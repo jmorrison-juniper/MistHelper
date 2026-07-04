@@ -254,9 +254,12 @@ class TestBuildAuditResult:
             def resolve(self, *_):
                 raise AssertionError("resolver must not be called for unmatched rows")
 
-        result = engine._build_audit_result(
-            row, site, _Boom(), "", False, {"by_name": {}, "by_full": {}, "by_no_suite": {}}
+        ctx = eng_mod._AuditContext(  # WHY: Bundle collapses six-param helper into ctx form.
+            business="",  # WHY: No business prefix influences suite fallbacks.
+            ui_geocode=False,  # WHY: Tier-3 disabled so resolver is never invoked.
+            authoritative_index={"by_name": {}, "by_full": {}, "by_no_suite": {}},  # WHY: Empty index -> no authority.
         )
+        result = engine._build_audit_result(row, site, _Boom(), ctx)  # WHY: Unmatched short-circuit skips resolver.
         assert result.issue_type == "UNMATCHED"
         assert result.source == "-"
 
@@ -333,9 +336,12 @@ class TestBusinessAuthorityIntegration:
             },
             "by_no_suite": {},
         }
-        result = engine._build_audit_result(
-            row, site, _ResolverStub(), "", False, authoritative_index
-        )  # Build one row.
+        ctx = eng_mod._AuditContext(  # WHY: Bundle context for the refactored builder API.
+            business="",  # WHY: No business prefix in this path.
+            ui_geocode=False,  # WHY: Tier-3 web geocoding stays off in the unit.
+            authoritative_index=authoritative_index,  # WHY: Feed the constructed authority index.
+        )
+        result = engine._build_audit_result(row, site, _ResolverStub(), ctx)  # WHY: Build one row via stub.
         assert result.issue_type in {
             "ADDRESS_MATCH",
             "MISSING_SUITE",
@@ -356,10 +362,12 @@ class TestResolveAndClassify:
     def test_zero_rows_yields_empty(self):
         """An empty input produces an empty result list (no exception)."""
         engine = AddressAuditEngine()
-        assert (
-            engine._resolve_and_classify([], [], None, "", False, {"by_name": {}, "by_full": {}, "by_no_suite": {}})
-            == []
+        ctx = eng_mod._AuditContext(  # WHY: Bundle context for the refactored resolver helper.
+            business="",  # WHY: Empty business string keeps prefix logic inert.
+            ui_geocode=False,  # WHY: Tier-3 disabled so no external geocode occurs.
+            authoritative_index={"by_name": {}, "by_full": {}, "by_no_suite": {}},  # WHY: Empty index for zero-row.
         )
+        assert engine._resolve_and_classify([], [], None, ctx) == []  # WHY: Empty input must produce empty output.
 
 
 class TestEnvConfig:
@@ -490,14 +498,12 @@ class TestConflictingHints:
             def resolve(self, *_):
                 raise AssertionError("resolver must not run on a conflict row")  # Must be skipped.
 
-        result = engine._build_audit_result(  # Drive the short-circuit.
-            row,  # CSV row.
-            site,  # Matched site.
-            _Guard(),  # Resolver guard stub.
-            "",  # No business prefix.
-            False,  # Tier-3 disabled for this test.
-            {"by_name": {}, "by_full": {}, "by_no_suite": {}},  # No authority index for this test.
+        ctx = eng_mod._AuditContext(  # WHY: Wrap params for the refactored builder API.
+            business="",  # WHY: No business prefix in this path.
+            ui_geocode=False,  # WHY: Tier-3 disabled for this test.
+            authoritative_index={"by_name": {}, "by_full": {}, "by_no_suite": {}},  # WHY: No authority index required.
         )
+        result = engine._build_audit_result(row, site, _Guard(), ctx)  # WHY: Drive the conflicting-hints short-circuit.
         assert result.issue_type == "CONFLICTING_HINTS"  # Flagged review-only.
         assert result.suggested_address == ""  # No recommendation offered.
         assert result.source == "-"  # No single trustworthy source.

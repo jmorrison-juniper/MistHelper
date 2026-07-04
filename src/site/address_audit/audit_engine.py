@@ -20,8 +20,10 @@ import logging  # Action logging before/after every operation (project NON-NEGOT
 import os  # Path handling and environment access.
 import re  # Address normalization / suite extraction in classification.
 import sys  # Detect a non-interactive stdout to suppress the progress bar.
+from collections.abc import Callable  # Type of the collaborator factory used by _default.
 from contextlib import contextmanager  # Scope the console-log suppression to one run.
-from typing import Any  # Loose typing for Mist API records.
+from dataclasses import dataclass  # Frozen bundle for audit context (STRUCT-PARAMS fix).
+from typing import Any, TypeVar  # Loose typing for Mist API records + generic collaborator default.
 
 import mistapi  # Mist API SDK (sole Mist interface; hard dependency of MistHelper).
 
@@ -72,6 +74,24 @@ _DIRECTIONALS = {  # Street-name directional tokens, normalized to their abbrevi
     "southeast": "SE",
     "southwest": "SW",
 }
+_INVALID_CHOICE: Any = object()  # WHY: Sentinel from menu parser when raw entry is neither valid index nor 'q'.
+_T = TypeVar("_T")  # Generic collaborator type used by the ``_default(injected, factory)`` helper.
+
+
+@dataclass(frozen=True, slots=True)
+class _AuditContext:
+    """Frozen bundle of per-run audit inputs shared across pipeline helpers.
+
+    Groups the three read-only inputs (business-name prefix, Tier-3 enablement,
+    business-authoritative index) that previously travelled as three positional
+    arguments through ``_audit_rows``, ``_resolve_and_classify`` and
+    ``_build_audit_result``; bundling them keeps every function within the
+    five-parameter limit while preserving intent at each call site.
+    """
+
+    business: str  # Optional business-name prefix injected into geocoding queries (empty when skipped).
+    ui_geocode: bool  # Whether Tier-3 (browser/Google) geocoding may attach for this run.
+    authoritative_index: dict[str, dict[str, list[Any]]]  # Pre-indexed authoritative CSV lookup (empty when unused).
 
 
 class _AddressAuditConsoleFilter(logging.Filter):
@@ -105,13 +125,18 @@ class AddressAuditEngine:
         reporter: AddressAuditReporter | None = None,
     ) -> None:
         """Store collaborators (injectable for tests; sensible defaults otherwise)."""
-        self._ingester = ingester or CSVAddressIngester()  # CSV parser.
-        self._authority_ingester = (
-            authority_ingester or BusinessAuthorityIngester()
-        )  # Business-authoritative CSV parser.
-        self._enricher = enricher or SNMPLocationEnricher()  # SNMP enrichment.
-        self._renderer = renderer or ComparisonTableRenderer()  # Table + prompt.
-        self._reporter = reporter or AddressAuditReporter()  # CSV report writer.
+        self._ingester = self._default(ingester, CSVAddressIngester)  # CSV parser (default or injected).
+        self._authority_ingester = self._default(authority_ingester, BusinessAuthorityIngester)  # Authority parser.
+        self._enricher = self._default(enricher, SNMPLocationEnricher)  # SNMP enrichment (default or injected).
+        self._renderer = self._default(renderer, ComparisonTableRenderer)  # Table + prompt (default or injected).
+        self._reporter = self._default(reporter, AddressAuditReporter)  # CSV report writer (default or injected).
+
+    @staticmethod
+    def _default(injected: _T | None, factory: Callable[[], _T]) -> _T:
+        """Return ``injected`` when supplied, else construct a fresh ``factory()`` instance."""
+        if injected is not None:  # Test/caller supplied an override -> honour it verbatim.
+            return injected  # Preserve the injected collaborator without reconstructing it.
+        return factory()  # No override -> build the production default lazily so tests never touch it.
 
     def run(self, apisession: Any, org_id: str) -> None:
         """Menu entry point: drive the full audit pipeline end-to-end.
@@ -140,16 +165,12 @@ class AddressAuditEngine:
             print(f"No valid rows parsed from {csv_path} ({failures} skipped).")  # Inform operator.
             return  # Nothing further to do.
         business_csv_path = self._select_business_csv_file(csv_path)  # Optional second prompt for authoritative CSV.
-        authoritative_index = self._load_business_authority_index(business_csv_path)  # Pre-index authoritative data.
-        business = self._resolve_business_name()  # Business-name prefix (env or prompt).
-        results = self._audit_rows(  # Core pipeline.
-            apisession,  # Mist session.
-            org_id,  # Organization id.
-            rows,  # Primary customer CSV rows.
-            business,  # Optional business-name prefix.
-            ui_geocode,  # Tier-3 enablement.
-            authoritative_index,  # Optional business-authoritative lookup index.
+        ctx = _AuditContext(  # Bundle the three read-only per-run inputs into one frozen record.
+            business=self._resolve_business_name(),  # Business-name prefix (env or prompt).
+            ui_geocode=ui_geocode,  # Whether Tier-3 web geocoding may attach for this run.
+            authoritative_index=self._load_business_authority_index(business_csv_path),  # Pre-indexed authority.
         )
+        results = self._audit_rows(apisession, org_id, rows, ctx)  # Core pipeline driven by the bundled context.
         self._renderer.render(results)  # Render the comparison table.
         self._finish(results, apisession)  # Post-table save/quit prompt + optional write-back.
 
@@ -163,29 +184,35 @@ class AddressAuditEngine:
         operator sees only the table, prompts, and progress bar on screen, with the
         Nominatim "no result" warnings and other diagnostics confined to the file.
         """
-        root = logging.getLogger()  # Root logger carries both file and console handlers.
-        console = [  # Console handlers are StreamHandlers that are not FileHandlers.
-            handler
-            for handler in root.handlers
-            if isinstance(handler, logging.StreamHandler) and not isinstance(handler, logging.FileHandler)
-        ]
+        handlers = self._console_handlers()  # Snapshot of the console handlers currently attached to root.
         log_filter = _AddressAuditConsoleFilter()  # Drops only address_audit records from console.
-        for handler in console:  # Attach the filter to each console handler.
-            handler.addFilter(log_filter)
+        for handler in handlers:  # Attach the filter to each console handler.
+            handler.addFilter(log_filter)  # Runtime filter registration on this handler.
         try:
             yield  # Run the audit with console diagnostics suppressed.
         finally:
-            for handler in console:  # Always detach, even when the run raises.
-                handler.removeFilter(log_filter)
+            for handler in handlers:  # Always detach, even when the run raises.
+                handler.removeFilter(log_filter)  # Runtime filter removal to leave logging state pristine.
+
+    @staticmethod
+    def _console_handlers() -> list[logging.Handler]:
+        """Return the console (non-file) ``StreamHandler`` instances on the root logger."""
+        root = logging.getLogger()  # Root logger carries both file and console handlers.
+        return [handler for handler in root.handlers if AddressAuditEngine._is_console_handler(handler)]
+
+    @staticmethod
+    def _is_console_handler(handler: logging.Handler) -> bool:
+        """Return True for a console-bound ``StreamHandler`` (i.e. not a ``FileHandler``)."""
+        if not isinstance(handler, logging.StreamHandler):  # Not a stream handler at all -> never console.
+            return False  # Ignore this handler for console-filter purposes.
+        return not isinstance(handler, logging.FileHandler)  # StreamHandler AND not-a-FileHandler == console.
 
     def _audit_rows(
         self,
         apisession: Any,
         org_id: str,
         rows: list[AddressRow],
-        business: str,
-        ui_geocode: bool,
-        authoritative_index: dict[str, dict[str, list[Any]]],
+        ctx: _AuditContext,
     ) -> list[AuditResult]:
         """Load Mist data, match/enrich/resolve every row, and classify the outcomes."""
         inventory_by_serial, sites_by_id, sites_list = self._load_mist_data(apisession, org_id)  # One read.
@@ -193,15 +220,8 @@ class AddressAuditEngine:
         matched = self._match_sites(rows, matcher, sites_list)  # Serial -> fuzzy fallback per row.
         self._enrich_sites(apisession, matched)  # Fill SNMP location on matched sites.
         perf = PhaseTimer()  # One timer shared by the resolver + geocoder for this run.
-        resolver = self._build_resolver(ui_geocode, perf)  # Tiered resolver (+ optional Tier 3).
-        results = self._resolve_and_classify(  # Build results.
-            rows,  # Input CSV rows.
-            matched,  # Matched/enriched site rows.
-            resolver,  # Resolver instance.
-            business,  # Optional business-name prefix.
-            ui_geocode,  # Tier-3 enablement.
-            authoritative_index,  # Optional business-authoritative lookup.
-        )
+        resolver = self._build_resolver(ctx.ui_geocode, perf)  # Tiered resolver (+ optional Tier 3).
+        results = self._resolve_and_classify(rows, matched, resolver, ctx)  # Build results using bundled context.
         if not perf.is_empty():  # Emit the per-phase timing breakdown so slow stages are visible.
             logging.info("Address audit phase timing (slowest first):\n%s", perf.summary())  # Diagnostic summary.
         return results  # Hand the classified results back to the pipeline.
@@ -238,10 +258,19 @@ class AddressAuditEngine:
 
     def _prompt_business_csv_choice(self, candidates: list[str], primary_csv_path: str) -> str | None:
         """Prompt for a business-authoritative CSV file index, or skip with ``q``."""
+        self._print_business_csv_menu(candidates, primary_csv_path)  # Show the numbered choices once.
+        return self._read_business_csv_selection(candidates)  # Re-prompt loop until valid answer or explicit skip.
+
+    @staticmethod
+    def _print_business_csv_menu(candidates: list[str], primary_csv_path: str) -> None:
+        """Print the numbered business-authoritative CSV menu with a primary-file marker."""
         print("\nOptional: select business-authoritative CSV file in data/ (or q to skip):")  # Second prompt header.
         for index, path in enumerate(candidates, start=1):  # Enumerate options 1..N.
             marker = " (primary file)" if path == primary_csv_path else ""  # Guard hint when selecting same file.
             print(f"  [{index}] {os.path.basename(path)}{marker}")  # Show indexed filename choice.
+
+    def _read_business_csv_selection(self, candidates: list[str]) -> str | None:
+        """Loop reading operator input until a valid index or explicit 'q' skip is entered."""
         while True:  # Re-prompt until valid selection or explicit skip.
             raw = (
                 InputUtils.safe_input(
@@ -249,15 +278,33 @@ class AddressAuditEngine:
                 )
                 .strip()
                 .lower()
-            )
-            if raw == "q":  # Operator explicitly skips the authority dataset for this run.
-                logging.info("Business-authoritative CSV selection skipped by operator")  # Action-log skip.
-                return None  # Proceed without authority data.
-            if raw.isdigit() and 1 <= int(raw) <= len(candidates):  # Valid in-range index.
-                picked = candidates[int(raw) - 1]  # Resolve selected path from the menu index.
-                logging.info("Selected business-authoritative CSV: %s", picked)  # Action-log selected file.
-                return picked  # Use the selected authority file.
+            )  # Normalize once for downstream comparisons.
+            picked = self._parse_business_csv_choice(raw, candidates)  # Interpret the raw operator entry.
+            if picked is not _INVALID_CHOICE:  # Valid choice (path) or explicit skip (None) -> exit the retry loop.
+                return picked  # type: ignore[no-any-return]  # Sentinel guarantees str|None here.
             print(f"Invalid selection. Enter 1-{len(candidates)} or q to skip.")  # One-line validation message.
+
+    @staticmethod
+    def _parse_business_csv_choice(raw: str, candidates: list[str]) -> Any:
+        """Return the picked path, ``None`` for skip, or ``_INVALID_CHOICE`` when unrecognized."""
+        if raw == "q":  # Operator explicitly skips the authority dataset for this run.
+            logging.info("Business-authoritative CSV selection skipped by operator")  # Action-log skip.
+            return None  # Proceed without authority data.
+        picked = AddressAuditEngine._business_csv_from_index(raw, candidates)  # Try to resolve raw as a menu index.
+        if picked is None:  # Not a valid numeric index -> report as invalid so the loop re-prompts.
+            return _INVALID_CHOICE  # Sentinel prompts the outer loop to ask again.
+        logging.info("Selected business-authoritative CSV: %s", picked)  # Action-log selected file.
+        return picked  # Use the selected authority file.
+
+    @staticmethod
+    def _business_csv_from_index(raw: str, candidates: list[str]) -> str | None:
+        """Return the ``candidates`` entry for a valid 1..N menu index, else ``None``."""
+        if not raw.isdigit():  # Non-numeric entry cannot be a menu index.
+            return None  # Signal "not a valid index".
+        index = int(raw)  # Parse once so the range check has a clean integer.
+        if 1 <= index <= len(candidates):  # In-range menu selection -> resolve to the picked path.
+            return candidates[index - 1]  # 1-based menu maps to a 0-based list index.
+        return None  # Out-of-range -> caller treats as invalid.
 
     def _load_business_authority_index(
         self,
@@ -446,24 +493,13 @@ class AddressAuditEngine:
         self,
         rows: list[AddressRow],
         matched: list[MatchedSite],
-        resolver: AddressResolver,
-        business: str,
-        ui_geocode: bool,
-        authoritative_index: dict[str, dict[str, list[Any]]],
+        resolver: AddressResolver | None,
+        ctx: _AuditContext,
     ) -> list[AuditResult]:
         """Resolve + classify every row, returning one ``AuditResult`` per CSV row."""
         results: list[AuditResult] = []  # Accumulator (100% row accountability).
         for row, site in self._progress(list(zip(rows, matched, strict=False)), len(rows)):  # Iterate w/ progress.
-            results.append(  # One result.
-                self._build_audit_result(
-                    row,  # Input CSV row.
-                    site,  # Matched site data.
-                    resolver,  # Resolver instance.
-                    business,  # Optional business-name prefix.
-                    ui_geocode,  # Tier-3 enablement.
-                    authoritative_index,  # Optional authority lookup.
-                )
-            )
+            results.append(self._build_audit_result(row, site, resolver, ctx))  # One classified result per row.
         logging.debug("Classified %d audit rows", len(results))  # Action-log completion.
         self._flag_duplicate_addresses(results)  # Cross-row safety: flag one address shared by 2+ sites.
         return results  # Hand back all results.
@@ -481,27 +517,48 @@ class AddressAuditEngine:
         full addresses differ, so they land in different buckets and are untouched.
         Rows already flagged CONFLICTING_HINTS keep that (more specific) reason.
         """
+        buckets = AddressAuditEngine._bucket_by_address(results)  # Group every eligible row by its comparison key.
+        for rows in buckets.values():  # Inspect each address bucket for a cross-site collision.
+            AddressAuditEngine._apply_duplicate_flag(rows)  # Flag every row in a colliding bucket in one place.
+
+    @staticmethod
+    def _bucket_by_address(results: list[AuditResult]) -> dict[str, list[AuditResult]]:
+        """Group results by their normalized comparison-key address (skipping ineligible rows)."""
         buckets: dict[str, list[AuditResult]] = {}  # Normalized full address -> rows sharing it.
         for result in results:  # Bucket every row by the address that will identify its site.
-            if result.issue_type in ("UNMATCHED", "CONFLICTING_HINTS"):  # No trusted/unique address to compare.
-                continue  # Leave these rows as-is.
-            final = result.suggested_address or AddressAuditEngine._mist_address_str(result)  # Post-audit address.
-            key = AddressAuditEngine._address_key(final)  # Normalize for an apples-to-apples comparison.
-            if key:  # Only bucket rows that actually have an address.
+            key = AddressAuditEngine._bucket_key(result)  # "" for ineligible rows (leave them out).
+            if key:  # Only bucket rows that actually have an address to compare.
                 buckets.setdefault(key, []).append(result)  # Group rows by identical normalized address.
-        for rows in buckets.values():  # Inspect each address bucket for a cross-site collision.
-            sites = {r.matched_site.site_id for r in rows if r.matched_site.site_id}  # Distinct sites here.
-            if len(sites) < 2:  # One site (or repeats of the same site) -> not a collision.
-                continue  # Nothing to flag.
-            for result in rows:  # Two or more different sites share this exact address -> flag them all.
-                logging.info(
-                    "Duplicate address across %d sites (e.g. %s): not unique, flagging for review",
-                    len(sites),
-                    result.matched_site.site_name,
-                )  # Action-log the collision so script.log explains the flag.
-                result.issue_type = "DUPLICATE_ADDRESS"  # Review-only: excluded from the correctable/push set.
-                result.suggested_address = ""  # Never recommend pushing a non-unique address.
-                result.source = "-"  # No trustworthy single source for a colliding address.
+        return buckets  # Hand back the bucket map for the collision pass.
+
+    @staticmethod
+    def _bucket_key(result: AuditResult) -> str:
+        """Return the collision key for a result, or ``''`` when it should be skipped."""
+        if result.issue_type in ("UNMATCHED", "CONFLICTING_HINTS"):  # No trusted/unique address to compare.
+            return ""  # Signal "leave this row out of the collision pass".
+        final = result.suggested_address or AddressAuditEngine._mist_address_str(result)  # Post-audit address.
+        return AddressAuditEngine._address_key(final)  # Normalize for an apples-to-apples comparison.
+
+    @staticmethod
+    def _apply_duplicate_flag(rows: list[AuditResult]) -> None:
+        """Mark every row in ``rows`` as DUPLICATE when the bucket spans 2+ distinct sites."""
+        sites = {r.matched_site.site_id for r in rows if r.matched_site.site_id}  # Distinct sites in this bucket.
+        if len(sites) < 2:  # One site (or repeats of the same site) -> not a collision.
+            return  # Nothing to flag.
+        for result in rows:  # Two or more different sites share this exact address -> flag them all.
+            AddressAuditEngine._mark_duplicate(result, len(sites))  # Rewrite the row in-place as review-only.
+
+    @staticmethod
+    def _mark_duplicate(result: AuditResult, site_count: int) -> None:
+        """Rewrite a single result in-place as ``DUPLICATE_ADDRESS`` (review-only, no push)."""
+        logging.info(
+            "Duplicate address across %d sites (e.g. %s): not unique, flagging for review",
+            site_count,
+            result.matched_site.site_name,
+        )  # Action-log the collision so script.log explains the flag.
+        result.issue_type = "DUPLICATE_ADDRESS"  # Review-only: excluded from the correctable/push set.
+        result.suggested_address = ""  # Never recommend pushing a non-unique address.
+        result.source = "-"  # No trustworthy single source for a colliding address.
 
     @staticmethod
     def _mist_address_str(result: AuditResult) -> str:
@@ -520,39 +577,56 @@ class AddressAuditEngine:
         self,
         row: AddressRow,
         site: MatchedSite,
-        resolver: AddressResolver,
-        business: str,
-        ui_geocode: bool,
-        authoritative_index: dict[str, dict[str, list[Any]]],
+        resolver: Any,
+        ctx: _AuditContext,
     ) -> AuditResult:
         """Resolve one row's address and wrap it in a classified ``AuditResult``."""
         if site.match_strategy == "unmatched":  # No site -> no resolution attempted.
             return AuditResult(address_row=row, matched_site=site, issue_type="UNMATCHED", source="-")
-        authoritative_addr = self._authority_ingester.match(row, site, authoritative_index)  # Optional authority hint.
-        candidates = ResolveCandidates(  # Bundle the inputs for the resolver.
+        candidates = self._build_candidates(row, site, ctx)  # Bundle mist+csv+authority+snmp for the resolver.
+        if resolver.has_conflicting_hints(candidates):  # Hints disagree on the building with no majority.
+            return self._conflicting_hints_result(row, site)  # Review-only: refuse to auto-pick among divergent hints.
+        resolver_result = resolver.resolve(candidates)  # Run the tier cascade (fail-soft).
+        return self._compose_audit_result(row, site, resolver_result, candidates)  # Classify + wrap the outcome.
+
+    def _build_candidates(self, row: AddressRow, site: MatchedSite, ctx: _AuditContext) -> ResolveCandidates:
+        """Assemble the resolver-input candidates (mist, csv, authority, snmp) for one row."""
+        authoritative_addr = self._authority_ingester.match(row, site, ctx.authoritative_index)  # Optional auth hint.
+        return ResolveCandidates(  # Bundle the inputs for the resolver.
             mist_address=site.mist_address,  # Current Mist address.
             csv_address=self._csv_to_dict(row),  # Customer CSV address.
             authoritative_address=authoritative_addr,  # Business-authoritative address when uniquely matched.
             snmp_location=site.snmp_location,  # SNMP reference (may be None).
-            business_name=business,  # Optional query prefix.
-            ui_geocode=ui_geocode,  # Whether Tier 3 is permitted.
+            business_name=ctx.business,  # Optional query prefix.
+            ui_geocode=ctx.ui_geocode,  # Whether Tier 3 is permitted.
         )
-        if resolver.has_conflicting_hints(candidates):  # Hints disagree on the building with no majority.
-            logging.info("Conflicting address hints for site %s; flagging CONFLICTING_HINTS", site.site_name)
-            return AuditResult(  # Review-only: the tool refuses to auto-pick among divergent stores.
-                address_row=row,  # Original CSV row.
-                matched_site=site,  # Keep the three hint columns visible for manual review.
-                issue_type="CONFLICTING_HINTS",  # Never enters the correctable/push set.
-                source="-",  # No single trustworthy source to credit.
-                suggested_address="",  # Decline to recommend; operator compares Mist/CSV/SNMP by hand.
-            )
-        resolver_result = resolver.resolve(candidates)  # Run the tier cascade (fail-soft).
+
+    @staticmethod
+    def _conflicting_hints_result(row: AddressRow, site: MatchedSite) -> AuditResult:
+        """Build the review-only ``CONFLICTING_HINTS`` result when the resolver refuses to pick."""
+        logging.info("Conflicting address hints for site %s; flagging CONFLICTING_HINTS", site.site_name)
+        return AuditResult(  # Review-only: the tool refuses to auto-pick among divergent stores.
+            address_row=row,  # Original CSV row.
+            matched_site=site,  # Keep the three hint columns visible for manual review.
+            issue_type="CONFLICTING_HINTS",  # Never enters the correctable/push set.
+            source="-",  # No single trustworthy source to credit.
+            suggested_address="",  # Decline to recommend; operator compares Mist/CSV/SNMP by hand.
+        )
+
+    def _compose_audit_result(
+        self,
+        row: AddressRow,
+        site: MatchedSite,
+        resolver_result: Any,
+        candidates: ResolveCandidates,
+    ) -> AuditResult:
+        """Classify a resolved row and wrap the outcome as an ``AuditResult``."""
         issue = self._classify(  # Classify with all available hints, including optional authority data.
             site.mist_address,  # Mist address.
             self._csv_to_dict(row),  # Customer CSV address.
             site.snmp_location,  # SNMP location.
             resolver_result,  # Resolver outcome.
-            authoritative_addr,  # Optional authoritative business hint.
+            candidates.authoritative_address,  # Optional authoritative business hint.
         )
         return AuditResult(  # Compose the per-row result.
             address_row=row,  # Original CSV row.
@@ -573,8 +647,19 @@ class AddressAuditEngine:
     ) -> str:
         """Return one of the resolved classification states for a row (excludes the
         out-of-band UNMATCHED / CONFLICTING_HINTS / DUPLICATE_ADDRESS states)."""
-        if resolver_result is None or resolver_result.canonical_address is None:  # No external result.
-            return self._classify_internal(mist_addr, csv_addr, snmp_loc, authoritative_addr or {})  # Internal signals.
+        if not self._has_external_result(resolver_result):  # No external result -> use internal signals only.
+            return self._classify_internal(mist_addr, csv_addr, snmp_loc, authoritative_addr or {})  # Internal path.
+        return self._classify_external(mist_addr, resolver_result)  # External hit -> compare against Mist.
+
+    @staticmethod
+    def _has_external_result(resolver_result: Any) -> bool:
+        """Return True when the resolver produced a usable canonical address."""
+        if resolver_result is None:  # Whole result missing -> nothing external to classify against.
+            return False  # Force the internal-only classification path.
+        return resolver_result.canonical_address is not None  # A None canonical also means no external result.
+
+    def _classify_external(self, mist_addr: dict[str, Any], resolver_result: Any) -> str:
+        """Classify a row when the resolver produced an external canonical address."""
         if resolver_result.ambiguous:  # Multiple plausible candidates (mall scenario).
             return "AMBIGUOUS"  # Needs manual disambiguation.
         mist_street = mist_addr.get("address", "")  # Mist street line is the stable anchor.
@@ -610,13 +695,26 @@ class AddressAuditEngine:
     ) -> str:
         """Classify on internal CSV/SNMP signals alone when no external result exists."""
         mist_street = mist_addr.get("address", "")  # Mist street anchor.
-        authority_street = (authoritative_addr or {}).get("address", "")  # Optional business-authoritative street hint.
-        candidate = (
-            authority_street or snmp_loc or csv_addr.get("address", "")
-        )  # Authority > SNMP > CSV fallback order.
-        if candidate and self._has_suite_discrepancy(mist_street, candidate):  # Internal adds a missing suite.
+        candidate = self._internal_candidate(csv_addr, snmp_loc, authoritative_addr)  # Authority > SNMP > CSV order.
+        if not candidate:  # No internal signal produced any candidate address.
+            return "NO_RESULT"  # Internal inconclusive and nothing external resolved.
+        if self._has_suite_discrepancy(mist_street, candidate):  # Internal adds a missing suite.
             return "MISSING_SUITE"  # The common strip-mall case, caught without any external call.
-        return "NO_RESULT"  # Internal inconclusive and nothing external resolved.
+        return "NO_RESULT"  # Internal signal exists but adds no suite -> still inconclusive.
+
+    @staticmethod
+    def _internal_candidate(
+        csv_addr: dict[str, Any],
+        snmp_loc: str | None,
+        authoritative_addr: dict[str, Any] | None,
+    ) -> str:
+        """Pick the best internal candidate street (authority > SNMP > CSV), or ``''``."""
+        authority_street = (authoritative_addr or {}).get("address", "")  # Business-authoritative hint (may be blank).
+        if authority_street:  # Authority wins whenever it produced an address.
+            return str(authority_street)  # Coerce so mypy sees a concrete str even when the dict is Any-typed.
+        if snmp_loc:  # SNMP location fallback (may still be blank/None).
+            return snmp_loc  # SNMP variable already normalized to a plain string upstream.
+        return str(csv_addr.get("address", ""))  # Final fallback: the primary CSV row's street.
 
     def _classify_suite(self, mist_street: str, canonical: str) -> str:
         """Classify a same-street pair by comparing suite/unit specificity."""
@@ -641,15 +739,29 @@ class AddressAuditEngine:
         A conflicting leading directional (Mist 'E Jefferson' vs web 'West Jefferson')
         is treated as a different street so a wrong-side address never reads as a match.
         """
-        mist_number = self._house_number(mist_street)  # Mist street's house number.
-        if mist_number and mist_number not in self._all_numbers(candidate):  # House number must appear.
-            return False  # Different building number -> different street.
-        mist_dir = self._leading_directional(mist_street)  # Directional right after the house number.
-        cand_dir = self._leading_directional(candidate)  # Same for the candidate (city dirs ignored).
-        if mist_dir and cand_dir and mist_dir != cand_dir:  # Opposite directionals (E vs W).
-            return False  # Different side of the street -> different street.
+        if self._house_number_mismatch(mist_street, candidate):  # Different building number -> different street.
+            return False  # No further checks needed.
+        if self._directionals_disagree(mist_street, candidate):  # Opposite side of the street.
+            return False  # Wrong-side address must never read as a match.
         overlap = self._name_words(mist_street) & self._name_words(candidate)  # Shared street words.
         return bool(overlap)  # Same street when at least one street-name word matches.
+
+    @staticmethod
+    def _house_number_mismatch(mist_street: str, candidate: str) -> bool:
+        """Return True when the Mist house number is present but absent from the candidate."""
+        mist_number = AddressAuditEngine._house_number(mist_street)  # Mist street's leading house number.
+        if not mist_number:  # No Mist house number to anchor on -> nothing to disagree about.
+            return False  # Cannot be a mismatch when there is nothing to compare.
+        return mist_number not in AddressAuditEngine._all_numbers(candidate)  # True when candidate lacks that number.
+
+    @staticmethod
+    def _directionals_disagree(mist_street: str, candidate: str) -> bool:
+        """Return True when both streets carry leading directionals and they conflict (E vs W)."""
+        mist_dir = AddressAuditEngine._leading_directional(mist_street)  # Directional right after Mist's number.
+        cand_dir = AddressAuditEngine._leading_directional(candidate)  # Same for the candidate (city dirs ignored).
+        if not (mist_dir and cand_dir):  # At least one side has no directional -> cannot disagree meaningfully.
+            return False  # Absence is not conflict.
+        return mist_dir != cand_dir  # Both present -> conflict when they differ.
 
     @staticmethod
     def _leading_directional(street: str) -> str:
@@ -681,13 +793,21 @@ class AddressAuditEngine:
         """
         without_suite = re.sub(_SUITE_PATTERN, " ", text.lower())  # Drop the suite token.
         normalized = self._normalize(without_suite)  # Lowercase, de-punctuate, collapse.
-        words: set[str] = set()  # Accumulate comparable name tokens.
-        for token in normalized.split():  # Walk every token.
-            if token.isalpha() and len(token) >= 2:  # Street-name words (military, jefferson).
-                words.add(token)  # Keep the word.
-            elif any(ch.isdigit() for ch in token) and any(ch.isalpha() for ch in token):  # Ordinals: 107th, a1a.
-                words.add(token)  # Keep numeric-named streets (pure digits like the house number excluded).
-        return words  # Comparable street-name token set.
+        return {token for token in normalized.split() if self._is_name_token(token)}  # Keep only name-shaped tokens.
+
+    @staticmethod
+    def _is_name_token(token: str) -> bool:
+        """Return True for a street-name token: alphabetic word OR alnum ordinal (``107th``)."""
+        if token.isalpha() and len(token) >= 2:  # Street-name words (military, jefferson).
+            return True  # Keep the plain alphabetic word.
+        return AddressAuditEngine._is_alnum_ordinal(token)  # Fall through to the ordinal/alnum detector.
+
+    @staticmethod
+    def _is_alnum_ordinal(token: str) -> bool:
+        """Return True when ``token`` mixes letters and digits (``107th``, ``a1a``)."""
+        has_digit = any(ch.isdigit() for ch in token)  # At least one numeric character present.
+        has_alpha = any(ch.isalpha() for ch in token)  # At least one alphabetic character present.
+        return has_digit and has_alpha  # Both signals -> a numeric-named street token.
 
     @staticmethod
     def _house_number(text: str) -> str:
