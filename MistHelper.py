@@ -17024,24 +17024,32 @@ class InventoryCSVComparator:  # Inventory CSV comparator.
     """Compare Mist inventory with CSV. Delegated to src.inventory.csv_comparator."""
 
     @staticmethod
-    def _build_impl_kwargs(fast: bool, address_check: bool, debug: bool, skip_ssl_verify: bool) -> dict:
-        """Bundle inventory comparator dependencies into the constructor kwargs dict for the impl."""
-        return {  # Single source of truth for the impl's 14 dependencies.
-            "fast": fast,  # Caching/speed flag.
-            "address_check": address_check,  # Address validation flag.
-            "debug": debug,  # Debug logging flag.
-            "skip_ssl_verify": skip_ssl_verify,  # SSL verify flag.
-            "apisession": apisession,  # Shared API session.
-            "get_csv_path_fn": FilePathUtils.get_csv_path,  # CSV path resolver.
-            "check_and_generate_csv_fn": CacheUtils.check_and_generate_csv,  # Cache-aware CSV builder.
-            "create_parse_failures_csv_fn": CacheUtils.create_address_parse_failures_csv,  # Parse-failure exporter.
-            "devices_with_site_info_fn": OrgInventoryExporter.devices_with_site_info,  # Inventory fetcher.
-            "get_org_id_fn": ConfigUtils.get_cached_or_prompted_org_id,  # Org-id resolver.
-            "get_device_identifier_fn": DeviceUtils.get_device_identifier,  # Device-id resolver.
-            "address_utils_cls": AddressUtils,  # Address parsing utility class.
-            "nominatim_validator_cls": NominatimValidator,  # External validator class.
-            "address_validation_config_cls": AddressValidationConfig,  # Validation config class.
-        }
+    def _build_impl_args(fast: bool, address_check: bool, debug: bool, skip_ssl_verify: bool):
+        """Return a (flags, deps) tuple for the extracted impl constructor."""
+        from src.inventory.csv_comparator import (  # pylint: disable=import-outside-toplevel
+            ComparatorDependencies,
+            ComparatorFlags,
+        )
+
+        flags = ComparatorFlags(  # Runtime toggles bundle.
+            fast=fast,  # Caching/speed flag.
+            address_check=address_check,  # Address validation flag.
+            debug=debug,  # Debug logging flag.
+            skip_ssl_verify=skip_ssl_verify,  # SSL verify flag.
+        )
+        deps = ComparatorDependencies(  # Injected callables + classes bundle.
+            apisession=apisession,  # Shared API session.
+            get_csv_path_fn=FilePathUtils.get_csv_path,  # CSV path resolver.
+            check_and_generate_csv_fn=CacheUtils.check_and_generate_csv,  # Cache-aware CSV builder.
+            create_parse_failures_csv_fn=CacheUtils.create_address_parse_failures_csv,  # Parse-failure exporter.
+            devices_with_site_info_fn=OrgInventoryExporter.devices_with_site_info,  # Inventory fetcher.
+            get_org_id_fn=ConfigUtils.get_cached_or_prompted_org_id,  # Org-id resolver.
+            get_device_identifier_fn=DeviceUtils.get_device_identifier,  # Device-id resolver.
+            address_utils_cls=AddressUtils,  # Address parsing utility class.
+            nominatim_validator_cls=NominatimValidator,  # External validator class.
+            address_validation_config_cls=AddressValidationConfig,  # Validation config class.
+        )
+        return flags, deps  # Tuple consumed by the impl constructor.
 
     def __init__(  # Capture comparison inputs.
         self, fast: bool = False, address_check: bool = False, debug: bool = False, skip_ssl_verify: bool = True
@@ -17051,8 +17059,10 @@ class InventoryCSVComparator:  # Inventory CSV comparator.
             InventoryCSVComparator as _Impl,  # pylint: disable=import-outside-toplevel
         )
 
-        kwargs = InventoryCSVComparator._build_impl_kwargs(fast, address_check, debug, skip_ssl_verify)  # Bundle deps.
-        self._impl = _Impl(**kwargs)  # Build the impl.
+        flags, deps = InventoryCSVComparator._build_impl_args(  # Grouped constructor args.
+            fast, address_check, debug, skip_ssl_verify
+        )
+        self._impl = _Impl(flags=flags, deps=deps)  # Build the impl.
 
     def execute(self) -> None:  # Run the comparison.
         """Execute the complete inventory comparison workflow."""
