@@ -9,7 +9,10 @@ from __future__ import annotations  # PEP 563: postpone annotation evaluation fo
 import getpass  # Standard-library secure password prompt
 import logging  # Action logging for every interactive step
 
-from src.ssh.command.command_runner import SingleCommandRunner  # Real single-command executor (no façade)
+from src.ssh.command.command_runner import (  # Real single-command executor (no façade)
+    SingleCommandRequest,
+    SingleCommandRunner,
+)
 from src.ssh.config.validators import (  # Shared input validators
     validate_command,
     validate_hostname,
@@ -163,4 +166,13 @@ class InteractiveMode:  # Groups the interactive REPL prompt helpers under one n
         command = InteractiveMode._prompt_command()  # Phase 7: command
         print(f"\n>> Starting SSH session (shell_mode={use_shell})...")  # Status line (verbatim preserved)
         logging.debug("Dispatching interactive SSH command to SingleCommandRunner.run")  # After-action log
-        return SingleCommandRunner.run(hostname, username, password, command, port, timeout, use_shell)
+        interactive_request = SingleCommandRequest(  # WHY: dataclass keeps SingleCommandRunner.run at 1 param.
+            hostname=hostname,
+            username=username,
+            password=password,
+            command=command,
+            port=port,
+            timeout=timeout,
+            use_shell=use_shell,
+        )
+        return SingleCommandRunner.run(interactive_request)

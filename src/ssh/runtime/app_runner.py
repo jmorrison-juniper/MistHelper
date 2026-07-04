@@ -14,7 +14,10 @@ from typing import Any  # Loose typing for argparse Namespace + env config dict
 
 from src.ssh.batch.batch_executor import BatchExecutor, BatchRunRequest  # Multi-command, single-host executor
 from src.ssh.batch.multi_host_runner import MultiHostRunner  # Threaded multi-host orchestrator
-from src.ssh.command.command_runner import SingleCommandRunner  # Single-command, single-host orchestrator
+from src.ssh.command.command_runner import (  # Single-command, single-host orchestrator (dataclass entrypoint)
+    SingleCommandRequest,
+    SingleCommandRunner,
+)
 from src.ssh.config.csv_loader import CommandCsvLoader  # SSH_COMMANDS.CSV loader
 from src.ssh.config.env_loader import EnvSshConfigLoader  # .env loader
 from src.ssh.config.validators import (  # Shared input validators
@@ -228,9 +231,16 @@ class AppRunner:
         """Pick the right batch/multi-host executor and run it."""
         if len(hosts) == 1 and len(commands) == 1:  # Single host, single command
             logging.info("Dispatching to SingleCommandRunner.run (1 host / 1 cmd)")
-            return bool(
-                SingleCommandRunner.run(hosts[0], user, password, commands[0], args.port, args.timeout, use_shell)
+            single_request = SingleCommandRequest(  # WHY: dataclass keeps SingleCommandRunner.run at 1 param.
+                hostname=hosts[0],
+                username=user,
+                password=password,
+                command=commands[0],
+                port=args.port,
+                timeout=args.timeout,
+                use_shell=use_shell,
             )
+            return bool(SingleCommandRunner.run(single_request))
         if len(hosts) == 1:  # Single host, many commands
             logging.info("Dispatching to BatchExecutor.run (1 host / %d cmds)", len(commands))
             batch_request = BatchRunRequest(  # WHY: dataclass keeps BatchExecutor.run at 1 param.
