@@ -45,6 +45,22 @@ class WanOverrideWalker:
         if not devices_with_overrides:  # Fleet fully compliant: emit empty CSV and exit
             OverrideReportWriter.write_empty()  # Header-only CSV plus the legacy compliance console message
             return  # Done; no live API calls needed
+        WanOverrideWalker._run_live_passes(  # Delegate 2nd/3rd passes + final write to keep this fn short
+            fast=fast,
+            target_ports=target_ports,
+            configs=configs,
+            devices_with_overrides=devices_with_overrides,
+        )
+
+    @staticmethod
+    def _run_live_passes(
+        fast: bool,
+        target_ports: list[str],
+        configs: list[dict[str, str]],
+        devices_with_overrides: dict[str, dict[str, Any]],
+    ) -> None:  # Extracted so _run_pipeline stays under STRUCT-LENGTH limit.
+        """Run second/third passes + report write when overrides are present."""
+        # WHY: pulls the post-first-pass block out of _run_pipeline to drop it from 27 to <25 lines.
         logging.info(  # Legacy info log preserved verbatim for downstream log parsers
             "! Second pass: Fetching device configs and stats for %d devices with overrides...",
             len(devices_with_overrides),
@@ -136,6 +152,29 @@ class WanOverrideWalker:
         return devices_with_overrides  # Hand back to orchestrator for the second-pass fetch
 
     @staticmethod
+    def _extract_row_identifiers(row: dict[str, str]) -> tuple[str, str, str] | None:  # Guard helper.
+        """Return (device_name, site_id, device_id) or None if any required field is empty."""
+        # WHY: collapses three not-empty checks into one, dropping _classify_row CC from 6 to <=5.
+        device_name = row.get("name", "").strip()  # Required identifying field for the report
+        site_id = row.get("site_id", "").strip()  # Required for downstream API calls
+        device_id = row.get("id", "").strip()  # Required as the dict key
+        if not device_name or not site_id or not device_id:  # Skip rows missing any required identifier
+            return None  # Signal "skip this row" without leaking blank fields downstream
+        return device_name, site_id, device_id  # Bundle identifiers for the caller
+
+    @staticmethod
+    def _resolve_template_name(
+        site_id: str,
+        site_to_template: dict[str, str],
+        template_lookup: dict[str, str],
+    ) -> tuple[str, str]:  # Extracted to keep _classify_row short.
+        """Return (template_id, template_name) resolved from the site->template lookups."""
+        # WHY: pulls the template-name lookup out of _classify_row to shrink it under 25 lines.
+        template_id = site_to_template.get(site_id, "")  # Resolve template UUID (may be empty)
+        template_name = template_lookup.get(template_id, "No Template") if template_id else "No Template"  # Label
+        return template_id, template_name  # Caller stores both in the returned device-info dict
+
+    @staticmethod
     def _classify_row(
         row: dict[str, str],
         site_lookup: dict[str, str],
@@ -144,16 +183,36 @@ class WanOverrideWalker:
         target_ports: list[str],
     ) -> dict[str, Any] | None:
         """Return a populated device-info dict if the row has overrides, else None to skip it."""
-        device_name = row.get("name", "").strip()  # Required identifying field for the report
-        site_id = row.get("site_id", "").strip()  # Required for downstream API calls
-        device_id = row.get("id", "").strip()  # Required as the dict key
-        if not device_name or not site_id or not device_id:  # Skip rows missing any required identifier
-            return None  # Helper returns None so the orchestrator skips this row silently
+        identifiers = WanOverrideWalker._extract_row_identifiers(row)  # Guard: skip incomplete rows
+        if identifiers is None:  # Helper returned None because at least one identifier was blank
+            return None  # Caller treats None as "no entry to add"
         overridden_ports = OverrideClassifier.classify(row, target_ports)  # Decide which ports are overridden
         if not overridden_ports:  # Skip devices with zero overrides to save API calls in the second pass
             return None  # Caller treats None as "no entry to add"
-        template_id = site_to_template.get(site_id, "")  # Resolve template UUID (may be empty)
-        template_name = template_lookup.get(template_id, "No Template") if template_id else "No Template"  # Label
+        _, site_id, _ = identifiers  # Only site_id is needed here; the rest flow through the builder
+        template_id, template_name = WanOverrideWalker._resolve_template_name(  # Resolve template metadata
+            site_id, site_to_template, template_lookup
+        )
+        return WanOverrideWalker._build_device_info(  # Delegate dict construction to keep this fn <=25 lines
+            identifiers=identifiers,
+            row=row,
+            site_lookup=site_lookup,
+            template=(template_id, template_name),
+            overridden_ports=overridden_ports,
+        )
+
+    @staticmethod
+    def _build_device_info(
+        identifiers: tuple[str, str, str],
+        row: dict[str, str],
+        site_lookup: dict[str, str],
+        template: tuple[str, str],
+        overridden_ports: list[str],
+    ) -> dict[str, Any]:  # Extracted so _classify_row stays under STRUCT-LENGTH limit.
+        """Assemble the 8-key device-info dict consumed by the second and third passes."""
+        # WHY: pulls the dict literal out of _classify_row to drop it from 28 to <25 lines.
+        device_name, site_id, device_id = identifiers  # Unpack the guarded identifier triple
+        template_id, template_name = template  # Unpack precomputed template metadata
         return {  # Bundle every field the third pass needs so the orchestrator does not pass extra args
             "device_name": device_name,
             "site_id": site_id,
