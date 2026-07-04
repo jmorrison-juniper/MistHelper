@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.reports.e911_bssid import E911BSSIDReportGenerator
+from src.reports.e911_bssid import E911BSSIDReportGenerator, SiteBatchContext
 
 
 # ---------------------------------------------------------------------------
@@ -556,15 +556,16 @@ class TestHandleRateLimit:
     def test_saves_checkpoint_and_returns_false(self, capsys):
         """Rate limit handler saves state and returns False."""
         org_data = {"sites": {}}
-        result = E911BSSIDReportGenerator._handle_rate_limit(
-            "org-1",
-            org_data,
-            {"site-a"},
-            {"m1": "F1"},
-            {"k": ["v"]},
-            10,
-            5,
+        batch = SiteBatchContext(
+            org_id="org-1",
+            org_data=org_data,
+            total_sites=10,
+            completed_sites={"site-a"},
+            map_lookup={"m1": "F1"},
+            wlan_band_lookup={"k": ["v"]},
+            wlan_context={},
         )
+        result = E911BSSIDReportGenerator._handle_rate_limit(batch, 5)
         assert result is False
         assert os.path.exists(E911BSSIDReportGenerator.CHECKPOINT_FILE)
         output = capsys.readouterr().out
@@ -1126,40 +1127,52 @@ class TestProcessSiteBatch:
 
     def test_processes_all_sites(self):
         """All sites processed returns True."""
-        org_data = {"sites": {"s1": {}}}
-        wctx = {
+        org_data = {"sites": {"s1": {}}}  # WHY: minimal org_data with one site
+        wctx = {  # WHY: wlan_context bundle used by SiteBatchContext
             "wlan_templates": [],
             "org_wlans": [],
             "wlan_band_lookup": {},
             "site_template_cache": {},
         }
+        batch = SiteBatchContext(  # WHY: bundle 7 per-batch fields into the new 4-arg signature
+            org_id="org-1",
+            org_data=org_data,
+            total_sites=1,
+            completed_sites=set(),
+            map_lookup={},
+            wlan_band_lookup={},
+            wlan_context=wctx,
+        )
         with (
             patch.object(E911BSSIDReportGenerator, "_fetch_site_maps"),
             patch.object(E911BSSIDReportGenerator, "_resolve_site_ssids"),
         ):
             result = E911BSSIDReportGenerator._process_site_batch(
-                MagicMock(),
-                "org-1",
-                100,
-                org_data,
-                ["s1"],
-                set(),
-                {},
-                {},
-                wctx,
-                1,
+                MagicMock(),  # apisession
+                100,  # page_limit
+                ["s1"],  # remaining sites
+                batch,  # SiteBatchContext bundling org state
             )
         assert result is True
 
     def test_rate_limit_returns_false(self):
         """Rate-limited site batch saves checkpoint and returns False."""
-        org_data = {"sites": {"s1": {}}}
-        wctx = {
+        org_data = {"sites": {"s1": {}}}  # WHY: minimal org_data with one site
+        wctx = {  # WHY: wlan_context bundle used by SiteBatchContext
             "wlan_templates": [],
             "org_wlans": [],
             "wlan_band_lookup": {},
             "site_template_cache": {},
         }
+        batch = SiteBatchContext(  # WHY: bundle 7 per-batch fields into the new 4-arg signature
+            org_id="org-1",
+            org_data=org_data,
+            total_sites=1,
+            completed_sites=set(),
+            map_lookup={},
+            wlan_band_lookup={},
+            wlan_context=wctx,
+        )
         with (
             patch.object(
                 E911BSSIDReportGenerator,
@@ -1169,29 +1182,32 @@ class TestProcessSiteBatch:
             patch.object(E911BSSIDReportGenerator, "_handle_rate_limit", return_value=False),
         ):
             result = E911BSSIDReportGenerator._process_site_batch(
-                MagicMock(),
-                "org-1",
-                100,
-                org_data,
-                ["s1"],
-                set(),
-                {},
-                {},
-                wctx,
-                1,
+                MagicMock(),  # apisession
+                100,  # page_limit
+                ["s1"],  # remaining sites
+                batch,  # SiteBatchContext bundling org state
             )
         assert result is False
 
     def test_generic_error_continues(self):
         """Non-rate-limit errors are logged and site is marked done."""
-        org_data = {"sites": {"s1": {}}}
-        completed: set[str] = set()
-        wctx = {
+        org_data = {"sites": {"s1": {}}}  # WHY: minimal org_data with one site
+        completed: set[str] = set()  # WHY: track sites marked done via shared set
+        wctx = {  # WHY: wlan_context bundle used by SiteBatchContext
             "wlan_templates": [],
             "org_wlans": [],
             "wlan_band_lookup": {},
             "site_template_cache": {},
         }
+        batch = SiteBatchContext(  # WHY: bundle 7 per-batch fields into the new 4-arg signature
+            org_id="org-1",
+            org_data=org_data,
+            total_sites=1,
+            completed_sites=completed,
+            map_lookup={},
+            wlan_band_lookup={},
+            wlan_context=wctx,
+        )
         with (
             patch.object(
                 E911BSSIDReportGenerator,
@@ -1200,46 +1216,43 @@ class TestProcessSiteBatch:
             ),
         ):
             result = E911BSSIDReportGenerator._process_site_batch(
-                MagicMock(),
-                "org-1",
-                100,
-                org_data,
-                ["s1"],
-                completed,
-                {},
-                {},
-                wctx,
-                1,
+                MagicMock(),  # apisession
+                100,  # page_limit
+                ["s1"],  # remaining sites
+                batch,  # SiteBatchContext bundling org state
             )
         assert result is True
         assert "s1" in completed
 
     def test_checkpoint_at_interval(self):
         """Checkpoint saved at CHECKPOINT_INTERVAL."""
-        org_data = {"sites": {f"s{i}": {} for i in range(55)}}
-        remaining = [f"s{i}" for i in range(55)]
-        wctx = {
+        org_data = {"sites": {f"s{i}": {} for i in range(55)}}  # WHY: 55 sites > CHECKPOINT_INTERVAL (50)
+        remaining = [f"s{i}" for i in range(55)]  # WHY: all 55 sites to process this run
+        wctx = {  # WHY: wlan_context bundle used by SiteBatchContext
             "wlan_templates": [],
             "org_wlans": [],
             "wlan_band_lookup": {},
             "site_template_cache": {},
         }
+        batch = SiteBatchContext(  # WHY: bundle 7 per-batch fields into the new 4-arg signature
+            org_id="org-1",
+            org_data=org_data,
+            total_sites=55,
+            completed_sites=set(),
+            map_lookup={},
+            wlan_band_lookup={},
+            wlan_context=wctx,
+        )
         with (
             patch.object(E911BSSIDReportGenerator, "_fetch_site_maps"),
             patch.object(E911BSSIDReportGenerator, "_resolve_site_ssids"),
             patch.object(E911BSSIDReportGenerator, "_save_checkpoint") as mock_save,
         ):
             E911BSSIDReportGenerator._process_site_batch(
-                MagicMock(),
-                "org-1",
-                100,
-                org_data,
-                remaining,
-                set(),
-                {},
-                {},
-                wctx,
-                55,
+                MagicMock(),  # apisession
+                100,  # page_limit
+                remaining,  # remaining sites
+                batch,  # SiteBatchContext bundling org state
             )
         assert mock_save.call_count == 1  # At index 50
 
@@ -1334,6 +1347,20 @@ class TestProcessSiteBatchRateLimit:
             "site_template_cache": {},
         }
         completed_sites: set = set()  # no sites completed yet
+        batch = SiteBatchContext(  # WHY: bundle 7 per-batch fields into the new 4-arg signature
+            org_id="org-1",
+            org_data=org_data,
+            total_sites=1,
+            completed_sites=completed_sites,
+            map_lookup={},
+            wlan_band_lookup={},
+            wlan_context={
+                "wlan_templates": [],
+                "org_wlans": [],
+                "wlan_band_lookup": {},
+                "site_template_cache": {},
+            },
+        )
         with patch.object(  # _fetch_site_maps raises E911_RATE_LIMIT on first site
             E911BSSIDReportGenerator,
             "_fetch_site_maps",
@@ -1346,20 +1373,9 @@ class TestProcessSiteBatchRateLimit:
             ) as mock_handle:
                 result = E911BSSIDReportGenerator._process_site_batch(
                     apisession=mock_apisession,
-                    org_id="org-1",
                     page_limit=1000,
-                    org_data=org_data,
                     remaining=["site-1"],
-                    completed_sites=completed_sites,
-                    map_lookup={},
-                    wlan_band_lookup={},
-                    wlan_context={
-                        "wlan_templates": [],
-                        "org_wlans": [],
-                        "wlan_band_lookup": {},
-                        "site_template_cache": {},
-                    },
-                    total_sites=1,
+                    batch=batch,
                 )
         assert result is False  # line 640: returned from _handle_rate_limit call
         mock_handle.assert_called_once()  # _handle_rate_limit was invoked at line 640
@@ -1377,6 +1393,20 @@ class TestProcessSiteBatchRateLimit:
             "site_template_cache": {},
         }
         completed_sites: set = set()  # no sites completed yet
+        batch = SiteBatchContext(  # WHY: bundle 7 per-batch fields into the new 4-arg signature
+            org_id="org-1",
+            org_data=org_data,
+            total_sites=1,
+            completed_sites=completed_sites,
+            map_lookup={},
+            wlan_band_lookup={},
+            wlan_context={
+                "wlan_templates": [],
+                "org_wlans": [],
+                "wlan_band_lookup": {},
+                "site_template_cache": {},
+            },
+        )
         with patch.object(  # _fetch_site_maps raises non-RATE-LIMIT RuntimeError
             E911BSSIDReportGenerator,
             "_fetch_site_maps",
@@ -1385,19 +1415,8 @@ class TestProcessSiteBatchRateLimit:
             with pytest.raises(RuntimeError, match="unexpected_api_error"):  # expect re-raise
                 E911BSSIDReportGenerator._process_site_batch(  # call; should re-raise
                     apisession=mock_apisession,
-                    org_id="org-1",
                     page_limit=1000,
-                    org_data=org_data,
                     remaining=["site-1"],
-                    completed_sites=completed_sites,
-                    map_lookup={},
-                    wlan_band_lookup={},
-                    wlan_context={
-                        "wlan_templates": [],
-                        "org_wlans": [],
-                        "wlan_band_lookup": {},
-                        "site_template_cache": {},
-                    },
-                    total_sites=1,
+                    batch=batch,
                 )
         # Line 640 (raise) was executed: RuntimeError re-raised and caught by pytest.raises
