@@ -80,6 +80,43 @@ class SLEMetricsService:
         )  # Bundle the resolved run configuration
 
     @staticmethod
+    def _build_sites_aggregated_record(
+        metric: str, org_id: str, sle_category: str, sites_sle_data: list[Any]
+    ) -> dict[str, Any]:
+        """Build one aggregated SLE record for a metric/category and tag worst-site analyses."""
+        # WHY: extracted so _fetch_category_sites keeps CC low and _fetch_sites_aggregated shrinks.
+        aggregated_result: dict[str, Any] = {
+            "sle_metric_type": f"{metric}_{sle_category}",  # Composite key for downstream consumers
+            "org_id": org_id,  # Owning org UUID
+            "sle_category": sle_category,  # WiFi/WAN/wired category
+            "data_source": "org_sites_sle_aggregated",  # Marks the aggregation path used
+            "total_sites": len(sites_sle_data),  # Count of sites in the returned page set
+            "sites_analyzed": sites_sle_data,  # Underlying per-site SLE payloads
+            "metric_name": metric,  # Original metric name for cross-reference
+        }
+        if "worst-sites" in metric:  # Tag worst-site analyses for downstream consumers
+            aggregated_result["analysis_type"] = "worst_sites_identification"  # Mark analysis intent
+        return aggregated_result  # Ready for accumulation into all_sle_data
+
+    @staticmethod
+    def _fetch_category_sites(
+        deps: SimpleNamespace, org_id: str, metric: str, sle_category: str, config: SimpleNamespace
+    ) -> dict[str, Any] | None:
+        """Fetch one category's sites SLE data and return an aggregated record (or None if empty)."""
+        # WHY: returns dict|None instead of taking all_sle_data by ref to stay under STRUCT-PARAMS (5).
+        response = deps.mistapi.api.v1.orgs.insights.getOrgSitesSle(
+            deps.apisession, org_id, sle=sle_category, duration=config.duration_value, limit=1000
+        )  # Query org sites SLE for this category
+        sites_sle_data = deps.mistapi.get_all(response=response, mist_session=deps.apisession) or []  # Page all
+        if not sites_sle_data:  # No sites returned for this category
+            logging.debug("No sites SLE data available for metric: %s with SLE: %s", metric, sle_category)  # Empty
+            return None  # Category produced no data
+        logging.debug(
+            "Retrieved sites SLE for %s/%s (%s sites)", metric, sle_category, len(sites_sle_data)
+        )  # Trace success with site count
+        return SLEMetricsService._build_sites_aggregated_record(metric, org_id, sle_category, sites_sle_data)
+
+    @staticmethod
     def _fetch_sites_aggregated(
         deps: SimpleNamespace, org_id: str, metric: str, config: SimpleNamespace, all_sle_data: list[Any]
     ) -> int:
@@ -87,39 +124,14 @@ class SLEMetricsService:
         retrieved = 0  # Successful per-category fetches for this metric
         for sle_category in config.sle_categories:  # Iterate each service category for this aggregated metric
             try:  # Per-category failures are non-fatal and skip to the next category
-                response = deps.mistapi.api.v1.orgs.insights.getOrgSitesSle(
-                    deps.apisession, org_id, sle=sle_category, duration=config.duration_value, limit=1000
-                )  # Query org sites SLE for this category
-                sites_sle_data = deps.mistapi.get_all(response=response, mist_session=deps.apisession) or []  # Page all
-                if sites_sle_data:  # Only record when the category returned sites
-                    aggregated_result = {
-                        "sle_metric_type": f"{metric}_{sle_category}",
-                        "org_id": org_id,
-                        "sle_category": sle_category,
-                        "data_source": "org_sites_sle_aggregated",
-                        "total_sites": len(sites_sle_data),
-                        "sites_analyzed": sites_sle_data,
-                        "metric_name": metric,
-                    }  # Build the aggregated record for this metric/category
-                    if "worst-sites" in metric:  # Tag worst-site analyses for downstream consumers
-                        aggregated_result["analysis_type"] = "worst_sites_identification"  # Mark analysis intent
-                    all_sle_data.append(aggregated_result)  # Accumulate the aggregated record
+                record = SLEMetricsService._fetch_category_sites(deps, org_id, metric, sle_category, config)
+                if record is not None:  # Helper returned an aggregated record for this category
+                    all_sle_data.append(record)  # Accumulate the aggregated record
                     retrieved += 1  # Count this successful category fetch
-                    logging.debug(
-                        "Successfully retrieved sites SLE data for metric analysis: %s with SLE: %s (%s sites)",
-                        metric,
-                        sle_category,
-                        len(sites_sle_data),
-                    )  # Trace success with site count
-                else:  # No sites returned for this category
-                    logging.debug(
-                        "No sites SLE data available for metric: %s with SLE: %s", metric, sle_category
-                    )  # Trace
             except Exception as sites_error:  # Category-level API failure - log and continue
                 logging.debug(
-                    "Failed to get sites SLE data for metric '%s' with SLE '%s': %s", metric, sle_category, sites_error
+                    "Failed sites SLE for metric '%s' with SLE '%s': %s", metric, sle_category, sites_error
                 )  # Trace the per-category failure
-                continue  # Skip to the next category
         return retrieved  # Total successful category fetches for this metric
 
     @staticmethod
@@ -250,43 +262,42 @@ class SLEMetricsService:
             )  # Write an empty export for consistency
 
     @classmethod
-    def execute(cls, fast: bool = False) -> None:
-        """Run the organization SLE metrics export workflow."""
-        deps = _resolve_runtime_dependencies()  # Resolve MistHelper collaborators at call time
-
-        print("Export Organization SLE Metrics:")  # User-facing banner
-        logging.info("Starting export of organization SLE metrics...")  # Trace workflow start
-        org_id = deps.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve target org (cached or prompted)
-
-        config = cls._build_run_config(deps, fast)  # Resolve categories/metrics/duration (honors fast mode)
-        total_items = len(config.specialized_metrics) + len(config.sle_categories)  # Total progress work units
-        progress = _SleProgressTracker(deps.PROGRESS_EMITTER, total_items)  # Encapsulate progress + items-done counter
-        progress.start()  # Emit the progress-start event
-
-        all_sle_data: list[Any] = []  # Accumulates every SLE record across both loops
-
-        print(f"! Retrieving organization SLE data using {len(config.sle_categories)} service categories...")  # Info
-        print(f"! Also attempting {len(config.specialized_metrics)} specialized SLE aggregation metrics...")  # Info
-
+    def _run_retrieval(
+        cls,
+        deps: SimpleNamespace,
+        org_id: str,
+        config: SimpleNamespace,
+        all_sle_data: list[Any],
+        progress: "_SleProgressTracker",
+    ) -> None:
+        """Run both retrieval loops and export; write empty CSV on any top-level failure."""
+        # WHY: extracted from execute so execute stays under the 25-line STRUCT-LENGTH limit.
         try:  # Guard the whole retrieval+export so progress always completes
-            specialized_retrieved, specialized_failed = cls._run_specialized_loop(
-                deps, org_id, config, all_sle_data, progress
-            )  # First loop: specialized metrics
-            category_retrieved, category_failed = cls._run_category_loop(
-                deps, org_id, config, all_sle_data, progress
-            )  # Second loop: aggregated categories
-            metrics_retrieved = specialized_retrieved + category_retrieved  # Total successful fetches
-            metrics_failed = specialized_failed + category_failed  # Total failed fetches
-
+            spec_ok, spec_fail = cls._run_specialized_loop(deps, org_id, config, all_sle_data, progress)  # Loop 1
+            cat_ok, cat_fail = cls._run_category_loop(deps, org_id, config, all_sle_data, progress)  # Loop 2
+            metrics_retrieved = spec_ok + cat_ok  # Total successful fetches
+            metrics_failed = spec_fail + cat_fail  # Total failed fetches
             print(f"! SLE data retrieval completed: {metrics_retrieved} successful, {metrics_failed} failed")  # Summary
-            logging.info(
-                "Org SLE data: %s retrieved successfully, %s failed", metrics_retrieved, metrics_failed
-            )  # Trace
-
+            logging.info("Org SLE data: %s retrieved successfully, %s failed", metrics_retrieved, metrics_failed)
             cls._export_results(deps, all_sle_data, metrics_retrieved)  # Flatten + export (or write empty)
-
         except Exception as exception:  # Any unexpected top-level failure still writes an empty export
             print(f"! Error exporting organization SLE metrics: {exception}")  # User-facing error
             logging.error("Failed to export org SLE metrics: %s", exception)  # Trace the failure
             deps.DataExporter.write_with_format_selection([], "OrgSLEMetrics.csv")  # Write empty export on failure
+
+    @classmethod
+    def execute(cls, fast: bool = False) -> None:
+        """Run the organization SLE metrics export workflow."""
+        deps = _resolve_runtime_dependencies()  # Resolve MistHelper collaborators at call time
+        print("Export Organization SLE Metrics:")  # User-facing banner
+        logging.info("Starting export of organization SLE metrics...")  # Trace workflow start
+        org_id = deps.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve target org (cached or prompted)
+        config = cls._build_run_config(deps, fast)  # Resolve categories/metrics/duration (honors fast mode)
+        total_items = len(config.specialized_metrics) + len(config.sle_categories)  # Total progress work units
+        progress = _SleProgressTracker(deps.PROGRESS_EMITTER, total_items)  # Encapsulate progress + items-done counter
+        progress.start()  # Emit the progress-start event
+        all_sle_data: list[Any] = []  # Accumulates every SLE record across both loops
+        print(f"! Retrieving organization SLE data using {len(config.sle_categories)} service categories...")  # Info
+        print(f"! Also attempting {len(config.specialized_metrics)} specialized SLE aggregation metrics...")  # Info
+        cls._run_retrieval(deps, org_id, config, all_sle_data, progress)  # Run both loops + export (or empty)
         progress.complete()  # Always emit the progress-complete event
