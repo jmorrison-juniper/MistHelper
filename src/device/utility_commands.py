@@ -42,7 +42,7 @@ WebSocketManagerFactory = Callable[[Any], Any]  # WHY: WSManager factory signatu
 
 
 @dataclass(frozen=True)
-class UtilityCommandsDeps:
+class UtilityCommandsDeps:  # WHY: frozen bundle keeps parent __init__ under STRUCT-PARAMS
     """Injected dependencies for :class:`DeviceUtilityCommands`.
 
     Bundles the 6 dependencies into a single frozen dataclass so
@@ -59,10 +59,10 @@ class UtilityCommandsDeps:
 
 
 # WHY: HTTP status codes >= this value denote an error response.
-_HTTP_ERROR_THRESHOLD = 400
+_HTTP_ERROR_THRESHOLD = 400  # WHY: sentinel threshold shared by API result helpers
 
 
-def _extract_error_detail(response: Any) -> str:
+def _extract_error_detail(response: Any) -> str:  # WHY: pull optional .data.detail off a response
     """Return the ``data.detail`` string from a response, or empty string."""
     data = getattr(response, "data", None)  # WHY: guard missing .data on error responses
     if isinstance(data, dict):  # WHY: only mistapi dicts carry the detail key
@@ -70,7 +70,7 @@ def _extract_error_detail(response: Any) -> str:
     return ""  # WHY: unknown shape -> no detail available
 
 
-def _print_api_error(response: Any, fail_msg: str, status_code: int) -> None:
+def _print_api_error(response: Any, fail_msg: str, status_code: int) -> None:  # WHY: uniform HTTP-error formatter
     """Print a formatted error line including the status code and any detail."""
     detail = _extract_error_detail(response)  # WHY: pull optional server message
     error_text = f"! {fail_msg} (HTTP {status_code})"  # WHY: base line always includes status
@@ -79,7 +79,7 @@ def _print_api_error(response: Any, fail_msg: str, status_code: int) -> None:
     print(error_text)  # WHY: single write to keep operator output atomic
 
 
-class DeviceUtilityCommands:
+class DeviceUtilityCommands:  # WHY: parent class hosting 35 device-command operations
     """Device utility commands covering 35 Mist API endpoints.
 
     Categories: diagnostics, show commands, device management, clear/reset,
@@ -88,7 +88,7 @@ class DeviceUtilityCommands:
     typed 'CLEAR' (clear/reset operations).
     """
 
-    DEVICE_TYPE_COMPATIBILITY_MAP: dict[str, list[str]] = {
+    DEVICE_TYPE_COMPATIBILITY_MAP: dict[str, list[str]] = {  # WHY: gate per-command by device type
         "traceroute": ["ap", "switch", "gateway"],
         "show_ospf_neighbors": ["gateway"],
         "show_ospf_interfaces": ["gateway"],
@@ -126,7 +126,7 @@ class DeviceUtilityCommands:
         "snapshot": ["switch"],
     }
 
-    def __init__(self, deps: UtilityCommandsDeps) -> None:
+    def __init__(self, deps: UtilityCommandsDeps) -> None:  # WHY: single-arg deps struct satisfies STRUCT-PARAMS
         """Initialize with the injected :class:`UtilityCommandsDeps` bundle.
 
         Args:
@@ -148,7 +148,7 @@ class DeviceUtilityCommands:
             _UtilityCommandsClear(self),  # WHY: destructive clear/reset cluster binding
         )
 
-    def __getattr__(self, name: str) -> Any:
+    def __getattr__(self, name: str) -> Any:  # WHY: transparently proxies to cluster helpers
         """Proxy cluster-attribute access to helper clusters.
 
         Python only invokes ``__getattr__`` when normal lookup fails, so
@@ -162,14 +162,14 @@ class DeviceUtilityCommands:
         for cluster in self.__dict__.get("_clusters", ()):  # WHY: iterate bundled clusters
             if hasattr(type(cluster), name):  # WHY: class-level lookup avoids cluster __getattr__ recursion
                 return getattr(cluster, name)  # WHY: bound method resolves through cluster
-        raise AttributeError(f"{type(self).__name__!r} object has no attribute {name!r}")
+        raise AttributeError(f"{type(self).__name__!r} object has no attribute {name!r}")  # WHY: mirror stdlib msg
 
     # ------------------------------------------------------------------
     # Private helpers retained on the parent (referenced by tests at class level)
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _print_api_result(response: Any, success_msg: str, fail_msg: str) -> bool:
+    def _print_api_result(response: Any, success_msg: str, fail_msg: str) -> bool:  # WHY: uniform HTTP-status renderer
         """Check API response status and print message.
 
         Delegates status extraction and error formatting to module-level
@@ -178,9 +178,9 @@ class DeviceUtilityCommands:
         status = getattr(response, "status_code", None)  # WHY: guard missing attr on mocks
         if isinstance(status, int) and status >= _HTTP_ERROR_THRESHOLD:  # WHY: only ints compare
             _print_api_error(response, fail_msg, status)  # WHY: delegate detail extraction
-            return False
+            return False  # WHY: caller treats False as failure
         print(f"-> {success_msg}")  # WHY: emit success line
-        return True
+        return True  # WHY: caller treats True as success
 
     @staticmethod
     def _handle_clear_session_error(error: Exception) -> None:
