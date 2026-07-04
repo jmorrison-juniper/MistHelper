@@ -14,7 +14,10 @@ from src.ssh.batch.interactive_batch_executor import (  # Real collaborator (no 
     InteractiveBatchExecutor,
     InteractiveSessionRequest,
 )
-from src.ssh.command.command_runner import SingleCommandRunner  # Existing single-command orchestrator
+from src.ssh.command.command_runner import (  # Existing single-command orchestrator (dataclass entrypoint)
+    SingleCommandRequest,
+    SingleCommandRunner,
+)
 
 if TYPE_CHECKING:  # Imported only for type hints — avoids circular import at runtime
     from src.ssh.ssh_runner import SSHConnectionConfig, SSHExecutionConfig
@@ -98,15 +101,16 @@ class HostRunner:
     ) -> tuple[str, bool, str]:
         """Pick execution flavor based on number of commands + interactive heuristic."""
         if len(commands) == 1:  # Single command → SingleCommandRunner orchestrator
-            single_success = SingleCommandRunner.run(
-                hostname,
-                username,
-                password,
-                commands[0],
-                port,
-                timeout,
-                use_shell,
+            single_request = SingleCommandRequest(  # WHY: dataclass keeps run() at 1 param.
+                hostname=hostname,
+                username=username,
+                password=password,
+                command=commands[0],
+                port=port,
+                timeout=timeout,
+                use_shell=use_shell,
             )
+            single_success = SingleCommandRunner.run(single_request)
             return (hostname, single_success, f"Single command: {commands[0]}")
         if HostRunner._needs_interactive(commands, hostname, logger):  # Detect su/sudo + password sequences
             logger.info("[%s] Using interactive mode for %d commands", hostname, len(commands))
