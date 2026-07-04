@@ -72,7 +72,7 @@ Follow `contracts/per-file-pr.md` for each task. Every task below expands to: ba
 
 - [ ] T006 Refactor `src\gateway\template_config.py` (rank 6, current D/65.0, 25 issues) to A+/100.0 (floor A/>=94). Branch: `refactor/compliance-006-template_config`. Follow `contracts/per-file-pr.md`.
 - [ ] T007 Refactor `src\reports\e911_bssid.py` (rank 7, current D/65.0, 23 issues) to A+/100.0 (floor A/>=94). Branch: `refactor/compliance-007-e911_bssid`. Follow `contracts/per-file-pr.md`.
-- [ ] T008 Refactor `src\maps\launcher\_viewer_drawing.py` (rank 8, current C/73.0, 22 issues) to A+/100.0 (floor A/>=94). Branch: `refactor/compliance-008-_viewer_drawing`. Follow `contracts/per-file-pr.md`.
+- [X] T008 Refactor `src\maps\launcher\_viewer_drawing.py` (rank 8, current C/73.0, 22 issues) to A+/100.0 (floor A/>=94). Branch: `refactor/compliance-008-_viewer_drawing`. Follow `contracts/per-file-pr.md`.
 - [ ] T009 Refactor `src\maps\_maps_wizard.py` (rank 9, current D/64.0, 22 issues) to A+/100.0 (floor A/>=94). Branch: `refactor/compliance-009-_maps_wizard`. Follow `contracts/per-file-pr.md`.
 - [ ] T010 Refactor `src\maps\launcher\_viewer_refresh.py` (rank 10, current D+/67.0, 21 issues) to A+/100.0 (floor A/>=94). Branch: `refactor/compliance-010-_viewer_refresh`. Follow `contracts/per-file-pr.md`.
 
