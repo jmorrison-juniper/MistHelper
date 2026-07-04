@@ -7,6 +7,7 @@ import sys
 from typing import Any
 
 from src.websocket.service_ping_discovery import (
+    ServicePingDiscoveryDependencies,
     ServicePingDiscoveryMixin,
     configure_service_ping_discovery_dependencies,
 )
@@ -56,12 +57,14 @@ def configure_service_ping_manager_dependencies(
     APIFetchUtils = api_fetch_utils
 
     configure_service_ping_discovery_dependencies(
-        apisession_dependency=apisession_dependency,
-        mistapi_dependency=mistapi_dependency,
-        api_tenant_fetch_utils=api_tenant_fetch_utils,
-        config_utils=config_utils,
-        api_fetch_utils=api_fetch_utils,
-        input_utils=input_utils,
+        ServicePingDiscoveryDependencies(
+            apisession=apisession_dependency,
+            mistapi=mistapi_dependency,
+            api_tenant_fetch_utils=api_tenant_fetch_utils,
+            config_utils=config_utils,
+            api_fetch_utils=api_fetch_utils,
+            input_utils=input_utils,
+        )
     )
 
 
