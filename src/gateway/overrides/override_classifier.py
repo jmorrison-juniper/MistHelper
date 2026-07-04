@@ -24,9 +24,9 @@ class OverrideClassifier:  # Namespace for stateless override classification hel
     def _field_matches_port(field_name: str, port_name: str) -> bool:  # Extracted to keep _port_has_override CC <= 5.
         """Return True if field_name is a port_config_<port> column (either separator variant)."""
         # WHY: extracting the 'or' predicate cuts one branch out of _port_has_override.
-        prefix_underscore = f"port_config_{port_name}_"  # Flattened CSV variant using underscore separator.
-        prefix_dot = f"port_config_{port_name}."  # Flattened CSV variant using dot separator.
-        return field_name.startswith(prefix_underscore) or field_name.startswith(prefix_dot)  # Either variant qualifies.
+        prefix_u = f"port_config_{port_name}_"  # Flattened CSV variant using underscore separator.
+        prefix_d = f"port_config_{port_name}."  # Flattened CSV variant using dot separator.
+        return field_name.startswith(prefix_u) or field_name.startswith(prefix_d)  # Either variant qualifies.
 
     @staticmethod
     def _value_is_override(value: Any) -> bool:  # Extracted so _port_has_override stays CC <= 5.
