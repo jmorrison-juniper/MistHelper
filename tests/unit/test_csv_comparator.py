@@ -19,7 +19,10 @@ sys.modules["mistapi"] = _our_mock
 
 from src.inventory.csv_comparator import (
     AddressComparisonCounters,
+    ComparatorDependencies,
+    ComparatorFlags,
     InventoryCSVComparator,
+    RecordComparisonInputs,
 )
 
 
@@ -80,11 +83,13 @@ def _mock_address_utils() -> MagicMock:
 
 def _make_comparator(**overrides: object) -> InventoryCSVComparator:
     """Create a comparator with default mocked dependencies."""
-    defaults: dict[str, object] = {
+    flag_defaults: dict[str, object] = {
         "fast": False,
         "address_check": False,
         "debug": False,
         "skip_ssl_verify": True,
+    }
+    dep_defaults: dict[str, object] = {
         "apisession": MagicMock(),
         "get_csv_path_fn": lambda f: f"data/{f}",
         "check_and_generate_csv_fn": MagicMock(),
@@ -96,8 +101,14 @@ def _make_comparator(**overrides: object) -> InventoryCSVComparator:
         "nominatim_validator_cls": MagicMock,
         "address_validation_config_cls": MagicMock,
     }
-    defaults.update(overrides)
-    return InventoryCSVComparator(**defaults)  # type: ignore[arg-type]
+    for key, value in overrides.items():
+        if key in flag_defaults:
+            flag_defaults[key] = value
+        else:
+            dep_defaults[key] = value
+    flags = ComparatorFlags(**flag_defaults)  # type: ignore[arg-type]
+    deps = ComparatorDependencies(**dep_defaults)  # type: ignore[arg-type]
+    return InventoryCSVComparator(flags=flags, deps=deps)
 
 
 # ================================================================
@@ -448,12 +459,14 @@ class TestRecordComparison:
         """Perfect match increments counter."""
         comp = _make_comparator()
         comp._record_comparison_result(
-            device={},
-            device_serial="SN1",
-            device_identifier="Dev1",
-            mist_address={},
-            comparison_address={},
-            comparison_result={"is_match": True},
+            RecordComparisonInputs(
+                device={},
+                device_serial="SN1",
+                device_identifier="Dev1",
+                mist_address={},
+                comparison_address={},
+                comparison_result={"is_match": True},
+            )
         )
         assert comp.counters.perfect_matches == 1
         assert comp.counters.mismatches_found == 0
@@ -462,12 +475,14 @@ class TestRecordComparison:
         """Mismatch appends to all_conflicts."""
         comp = _make_comparator()
         comp._record_comparison_result(
-            device={"site_name": "S1"},
-            device_serial="SN2",
-            device_identifier="Dev2",
-            mist_address={"address": "A"},
-            comparison_address={"address": "B"},
-            comparison_result={"is_match": False},
+            RecordComparisonInputs(
+                device={"site_name": "S1"},
+                device_serial="SN2",
+                device_identifier="Dev2",
+                mist_address={"address": "A"},
+                comparison_address={"address": "B"},
+                comparison_result={"is_match": False},
+            )
         )
         assert comp.counters.mismatches_found == 1
         assert len(comp.all_conflicts) == 1
