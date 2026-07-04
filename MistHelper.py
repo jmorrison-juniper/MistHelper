@@ -18352,15 +18352,16 @@ class SiteConfigManager:  # Site config manager.
         """Configure extracted module dependencies and return the module handle."""
         from src.site import site_config_manager as site_config_module  # noqa: PLC0415,I001
 
-        site_config_module.configure_site_config_manager_dependencies(  # Wire dependencies.
-            apisession_dependency=apisession,
-            config_utils=ConfigUtils,
-            file_path_utils=FilePathUtils,
-            input_utils=InputUtils,
-            data_exporter=DataExporter,
-            mistapi_dependency=mistapi,
-            default_api_page_limit=DEFAULT_API_PAGE_LIMIT,
+        deps = site_config_module.SiteConfigDependencies(  # Build dependency dataclass.
+            apisession=apisession,  # Live Mist API session.
+            config_utils=ConfigUtils,  # Shared org/stop-signal helpers.
+            file_path_utils=FilePathUtils,  # CSV path resolver.
+            input_utils=InputUtils,  # Safe input prompts.
+            data_exporter=DataExporter,  # Output writer.
+            mistapi=mistapi,  # Mist SDK module.
+            default_api_page_limit=DEFAULT_API_PAGE_LIMIT,  # Bulk fetch page size.
         )
+        site_config_module.configure_site_config_manager_dependencies(deps)  # Wire dependencies.
         return site_config_module  # Return the module.
 
     @staticmethod
