@@ -1,8 +1,8 @@
 """Global assignment map builder extracted from high-complexity import manager method."""
 
-import logging
-from collections.abc import Callable
-from typing import Any
+import logging  # WHY: debug logs for optional-dep import outcomes
+from collections.abc import Callable  # WHY: type alias for injected fallback handler
+from typing import Any  # WHY: broad module-object typing on the imports dict
 
 # Per-module attribute re-exports: module name -> tuple of (global_name, source_attr).
 # Each entry copies module_obj.<source_attr> into global_vars[<global_name>] via getattr(default None).
@@ -25,10 +25,10 @@ _MODULE_ALIASES: dict[str, str] = {
 }
 
 # Modules added to the namespace only when present, each emitting a debug log line.
-_LOGGED_MODULES: tuple[str, ...] = ("mistapi", "paramiko", "redexpect")
+_LOGGED_MODULES: tuple[str, ...] = ("mistapi", "paramiko", "redexpect")  # WHY: optional-dep whitelist
 
 
-def _import_scourgify_normalizer(global_vars: dict[str, Any], module_obj: Any) -> None:
+def _import_scourgify_normalizer(global_vars: dict[str, Any], module_obj: Any) -> None:  # WHY: scourgify shim
     """Expose scourgify's normalize_address_record, falling back to a direct import."""
     try:  # The shim module may not carry the attribute directly on all install paths
         normalize_func = getattr(module_obj, "normalize_address_record", None)  # Prefer attribute already on module
@@ -42,7 +42,7 @@ def _import_scourgify_normalizer(global_vars: dict[str, Any], module_obj: Any) -
         logging.debug("Could not import normalize_address_record from scourgify, using fallback")  # Non-fatal
 
 
-def _import_rapidfuzz_matcher(global_vars: dict[str, Any], module_obj: Any) -> None:
+def _import_rapidfuzz_matcher(global_vars: dict[str, Any], module_obj: Any) -> None:  # WHY: rapidfuzz shim
     """Expose rapidfuzz's fuzz matcher, falling back to a direct import."""
     try:  # The module may not carry `fuzz` directly depending on import path
         fuzz_module = getattr(module_obj, "fuzz", None)  # Prefer attribute already on module
@@ -56,24 +56,24 @@ def _import_rapidfuzz_matcher(global_vars: dict[str, Any], module_obj: Any) -> N
         logging.debug("Could not import fuzz from rapidfuzz, using fallback")  # Non-fatal
 
 
-class GlobalAssignmentsBuilderService:
+class GlobalAssignmentsBuilderService:  # WHY: single-purpose helper class extracted for CC compliance
     """Build global name-to-object assignments from imported modules."""
 
     @staticmethod
-    def _apply_attribute_exports(global_vars: dict[str, Any], module_name: str, module_obj: Any) -> None:
+    def _apply_attribute_exports(global_vars: dict[str, Any], module_name: str, module_obj: Any) -> None:  # re-exports
         """Copy configured submember attributes from a module into the global namespace."""
         for global_name, source_attr in _ATTRIBUTE_EXPORTS.get(module_name, ()):  # Empty tuple when not configured
             global_vars[global_name] = getattr(module_obj, source_attr, None)  # Preserve original getattr(None) default
 
     @staticmethod
-    def _expose_module_alternate_name(global_vars: dict[str, Any], module_name: str, module_obj: Any) -> None:
+    def _expose_module_alternate_name(global_vars: dict[str, Any], module_name: str, module_obj: Any) -> None:  # alias
         """Expose a module object under its conventional alternate name when one is configured."""
         alias = _MODULE_ALIASES.get(module_name)  # None when this module has no alternate name
         if alias:  # Only assign when an alternate name is configured
             global_vars[alias] = module_obj  # Expose module under the alternate name
 
     @staticmethod
-    def _apply_optional_imports(global_vars: dict[str, Any], module_name: str, module_obj: Any) -> None:
+    def _apply_optional_imports(global_vars: dict[str, Any], module_name: str, module_obj: Any) -> None:  # dispatch
         """Handle modules that require conditional attribute import with package fallback."""
         if module_name == "usaddress-scourgify" and module_obj:  # Address normalizer (optional dependency)
             _import_scourgify_normalizer(global_vars, module_obj)  # Delegate to scourgify-specific handler
@@ -81,7 +81,7 @@ class GlobalAssignmentsBuilderService:
             _import_rapidfuzz_matcher(global_vars, module_obj)  # Delegate to rapidfuzz-specific handler
 
     @staticmethod
-    def _apply_logged_module(global_vars: dict[str, Any], module_name: str, module_obj: Any) -> None:
+    def _apply_logged_module(global_vars: dict[str, Any], module_name: str, module_obj: Any) -> None:  # logged
         """Register present-only modules and emit a debug log line for each."""
         if module_name in _LOGGED_MODULES and module_obj:  # Only when configured and actually imported
             global_vars[module_name] = module_obj  # Expose module under its own name
