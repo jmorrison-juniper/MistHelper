@@ -125,7 +125,7 @@ def _sample_suffix(output: str) -> str:
 
 
 def _validate_port_arg(value: str) -> int:
-    """argparse type validator for --port ensuring the value is in 1..65535."""
+    """Validate the --port argparse value ensuring it is in 1..65535."""
     parsed = int(value)  # WHY: argparse hands strings; convert to int for range validation
     if not SshConnector._validate_port(parsed):  # WHY: delegate to canonical port validator in connector
         msg = f"Port must be between 1 and 65535, got {parsed}"  # WHY: shorten for line length
@@ -134,7 +134,7 @@ def _validate_port_arg(value: str) -> int:
 
 
 def _validate_timeout_arg(value: str) -> int:
-    """argparse type validator for --timeout ensuring the value is in 1..3600."""
+    """Validate the --timeout argparse value ensuring it is in 1..3600."""
     parsed = int(value)  # WHY: argparse gives strings; convert to int for validation
     if not EnhancedSSHRunner._validate_timeout(parsed):  # WHY: reuse the same runner-level timeout validator
         raise argparse.ArgumentTypeError(  # WHY: preserve legacy error text so users' scripts still parse it
@@ -144,7 +144,7 @@ def _validate_timeout_arg(value: str) -> int:
 
 
 def _validate_threads_arg(value: str) -> int:
-    """argparse type validator for --max-threads ensuring 1..100 inclusive."""
+    """Validate the --max-threads argparse value ensuring 1..100 inclusive."""
     parsed = int(value)  # WHY: argparse hands strings; convert to int for range validation
     if parsed <= 0 or parsed > 100:  # WHY: explicit bounds keep the CLI safe and predictable
         raise argparse.ArgumentTypeError(f"Thread count must be between 1 and 100, got {parsed}")  # WHY: keep msg
