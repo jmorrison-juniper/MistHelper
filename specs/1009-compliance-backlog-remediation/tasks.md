@@ -137,7 +137,7 @@ Follow `contracts/per-file-pr.md` for each task. Every task below expands to: ba
 - [ ] T046 Refactor `src\websocket\manager.py` (rank 46, current C+/78.0, 9 issues) to A+/100.0 (floor A/>=94). Branch: `refactor/compliance-046-manager`. Follow `contracts/per-file-pr.md`.
 - [ ] T047 Refactor `src\maps\launcher\_viewer_site_switch.py` (rank 47, current B/83.0, 9 issues) to A+/100.0 (floor A/>=94). Branch: `refactor/compliance-047-_viewer_site_switch`. Follow `contracts/per-file-pr.md`.
 - [ ] T048 Refactor `src\websocket\polling\completion_detector.py` (rank 48, current B/84.0, 9 issues) to A+/100.0 (floor A/>=94). Branch: `refactor/compliance-048-completion_detector`. Follow `contracts/per-file-pr.md`.
-- [ ] T049 Refactor `src\ssh\batch\host_runner.py` (rank 49, current C-/72.0, 8 issues) to A+/100.0 (floor A/>=94). Branch: `refactor/compliance-049-host_runner`. Follow `contracts/per-file-pr.md`.
+- [X] T049 Refactor `src\ssh\batch\host_runner.py` (rank 49, current C-/72.0, 8 issues) to A+/100.0 (floor A/>=94). Branch: `refactor/compliance-049-host_runner`. Follow `contracts/per-file-pr.md`.
 - [ ] T050 Refactor `src\troubleshooting\interactive_test_runner.py` (rank 50, current C/75.0, 8 issues) to A+/100.0 (floor A/>=94). Branch: `refactor/compliance-050-interactive_test_runner`. Follow `contracts/per-file-pr.md`.
 
 - [ ] **R50** Backlog Refresh Checkpoint (after 50 merges). Follow `contracts/backlog-refresh.md`: rerun the full-repo analyzer, regenerate `data/compliance_backlog.tsv`, and reorder remaining tasks if ranks 51..97 have shifted.
