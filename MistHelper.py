@@ -17079,17 +17079,19 @@ class WAN2MigrationManager:  # WAN2 migration manager.
         """Initialize delegated WAN2 manager with runtime dependencies."""
         from src.gateway import wan2_migration_manager as wan2_module  # noqa: PLC0415,I001
 
-        wan2_module.configure_wan2_migration_dependencies(  # Wire dependencies.
-            apisession_dependency=apisession,
-            config_utils=ConfigUtils,
-            cache_utils=CacheUtils,
-            org_site_exporter=OrgSiteExporter,
-            gateway_export_utils=GatewayExportUtils,
-            file_path_utils=FilePathUtils,
-            input_utils=InputUtils,
-            data_exporter=DataExporter,
-            mistapi_dependency=mistapi,
-            site_exclude_prefix=MIST_SITE_EXCLUDE_PREFIX,
+        wan2_module.configure_wan2_migration_dependencies(  # Wire dependencies via dataclass.
+            wan2_module.WAN2MigrationDependencies(  # Frozen bundle preserves public API.
+                apisession=apisession,  # Mist API session handle.
+                config_utils=ConfigUtils,  # Config helpers facade.
+                cache_utils=CacheUtils,  # Cache generation facade.
+                org_site_exporter=OrgSiteExporter,  # Site exporter facade.
+                gateway_export_utils=GatewayExportUtils,  # Gateway exporter facade.
+                file_path_utils=FilePathUtils,  # Path resolver facade.
+                input_utils=InputUtils,  # Safe input facade.
+                data_exporter=DataExporter,  # Report writer facade.
+                mistapi=mistapi,  # mistapi library reference.
+                site_exclude_prefix=MIST_SITE_EXCLUDE_PREFIX,  # Exclusion prefix.
+            )
         )
         self._impl = wan2_module.WAN2MigrationManager()  # Create the impl.
 
