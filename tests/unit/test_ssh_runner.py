@@ -13,7 +13,10 @@ from src.ssh.batch.interactive_batch_executor import (  # T013c: extracted inter
     InteractiveBatchExecutor,
     InteractiveSessionRequest,
 )
-from src.ssh.batch.multi_host_runner import MultiHostRunner  # T013c: extracted multi-host orchestrator
+from src.ssh.batch.multi_host_runner import (  # T013c/T039: extracted multi-host orchestrator + request bundle
+    MultiHostRunner,
+    MultiHostRunRequest,
+)
 from src.ssh.config.command_parser import CommandListParser
 from src.ssh.config.csv_loader import CommandCsvLoader
 from src.ssh.config.env_loader import EnvSshConfigLoader
@@ -960,13 +963,15 @@ class TestRunSSHCommandsMultiHost:
         ]
 
         result = MultiHostRunner.run(
-            hosts=["10.0.0.1", "10.0.0.2"],
-            username="admin",
-            password="pass",
-            commands=["show version"],
-            port=22,
-            timeout=30,
-            max_threads=2,
+            MultiHostRunRequest(
+                hosts=("10.0.0.1", "10.0.0.2"),
+                username="admin",
+                password="pass",
+                commands=("show version",),
+                port=22,
+                timeout=30,
+                max_threads=2,
+            )
         )
         assert result["total"] == 2
         assert result["successful"] == 2
@@ -981,12 +986,14 @@ class TestRunSSHCommandsMultiHost:
         ]
 
         result = MultiHostRunner.run(
-            hosts=["10.0.0.1", "10.0.0.2"],
-            username="admin",
-            password="pass",
-            commands=["show version"],
-            port=22,
-            timeout=30,
+            MultiHostRunRequest(
+                hosts=("10.0.0.1", "10.0.0.2"),
+                username="admin",
+                password="pass",
+                commands=("show version",),
+                port=22,
+                timeout=30,
+            )
         )
         assert result["successful"] == 1
         assert result["failed"] == 1
@@ -996,12 +1003,14 @@ class TestRunSSHCommandsMultiHost:
     def test_missing_credentials_raises(self):
         """Missing username/password raises ValueError."""
         with pytest.raises(ValueError):
-            MultiHostRunner.run(hosts=["10.0.0.1"], username=None, password="pass", commands=["show version"])
+            MultiHostRunRequest(hosts=("10.0.0.1",), username="", password="pass", commands=("show version",))
 
     @patch("src.ssh.batch.multi_host_runner.HostRunner.run")
     def test_empty_host_list(self, mock_on_host):
         """Empty host list returns zero results."""
-        result = MultiHostRunner.run(hosts=[], username="admin", password="pass", commands=["show version"])
+        result = MultiHostRunner.run(
+            MultiHostRunRequest(hosts=(), username="admin", password="pass", commands=("show version",))
+        )
         assert result["total"] == 0
         assert result["successful"] == 0
         mock_on_host.assert_not_called()
@@ -1013,7 +1022,9 @@ class TestRunSSHCommandsMultiHost:
 
         config = SSHConnectionConfig(hostname="ignored", username="admin", password="pass")
         exec_config = SSHExecutionConfig(commands=["show version"], max_threads=3)
-        result = MultiHostRunner.run(hosts=["10.0.0.1"], config=config, exec_config=exec_config)
+        result = MultiHostRunner.run(
+            MultiHostRunRequest.from_configs(hosts=["10.0.0.1"], config=config, exec_config=exec_config)
+        )
         assert result["total"] == 1
         assert result["successful"] == 1
 
@@ -1510,13 +1521,15 @@ class TestRunSSHCommandsMultiHostDeep:
         mock_on_host.side_effect = [(h, True, "ok") for h in hosts]
 
         result = MultiHostRunner.run(
-            hosts=hosts,
-            username="admin",
-            password="pass",
-            commands=["show version"],
-            port=22,
-            timeout=30,
-            max_threads=5,
+            MultiHostRunRequest(
+                hosts=tuple(hosts),
+                username="admin",
+                password="pass",
+                commands=("show version",),
+                port=22,
+                timeout=30,
+                max_threads=5,
+            )
         )
         assert result["total"] == 10
         assert result["successful"] == 10
@@ -1529,7 +1542,14 @@ class TestRunSSHCommandsMultiHostDeep:
         mock_on_host.side_effect = RuntimeError("thread crash")
 
         result = MultiHostRunner.run(
-            hosts=["10.0.0.1"], username="admin", password="pass", commands=["show version"], port=22, timeout=30
+            MultiHostRunRequest(
+                hosts=("10.0.0.1",),
+                username="admin",
+                password="pass",
+                commands=("show version",),
+                port=22,
+                timeout=30,
+            )
         )
         assert result["total"] == 1
         assert result["failed"] == 1
@@ -1544,12 +1564,14 @@ class TestRunSSHCommandsMultiHostDeep:
         ]
 
         result = MultiHostRunner.run(
-            hosts=["10.0.0.1", "10.0.0.2"],
-            username="admin",
-            password="pass",
-            commands=["show version"],
-            port=22,
-            timeout=30,
+            MultiHostRunRequest(
+                hosts=("10.0.0.1", "10.0.0.2"),
+                username="admin",
+                password="pass",
+                commands=("show version",),
+                port=22,
+                timeout=30,
+            )
         )
         assert "results" in result
         assert "10.0.0.1" in result["results"]
@@ -1559,7 +1581,9 @@ class TestRunSSHCommandsMultiHostDeep:
     @patch("src.ssh.batch.multi_host_runner.HostRunner.run")
     def test_none_hosts_treated_as_empty(self, mock_on_host):
         """None hosts list is treated as empty."""
-        result = MultiHostRunner.run(hosts=None, username="admin", password="pass", commands=["show version"])
+        result = MultiHostRunner.run(
+            MultiHostRunRequest(hosts=(), username="admin", password="pass", commands=("show version",))
+        )
         assert result["total"] == 0
         mock_on_host.assert_not_called()
 
