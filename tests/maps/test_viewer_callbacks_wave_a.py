@@ -135,7 +135,7 @@ def test_register_with_wires_five_wave_a_callbacks() -> None:
     # The wave-A method names must all be present in the registered set
     bound_names = {record.bound_func.__name__ for record in app.registered}
     wave_a_names = {
-        "apply_layer_toggles",
+        "_pack_and_apply",
         "display_click_data",
         "toggle_origin_mode",
         "toggle_zone_name_input",
