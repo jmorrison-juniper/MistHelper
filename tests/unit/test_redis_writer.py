@@ -191,18 +191,18 @@ class TestExtractAllAddsThreadPoolBranch:
 
     def test_over_1000_records_uses_thread_pool(self, config, mock_redis) -> None:
         """Lines 143-173: Exactly 1001 records must trigger the thread pool branch."""
-        from src.db.redis_writer import RedisTimeSeriesWriter  # Import module under test
+        from src.db.redis_writer import RedisTimeSeriesWriter, _ExtractContext  # Import module under test
 
         writer = RedisTimeSeriesWriter(config)  # Create writer with mocked redis
         records = [{"id": str(i), "ts": float(i)} for i in range(1001)]  # 1001 exceeds 1000 threshold
+        ctx = _ExtractContext(  # Frozen context replaces the loose-arg signature
+            api_function_name="testFunc",
+            primary_keys=["id"],
+            entity_key_field="id",
+            ts_value_fields=None,
+        )
         with patch.object(writer, "_extract_chunk", return_value=([], {})) as mock_chunk:  # Mock worker
-            adds, keys = writer._extract_all_adds(  # Call method that routes to thread pool
-                records,
-                "testFunc",  # API function name for logging
-                ["id"],  # Primary keys
-                "id",  # Entity key field
-                None,  # No specific TS value fields
-            )
+            adds, keys = writer._extract_all_adds(records, ctx)  # Route through parallel branch via context
         assert adds == []  # Thread pool collects empty adds from mocked chunks
         assert keys == {}  # Thread pool collects empty keys from mocked chunks
         assert mock_chunk.call_count >= 2  # Multiple chunks must be processed by the pool
@@ -228,15 +228,21 @@ class TestCoverageGapTargets:
 
     def test_extract_chunk_with_ts_value_fields_calls_listed_fields(self, config, mock_redis) -> None:
         """Line 189: when ts_value_fields is provided, _extract_listed_fields is called instead of _extract_numeric."""
-        from src.db.redis_writer import RedisTimeSeriesWriter  # Import module under test
+        from src.db.redis_writer import RedisTimeSeriesWriter, _ExtractContext  # Import module under test
 
         writer = RedisTimeSeriesWriter(config)  # Create writer with mocked redis
         records = [{"entity_id": "dev-1", "cpu": 45.0}]  # Single record for testing
         listed_return = {"cpu": 45.0}  # Fake return value from _extract_listed_fields (must be a dict)
-        with patch.object(writer, "_extract_listed_fields", return_value=listed_return) as mock_lf:  # Mock
-            writer._extract_chunk(  # Call with ts_value_fields to trigger line 189
-                records, "testFunc", ["entity_id"], "entity_id", ["cpu"]  # ts_value_fields=["cpu"]
-            )
+        ctx = _ExtractContext(  # Frozen context carrying ts_value_fields=["cpu"]
+            api_function_name="testFunc",
+            primary_keys=["entity_id"],
+            entity_key_field="entity_id",
+            ts_value_fields=["cpu"],
+        )
+        with patch(  # Patch on the class since _select_numeric references the static via class binding
+            "src.db.redis_writer.RedisTimeSeriesWriter._extract_listed_fields", return_value=listed_return
+        ) as mock_lf:
+            writer._extract_chunk(records, ctx)  # Trigger the listed-fields branch via context.ts_value_fields
         mock_lf.assert_called_once()  # _extract_listed_fields must have been called via line 189
 
     def test_create_single_key_skips_when_key_already_cached(self, config, mock_redis) -> None:
