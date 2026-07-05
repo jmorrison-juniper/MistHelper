@@ -334,11 +334,19 @@ class MapsManager:  # WHY: declare MapsManager class
         """Delegating wrapper: backup lives in src.maps._maps_backup."""
         # Wrapper kept so viewer_callbacks.maps_manager_ref._backup_map_geometry
         # still resolves and tests can continue to stub the method on MapsManager.
-        from src.maps._maps_backup import backup_map_geometry  # WHY: import required module
-
-        return backup_map_geometry(  # WHY: return computed result
-            self, api_session, site_id, map_id, map_name, backup_reason
+        from src.maps._maps_backup import (  # WHY: import module symbols on demand
+            BackupRequest,
+            backup_map_geometry,
         )
+
+        request = BackupRequest(  # WHY: aggregate five call args into one value object
+            api_session=api_session,
+            site_id=site_id,
+            map_id=map_id,
+            map_name=map_name,
+            backup_reason=backup_reason,
+        )
+        return backup_map_geometry(request)  # WHY: return computed result
 
     def run_systematic_test(self) -> bool:  # WHY: declare public method run_systematic_test
         """Delegating wrapper: testing lives in src.maps._maps_testing."""
