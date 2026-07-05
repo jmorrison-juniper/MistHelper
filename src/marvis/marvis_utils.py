@@ -1,6 +1,6 @@
 """Utilities for processing Marvis AI API responses into CSV-ready format.
 
-src/marvis/marvis_utils.py — extracted from MistHelper.py to keep the monolith
+src/marvis/marvis_utils.py -- extracted from MistHelper.py to keep the monolith
 under the 5-Item Rule limit.
 
 Dependencies are injected via the constructor to avoid circular imports
@@ -10,14 +10,25 @@ hold (escape_multiline and flatten_nested_fields from DataProcessingUtils).
 Target audience: Junior NOC engineers.  Every line is commented.
 """
 
-from __future__ import annotations  # Enable PEP 563 postponed annotations for forward refs
+from __future__ import annotations  # WHY: PEP 563 postponed annotations for forward refs
 
-import logging  # Standard library logging for info/debug/error messages
-from collections.abc import Callable  # Use collections.abc.Callable per UP035 (not typing.Callable)
-from typing import Any  # Generic Any type hint for untyped API response data
+import logging  # WHY: Standard library logging for info/debug/error trace
+from collections.abc import Callable  # WHY: UP035 requires collections.abc.Callable
+from typing import Any  # WHY: Generic Any type hint for untyped API payloads
+
+# Module-level constants avoid magic values scattered through the logic.
+_SITES_ANALYSIS_TYPE = "sites"  # WHY: Sentinel driving the sites SLE expansion branch
+_RESULTS_KEY = "results"  # WHY: Nested key that Marvis wraps troubleshoot rows under
+_SITE_METADATA_KEYS: tuple[str, ...] = (  # WHY: Parent-item keys copied to each site row
+    "start",
+    "end",
+    "limit",
+    "page",
+    "total",
+)
 
 
-class MarvisDataUtils:
+class MarvisDataUtils:  # WHY: Class groups Marvis-to-CSV helpers with injected deps
     """Process Marvis AI API responses into CSV-ready row lists.
 
     Uses dependency injection for data-processing helpers to keep this
@@ -33,130 +44,131 @@ class MarvisDataUtils:
         rows = marvis_data_utils.format_for_csv(response.data, "client")
     """
 
-    def __init__(  # Constructor that injects the two required data-processing callables
+    def __init__(  # WHY: Constructor injects data-processing callables (no import of MistHelper)
         self,
-        escape_fn: Callable[
-            [list[dict[str, Any]]], list[dict[str, Any]]
-        ],  # Callable to escape multiline strings in CSV data
-        flatten_fn: Callable[
-            [list[Any]], list[dict[str, Any]]
-        ],  # Callable to flatten deeply nested dicts into flat rows
+        escape_fn: Callable[[list[dict[str, Any]]], list[dict[str, Any]]],
+        flatten_fn: Callable[[list[Any]], list[dict[str, Any]]],
     ) -> None:
         """Initialise MarvisDataUtils with injected data-processing helpers.
 
         Args:
             escape_fn:  Callable matching DataProcessingUtils.escape_multiline
-                        signature — takes a list of dicts, returns a list of dicts
+                        signature -- takes a list of dicts, returns a list of dicts
                         with multiline strings escaped.
             flatten_fn: Callable matching DataProcessingUtils.flatten_nested_fields
-                        signature — takes a list of arbitrary items and returns a
+                        signature -- takes a list of arbitrary items and returns a
                         flat list of dicts suitable for CSV export.
         """
-        self._escape_fn = escape_fn  # Store escape callable for use in format_for_csv
-        self._flatten_fn = flatten_fn  # Store flatten callable for fallback processing
+        self._escape_fn = escape_fn  # WHY: Store escape callable for primary + fallback paths
+        self._flatten_fn = flatten_fn  # WHY: Store flatten callable for fallback path
 
-    def format_for_csv(  # noqa: C901, PLR0912  # Complex method with intentional branching for analysis types
+    def format_for_csv(  # WHY: Public entry -- try structured path, fall back on error
         self,
-        api_response_data: Any,  # Raw API response from a Marvis troubleshoot call
-        analysis_type: str = "generic",  # Category label used to choose formatting strategy
+        api_response_data: Any,
+        analysis_type: str = "generic",
     ) -> list[dict[str, Any]]:
         """Convert a raw Marvis API response into a flat list of dicts for CSV export.
 
-        Handles four known analysis types (client, device, network, sites) plus a
-        generic fallback.  For "sites", each site in the results list becomes its
-        own row.  For other types, each top-level item becomes a single flattened row.
-
-        Args:
-            api_response_data: Raw Marvis API response (dict or list of dicts).
-            analysis_type:     One of "client", "device", "network", "sites", or
-                               "generic".  Drives the formatting strategy.
-
-        Returns:
-            List of flat dicts suitable for csv.DictWriter or similar.
+        Handles the sites SLE expansion and generic per-item flattening; any
+        internal error routes to the legacy flatten+escape fallback so callers
+        always receive a list rather than an exception.
         """
-        try:  # Wrap entire method in try/except so a bad response never crashes the caller
-            logging.info(  # Log entry point so operators can trace which analysis_type was processed
-                "Starting Marvis CSV formatting for analysis_type='%s'", analysis_type
-            )
+        try:  # WHY: Bad payloads must never crash the caller
+            return self._run_primary_pipeline(api_response_data, analysis_type)  # WHY: Structured path
+        except Exception as error:  # WHY: Any failure routes to the legacy fallback
+            self._log_primary_failure(analysis_type, error)  # WHY: Diagnostic before fallback
+            return self._recover_via_flatten_pipeline(api_response_data)  # WHY: Injected fallback
 
-            if not api_response_data:  # Guard against None or empty responses from the API
-                logging.warning(
-                    "Empty Marvis API response received — returning empty list"
-                )  # Warn so operators know the API gave nothing
-                return []  # Return empty list instead of crashing
+    @staticmethod
+    def _log_primary_failure(analysis_type: str, error: Exception) -> None:  # WHY: Split logging out
+        """Emit error + info logs describing the fallback transition."""
+        logging.error(  # WHY: Preserve full error context for operator triage
+            "Error formatting Marvis data for CSV (analysis_type='%s'): %s",
+            analysis_type,
+            error,
+        )
+        logging.info("Falling back to legacy flatten+escape method for Marvis data")  # WHY: Signal fallback
 
-            # Normalise the response: the Marvis API sometimes returns a single dict
-            # instead of a list; wrap it so the rest of the logic always iterates.
-            if not isinstance(api_response_data, list):  # Check if response is a single dict
-                data_list: list[Any] = [api_response_data]  # Wrap single dict in a list for uniform processing
-            else:
-                data_list = api_response_data  # Already a list — use directly
-
-            formatted_data: list[dict[str, Any]] = []  # Accumulator for processed rows
-
-            for item in data_list:  # Iterate over each top-level response item
-                if not isinstance(item, dict):  # Skip non-dict items (malformed data)
-                    logging.warning(  # Warn operators so they can investigate malformed API responses
-                        "Unexpected data type in Marvis response: %s — skipping item", type(item)
-                    )
-                    continue  # Move to next item without crashing
-
-                # The "sites" analysis type returns an SLE summary with a nested
-                # "results" list — one entry per site.  Expand that list so each
-                # site becomes its own CSV row.
-                if (  # Check for sites SLE structure with a results list
-                    analysis_type == "sites"  # Only apply special handling for the sites analysis type
-                    and "results" in item  # Response must have a results key
-                    and isinstance(item["results"], list)  # Results must be a list of site dicts
-                ):
-                    logging.info(  # Log how many sites are being processed for operator visibility
-                        "Processing organization sites SLE data with %d sites",
-                        len(item["results"]),
-                    )
-                    formatted_data = self._expand_sites_rows(item, formatted_data)  # Delegate site expansion to helper
-                    logging.info(  # Log the row count so operators can verify the expansion worked
-                        "Converted %d sites into %d readable rows",
-                        len(item["results"]),
-                        len(formatted_data),
-                    )
-
-                else:  # All non-sites types (client, device, network, generic)
-                    formatted_row = self._build_flat_row(item)  # Flatten one response item into a dict row
-                    if formatted_row:  # Only append if the flattening produced at least one key-value pair
-                        formatted_data.append(formatted_row)  # Add the flattened row to the accumulator
-
-            # Apply CSV-safe escaping to all collected rows so multiline strings
-            # don't break spreadsheet imports (e.g. embedded newlines in descriptions).
-            logging.info(  # Log before calling the injected escape function so the call is traceable
-                "Applying multiline escape to %d Marvis rows", len(formatted_data)
-            )
-            formatted_data = self._escape_fn(formatted_data)  # Call the injected escape_multiline function
-            logging.debug(  # Log after escaping so operators know the post-escape row count
-                "Marvis data formatting complete: %d rows for analysis_type='%s'",
-                len(formatted_data),
-                analysis_type,
-            )
-            return formatted_data  # Return the fully formatted list of flat row dicts
-
-        except Exception as error:  # Catch any unexpected error so Marvis failures don't crash the whole export
-            logging.error(  # Log the full error context so operators can diagnose failures
-                "Error formatting Marvis data for CSV (analysis_type='%s'): %s",
-                analysis_type,
-                error,
-            )
-            logging.info(
-                "Falling back to legacy flatten+escape method for Marvis data"
-            )  # Inform operators that the fallback path is being used
-            return self._recover_via_flatten_pipeline(api_response_data)  # Use injected callables for safe fallback
-
-    # ------------------------------------------------------------------
-    # Private helpers — extract sub-logic to stay within the 25-line rule
-    # ------------------------------------------------------------------
-
-    def _expand_sites_rows(  # Helper that converts the sites SLE results list into per-site CSV rows
+    def _run_primary_pipeline(  # WHY: Extract structured formatting from the try/except shell
         self,
-        item: dict[str, Any],  # Top-level response item that contains the nested "results" list
-        accumulated: list[dict[str, Any]],  # Existing list to append the new site rows into
+        api_response_data: Any,
+        analysis_type: str,
+    ) -> list[dict[str, Any]]:
+        """Run the structured format-then-escape pipeline on a normalised list."""
+        logging.info("Starting Marvis CSV formatting for analysis_type='%s'", analysis_type)  # WHY: Trace entry
+        if not api_response_data:  # WHY: None / empty responses short-circuit to []
+            logging.warning("Empty Marvis API response received -- returning empty list")
+            return []  # WHY: Empty list keeps callers safe from None-iteration errors
+        data_list = self._normalise_to_list(api_response_data)  # WHY: Uniform iteration
+        formatted = self._collect_rows(data_list, analysis_type)  # WHY: Dispatch per-item strategy
+        logging.info("Applying multiline escape to %d Marvis rows", len(formatted))  # WHY: Trace escape call
+        formatted = self._escape_fn(formatted)  # WHY: CSV-safe multiline escaping
+        logging.debug(  # WHY: Post-escape count aids operator verification
+            "Marvis data formatting complete: %d rows for analysis_type='%s'",
+            len(formatted),
+            analysis_type,
+        )
+        return formatted  # WHY: Fully formatted list returned to caller
+
+    @staticmethod
+    def _normalise_to_list(data: Any) -> list[Any]:  # WHY: Wrap single dict responses in list
+        """Return the response as a list so the rest of the pipeline can iterate."""
+        return data if isinstance(data, list) else [data]  # WHY: Single-item wrap when not list
+
+    def _collect_rows(  # WHY: Iterate response items and dispatch per analysis type
+        self,
+        data_list: list[Any],
+        analysis_type: str,
+    ) -> list[dict[str, Any]]:
+        """Iterate the normalised list and delegate to the right expansion helper."""
+        formatted: list[dict[str, Any]] = []  # WHY: Accumulator for output rows
+        for item in data_list:  # WHY: One item can produce one or many rows
+            if not isinstance(item, dict):  # WHY: Skip malformed non-dict entries
+                logging.warning(
+                    "Unexpected data type in Marvis response: %s -- skipping item",
+                    type(item),
+                )
+                continue  # WHY: Malformed entries are logged and dropped
+            self._dispatch_item(item, analysis_type, formatted)  # WHY: Delegate to sites or generic path
+        return formatted  # WHY: Row accumulator ready for escape pass
+
+    def _dispatch_item(  # WHY: Route a single item to the sites or generic builder
+        self,
+        item: dict[str, Any],
+        analysis_type: str,
+        formatted: list[dict[str, Any]],
+    ) -> None:
+        """Dispatch one response item to the sites expansion or generic flattener."""
+        if self._is_sites_expansion(item, analysis_type):  # WHY: Sites SLE branch fans out rows
+            logging.info(  # WHY: Report site count for operator visibility
+                "Processing organization sites SLE data with %d sites",
+                len(item[_RESULTS_KEY]),
+            )
+            self._expand_sites_rows(item, formatted)  # WHY: Mutates formatted in place
+            logging.info(  # WHY: Report resulting row count after expansion
+                "Converted %d sites into %d readable rows",
+                len(item[_RESULTS_KEY]),
+                len(formatted),
+            )
+            return  # WHY: Sites branch is fully handled
+        row = self._build_flat_row(item)  # WHY: Non-sites items flatten to a single row
+        if row:  # WHY: Skip empty-dict results to avoid blank CSV rows
+            formatted.append(row)  # WHY: Append the flattened row
+
+    @staticmethod
+    def _is_sites_expansion(  # WHY: Predicate isolates the sites-SLE branch condition
+        item: dict[str, Any],
+        analysis_type: str,
+    ) -> bool:
+        """Return True when the item should be expanded per-site."""
+        return (  # WHY: All three checks are needed to safely index item[results]
+            analysis_type == _SITES_ANALYSIS_TYPE and _RESULTS_KEY in item and isinstance(item[_RESULTS_KEY], list)
+        )
+
+    def _expand_sites_rows(  # WHY: Fan out nested results list into per-site rows
+        self,
+        item: dict[str, Any],
+        accumulated: list[dict[str, Any]],
     ) -> list[dict[str, Any]]:
         """Expand the nested 'results' list from a sites SLE response into per-site rows.
 
@@ -171,35 +183,29 @@ class MarvisDataUtils:
         Returns:
             Updated list of formatted rows with the newly expanded site rows appended.
         """
-        metadata_keys = [
-            "start",
-            "end",
-            "limit",
-            "page",
-            "total",
-        ]  # Keys to copy from the parent object into each site row
+        for idx, site_data in enumerate(item[_RESULTS_KEY]):  # WHY: Each site becomes one row
+            accumulated.append(self._build_site_row(item, idx, site_data))  # WHY: Append per-site row
+        return accumulated  # WHY: Return same list for chaining / test parity
 
-        for idx, site_data in enumerate(item["results"]):  # Iterate over each site entry in the results list
-            site_row: dict[str, Any] = {}  # Start a fresh dict for this site's CSV row
+    @staticmethod
+    def _build_site_row(  # WHY: Assemble a single site row from parent metadata + site fields
+        item: dict[str, Any],
+        idx: int,
+        site_data: Any,
+    ) -> dict[str, Any]:
+        """Build one row combining parent metadata, site index, and site fields."""
+        site_row: dict[str, Any] = {  # WHY: Seed row with parent-level metadata keys
+            key: item[key] for key in _SITE_METADATA_KEYS if key in item
+        }
+        site_row["site_index"] = idx  # WHY: Sequential index preserves original ordering
+        if isinstance(site_data, dict):  # WHY: Skip malformed non-dict site entries silently
+            for key, value in site_data.items():  # WHY: Copy every site-level field
+                site_row[key.replace("-", "_")] = value  # WHY: Normalise hyphens for CSV columns
+        return site_row  # WHY: Fully built site row ready to append
 
-            for meta_key in metadata_keys:  # Copy metadata from the parent response into this site's row
-                if meta_key in item:  # Only copy keys that actually exist in this response
-                    site_row[meta_key] = item[meta_key]  # Preserve metadata context alongside per-site data
-
-            site_row["site_index"] = idx  # Add a sequential index so analysts can re-sort to original order
-
-            if isinstance(site_data, dict):  # Only process dict entries — skip malformed items
-                for key, value in site_data.items():  # Iterate over all site-level fields
-                    clean_key = key.replace("-", "_")  # Normalise hyphens to underscores for CSV column compatibility
-                    site_row[clean_key] = value  # Store the normalised field in the row
-
-            accumulated.append(site_row)  # Append the fully constructed site row to the accumulator
-
-        return accumulated  # Return the updated list with all new site rows appended
-
-    def _build_flat_row(  # Helper that flattens a single Marvis response item into a CSV-ready dict
+    def _build_flat_row(  # WHY: Flatten one Marvis response item into a CSV-ready dict
         self,
-        item: dict[str, Any],  # A single dict from the top-level Marvis response list
+        item: dict[str, Any],
     ) -> dict[str, Any]:
         """Flatten one Marvis response item (client / device / network) into a single dict.
 
@@ -214,30 +220,43 @@ class MarvisDataUtils:
         Returns:
             A flat dict with all nested values promoted to top-level keys.
         """
-        formatted_row: dict[str, Any] = {}  # Accumulate all key-value pairs for this row
+        formatted_row: dict[str, Any] = {}  # WHY: Accumulate every flattened column here
+        for key, value in item.items():  # WHY: Walk every top-level field of the item
+            self._flatten_field(formatted_row, key, value)  # WHY: Table-free per-field dispatch
+        return formatted_row  # WHY: Fully flattened dict ready for escape pass
 
-        for key, value in item.items():  # Iterate over every field in the response item
-            if key == "results" and isinstance(
-                value, list
-            ):  # "results" is a special nested array requiring index-based expansion
-                formatted_row = self._flatten_results_array(
-                    formatted_row, value
-                )  # Delegate results-array expansion to dedicated helper
-            elif isinstance(value, dict):  # Nested dict — flatten by prepending the parent key name
-                for nested_key, nested_value in value.items():  # Iterate nested dict keys
-                    clean_key = f"{key}_{nested_key}".replace("-", "_")  # Build composite key, normalising hyphens
-                    formatted_row[clean_key] = nested_value  # Store flattened nested value
-            elif isinstance(value, list):  # Lists that aren't "results" — join as comma-separated string
-                formatted_row[key] = ",".join(map(str, value))  # Convert list to single string for CSV compatibility
-            else:  # Scalar value — store directly
-                formatted_row[key] = value  # Simple direct assignment for strings, ints, booleans, etc.
-
-        return formatted_row  # Return the fully flattened row dict
-
-    def _flatten_results_array(  # Helper that index-expands the nested "results" array into prefixed columns
+    def _flatten_field(  # WHY: Guard clause peels off the results-array special case first
         self,
-        row: dict[str, Any],  # Existing partial row dict to add result columns into
-        results: list[Any],  # The "results" list from a single Marvis troubleshoot response item
+        row: dict[str, Any],
+        key: str,
+        value: Any,
+    ) -> None:
+        """Flatten a single (key, value) pair into the accumulating row dict."""
+        if key == _RESULTS_KEY and isinstance(value, list):  # WHY: Special nested results array
+            self._flatten_results_array(row, value)  # WHY: Delegate index-expansion helper
+            return  # WHY: Guard-clause return keeps the sibling dispatch simple
+        self._store_typed_value(row, key, value)  # WHY: Dispatch by scalar / dict / list type
+
+    @staticmethod
+    def _store_typed_value(  # WHY: Split by value type -- keeps _flatten_field CC low
+        row: dict[str, Any],
+        key: str,
+        value: Any,
+    ) -> None:
+        """Store a value into the row using per-type flattening rules."""
+        if isinstance(value, dict):  # WHY: Nested dict flattens via parent_child keys
+            for nested_key, nested_value in value.items():  # WHY: Enumerate nested entries
+                row[f"{key}_{nested_key}".replace("-", "_")] = nested_value  # WHY: Composite key
+            return  # WHY: Dict branch fully handled
+        if isinstance(value, list):  # WHY: Plain list becomes comma-separated string
+            row[key] = ",".join(map(str, value))  # WHY: CSV-friendly single-cell representation
+            return  # WHY: List branch fully handled
+        row[key] = value  # WHY: Scalar values map directly to their column
+
+    def _flatten_results_array(  # WHY: Expand each result dict into result_N_key columns
+        self,
+        row: dict[str, Any],
+        results: list[Any],
     ) -> dict[str, Any]:
         """Expand each entry in a Marvis 'results' array into prefixed columns.
 
@@ -251,20 +270,26 @@ class MarvisDataUtils:
         Returns:
             The updated row dict with result_N_key columns added.
         """
-        for idx, result in enumerate(results):  # Enumerate results so we can prefix columns with the result index
-            if isinstance(result, dict):  # Only expand dict entries — skip malformed items
-                for result_key, result_value in result.items():  # Iterate each field within this result entry
-                    # Build column name like result_0_category (underscores, no hyphens)
-                    clean_key = f"result_{idx}_{result_key.replace('-', '_')}"  # Index-prefixed column name for CSV
-                    row[clean_key] = result_value  # Store indexed result field in the row
-            else:  # Non-dict result entry — store as a plain indexed column
-                row[f"result_{idx}"] = str(result)  # Convert to string to ensure CSV writeability
+        for idx, result in enumerate(results):  # WHY: Index each entry so columns stay ordered
+            self._store_result_columns(row, idx, result)  # WHY: One helper handles dict + scalar
+        return row  # WHY: Return same dict so caller / tests can chain
 
-        return row  # Return the row with all result columns appended
+    @staticmethod
+    def _store_result_columns(  # WHY: Emit result_N or result_N_key columns for one entry
+        row: dict[str, Any],
+        idx: int,
+        result: Any,
+    ) -> None:
+        """Store one result entry into the row using indexed column names."""
+        if isinstance(result, dict):  # WHY: Dict results expand into multiple prefixed columns
+            for result_key, result_value in result.items():  # WHY: Walk nested result fields
+                row[f"result_{idx}_{result_key.replace('-', '_')}"] = result_value  # WHY: Prefixed key
+            return  # WHY: Dict branch fully handled
+        row[f"result_{idx}"] = str(result)  # WHY: Non-dict results stringify into a single column
 
-    def _recover_via_flatten_pipeline(  # Fallback path used when the primary formatter raises unexpectedly
+    def _recover_via_flatten_pipeline(  # WHY: Legacy fallback path for unexpected errors
         self,
-        api_response_data: Any,  # The original raw API response that caused the formatting error
+        api_response_data: Any,
     ) -> list[dict[str, Any]]:
         """Recover from a formatting failure using the two injected processing callables.
 
@@ -278,23 +303,11 @@ class MarvisDataUtils:
         Returns:
             A list of flattened dicts (may be less readable than the primary path).
         """
-        logging.info(
-            "Beginning legacy Marvis fallback: normalise to list"
-        )  # Log before normalising so operators can trace the fallback
-        fallback_data: list[Any] = (  # Normalise to list so flatten_fn can iterate
-            [api_response_data]  # Wrap a single dict in a list if needed
-            if not isinstance(api_response_data, list)  # Check if the raw data is already a list
-            else api_response_data  # Already a list — use as-is
-        )
-        logging.info(
-            "Applying flatten to %d legacy Marvis items", len(fallback_data)
-        )  # Log before flatten so operators know it was called
-        fallback_data = self._flatten_fn(fallback_data)  # Flatten nested fields using the injected flatten callable
-        logging.debug(
-            "Legacy flatten produced %d rows; applying escape", len(fallback_data)
-        )  # Log row count after flatten before escaping
-        fallback_data = self._escape_fn(fallback_data)  # Escape multiline strings using the injected escape callable
-        logging.debug(
-            "Legacy Marvis fallback complete: %d rows", len(fallback_data)
-        )  # Log final row count so operators know the fallback finished
-        return fallback_data  # Return the fallback result to the caller
+        logging.info("Beginning legacy Marvis fallback: normalise to list")  # WHY: Trace fallback entry
+        fallback_data = self._normalise_to_list(api_response_data)  # WHY: Same wrap logic as primary
+        logging.info("Applying flatten to %d legacy Marvis items", len(fallback_data))  # WHY: Trace flatten
+        fallback_data = self._flatten_fn(fallback_data)  # WHY: Injected flatten callable
+        logging.debug("Legacy flatten produced %d rows; applying escape", len(fallback_data))  # WHY: Trace escape
+        fallback_data = self._escape_fn(fallback_data)  # WHY: Injected escape callable
+        logging.debug("Legacy Marvis fallback complete: %d rows", len(fallback_data))  # WHY: Trace exit
+        return fallback_data  # WHY: Return fallback rows to caller
