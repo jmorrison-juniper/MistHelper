@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from src.gateway.wan_probe_device_override_manager import (
+    WANProbeDeviceOverrideDependencies,
     WANProbeDeviceOverrideManager,
     configure_wan_probe_device_override_dependencies,
 )
@@ -14,19 +15,21 @@ from src.gateway.wan_probe_device_override_manager import (
 def _configure_dependencies(*, site_exclude_prefix: str = "") -> None:
     """Configure minimal dependency graph for WAN probe override manager tests."""
     configure_wan_probe_device_override_dependencies(
-        apisession_dependency=object(),
-        config_utils=SimpleNamespace(
-            get_cached_or_prompted_org_id=MagicMock(return_value="org-1"),
-            check_stop_signal=MagicMock(return_value=False),
-        ),
-        cache_utils=SimpleNamespace(check_and_generate_csv=MagicMock()),
-        org_site_exporter=SimpleNamespace(sites=MagicMock()),
-        gateway_export_utils=SimpleNamespace(templates=MagicMock()),
-        file_path_utils=SimpleNamespace(get_csv_path=MagicMock(return_value="test.csv")),
-        input_utils=SimpleNamespace(safe_input=MagicMock(return_value="1")),
-        data_exporter=SimpleNamespace(write_with_format_selection=MagicMock()),
-        mistapi_dependency=SimpleNamespace(),
-        site_exclude_prefix=site_exclude_prefix,
+        WANProbeDeviceOverrideDependencies(
+            apisession=object(),
+            config_utils=SimpleNamespace(
+                get_cached_or_prompted_org_id=MagicMock(return_value="org-1"),
+                check_stop_signal=MagicMock(return_value=False),
+            ),
+            cache_utils=SimpleNamespace(check_and_generate_csv=MagicMock()),
+            org_site_exporter=SimpleNamespace(sites=MagicMock()),
+            gateway_export_utils=SimpleNamespace(templates=MagicMock()),
+            file_path_utils=SimpleNamespace(get_csv_path=MagicMock(return_value="test.csv")),
+            input_utils=SimpleNamespace(safe_input=MagicMock(return_value="1")),
+            data_exporter=SimpleNamespace(write_with_format_selection=MagicMock()),
+            mistapi=SimpleNamespace(),
+            site_exclude_prefix=site_exclude_prefix,
+        )
     )
 
 
