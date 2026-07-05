@@ -1,6 +1,6 @@
 # Coding Guideline Compliance Report
 
-- **Generated**: 2026-07-05 16:10:41 UTC
+- **Generated**: 2026-07-05 16:49:41 UTC
 - **Tool**: compliance-analyzer (tools/compliance_analyzer)
 - **Files analyzed**: 249
 
@@ -11,7 +11,7 @@ Plan at the end to drive fixes.
 
 ## Summary
 
-- **Overall score**: 98.2 / 100
+- **Overall score**: 98.3 / 100
 - **Overall grade**: A+
 
 | File | Score | Grade | Critical | High | Medium | Low | Total |
@@ -189,7 +189,7 @@ Plan at the end to drive fixes.
 | src\site\address_audit\site_matcher.py | 100.0 | A+ | 0 | 0 | 0 | 0 | 0 |
 | src\site\address_audit\snmp_enricher.py | 100.0 | A+ | 0 | 0 | 0 | 0 | 0 |
 | src\site\address_audit\suite_patterns.py | 100.0 | A+ | 0 | 0 | 0 | 0 | 0 |
-| src\site\address_audit\ui_geocoder.py | 88.0 | B+ | 0 | 0 | 3 | 3 | 6 |
+| src\site\address_audit\ui_geocoder.py | 100.0 | A+ | 0 | 0 | 0 | 0 | 0 |
 | src\site\site_config_manager.py | 100.0 | A+ | 0 | 0 | 0 | 0 | 0 |
 | src\ssh\__init__.py | 100.0 | A+ | 0 | 0 | 0 | 0 | 0 |
 | src\ssh\batch\__init__.py | 100.0 | A+ | 0 | 0 | 0 | 0 | 0 |
@@ -211,7 +211,7 @@ Plan at the end to drive fixes.
 | src\ssh\runtime\app_runner.py | 100.0 | A+ | 0 | 0 | 0 | 0 | 0 |
 | src\ssh\runtime\interactive_mode.py | 97.0 | A+ | 0 | 0 | 1 | 0 | 1 |
 | src\ssh\shell_execution\__init__.py | 100.0 | A+ | 0 | 0 | 0 | 0 | 0 |
-| src\ssh\shell_execution\shell_executor.py | 88.0 | B+ | 0 | 0 | 3 | 3 | 6 |
+| src\ssh\shell_execution\shell_executor.py | 100.0 | A+ | 0 | 0 | 0 | 0 | 0 |
 | src\ssh\ssh_runner.py | 100.0 | A+ | 0 | 0 | 0 | 0 | 0 |
 | src\ssh\ssh_runner_manager.py | 100.0 | A+ | 0 | 0 | 0 | 0 | 0 |
 | src\ssid_consolidation\__init__.py | 100.0 | A+ | 0 | 0 | 0 | 0 | 0 |
@@ -270,19 +270,19 @@ Plan at the end to drive fixes.
 
 ```json
 {
-  "overall_score": 98.2,
+  "overall_score": 98.3,
   "overall_grade": "A+",
   "severity_totals": {
     "critical": 0,
     "high": 42,
-    "medium": 47,
-    "low": 50
+    "medium": 41,
+    "low": 44
   },
   "rule_totals": {
-    "CONV-COMMENTS": 37,
-    "STRUCT-BLOCKS": 9,
-    "STRUCT-COMPLEXITY": 41,
-    "STRUCT-LENGTH": 45,
+    "CONV-COMMENTS": 36,
+    "STRUCT-BLOCKS": 7,
+    "STRUCT-COMPLEXITY": 37,
+    "STRUCT-LENGTH": 40,
     "STRUCT-PARAMS": 7
   },
   "files": [
@@ -1326,9 +1326,9 @@ Plan at the end to drive fixes.
     },
     {
       "path": "src\\site\\address_audit\\ui_geocoder.py",
-      "score": 88.0,
-      "grade": "B+",
-      "violations": 6
+      "score": 100.0,
+      "grade": "A+",
+      "violations": 0
     },
     {
       "path": "src\\site\\site_config_manager.py",
@@ -1458,9 +1458,9 @@ Plan at the end to drive fixes.
     },
     {
       "path": "src\\ssh\\shell_execution\\shell_executor.py",
-      "score": 88.0,
-      "grade": "B+",
-      "violations": 6
+      "score": 100.0,
+      "grade": "A+",
+      "violations": 0
     },
     {
       "path": "src\\ssh\\ssh_runner.py",
@@ -6669,48 +6669,32 @@ No violations found. This file complies with the guidelines.
 
 ## File: src\site\address_audit\ui_geocoder.py
 
-- **Score**: 88.0 / 100
-- **Grade**: B+
+- **Score**: 100.0 / 100
+- **Grade**: A+
 
 ### Metrics
 
 | Metric | Value |
 | - | - |
-| Lines of code | 583 |
-| Executable code lines | 321 |
-| Functions | 37 |
+| Lines of code | 654 |
+| Executable code lines | 353 |
+| Functions | 44 |
 | Classes | 1 |
-| Average complexity | 2.9 |
-| Max complexity | 10 |
-| Inline comment coverage | 86.9% |
+| Average complexity | 2.7 |
+| Max complexity | 5 |
+| Inline comment coverage | 84.7% |
 
 ### Complexity Hotspots
 
 | Function | Cyclomatic Complexity |
 | - | - |
-| _read_fresh_suggestions | 10 |
-| _preserve_query_suite | 7 |
 | ensure_location_field_ready | 5 |
 | geocode_via_ui | 5 |
+| _evaluate_suite | 5 |
 | close | 5 |
+| _cdp_port | 4 |
 
-### Violations
-
-#### Complexity
-
-| Line | Severity | Rule | Symbol | Issue | Remediation |
-| - | - | - | - | - | - |
-| 306 | low | STRUCT-COMPLEXITY | _read_fresh_suggestions | Cyclomatic complexity is 10 (target <= 5). | Reduce branching by extracting helpers, using guard clauses, or simplifying logic. |
-| 446 | low | STRUCT-COMPLEXITY | _preserve_query_suite | Cyclomatic complexity is 7 (target <= 5). | Reduce branching by extracting helpers, using guard clauses, or simplifying logic. |
-
-#### Structure
-
-| Line | Severity | Rule | Symbol | Issue | Remediation |
-| - | - | - | - | - | - |
-| 306 | medium | STRUCT-LENGTH | _read_fresh_suggestions | Function spans 39 lines (limit 25). | Extract logical sections into well-named helper methods to shrink the function. |
-| 446 | medium | STRUCT-LENGTH | _preserve_query_suite | Function spans 27 lines (limit 25). | Extract logical sections into well-named helper methods to shrink the function. |
-| 541 | medium | STRUCT-LENGTH | spawn_debuggable_browser | Function spans 28 lines (limit 25). | Extract logical sections into well-named helper methods to shrink the function. |
-| 306 | low | STRUCT-BLOCKS | _read_fresh_suggestions | Function has 6 logical blocks (limit 5). | Split the function so each helper owns a single cohesive block of logic. |
+No violations found. This file complies with the guidelines.
 
 ## File: src\site\site_config_manager.py
 
@@ -7257,53 +7241,32 @@ No violations found. This file complies with the guidelines.
 
 ## File: src\ssh\shell_execution\shell_executor.py
 
-- **Score**: 88.0 / 100
-- **Grade**: B+
+- **Score**: 100.0 / 100
+- **Grade**: A+
 
 ### Metrics
 
 | Metric | Value |
 | - | - |
-| Lines of code | 420 |
-| Executable code lines | 238 |
-| Functions | 21 |
-| Classes | 1 |
-| Average complexity | 3.5 |
-| Max complexity | 8 |
-| Inline comment coverage | 58.0% |
+| Lines of code | 609 |
+| Executable code lines | 296 |
+| Functions | 35 |
+| Classes | 3 |
+| Average complexity | 2.5 |
+| Max complexity | 5 |
+| Inline comment coverage | 85.1% |
 
 ### Complexity Hotspots
 
 | Function | Cyclomatic Complexity |
 | - | - |
-| _clean_output_lines | 8 |
-| _collect_output | 7 |
-| _drain_excess | 5 |
-| _cleanup_shell | 5 |
-| _line_is_artifact_or_prompt | 5 |
+| _evaluate_success | 5 |
+| _loop_step | 4 |
+| _drain_excess | 4 |
+| _cleanup_shell | 4 |
+| _drain_cleanup_tail | 4 |
 
-### Violations
-
-#### Complexity
-
-| Line | Severity | Rule | Symbol | Issue | Remediation |
-| - | - | - | - | - | - |
-| 189 | low | STRUCT-COMPLEXITY | _collect_output | Cyclomatic complexity is 7 (target <= 5). | Reduce branching by extracting helpers, using guard clauses, or simplifying logic. |
-| 340 | low | STRUCT-COMPLEXITY | _clean_output_lines | Cyclomatic complexity is 8 (target <= 5). | Reduce branching by extracting helpers, using guard clauses, or simplifying logic. |
-
-#### Conventions
-
-| Line | Severity | Rule | Symbol | Issue | Remediation |
-| - | - | - | - | - | - |
-| 21 | medium | CONV-COMMENTS | <file> | Inline-comment coverage is 58.0%; uncommented lines: 21, 94, 103, 112, 115, 119, 129, 130, 132, 133, 134, 139. | Add a same-line comment explaining intent on each executable line of changed code. |
-
-#### Structure
-
-| Line | Severity | Rule | Symbol | Issue | Remediation |
-| - | - | - | - | - | - |
-| 189 | medium | STRUCT-LENGTH | _collect_output | Function spans 28 lines (limit 25). | Extract logical sections into well-named helper methods to shrink the function. |
-| 236 | medium | STRUCT-LENGTH | _read_one_chunk | Function spans 29 lines (limit 25). | Extract logical sections into well-named helper methods to shrink the function. |
-| 189 | low | STRUCT-BLOCKS | _collect_output | Function has 6 logical blocks (limit 5). | Split the function so each helper owns a single cohesive block of logic. |
+No violations found. This file complies with the guidelines.
 
 ## File: src\ssh\ssh_runner.py
 
@@ -9125,7 +9088,7 @@ No violations found. This file complies with the guidelines.
   - Fix: Add a same-line comment explaining intent on each executable line of changed code.
   - Done when: analyzer reports no CONV-COMMENTS for `<file>` in `src\websocket\polling\result_collector.py`.
 
-### Phase: Medium (47 task(s))
+### Phase: Medium (41 task(s))
 
 - [ ] **CMP-043** `src\bootstrap\package_installer.py:19` - STRUCT-LENGTH (Structure)
   - Symbol: `find_uv_executable`
@@ -9272,345 +9235,285 @@ No violations found. This file complies with the guidelines.
   - Problem: Function spans 38 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
   - Done when: analyzer reports no STRUCT-LENGTH for `match` in `src\site\address_audit\business_authority_ingester.py`.
-- [ ] **CMP-072** `src\site\address_audit\ui_geocoder.py:306` - STRUCT-LENGTH (Structure)
-  - Symbol: `_read_fresh_suggestions`
-  - Problem: Function spans 39 lines (limit 25).
-  - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_read_fresh_suggestions` in `src\site\address_audit\ui_geocoder.py`.
-- [ ] **CMP-073** `src\site\address_audit\ui_geocoder.py:446` - STRUCT-LENGTH (Structure)
-  - Symbol: `_preserve_query_suite`
-  - Problem: Function spans 27 lines (limit 25).
-  - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_preserve_query_suite` in `src\site\address_audit\ui_geocoder.py`.
-- [ ] **CMP-074** `src\site\address_audit\ui_geocoder.py:541` - STRUCT-LENGTH (Structure)
-  - Symbol: `spawn_debuggable_browser`
-  - Problem: Function spans 28 lines (limit 25).
-  - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `spawn_debuggable_browser` in `src\site\address_audit\ui_geocoder.py`.
-- [ ] **CMP-075** `src\ssh\runtime\interactive_mode.py:151` - STRUCT-LENGTH (Structure)
+- [ ] **CMP-072** `src\ssh\runtime\interactive_mode.py:151` - STRUCT-LENGTH (Structure)
   - Symbol: `run`
   - Problem: Function spans 28 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
   - Done when: analyzer reports no STRUCT-LENGTH for `run` in `src\ssh\runtime\interactive_mode.py`.
-- [ ] **CMP-076** `src\ssh\shell_execution\shell_executor.py:21` - CONV-COMMENTS (Conventions)
-  - Symbol: `<file>`
-  - Problem: Inline-comment coverage is 58.0%; uncommented lines: 21, 94, 103, 112, 115, 119, 129, 130, 132, 133, 134, 139.
-  - Fix: Add a same-line comment explaining intent on each executable line of changed code.
-  - Done when: analyzer reports no CONV-COMMENTS for `<file>` in `src\ssh\shell_execution\shell_executor.py`.
-- [ ] **CMP-077** `src\ssh\shell_execution\shell_executor.py:189` - STRUCT-LENGTH (Structure)
-  - Symbol: `_collect_output`
-  - Problem: Function spans 28 lines (limit 25).
-  - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_collect_output` in `src\ssh\shell_execution\shell_executor.py`.
-- [ ] **CMP-078** `src\ssh\shell_execution\shell_executor.py:236` - STRUCT-LENGTH (Structure)
-  - Symbol: `_read_one_chunk`
-  - Problem: Function spans 29 lines (limit 25).
-  - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `_read_one_chunk` in `src\ssh\shell_execution\shell_executor.py`.
-- [ ] **CMP-079** `src\ssid_consolidation\_ssid_template_phase3.py:191` - STRUCT-LENGTH (Structure)
+- [ ] **CMP-073** `src\ssid_consolidation\_ssid_template_phase3.py:191` - STRUCT-LENGTH (Structure)
   - Symbol: `phase3_site_groups`
   - Problem: Function spans 34 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
   - Done when: analyzer reports no STRUCT-LENGTH for `phase3_site_groups` in `src\ssid_consolidation\_ssid_template_phase3.py`.
-- [ ] **CMP-080** `src\ssid_consolidation\_ssid_template_phase3.py:245` - STRUCT-LENGTH (Structure)
+- [ ] **CMP-074** `src\ssid_consolidation\_ssid_template_phase3.py:245` - STRUCT-LENGTH (Structure)
   - Symbol: `_assign_sites_to_groups`
   - Problem: Function spans 30 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
   - Done when: analyzer reports no STRUCT-LENGTH for `_assign_sites_to_groups` in `src\ssid_consolidation\_ssid_template_phase3.py`.
-- [ ] **CMP-081** `src\ssid_consolidation\_ssid_template_phase45.py:140` - STRUCT-LENGTH (Structure)
+- [ ] **CMP-075** `src\ssid_consolidation\_ssid_template_phase45.py:140` - STRUCT-LENGTH (Structure)
   - Symbol: `_record_deviation_choice`
   - Problem: Function spans 29 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
   - Done when: analyzer reports no STRUCT-LENGTH for `_record_deviation_choice` in `src\ssid_consolidation\_ssid_template_phase45.py`.
-- [ ] **CMP-082** `src\ssid_consolidation\_ssid_template_phase45.py:435` - STRUCT-LENGTH (Structure)
+- [ ] **CMP-076** `src\ssid_consolidation\_ssid_template_phase45.py:435` - STRUCT-LENGTH (Structure)
   - Symbol: `_create_or_update_templates`
   - Problem: Function spans 30 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
   - Done when: analyzer reports no STRUCT-LENGTH for `_create_or_update_templates` in `src\ssid_consolidation\_ssid_template_phase45.py`.
-- [ ] **CMP-083** `src\ui\execution\item_executor.py:28` - STRUCT-LENGTH (Structure)
+- [ ] **CMP-077** `src\ui\execution\item_executor.py:28` - STRUCT-LENGTH (Structure)
   - Symbol: `execute`
   - Problem: Function spans 30 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
   - Done when: analyzer reports no STRUCT-LENGTH for `execute` in `src\ui\execution\item_executor.py`.
-- [ ] **CMP-084** `src\ui\input_handlers\key_poller.py:7` - CONV-COMMENTS (Conventions)
+- [ ] **CMP-078** `src\ui\input_handlers\key_poller.py:7` - CONV-COMMENTS (Conventions)
   - Symbol: `<file>`
   - Problem: Inline-comment coverage is 58.2%; uncommented lines: 7, 9, 10, 11, 12, 31, 41, 44, 48, 55, 62, 66.
   - Fix: Add a same-line comment explaining intent on each executable line of changed code.
   - Done when: analyzer reports no CONV-COMMENTS for `<file>` in `src\ui\input_handlers\key_poller.py`.
-- [ ] **CMP-085** `src\ui\layout\layout_builder.py:7` - CONV-COMMENTS (Conventions)
+- [ ] **CMP-079** `src\ui\layout\layout_builder.py:7` - CONV-COMMENTS (Conventions)
   - Symbol: `<file>`
   - Problem: Inline-comment coverage is 51.2%; uncommented lines: 7, 9, 10, 11, 18, 21, 25, 38, 39, 48, 49, 50.
   - Fix: Add a same-line comment explaining intent on each executable line of changed code.
   - Done when: analyzer reports no CONV-COMMENTS for `<file>` in `src\ui\layout\layout_builder.py`.
-- [ ] **CMP-086** `src\ui\layout\layout_builder.py:25` - STRUCT-LENGTH (Structure)
+- [ ] **CMP-080** `src\ui\layout\layout_builder.py:25` - STRUCT-LENGTH (Structure)
   - Symbol: `build`
   - Problem: Function spans 27 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
   - Done when: analyzer reports no STRUCT-LENGTH for `build` in `src\ui\layout\layout_builder.py`.
-- [ ] **CMP-087** `src\wan_hub_group_manager.py:238` - STRUCT-LENGTH (Structure)
+- [ ] **CMP-081** `src\wan_hub_group_manager.py:238` - STRUCT-LENGTH (Structure)
   - Symbol: `_prompt_action`
   - Problem: Function spans 30 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
   - Done when: analyzer reports no STRUCT-LENGTH for `_prompt_action` in `src\wan_hub_group_manager.py`.
-- [ ] **CMP-088** `src\wan_hub_group_manager.py:269` - STRUCT-LENGTH (Structure)
+- [ ] **CMP-082** `src\wan_hub_group_manager.py:269` - STRUCT-LENGTH (Structure)
   - Symbol: `_prompt_set_pod`
   - Problem: Function spans 26 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
   - Done when: analyzer reports no STRUCT-LENGTH for `_prompt_set_pod` in `src\wan_hub_group_manager.py`.
-- [ ] **CMP-089** `src\websocket\polling\result_collector.py:75` - STRUCT-LENGTH (Structure)
+- [ ] **CMP-083** `src\websocket\polling\result_collector.py:75` - STRUCT-LENGTH (Structure)
   - Symbol: `collect`
   - Problem: Function spans 39 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
   - Done when: analyzer reports no STRUCT-LENGTH for `collect` in `src\websocket\polling\result_collector.py`.
 
-### Phase: Low (50 task(s))
+### Phase: Low (44 task(s))
 
-- [ ] **CMP-090** `src\auth\interactive\msp_org_selector.py:118` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-084** `src\auth\interactive\msp_org_selector.py:118` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_fetch_msp_orgs`
   - Problem: Cyclomatic complexity is 6 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
   - Done when: analyzer reports no STRUCT-COMPLEXITY for `_fetch_msp_orgs` in `src\auth\interactive\msp_org_selector.py`.
-- [ ] **CMP-091** `src\auth\interactive\msp_org_selector.py:192` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-085** `src\auth\interactive\msp_org_selector.py:192` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_interpret_choice`
   - Problem: Cyclomatic complexity is 8 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
   - Done when: analyzer reports no STRUCT-COMPLEXITY for `_interpret_choice` in `src\auth\interactive\msp_org_selector.py`.
-- [ ] **CMP-092** `src\bootstrap\dependency_check.py:60` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-086** `src\bootstrap\dependency_check.py:60` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_classify_packages`
   - Problem: Cyclomatic complexity is 10 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
   - Done when: analyzer reports no STRUCT-COMPLEXITY for `_classify_packages` in `src\bootstrap\dependency_check.py`.
-- [ ] **CMP-093** `src\bootstrap\dependency_check.py:60` - STRUCT-BLOCKS (Structure)
+- [ ] **CMP-087** `src\bootstrap\dependency_check.py:60` - STRUCT-BLOCKS (Structure)
   - Symbol: `_classify_packages`
   - Problem: Function has 6 logical blocks (limit 5).
   - Fix: Split the function so each helper owns a single cohesive block of logic.
   - Done when: analyzer reports no STRUCT-BLOCKS for `_classify_packages` in `src\bootstrap\dependency_check.py`.
-- [ ] **CMP-094** `src\bootstrap\dependency_check.py:103` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-088** `src\bootstrap\dependency_check.py:103` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_install_missing_packages`
   - Problem: Cyclomatic complexity is 7 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
   - Done when: analyzer reports no STRUCT-COMPLEXITY for `_install_missing_packages` in `src\bootstrap\dependency_check.py`.
-- [ ] **CMP-095** `src\bootstrap\dependency_check.py:126` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-089** `src\bootstrap\dependency_check.py:126` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_upgrade_outdated_packages`
   - Problem: Cyclomatic complexity is 7 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
   - Done when: analyzer reports no STRUCT-COMPLEXITY for `_upgrade_outdated_packages` in `src\bootstrap\dependency_check.py`.
-- [ ] **CMP-096** `src\bootstrap\package_installer.py:19` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-090** `src\bootstrap\package_installer.py:19` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `find_uv_executable`
   - Problem: Cyclomatic complexity is 10 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
   - Done when: analyzer reports no STRUCT-COMPLEXITY for `find_uv_executable` in `src\bootstrap\package_installer.py`.
-- [ ] **CMP-097** `src\bootstrap\package_installer.py:19` - STRUCT-BLOCKS (Structure)
+- [ ] **CMP-091** `src\bootstrap\package_installer.py:19` - STRUCT-BLOCKS (Structure)
   - Symbol: `find_uv_executable`
   - Problem: Function has 8 logical blocks (limit 5).
   - Fix: Split the function so each helper owns a single cohesive block of logic.
   - Done when: analyzer reports no STRUCT-BLOCKS for `find_uv_executable` in `src\bootstrap\package_installer.py`.
-- [ ] **CMP-098** `src\db\router.py:147` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-092** `src\db\router.py:147` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_snapshot_if_config`
   - Problem: Cyclomatic complexity is 6 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
   - Done when: analyzer reports no STRUCT-COMPLEXITY for `_snapshot_if_config` in `src\db\router.py`.
-- [ ] **CMP-099** `src\export\device_events_52w_exporter.py:101` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-093** `src\export\device_events_52w_exporter.py:101` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_normalize_page`
   - Problem: Cyclomatic complexity is 6 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
   - Done when: analyzer reports no STRUCT-COMPLEXITY for `_normalize_page` in `src\export\device_events_52w_exporter.py`.
-- [ ] **CMP-100** `src\export\site_insights_exporter.py:64` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-094** `src\export\site_insights_exporter.py:64` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_metric_compatible_with_platform`
   - Problem: Cyclomatic complexity is 7 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
   - Done when: analyzer reports no STRUCT-COMPLEXITY for `_metric_compatible_with_platform` in `src\export\site_insights_exporter.py`.
-- [ ] **CMP-101** `src\maps\plotly_map_templates.py:189` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-095** `src\maps\plotly_map_templates.py:189` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `validate_template`
   - Problem: Cyclomatic complexity is 7 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
   - Done when: analyzer reports no STRUCT-COMPLEXITY for `validate_template` in `src\maps\plotly_map_templates.py`.
-- [ ] **CMP-102** `src\refactors\serial_cc\import_initialization_service.py:24` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-096** `src\refactors\serial_cc\import_initialization_service.py:24` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_import_package_group`
   - Problem: Cyclomatic complexity is 8 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
   - Done when: analyzer reports no STRUCT-COMPLEXITY for `_import_package_group` in `src\refactors\serial_cc\import_initialization_service.py`.
-- [ ] **CMP-103** `src\refactors\serial_cc\import_initialization_service.py:49` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-097** `src\refactors\serial_cc\import_initialization_service.py:49` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_log_summary`
   - Problem: Cyclomatic complexity is 7 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
   - Done when: analyzer reports no STRUCT-COMPLEXITY for `_log_summary` in `src\refactors\serial_cc\import_initialization_service.py`.
-- [ ] **CMP-104** `src\refactors\serial_cc\site_client_insights.py:135` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-098** `src\refactors\serial_cc\site_client_insights.py:135` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `execute`
   - Problem: Cyclomatic complexity is 9 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
   - Done when: analyzer reports no STRUCT-COMPLEXITY for `execute` in `src\refactors\serial_cc\site_client_insights.py`.
-- [ ] **CMP-105** `src\refactors\serial_cc\site_client_insights.py:135` - STRUCT-BLOCKS (Structure)
+- [ ] **CMP-099** `src\refactors\serial_cc\site_client_insights.py:135` - STRUCT-BLOCKS (Structure)
   - Symbol: `execute`
   - Problem: Function has 7 logical blocks (limit 5).
   - Fix: Split the function so each helper owns a single cohesive block of logic.
   - Done when: analyzer reports no STRUCT-BLOCKS for `execute` in `src\refactors\serial_cc\site_client_insights.py`.
-- [ ] **CMP-106** `src\refactors\serial_cc\start_site_client_capture_wireless.py:162` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-100** `src\refactors\serial_cc\start_site_client_capture_wireless.py:162` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_print_summary`
   - Problem: Cyclomatic complexity is 6 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
   - Done when: analyzer reports no STRUCT-COMPLEXITY for `_print_summary` in `src\refactors\serial_cc\start_site_client_capture_wireless.py`.
-- [ ] **CMP-107** `src\refactors\serial_cc\start_site_client_capture_wireless.py:186` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-101** `src\refactors\serial_cc\start_site_client_capture_wireless.py:186` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `execute`
   - Problem: Cyclomatic complexity is 8 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
   - Done when: analyzer reports no STRUCT-COMPLEXITY for `execute` in `src\refactors\serial_cc\start_site_client_capture_wireless.py`.
-- [ ] **CMP-108** `src\refactors\serial_cc\start_site_client_capture_wireless.py:186` - STRUCT-BLOCKS (Structure)
+- [ ] **CMP-102** `src\refactors\serial_cc\start_site_client_capture_wireless.py:186` - STRUCT-BLOCKS (Structure)
   - Symbol: `execute`
   - Problem: Function has 7 logical blocks (limit 5).
   - Fix: Split the function so each helper owns a single cohesive block of logic.
   - Done when: analyzer reports no STRUCT-BLOCKS for `execute` in `src\refactors\serial_cc\start_site_client_capture_wireless.py`.
-- [ ] **CMP-109** `src\refactors\serial_cc\start_site_scan_capture.py:202` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-103** `src\refactors\serial_cc\start_site_scan_capture.py:202` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_check_existing_captures`
   - Problem: Cyclomatic complexity is 7 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
   - Done when: analyzer reports no STRUCT-COMPLEXITY for `_check_existing_captures` in `src\refactors\serial_cc\start_site_scan_capture.py`.
-- [ ] **CMP-110** `src\refactors\serial_cc\start_site_scan_capture.py:232` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-104** `src\refactors\serial_cc\start_site_scan_capture.py:232` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `execute`
   - Problem: Cyclomatic complexity is 10 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
   - Done when: analyzer reports no STRUCT-COMPLEXITY for `execute` in `src\refactors\serial_cc\start_site_scan_capture.py`.
-- [ ] **CMP-111** `src\refactors\serial_cc\start_site_scan_capture.py:232` - STRUCT-BLOCKS (Structure)
+- [ ] **CMP-105** `src\refactors\serial_cc\start_site_scan_capture.py:232` - STRUCT-BLOCKS (Structure)
   - Symbol: `execute`
   - Problem: Function has 9 logical blocks (limit 5).
   - Fix: Split the function so each helper owns a single cohesive block of logic.
   - Done when: analyzer reports no STRUCT-BLOCKS for `execute` in `src\refactors\serial_cc\start_site_scan_capture.py`.
-- [ ] **CMP-112** `src\site\address_audit\address_corrector.py:51` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-106** `src\site\address_audit\address_corrector.py:51` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_is_correctable`
   - Problem: Cyclomatic complexity is 6 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
   - Done when: analyzer reports no STRUCT-COMPLEXITY for `_is_correctable` in `src\site\address_audit\address_corrector.py`.
-- [ ] **CMP-113** `src\site\address_audit\address_corrector.py:73` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-107** `src\site\address_audit\address_corrector.py:73` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_review_one`
   - Problem: Cyclomatic complexity is 8 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
   - Done when: analyzer reports no STRUCT-COMPLEXITY for `_review_one` in `src\site\address_audit\address_corrector.py`.
-- [ ] **CMP-114** `src\site\address_audit\address_corrector.py:128` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-108** `src\site\address_audit\address_corrector.py:128` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_print_summary`
   - Problem: Cyclomatic complexity is 7 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
   - Done when: analyzer reports no STRUCT-COMPLEXITY for `_print_summary` in `src\site\address_audit\address_corrector.py`.
-- [ ] **CMP-115** `src\site\address_audit\business_authority_ingester.py:73` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-109** `src\site\address_audit\business_authority_ingester.py:73` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `match`
   - Problem: Cyclomatic complexity is 7 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
   - Done when: analyzer reports no STRUCT-COMPLEXITY for `match` in `src\site\address_audit\business_authority_ingester.py`.
-- [ ] **CMP-116** `src\site\address_audit\business_authority_ingester.py:112` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-110** `src\site\address_audit\business_authority_ingester.py:112` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_parse_row`
   - Problem: Cyclomatic complexity is 10 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
   - Done when: analyzer reports no STRUCT-COMPLEXITY for `_parse_row` in `src\site\address_audit\business_authority_ingester.py`.
-- [ ] **CMP-117** `src\site\address_audit\ui_geocoder.py:306` - STRUCT-COMPLEXITY (Complexity)
-  - Symbol: `_read_fresh_suggestions`
-  - Problem: Cyclomatic complexity is 10 (target <= 5).
-  - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_read_fresh_suggestions` in `src\site\address_audit\ui_geocoder.py`.
-- [ ] **CMP-118** `src\site\address_audit\ui_geocoder.py:306` - STRUCT-BLOCKS (Structure)
-  - Symbol: `_read_fresh_suggestions`
-  - Problem: Function has 6 logical blocks (limit 5).
-  - Fix: Split the function so each helper owns a single cohesive block of logic.
-  - Done when: analyzer reports no STRUCT-BLOCKS for `_read_fresh_suggestions` in `src\site\address_audit\ui_geocoder.py`.
-- [ ] **CMP-119** `src\site\address_audit\ui_geocoder.py:446` - STRUCT-COMPLEXITY (Complexity)
-  - Symbol: `_preserve_query_suite`
-  - Problem: Cyclomatic complexity is 7 (target <= 5).
-  - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_preserve_query_suite` in `src\site\address_audit\ui_geocoder.py`.
-- [ ] **CMP-120** `src\ssh\shell_execution\shell_executor.py:189` - STRUCT-COMPLEXITY (Complexity)
-  - Symbol: `_collect_output`
-  - Problem: Cyclomatic complexity is 7 (target <= 5).
-  - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_collect_output` in `src\ssh\shell_execution\shell_executor.py`.
-- [ ] **CMP-121** `src\ssh\shell_execution\shell_executor.py:189` - STRUCT-BLOCKS (Structure)
-  - Symbol: `_collect_output`
-  - Problem: Function has 6 logical blocks (limit 5).
-  - Fix: Split the function so each helper owns a single cohesive block of logic.
-  - Done when: analyzer reports no STRUCT-BLOCKS for `_collect_output` in `src\ssh\shell_execution\shell_executor.py`.
-- [ ] **CMP-122** `src\ssh\shell_execution\shell_executor.py:340` - STRUCT-COMPLEXITY (Complexity)
-  - Symbol: `_clean_output_lines`
-  - Problem: Cyclomatic complexity is 8 (target <= 5).
-  - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
-  - Done when: analyzer reports no STRUCT-COMPLEXITY for `_clean_output_lines` in `src\ssh\shell_execution\shell_executor.py`.
-- [ ] **CMP-123** `src\ssid_consolidation\_ssid_template_phase3.py:93` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-111** `src\ssid_consolidation\_ssid_template_phase3.py:93` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_assign_matrix_sites`
   - Problem: Cyclomatic complexity is 6 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
   - Done when: analyzer reports no STRUCT-COMPLEXITY for `_assign_matrix_sites` in `src\ssid_consolidation\_ssid_template_phase3.py`.
-- [ ] **CMP-124** `src\ssid_consolidation\_ssid_template_phase3.py:245` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-112** `src\ssid_consolidation\_ssid_template_phase3.py:245` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_assign_sites_to_groups`
   - Problem: Cyclomatic complexity is 6 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
   - Done when: analyzer reports no STRUCT-COMPLEXITY for `_assign_sites_to_groups` in `src\ssid_consolidation\_ssid_template_phase3.py`.
-- [ ] **CMP-125** `src\ssid_consolidation\_ssid_template_phase45.py:219` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-113** `src\ssid_consolidation\_ssid_template_phase45.py:219` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_cluster_deviation_params`
   - Problem: Cyclomatic complexity is 6 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
   - Done when: analyzer reports no STRUCT-COMPLEXITY for `_cluster_deviation_params` in `src\ssid_consolidation\_ssid_template_phase45.py`.
-- [ ] **CMP-126** `src\ssid_consolidation\_ssid_template_phase45.py:506` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-114** `src\ssid_consolidation\_ssid_template_phase45.py:506` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_disable_ssids`
   - Problem: Cyclomatic complexity is 7 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
   - Done when: analyzer reports no STRUCT-COMPLEXITY for `_disable_ssids` in `src\ssid_consolidation\_ssid_template_phase45.py`.
-- [ ] **CMP-127** `src\ui\execution\item_executor.py:28` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-115** `src\ui\execution\item_executor.py:28` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `execute`
   - Problem: Cyclomatic complexity is 8 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
   - Done when: analyzer reports no STRUCT-COMPLEXITY for `execute` in `src\ui\execution\item_executor.py`.
-- [ ] **CMP-128** `src\ui\execution\item_executor.py:90` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-116** `src\ui\execution\item_executor.py:90` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_collect_one_param`
   - Problem: Cyclomatic complexity is 7 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
   - Done when: analyzer reports no STRUCT-COMPLEXITY for `_collect_one_param` in `src\ui\execution\item_executor.py`.
-- [ ] **CMP-129** `src\ui\execution\item_executor.py:162` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-117** `src\ui\execution\item_executor.py:162` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `build`
   - Problem: Cyclomatic complexity is 7 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
   - Done when: analyzer reports no STRUCT-COMPLEXITY for `build` in `src\ui\execution\item_executor.py`.
-- [ ] **CMP-130** `src\ui\execution\output_formatter.py:78` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-118** `src\ui\execution\output_formatter.py:78` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_render_sequence`
   - Problem: Cyclomatic complexity is 6 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
   - Done when: analyzer reports no STRUCT-COMPLEXITY for `_render_sequence` in `src\ui\execution\output_formatter.py`.
-- [ ] **CMP-131** `src\ui\input_handlers\key_poller.py:95` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-119** `src\ui\input_handlers\key_poller.py:95` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_parse_unix_csi`
   - Problem: Cyclomatic complexity is 10 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
   - Done when: analyzer reports no STRUCT-COMPLEXITY for `_parse_unix_csi` in `src\ui\input_handlers\key_poller.py`.
-- [ ] **CMP-132** `src\ui\input_handlers\key_poller.py:95` - STRUCT-BLOCKS (Structure)
+- [ ] **CMP-120** `src\ui\input_handlers\key_poller.py:95` - STRUCT-BLOCKS (Structure)
   - Symbol: `_parse_unix_csi`
   - Problem: Function has 6 logical blocks (limit 5).
   - Fix: Split the function so each helper owns a single cohesive block of logic.
   - Done when: analyzer reports no STRUCT-BLOCKS for `_parse_unix_csi` in `src\ui\input_handlers\key_poller.py`.
-- [ ] **CMP-133** `src\ui\runtime\level_discoverer.py:20` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-121** `src\ui\runtime\level_discoverer.py:20` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `discover`
   - Problem: Cyclomatic complexity is 6 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
   - Done when: analyzer reports no STRUCT-COMPLEXITY for `discover` in `src\ui\runtime\level_discoverer.py`.
-- [ ] **CMP-134** `src\websocket\polling\message_router.py:76` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-122** `src\websocket\polling\message_router.py:76` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_parse_string`
   - Problem: Cyclomatic complexity is 6 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
   - Done when: analyzer reports no STRUCT-COMPLEXITY for `_parse_string` in `src\websocket\polling\message_router.py`.
-- [ ] **CMP-135** `src\websocket\polling\message_router.py:97` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-123** `src\websocket\polling\message_router.py:97` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_trace_packet`
   - Problem: Cyclomatic complexity is 6 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
   - Done when: analyzer reports no STRUCT-COMPLEXITY for `_trace_packet` in `src\websocket\polling\message_router.py`.
-- [ ] **CMP-136** `src\websocket\polling\message_router.py:147` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-124** `src\websocket\polling\message_router.py:147` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_unwrap_payload`
   - Problem: Cyclomatic complexity is 8 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
   - Done when: analyzer reports no STRUCT-COMPLEXITY for `_unwrap_payload` in `src\websocket\polling\message_router.py`.
-- [ ] **CMP-137** `src\websocket\polling\message_router.py:147` - STRUCT-BLOCKS (Structure)
+- [ ] **CMP-125** `src\websocket\polling\message_router.py:147` - STRUCT-BLOCKS (Structure)
   - Symbol: `_unwrap_payload`
   - Problem: Function has 6 logical blocks (limit 5).
   - Fix: Split the function so each helper owns a single cohesive block of logic.
   - Done when: analyzer reports no STRUCT-BLOCKS for `_unwrap_payload` in `src\websocket\polling\message_router.py`.
-- [ ] **CMP-138** `src\websocket\polling\result_collector.py:137` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-126** `src\websocket\polling\result_collector.py:137` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_try_completion`
   - Problem: Cyclomatic complexity is 6 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
   - Done when: analyzer reports no STRUCT-COMPLEXITY for `_try_completion` in `src\websocket\polling\result_collector.py`.
-- [ ] **CMP-139** `src\websocket\polling\result_collector.py:249` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-127** `src\websocket\polling\result_collector.py:249` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_maybe_emit_combined_trace`
   - Problem: Cyclomatic complexity is 7 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.

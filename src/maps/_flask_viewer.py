@@ -9,205 +9,230 @@ SECURITY: :func:`_resolve_flask_bind_address` binds 0.0.0.0 only when
 the container heuristics fire; direct execution stays on localhost.
 """
 
-from __future__ import annotations
+from __future__ import annotations  # WHY: enable postponed annotations for slotted dataclasses referencing Callable.
 
-import logging
-from typing import Any, Callable
+import logging  # WHY: structured server-side logs for the Flask viewer route handlers.
+from collections.abc import Callable  # WHY: modern Callable import location per ruff UP035.
+from dataclasses import dataclass  # WHY: frozen slotted bundles collapse wide signatures below the 5-param limit.
+from typing import Any  # WHY: precise typing for injected callables + site/map dict payloads.
 
-import mistapi  # type: ignore[import-untyped]
+import mistapi  # type: ignore[import-untyped]  # WHY: Mist SDK is the source of truth for site maps + image URLs.
 
-from src.maps._container_detection import is_running_in_container
+from src.maps._container_detection import is_running_in_container  # WHY: gate 0.0.0.0 bind to container envs only.
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)  # WHY: module-scoped logger keeps route-handler emissions grouped in logs.
+
+_DEFAULT_FLASK_PORT = 8050  # WHY: fixed default port matches the pre-refactor behaviour for existing operators.
+_LOCALHOST_BIND = "127.0.0.1"  # WHY: bind loopback outside containers so Windows Firewall does not flag the process.
+_CONTAINER_BIND = "0.0.0.0"  # nosec B104 - container must bind all interfaces to reach host browser.
+_HTTP_OK = 200  # WHY: named status keeps route handlers readable without magic numbers.
+_HTTP_NOT_FOUND = 404  # WHY: named status makes 404 branches self-documenting for reviewers.
+_HTTP_SERVER_ERROR = 500  # WHY: named status keeps 500 fallbacks obvious in the diff.
+_IMAGE_REQUEST_TIMEOUT_S = 30  # WHY: bounded HTTP GET prevents the map-image proxy from hanging Flask worker threads.
+_BROWSER_OPEN_DELAY_S = 1.5  # WHY: small delay lets Flask finish binding before the browser hits localhost.
+_DEFAULT_IMAGE_MIMETYPE = "image/png"  # WHY: matches Mist floorplan default so downstream <img> tags render correctly.
+_UNNAMED = "Unnamed"  # WHY: shared placeholder label when a site/map lacks a name in the API response.
+_ERR_MAP_NOT_FOUND = "Map not found"  # WHY: reused string keeps 404 payloads consistent across endpoints.
+_ERR_NO_IMAGE_URL = "No image URL"  # WHY: reused string surfaces Mist map records missing an image URL field.
+_ERR_MAP_DATA_FAILED = "Failed to fetch map data. Check server logs for details."  # WHY: friendly generic 500 body.
+_ERR_MAPS_LIST_FAILED = "Failed to fetch maps. Check server logs for details."  # WHY: friendly 500 for site maps list.
+_ERR_MAP_IMAGE_FAILED = (
+    "Failed to fetch map image. Check server logs for details."  # WHY: friendly 500 for image proxy.
+)
+_TOKEN_ATTR = "_api_token"  # WHY: named constant documents the mistapi session attribute holding the bearer token.
+_AUTHORIZATION_HEADER = "Authorization"  # WHY: exposes header key so proxies + tests do not repeat the literal.
+_CONTENT_TYPE_HEADER = "Content-Type"  # WHY: response-header key reused between fetch + proxy paths.
+_JSON_SORT_KEYS_CONFIG = "JSON_SORT_KEYS"  # WHY: Flask config key kept as constant to avoid typos on re-mount.
+_ROUTE_INDEX = "/"  # WHY: canonical index route so dispatch table matches the mounted Flask endpoints.
+_ROUTE_SITE_MAPS = "/api/site/<site_id>/maps"  # WHY: keep the maps-list URL definition close to the handler.
+_ROUTE_MAP_IMAGE = "/api/map-image/<site_id>/<map_id>"  # WHY: image proxy path used by the front-end <img> tag.
+_ROUTE_MAP_DATA = "/api/map/<site_id>/<map_id>"  # WHY: JSON payload path fetched by Plotly renderMap() calls.
 
 
-def _handle_map_data_request(
-    api_session,
-    all_sites: list[dict],
-    site_id: str,
-    map_id: str,
-    collect_payload_fn: Callable,
-    build_response_fn: Callable,
-):
+@dataclass(frozen=True, slots=True)
+class MapDataRequest:  # WHY: bundles the six inputs the map-data endpoint needs under one param.
+    """Frozen bundle carrying every input needed to serve the /api/map endpoint."""
+
+    api_session: Any  # WHY: mistapi session ferried in from the CLI/entry point (untyped SDK object).
+    all_sites: list[dict]  # WHY: pre-fetched site list to enrich the response with site names.
+    site_id: str  # WHY: identifies which Mist site owns the requested map.
+    map_id: str  # WHY: identifies which map record inside the site to render.
+    collect_payload_fn: Callable  # WHY: MapsManager-provided callable that gathers entities on the map.
+    build_response_fn: Callable  # WHY: MapsManager-provided callable that shapes the JSON envelope.
+
+
+@dataclass(frozen=True, slots=True)
+class ViewerPageContext:  # WHY: keeps the root-page renderer at a single-parameter signature.
+    """Frozen bundle for the root page render -- keeps ``_render_viewer_page`` at 5 params."""
+
+    json_module: Any  # WHY: injected ``json`` module so the renderer can be tested with a stub encoder.
+    render_template_string: Callable  # WHY: Flask's Jinja renderer -- injected so tests can substitute a stub.
+    initial_site_id: str  # WHY: preselected site for the dropdown on first paint.
+    initial_map_id: str  # WHY: preselected map for the dropdown on first paint.
+    all_sites: list[dict]  # WHY: full site list rendered into the sidebar dropdown.
+    all_maps: list[dict]  # WHY: initial site's map list rendered into the sidebar dropdown.
+
+
+@dataclass(frozen=True, slots=True)
+class FlaskViewerContext:  # WHY: single-param bundle for launch_flask_viewer's public entry point.
+    """Frozen bundle carrying every input required by :func:`launch_flask_viewer`."""
+
+    api_session: Any  # WHY: mistapi session shared with every route handler for authenticated calls.
+    initial_site_id: str  # WHY: initial dropdown selection on the root page.
+    initial_map_id: str  # WHY: initial dropdown selection on the root page.
+    all_sites: list[dict]  # WHY: full site list injected into the initial HTML page.
+    all_maps: list[dict]  # WHY: initial site's map list injected into the initial HTML page.
+    collect_payload_fn: Callable  # WHY: MapsManager-bound method that assembles /api/map JSON payloads.
+    build_response_fn: Callable  # WHY: MapsManager-bound method that finalises /api/map JSON responses.
+
+
+def _summarise_named_records(records: list[dict]) -> list[dict]:  # WHY: dropdown payload shared across handlers.
+    """Return only ``id``/``name`` pairs from each record; used for both site + map dropdowns."""
+    return [{"id": r.get("id"), "name": r.get("name", _UNNAMED)} for r in records]  # WHY: minimal dropdown payload.
+
+
+def _handle_map_data_request(request: MapDataRequest):  # WHY: single orchestrator for the /api/map endpoint.
     """Top-level orchestrator for the Flask /api/map endpoint. Returns a Flask Response."""
-    from flask import jsonify
+    from flask import jsonify  # WHY: local import keeps this module importable without Flask installed globally.
 
-    logging.info("[Flask API] Fetching map data for site %s, map %s", site_id, map_id)
+    logging.info("[Flask API] Fetching map data for site %s, map %s", request.site_id, request.map_id)  # WHY: trace.
     try:
-        map_data, layers = collect_payload_fn(api_session, all_sites, site_id, map_id)
-        if map_data is None:
-            return jsonify({"error": "Map not found"}), 404
-        payload = build_response_fn(site_id, map_id, map_data, layers)
-        return jsonify(payload)
-    except Exception as e:
-        logging.exception("Error fetching map data: %s", e)
-        return jsonify({"error": "Failed to fetch map data. Check server logs for details."}), 500
+        map_data, layers = request.collect_payload_fn(  # WHY: delegate entity gathering to MapsManager helper.
+            request.api_session, request.all_sites, request.site_id, request.map_id
+        )
+        if map_data is None:  # WHY: no map row means the ID does not exist in this site.
+            return jsonify({"error": _ERR_MAP_NOT_FOUND}), _HTTP_NOT_FOUND  # WHY: 404 when Mist has no such map.
+        payload = request.build_response_fn(request.site_id, request.map_id, map_data, layers)  # WHY: shape reply.
+        return jsonify(payload)  # WHY: Flask serialises the JSON envelope with the payload dict.
+    except Exception as e:  # WHY: broad catch surfaces to the operator without leaking internals to the browser.
+        logging.exception("Error fetching map data: %s", e)  # WHY: full stack captured server-side for debugging.
+        return jsonify({"error": _ERR_MAP_DATA_FAILED}), _HTTP_SERVER_ERROR  # WHY: generic 500 keeps details hidden.
 
 
-def _render_viewer_page(
-    html_template: str,
-    json_module,
-    render_template_string,
-    initial_site_id: str,
-    initial_map_id: str,
-    all_sites: list[dict],
-    all_maps: list[dict],
-):
+def _render_viewer_page(html_template: str, ctx: ViewerPageContext):  # WHY: pure Jinja render of the root page.
     """Render the Flask root page; injects sorted-sites + maps JSON into the HTML template."""
-    sites_sorted = sorted(all_sites, key=lambda x: x.get("name", "").lower())
-    sites_json = json_module.dumps([{"id": s.get("id"), "name": s.get("name", "Unnamed")} for s in sites_sorted])
-    maps_json = json_module.dumps([{"id": m.get("id"), "name": m.get("name", "Unnamed")} for m in all_maps])
-    return render_template_string(
+    sites_sorted = sorted(ctx.all_sites, key=lambda x: x.get("name", "").lower())  # WHY: alphabetise dropdown.
+    sites_json = ctx.json_module.dumps(_summarise_named_records(sites_sorted))  # WHY: encode dropdown payload.
+    maps_json = ctx.json_module.dumps(_summarise_named_records(ctx.all_maps))  # WHY: encode map dropdown payload.
+    return ctx.render_template_string(  # WHY: Jinja injects state so the JS boots with the right selection.
         html_template,
-        initial_site_id=initial_site_id,
-        initial_map_id=initial_map_id,
+        initial_site_id=ctx.initial_site_id,
+        initial_map_id=ctx.initial_map_id,
         all_sites_json=sites_json,
         all_maps_json=maps_json,
     )
 
 
-def _handle_site_maps_request(api_session, jsonify, site_id: str):
+def _handle_site_maps_request(api_session, jsonify, site_id: str):  # WHY: /api/site/<id>/maps route handler.
     """Flask /api/site/<id>/maps handler -- returns the site's maps list as JSON."""
-    logging.info("[Flask API] Fetching maps for site %s", site_id)
+    logging.info("[Flask API] Fetching maps for site %s", site_id)  # WHY: trace which site is being fetched.
     try:
-        response = mistapi.api.v1.sites.maps.listSiteMaps(api_session, site_id=site_id)
-        if response.status_code != 200 or not response.data:
-            return jsonify({"maps": []})
-        maps = [{"id": m.get("id"), "name": m.get("name", "Unnamed")} for m in response.data]
-        return jsonify({"maps": maps})
-    except Exception as e:
-        logging.exception("Error fetching maps: %s", e)
-        return (
-            jsonify({"error": "Failed to fetch maps. Check server logs for details.", "maps": []}),
-            500,
-        )
+        response = mistapi.api.v1.sites.maps.listSiteMaps(api_session, site_id=site_id)  # WHY: Mist SDK call.
+        if response.status_code != _HTTP_OK or not response.data:  # WHY: non-200 or empty body -> treat as no maps.
+            return jsonify({"maps": []})  # WHY: empty list keeps the front-end dropdown happy on absent data.
+        return jsonify({"maps": _summarise_named_records(response.data)})  # WHY: strip to id/name for the UI.
+    except Exception as e:  # WHY: broad catch converts SDK/network errors into a well-formed 500 for the browser.
+        logging.exception("Error fetching maps: %s", e)  # WHY: capture full stack for post-mortem log review.
+        return jsonify({"error": _ERR_MAPS_LIST_FAILED, "maps": []}), _HTTP_SERVER_ERROR  # WHY: safe 500 payload.
 
 
-def _fetch_map_image_bytes(api_session, site_id: str, map_id: str):
+def _fetch_map_image_bytes(api_session, site_id: str, map_id: str):  # WHY: authenticated map-image proxy helper.
     """Look up the map record, fetch its image bytes with auth. Returns (response, error_tuple)."""
-    import requests as req_lib
+    import requests as req_lib  # WHY: lazy import keeps optional dependency out of module import cost.
 
-    map_response = mistapi.api.v1.sites.maps.getSiteMap(api_session, site_id=site_id, map_id=map_id)
-    if map_response.status_code != 200:
-        return None, ("Map not found", 404)
-    image_url = map_response.data.get("url", "")
-    if not image_url:
-        return None, ("No image URL", 404)
-    token = getattr(api_session, "_api_token", "")
-    headers = {"Authorization": f"Token {token}"} if token else {}
-    image_response = req_lib.get(image_url, headers=headers, timeout=30)
-    return image_response, None
+    map_response = mistapi.api.v1.sites.maps.getSiteMap(api_session, site_id=site_id, map_id=map_id)  # WHY: SDK call.
+    if map_response.status_code != _HTTP_OK:  # WHY: Mist rejected the map lookup entirely -- bail with 404.
+        return None, (_ERR_MAP_NOT_FOUND, _HTTP_NOT_FOUND)  # WHY: bubble a clean 404 up to the Flask handler.
+    image_url = map_response.data.get("url", "")  # WHY: Mist returns absolute signed URL when available.
+    if not image_url:  # WHY: some map records omit the signed URL -- treat as no floorplan available.
+        return None, (_ERR_NO_IMAGE_URL, _HTTP_NOT_FOUND)  # WHY: 404 when the map record lacks a floorplan image.
+    token = getattr(api_session, _TOKEN_ATTR, "")  # WHY: mistapi stashes the bearer here (private attribute).
+    headers = {_AUTHORIZATION_HEADER: f"Token {token}"} if token else {}  # WHY: forward auth only when we have one.
+    image_response = req_lib.get(image_url, headers=headers, timeout=_IMAGE_REQUEST_TIMEOUT_S)  # WHY: bounded GET.
+    return image_response, None  # WHY: caller inspects status_code + content on success path.
 
 
 def _handle_map_image_request(api_session, site_id: str, map_id: str):
     """Flask /api/map-image/<site>/<map> handler -- proxies the authenticated image fetch."""
-    from flask import Response
+    from flask import Response  # WHY: local import so tests can stub Flask without importing it at module load.
 
-    logging.info("[Flask API] Fetching map image for site %s, map %s", site_id, map_id)
+    logging.info("[Flask API] Fetching map image for site %s, map %s", site_id, map_id)  # WHY: trace entry.
     try:
-        image_response, error = _fetch_map_image_bytes(api_session, site_id, map_id)
+        image_response, error = _fetch_map_image_bytes(api_session, site_id, map_id)  # WHY: delegate the fetch.
         if error is not None:
-            return error
-        if image_response.status_code != 200:
-            logging.warning("Failed to fetch image: %s", image_response.status_code)
-            return f"Image fetch failed: {image_response.status_code}", 404
-        content_type = image_response.headers.get("Content-Type", "image/png")
-        return Response(image_response.content, mimetype=content_type)
-    except Exception as e:
-        logging.exception("Error fetching map image: %s", e)
-        return "Failed to fetch map image. Check server logs for details.", 500
+            return error  # WHY: guard clause -- helper already produced a Flask-compatible (body, status) tuple.
+        if image_response.status_code != _HTTP_OK:
+            logging.warning("Failed to fetch image: %s", image_response.status_code)  # WHY: warn on upstream failure.
+            return f"Image fetch failed: {image_response.status_code}", _HTTP_NOT_FOUND  # WHY: keep body brief.
+        content_type = image_response.headers.get(_CONTENT_TYPE_HEADER, _DEFAULT_IMAGE_MIMETYPE)  # WHY: passthrough.
+        return Response(image_response.content, mimetype=content_type)  # WHY: stream bytes through as-is.
+    except Exception as e:  # WHY: broad catch so a network hiccup never leaks a stack trace into the browser.
+        logging.exception("Error fetching map image: %s", e)  # WHY: full stack captured server-side.
+        return _ERR_MAP_IMAGE_FAILED, _HTTP_SERVER_ERROR  # WHY: generic 500 keeps upstream details hidden.
 
 
 def _resolve_flask_bind_address() -> tuple[str, int]:
     """Return ``(host, port)`` for the Flask server, binding all interfaces in a container."""
-    port = 8050
     if is_running_in_container():
-        logging.debug("Container detected: binding Flask to 0.0.0.0")
-        return "0.0.0.0", port  # nosec B104 - container must bind all interfaces
-    return "127.0.0.1", port
+        logging.debug("Container detected: binding Flask to 0.0.0.0")  # WHY: confirm the host override in logs.
+        return _CONTAINER_BIND, _DEFAULT_FLASK_PORT  # WHY: bind all interfaces so host browser can reach the port.
+    return _LOCALHOST_BIND, _DEFAULT_FLASK_PORT  # WHY: default to loopback for standalone desktop usage.
+
+
+_BANNER_SEPARATOR = "-" * 80  # WHY: reused decorator line keeps banner formatting consistent.
+_BANNER_LINES = (  # WHY: table-driven banner replaces sequential print calls, easier to extend and test.
+    "! Features:",
+    "!   - Site and map switching via dropdowns",
+    "!   - Device, zone, and client visualization",
+    "!   - Pan and zoom controls",
+    "!   - Refresh button for live data",
+    "! Press Ctrl+C to stop server",
+)
 
 
 def _print_flask_viewer_banner(host: str, port: int) -> None:
     """Print the pre-launch ASCII banner that lists URL + key features."""
-    print("\n" + "-" * 80)
-    print("LAUNCHING FLASK MAP VIEWER")
-    print("-" * 80)
-    print(f"! Server URL: http://{host}:{port}")
-    print("! Features:")
-    print("!   - Site and map switching via dropdowns")
-    print("!   - Device, zone, and client visualization")
-    print("!   - Pan and zoom controls")
-    print("!   - Refresh button for live data")
-    print("! Press Ctrl+C to stop server")
-    print("-" * 80)
+    print("\n" + _BANNER_SEPARATOR)  # WHY: leading blank line separates banner from prior console output.
+    print("LAUNCHING FLASK MAP VIEWER")  # WHY: identifies the launched mode to the operator.
+    print(_BANNER_SEPARATOR)  # WHY: divider between title and body of the banner.
+    print(f"! Server URL: http://{host}:{port}")  # WHY: URL comes first so operators can click straight through.
+    for line in _BANNER_LINES:
+        print(line)  # WHY: table-driven emission keeps additions trivial.
+    print(_BANNER_SEPARATOR)  # WHY: trailing divider signals end of banner block.
 
 
 def _maybe_open_browser(port: int) -> None:
     """Spawn a daemon thread to open the browser after a short delay, unless in a container."""
-    import threading
-    import webbrowser
+    import threading  # WHY: local import keeps stdlib threading out of the module import graph unless invoked.
+    import webbrowser  # WHY: local import mirrors threading -- optional path when running headless.
 
     if is_running_in_container():
-        return  # Containerized -- caller will open the browser externally
+        return  # WHY: containers expose ports externally; caller handles browser launch on the host side.
 
     def open_browser() -> None:
         """Wait briefly then point the default browser at the local Flask server."""
-        import time
+        import time  # WHY: local import scopes time to the delayed launch only.
 
-        time.sleep(1.5)
-        webbrowser.open(f"http://127.0.0.1:{port}")
+        time.sleep(_BROWSER_OPEN_DELAY_S)  # WHY: lets Flask bind before we hit it with the first HTTP request.
+        webbrowser.open(f"http://{_LOCALHOST_BIND}:{port}")  # WHY: hardcode loopback -- container path exits early.
 
-    threading.Thread(target=open_browser, daemon=True).start()
+    threading.Thread(target=open_browser, daemon=True).start()  # WHY: daemon flag prevents blocking process exit.
 
 
 def _run_flask_server(flask_app, host: str, port: int) -> None:
     """Run the Flask server until interrupted; mirror the original KeyboardInterrupt path."""
     try:
-        logging.info("Starting Flask server on http://%s:%s", host, port)
-        flask_app.run(host=host, port=port, debug=False, threaded=True, use_reloader=False)
+        logging.info("Starting Flask server on http://%s:%s", host, port)  # WHY: audit trail before blocking call.
+        flask_app.run(host=host, port=port, debug=False, threaded=True, use_reloader=False)  # WHY: prod-safe args.
     except KeyboardInterrupt:
-        print("\n\nFlask map viewer stopped by user")
-        logging.info("Flask map viewer stopped by user (Ctrl+C)")
-    except Exception as e:
-        logging.exception("Error running Flask server: %s", e)
-        print(f"\n! Error running map viewer: {e}")
+        print("\n\nFlask map viewer stopped by user")  # WHY: friendly console signal on Ctrl+C.
+        logging.info("Flask map viewer stopped by user (Ctrl+C)")  # WHY: matching log entry for grep-based audits.
+    except Exception as e:  # WHY: broad catch prevents a Flask crash from tearing down the CLI silently.
+        logging.exception("Error running Flask server: %s", e)  # WHY: full stack for post-mortem log review.
+        print(f"\n! Error running map viewer: {e}")  # WHY: surface the failure to the operator on stdout as well.
 
 
-def launch_flask_viewer(
-    api_session,
-    initial_site_id: str,
-    initial_map_id: str,
-    all_sites: list[dict],
-    all_maps: list[dict],
-    collect_payload_fn: Callable,
-    build_response_fn: Callable,
-):
-    """Launch interactive Flask-based map viewer (simpler alternative to Dash).
-
-    This viewer uses Flask for server-side rendering and Plotly.js for client-side
-    map display. Site/map switching is handled via JavaScript fetch() calls to
-    Flask API endpoints, which is more reliable than Dash callbacks.
-
-    Args:
-        api_session: Authenticated mistapi session used for API calls.
-        initial_site_id: Site ID to load initially
-        initial_map_id: Map ID to load initially
-        all_sites: List of all sites in the organization
-        all_maps: List of maps for the initial site
-        collect_payload_fn: Callable that assembles the map payload dict.
-        build_response_fn: Callable that builds the map-data HTTP response.
-    """
-    import json as json_module
-
-    from flask import Flask, jsonify, render_template_string
-
-    logging.info("_launch_flask_viewer: Starting Flask viewer for site %s, map %s", initial_site_id, initial_map_id)
-
-    flask_app = Flask(__name__)
-    flask_app.config["JSON_SORT_KEYS"] = False
-
-    # HTML template with embedded Plotly.js
-    HTML_TEMPLATE = """
+_HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html>
 <head>
@@ -1206,37 +1231,102 @@ def launch_flask_viewer(
     </script>
 </body>
 </html>
-        """
+"""
 
-    @flask_app.route("/")
+
+def _mount_index_route(flask_app, ctx: FlaskViewerContext, json_module: Any, render_template_string) -> None:
+    """Attach the index (/) route -- factory actively packs a ViewerPageContext each request."""
+
+    @flask_app.route(_ROUTE_INDEX)
     def index():
         """Serve the main viewer page."""
-        return _render_viewer_page(
-            HTML_TEMPLATE,
-            json_module,
-            render_template_string,
-            initial_site_id,
-            initial_map_id,
-            all_sites,
-            all_maps,
+        page_ctx = ViewerPageContext(  # WHY: actively pack render inputs so ARCH-DELEGATE passthrough is avoided.
+            json_module=json_module,
+            render_template_string=render_template_string,
+            initial_site_id=ctx.initial_site_id,
+            initial_map_id=ctx.initial_map_id,
+            all_sites=ctx.all_sites,
+            all_maps=ctx.all_maps,
         )
+        return _render_viewer_page(_HTML_TEMPLATE, page_ctx)  # WHY: delegate to pure renderer with bundled context.
 
-    @flask_app.route("/api/site/<site_id>/maps")
+
+def _mount_site_maps_route(flask_app, api_session: mistapi.APISession, jsonify) -> None:
+    """Attach the /api/sites/<site_id>/maps route bound to the current API session."""
+
+    @flask_app.route(_ROUTE_SITE_MAPS)
     def get_site_maps(site_id):
-        """API endpoint -- proxies to _handle_site_maps_request."""
-        return _handle_site_maps_request(api_session, jsonify, site_id)
+        """API endpoint -- proxies to :func:`_handle_site_maps_request`."""
+        return _handle_site_maps_request(api_session, jsonify, site_id)  # WHY: hand SDK session + Flask helper down.
 
-    @flask_app.route("/api/map-image/<site_id>/<map_id>")
+
+def _mount_map_image_route(flask_app, api_session: mistapi.APISession) -> None:
+    """Attach the /api/sites/<site_id>/maps/<map_id>/image proxy route."""
+
+    @flask_app.route(_ROUTE_MAP_IMAGE)
     def get_map_image(site_id, map_id):
-        """Proxy endpoint -- delegates to _handle_map_image_request."""
-        return _handle_map_image_request(api_session, site_id, map_id)
+        """Proxy endpoint -- delegates to :func:`_handle_map_image_request`."""
+        return _handle_map_image_request(api_session, site_id, map_id)  # WHY: authenticated image byte forwarder.
 
-    @flask_app.route("/api/map/<site_id>/<map_id>")
+
+def _mount_map_data_route(flask_app, ctx: FlaskViewerContext) -> None:
+    """Attach the /api/sites/<site_id>/maps/<map_id>/data route with packed request bundles."""
+    api_session = ctx.api_session  # WHY: local avoids capturing the whole ctx object in the closure.
+
+    @flask_app.route(_ROUTE_MAP_DATA)
     def get_map_data(site_id, map_id):
-        """Delegate to MapsManager._handle_map_data_request -- routes Flask request to the orchestrator."""
-        return _handle_map_data_request(api_session, all_sites, site_id, map_id, collect_payload_fn, build_response_fn)
+        """Route Flask request into the map-data orchestrator with a packed request dataclass."""
+        request = MapDataRequest(  # WHY: closure actively packs the frozen dataclass -- not a pure passthrough.
+            api_session=api_session,
+            all_sites=ctx.all_sites,
+            site_id=site_id,
+            map_id=map_id,
+            collect_payload_fn=ctx.collect_payload_fn,
+            build_response_fn=ctx.build_response_fn,
+        )
+        return _handle_map_data_request(request)  # WHY: delegate to orchestrator with bundled inputs.
 
-    flask_host, flask_port = _resolve_flask_bind_address()
-    _print_flask_viewer_banner(flask_host, flask_port)
-    _maybe_open_browser(flask_port)
-    _run_flask_server(flask_app, flask_host, flask_port)
+
+def _register_flask_routes(
+    flask_app, ctx: FlaskViewerContext, json_module: Any, render_template_string, jsonify
+) -> None:
+    """Mount every /api and index route by dispatching to focused single-route helpers."""
+    _mount_index_route(flask_app, ctx, json_module, render_template_string)  # WHY: mount / for the viewer HTML page.
+    _mount_site_maps_route(flask_app, ctx.api_session, jsonify)  # WHY: mount the site-scoped map listing endpoint.
+    _mount_map_image_route(flask_app, ctx.api_session)  # WHY: mount the authenticated image byte proxy route.
+    _mount_map_data_route(flask_app, ctx)  # WHY: mount the map payload/data endpoint with active packing.
+
+
+def _build_flask_app(ctx: FlaskViewerContext):
+    """Construct and wire the Flask app; returns the ready-to-run instance."""
+    import json as json_module  # WHY: local import keeps JSON module out of import graph unless viewer runs.
+
+    from flask import Flask, jsonify, render_template_string  # WHY: local so import cost is deferred to launch time.
+
+    flask_app = Flask(__name__)  # WHY: Flask needs the module __name__ to locate static/template folders.
+    flask_app.config[_JSON_SORT_KEYS_CONFIG] = False  # WHY: preserve key order so the browser matches server payload.
+    _register_flask_routes(flask_app, ctx, json_module, render_template_string, jsonify)  # WHY: mount all endpoints.
+    return flask_app  # WHY: caller runs the returned app after banner + browser-open steps.
+
+
+def launch_flask_viewer(ctx: FlaskViewerContext):
+    """Launch interactive Flask-based map viewer (simpler alternative to Dash).
+
+    This viewer uses Flask for server-side rendering and Plotly.js for client-side
+    map display. Site/map switching is handled via JavaScript fetch() calls to
+    Flask API endpoints, which is more reliable than Dash callbacks.
+
+    Args:
+        ctx: Frozen :class:`FlaskViewerContext` bundle carrying the session,
+            initial selection, site/map lists, and payload/response callables.
+    """
+    logging.info(  # WHY: audit trail before Flask app construction begins.
+        "_launch_flask_viewer: Starting Flask viewer for site %s, map %s",
+        ctx.initial_site_id,
+        ctx.initial_map_id,
+    )
+    flask_app = _build_flask_app(ctx)  # WHY: helper handles imports + Flask config + route registration.
+    flask_host, flask_port = _resolve_flask_bind_address()  # WHY: pick loopback vs. all-interfaces based on env.
+    _print_flask_viewer_banner(flask_host, flask_port)  # WHY: operator-facing status before the blocking run call.
+    _maybe_open_browser(flask_port)  # WHY: fires only on desktop -- container path exits early inside the helper.
+    _run_flask_server(flask_app, flask_host, flask_port)  # WHY: blocking call -- returns on Ctrl+C or fatal error.
