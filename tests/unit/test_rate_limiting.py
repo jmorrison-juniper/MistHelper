@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.utils.rate_limiting import RateLimitingUtils
+from src.utils.rate_limiting import PidInputs, RateLimitingUtils
 
 
 # ---------------------------------------------------------------------------
@@ -380,28 +380,33 @@ class TestEstimateApiUsage:
 class TestCalculatePidDelay:
     """Tests for _calculate_pid_delay static method."""
 
+    @staticmethod
+    def _make_inputs(used: float = 100, delay_integral: float = 0.0) -> PidInputs:
+        """Return a PidInputs bundle populated with common test defaults."""
+        return PidInputs(
+            used=used,
+            limit=5000,
+            seconds_elapsed=1800,
+            delay_integral=delay_integral,
+            k_p=0.1,
+            k_i=0.001,
+            previous_elapsed=1799,
+        )
+
     def test_returns_five_tuple(self):
         """Returns a 5-element tuple."""
-        result = RateLimitingUtils._calculate_pid_delay(
-            used=100, limit=5000, seconds_elapsed=1800, delay_integral=0.0, k_p=0.1, k_i=0.001, previous_elapsed=1799
-        )
+        result = RateLimitingUtils._calculate_pid_delay(self._make_inputs())
         assert len(result) == 5
 
     def test_delay_is_clamped(self):
         """Delay is between 0.01 and 10."""
-        sat_delay, _, _, _, _ = RateLimitingUtils._calculate_pid_delay(
-            used=100, limit=5000, seconds_elapsed=1800, delay_integral=0.0, k_p=0.1, k_i=0.001, previous_elapsed=1799
-        )
+        sat_delay, _, _, _, _ = RateLimitingUtils._calculate_pid_delay(self._make_inputs())
         assert 0.01 <= sat_delay <= 10
 
     def test_high_usage_increases_delay(self):
         """Near-limit usage produces higher delay."""
-        sat_low, _, _, _, _ = RateLimitingUtils._calculate_pid_delay(
-            used=100, limit=5000, seconds_elapsed=1800, delay_integral=0.0, k_p=0.1, k_i=0.001, previous_elapsed=1799
-        )
-        sat_high, _, _, _, _ = RateLimitingUtils._calculate_pid_delay(
-            used=4900, limit=5000, seconds_elapsed=1800, delay_integral=0.0, k_p=0.1, k_i=0.001, previous_elapsed=1799
-        )
+        sat_low, _, _, _, _ = RateLimitingUtils._calculate_pid_delay(self._make_inputs(used=100))
+        sat_high, _, _, _, _ = RateLimitingUtils._calculate_pid_delay(self._make_inputs(used=4900))
         assert sat_high > sat_low
 
 
@@ -638,13 +643,15 @@ class TestEdgeCases:
     def test_hour_boundary_resets_integral(self):
         """Hour boundary crossing halves the delay integral."""
         sat_delay, error, integral, _, _ = RateLimitingUtils._calculate_pid_delay(
-            used=100,
-            limit=5000,
-            seconds_elapsed=10.0,
-            delay_integral=100.0,
-            k_p=0.1,
-            k_i=0.001,
-            previous_elapsed=3500.0,
+            PidInputs(
+                used=100,
+                limit=5000,
+                seconds_elapsed=10.0,
+                delay_integral=100.0,
+                k_p=0.1,
+                k_i=0.001,
+                previous_elapsed=3500.0,
+            )
         )
         assert integral != 100.0
 
