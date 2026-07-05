@@ -77,7 +77,8 @@ class _ValueFormatter:  # WHY: replaces inner closure so it can be unit-tested
         renderer = _TYPE_RENDERERS.get(type(value))  # WHY: exact-type lookup keeps bool distinct
         if renderer is None:  # WHY: unknown type falls through to safe str() render
             return f"[white]{value!s}[/white]"  # WHY: fallback style for unknown types
-        return renderer(self, value)  # WHY: dispatch to bound-method renderer
+        result: str = renderer(self, value)  # WHY: dispatch to bound-method renderer
+        return result  # WHY: explicit str typing keeps mypy strict happy
 
     def _render_bool(self, value: bool) -> str:  # noqa: ARG002 - self kept for uniform signature
         """Render a bool value in cyan (kept before int by dispatch table)."""
