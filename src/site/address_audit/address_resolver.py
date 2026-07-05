@@ -92,7 +92,7 @@ class AddressResolver:
         ui: ResolverResult | None,
         candidates: ResolveCandidates,
         query: str,
-    ) -> ResolverResult:
+    ) -> ResolverResult:  # WHY: fan-in point where the three tiers collapse to one authoritative answer.
         """Merge results with the web (Tier 3) as the authority for the true suite.
 
         Priority: a confident Tier-3 (Google-via-Mist) suggestion WINS because it is
@@ -101,18 +101,39 @@ class AddressResolver:
         otherwise NO_RESULT. Tier 3 only overrides when it actually returned an
         address, so a missing/failed browser never makes results worse.
         """
-        if ui is not None and ui.canonical_address:  # Tier 3 deduced a real (suite-bearing) address.
-            ui.query = query  # Stamp the query for cache consistency.
-            ui.street_validated = ui.street_validated or osm is not None  # Note OSM street cross-check.
-            return ui  # Web authority wins -> the true shippable address.
-        if internal is not None:  # Internal supplied the suite-corrected suggestion.
-            internal.query = query  # Stamp the query for cache consistency.
-            internal.street_validated = osm is not None  # OSM confirmed the base street exists.
-            return internal  # Suite from internal hint, street externally cross-checked.
-        if osm is not None:  # No internal suite, but OSM validated the street.
-            osm.street_validated = True  # OSM itself is the external validator here.
-            return osm  # Return the OSM-canonical result.
-        return ResolverResult(query=query, canonical_address=None, source="internal", confidence=0.0)
+        winner = self._pick_tier_winner(ui, internal, osm)  # WHY: encapsulate priority order in a pure helper.
+        if winner is None:  # WHY: no tier produced an address -> NO_RESULT sentinel.
+            return ResolverResult(query=query, canonical_address=None, source="internal", confidence=0.0)
+        winner.query = query  # WHY: stamp the query so the cache key round-trips consistently.
+        winner.street_validated = self._resolve_validated(winner, ui, osm)  # WHY: preserve OSM cross-check semantics.
+        return winner  # WHY: single return keeps the merge trivial and free of tier-specific branches.
+
+    @staticmethod
+    def _pick_tier_winner(
+        ui: ResolverResult | None,
+        internal: ResolverResult | None,
+        osm: ResolverResult | None,
+    ) -> ResolverResult | None:  # WHY: isolate the tier-priority table from the finalization logic.
+        """Return the highest-priority non-empty tier result, or None when all tiers are empty."""
+        if ui is not None and ui.canonical_address:  # WHY: Tier 3 only wins with a real (suite-bearing) address.
+            return ui  # WHY: web authority is the only source that knows the true suite.
+        if internal is not None:  # WHY: internal suite hint beats a bare OSM street when both exist.
+            return internal  # WHY: suite-bearing suggestion wins over a mere street validation.
+        return osm  # WHY: OSM (or None) is the last-chance answer.
+
+    @staticmethod
+    def _resolve_validated(
+        winner: ResolverResult,
+        ui: ResolverResult | None,
+        osm: ResolverResult | None,
+    ) -> bool:  # WHY: tier identity dictates how the street-validated flag is derived.
+        """Return the street_validated flag for the winning tier, respecting OSM cross-check."""
+        osm_present = osm is not None  # WHY: cache the presence check so both branches read cleanly.
+        if winner is ui:  # WHY: Tier 3 may already carry its own validated flag; OR with OSM cross-check.
+            return winner.street_validated or osm_present  # WHY: never demote an already-validated UI answer.
+        if winner is osm:  # WHY: OSM itself is the external validator when it wins.
+            return True  # WHY: OSM's presence *is* the confirmation.
+        return osm_present  # WHY: internal winner only trusts OSM's separate confirmation.
 
     def _compare_internal(self, candidates: ResolveCandidates) -> ResolverResult | None:
         """Tier 1: build a clean Mist-base + suite suggestion when Mist is missing a suite.
@@ -125,17 +146,20 @@ class AddressResolver:
         mist_street = candidates.mist_address.get("address", "")  # Mist street line (the clean base).
         if re.search(_SUITE_PATTERN, mist_street, flags=re.IGNORECASE):  # Mist already carries a suite.
             return None  # No discrepancy to surface; defer to Tier 2.
-        authority_suite = self._extract_suite(
-            candidates.authoritative_address.get("address", "")
-        )  # Business authority.
-        csv_suite = self._extract_suite(candidates.csv_address.get("address", ""))  # Customer CSV suite.
-        snmp_suite = self._extract_suite(candidates.snmp_location or "")  # SNMP suite (fallback).
-        suite = authority_suite or csv_suite or snmp_suite  # Prefer authority > CSV > SNMP for Tier-1 suggestion.
+        suite = self._pick_internal_suite(candidates)  # WHY: fold the authority/CSV/SNMP fallback chain into a helper.
         if not suite:  # Neither internal source supplies a suite Mist lacks.
             return None  # Nothing to add; defer to Tier 2.
         clean = self._build_clean_suggestion(candidates.mist_address, suite)  # Mist base + suite, no pollution.
         logging.debug("Tier 1 internal suggestion (suite=%s): %s", suite, clean)  # Trace the internal hit.
         return ResolverResult(query="", canonical_address=clean, source="internal", confidence=0.7)
+
+    def _pick_internal_suite(self, candidates: ResolveCandidates) -> str:  # WHY: keep suite fallback out of Tier 1.
+        """Return the first available suite token: authority > CSV > SNMP; empty string when none."""
+        for source in (candidates.authoritative_address, candidates.csv_address):  # WHY: authority-first preference.
+            suite = self._extract_suite(source.get("address", ""))  # WHY: normalized suite token or empty.
+            if suite:  # WHY: first non-empty match wins.
+                return suite  # WHY: authority beats CSV beats SNMP by iteration order.
+        return self._extract_suite(candidates.snmp_location or "")  # WHY: SNMP is the last-resort fallback.
 
     @staticmethod
     def _extract_suite(text: str) -> str:
@@ -150,13 +174,16 @@ class AddressResolver:
         base = mist_address.get("address", "").strip()  # Mist's street line.
         base = re.sub(_SUITE_PATTERN, "", base, flags=re.IGNORECASE).strip().rstrip(",").strip()  # De-dupe suite.
         street = f"{base} {suite}".strip() if suite else base  # Append the discovered suite.
-        locality = " ".join(  # "STATE ZIP" tail built from Mist's own fields.
-            part
-            for part in (mist_address.get("state", ""), str(mist_address.get("zip", mist_address.get("zipcode", ""))))
-            if part
-        ).strip()
+        locality = self._build_locality(mist_address)  # WHY: pull "STATE ZIP" join into a helper to cap CC.
         parts = [street, mist_address.get("city", ""), locality]  # Ordered output components.
         return ", ".join(part for part in parts if part).strip()  # Clean "street, city, ST ZIP".
+
+    @staticmethod
+    def _build_locality(mist_address: dict[str, Any]) -> str:  # WHY: isolate the state/zip join so CC stays under 5.
+        """Return a "STATE ZIP" pair built from Mist fields; empty string when both are absent."""
+        zip_value = mist_address.get("zip") or mist_address.get("zipcode", "")  # WHY: either zip key may be populated.
+        tokens = (mist_address.get("state", ""), str(zip_value))  # WHY: state first, ZIP second per US postal order.
+        return " ".join(token for token in tokens if token).strip()  # WHY: filter empties so lone components stand.
 
     def _validate_nominatim(self, candidates: ResolveCandidates, query: str) -> ResolverResult | None:
         """Tier 2: validate the base street via the reused ``NominatimValidator``."""
@@ -169,10 +196,7 @@ class AddressResolver:
         outcome = validator.validate(mist_street, csv_street)  # Geocode both suite-stripped streets.
         comparison = outcome.get("comparison_validation", {})  # The CSV-side geocode result.
         if not comparison.get("valid"):  # Nominatim could not validate the candidate street.
-            street_for_log = csv_street.get("address") or mist_street.get("address") or query  # Actual street tried.
-            logging.warning(  # Show the street actually geocoded (not the business+suite query string).
-                "Nominatim returned no result for street '%s' (check network/SSL)", street_for_log
-            )
+            self._log_nominatim_miss(csv_street, mist_street, query)  # WHY: keep miss-log path off the hot return.
             return None  # Defer to Tier 3 / NO_RESULT.
         confidence = float(comparison.get("confidence", 0.0))  # OSM importance-derived confidence.
         canonical = self._nominatim_canonical(candidates, comparison)  # Clean street line (not raw display_name).
@@ -184,6 +208,18 @@ class AddressResolver:
             confidence=confidence,  # Validation confidence.
             ambiguous=confidence < 0.4,  # Low confidence flags a possible mall/ambiguous case.
             raw_response=outcome,  # Full validator payload for audit/debug.
+        )
+
+    @staticmethod
+    def _log_nominatim_miss(
+        csv_street: dict[str, Any],
+        mist_street: dict[str, Any],
+        query: str,
+    ) -> None:  # WHY: single-purpose helper keeps _validate_nominatim under the 25-line cap.
+        """Emit the "no result" warning with the actual street that was geocoded."""
+        street_for_log = csv_street.get("address") or mist_street.get("address") or query  # WHY: prefer the CSV try.
+        logging.warning(  # WHY: show the real street, not the business+suite query string.
+            "Nominatim returned no result for street '%s' (check network/SSL)", street_for_log
         )
 
     def _nominatim_canonical(self, candidates: ResolveCandidates, comparison: dict[str, Any]) -> str:
@@ -257,18 +293,24 @@ class AddressResolver:
         mist_unit = self._suite_unit(candidates.mist_address.get("address", ""))  # Mist's unit id (or '').
         if not mist_unit:  # Mist has no suite at all.
             return True  # Discover the missing suite.
-        authority_unit = self._suite_unit(candidates.authoritative_address.get("address", ""))  # Authority unit id.
-        if authority_unit and authority_unit != mist_unit:  # Business authority claims a different suite.
-            logging.info(  # Action-log conflict source for the operator/debug log.
-                "Mist unit %r conflicts with business-authority unit %r; adjudicating via Tier 3",
-                mist_unit,
-                authority_unit,
-            )
-            return True  # Resolve the authority conflict against the web.
-        csv_unit = self._suite_unit(candidates.csv_address.get("address", ""))  # CSV's unit id (or '').
-        if csv_unit and csv_unit != mist_unit:  # CSV claims a different unit.
-            logging.info("Mist unit %r conflicts with CSV unit %r; adjudicating via Tier 3", mist_unit, csv_unit)
-            return True  # Resolve the conflict against the web.
+        return self._has_unit_conflict(candidates, mist_unit)  # WHY: table-drive the authority/CSV conflict scan.
+
+    def _has_unit_conflict(self, candidates: ResolveCandidates, mist_unit: str) -> bool:
+        """Return True when authority or CSV claim a suite different from Mist's."""
+        sources = (  # WHY: (log-label, address-dict) pairs preserve the authority-then-CSV precedence.
+            ("business-authority", candidates.authoritative_address),
+            ("CSV", candidates.csv_address),
+        )
+        for label, address in sources:  # WHY: iterate in priority order so the first conflict wins.
+            other_unit = self._suite_unit(address.get("address", ""))  # WHY: normalize both sides to bare unit ids.
+            if other_unit and other_unit != mist_unit:  # WHY: only a *different* non-empty unit is a conflict.
+                logging.info(  # WHY: log the specific source so operators can audit the adjudication trigger.
+                    "Mist unit %r conflicts with %s unit %r; adjudicating via Tier 3",
+                    mist_unit,
+                    label,
+                    other_unit,
+                )
+                return True  # WHY: resolve the conflict against the web.
         return False  # Mist already specific and consistent with the CSV.
 
     @staticmethod
@@ -322,13 +364,18 @@ class AddressResolver:
         distinct = set(numbers)  # Unique house numbers across the hints.
         if len(distinct) < 2:  # Zero or one distinct number -> consensus or a single source.
             return False  # Nothing for the sources to disagree about.
-        counts = {number: numbers.count(number) for number in distinct}  # Votes per distinct number.
-        top = max(counts.values())  # Highest vote count among the numbers.
-        leaders = [number for number, votes in counts.items() if votes == top]  # Numbers tied at the top.
-        conflict = len(leaders) > 1  # More than one number shares the lead -> no majority -> conflict.
-        if conflict:  # Action-log only the genuine conflict so script.log explains the flag.
-            logging.info("Conflicting hint house numbers %s; no majority to trust", sorted(distinct))
-        return conflict  # True only when the sources actively disagree with no winner.
+        if not self._has_tied_leaders(numbers, distinct):  # WHY: single leader = majority-wins, no conflict.
+            return False  # Clear leader breaks the tie -> not a conflict.
+        logging.info("Conflicting hint house numbers %s; no majority to trust", sorted(distinct))  # Explain the flag.
+        return True  # True only when the sources actively disagree with no winner.
+
+    @staticmethod
+    def _has_tied_leaders(numbers: list[str], distinct: set[str]) -> bool:  # WHY: extract vote-count math.
+        """Return True when at least two distinct house numbers share the top vote count."""
+        counts = {number: numbers.count(number) for number in distinct}  # WHY: one pass per distinct number.
+        top = max(counts.values())  # WHY: highest vote count is the leader threshold.
+        leaders = sum(1 for votes in counts.values() if votes == top)  # WHY: count how many share the lead.
+        return leaders > 1  # WHY: two or more leaders => tied => no majority.
 
     def _gather_hints(self, candidates: ResolveCandidates) -> list[tuple[str, str, str, bool]]:
         """Normalize each hint into (label, text, house_number, has_suite); drop empties."""
@@ -425,21 +472,29 @@ class AddressResolver:
 
     def _from_cache(self, key: str) -> ResolverResult | None:
         """Return a cached ``ResolverResult`` for ``key``, or ``None`` on miss/error."""
+        row = self._fetch_cached_row(key)  # WHY: isolate the SQLite path so this stays a plain flow.
+        if row is None:  # No cached entry for this key (or read failed).
+            return None  # Caller resolves live.
+        self.cache_hits += 1  # Count the hit for the run summary.
+        logging.debug("cache hit for %s", key)  # Action-log the hit.
+        return self._row_to_result(row, key)  # WHY: hydration is a pure transform of tuple -> dataclass.
+
+    def _fetch_cached_row(self, key: str) -> tuple[Any, Any, Any, Any] | None:  # WHY: split I/O from mapping.
+        """Return the raw SQLite row for ``key``, or None on miss / error (fail-soft)."""
         try:
             self._ensure_db_dir()  # Make sure the data/ directory exists.
             with sqlite3.connect(self._db_path) as conn:  # Open (creates the DB file if absent).
                 self._ensure_cache_table(conn)  # Ensure the table exists before querying.
-                row = conn.execute(  # Look up the normalized key.
+                return conn.execute(  # WHY: single-row lookup by normalized cache key.
                     "SELECT canonical_addr, source, confidence, raw_json FROM geocoding_cache WHERE query_key = ?",
                     (key,),
                 ).fetchone()
         except sqlite3.Error as exc:  # Cache problems must never break the audit.
             logging.debug("Cache read error (ignored): %s", exc)  # Trace and treat as a miss.
             return None  # Fall through to live resolution.
-        if row is None:  # No cached entry for this key.
-            return None  # Caller resolves live.
-        self.cache_hits += 1  # Count the hit for the run summary.
-        logging.debug("cache hit for %s", key)  # Action-log the hit.
+
+    def _row_to_result(self, row: tuple[Any, Any, Any, Any], key: str) -> ResolverResult:  # WHY: pure hydration.
+        """Reconstruct a ``ResolverResult`` from a cached SQLite row."""
         raw = self._loads_json(row[3])  # Restore the raw payload (carries street-validation flag).
         return ResolverResult(  # Reconstruct the result from the cached row.
             query=key,  # Use the key as the query echo.
