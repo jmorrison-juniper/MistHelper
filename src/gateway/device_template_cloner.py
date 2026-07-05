@@ -1,12 +1,15 @@
 """Clone a gateway device's local config into a new org-level gateway template.
 
-Menu 194 — extracted implementation for DeviceConfigTemplateClonerManager.
+Menu 194 - extracted implementation for DeviceConfigTemplateClonerManager.
 Source: live device config fetched via getSiteDevice, NOT an existing template.
 """
 
-import copy  # Deep copy for nested dict safety
-import logging  # Structured action logging throughout
-from collections.abc import Callable  # Type hints for injected dependencies
+from __future__ import annotations  # PEP 563 postponed evaluation for typing forward refs
+
+import copy  # Deep copy for nested dict safety across payload mutations
+import logging  # Structured action logging throughout the clone workflow
+from collections.abc import Callable  # Type hints for injected dependency callables
+from dataclasses import dataclass  # Frozen dataclass groups injected deps under 5-param limit
 
 import mistapi.api.v1.orgs.gatewaytemplates  # Create/list org gateway templates
 import mistapi.api.v1.orgs.sites  # List org sites for site selection
@@ -17,45 +20,45 @@ import mistapi.api.v1.sites.devices  # List and fetch device configs
 # ---------------------------------------------------------------------------
 
 # Device-specific runtime metadata fields that must NOT appear in a template.
-# These fields are device-instance identifiers or ephemeral state — keeping
+# These fields are device-instance identifiers or ephemeral state - keeping
 # them in a template would cause incorrect or conflicting behavior on apply.
 DEVICE_METADATA_FIELDS_TO_STRIP = frozenset(
     {
-        "id",  # Device UUID — unique per device, meaningless in a template
-        "mac",  # Hardware MAC address — device-specific identifier
-        "serial",  # Serial number — device-specific identifier
-        "model",  # Physical model — overridden separately via gateway_matching
-        "site_id",  # Site assignment — must not leak into a reusable template
-        "org_id",  # Org assignment — set automatically on template create
-        "map_id",  # Floor plan placement — device-specific positional data
-        "x",  # Floor plan X coordinate — device-specific positional data
-        "y",  # Floor plan Y coordinate — device-specific positional data
-        "orientation",  # Physical orientation on map — device-specific
-        "last_seen",  # Runtime timestamp — ephemeral device state
-        "uptime",  # Runtime uptime counter — ephemeral device state
-        "status",  # Runtime connection status — ephemeral device state
-        "connected",  # Runtime connectivity flag — ephemeral device state
-        "version",  # Firmware version string — runtime device state
-        "ip",  # Management IP — device-specific addressing
-        "ext_ip",  # External IP — device-specific addressing
-        "ips",  # IP list — device-specific addressing
-        "ip_stat",  # IP statistics — ephemeral runtime data
-        "template_id",  # Currently applied template ID — device-specific ref
-        "gateway_template_id",  # Currently applied gateway template — device ref
-        "name",  # Device hostname — overridden per-device, not a template field
-        "notes",  # Device notes — device-specific operator notes
-        "image1_url",  # Device image URL — device-instance attachment
-        "image2_url",  # Device image URL — device-instance attachment
-        "image3_url",  # Device image URL — device-instance attachment
-        "created_time",  # Creation timestamp — runtime metadata
-        "modified_time",  # Last modified timestamp — runtime metadata
-        "if_stat",  # Interface statistics — ephemeral runtime data
-        "port_stat",  # Port statistics — ephemeral runtime data
-        "service_stat",  # Service statistics — ephemeral runtime data
+        "id",  # Device UUID - unique per device, meaningless in a template
+        "mac",  # Hardware MAC address - device-specific identifier
+        "serial",  # Serial number - device-specific identifier
+        "model",  # Physical model - overridden separately via gateway_matching
+        "site_id",  # Site assignment - must not leak into a reusable template
+        "org_id",  # Org assignment - set automatically on template create
+        "map_id",  # Floor plan placement - device-specific positional data
+        "x",  # Floor plan X coordinate - device-specific positional data
+        "y",  # Floor plan Y coordinate - device-specific positional data
+        "orientation",  # Physical orientation on map - device-specific
+        "last_seen",  # Runtime timestamp - ephemeral device state
+        "uptime",  # Runtime uptime counter - ephemeral device state
+        "status",  # Runtime connection status - ephemeral device state
+        "connected",  # Runtime connectivity flag - ephemeral device state
+        "version",  # Firmware version string - runtime device state
+        "ip",  # Management IP - device-specific addressing
+        "ext_ip",  # External IP - device-specific addressing
+        "ips",  # IP list - device-specific addressing
+        "ip_stat",  # IP statistics - ephemeral runtime data
+        "template_id",  # Currently applied template ID - device-specific ref
+        "gateway_template_id",  # Currently applied gateway template - device ref
+        "name",  # Device hostname - overridden per-device, not a template field
+        "notes",  # Device notes - device-specific operator notes
+        "image1_url",  # Device image URL - device-instance attachment
+        "image2_url",  # Device image URL - device-instance attachment
+        "image3_url",  # Device image URL - device-instance attachment
+        "created_time",  # Creation timestamp - runtime metadata
+        "modified_time",  # Last modified timestamp - runtime metadata
+        "if_stat",  # Interface statistics - ephemeral runtime data
+        "port_stat",  # Port statistics - ephemeral runtime data
+        "service_stat",  # Service statistics - ephemeral runtime data
     }
 )
 
-# Field names that contain secret values — must be redacted before logging
+# Field names that contain secret values - must be redacted before logging
 # or exporting to prevent credential exposure in log files and CSV output.
 SECRET_FIELD_NAMES = frozenset({"psk", "passphrase", "password", "secret", "community"})
 
@@ -74,36 +77,53 @@ COMMON_GATEWAY_MODELS = [
     "SSR1500",  # High-density Session Smart Router
 ]
 
+# Sentinel returned by hardware platform picker when the engineer explicitly
+# chooses to keep the source device model (menu option 0 or empty input).
+_KEEP_SOURCE_MODEL_INPUTS = frozenset({"0", ""})
+
+
+# ---------------------------------------------------------------------------
+# Dependency bundle
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class DeviceTemplateClonerDeps:  # Group injected deps to keep __init__ under 5 params
+    """Frozen bundle of injected dependencies for DeviceConfigTemplateClonerManager.
+
+    Grouping the 5 callables/objects here keeps the manager constructor at
+    2 parameters (org_id + deps) so the module satisfies the STRUCT-PARAMS
+    rule while retaining full dependency-injection testability.
+    """
+
+    apisession: object  # Authenticated mistapi session object - carries auth creds
+    input_fn: Callable  # safe_input wrapper - handles EOF in SSH/container contexts
+    get_csv_path_fn: Callable  # FilePathUtils.get_csv_path - OS-safe output paths
+    save_data_fn: Callable  # DataExporter writer - legacy save path retained
+    write_csv_fn: Callable  # DataExporter.write_with_format_selection - PK-aware writer
+
 
 # ---------------------------------------------------------------------------
 # Manager class
 # ---------------------------------------------------------------------------
 
 
-class DeviceConfigTemplateClonerManager:
+class DeviceConfigTemplateClonerManager:  # Menu 194 clone-to-template manager
     """Clone a gateway device's local config into a new org-level gateway template.
 
     All dependencies are injected at construction time so the class remains
-    testable without real API credentials.  Business logic is split into
+    testable without real API credentials. Business logic is split into
     small private helper methods to satisfy the 25-line function limit.
     """
 
-    def __init__(  # noqa: PLR0913 — 6 injected dependencies, all required
-        self,
-        org_id: str,  # Mist org UUID used for all API calls
-        apisession: object,  # Authenticated mistapi session object
-        input_fn: Callable,  # safe_input wrapper for all user prompts
-        get_csv_path_fn: Callable,  # FilePathUtils.get_csv_path for output paths
-        save_data_fn: Callable,  # DataExporter.write_with_format_selection (was save_data_to_output, issue #431)
-        write_csv_fn: Callable,  # DataExporter.write_with_format_selection — PK-aware writer
-    ) -> None:
-        """Store injected dependencies as instance attributes."""
-        self.org_id = org_id  # Org UUID — scope for all API list/create calls
-        self.apisession = apisession  # API session — carries auth credentials
-        self.input_fn = input_fn  # safe_input — handles EOF in SSH/container contexts
-        self.get_csv_path_fn = get_csv_path_fn  # Path builder — avoids hardcoded separators
-        self.save_data_fn = save_data_fn  # CSV writer — handles file creation and append
-        self.write_csv_fn = write_csv_fn  # PK-aware format-selecting writer for export row
+    def __init__(self, org_id: str, deps: DeviceTemplateClonerDeps) -> None:
+        """Store injected dependencies as instance attributes for helper access."""
+        self.org_id = org_id  # Org UUID - scope for all API list/create calls
+        self.apisession = deps.apisession  # API session - carries auth credentials
+        self.input_fn = deps.input_fn  # safe_input - handles EOF in SSH contexts
+        self.get_csv_path_fn = deps.get_csv_path_fn  # Path builder for OS-safe paths
+        self.save_data_fn = deps.save_data_fn  # Legacy CSV writer retained for compat
+        self.write_csv_fn = deps.write_csv_fn  # PK-aware format-selecting writer
 
     # ------------------------------------------------------------------
     # Site selection
@@ -120,25 +140,17 @@ class DeviceConfigTemplateClonerManager:
         logging.debug("Received %d sites from API", len(sites))  # Log result count after call
         return sites  # Return site list for caller to display
 
-    def _select_site(self) -> "dict | None":
+    def _select_site(self) -> dict | None:
         """Display a numbered site menu and return the site the user picks."""
         sites = self._list_sites()  # Fetch site list from API
-        if not sites:  # Guard — nothing to select if org has no sites
+        if not sites:  # Guard - nothing to select if org has no sites
             logging.warning("No sites found for org_id %s", self.org_id)  # Warn on empty list
             print("No sites found for this org.")  # Inform the NOC engineer
             return None  # Signal caller to abort the workflow
         for index, site in enumerate(sites, start=1):  # Build numbered list for display
             print(f"  {index:3}. {site.get('name', 'Unknown')} ({site.get('id', '')})")  # Show name+ID
         raw = self.input_fn("Select site number: ", context="site_selection")  # Prompt for choice
-        try:
-            choice = int(raw.strip())  # Parse user input as integer
-            if not 1 <= choice <= len(sites):  # Validate range before indexing
-                print("Invalid selection.")  # Inform engineer of bad input
-                return None  # Signal caller to abort
-            return sites[choice - 1]  # Return selected site dict (1-based to 0-based)
-        except ValueError:  # Handle non-numeric input gracefully
-            print("Invalid input — please enter a number.")  # Guide the engineer
-            return None  # Signal caller to abort
+        return self._resolve_menu_choice(raw, sites)  # Delegate parse+validate to shared helper
 
     # ------------------------------------------------------------------
     # Gateway device selection
@@ -157,31 +169,35 @@ class DeviceConfigTemplateClonerManager:
         logging.debug("Found %d gateway device(s) at site %s", len(gateways), site_id)  # Log count
         return gateways  # Return filtered gateway list
 
-    def _select_gateway(self, gateways: list) -> "dict | None":
+    def _select_gateway(self, gateways: list) -> dict | None:
         """Display a numbered gateway menu and return the device the user picks."""
-        if not gateways:  # Guard — nothing to select if site has no gateways
+        if not gateways:  # Guard - nothing to select if site has no gateways
             print("No gateway devices found at the selected site.")  # Inform engineer
             return None  # Signal caller to abort
         for index, device in enumerate(gateways, start=1):  # Build numbered display list
             model = device.get("model", "Unknown")  # Extract model for display
             name = device.get("name", device.get("mac", "Unknown"))  # Fall back to MAC if no name
-            print(f"  {index:3}. {name} — {model} ({device.get('id', '')})")  # Display selection row
+            print(f"  {index:3}. {name} - {model} ({device.get('id', '')})")  # Display selection row
         raw = self.input_fn("Select gateway number: ", context="gateway_selection")  # Prompt for choice
+        return self._resolve_menu_choice(raw, gateways)  # Delegate parse+validate to shared helper
+
+    def _resolve_menu_choice(self, raw: str, items: list) -> dict | None:
+        """Parse a menu response string and return items[choice-1] or None on bad input."""
         try:
-            choice = int(raw.strip())  # Parse user input as integer
-            if not 1 <= choice <= len(gateways):  # Validate range before indexing
-                print("Invalid selection.")  # Inform engineer of bad input
-                return None  # Signal caller to abort
-            return gateways[choice - 1]  # Return selected device dict (1-based to 0-based)
-        except ValueError:  # Handle non-numeric input gracefully
-            print("Invalid input — please enter a number.")  # Guide the engineer
+            choice = int(raw.strip())  # Parse response as integer index
+        except ValueError:  # Non-numeric response - guide the engineer and abort
+            print("Invalid input - please enter a number.")  # Inform engineer of bad input
             return None  # Signal caller to abort
+        if not 1 <= choice <= len(items):  # Validate 1-based range before indexing
+            print("Invalid selection.")  # Inform engineer of out-of-range input
+            return None  # Signal caller to abort
+        return items[choice - 1]  # Convert to 0-based and return picked entry
 
     # ------------------------------------------------------------------
     # Device config fetch
     # ------------------------------------------------------------------
 
-    def _fetch_device_config(self, site_id: str, device_id: str) -> "dict | None":
+    def _fetch_device_config(self, site_id: str, device_id: str) -> dict | None:
         """Fetch full device config from getSiteDevice and return as a dict."""
         logging.info(  # Log before API call with identifying context
             "Fetching device config for device_id %s at site_id %s", device_id, site_id
@@ -192,7 +208,7 @@ class DeviceConfigTemplateClonerManager:
             device_id,
         )
         config = response.data if hasattr(response, "data") else {}  # Extract device dict from response
-        logging.debug(  # Log field count after fetch — safe summary without secret values
+        logging.debug(  # Log field count after fetch - safe summary without secret values
             "Received device config with %d top-level fields", len(config)
         )
         return config if config else None  # Return config dict or None on empty response
@@ -219,7 +235,7 @@ class DeviceConfigTemplateClonerManager:
     # Template metadata prompting
     # ------------------------------------------------------------------
 
-    def _prompt_template_meta(self, device_model: str, existing_names: set) -> "tuple[str, str, str]":
+    def _prompt_template_meta(self, device_model: str, existing_names: set) -> tuple[str, str, str]:
         """Prompt engineer for template type, name, and hardware model; return (name, type, model)."""
         ttype = self._prompt_template_type()  # Get template type first
         name = self._prompt_template_name(device_model, existing_names)  # Get unique name
@@ -243,7 +259,7 @@ class DeviceConfigTemplateClonerManager:
             )
             name = raw.strip() or default_name  # Use default if engineer pressed Enter
             if name in existing_names:  # Reject names already in use
-                print(f"Name '{name}' already exists — please choose a different name.")  # Guide engineer
+                print(f"Name '{name}' already exists - please choose a different name.")  # Guide engineer
                 continue  # Retry the name prompt
             if not name:  # Reject empty names after default resolution
                 print("Name cannot be empty.")  # Guide engineer
@@ -257,43 +273,33 @@ class DeviceConfigTemplateClonerManager:
         for index, model in enumerate(COMMON_GATEWAY_MODELS, start=1):  # List common models
             print(f"  {index:2}. {model}")  # Display each model with its number
         raw = self.input_fn("Select model [0 = same]: ", context="hardware_platform_selection")  # Prompt
-        raw = raw.strip()  # Remove whitespace
-        if raw == "0" or not raw:  # Return source model if engineer chose same or pressed Enter
+        return self._resolve_hardware_choice(raw.strip(), source_model)  # Delegate parse to helper
+
+    def _resolve_hardware_choice(self, raw: str, source_model: str) -> str:
+        """Convert a hardware-selection response into a concrete model name (safe defaults)."""
+        if raw in _KEEP_SOURCE_MODEL_INPUTS:  # Engineer chose option 0 or pressed Enter
             return source_model  # Preserve original model from source device
         try:
-            index = int(raw)  # Parse selection as integer
-            if 1 <= index <= len(COMMON_GATEWAY_MODELS):  # Validate range before indexing
-                return COMMON_GATEWAY_MODELS[index - 1]  # Return chosen model from constant list
-        except ValueError:  # Handle non-numeric input
-            pass  # Fall through to return source model as safe default
-        print("Invalid selection — using source model.")  # Inform engineer of fallback
-        return source_model  # Fall back to source model on invalid input
+            index = int(raw)  # Parse selection as integer index into COMMON_GATEWAY_MODELS
+        except ValueError:  # Non-numeric response - fall through to safe default
+            print("Invalid selection - using source model.")  # Inform engineer of fallback
+            return source_model  # Safe default preserves source model
+        if 1 <= index <= len(COMMON_GATEWAY_MODELS):  # Validate range before indexing constant list
+            return COMMON_GATEWAY_MODELS[index - 1]  # Return chosen model (1-based to 0-based)
+        print("Invalid selection - using source model.")  # Range failure - inform engineer
+        return source_model  # Safe default preserves source model on out-of-range input
 
     # ------------------------------------------------------------------
     # Payload construction
     # ------------------------------------------------------------------
 
-    def _build_template_payload(self, device_config: dict, name: str, ttype: str, model: str) -> dict:  # noqa: PLR0913
+    def _build_template_payload(self, device_config: dict, name: str, ttype: str, model: str) -> dict:
         """Build the gateway template payload by stripping metadata and injecting template fields."""
-        raw_config = copy.deepcopy(device_config)  # Deep copy to avoid mutating caller's data
-        payload = {  # Build payload dict excluding all device metadata and None values
-            key: value
-            for key, value in raw_config.items()  # Iterate all config fields from device
-            if key not in DEVICE_METADATA_FIELDS_TO_STRIP  # Strip device-instance metadata fields
-            and value is not None  # Strip None values — API rejects explicit nulls in templates
-        }
+        payload = self._strip_device_metadata(device_config)  # Copy and strip device-instance fields
         payload["name"] = name  # Inject template name provided by engineer
         payload["type"] = ttype  # Inject template type (standalone or spoke)
-        payload["gateway_matching"] = {  # Inject hardware matching block for model targeting
-            "enable": True,  # Enable gateway matching so template targets specific model
-            "rules": [  # List of matching rules evaluated in order
-                {
-                    "match_model": model,  # Match on the selected hardware model
-                    "name": name,  # Associate matching rule with template name
-                }
-            ],
-        }
-        logging.debug(  # Log payload field count — safe summary without secret values
+        payload["gateway_matching"] = self._build_gateway_matching(name, model)  # Inject match block
+        logging.debug(  # Log payload field count - safe summary without secret values
             "Built template payload with %d fields for template '%s' (type=%s, model=%s)",
             len(payload),
             name,
@@ -302,23 +308,54 @@ class DeviceConfigTemplateClonerManager:
         )
         return payload  # Return completed payload ready for API submission
 
+    def _strip_device_metadata(self, device_config: dict) -> dict:
+        """Return a deep copy of device_config with metadata fields and None values removed."""
+        raw_config = copy.deepcopy(device_config)  # Deep copy to avoid mutating caller's dict
+        return {  # Filter dict comprehension excludes metadata and None values in one pass
+            key: value
+            for key, value in raw_config.items()  # Iterate every field from source device
+            if key not in DEVICE_METADATA_FIELDS_TO_STRIP  # Strip device-instance metadata
+            and value is not None  # Strip None values - API rejects explicit nulls in templates
+        }
+
+    def _build_gateway_matching(self, name: str, model: str) -> dict:
+        """Build the gateway_matching block that targets the template to a specific model."""
+        return {  # Static shape - single match rule keyed to selected hardware model
+            "enable": True,  # Enable gateway matching so template targets specific model
+            "rules": [  # List of matching rules evaluated in order by the API
+                {
+                    "match_model": model,  # Match on the selected hardware model
+                    "name": name,  # Associate matching rule with template name
+                }
+            ],
+        }
+
     def _redact_secrets_from_payload(self, payload: dict) -> dict:
         """Return a copy of payload with all secret field values replaced by REDACTED."""
         redacted = copy.deepcopy(payload)  # Deep copy so original payload is not modified
-        self._redact_dict_recursive(redacted)  # Recursively walk all nested dicts
+        self._redact_recursive(redacted)  # Recursively walk all nested dicts and lists
         return redacted  # Return redacted copy safe for logging
 
-    def _redact_dict_recursive(self, obj: "dict | list") -> None:
-        """Recursively redact SECRET_FIELD_NAMES values in nested dicts and lists."""
-        if isinstance(obj, dict):  # Process dict nodes by checking each key
-            for key in list(obj.keys()):  # Iterate keys to check for secret field names
-                if key.lower() in SECRET_FIELD_NAMES:  # Compare lowercase key to secret names
-                    obj[key] = "REDACTED"  # Replace secret value with safe placeholder
-                else:
-                    self._redact_dict_recursive(obj[key])  # Recurse into non-secret nested values
-        elif isinstance(obj, list):  # Process list nodes by recursing into each element
-            for item in obj:  # Iterate list elements
-                self._redact_dict_recursive(item)  # Recurse into each list element
+    def _redact_recursive(self, obj: object) -> None:
+        """Dispatch redaction to the dict or list handler based on node type."""
+        if isinstance(obj, dict):  # Dict nodes: check each key against SECRET_FIELD_NAMES
+            self._redact_dict(obj)  # Delegate to dict-specific handler
+            return  # Prevent list branch from firing on same object
+        if isinstance(obj, list):  # List nodes: recurse into each element
+            self._redact_list(obj)  # Delegate to list-specific handler
+
+    def _redact_dict(self, obj: dict) -> None:
+        """Redact secret fields in place within a dict, recursing into non-secret children."""
+        for key in list(obj.keys()):  # Snapshot keys to allow safe in-place mutation
+            if key.lower() in SECRET_FIELD_NAMES:  # Compare lowercase key to secret names
+                obj[key] = "REDACTED"  # Replace secret value with safe placeholder
+                continue  # Skip recursion - value has been replaced with scalar
+            self._redact_recursive(obj[key])  # Recurse into non-secret nested value
+
+    def _redact_list(self, obj: list) -> None:
+        """Recurse into every element of a list to redact secrets in nested dicts."""
+        for item in obj:  # Iterate list elements without mutating the list itself
+            self._redact_recursive(item)  # Each element may be dict, list, or scalar
 
     # ------------------------------------------------------------------
     # Confirmation
@@ -336,7 +373,7 @@ class DeviceConfigTemplateClonerManager:
             "Type CREATE to confirm (or anything else to cancel): ",
             context="create_gateway_template_confirmation",
         )
-        confirmed = raw.strip() == "CREATE"  # Exact case comparison — no shortcuts
+        confirmed = raw.strip() == "CREATE"  # Exact case comparison - no shortcuts
         if confirmed:  # Log outcome for audit trail
             logging.info("User confirmed template creation for '%s'", name)  # Log approval
         else:
@@ -347,7 +384,7 @@ class DeviceConfigTemplateClonerManager:
     # Template creation
     # ------------------------------------------------------------------
 
-    def _create_template(self, payload: dict) -> "dict | None":
+    def _create_template(self, payload: dict) -> dict | None:
         """Call createOrgGatewayTemplate and return the newly created template dict."""
         logging.info(  # Log before API write call with non-secret identifying fields
             "Creating org gateway template '%s' (type=%s) for org_id %s",
@@ -361,7 +398,7 @@ class DeviceConfigTemplateClonerManager:
             body=payload,  # Pass full payload dict as API request body
         )
         template = response.data if hasattr(response, "data") else {}  # Extract created template dict
-        logging.debug(  # Log new template ID after creation — safe identifying field
+        logging.debug(  # Log new template ID after creation - safe identifying field
             "Created gateway template with ID %s", template.get("id", "unknown")
         )
         return template if template else None  # Return template dict or None on empty response
@@ -392,48 +429,57 @@ class DeviceConfigTemplateClonerManager:
         print(f"\nSuccess: Created gateway template '{row['template_name']}' (ID: {row['template_id']})")
 
     # ------------------------------------------------------------------
-    # Main workflow
+    # Main workflow (split into phase helpers to satisfy STRUCT-* limits)
     # ------------------------------------------------------------------
+
+    def _gather_source_device(self) -> tuple[dict, dict] | None:
+        """Site+gateway+config phase: return (gateway, device_config) or None on abort."""
+        site = self._select_site()  # Step 1: let engineer choose the source site
+        if site is None:  # Abort if site selection failed or was cancelled
+            return None  # Signal caller to abort the workflow
+        gateways = self._list_gateways(site["id"])  # Step 2: fetch gateways at selected site
+        gateway = self._select_gateway(gateways)  # Step 3: let engineer choose the gateway
+        if gateway is None:  # Abort if gateway selection failed or was cancelled
+            return None  # Signal caller to abort the workflow
+        device_config = self._fetch_device_config(site["id"], gateway["id"])  # Step 4: fetch config
+        if device_config is None:  # Abort if config fetch returned empty
+            print("Failed to fetch device configuration.")  # Inform engineer
+            return None  # Signal caller to abort the workflow
+        return gateway, device_config  # Return combined tuple for downstream phases
+
+    def _gather_template_meta(self, gateway: dict) -> tuple[str, str, str] | None:
+        """Meta phase: return (name, ttype, model) or None if confirmation declined."""
+        existing_names = self._fetch_existing_template_names()  # Step 5: load existing name set
+        device_model = gateway.get("model", "SRX300")  # Use source model as default suggestion
+        name, ttype, model = self._prompt_template_meta(device_model, existing_names)  # Step 6
+        if not self._confirm_creation(name, ttype, model):  # Step 7: require explicit confirmation
+            print("Operation cancelled.")  # Inform engineer of cancellation
+            return None  # Signal caller to abort - user declined the CREATE prompt
+        return name, ttype, model  # Return metadata tuple for payload construction
+
+    def _create_and_export(self, gateway: dict, device_config: dict, meta: tuple[str, str, str]) -> bool:
+        """Write phase: build payload, create template, and export result row."""
+        name, ttype, model = meta  # Unpack metadata tuple provided by prior phase
+        payload = self._build_template_payload(device_config, name, ttype, model)  # Step 8
+        new_template = self._create_template(payload)  # Step 9: API write call
+        if new_template is None:  # Abort if API returned no data
+            print("Template creation failed - no data returned from API.")  # Inform engineer
+            return False  # Signal failure to caller
+        self._export_result(gateway, new_template)  # Step 10: write CSV export row
+        return True  # Signal successful completion to caller
 
     def clone(self) -> bool:
         """Orchestrate the full clone workflow and return True on success."""
         try:
-            site = self._select_site()  # Step 1: let engineer choose the source site
-            if site is None:  # Abort if site selection failed or was cancelled
-                return False  # Signal failure to caller
-            site_id = site["id"]  # Extract site UUID for downstream API calls
-
-            gateways = self._list_gateways(site_id)  # Step 2: fetch gateways at selected site
-            gateway = self._select_gateway(gateways)  # Step 3: let engineer choose the gateway
-            if gateway is None:  # Abort if gateway selection failed or was cancelled
-                return False  # Signal failure to caller
-            device_id = gateway["id"]  # Extract device UUID for config fetch
-
-            device_config = self._fetch_device_config(site_id, device_id)  # Step 4: fetch full config
-            if device_config is None:  # Abort if config fetch returned empty
-                print("Failed to fetch device configuration.")  # Inform engineer
-                return False  # Signal failure to caller
-
-            existing_names = self._fetch_existing_template_names()  # Step 5: load name set
-            device_model = gateway.get("model", "SRX300")  # Use source model as default suggestion
-            name, ttype, model = self._prompt_template_meta(device_model, existing_names)  # Step 6
-
-            if not self._confirm_creation(name, ttype, model):  # Step 7: require explicit confirmation
-                print("Operation cancelled.")  # Inform engineer
+            source = self._gather_source_device()  # Phase 1: site/gateway/config selection
+            if source is None:  # Abort if any selection step returned None
+                return False  # Signal cancellation or failure to caller
+            gateway, device_config = source  # Unpack tuple returned by source phase
+            meta = self._gather_template_meta(gateway)  # Phase 2: template metadata + confirm
+            if meta is None:  # Abort if engineer declined the CREATE confirmation
                 return False  # Signal cancellation to caller
-
-            payload = self._build_template_payload(device_config, name, ttype, model)  # Step 8
-            new_template = self._create_template(payload)  # Step 9: write to API
-            if new_template is None:  # Abort if API returned no data
-                print("Template creation failed — no data returned from API.")  # Inform engineer
-                return False  # Signal failure to caller
-
-            self._export_result(gateway, new_template)  # Step 10: write CSV export
-            return True  # Signal successful completion to caller
-
+            return self._create_and_export(gateway, device_config, meta)  # Phase 3: write + export
         except Exception as exc:  # Catch all unexpected errors for safe logging
-            logging.exception(  # Log full error context for NOC engineer troubleshooting
-                "DeviceConfigTemplateClonerManager.clone() failed: %s", exc
-            )
+            logging.exception("DeviceConfigTemplateClonerManager.clone() failed: %s", exc)  # Log context
             print(f"Error: {exc}")  # Print brief error message for interactive feedback
             return False  # Signal failure to caller

@@ -14,21 +14,26 @@ from src.gateway.device_template_cloner import (
     DEVICE_METADATA_FIELDS_TO_STRIP,
     SECRET_FIELD_NAMES,
     DeviceConfigTemplateClonerManager,
+    DeviceTemplateClonerDeps,
 )
 
 
-def _build_manager(**overrides) -> DeviceConfigTemplateClonerManager:
-    """Construct a cloner with mocked dependencies; overrides replace individual mocks."""
-    deps = {  # Default mock dependency set for the cloner constructor
-        "org_id": "org-uuid-1",  # Test org UUID
+def _build_deps(**overrides) -> DeviceTemplateClonerDeps:
+    """Construct a deps bundle for the cloner; overrides replace individual mocks."""
+    fields = {  # Default mock dependency set matching the frozen deps dataclass
         "apisession": MagicMock(name="apisession"),  # Mock mistapi session
         "input_fn": MagicMock(name="input_fn", return_value=""),  # Default prompt returns empty
         "get_csv_path_fn": MagicMock(name="get_csv_path_fn", return_value="data/test.csv"),  # Path stub
-        "save_data_fn": MagicMock(name="save_data_fn"),  # CSV writer stub (legacy path)
+        "save_data_fn": MagicMock(name="save_data_fn"),  # Legacy CSV writer stub
         "write_csv_fn": MagicMock(name="write_csv_fn"),  # PK-aware writer stub (the new contract)
     }
-    deps.update(overrides)  # Allow individual tests to override specific mocks
-    return DeviceConfigTemplateClonerManager(**deps)  # Build instance with merged dependencies
+    fields.update(overrides)  # Allow individual tests to override specific mocks
+    return DeviceTemplateClonerDeps(**fields)  # Build immutable deps bundle
+
+
+def _build_manager(*, org_id: str = "org-uuid-1", **overrides) -> DeviceConfigTemplateClonerManager:
+    """Construct a cloner with mocked dependencies; overrides target the deps fields."""
+    return DeviceConfigTemplateClonerManager(org_id=org_id, deps=_build_deps(**overrides))
 
 
 def test_constructor_accepts_write_csv_fn_dependency() -> None:
@@ -46,7 +51,7 @@ def test_export_result_calls_write_csv_with_correct_signature() -> None:
     the correct call signature so the bug cannot regress silently.
     """
     write_csv = MagicMock(name="write_csv_fn")  # Track all calls to the PK-aware writer
-    manager = _build_manager(write_csv_fn=write_csv)  # Inject the tracking mock
+    manager = _build_manager(write_csv_fn=write_csv)  # Inject the tracking mock via deps
     gateway = {  # Source device metadata used to populate the export row
         "id": "dev-1",
         "name": "branch-gw-1",
@@ -181,20 +186,27 @@ def test_clone_happy_path_calls_export_with_new_template() -> None:
         manager._export_result.assert_called_once_with(gateway, new_template)  # Export wired correctly
 
 
-@pytest.mark.parametrize(  # Verify all 5 required dependencies are injected as constructor kwargs
-    "missing_kwarg",
-    ["org_id", "apisession", "input_fn", "get_csv_path_fn", "save_data_fn", "write_csv_fn"],
+@pytest.mark.parametrize(  # Verify every deps dataclass field is required for construction
+    "missing_field",
+    ["apisession", "input_fn", "get_csv_path_fn", "save_data_fn", "write_csv_fn"],
 )
-def test_constructor_requires_all_dependencies(missing_kwarg: str) -> None:
-    """Cloner constructor must require every documented dependency \u2014 no silent defaults."""
-    deps = {  # Complete dependency set used as the baseline
-        "org_id": "org-1",
+def test_deps_dataclass_requires_all_fields(missing_field: str) -> None:
+    """DeviceTemplateClonerDeps must reject construction if any injected field is missing."""
+    fields = {  # Complete field set used as the baseline for the deps dataclass
         "apisession": MagicMock(),
         "input_fn": MagicMock(),
         "get_csv_path_fn": MagicMock(),
         "save_data_fn": MagicMock(),
         "write_csv_fn": MagicMock(),
     }
-    deps.pop(missing_kwarg)  # Remove one dependency to verify it is required
-    with pytest.raises(TypeError):  # Constructor must reject incomplete dependency injection
-        DeviceConfigTemplateClonerManager(**deps)
+    fields.pop(missing_field)  # Remove one field to verify it is required
+    with pytest.raises(TypeError):  # Dataclass must reject incomplete construction
+        DeviceTemplateClonerDeps(**fields)
+
+
+def test_manager_requires_org_id_and_deps() -> None:
+    """Manager constructor must require both positional/keyword arguments explicitly."""
+    with pytest.raises(TypeError):  # Missing deps must be rejected
+        DeviceConfigTemplateClonerManager(org_id="org-1")  # type: ignore[call-arg]
+    with pytest.raises(TypeError):  # Missing org_id must be rejected
+        DeviceConfigTemplateClonerManager(deps=_build_deps())  # type: ignore[call-arg]

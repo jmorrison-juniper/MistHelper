@@ -16463,14 +16463,20 @@ class DeviceConfigTemplateClonerManager:  # Device config template cloner.
         from src.gateway.device_template_cloner import (  # pylint: disable=import-outside-toplevel
             DeviceConfigTemplateClonerManager as Impl,  # Import extracted implementation class
         )
+        from src.gateway.device_template_cloner import (
+            DeviceTemplateClonerDeps,  # Frozen deps bundle groups injected dependencies
+        )
 
-        Impl(
-            org_id=ConfigUtils.get_cached_or_prompted_org_id(),  # Resolve org_id from cache or prompt
+        deps = DeviceTemplateClonerDeps(  # Bundle the 5 injected dependencies for the manager
             apisession=apisession,  # Pass authenticated global API session
             input_fn=InputUtils.safe_input,  # Pass EOF-safe input wrapper for SSH/container contexts
             get_csv_path_fn=FilePathUtils.get_csv_path,  # Pass path builder for OS-safe output paths
-            save_data_fn=DataExporter.write_with_format_selection,  # Pass CSV writer for output persistence
+            save_data_fn=DataExporter.write_with_format_selection,  # Pass CSV writer for persistence
             write_csv_fn=DataExporter.write_with_format_selection,  # Pass PK-aware format-selecting writer
+        )
+        Impl(
+            org_id=ConfigUtils.get_cached_or_prompted_org_id(),  # Resolve org_id from cache or prompt
+            deps=deps,  # Inject the frozen deps bundle
         ).clone()  # Delegate all business logic to extracted implementation
 
 
