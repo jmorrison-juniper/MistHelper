@@ -1,336 +1,437 @@
 """Workflow extraction for interactive-safe menu systematic test execution."""
 
-from __future__ import annotations
+from __future__ import annotations  # WHY: enable PEP 604 union syntax on older runtimes.
 
-import inspect
-import logging
-import os
-import time
-from dataclasses import dataclass
-from datetime import datetime
-from typing import Any
+import inspect  # WHY: gate site_id kwarg injection based on callable signatures.
+import logging  # WHY: emit structured diagnostics for suite orchestration.
+import os  # WHY: read MIST_INTERACTIVE_TEST_SITE selector from environment.
+import time  # WHY: measure per-option and suite durations.
+from dataclasses import dataclass  # WHY: dataclasses bundle related params under the 5-Item Rule.
+from datetime import datetime  # WHY: format suite start-time header line.
+from typing import Any  # WHY: emitter and registry protocols intentionally unconstrained.
 
-from src.dataclasses.progress_event import TestSummary  # Issue #470: bundle test-summary stats for emit_test_summary.
+from src.dataclasses.progress_event import TestSummary  # WHY: reuse issue #470 aggregate telemetry container.
+
+
+@dataclass(frozen=True, slots=True)
+class SuiteTallies:  # WHY: bundle counts+timing so summary/finalize signatures stay within 5-param limit.
+    """Tallies produced by the interactive-safe option execution loop."""
+
+    success_count: int  # WHY: successful option invocations reported in the summary block.
+    error_count: int  # WHY: failed option invocations reported in the summary block.
+    skip_count: int  # WHY: options skipped as non-interactive-safe.
+    total_time: float  # WHY: wall-clock seconds elapsed running the entire suite.
+
+
+@dataclass(frozen=True, slots=True)
+class SuiteContext:  # WHY: bundle runtime handles to keep run/finalize signatures within 5-param limit.
+    """Runtime handles + counters threaded through the finalize phase of a suite run."""
+
+    all_options: list[str]  # WHY: full option universe used for TestSummary total_ops metric.
+    interactive_options: list[str]  # WHY: subset actually executed; drives coverage denominator.
+    test_site_id: str | None  # WHY: resolved test site injected into interactive callables.
+    emitter: Any  # WHY: telemetry emitter that receives per-option and summary events.
+    telemetry_path: Any  # WHY: destination path echoed in the operator summary block.
+    skip_count: int  # WHY: pre-emitted skip count included in TestSummary metrics.
+    start_time: float  # WHY: monotonic origin used to derive total suite runtime.
 
 
 @dataclass
-class InteractiveTestRunner:
+class InteractiveTestRunner:  # WHY: dependency container avoids global module state for the workflow.
     """Run interactive-safe operation tests while preserving legacy operator output."""
 
-    menu_actions: dict[str, tuple[Any, str]]
-    operation_registry: Any
-    telemetry_emitter_cls: Any
-    config_utils: Any
-    mistapi_module: Any
-    apisession: Any
-    org_id_getter: Any
-    org_id_setter: Any
+    menu_actions: dict[str, tuple[Any, str]]  # WHY: option-id -> (callable, description) dispatch table.
+    operation_registry: Any  # WHY: source of interactive-safe filtering, reasons, and categories.
+    telemetry_emitter_cls: Any  # WHY: telemetry emitter factory used to instantiate an emitter.
+    config_utils: Any  # WHY: fallback path used to resolve/cache the org id.
+    mistapi_module: Any  # WHY: mistapi module used to list org sites for test-site resolution.
+    apisession: Any  # WHY: authenticated Mist API session passed to listOrgSites.
+    org_id_getter: Any  # WHY: cached org id lookup callable.
+    org_id_setter: Any  # WHY: cached org id persistence callable.
+
+    def _fetch_selector_sites(self, org_id: str) -> list[dict[str, Any]]:
+        """Fetch full org site list for selector-based test-site resolution."""
+        logging.info("Selector provided; fetching organization sites for selector match")  # WHY: log before API call.
+        sites_response = self.mistapi_module.api.v1.orgs.sites.listOrgSites(
+            self.apisession, org_id, limit=1000
+        )  # WHY: fetch full org site set so selector can resolve by id or name.
+        sites_data = self.mistapi_module.get_all(
+            response=sites_response, mist_session=self.apisession
+        )  # WHY: resolve paginated site response into iterable list.
+        logging.debug(
+            "Fetched %d sites while resolving selector", len(sites_data) if sites_data else 0
+        )  # WHY: log dataset size for selector lookup diagnostics.
+        return sites_data  # WHY: hand full list to matcher helper for selector comparison.
+
+    @staticmethod
+    def _find_selector_match(sites_data: list[dict[str, Any]], site_selector: str) -> dict[str, Any] | None:
+        """Return first site matching selector by UUID or case-insensitive name."""
+        selector_lower = site_selector.lower()  # WHY: precompute lowered form for name match.
+        return next(
+            (
+                site
+                for site in sites_data
+                if site.get("id") == site_selector or site.get("name", "").lower() == selector_lower
+            ),
+            None,
+        )  # WHY: single-pass generator scan avoids extra branches in caller.
+
+    @staticmethod
+    def _log_selector_miss(site_selector: str) -> None:
+        """Log selector-miss and print legacy warning banner."""
+        print(
+            f"   Warning: MIST_INTERACTIVE_TEST_SITE='{site_selector}' not found; "
+            "falling back to first available site."
+        )  # WHY: preserve legacy operator-facing warning banner.
+        logging.warning(
+            "INTERACTIVE_TEST: MIST_INTERACTIVE_TEST_SITE '%s' not found; using first available site.",
+            site_selector,
+        )  # WHY: log fallback path for operations diagnostics.
+
+    def _lookup_selector_site(self, org_id: str, site_selector: str) -> tuple[str | None, str]:
+        """Return site matching the environment selector by UUID or case-insensitive name."""
+        sites_data = self._fetch_selector_sites(org_id)  # WHY: delegate list fetch to helper.
+        matching_site = self._find_selector_match(
+            sites_data, site_selector
+        )  # WHY: delegate selector matching to helper.
+        if not matching_site:
+            self._log_selector_miss(site_selector)  # WHY: emit legacy miss warning.
+            return None, "Unknown"  # WHY: signal caller to attempt fallback lookup.
+        site_id = matching_site["id"]  # WHY: capture matched site id for downstream operations.
+        site_name = matching_site.get("name", "Unknown")  # WHY: capture matched site name for context.
+        print(
+            f"   Using test site from MIST_INTERACTIVE_TEST_SITE: {site_name} ({site_id})"
+        )  # WHY: preserve legacy explicit selector-success message.
+        logging.debug(
+            "Selector matched site_id=%s site_name=%s", site_id, site_name
+        )  # WHY: log selector match details for traceability.
+        return site_id, site_name  # WHY: return resolved selector context to orchestrator.
+
+    def _lookup_first_available_site(self, org_id: str) -> tuple[str | None, str]:
+        """Return the first available org site for deterministic fallback selection."""
+        logging.info(
+            "Resolving fallback test site using first available org site"
+        )  # WHY: log before fallback API call.
+        sites_response = self.mistapi_module.api.v1.orgs.sites.listOrgSites(
+            self.apisession, org_id, limit=1
+        )  # WHY: request only the first available site as deterministic fallback.
+        if not sites_response.data:
+            return None, "Unknown"  # WHY: signal absence of any site so caller can abort.
+        site_id = sites_response.data[0]["id"]  # WHY: capture fallback site UUID for test execution.
+        site_name = sites_response.data[0].get(
+            "name", "Unknown"
+        )  # WHY: capture fallback site name for user-visible context.
+        print(
+            f"   Using first available test site: {site_name} ({site_id})"
+        )  # WHY: preserve legacy fallback message output.
+        return site_id, site_name  # WHY: return resolved fallback context to orchestrator.
 
     def _resolve_test_site(self, org_id: str) -> tuple[str | None, str]:
         """Resolve test site from environment selector or first available site."""
-        logging.info("Resolving interactive-test site for org_id=%s", org_id)  # Log before test-site resolution begins.
+        logging.info("Resolving interactive-test site for org_id=%s", org_id)  # WHY: log entry to test-site resolution.
         site_selector = os.getenv(
             "MIST_INTERACTIVE_TEST_SITE", ""
-        ).strip()  # Read optional environment override for deterministic test-site selection.
+        ).strip()  # WHY: read optional environment override for deterministic test-site selection.
         logging.debug(
             "Environment selector MIST_INTERACTIVE_TEST_SITE='%s'", site_selector
-        )  # Log resolved selector value for diagnostics.
-        test_site_name = "Unknown"  # Initialize safe fallback name used if lookup fails.
-        test_site_id = None  # Initialize safe fallback ID used when no site is found.
+        )  # WHY: log resolved selector value for diagnostics.
+        site_id: str | None = None  # WHY: initialize safe fallback ID used when no site is found.
+        site_name = "Unknown"  # WHY: initialize safe fallback name used if lookup fails.
         if site_selector:
-            logging.info(
-                "Selector provided; fetching organization sites for selector match"
-            )  # Log before full-site list API call.
-            sites_response = self.mistapi_module.api.v1.orgs.sites.listOrgSites(
-                self.apisession, org_id, limit=1000
-            )  # Fetch org sites so selector can resolve by id or name.
-            sites_data = self.mistapi_module.get_all(
-                response=sites_response, mist_session=self.apisession
-            )  # Resolve paginated site response into iterable list.
-            logging.debug(
-                "Fetched %d sites while resolving selector", len(sites_data) if sites_data else 0
-            )  # Log selector-lookup dataset size.
-            matching_site = next(  # Find first site matching selector by UUID or case-insensitive name.
-                (
-                    site
-                    for site in sites_data
-                    if site.get("id") == site_selector or site.get("name", "").lower() == site_selector.lower()
-                ),
-                None,
-            )
-            if matching_site:
-                test_site_id = matching_site["id"]  # Store matched site ID for downstream interactive-safe operations.
-                test_site_name = matching_site.get(
-                    "name", "Unknown"
-                )  # Store matched site name for user-visible context.
-                print(
-                    f"   Using test site from MIST_INTERACTIVE_TEST_SITE: {test_site_name} ({test_site_id})"
-                )  # Preserve legacy explicit selector-success message.
-                logging.debug(
-                    "Selector matched site_id=%s site_name=%s", test_site_id, test_site_name
-                )  # Log selector match details.
-            else:
-                print(
-                    f"   Warning: MIST_INTERACTIVE_TEST_SITE='{site_selector}' not found; "
-                    "falling back to first available site."
-                )
-                logging.warning(
-                    "INTERACTIVE_TEST: MIST_INTERACTIVE_TEST_SITE '%s' not found; using first available site.",
-                    site_selector,
-                )
-        if not test_site_id:
-            logging.info(
-                "Resolving fallback test site using first available org site"
-            )  # Log before fallback site lookup API call.
-            sites_response = self.mistapi_module.api.v1.orgs.sites.listOrgSites(
-                self.apisession, org_id, limit=1
-            )  # Request first available site as deterministic fallback.
-            if sites_response.data and len(sites_response.data) > 0:
-                test_site_id = sites_response.data[0]["id"]  # Capture fallback site UUID for test execution.
-                test_site_name = sites_response.data[0].get(
-                    "name", "Unknown"
-                )  # Capture fallback site name for visibility.
-                print(
-                    f"   Using first available test site: {test_site_name} ({test_site_id})"
-                )  # Preserve legacy fallback message output.
+            site_id, site_name = self._lookup_selector_site(
+                org_id, site_selector
+            )  # WHY: delegate selector-based lookup to helper.
+        if not site_id:
+            site_id, site_name = self._lookup_first_available_site(
+                org_id
+            )  # WHY: delegate fallback to first-available-site helper.
         logging.debug(
-            "Resolved interactive test site_id=%s site_name=%s", test_site_id, test_site_name
-        )  # Log final resolution result for caller context.
-        return test_site_id, test_site_name  # Return resolved site context used by execute() workflow.
+            "Resolved interactive test site_id=%s site_name=%s", site_id, site_name
+        )  # WHY: log final resolution result for caller context.
+        return site_id, site_name  # WHY: return resolved site context used by execute() workflow.
 
     def _print_suite_header(self) -> None:
         """Print suite banner preserved verbatim from legacy execute() output."""
-        print(" Starting interactive test of MistHelper menu options...")  # Preserve legacy header text.
-        print("  Note: This tests read-only operations requiring site/device/client selection")  # Preserve note.
-        print(f"! Test started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")  # Preserve start-time line.
-        print("=" * 80)  # Preserve legacy visual divider.
+        print(" Starting interactive test of MistHelper menu options...")  # WHY: preserve legacy header text.
+        print(
+            "  Note: This tests read-only operations requiring site/device/client selection"
+        )  # WHY: preserve legacy operator note.
+        print(
+            f"! Test started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        )  # WHY: preserve legacy start-time line.
+        print("=" * 80)  # WHY: preserve legacy visual divider.
 
     def _build_option_lists(self) -> tuple[list[str], list[str], list[str]]:
         """Return (all_options, interactive_options, skip_list) using stable legacy ordering."""
-        logging.info("Building interactive option lists from menu actions")  # Log before list-build action.
+        logging.info("Building interactive option lists from menu actions")  # WHY: log before list-build action.
         all_options = sorted(
             self.menu_actions.keys(), key=lambda option: float(option.replace("a", ".1"))
-        )  # Preserve legacy float-key ordering.
-        interactive_options = self.operation_registry.interactive_safe_options(all_options)  # Filter safe options.
+        )  # WHY: preserve legacy float-key ordering across sub-option letters.
+        interactive_options = self.operation_registry.interactive_safe_options(
+            all_options
+        )  # WHY: filter to interactive-safe options via registry.
         skip_list = [
             option for option in all_options if not self.operation_registry.is_interactive_safe(option)
-        ]  # Build skip list mirroring legacy filter.
+        ]  # WHY: build skip list mirroring legacy negative filter.
         logging.debug(
             "Built option lists: %d interactive, %d skipped", len(interactive_options), len(skip_list)
-        )  # Log list-build result.
-        return all_options, interactive_options, skip_list  # Return triple consumed by execute().
+        )  # WHY: log list-build result for diagnostics.
+        return all_options, interactive_options, skip_list  # WHY: return triple consumed by execute().
+
+    def _print_tested_options(self, interactive_options: list[str]) -> None:
+        """Print the tested-options listing verbatim from legacy output."""
+        print(" Testing interactive read-only operations:")  # WHY: preserve tested section header.
+        for option in interactive_options:
+            if option in self.menu_actions:
+                _, description = self.menu_actions[option]  # WHY: resolve description for option listing.
+                print(f"   {option:>3}: {description}")  # WHY: preserve per-option tested listing.
+
+    def _print_skipped_options(self, skip_list: list[str]) -> None:
+        """Print the skipped-options listing verbatim from legacy output."""
+        print(" Skipping non-interactive-safe operations:")  # WHY: preserve skipped section header.
+        for option in skip_list:
+            if option in self.menu_actions:
+                reason = self.operation_registry.skip_reason(option)  # WHY: resolve registry skip reason.
+                if reason:
+                    print(f"   {option:>3}: {reason}")  # WHY: preserve per-option skip-reason listing.
 
     def _print_option_listings(self, interactive_options: list[str], skip_list: list[str]) -> None:
         """Print the tested-and-skipped option listings preserving legacy formatting."""
-        print(f"! Found {len(interactive_options)} interactive read-only options to test")  # Preserve count line.
-        print(f"! {len(skip_list)} options will be skipped")  # Preserve skip-count line.
-        print()  # Preserve blank line spacing.
-        print(" Testing interactive read-only operations:")  # Preserve tested section header.
-        for option in interactive_options:
-            if option in self.menu_actions:
-                _, description = self.menu_actions[option]  # Resolve description for option listing.
-                print(f"   {option:>3}: {description}")  # Preserve per-option tested listing.
-        print()  # Preserve spacing between sections.
-        print(" Skipping non-interactive-safe operations:")  # Preserve skipped section header.
-        for option in skip_list:
-            if option in self.menu_actions:
-                reason = self.operation_registry.skip_reason(option)  # Resolve registry skip reason.
-                if reason:
-                    print(f"   {option:>3}: {reason}")  # Preserve per-option skip-reason listing.
-        print()  # Preserve spacing before telemetry setup.
+        print(f"! Found {len(interactive_options)} interactive read-only options to test")  # WHY: preserve count line.
+        print(f"! {len(skip_list)} options will be skipped")  # WHY: preserve skip-count line.
+        print()  # WHY: preserve blank-line spacing before tested listing.
+        self._print_tested_options(interactive_options)  # WHY: delegate tested-listing print to helper.
+        print()  # WHY: preserve spacing between sections.
+        self._print_skipped_options(skip_list)  # WHY: delegate skipped-listing print to helper.
+        print()  # WHY: preserve spacing before telemetry setup.
 
     def _create_emitter(self) -> tuple[Any, Any]:
         """Initialize telemetry emitter; return (emitter, path) tuple."""
-        logging.info("Creating telemetry emitter for interactive test run")  # Log before emitter setup.
-        telemetry_path = self.telemetry_emitter_cls.timestamped_path("data")  # Generate timestamped path.
-        emitter = self.telemetry_emitter_cls(telemetry_path)  # Construct emitter instance.
-        logging.debug("Telemetry emitter initialized with path: %s", telemetry_path)  # Log emitter destination.
-        return emitter, telemetry_path  # Return tuple so callers do not depend on emitter attribute layout.
+        logging.info("Creating telemetry emitter for interactive test run")  # WHY: log before emitter setup.
+        telemetry_path = self.telemetry_emitter_cls.timestamped_path("data")  # WHY: generate timestamped output path.
+        emitter = self.telemetry_emitter_cls(telemetry_path)  # WHY: construct emitter instance.
+        logging.debug("Telemetry emitter initialized with path: %s", telemetry_path)  # WHY: log emitter destination.
+        return emitter, telemetry_path  # WHY: return tuple so callers do not depend on emitter attrs.
 
     def _emit_skip_events(self, emitter: Any, skip_list: list[str]) -> int:
         """Emit telemetry skip events for non-interactive-safe options and return skip count."""
-        skip_count = 0  # Initialize skip counter.
+        skip_count = 0  # WHY: initialize skip counter for aggregate reporting.
         for option in skip_list:
             if option in self.menu_actions:
-                _, op_name = self.menu_actions[option]  # Resolve op-name for skip event payload.
-                logging.info("Emitting telemetry skip event for option %s", option)  # Log before skip emission.
+                _, op_name = self.menu_actions[option]  # WHY: resolve op-name for skip event payload.
+                logging.info("Emitting telemetry skip event for option %s", option)  # WHY: log before skip emission.
                 emitter.emit_test_skip(
                     option,
                     op_name,
                     self.operation_registry.skip_reason(option),
                     self.operation_registry.skip_category(option),
                     "interactive",
-                )  # Emit skip event for option.
-                skip_count += 1  # Increment skip counter.
-        logging.debug("Emitted %d skip telemetry events", skip_count)  # Log skip emission summary.
-        return skip_count  # Return count for summary reporting.
+                )  # WHY: emit skip event capturing option identity + skip metadata.
+                skip_count += 1  # WHY: increment skip counter after successful emission.
+        logging.debug("Emitted %d skip telemetry events", skip_count)  # WHY: log skip emission summary.
+        return skip_count  # WHY: return count for summary reporting.
 
     def _ensure_org_id(self) -> str:
         """Return cached org_id or resolve and persist a new one."""
-        org_id = self.org_id_getter()  # Retrieve cached org_id.
+        org_id = self.org_id_getter()  # WHY: retrieve cached org_id from injected getter.
         if not org_id:
-            logging.info("No cached org_id present; resolving via config utils")  # Log before resolution.
-            org_id = self.config_utils.get_cached_or_prompted_org_id()  # Resolve org_id via utils.
-            self.org_id_setter(org_id)  # Persist resolved org_id.
-            logging.debug("Resolved and stored org_id=%s", org_id)  # Log resolution result.
-        return org_id  # Return org_id for downstream site resolution.
+            logging.info("No cached org_id present; resolving via config utils")  # WHY: log before resolution.
+            org_id = self.config_utils.get_cached_or_prompted_org_id()  # WHY: resolve org_id via utils.
+            self.org_id_setter(org_id)  # WHY: persist resolved org_id via injected setter.
+            logging.debug("Resolved and stored org_id=%s", org_id)  # WHY: log resolution result.
+        return org_id  # WHY: return org_id for downstream site resolution.
 
     def _resolve_site_or_close(self, org_id: str, emitter: Any) -> tuple[str | None, str]:
         """Resolve test site context; close emitter and return (None, '') on failure paths."""
         try:
-            print("   Fetching test site for interactive operations...")  # Preserve legacy cue.
-            test_site_id, test_site_name = self._resolve_test_site(org_id)  # Resolve test site.
+            print("   Fetching test site for interactive operations...")  # WHY: preserve legacy cue.
+            test_site_id, test_site_name = self._resolve_test_site(org_id)  # WHY: resolve test site.
             if test_site_id:
                 logging.info(
                     "INTERACTIVE_TEST: Using test site_id=%s name=%s", test_site_id, test_site_name
-                )  # Log selected site context.
-                return test_site_id, test_site_name  # Return resolved context on success.
-            print("[ERROR] No sites found in organization - cannot run interactive tests")  # Preserve no-site error.
-            logging.error("INTERACTIVE_TEST: No sites available for testing")  # Log no-site terminal condition.
+                )  # WHY: log selected site context.
+                return test_site_id, test_site_name  # WHY: return resolved context on success.
+            print(
+                "[ERROR] No sites found in organization - cannot run interactive tests"
+            )  # WHY: preserve legacy no-site error message.
+            logging.error("INTERACTIVE_TEST: No sites available for testing")  # WHY: log no-site terminal condition.
         except Exception as error:
-            print(f"[ERROR] Failed to fetch test site: {error}")  # Preserve fetch-failure message.
-            logging.error("INTERACTIVE_TEST: Failed to fetch test site: %s", error)  # Log exception context.
-        logging.info("Closing telemetry emitter after site-resolution failure")  # Log before close on failure.
-        emitter.close()  # Close emitter to flush events on failure path.
-        logging.debug("Telemetry emitter closed after site-resolution failure")  # Log close completion.
-        return None, ""  # Signal caller to abort suite.
+            print(f"[ERROR] Failed to fetch test site: {error}")  # WHY: preserve fetch-failure message.
+            logging.error("INTERACTIVE_TEST: Failed to fetch test site: %s", error)  # WHY: log exception context.
+        logging.info("Closing telemetry emitter after site-resolution failure")  # WHY: log before close on failure.
+        emitter.close()  # WHY: close emitter to flush events on failure path.
+        logging.debug("Telemetry emitter closed after site-resolution failure")  # WHY: log close completion.
+        return None, ""  # WHY: signal caller to abort suite.
 
     def _invoke_option(self, option: str, test_site_id: str | None) -> None:
         """Invoke a single menu option callable with prepared kwargs."""
-        function, _description = self.menu_actions[option]  # Resolve callable for option.
-        signature = inspect.signature(function)  # Inspect signature to gate kwargs injection.
-        invoke_kwargs: dict[str, Any] = {}  # Initialize kwargs payload.
+        function, _description = self.menu_actions[option]  # WHY: resolve callable for option.
+        signature = inspect.signature(function)  # WHY: inspect signature to gate kwargs injection.
+        invoke_kwargs: dict[str, Any] = {}  # WHY: initialize kwargs payload.
         if "site_id" in signature.parameters:
-            invoke_kwargs["site_id"] = test_site_id  # Inject resolved site when callable accepts it.
-        logging.debug("Invoking option %s with kwargs=%s", option, invoke_kwargs)  # Log invocation kwargs.
-        function(**invoke_kwargs)  # Execute target interactive-safe operation.
+            invoke_kwargs["site_id"] = test_site_id  # WHY: inject site when callable accepts it.
+        logging.debug(
+            "Invoking option %s with kwargs=%s", option, invoke_kwargs
+        )  # WHY: log invocation kwargs for diagnostics.
+        function(**invoke_kwargs)  # WHY: execute target interactive-safe operation.
+
+    def _emit_option_pass(self, option: str, description: str, duration: float, emitter: Any) -> bool:
+        """Emit telemetry pass event and preserve legacy success output for an option."""
+        print(f"   [SUCCESS] Option {option} completed successfully")  # WHY: preserve success message.
+        logging.info("Emitting telemetry pass event for option %s", option)  # WHY: log before pass emission.
+        emitter.emit_test_pass(option, description, duration, "interactive")  # WHY: emit pass event.
+        logging.debug("Telemetry pass event emitted for option %s", option)  # WHY: log pass completion.
+        logging.info(
+            "INTERACTIVE_TEST: Successfully completed menu option %s", option
+        )  # WHY: log operator-facing success.
+        return True  # WHY: signal success to caller.
+
+    def _emit_option_fail(self, option: str, description: str, duration: float, error: Exception, emitter: Any) -> bool:
+        """Emit telemetry fail event and preserve legacy failure output for an option."""
+        print(
+            f"   [FAILED]  Option {option} failed: {str(error)[:100]}..."
+        )  # WHY: preserve failure message with legacy truncation.
+        logging.info("Emitting telemetry fail event for option %s", option)  # WHY: log before fail emission.
+        emitter.emit_test_fail(
+            option, description, duration, error, "interactive"
+        )  # WHY: emit fail event with exception context.
+        logging.debug("Telemetry fail event emitted for option %s", option)  # WHY: log fail completion.
+        logging.error("INTERACTIVE_TEST: Failed menu option %s: %s", option, error)  # WHY: log operator-facing failure.
+        return False  # WHY: signal failure to caller.
 
     def _run_single_option(self, index: int, total: int, option: str, test_site_id: str | None, emitter: Any) -> bool:
         """Run a single interactive option, emit telemetry, and return True on success."""
-        _function, description = self.menu_actions[option]  # Resolve description for progress output.
+        _function, description = self.menu_actions[option]  # WHY: resolve description for progress output.
         print(
             f"   [{index:2}/{total}] Testing option {option:>3}: {description[:60]}..."
-        )  # Preserve per-option progress line.
-        logging.info("Emitting telemetry start event for option %s", option)  # Log before start emission.
-        emitter.emit_test_start(option, description, "interactive")  # Emit start event.
-        logging.debug("Telemetry start event emitted for option %s", option)  # Log start emission completion.
-        op_start = time.time()  # Capture per-option start timestamp.
+        )  # WHY: preserve per-option progress line.
+        logging.info("Emitting telemetry start event for option %s", option)  # WHY: log before start emission.
+        emitter.emit_test_start(option, description, "interactive")  # WHY: emit start event.
+        logging.debug("Telemetry start event emitted for option %s", option)  # WHY: log start emission completion.
+        op_start = time.time()  # WHY: capture per-option start timestamp.
         logging.info(
             "INTERACTIVE_TEST: Starting test of menu option %s description='%s'", option, description
-        )  # Log before invocation.
+        )  # WHY: log before invocation.
         try:
-            self._invoke_option(option, test_site_id)  # Invoke the menu callable.
-            duration = time.time() - op_start  # Compute success duration.
-            print(f"   [SUCCESS] Option {option} completed successfully")  # Preserve success message.
-            logging.info("Emitting telemetry pass event for option %s", option)  # Log before pass emission.
-            emitter.emit_test_pass(option, description, duration, "interactive")  # Emit pass event.
-            logging.debug("Telemetry pass event emitted for option %s", option)  # Log pass completion.
-            logging.info("INTERACTIVE_TEST: Successfully completed menu option %s", option)  # Log success.
-            return True  # Signal success to caller.
+            self._invoke_option(option, test_site_id)  # WHY: invoke the menu callable.
+            return self._emit_option_pass(
+                option, description, time.time() - op_start, emitter
+            )  # WHY: delegate success emission.
         except Exception as error:
-            duration = time.time() - op_start  # Compute failure duration.
-            print(f"   [FAILED]  Option {option} failed: {str(error)[:100]}...")  # Preserve failure message.
-            logging.info("Emitting telemetry fail event for option %s", option)  # Log before fail emission.
-            emitter.emit_test_fail(option, description, duration, error, "interactive")  # Emit fail event.
-            logging.debug("Telemetry fail event emitted for option %s", option)  # Log fail completion.
-            logging.error("INTERACTIVE_TEST: Failed menu option %s: %s", option, error)  # Log option failure.
-            return False  # Signal failure to caller.
+            return self._emit_option_fail(
+                option, description, time.time() - op_start, error, emitter
+            )  # WHY: delegate failure emission.
 
     def _run_option_loop(
         self, interactive_options: list[str], test_site_id: str | None, emitter: Any
     ) -> tuple[int, int]:
         """Iterate interactive options, executing each and tallying successes/failures."""
-        success_count = 0  # Initialize success counter.
-        error_count = 0  # Initialize failure counter.
-        total = len(interactive_options)  # Cache total for progress display.
+        success_count = 0  # WHY: initialize success counter.
+        error_count = 0  # WHY: initialize failure counter.
+        total = len(interactive_options)  # WHY: cache total for progress display.
         for index, option in enumerate(interactive_options, 1):
             if option not in self.menu_actions:
-                continue  # Skip options missing from dispatch table.
+                continue  # WHY: skip options missing from dispatch table.
             if self._run_single_option(index, total, option, test_site_id, emitter):
-                success_count += 1  # Increment success counter on pass.
+                success_count += 1  # WHY: increment success counter on pass.
             else:
-                error_count += 1  # Increment failure counter on fail.
-            time.sleep(1)  # Preserve legacy pacing delay between options.
-        return success_count, error_count  # Return tally for summary reporting.
+                error_count += 1  # WHY: increment failure counter on fail.
+            time.sleep(1)  # WHY: preserve legacy pacing delay between options.
+        return success_count, error_count  # WHY: return tally for summary reporting.
 
-    def _finalize_telemetry(
-        self,
-        emitter: Any,
-        total_ops: int,
-        success_count: int,
-        error_count: int,
-        skip_count: int,
-        total_time: float,
-    ) -> None:
+    def _finalize_telemetry(self, emitter: Any, tallies: SuiteTallies, total_ops: int) -> None:
         """Emit summary event, close emitter, and enforce retention policy."""
-        logging.info("Emitting telemetry summary for interactive test suite")  # Log before summary emission.
+        logging.info("Emitting telemetry summary for interactive test suite")  # WHY: log before summary emission.
         emitter.emit_test_summary(
-            TestSummary(total_ops, success_count, error_count, skip_count, total_time, "interactive")
-        )  # Emit aggregate metrics (issue #470: stats bundled into a TestSummary dataclass).
-        logging.debug("Telemetry summary event emitted successfully")  # Log summary completion.
-        logging.info("Closing telemetry emitter after interactive suite completion")  # Log before close.
-        emitter.close()  # Flush pending events.
-        logging.debug("Telemetry emitter closed successfully")  # Log close completion.
-        logging.info("Applying telemetry retention policy")  # Log before retention enforcement.
-        emitter.enforce_retention()  # Prune old telemetry files.
-        logging.debug("Telemetry retention policy enforcement completed")  # Log retention completion.
+            TestSummary(
+                total_ops,
+                tallies.success_count,
+                tallies.error_count,
+                tallies.skip_count,
+                tallies.total_time,
+                "interactive",
+            )
+        )  # WHY: emit aggregate metrics (issue #470: stats bundled into a TestSummary dataclass).
+        logging.debug("Telemetry summary event emitted successfully")  # WHY: log summary completion.
+        logging.info("Closing telemetry emitter after interactive suite completion")  # WHY: log before close.
+        emitter.close()  # WHY: flush pending events.
+        logging.debug("Telemetry emitter closed successfully")  # WHY: log close completion.
+        logging.info("Applying telemetry retention policy")  # WHY: log before retention enforcement.
+        emitter.enforce_retention()  # WHY: prune old telemetry files.
+        logging.debug("Telemetry retention policy enforcement completed")  # WHY: log retention completion.
 
-    def _print_summary(
-        self,
-        success_count: int,
-        error_count: int,
-        skip_count: int,
-        interactive_total: int,
-        total_time: float,
-        telemetry_path: Any,
-    ) -> bool:
-        """Print the legacy summary block and return overall suite pass/fail status."""
-        print()  # Preserve blank line before summary.
-        print("=" * 80)  # Preserve summary separator line.
-        print(" Interactive Test Summary:")  # Preserve summary title.
-        print(f"   Successful operations: {success_count}")  # Preserve success count line.
-        print(f"   Failed operations: {error_count}")  # Preserve failure count line.
-        print(f"   Skipped operations: {skip_count}")  # Preserve skip count line.
+    def _print_summary_stats(self, tallies: SuiteTallies, interactive_total: int, telemetry_path: Any) -> None:
+        """Print the legacy stats block preserving exact formatting and message text."""
+        print()  # WHY: preserve blank line before summary.
+        print("=" * 80)  # WHY: preserve summary separator line.
+        print(" Interactive Test Summary:")  # WHY: preserve summary title.
+        print(f"   Successful operations: {tallies.success_count}")  # WHY: preserve success count line.
+        print(f"   Failed operations: {tallies.error_count}")  # WHY: preserve failure count line.
+        print(f"   Skipped operations: {tallies.skip_count}")  # WHY: preserve skip count line.
+        coverage_pct = tallies.success_count / interactive_total * 100  # WHY: precompute coverage %.
         print(
-            f"   Total interactive read-only coverage: {success_count}/{interactive_total} "
-            f"({success_count / interactive_total * 100:.1f}%)"
-        )  # Preserve coverage formatting.
-        print(f"   Total execution time: {total_time:.2f} seconds")  # Preserve duration line.
-        print(f"   Telemetry written to: {telemetry_path}")  # Preserve telemetry-path line.
-        print("   Detailed logs in: script.log")  # Preserve log-guidance line.
-        if error_count == 0:
-            print("   All tested interactive operations completed successfully!")  # Preserve all-pass banner.
+            f"   Total interactive read-only coverage: {tallies.success_count}/{interactive_total} "
+            f"({coverage_pct:.1f}%)"
+        )  # WHY: preserve coverage formatting.
+        print(f"   Total execution time: {tallies.total_time:.2f} seconds")  # WHY: preserve duration line.
+        print(f"   Telemetry written to: {telemetry_path}")  # WHY: preserve telemetry-path line.
+        print("   Detailed logs in: script.log")  # WHY: preserve log-guidance line.
+
+    def _print_summary_verdict(self, tallies: SuiteTallies, interactive_total: int) -> bool:
+        """Print final verdict banner and return suite pass/fail status."""
+        if tallies.error_count == 0:
+            print("   All tested interactive operations completed successfully!")  # WHY: preserve all-pass banner.
             logging.info(
                 "INTERACTIVE_TEST: All %s tested operations completed successfully in %.2fs",
-                success_count,
-                total_time,
-            )
-            return True  # Return pass status.
-        print(f"   {error_count} operations failed - check logs for details")  # Preserve failure summary line.
-        logging.warning("INTERACTIVE_TEST: %s operations failed out of %s tested", error_count, interactive_total)
-        return False  # Return failure status.
+                tallies.success_count,
+                tallies.total_time,
+            )  # WHY: log all-pass suite outcome.
+            return True  # WHY: return pass status.
+        print(
+            f"   {tallies.error_count} operations failed - check logs for details"
+        )  # WHY: preserve failure summary line.
+        logging.warning(
+            "INTERACTIVE_TEST: %s operations failed out of %s tested",
+            tallies.error_count,
+            interactive_total,
+        )  # WHY: log partial-failure suite outcome.
+        return False  # WHY: return failure status.
+
+    def _print_summary(self, tallies: SuiteTallies, interactive_total: int, telemetry_path: Any) -> bool:
+        """Print the legacy summary block and return overall suite pass/fail status."""
+        self._print_summary_stats(tallies, interactive_total, telemetry_path)  # WHY: delegate stats-block print.
+        return self._print_summary_verdict(tallies, interactive_total)  # WHY: delegate verdict print + suite status.
+
+    def _run_and_finalize(self, ctx: SuiteContext) -> bool:
+        """Run per-option loop, finalize telemetry, and print the summary block."""
+        print()  # WHY: preserve spacing before per-option execution loop.
+        success_count, error_count = self._run_option_loop(
+            ctx.interactive_options, ctx.test_site_id, ctx.emitter
+        )  # WHY: execute option loop.
+        tallies = SuiteTallies(
+            success_count, error_count, ctx.skip_count, time.time() - ctx.start_time
+        )  # WHY: bundle tallies for downstream reporting.
+        self._finalize_telemetry(
+            ctx.emitter, tallies, len(ctx.all_options)
+        )  # WHY: emit summary, close emitter, enforce retention.
+        return self._print_summary(
+            tallies, len(ctx.interactive_options), ctx.telemetry_path
+        )  # WHY: print summary and return suite status.
 
     def execute(self) -> bool:
         """Run the interactive-safe systematic test suite."""
-        logging.info("Starting interactive-safe systematic test suite")  # Log suite entry boundary.
-        start_time = time.time()  # Capture suite start timestamp.
-        self._print_suite_header()  # Emit legacy header block.
-        all_options, interactive_options, skip_list = self._build_option_lists()  # Build option lists.
-        self._print_option_listings(interactive_options, skip_list)  # Emit option listings.
-        emitter, telemetry_path = self._create_emitter()  # Initialize telemetry emitter; capture path.
-        skip_count = self._emit_skip_events(emitter, skip_list)  # Emit skip events and tally count.
-        org_id = self._ensure_org_id()  # Resolve org_id with cache fallback.
-        test_site_id, _site_name = self._resolve_site_or_close(org_id, emitter)  # Resolve site context.
+        logging.info("Starting interactive-safe systematic test suite")  # WHY: log suite entry boundary.
+        start_time = time.time()  # WHY: capture suite start timestamp.
+        self._print_suite_header()  # WHY: emit legacy header block.
+        all_options, interactive_options, skip_list = self._build_option_lists()  # WHY: build option lists.
+        self._print_option_listings(interactive_options, skip_list)  # WHY: emit option listings.
+        emitter, telemetry_path = self._create_emitter()  # WHY: initialize telemetry emitter; capture path.
+        skip_count = self._emit_skip_events(emitter, skip_list)  # WHY: emit skip events and tally count.
+        org_id = self._ensure_org_id()  # WHY: resolve org_id with cache fallback.
+        test_site_id, _site_name = self._resolve_site_or_close(org_id, emitter)  # WHY: resolve site context or abort.
         if not test_site_id:
-            return False  # Abort because prerequisite site could not be resolved.
-        print()  # Preserve spacing before per-option execution loop.
-        success_count, error_count = self._run_option_loop(
-            interactive_options, test_site_id, emitter
-        )  # Execute option loop.
-        total_time = time.time() - start_time  # Compute total suite runtime.
-        self._finalize_telemetry(
-            emitter, len(all_options), success_count, error_count, skip_count, total_time
-        )  # Emit summary, close emitter, enforce retention.
-        return self._print_summary(
-            success_count, error_count, skip_count, len(interactive_options), total_time, telemetry_path
-        )  # Print summary and return suite status.
+            return False  # WHY: abort because prerequisite site could not be resolved.
+        ctx = SuiteContext(
+            all_options, interactive_options, test_site_id, emitter, telemetry_path, skip_count, start_time
+        )  # WHY: bundle handles+counters for finalize phase under 5-param limit.
+        return self._run_and_finalize(ctx)  # WHY: delegate execution loop + finalize + summary print.
