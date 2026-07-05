@@ -10,7 +10,10 @@ from dataclasses import dataclass
 from typing import Any
 
 from src.dataclasses.progress_event import ProgressContext  # Issue #470: bundle progress identity for emit_progress_*.
-from src.ssh.batch.multi_host_runner import MultiHostRunner  # T013c: extracted multi-host orchestrator
+from src.ssh.batch.multi_host_runner import (  # T013c/T039: extracted multi-host orchestrator + request bundle
+    MultiHostRunner,
+    MultiHostRunRequest,
+)
 from src.ssh.config.csv_loader import CommandCsvLoader  # T013a: extracted CSV loader
 from src.ssh.config.env_loader import EnvSshConfigLoader  # T013a: extracted .env loader
 from src.ssh.runtime.app_runner import AppRunner  # T013d: real concrete CLI orchestrator (no façade)
@@ -220,15 +223,17 @@ class SSHRunnerManager:
             if len(hosts) > 1 or len(commands) > 1:
                 print(f"\n!? Executing {len(commands)} command(s) on {len(hosts)} host(s)")
 
-                summary = MultiHostRunner.run(  # T013c: direct call (no façade through deps.enhanced_ssh_runner)
-                    hosts=hosts,
-                    username=username,
-                    password=password,
-                    commands=commands,
-                    port=22,
-                    timeout=30,
-                    use_shell=True,
-                    max_threads=min(len(hosts), 4),
+                summary = MultiHostRunner.run(  # T013c/T039: direct call via immutable request bundle
+                    MultiHostRunRequest(  # Bundle collapses the runner's parameter surface
+                        hosts=tuple(hosts),  # Convert list to tuple for frozen dataclass storage
+                        username=username,  # Shared SSH login account
+                        password=password,  # Shared SSH login secret
+                        commands=tuple(commands),  # Convert list to tuple for frozen dataclass storage
+                        port=22,  # Standard SSH port for network devices
+                        timeout=30,  # Historical CLI default connection timeout
+                        use_shell=True,  # Shell mode preferred for network device sessions
+                        max_threads=min(len(hosts), 4),  # Cap worker pool to at most 4 threads
+                    )
                 )
 
                 successful = sum(
@@ -409,15 +414,17 @@ class SSHRunnerManager:
             print(f"  - Target hosts: {len(management_ips)} gateways")
             print(f"  - Commands: {len(commands)}")
 
-            results = MultiHostRunner.run(  # T013c: direct call (no façade through deps.enhanced_ssh_runner)
-                hosts=management_ips,
-                username=ssh_config["username"],
-                password=ssh_config["password"],
-                commands=commands,
-                port=22,
-                timeout=30,
-                use_shell=True,
-                max_threads=5,
+            results = MultiHostRunner.run(  # T013c/T039: direct call via immutable request bundle
+                MultiHostRunRequest(  # Bundle collapses the runner's parameter surface
+                    hosts=tuple(management_ips),  # Convert list to tuple for frozen dataclass storage
+                    username=ssh_config["username"],  # SSH login sourced from resolved config
+                    password=ssh_config["password"],  # SSH secret sourced from resolved config
+                    commands=tuple(commands),  # Convert list to tuple for frozen dataclass storage
+                    port=22,  # Standard SSH port for network devices
+                    timeout=30,  # Historical CLI default connection timeout
+                    use_shell=True,  # Shell mode preferred for network device sessions
+                    max_threads=5,  # Historical default fan-out width for gateway clone runs
+                )
             )
 
             successful = results.get("successful", 0)

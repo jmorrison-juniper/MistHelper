@@ -13,7 +13,10 @@ import multiprocessing  # Default thread-count derivation
 from typing import Any  # Loose typing for argparse Namespace + env config dict
 
 from src.ssh.batch.batch_executor import BatchExecutor, BatchRunRequest  # Multi-command, single-host executor
-from src.ssh.batch.multi_host_runner import MultiHostRunner  # Threaded multi-host orchestrator
+from src.ssh.batch.multi_host_runner import (  # Threaded multi-host orchestrator + request bundle
+    MultiHostRunner,
+    MultiHostRunRequest,
+)
 from src.ssh.command.command_runner import (  # Single-command, single-host orchestrator (dataclass entrypoint)
     SingleCommandRequest,
     SingleCommandRunner,
@@ -266,9 +269,17 @@ class AppRunner:
         if max_threads != requested_threads:  # Tell the user if we clamped their request
             print(f"!? Adjusted thread count from {requested_threads} to {max_threads}")
         logging.info("Dispatching to MultiHostRunner.run (%d hosts / %d cmds)", len(hosts), len(commands))
-        ssh_results = MultiHostRunner.run(
-            hosts, user, password, commands, args.port, args.timeout, use_shell, max_threads
+        request = MultiHostRunRequest(  # T039: immutable request bundle collapses runner signature
+            hosts=tuple(hosts),  # Convert list to tuple for frozen dataclass storage
+            username=user,  # Shared SSH login account
+            password=password,  # Shared SSH login secret
+            commands=tuple(commands),  # Convert list to tuple for frozen dataclass storage
+            port=args.port,  # CLI-provided TCP port
+            timeout=args.timeout,  # CLI-provided per-host timeout
+            use_shell=use_shell,  # Resolved shell mode flag
+            max_threads=max_threads,  # Clamped ThreadPoolExecutor worker cap
         )
+        ssh_results = MultiHostRunner.run(request)  # Dispatch the multi-host fan-out
         logging.debug("MultiHostRunner.run returned failed=%s", ssh_results.get("failed"))  # After-action log
         return ssh_results["failed"] == 0  # type: ignore[no-any-return]  # Success when no host failed
 
