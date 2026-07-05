@@ -5,25 +5,25 @@ for the MistHelper polyglot database layer.  Uses batch import for high
 throughput on bulk API data pulls.
 """
 
-from __future__ import annotations
+from __future__ import annotations  # WHY: enable postponed annotation evaluation for typing
 
-import hashlib
-import json
-import socket
-import time
-import uuid
-from typing import Any
-from urllib.parse import urlparse
+import hashlib  # WHY: deterministic keys and snapshot hashes rely on sha256
+import json  # WHY: canonical serialisation for snapshot hash comparison
+import socket  # WHY: pre-flight DNS check before opening ArangoDB client
+import time  # WHY: epoch timestamps stamp every write and snapshot doc
+import uuid  # WHY: fallback random keys for auto-increment strategies
+from typing import Any  # WHY: type hints for python-arango dynamic returns
+from urllib.parse import urlparse  # WHY: extract hostname for DNS pre-flight
 
-import structlog
-from arango import ArangoClient  # type: ignore[attr-defined]
+import structlog  # WHY: structured logging for observability of writes and edges
+from arango import ArangoClient  # type: ignore[attr-defined]  # WHY: python-arango client entrypoint
 
-from . import DatabaseConfig, WriteResult
+from . import DatabaseConfig, WriteResult  # WHY: shared config and result dataclasses
 
-logger = structlog.get_logger(__name__)
+logger = structlog.get_logger(__name__)  # WHY: module-scoped logger tags every event
 
-GRAPH_NAME = "mist_network_topology"
-IMPORT_BATCH_SIZE = 5000
+GRAPH_NAME = "mist_network_topology"  # WHY: canonical name for the named graph in ArangoDB
+IMPORT_BATCH_SIZE = 5000  # WHY: python-arango import_bulk size that balances memory and throughput
 
 # Core config & hierarchy edges registered in the named graph for visualization.
 # Models the Mist config inheritance tree from the OpenAPI spec:
@@ -34,7 +34,7 @@ IMPORT_BATCH_SIZE = 5000
 #   Org -> Infrastructure (MxClusters, MxTunnels, MxEdges)
 # Events, stats, telemetry, clients, and sessions are excluded from the
 # graph view but their edge collections are still created and populated.
-GRAPH_EDGE_DEFINITIONS = [
+GRAPH_EDGE_DEFINITIONS = [  # WHY: named-graph edge definitions used to build the topology graph
     # -- Containment: Org -> Site -> Device -> Port --
     {
         "edge_collection": "OrgContainsSite",
@@ -236,7 +236,7 @@ GRAPH_EDGE_DEFINITIONS = [
 # Full edge definitions: ALL relationship types including events, stats,
 # telemetry, and operational data.  Used for collection creation and data
 # writing -- every edge collection below is created and populated.
-EDGE_DEFINITIONS = [
+EDGE_DEFINITIONS = [  # WHY: exhaustive edge definitions for every populated edge collection
     {
         "edge_collection": "OrgContainsSite",
         "from_vertex_collections": ["orgs"],
@@ -1050,12 +1050,12 @@ EDGE_DEFINITIONS = [
 
 # Derived set: names of all edge collections declared in EDGE_DEFINITIONS.
 # Used by _ensure_collection() to create them with the correct ArangoDB type.
-_EDGE_COLLECTION_NAMES: set[str] = {str(d["edge_collection"]) for d in EDGE_DEFINITIONS}
+_EDGE_COLLECTION_NAMES: set[str] = {str(d["edge_collection"]) for d in EDGE_DEFINITIONS}  # WHY: fast membership test
 
 # Maps entity_type (API function name) to the vertex collection
 # that holds the entity.  Used by snapshot() to create
 # ConfigSnapshotForEntity edges linking snapshots to their entities.
-ENTITY_TYPE_TO_VERTEX: dict[str, str] = {
+ENTITY_TYPE_TO_VERTEX: dict[str, str] = {  # WHY: map API function names to vertex collections for snapshot edges
     "listOrgSites": "sites",
     "listSiteDevices": "devices",
     "getOrgInventory": "devices",
@@ -1244,7 +1244,7 @@ ENTITY_TYPE_TO_VERTEX: dict[str, str] = {
 # Maps API collection names to graph vertex + edge relationships.
 # Each entry defines which vertex collection to populate and which
 # edges to create from the raw API data fields.
-COLLECTION_VERTEX_MAP: dict[str, dict[str, Any]] = {
+COLLECTION_VERTEX_MAP: dict[str, dict[str, Any]] = {  # WHY: drives graph population for each raw collection
     "listOrgSites": {
         "vertex": "sites",
         "key_field": "id",
@@ -3881,7 +3881,7 @@ COLLECTION_VERTEX_MAP: dict[str, dict[str, Any]] = {
     "listOrgSecIntelProfiles": {"vertex": "secIntel_profiles", "key_field": "id"},
 }
 
-TEMPLATE_ID_FIELDS = [
+TEMPLATE_ID_FIELDS = [  # WHY: pairs each site template FK field with its template_type label for edge docs
     ("rftemplate_id", "rf"),
     ("gatewaytemplate_id", "gateway"),
     ("networktemplate_id", "network"),
@@ -3890,355 +3890,409 @@ TEMPLATE_ID_FIELDS = [
 ]
 
 
-class ArangoDBWriter:
+class ArangoDBWriter:  # WHY: primary writer class for the ArangoDB polyglot backend
     """Write documents to ArangoDB with upsert, graph, and snapshot support."""
 
-    def __init__(self, config: DatabaseConfig) -> None:
+    def __init__(self, config: DatabaseConfig) -> None:  # WHY: constructor wires config and connects to the server
         """Initialize ArangoDB connection and ensure database exists."""
-        hostname = urlparse(config.arango_host).hostname or "arangodb"
-        try:
-            socket.getaddrinfo(hostname, None)
-        except socket.gaierror as dns_error:
-            raise ConnectionError(f"ArangoDB host '{hostname}' not resolvable") from dns_error
-        self._client = ArangoClient(hosts=config.arango_host)
-        self._config = config
-        self._ensure_database()
-        self._db = self._client.db(
+        hostname = urlparse(config.arango_host).hostname or "arangodb"  # WHY: parse URL to isolate host for DNS check
+        self._preflight_dns(hostname)  # WHY: fail fast when host cannot resolve so callers see a clear error
+        self._client = ArangoClient(hosts=config.arango_host)  # WHY: python-arango client is the entry to all ops
+        self._config = config  # WHY: retain config for later system-db reconnects and diagnostics
+        self._ensure_database()  # WHY: create the target database when the server is empty
+        self._db = self._client.db(  # WHY: reopen the client bound to the target database
             config.arango_database,
             username=config.arango_username,
             password=config.arango_password,
         )
-        self._ensure_graph()
-        logger.info("arango_writer_ready", database=config.arango_database)
+        self._ensure_graph()  # WHY: named graph must exist before any edge is imported
+        logger.info("arango_writer_ready", database=config.arango_database)  # WHY: observability marker
 
-    def _ensure_database(self) -> None:
+    @staticmethod
+    def _preflight_dns(hostname: str) -> None:  # WHY: guard clause factored out of __init__ to keep it short
+        """Raise ConnectionError early if the ArangoDB hostname does not resolve."""
+        try:
+            socket.getaddrinfo(hostname, None)  # WHY: cheap DNS lookup surfaces misconfigurations up-front
+        except socket.gaierror as dns_error:  # WHY: convert socket-level failure into a domain error
+            raise ConnectionError(f"ArangoDB host '{hostname}' not resolvable") from dns_error
+
+    def _ensure_database(self) -> None:  # WHY: idempotent bootstrap of the misthelper database
         """Create the misthelper database if it does not exist."""
-        sys_db = self._client.db(
+        sys_db = self._client.db(  # WHY: system database is the only place create_database can run
             "_system",
             username=self._config.arango_username,
             password=self._config.arango_password,
         )
-        if not sys_db.has_database(self._config.arango_database):
-            sys_db.create_database(self._config.arango_database)
-            logger.info("database_created", name=self._config.arango_database)
+        if sys_db.has_database(self._config.arango_database):  # WHY: guard clause skips existing databases
+            return
+        sys_db.create_database(self._config.arango_database)  # WHY: create when missing
+        logger.info("database_created", name=self._config.arango_database)  # WHY: log creation for auditing
 
-    def _ensure_graph(self) -> None:
+    def _ensure_graph(self) -> None:  # WHY: bootstrap or refresh the named topology graph
         """Create or update the network topology graph.
 
         Uses GRAPH_EDGE_DEFINITIONS (core config/hierarchy only) for the
         named graph visualization.  All edge collections from the full
         EDGE_DEFINITIONS are still created and populated separately.
         """
-        if self._db.has_graph(GRAPH_NAME):
-            graph = self._db.graph(GRAPH_NAME)
-            edge_defs: list[dict] = graph.edge_definitions()  # type: ignore[assignment]
-            existing = {d["edge_collection"] for d in edge_defs}
-            expected = {d["edge_collection"] for d in GRAPH_EDGE_DEFINITIONS}
-            if existing != expected:
-                self._db.delete_graph(GRAPH_NAME, drop_collections=False)
-                self._db.create_graph(GRAPH_NAME, edge_definitions=GRAPH_EDGE_DEFINITIONS)
-                logger.info("graph_updated", name=GRAPH_NAME)
+        if self._db.has_graph(GRAPH_NAME):  # WHY: branch on whether the graph already exists
+            self._refresh_graph_if_stale()  # WHY: refresh edge defs when they drift from the spec
         else:
-            self._db.create_graph(GRAPH_NAME, edge_definitions=GRAPH_EDGE_DEFINITIONS)
-            logger.info("graph_created", name=GRAPH_NAME)
-        self._backfill_snapshot_edges()
+            self._db.create_graph(GRAPH_NAME, edge_definitions=GRAPH_EDGE_DEFINITIONS)  # WHY: create fresh graph
+            logger.info("graph_created", name=GRAPH_NAME)  # WHY: audit trail for graph creation
+        self._backfill_snapshot_edges()  # WHY: legacy snapshots may lack edges; fill them in on boot
 
-    def _ensure_collection(self, name: str) -> Any:
+    def _refresh_graph_if_stale(self) -> None:  # WHY: extracted helper trims _ensure_graph blocks
+        """Recreate the named graph when live edge definitions drift from the expected set."""
+        graph = self._db.graph(GRAPH_NAME)  # WHY: fetch handle so we can read current edge defs
+        edge_defs: list[dict] = graph.edge_definitions()  # type: ignore[assignment]  # WHY: live definitions from server
+        existing = {d["edge_collection"] for d in edge_defs}  # WHY: set-compare against the expected set
+        expected = {d["edge_collection"] for d in GRAPH_EDGE_DEFINITIONS}  # WHY: canonical expected edges
+        if existing == expected:  # WHY: guard clause avoids unnecessary teardown when in sync
+            return
+        self._db.delete_graph(GRAPH_NAME, drop_collections=False)  # WHY: preserve underlying collection data
+        self._db.create_graph(GRAPH_NAME, edge_definitions=GRAPH_EDGE_DEFINITIONS)  # WHY: recreate with new defs
+        logger.info("graph_updated", name=GRAPH_NAME)  # WHY: audit trail for graph refresh
+
+    def _ensure_collection(self, name: str) -> Any:  # WHY: idempotent collection creation with edge-awareness
         """Return collection, creating it if needed (edge-aware)."""
-        if not self._db.has_collection(name):
-            is_edge = name in _EDGE_COLLECTION_NAMES
-            self._db.create_collection(name, edge=is_edge)
-            logger.info("collection_created", name=name, edge=is_edge)
-        return self._db.collection(name)
+        if not self._db.has_collection(name):  # WHY: guard clause skips existing collections
+            is_edge = name in _EDGE_COLLECTION_NAMES  # WHY: edge collections require the edge=True flag
+            self._db.create_collection(name, edge=is_edge)  # WHY: create with correct edge flag
+            logger.info("collection_created", name=name, edge=is_edge)  # WHY: audit trail
+        return self._db.collection(name)  # WHY: return live handle for the caller
 
-    def write(self, data: list[dict], collection_name: str, strategy: dict) -> WriteResult:
+    def write(self, data: list[dict], collection_name: str, strategy: dict) -> WriteResult:  # WHY: public write API
         """Upsert documents using batch import for performance."""
-        collection = self._ensure_collection(collection_name)
-        if not data:
-            return WriteResult(
+        collection = self._ensure_collection(collection_name)  # WHY: guarantee target collection exists first
+        if not data:  # WHY: empty payload returns a trivially successful WriteResult
+            return WriteResult(  # WHY: zero-record success avoids downstream branches on empty input
                 success=True,
                 backend="arangodb",
                 records_written=0,
                 records_failed=0,
             )
-
-        docs = [self._prepare_document(r, strategy) for r in data]
-        written, failed = self._batch_import(collection, docs)
-
-        if written > 0:
-            self._populate_graph(data, collection_name)
-
-        return WriteResult(
+        docs = [self._prepare_document(r, strategy) for r in data]  # WHY: stamp keys and timestamps up-front
+        written, failed = self._batch_import(collection, docs)  # WHY: batched import with replace semantics
+        if written > 0:  # WHY: only rebuild graph when at least one row landed
+            self._populate_graph(data, collection_name)  # WHY: keep graph consistent with document state
+        return WriteResult(  # WHY: return typed result so router can aggregate across backends
             success=(failed == 0),
             backend="arangodb",
             records_written=written,
             records_failed=failed,
         )
 
-    def _batch_import(
-        self,
-        collection: Any,
-        docs: list[dict],
-    ) -> tuple[int, int]:
+    def _batch_import(self, collection: Any, docs: list[dict]) -> tuple[int, int]:  # WHY: chunked import primitive
         """Import documents in batches with on_duplicate=replace."""
-        written = 0
-        failed = 0
-        for start in range(0, len(docs), IMPORT_BATCH_SIZE):
-            batch = docs[start : start + IMPORT_BATCH_SIZE]
-            try:
-                result = collection.import_bulk(
-                    batch,
-                    on_duplicate="replace",
-                )
-                written += result.get("created", 0)
-                written += result.get("updated", 0)
-                failed += result.get("errors", 0)
-            except Exception as error:
-                failed += len(batch)
-                logger.warning(
-                    "batch_import_failed",
-                    collection=collection.name,
-                    batch_size=len(batch),
-                    error=str(error),
-                )
-        logger.info(
+        written, failed = self._sum_batch_results(collection, docs)  # WHY: delegate loop to helper for length
+        logger.info(  # WHY: single completion log per collection keeps output readable
             "import_complete",
             collection=collection.name,
             written=written,
             failed=failed,
         )
-        return written, failed
+        return written, failed  # WHY: caller aggregates written/failed across many collections
 
-    def _prepare_document(self, record: dict, strategy: dict) -> dict:
+    def _sum_batch_results(self, collection: Any, docs: list[dict]) -> tuple[int, int]:  # WHY: loop helper
+        """Iterate through IMPORT_BATCH_SIZE chunks and sum written/failed counters."""
+        written = 0  # WHY: running total of successfully imported docs
+        failed = 0  # WHY: running total of failed docs
+        for start in range(0, len(docs), IMPORT_BATCH_SIZE):  # WHY: window through docs in fixed-size chunks
+            batch = docs[start : start + IMPORT_BATCH_SIZE]  # WHY: slice out this batch
+            batch_written, batch_failed = self._import_single_batch(collection, batch)  # WHY: import one batch
+            written += batch_written  # WHY: accumulate successes
+            failed += batch_failed  # WHY: accumulate failures
+        return written, failed  # WHY: expose totals to caller
+
+    @staticmethod
+    def _import_single_batch(collection: Any, batch: list[dict]) -> tuple[int, int]:  # WHY: try/except localised
+        """Import a single batch and return (written, failed) counters for it."""
+        try:
+            result = collection.import_bulk(batch, on_duplicate="replace")  # WHY: python-arango bulk API
+        except Exception as error:  # WHY: any driver-side failure marks the whole batch as failed
+            logger.warning(  # WHY: preserve original diagnostics for operators
+                "batch_import_failed",
+                collection=collection.name,
+                batch_size=len(batch),
+                error=str(error),
+            )
+            return 0, len(batch)  # WHY: nothing succeeded so all rows count as failed
+        written = result.get("created", 0) + result.get("updated", 0)  # WHY: driver reports created+updated
+        failed = result.get("errors", 0)  # WHY: driver reports errors separately
+        return written, failed  # WHY: hand counters back to the aggregator
+
+    def _prepare_document(self, record: dict, strategy: dict) -> dict:  # WHY: shape a raw record for storage
         """Add _key, timestamps, and clear soft-delete flag."""
-        doc = dict(record)
-        strategy_type = strategy.get("type", "natural_pk")
-        primary_keys = strategy.get("primary_key", ["id"])
+        doc = dict(record)  # WHY: copy so the caller's dict is never mutated
+        strategy_type = strategy.get("type", "natural_pk")  # WHY: default to natural PK when unspecified
+        primary_keys = strategy.get("primary_key", ["id"])  # WHY: default to 'id' when unspecified
+        doc["_key"] = self._compute_key(doc, strategy_type, primary_keys)  # WHY: table-driven key selection
+        now = int(time.time())  # WHY: single timestamp for both timestamp fields
+        doc["_misthelper_updated_at"] = now  # WHY: track last write for staleness checks
+        doc["_misthelper_deleted_at"] = None  # WHY: explicitly clear soft-delete on any fresh write
+        return doc  # WHY: return storage-ready document
 
-        if strategy_type == "auto_increment_with_unique":
-            doc["_key"] = str(uuid.uuid4())
-        else:
-            key_value = doc.get(primary_keys[0], str(uuid.uuid4()))
-            doc["_key"] = str(key_value)
-
-        doc["_misthelper_updated_at"] = int(time.time())
-        doc["_misthelper_deleted_at"] = None
-        return doc
+    @staticmethod
+    def _compute_key(doc: dict, strategy_type: str, primary_keys: list[str]) -> str:  # WHY: key resolution helper
+        """Return the _key that _prepare_document should assign for this strategy."""
+        if strategy_type == "auto_increment_with_unique":  # WHY: auto-increment strategies always get UUIDs
+            return str(uuid.uuid4())  # WHY: unique key when no natural PK is available
+        key_value = doc.get(primary_keys[0], str(uuid.uuid4()))  # WHY: fall back to UUID when PK is missing
+        return str(key_value)  # WHY: ArangoDB keys must be strings
 
     # -- Graph population ------------------------------------------------
 
-    def _populate_graph(self, data: list[dict], collection_name: str) -> None:
+    def _populate_graph(self, data: list[dict], collection_name: str) -> None:  # WHY: rebuild graph after writes
         """Populate graph vertex and edge collections from raw API data."""
-        mapping = COLLECTION_VERTEX_MAP.get(collection_name)
-        if not mapping:
+        mapping = COLLECTION_VERTEX_MAP.get(collection_name)  # WHY: table-driven dispatch to graph rules
+        if not mapping:  # WHY: skip collections with no graph mapping
             return
+        vertex_col_name = mapping["vertex"]  # WHY: destination vertex collection
+        key_field = mapping["key_field"]  # WHY: field used to build vertex _key
+        vertex_col = self._ensure_collection(vertex_col_name)  # WHY: ensure destination vertex collection exists
+        vertices = self._build_vertices(data, key_field)  # WHY: shape vertex docs from raw records
+        if vertices:  # WHY: only import when we actually have vertices to write
+            self._batch_import(vertex_col, vertices)  # WHY: bulk import the vertices
+        self._ensure_org_vertex(data)  # WHY: every graph write also anchors the org vertex
+        self._ensure_target_vertices(data, mapping)  # WHY: create stub vertices for FK targets lacking API pulls
+        self._import_edge_docs(data, key_field, mapping)  # WHY: build and import edges declared by the mapping
+        if mapping.get("template_edges"):  # WHY: sites need template->site edges wired separately
+            self._build_template_edges(data)  # WHY: hydrate template->site edges from FK fields
+        logger.info("graph_populated", collection=collection_name)  # WHY: audit event per collection
 
-        vertex_col_name = mapping["vertex"]
-        key_field = mapping["key_field"]
-        vertex_col = self._ensure_collection(vertex_col_name)
-
-        vertices = self._build_vertices(data, key_field)
-        if vertices:
-            self._batch_import(vertex_col, vertices)
-
-        self._ensure_org_vertex(data)
-        self._ensure_target_vertices(data, mapping)
-        self._import_edge_docs(data, key_field, mapping)
-
-        if mapping.get("template_edges"):
-            self._build_template_edges(data)
-
-        logger.info("graph_populated", collection=collection_name)
-
-    def _import_edge_docs(
-        self,
-        data: list[dict],
-        key_field: str,
-        mapping: dict[str, Any],
-    ) -> None:
+    def _import_edge_docs(self, data: list[dict], key_field: str, mapping: dict[str, Any]) -> None:  # WHY: helper
         """Build and import edge documents for a mapping."""
-        for edge_config in mapping.get("edges", []):
-            edge_docs = self._build_edges(data, key_field, edge_config)
-            if edge_docs:
-                edge_col = self._ensure_collection(edge_config["edge_col"])
-                self._batch_import(edge_col, edge_docs)
+        for edge_config in mapping.get("edges", []):  # WHY: each mapping may declare many edge builders
+            edge_docs = self._build_edges(data, key_field, edge_config)  # WHY: build docs from this config
+            if not edge_docs:  # WHY: guard clause skips empty batches
+                continue
+            edge_col = self._ensure_collection(edge_config["edge_col"])  # WHY: ensure destination edge collection
+            self._batch_import(edge_col, edge_docs)  # WHY: import the batch
 
-    def _build_vertices(self, data: list[dict], key_field: str) -> list[dict]:
+    def _build_vertices(self, data: list[dict], key_field: str) -> list[dict]:  # WHY: shape vertex documents
         """Build full vertex documents from raw API records.
 
         Stores the complete API response in the vertex so graph
         traversals return rich data without joining back to the
         document collection.
         """
-        vertices: list[dict] = []
-        for record in data:
-            key_value = record.get(key_field)
-            if not key_value:
+        vertices: list[dict] = []  # WHY: accumulator for output list
+        for record in data:  # WHY: shape one vertex per record with a valid key
+            key_value = record.get(key_field)  # WHY: identify record via its declared key field
+            if not key_value:  # WHY: guard clause skips records without an identifying key
                 continue
-            vertex = dict(record)
-            vertex["_key"] = self._sanitize_key(str(key_value))
-            vertex["_misthelper_updated_at"] = int(time.time())
-            vertices.append(vertex)
-        return vertices
+            vertex = dict(record)  # WHY: copy so we can safely mutate _key and timestamp
+            vertex["_key"] = self._sanitize_key(str(key_value))  # WHY: keys must satisfy Arango rules
+            vertex["_misthelper_updated_at"] = int(time.time())  # WHY: stamp for staleness tracking
+            vertices.append(vertex)  # WHY: emit shaped vertex
+        return vertices  # WHY: caller batch-imports the list
 
-    def _build_edges(
+    def _build_edges(  # WHY: build edge documents with deterministic keys for idempotency
         self,
         data: list[dict],
         key_field: str,
         edge_config: dict[str, str],
     ) -> list[dict]:
         """Build edge documents with deterministic keys for idempotent upserts."""
-        edges: list[dict] = []
-        from_col = edge_config["from_col"]
-        to_col = edge_config.get("to_col", "")
-        from_field = edge_config["from_field"]
-        to_field = edge_config.get("to_field", key_field)
+        to_col = edge_config.get("to_col", "")  # WHY: destination collection identifier
+        to_key_lookup = self._build_key_lookup(to_col, edge_config.get("to_key_lookup", ""))  # WHY: FK->key map
+        edges: list[dict] = []  # WHY: accumulator for output edges
+        for record in data:  # WHY: emit zero or more edges per record
+            edges.extend(self._edges_for_record(record, key_field, edge_config, to_key_lookup))  # WHY: helper
+        return edges  # WHY: return combined edges for batch import
 
-        to_key_lookup = self._build_key_lookup(to_col, edge_config.get("to_key_lookup", ""))
-
-        for record in data:
-            from_value = self._resolve_nested_field(record, from_field) if "." in from_field else record.get(from_field)
-            to_raw = self._resolve_nested_field(record, to_field) if "." in to_field else record.get(to_field)
-            if not from_value or not to_raw:
-                continue
-            to_values = to_raw if isinstance(to_raw, list) else [to_raw]
-            for to_value in to_values:
-                if not to_value:
-                    continue
-                to_key = to_key_lookup.get(str(to_value), str(to_value))
-                from_id = f"{from_col}/{self._sanitize_key(str(from_value))}"
-                to_id = f"{to_col}/{self._sanitize_key(to_key)}"
-                edges.append(
-                    {
-                        "_key": self._edge_key(from_id, to_id),
-                        "_from": from_id,
-                        "_to": to_id,
-                        "_misthelper_updated_at": int(time.time()),
-                    }
-                )
-        return edges
-
-    def _build_key_lookup(self, collection_name: str, lookup_field: str) -> dict[str, str]:
-        """Build a lookup dict mapping a field value to vertex _key."""
-        if not lookup_field:
-            return {}
-        try:
-            col = self._db.collection(collection_name)
-            cursor = col.all()
-            if cursor is None:
-                return {}
-            lookup: dict[str, str] = {}
-            for doc in cursor:  # type: ignore[union-attr]
-                if lookup_field in doc:
-                    lookup[str(doc[lookup_field])] = doc["_key"]
-            return lookup
-        except Exception:
-            return {}
-
-    def _ensure_org_vertex(self, data: list[dict]) -> None:
-        """Create a single org vertex from the first record's org_id."""
-        for record in data:
-            org_id = record.get("org_id")
-            if org_id:
-                org_col = self._ensure_collection("orgs")
-                org_doc = {
-                    "_key": self._sanitize_key(str(org_id)),
-                    "org_id": org_id,
-                    "_misthelper_updated_at": int(time.time()),
-                }
-                try:
-                    org_col.import_bulk([org_doc], on_duplicate="replace")
-                except Exception as error:
-                    logger.warning("org_vertex_failed", error=str(error))
-                return
-
-    def _ensure_target_vertices(self, data: list[dict], mapping: dict) -> None:
-        """Create stub vertices for FK targets that lack their own API call."""
-        for fk_field, vertex_col_name in mapping.get("ensure_target_vertices", []):
-            col = self._ensure_collection(vertex_col_name)
-            stubs: list[dict] = []
-            for record in data:
-                raw = self._resolve_nested_field(record, fk_field) if "." in fk_field else record.get(fk_field)
-                if not raw:
-                    continue
-                values = raw if isinstance(raw, list) else [raw]
-                for value in values:
-                    if value:
-                        stubs.append(
-                            {
-                                "_key": self._sanitize_key(str(value)),
-                                "_misthelper_updated_at": int(time.time()),
-                            }
-                        )
-            if stubs:
-                self._batch_import(col, stubs)
-
-    def _build_template_edges(self, data: list[dict]) -> None:
-        """Create TemplateAssignedToSite edges from site template_id fields."""
-        edge_col = self._ensure_collection("TemplateAssignedToSite")
-        edges: list[dict] = []
-        for record in data:
-            site_id = record.get("id")
-            if not site_id:
-                continue
-            for template_field, template_type in TEMPLATE_ID_FIELDS:
-                template_id = record.get(template_field)
-                if not template_id:
-                    continue
-                from_id = f"templates/{self._sanitize_key(str(template_id))}"
-                to_id = f"sites/{self._sanitize_key(str(site_id))}"
-                edges.append(
-                    {
-                        "_key": self._edge_key(from_id, to_id),
-                        "_from": from_id,
-                        "_to": to_id,
-                        "template_type": template_type,
-                        "_misthelper_updated_at": int(time.time()),
-                    }
-                )
-        if edges:
-            self._batch_import(edge_col, edges)
+    def _edges_for_record(  # WHY: per-record helper flattens the previously-nested loops
+        self,
+        record: dict,
+        key_field: str,
+        edge_config: dict[str, str],
+        to_key_lookup: dict[str, str],
+    ) -> list[dict]:
+        """Return zero or more edge docs for a single source record."""
+        from_value = self._resolve_field(record, edge_config["from_field"])  # WHY: source endpoint
+        if not from_value:  # WHY: guard clause exits when source is missing
+            return []
+        to_field = edge_config.get("to_field", key_field)  # WHY: destination-side field, defaulting to record key
+        to_values = self._as_nonempty_list(self._resolve_field(record, to_field))  # WHY: normalized non-empty list
+        if not to_values:  # WHY: guard clause exits when destination is missing/empty
+            return []
+        from_col = edge_config["from_col"]  # WHY: source collection identifier
+        to_col = edge_config.get("to_col", "")  # WHY: destination collection identifier
+        return [  # WHY: comprehension keeps the helper compact and CC low
+            self._build_edge_doc(from_col, from_value, to_col, to_key_lookup.get(str(v), str(v))) for v in to_values
+        ]
 
     @staticmethod
-    def _edge_key(from_id: str, to_id: str) -> str:
+    def _as_nonempty_list(raw: Any) -> list[Any]:  # WHY: shared normalizer used by edges and stubs
+        """Return raw as a list with falsy entries dropped; empty list when raw is falsy."""
+        if not raw:  # WHY: guard clause propagates a missing/empty value as an empty list
+            return []
+        values = raw if isinstance(raw, list) else [raw]  # WHY: normalize scalar to list
+        return [v for v in values if v]  # WHY: drop falsy list entries
+
+    def _build_edge_doc(self, from_col: str, from_value: Any, to_col: str, to_key: str) -> dict:  # WHY: build one
+        """Assemble a single edge document with deterministic key and timestamp."""
+        from_id = f"{from_col}/{self._sanitize_key(str(from_value))}"  # WHY: canonical Arango vertex id
+        to_id = f"{to_col}/{self._sanitize_key(to_key)}"  # WHY: canonical Arango vertex id
+        return {  # WHY: shape a standard edge document
+            "_key": self._edge_key(from_id, to_id),  # WHY: deterministic key so re-runs upsert cleanly
+            "_from": from_id,  # WHY: Arango-required _from
+            "_to": to_id,  # WHY: Arango-required _to
+            "_misthelper_updated_at": int(time.time()),  # WHY: staleness stamp
+        }
+
+    def _resolve_field(self, record: dict, field: str) -> Any:  # WHY: dispatcher for nested vs. flat field access
+        """Return the record value for a field, supporting dot-separated nested paths."""
+        if "." in field:  # WHY: guard clause routes nested paths through the recursive helper
+            return self._resolve_nested_field(record, field)
+        return record.get(field)  # WHY: flat field lookup
+
+    def _build_key_lookup(self, collection_name: str, lookup_field: str) -> dict[str, str]:  # WHY: FK->_key map
+        """Build a lookup dict mapping a field value to vertex _key."""
+        if not lookup_field:  # WHY: guard clause returns empty when caller opted out
+            return {}
+        cursor = self._safe_all(collection_name)  # WHY: helper hides driver errors and None cursors
+        if cursor is None:  # WHY: guard clause exits when the collection is missing or empty
+            return {}
+        return {str(doc[lookup_field]): doc["_key"] for doc in cursor if lookup_field in doc}  # WHY: build map
+
+    def _safe_all(self, collection_name: str) -> Any:  # WHY: driver returns Any and can raise on missing coll
+        """Return an iterator over all docs in a collection, or None if unavailable."""
+        try:
+            col = self._db.collection(collection_name)  # WHY: driver call may raise if collection missing
+            return col.all()  # WHY: cursor over the collection
+        except Exception:  # WHY: preserve original 'swallow all errors' contract for compat
+            return None
+
+    def _ensure_org_vertex(self, data: list[dict]) -> None:  # WHY: derive org vertex from first-with-org record
+        """Create a single org vertex from the first record's org_id."""
+        for record in data:  # WHY: scan until we find one record carrying org_id
+            org_id = record.get("org_id")  # WHY: not every record type carries org_id
+            if not org_id:  # WHY: guard clause skips records without org_id
+                continue
+            self._import_org_doc(str(org_id))  # WHY: import single org doc using the id we found
+            return  # WHY: only one org vertex per write is needed
+
+    def _import_org_doc(self, org_id: str) -> None:  # WHY: single-doc import isolated for testability
+        """Import a single org vertex, tolerating driver failures for observability."""
+        org_col = self._ensure_collection("orgs")  # WHY: ensure the org vertex collection exists
+        org_doc = {  # WHY: minimal doc shape - full record already lives in the domain collection
+            "_key": self._sanitize_key(org_id),
+            "org_id": org_id,
+            "_misthelper_updated_at": int(time.time()),
+        }
+        try:
+            org_col.import_bulk([org_doc], on_duplicate="replace")  # WHY: idempotent upsert via bulk API
+        except Exception as error:  # WHY: driver errors are logged, not raised, to keep write path resilient
+            logger.warning("org_vertex_failed", error=str(error))  # WHY: preserve original diagnostics
+
+    def _ensure_target_vertices(self, data: list[dict], mapping: dict) -> None:  # WHY: create FK stub vertices
+        """Create stub vertices for FK targets that lack their own API call."""
+        for fk_field, vertex_col_name in mapping.get("ensure_target_vertices", []):  # WHY: iterate declared FKs
+            stubs = self._collect_stubs(data, fk_field)  # WHY: build the stub-doc list for this FK
+            if not stubs:  # WHY: guard clause skips empty stub lists
+                continue
+            col = self._ensure_collection(vertex_col_name)  # WHY: ensure destination vertex collection exists
+            self._batch_import(col, stubs)  # WHY: bulk upsert the stubs
+
+    def _collect_stubs(self, data: list[dict], fk_field: str) -> list[dict]:  # WHY: helper isolates loop body
+        """Return stub vertex docs for every FK value found under fk_field."""
+        stubs: list[dict] = []  # WHY: accumulator for output
+        for record in data:  # WHY: scan every record for FK values
+            values = self._as_nonempty_list(self._resolve_field(record, fk_field))  # WHY: normalize FK values
+            stubs.extend(self._make_stub(v) for v in values)  # WHY: append one stub per non-empty FK value
+        return stubs  # WHY: caller batch-imports the accumulated stubs
+
+    @staticmethod
+    def _make_stub(value: Any) -> dict:  # WHY: single-place shape for FK stubs
+        """Return a minimal vertex stub document for the given FK value."""
+        return {  # WHY: bare-minimum vertex - full data will be filled in when its own API pulls run
+            "_key": ArangoDBWriter._sanitize_key(str(value)),
+            "_misthelper_updated_at": int(time.time()),
+        }
+
+    def _build_template_edges(self, data: list[dict]) -> None:  # WHY: wire template->site edges from FK fields
+        """Create TemplateAssignedToSite edges from site template_id fields."""
+        edges: list[dict] = []  # WHY: accumulator for output edges
+        for record in data:  # WHY: each site record may contribute several template edges
+            site_id = record.get("id")  # WHY: template edges point at the site's own id
+            if not site_id:  # WHY: guard clause skips records without an id
+                continue
+            edges.extend(self._template_edges_for_site(record, str(site_id)))  # WHY: helper builds edges
+        if not edges:  # WHY: guard clause avoids ensure_collection when there is nothing to import
+            return
+        edge_col = self._ensure_collection("TemplateAssignedToSite")  # WHY: ensure destination edge collection
+        self._batch_import(edge_col, edges)  # WHY: bulk upsert of collected edges
+
+    def _template_edges_for_site(self, record: dict, site_id: str) -> list[dict]:  # WHY: per-site helper
+        """Return template->site edges for every populated template FK on a site record."""
+        to_id = f"sites/{self._sanitize_key(site_id)}"  # WHY: destination is the site vertex
+        edges: list[dict] = []  # WHY: accumulator for output
+        for template_field, template_type in TEMPLATE_ID_FIELDS:  # WHY: table-driven over supported FK fields
+            template_id = record.get(template_field)  # WHY: read the template FK
+            if not template_id:  # WHY: guard clause skips absent FKs
+                continue
+            from_id = f"templates/{self._sanitize_key(str(template_id))}"  # WHY: source is the template vertex
+            edges.append(  # WHY: append shaped edge with template_type label
+                {
+                    "_key": self._edge_key(from_id, to_id),
+                    "_from": from_id,
+                    "_to": to_id,
+                    "template_type": template_type,
+                    "_misthelper_updated_at": int(time.time()),
+                }
+            )
+        return edges  # WHY: caller aggregates across records
+
+    @staticmethod
+    def _edge_key(from_id: str, to_id: str) -> str:  # WHY: deterministic edge key derivation
         """Deterministic edge key from endpoints for idempotent upserts."""
-        return hashlib.sha256(
+        return hashlib.sha256(  # WHY: 16-char sha256 prefix is stable and short enough for Arango
             f"{from_id}:{to_id}".encode(),
         ).hexdigest()[:16]
 
     @staticmethod
-    def _resolve_nested_field(record: dict, field_path: str) -> Any:
+    def _resolve_nested_field(record: dict, field_path: str) -> Any:  # WHY: dot-path resolver
         """Resolve dot-separated field paths (e.g., 'matching.site_ids')."""
-        parts = field_path.split(".")
-        value: Any = record
-        for part in parts:
-            if isinstance(value, dict):
-                value = value.get(part)
-            else:
+        parts = field_path.split(".")  # WHY: split path into successive keys
+        value: Any = record  # WHY: walk starts at the record root
+        for part in parts:  # WHY: descend through each dot-separated key
+            if not isinstance(value, dict):  # WHY: guard clause: stop at first non-dict node
                 return None
-        return value
+            value = value.get(part)  # WHY: descend one level
+        return value  # WHY: final leaf value (or None when missing)
 
     @staticmethod
-    def _sanitize_key(key: str) -> str:
+    def _sanitize_key(key: str) -> str:  # WHY: keep Arango happy with invalid-char stripping
         """Replace characters invalid in ArangoDB document keys."""
-        return key.replace("/", "_").replace(":", "_")
+        return key.replace("/", "_").replace(":", "_")  # WHY: '/' and ':' collide with _id and edge format
 
-    def mark_absent_as_deleted(self, collection_name: str, current_keys: set[str]) -> None:
+    def mark_absent_as_deleted(self, collection_name: str, current_keys: set[str]) -> None:  # WHY: soft-delete
         """Soft-delete documents whose keys are absent from current data."""
-        if not self._db.has_collection(collection_name):
+        if not self._db.has_collection(collection_name):  # WHY: guard clause skips missing collections
             return
+        collection = self._db.collection(collection_name)  # WHY: driver handle for updates
+        now = int(time.time())  # WHY: single timestamp shared by every soft-delete in this pass
+        for doc in collection.all():  # type: ignore[union-attr]  # WHY: scan every doc for absent keys
+            self._soft_delete_if_absent(collection, collection_name, doc, current_keys, now)  # WHY: helper
 
-        collection = self._db.collection(collection_name)
-        now = int(time.time())
+    @staticmethod
+    def _soft_delete_if_absent(  # WHY: per-doc helper isolates the mutation and its logging
+        collection: Any,
+        collection_name: str,
+        doc: dict,
+        current_keys: set[str],
+        now: int,
+    ) -> None:
+        """Mark a single doc as soft-deleted if its key is not in current_keys."""
+        key = doc.get("_key")  # WHY: read primary key from the doc
+        if key in current_keys or doc.get("_misthelper_deleted_at"):  # WHY: guard clause skips live/already-gone
+            return
+        collection.update({"_key": key, "_misthelper_deleted_at": now})  # WHY: driver-side partial update
+        logger.debug("soft_deleted", collection=collection_name, key=key)  # WHY: audit each soft-delete
 
-        for doc in collection.all():  # type: ignore[union-attr]
-            key = doc.get("_key")
-            already_deleted = doc.get("_misthelper_deleted_at")
-            if key not in current_keys and not already_deleted:
-                collection.update({"_key": key, "_misthelper_deleted_at": now})
-                logger.debug("soft_deleted", collection=collection_name, key=key)
-
-    def snapshot(
+    def snapshot(  # WHY: store a config snapshot when the payload hash changed
         self,
         entity_type: str,
         entity_id: str,
@@ -4247,99 +4301,129 @@ class ArangoDBWriter:
         trigger: str = "api_pull",
     ) -> bool:
         """Store a config snapshot, skipping if hash is unchanged."""
-        if config_hash is None:
-            config_hash = hashlib.sha256(json.dumps(config_body, sort_keys=True).encode()).hexdigest()
-
-        collection = self._ensure_collection("config_snapshots")
-
-        cursor = self._db.aql.execute(
-            "FOR doc IN config_snapshots FILTER doc.entity_id == @eid SORT doc.timestamp DESC LIMIT 1 RETURN doc",
-            bind_vars={"eid": entity_id},
-        )
-        for existing in cursor:  # type: ignore[union-attr]
-            if existing.get("config_hash") == config_hash:
-                return False
-
-        snapshot_doc = {
-            "_key": str(uuid.uuid4()),
-            "entity_type": entity_type,
-            "entity_id": entity_id,
-            "timestamp": int(time.time()),
-            "config_hash": config_hash,
-            "config_body": config_body,
-            "trigger": trigger,
-            "_misthelper_updated_at": int(time.time()),
-        }
-        collection.insert(snapshot_doc)
-        self._create_snapshot_edge(str(snapshot_doc["_key"]), entity_type, entity_id)
-        logger.info(
+        effective_hash = config_hash or self._hash_body(config_body)  # WHY: default to canonical body hash
+        collection = self._ensure_collection("config_snapshots")  # WHY: ensure destination collection exists
+        if self._latest_snapshot_hash(entity_id) == effective_hash:  # WHY: skip when unchanged
+            return False
+        snapshot_doc = self._build_snapshot_doc(entity_type, entity_id, effective_hash, config_body, trigger)
+        collection.insert(snapshot_doc)  # WHY: durable snapshot record
+        self._create_snapshot_edge(str(snapshot_doc["_key"]), entity_type, entity_id)  # WHY: link to entity
+        logger.info(  # WHY: audit event including trigger
             "snapshot_stored",
             entity_type=entity_type,
             entity_id=entity_id,
             trigger=trigger,
         )
-        return True
+        return True  # WHY: signal a new snapshot was written
 
-    def _create_snapshot_edge(
+    @staticmethod
+    def _hash_body(config_body: dict) -> str:  # WHY: canonical hash helper
+        """Return a stable sha256 hex digest of a config body."""
+        return hashlib.sha256(json.dumps(config_body, sort_keys=True).encode()).hexdigest()
+
+    def _latest_snapshot_hash(self, entity_id: str) -> str | None:  # WHY: dedupe check helper
+        """Return the hash of the most-recent snapshot for entity_id (or None)."""
+        cursor = self._db.aql.execute(  # WHY: AQL query bounded to LIMIT 1 for speed
+            "FOR doc IN config_snapshots FILTER doc.entity_id == @eid SORT doc.timestamp DESC LIMIT 1 RETURN doc",
+            bind_vars={"eid": entity_id},
+        )
+        for existing in cursor:  # type: ignore[union-attr]  # WHY: cursor yields at most one doc
+            return existing.get("config_hash")  # WHY: return hash from newest snapshot
+        return None  # WHY: entity has no prior snapshots
+
+    @staticmethod
+    def _build_snapshot_doc(  # WHY: builder helper isolates document shape
+        entity_type: str,
+        entity_id: str,
+        config_hash: str,
+        config_body: dict,
+        trigger: str,
+    ) -> dict:
+        """Assemble the persisted snapshot document."""
+        now = int(time.time())  # WHY: one timestamp shared by timestamp and _misthelper_updated_at
+        return {  # WHY: shape stored in config_snapshots
+            "_key": str(uuid.uuid4()),
+            "entity_type": entity_type,
+            "entity_id": entity_id,
+            "timestamp": now,
+            "config_hash": config_hash,
+            "config_body": config_body,
+            "trigger": trigger,
+            "_misthelper_updated_at": now,
+        }
+
+    def _create_snapshot_edge(  # WHY: link a snapshot doc to its entity via an edge
         self,
         snapshot_key: str,
         entity_type: str,
         entity_id: str,
     ) -> None:
         """Create a ConfigSnapshotForEntity edge linking snapshot to entity."""
-        vertex_col = ENTITY_TYPE_TO_VERTEX.get(entity_type)
-        if not vertex_col:
+        vertex_col = ENTITY_TYPE_TO_VERTEX.get(entity_type)  # WHY: entity type declares target vertex collection
+        if not vertex_col:  # WHY: guard clause skips entity types not mapped to vertices
             return
-        from_id = f"config_snapshots/{self._sanitize_key(snapshot_key)}"
-        to_id = f"{vertex_col}/{self._sanitize_key(str(entity_id))}"
-        edge_col = self._ensure_collection("ConfigSnapshotForEntity")
-        edge_doc = {
-            "_key": self._edge_key(from_id, to_id),
+        from_id = f"config_snapshots/{self._sanitize_key(snapshot_key)}"  # WHY: canonical Arango vertex id
+        to_id = f"{vertex_col}/{self._sanitize_key(str(entity_id))}"  # WHY: canonical Arango vertex id
+        edge_col = self._ensure_collection("ConfigSnapshotForEntity")  # WHY: ensure edge collection exists
+        edge_doc = self._snapshot_edge_doc(from_id, to_id, entity_type)  # WHY: shape helper isolates the dict
+        try:
+            edge_col.import_bulk([edge_doc], on_duplicate="replace")  # WHY: idempotent upsert
+        except Exception as error:  # WHY: driver errors are logged, not raised, to keep write path resilient
+            logger.warning("snapshot_edge_failed", error=str(error))  # WHY: preserve original diagnostics
+
+    @staticmethod
+    def _snapshot_edge_doc(from_id: str, to_id: str, entity_type: str) -> dict:  # WHY: single-place shape
+        """Return the edge document body for a snapshot->entity edge."""
+        return {  # WHY: labelled edge shape reused by insert and backfill paths
+            "_key": ArangoDBWriter._edge_key(from_id, to_id),
             "_from": from_id,
             "_to": to_id,
             "entity_type": entity_type,
             "_misthelper_updated_at": int(time.time()),
         }
-        try:
-            edge_col.import_bulk([edge_doc], on_duplicate="replace")
-        except Exception as error:
-            logger.warning("snapshot_edge_failed", error=str(error))
 
-    def _backfill_snapshot_edges(self) -> None:
+    def _backfill_snapshot_edges(self) -> None:  # WHY: create edges for pre-existing edge-less snapshots
         """Create edges for existing snapshots that lack them."""
-        if not self._db.has_collection("config_snapshots"):
+        if not self._db.has_collection("config_snapshots"):  # WHY: guard clause skips when no snapshots exist
             return
-        edge_col = self._ensure_collection("ConfigSnapshotForEntity")
-        try:
-            if edge_col.count() >= self._db.collection("config_snapshots").count():
-                return
-        except TypeError:
+        edge_col = self._ensure_collection("ConfigSnapshotForEntity")  # WHY: ensure destination edge collection
+        if self._backfill_already_done(edge_col):  # WHY: skip when counts already match
             return
+        edges = self._collect_backfill_edges()  # WHY: build edges for all snapshots
+        if not edges:  # WHY: guard clause when there is nothing to import
+            return
+        self._batch_import(edge_col, edges)  # WHY: bulk upsert
+        logger.info("snapshot_edges_backfilled", count=len(edges))  # WHY: audit trail
 
-        cursor = self._db.aql.execute(
+    def _backfill_already_done(self, edge_col: Any) -> bool:  # WHY: cheap dedupe of the expensive scan
+        """Return True when edge count already meets snapshot count."""
+        try:
+            return bool(edge_col.count() >= self._db.collection("config_snapshots").count())
+        except TypeError:  # WHY: mocked collections in tests return non-comparable counts
+            return True
+
+    def _collect_backfill_edges(self) -> list[dict]:  # WHY: helper isolates the AQL scan and edge shaping
+        """Return all snapshot->entity edges implied by current snapshot rows."""
+        cursor = self._db.aql.execute(  # WHY: minimal projection reduces network traffic
             "FOR s IN config_snapshots RETURN {  key: s._key, entity_type: s.entity_type, entity_id: s.entity_id}",
         )
-        edges: list[dict] = []
-        for snap in cursor:  # type: ignore[union-attr]
-            vertex_col = ENTITY_TYPE_TO_VERTEX.get(snap["entity_type"] or "")
-            if not vertex_col or not snap["entity_id"]:
-                continue
-            from_id = f"config_snapshots/{self._sanitize_key(snap['key'])}"
-            to_id = f"{vertex_col}/{self._sanitize_key(str(snap['entity_id']))}"
-            edges.append(
-                {
-                    "_key": self._edge_key(from_id, to_id),
-                    "_from": from_id,
-                    "_to": to_id,
-                    "entity_type": snap["entity_type"],
-                    "_misthelper_updated_at": int(time.time()),
-                }
-            )
-        if edges:
-            self._batch_import(edge_col, edges)
-            logger.info("snapshot_edges_backfilled", count=len(edges))
+        edges: list[dict] = []  # WHY: accumulator for output
+        for snap in cursor:  # type: ignore[union-attr]  # WHY: iterate every snapshot row
+            edge = self._backfill_edge_for(snap)  # WHY: helper returns None when snap is unmappable
+            if edge is not None:  # WHY: guard clause skips unmappable snapshots
+                edges.append(edge)  # WHY: accumulate mappable edges
+        return edges  # WHY: caller batches these into a single import
 
-    def close(self) -> None:
+    def _backfill_edge_for(self, snap: dict) -> dict | None:  # WHY: single-snap edge builder
+        """Return the edge doc for a snapshot row, or None if the target vertex is unknown."""
+        vertex_col = ENTITY_TYPE_TO_VERTEX.get(snap["entity_type"] or "")  # WHY: table-driven vertex lookup
+        if not vertex_col or not snap["entity_id"]:  # WHY: guard clause skips unmappable rows
+            return None
+        from_id = f"config_snapshots/{self._sanitize_key(snap['key'])}"  # WHY: canonical Arango vertex id
+        to_id = f"{vertex_col}/{self._sanitize_key(str(snap['entity_id']))}"  # WHY: canonical Arango vertex id
+        return self._snapshot_edge_doc(from_id, to_id, snap["entity_type"])  # WHY: shared shape helper
+
+    def close(self) -> None:  # WHY: release underlying HTTP session
         """Close the ArangoDB client connection."""
-        self._client.close()
-        logger.info("arango_writer_closed")
+        self._client.close()  # WHY: python-arango releases pooled connections here
+        logger.info("arango_writer_closed")  # WHY: audit trail on shutdown
