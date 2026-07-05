@@ -63,6 +63,19 @@ except ImportError:  # pragma: no cover -- exercised only on hosts without Playw
 _KEY_JITTER = secrets.SystemRandom()  # Per-keystroke delay source; unpredictable cadence dodges bot heuristics.
 _THINKING_PAUSE_EVERY = 7  # Add an occasional longer "thinking" pause every N characters while typing.
 _SUITE_GRACE_S = 2.0  # Extra seconds (after the house number matches) to let a typed suite/unit land in the dropdown.
+_POLL_INTERVAL_MS = 200  # WHY: cooperative pause between suggestion-list re-reads while waiting for a fresh row.
+_CLEAR_SETTLE_MS = 150  # WHY: brief pause after clearing the field so Google tears down the stale dropdown.
+_LOCATE_TIMEOUT_FLOOR_MS = 1000  # WHY: minimum per-selector budget when splitting the locate timeout across candidates.
+_DEFAULT_CDP_PORT = 9222  # WHY: standard Chrome/Edge remote-debugging port when the endpoint carries no digits.
+_DASHBOARD_URL_DEFAULT = "https://manage.mist.com/"  # WHY: default landing page when spawning a debuggable browser.
+_EDGE_EXE_NAME = "msedge.exe"  # WHY: Windows Edge binary name probed under both ProgramFiles roots.
+_EDGE_INSTALL_TAIL = (
+    "Microsoft",
+    "Edge",
+    "Application",
+    _EDGE_EXE_NAME,
+)  # WHY: path tail under each ProgramFiles root.
+_PROFILE_PREFIX = "misthelper-edge-"  # WHY: throwaway profile dir prefix so we never touch the operator's real profile.
 
 # --- Selector constants (captured 2026-06-29; re-verify if the Mist dashboard UI changes) ---
 # Google Places Autocomplete attaches ``pac-target-input`` to the bound input and
@@ -153,7 +166,7 @@ class MistUIGeocoder:
         """Parse the TCP port from the configured CDP endpoint (default 9222)."""
         tail = self._config.cdp_endpoint.rsplit(":", 1)[-1]  # Text after the final colon.
         digits = "".join(ch for ch in tail if ch.isdigit())  # Keep only the numeric run.
-        return int(digits) if digits else 9222  # Parsed port or the documented default.
+        return int(digits) if digits else _DEFAULT_CDP_PORT  # WHY: parsed port or the documented default.
 
     def _await_spawn_login(self) -> None:
         """Block until the operator has logged in and opened a site's Location Search page."""
@@ -279,7 +292,7 @@ class MistUIGeocoder:
         """Focus the field, clear any stale value/dropdown, then type with human-like timing."""
         field.click()  # Focus so Google binds keystrokes.
         field.fill("")  # Clear any previous text.
-        self._settle(page, 150)  # Let Google tear down the previous dropdown before typing.
+        self._settle(page, _CLEAR_SETTLE_MS)  # WHY: let Google tear down the previous dropdown before typing.
         self._type_humanlike(field, query)  # Randomized per-key cadence to avoid bot/throttle heuristics.
 
     def _type_humanlike(self, field: Any, query: str) -> None:
@@ -304,42 +317,82 @@ class MistUIGeocoder:
         return delay  # Seconds to sleep before the next keystroke.
 
     def _read_fresh_suggestions(self, page: Any, expected: str, timeout_ms: int, expected_suite: str = "") -> list[str]:
-        """Poll until the TOP suggestion matches ``expected`` (this query's house number).
+        """Poll until the TOP suggestion anchors on ``expected`` (this query's house number).
 
-        Google leaves the PREVIOUS query's suggestions in the DOM until the new
-        request returns, so reading immediately yields a stale (wrong) answer -- the
-        observed one-row lag. We wait until the top row actually contains this
-        query's house number; on timeout we return [] (NO_RESULT) rather than risk
-        a stale, wrong address. Queries without a house number cannot be anchored,
-        so they read the first stable list (rare for retail addresses).
-
-        The suite lags too: the unit is typed LAST, so the house number is already
-        present in the dropdown before the suite-bearing request returns, and a
-        house-number-only wait would accept the base street without the unit. When
-        ``expected_suite`` is set we therefore keep polling for a short, bounded
-        grace (``_SUITE_GRACE_S``) for the top row to also reflect that unit; if it
-        lands we use it, and if the grace expires we accept the base street (the
-        builder then re-appends the unit we typed). Google usually catches up, so
-        this recovers the unit without stalling rows where Google has no unit.
+        Google's autocomplete lags: the previous query's rows persist until the new
+        request returns, and the suite (typed last) lags behind the street. We wait
+        for the top row to reflect this query, then hold for ``_SUITE_GRACE_S`` for
+        the unit to catch up. On timeout we return the best fresh list (or []).
         """
-        deadline = time.monotonic() + max(0.0, timeout_ms / 1000.0)  # Absolute wait deadline.
-        grace = min(_SUITE_GRACE_S, max(0.0, timeout_ms / 1000.0))  # Bounded extra window for a lagging suite.
-        house_ok_at: float | None = None  # Monotonic time the house number first matched (starts the suite grace).
-        fresh_fallback: list[str] = []  # Best house-number-fresh list seen (may lack the suite) for a timeout return.
-        while time.monotonic() < deadline:  # Poll until fresh or timed out.
+        deadline = time.monotonic() + max(0.0, timeout_ms / 1000.0)  # WHY: absolute wait deadline for the poll loop.
+        grace = min(_SUITE_GRACE_S, max(0.0, timeout_ms / 1000.0))  # WHY: bounded window for a lagging suite.
+        fresh_fallback, resolved = self._poll_for_fresh_top(page, expected, expected_suite, deadline, grace)
+        if resolved is not None:  # WHY: helper accepted the top row (suite present or grace expired).
+            return resolved  # Top suggestion accepted for THIS query.
+        return self._fresh_timeout_result(fresh_fallback, expected)  # WHY: convert timeout into fallback or NO_RESULT.
+
+    def _poll_for_fresh_top(
+        self,
+        page: Any,
+        expected: str,
+        expected_suite: str,
+        deadline: float,
+        grace: float,
+    ) -> tuple[list[str], list[str] | None]:
+        """Poll suggestion rows until the top anchors on ``expected`` and the suite catches up.
+
+        Returns ``(fresh_fallback, resolved)`` -- ``resolved`` is set when a row is
+        acceptable; ``fresh_fallback`` holds the best house-fresh list seen so far
+        for the timeout branch.
+        """
+        house_ok_at: float | None = None  # WHY: monotonic time the house number first matched (suite grace anchor).
+        fresh_fallback: list[str] = []  # WHY: best house-number-fresh list seen (may lack the suite) for timeout.
+        while time.monotonic() < deadline:  # WHY: poll until fresh or timed out.
             texts = self._current_suggestions(page)  # Snapshot the current dropdown rows.
-            if texts and (not expected or self._matches_house_number(texts[0], expected)):  # Fresh top row.
-                fresh_fallback = texts  # Remember it: the street/number belongs to THIS query.
-                if not expected_suite or self._reflects_suite(texts[0], expected_suite):  # Suite present (or none).
-                    return texts  # The top suggestion fully belongs to THIS query.
-                if house_ok_at is None:  # House number just became fresh; start the suite grace clock.
-                    house_ok_at = time.monotonic()  # Give the lagging suite a moment to appear.
-                elif time.monotonic() - house_ok_at >= grace:  # Suite never showed within the grace window.
-                    logging.info("Suite '%s' not shown within grace; using base street", expected_suite)  # Note.
-                    return texts  # Accept the base street; _build_result re-appends the unit we typed.
-            self._settle(page, 200)  # Brief pause before re-polling.
-        if fresh_fallback:  # Timed out mid-grace but we did see this query's street/number.
-            return fresh_fallback  # Prefer the fresh street over NO_RESULT.
+            if self._is_fresh_top(texts, expected):  # WHY: only THIS query's street/number qualifies as fresh.
+                fresh_fallback = texts  # Remember: street/number belongs to THIS query.
+                resolved, house_ok_at = self._evaluate_suite(texts, expected_suite, house_ok_at, grace)
+                if resolved is not None:  # WHY: helper decided we can finalize (suite present or grace expired).
+                    return fresh_fallback, resolved  # Top suggestion accepted for THIS query.
+            self._settle(page, _POLL_INTERVAL_MS)  # Brief pause before re-polling.
+        return fresh_fallback, None  # WHY: timed out -- caller handles fallback vs NO_RESULT.
+
+    @staticmethod
+    def _is_fresh_top(texts: list[str], expected: str) -> bool:
+        """Return True when ``texts`` has a top row that anchors on ``expected`` (or none needed)."""
+        if not texts:  # WHY: an empty dropdown cannot be fresh.
+            return False  # Keep polling.
+        return not expected or MistUIGeocoder._matches_house_number(texts[0], expected)  # WHY: anchor optional.
+
+    def _evaluate_suite(
+        self,
+        texts: list[str],
+        expected_suite: str,
+        house_ok_at: float | None,
+        grace: float,
+    ) -> tuple[list[str] | None, float | None]:
+        """Decide whether the fresh top row is final, starts/extends the suite grace, or is skipped.
+
+        Returns ``(resolved, house_ok_at)``. When ``resolved`` is not ``None`` the
+        caller must return it immediately; when it is ``None`` the caller keeps
+        polling with the (possibly updated) ``house_ok_at`` timestamp.
+        """
+        if not expected_suite or self._reflects_suite(
+            texts[0], expected_suite
+        ):  # WHY: suite satisfied or none required.
+            return texts, house_ok_at  # Finalize on the top row.
+        if house_ok_at is None:  # WHY: first fresh house-number sighting -- start the grace clock.
+            return None, time.monotonic()  # Keep polling; anchor the suite grace at now.
+        if time.monotonic() - house_ok_at >= grace:  # WHY: grace expired -- accept the base street.
+            logging.info("Suite '%s' not shown within grace; using base street", expected_suite)  # Action-log fallback.
+            return texts, house_ok_at  # _build_result re-appends the unit we typed.
+        return None, house_ok_at  # WHY: still within grace window -- keep polling for the suite.
+
+    @staticmethod
+    def _fresh_timeout_result(fresh_fallback: list[str], expected: str) -> list[str]:
+        """Return the best fresh list seen before timeout, or [] when nothing fresh was seen."""
+        if fresh_fallback:  # WHY: prefer the fresh street over NO_RESULT.
+            return fresh_fallback  # Timed out mid-grace but the street/number were correct.
         logging.info("No fresh suggestion for house number '%s' within timeout; skipping (stale-guard)", expected)
         return []  # Fail-soft to NO_RESULT.
 
@@ -408,7 +461,9 @@ class MistUIGeocoder:
 
     def _locate_input(self, page: Any, timeout_ms: int) -> Any:
         """Probe candidate selectors and return the first matching input element."""
-        per_try = max(1000, timeout_ms // max(1, len(INPUT_SELECTORS)))  # Split budget across candidates.
+        per_try = max(
+            _LOCATE_TIMEOUT_FLOOR_MS, timeout_ms // max(1, len(INPUT_SELECTORS))
+        )  # WHY: floored per-candidate budget.
         last_error: Exception | None = None  # Remember the final miss for the raise.
         for selector in INPUT_SELECTORS:  # Try candidates in priority order.
             try:
@@ -455,21 +510,32 @@ class MistUIGeocoder:
         (a DIFFERENT unit means Google is the authority -- leave it), and the house
         numbers agree (never graft a unit onto a different building).
         """
-        suite_id = self._suite_id(query)  # The unit id we typed (e.g. "200"); "" when none.
-        if not suite_id:  # We never asked about a unit.
-            return suggestion  # Nothing to preserve.
-        if self._reflects_suite(suggestion, suite_id):  # Google already shows our unit.
-            return suggestion  # Already complete.
-        if self._suite_phrase(suggestion):  # Google returned a DIFFERENT unit -> it is the authority.
-            return suggestion  # Trust Google's unit over ours.
-        query_house = self._house_number(query)  # House number we asked about.
-        sugg_house = self._house_number(suggestion)  # House number Google returned.
-        if query_house and sugg_house and query_house != sugg_house:  # Different building.
-            return suggestion  # Never graft a unit across buildings.
+        suite_id = self._suite_id(query)  # WHY: the unit id we typed (e.g. "200"); "" when none.
+        if self._skip_suite_preservation(query, suggestion, suite_id):  # WHY: guard-clause bundles all no-op cases.
+            return suggestion  # Nothing to preserve, already complete, Google authoritative, or different building.
         phrase = self._suite_phrase(query)  # The full 'Unit 200' / '#3' token to restore.
         restored = self._insert_suite(suggestion, phrase)  # Append it to the street segment.
         logging.info("Preserved typed unit '%s' Google omitted: %s", phrase, restored)  # Action-log the restore.
         return restored  # Street from Google, unit preserved from the customer data.
+
+    def _skip_suite_preservation(self, query: str, suggestion: str, suite_id: str) -> bool:
+        """Return True when the suggestion should be returned untouched (no unit preservation)."""
+        if not suite_id:  # WHY: we never asked about a unit -- nothing to preserve.
+            return True
+        if self._reflects_suite(suggestion, suite_id):  # WHY: Google already shows our unit.
+            return True
+        if self._suite_phrase(suggestion):  # WHY: Google returned a DIFFERENT unit -- it is the authority.
+            return True
+        return self._different_house(query, suggestion)  # WHY: never graft a unit across buildings.
+
+    @staticmethod
+    def _different_house(query: str, suggestion: str) -> bool:
+        """Return True only when both sides carry a house number and they disagree."""
+        query_house = MistUIGeocoder._house_number(query)  # House number we asked about.
+        sugg_house = MistUIGeocoder._house_number(suggestion)  # House number Google returned.
+        if not query_house or not sugg_house:  # WHY: unknown on either side -- do not treat as different.
+            return False  # Cannot rule out same-building; defer to other guards.
+        return query_house != sugg_house  # WHY: both known -- disagreement means a different building.
 
     @staticmethod
     def _insert_suite(address: str, phrase: str) -> str:
@@ -539,8 +605,8 @@ class MistUIGeocoder:
 
     @staticmethod
     def spawn_debuggable_browser(
-        cdp_port: int = 9222,
-        dashboard_url: str = "https://manage.mist.com/",
+        cdp_port: int = _DEFAULT_CDP_PORT,
+        dashboard_url: str = _DASHBOARD_URL_DEFAULT,
     ) -> subprocess.Popen[bytes] | None:
         """Launch system Edge with remote debugging so it can be taken over via CDP.
 
@@ -553,8 +619,17 @@ class MistUIGeocoder:
         if edge is None:  # No Edge -> cannot offer a takeover target.
             logging.warning("Microsoft Edge not found; cannot spawn a debuggable browser")  # Inform operator.
             return None  # Caller should fall back to launch mode.
-        profile = tempfile.mkdtemp(prefix="misthelper-edge-")  # Dedicated profile dir (never the default one).
-        args = [  # Edge CLI flags that enable CDP on the chosen port.
+        profile = tempfile.mkdtemp(prefix=_PROFILE_PREFIX)  # WHY: dedicated dir so the operator's profile is untouched.
+        args = MistUIGeocoder._debuggable_edge_args(edge, cdp_port, profile, dashboard_url)  # Build the CLI flags.
+        logging.info("Spawning debuggable Edge on port %d (profile=%s)", cdp_port, profile)  # Action-log spawn.
+        proc = subprocess.Popen(args)  # Launch Edge; the operator logs in, then we attach.
+        logging.debug("Debuggable Edge started (pid=%s)", proc.pid)  # Trace the PID.
+        return proc  # Caller terminates it when the audit finishes.
+
+    @staticmethod
+    def _debuggable_edge_args(edge: str, cdp_port: int, profile: str, dashboard_url: str) -> list[str]:
+        """Return the Edge CLI argv that enables CDP on ``cdp_port`` in ``profile``."""
+        return [  # WHY: Edge CLI flags that enable CDP takeover into an isolated profile.
             edge,  # Edge executable path.
             f"--remote-debugging-port={cdp_port}",  # Expose the DevTools endpoint for connect_over_cdp.
             f"--user-data-dir={profile}",  # Isolate cookies/session in a throwaway profile.
@@ -562,17 +637,13 @@ class MistUIGeocoder:
             "--no-default-browser-check",  # Skip the default-browser nag.
             dashboard_url,  # Open straight to the Mist login/landing page.
         ]
-        logging.info("Spawning debuggable Edge on port %d (profile=%s)", cdp_port, profile)  # Action-log spawn.
-        proc = subprocess.Popen(args)  # Launch Edge; the operator logs in, then we attach.
-        logging.debug("Debuggable Edge started (pid=%s)", proc.pid)  # Trace the PID.
-        return proc  # Caller terminates it when the audit finishes.
 
     @staticmethod
     def _edge_executable() -> str | None:
         """Locate ``msedge.exe`` via standard install paths, then PATH."""
-        candidates = [  # Standard per-machine Edge install locations on Windows.
-            os.path.join(os.environ.get("ProgramFiles(x86)", ""), "Microsoft", "Edge", "Application", "msedge.exe"),
-            os.path.join(os.environ.get("ProgramFiles", ""), "Microsoft", "Edge", "Application", "msedge.exe"),
+        candidates = [  # WHY: standard per-machine Edge install locations on Windows.
+            os.path.join(os.environ.get("ProgramFiles(x86)", ""), *_EDGE_INSTALL_TAIL),
+            os.path.join(os.environ.get("ProgramFiles", ""), *_EDGE_INSTALL_TAIL),
         ]
         for path in candidates:  # Probe each known location.
             if path and os.path.isfile(path):  # First existing binary wins.
