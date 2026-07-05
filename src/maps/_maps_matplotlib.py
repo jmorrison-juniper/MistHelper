@@ -24,7 +24,7 @@ from typing import Any  # Loose typing for Mist API JSON payloads.
 import matplotlib.pyplot as plt  # Plot backend used by the fallback matplotlib viewer.
 import mistapi  # Mist API SDK used for listing site maps and related endpoints.
 
-from src.maps._flask_viewer import launch_flask_viewer  # Full-featured Flask viewer entry point.
+from src.maps._flask_viewer import FlaskViewerContext, launch_flask_viewer  # Viewer entry + context bundle.
 
 logger = logging.getLogger(__name__)  # Module logger keyed to this file for filtering.
 
@@ -200,13 +200,15 @@ class _MapsMatplotlib:  # Wrapper class holding the extracted matplotlib/launch 
             len(sites_sorted),
         )
         launch_flask_viewer(
-            self.apisession,
-            targets.site_id,
-            targets.map_id,
-            sites_sorted,
-            targets.all_maps,
-            self._collect_map_payload,
-            self._build_map_data_response,
+            FlaskViewerContext(
+                api_session=self.apisession,  # Authenticated Mist API session passed through.
+                initial_site_id=targets.site_id,  # Site selected for the initial render.
+                initial_map_id=targets.map_id,  # Map selected for the initial render.
+                all_sites=sites_sorted,  # Sorted site list for the site picker dropdown.
+                all_maps=targets.all_maps,  # Map list for the initial site.
+                collect_payload_fn=self._collect_map_payload,  # Callback that hydrates payload entities.
+                build_response_fn=self._build_map_data_response,  # Callback that shapes the JSON reply.
+            )
         )  # Delegate to the Flask-based interactive viewer.
 
     def _bootstrap_sites(self) -> list[dict[str, Any]] | None:
