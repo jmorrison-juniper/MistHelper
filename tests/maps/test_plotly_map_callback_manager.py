@@ -1,6 +1,10 @@
 """Unit tests for PlotlyMapCallbackManager."""
 
-from src.maps.plotly_map_callback_manager import PlotlyMapCallbackManager
+from src.maps.plotly_map_callback_manager import (
+    LayerToggleInputs,
+    PlotlyMapCallbackManager,
+    make_dash_layer_callback,
+)
 
 
 class _FakeHtml:
@@ -30,14 +34,14 @@ def test_apply_layer_toggles_trace_visibility() -> None:
         "layout": {"annotations": []},
     }
 
-    updated = manager.apply_layer_toggles(
-        current_fig=fig,
-        infra_layers=["walls"],
-        beacon_layers=[],
-        client_layers=[],
-        device_layers=["gateways"],
-        filter_layers=[],
+    bundle = LayerToggleInputs.from_optional_lists(
+        ["walls"],
+        [],
+        [],
+        ["gateways"],
+        [],
     )
+    updated = manager.apply_layer_toggles(bundle, fig)
 
     visibility = {trace["name"]: trace["visible"] for trace in updated["data"]}
     assert visibility["Walls"] is True
@@ -60,14 +64,8 @@ def test_apply_layer_toggles_annotation_visibility() -> None:
         },
     }
 
-    updated = manager.apply_layer_toggles(
-        current_fig=fig,
-        infra_layers=["zones"],
-        beacon_layers=[],
-        client_layers=[],
-        device_layers=[],
-        filter_layers=[],
-    )
+    bundle = LayerToggleInputs.from_optional_lists(["zones"], [], [], [], [])
+    updated = manager.apply_layer_toggles(bundle, fig)
 
     annotations = {ann["name"]: ann["visible"] for ann in updated["layout"]["annotations"]}
     assert annotations["Zone Label"] is True
@@ -100,3 +98,25 @@ def test_build_click_details_handles_empty_hover() -> None:
 
     result = manager.build_click_details(click_data, _FakeHtml)
     assert result[1]["children"][0]["text"] == "No device data available"
+
+
+def test_make_dash_layer_callback_packs_positional_inputs() -> None:
+    """Dash-facing callback packs five layer lists + figure state into the bundle."""
+    manager = PlotlyMapCallbackManager()
+    fig = {
+        "data": [{"name": "Walls", "visible": True}],
+        "layout": {"annotations": []},
+    }
+    dash_callback = make_dash_layer_callback(manager)
+
+    updated = dash_callback(["walls"], [], [], [], [], fig)
+
+    assert updated["data"][0]["visible"] is True
+
+
+def test_layer_toggle_inputs_all_layers_union() -> None:
+    """LayerToggleInputs.all_layers returns a frozenset of every selected layer."""
+    bundle = LayerToggleInputs.from_optional_lists(
+        ["walls"], ["ble_beacons"], None, ["aps"], []
+    )
+    assert bundle.all_layers() == frozenset({"walls", "ble_beacons", "aps"})

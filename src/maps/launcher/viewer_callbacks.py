@@ -370,7 +370,11 @@ class MapViewerCallbacks:  # WHY: thin coordinator over 6 extracted callback clu
         # MapsManager._launch_plotly_viewer).
         from dash import Input, Output, State  # Local import keeps module import-light
 
-        app.callback(  # PlotlyMapCallbackManager.apply_layer_toggles (registered directly, no adapter)
+        from src.maps.plotly_map_callback_manager import (  # WHY: Dash-side input packer
+            make_dash_layer_callback,
+        )
+
+        app.callback(  # PlotlyMapCallbackManager.apply_layer_toggles (packed via make_dash_layer_callback)
             Output("map-display", "figure"),  # Output: replaces the figure
             [
                 Input("layer-toggle", "value"),  # Walls/wayfinding checklist
@@ -380,4 +384,4 @@ class MapViewerCallbacks:  # WHY: thin coordinator over 6 extracted callback clu
                 Input("filter-toggle", "value"),  # Status-filter checklist
             ],
             State("map-display", "figure"),  # Current figure passed in last for mutation
-        )(self._state.callback_manager.apply_layer_toggles)
+        )(make_dash_layer_callback(self._state.callback_manager))
