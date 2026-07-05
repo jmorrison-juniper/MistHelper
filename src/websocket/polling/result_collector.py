@@ -13,7 +13,7 @@ import time  # Timing for the polling loop and idle calculations
 from typing import Any  # Result dict shape
 
 from src.websocket.polling.completion_detector import CompletionDetector  # Indicator strategies
-from src.websocket.polling.result_combiner import combine_segments  # Final segment merge
+from src.websocket.polling.result_combiner import CombineRequest, combine_segments  # Final segment merge
 
 # Circuit-breaker constant — preserved from original implementation
 _MAX_CHECK_ITERATIONS = 10000
@@ -101,7 +101,16 @@ class ResultCollector:
             if self._debug:
                 print(f"[DEBUG] No results collected for session {session_id}")
             return None
-        return combine_segments(final_results, session_id, self._logger, self._debug, elapsed, ctx.check_count)
+        return combine_segments(
+            CombineRequest(
+                final_results=final_results,
+                session_id=session_id,
+                logger=self._logger,
+                debug_mode=self._debug,
+                elapsed=elapsed,
+                check_count=ctx.check_count,
+            )
+        )
 
     def _poll_loop(
         self,
