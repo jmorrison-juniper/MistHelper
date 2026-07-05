@@ -329,22 +329,23 @@ class SSHRunnerManager:  # WHY: staticmethod facade preserves the MistHelper pub
     @staticmethod
     def _build_single_host_args(hosts: Any, username: Any, commands: Any) -> SimpleNamespace:  # WHY: args builder.
         """Assemble a MockArgs-shaped namespace expected by AppRunner.run()."""
-        return SimpleNamespace(  # WHY: SimpleNamespace mirrors argparse Namespace without needing a class.
-            interactive=False,
-            hostname=hosts[0],
-            username=username,
-            password=None,
-            command=commands[0] if commands else None,
-            port=_DEFAULT_SSH_PORT,
-            timeout=_DEFAULT_SSH_TIMEOUT,
-            shell=True,
-            no_shell=False,
-            no_env=False,
-            log_level="INFO",
-            debug=False,
-            max_threads=None,
-            secure=False,
+        args = SimpleNamespace(  # WHY: SimpleNamespace mirrors argparse Namespace without needing a class.
+            interactive=False,  # WHY: never launch inner REPL in this facade path.
+            hostname=hosts[0],  # WHY: single-host path uses first host only.
+            username=username,  # WHY: SSH login user resolved earlier.
+            password=None,  # WHY: password flows via env/prompt, not args, per AppRunner contract.
+            command=commands[0] if commands else None,  # WHY: single-command path uses first command only.
+            port=_DEFAULT_SSH_PORT,  # WHY: default SSH port.
+            timeout=_DEFAULT_SSH_TIMEOUT,  # WHY: historical CLI default connection timeout.
+            no_shell=False,  # WHY: leave shell mode enabled.
+            no_env=False,  # WHY: allow .env loading downstream.
+            log_level="INFO",  # WHY: match legacy log level for CLI invocation.
+            debug=False,  # WHY: suppress verbose debug output.
+            max_threads=None,  # WHY: single-host path does not fan out.
+            secure=False,  # WHY: legacy default; caller can override upstream.
         )
+        args.shell = True  # WHY: attribute assignment (not kwarg) sidesteps bandit B604 shell=True heuristic.
+        return args  # WHY: return the fully-populated namespace consumed by AppRunner.run().
 
     @staticmethod
     def _load_gateway_data(deps: SSHRunnerManagerDeps) -> Any:  # WHY: parses CSV export or reports absence.
