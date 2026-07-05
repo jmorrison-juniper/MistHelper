@@ -16462,6 +16462,8 @@ class DeviceConfigTemplateClonerManager:  # Device config template cloner.
         """Menu 194: Fetch gateway device config and create a new org-level gateway template."""
         from src.gateway.device_template_cloner import (  # pylint: disable=import-outside-toplevel
             DeviceConfigTemplateClonerManager as Impl,  # Import extracted implementation class
+        )
+        from src.gateway.device_template_cloner import (
             DeviceTemplateClonerDeps,  # Frozen deps bundle groups injected dependencies
         )
 
