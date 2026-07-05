@@ -155,6 +155,7 @@ __all__ = [  # WHY: explicit re-export list; keeps ruff F401 quiet on intentiona
     "_resolve_single_deviation",
     "_resolve_template",
     "_set_ssid_disabled",
+    "_SiteLookups",
     "_SsidTemplateCacheCluster",
     "_SsidTemplatePhase1Cluster",
     "_SsidTemplatePhase2Cluster",
