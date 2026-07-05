@@ -116,7 +116,5 @@ def test_make_dash_layer_callback_packs_positional_inputs() -> None:
 
 def test_layer_toggle_inputs_all_layers_union() -> None:
     """LayerToggleInputs.all_layers returns a frozenset of every selected layer."""
-    bundle = LayerToggleInputs.from_optional_lists(
-        ["walls"], ["ble_beacons"], None, ["aps"], []
-    )
+    bundle = LayerToggleInputs.from_optional_lists(["walls"], ["ble_beacons"], None, ["aps"], [])
     assert bundle.all_layers() == frozenset({"walls", "ble_beacons", "aps"})
