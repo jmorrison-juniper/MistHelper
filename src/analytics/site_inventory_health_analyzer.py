@@ -369,7 +369,9 @@ class SiteInventoryHealthAnalyzer:  # WHY: namespace for the analyzer entry poin
             filename=f"SitesMissingInfrastructure_{timestamp}.csv",
             api_function_name="sitesMissingInfrastructure",
             label="Missing infrastructure",
-            empty_message="! No sites found with missing infrastructure (all sites with APs have switches and gateways)",
+            empty_message=(
+                "! No sites found with missing infrastructure " "(all sites with APs have switches and gateways)"
+            ),
         )
         offline_spec = _ExportSpec(  # WHY: bundle offline-report export parameters
             filename=f"SitesWithOfflineInfrastructure_{timestamp}.csv",
