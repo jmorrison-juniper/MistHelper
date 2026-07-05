@@ -1,68 +1,117 @@
 """Combine collected WebSocket message segments into a single result dict."""
 
-from __future__ import annotations
+from __future__ import annotations  # PEP 563 postponed evaluation for typing forward refs
 
-import logging  # Standard logger
-from typing import Any  # Used for the segment dict shape
+import logging  # Standard logger type used by callers
+from dataclasses import dataclass  # Frozen bundle for the 6 caller inputs
+from typing import Any  # Segment dicts have heterogeneous values
 
-# Keys that are merged specially or excluded from the generic combiner.
-_RESERVED_KEYS = {"raw", "session"}
+_RESERVED_KEYS = {"raw", "session"}  # Keys handled specially and excluded from generic merge
+_VERBOSE_SEGMENT_THRESHOLD = 5  # Per-segment trace fires only when segment count exceeds this
+_TRAILER_BAR = "=" * 60  # Fixed-width visual separator preserved from original output
+_PREVIEW_CHARS = 150  # Head/tail preview length in verbose trailer
+
+MergedPayload = tuple[str, dict[str, Any]]  # Return shape: (concatenated raw, extras dict)
 
 
-def combine_segments(
-    final_results: list[dict[str, Any]],
-    session_id: str,
-    logger: logging.Logger,
-    debug_mode: bool,
-    elapsed: float,
-    check_count: int,
-) -> dict[str, Any] | None:
+@dataclass(frozen=True, slots=True)  # Frozen + slots keeps the bundle immutable and compact
+class CombineRequest:  # Immutable transport of the six caller inputs
+    """Immutable bundle of the six inputs required to combine segments."""
+
+    final_results: list[dict[str, Any]]  # Captured message segments in arrival order
+    session_id: str  # Session id echoed into the envelope
+    logger: logging.Logger  # Structured logger for info/debug output
+    debug_mode: bool  # Enables verbatim [DEBUG] print statements
+    elapsed: float  # Wall time spent waiting on segments (seconds)
+    check_count: int  # Number of poll iterations performed
+
+
+def combine_segments(request: CombineRequest) -> dict[str, Any] | None:  # Public entrypoint
     """Combine message segments into a single result; mirror original print/log output."""
-    logger.info("Combining %s WebSocket result segments", len(final_results))  # Pre-action log
-    if not final_results:  # Nothing to combine
-        logger.debug("combine_segments called with empty list")  # Post-action log
-        return None
-    if debug_mode:  # Verbatim diagnostic prints preserved from original implementation
-        logger.debug("Combining %s result segments", len(final_results))
-        logger.debug("Total wait time: %.2f seconds", elapsed)
-        logger.debug("Total checks performed: %s", check_count)
-        print(f"[DEBUG] Combining {len(final_results)} result segments")
-        print(f"[DEBUG] Total wait time: {elapsed:.2f} seconds")
-        print(f"[DEBUG] Total checks performed: {check_count}")
-    combined_raw, combined_other = _merge_segments(final_results, debug_mode)  # Do the merge work
-    final_result: dict[str, Any] = {"raw": combined_raw, "session": session_id}  # Build envelope
-    final_result.update(combined_other)  # Merge non-raw/non-session fields back in
-    if debug_mode:  # Verbatim debug trailer
-        print(f"[DEBUG] Final combined result length: {len(combined_raw)} characters")
-        print(f"[DEBUG] Final result fields: {list(final_result.keys())}")
-        print(f"[DEBUG] First 150 chars of final result: {repr(combined_raw[:150])}")
-        print(f"[DEBUG] Last 150 chars of final result: {repr(combined_raw[-150:])}")
-        if len(combined_raw) == 0:
-            print("[DEBUG] WARNING: Final result is empty - this may indicate an issue")
-        print(f"[DEBUG] Session {session_id} result collection complete")
-        print("[DEBUG] " + "=" * 60)
-    logger.info("Command completed with %s message segments", len(final_results))  # Post-action log
-    return final_result
+    segments = request.final_results  # Local alias improves readability of guard block
+    request.logger.info("Combining %s WebSocket result segments", len(segments))  # Pre-action log
+    if not segments:  # Guard: nothing to combine
+        request.logger.debug("combine_segments called with empty list")  # Post-action log
+        return None  # Sentinel returned to caller to mirror original contract
+    _emit_debug_header(request)  # Preserve verbatim diagnostic prints from original impl
+    combined_raw, combined_other = _merge_segments(segments, request.debug_mode)  # Do the merge work
+    final_result = _build_envelope(combined_raw, combined_other, request.session_id)  # Envelope assembly
+    _emit_debug_trailer(request, combined_raw, final_result)  # Verbatim debug trailer
+    request.logger.info("Command completed with %s message segments", len(segments))  # Post-action log
+    return final_result  # Return the fully assembled envelope dict
 
 
-def _merge_segments(
-    final_results: list[dict[str, Any]],
-    debug_mode: bool,
-) -> tuple[str, dict[str, Any]]:
+def _build_envelope(  # Assemble the outbound result envelope
+    combined_raw: str, combined_other: dict[str, Any], session_id: str
+) -> dict[str, Any]:
+    """Assemble the outbound result envelope preserving key order and merging extras."""
+    envelope: dict[str, Any] = {"raw": combined_raw, "session": session_id}  # Envelope skeleton
+    envelope.update(combined_other)  # Merge non-raw/non-session fields back in
+    return envelope  # Fully populated envelope handed back to caller
+
+
+def _emit_debug_header(request: CombineRequest) -> None:  # Verbose header emitter
+    """Emit verbose logger + stdout diagnostics that mirror the pre-refactor output."""
+    if not request.debug_mode:  # Guard: skip entirely when quiet mode is active
+        return  # Nothing to emit when debug is off
+    count = len(request.final_results)  # Cached count for the header block
+    request.logger.debug("Combining %s result segments", count)  # Logger mirror line
+    request.logger.debug("Total wait time: %.2f seconds", request.elapsed)  # Wall time
+    request.logger.debug("Total checks performed: %s", request.check_count)  # Poll iterations
+    print(f"[DEBUG] Combining {count} result segments")  # Verbatim stdout line 1
+    print(f"[DEBUG] Total wait time: {request.elapsed:.2f} seconds")  # Verbatim stdout line 2
+    print(f"[DEBUG] Total checks performed: {request.check_count}")  # Verbatim stdout line 3
+
+
+def _emit_debug_trailer(  # Verbose trailer emitter
+    request: CombineRequest, combined_raw: str, final_result: dict[str, Any]
+) -> None:
+    """Emit the trailing debug block including head/tail previews and completion banner."""
+    if not request.debug_mode:  # Guard: skip entirely when quiet mode is active
+        return  # Nothing to emit when debug is off
+    print(f"[DEBUG] Final combined result length: {len(combined_raw)} characters")  # Length summary
+    print(f"[DEBUG] Final result fields: {list(final_result.keys())}")  # Field roster
+    print(f"[DEBUG] First 150 chars of final result: {repr(combined_raw[:_PREVIEW_CHARS])}")  # Head preview
+    print(f"[DEBUG] Last 150 chars of final result: {repr(combined_raw[-_PREVIEW_CHARS:])}")  # Tail preview
+    if len(combined_raw) == 0:  # Empty payload sentinel
+        print("[DEBUG] WARNING: Final result is empty - this may indicate an issue")  # Verbatim warn
+    print(f"[DEBUG] Session {request.session_id} result collection complete")  # Completion line
+    print("[DEBUG] " + _TRAILER_BAR)  # Fixed-width separator
+
+
+def _merge_segments(final_results: list[dict[str, Any]], debug_mode: bool) -> MergedPayload:  # Merge driver
     """Concatenate raw chunks and accumulate auxiliary keys across segments."""
-    combined_raw = ""  # Final concatenated raw payload
+    combined_raw_parts: list[str] = []  # Buffer chunks then join once for O(n) concat
     combined_other: dict[str, Any] = {}  # Auxiliary fields accumulator
+    verbose = debug_mode and len(final_results) > _VERBOSE_SEGMENT_THRESHOLD  # Precomputed trace flag
     for index, result in enumerate(final_results):  # Walk each captured segment
-        raw_content = result.get("raw", "")  # Per-segment raw chunk
-        if raw_content:  # Skip empty chunks
-            combined_raw += raw_content  # Append to combined buffer
-            if debug_mode and len(final_results) > 5:  # Verbose per-segment trace
-                print(f"[DEBUG] Segment {index + 1}: {len(raw_content)} chars")
-        for key, value in result.items():  # Merge any extra metadata fields
-            if key in _RESERVED_KEYS:  # raw/session handled above
-                continue
-            if key in combined_other:  # If we've seen this key before, concatenate as string
-                combined_other[key] = str(combined_other[key]) + str(value)
-            else:
-                combined_other[key] = value  # First occurrence — store as-is
-    return combined_raw, combined_other
+        _absorb_raw_chunk(result, combined_raw_parts, verbose, index)  # Handle raw + optional trace
+        _absorb_extras(result, combined_other)  # Merge any extra metadata fields
+    return "".join(combined_raw_parts), combined_other  # Single join keeps concat O(n)
+
+
+def _absorb_raw_chunk(  # Per-segment raw handler
+    result: dict[str, Any], buffer: list[str], verbose: bool, index: int
+) -> None:
+    """Append this segment's raw chunk to the buffer and emit an optional trace line."""
+    raw_content = result.get("raw", "")  # Per-segment raw chunk
+    if not raw_content:  # Guard: skip empty chunks
+        return  # Empty chunk contributes nothing to buffer or trace
+    buffer.append(raw_content)  # Defer join to caller for single allocation
+    if verbose:  # Emit per-segment trace when verbose mode is precomputed on
+        print(f"[DEBUG] Segment {index + 1}: {len(raw_content)} chars")  # Verbatim trace
+
+
+def _absorb_extras(result: dict[str, Any], accumulator: dict[str, Any]) -> None:  # Extras merger
+    """Merge non-reserved keys into the accumulator, concatenating on repeat keys."""
+    for key, value in result.items():  # Merge any extra metadata fields
+        if key in _RESERVED_KEYS:  # raw/session are handled by the envelope builder
+            continue  # Skip reserved keys entirely
+        accumulator[key] = _fold_extra(accumulator.get(key), value, key in accumulator)  # Table-style fold
+
+
+def _fold_extra(existing: Any, incoming: Any, seen: bool) -> Any:  # Pure fold helper
+    """Return the folded value: str-concat when the key was seen, otherwise the incoming value."""
+    if seen:  # Repeat keys are concatenated as strings to match legacy behavior
+        return str(existing) + str(incoming)  # Coerce both sides to str before concat
+    return incoming  # First occurrence — store as-is
