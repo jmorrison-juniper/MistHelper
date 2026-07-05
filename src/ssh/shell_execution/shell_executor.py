@@ -162,10 +162,10 @@ class ShellExecutor:
             return self._run_phases(
                 command, start_time, hostname
             )  # WHY: Delegate the phase pipeline to a bounded helper
-        except (
-            Exception
-        ) as shell_error:  # noqa: BLE001 - top-level fallback mirrors original behavior  # WHY: Any escape from the pipeline surfaces as a failure tuple
-            error_msg = f"Shell execution error: {type(shell_error).__name__}: {shell_error}"  # WHY: Preserve original error phrasing for callers/tests
+        except Exception as shell_error:  # noqa: BLE001  # WHY: Top-level fallback mirrors original behavior
+            # WHY: Any escape from the pipeline surfaces as the documented failure tuple
+            err_type = type(shell_error).__name__  # WHY: Class name only for concise error phrasing
+            error_msg = f"Shell execution error: {err_type}: {shell_error}"  # WHY: Preserve original phrasing
             self.logger.exception(error_msg)  # WHY: Include traceback for post-mortem debugging
             return False, "", error_msg  # WHY: Documented failure-tuple shape
 
@@ -333,7 +333,8 @@ class ShellExecutor:
             f"\nX  [{context.hostname}] Ctrl+C detected! Interrupting command: {context.command}"
         )  # WHY: Verbatim operator prompt
         self.logger.warning("Command interrupted by user: %s", context.command)  # WHY: Log for post-mortem
-        state.output += "\n\n[COMMAND INTERRUPTED BY USER - Ctrl+C pressed during data collection]\n"  # WHY: Marker preserved verbatim
+        # WHY: Marker preserved verbatim so downstream log parity is unaffected
+        state.output += "\n\n[COMMAND INTERRUPTED BY USER - Ctrl+C pressed during data collection]\n"
 
     def _handle_hang_detection(
         self, start_time: float, command: str, hostname: str
