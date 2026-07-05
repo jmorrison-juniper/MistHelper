@@ -48,6 +48,7 @@ from ._ssid_template_phase1 import (  # WHY: re-export phase 1 helpers reference
     _group_by_target,  # WHY: re-export for backward-compat imports
     _print_phase1_summary,  # WHY: re-export for backward-compat imports
     _resolve_template,  # WHY: re-export for backward-compat imports
+    _SiteLookups,  # WHY: re-export dataclass for tests using new _build_site_row signature
     _SsidTemplatePhase1Cluster,  # WHY: phase-1 audit cluster bound in __init__
 )
 from ._ssid_template_phase2 import (  # WHY: re-export phase 2 helpers referenced by name in tests

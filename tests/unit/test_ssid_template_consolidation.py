@@ -100,6 +100,7 @@ from src.ssid_consolidation.ssid_template_consolidation import (  # noqa: E402
     _print_phase_summary,
     _resolve_template,
     _set_ssid_disabled,
+    _SiteLookups,
     _template_result,
 )
 
@@ -3179,9 +3180,7 @@ class TestBuildSiteRowEmpty:
             "Corp",
             ("psk",),
             re.compile(r"pilot|test|lab", re.IGNORECASE),
-            {},
-            {},
-            {},
+            _SiteLookups(template_lookup={}, sitegroup_lookup={}, mxtunnel_lookup={}),
         )
         assert result is None
 
