@@ -18276,16 +18276,18 @@ class WANProbeDeviceOverrideManager:  # WAN probe device override.
         from src.gateway import wan_probe_device_override_manager as wan_probe_module  # noqa: PLC0415,I001
 
         wan_probe_module.configure_wan_probe_device_override_dependencies(  # Wire dependencies.
-            apisession_dependency=apisession,
-            config_utils=ConfigUtils,
-            cache_utils=CacheUtils,
-            org_site_exporter=OrgSiteExporter,
-            gateway_export_utils=GatewayExportUtils,
-            file_path_utils=FilePathUtils,
-            input_utils=InputUtils,
-            data_exporter=DataExporter,
-            mistapi_dependency=mistapi,
-            site_exclude_prefix=MIST_SITE_EXCLUDE_PREFIX,
+            wan_probe_module.WANProbeDeviceOverrideDependencies(  # Frozen dependency bundle.
+                apisession=apisession,
+                config_utils=ConfigUtils,
+                cache_utils=CacheUtils,
+                org_site_exporter=OrgSiteExporter,
+                gateway_export_utils=GatewayExportUtils,
+                file_path_utils=FilePathUtils,
+                input_utils=InputUtils,
+                data_exporter=DataExporter,
+                mistapi=mistapi,
+                site_exclude_prefix=MIST_SITE_EXCLUDE_PREFIX,
+            )
         )
         return wan_probe_module.WANProbeDeviceOverrideManager.configure(dry_run=dry_run)  # Delegate the config.
 
