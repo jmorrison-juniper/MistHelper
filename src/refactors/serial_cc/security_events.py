@@ -5,8 +5,10 @@ import importlib  # Dynamic import shields the module from a MistHelper import c
 import logging  # Structured trace/warn/error logging across the export flow.
 import os  # File existence and mtime probes for the fast-mode freshness check.
 import time  # Wall clock for freshness math and progress duration reporting.
-from collections.abc import Callable  # Typed callable signature for API fetchers.
-from collections.abc import Iterator  # Typed yield signature for the site iterator helper.
+from collections.abc import (
+    Callable,  # Typed callable signature for API fetchers.
+    Iterator,  # Typed yield signature for the site iterator helper.
+)
 from dataclasses import dataclass  # Frozen dataclass bundles flattened-export config.
 from types import SimpleNamespace  # SimpleNamespace bags all runtime dependencies.
 from typing import Any  # Loose typing for heterogeneous API payloads.
