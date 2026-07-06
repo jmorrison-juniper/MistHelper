@@ -1,6 +1,6 @@
 # Coding Guideline Compliance Report
 
-- **Generated**: 2026-07-06 02:02:17 UTC
+- **Generated**: 2026-07-06 02:28:51 UTC
 - **Tool**: compliance-analyzer (tools/compliance_analyzer)
 - **Files analyzed**: 249
 
@@ -11,7 +11,7 @@ Plan at the end to drive fixes.
 
 ## Summary
 
-- **Overall score**: 99.5 / 100
+- **Overall score**: 99.6 / 100
 - **Overall grade**: A+
 
 | File | Score | Grade | Critical | High | Medium | Low | Total |
@@ -134,7 +134,7 @@ Plan at the end to drive fixes.
 | src\maps\_maps_coverage.py | 100.0 | A+ | 0 | 0 | 0 | 0 | 0 |
 | src\maps\_maps_matplotlib.py | 100.0 | A+ | 0 | 0 | 0 | 0 | 0 |
 | src\maps\_maps_testing.py | 100.0 | A+ | 0 | 0 | 0 | 0 | 0 |
-| src\maps\_maps_utils.py | 91.0 | A- | 0 | 1 | 1 | 0 | 2 |
+| src\maps\_maps_utils.py | 100.0 | A+ | 0 | 0 | 0 | 0 | 0 |
 | src\maps\_maps_wizard.py | 100.0 | A+ | 0 | 0 | 0 | 0 | 0 |
 | src\maps\_plotly_viewer.py | 100.0 | A+ | 0 | 0 | 0 | 0 | 0 |
 | src\maps\_viewer_launch.py | 100.0 | A+ | 0 | 0 | 0 | 0 | 0 |
@@ -270,19 +270,19 @@ Plan at the end to drive fixes.
 
 ```json
 {
-  "overall_score": 99.5,
+  "overall_score": 99.6,
   "overall_grade": "A+",
   "severity_totals": {
     "critical": 0,
-    "high": 12,
-    "medium": 12,
+    "high": 11,
+    "medium": 11,
     "low": 13
   },
   "rule_totals": {
-    "CONV-COMMENTS": 17,
+    "CONV-COMMENTS": 16,
     "STRUCT-BLOCKS": 1,
     "STRUCT-COMPLEXITY": 12,
-    "STRUCT-LENGTH": 7
+    "STRUCT-LENGTH": 6
   },
   "files": [
     {
@@ -995,9 +995,9 @@ Plan at the end to drive fixes.
     },
     {
       "path": "src\\maps\\_maps_utils.py",
-      "score": 91.0,
-      "grade": "A-",
-      "violations": 2
+      "score": 100.0,
+      "grade": "A+",
+      "violations": 0
     },
     {
       "path": "src\\maps\\_maps_wizard.py",
@@ -4883,20 +4883,20 @@ No violations found. This file complies with the guidelines.
 
 ## File: src\maps\_maps_utils.py
 
-- **Score**: 91.0 / 100
-- **Grade**: A-
+- **Score**: 100.0 / 100
+- **Grade**: A+
 
 ### Metrics
 
 | Metric | Value |
 | - | - |
-| Lines of code | 129 |
-| Executable code lines | 60 |
-| Functions | 5 |
+| Lines of code | 153 |
+| Executable code lines | 76 |
+| Functions | 6 |
 | Classes | 0 |
-| Average complexity | 3.6 |
+| Average complexity | 3.2 |
 | Max complexity | 5 |
-| Inline comment coverage | 0.0% |
+| Inline comment coverage | 90.8% |
 
 ### Complexity Hotspots
 
@@ -4908,19 +4908,7 @@ No violations found. This file complies with the guidelines.
 | write_data_with_format_selection | 3 |
 | _write_csv_rows | 2 |
 
-### Violations
-
-#### Conventions
-
-| Line | Severity | Rule | Symbol | Issue | Remediation |
-| - | - | - | - | - | - |
-| 10 | high | CONV-COMMENTS | <file> | Inline-comment coverage is 0.0%; uncommented lines: 10, 12, 13, 14, 15, 17, 22, 26, 29, 36, 37, 38. | Add a same-line comment explaining intent on each executable line of changed code. |
-
-#### Structure
-
-| Line | Severity | Rule | Symbol | Issue | Remediation |
-| - | - | - | - | - | - |
-| 81 | medium | STRUCT-LENGTH | write_data_with_format_selection | Function spans 32 lines (limit 25). | Extract logical sections into well-named helper methods to shrink the function. |
+No violations found. This file complies with the guidelines.
 
 ## File: src\maps\_maps_wizard.py
 
@@ -8516,7 +8504,7 @@ No violations found. This file complies with the guidelines.
 > `speckit.tasks`, and `speckit.implement`. Re-run this analyzer to verify
 > every task is resolved before closing the phase.
 
-### Phase: High (12 task(s))
+### Phase: High (11 task(s))
 
 - [ ] **CMP-001** `src\analytics\__init__.py:3` - CONV-COMMENTS (Conventions)
   - Symbol: `<file>`
@@ -8538,105 +8526,95 @@ No violations found. This file complies with the guidelines.
   - Problem: Inline-comment coverage is 1.7%; uncommented lines: 8, 10, 11, 12, 13, 15, 18, 20, 39, 42, 43, 44.
   - Fix: Add a same-line comment explaining intent on each executable line of changed code.
   - Done when: analyzer reports no CONV-COMMENTS for `<file>` in `src\db\__init__.py`.
-- [ ] **CMP-005** `src\maps\_maps_utils.py:10` - CONV-COMMENTS (Conventions)
-  - Symbol: `<file>`
-  - Problem: Inline-comment coverage is 0.0%; uncommented lines: 10, 12, 13, 14, 15, 17, 22, 26, 29, 36, 37, 38.
-  - Fix: Add a same-line comment explaining intent on each executable line of changed code.
-  - Done when: analyzer reports no CONV-COMMENTS for `<file>` in `src\maps\_maps_utils.py`.
-- [ ] **CMP-006** `src\ui\execution\__init__.py:3` - CONV-COMMENTS (Conventions)
+- [ ] **CMP-005** `src\ui\execution\__init__.py:3` - CONV-COMMENTS (Conventions)
   - Symbol: `<file>`
   - Problem: Inline-comment coverage is 0.0%; uncommented lines: 3, 4, 5, 6, 7, 8.
   - Fix: Add a same-line comment explaining intent on each executable line of changed code.
   - Done when: analyzer reports no CONV-COMMENTS for `<file>` in `src\ui\execution\__init__.py`.
-- [ ] **CMP-007** `src\ui\execution\output_formatter.py:7` - CONV-COMMENTS (Conventions)
+- [ ] **CMP-006** `src\ui\execution\output_formatter.py:7` - CONV-COMMENTS (Conventions)
   - Symbol: `<file>`
   - Problem: Inline-comment coverage is 34.5%; uncommented lines: 7, 9, 10, 15, 18, 21, 22, 26, 29, 34, 35, 37.
   - Fix: Add a same-line comment explaining intent on each executable line of changed code.
   - Done when: analyzer reports no CONV-COMMENTS for `<file>` in `src\ui\execution\output_formatter.py`.
-- [ ] **CMP-008** `src\ui\input_handlers\__init__.py:3` - CONV-COMMENTS (Conventions)
+- [ ] **CMP-007** `src\ui\input_handlers\__init__.py:3` - CONV-COMMENTS (Conventions)
   - Symbol: `<file>`
   - Problem: Inline-comment coverage is 0.0%; uncommented lines: 3, 4.
   - Fix: Add a same-line comment explaining intent on each executable line of changed code.
   - Done when: analyzer reports no CONV-COMMENTS for `<file>` in `src\ui\input_handlers\__init__.py`.
-- [ ] **CMP-009** `src\ui\layout\__init__.py:3` - CONV-COMMENTS (Conventions)
+- [ ] **CMP-008** `src\ui\layout\__init__.py:3` - CONV-COMMENTS (Conventions)
   - Symbol: `<file>`
   - Problem: Inline-comment coverage is 0.0%; uncommented lines: 3, 4.
   - Fix: Add a same-line comment explaining intent on each executable line of changed code.
   - Done when: analyzer reports no CONV-COMMENTS for `<file>` in `src\ui\layout\__init__.py`.
-- [ ] **CMP-010** `src\ui\runtime\__init__.py:3` - CONV-COMMENTS (Conventions)
+- [ ] **CMP-009** `src\ui\runtime\__init__.py:3` - CONV-COMMENTS (Conventions)
   - Symbol: `<file>`
   - Problem: Inline-comment coverage is 0.0%; uncommented lines: 3, 4, 5.
   - Fix: Add a same-line comment explaining intent on each executable line of changed code.
   - Done when: analyzer reports no CONV-COMMENTS for `<file>` in `src\ui\runtime\__init__.py`.
-- [ ] **CMP-011** `src\ui\runtime\level_discoverer.py:3` - CONV-COMMENTS (Conventions)
+- [ ] **CMP-010** `src\ui\runtime\level_discoverer.py:3` - CONV-COMMENTS (Conventions)
   - Symbol: `<file>`
   - Problem: Inline-comment coverage is 44.8%; uncommented lines: 3, 5, 6, 7, 8, 13, 16, 20, 29, 32, 34, 36.
   - Fix: Add a same-line comment explaining intent on each executable line of changed code.
   - Done when: analyzer reports no CONV-COMMENTS for `<file>` in `src\ui\runtime\level_discoverer.py`.
-- [ ] **CMP-012** `src\websocket\__init__.py:3` - CONV-COMMENTS (Conventions)
+- [ ] **CMP-011** `src\websocket\__init__.py:3` - CONV-COMMENTS (Conventions)
   - Symbol: `<file>`
   - Problem: Inline-comment coverage is 0.0%; uncommented lines: 3, 4, 5, 6, 7, 8, 10.
   - Fix: Add a same-line comment explaining intent on each executable line of changed code.
   - Done when: analyzer reports no CONV-COMMENTS for `<file>` in `src\websocket\__init__.py`.
 
-### Phase: Medium (12 task(s))
+### Phase: Medium (11 task(s))
 
-- [ ] **CMP-013** `src\capture\org_pcap_wait_download_workflow.py:3` - CONV-COMMENTS (Conventions)
+- [ ] **CMP-012** `src\capture\org_pcap_wait_download_workflow.py:3` - CONV-COMMENTS (Conventions)
   - Symbol: `<file>`
   - Problem: Inline-comment coverage is 52.2%; uncommented lines: 3, 5, 6, 7, 9, 13, 16, 17, 18, 20, 62.
   - Fix: Add a same-line comment explaining intent on each executable line of changed code.
   - Done when: analyzer reports no CONV-COMMENTS for `<file>` in `src\capture\org_pcap_wait_download_workflow.py`.
-- [ ] **CMP-014** `src\capture\org_pcap_wait_download_workflow.py:20` - STRUCT-LENGTH (Structure)
+- [ ] **CMP-013** `src\capture\org_pcap_wait_download_workflow.py:20` - STRUCT-LENGTH (Structure)
   - Symbol: `execute`
   - Problem: Function spans 41 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
   - Done when: analyzer reports no STRUCT-LENGTH for `execute` in `src\capture\org_pcap_wait_download_workflow.py`.
-- [ ] **CMP-015** `src\capture\site_pcap_wait_download_workflow.py:3` - CONV-COMMENTS (Conventions)
+- [ ] **CMP-014** `src\capture\site_pcap_wait_download_workflow.py:3` - CONV-COMMENTS (Conventions)
   - Symbol: `<file>`
   - Problem: Inline-comment coverage is 52.2%; uncommented lines: 3, 5, 6, 7, 9, 13, 16, 17, 18, 20, 62.
   - Fix: Add a same-line comment explaining intent on each executable line of changed code.
   - Done when: analyzer reports no CONV-COMMENTS for `<file>` in `src\capture\site_pcap_wait_download_workflow.py`.
-- [ ] **CMP-016** `src\capture\site_pcap_wait_download_workflow.py:20` - STRUCT-LENGTH (Structure)
+- [ ] **CMP-015** `src\capture\site_pcap_wait_download_workflow.py:20` - STRUCT-LENGTH (Structure)
   - Symbol: `execute`
   - Problem: Function spans 41 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
   - Done when: analyzer reports no STRUCT-LENGTH for `execute` in `src\capture\site_pcap_wait_download_workflow.py`.
-- [ ] **CMP-017** `src\maps\_maps_utils.py:81` - STRUCT-LENGTH (Structure)
-  - Symbol: `write_data_with_format_selection`
-  - Problem: Function spans 32 lines (limit 25).
-  - Fix: Extract logical sections into well-named helper methods to shrink the function.
-  - Done when: analyzer reports no STRUCT-LENGTH for `write_data_with_format_selection` in `src\maps\_maps_utils.py`.
-- [ ] **CMP-018** `src\refactors\serial_cc\import_initialization_service.py:71` - STRUCT-LENGTH (Structure)
+- [ ] **CMP-016** `src\refactors\serial_cc\import_initialization_service.py:71` - STRUCT-LENGTH (Structure)
   - Symbol: `execute`
   - Problem: Function spans 29 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
   - Done when: analyzer reports no STRUCT-LENGTH for `execute` in `src\refactors\serial_cc\import_initialization_service.py`.
-- [ ] **CMP-019** `src\site\address_audit\address_corrector.py:30` - CONV-COMMENTS (Conventions)
+- [ ] **CMP-017** `src\site\address_audit\address_corrector.py:30` - CONV-COMMENTS (Conventions)
   - Symbol: `<file>`
   - Problem: Inline-comment coverage is 79.3%; uncommented lines: 30, 34, 37, 41, 51, 61, 73, 79, 82, 85, 93, 96.
   - Fix: Add a same-line comment explaining intent on each executable line of changed code.
   - Done when: analyzer reports no CONV-COMMENTS for `<file>` in `src\site\address_audit\address_corrector.py`.
-- [ ] **CMP-020** `src\site\address_audit\business_authority_ingester.py:73` - STRUCT-LENGTH (Structure)
+- [ ] **CMP-018** `src\site\address_audit\business_authority_ingester.py:73` - STRUCT-LENGTH (Structure)
   - Symbol: `match`
   - Problem: Function spans 38 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
   - Done when: analyzer reports no STRUCT-LENGTH for `match` in `src\site\address_audit\business_authority_ingester.py`.
-- [ ] **CMP-021** `src\ssh\runtime\interactive_mode.py:151` - STRUCT-LENGTH (Structure)
+- [ ] **CMP-019** `src\ssh\runtime\interactive_mode.py:151` - STRUCT-LENGTH (Structure)
   - Symbol: `run`
   - Problem: Function spans 28 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
   - Done when: analyzer reports no STRUCT-LENGTH for `run` in `src\ssh\runtime\interactive_mode.py`.
-- [ ] **CMP-022** `src\ui\input_handlers\key_poller.py:7` - CONV-COMMENTS (Conventions)
+- [ ] **CMP-020** `src\ui\input_handlers\key_poller.py:7` - CONV-COMMENTS (Conventions)
   - Symbol: `<file>`
   - Problem: Inline-comment coverage is 58.2%; uncommented lines: 7, 9, 10, 11, 12, 31, 41, 44, 48, 55, 62, 66.
   - Fix: Add a same-line comment explaining intent on each executable line of changed code.
   - Done when: analyzer reports no CONV-COMMENTS for `<file>` in `src\ui\input_handlers\key_poller.py`.
-- [ ] **CMP-023** `src\ui\layout\layout_builder.py:7` - CONV-COMMENTS (Conventions)
+- [ ] **CMP-021** `src\ui\layout\layout_builder.py:7` - CONV-COMMENTS (Conventions)
   - Symbol: `<file>`
   - Problem: Inline-comment coverage is 51.2%; uncommented lines: 7, 9, 10, 11, 18, 21, 25, 38, 39, 48, 49, 50.
   - Fix: Add a same-line comment explaining intent on each executable line of changed code.
   - Done when: analyzer reports no CONV-COMMENTS for `<file>` in `src\ui\layout\layout_builder.py`.
-- [ ] **CMP-024** `src\ui\layout\layout_builder.py:25` - STRUCT-LENGTH (Structure)
+- [ ] **CMP-022** `src\ui\layout\layout_builder.py:25` - STRUCT-LENGTH (Structure)
   - Symbol: `build`
   - Problem: Function spans 27 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
@@ -8644,67 +8622,67 @@ No violations found. This file complies with the guidelines.
 
 ### Phase: Low (13 task(s))
 
-- [ ] **CMP-025** `src\auth\interactive\msp_org_selector.py:118` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-023** `src\auth\interactive\msp_org_selector.py:118` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_fetch_msp_orgs`
   - Problem: Cyclomatic complexity is 6 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
   - Done when: analyzer reports no STRUCT-COMPLEXITY for `_fetch_msp_orgs` in `src\auth\interactive\msp_org_selector.py`.
-- [ ] **CMP-026** `src\auth\interactive\msp_org_selector.py:192` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-024** `src\auth\interactive\msp_org_selector.py:192` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_interpret_choice`
   - Problem: Cyclomatic complexity is 8 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
   - Done when: analyzer reports no STRUCT-COMPLEXITY for `_interpret_choice` in `src\auth\interactive\msp_org_selector.py`.
-- [ ] **CMP-027** `src\refactors\serial_cc\import_initialization_service.py:24` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-025** `src\refactors\serial_cc\import_initialization_service.py:24` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_import_package_group`
   - Problem: Cyclomatic complexity is 8 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
   - Done when: analyzer reports no STRUCT-COMPLEXITY for `_import_package_group` in `src\refactors\serial_cc\import_initialization_service.py`.
-- [ ] **CMP-028** `src\refactors\serial_cc\import_initialization_service.py:49` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-026** `src\refactors\serial_cc\import_initialization_service.py:49` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_log_summary`
   - Problem: Cyclomatic complexity is 7 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
   - Done when: analyzer reports no STRUCT-COMPLEXITY for `_log_summary` in `src\refactors\serial_cc\import_initialization_service.py`.
-- [ ] **CMP-029** `src\site\address_audit\address_corrector.py:51` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-027** `src\site\address_audit\address_corrector.py:51` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_is_correctable`
   - Problem: Cyclomatic complexity is 6 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
   - Done when: analyzer reports no STRUCT-COMPLEXITY for `_is_correctable` in `src\site\address_audit\address_corrector.py`.
-- [ ] **CMP-030** `src\site\address_audit\address_corrector.py:73` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-028** `src\site\address_audit\address_corrector.py:73` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_review_one`
   - Problem: Cyclomatic complexity is 8 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
   - Done when: analyzer reports no STRUCT-COMPLEXITY for `_review_one` in `src\site\address_audit\address_corrector.py`.
-- [ ] **CMP-031** `src\site\address_audit\address_corrector.py:128` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-029** `src\site\address_audit\address_corrector.py:128` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_print_summary`
   - Problem: Cyclomatic complexity is 7 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
   - Done when: analyzer reports no STRUCT-COMPLEXITY for `_print_summary` in `src\site\address_audit\address_corrector.py`.
-- [ ] **CMP-032** `src\site\address_audit\business_authority_ingester.py:73` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-030** `src\site\address_audit\business_authority_ingester.py:73` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `match`
   - Problem: Cyclomatic complexity is 7 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
   - Done when: analyzer reports no STRUCT-COMPLEXITY for `match` in `src\site\address_audit\business_authority_ingester.py`.
-- [ ] **CMP-033** `src\site\address_audit\business_authority_ingester.py:112` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-031** `src\site\address_audit\business_authority_ingester.py:112` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_parse_row`
   - Problem: Cyclomatic complexity is 10 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
   - Done when: analyzer reports no STRUCT-COMPLEXITY for `_parse_row` in `src\site\address_audit\business_authority_ingester.py`.
-- [ ] **CMP-034** `src\ui\execution\output_formatter.py:78` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-032** `src\ui\execution\output_formatter.py:78` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_render_sequence`
   - Problem: Cyclomatic complexity is 6 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
   - Done when: analyzer reports no STRUCT-COMPLEXITY for `_render_sequence` in `src\ui\execution\output_formatter.py`.
-- [ ] **CMP-035** `src\ui\input_handlers\key_poller.py:95` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-033** `src\ui\input_handlers\key_poller.py:95` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `_parse_unix_csi`
   - Problem: Cyclomatic complexity is 10 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
   - Done when: analyzer reports no STRUCT-COMPLEXITY for `_parse_unix_csi` in `src\ui\input_handlers\key_poller.py`.
-- [ ] **CMP-036** `src\ui\input_handlers\key_poller.py:95` - STRUCT-BLOCKS (Structure)
+- [ ] **CMP-034** `src\ui\input_handlers\key_poller.py:95` - STRUCT-BLOCKS (Structure)
   - Symbol: `_parse_unix_csi`
   - Problem: Function has 6 logical blocks (limit 5).
   - Fix: Split the function so each helper owns a single cohesive block of logic.
   - Done when: analyzer reports no STRUCT-BLOCKS for `_parse_unix_csi` in `src\ui\input_handlers\key_poller.py`.
-- [ ] **CMP-037** `src\ui\runtime\level_discoverer.py:20` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-035** `src\ui\runtime\level_discoverer.py:20` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `discover`
   - Problem: Cyclomatic complexity is 6 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
