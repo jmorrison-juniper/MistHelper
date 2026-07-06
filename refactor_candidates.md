@@ -1,10 +1,10 @@
 # Refactor candidates: MistHelper.py
 
 - Entrypoint: `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`
-- Module graph size: 194 first-party files
-- Definitions analyzed: 88
+- Module graph size: 196 first-party files
+- Definitions analyzed: 86
 - LOC saveable (unused + single-use): 0
-- Category counts: unused=0, single-use=0, low-use=8, hot=79, skipped=1
+- Category counts: unused=0, single-use=0, low-use=6, hot=79, skipped=1
 
 ## How to read this report
 
@@ -66,7 +66,7 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
 | `OrgConfigExporter` | class | 168 | 24 | hot |  | oversize_25_lines |
 | `OrgClientSecurityExporter` | class | 162 | 26 | hot |  | oversize_25_lines |
 | `CLIShellManager` | class | 161 | 23 | hot |  | oversize_25_lines,missing_action_logging |
-| `DataProcessingUtils` | class | 158 | 201 | hot |  | oversize_25_lines,missing_inline_comments,hardcoded_separator |
+| `DataProcessingUtils` | class | 158 | 197 | hot |  | oversize_25_lines,missing_inline_comments,hardcoded_separator |
 | `DataCollectionManager` | class | 156 | 20 | hot |  | oversize_25_lines,missing_inline_comments |
 | `SitesByAPModelExporter` | class | 146 | 22 | hot |  | oversize_25_lines |
 | `SiteExportUtils` | class | 145 | 94 | hot |  | oversize_25_lines,missing_action_logging |
@@ -110,10 +110,8 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
 | `SSHConnectionConfig` | class | 9 | 6 | hot |  | missing_action_logging |
 | `DeviceFetchConfig` | class | 9 | 4 | hot |  | missing_action_logging |
 | `SSHExecutionConfig` | class | 8 | 5 | hot |  | missing_inline_comments,missing_action_logging |
-| `marvis_data_utils` | assignment | 4 | 3 | low-use | MarvisDataUtils | missing_action_logging |
 | `is_debug_mode` | function | 3 | 12 | hot |  | missing_action_logging |
 | `tqdm` | function | 3 | 43 | hot |  | missing_action_logging |
-| `FAST_MODE_BACKOFF_MULTIPLIER` | assignment | 3 | 3 | low-use | FastModeBackoffMultiplierManager | missing_inline_comments,missing_action_logging |
 | `FAST_MODE_DEVICES_PER_THREAD` | assignment | 3 | 2 | low-use | FastModeDevicesPerThreadManager | missing_inline_comments,missing_action_logging |
 | `FAST_MODE_SEQUENTIAL_MAX_RETRIES` | assignment | 3 | 2 | low-use | FastModeSequentialMaxRetriesManager | missing_inline_comments,missing_action_logging |
 | `FAST_MODE_MAX_CONCURRENT_CONNECTIONS` | assignment | 3 | 6 | hot |  | missing_inline_comments,missing_action_logging |
@@ -121,11 +119,11 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
 | `MIST_WAN_TARGET_PORTS` | assignment | 3 | 3 | low-use | MistWanTargetPortsManager | missing_inline_comments,missing_action_logging |
 | `MIST_SITE_EXCLUDE_PREFIX` | assignment | 3 | 11 | hot |  | missing_inline_comments,missing_action_logging |
 
-## Low-Use (8)
+## Low-Use (6)
 
 ### `detect_msp_privileges` (function, 25 lines)
 
-- Def site: line 2117-2141
+- Def site: line 2123-2147
 - References: 3
 - Suggested class: `DetectMspPrivilegesManager`
 - Suggested module: `src/refactors/detect_msp_privileges.py`
@@ -133,11 +131,11 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
 - Guideline flags (address during the move):
   - [ ] missing_action_logging
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 2247, 17708, 20659
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 2253, 17710, 20661
 
 ### `BulkSwitchFirmwareUpgrader` (class, 19 lines)
 
-- Def site: line 18100-18118
+- Def site: line 18102-18120
 - References: 2
 - Suggested class: `FirmwareManager`
 - Suggested module: `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\firmware\firmware_manager.py`
@@ -148,35 +146,9 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
 - Reference sites (one PR cluster per file):
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\firmware\firmware_manager.py`: lines 1880, 1881
 
-### `marvis_data_utils` (assignment, 4 lines)
-
-- Def site: line 6514-6517
-- References: 3
-- Suggested class: `MarvisDataUtils`
-- Suggested module: `src/refactors/marvis_data_utils.py`
-- Rationale: low-use: sole caller lives inside MistHelper.py from `_build_deps()`; extract `marvis_data_utils` OUT of the entrypoint into a new `src/refactors/marvis_data_utils.py` module and rewrite the callsite(s) to import from there
-- Guideline flags (address during the move):
-  - [ ] missing_action_logging
-- Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 6514, 15656
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\troubleshooting\marvis_troubleshoot_utils.py`: lines 21
-
-### `FAST_MODE_BACKOFF_MULTIPLIER` (assignment, 3 lines)
-
-- Def site: line 1989-1991
-- References: 3
-- Suggested class: `FastModeBackoffMultiplierManager`
-- Suggested module: `src/refactors/fast__mode__backoff__multiplier.py`
-- Rationale: low-use: sole caller lives inside MistHelper.py from `_handle_site_port_stats_retry()`; extract `FAST_MODE_BACKOFF_MULTIPLIER` OUT of the entrypoint into a new `src/refactors/fast__mode__backoff__multiplier.py` module and rewrite the callsite(s) to import from there
-- Guideline flags (address during the move):
-  - [ ] missing_inline_comments
-  - [ ] missing_action_logging
-- Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 1989, 9900, 15329
-
 ### `FAST_MODE_DEVICES_PER_THREAD` (assignment, 3 lines)
 
-- Def site: line 1992-1994
+- Def site: line 1998-2000
 - References: 2
 - Suggested class: `FastModeDevicesPerThreadManager`
 - Suggested module: `src/refactors/fast__mode__devices__per__thread.py`
@@ -185,11 +157,11 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] missing_inline_comments
   - [ ] missing_action_logging
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 1992, 7390
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 1998, 7392
 
 ### `FAST_MODE_SEQUENTIAL_MAX_RETRIES` (assignment, 3 lines)
 
-- Def site: line 1997-1999
+- Def site: line 2003-2005
 - References: 2
 - Suggested class: `FastModeSequentialMaxRetriesManager`
 - Suggested module: `src/refactors/fast__mode__sequential__max__retries.py`
@@ -198,11 +170,11 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] missing_inline_comments
   - [ ] missing_action_logging
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 1997, 15469
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 2003, 15471
 
 ### `FAST_MODE_USE_CONNECTION_AWARE_THREADING` (assignment, 3 lines)
 
-- Def site: line 2004-2006
+- Def site: line 2010-2012
 - References: 2
 - Suggested class: `FastModeUseConnectionAwareThreadingManager`
 - Suggested module: `src/refactors/fast__mode__use__connection__aware__threading.py`
@@ -210,11 +182,11 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
 - Guideline flags (address during the move):
   - [ ] missing_action_logging
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 2004, 7380
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 2010, 7382
 
 ### `MIST_WAN_TARGET_PORTS` (assignment, 3 lines)
 
-- Def site: line 2012-2014
+- Def site: line 2018-2020
 - References: 3
 - Suggested class: `MistWanTargetPortsManager`
 - Suggested module: `src/refactors/mist__wan__target__ports.py`
@@ -223,14 +195,14 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] missing_inline_comments
   - [ ] missing_action_logging
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 2012, 15558
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 2018, 15560
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\gateway\gateway_export_utils.py`: lines 51
 
 ## Hot (79)
 
 ### `ENDPOINT_PRIMARY_KEY_STRATEGIES` (assignment, 2327 lines)
 
-- Def site: line 2855-5181
+- Def site: line 2861-5187
 - References: 5
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -241,11 +213,11 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] missing_action_logging
   - [ ] non_ascii_logs
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 2855, 6560, 6561, 6570, 6734
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 2861, 6562, 6563, 6572, 6736
 
 ### `ConstDefinitionsExporter` (class, 759 lines)
 
-- Def site: line 13915-14673
+- Def site: line 13917-14675
 - References: 14
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -254,11 +226,11 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] oversize_25_lines
   - [ ] non_ascii_logs
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 14392, 14392, 14404, 14404, 14432, 14432, 14444, 14444, 14505, 14505, 14542, 14542, 14699, 19099
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 14394, 14394, 14406, 14406, 14434, 14434, 14446, 14446, 14507, 14507, 14544, 14544, 14701, 19101
 
 ### `OrgInventoryExporter` (class, 686 lines)
 
-- Def site: line 9061-9746
+- Def site: line 9063-9748
 - References: 110
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -267,12 +239,12 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] oversize_25_lines
   - [ ] missing_inline_comments
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 5567, 5567, 9184, 9184, 9235, 9235, 9238, 9238, 9279, 9279, 9318, 9318, 9336, 9336, 9414, 9414, 9421, 9421, 9431, 9431, 9434, 9434, 9447, 9447, 9448, 9448, 9449, 9449, 9450, 9450, 9458, 9458, 9460, 9460, 9461, 9461, 9462, 9462, 9463, 9463, 9466, 9466, 9469, 9469, 9472, 9472, 9475, 9475, 9521, 9521, 9544, 9544, 9545, 9545, 9546, 9546, 9548, 9548, 9584, 9584, 9600, 9600, 9654, 9654, 9655, 9655, 9656, 9656, 9659, 9659, 9660, 9660, 9679, 9679, 9681, 9681, 9682, 9682, 9717, 9717, 15068, 15068, 15121, 15121, 15552, 17044, 17044, 17068, 17068, 17092, 17092, 17235, 17235, 18874, 18874, 18881, 18881, 18890, 18890, 18894, 18894, 18903, 18903
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 5573, 5573, 9186, 9186, 9237, 9237, 9240, 9240, 9281, 9281, 9320, 9320, 9338, 9338, 9416, 9416, 9423, 9423, 9433, 9433, 9436, 9436, 9449, 9449, 9450, 9450, 9451, 9451, 9452, 9452, 9460, 9460, 9462, 9462, 9463, 9463, 9464, 9464, 9465, 9465, 9468, 9468, 9471, 9471, 9474, 9474, 9477, 9477, 9523, 9523, 9546, 9546, 9547, 9547, 9548, 9548, 9550, 9550, 9586, 9586, 9602, 9602, 9656, 9656, 9657, 9657, 9658, 9658, 9661, 9661, 9662, 9662, 9681, 9681, 9683, 9683, 9684, 9684, 9719, 9719, 15070, 15070, 15123, 15123, 15554, 17046, 17046, 17070, 17070, 17094, 17094, 17237, 17237, 18876, 18876, 18883, 18883, 18892, 18892, 18896, 18896, 18905, 18905
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\gateway\gateway_export_utils.py`: lines 45, 294, 294, 342, 342, 498, 498
 
 ### `OrgConfigMigrationManager` (class, 675 lines)
 
-- Def site: line 16343-17017
+- Def site: line 16345-17019
 - References: 4
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -280,11 +252,11 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
 - Guideline flags (address during the move):
   - [ ] oversize_25_lines
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 16731, 16731, 19345, 19351
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 16733, 16733, 19347, 19353
 
 ### `OrgExportUtils` (class, 653 lines)
 
-- Def site: line 11794-12446
+- Def site: line 11796-12448
 - References: 128
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -294,11 +266,11 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] non_ascii_logs
   - [ ] hardcoded_separator
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 10571, 10571, 10580, 10580, 10668, 10668, 10675, 10675, 11349, 11349, 11635, 11635, 11640, 11640, 11647, 11647, 11652, 11652, 11866, 11866, 11888, 11888, 11891, 11891, 11917, 11917, 11926, 11926, 11927, 11927, 11948, 11948, 11991, 11991, 12037, 12037, 12048, 12048, 12075, 12075, 12080, 12080, 12081, 12081, 12082, 12082, 12114, 12114, 12120, 12120, 12145, 12145, 12165, 12165, 12200, 12200, 12215, 12215, 12221, 12221, 12223, 12223, 12226, 12226, 12228, 12228, 12232, 12232, 12236, 12236, 12241, 12241, 12248, 12248, 12255, 12255, 12262, 12262, 12271, 12271, 12281, 12281, 12288, 12288, 12295, 12295, 12302, 12302, 12309, 12309, 12316, 12316, 12326, 12326, 12335, 12335, 12344, 12344, 12353, 12353, 12362, 12362, 12391, 12391, 18835, 18835, 19016, 19016, 19093, 19093, 19094, 19094, 19102, 19102, 19307, 19307, 19308, 19308, 19327, 19327, 19334, 19334, 19335, 19335, 19336, 19336, 19337, 19337
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 10573, 10573, 10582, 10582, 10670, 10670, 10677, 10677, 11351, 11351, 11637, 11637, 11642, 11642, 11649, 11649, 11654, 11654, 11868, 11868, 11890, 11890, 11893, 11893, 11919, 11919, 11928, 11928, 11929, 11929, 11950, 11950, 11993, 11993, 12039, 12039, 12050, 12050, 12077, 12077, 12082, 12082, 12083, 12083, 12084, 12084, 12116, 12116, 12122, 12122, 12147, 12147, 12167, 12167, 12202, 12202, 12217, 12217, 12223, 12223, 12225, 12225, 12228, 12228, 12230, 12230, 12234, 12234, 12238, 12238, 12243, 12243, 12250, 12250, 12257, 12257, 12264, 12264, 12273, 12273, 12283, 12283, 12290, 12290, 12297, 12297, 12304, 12304, 12311, 12311, 12318, 12318, 12328, 12328, 12337, 12337, 12346, 12346, 12355, 12355, 12364, 12364, 12393, 12393, 18837, 18837, 19018, 19018, 19095, 19095, 19096, 19096, 19104, 19104, 19309, 19309, 19310, 19310, 19329, 19329, 19336, 19336, 19337, 19337, 19338, 19338, 19339, 19339
 
 ### `BulkRadiusWLANConfigManager` (class, 587 lines)
 
-- Def site: line 18131-18717
+- Def site: line 18133-18719
 - References: 13
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -306,11 +278,11 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
 - Guideline flags (address during the move):
   - [ ] oversize_25_lines
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 18408, 18408, 18409, 18409, 18412, 18412, 18414, 18414, 18416, 18416, 18432, 18432, 19252
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 18410, 18410, 18411, 18411, 18414, 18414, 18416, 18416, 18418, 18418, 18434, 18434, 19254
 
 ### `menu_actions` (assignment, 572 lines)
 
-- Def site: line 18816-19387
+- Def site: line 18818-19389
 - References: 17
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -320,12 +292,12 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] missing_inline_comments
   - [ ] missing_action_logging
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 18816, 20101, 20102, 20111, 20231, 20231, 20273, 20331, 20376, 20867, 20871, 20916, 20916, 20943, 20943, 20946
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 18818, 20103, 20104, 20113, 20233, 20233, 20275, 20333, 20378, 20869, 20873, 20918, 20918, 20945, 20945, 20948
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\troubleshooting\interactive_test_runner.py`: lines 43
 
 ### `OrgTicketManager` (class, 463 lines)
 
-- Def site: line 8345-8807
+- Def site: line 8347-8809
 - References: 66
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -333,11 +305,11 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
 - Guideline flags (address during the move):
   - [ ] oversize_25_lines
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 8386, 8386, 8391, 8391, 8401, 8401, 8409, 8409, 8414, 8414, 8419, 8419, 8429, 8429, 8434, 8434, 8439, 8439, 8459, 8459, 8469, 8469, 8470, 8470, 8473, 8473, 8503, 8503, 8589, 8589, 8591, 8591, 8615, 8615, 8621, 8621, 8626, 8626, 8635, 8635, 8639, 8639, 8658, 8658, 8661, 8661, 8672, 8672, 8673, 8673, 8768, 8768, 8789, 8789, 19375, 19375, 19376, 19376, 19377, 19377, 19378, 19378, 19379, 19379, 19380, 19380
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 8388, 8388, 8393, 8393, 8403, 8403, 8411, 8411, 8416, 8416, 8421, 8421, 8431, 8431, 8436, 8436, 8441, 8441, 8461, 8461, 8471, 8471, 8472, 8472, 8475, 8475, 8505, 8505, 8591, 8591, 8593, 8593, 8617, 8617, 8623, 8623, 8628, 8628, 8637, 8637, 8641, 8641, 8660, 8660, 8663, 8663, 8674, 8674, 8675, 8675, 8770, 8770, 8791, 8791, 19377, 19377, 19378, 19378, 19379, 19379, 19380, 19380, 19381, 19381, 19382, 19382
 
 ### `OperationRegistry` (class, 461 lines)
 
-- Def site: line 19612-20072
+- Def site: line 19614-20074
 - References: 9
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -347,11 +319,11 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] missing_inline_comments
   - [ ] missing_action_logging
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 20079, 20079, 20083, 20083, 20103, 20103, 20108, 20108, 20332
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 20081, 20081, 20085, 20085, 20105, 20105, 20110, 20110, 20334
 
 ### `PromptUtils` (class, 441 lines)
 
-- Def site: line 7792-8232
+- Def site: line 7794-8234
 - References: 117
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -359,14 +331,14 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
 - Guideline flags (address during the move):
   - [ ] oversize_25_lines
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 7737, 7737, 7753, 7753, 7757, 7757, 7758, 7758, 7759, 7759, 7774, 7774, 7780, 7780, 7807, 7807, 7810, 7810, 7818, 7818, 7836, 7836, 7886, 7886, 7894, 7894, 7899, 7899, 7945, 7945, 7956, 7956, 7981, 7981, 8000, 8000, 8001, 8001, 8004, 8004, 8005, 8005, 8095, 8095, 8097, 8097, 8101, 8101, 8129, 8129, 8130, 8130, 8131, 8131, 8132, 8132, 8133, 8133, 8142, 8142, 8186, 8186, 8210, 8210, 12526, 12526, 12576, 12576, 12581, 12581, 12724, 12807, 12807, 12861, 12861, 12882, 12882, 12887, 12887, 13151, 13151, 13354, 13556, 13556, 13643, 13643, 13648, 13648, 13698, 13698, 13699, 13699, 15195, 15195, 15654, 17051, 17051, 17573, 17573, 18740, 18740, 18741, 18741, 19027, 19027
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 7739, 7739, 7755, 7755, 7759, 7759, 7760, 7760, 7761, 7761, 7776, 7776, 7782, 7782, 7809, 7809, 7812, 7812, 7820, 7820, 7838, 7838, 7888, 7888, 7896, 7896, 7901, 7901, 7947, 7947, 7958, 7958, 7983, 7983, 8002, 8002, 8003, 8003, 8006, 8006, 8007, 8007, 8097, 8097, 8099, 8099, 8103, 8103, 8131, 8131, 8132, 8132, 8133, 8133, 8134, 8134, 8135, 8135, 8144, 8144, 8188, 8188, 8212, 8212, 12528, 12528, 12578, 12578, 12583, 12583, 12726, 12809, 12809, 12863, 12863, 12884, 12884, 12889, 12889, 13153, 13153, 13356, 13558, 13558, 13645, 13645, 13650, 13650, 13700, 13700, 13701, 13701, 15197, 15197, 15656, 17053, 17053, 17575, 17575, 18742, 18742, 18743, 18743, 19029, 19029
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\export\site_export_utils.py`: lines 23, 67, 195, 195
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\export\site_insights_exporter.py`: lines 37, 51
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\websocket\service_ping_manager.py`: lines 17, 62, 122, 122, 127, 127
 
 ### `OrgDeviceStatsExporter` (class, 414 lines)
 
-- Def site: line 9749-10162
+- Def site: line 9751-10164
 - References: 58
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -375,11 +347,11 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] oversize_25_lines
   - [ ] missing_inline_comments
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 5561, 5561, 9782, 9782, 9866, 9866, 9872, 9872, 9875, 9875, 9919, 9919, 9933, 9933, 9960, 9960, 9966, 9966, 9980, 9980, 10063, 10063, 10065, 10065, 10069, 10069, 10071, 10071, 10074, 10074, 10078, 10078, 10081, 10081, 10091, 10091, 10097, 10097, 10135, 10135, 15069, 15069, 15070, 15070, 15071, 15071, 15122, 15122, 15123, 15123, 18875, 18875, 18876, 18876, 18877, 18877, 18901, 18901
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 5567, 5567, 9784, 9784, 9868, 9868, 9874, 9874, 9877, 9877, 9921, 9921, 9935, 9935, 9962, 9962, 9968, 9968, 9982, 9982, 10065, 10065, 10067, 10067, 10071, 10071, 10073, 10073, 10076, 10076, 10080, 10080, 10083, 10083, 10093, 10093, 10099, 10099, 10137, 10137, 15071, 15071, 15072, 15072, 15073, 15073, 15124, 15124, 15125, 15125, 18877, 18877, 18878, 18878, 18879, 18879, 18903, 18903
 
 ### `DeviceRebootManager` (class, 398 lines)
 
-- Def site: line 17154-17551
+- Def site: line 17156-17553
 - References: 46
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -388,11 +360,11 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] oversize_25_lines
   - [ ] missing_inline_comments
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 17175, 17175, 17180, 17180, 17184, 17184, 17187, 17187, 17194, 17194, 17196, 17196, 17197, 17197, 17200, 17200, 17203, 17203, 17206, 17206, 17248, 17248, 17280, 17280, 17347, 17347, 17360, 17360, 17365, 17365, 17417, 17417, 17450, 17450, 17451, 17451, 17452, 17452, 17482, 17482, 17511, 17511, 17512, 17512, 19058, 19058
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 17177, 17177, 17182, 17182, 17186, 17186, 17189, 17189, 17196, 17196, 17198, 17198, 17199, 17199, 17202, 17202, 17205, 17205, 17208, 17208, 17250, 17250, 17282, 17282, 17349, 17349, 17362, 17362, 17367, 17367, 17419, 17419, 17452, 17452, 17453, 17453, 17454, 17454, 17484, 17484, 17513, 17513, 17514, 17514, 19060, 19060
 
 ### `MSPInventoryExporter` (class, 388 lines)
 
-- Def site: line 17605-17992
+- Def site: line 17607-17994
 - References: 5
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -402,11 +374,11 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] missing_inline_comments
   - [ ] non_ascii_logs
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 17632, 17776, 17776, 19198, 19198
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 17634, 17778, 17778, 19200, 19200
 
 ### `DataExporter` (class, 345 lines)
 
-- Def site: line 6701-7045
+- Def site: line 6703-7047
 - References: 250
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -415,7 +387,7 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] oversize_25_lines
   - [ ] non_ascii_logs
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 5657, 5657, 6747, 6747, 6763, 6763, 6764, 6764, 6787, 6787, 6789, 6789, 6792, 6792, 6806, 6806, 6808, 6808, 6817, 6817, 6819, 6819, 6820, 6820, 6826, 6826, 6827, 6827, 6827, 6844, 6844, 6848, 6848, 6890, 6890, 6921, 6921, 6924, 6924, 6926, 6926, 6972, 6972, 6982, 6982, 7015, 7015, 7020, 7020, 7027, 7027, 7249, 7249, 7281, 7281, 7292, 7292, 7317, 7317, 7337, 7337, 7849, 7849, 8642, 8642, 8921, 8921, 8936, 9000, 9000, 9017, 9017, 9035, 9035, 9056, 9056, 9615, 9615, 9690, 9690, 10020, 10020, 10371, 10371, 10456, 10472, 10592, 10592, 10596, 10596, 10616, 10616, 10629, 10629, 10633, 10633, 10651, 10651, 10813, 10813, 11160, 11160, 11307, 11307, 11384, 11384, 11388, 11388, 11393, 11393, 11526, 11526, 11545, 11545, 11596, 11596, 11599, 11599, 11750, 11750, 11753, 11753, 11852, 11852, 11858, 11858, 12155, 12155, 12172, 12172, 12187, 12187, 12401, 12401, 12429, 12429, 12445, 12445, 12482, 12482, 12520, 12520, 12609, 12609, 12638, 12638, 12676, 12676, 12727, 12792, 12792, 12798, 12798, 12840, 12840, 13009, 13009, 13015, 13015, 13134, 13134, 13142, 13142, 13306, 13306, 13357, 13530, 13530, 13701, 13701, 14214, 14214, 14575, 14575, 14581, 14581, 15489, 15489, 15548, 15655, 15791, 15791, 15809, 15809, 15827, 15827, 17098, 17098, 17119, 17958, 17958, 18043, 18043, 18064, 18064, 18566, 18566, 19227, 19227, 19243, 19243
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 5663, 5663, 6749, 6749, 6765, 6765, 6766, 6766, 6789, 6789, 6791, 6791, 6794, 6794, 6808, 6808, 6810, 6810, 6819, 6819, 6821, 6821, 6822, 6822, 6828, 6828, 6829, 6829, 6829, 6846, 6846, 6850, 6850, 6892, 6892, 6923, 6923, 6926, 6926, 6928, 6928, 6974, 6974, 6984, 6984, 7017, 7017, 7022, 7022, 7029, 7029, 7251, 7251, 7283, 7283, 7294, 7294, 7319, 7319, 7339, 7339, 7851, 7851, 8644, 8644, 8923, 8923, 8938, 9002, 9002, 9019, 9019, 9037, 9037, 9058, 9058, 9617, 9617, 9692, 9692, 10022, 10022, 10373, 10373, 10458, 10474, 10594, 10594, 10598, 10598, 10618, 10618, 10631, 10631, 10635, 10635, 10653, 10653, 10815, 10815, 11162, 11162, 11309, 11309, 11386, 11386, 11390, 11390, 11395, 11395, 11528, 11528, 11547, 11547, 11598, 11598, 11601, 11601, 11752, 11752, 11755, 11755, 11854, 11854, 11860, 11860, 12157, 12157, 12174, 12174, 12189, 12189, 12403, 12403, 12431, 12431, 12447, 12447, 12484, 12484, 12522, 12522, 12611, 12611, 12640, 12640, 12678, 12678, 12729, 12794, 12794, 12800, 12800, 12842, 12842, 13011, 13011, 13017, 13017, 13136, 13136, 13144, 13144, 13308, 13308, 13359, 13532, 13532, 13703, 13703, 14216, 14216, 14577, 14577, 14583, 14583, 15491, 15491, 15550, 15657, 15793, 15793, 15811, 15811, 15829, 15829, 17100, 17100, 17121, 17960, 17960, 18045, 18045, 18066, 18066, 18568, 18568, 19229, 19229, 19245, 19245
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\export\site_export_utils.py`: lines 26, 70, 187, 187, 285, 285, 293, 293, 362, 362, 391, 391, 543, 543, 558, 558
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\export\site_insights_exporter.py`: lines 39, 53
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\gateway\gateway_export_utils.py`: lines 41, 379, 379, 439, 439, 456, 456, 475, 475, 548, 548
@@ -426,7 +398,7 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
 
 ### `SiteAnomalyExporter` (class, 341 lines)
 
-- Def site: line 12848-13188
+- Def site: line 12850-13190
 - References: 54
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -435,11 +407,11 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] oversize_25_lines
   - [ ] non_ascii_logs
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 12865, 12865, 12867, 12867, 12871, 12871, 12872, 12872, 12886, 12886, 12892, 12892, 12895, 12895, 12898, 12898, 12956, 12956, 12962, 12962, 12967, 12967, 12981, 12981, 12999, 12999, 13109, 13109, 13113, 13113, 13115, 13115, 13118, 13118, 13155, 13155, 13160, 13160, 13174, 13174, 13178, 13178, 13180, 13180, 13183, 13183, 13188, 13188, 19104, 19104, 19108, 19108, 19112, 19112
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 12867, 12867, 12869, 12869, 12873, 12873, 12874, 12874, 12888, 12888, 12894, 12894, 12897, 12897, 12900, 12900, 12958, 12958, 12964, 12964, 12969, 12969, 12983, 12983, 13001, 13001, 13111, 13111, 13115, 13115, 13117, 13117, 13120, 13120, 13157, 13157, 13162, 13162, 13176, 13176, 13180, 13180, 13182, 13182, 13185, 13185, 13190, 13190, 19106, 19106, 19110, 19110, 19114, 19114
 
 ### `APIDataFetcher` (class, 328 lines)
 
-- Def site: line 7048-7375
+- Def site: line 7050-7377
 - References: 16
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -447,11 +419,11 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
 - Guideline flags (address during the move):
   - [ ] oversize_25_lines
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 7150, 7150, 8366, 8847, 8866, 8967, 9096, 9119, 9791, 10099, 10144, 10558, 11328, 11339, 11402, 11819
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 7152, 7152, 8368, 8849, 8868, 8969, 9098, 9121, 9793, 10101, 10146, 10560, 11330, 11341, 11404, 11821
 
 ### `InsightMetricsUtils` (class, 328 lines)
 
-- Def site: line 14679-15006
+- Def site: line 14681-15008
 - References: 51
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -461,13 +433,13 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] non_ascii_logs
   - [ ] hardcoded_separator
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 12136, 12136, 12195, 12195, 12196, 12196, 13360, 14720, 14720, 14722, 14722, 14728, 14728, 14742, 14742, 14781, 14781, 14784, 14784, 14786, 14786, 14787, 14787, 14788, 14788, 14842, 14842, 14843, 14843, 14854, 14854, 14863, 14863, 14882, 14882, 14934, 14934, 14938, 14938, 14946, 14946, 14947, 14947, 14971, 14971, 14975, 14975
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 12138, 12138, 12197, 12197, 12198, 12198, 13362, 14722, 14722, 14724, 14724, 14730, 14730, 14744, 14744, 14783, 14783, 14786, 14786, 14788, 14788, 14789, 14789, 14790, 14790, 14844, 14844, 14845, 14845, 14856, 14856, 14865, 14865, 14884, 14884, 14936, 14936, 14940, 14940, 14948, 14948, 14949, 14949, 14973, 14973, 14977, 14977
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\export\site_export_utils.py`: lines 29, 73
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\export\site_insights_exporter.py`: lines 41, 55
 
 ### `ARPCommandManager` (class, 289 lines)
 
-- Def site: line 16039-16327
+- Def site: line 16041-16329
 - References: 46
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -477,11 +449,11 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] non_ascii_logs
   - [ ] hardcoded_separator
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 16067, 16067, 16070, 16070, 16075, 16075, 16078, 16078, 16122, 16122, 16128, 16128, 16159, 16159, 16162, 16162, 16166, 16166, 16192, 16192, 16209, 16209, 16215, 16215, 16229, 16229, 16230, 16230, 16232, 16232, 16238, 16238, 16245, 16245, 16254, 16254, 16301, 16301, 16323, 16323, 16324, 16324, 16325, 16325, 19049, 19049
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 16069, 16069, 16072, 16072, 16077, 16077, 16080, 16080, 16124, 16124, 16130, 16130, 16161, 16161, 16164, 16164, 16168, 16168, 16194, 16194, 16211, 16211, 16217, 16217, 16231, 16231, 16232, 16232, 16234, 16234, 16240, 16240, 16247, 16247, 16256, 16256, 16303, 16303, 16325, 16325, 16326, 16326, 16327, 16327, 19051, 19051
 
 ### `OfflineDeviceReporter` (class, 273 lines)
 
-- Def site: line 10165-10437
+- Def site: line 10167-10439
 - References: 54
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -490,11 +462,11 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] oversize_25_lines
   - [ ] missing_inline_comments
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 10188, 10188, 10189, 10189, 10202, 10202, 10203, 10203, 10205, 10205, 10206, 10206, 10209, 10209, 10212, 10212, 10216, 10216, 10217, 10217, 10293, 10293, 10297, 10297, 10300, 10300, 10313, 10313, 10350, 10350, 10367, 10367, 10380, 10380, 10382, 10382, 10389, 10389, 10398, 10398, 10407, 10407, 10408, 10408, 10419, 10419, 10423, 10423, 10432, 10432, 10437, 10437, 19306, 19306
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 10190, 10190, 10191, 10191, 10204, 10204, 10205, 10205, 10207, 10207, 10208, 10208, 10211, 10211, 10214, 10214, 10218, 10218, 10219, 10219, 10295, 10295, 10299, 10299, 10302, 10302, 10315, 10315, 10352, 10352, 10369, 10369, 10382, 10382, 10384, 10384, 10391, 10391, 10400, 10400, 10409, 10409, 10410, 10410, 10421, 10421, 10425, 10425, 10434, 10434, 10439, 10439, 19308, 19308
 
 ### `CacheUtils` (class, 264 lines)
 
-- Def site: line 5187-5450
+- Def site: line 5193-5456
 - References: 106
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -502,14 +474,14 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
 - Guideline flags (address during the move):
   - [ ] oversize_25_lines
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 5227, 5227, 5229, 5229, 5311, 5311, 5317, 5317, 5354, 5354, 5356, 5356, 5365, 5365, 5375, 5375, 5385, 5385, 5421, 5421, 7885, 7885, 9543, 9543, 9544, 9544, 9855, 9855, 10701, 10701, 10721, 10721, 12722, 15128, 15128, 15134, 15134, 15135, 15135, 15136, 15136, 15137, 15137, 15138, 15138, 15139, 15139, 15146, 15146, 15174, 15174, 15546, 15792, 15792, 15810, 15810, 15828, 15828, 15854, 17043, 17043, 17067, 17067, 17091, 17091, 17235, 17235, 17236, 17236, 17237, 17237, 17238, 17238, 17574, 17574, 18791, 18791, 19343, 19343
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 5233, 5233, 5235, 5235, 5317, 5317, 5323, 5323, 5360, 5360, 5362, 5362, 5371, 5371, 5381, 5381, 5391, 5391, 5427, 5427, 7887, 7887, 9545, 9545, 9546, 9546, 9857, 9857, 10703, 10703, 10723, 10723, 12724, 15130, 15130, 15136, 15136, 15137, 15137, 15138, 15138, 15139, 15139, 15140, 15140, 15141, 15141, 15148, 15148, 15176, 15176, 15548, 15794, 15794, 15812, 15812, 15830, 15830, 15856, 17045, 17045, 17069, 17069, 17093, 17093, 17237, 17237, 17238, 17238, 17239, 17239, 17240, 17240, 17576, 17576, 18793, 18793, 19345, 19345
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\gateway\gateway_export_utils.py`: lines 39, 338, 338, 340, 340, 342, 342, 344, 344, 498, 498, 499, 499, 544, 544
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\gateway\gateway_stats_exporter.py`: lines 30, 331, 331, 352, 352
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\gateway\wan2_migration_manager.py`: lines 16, 191, 191, 192, 192, 195, 195
 
 ### `GlobalWiredClientReportGenerator` (class, 251 lines)
 
-- Def site: line 10932-11182
+- Def site: line 10934-11184
 - References: 32
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -519,11 +491,11 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] non_ascii_logs
   - [ ] hardcoded_separator
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 10939, 10939, 10942, 10942, 10947, 10947, 10948, 10948, 10956, 10956, 10959, 10959, 10967, 10967, 11007, 11007, 11015, 11015, 11063, 11063, 11080, 11080, 11083, 11083, 11085, 11085, 11149, 11149, 11150, 11150, 19309, 19309
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 10941, 10941, 10944, 10944, 10949, 10949, 10950, 10950, 10958, 10958, 10961, 10961, 10969, 10969, 11009, 11009, 11017, 11017, 11065, 11065, 11082, 11082, 11085, 11085, 11087, 11087, 11151, 11151, 11152, 11152, 19311, 19311
 
 ### `GatewayTestExporter` (class, 245 lines)
 
-- Def site: line 15258-15502
+- Def site: line 15260-15504
 - References: 34
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -533,11 +505,11 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] missing_inline_comments
   - [ ] non_ascii_logs
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 15124, 15124, 15284, 15284, 15286, 15286, 15287, 15287, 15288, 15288, 15316, 15316, 15321, 15321, 15343, 15343, 15344, 15344, 15386, 15386, 15394, 15394, 15420, 15420, 15429, 15429, 15437, 15437, 15468, 15468, 18880, 18880, 18884, 18884
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 15126, 15126, 15286, 15286, 15288, 15288, 15289, 15289, 15290, 15290, 15318, 15318, 15323, 15323, 15345, 15345, 15346, 15346, 15388, 15388, 15396, 15396, 15422, 15422, 15431, 15431, 15439, 15439, 15470, 15470, 18882, 18882, 18886, 18886
 
 ### `APIFetchUtils` (class, 221 lines)
 
-- Def site: line 6120-6340
+- Def site: line 6126-6346
 - References: 36
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -545,14 +517,14 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
 - Guideline flags (address during the move):
   - [ ] oversize_25_lines
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 6143, 6143, 6194, 6194, 6264, 6264, 6288, 6288, 6300, 6300, 6302, 6302, 6312, 6312, 6327, 6327, 6331, 6331, 6332, 6332, 6335, 6335, 6337, 6337, 12835, 12835, 15550
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 6149, 6149, 6200, 6200, 6270, 6270, 6294, 6294, 6306, 6306, 6308, 6308, 6318, 6318, 6333, 6333, 6337, 6337, 6338, 6338, 6341, 6341, 6343, 6343, 12837, 12837, 15552
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\gateway\gateway_export_utils.py`: lines 43, 449, 449
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\websocket\service_ping_discovery.py`: lines 13, 43, 108, 108
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\websocket\service_ping_manager.py`: lines 23, 68
 
 ### `TelemetryEmitter` (class, 214 lines)
 
-- Def site: line 19393-19606
+- Def site: line 19395-19608
 - References: 5
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -561,11 +533,11 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] oversize_25_lines
   - [ ] missing_inline_comments
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 20249, 20249, 20252, 20333, 20684
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 20251, 20251, 20254, 20335, 20686
 
 ### `PromptClientUtils` (class, 210 lines)
 
-- Def site: line 7576-7785
+- Def site: line 7578-7787
 - References: 31
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -574,11 +546,11 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] oversize_25_lines
   - [ ] raw_input_call
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 7589, 7589, 7595, 7595, 7596, 7596, 7599, 7599, 7622, 7622, 7625, 7625, 7628, 7628, 7629, 7629, 7631, 7631, 7698, 7698, 7742, 7742, 8207, 8207, 13156, 13156, 15653, 15892, 15892, 16052, 16052
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 7591, 7591, 7597, 7597, 7598, 7598, 7601, 7601, 7624, 7624, 7627, 7627, 7630, 7630, 7631, 7631, 7633, 7633, 7700, 7700, 7744, 7744, 8209, 8209, 13158, 13158, 15655, 15894, 15894, 16054, 16054
 
 ### `SiteDeviceExporter` (class, 203 lines)
 
-- Def site: line 12454-12656
+- Def site: line 12456-12658
 - References: 30
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -587,11 +559,11 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] oversize_25_lines
   - [ ] non_ascii_logs
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 12475, 12475, 12484, 12484, 12546, 12546, 12553, 12553, 12585, 12585, 12587, 12587, 12611, 12611, 12646, 12646, 12653, 12653, 12684, 12684, 15198, 15198, 18916, 18916, 18918, 18918, 18919, 18919, 18921, 18921
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 12477, 12477, 12486, 12486, 12548, 12548, 12555, 12555, 12587, 12587, 12589, 12589, 12613, 12613, 12648, 12648, 12655, 12655, 12686, 12686, 15200, 15200, 18918, 18918, 18920, 18920, 18921, 18921, 18923, 18923
 
 ### `DeviceUtilityCommands` (class, 188 lines)
 
-- Def site: line 13707-13894
+- Def site: line 13709-13896
 - References: 70
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -601,11 +573,11 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] missing_inline_comments
   - [ ] missing_action_logging
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 19266, 19266, 19267, 19267, 19268, 19268, 19269, 19269, 19270, 19270, 19271, 19271, 19272, 19272, 19273, 19273, 19275, 19275, 19276, 19276, 19277, 19277, 19278, 19278, 19279, 19279, 19280, 19280, 19281, 19281, 19283, 19283, 19284, 19284, 19285, 19285, 19286, 19286, 19287, 19287, 19288, 19288, 19289, 19289, 19290, 19290, 19291, 19291, 19293, 19293, 19294, 19294, 19295, 19295, 19296, 19296, 19297, 19297, 19298, 19298, 19299, 19299, 19300, 19300, 19301, 19301, 19303, 19303, 19304, 19304
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 19268, 19268, 19269, 19269, 19270, 19270, 19271, 19271, 19272, 19272, 19273, 19273, 19274, 19274, 19275, 19275, 19277, 19277, 19278, 19278, 19279, 19279, 19280, 19280, 19281, 19281, 19282, 19282, 19283, 19283, 19285, 19285, 19286, 19286, 19287, 19287, 19288, 19288, 19289, 19289, 19290, 19290, 19291, 19291, 19292, 19292, 19293, 19293, 19295, 19295, 19296, 19296, 19297, 19297, 19298, 19298, 19299, 19299, 19300, 19300, 19301, 19301, 19302, 19302, 19303, 19303, 19305, 19305, 19306, 19306
 
 ### `SFPTransceiverDataProcessor` (class, 180 lines)
 
-- Def site: line 5532-5711
+- Def site: line 5538-5717
 - References: 22
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -614,11 +586,11 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] oversize_25_lines
   - [ ] missing_inline_comments
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 5620, 5620, 5657, 5657, 5659, 5659, 5662, 5662, 5670, 5670, 5672, 5672, 5674, 5674, 5677, 5677, 5706, 5706, 5709, 5709, 19043, 19043
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 5626, 5626, 5663, 5663, 5665, 5665, 5668, 5668, 5676, 5676, 5678, 5678, 5680, 5680, 5683, 5683, 5712, 5712, 5715, 5715, 19045, 19045
 
 ### `DatabaseSchemaUtils` (class, 179 lines)
 
-- Def site: line 6520-6698
+- Def site: line 6522-6700
 - References: 34
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -626,11 +598,11 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
 - Guideline flags (address during the move):
   - [ ] oversize_25_lines
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 6565, 6565, 6603, 6603, 6614, 6614, 6640, 6640, 6641, 6641, 6643, 6643, 6649, 6649, 6650, 6650, 6653, 6653, 6659, 6659, 6660, 6660, 6663, 6663, 6665, 6665, 6675, 6675, 6677, 6677, 6678, 6678, 6680, 6680
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 6567, 6567, 6605, 6605, 6616, 6616, 6642, 6642, 6643, 6643, 6645, 6645, 6651, 6651, 6652, 6652, 6655, 6655, 6661, 6661, 6662, 6662, 6665, 6665, 6667, 6667, 6677, 6677, 6679, 6679, 6680, 6680, 6682, 6682
 
 ### `LicenseExportUtils` (class, 168 lines)
 
-- Def site: line 11412-11579
+- Def site: line 11414-11581
 - References: 20
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -639,11 +611,11 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] oversize_25_lines
   - [ ] non_ascii_logs
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 11519, 11519, 11538, 11538, 11556, 11556, 11565, 11565, 11568, 11568, 11569, 11569, 11572, 11572, 11577, 11577, 11579, 11579, 18944, 18944
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 11521, 11521, 11540, 11540, 11558, 11558, 11567, 11567, 11570, 11570, 11571, 11571, 11574, 11574, 11579, 11579, 11581, 11581, 18946, 18946
 
 ### `OrgConfigExporter` (class, 168 lines)
 
-- Def site: line 11624-11791
+- Def site: line 11626-11793
 - References: 24
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -651,11 +623,11 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
 - Guideline flags (address during the move):
   - [ ] oversize_25_lines
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 11661, 11661, 11663, 11663, 11666, 11666, 11737, 11737, 11739, 11739, 11752, 11752, 11756, 11756, 18947, 18947, 18948, 18948, 18949, 18949, 18987, 18987, 18992, 18992
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 11663, 11663, 11665, 11665, 11668, 11668, 11739, 11739, 11741, 11741, 11754, 11754, 11758, 11758, 18949, 18949, 18950, 18950, 18951, 18951, 18989, 18989, 18994, 18994
 
 ### `OrgClientSecurityExporter` (class, 162 lines)
 
-- Def site: line 10657-10818
+- Def site: line 10659-10820
 - References: 26
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -663,11 +635,11 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
 - Guideline flags (address during the move):
   - [ ] oversize_25_lines
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 10695, 10695, 10702, 10702, 10709, 10709, 10715, 10715, 10722, 10722, 10729, 10729, 10790, 10790, 10801, 10801, 18935, 18935, 18936, 18936, 18938, 18938, 18939, 18939, 18940, 18940
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 10697, 10697, 10704, 10704, 10711, 10711, 10717, 10717, 10724, 10724, 10731, 10731, 10792, 10792, 10803, 10803, 18937, 18937, 18938, 18938, 18940, 18940, 18941, 18941, 18942, 18942
 
 ### `CLIShellManager` (class, 161 lines)
 
-- Def site: line 15873-16033
+- Def site: line 15875-16035
 - References: 23
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -676,12 +648,12 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] oversize_25_lines
   - [ ] missing_action_logging
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 15896, 15896, 15898, 15898, 15967, 15967, 15969, 15969, 15988, 15988, 15990, 15990, 15990, 16006, 16006, 16022, 16022, 16023, 16023, 16029, 16029, 19048, 19048
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 15898, 15898, 15900, 15900, 15969, 15969, 15971, 15971, 15990, 15990, 15992, 15992, 15992, 16008, 16008, 16024, 16024, 16025, 16025, 16031, 16031, 19050, 19050
 
 ### `DataProcessingUtils` (class, 158 lines)
 
-- Def site: line 6348-6505
-- References: 201
+- Def site: line 6354-6511
+- References: 197
 - Suggested class: _n/a_
 - Suggested module: _n/a_
 - Rationale: Widely used; leave in place until dependencies decouple
@@ -690,7 +662,7 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] missing_inline_comments
   - [ ] hardcoded_separator
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 5485, 5485, 6364, 6364, 6377, 6377, 6380, 6380, 6404, 6404, 6412, 6412, 6413, 6413, 6435, 6435, 6440, 6440, 6442, 6442, 6515, 6515, 6516, 6516, 6923, 6923, 6948, 6948, 7017, 7017, 7018, 7018, 7347, 7347, 7361, 7361, 7362, 7362, 7847, 7847, 7848, 7848, 8770, 8770, 8935, 8995, 8995, 8997, 8997, 8998, 8998, 9015, 9015, 9016, 9016, 9033, 9033, 9034, 9034, 9054, 9054, 9055, 9055, 9612, 9612, 9613, 9613, 9687, 9687, 9688, 9688, 10016, 10016, 10019, 10019, 10594, 10594, 10595, 10595, 10631, 10631, 10632, 10632, 10811, 10811, 10812, 10812, 11156, 11156, 11157, 11157, 11303, 11303, 11304, 11304, 11386, 11386, 11387, 11387, 11598, 11598, 11773, 11773, 11774, 11774, 11850, 11850, 11851, 11851, 12154, 12154, 12170, 12170, 12171, 12171, 12399, 12399, 12400, 12400, 12479, 12479, 12480, 12480, 12481, 12481, 12517, 12517, 12518, 12518, 12606, 12606, 12607, 12607, 12635, 12635, 12636, 12636, 12673, 12673, 12674, 12674, 12726, 12795, 12795, 12796, 12796, 12838, 12838, 12839, 12839, 13007, 13007, 13008, 13008, 13132, 13132, 13133, 13133, 13356, 13528, 13528, 14580, 14580, 15487, 15487, 15488, 15488, 15549, 15657, 17096, 17096, 17097, 17097, 17948, 17948
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 5491, 5491, 6370, 6370, 6383, 6383, 6386, 6386, 6410, 6410, 6418, 6418, 6419, 6419, 6441, 6441, 6446, 6446, 6448, 6448, 6925, 6925, 6950, 6950, 7019, 7019, 7020, 7020, 7349, 7349, 7363, 7363, 7364, 7364, 7849, 7849, 7850, 7850, 8772, 8772, 8937, 8997, 8997, 8999, 8999, 9000, 9000, 9017, 9017, 9018, 9018, 9035, 9035, 9036, 9036, 9056, 9056, 9057, 9057, 9614, 9614, 9615, 9615, 9689, 9689, 9690, 9690, 10018, 10018, 10021, 10021, 10596, 10596, 10597, 10597, 10633, 10633, 10634, 10634, 10813, 10813, 10814, 10814, 11158, 11158, 11159, 11159, 11305, 11305, 11306, 11306, 11388, 11388, 11389, 11389, 11600, 11600, 11775, 11775, 11776, 11776, 11852, 11852, 11853, 11853, 12156, 12156, 12172, 12172, 12173, 12173, 12401, 12401, 12402, 12402, 12481, 12481, 12482, 12482, 12483, 12483, 12519, 12519, 12520, 12520, 12608, 12608, 12609, 12609, 12637, 12637, 12638, 12638, 12675, 12675, 12676, 12676, 12728, 12797, 12797, 12798, 12798, 12840, 12840, 12841, 12841, 13009, 13009, 13010, 13010, 13134, 13134, 13135, 13135, 13358, 13530, 13530, 14582, 14582, 15489, 15489, 15490, 15490, 15551, 15659, 17098, 17098, 17099, 17099, 17950, 17950
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\export\site_export_utils.py`: lines 25, 69, 152, 152, 153, 153, 158, 158, 186, 186, 541, 541
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\export\site_insights_exporter.py`: lines 38, 52
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\gateway\gateway_export_utils.py`: lines 42, 453, 453, 454, 454, 473, 473, 474, 474
@@ -698,7 +670,7 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
 
 ### `DataCollectionManager` (class, 156 lines)
 
-- Def site: line 15020-15175
+- Def site: line 15022-15177
 - References: 20
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -707,11 +679,11 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] oversize_25_lines
   - [ ] missing_inline_comments
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 15042, 15042, 15048, 15048, 15050, 15050, 15078, 15078, 15104, 15104, 15107, 15107, 15110, 15110, 19034, 19034, 19038, 19038, 19046, 19046
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 15044, 15044, 15050, 15050, 15052, 15052, 15080, 15080, 15106, 15106, 15109, 15109, 15112, 15112, 19036, 19036, 19040, 19040, 19048, 19048
 
 ### `SitesByAPModelExporter` (class, 146 lines)
 
-- Def site: line 13191-13336
+- Def site: line 13193-13338
 - References: 22
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -719,11 +691,11 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
 - Guideline flags (address during the move):
   - [ ] oversize_25_lines
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 13230, 13230, 13237, 13237, 13262, 13262, 13265, 13265, 13278, 13278, 13322, 13322, 13326, 13326, 13331, 13331, 13332, 13332, 13336, 13336, 19341, 19341
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 13232, 13232, 13239, 13239, 13264, 13264, 13267, 13267, 13280, 13280, 13324, 13324, 13328, 13328, 13333, 13333, 13334, 13334, 13338, 13338, 19343, 19343
 
 ### `SiteExportUtils` (class, 145 lines)
 
-- Def site: line 13344-13488
+- Def site: line 13346-13490
 - References: 94
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -732,12 +704,12 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] oversize_25_lines
   - [ ] missing_action_logging
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 12565, 12565, 12741, 12741, 12819, 12819, 12824, 12824, 13373, 13373, 13379, 13379, 13385, 13385, 13391, 13391, 13397, 13397, 13403, 13403, 13409, 13409, 13415, 13415, 13421, 13421, 13427, 13427, 13433, 13433, 13439, 13439, 13445, 13445, 13451, 13451, 13457, 13457, 13463, 13463, 13469, 13469, 13475, 13475, 13481, 13481, 13487, 13487, 18954, 18954, 19095, 19095, 19097, 19097, 19212, 19212, 19338, 19338, 19339, 19339, 19340, 19340, 19359, 19359, 19360, 19360, 19361, 19361, 19362, 19362, 19363, 19363, 19364, 19364, 19365, 19365
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 12567, 12567, 12743, 12743, 12821, 12821, 12826, 12826, 13375, 13375, 13381, 13381, 13387, 13387, 13393, 13393, 13399, 13399, 13405, 13405, 13411, 13411, 13417, 13417, 13423, 13423, 13429, 13429, 13435, 13435, 13441, 13441, 13447, 13447, 13453, 13453, 13459, 13459, 13465, 13465, 13471, 13471, 13477, 13477, 13483, 13483, 13489, 13489, 18956, 18956, 19097, 19097, 19099, 19099, 19214, 19214, 19340, 19340, 19341, 19341, 19342, 19342, 19361, 19361, 19362, 19362, 19363, 19363, 19364, 19364, 19365, 19365, 19366, 19366, 19367, 19367
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\export\site_export_utils.py`: lines 208, 208, 351, 351, 355, 355, 365, 365, 414, 414, 423, 423, 432, 432, 496, 496, 524, 524
 
 ### `OrgTemplateExporter` (class, 144 lines)
 
-- Def site: line 10511-10654
+- Def site: line 10513-10656
 - References: 18
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -746,11 +718,11 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] oversize_25_lines
   - [ ] missing_inline_comments
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 10525, 10525, 10526, 10526, 10612, 10612, 10647, 10647, 18929, 18929, 18930, 18930, 18931, 18931, 18932, 18932, 18933, 18933
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 10527, 10527, 10528, 10528, 10614, 10614, 10649, 10649, 18931, 18931, 18932, 18932, 18933, 18933, 18934, 18934, 18935, 18935
 
 ### `GatewayHaExporter` (class, 139 lines)
 
-- Def site: line 13491-13629
+- Def site: line 13493-13631
 - References: 18
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -758,11 +730,11 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
 - Guideline flags (address during the move):
   - [ ] oversize_25_lines
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 13560, 13560, 13563, 13563, 13564, 13564, 13565, 13565, 13585, 13585, 13588, 13588, 13596, 13596, 13601, 13601, 19367, 19367
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 13562, 13562, 13565, 13565, 13566, 13566, 13567, 13567, 13587, 13587, 13590, 13590, 13598, 13598, 13603, 13603, 19369, 19369
 
 ### `OrgAlarmEventExporter` (class, 129 lines)
 
-- Def site: line 8813-8941
+- Def site: line 8815-8943
 - References: 14
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -771,11 +743,11 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] oversize_25_lines
   - [ ] missing_inline_comments
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 8884, 8884, 8895, 8895, 15118, 15118, 15119, 15119, 18832, 18832, 18833, 18833, 19012, 19012
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 8886, 8886, 8897, 8897, 15120, 15120, 15121, 15121, 18834, 18834, 18835, 18835, 19014, 19014
 
 ### `WiredClientManufacturerReportGenerator` (class, 129 lines)
 
-- Def site: line 11185-11313
+- Def site: line 11187-11315
 - References: 20
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -784,11 +756,11 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] oversize_25_lines
   - [ ] non_ascii_logs
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 11192, 11192, 11197, 11197, 11198, 11198, 11199, 11199, 11202, 11202, 11203, 11203, 11266, 11266, 11273, 11273, 11300, 11300, 19311, 19311
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 11194, 11194, 11199, 11199, 11200, 11200, 11201, 11201, 11204, 11204, 11205, 11205, 11268, 11268, 11275, 11275, 11302, 11302, 19313, 19313
 
 ### `TroubleshootUtils` (class, 127 lines)
 
-- Def site: line 15643-15769
+- Def site: line 15645-15771
 - References: 36
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -797,11 +769,11 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] oversize_25_lines
   - [ ] non_ascii_logs
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 15663, 15663, 15668, 15668, 15673, 15673, 15710, 15710, 15716, 15716, 15722, 15722, 15728, 15728, 15734, 15734, 15735, 15735, 15736, 15736, 15737, 15737, 15738, 15738, 15742, 15742, 15751, 15751, 15755, 15755, 15758, 15758, 15764, 15764, 19007, 19007
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 15665, 15665, 15670, 15670, 15675, 15675, 15712, 15712, 15718, 15718, 15724, 15724, 15730, 15730, 15736, 15736, 15737, 15737, 15738, 15738, 15739, 15739, 15740, 15740, 15744, 15744, 15753, 15753, 15757, 15757, 15760, 15760, 15766, 15766, 19009, 19009
 
 ### `EnvironmentUtils` (class, 125 lines)
 
-- Def site: line 5765-5889
+- Def site: line 5771-5895
 - References: 28
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -810,11 +782,11 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] oversize_25_lines
   - [ ] hardcoded_separator
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 5786, 5786, 5788, 5788, 5804, 5804, 5816, 5816, 5855, 5855, 5856, 5856, 5857, 5857, 5858, 5858, 5859, 5859, 5870, 5870, 5873, 5873, 6805, 6805, 20346, 20346, 20929, 20929
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 5792, 5792, 5794, 5794, 5810, 5810, 5822, 5822, 5861, 5861, 5862, 5862, 5863, 5863, 5864, 5864, 5865, 5865, 5876, 5876, 5879, 5879, 6807, 6807, 20348, 20348, 20931, 20931
 
 ### `OrgSiteExporter` (class, 112 lines)
 
-- Def site: line 8947-9058
+- Def site: line 8949-9060
 - References: 52
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -822,13 +794,13 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
 - Guideline flags (address during the move):
   - [ ] oversize_25_lines
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 7885, 7885, 9543, 9543, 9855, 9855, 10701, 10701, 10721, 10721, 12723, 15067, 15067, 15120, 15120, 15553, 15793, 15793, 15811, 15811, 15829, 15829, 17045, 17045, 17069, 17069, 17093, 17093, 17236, 17236, 17577, 17577, 18873, 18873, 18888, 18888, 18898, 18898, 18898, 18898, 18908, 18908
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 7887, 7887, 9545, 9545, 9857, 9857, 10703, 10703, 10723, 10723, 12725, 15069, 15069, 15122, 15122, 15555, 15795, 15795, 15813, 15813, 15831, 15831, 17047, 17047, 17071, 17071, 17095, 17095, 17238, 17238, 17579, 17579, 18875, 18875, 18890, 18890, 18900, 18900, 18900, 18900, 18910, 18910
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\gateway\gateway_export_utils.py`: lines 46, 338, 338, 499, 499, 546, 546
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\gateway\wan2_migration_manager.py`: lines 17, 191, 191
 
 ### `FilterOperatorEngine` (class, 109 lines)
 
-- Def site: line 10821-10929
+- Def site: line 10823-10931
 - References: 37
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -838,11 +810,11 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] missing_inline_comments
   - [ ] missing_action_logging
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 10876, 10876, 10879, 10879, 10880, 10880, 10885, 10885, 10903, 10903, 10903, 10912, 10912, 10912, 10912, 10913, 10913, 10913, 10913, 10971, 10971, 10974, 10974, 10986, 10986, 10987, 10987, 11000, 11000, 11039, 11039, 11047, 11047, 11101, 11101, 11109, 11109
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 10878, 10878, 10881, 10881, 10882, 10882, 10887, 10887, 10905, 10905, 10905, 10914, 10914, 10914, 10914, 10915, 10915, 10915, 10915, 10973, 10973, 10976, 10976, 10988, 10988, 10989, 10989, 11002, 11002, 11041, 11041, 11049, 11049, 11103, 11103, 11111, 11111
 
 ### `SiteConfigExporter` (class, 100 lines)
 
-- Def site: line 12746-12845
+- Def site: line 12748-12847
 - References: 14
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -851,11 +823,11 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] oversize_25_lines
   - [ ] non_ascii_logs
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 12811, 12811, 12813, 12813, 12814, 12814, 18882, 18882, 18950, 18950, 18952, 18952, 18953, 18953
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 12813, 12813, 12815, 12815, 12816, 12816, 18884, 18884, 18952, 18952, 18954, 18954, 18955, 18955
 
 ### `GatewayExportUtils` (class, 98 lines)
 
-- Def site: line 15535-15632
+- Def site: line 15537-15634
 - References: 78
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -864,13 +836,13 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] oversize_25_lines
   - [ ] missing_action_logging
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 15278, 15278, 15513, 15513, 15571, 15571, 15577, 15577, 15583, 15583, 15589, 15589, 15595, 15595, 15601, 15601, 15607, 15607, 15613, 15613, 15619, 15619, 15625, 15625, 15631, 15631, 15855, 17237, 17237, 17240, 17240, 17576, 17576, 18839, 18839, 18906, 18906, 18912, 18912, 18963, 18963, 19020, 19020
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 15280, 15280, 15515, 15515, 15573, 15573, 15579, 15579, 15585, 15585, 15591, 15591, 15597, 15597, 15603, 15603, 15609, 15609, 15615, 15615, 15621, 15621, 15627, 15627, 15633, 15633, 15857, 17239, 17239, 17242, 17242, 17578, 17578, 18841, 18841, 18908, 18908, 18914, 18914, 18965, 18965, 19022, 19022
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\gateway\gateway_export_utils.py`: lines 76, 92, 340, 340, 346, 346, 402, 402, 404, 404, 408, 408, 411, 411, 414, 414, 415, 415, 458, 458, 459, 459, 491, 491, 492, 492, 508, 508, 545, 545
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\gateway\wan2_migration_manager.py`: lines 18, 193, 193, 196, 196
 
 ### `DeviceUtils` (class, 97 lines)
 
-- Def site: line 8243-8339
+- Def site: line 8245-8341
 - References: 4
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -878,11 +850,11 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
 - Guideline flags (address during the move):
   - [ ] oversize_25_lines
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 8299, 8299, 8335, 8335
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 8301, 8301, 8337, 8337
 
 ### `OrgAdminExporter` (class, 94 lines)
 
-- Def site: line 11316-11409
+- Def site: line 11318-11411
 - References: 14
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -891,11 +863,11 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] oversize_25_lines
   - [ ] hardcoded_separator
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 11368, 11368, 11381, 11381, 18942, 18942, 18984, 18984, 18985, 18985, 18990, 18990, 18991, 18991
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 11370, 11370, 11383, 11383, 18944, 18944, 18986, 18986, 18987, 18987, 18992, 18992, 18993, 18993
 
 ### `ValidationUtils` (class, 90 lines)
 
-- Def site: line 5895-5984
+- Def site: line 5901-5990
 - References: 15
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -905,13 +877,13 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] missing_inline_comments
   - [ ] missing_action_logging
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 5977, 5977, 15341, 15341, 15342, 15342, 15556, 18742, 18742
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 5983, 5983, 15343, 15343, 15344, 15344, 15558, 18744, 18744
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\gateway\gateway_export_utils.py`: lines 49
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\gateway\gateway_stats_exporter.py`: lines 26, 138, 138, 139, 139
 
 ### `SiteClientExporter` (class, 85 lines)
 
-- Def site: line 12659-12743
+- Def site: line 12661-12745
 - References: 10
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -921,11 +893,11 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] missing_inline_comments
   - [ ] non_ascii_logs
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 12693, 12693, 18917, 18917, 18925, 18925, 18951, 18951, 19096, 19096
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 12695, 12695, 18919, 18919, 18927, 18927, 18953, 18953, 19098, 19098
 
 ### `OrgLevelAPFirmwareUpgrader` (class, 79 lines)
 
-- Def site: line 18019-18097
+- Def site: line 18021-18099
 - References: 33
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -935,12 +907,12 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] missing_inline_comments
   - [ ] missing_action_logging
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 18014, 18014, 18015, 18015, 19191, 19191
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 18016, 18016, 18017, 18017, 19193, 19193
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\firmware\org_ap_upgrader.py`: lines 412, 409, 425, 770, 770, 772, 772, 781, 781, 786, 786, 790, 790, 846, 846, 847, 847, 848, 848, 849, 849, 883, 883, 2223, 2223, 2226, 2226
 
 ### `VirtualChassisManager` (class, 78 lines)
 
-- Def site: line 17023-17100
+- Def site: line 17025-17102
 - References: 104
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -950,12 +922,12 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] missing_inline_comments
   - [ ] missing_action_logging
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 19062, 19062, 19066, 19066, 19070, 19070
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 19064, 19064, 19068, 19068, 19072, 19072
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\device\virtual_chassis.py`: lines 87, 87, 88, 88, 92, 92, 95, 95, 101, 101, 112, 112, 117, 117, 124, 124, 125, 125, 127, 127, 136, 136, 139, 139, 141, 141, 143, 143, 146, 146, 147, 147, 154, 154, 176, 176, 188, 188, 199, 199, 210, 210, 214, 214, 219, 219, 234, 234, 249, 249, 259, 259, 262, 262, 263, 263, 315, 315, 318, 318, 365, 365, 381, 381, 383, 383, 385, 385, 440, 440, 444, 444, 457, 457, 472, 472, 515, 515, 517, 517, 544, 544, 546, 546, 598, 598, 600, 600, 657, 657, 701, 701, 771, 771, 871, 871, 874, 874
 
 ### `InputUtils` (class, 74 lines)
 
-- Def site: line 1889-1962
+- Def site: line 1895-1968
 - References: 252
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -964,7 +936,7 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] oversize_25_lines
   - [ ] raw_input_call
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 1902, 1902, 1934, 1934, 2283, 2283, 2310, 2310, 7597, 7597, 7683, 7683, 7813, 7813, 7890, 7890, 7973, 7973, 8203, 8203, 8392, 8392, 8448, 8448, 8461, 8461, 8478, 8478, 8523, 8523, 8554, 8554, 8560, 8560, 8663, 8663, 10204, 10204, 10471, 10973, 10973, 11002, 11002, 11267, 11267, 11473, 11473, 11712, 11712, 12428, 12428, 12444, 12444, 13231, 13231, 13650, 13650, 13700, 13700, 15554, 15756, 15756, 15789, 15789, 15807, 15807, 15825, 15825, 15853, 17050, 17050, 17075, 17075, 17118, 17217, 17217, 17429, 17429, 17572, 17572, 17679, 17679, 18009, 18009, 18039, 18039, 18060, 18060, 18079, 18079, 18095, 18095, 18112, 18112, 18689, 18689, 18709, 18709, 18744, 18744, 18757, 18757, 19225, 19225, 19316, 19316, 19321, 19321, 19327, 19327, 19346, 19346, 19352, 19352, 20952, 20952
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 1908, 1908, 1940, 1940, 2289, 2289, 2316, 2316, 7599, 7599, 7685, 7685, 7815, 7815, 7892, 7892, 7975, 7975, 8205, 8205, 8394, 8394, 8450, 8450, 8463, 8463, 8480, 8480, 8525, 8525, 8556, 8556, 8562, 8562, 8665, 8665, 10206, 10206, 10473, 10975, 10975, 11004, 11004, 11269, 11269, 11475, 11475, 11714, 11714, 12430, 12430, 12446, 12446, 13233, 13233, 13652, 13652, 13702, 13702, 15556, 15758, 15758, 15791, 15791, 15809, 15809, 15827, 15827, 15855, 17052, 17052, 17077, 17077, 17120, 17219, 17219, 17431, 17431, 17574, 17574, 17681, 17681, 18011, 18011, 18041, 18041, 18062, 18062, 18081, 18081, 18097, 18097, 18114, 18114, 18691, 18691, 18711, 18711, 18746, 18746, 18759, 18759, 19227, 19227, 19318, 19318, 19323, 19323, 19329, 19329, 19348, 19348, 19354, 19354, 20954, 20954
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\gateway\gateway_export_utils.py`: lines 47, 549, 549
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\gateway\wan2_migration_manager.py`: lines 20, 226, 226, 244, 244, 313, 313
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\inventory\csv_comparator.py`: lines 411, 411
@@ -985,7 +957,7 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
 
 ### `InteractiveDisplayUtils` (class, 72 lines)
 
-- Def site: line 15181-15252
+- Def site: line 15183-15254
 - References: 8
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -994,11 +966,11 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] oversize_25_lines
   - [ ] missing_inline_comments
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 19028, 19028, 19029, 19029, 19030, 19030, 19031, 19031
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 19030, 19030, 19031, 19031, 19032, 19032, 19033, 19033
 
 ### `DisplayUtils` (class, 70 lines)
 
-- Def site: line 5456-5525
+- Def site: line 5462-5531
 - References: 8
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -1008,11 +980,11 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] missing_inline_comments
   - [ ] non_ascii_logs
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 5488, 5488, 5489, 5489, 5504, 5504, 5506, 5506
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 5494, 5494, 5495, 5495, 5510, 5510, 5512, 5512
 
 ### `ConfigUtils` (class, 70 lines)
 
-- Def site: line 5990-6059
+- Def site: line 5996-6065
 - References: 182
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -1020,7 +992,7 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
 - Guideline flags (address during the move):
   - [ ] oversize_25_lines
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 6032, 6032, 6037, 6037, 6134, 6134, 6192, 6192, 7083, 7083, 7740, 7740, 8385, 8385, 8408, 8408, 8428, 8428, 8613, 8613, 8634, 8634, 8909, 8909, 8934, 8934, 8989, 8989, 9011, 9011, 9028, 9028, 9045, 9045, 9430, 9430, 9653, 9653, 9670, 9670, 10062, 10062, 10394, 10394, 10605, 10605, 10642, 10642, 10795, 10795, 10938, 10938, 11191, 11191, 11379, 11379, 11563, 11563, 11882, 11882, 12218, 12218, 12390, 12390, 12430, 12430, 12436, 12436, 12530, 12530, 12760, 12760, 12833, 12833, 13320, 13320, 13355, 13554, 13554, 15061, 15061, 15277, 15277, 15545, 15652, 15752, 15752, 15787, 15787, 15805, 15805, 15823, 15823, 17116, 18010, 18010, 18012, 18012, 18036, 18036, 18040, 18040, 18041, 18041, 18061, 18061, 18062, 18062, 18223, 18223, 18793, 18793, 18825, 18825, 18862, 18862, 18868, 18868, 18996, 18996, 19053, 19053, 19136, 19136, 19145, 19145, 19223, 19223, 19224, 19224, 19241, 19241, 19316, 19316, 19321, 19321, 19327, 19327, 19346, 19346, 19352, 19352, 20263, 20263, 20334, 20816, 20816, 20904, 20904
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 6038, 6038, 6043, 6043, 6140, 6140, 6198, 6198, 7085, 7085, 7742, 7742, 8387, 8387, 8410, 8410, 8430, 8430, 8615, 8615, 8636, 8636, 8911, 8911, 8936, 8936, 8991, 8991, 9013, 9013, 9030, 9030, 9047, 9047, 9432, 9432, 9655, 9655, 9672, 9672, 10064, 10064, 10396, 10396, 10607, 10607, 10644, 10644, 10797, 10797, 10940, 10940, 11193, 11193, 11381, 11381, 11565, 11565, 11884, 11884, 12220, 12220, 12392, 12392, 12432, 12432, 12438, 12438, 12532, 12532, 12762, 12762, 12835, 12835, 13322, 13322, 13357, 13556, 13556, 15063, 15063, 15279, 15279, 15547, 15654, 15754, 15754, 15789, 15789, 15807, 15807, 15825, 15825, 17118, 18012, 18012, 18014, 18014, 18038, 18038, 18042, 18042, 18043, 18043, 18063, 18063, 18064, 18064, 18225, 18225, 18795, 18795, 18827, 18827, 18864, 18864, 18870, 18870, 18998, 18998, 19055, 19055, 19138, 19138, 19147, 19147, 19225, 19225, 19226, 19226, 19243, 19243, 19318, 19318, 19323, 19323, 19329, 19329, 19348, 19348, 19354, 19354, 20265, 20265, 20336, 20818, 20818, 20906, 20906
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\export\site_export_utils.py`: lines 24, 68, 245, 245, 555, 555, 556, 556
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\gateway\gateway_export_utils.py`: lines 38, 401, 401, 448, 448, 466, 466, 507, 507, 541, 541
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\gateway\gateway_stats_exporter.py`: lines 25, 316, 316
@@ -1030,7 +1002,7 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
 
 ### `OrgDeviceInventorySummary` (class, 69 lines)
 
-- Def site: line 10440-10508
+- Def site: line 10442-10510
 - References: 22
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -1041,11 +1013,11 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] missing_action_logging
   - [ ] non_ascii_logs
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 10480, 10480, 10485, 10485, 10490, 10490, 10491, 10491, 10497, 10497, 10498, 10498, 10504, 10504, 10505, 10505, 10506, 10506, 10507, 10507, 19369, 19369
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 10482, 10482, 10487, 10487, 10492, 10492, 10493, 10493, 10499, 10499, 10500, 10500, 10506, 10506, 10507, 10507, 10508, 10508, 10509, 10509, 19371, 19371
 
 ### `AuditAnalysisOps` (class, 66 lines)
 
-- Def site: line 18748-18813
+- Def site: line 18750-18815
 - References: 8
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -1055,11 +1027,11 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] missing_inline_comments
   - [ ] raw_input_call
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 18796, 18796, 18804, 18804, 18813, 18813, 19342, 19342
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 18798, 18798, 18806, 18806, 18815, 18815, 19344, 19344
 
 ### `GatewayTemplateConfigManager` (class, 56 lines)
 
-- Def site: line 15776-15831
+- Def site: line 15778-15833
 - References: 6
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -1069,11 +1041,11 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] missing_inline_comments
   - [ ] missing_action_logging
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 18967, 18967, 18971, 18971, 19176, 19176
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 18969, 18969, 18973, 18973, 19178, 19178
 
 ### `APICoreFetchUtils` (class, 47 lines)
 
-- Def site: line 6065-6111
+- Def site: line 6071-6117
 - References: 55
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -1082,13 +1054,13 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] oversize_25_lines
   - [ ] missing_inline_comments
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 6189, 6189, 8075, 8075, 8990, 8990, 9013, 9013, 9500, 9500, 9535, 9535, 9549, 9549, 9672, 9672, 9676, 9676, 10224, 10224, 12534, 12534, 13204, 13204, 13330, 13330, 13362, 13540, 13540, 13576, 13576, 15551, 17900, 17900, 18011, 18011, 18042, 18042, 18063, 18063, 19226, 19226, 19242, 19242, 20835, 20835
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 6195, 6195, 8077, 8077, 8992, 8992, 9015, 9015, 9502, 9502, 9537, 9537, 9551, 9551, 9674, 9674, 9678, 9678, 10226, 10226, 12536, 12536, 13206, 13206, 13332, 13332, 13364, 13542, 13542, 13578, 13578, 15553, 17902, 17902, 18013, 18013, 18044, 18044, 18065, 18065, 19228, 19228, 19244, 19244, 20837, 20837
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\export\site_export_utils.py`: lines 31, 75, 557, 557
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\gateway\gateway_export_utils.py`: lines 44, 514, 514, 525, 525
 
 ### `FilePathUtils` (class, 46 lines)
 
-- Def site: line 5714-5759
+- Def site: line 5720-5765
 - References: 97
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -1097,14 +1069,14 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] oversize_25_lines
   - [ ] missing_inline_comments
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 5226, 5226, 5268, 5268, 5313, 5313, 5419, 5419, 5434, 5434, 5704, 5704, 5705, 5705, 5749, 5749, 6215, 6215, 7909, 7909, 9200, 9200, 9511, 9511, 9527, 9527, 9856, 9856, 10737, 10737, 10756, 10756, 12725, 15144, 15144, 15547, 15790, 15790, 15808, 15808, 15826, 15826, 15856, 16278, 16278, 16318, 16318, 16319, 16319, 16320, 16320, 17042, 17042, 17066, 17066, 17070, 17070, 17090, 17090, 17117, 17192, 17192, 17226, 17226, 17247, 17247, 17279, 17279, 17341, 17341, 17380, 17380, 17530, 17530, 17575, 17575
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 5232, 5232, 5274, 5274, 5319, 5319, 5425, 5425, 5440, 5440, 5710, 5710, 5711, 5711, 5755, 5755, 6221, 6221, 7911, 7911, 9202, 9202, 9513, 9513, 9529, 9529, 9858, 9858, 10739, 10739, 10758, 10758, 12727, 15146, 15146, 15549, 15792, 15792, 15810, 15810, 15828, 15828, 15858, 16280, 16280, 16320, 16320, 16321, 16321, 16322, 16322, 17044, 17044, 17068, 17068, 17072, 17072, 17092, 17092, 17119, 17194, 17194, 17228, 17228, 17249, 17249, 17281, 17281, 17343, 17343, 17382, 17382, 17532, 17532, 17577, 17577
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\gateway\gateway_export_utils.py`: lines 40, 148, 148, 226, 226, 234, 234, 242, 242, 547, 547
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\gateway\gateway_stats_exporter.py`: lines 31, 355, 355
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\gateway\wan2_migration_manager.py`: lines 19, 198, 198, 341, 341, 347, 347
 
 ### `SiteConfigManager` (class, 43 lines)
 
-- Def site: line 17106-17148
+- Def site: line 17108-17150
 - References: 16
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -1113,11 +1085,11 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] oversize_25_lines
   - [ ] missing_action_logging
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 17129, 17129, 17135, 17135, 17141, 17141, 17147, 17147, 19160, 19160, 19164, 19164, 19168, 19168, 19172, 19172
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 17131, 17131, 17137, 17137, 17143, 17143, 17149, 17149, 19162, 19162, 19166, 19166, 19170, 19170, 19174, 19174
 
 ### `SelfExportUtils` (class, 40 lines)
 
-- Def site: line 11582-11621
+- Def site: line 11584-11623
 - References: 4
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -1126,11 +1098,11 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] oversize_25_lines
   - [ ] non_ascii_logs
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 11619, 11619, 19366, 19366
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 11621, 11621, 19368, 19368
 
 ### `TimeUtils` (class, 29 lines)
 
-- Def site: line 1853-1881
+- Def site: line 1859-1887
 - References: 51
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -1139,12 +1111,12 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] oversize_25_lines
   - [ ] missing_inline_comments
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 8863, 8863, 8864, 8864, 8893, 8893, 8894, 8894, 8910, 8910, 8911, 8911, 9789, 9789, 9790, 9790, 10094, 10094, 10095, 10095, 10142, 10142, 10143, 10143, 10698, 10698, 10700, 10700, 10718, 10718, 10720, 10720, 11608, 11608, 11609, 11609, 12269, 12269, 12270, 12270, 12375, 12375, 12376, 12376, 13358
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 8865, 8865, 8866, 8866, 8895, 8895, 8896, 8896, 8912, 8912, 8913, 8913, 9791, 9791, 9792, 9792, 10096, 10096, 10097, 10097, 10144, 10144, 10145, 10145, 10700, 10700, 10702, 10702, 10720, 10720, 10722, 10722, 11610, 11610, 11611, 11611, 12271, 12271, 12272, 12272, 12377, 12377, 12378, 12378, 13360
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\export\site_export_utils.py`: lines 27, 71, 206, 206, 207, 207
 
 ### `GatewayStatsExporter` (class, 28 lines)
 
-- Def site: line 15505-15532
+- Def site: line 15507-15534
 - References: 52
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -1153,12 +1125,12 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] oversize_25_lines
   - [ ] missing_action_logging
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 15519, 15519, 15525, 15525, 15531, 15531, 19074, 19074, 19078, 19078
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 15521, 15521, 15527, 15527, 15533, 15533, 19076, 19076, 19080, 19080
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\gateway\gateway_stats_exporter.py`: lines 198, 198, 242, 242, 245, 245, 261, 261, 303, 303, 306, 306, 322, 322, 324, 324, 325, 325, 332, 332, 342, 342, 345, 345, 346, 346, 353, 353, 372, 372, 381, 381, 382, 382, 383, 383, 400, 400, 401, 401, 454, 454
 
 ### `SSHRunnerManager` (class, 26 lines)
 
-- Def site: line 15842-15867
+- Def site: line 15844-15869
 - References: 82
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -1168,12 +1140,12 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] missing_inline_comments
   - [ ] missing_action_logging
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 15862, 15862, 15867, 15867, 19082, 19082, 19087, 19087
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 15864, 15864, 15869, 15869, 19084, 19084, 19089, 19089
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\ssh\ssh_runner_manager.py`: lines 61, 61, 62, 62, 64, 64, 68, 68, 73, 73, 86, 86, 87, 87, 96, 96, 97, 97, 129, 129, 130, 130, 131, 131, 136, 136, 137, 137, 139, 139, 162, 162, 165, 165, 168, 168, 189, 189, 193, 193, 209, 209, 210, 210, 211, 211, 278, 278, 280, 280, 281, 281, 327, 327, 369, 369, 373, 373, 382, 382, 400, 400, 416, 416, 438, 438, 495, 495, 499, 499, 500, 500, 503, 503
 
 ### `RoutingUtils` (class, 22 lines)
 
-- Def site: line 13657-13678
+- Def site: line 13659-13680
 - References: 12
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -1182,7 +1154,7 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] missing_inline_comments
   - [ ] missing_action_logging
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 18848, 18848, 18852, 18852, 18856, 18856
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 18850, 18850, 18854, 18854, 18858, 18858
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\network\_routing_utils_display.py`: lines 106
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\network\_routing_utils_forwarding.py`: lines 46
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\network\_routing_utils_parsing.py`: lines 67
@@ -1192,17 +1164,17 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
 
 ### `FirmwareManager` (class, 22 lines)
 
-- Def site: line 17558-17579
+- Def site: line 17560-17581
 - References: 8
 - Suggested class: _n/a_
 - Suggested module: _n/a_
 - Rationale: Widely used; leave in place until dependencies decouple
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 18995, 18995, 19052, 19052, 19135, 19135, 19144, 19144
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 18997, 18997, 19054, 19054, 19137, 19137, 19146, 19146
 
 ### `SiteAutoUpgradeConfigurator` (class, 22 lines)
 
-- Def site: line 17995-18016
+- Def site: line 17997-18018
 - References: 6
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -1211,24 +1183,24 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] missing_inline_comments
   - [ ] missing_action_logging
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 19205, 19205
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 19207, 19207
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\firmware\site_auto_upgrade.py`: lines 177, 177, 742, 964
 
 ### `execute_with_connection_pool_management` (function, 21 lines)
 
-- Def site: line 7547-7567
+- Def site: line 7549-7569
 - References: 7
 - Suggested class: _n/a_
 - Suggested module: _n/a_
 - Rationale: Widely used; leave in place until dependencies decouple
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 6298, 10067, 15390, 15555
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 6304, 10069, 15392, 15557
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\gateway\gateway_export_utils.py`: lines 48, 550
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\gateway\gateway_stats_exporter.py`: lines 32
 
 ### `EndpointConfig` (class, 10 lines)
 
-- Def site: line 13903-13912
+- Def site: line 13905-13914
 - References: 13
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -1236,11 +1208,11 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
 - Guideline flags (address during the move):
   - [ ] missing_action_logging
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 13939, 14075, 14152, 14171, 14183, 14204, 14217, 14228, 14234, 14247, 14340, 14475, 14570
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 13941, 14077, 14154, 14173, 14185, 14206, 14219, 14230, 14236, 14249, 14342, 14477, 14572
 
 ### `SSHConnectionConfig` (class, 9 lines)
 
-- Def site: line 316-324
+- Def site: line 322-330
 - References: 6
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -1256,7 +1228,7 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
 
 ### `DeviceFetchConfig` (class, 9 lines)
 
-- Def site: line 343-351
+- Def site: line 349-357
 - References: 4
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -1264,12 +1236,12 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
 - Guideline flags (address during the move):
   - [ ] missing_action_logging
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 15213, 15230, 15246
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 15215, 15232, 15248
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\refactors\device_data_fetcher.py`: lines 49
 
 ### `SSHExecutionConfig` (class, 8 lines)
 
-- Def site: line 328-335
+- Def site: line 334-341
 - References: 5
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -1285,7 +1257,7 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
 
 ### `is_debug_mode` (function, 3 lines)
 
-- Def site: line 303-305
+- Def site: line 309-311
 - References: 12
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -1293,12 +1265,12 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
 - Guideline flags (address during the move):
   - [ ] missing_action_logging
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 13363, 13652, 18044, 18065, 18210, 18241, 18273, 18508, 18523
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 13365, 13654, 18046, 18067, 18212, 18243, 18275, 18510, 18525
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\export\site_export_utils.py`: lines 32, 76, 337
 
 ### `tqdm` (function, 3 lines)
 
-- Def site: line 620-622
+- Def site: line 626-628
 - References: 43
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -1306,7 +1278,7 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
 - Guideline flags (address during the move):
   - [ ] missing_action_logging
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 1230, 1899, 1899, 1899, 1911, 1917, 6191, 6311, 7371, 7431, 9599, 9710, 9964, 10794, 13365, 15423, 15465, 15563, 19228
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 1236, 1905, 1905, 1905, 1917, 1923, 6197, 6317, 7373, 7433, 9601, 9712, 9966, 10796, 13367, 15425, 15467, 15565, 19230
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\export\site_export_utils.py`: lines 34, 78, 162
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\gateway\gateway_export_utils.py`: lines 56
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\gateway\gateway_stats_exporter.py`: lines 36, 212, 255
@@ -1319,7 +1291,7 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
 
 ### `FAST_MODE_MAX_CONCURRENT_CONNECTIONS` (assignment, 3 lines)
 
-- Def site: line 2001-2003
+- Def site: line 2007-2009
 - References: 6
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -1328,11 +1300,11 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] missing_inline_comments
   - [ ] missing_action_logging
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 2001, 7381, 7388, 7389, 9975, 15412
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 2007, 7383, 7390, 7391, 9977, 15414
 
 ### `MIST_SITE_EXCLUDE_PREFIX` (assignment, 3 lines)
 
-- Def site: line 2019-2021
+- Def site: line 2025-2027
 - References: 11
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -1341,7 +1313,7 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] missing_inline_comments
   - [ ] missing_action_logging
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 2019, 15559
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 2025, 15561
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\gateway\gateway_export_utils.py`: lines 52, 543
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\gateway\wan2_migration_manager.py`: lines 23, 270, 272, 287, 290, 294, 297
 
@@ -1349,7 +1321,7 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
 
 ### `GlobalImportManager` (class, 1005 lines)
 
-- Def site: line 736-1740
+- Def site: line 742-1746
 - References: 1
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -1357,7 +1329,7 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
 - Guideline flags (address during the move):
   - [ ] oversize_25_lines
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 1785
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 1791
 
 ## Limitations
 
