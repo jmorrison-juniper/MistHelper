@@ -1872,13 +1872,16 @@ class FirmwareManager:
         """Bulk switch firmware upgrade for selected site(s) via interactive picker or template override."""
         logging.info("Starting bulk switch firmware upgrade by site...")  # WHY: audit entry
         logging.debug("FirmwareManager._bulk_upgrade_switch_firmware_by_site() initiated")  # WHY: trace call
-        import sys as _sys  # noqa: PLC0415  # WHY: lazy import to avoid circular deps
+        from src.firmware.bulk_switch_upgrader import (  # WHY: lazy import keeps module load cheap
+            BulkSwitchFirmwareUpgrader as _Impl,
+        )
 
-        _main = _sys.modules.get("__main__") or _sys.modules.get("MistHelper")  # WHY: locate entry module
-        if _main is None:  # WHY: guard when neither module surface is present
-            return  # WHY: cannot proceed without the upgrader class
-        BulkSwitchFirmwareUpgrader = _main.BulkSwitchFirmwareUpgrader  # WHY: lazy attribute access
-        BulkSwitchFirmwareUpgrader(self.org_id, sites_to_upgrade_override).execute()  # WHY: run upgrade flow
+        _Impl(  # WHY: direct dispatch replaces prior MistHelper wrapper (FR-015 fold-in)
+            org_id=self.org_id,  # WHY: instance-owned org scope
+            apisession=self.apisession,  # WHY: instance-owned Mist session
+            safe_input_fn=_MH.InputUtils.safe_input,  # WHY: preserves Ctrl+C / stop-signal semantics
+            sites_override=sites_to_upgrade_override,  # WHY: forward template-driven override if present
+        ).execute()  # WHY: run upgrade flow
 
     def _upgrade_switch_firmware_by_gateway_template(self) -> None:
         """Advanced switch firmware upgrade organized by Gateway Template assignment.
