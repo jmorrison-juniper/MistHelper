@@ -18106,25 +18106,9 @@ class OrgLevelAPFirmwareUpgrader:
         return upgrader._select_orgs_from_msp(msp)
 
 
-class BulkSwitchFirmwareUpgrader:
-    """Delegate to src.firmware.bulk_switch_upgrader.
-
-    Executes firmware upgrades on switches across selected sites with safety checks.
-    """
-
-    def __init__(self, org_id: str, sites_override: list[dict[str, Any]] | None = None):
-        from src.firmware.bulk_switch_upgrader import BulkSwitchFirmwareUpgrader as _Impl
-
-        self._impl = _Impl(
-            org_id=org_id,
-            apisession=apisession,
-            safe_input_fn=InputUtils.safe_input,
-            sites_override=sites_override,
-        )
-
-    def execute(self) -> dict[str, Any]:
-        """Orchestrate the complete upgrade workflow."""
-        return self._impl.execute()
+# NOTE: BulkSwitchFirmwareUpgrader folded into FirmwareManager per initiative 1011 SC-033
+# (FR-015: fold-in to caller; FR-003: no wrapper shim). Sole caller now dispatches directly
+# to src.firmware.bulk_switch_upgrader.BulkSwitchFirmwareUpgrader.
 
 
 # ============================================================================
