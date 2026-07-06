@@ -1,8 +1,8 @@
 # Coding Guideline Compliance Report
 
-- **Generated**: 2026-07-06 04:10:19 UTC
+- **Generated**: 2026-07-06 04:30:52 UTC
 - **Tool**: compliance-analyzer (tools/compliance_analyzer)
-- **Files analyzed**: 251
+- **Files analyzed**: 252
 
 Files are graded against the project guidelines: the 5-Item Rule, no
 wrappers/delegators/aliases/shims, complexity limits, inline comments,
@@ -175,6 +175,7 @@ Plan at the end to drive fixes.
 | src\refactors\serial_cc\switch_vc_stats.py | 100.0 | A+ | 0 | 0 | 0 | 0 | 0 |
 | src\refactors\serial_cc\test_results_by_site.py | 100.0 | A+ | 0 | 0 | 0 | 0 | 0 |
 | src\refactors\sqlite_database_writer.py | 100.0 | A+ | 0 | 0 | 0 | 0 | 0 |
+| src\refactors\tui_launcher.py | 100.0 | A+ | 0 | 0 | 0 | 0 | 0 |
 | src\reports\__init__.py | 100.0 | A+ | 0 | 0 | 0 | 0 | 0 |
 | src\reports\e911_bssid.py | 100.0 | A+ | 0 | 0 | 0 | 0 | 0 |
 | src\site\__init__.py | 100.0 | A+ | 0 | 0 | 0 | 0 | 0 |
@@ -1242,6 +1243,12 @@ Plan at the end to drive fixes.
       "violations": 0
     },
     {
+      "path": "src\\refactors\\tui_launcher.py",
+      "score": 100.0,
+      "grade": "A+",
+      "violations": 0
+    },
+    {
       "path": "src\\reports\\__init__.py",
       "score": 100.0,
       "grade": "A+",
@@ -1806,13 +1813,13 @@ Plan at the end to drive fixes.
 
 | Metric | Value |
 | - | - |
-| Lines of code | 24189 |
-| Executable code lines | 11179 |
-| Functions | 1377 |
-| Classes | 94 |
+| Lines of code | 24070 |
+| Executable code lines | 11113 |
+| Functions | 1366 |
+| Classes | 93 |
 | Average complexity | 2.6 |
 | Max complexity | 6 |
-| Inline comment coverage | 80.1% |
+| Inline comment coverage | 80.5% |
 
 ### Complexity Hotspots
 
@@ -1830,14 +1837,14 @@ Plan at the end to drive fixes.
 
 | Line | Severity | Rule | Symbol | Issue | Remediation |
 | - | - | - | - | - | - |
-| 16336 | low | STRUCT-COMPLEXITY | execute | Cyclomatic complexity is 6 (target <= 5). | Reduce branching by extracting helpers, using guard clauses, or simplifying logic. |
+| 16337 | low | STRUCT-COMPLEXITY | execute | Cyclomatic complexity is 6 (target <= 5). | Reduce branching by extracting helpers, using guard clauses, or simplifying logic. |
 
 #### Structure
 
 | Line | Severity | Rule | Symbol | Issue | Remediation |
 | - | - | - | - | - | - |
-| 16382 | medium | STRUCT-LENGTH | _make_ws_callbacks | Function spans 28 lines (limit 25). | Extract logical sections into well-named helper methods to shrink the function. |
-| 16660 | medium | STRUCT-LENGTH | _build_impl_args | Function spans 26 lines (limit 25). | Extract logical sections into well-named helper methods to shrink the function. |
+| 16383 | medium | STRUCT-LENGTH | _make_ws_callbacks | Function spans 28 lines (limit 25). | Extract logical sections into well-named helper methods to shrink the function. |
+| 16661 | medium | STRUCT-LENGTH | _build_impl_args | Function spans 26 lines (limit 25). | Extract logical sections into well-named helper methods to shrink the function. |
 
 ## File: src\__init__.py
 
@@ -6037,7 +6044,7 @@ No violations found. This file complies with the guidelines.
 
 | Metric | Value |
 | - | - |
-| Lines of code | 447 |
+| Lines of code | 446 |
 | Executable code lines | 229 |
 | Functions | 32 |
 | Classes | 1 |
@@ -6054,6 +6061,35 @@ No violations found. This file complies with the guidelines.
 | _determine_fields_and_strategy | 4 |
 | _create_schema_indexes | 4 |
 | _validate_data | 3 |
+
+No violations found. This file complies with the guidelines.
+
+## File: src\refactors\tui_launcher.py
+
+- **Score**: 100.0 / 100
+- **Grade**: A+
+
+### Metrics
+
+| Metric | Value |
+| - | - |
+| Lines of code | 165 |
+| Executable code lines | 92 |
+| Functions | 13 |
+| Classes | 1 |
+| Average complexity | 1.9 |
+| Max complexity | 5 |
+| Inline comment coverage | 84.8% |
+
+### Complexity Hotspots
+
+| Function | Cyclomatic Complexity |
+| - | - |
+| _suppress_console_logging | 5 |
+| launch | 4 |
+| _ensure_api_session | 3 |
+| _run_tui | 2 |
+| _restore_console_logging | 2 |
 
 No violations found. This file complies with the guidelines.
 
@@ -8649,12 +8685,12 @@ No violations found. This file complies with the guidelines.
 
 ### Phase: Medium (13 task(s))
 
-- [ ] **CMP-012** `MistHelper.py:16382` - STRUCT-LENGTH (Structure)
+- [ ] **CMP-012** `MistHelper.py:16383` - STRUCT-LENGTH (Structure)
   - Symbol: `_make_ws_callbacks`
   - Problem: Function spans 28 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
   - Done when: analyzer reports no STRUCT-LENGTH for `_make_ws_callbacks` in `MistHelper.py`.
-- [ ] **CMP-013** `MistHelper.py:16660` - STRUCT-LENGTH (Structure)
+- [ ] **CMP-013** `MistHelper.py:16661` - STRUCT-LENGTH (Structure)
   - Symbol: `_build_impl_args`
   - Problem: Function spans 26 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
@@ -8717,7 +8753,7 @@ No violations found. This file complies with the guidelines.
 
 ### Phase: Low (14 task(s))
 
-- [ ] **CMP-025** `MistHelper.py:16336` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-025** `MistHelper.py:16337` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `execute`
   - Problem: Cyclomatic complexity is 6 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
