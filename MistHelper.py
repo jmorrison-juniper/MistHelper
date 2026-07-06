@@ -167,6 +167,9 @@ from src.refactors.inventory_csvcomparator import (
 )
 from src.refactors.keyboard_listener import KeyboardListener  # PR-13 extracted no-op keyboard listener stub (SC-012)
 from src.refactors.maps_manager_launcher import MapsManagerLauncher  # Extracted Maps Manager launcher (SC-006)
+from src.refactors.package_import_map import (
+    PackageImportMapManager,  # Extracted pip-name -> import-name mapping (SC-025)
+)
 from src.refactors.run_interactive_test import (
     RunInteractiveTestManager,  # Extracted interactive-test manager (SC-011)
 )
@@ -377,20 +380,9 @@ except Exception:  # If python-dotenv is not installed yet, fall back to a manua
     except Exception:  # nosec B110  # If .env is missing or unreadable, continue silently (the file is optional)
         pass  # No .env available; rely on the real process environment only
 
-# Package name to import name mapping for special cases
-PACKAGE_IMPORT_MAP = {  # Map pip package names to their importable module names where they differ
-    "websocket-client": "websocket",  # pip 'websocket-client' is imported as 'websocket'
-    "python-dotenv": "dotenv",  # pip 'python-dotenv' is imported as 'dotenv'
-    "usaddress-scourgify": "scourgify",  # pip 'usaddress-scourgify' is imported as 'scourgify'
-    "pillow": "PIL",  # pip 'pillow' is imported as 'PIL'
-    "beautifulsoup4": "bs4",  # pip 'beautifulsoup4' is imported as 'bs4'
-    "pyyaml": "yaml",  # pip 'pyyaml' is imported as 'yaml'
-    "python-dateutil": "dateutil",  # pip 'python-dateutil' is imported as 'dateutil'
-    "msgpack-python": "msgpack",  # pip 'msgpack-python' is imported as 'msgpack'
-    "flask": "flask",  # 'flask' package and import names match (listed for completeness)
-    "flask-wtf": "flask_wtf",  # pip 'flask-wtf' is imported as 'flask_wtf' (hyphen becomes underscore)
-    "gunicorn": "gunicorn",  # 'gunicorn' package and import names match (listed for completeness)
-}
+# NOTE: PACKAGE_IMPORT_MAP extracted to
+# src/refactors/package_import_map.py::PackageImportMapManager.MAPPING
+# per initiative 1011 SC-025 (FR-003: no wrapper shim; FR-005: fn->method).
 
 
 def _get_installed_version(package_name: str) -> str:  # Look up the installed version string for a package
@@ -562,7 +554,7 @@ def _early_dependency_check():  # Public entry point; delegates to the extracted
         os_module=os,  # Inject os for env checks (DISABLE_AUTO_INSTALL, etc.)
         logging_module=logging,  # Inject logging for progress messages
         sys_module=sys,  # Inject sys for the interpreter path
-        package_import_map=PACKAGE_IMPORT_MAP,  # Provide the pip-name -> import-name mapping
+        package_import_map=PackageImportMapManager.MAPPING,  # Provide the pip-name -> import-name mapping
         parse_requirements_file_fn=_parse_requirements_file,  # Reuse the requirements parser defined above
         get_installed_version_fn=_get_installed_version,  # Reuse the installed-version lookup
         version_satisfies_fn=_version_satisfies,  # Reuse the version-constraint checker
