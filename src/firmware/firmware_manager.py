@@ -3931,7 +3931,8 @@ class FirmwareUpgradeStatusChecker:
 
         filename = f"FirmwareUpgradeStatus_{timestamp}.csv"  # WHY: output filename
         try:  # WHY: tolerate write errors
-            _MH.DataExporter.write_with_format_selection(self.upgrade_results, filename)  # WHY: lazy MistHelper attr resolved via _MH proxy
+            # WHY: lazy MistHelper attr resolved via _MH proxy
+            _MH.DataExporter.write_with_format_selection(self.upgrade_results, filename)
             print(f"\n[SUCCESS] Device firmware status exported to: data/{filename}")
             print(f"   [DATA] {len(self.upgrade_results)} device records exported")
             logging.info("Exported %s device status records", len(self.upgrade_results))  # WHY: audit
