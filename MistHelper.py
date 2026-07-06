@@ -16516,46 +16516,6 @@ from src.utils.address_utils import (
 from src.utils.rate_limiting import RateLimitingUtils  # noqa: E402
 
 
-class AddressComparisonCounters:  # Address comparison counters.
-    """Track metrics for address comparison. Delegated to src.inventory.csv_comparator."""
-
-    def __init__(self):  # Build the counters.
-        """Initialize all counter attributes and timing."""
-        from src.inventory.csv_comparator import (
-            AddressComparisonCounters as _Impl,  # pylint: disable=import-outside-toplevel
-        )
-
-        self._impl = _Impl()  # Create the impl.
-        # Expose attrs for direct access compatibility
-        self.total_devices = self._impl.total_devices  # Mirror total devices.
-        self.devices_enriched = self._impl.devices_enriched  # Mirror enriched.
-        self.devices_skipped = self._impl.devices_skipped  # Mirror skipped.
-        self.perfect_matches = self._impl.perfect_matches  # Mirror perfect matches.
-        self.mismatches_found = self._impl.mismatches_found  # Mirror mismatches.
-        self.auto_corrections = self._impl.auto_corrections  # Mirror auto-corrections.
-        self.comparison_failures = self._impl.comparison_failures  # Mirror comparison failures.
-        self.parse_failures = self._impl.parse_failures  # Mirror parse failures.
-        self.parse_failure_reasons = self._impl.parse_failure_reasons  # Mirror failure reasons.
-        self.start_time = self._impl.start_time  # Mirror start time.
-        self.end_time = self._impl.end_time  # Mirror end time.
-
-    def start_timing(self):  # Start timing.
-        """Start the timing counter for performance tracking."""
-        self._impl.start_timing()  # Delegate to the impl.
-
-    def end_timing(self):  # End timing.
-        """End the timing counter for performance tracking."""
-        self._impl.end_timing()  # Delegate to the impl.
-
-    def get_duration(self):  # Get the duration.
-        """Get the elapsed time in seconds between start and end timing."""
-        return self._impl.get_duration()  # Delegate to the impl.
-
-    def log_summary(self):  # Log the summary.
-        """Log a comprehensive summary of all counter metrics."""
-        self._impl.log_summary()  # Delegate to the impl.
-
-
 class InventoryCSVComparator:  # Inventory CSV comparator.
     """Compare Mist inventory with CSV. Delegated to src.inventory.csv_comparator."""
 
