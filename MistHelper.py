@@ -162,6 +162,9 @@ from src.refactors.fast_mode_backoff_multiplier import (
 from src.refactors.fast_mode_devices_per_thread import (
     FastModeDevicesPerThread,  # Extracted fast-mode devices-per-thread constant (SC-029)
 )
+from src.refactors.fast_mode_sequential_max_retries import (
+    FastModeSequentialMaxRetries,  # Extracted fast-mode sequential-fallback retry ceiling (SC-030)
+)
 from src.refactors.initialize_mist_session import (
     MistSessionInitializer,  # Extracted token-based session initializer (SC-024)
 )
@@ -2001,11 +2004,11 @@ org_id = None  # Active organization ID, populated after the user selects an org
 # NOTE: FAST_MODE_DEVICES_PER_THREAD extracted to
 # src/refactors/fast_mode_devices_per_thread.py::FastModeDevicesPerThread.VALUE
 # per initiative 1011 SC-029 (FR-003: no wrapper shim; FR-005: const->classattr).
+# NOTE: FAST_MODE_SEQUENTIAL_MAX_RETRIES extracted to
+# src/refactors/fast_mode_sequential_max_retries.py::FastModeSequentialMaxRetries.VALUE
+# per initiative 1011 SC-030 (FR-003: no wrapper shim; FR-005: const->classattr).
 FAST_MODE_RETRY_THREADS = int(os.getenv("FAST_MODE_RETRY_THREADS", "4"))  # Thread count for the retry pass
 FAST_MODE_RETRY_MAX_RETRIES = int(os.getenv("FAST_MODE_RETRY_MAX_RETRIES", "2"))  # Retry ceiling within the retry pass
-FAST_MODE_SEQUENTIAL_MAX_RETRIES = int(
-    os.getenv("FAST_MODE_SEQUENTIAL_MAX_RETRIES", "1")
-)  # Retry ceiling for the sequential fallback
 FAST_MODE_FALLBACK_THREADS = int(os.getenv("FAST_MODE_FALLBACK_THREADS", "8"))  # Thread count for the fallback pass
 FAST_MODE_MAX_CONCURRENT_CONNECTIONS = int(
     os.getenv("FAST_MODE_MAX_CONCURRENT_CONNECTIONS", "8")
@@ -6291,7 +6294,7 @@ class APIFetchUtils:  # Higher-level org/site fetchers.
     @staticmethod
     def _gw_retry_configs(apisession, failed_items, connection_semaphore):
         """Retry failed gateway config fetches with bounded exponential backoff; return the recovered configs."""
-        max_retries = int(os.getenv("FAST_MODE_SEQUENTIAL_MAX_RETRIES", "1"))  # Configurable retry count.
+        max_retries = FastModeSequentialMaxRetries.VALUE  # Configurable retry count from extracted class attribute.
         retry_results = []  # Collect configs recovered on retry.
         for failed_work_item in failed_items:  # Walk every failed item.
             result = APIFetchUtils._gw_retry_one_item(
@@ -15473,7 +15476,7 @@ class GatewayTestExporter:  # Gateway synthetic test exporter.
             gateway_devices, desc="Gateway Devices", unit="device"
         ):
             result = GatewayTestExporter.fetch_synthetic_test_stats_with_retry(
-                device_info, max_retries=FAST_MODE_SEQUENTIAL_MAX_RETRIES
+                device_info, max_retries=FastModeSequentialMaxRetries.VALUE
             )
             if result:  # Have a result.
                 all_stats.append(result)  # Collect it.
