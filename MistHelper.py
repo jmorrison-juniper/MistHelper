@@ -361,49 +361,6 @@ def is_debug_mode():  # Check if debug mode is enabled via CLI flags
     return "--debug" in sys.argv or "-d" in sys.argv  # Return True if debug flag present in command line
 
 
-# Performance monitoring helper for detecting infinite loops
-class PerformanceMonitor:
-    """Simple performance monitoring to detect hangs and infinite loops."""
-
-    # Set up a loop monitor with a name and safety limits
-    def __init__(self, name, max_iterations=10000, log_interval=5.0):
-        self.name = name  # Store a human-readable name so log/error messages identify which loop is being watched
-        self.start_time = time.time()  # Record wall-clock start time to measure total elapsed duration
-        self.last_log_time = self.start_time  # Track when we last printed a progress update (throttles logging)
-        self.iteration_count = 0  # Count loop iterations to detect runaway/infinite loops
-        self.max_iterations = max_iterations  # Hard ceiling on iterations before the circuit breaker trips
-        self.log_interval = log_interval  # Minimum seconds between periodic performance log messages
-
-    def check_iteration(self):  # Call once per loop pass to track progress and enforce the safety limit
-        """Call this on each loop iteration to monitor for hangs."""
-        self.iteration_count += 1  # Increment the per-iteration counter
-        current_time = time.time()  # Capture current time for interval and elapsed calculations
-
-        # Log performance periodically
-        if is_debug_mode() and (current_time - self.last_log_time) >= self.log_interval:  # type: ignore[no-untyped-call]  # Only log in debug mode and no more often than log_interval
-            elapsed = current_time - self.start_time  # Compute total seconds since the loop started
-            print(
-                f"[PERF] {self.name}: {self.iteration_count} iterations in {elapsed:.1f}s"
-            )  # Show progress so operators can see the loop is alive
-            self.last_log_time = current_time  # Reset the throttle timer after logging
-
-        # Circuit breaker for infinite loops
-        if self.iteration_count > self.max_iterations:  # Trip the breaker if iterations exceed the safety ceiling
-            # Build a clear diagnostic message for the circuit breaker trip
-            error_msg = f"CIRCUIT BREAKER: {self.name} exceeded {self.max_iterations} iterations!"
-            print(f"[EMERGENCY] {error_msg}")  # Print to console so the operator sees it immediately
-            logging.error(error_msg)  # Also record the breaker trip in the log file for post-mortem analysis
-            raise RuntimeError(error_msg)  # Abort the runaway loop by raising to unwind the call stack
-
-    def finish(self):  # Call when the monitored loop completes normally
-        """Call when loop completes normally."""
-        elapsed = time.time() - self.start_time  # Compute total runtime of the loop
-        if is_debug_mode():  # type: ignore[no-untyped-call]  # Only emit the summary when debugging to avoid log noise
-            print(
-                f"[PERF] {self.name} completed: {self.iteration_count} iterations in {elapsed:.1f}s"
-            )  # Report final iteration count and duration
-
-
 # ============================================================================
 # CONFIGURATION DATACLASSES (5-Item Rule Compliance)
 # ============================================================================
