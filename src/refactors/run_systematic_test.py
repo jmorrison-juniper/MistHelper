@@ -109,9 +109,9 @@ class RunSystematicTestManager:
         misthelper._print_systematic_pre_run_counts(  # Print pre-run counts of total/safe/unsafe
             all_options, safe_options, unsafe_list
         )
-        emitter, telemetry_path, skip_count = (
-            misthelper._initialize_systematic_telemetry(unsafe_list)  # Open timestamped telemetry emitter
-        )
+        emitter, telemetry_path, skip_count = misthelper._initialize_systematic_telemetry(
+            unsafe_list
+        )  # Open timestamped telemetry emitter
         fast_enabled = misthelper._resolve_systematic_test_context()  # Resolve org + fast mode once
         logging.debug(  # Log resolved context for tracing (counts + fast flag)
             "RunSystematicTestManager: sweep prepared safe=%d unsafe=%d fast=%s",
@@ -121,17 +121,16 @@ class RunSystematicTestManager:
         )
         return safe_options, unsafe_list, all_options, skip_count, emitter, telemetry_path, fast_enabled
 
-    def _execute_sweep(
-        self, emitter: Any, safe_options: list[str], fast_enabled: bool
-    ) -> tuple[int, int]:
+    def _execute_sweep(self, emitter: Any, safe_options: list[str], fast_enabled: bool) -> tuple[int, int]:
         """Run every safe option through the telemetry-emitting loop and count outcomes."""
         logging.info(  # Log execution phase entry with count of safe options
             "RunSystematicTestManager: executing sweep across %d safe options", len(safe_options)
         )
-        success_count, error_count = (
-            self._misthelper()._execute_systematic_test_loop(  # Delegate loop body to canonical helper
-                emitter, safe_options, fast_enabled
-            )
+        (
+            success_count,
+            error_count,
+        ) = self._misthelper()._execute_systematic_test_loop(  # Delegate loop body to canonical helper
+            emitter, safe_options, fast_enabled
         )
         logging.debug(  # Log per-run counts for observability without recomputing them
             "RunSystematicTestManager: sweep executed success=%d error=%d", success_count, error_count
@@ -168,9 +167,7 @@ class RunSystematicTestManager:
         """Emit summary, close telemetry, print operator summary, and return outcome."""
         logging.info("RunSystematicTestManager: finalizing sweep and printing summary")  # Log finalize
         misthelper = self._misthelper()  # Cache module handle for the three helper lookups below
-        misthelper._finalize_systematic_telemetry(  # Emit summary event, close file, enforce retention
-            emitter, summary
-        )
+        misthelper._finalize_systematic_telemetry(emitter, summary)  # Emit summary event, close file, enforce retention
         misthelper._print_systematic_summary(summary, telemetry_path)  # Print user-facing summary block
         outcome = bool(  # Cast Any (misthelper module attr) to bool for strict typing conformance
             misthelper._report_systematic_outcome(  # Emit pass/fail message + return boolean
