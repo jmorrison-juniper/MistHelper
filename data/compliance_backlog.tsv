@@ -1,7 +1,2 @@
 rank	total	critical	high	medium	low	score	grade	path
-1	2	0	2	0	0	88.0	B+	src\maps\plotly_map_serializer.py
-2	2	0	1	1	0	91.0	A-	src\capture\org_capture_workflow.py
-3	2	0	1	1	0	91.0	A-	src\capture\site_capture_loop.py
-4	2	0	1	1	0	91.0	A-	src\db\retention.py
-5	2	0	1	1	0	91.0	A-	src\gateway\overrides\_deps.py
-6	2	0	1	1	0	91.0	A-	src\maps\_maps_utils.py
+1	2	0	1	1	0	91.0	A-	src\maps\_maps_utils.py
