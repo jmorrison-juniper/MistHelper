@@ -172,11 +172,13 @@ class RunSystematicTestManager:
             emitter, summary
         )
         misthelper._print_systematic_summary(summary, telemetry_path)  # Print user-facing summary block
-        outcome = misthelper._report_systematic_outcome(  # Emit pass/fail message + return boolean
-            counters.success_count,
-            counters.error_count,
-            len(counters.safe_options),
-            summary.total_time,
+        outcome = bool(  # Cast Any (misthelper module attr) to bool for strict typing conformance
+            misthelper._report_systematic_outcome(  # Emit pass/fail message + return boolean
+                counters.success_count,
+                counters.error_count,
+                len(counters.safe_options),
+                summary.elapsed,  # TestSummary field name is `elapsed` (wall-clock seconds)
+            )
         )
         logging.debug(  # Log final outcome so callers can trace exit-code decision
             "RunSystematicTestManager: sweep finalized outcome=%s", outcome
