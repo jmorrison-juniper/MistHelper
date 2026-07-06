@@ -77,7 +77,9 @@ class WAN2MigrationLauncher:
         """Configure the canonical wan2_migration_manager module with MistHelper runtime globals."""
         logging.info("WAN2MigrationLauncher: wiring runtime dependencies into wan2_migration_manager")  # Log wire start
         misthelper = self._misthelper()  # Cache module handle for the ten attribute lookups below
-        from src.gateway import wan2_migration_manager as wan2_module  # noqa: PLC0415 - lazy import keeps startup path light
+        from src.gateway import (
+            wan2_migration_manager as wan2_module,  # noqa: PLC0415 - lazy import keeps startup path light
+        )
 
         wan2_module.configure_wan2_migration_dependencies(  # Publish MistHelper-owned deps as frozen dataclass
             wan2_module.WAN2MigrationDependencies(
@@ -98,7 +100,9 @@ class WAN2MigrationLauncher:
     def _build_manager(self) -> Any:
         """Instantiate the canonical WAN2MigrationManager with dependencies already wired."""
         logging.info("WAN2MigrationLauncher: instantiating canonical WAN2MigrationManager")  # Log build start
-        from src.gateway.wan2_migration_manager import WAN2MigrationManager  # noqa: PLC0415 - lazy import mirrors _wire_dependencies
+        from src.gateway.wan2_migration_manager import (
+            WAN2MigrationManager,  # noqa: PLC0415 - lazy import mirrors _wire_dependencies
+        )
 
         manager = WAN2MigrationManager()  # Canonical class; constructor pulls wired module globals
         logging.debug("WAN2MigrationLauncher: WAN2MigrationManager instantiated successfully")  # Log build finish
