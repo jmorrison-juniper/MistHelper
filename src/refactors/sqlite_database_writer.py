@@ -36,8 +36,7 @@ def _resolve_runtime_dependencies() -> SimpleNamespace:
 
 
 class SQLiteDatabaseWriter:  # Upsert records into SQLite.
-    """
-    Write list of dictionaries to SQLite database using hybrid primary key strategies.
+    """Write list of dictionaries to SQLite database using hybrid primary key strategies.
 
     Eliminates artificial api_id fields and uses proper business keys from Mist API.
     Follows NASA/JPL coding standards with comprehensive logging and error handling.
