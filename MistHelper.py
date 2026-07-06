@@ -151,6 +151,7 @@ from src.refactors.maps_manager_launcher import MapsManagerLauncher  # Extracted
 from src.refactors.service_ping_launcher import ServicePingLauncher  # Extracted Service Ping launcher (SC-008)
 from src.refactors.sqlite_database_writer import SQLiteDatabaseWriter  # Extracted SQLite writer (SC-003)
 from src.refactors.tui_launcher import TUILauncher  # Extracted TUI launcher (SC-004)
+from src.refactors.wan2_migration_launcher import WAN2MigrationLauncher  # Extracted WAN2 migration launcher (SC-009)
 from src.reports.e911_bssid import E911BSSIDReportGenerator  # Module-level for tests
 from src.site.address_audit import AddressAuditEngine  # Menu 195: read-only CSV site-address audit
 from src.ssh.ssh_runner import EnhancedSSHRunner  # Import SSH command execution and result parsing
@@ -16514,41 +16515,6 @@ class InventoryCSVComparator:  # Inventory CSV comparator.
 
 
 # ============================================================================
-# WAN2 MIGRATION MANAGER CLASS (delegated)
-# ============================================================================
-class WAN2MigrationManager:  # WAN2 migration manager.
-    """Delegation wrapper for extracted WAN2 migration manager implementation."""
-
-    def __init__(self):  # Wire and build the impl.
-        """Initialize delegated WAN2 manager with runtime dependencies."""
-        from src.gateway import wan2_migration_manager as wan2_module  # noqa: PLC0415,I001
-
-        wan2_module.configure_wan2_migration_dependencies(  # Wire dependencies via dataclass.
-            wan2_module.WAN2MigrationDependencies(  # Frozen bundle preserves public API.
-                apisession=apisession,  # Mist API session handle.
-                config_utils=ConfigUtils,  # Config helpers facade.
-                cache_utils=CacheUtils,  # Cache generation facade.
-                org_site_exporter=OrgSiteExporter,  # Site exporter facade.
-                gateway_export_utils=GatewayExportUtils,  # Gateway exporter facade.
-                file_path_utils=FilePathUtils,  # Path resolver facade.
-                input_utils=InputUtils,  # Safe input facade.
-                data_exporter=DataExporter,  # Report writer facade.
-                mistapi=mistapi,  # mistapi library reference.
-                site_exclude_prefix=MIST_SITE_EXCLUDE_PREFIX,  # Exclusion prefix.
-            )
-        )
-        self._impl = wan2_module.WAN2MigrationManager()  # Create the impl.
-
-    def set_site_variable(self):  # Set a site variable.
-        """Menu #149 delegated entrypoint."""
-        return self._impl.set_site_variable()  # Delegate to the impl.
-
-    def __getattr__(self, name):  # Forward unknown attributes.
-        """Proxy attribute access to the extracted implementation."""
-        return getattr(self._impl, name)  # Delegate to real impl for test compat
-
-
-# ============================================================================
 # ORG CONFIG MIGRATION MANAGER CLASS
 # ============================================================================
 class OrgConfigMigrationManager:  # Org config migration manager.
@@ -21549,7 +21515,7 @@ menu_actions = {
     # GATEWAY TEMPLATE VARIABLE OPERATIONS
     # ==============================
     "149": (
-        lambda: WAN2MigrationManager().set_site_variable(),  # type: ignore[no-untyped-call]
+        lambda: WAN2MigrationLauncher().launch(),  # type: ignore[no-untyped-call]
         "Set WAN2 Interface Site Variable - Configure 'wan2_interface' site variable for template-based WAN migration (Reports sites with ge-0/0/1 overrides)",  # noqa: E501
     ),
     "163": (

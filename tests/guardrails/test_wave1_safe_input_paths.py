@@ -16,9 +16,26 @@ def test_ssh_runner_confirm_execution_returns_false_on_eof(monkeypatch):
 
 
 def test_wan2_confirm_operation_handles_eof_as_cancel(monkeypatch):
+    # Wire canonical WAN2MigrationManager with MistHelper runtime globals (delegator shim removed)
+    from src.gateway import wan2_migration_manager as wan2_module  # Import canonical module
+
+    wan2_module.configure_wan2_migration_dependencies(  # Publish MistHelper-owned deps into canonical module
+        wan2_module.WAN2MigrationDependencies(  # Frozen bundle mirrors production wiring
+            apisession=getattr(MistHelper, "apisession", None),  # Current apisession (may be None in tests)
+            config_utils=MistHelper.ConfigUtils,  # Config helper facade
+            cache_utils=MistHelper.CacheUtils,  # Cache generation facade
+            org_site_exporter=MistHelper.OrgSiteExporter,  # Site exporter facade
+            gateway_export_utils=MistHelper.GatewayExportUtils,  # Gateway exporter facade
+            file_path_utils=MistHelper.FilePathUtils,  # Path resolver facade
+            input_utils=MistHelper.InputUtils,  # Safe input facade
+            data_exporter=MistHelper.DataExporter,  # Report writer facade
+            mistapi=MistHelper.mistapi,  # mistapi library reference
+            site_exclude_prefix=MistHelper.MIST_SITE_EXCLUDE_PREFIX,  # Exclusion prefix
+        )
+    )
     # Patch org_id lookup before construction so __init__ does not hit the real API
     monkeypatch.setattr(MistHelper.ConfigUtils, "get_cached_or_prompted_org_id", lambda: "org-test")
-    manager = MistHelper.WAN2MigrationManager()  # Safe to construct with mocked org lookup
+    manager = wan2_module.WAN2MigrationManager()  # Construct canonical manager directly
 
     def raise_eof(_prompt):  # Simulate SSH/container EOF on confirmation prompt
         raise EOFError

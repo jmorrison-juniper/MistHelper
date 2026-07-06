@@ -42,7 +42,6 @@ _SRC_CAPTURE_PATH = Path(__file__).resolve().parents[2] / "src" / "capture"
 _WAVE1_IN_SCOPE_CLASSES = [
     "TroubleshootUtils",  # Touched in safe_input hardening and logging envelope work
     "SSHRunnerManager",  # Touched in safe_input hardening and logging envelope work
-    "WAN2MigrationManager",  # Touched in safe_input hardening and logging envelope work
     "InputUtils",  # Core safe_input infrastructure used across all touched paths
     "OperationRegistry",  # Routing/safety classification — US2 guardrail baseline source
     "PacketCaptureManager",  # Wave 1 exclusion: must NOT have been extracted to a new module

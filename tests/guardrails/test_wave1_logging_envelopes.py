@@ -133,12 +133,28 @@ class TestGetSiteSelectionEnvelopes:
     """WAN2MigrationManager._get_site_selection() logging envelope tests."""
 
     def _make_manager(self, monkeypatch):
-        """Build a WAN2MigrationManager with a mocked org and fake sites."""
+        """Build a canonical WAN2MigrationManager with a mocked org and fake sites."""
+        from src.gateway import wan2_migration_manager as wan2_module  # Import canonical module
+
+        wan2_module.configure_wan2_migration_dependencies(  # Wire runtime deps into canonical module
+            wan2_module.WAN2MigrationDependencies(  # Frozen bundle mirrors production wiring
+                apisession=getattr(MistHelper, "apisession", None),  # Current apisession (may be None in tests)
+                config_utils=MistHelper.ConfigUtils,  # Config helper facade
+                cache_utils=MistHelper.CacheUtils,  # Cache generation facade
+                org_site_exporter=MistHelper.OrgSiteExporter,  # Site exporter facade
+                gateway_export_utils=MistHelper.GatewayExportUtils,  # Gateway exporter facade
+                file_path_utils=MistHelper.FilePathUtils,  # Path resolver facade
+                input_utils=MistHelper.InputUtils,  # Safe input facade
+                data_exporter=MistHelper.DataExporter,  # Report writer facade
+                mistapi=MistHelper.mistapi,  # mistapi library reference
+                site_exclude_prefix=MistHelper.MIST_SITE_EXCLUDE_PREFIX,  # Exclusion prefix
+            )
+        )
         monkeypatch.setattr(  # Prevent real org_id lookup during __init__
             MistHelper.ConfigUtils, "get_cached_or_prompted_org_id", lambda: "org-test"
         )
-        manager = MistHelper.WAN2MigrationManager()  # Construct with mocked org
-        manager._impl.sites = [  # Inject fake sites on the real implementation (wrapper delegates via __getattr__)
+        manager = wan2_module.WAN2MigrationManager()  # Construct canonical manager directly
+        manager.sites = [  # Inject fake sites directly on the canonical manager
             {"id": "s1", "name": "Site Alpha"},
             {"id": "s2", "name": "Site Beta"},
         ]
@@ -184,11 +200,27 @@ class TestConfirmSiteVariableOperationEnvelopes:
     """WAN2MigrationManager._confirm_site_variable_operation() logging envelope tests."""
 
     def _make_manager(self, monkeypatch):
-        """Build a WAN2MigrationManager with a mocked org."""
+        """Build a canonical WAN2MigrationManager with a mocked org."""
+        from src.gateway import wan2_migration_manager as wan2_module  # Import canonical module
+
+        wan2_module.configure_wan2_migration_dependencies(  # Wire runtime deps into canonical module
+            wan2_module.WAN2MigrationDependencies(  # Frozen bundle mirrors production wiring
+                apisession=getattr(MistHelper, "apisession", None),  # Current apisession (may be None in tests)
+                config_utils=MistHelper.ConfigUtils,  # Config helper facade
+                cache_utils=MistHelper.CacheUtils,  # Cache generation facade
+                org_site_exporter=MistHelper.OrgSiteExporter,  # Site exporter facade
+                gateway_export_utils=MistHelper.GatewayExportUtils,  # Gateway exporter facade
+                file_path_utils=MistHelper.FilePathUtils,  # Path resolver facade
+                input_utils=MistHelper.InputUtils,  # Safe input facade
+                data_exporter=MistHelper.DataExporter,  # Report writer facade
+                mistapi=MistHelper.mistapi,  # mistapi library reference
+                site_exclude_prefix=MistHelper.MIST_SITE_EXCLUDE_PREFIX,  # Exclusion prefix
+            )
+        )
         monkeypatch.setattr(  # Prevent real org_id lookup
             MistHelper.ConfigUtils, "get_cached_or_prompted_org_id", lambda: "org-test"
         )
-        return MistHelper.WAN2MigrationManager()  # Construct manager safely
+        return wan2_module.WAN2MigrationManager()  # Construct canonical manager directly
 
     def test_entry_envelope_emitted(self, caplog, monkeypatch):
         """Entry log must appear before confirmation prompt."""
