@@ -156,6 +156,9 @@ from src.refactors.device_config_template_cloner_manager import (
 from src.refactors.device_data_fetcher import (
     DeviceDataFetcher,  # Extracted interactive device data fetcher (SC-017)
 )
+from src.refactors.fast_mode_backoff_multiplier import (
+    FastModeBackoffMultiplier,  # Extracted fast-mode backoff multiplier constant (SC-028)
+)
 from src.refactors.initialize_mist_session import (
     MistSessionInitializer,  # Extracted token-based session initializer (SC-024)
 )
@@ -1989,9 +1992,9 @@ FAST_MODE_RETRY_DELAY = float(os.getenv("FAST_MODE_RETRY_DELAY", "0.5"))  # Shor
 org_id = None  # Active organization ID, populated after the user selects an org
 
 # Additional Fast Mode Configuration from .env (continuing from earlier definitions)
-FAST_MODE_BACKOFF_MULTIPLIER = float(
-    os.getenv("FAST_MODE_BACKOFF_MULTIPLIER", "1.5")
-)  # Exponential backoff growth factor
+# NOTE: FAST_MODE_BACKOFF_MULTIPLIER extracted to
+# src/refactors/fast_mode_backoff_multiplier.py::FastModeBackoffMultiplier.VALUE
+# per initiative 1011 SC-028 (FR-003: no wrapper shim; FR-005: const->classattr).
 FAST_MODE_DEVICES_PER_THREAD = int(
     os.getenv("FAST_MODE_DEVICES_PER_THREAD", "10")
 )  # Devices each worker thread handles
@@ -9896,7 +9899,7 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
     def _handle_site_port_stats_retry(attempt, site_name, exception):
         """Backoff + log retry; return True if more attempts remain."""
         if attempt < FAST_MODE_MAX_RETRIES:  # More retries remain
-            backoff_delay = FAST_MODE_RETRY_DELAY * (FAST_MODE_BACKOFF_MULTIPLIER**attempt)  # Backoff curve
+            backoff_delay = FAST_MODE_RETRY_DELAY * (FastModeBackoffMultiplier.VALUE**attempt)  # Backoff curve
             logging.warning("! Attempt %s failed for site %s: %s", attempt + 1, site_name, exception)  # Log fail
             logging.info(
                 "! Retrying in %.1fs (attempt %s/%s)",
@@ -15325,7 +15328,7 @@ class GatewayTestExporter:  # Gateway synthetic test exporter.
             if attempt >= max_retries:  # Out of retries.
                 logging.error("! Final attempt failed for device %s at site %s", device_id, site_id)  # Final failure.
                 return None  # Give up.
-            backoff_delay = retry_delay * (FAST_MODE_BACKOFF_MULTIPLIER**attempt)  # Exponential backoff.
+            backoff_delay = retry_delay * (FastModeBackoffMultiplier.VALUE**attempt)  # Exponential backoff.
             logging.info(  # Log the retry.
                 "! Fast retry in %.1fs (attempt %s/%s)", backoff_delay, attempt + 2, max_retries + 1
             )
