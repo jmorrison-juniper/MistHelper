@@ -147,6 +147,7 @@ from src.gateway.gateway_export_utils import (
 )  # Import gateway export utility configuration
 from src.org_data_collector import OrgDataCollector  # Import org-level data collection orchestrator
 from src.refactors.data_directory_checker import DataDirectoryChecker  # Early data-dir writable check (SC-005)
+from src.refactors.maps_manager_launcher import MapsManagerLauncher  # Extracted Maps Manager launcher (SC-006)
 from src.refactors.sqlite_database_writer import SQLiteDatabaseWriter  # Extracted SQLite writer (SC-003)
 from src.refactors.tui_launcher import TUILauncher  # Extracted TUI launcher (SC-004)
 from src.reports.e911_bssid import E911BSSIDReportGenerator  # Module-level for tests
@@ -22069,74 +22070,6 @@ menu_actions = {
         " (Requires typing 'CREATE' to confirm)",
     ),
 }
-
-
-class MapsManagerLauncher:
-    """
-    Launch MapsManager from external maps_manager.py module.
-
-    The external module contains the full interactive map viewer implementation
-    (~7,500 lines) supporting standalone execution and MistHelper integration.
-
-    SECURITY: Read-only map viewing with interactive Dash web server
-
-    Usage:
-        MapsManagerLauncher().launch()
-    """
-
-    def __init__(self):
-        """Initialize launcher with module reference placeholder."""
-        self.maps_manager = None
-        self.org_id: str = ""
-
-    def launch(self) -> None:
-        """Main entry point - orchestrates module import and execution."""
-        logging.info("Menu #142: Starting Maps Manager")
-        if not self._import_module():
-            return
-        if not self._get_org_id():
-            return
-        self._run_interactive_menu()
-        logging.info("Menu #142: Maps Manager session completed")
-
-    def _import_module(self) -> bool:
-        """Import MapsManager from external module with error handling."""
-        try:
-            from src.maps.maps_manager import MapsManager as ExternalMapsManager
-
-            self._external_class = ExternalMapsManager
-            return True
-        except ImportError as error:
-            self._handle_import_error(error)
-            return False
-
-    def _handle_import_error(self, error: ImportError) -> None:
-        """Log and display import failure message."""
-        logging.error("Failed to import MapsManager from src/maps/maps_manager.py: %s", error)
-        print("\nERROR: Could not load Maps Manager module.")
-        print("Ensure src/maps/maps_manager.py exists")
-
-    def _get_org_id(self) -> bool:
-        """Get organization ID from cache or prompt."""
-        try:
-            self.org_id = ConfigUtils.get_cached_or_prompted_org_id()
-            return bool(self.org_id)
-        except Exception as error:
-            self._handle_fatal_error(error)
-            return False
-
-    def _run_interactive_menu(self) -> None:
-        """Instantiate and run the Maps Manager interactive menu."""
-        try:
-            self.maps_manager = self._external_class(apisession, self.org_id)
-            self.maps_manager.run_interactive_menu()
-        except Exception as error:
-            self._handle_fatal_error(error)
-
-    def _handle_fatal_error(self, error: Exception) -> None:
-        """Log and display fatal error message."""
-        logging.error("Error running Maps Manager: %s", error, exc_info=True)
-        print(f"\nERROR: {error}")
 
 
 # ============================================================================
