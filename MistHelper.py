@@ -147,6 +147,7 @@ from src.gateway.gateway_export_utils import (
 )  # Import gateway export utility configuration
 from src.org_data_collector import OrgDataCollector  # Import org-level data collection orchestrator
 from src.refactors.sqlite_database_writer import SQLiteDatabaseWriter  # Extracted SQLite writer (SC-003)
+from src.refactors.tui_launcher import TUILauncher  # Extracted TUI launcher (SC-004)
 from src.reports.e911_bssid import E911BSSIDReportGenerator  # Module-level for tests
 from src.site.address_audit import AddressAuditEngine  # Menu 195: read-only CSV site-address audit
 from src.ssh.ssh_runner import EnhancedSSHRunner  # Import SSH command execution and result parsing
@@ -22235,126 +22236,6 @@ class MapsManagerLauncher:
         """Log and display fatal error message."""
         logging.error("Error running Maps Manager: %s", error, exc_info=True)
         print(f"\nERROR: {error}")
-
-
-class TUILauncher:
-    """
-    Launch Terminal User Interface mode from interactive menu.
-
-    Replicates the --tui CLI flag behavior but returns to menu instead of exiting.
-    Provides an interactive, keyboard-driven API browser.
-
-    SECURITY: Read-only browser mode with safe API exploration
-
-    Usage:
-        TUILauncher().launch()
-    """
-
-    def __init__(self):
-        """Initialize TUI launcher with console handler tracking."""
-        self.console_handlers: list = []  # type: ignore[type-arg]
-        self.debug_mode: bool = False
-
-    def launch(self) -> None:
-        """Main entry point: launch TUI mode from menu."""
-        logging.info("TUI_MODE: Starting Terminal User Interface mode from menu")
-        self._print_welcome()
-
-        if not self._ensure_api_session():
-            return
-
-        self._suppress_console_logging()
-
-        try:
-            self._run_tui()
-        except KeyboardInterrupt:
-            self._handle_keyboard_interrupt()
-        except Exception as error:
-            self._handle_fatal_error(error)
-        finally:
-            self._restore_console_logging()
-
-        self._print_exit_message()
-
-    def _print_welcome(self) -> None:
-        """Print TUI activation messages."""
-        print("\n>> Terminal User Interface mode activated")
-        print(">> Use arrow keys to navigate, Enter to select, Q to quit")
-
-    def _ensure_api_session(self) -> bool:
-        """Initialize Mist API session if needed."""
-        global apisession
-        if apisession:
-            return True
-
-        print(">> Initializing Mist API session...")
-        if not initialize_mist_session():  # type: ignore[no-untyped-call]
-            print("[ERROR] Failed to initialize Mist API session")
-            logging.error("TUI_MODE: Could not initialize API session")
-            return False
-
-        print(">> API session initialized successfully")
-        return True
-
-    def _suppress_console_logging(self) -> None:
-        """Remove console handlers to prevent interference with Rich TUI."""
-        root_logger = logging.getLogger()
-        self.console_handlers = [
-            h
-            for h in root_logger.handlers
-            if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler)
-        ]
-        for handler in self.console_handlers:
-            root_logger.removeHandler(handler)
-            logging.debug("TUI_MODE: Removed console handler to prevent interference with Rich TUI")
-
-    def _get_debug_mode(self) -> bool:
-        """Get debug mode from global args if available."""
-        args_obj = globals().get("args", type("obj", (), {"debug": False})())
-        return getattr(args_obj, "debug", False)
-
-    def _run_tui(self) -> None:
-        """Create and run the TUI instance."""
-        global apisession
-        self.debug_mode = self._get_debug_mode()
-
-        from src.ui.tui import MistHelperTUI  # PLC0415: lazy import
-
-        tui = MistHelperTUI(debug_mode=self.debug_mode)  # type: ignore[no-untyped-call]
-        tui.apisession = apisession
-
-        if self.debug_mode:
-            logging.debug("TUI_MODE: Debug mode is ACTIVE - enhanced logging enabled")
-
-        tui.run()  # type: ignore[no-untyped-call]
-
-    def _handle_keyboard_interrupt(self) -> None:
-        """Handle user Ctrl+C interruption."""
-        logging.info("TUI_MODE: User interrupted with Ctrl+C")
-        print("\n[EXIT] TUI mode stopped by user")
-
-    def _handle_fatal_error(self, error: Exception) -> None:
-        """Handle fatal TUI errors."""
-        logging.error("TUI_MODE: Fatal error - %s", error, exc_info=True)
-        print(f"\n[ERROR] TUI mode crashed: {error}")
-
-    def _restore_console_logging(self) -> None:
-        """Restore console handlers after TUI mode exits."""
-        root_logger = logging.getLogger()
-        for handler in self.console_handlers:
-            root_logger.addHandler(handler)
-        logging.debug("TUI_MODE: Restored console handler after TUI exit")
-
-    def _print_exit_message(self) -> None:
-        """Print exit messages and debug timestamp if enabled."""
-        self.debug_mode = self._get_debug_mode()
-
-        if self.debug_mode:
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-            logging.debug("TUI_DEBUG: [%s] TUI_MODE function completed - returning to caller", timestamp)
-
-        logging.info("TUI_MODE: TUI mode completed successfully")
-        print("\n>> Returned from TUI mode to main menu")
 
 
 # ============================================================================
