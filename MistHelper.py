@@ -159,6 +159,9 @@ from src.refactors.device_data_fetcher import (
 from src.refactors.fast_mode_backoff_multiplier import (
     FastModeBackoffMultiplier,  # Extracted fast-mode backoff multiplier constant (SC-028)
 )
+from src.refactors.fast_mode_devices_per_thread import (
+    FastModeDevicesPerThread,  # Extracted fast-mode devices-per-thread constant (SC-029)
+)
 from src.refactors.initialize_mist_session import (
     MistSessionInitializer,  # Extracted token-based session initializer (SC-024)
 )
@@ -1995,9 +1998,9 @@ org_id = None  # Active organization ID, populated after the user selects an org
 # NOTE: FAST_MODE_BACKOFF_MULTIPLIER extracted to
 # src/refactors/fast_mode_backoff_multiplier.py::FastModeBackoffMultiplier.VALUE
 # per initiative 1011 SC-028 (FR-003: no wrapper shim; FR-005: const->classattr).
-FAST_MODE_DEVICES_PER_THREAD = int(
-    os.getenv("FAST_MODE_DEVICES_PER_THREAD", "10")
-)  # Devices each worker thread handles
+# NOTE: FAST_MODE_DEVICES_PER_THREAD extracted to
+# src/refactors/fast_mode_devices_per_thread.py::FastModeDevicesPerThread.VALUE
+# per initiative 1011 SC-029 (FR-003: no wrapper shim; FR-005: const->classattr).
 FAST_MODE_RETRY_THREADS = int(os.getenv("FAST_MODE_RETRY_THREADS", "4"))  # Thread count for the retry pass
 FAST_MODE_RETRY_MAX_RETRIES = int(os.getenv("FAST_MODE_RETRY_MAX_RETRIES", "2"))  # Retry ceiling within the retry pass
 FAST_MODE_SEQUENTIAL_MAX_RETRIES = int(
@@ -7389,7 +7392,9 @@ def _pool_configure(work_items: list[Any], batch_description: str) -> tuple[int,
         logging.info("! CPU-aware threading: Using %s threads (maximum CPU utilization)", max_threads)
     connection_semaphore = threading.Semaphore(FAST_MODE_MAX_CONCURRENT_CONNECTIONS)  # Bound simultaneous API calls.
     logging.info("* Connection pool protection: Maximum %s concurrent API calls", FAST_MODE_MAX_CONCURRENT_CONNECTIONS)
-    batch_size = max_threads * FAST_MODE_DEVICES_PER_THREAD  # Scale batch size to thread count and per-thread setting.
+    batch_size = (
+        max_threads * FastModeDevicesPerThread.VALUE
+    )  # Scale batch size to thread count and per-thread setting.
     logging.info("* Processing %s %s with connection pool management...", len(work_items), batch_description)
     return (max_threads, connection_semaphore, batch_size, threading_mode)  # Bundle pool configuration values.
 
