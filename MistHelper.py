@@ -100,7 +100,7 @@ from src.audit.filter import AuditLogFilter  # Import audit log filtering to rem
 from src.audit.renderer import AuditReportRenderer  # Import Mermaid timeline + HTML report rendering
 from src.audit.time_parser import TimeRangeParser  # Import audit log time range parsing (7d, 4w, etc.)
 from src.auth.interactive import (
-    LoginOrchestrator,
+    LoginOrchestrator,  # noqa: F401  # Re-exported so extracted refactors can resolve it via MistHelper (SC-023)
     MspOrgSelector,
 )  # Duplicate import (re-stated with comment below); kept to preserve module load behavior
 from src.bootstrap.dependency_check import (
@@ -155,6 +155,9 @@ from src.refactors.device_config_template_cloner_manager import (
 )
 from src.refactors.device_data_fetcher import (
     DeviceDataFetcher,  # Extracted interactive device data fetcher (SC-017)
+)
+from src.refactors.initialize_mist_session_interactive import (
+    MistSessionInteractiveInitializer,  # Extracted interactive login initializer (SC-023)
 )
 from src.refactors.inventory_csvcomparator import (
     InventoryCSVComparator,  # Extracted inventory CSV comparator adapter (SC-018)
@@ -2195,24 +2198,9 @@ def _restore_session_globals_from_state(state: dict) -> None:
     org_id = state.get("org_id", org_id)  # Copy the selected org ID back
 
 
-def initialize_mist_session_interactive():
-    """Initialize Mist API session via extracted interactive session manager."""
-    global apisession, mistapi, msp_privileges, selected_msp, org_id  # These globals are updated on login
-    state = _snapshot_session_globals_to_state()  # Capture current globals into a mutable bag
-
-    def _detect_msp_for_login():  # DI adapter binding MSP detection to freshly-authenticated session
-        return detect_msp_privileges(
-            state.get("apisession")
-        )  # Orchestrator stores the new session in state before this runs
-
-    session_manager = LoginOrchestrator(  # Build the interactive login orchestrator with injected deps
-        state=state,  # Pass the mutable state bag the orchestrator will update
-        safe_input=InputUtils.safe_input,  # Inject the EOF-safe input function
-        detect_msp_privileges=_detect_msp_for_login,  # Inject MSP detection bound to the new login session
-    )
-    login_success = session_manager.execute()  # Run the interactive login workflow
-    _restore_session_globals_from_state(state)  # Mirror any state mutations back to module globals
-    return login_success  # Report whether the interactive login succeeded
+# NOTE: initialize_mist_session_interactive() extracted to
+# src/refactors/initialize_mist_session_interactive.py::MistSessionInteractiveInitializer.initialize
+# per initiative 1011 SC-023 (FR-003: no wrapper shim; FR-005: fn->method).
 
 
 def _print_switch_login_header():
@@ -2255,7 +2243,7 @@ def _attempt_interactive_login_with_rollback(old_session, old_org_id) -> bool:
     msp_privileges = []  # Clear cached MSP grants from the old session
     org_id = None  # Clear the selected org from the old session
 
-    if not initialize_mist_session_interactive():  # type: ignore[no-untyped-call]  # Attempt the interactive login
+    if not MistSessionInteractiveInitializer.initialize():  # Attempt the interactive login
         print("")  # Blank spacer line
         print("  X Login failed - restoring previous session")  # Inform the user of the rollback
         apisession = old_session  # Restore the prior API session
@@ -17731,7 +17719,7 @@ class MSPInventoryExporter:
         """Execute login and validate MSP privileges obtained."""
         global msp_privileges
 
-        if not initialize_mist_session_interactive():  # type: ignore[no-untyped-call]
+        if not MistSessionInteractiveInitializer.initialize():
             print("")
             print("  X Login failed.")
             return False
@@ -20678,7 +20666,7 @@ def _establish_mist_session(args: argparse.Namespace) -> None:
     logging.debug("_establish_mist_session: starting session initialization")  # Log entry
     if args.login:  # Interactive login requested via --login flag
         logging.info("Interactive login mode requested via --login flag")  # Log before interactive login
-        if not initialize_mist_session_interactive():  # type: ignore[no-untyped-call]  # Attempt email/password login
+        if not MistSessionInteractiveInitializer.initialize():  # Attempt email/password login
             logging.error("Failed to initialize Mist API session via interactive login")  # Log auth failure
             print(" Failed to initialize Mist API session. Check your credentials.")  # Inform user
             sys.exit(1)  # Exit -- cannot proceed without authenticated session
