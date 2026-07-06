@@ -600,7 +600,7 @@ When implementing a Feature Spec, AI agents must follow this protocol:
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan
-at specs/1009-compliance-backlog-remediation/plan.md
+at specs/1010-misthelper-refactor-extraction/plan.md
 <!-- SPECKIT END -->
 
 <!-- rtk-instructions v2 -->
