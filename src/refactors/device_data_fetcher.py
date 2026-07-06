@@ -107,7 +107,7 @@ class DeviceDataFetcher:
         """Process fetched data and output to CSV and table."""
         logging.info("Processing %s record(s) for %s", len(data), self.filename)  # Announce processing start
         processed = _MH.DataProcessingUtils.flatten_nested_fields(data)  # Flatten nested API structures
-        processed = _MH.DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
-        _MH.DataExporter.write_with_format_selection(processed, self.filename)  # type: ignore[no-untyped-call]
+        processed = _MH.DataProcessingUtils.escape_multiline(processed)  # Escape multiline strings for CSV
+        _MH.DataExporter.write_with_format_selection(processed, self.filename)  # Emit CSV/JSON per user choice
         _MH.DisplayUtils.dict_list_as_pretty_table(processed)  # Render to console via PrettyTable
         logging.debug("Wrote %s and rendered table", self.filename)  # Trace output completion
