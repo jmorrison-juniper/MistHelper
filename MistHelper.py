@@ -146,6 +146,9 @@ from src.gateway.gateway_export_utils import (
     configure_gateway_export_utils_dependencies,
 )  # Import gateway export utility configuration
 from src.org_data_collector import OrgDataCollector  # Import org-level data collection orchestrator
+from src.refactors.anomaly_metrics_discovery import (
+    AnomalyMetricsDiscovery,  # Extracted anomaly metrics discovery (SC-016)
+)
 from src.refactors.data_directory_checker import DataDirectoryChecker  # Early data-dir writable check (SC-005)
 from src.refactors.keyboard_listener import KeyboardListener  # PR-13 extracted no-op keyboard listener stub (SC-012)
 from src.refactors.maps_manager_launcher import MapsManagerLauncher  # Extracted Maps Manager launcher (SC-006)
@@ -19297,104 +19300,6 @@ class BulkSwitchFirmwareUpgrader:
     def execute(self) -> dict[str, Any]:
         """Orchestrate the complete upgrade workflow."""
         return self._impl.execute()
-
-
-# ============================================================================
-# ANOMALY EXPORT SECTION - Site Anomaly Events for AI/ML Analysis
-# ============================================================================
-
-
-class AnomalyMetricsDiscovery:
-    """
-    Discovers and prioritizes site-scoped anomaly metrics from ConstInsightMetrics.csv.
-
-    Provides fallback metrics when CSV is unavailable. Used for AI/ML anomaly analysis.
-    """
-
-    # Priority keywords for anomaly-related metrics
-    PRIORITY_KEYWORDS = [
-        "roam",
-        "availability",
-        "capacity",
-        "coverage",
-        "client",
-        "throughput",
-        "latency",
-        "band",
-        "ap-",
-        "switch-",
-    ]
-
-    # Fallback metrics when CSV unavailable
-    FALLBACK_METRICS = [
-        {"metric_name": "client-roam-band5", "description": "5GHz roaming anomalies", "priority": True},
-        {"metric_name": "client-roam-band24", "description": "2.4GHz roaming anomalies", "priority": True},
-        {"metric_name": "ap-availability", "description": "AP availability anomalies", "priority": True},
-    ]
-
-    @classmethod
-    def discover(cls) -> list[dict[str, Any]]:
-        """
-        Discover potential anomaly metrics from ConstInsightMetrics.csv.
-
-        Returns:
-            List of metric dictionaries with metric_name, description, and priority.
-        """
-        try:
-            metrics_path = FilePathUtils.get_csv_path("ConstInsightMetrics.csv")
-
-            if not os.path.exists(metrics_path):
-                return cls._handle_missing_csv()
-
-            return cls._parse_metrics_csv(metrics_path)
-
-        except Exception as exception:
-            logging.error("Error reading ConstInsightMetrics.csv: %s", str(exception))
-            return cls.FALLBACK_METRICS.copy()
-
-    @classmethod
-    def _handle_missing_csv(cls) -> list[dict[str, Any]]:
-        """Handle case when ConstInsightMetrics.csv is not found."""
-        logging.warning(
-            "ConstInsightMetrics.csv not found. Please export organization constants first (menu option 11)."
-        )
-        return cls.FALLBACK_METRICS.copy()
-
-    @classmethod
-    def _parse_metrics_csv(cls, csv_path: str) -> list[dict[str, Any]]:
-        """Parse metrics CSV and extract site-scoped anomaly metrics."""
-        potential_metrics = []
-
-        with open(csv_path, encoding="utf-8") as csv_file:
-            reader = csv.DictReader(csv_file)
-            for row in reader:
-                metric = cls._process_csv_row(row)
-                if metric:
-                    potential_metrics.append(metric)
-
-        return cls._sort_by_priority(potential_metrics)
-
-    @classmethod
-    def _process_csv_row(cls, row: dict[str, str]) -> dict[str, Any] | None:
-        """Process a single CSV row and return metric dict if site-scoped."""
-        metric_key = row.get("key", "").strip().lower()
-        metric_name = row.get("name", "").strip()
-        metric_scope = row.get("scope", "").strip().lower()
-
-        if metric_scope != "site" or not metric_key:
-            return None
-
-        is_priority = any(keyword in metric_key for keyword in cls.PRIORITY_KEYWORDS)
-        description = metric_name if metric_name else f"Anomaly events for {metric_key}"
-
-        return {"metric_name": metric_key, "description": description, "priority": is_priority}
-
-    @classmethod
-    def _sort_by_priority(cls, metrics: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Sort metrics with priority items first, then alphabetically."""
-        metrics.sort(key=lambda x: (not x.get("priority", False), x["metric_name"]))
-        logging.info("Found %s potential anomaly metrics from ConstInsightMetrics.csv", len(metrics))
-        return metrics
 
 
 # ============================================================================
