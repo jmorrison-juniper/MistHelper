@@ -148,6 +148,9 @@ from src.gateway.gateway_export_utils import (
 from src.org_data_collector import OrgDataCollector  # Import org-level data collection orchestrator
 from src.refactors.data_directory_checker import DataDirectoryChecker  # Early data-dir writable check (SC-005)
 from src.refactors.maps_manager_launcher import MapsManagerLauncher  # Extracted Maps Manager launcher (SC-006)
+from src.refactors.run_interactive_test import (
+    RunInteractiveTestManager,  # Extracted interactive-test manager (SC-011)
+)
 from src.refactors.service_ping_launcher import ServicePingLauncher  # Extracted Service Ping launcher (SC-008)
 from src.refactors.sqlite_database_writer import SQLiteDatabaseWriter  # Extracted SQLite writer (SC-003)
 from src.refactors.switch_to_interactive_login import (
@@ -22881,26 +22884,6 @@ def _build_interactive_test_runner(get_org_id: Any, set_org_id: Any) -> Any:
     return runner
 
 
-def run_interactive_test():
-    """Run interactive-safe tests through the extracted InteractiveTestRunner."""
-    global org_id
-
-    logging.info("Routing run_interactive_test to InteractiveTestRunner")  # Log entry
-
-    def _get_org_id():
-        return org_id  # Return current module-level org_id so runner can read shared runtime context
-
-    def _set_org_id(new_org_id):
-        global org_id
-        org_id = new_org_id  # Persist resolved org_id from runner back into module-level state
-
-    runner = _build_interactive_test_runner(_get_org_id, _set_org_id)  # Build runner with context closures
-    logging.info("Executing interactive test runner")  # Log before invocation
-    result = runner.execute()  # Execute extracted interactive test workflow
-    logging.debug("Completed run_interactive_test with result=%s", result)  # Log outcome
-    return result
-
-
 def _run_web_portal_server(app: Any, host: str, port: int, dev_debug: bool) -> None:
     """Start the Flask app in container mode (Gunicorn-aware) or local Flask dev server mode."""
     in_container = EnvironmentUtils.is_running_in_container()  # Detect container runtime to switch banner + debug flag
@@ -23630,7 +23613,7 @@ def _run_systematic_test_mode(_args: argparse.Namespace) -> None:
 def _run_interactive_test_mode(_args: argparse.Namespace) -> None:
     """Run interactive test mode (read-only menus with site/device selection) and exit."""
     logging.info("INTERACTIVE_TEST: Starting interactive test mode")  # Trace before dispatch
-    sys.exit(0 if run_interactive_test() else 1)  # type: ignore[no-untyped-call]
+    sys.exit(0 if RunInteractiveTestManager().run() else 1)  # Route to extracted manager (PR-12)
 
 
 def _run_tui_mode_and_exit(args: argparse.Namespace) -> None:
