@@ -126,13 +126,13 @@ class TUILauncher:  # Launch TUI mode from interactive menu.
 
         from src.ui.tui import MistHelperTUI  # PLC0415: lazy import to keep startup path light
 
-        tui = MistHelperTUI(debug_mode=self.debug_mode)  # type: ignore[no-untyped-call]
+        tui = MistHelperTUI(debug_mode=self.debug_mode)  # Rich-based TUI, typed in src.ui.tui
         tui.apisession = self._apisession()  # Hand the already-initialized apisession to the TUI
 
         if self.debug_mode:  # Only log the debug-enabled banner when caller opted in
             logging.debug("TUI_MODE: Debug mode is ACTIVE - enhanced logging enabled")  # Debug-active breadcrumb
 
-        tui.run()  # type: ignore[no-untyped-call]
+        tui.run()  # Enter the Rich event loop (blocks until user quits)
         logging.debug("TUI_MODE: Rich TUI run loop returned")  # Log after TUI loop finishes
 
     def _handle_keyboard_interrupt(self) -> None:
