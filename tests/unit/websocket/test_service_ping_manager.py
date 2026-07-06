@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -168,15 +169,24 @@ def test_execute_runs_end_to_end_until_display_results() -> None:
     manager._cleanup.assert_called_once()
 
 
-def test_misthelper_wrapper_delegates_execute(monkeypatch) -> None:
-    """MistHelper wrapper should preserve menu orchestration while delegating execution."""
-    fake_delegate = SimpleNamespace(execute=MagicMock(), debug_mode=False)
-    monkeypatch.setattr(MistHelper, "_get_service_ping_manager_instance", lambda: fake_delegate)
+def test_misthelper_menu_120_launcher_delegates_execute(monkeypatch) -> None:
+    """Menu 120 launcher should wire deps and delegate execute() to the canonical manager."""
+    fake_manager = SimpleNamespace(execute=MagicMock())  # Fake canonical ServicePingManager instance
+    launcher_module = importlib.import_module("src.refactors.service_ping_launcher")  # Load launcher module
+    monkeypatch.setattr(  # Intercept _build_manager so no real deps are needed
+        launcher_module.ServicePingLauncher,
+        "_build_manager",
+        lambda self: fake_manager,
+    )
+    monkeypatch.setattr(  # Intercept _wire_dependencies so we don't publish real globals during the test
+        launcher_module.ServicePingLauncher,
+        "_wire_dependencies",
+        lambda self: None,
+    )
 
-    wrapper = MistHelper.ServicePingManager()
-    wrapper.execute()
+    launcher_module.ServicePingLauncher().launch()  # Exercise the public menu entry point
 
-    fake_delegate.execute.assert_called_once_with()
+    fake_manager.execute.assert_called_once_with()  # Verify launch() delegates to manager.execute()
 
 
 def test_menu_action_120_description_is_preserved() -> None:

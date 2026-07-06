@@ -1,8 +1,8 @@
 # Coding Guideline Compliance Report
 
-- **Generated**: 2026-07-06 05:26:50 UTC
+- **Generated**: 2026-07-06 05:45:47 UTC
 - **Tool**: compliance-analyzer (tools/compliance_analyzer)
-- **Files analyzed**: 254
+- **Files analyzed**: 255
 
 Files are graded against the project guidelines: the 5-Item Rule, no
 wrappers/delegators/aliases/shims, complexity limits, inline comments,
@@ -176,6 +176,7 @@ Plan at the end to drive fixes.
 | src\refactors\serial_cc\start_site_scan_capture.py | 100.0 | A+ | 0 | 0 | 0 | 0 | 0 |
 | src\refactors\serial_cc\switch_vc_stats.py | 100.0 | A+ | 0 | 0 | 0 | 0 | 0 |
 | src\refactors\serial_cc\test_results_by_site.py | 100.0 | A+ | 0 | 0 | 0 | 0 | 0 |
+| src\refactors\service_ping_launcher.py | 100.0 | A+ | 0 | 0 | 0 | 0 | 0 |
 | src\refactors\sqlite_database_writer.py | 100.0 | A+ | 0 | 0 | 0 | 0 | 0 |
 | src\refactors\tui_launcher.py | 100.0 | A+ | 0 | 0 | 0 | 0 | 0 |
 | src\reports\__init__.py | 100.0 | A+ | 0 | 0 | 0 | 0 | 0 |
@@ -1251,6 +1252,12 @@ Plan at the end to drive fixes.
       "violations": 0
     },
     {
+      "path": "src\\refactors\\service_ping_launcher.py",
+      "score": 100.0,
+      "grade": "A+",
+      "violations": 0
+    },
+    {
       "path": "src\\refactors\\sqlite_database_writer.py",
       "score": 100.0,
       "grade": "A+",
@@ -1827,10 +1834,10 @@ Plan at the end to drive fixes.
 
 | Metric | Value |
 | - | - |
-| Lines of code | 23864 |
-| Executable code lines | 11003 |
-| Functions | 1345 |
-| Classes | 90 |
+| Lines of code | 23812 |
+| Executable code lines | 10982 |
+| Functions | 1341 |
+| Classes | 89 |
 | Average complexity | 2.6 |
 | Max complexity | 6 |
 | Inline comment coverage | 80.7% |
@@ -1851,14 +1858,14 @@ Plan at the end to drive fixes.
 
 | Line | Severity | Rule | Symbol | Issue | Remediation |
 | - | - | - | - | - | - |
-| 16239 | low | STRUCT-COMPLEXITY | execute | Cyclomatic complexity is 6 (target <= 5). | Reduce branching by extracting helpers, using guard clauses, or simplifying logic. |
+| 16187 | low | STRUCT-COMPLEXITY | execute | Cyclomatic complexity is 6 (target <= 5). | Reduce branching by extracting helpers, using guard clauses, or simplifying logic. |
 
 #### Structure
 
 | Line | Severity | Rule | Symbol | Issue | Remediation |
 | - | - | - | - | - | - |
-| 16285 | medium | STRUCT-LENGTH | _make_ws_callbacks | Function spans 28 lines (limit 25). | Extract logical sections into well-named helper methods to shrink the function. |
-| 16523 | medium | STRUCT-LENGTH | _build_impl_args | Function spans 26 lines (limit 25). | Extract logical sections into well-named helper methods to shrink the function. |
+| 16233 | medium | STRUCT-LENGTH | _make_ws_callbacks | Function spans 28 lines (limit 25). | Extract logical sections into well-named helper methods to shrink the function. |
+| 16471 | medium | STRUCT-LENGTH | _build_impl_args | Function spans 26 lines (limit 25). | Extract logical sections into well-named helper methods to shrink the function. |
 
 ## File: src\__init__.py
 
@@ -6104,6 +6111,31 @@ No violations found. This file complies with the guidelines.
 
 No violations found. This file complies with the guidelines.
 
+## File: src\refactors\service_ping_launcher.py
+
+- **Score**: 100.0 / 100
+- **Grade**: A+
+
+### Metrics
+
+| Metric | Value |
+| - | - |
+| Lines of code | 110 |
+| Executable code lines | 41 |
+| Functions | 7 |
+| Classes | 1 |
+| Average complexity | 1.1 |
+| Max complexity | 2 |
+| Inline comment coverage | 80.5% |
+
+### Complexity Hotspots
+
+| Function | Cyclomatic Complexity |
+| - | - |
+| launch | 2 |
+
+No violations found. This file complies with the guidelines.
+
 ## File: src\refactors\sqlite_database_writer.py
 
 - **Score**: 100.0 / 100
@@ -8754,12 +8786,12 @@ No violations found. This file complies with the guidelines.
 
 ### Phase: Medium (13 task(s))
 
-- [ ] **CMP-012** `MistHelper.py:16285` - STRUCT-LENGTH (Structure)
+- [ ] **CMP-012** `MistHelper.py:16233` - STRUCT-LENGTH (Structure)
   - Symbol: `_make_ws_callbacks`
   - Problem: Function spans 28 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
   - Done when: analyzer reports no STRUCT-LENGTH for `_make_ws_callbacks` in `MistHelper.py`.
-- [ ] **CMP-013** `MistHelper.py:16523` - STRUCT-LENGTH (Structure)
+- [ ] **CMP-013** `MistHelper.py:16471` - STRUCT-LENGTH (Structure)
   - Symbol: `_build_impl_args`
   - Problem: Function spans 26 lines (limit 25).
   - Fix: Extract logical sections into well-named helper methods to shrink the function.
@@ -8822,7 +8854,7 @@ No violations found. This file complies with the guidelines.
 
 ### Phase: Low (14 task(s))
 
-- [ ] **CMP-025** `MistHelper.py:16239` - STRUCT-COMPLEXITY (Complexity)
+- [ ] **CMP-025** `MistHelper.py:16187` - STRUCT-COMPLEXITY (Complexity)
   - Symbol: `execute`
   - Problem: Cyclomatic complexity is 6 (target <= 5).
   - Fix: Reduce branching by extracting helpers, using guard clauses, or simplifying logic.
