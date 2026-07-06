@@ -44,7 +44,6 @@ _CAPTURE_BASELINE_FILES = {
 _WAVE1_CLASSES = [
     "TroubleshootUtils",  # Touched in safe_input hardening and logging envelopes
     "SSHRunnerManager",  # Touched in safe_input hardening and logging envelopes
-    "WAN2MigrationManager",  # Touched in safe_input hardening and logging envelopes
     "InputUtils",  # Core safe_input infrastructure
     "OperationRegistry",  # Routing/safety classification baseline
     "PacketCaptureManager",  # Wave 1 exclusion: must NOT have been extracted
