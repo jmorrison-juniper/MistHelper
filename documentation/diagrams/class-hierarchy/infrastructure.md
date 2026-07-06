@@ -24,12 +24,6 @@ classDiagram
         +validate_permissions()
     }
 
-    class PerformanceMonitor {
-        +start_timer()
-        +stop_timer()
-        +report_metrics()
-    }
-
     class SSHConnectionConfig {
         +hostname: str
         +username: str

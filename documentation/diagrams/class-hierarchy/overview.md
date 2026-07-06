@@ -17,9 +17,8 @@ Top-level view of MistHelper's 99+ classes organized into 12 families with inter
 classDiagram
     direction LR
 
-    class InfrastructureCore["Infrastructure & Core (2)"] {
+    class InfrastructureCore["Infrastructure & Core (1)"] {
         DataDirectoryChecker
-        PerformanceMonitor
     }
 
     class ConfigObjects["Configuration Objects (6)"] {
