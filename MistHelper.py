@@ -171,6 +171,9 @@ from src.refactors.switch_to_interactive_login import (
 )
 from src.refactors.tui_launcher import TUILauncher  # Extracted TUI launcher (SC-004)
 from src.refactors.wan2_migration_launcher import WAN2MigrationLauncher  # Extracted WAN2 migration launcher (SC-009)
+from src.refactors.wan_probe_device_override_manager import (
+    WANProbeDeviceOverrideManager,  # Extracted WAN probe device override manager (SC-021)
+)
 from src.refactors.wanprobe_config_manager import (
     WANProbeConfigManager,  # Extracted WAN probe config manager (SC-015)
 )
@@ -17043,36 +17046,6 @@ class OrgConfigMigrationManager:  # Org config migration manager.
             print(f"    Skipped:      {len(skipped)}")  # Show skipped count.
         if failed:  # Show failed count
             print(f"    Failed:       {len(failed)}")  # Show failed count.
-
-
-# ============================================================================
-# WAN PROBE DEVICE OVERRIDE MANAGER CLASS (delegated)
-# ============================================================================
-
-
-class WANProbeDeviceOverrideManager:  # WAN probe device override.
-    """Delegation wrapper for extracted WAN probe device override manager implementation."""
-
-    @classmethod
-    def configure(cls, dry_run: bool = False) -> None:  # Configure entry point.
-        """Menu #167 delegated entrypoint."""
-        from src.gateway import wan_probe_device_override_manager as wan_probe_module  # noqa: PLC0415,I001
-
-        wan_probe_module.configure_wan_probe_device_override_dependencies(  # Wire dependencies.
-            wan_probe_module.WANProbeDeviceOverrideDependencies(  # Frozen dependency bundle.
-                apisession=apisession,
-                config_utils=ConfigUtils,
-                cache_utils=CacheUtils,
-                org_site_exporter=OrgSiteExporter,
-                gateway_export_utils=GatewayExportUtils,
-                file_path_utils=FilePathUtils,
-                input_utils=InputUtils,
-                data_exporter=DataExporter,
-                mistapi=mistapi,
-                site_exclude_prefix=MIST_SITE_EXCLUDE_PREFIX,
-            )
-        )
-        return wan_probe_module.WANProbeDeviceOverrideManager.configure(dry_run=dry_run)  # Delegate the config.
 
 
 # ============================================================================
