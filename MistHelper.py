@@ -153,6 +153,9 @@ from src.refactors.data_directory_checker import DataDirectoryChecker  # Early d
 from src.refactors.device_data_fetcher import (
     DeviceDataFetcher,  # Extracted interactive device data fetcher (SC-017)
 )
+from src.refactors.inventory_csvcomparator import (
+    InventoryCSVComparator,  # Extracted inventory CSV comparator adapter (SC-018)
+)
 from src.refactors.keyboard_listener import KeyboardListener  # PR-13 extracted no-op keyboard listener stub (SC-012)
 from src.refactors.maps_manager_launcher import MapsManagerLauncher  # Extracted Maps Manager launcher (SC-006)
 from src.refactors.run_interactive_test import (
@@ -16380,61 +16383,7 @@ class ARPCommandManager:  # ARP WebSocket command manager.
 # ============================================================================
 # RATE LIMITING & ADDRESS UTILITIES (extracted to src/utils/)
 # ============================================================================
-from src.utils.address_utils import (
-    AddressUtils,  # noqa: E402
-    AddressValidationConfig,  # noqa: E402
-    NominatimValidator,  # noqa: E402
-)
 from src.utils.rate_limiting import RateLimitingUtils  # noqa: E402
-
-
-class InventoryCSVComparator:  # Inventory CSV comparator.
-    """Compare Mist inventory with CSV. Delegated to src.inventory.csv_comparator."""
-
-    @staticmethod
-    def _build_impl_args(fast: bool, address_check: bool, debug: bool, skip_ssl_verify: bool):
-        """Return a (flags, deps) tuple for the extracted impl constructor."""
-        from src.inventory.csv_comparator import (  # pylint: disable=import-outside-toplevel
-            ComparatorDependencies,
-            ComparatorFlags,
-        )
-
-        flags = ComparatorFlags(  # Runtime toggles bundle.
-            fast=fast,  # Caching/speed flag.
-            address_check=address_check,  # Address validation flag.
-            debug=debug,  # Debug logging flag.
-            skip_ssl_verify=skip_ssl_verify,  # SSL verify flag.
-        )
-        deps = ComparatorDependencies(  # Injected callables + classes bundle.
-            apisession=apisession,  # Shared API session.
-            get_csv_path_fn=FilePathUtils.get_csv_path,  # CSV path resolver.
-            check_and_generate_csv_fn=CacheUtils.check_and_generate_csv,  # Cache-aware CSV builder.
-            create_parse_failures_csv_fn=CacheUtils.create_address_parse_failures_csv,  # Parse-failure exporter.
-            devices_with_site_info_fn=OrgInventoryExporter.devices_with_site_info,  # Inventory fetcher.
-            get_org_id_fn=ConfigUtils.get_cached_or_prompted_org_id,  # Org-id resolver.
-            get_device_identifier_fn=DeviceUtils.get_device_identifier,  # Device-id resolver.
-            address_utils_cls=AddressUtils,  # Address parsing utility class.
-            nominatim_validator_cls=NominatimValidator,  # External validator class.
-            address_validation_config_cls=AddressValidationConfig,  # Validation config class.
-        )
-        return flags, deps  # Tuple consumed by the impl constructor.
-
-    def __init__(  # Capture comparison inputs.
-        self, fast: bool = False, address_check: bool = False, debug: bool = False, skip_ssl_verify: bool = True
-    ):
-        """Initialize the inventory comparator (fast/address_check/debug/skip_ssl_verify flags)."""
-        from src.inventory.csv_comparator import (
-            InventoryCSVComparator as _Impl,  # pylint: disable=import-outside-toplevel
-        )
-
-        flags, deps = InventoryCSVComparator._build_impl_args(  # Grouped constructor args.
-            fast, address_check, debug, skip_ssl_verify
-        )
-        self._impl = _Impl(flags=flags, deps=deps)  # Build the impl.
-
-    def execute(self) -> None:  # Run the comparison.
-        """Execute the complete inventory comparison workflow."""
-        self._impl.execute()  # Delegate to the impl.
 
 
 # ============================================================================
