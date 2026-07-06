@@ -322,7 +322,7 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
 - References: 3
 - Suggested class: `MarvisDataUtils`
 - Suggested module: `src/refactors/marvis_data_utils.py`
-- Rationale: low-use: sole caller lives inside MistHelper.py from `_build_deps()`; extract `marvis_data_utils` OUT of the entrypoint into a new `src/refactors/marvis_data_utils.py` module and rewrite the callsite(s) to import from there
+- Rationale: low-use: sole caller lives inside MistHelper.py from `MarvisTroubleshootDeps()`; extract `marvis_data_utils` OUT of the entrypoint into a new `src/refactors/marvis_data_utils.py` module and rewrite the callsite(s) to import from there
 - Guideline flags (address during the move):
   - [ ] missing_action_logging
 - Reference sites (one PR cluster per file):
