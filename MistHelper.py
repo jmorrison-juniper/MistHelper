@@ -180,6 +180,9 @@ from src.refactors.maps_manager_launcher import MapsManagerLauncher  # Extracted
 from src.refactors.marvis_data_utils import (
     MarvisDataUtilsFactory,  # Extracted Marvis data-utils singleton factory (SC-027)
 )
+from src.refactors.mist_wan_target_ports import (
+    MistWanTargetPorts,  # Extracted operator-configured WAN target-ports list (SC-032)
+)
 from src.refactors.package_import_map import (
     PackageImportMapManager,  # Extracted pip-name -> import-name mapping (SC-025)
 )
@@ -2018,12 +2021,8 @@ FAST_MODE_USE_CONNECTION_AWARE_THREADING = (  # Whether to size threads based on
 )
 FAST_MODE_ENABLED: bool = False  # Set to True via --fast CLI flag at startup
 
-# WAN Port Configuration from .env (REQUIRED - no defaults)
-# MIST_WAN_TARGET_PORTS: Comma-separated list of WAN port names to target
-# Example: "ge-0/0/0,ge-0/0/1,ge-0/0/2,{{wan1_interface}},{{wan2_interface}},{{wan3_interface}}"
-MIST_WAN_TARGET_PORTS = [
-    p.strip() for p in os.getenv("MIST_WAN_TARGET_PORTS", "").split(",") if p.strip()
-]  # Parse CSV env into a clean list of port names
+# NOTE: MIST_WAN_TARGET_PORTS extracted to src/refactors/mist_wan_target_ports.py
+# per initiative 1011 SC-032 (FR-003: no wrapper shim; FR-005: assignment->classattr).
 
 # Site Exclusion Configuration from .env (REQUIRED - no defaults)
 # MIST_SITE_EXCLUDE_PREFIX: Site name prefix to exclude from destructive operations
@@ -15565,7 +15564,7 @@ class GatewayExportUtils:  # Gateway export delegators.
             connection_pool_fn=execute_with_connection_pool_management,  # Pool wrapper.
             validation_utils=ValidationUtils,  # Input validation.
             rate_limiting_utils=RateLimitingUtils,  # Adaptive delay.
-            mist_wan_target_ports=MIST_WAN_TARGET_PORTS,  # Port list constant.
+            mist_wan_target_ports=MistWanTargetPorts.VALUE,  # Port list from extracted class attribute.
             mist_site_exclude_prefix=MIST_SITE_EXCLUDE_PREFIX,  # Site filter prefix.
             fast_mode_max_retries=FAST_MODE_MAX_RETRIES,  # Retry cap.
             fast_mode_retry_delay=FAST_MODE_RETRY_DELAY,  # Delay between retries.
