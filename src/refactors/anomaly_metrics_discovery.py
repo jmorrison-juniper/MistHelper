@@ -32,8 +32,7 @@ _MH = _MistHelperProxy()  # Sole module-level proxy handle used inside the class
 
 
 class AnomalyMetricsDiscovery:
-    """
-    Discovers and prioritizes site-scoped anomaly metrics from ConstInsightMetrics.csv.
+    """Discover and prioritize site-scoped anomaly metrics from ConstInsightMetrics.csv.
 
     Provides fallback metrics when CSV is unavailable. Used for AI/ML anomaly analysis.
     """
@@ -61,8 +60,7 @@ class AnomalyMetricsDiscovery:
 
     @classmethod
     def discover(cls) -> list[dict[str, Any]]:
-        """
-        Discover potential anomaly metrics from ConstInsightMetrics.csv.
+        """Discover potential anomaly metrics from ConstInsightMetrics.csv.
 
         Returns:
             List of metric dictionaries with metric_name, description, and priority.
