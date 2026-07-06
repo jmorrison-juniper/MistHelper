@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from MistHelper import PacketCaptureManager, SiteClientExporter, run_interactive_test
+from MistHelper import PacketCaptureManager, SiteClientExporter
+from src.refactors.run_interactive_test import RunInteractiveTestManager
 from tests.fixtures.next5_parity_baseline import NEXT5_TARGET_FUNCTIONS
 from tests.integration.helpers.compatibility_assertions import (
     assert_callable_entrypoint,
@@ -19,7 +20,7 @@ def test_next5_entrypoints_remain_callable() -> None:
     assert_callable_entrypoint(PacketCaptureManager._wait_and_download_pcap, "_wait_and_download_pcap")
     assert_callable_entrypoint(PacketCaptureManager._wait_and_download_pcap_org, "_wait_and_download_pcap_org")
     assert_callable_entrypoint(SiteClientExporter.wifi_clients, "wifi_clients")
-    assert_callable_entrypoint(run_interactive_test, "run_interactive_test")
+    assert_callable_entrypoint(RunInteractiveTestManager.run, "run_interactive_test")
 
 
 def test_next5_target_name_matrix_is_fully_mapped() -> None:
@@ -29,6 +30,6 @@ def test_next5_target_name_matrix_is_fully_mapped() -> None:
         "_wait_and_download_pcap": PacketCaptureManager._wait_and_download_pcap,
         "_wait_and_download_pcap_org": PacketCaptureManager._wait_and_download_pcap_org,
         "wifi_clients": SiteClientExporter.wifi_clients,
-        "run_interactive_test": run_interactive_test,
+        "run_interactive_test": RunInteractiveTestManager.run,
     }
     assert_target_mapping_complete(NEXT5_TARGET_FUNCTIONS, target_mapping)
