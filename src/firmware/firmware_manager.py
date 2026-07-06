@@ -1571,14 +1571,12 @@ class FirmwareManager:
         sites_for_upgrader = [  # WHY: normalize site shape expected by BulkAPFirmwareUpgrader
             {"id": s["id"], "name": s.get("name", "Unknown")} for s in sites
         ]
-        main_module = sys.modules.get("__main__") or sys.modules.get("MistHelper")  # WHY: locate host module
-        if main_module is None:  # WHY: guard against missing host (e.g., isolated unit test)
-            logging.debug("MSP upgrade skipped: MistHelper host module not loaded")  # WHY: trace skip
-            return  # WHY: no-op when host absent, caller records completion
-        bulk_upgrader_cls = main_module.BulkAPFirmwareUpgrader  # WHY: lazy attr avoids circular import
-        upgrader = bulk_upgrader_cls(target_org_id, sites_for_upgrader, dry_run=dry_run)  # WHY: construct
-        upgrader.execute()  # WHY: run the actual bulk upgrade
-        logging.info("MSP upgrade %s for org id %s", "simulated" if dry_run else "completed", target_org_id)  # WHY: log
+        self._dispatch_bulk_ap_upgrade(target_org_id, sites_for_upgrader, dry_run)  # WHY: delegate to shared dispatcher
+        logging.info(  # WHY: audit MSP org completion after dispatcher returns
+            "MSP upgrade %s for org id %s",
+            "simulated" if dry_run else "completed",
+            target_org_id,
+        )
 
     def _handle_msp_interrupt(  # WHY: format interrupted record + confirm continuation
         self,
@@ -1747,16 +1745,48 @@ class FirmwareManager:
         sites_to_upgrade_override: list[dict[str, Any]] | None,
     ) -> None:
         """Execute the bulk firmware upgrade using BulkAPFirmwareUpgrader class."""
-        import sys as _sys
+        dry_run = getattr(getattr(_MH, "args", None), "dry_run", False)  # WHY: pull dry_run from CLI args namespace
+        self._dispatch_bulk_ap_upgrade(  # WHY: delegate to shared dispatcher used by MSP path too
+            self.org_id, sites_to_upgrade_override, dry_run
+        )
 
-        _main = _sys.modules.get("__main__") or _sys.modules.get("MistHelper")
-        if _main is None:
-            return
-        BulkAPFirmwareUpgrader = _main.BulkAPFirmwareUpgrader  # lazy import avoids circular
-        # Check for dry_run flag from global args
-        dry_run = getattr(getattr(_main, "args", None), "dry_run", False)
-        upgrader = BulkAPFirmwareUpgrader(self.org_id, sites_to_upgrade_override, dry_run=dry_run)
-        upgrader.execute()
+    def _build_bulk_ap_config(  # WHY: assemble BulkAPUpgraderConfig from MistHelper globals via _MH proxy
+        self,
+        target_org_id: str,
+        sites_override: list[dict[str, Any]] | None,
+        dry_run: bool,
+    ) -> Any:
+        """Assemble the frozen BulkAPUpgraderConfig used by the upgrader."""
+        from src.firmware.bulk_ap_upgrader import BulkAPUpgraderConfig  # WHY: lazy import per Constitution
+
+        return BulkAPUpgraderConfig(  # WHY: immutable bundle per FR-004 single-arg constructor
+            org_id=target_org_id,  # WHY: caller-selected target org id
+            apisession=_MH.apisession,  # WHY: ambient session sourced from MistHelper module
+            sites_override=sites_override,  # WHY: preselected sites bypass interactive prompt
+            dry_run=dry_run,  # WHY: dry-run flag flows through unchanged
+            safe_input_fn=_MH.InputUtils.safe_input,  # WHY: preserves Ctrl+C / stop-signal behavior
+            check_stop_fn=_MH.ConfigUtils.check_stop_signal,  # WHY: cooperative abort polling
+            fetch_sites_fn=_MH.APICoreFetchUtils.all_sites_with_limit,  # WHY: cache-aware site fetch
+            get_csv_path_fn=_MH.FilePathUtils.get_csv_path,  # WHY: OS-safe CSV path resolution
+            check_firmware_status_fn=lambda: _MH.FirmwareManager.create(  # WHY: lazy status re-check factory
+                _MH.apisession, _MH.ConfigUtils.get_cached_or_prompted_org_id()
+            ).check_firmware_upgrade_status(),
+            get_org_id_fn=_MH.ConfigUtils.get_cached_or_prompted_org_id,  # WHY: seam so upgrader can re-prompt
+        )
+
+    def _dispatch_bulk_ap_upgrade(  # WHY: build config + run BulkAPFirmwareUpgrader (replaces MistHelper wrapper)
+        self,
+        target_org_id: str,
+        sites_override: list[dict[str, Any]] | None,
+        dry_run: bool,
+    ) -> None:
+        """Build BulkAPUpgraderConfig and execute the bulk AP upgrade."""
+        from src.firmware.bulk_ap_upgrader import (  # WHY: lazy import keeps module load cheap
+            BulkAPFirmwareUpgrader as _Impl,
+        )
+
+        config = self._build_bulk_ap_config(target_org_id, sites_override, dry_run)  # WHY: delegate build
+        _Impl(config).execute()  # WHY: single-arg constructor + execute per contracts/constructor.md
 
     def _execute_status_check(self, scope_choice: str, site_filter: str | None) -> None:
         """Execute the firmware status check using the co-located FirmwareUpgradeStatusChecker."""
