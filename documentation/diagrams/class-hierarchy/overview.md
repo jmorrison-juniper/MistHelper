@@ -21,11 +21,10 @@ classDiagram
         DataDirectoryChecker
     }
 
-    class ConfigObjects["Configuration Objects (6)"] {
+    class ConfigObjects["Configuration Objects (5)"] {
         SSHConnectionConfig
         SSHExecutionConfig
         AddressValidationConfig
-        MapViewerConfig
         DeviceFetchConfig
         EndpointConfig
     }
