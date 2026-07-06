@@ -1,11 +1,11 @@
 """Unit tests for PlotlyMapDataSerializer."""
 
-from src.maps.plotly_map_serializer import PlotlyMapDataSerializer
+from src.maps.plotly_map_serializer import MapConfigParams, PlotlyMapDataSerializer
 
 
 def test_build_map_config() -> None:
     """Map config payload contains expected keys and values."""
-    payload = PlotlyMapDataSerializer.build_map_config(
+    params = MapConfigParams(
         site_id="s1",
         site_name="Site A",
         map_id="m1",
@@ -14,6 +14,7 @@ def test_build_map_config() -> None:
         map_width=1000,
         map_height=600,
     )
+    payload = PlotlyMapDataSerializer.build_map_config(params)
 
     assert payload == {
         "site_id": "s1",

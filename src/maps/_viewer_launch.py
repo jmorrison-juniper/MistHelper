@@ -31,7 +31,10 @@ from src.maps.launcher import MapViewerCallbacks, MapViewerState  # WHY: Callbac
 from src.maps.plotly_heatmap_renderer import PlotlyCoverageHeatmapRenderer  # WHY: RF heatmap renderer instance.
 from src.maps.plotly_map_callback_manager import PlotlyMapCallbackManager  # WHY: Layer/click callback delegate.
 from src.maps.plotly_map_figure_builder import PlotlyMapFigureBuilder  # WHY: Walls/wayfinding/zones figure builder.
-from src.maps.plotly_map_serializer import PlotlyMapDataSerializer  # WHY: Store payload serializer.
+from src.maps.plotly_map_serializer import (  # WHY: Store payload serializer + params bundle.
+    MapConfigParams,
+    PlotlyMapDataSerializer,
+)
 from src.maps.plotly_map_templates import DashTemplateManager  # WHY: HTML/CSS template provider for the Dash shell.
 
 try:  # WHY: mistapi is required for real deletes but tests may stub it.
@@ -1490,17 +1493,18 @@ def _map_config_store(dcc_mod: Any, ctx: dict[str, Any]) -> Any:  # WHY: Split l
     """Return the ``map-config-store`` Store carrying the current map identity payload."""
     serializer = ctx["helpers"]["serializer"]  # WHY: Local shortcut.
     data, scope = ctx["data"], ctx["scope"]  # WHY: Local shortcuts.
+    params = MapConfigParams(  # WHY: Frozen bundle keeps builder signature 1-arg.
+        site_id=scope.site_id,
+        site_name=scope.site_name,
+        map_id=scope.map_id,
+        map_name=data.map_data.get("name", "Unknown"),
+        ppm=ctx["ppm"],
+        map_width=data.map_data.get("width", 1000),
+        map_height=data.map_data.get("height", 1000),
+    )
     return dcc_mod.Store(  # WHY: Store holds the map-identity dict for JS callbacks.
         id="map-config-store",
-        data=serializer.build_map_config(  # WHY: Current-map identity.
-            site_id=scope.site_id,
-            site_name=scope.site_name,
-            map_id=scope.map_id,
-            map_name=data.map_data.get("name", "Unknown"),
-            ppm=ctx["ppm"],
-            map_width=data.map_data.get("width", 1000),
-            map_height=data.map_data.get("height", 1000),
-        ),
+        data=serializer.build_map_config(params),  # WHY: Current-map identity payload.
     )
 
 
