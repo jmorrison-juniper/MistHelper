@@ -392,18 +392,7 @@ class SSHExecutionConfig:
 
 
 # NOTE: WebSocketListenerConfig removed - use ARPCommandManager._listen_for_output parameters directly
-
-
-@dataclass
-class MapViewerConfig:
-    """Configuration for interactive map viewer."""
-
-    site_id: str  # Mist site UUID the map belongs to
-    site_name: str  # Human-readable site name shown in the viewer
-    map_id: str  # Mist map UUID identifying the specific floor plan
-    coverage_data: dict | None = None  # type: ignore[type-arg]  # Optional RF coverage overlay data (None if not loaded)
-    all_maps: list | None = None  # type: ignore[type-arg]  # Optional list of all maps at the site for navigation (None if unused)
-    all_sites: list | None = None  # type: ignore[type-arg]  # Optional list of all sites for cross-site navigation (None if unused)
+# NOTE: MapViewerConfig removed (SC-002) - unused dataclass, MapsManager builds runtime state directly
 
 
 @dataclass

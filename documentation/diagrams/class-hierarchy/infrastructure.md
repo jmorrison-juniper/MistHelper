@@ -43,12 +43,6 @@ classDiagram
         +fuzzy_threshold: float
     }
 
-    class MapViewerConfig {
-        +host: str
-        +port: int
-        +debug: bool
-    }
-
     class DeviceFetchConfig {
         +device_type: str
         +include_stats: bool
