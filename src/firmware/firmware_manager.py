@@ -9,12 +9,15 @@ Mist organization sites.
 from __future__ import annotations
 
 import csv  # WHY: CSV read/write for firmware plan artifacts
+import importlib  # WHY: lazy import of MistHelper for _MistHelperProxy late-binding
+import json  # WHY: read stored ActiveUpgrades.json tracker in FirmwareUpgradeStatusChecker
 import logging  # WHY: emit info/debug audit trail per Constitution VII
+import os  # WHY: filesystem existence check for ActiveUpgrades.json tracker
 import sys  # WHY: needed for _bind_module_globals to rebind module attrs
 import time  # WHY: polling delays for continuous monitoring mode
 from collections.abc import Callable  # WHY: type hints for injected dependency callables
 from dataclasses import dataclass  # WHY: FirmwareManagerConfig frozen value object
-from datetime import datetime  # WHY: timestamped CSV filenames and audit lines
+from datetime import UTC, datetime  # WHY: UTC-aware ISO timestamps and CSV filenames
 from typing import Any, cast  # WHY: Any for opaque API objects; cast narrows mypy return types
 
 # Type aliases for injected dependencies keep readable signatures across helpers.
@@ -41,6 +44,25 @@ except ImportError:  # pragma: no cover
 # WHY: Annotate as Any so pyright treats mistapi.<attr> uniformly under both branches;
 # WHY: production callsites remain guarded by mistapi truthiness where relevant.
 mistapi: Any = _mistapi_module
+
+
+class _MistHelperProxy:  # WHY: attribute forwarder to live MistHelper module
+    """Forward attribute access to the currently-loaded MistHelper module.
+
+    Enables the co-located FirmwareUpgradeStatusChecker class to reference
+    MistHelper-owned utility singletons (ConfigUtils, PromptUtils, etc.)
+    without importing MistHelper at module load time (which would create a
+    circular import). Attributes are resolved at call time so test
+    monkey-patches applied to MistHelper are honoured.
+    """
+
+    def __getattr__(self, name: str) -> Any:  # WHY: only invoked when the attr is missing normally
+        """Resolve name against the live MistHelper module (call-time lookup)."""
+        misthelper_module = importlib.import_module("MistHelper")  # WHY: lazy import at call time
+        return getattr(misthelper_module, name)  # WHY: fetch current bound value from MistHelper
+
+
+_MH = _MistHelperProxy()  # WHY: sole module-level proxy handle used by FirmwareUpgradeStatusChecker
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -1737,22 +1759,18 @@ class FirmwareManager:
         upgrader.execute()
 
     def _execute_status_check(self, scope_choice: str, site_filter: str | None) -> None:
-        """Execute the firmware status check using FirmwareUpgradeStatusChecker."""
-        import sys as _sys
-
-        _main = _sys.modules.get("__main__") or _sys.modules.get("MistHelper")
-        if _main is None:
-            return
-        FirmwareUpgradeStatusChecker = _main.FirmwareUpgradeStatusChecker  # lazy import avoids circular
-        # Set up the implementation to use this class's session and org_id
-        global apisession
-        original_apisession = apisession
-        apisession = self.apisession
-
-        try:
-            FirmwareUpgradeStatusChecker(scope_choice, site_filter).check()
-        finally:
-            apisession = original_apisession
+        """Execute the firmware status check using the co-located FirmwareUpgradeStatusChecker."""
+        logging.info(
+            "Dispatching status check (scope=%s, site_filter=%s)", scope_choice, site_filter
+        )  # WHY: audit trail before wiring module globals
+        global apisession  # WHY: co-located checker reads bare apisession at module scope
+        original_apisession = apisession  # WHY: preserve caller's session for restoration
+        apisession = self.apisession  # WHY: bind this FirmwareManager's session for the checker
+        try:  # WHY: guarantee restoration on any exception path
+            FirmwareUpgradeStatusChecker(scope_choice, site_filter).check()  # WHY: run the co-located workflow
+        finally:  # WHY: always restore even if the checker raises
+            apisession = original_apisession  # WHY: leave module globals as we found them
+        logging.debug("Status check dispatch complete")  # WHY: audit trail after restoration
 
     # ===============================================================================
     # SWITCH FIRMWARE UPGRADE METHODS
@@ -3055,3 +3073,977 @@ class FirmwareManager:
 
 
 # NOTE: check_firmware_upgrade_status_direct removed - use FirmwareManager(apisession, org_id).check_firmware_upgrade_status() directly  # noqa: E501
+
+
+class FirmwareUpgradeStatusChecker:
+    """Comprehensive firmware upgrade status monitoring and reporting.
+
+    Analyzes device firmware status across organization or specific sites,
+    tracks active upgrade operations, and exports detailed status reports.
+    Co-located with FirmwareManager per FR-015 (fold firmware helpers into
+    the firmware_manager module rather than a fresh src/refactors/* file).
+
+    Features:
+    - Device firmware status analysis (in-progress, completed, failed)
+    - Active upgrade operation discovery (SSR, AP, Switch)
+    - Stale upgrade detection (100% but not marked complete)
+    - Progress visualization and distribution analysis
+    - CSV export for detailed analysis
+
+    Usage:
+        FirmwareUpgradeStatusChecker(scope_choice, site_filter).check()
+    """
+
+    # Stale upgrade threshold (hours) - upgrades at 100% older than this are treated as complete
+    STALE_UPGRADE_HOURS = 1  # WHY: default staleness cutoff shared across helpers
+
+    # Device type display names
+    DEVICE_TYPE_NAMES = {  # WHY: canonical friendly labels for device-type distribution output
+        "ap": "Access Points",  # WHY: menu-facing label for AP rows
+        "switch": "Switches",  # WHY: menu-facing label for switch rows
+        "gateway": "Gateways/SSRs",  # WHY: menu-facing label combines gateway and SSR
+        "ssr": "Session Smart Routers",  # WHY: dedicated label for SSR devices when reported distinctly
+    }
+
+    def __init__(self, scope_choice: str | None = None, site_filter: str | None = None):
+        """Initialize the status checker.
+
+        Args:
+            scope_choice: '2' for specific site, '3' for active only, '4' for failed only
+            site_filter: Site ID filter (required if scope_choice='2')
+        """
+        logging.info(  # WHY: audit trail before touching MistHelper singletons
+            "Initializing FirmwareUpgradeStatusChecker (scope=%s, site_filter=%s)",
+            scope_choice,
+            site_filter,
+        )
+        self.scope_choice = scope_choice  # WHY: menu scope selector (2/3/4)
+        self.site_filter = site_filter  # WHY: optional single-site override
+        self.org_id = _MH.ConfigUtils.get_cached_or_prompted_org_id()  # WHY: resolve org via MistHelper cache
+        self.all_device_stats: list[dict[str, Any]] = []  # WHY: raw device stats collected across API calls
+        self.upgrade_results: list[dict[str, Any]] = []  # WHY: rows for the CSV export
+        self.active_upgrades: list[dict[str, Any]] = []  # WHY: active upgrade operations for the CSV export
+        self.site_lookup: dict[str, str] = {}  # WHY: site_id -> site_name enrichment map
+        self.summary = self._create_empty_summary()  # WHY: aggregated counters and distributions
+        logging.debug("FirmwareUpgradeStatusChecker initialized for org %s", self.org_id)  # WHY: post-init trace
+
+    def _create_empty_summary(self) -> dict[str, Any]:
+        """Create empty firmware status summary structure."""
+        return {  # WHY: canonical shape consumed by every _display_* helper
+            "total_devices": 0,  # WHY: incremented per processed device
+            "devices_with_fwupdate": 0,  # WHY: count of devices that reported fwupdate payload
+            "upgrade_in_progress": 0,  # WHY: count of active upgrades
+            "upgrade_failed": 0,  # WHY: count of failed upgrades
+            "upgrade_completed": 0,  # WHY: count of completed upgrades
+            "upgrade_unknown": 0,  # WHY: count of devices with unrecognized status
+            "devices_by_status": {},  # WHY: histogram keyed by raw status string
+            "devices_by_version": {},  # WHY: histogram keyed by firmware version
+            "devices_by_model": {},  # WHY: histogram keyed by hardware model
+            "devices_by_type": {},  # WHY: histogram keyed by device type (ap/switch/gateway/ssr)
+            "progress_total": 0,  # WHY: running sum of percent-complete values for mean
+            "progress_count": 0,  # WHY: divisor for mean progress calculation
+            "devices_upgrading": [],  # WHY: rows for real-time upgrade table
+        }
+
+    def check(self) -> None:
+        """Main entry point - execute firmware upgrade status check."""
+        logging.info("Starting firmware upgrade status check...")  # WHY: audit trail for top-level entry
+        logging.debug("Scope: %s, Site filter: %s", self.scope_choice, self.site_filter)  # WHY: detail scope
+
+        if not self._resolve_site_filter():  # WHY: user may cancel site selection
+            return  # WHY: exit cleanly when no site is chosen
+        if not self._fetch_device_stats():  # WHY: bail when the API returns nothing
+            return  # WHY: exit cleanly when device stats unavailable
+        self._fetch_site_lookup()  # WHY: enrich device rows with site names
+        self._process_all_devices()  # WHY: iterate device stats into structured rows
+        self._display_summary()  # WHY: print aggregate counters and distributions
+        self._display_upgrading_devices()  # WHY: real-time table for in-progress upgrades
+        self._check_active_operations()  # WHY: probe SSR/site upgrade endpoints
+        self._export_results()  # WHY: write CSV artifacts
+        self._display_recommendations()  # WHY: closing operator guidance
+
+        logging.info("Firmware upgrade status check completed successfully")  # WHY: audit trail on success
+
+    def _resolve_site_filter(self) -> bool:
+        """Resolve site filter if specific site mode selected."""
+        if self.scope_choice == "2" and self.site_filter is None:  # WHY: only prompt when mode 2 and no override
+            logging.debug("User selected specific site mode")  # WHY: trace prompt entry
+            self.site_filter = _MH.PromptUtils.select_site()  # WHY: interactive site picker via MistHelper
+            if not self.site_filter:  # WHY: user cancelled selection
+                print(" No site selected. Exiting.")  # WHY: operator-facing cancel notice
+                logging.warning("No site selected in specific site mode")  # WHY: audit trail for cancellation
+                return False  # WHY: signal caller to abort
+            logging.debug("Selected site filter: %s", self.site_filter)  # WHY: trace resolved site id
+        return True  # WHY: proceed with (possibly None) filter
+
+    def _fetch_device_stats(self) -> bool:
+        """Fetch device statistics from API."""
+        print("\n  Fetching device statistics...")  # WHY: operator-facing progress banner
+        logging.debug("Scope: %s, site_filter: %s", self.scope_choice, self.site_filter)  # WHY: trace scope
+
+        try:  # WHY: tolerate API failures without crashing menu
+            if self.site_filter:  # WHY: single-site branch when filter set
+                return self._fetch_site_stats()
+            return self._fetch_org_stats()  # WHY: org-wide branch otherwise
+        except Exception as exception:  # WHY: any API error yields graceful failure
+            print(f"! Failed to fetch device statistics: {exception}")  # WHY: operator notice
+            logging.error("Failed to fetch device statistics: %s", exception)  # WHY: structured error log
+            return False  # WHY: signal caller to abort
+
+    def _fetch_site_stats(self) -> bool:
+        """Fetch device stats for a single site."""
+        print("   Fetching stats for selected site...")  # WHY: operator-facing progress banner
+        stats_resp = mistapi.api.v1.sites.stats.listSiteDevicesStats(  # WHY: fetch first page for site
+            apisession, self.site_filter, type="all", limit=1000
+        )
+        site_stats = mistapi.get_all(response=stats_resp, mist_session=apisession)  # WHY: paginate to completion
+        self.all_device_stats.extend(site_stats)  # WHY: accumulate into shared list
+
+        print(f"   Retrieved stats for {len(site_stats)} devices at selected site")  # WHY: user-visible count
+        logging.info("Retrieved stats for %s devices at site %s", len(site_stats), self.site_filter)  # WHY: audit
+        return len(self.all_device_stats) > 0 or self._handle_empty_stats()  # WHY: empty-state handling
+
+    def _fetch_org_stats(self) -> bool:
+        """Fetch device stats organization-wide."""
+        print("   Fetching organization-wide device statistics...")  # WHY: operator-facing progress banner
+        stats_resp = mistapi.api.v1.orgs.stats.listOrgDevicesStats(  # WHY: fetch first page org-wide
+            apisession, self.org_id, type="all", fields="*", limit=1000
+        )
+        org_stats = mistapi.get_all(response=stats_resp, mist_session=apisession)  # WHY: paginate to completion
+        self.all_device_stats.extend(org_stats)  # WHY: accumulate into shared list
+
+        print(f"   Retrieved stats for {len(org_stats)} devices organization-wide")  # WHY: user-visible count
+        logging.info("Retrieved stats for %s devices organization-wide", len(org_stats))  # WHY: audit trail
+        return len(self.all_device_stats) > 0 or self._handle_empty_stats()  # WHY: empty-state handling
+
+    def _handle_empty_stats(self) -> bool:
+        """Handle case when no device statistics found."""
+        print(" No device statistics found.")  # WHY: operator-facing empty-state notice
+        return False  # WHY: signal caller to abort
+
+    def _fetch_site_lookup(self) -> None:
+        """Fetch site information for device enrichment."""
+        print("   Fetching site information for device enrichment...")  # WHY: operator-facing progress banner
+        try:  # WHY: tolerate API failure; lookup is optional enrichment
+            all_sites = _MH.APICoreFetchUtils.all_sites_with_limit(self.org_id)  # WHY: cached fetch via MistHelper
+            for site in all_sites:  # WHY: build site_id -> site_name map
+                site_id = site.get("id")  # WHY: primary lookup key
+                site_name = site.get("name", "Unknown")  # WHY: fallback when name missing
+                if site_id:  # WHY: skip rows without an id
+                    self.site_lookup[site_id] = site_name  # WHY: cache in instance dict
+        except Exception as exception:  # WHY: enrichment failure must not abort report
+            logging.warning("Failed to fetch site information: %s", exception)  # WHY: warn but continue
+            self.site_lookup.clear()  # WHY: leave empty rather than partial
+
+    def _process_all_devices(self) -> None:
+        """Process firmware status for all devices."""
+        print(f"\n  Analyzing firmware status for {len(self.all_device_stats)} devices...")  # WHY: banner
+
+        for device_stats in self.all_device_stats:  # WHY: iterate every collected device
+            device_info = self._extract_device_info(device_stats)  # WHY: normalize identity fields
+            fw_info = self._process_fwupdate(device_stats, device_info)  # WHY: parse fwupdate payload
+            self._update_summary_counters(device_info, fw_info)  # WHY: increment histograms
+            self._maybe_add_to_results(device_info, fw_info)  # WHY: append row when in scope
+
+    def _extract_device_info(self, device_stats: dict[str, Any]) -> dict[str, Any]:
+        """Extract device information from stats."""
+        site_id = device_stats.get("site_id", "Unknown")  # WHY: used for both row and site_lookup
+        return {  # WHY: canonical device identity block
+            "device_id": device_stats.get("id", "Unknown"),  # WHY: primary device id
+            "device_name": device_stats.get("name", "Unnamed"),  # WHY: display name
+            "device_mac": device_stats.get("mac", "Unknown"),  # WHY: MAC identifier
+            "device_model": device_stats.get("model", "Unknown"),  # WHY: hardware model
+            "device_type": device_stats.get("type", "Unknown"),  # WHY: type bucket (ap/switch/etc)
+            "device_version": device_stats.get("version", "Unknown"),  # WHY: current firmware version
+            "site_id": site_id,  # WHY: propagate for lookup
+            "site_name": self.site_lookup.get(site_id, "Unknown Site"),  # WHY: enriched site name
+            "last_seen": device_stats.get("last_seen", 0),  # WHY: epoch for freshness display
+        }
+
+    def _process_fwupdate(self, device_stats: dict[str, Any], device_info: dict[str, Any]) -> dict[str, Any]:
+        """Process fwupdate field from device stats."""
+        fwupdate = device_stats.get("fwupdate", {})  # WHY: extract nested firmware payload
+
+        if not fwupdate:  # WHY: no firmware information reported
+            return self._create_no_upgrade_info(device_info["last_seen"])  # WHY: default row shape
+
+        self.summary["devices_with_fwupdate"] += 1  # WHY: count fw-reporting devices
+        return self._parse_fwupdate_data(fwupdate, device_info)  # WHY: build structured fw row
+
+    def _create_no_upgrade_info(self, last_seen: Any) -> dict[str, Any]:
+        """Create default firmware info when no upgrade data exists."""
+        return {  # WHY: canonical empty-fwupdate row shape
+            "fw_status": "no_upgrade_info",  # WHY: sentinel status
+            "fw_progress": 0,  # WHY: zero progress by default
+            "fw_timestamp": 0,  # WHY: no timestamp yet
+            "fw_status_id": 0,  # WHY: no status id yet
+            "fw_will_retry": False,  # WHY: no retry scheduled
+            "fw_time_str": "N/A",  # WHY: display fallback
+            "last_seen_str": self._format_timestamp(last_seen),  # WHY: preserve freshness display
+        }
+
+    def _parse_fwupdate_data(self, fwupdate: dict[str, Any], device_info: dict[str, Any]) -> dict[str, Any]:
+        """Parse fwupdate dictionary into structured info."""
+        fw_status = fwupdate.get("status", "unknown")  # WHY: primary status keyword
+        fw_progress = fwupdate.get("progress", 0)  # WHY: percent-complete
+        fw_timestamp = fwupdate.get("timestamp", 0)  # WHY: last status-change epoch
+
+        fw_info = {  # WHY: canonical parsed fw row shape
+            "fw_status": fw_status,
+            "fw_progress": fw_progress,
+            "fw_timestamp": fw_timestamp,
+            "fw_status_id": fwupdate.get("status_id", 0),
+            "fw_will_retry": fwupdate.get("will_retry", False),
+            "fw_time_str": self._format_timestamp(fw_timestamp),
+            "last_seen_str": self._format_timestamp(device_info["last_seen"]),
+        }
+
+        self._categorize_status(fw_status, fw_progress, fw_timestamp, device_info)  # WHY: bucket status
+        self._track_status_distribution(fw_status)  # WHY: increment histogram
+
+        return fw_info  # WHY: caller consumes structured row
+
+    def _categorize_status(
+        self, fw_status: str, fw_progress: Any, fw_timestamp: Any, device_info: dict[str, Any]
+    ) -> None:
+        """Categorize device upgrade status and update summary."""
+        if fw_status in ("inprogress", "upgrading", "downloading"):  # WHY: active states
+            if self._is_stale_upgrade(fw_progress, fw_timestamp):  # WHY: stuck at 100% for too long
+                self.summary["upgrade_completed"] += 1  # WHY: treat stale as complete
+            else:
+                self._track_active_upgrade(fw_progress, fw_timestamp, device_info)  # WHY: live upgrade
+        elif fw_status == "failed":  # WHY: explicit failure
+            self.summary["upgrade_failed"] += 1  # WHY: increment failure counter
+        elif fw_status in ("upgraded", "success"):  # WHY: explicit success
+            self.summary["upgrade_completed"] += 1  # WHY: increment completion counter
+        else:
+            self.summary["upgrade_unknown"] += 1  # WHY: fallback for unrecognized status
+
+    def _is_stale_upgrade(self, fw_progress: Any, fw_timestamp: Any) -> bool:
+        """Check if upgrade at 100% is stale (older than threshold)."""
+        if fw_progress != 100:  # WHY: only a completed (100%) upgrade can be stale
+            return False  # WHY: not complete -- not stale
+        if not self._is_valid_upgrade_timestamp(fw_timestamp):  # WHY: timestamp must be usable
+            return False  # WHY: cannot judge staleness without a valid timestamp
+
+        try:  # WHY: clock math can raise on pathological values
+            upgrade_age_hours = (time.time() - fw_timestamp) / 3600  # WHY: age in hours
+            return upgrade_age_hours > self.STALE_UPGRADE_HOURS  # type: ignore[no-any-return]
+        except (ValueError, OSError, TypeError):  # WHY: defensive: treat bad math as not stale
+            return False  # WHY: could not compute age -- treat as not stale
+
+    @staticmethod
+    def _is_valid_upgrade_timestamp(fw_timestamp: Any) -> bool:
+        """Return True when fw_timestamp is a positive int/float usable for age math."""
+        if not isinstance(fw_timestamp, (int, float)):  # WHY: must be numeric for clock math
+            return False  # WHY: non-numeric timestamp is unusable
+        return fw_timestamp > 0  # WHY: reject zero/negative epoch values
+
+    def _track_active_upgrade(self, fw_progress: Any, fw_timestamp: Any, device_info: dict[str, Any]) -> None:
+        """Track an actively upgrading device."""
+        self.summary["upgrade_in_progress"] += 1  # WHY: increment active counter
+
+        if fw_progress is not None and isinstance(fw_progress, (int, float)):  # WHY: only count numeric progress
+            self.summary["progress_total"] += fw_progress  # WHY: accumulate for mean
+            self.summary["progress_count"] += 1  # WHY: increment divisor
+
+        self.summary["devices_upgrading"].append(  # WHY: retain a row for the real-time table
+            {
+                "device_name": device_info["device_name"],
+                "device_mac": device_info["device_mac"],
+                "device_type": device_info["device_type"],
+                "device_model": device_info["device_model"],
+                "site_name": device_info["site_name"],
+                "current_version": device_info["device_version"],
+                "progress": fw_progress if fw_progress is not None else 0,
+                "fw_timestamp": fw_timestamp,
+            }
+        )
+
+    def _track_status_distribution(self, fw_status: str) -> None:
+        """Track status distribution in summary."""
+        if fw_status not in self.summary["devices_by_status"]:  # WHY: initialize bucket lazily
+            self.summary["devices_by_status"][fw_status] = 0
+        self.summary["devices_by_status"][fw_status] += 1  # WHY: increment bucket
+
+    def _format_timestamp(self, timestamp: Any) -> str:
+        """Format a Unix timestamp to readable string."""
+        if not timestamp or not isinstance(timestamp, (int, float)) or timestamp <= 0:  # WHY: guard invalid values
+            return "Unknown"
+        try:  # WHY: fromtimestamp may raise on invalid epoch
+            return datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S")  # WHY: display format
+        except (ValueError, OSError, TypeError):  # WHY: any conversion error yields diagnostic string
+            return f"Invalid: {timestamp}"
+
+    def _update_summary_counters(self, device_info: dict[str, Any], fw_info: dict[str, Any]) -> None:
+        """Update summary counters for version, model, and type."""
+        del fw_info  # WHY: kept in signature for symmetry with sibling; only device_info is used
+        version = device_info["device_version"]  # WHY: histogram key
+        model = device_info["device_model"]  # WHY: histogram key
+        device_type = device_info["device_type"]  # WHY: histogram key
+
+        self.summary["devices_by_version"][version] = self.summary["devices_by_version"].get(version, 0) + 1
+        self.summary["devices_by_model"][model] = self.summary["devices_by_model"].get(model, 0) + 1
+        self.summary["devices_by_type"][device_type] = self.summary["devices_by_type"].get(device_type, 0) + 1
+        self.summary["total_devices"] += 1  # WHY: overall device counter
+
+    @staticmethod
+    def _build_upgrade_result_row(
+        device_info: dict[str, Any], fw_info: dict[str, Any], progress_display: str
+    ) -> dict[str, Any]:
+        """Build one upgrade-results row from device identity + firmware status + progress text."""
+        return {  # WHY: canonical CSV row shape
+            "Site ID": device_info["site_id"],
+            "Site Name": device_info["site_name"],
+            "Device ID": device_info["device_id"],
+            "Device Name": device_info["device_name"],
+            "Device MAC": device_info["device_mac"],
+            "Device Model": device_info["device_model"],
+            "Device Type": device_info["device_type"],
+            "Current Version": device_info["device_version"],
+            "Last Seen": fw_info["last_seen_str"],
+            "FW Upgrade Status": fw_info["fw_status"],
+            "FW Progress %": fw_info["fw_progress"],
+            "FW Progress Display": progress_display,
+            "FW Status ID": fw_info["fw_status_id"],
+            "FW Will Retry": fw_info["fw_will_retry"],
+            "FW Timestamp": fw_info["fw_time_str"],
+            "Timestamp": datetime.now(UTC).isoformat(),
+        }
+
+    def _maybe_add_to_results(self, device_info: dict[str, Any], fw_info: dict[str, Any]) -> None:
+        """Add device to results if it matches scope filter."""
+        if not self._should_include_device(fw_info):  # WHY: scope gate
+            return
+        progress_display = self._create_progress_display(fw_info)  # WHY: build display string
+        self.upgrade_results.append(
+            self._build_upgrade_result_row(device_info, fw_info, progress_display)  # WHY: append CSV row
+        )
+
+    def _should_include_device(self, fw_info: dict[str, Any]) -> bool:
+        """Check if device matches scope filter."""
+        fw_status = fw_info["fw_status"]  # WHY: current firmware lifecycle status
+        fw_progress = fw_info["fw_progress"]  # WHY: percent-complete when upgrading
+        fw_timestamp = fw_info["fw_timestamp"]  # WHY: last status-change epoch for staleness
+
+        if self.scope_choice == "3":  # WHY: active upgrades only
+            is_active = fw_status in ("inprogress", "upgrading", "downloading")  # WHY: live states
+            if is_active and self._is_stale_upgrade(fw_progress, fw_timestamp):  # WHY: drop stuck rows
+                return False  # WHY: exclude stale rows from the active view
+            return is_active  # WHY: otherwise include only live upgrades
+        if self.scope_choice == "4":  # WHY: failed upgrades only
+            return fw_status == "failed"  # type: ignore[no-any-return]
+        return True  # WHY: default scope keeps every device
+
+    def _render_active_progress(self, fw_progress: Any, fw_timestamp: Any) -> str:
+        """Render the cell for a device that reports an in-flight upgrade."""
+        if self._is_stale_upgrade(fw_progress, fw_timestamp):  # WHY: no movement past threshold = stuck
+            return "[===============] 100% (Complete - Stale)"  # WHY: full bar but flag staleness
+        if fw_progress is not None:  # WHY: a real percent is available
+            return _MH.DisplayUtils.create_progress_bar(fw_progress, bar_length=15)  # type: ignore[no-any-return]
+        return "N/A"  # WHY: active but no percent yet -- match outer fallback
+
+    def _create_progress_display(self, fw_info: dict[str, Any]) -> str:
+        """Create visual progress display for CSV."""
+        fw_status = fw_info["fw_status"]  # WHY: status selects which glyph to render
+        fw_progress = fw_info["fw_progress"]  # WHY: percent used to size the bar
+        fw_timestamp = fw_info["fw_timestamp"]  # WHY: timestamp detects stale rows
+
+        if fw_status in ("inprogress", "upgrading", "downloading"):  # WHY: device reports active work
+            return self._render_active_progress(fw_progress, fw_timestamp)  # WHY: delegate active rendering
+        if fw_status in ("upgraded", "success"):  # WHY: upgrade finished cleanly
+            return "[===============] 100% (Complete)"  # WHY: full bar marks completion
+        if fw_status == "failed":  # WHY: upgrade ended in failure
+            return "[!!!!! FAILED !!!!!]"  # WHY: loud marker for failures
+        return "N/A"  # WHY: idle/unknown devices have no progress
+
+    def _display_summary(self) -> None:
+        """Display firmware status summary."""
+        print("\n  Firmware Status Summary:")  # WHY: section header
+        print(f"   X  Total devices analyzed: {self.summary['total_devices']}")  # WHY: devices examined
+        print(f"   X  Devices with upgrade info: {self.summary['devices_with_fwupdate']}")  # WHY: with fw data
+        print(f"   X  Upgrades in progress: {self.summary['upgrade_in_progress']}")  # WHY: running upgrades
+
+        self._display_average_progress()  # WHY: mean progress when upgrades active
+
+        print(f"   X  Upgrades completed: {self.summary['upgrade_completed']}")  # WHY: completed tally
+        print(f"   X  Upgrades failed: {self.summary['upgrade_failed']}")  # WHY: failed tally
+        print(f"   X  Unknown status: {self.summary['upgrade_unknown']}")  # WHY: unreadable-status tally
+
+        self._display_status_distribution()  # WHY: counts by raw firmware status
+        self._display_type_distribution()  # WHY: counts by device type
+        self._display_version_distribution()  # WHY: counts by firmware version
+        self._display_model_distribution()  # WHY: counts by hardware model
+
+    def _display_average_progress(self) -> None:
+        """Display average progress for in-progress upgrades."""
+        if self.summary["progress_count"] > 0:  # WHY: only when some upgrade reported progress
+            avg_progress = self.summary["progress_total"] / self.summary["progress_count"]  # WHY: mean
+            progress_bar = _MH.DisplayUtils.create_progress_bar(int(avg_progress))  # WHY: render mean as bar
+            print(f"   X  Average upgrade progress: {progress_bar}")  # WHY: emit the averaged line
+
+    def _display_status_distribution(self) -> None:
+        """Display status distribution."""
+        if self.summary["devices_by_status"]:  # WHY: skip when no status data collected
+            print("\n  Status Distribution:")  # WHY: sub-section header
+            for status, count in sorted(self.summary["devices_by_status"].items()):  # WHY: alphabetical order
+                print(f"   X  {status}: {count} devices")  # WHY: one line per status bucket
+
+    def _display_type_distribution(self) -> None:
+        """Display device type distribution."""
+        print("\n  Device Type Distribution:")  # WHY: sub-section header always shown
+        if self.summary["devices_by_type"]:  # WHY: render buckets when type data exists
+            sorted_types = sorted(
+                self.summary["devices_by_type"].items(), key=lambda x: x[1], reverse=True
+            )  # WHY: descending count order
+            for device_type, count in sorted_types:  # WHY: walk each type bucket
+                type_display = self.DEVICE_TYPE_NAMES.get(device_type, device_type.upper())  # WHY: friendly label
+                print(f"   X  {type_display}: {count} devices")  # WHY: one line per device type
+        else:
+            print("   X  No device type information available")  # WHY: message when no type data gathered
+
+    def _display_version_distribution(self) -> None:
+        """Display version distribution."""
+        print("\n  Version Distribution:")  # WHY: sub-section header
+        sorted_versions = sorted(
+            self.summary["devices_by_version"].items(), key=lambda x: x[1], reverse=True
+        )  # WHY: descending count order
+        for version, count in sorted_versions:  # WHY: walk each version bucket
+            print(f"   X  {version}: {count} devices")
+
+    def _display_model_distribution(self) -> None:
+        """Display model distribution."""
+        print("\n  Model Distribution:")  # WHY: sub-section header
+        sorted_models = sorted(
+            self.summary["devices_by_model"].items(), key=lambda x: x[1], reverse=True
+        )  # WHY: descending count order
+        for model, count in sorted_models:  # WHY: walk each model bucket
+            print(f"   X  {model}: {count} devices")
+
+    def _display_upgrading_devices(self) -> None:
+        """Display detailed progress for devices currently upgrading."""
+        if not self.summary["devices_upgrading"]:  # WHY: skip when nothing is upgrading
+            return
+
+        print("\n  Devices Currently Upgrading (Real-Time Progress):")  # WHY: section banner
+        print(f"  {'=' * 110}")  # WHY: table top border
+
+        sorted_upgrading = sorted(
+            self.summary["devices_upgrading"], key=lambda x: x["progress"], reverse=True
+        )  # WHY: highest progress first
+
+        print(f"  {'Device Name':<35} {'Type':<8} {'Site':<35} {'Progress':<30}")  # WHY: column headers
+        print(f"  {'-' * 35} {'-' * 8} {'-' * 35} {'-' * 30}")  # WHY: header separator
+
+        for device in sorted_upgrading:  # WHY: emit each device row
+            self._print_upgrading_device(device)
+
+        print(f"  {'=' * 110}")  # WHY: table bottom border
+        self._display_progress_distribution(sorted_upgrading)  # WHY: histogram of progress buckets
+
+    def _print_upgrading_device(self, device: dict[str, Any]) -> None:
+        """Print a single upgrading device row."""
+        name = device["device_name"] or "Unnamed"  # WHY: fallback display name
+        dtype = device["device_type"] or "Unknown"  # WHY: fallback type
+        site = device["site_name"] or "Unknown"  # WHY: fallback site
+        progress_bar = _MH.DisplayUtils.create_progress_bar(device["progress"], bar_length=15)  # WHY: render bar
+        print(f"  {name:<35} {dtype:<8} {site:<35} {progress_bar}")
+
+    @staticmethod
+    def _classify_progress_bucket(progress: int) -> str:
+        """Return the histogram bucket label for one device progress value."""
+        if progress <= 25:  # WHY: first quartile
+            return "0-25%"
+        if progress <= 50:  # WHY: second quartile
+            return "26-50%"
+        if progress <= 75:  # WHY: third quartile
+            return "51-75%"
+        if progress < 100:  # WHY: pre-completion bucket
+            return "76-99%"
+        return "100%"  # WHY: fully complete
+
+    def _display_progress_distribution(self, sorted_upgrading: list[dict[str, Any]]) -> None:
+        """Display progress distribution for upgrading devices."""
+        ranges = {"0-25%": 0, "26-50%": 0, "51-75%": 0, "76-99%": 0, "100%": 0}  # WHY: histogram buckets
+        for device in sorted_upgrading:  # WHY: count each device into its bucket
+            bucket = self._classify_progress_bucket(device["progress"])  # WHY: resolve the bucket
+            ranges[bucket] += 1  # WHY: increment that bucket
+        print("\n  Progress Distribution:")  # WHY: section header
+        for range_label, count in ranges.items():  # WHY: print each non-empty bucket
+            if count > 0:  # WHY: skip zero buckets to keep output compact
+                print(f"   X  {range_label}: {count} device(s)")
+
+    def _check_active_operations(self) -> None:
+        """Check for active upgrade operations from various sources."""
+        print("\n  Checking for active upgrade operations...")  # WHY: banner
+
+        self._check_ssr_upgrades()  # WHY: SSR upgrades via org endpoint
+        self._check_stored_upgrades()  # WHY: stored ActiveUpgrades.json tracker
+        self._check_audit_logs()  # WHY: recent audit-log firmware events
+        self._check_device_events()  # WHY: SYSTEM_UPGRADE_* device events
+        self._check_site_upgrades()  # WHY: per-site upgrade endpoint probe
+
+    def _fetch_ssr_upgrades_payload(self) -> list | None:  # type: ignore[type-arg]
+        """Fetch SSR upgrades list; returns list-or-None (empty list signals 'no upgrades')."""
+        ssr_resp = mistapi.api.v1.orgs.ssr.listOrgSsrUpgrades(apisession, self.org_id)  # WHY: SSR API call
+        if ssr_resp.status_code != 200 or not hasattr(ssr_resp, "data"):  # WHY: HTTP or shape error
+            print(f"   -> Failed to retrieve SSR upgrade operations: {ssr_resp.status_code}")  # WHY: user-facing
+            return None  # WHY: signal hard failure to caller
+        return ssr_resp.data or []  # WHY: empty list keeps caller's truthiness check intact
+
+    def _check_ssr_upgrades(self) -> None:
+        """Check for active SSR upgrade operations."""
+        try:  # WHY: tolerate transient API failures
+            print("   Checking for active SSR upgrade operations...")  # WHY: operator banner
+            ssr_upgrades = self._fetch_ssr_upgrades_payload()  # WHY: delegate API call + validation
+            if ssr_upgrades is None:  # WHY: hard failure already logged by helper
+                return
+            if not ssr_upgrades:  # WHY: empty payload -- nothing to process
+                print("   -> No active SSR upgrade operations found")
+                return
+            print(f"   !? Found {len(ssr_upgrades)} SSR upgrade operation(s)")  # WHY: summary count
+            for upgrade in ssr_upgrades:  # WHY: process each SSR upgrade record
+                self._process_ssr_upgrade(upgrade)
+        except Exception as exception:  # WHY: any failure yields graceful warning
+            print(f"   -> Error checking SSR upgrade operations: {exception}")
+            logging.warning("Failed to check SSR upgrade operations: %s", exception)
+
+    def _record_ssr_upgrade(
+        self, upgrade_id: str, status: str, strategy: str, total: int, upgrade: dict[str, Any]
+    ) -> None:
+        """Append one SSR upgrade record to active_upgrades with org-level placeholder site fields."""
+        self.active_upgrades.append(
+            {
+                "upgrade_id": upgrade_id,
+                "site_id": "N/A (Org-level)",
+                "site_name": "SSR Upgrade (Org-level)",
+                "status": status,
+                "strategy": strategy,
+                "source": "ssr_api",
+                "total_devices": total,
+                "details": upgrade,
+            }
+        )
+
+    def _process_ssr_upgrade(self, upgrade: dict[str, Any]) -> None:
+        """Process a single SSR upgrade record."""
+        upgrade_id = upgrade.get("id", "Unknown")  # WHY: unique upgrade id
+        status = upgrade.get("status", "Unknown")  # WHY: current status
+        strategy = upgrade.get("strategy", "Unknown")  # WHY: rollout strategy
+        counts = upgrade.get("counts", {})  # WHY: per-status counts
+        versions = upgrade.get("versions", {})  # WHY: target versions
+        total = sum(counts.values()) if counts else 0  # WHY: total across all status buckets
+        status_parts = self._build_ssr_status_parts(counts)  # WHY: per-status display fragments
+        version_info = self._build_version_info(versions)  # WHY: target-version display
+        status_summary = " | ".join(status_parts) if status_parts else f"Status: {status}"  # WHY: fallback
+        print(f"      SSR Upgrade {upgrade_id[:8]}... [{strategy} strategy]: {status_summary}")
+        print(f"         Channel: {upgrade.get('channel', 'Unknown')} | Devices: {total} | {version_info}")
+        self._record_ssr_upgrade(upgrade_id, status, strategy, total, upgrade)  # WHY: persist record
+
+    def _build_ssr_status_parts(self, counts: dict[str, int]) -> list[str]:
+        """Build status parts list for SSR upgrade display."""
+        parts = []  # WHY: accumulate non-empty status fragments
+        if counts.get("upgrading", 0) > 0:
+            parts.append(f"{counts['upgrading']} upgrading")
+        if counts.get("success", 0) > 0:
+            parts.append(f"{counts['success']} completed")
+        if counts.get("failed", 0) > 0:
+            parts.append(f"{counts['failed']} failed")
+        if counts.get("queued", 0) > 0:
+            parts.append(f"{counts['queued']} queued")
+        return parts
+
+    def _build_version_info(self, versions: dict[str, str]) -> str:
+        """Build version info string from versions mapping."""
+        if not versions:  # WHY: default when no version data
+            return "Multiple versions"
+        target_versions = list(versions.values())  # WHY: extract distinct target values
+        if len(target_versions) == 1:  # WHY: single target -> show it directly
+            return f"-> {target_versions[0]}"
+        return f"Multiple versions ({len(target_versions)} different)"  # WHY: multi-target summary
+
+    def _load_org_upgrades_from_file(self, upgrade_file: str) -> list[dict[str, Any]] | None:
+        """Read ``ActiveUpgrades.json`` and return rows matching ``self.org_id`` (``None`` on read error)."""
+        try:  # WHY: open + parse tracker file
+            with open(upgrade_file, encoding="utf-8") as f:
+                stored = json.load(f)  # WHY: deserialize JSON list
+        except Exception as exception:  # WHY: tolerate IO/JSON errors
+            print(f"   -> Failed to read stored upgrade tracking data: {exception}")
+            logging.warning("Failed to read stored upgrade tracking: %s", exception)
+            return None  # WHY: signal failure to caller
+        return [u for u in stored if u.get("org_id") == self.org_id]  # WHY: filter to current org
+
+    def _check_stored_upgrades(self) -> None:
+        """Check stored upgrade IDs from ActiveUpgrades.json."""
+        print("   Checking for site-level upgrade operations...")  # WHY: section banner
+        upgrade_file = "ActiveUpgrades.json"  # WHY: persistent tracker path
+        if not os.path.exists(upgrade_file):  # WHY: no tracker file yet
+            print("   -> No site-level upgrade tracking file found")
+            return
+        org_upgrades = self._load_org_upgrades_from_file(upgrade_file)  # WHY: load + filter to org
+        if org_upgrades is None:  # WHY: read/parse failed (logged inside helper)
+            return
+        if not org_upgrades:  # WHY: empty after filter
+            print("   -> No stored upgrades match current organization")
+            return
+        print(f"   !? Found {len(org_upgrades)} stored upgrade operation(s)")  # WHY: summary
+        for record in org_upgrades:  # WHY: probe each tracked upgrade
+            self._check_stored_upgrade(record)
+
+    def _record_stored_upgrade(self, upgrade_id: str, site_id: str, site_name: str, details: dict[str, Any]) -> None:
+        """Append one stored-upgrade record from a getSiteDeviceUpgrade response into active_upgrades."""
+        print(
+            f"      Upgrade {upgrade_id[:8]}... at site '{site_name}': Status = {details.get('status', 'Unknown')}"  # noqa: E501
+        )
+        self.active_upgrades.append(
+            {
+                "upgrade_id": upgrade_id,
+                "site_id": site_id,
+                "site_name": site_name,
+                "status": details.get("status", "Unknown"),
+                "source": "stored_tracking",
+                "details": details,
+            }
+        )
+
+    @staticmethod
+    def _safe_get_site_upgrade_data(upgrade_id: str, site_id: str, site_name: str) -> dict[str, Any] | None:
+        """Call ``getSiteDeviceUpgrade`` and return ``resp.data`` if present, otherwise ``None``."""
+        del site_name  # WHY: kept in signature for symmetry with caller diagnostics
+        try:  # WHY: tolerate transient API failures
+            resp = mistapi.api.v1.sites.devices.getSiteDeviceUpgrade(apisession, site_id, upgrade_id)  # WHY: API call
+        except Exception as exception:  # WHY: any error yields graceful notice
+            print(f"      Failed to check upgrade {upgrade_id[:8]}...: {exception}")
+            return None
+        if resp and hasattr(resp, "data") and resp.data:  # WHY: live upgrade with details present
+            return resp.data  # type: ignore[no-any-return]
+        return None  # WHY: API returned empty body -> upgrade no longer active
+
+    def _check_stored_upgrade(self, record: dict[str, Any]) -> None:
+        """Check status of a stored upgrade record."""
+        upgrade_id = record.get("upgrade_id")  # WHY: tracked upgrade id
+        site_id = record.get("site_id")  # WHY: site the upgrade ran against
+        site_name = record.get("site_name", "Unknown")  # WHY: display name fallback
+        if not upgrade_id or not site_id:  # WHY: skip blank tracking rows
+            return
+        data = type(self)._safe_get_site_upgrade_data(upgrade_id, site_id, site_name)  # WHY: single API call
+        if data:  # WHY: still tracked upstream
+            self._record_stored_upgrade(upgrade_id, site_id, site_name, data)  # WHY: append to active list
+            return
+        print(f"      Upgrade {upgrade_id[:8]}... at site '{site_name}': No longer active")  # WHY: stale tracking row
+
+    def _fetch_audit_logs_24h(self) -> list[dict[str, Any]]:
+        """Fetch the last 24h of org audit logs (paginated to completion) for upgrade triage."""
+        end_time = int(time.time())  # WHY: upper bound = now
+        start_time = end_time - (24 * 60 * 60)  # WHY: lower bound = 24h ago
+        logging.info("Fetching org audit logs (last 24h) for upgrade triage")  # WHY: log before API
+        resp = mistapi.api.v1.orgs.logs.listOrgAuditLogs(
+            apisession, self.org_id, start=start_time, end=end_time, limit=1000
+        )
+        logs = mistapi.get_all(response=resp, mist_session=apisession)  # WHY: paginate to completion
+        logging.debug("Org audit logs returned %s entries", len(logs) if logs else 0)  # WHY: log after API
+        return logs or []
+
+    def _filter_upgrade_events(self, logs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Return only the audit-log entries that look like upgrade events."""
+        return [log for log in logs if self._is_upgrade_event(log)]  # WHY: delegate per-row predicate
+
+    def _check_audit_logs(self) -> None:
+        """Check organization audit logs for recent upgrade events."""
+        try:  # WHY: tolerate API or auth errors
+            print("   Checking organization audit logs for recent upgrade events...")
+            logs = self._fetch_audit_logs_24h()  # WHY: pull the raw 24h window
+            if not logs:
+                print("   -> No audit logs available for the last 24 hours")
+                return
+            upgrade_events = self._filter_upgrade_events(logs)  # WHY: delegate keyword filter
+            if not upgrade_events:
+                print("   -> No upgrade-related events found in audit logs")
+                return
+            print(f"   !? Found {len(upgrade_events)} upgrade-related audit event(s) in last 24 hours")
+            self._display_audit_events(upgrade_events[:5])  # WHY: show first 5
+        except Exception as exception:  # WHY: tolerate API or auth errors
+            print(f"   -> Error checking audit logs: {exception}")
+            logging.warning("Failed to search org audit logs: %s", exception)
+
+    def _is_upgrade_event(self, log_entry: dict[str, Any]) -> bool:
+        """Check if log entry is upgrade-related."""
+        message = log_entry.get("message", "").lower()  # WHY: case-insensitive match
+        return any(kw in message for kw in ["upgrade", "firmware", "version"])  # WHY: keyword predicate
+
+    def _display_audit_events(self, events: list[dict[str, Any]]) -> None:
+        """Display recent audit events."""
+        for event in sorted(events, key=lambda x: x.get("timestamp", 0), reverse=True):  # WHY: newest first
+            timestamp = self._format_timestamp(event.get("timestamp", 0))  # WHY: human-readable time
+            admin = event.get("admin_name", "System")  # WHY: actor label
+            message = event.get("message", "No message")  # WHY: event text
+            site = event.get("site_name", "Organization")  # WHY: scope label
+            print(f"      -> {timestamp} | {admin} | {site}: {message[:60]}...")
+
+    def _fetch_device_upgrade_events_24h(self) -> list[dict[str, Any]]:
+        """Fetch the last 24h of org-wide SYSTEM_UPGRADE_* device events for upgrade triage."""
+        end_time = int(time.time())  # WHY: upper bound = now
+        start_time = end_time - (24 * 60 * 60)  # WHY: lower bound = 24h ago
+        logging.info("Fetching org device upgrade events (last 24h)")  # WHY: log before API
+        resp = mistapi.api.v1.orgs.devices.searchOrgDeviceEvents(
+            apisession,
+            self.org_id,
+            type="SYSTEM_UPGRADE_COMPLETED,SYSTEM_UPGRADE_FAILED,SYSTEM_UPGRADE_STARTED",
+            start=start_time,
+            end=end_time,
+            limit=50,
+        )
+        events = mistapi.get_all(response=resp, mist_session=apisession)  # WHY: paginate to completion
+        logging.debug("Device upgrade events returned %s entries", len(events) if events else 0)  # WHY: log after API
+        return events or []
+
+    def _check_device_events(self) -> None:
+        """Check organization device events for upgrade activity."""
+        try:  # WHY: tolerate transient API failures
+            print("   Checking organization device events for upgrade activity...")
+            events = self._fetch_device_upgrade_events_24h()  # WHY: pull the SYSTEM_UPGRADE_* window
+            if not events:
+                print("   -> No device upgrade events found in last 24 hours")
+                return
+            print(f"   !? Found {len(events)} device upgrade event(s) in last 24 hours")
+            self._display_device_events(events)  # WHY: group + print
+        except Exception as exception:  # WHY: tolerate transient API failures
+            print(f"   -> Error checking device events: {exception}")
+            logging.warning("Failed to search device upgrade events: %s", exception)
+
+    def _display_device_events(self, events: list[dict[str, Any]]) -> None:
+        """Display device events grouped by type."""
+        by_type: dict[str, list[dict[str, Any]]] = {}  # WHY: group rows by event type
+        for event in events:  # WHY: bucket each event
+            event_type = event.get("type", "Unknown")
+            if event_type not in by_type:
+                by_type[event_type] = []
+            by_type[event_type].append(event)
+
+        for event_type, type_events in by_type.items():  # WHY: emit one summary line per bucket
+            display = event_type.replace("SYSTEM_UPGRADE_", "").title()  # WHY: friendly label
+            print(f"      {display}: {len(type_events)} event(s)")
+
+    def _report_sites_without_upgrades(self, total: int, sites_with_upgrades: int) -> None:
+        """Print trailing 'N site(s) have no active upgrade operations' when scanning all sites."""
+        if self.site_filter:  # WHY: caller scoped to one site -> no summary line needed
+            return
+        without = total - sites_with_upgrades  # WHY: sites that came back empty
+        if without > 0:  # WHY: only print when there's something to report
+            print(f"   -> {without} site(s) have no active upgrade operations")
+
+    def _check_site_upgrades(self) -> None:
+        """Check individual site upgrade operations."""
+        if not self.site_filter:  # WHY: banner only for full-org scan
+            print("\n   Checking individual site upgrade operations (first 5 sites)...")
+        sites = [self.site_filter] if self.site_filter else list(self.site_lookup.keys())[:5]  # WHY: scope selector
+        sites_with_upgrades = 0  # WHY: counter for trailing summary
+        for site_id in sites:  # WHY: probe each scoped site
+            if self._check_single_site_upgrades(site_id):  # WHY: True -> upgrade(s) found at site
+                sites_with_upgrades += 1
+        self._report_sites_without_upgrades(len(sites), sites_with_upgrades)  # WHY: emit trailing summary
+
+    def _check_single_site_upgrades(self, site_id: str) -> bool:
+        """Check upgrades for a single site. Returns True if upgrades found."""
+        site_name = self.site_lookup.get(site_id, "Unknown")  # WHY: friendly site label
+
+        try:  # WHY: tolerate transient API failures
+            resp = mistapi.api.v1.sites.devices.listSiteDeviceUpgrades(apisession, site_id)
+            upgrades = mistapi.get_all(response=resp, mist_session=apisession)
+
+            if not upgrades:  # WHY: no upgrades at this site
+                return False
+
+            print(f"   Site '{site_name}': !? {len(upgrades)} upgrade operation(s)")
+            for upgrade in upgrades:  # WHY: process each upgrade row
+                self._process_site_upgrade(upgrade, site_id, site_name)
+            return True
+
+        except Exception as exception:  # WHY: any error yields graceful warning
+            print(f"   Site '{site_name}': -> Error checking upgrades: {exception}")
+            logging.warning("Failed to check upgrades for site %s: %s", site_id, exception)
+            return False
+
+    def _record_site_upgrade(self, info: dict[str, Any]) -> None:
+        """Append one site-upgrade record into active_upgrades; info bundles identity + stage fields."""
+        counts = info["counts"]  # WHY: stage-count sub-dict
+        self.active_upgrades.append(
+            {
+                "site_id": info["site_id"],
+                "site_name": info["site_name"],
+                "upgrade_id": info["upgrade_id"],
+                "status": info["status"],
+                "strategy": info["strategy"],
+                "target_version": info["target"],
+                "source": "site_lookup",
+                "timestamp": datetime.now(UTC).isoformat(),
+                **{k: counts.get(k, 0) for k in ["total", "downloaded", "rebooted", "failed"]},
+            }
+        )
+
+    def _process_site_upgrade(self, upgrade: dict[str, Any], site_id: str, site_name: str) -> None:
+        """Process a single site upgrade record."""
+        upgrade_id = upgrade.get("id", "Unknown")  # WHY: unique upgrade id
+        status = upgrade.get("status", "Unknown")  # WHY: current status
+        strategy = upgrade.get("strategy", "Unknown")  # WHY: rollout strategy
+        target = upgrade.get("target_version", "Unknown")  # WHY: target firmware version
+        counts = upgrade.get("counts", {})  # WHY: per-stage counts
+        progress_parts = self._build_site_upgrade_progress(counts)  # WHY: per-stage display fragments
+        progress_info = " | ".join(progress_parts) if progress_parts else f"Status: {status}"  # WHY: fallback
+        print(f"      Upgrade {upgrade_id[:8]}... [{strategy}]: {progress_info}")
+        print(f"         Target: {target} | Started: {self._format_timestamp(upgrade.get('start_time', 0))}")
+        self._record_site_upgrade(
+            {
+                "upgrade_id": upgrade_id,
+                "status": status,
+                "strategy": strategy,
+                "target": target,
+                "counts": counts,
+                "site_id": site_id,
+                "site_name": site_name,
+            }
+        )
+
+    def _build_site_upgrade_progress(self, counts: dict[str, int]) -> list[str]:
+        """Build progress parts for site upgrade display."""
+        parts = []  # WHY: accumulate non-empty progress fragments
+        total = counts.get("total", 0)
+        if total > 0:  # WHY: only render fragments when a total is known
+            if counts.get("downloaded", 0) > 0:
+                parts.append(f"{counts['downloaded']}/{total} downloaded")
+            if counts.get("rebooted", 0) > 0:
+                parts.append(f"{counts['rebooted']}/{total} rebooted")
+            if counts.get("failed", 0) > 0:
+                parts.append(f"{counts['failed']} failed")
+        return parts
+
+    def _export_results(self) -> None:
+        """Export results to CSV files."""
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")  # WHY: shared filename timestamp
+
+        self._export_device_status(timestamp)  # WHY: emit per-device firmware status CSV
+        self._export_active_operations(timestamp)  # WHY: emit active-upgrade operations CSV
+
+    def _export_device_status(self, timestamp: str) -> None:
+        """Export device firmware status to CSV."""
+        if not self.upgrade_results:  # WHY: nothing to export
+            return
+
+        filename = f"FirmwareUpgradeStatus_{timestamp}.csv"  # WHY: output filename
+        try:  # WHY: tolerate write errors
+            _MH.DataExporter.write_with_format_selection(self.upgrade_results, filename)  # WHY: lazy MistHelper attr resolved via _MH proxy
+            print(f"\n[SUCCESS] Device firmware status exported to: data/{filename}")
+            print(f"   [DATA] {len(self.upgrade_results)} device records exported")
+            logging.info("Exported %s device status records", len(self.upgrade_results))  # WHY: audit
+        except Exception as exception:  # WHY: tolerate write errors
+            print(f"! Failed to export device status: {exception}")
+            logging.error("Failed to export device status: %s", exception)
+
+    _ACTIVE_UPGRADE_FIELDNAMES = [  # WHY: canonical CSV header order for active operations
+        "site_id",
+        "site_name",
+        "upgrade_id",
+        "status",
+        "strategy",
+        "target_version",
+        "start_time",
+        "enable_p2p",
+        "total_devices",
+        "downloaded",
+        "download_requested",
+        "rebooted",
+        "reboot_in_progress",
+        "failed",
+        "skipped",
+        "source",
+        "timestamp",
+    ]
+
+    def _export_active_operations(self, timestamp: str) -> None:
+        """Export active upgrade operations to CSV."""
+        if not self.active_upgrades:  # WHY: nothing to export
+            return
+        filename = os.path.join("data", f"ActiveUpgradeOperations_{timestamp}.csv")  # WHY: output path
+        try:  # WHY: tolerate write errors
+            mapped = [self._map_upgrade_for_export(u) for u in self.active_upgrades]  # WHY: project rows
+            with open(filename, mode="w", newline="", encoding="utf-8") as f:  # WHY: write CSV
+                writer = csv.DictWriter(f, fieldnames=self._ACTIVE_UPGRADE_FIELDNAMES)  # WHY: header set
+                writer.writeheader()  # WHY: emit header row
+                writer.writerows(mapped)  # WHY: emit data rows
+            print(f"! Active upgrade operations exported to: {filename}")
+            print(f"   {len(self.active_upgrades)} upgrade operations exported")
+            logging.info("Exported %s active upgrade operations", len(self.active_upgrades))  # WHY: audit
+        except Exception as exception:  # WHY: tolerate write errors
+            print(f"! Failed to export upgrade operations: {exception}")
+            logging.error("Failed to export upgrade operations: %s", exception)
+
+    # Export count fields: (export_key, upgrade_top_level_key, details_counts_key). Resolution is
+    # `upgrade.get(top_level) or counts.get(counts_key, 0)` -- looped in a helper so the parent stays CC<=5.
+    _UPGRADE_COUNT_FIELDS = [
+        ("total_devices", "total_devices", "total"),
+        ("downloaded", "downloaded", "downloaded"),
+        ("download_requested", "download_requested", "download_requested"),
+        ("rebooted", "rebooted", "rebooted"),
+        ("reboot_in_progress", "reboot_in_progress", "reboot_in_progress"),
+        ("failed", "failed", "failed"),
+        ("skipped", "skipped", "skipped"),
+    ]
+
+    def _map_upgrade_for_export(self, upgrade: dict[str, Any]) -> dict[str, Any]:
+        """Map upgrade record for CSV export."""
+        details = upgrade.get("details", {})  # WHY: nested details payload (may be empty)
+        counts = details.get("counts", {}) if details else {}  # WHY: per-status device counts
+        start_time = self._resolve_upgrade_start_time(upgrade, details)  # WHY: formatted start time
+        resolved_counts = self._resolve_upgrade_counts(upgrade, counts)  # WHY: per-status count columns
+        return {
+            "site_id": upgrade.get("site_id", "Unknown"),
+            "site_name": upgrade.get("site_name", "Unknown"),
+            "upgrade_id": upgrade.get("upgrade_id", "Unknown"),
+            "status": upgrade.get("status", "Unknown"),
+            "strategy": upgrade.get("strategy", "Unknown"),
+            "target_version": upgrade.get("target_version", "Unknown"),
+            "start_time": start_time or "Unknown",
+            "enable_p2p": upgrade.get("enable_p2p") or details.get("enable_p2p", "Unknown"),
+            **resolved_counts,
+            "source": upgrade.get("source", "unknown"),
+            "timestamp": upgrade.get("timestamp") or datetime.now(UTC).isoformat(),
+        }
+
+    def _resolve_upgrade_start_time(self, upgrade: dict[str, Any], details: dict[str, Any]) -> Any:
+        """Resolve upgrade start time from top-level or details and format when a positive epoch."""
+        start_time = upgrade.get("start_time") or details.get("start_time", 0)  # WHY: pick source
+        if isinstance(start_time, (int, float)) and start_time > 0:  # WHY: looks like a usable epoch
+            return self._format_timestamp(start_time)  # WHY: format to human-readable string
+        return start_time  # WHY: non-epoch value passes through unchanged
+
+    def _resolve_upgrade_counts(self, upgrade: dict[str, Any], counts: dict[str, Any]) -> dict[str, Any]:
+        """Resolve each export count column from top-level upgrade, falling back to details counts."""
+        return {
+            export_key: (upgrade.get(top_key) or counts.get(counts_key, 0))
+            for export_key, top_key, counts_key in self._UPGRADE_COUNT_FIELDS
+        }
+
+    def _display_recommendations(self) -> None:
+        """Display summary and recommendations."""
+        print("\n  Summary and Recommendations:")  # WHY: section banner
+
+        if self.summary["upgrade_failed"] > 0:  # WHY: guide operator on failed upgrades
+            print(f"   {self.summary['upgrade_failed']} devices have failed upgrades")
+            print("   Check failed devices for retry eligibility or manual intervention")
+
+        if self.summary["upgrade_in_progress"] > 0:  # WHY: caution around active upgrades
+            print(f"   {self.summary['upgrade_in_progress']} devices currently upgrading")
+            print("   Monitor progress and avoid disrupting these devices")
+
+        if len(self.summary["devices_by_version"]) > 3:  # WHY: version-sprawl heuristic
+            count = len(self.summary["devices_by_version"])
+            print(f"   Multiple firmware versions detected ({count} different versions)")
+            print("   Consider standardizing on a consistent firmware version")
+
+        if self.active_upgrades:  # WHY: highlight active operations for follow-up
+            print(f"   {len(self.active_upgrades)} active upgrade operations found")
+            print("   Monitor upgrade progress in exported CSV files")
+        else:
+            print("   No active upgrade operations detected")
+
+        print("\n  Status check complete. Check exported CSV files for detailed analysis.")
