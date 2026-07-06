@@ -150,6 +150,9 @@ from src.refactors.anomaly_metrics_discovery import (
     AnomalyMetricsDiscovery,  # Extracted anomaly metrics discovery (SC-016)
 )
 from src.refactors.data_directory_checker import DataDirectoryChecker  # Early data-dir writable check (SC-005)
+from src.refactors.device_config_template_cloner_manager import (
+    DeviceConfigTemplateClonerManager,  # Extracted device config template cloner (SC-020)
+)
 from src.refactors.device_data_fetcher import (
     DeviceDataFetcher,  # Extracted interactive device data fetcher (SC-017)
 )
@@ -15856,33 +15859,9 @@ class GatewayTemplateConfigManager:  # Gateway template config manager.
         ).clone_by_location()
 
 
-class DeviceConfigTemplateClonerManager:  # Device config template cloner.
-    """Menu 194: Clone device local config to a new gateway template.
-
-    Delegated to src.gateway.device_template_cloner.
-    """
-
-    @staticmethod
-    def clone() -> None:  # Clone a config.
-        """Menu 194: Fetch gateway device config and create a new org-level gateway template."""
-        from src.gateway.device_template_cloner import (  # pylint: disable=import-outside-toplevel
-            DeviceConfigTemplateClonerManager as Impl,  # Import extracted implementation class
-        )
-        from src.gateway.device_template_cloner import (
-            DeviceTemplateClonerDeps,  # Frozen deps bundle groups injected dependencies
-        )
-
-        deps = DeviceTemplateClonerDeps(  # Bundle the 5 injected dependencies for the manager
-            apisession=apisession,  # Pass authenticated global API session
-            input_fn=InputUtils.safe_input,  # Pass EOF-safe input wrapper for SSH/container contexts
-            get_csv_path_fn=FilePathUtils.get_csv_path,  # Pass path builder for OS-safe output paths
-            save_data_fn=DataExporter.write_with_format_selection,  # Pass CSV writer for persistence
-            write_csv_fn=DataExporter.write_with_format_selection,  # Pass PK-aware format-selecting writer
-        )
-        Impl(
-            org_id=ConfigUtils.get_cached_or_prompted_org_id(),  # Resolve org_id from cache or prompt
-            deps=deps,  # Inject the frozen deps bundle
-        ).clone()  # Delegate all business logic to extracted implementation
+# NOTE: DeviceConfigTemplateClonerManager extracted per SC-020.
+# Now lives at src/refactors/device_config_template_cloner_manager.py.
+# Callers should reference the imported DeviceConfigTemplateClonerManager symbol (see top-of-file imports).
 
 
 # ============================================================================
