@@ -166,6 +166,7 @@ from src.refactors.inventory_csvcomparator import (
     InventoryCSVComparator,  # Extracted inventory CSV comparator adapter (SC-018)
 )
 from src.refactors.keyboard_listener import KeyboardListener  # PR-13 extracted no-op keyboard listener stub (SC-012)
+from src.refactors.main_entrypoint import MainEntrypoint  # Extracted CLI main entrypoint (SC-026)
 from src.refactors.maps_manager_launcher import MapsManagerLauncher  # Extracted Maps Manager launcher (SC-006)
 from src.refactors.package_import_map import (
     PackageImportMapManager,  # Extracted pip-name -> import-name mapping (SC-025)
@@ -21042,18 +21043,9 @@ def _handle_post_menu_exception(iwant: str, error: Exception, container_mode: bo
     sys.exit(1)  # Exit with error code on unexpected exception in direct mode.
 
 
-def main():
-    """Main entry point for MistHelper CLI application."""
-    logging.debug("ENTRY: main()")  # Log application entry point.
-    _initialize_deferred_imports()  # Initialize deferred module imports if not already completed.
-    InputUtils.ensure_tqdm_available()  # Ensure tqdm is accessible via InputUtils wrapper before use.
-    parser = _build_argument_parser()  # Build argparse parser with all supported CLI flags.
-    args = parser.parse_args()  # Parse command line arguments into typed Namespace object.
-    _setup_runtime_flags(args)  # Apply --standalone env, register globals()["args"], set FAST_MODE_ENABLED.
-    _initialize_dependencies(args)  # Initialize deferred dependencies (respects --skip-deps flag).
-    _establish_mist_session(args)  # Authenticate with Mist API (--login path or API token path).
-    _configure_runtime_options(args)  # Set OUTPUT_FORMAT, init PROGRESS_EMITTER, apply --debug level.
-    _dispatch_main_mode(args)  # Choose and run the right mode (test, TUI, web portal, CLI, interactive).
+# NOTE: main entrypoint extracted to
+# src/refactors/main_entrypoint.py::MainEntrypoint.run
+# per initiative 1011 SC-026 (FR-003: no wrapper shim; FR-005: fn->method).
 
 
 def _run_systematic_test_mode(_args: argparse.Namespace) -> None:
@@ -21156,7 +21148,7 @@ if __name__ == "__main__":
             _sys_mod.excepthook = _global_excepthook
         except Exception as hook_setup_err:
             logging.warning("Failed to install global excepthook: %s", hook_setup_err)
-        main()  # type: ignore[no-untyped-call]
+        MainEntrypoint.run()  # Invoke extracted CLI main entrypoint (SC-026)
     except KeyboardInterrupt:
         logging.info("Application interrupted by user (Ctrl+C)")
         logging.debug("EXIT: __main__ - user interrupt")
