@@ -147,6 +147,7 @@ from src.gateway.gateway_export_utils import (
 )  # Import gateway export utility configuration
 from src.org_data_collector import OrgDataCollector  # Import org-level data collection orchestrator
 from src.refactors.data_directory_checker import DataDirectoryChecker  # Early data-dir writable check (SC-005)
+from src.refactors.keyboard_listener import KeyboardListener  # PR-13 extracted no-op keyboard listener stub (SC-012)
 from src.refactors.maps_manager_launcher import MapsManagerLauncher  # Extracted Maps Manager launcher (SC-006)
 from src.refactors.run_interactive_test import (
     RunInteractiveTestManager,  # Extracted interactive-test manager (SC-011)
@@ -640,14 +641,10 @@ try:  # rapidfuzz is optional (fast fuzzy string matching)
 except ImportError:  # rapidfuzz not installed
     fuzz = None  # type: ignore[assignment]  # None lets callers skip fuzzy matching
 
-# Keyboard listener functionality has been removed for simplicity
-# These functions are no-op fallbacks
-
-
-def listen_keyboard(*args, **kwargs):  # Removed feature; harmless stub kept for old call sites
-    """Keyboard listener has been removed - this is a no-op fallback."""
-    logging.info("Keyboard listener functionality has been removed")  # Tell any remaining caller this does nothing
-    return None  # No listener object to return
+# Keyboard listener functionality was extracted to src/refactors/keyboard_listener.py
+# (PR-13). The extracted class KeyboardListener preserves the no-op stub for the
+# single remaining call site (interactive SSR/SRX websocket shell). No wrapper or
+# alias is retained here per FR-005 (no shims left in MistHelper).
 
 
 # stop_listening() removed per issue #431: it was a `pass` no-op stub for a
@@ -16132,7 +16129,7 @@ class CLIShellManager:  # CLI shell over WebSocket.
         ws.send_binary(bytes(map(ord, "\00\n\n")))  # Send a wakeup; bytes (not bytearray) matches send_binary.
         if debug:  # Debug mode.
             print("[DEBUG] Sent wakeup sequence to Juniper SSRs")  # Trace the wakeup.
-        listen_keyboard(  # type: ignore[no-untyped-call]  # Block on keyboard input, forwarding each key to the PTY.
+        KeyboardListener().listen(  # Block on keyboard input, forwarding each key to the PTY (PR-13 extracted no-op).
             on_release=functools.partial(CLIShellManager._shell_send_key, ws, debug),
             delay_second_char=0,
             delay_other_chars=0,
