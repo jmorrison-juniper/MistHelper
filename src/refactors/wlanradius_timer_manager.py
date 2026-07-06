@@ -34,8 +34,7 @@ _MH = _MistHelperProxy()  # Sole module-level proxy handle used inside the class
 
 
 class WLANRadiusTimerManager:  # Menu 148 entrypoint for WLAN RADIUS timer edits
-    """
-    Interactive WLAN RADIUS authentication timer management.
+    """Interactive WLAN RADIUS authentication timer management.
 
     Workflow:
     1. Select site
