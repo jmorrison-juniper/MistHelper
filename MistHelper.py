@@ -148,6 +148,7 @@ from src.gateway.gateway_export_utils import (
 from src.org_data_collector import OrgDataCollector  # Import org-level data collection orchestrator
 from src.refactors.data_directory_checker import DataDirectoryChecker  # Early data-dir writable check (SC-005)
 from src.refactors.maps_manager_launcher import MapsManagerLauncher  # Extracted Maps Manager launcher (SC-006)
+from src.refactors.service_ping_launcher import ServicePingLauncher  # Extracted Service Ping launcher (SC-008)
 from src.refactors.sqlite_database_writer import SQLiteDatabaseWriter  # Extracted SQLite writer (SC-003)
 from src.refactors.tui_launcher import TUILauncher  # Extracted TUI launcher (SC-004)
 from src.reports.e911_bssid import E911BSSIDReportGenerator  # Module-level for tests
@@ -6211,7 +6212,7 @@ class APICoreFetchUtils:  # Low-level Mist API fetch helpers.
 # APITenantFetchUtils extracted to src/api/tenant_fetch.py (issue #331).
 # Dependency injection is used so the module has no circular import with MistHelper.
 # Instances are created at each call site using the runtime apisession and org ID resolver.
-from src.api.tenant_fetch import APITenantFetchUtils  # Import the extracted instance class
+from src.api.tenant_fetch import APITenantFetchUtils  # noqa: F401  # Re-exported for ServicePingLauncher late-binding
 
 
 class APIFetchUtils:  # Higher-level org/site fetchers.
@@ -13724,59 +13725,6 @@ class GatewayHaExporter:  # Gateway HA exporter.
             vc_mac = str(row.get("vc_mac") or "")  # Shared cluster MAC address
             print(f"{name:<30} {node_name:<8} {status:<12} {node0_mac:<20} {node1_mac:<20} {vc_mac:<18}")  # Print row
         print()  # Blank line after table for readability
-
-
-def _get_service_ping_manager_instance():  # Build a ServicePingManager.
-    """Create extracted ServicePingManager instance with MistHelper runtime dependencies."""
-    from src.websocket.service_ping_manager import ServicePingManager as _SPM  # Import the extracted class.
-    from src.websocket.service_ping_manager import configure_service_ping_manager_dependencies as _configure_spm
-
-    _configure_spm(  # Wire dependencies.
-        apisession_dependency=apisession,
-        mistapi_dependency=mistapi,
-        prompt_utils=PromptUtils,
-        input_utils=InputUtils,
-        websocket_manager_class=WebSocketManager,
-        is_debug_mode=is_debug_mode,
-        api_tenant_fetch_utils=APITenantFetchUtils,
-        config_utils=ConfigUtils,
-        api_fetch_utils=APIFetchUtils,
-    )
-
-    return _SPM()  # Return the instance.
-
-
-class ServicePingManager:  # Service ping facade.
-    """Service ping manager (Menu 120).
-
-    Implementation extracted to `src/websocket/service_ping_manager.py` and
-    `src/websocket/service_ping_discovery.py`. This wrapper preserves
-    MistHelper menu orchestration and delegation only.
-    """
-
-    from src.websocket.service_ping_manager import ServicePingManager as _Extracted  # Import the extracted class.
-
-    DEFAULT_HOST = _Extracted.DEFAULT_HOST  # Re-export default host.
-    DEFAULT_COUNT = _Extracted.DEFAULT_COUNT  # Re-export default count.
-    DEFAULT_SIZE = _Extracted.DEFAULT_SIZE  # Re-export default size.
-    MIN_SIZE = _Extracted.MIN_SIZE  # Re-export min size.
-    MAX_SIZE = _Extracted.MAX_SIZE  # Re-export max size.
-    DEFAULT_TENANT = _Extracted.DEFAULT_TENANT  # Re-export default tenant.
-    DEFAULT_SERVICE = _Extracted.DEFAULT_SERVICE  # Re-export default service.
-
-    def __init__(self):  # Build the delegate.
-        """Initialize wrapper by mirroring extracted manager state for test compatibility."""
-        extracted = _get_service_ping_manager_instance()  # Create the extracted instance.
-        self.__dict__.update(extracted.__dict__)  # Copy its state.
-        self._delegate = extracted  # Keep the delegate.
-
-    def __getattr__(self, name):  # Forward unknown attributes.
-        """Delegate unknown attributes and methods to extracted implementation."""
-        return getattr(self._delegate, name)  # Delegate the attribute.
-
-    def execute(self) -> None:  # Run the ping flow.
-        """Execute menu 120 via the extracted service ping manager."""
-        self._delegate.execute()  # Delegate to the impl.
 
 
 # ============================================================================
@@ -21766,7 +21714,7 @@ menu_actions = {
         "WebSocket Device ARP - Execute ARP command on device via WebSocket stream (real-time output)",
     ),
     "120": (
-        lambda: ServicePingManager().execute(),  # type: ignore[misc]
+        lambda: ServicePingLauncher().launch(),  # type: ignore[misc]
         "WebSocket Service Ping - Execute service-specific ping on SSR gateways via WebSocket stream (real-time output)",  # noqa: E501
     ),
     # ==============================

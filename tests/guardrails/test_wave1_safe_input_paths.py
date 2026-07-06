@@ -66,7 +66,24 @@ def test_handle_client_selection_returns_none_tuple_on_eof(monkeypatch):
 
 
 def test_service_ping_parameter_prompts_fall_back_to_defaults_on_eof(monkeypatch):
-    manager = MistHelper.ServicePingManager()
+    # Wire canonical ServicePingManager with MistHelper runtime globals (delegator shim removed)
+    from src.websocket.service_ping_manager import (
+        ServicePingManager,
+        configure_service_ping_manager_dependencies,
+    )
+
+    configure_service_ping_manager_dependencies(
+        apisession_dependency=getattr(MistHelper, "apisession", None),
+        mistapi_dependency=MistHelper.mistapi,
+        prompt_utils=MistHelper.PromptUtils,
+        input_utils=MistHelper.InputUtils,
+        websocket_manager_class=MistHelper.WebSocketManager,
+        is_debug_mode=MistHelper.is_debug_mode,
+        api_tenant_fetch_utils=MistHelper.APITenantFetchUtils,
+        config_utils=MistHelper.ConfigUtils,
+        api_fetch_utils=MistHelper.APIFetchUtils,
+    )
+    manager = ServicePingManager()
 
     def raise_eof(_prompt):
         raise EOFError
