@@ -156,6 +156,9 @@ from src.refactors.device_config_template_cloner_manager import (
 from src.refactors.device_data_fetcher import (
     DeviceDataFetcher,  # Extracted interactive device data fetcher (SC-017)
 )
+from src.refactors.initialize_mist_session import (
+    MistSessionInitializer,  # Extracted token-based session initializer (SC-024)
+)
 from src.refactors.initialize_mist_session_interactive import (
     MistSessionInteractiveInitializer,  # Extracted interactive login initializer (SC-023)
 )
@@ -2809,24 +2812,9 @@ def _log_failed_session_variants(tried_variants) -> None:
         logging.error("  - %s", variant)
 
 
-def initialize_mist_session() -> bool:
-    """Initialize the Mist API session (APISession first, filtered retry, Session fallback)."""
-    global apisession, mistapi  # Both module-level globals managed exclusively here
-    if apisession:  # Already initialized -- skip all setup and return immediately
-        return True
-    mistapi = _load_mistapi_module(mistapi)  # Ensure mistapi is available -- may perform fallback import
-    if not mistapi:  # mistapi unavailable -- cannot proceed with any initialization strategy
-        return False
-    host, tokens = _parse_api_tokens()  # Read MIST_HOST and MIST_APITOKEN/MIST_API_TOKEN from environment
-    apisession_cls, sig_params = _introspect_apisession_class(mistapi)  # Discover APISession and its params
-    apisession, successful_method, tried_variants = _attempt_all_session_strategies(  # Run all 3 strategies
-        apisession_cls, sig_params, tokens, host, mistapi
-    )
-    if not apisession:  # All strategies exhausted -- log what was tried and return failure
-        _log_failed_session_variants(tried_variants)
-        return False
-    _configure_session_timeout(apisession)  # Patch session with read timeout to prevent indefinite hangs
-    return _validate_initialized_session(apisession, successful_method)  # Verify mist_get and auth status
+# NOTE: initialize_mist_session() extracted to
+# src/refactors/initialize_mist_session.py::MistSessionInitializer.initialize
+# per initiative 1011 SC-024 (FR-003: no wrapper shim; FR-005: fn->method).
 
 
 def _install_default_request_timeout(inner_session: Any) -> None:
@@ -20671,7 +20659,7 @@ def _establish_mist_session(args: argparse.Namespace) -> None:
             print(" Failed to initialize Mist API session. Check your credentials.")  # Inform user
             sys.exit(1)  # Exit -- cannot proceed without authenticated session
     else:  # Default path: use API token from .env or environment variables
-        if not initialize_mist_session():  # type: ignore[no-untyped-call]  # Attempt token-based session init
+        if not MistSessionInitializer.initialize():  # Attempt token-based session init
             logging.error("Failed to initialize Mist API session")  # Log token auth failure
             print(" Failed to initialize Mist API session. Check your credentials.")  # Inform user
             sys.exit(1)  # Exit -- cannot proceed without authenticated session
@@ -20734,7 +20722,7 @@ def _ensure_tui_api_session() -> None:
     if apisession:  # Already authenticated -- nothing to do.
         return  # Reuse the existing session.
     print(">> Initializing Mist API session...")  # Inform user session is being set up.
-    if not initialize_mist_session():  # type: ignore[no-untyped-call]  # Attempt session init for TUI
+    if not MistSessionInitializer.initialize():  # Attempt session init for TUI
         print("[ERROR] Failed to initialize Mist API session")  # Inform user of auth failure.
         logging.error("TUI_MODE: Could not initialize API session")  # Log auth failure.
         sys.exit(1)  # Exit -- TUI cannot function without a session.
