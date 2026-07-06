@@ -168,6 +168,9 @@ from src.refactors.inventory_csvcomparator import (
 from src.refactors.keyboard_listener import KeyboardListener  # PR-13 extracted no-op keyboard listener stub (SC-012)
 from src.refactors.main_entrypoint import MainEntrypoint  # Extracted CLI main entrypoint (SC-026)
 from src.refactors.maps_manager_launcher import MapsManagerLauncher  # Extracted Maps Manager launcher (SC-006)
+from src.refactors.marvis_data_utils import (
+    MarvisDataUtilsFactory,  # Extracted Marvis data-utils singleton factory (SC-027)
+)
 from src.refactors.package_import_map import (
     PackageImportMapManager,  # Extracted pip-name -> import-name mapping (SC-025)
 )
@@ -6507,14 +6510,10 @@ class DataProcessingUtils:  # JSON flattening/normalization.
 
 # MarvisDataUtils extracted to src/marvis/marvis_utils.py (issue #330).
 # Dependency injection is used so the module has no circular import with MistHelper.
-from src.marvis.marvis_utils import MarvisDataUtils  # Import the extracted class
 
-# Create a module-level instance with the DataProcessingUtils callables injected.
-# All callers in this module use marvis_data_utils.format_for_csv(...) directly.
-marvis_data_utils = MarvisDataUtils(  # Instantiate with the two required data-processing helpers
-    escape_fn=DataProcessingUtils.escape_multiline,  # Callable to escape CSV strings in extracted class
-    flatten_fn=DataProcessingUtils.flatten_nested_fields,  # Pass flatten_nested_fields for the legacy fallback path
-)
+# NOTE: marvis_data_utils singleton extracted to
+# src/refactors/marvis_data_utils.py::MarvisDataUtilsFactory.instance()
+# per initiative 1011 SC-027 (FR-003: no wrapper shim; FR-005: fn->method).
 
 
 class DatabaseSchemaUtils:  # Build SQLite DDL from data.
@@ -15653,7 +15652,7 @@ class TroubleshootUtils:  # Marvis troubleshoot delegators.
             prompt_client_utils=PromptClientUtils,
             prompt_utils=PromptUtils,
             data_exporter=DataExporter,
-            marvis_data_utils=marvis_data_utils,
+            marvis_data_utils=MarvisDataUtilsFactory.instance(),
             data_processing_utils=DataProcessingUtils,
         )
 
