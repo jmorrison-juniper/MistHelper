@@ -22753,30 +22753,6 @@ def _systematic_test_resolve_fast_mode() -> bool:
     return False  # Neither source enabled fast mode.
 
 
-def run_systematic_test():  # noqa: C901, PLR0912, PLR0915
-    """Run systematic test of safe (GET-only, non-interactive, non-destructive) menu options.
-
-    Returns:
-        bool: True if all tested options passed, False if any failed.
-    """
-    start_time = time.time()  # Capture total-duration baseline before any setup work.
-    _print_systematic_banner()  # Banner + start timestamp + separator.
-    safe_options, unsafe_list, all_options = _build_systematic_test_options()  # Classify menu options.
-    _print_systematic_pre_run_counts(all_options, safe_options, unsafe_list)  # Print pre-run counts.
-    emitter, telemetry_path, skip_count = _initialize_systematic_telemetry(unsafe_list)  # Open telemetry.
-    fast_enabled = _resolve_systematic_test_context()  # Resolve org + fast mode once for the loop.
-    success_count, error_count = _execute_systematic_test_loop(
-        emitter, safe_options, fast_enabled
-    )  # Run every safe option through telemetry.
-    total_time = time.time() - start_time  # Total elapsed includes setup, execution, and delays.
-    summary = TestSummary(
-        len(all_options), success_count, error_count, skip_count, total_time, "systematic"
-    )  # Aggregate event reused by both finalize + print helpers (cuts param count to <=5).
-    _finalize_systematic_telemetry(emitter, summary)  # Emit summary, close, enforce retention.
-    _print_systematic_summary(summary, telemetry_path)  # Print user-facing summary block.
-    return _report_systematic_outcome(success_count, error_count, len(safe_options), total_time)
-
-
 def _print_systematic_banner():
     """Print the test-start banner + timestamp + separator to the operator console."""
     print(" Starting systematic test of MistHelper menu options...")  # Announce test start.
@@ -23663,7 +23639,11 @@ def main():
 def _run_systematic_test_mode(_args: argparse.Namespace) -> None:
     """Run all safe menu options once and exit 0 on pass / 1 on fail."""
     logging.info("SYSTEMATIC_TEST: Starting systematic test mode")  # Trace before dispatch
-    sys.exit(0 if run_systematic_test() else 1)  # type: ignore[no-untyped-call]
+    from src.refactors.run_systematic_test import (
+        RunSystematicTestManager,  # noqa: PLC0415 - lazy import keeps module startup path light
+    )
+
+    sys.exit(0 if RunSystematicTestManager().run() else 1)  # Delegate to extracted manager
 
 
 def _run_interactive_test_mode(_args: argparse.Namespace) -> None:
