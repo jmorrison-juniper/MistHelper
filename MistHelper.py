@@ -150,6 +150,9 @@ from src.refactors.anomaly_metrics_discovery import (
     AnomalyMetricsDiscovery,  # Extracted anomaly metrics discovery (SC-016)
 )
 from src.refactors.data_directory_checker import DataDirectoryChecker  # Early data-dir writable check (SC-005)
+from src.refactors.device_data_fetcher import (
+    DeviceDataFetcher,  # Extracted interactive device data fetcher (SC-017)
+)
 from src.refactors.keyboard_listener import KeyboardListener  # PR-13 extracted no-op keyboard listener stub (SC-012)
 from src.refactors.maps_manager_launcher import MapsManagerLauncher  # Extracted Maps Manager launcher (SC-006)
 from src.refactors.run_interactive_test import (
@@ -5542,76 +5545,6 @@ class DisplayUtils:
         if filled_length == 0:  # Just started: every cell empty
             return " " * bar_length  # Empty bar
         return "=" * (filled_length - 1) + ">" + " " * (bar_length - filled_length)  # Filled portion + arrow + empty
-
-
-class DeviceDataFetcher:
-    """
-    Interactive device data fetcher for single-device operations.
-
-    Fetches data for a specific device (by site_id/device_id or via user prompt),
-    writes the result to CSV, and displays as PrettyTable.
-
-    SECURITY: Uses authenticated API session for all device queries.
-
-    Usage:
-        DeviceDataFetcher(DeviceFetchConfig(fetch_function, filename, description)).fetch()
-        DeviceDataFetcher(DeviceFetchConfig(fetch_function, filename, description, device_type="gateway")).fetch()
-    """
-
-    def __init__(self, config: DeviceFetchConfig):
-        """Initialize fetcher from a DeviceFetchConfig (issue #470: 6 params bundled into one per 5-Item Rule)."""
-        self.fetch_function = config.fetch_function  # Callable that performs the actual API fetch.
-        self.filename = config.filename  # Output filename for the exported data.
-        self.description = config.description  # Human-readable description shown during the fetch.
-        self.device_type = config.device_type  # Device type filter (all/ap/switch/gateway).
-        self.site_id = config.site_id  # Optional site scope (None means an org-wide fetch).
-        self.device_id = config.device_id  # Optional single-device scope (None means all matching devices).
-
-    def fetch(self) -> None:
-        """Main entry point - orchestrates the device data fetch workflow."""
-        if not self._resolve_site_id():
-            return
-        if not self._resolve_device_id():
-            return
-        self._log_action()
-        data = self._fetch_data()
-        if data:
-            self._process_and_output(data)
-
-    def _resolve_site_id(self) -> bool:
-        """Resolve site ID from parameter or user prompt."""
-        if self.site_id:
-            return True
-        self.site_id = PromptUtils.select_site_id_from_csv()
-        return bool(self.site_id)
-
-    def _resolve_device_id(self) -> bool:
-        """Resolve device ID from parameter or user prompt."""
-        if self.device_id:
-            return True
-        assert self.site_id is not None, "Site ID must be resolved before device ID"  # nosec B101
-        self.device_id = PromptUtils.select_device_id_from_inventory(self.site_id, device_type=self.device_type)
-        return bool(self.device_id)
-
-    def _log_action(self) -> None:
-        """Log the action being performed."""
-        logging.info("%s for device ID: %s", self.description, self.device_id)
-
-    def _fetch_data(self) -> list[dict[str, Any]] | None:
-        """Fetch data using the configured API function."""
-        try:
-            response = self.fetch_function(apisession, self.site_id, self.device_id)
-            return [response.data] if response.data else None
-        except Exception as error:
-            logging.error("Failed to fetch device data: %s", error)
-            return None
-
-    def _process_and_output(self, data: list[dict[str, Any]]) -> None:
-        """Process fetched data and output to CSV and table."""
-        processed = DataProcessingUtils.flatten_nested_fields(data)
-        processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
-        DataExporter.write_with_format_selection(processed, self.filename)  # type: ignore[no-untyped-call]
-        DisplayUtils.dict_list_as_pretty_table(processed)
 
 
 # Issue #431: module-level alias `PacketCaptureManager = ExtractedPacketCaptureManager`
