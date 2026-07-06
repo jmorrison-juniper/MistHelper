@@ -8,7 +8,8 @@ import re  # WHY: regex match against WAN port-config column names.
 from typing import Any  # WHY: opaque types for injected utility modules.
 
 from src.gateway.gateway_stats_exporter import configure_gateway_stats_exporter_dependencies  # WHY: delegate wiring.
-from src.gateway.overrides import (  # WHY: import walker + override wiring entry point.
+from src.gateway.overrides import (  # WHY: import walker + override wiring entry point + deps bundle.
+    GatewayOverrideDependencies,
     WanOverrideWalker,
     configure_gateway_override_dependencies,
 )
@@ -78,16 +79,18 @@ def _wire_stats_exporter(deps: dict[str, Any]) -> None:  # WHY: forward stats-ex
 
 def _wire_override_subsystem(deps: dict[str, Any]) -> None:  # WHY: forward override-subsystem slots only.
     """Prime the WAN override analysis module-level slots from the shared dependency bundle."""
-    configure_gateway_override_dependencies(  # WHY: table-driven pass-through of shared deps.
-        apisession_dependency=deps["apisession_dependency"],
-        mistapi_dependency=deps["mistapi_dependency"],
-        cache_utils=deps["cache_utils"],
-        file_path_utils=deps["file_path_utils"],
-        data_exporter=deps["data_exporter"],
-        org_site_exporter=deps["org_site_exporter"],
-        mist_wan_target_ports=deps["mist_wan_target_ports"],
-        connection_pool_fn=deps["connection_pool_fn"],
-        gateway_export_utils_ref=GatewayExportUtils,
+    configure_gateway_override_dependencies(  # WHY: pass frozen bundle to shrink call signature.
+        GatewayOverrideDependencies(
+            apisession_dependency=deps["apisession_dependency"],
+            mistapi_dependency=deps["mistapi_dependency"],
+            cache_utils=deps["cache_utils"],
+            file_path_utils=deps["file_path_utils"],
+            data_exporter=deps["data_exporter"],
+            org_site_exporter=deps["org_site_exporter"],
+            mist_wan_target_ports=deps["mist_wan_target_ports"],
+            connection_pool_fn=deps["connection_pool_fn"],
+            gateway_export_utils_ref=GatewayExportUtils,
+        )
     )
 
 
