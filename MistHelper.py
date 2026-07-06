@@ -150,6 +150,9 @@ from src.refactors.data_directory_checker import DataDirectoryChecker  # Early d
 from src.refactors.maps_manager_launcher import MapsManagerLauncher  # Extracted Maps Manager launcher (SC-006)
 from src.refactors.service_ping_launcher import ServicePingLauncher  # Extracted Service Ping launcher (SC-008)
 from src.refactors.sqlite_database_writer import SQLiteDatabaseWriter  # Extracted SQLite writer (SC-003)
+from src.refactors.switch_to_interactive_login import (
+    SwitchToInteractiveLoginManager,  # Extracted switch-to-interactive-login manager (SC-010)
+)
 from src.refactors.tui_launcher import TUILauncher  # Extracted TUI launcher (SC-004)
 from src.refactors.wan2_migration_launcher import WAN2MigrationLauncher  # Extracted WAN2 migration launcher (SC-009)
 from src.reports.e911_bssid import E911BSSIDReportGenerator  # Module-level for tests
@@ -2283,28 +2286,6 @@ def _prompt_switch_login_confirmation() -> bool:
         logging.warning("User cancelled switch to interactive login")  # Log the cancel
         return False  # Caller should stay on the menu
     return True  # User explicitly chose to proceed
-
-
-def switch_to_interactive_login():
-    """Menu option to switch from API token to interactive login.
-
-    Returns:
-        bool: True to signal the menu should continue
-    """
-    global apisession, org_id  # We may roll back these globals on failure
-    logging.debug("Entering switch_to_interactive_login()")  # Trace entry for debugging
-    logging.info("User initiated switch to interactive login")  # Operator action note
-    _print_switch_login_header()  # type: ignore[no-untyped-call]  # Show the explanatory banner
-    if not _prompt_switch_login_confirmation():  # User cancelled or EOF'd the prompt
-        return True  # Stay on the menu without changing session
-    old_session = apisession  # Preserve the current session so we can roll back on failure
-    old_org_id = org_id  # Preserve the current org so we can roll back on failure
-    if not _attempt_interactive_login_with_rollback(
-        old_session, old_org_id
-    ):  # Try interactive login; restores on failure
-        return True  # Login failed but the old session was restored -- stay running
-    _handle_interactive_login_success()  # type: ignore[no-untyped-call]  # Login succeeded -- show status and pick MSP/org
-    return True  # Always return True so the menu loop continues
 
 
 def _select_msp_and_org():
@@ -21536,7 +21517,7 @@ menu_actions = {
     ),
     # Authentication Management
     "143": (
-        switch_to_interactive_login,
+        lambda: SwitchToInteractiveLoginManager().run(),  # type: ignore[no-untyped-call]
         "Switch to interactive login (email/password) - Enables MSP-level API access for current session",
     ),
     # Organization Management (Read-Only)
