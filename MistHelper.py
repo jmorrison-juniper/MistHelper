@@ -13538,194 +13538,10 @@ def _get_duc_instance():  # Build DeviceUtilityCommands.
     return _DUC(deps)  # Instantiate with bundled deps.
 
 
-class DeviceUtilityCommands:  # Device utility command facade.
-    """Device utility commands (Menus 123-157).
-
-    Implementation extracted to src/device/utility_commands.py.
-    This stub delegates to the extracted module while providing
-    access to MistHelper globals (apisession, utility classes).
-    """
-
-    from src.device.utility_commands import (  # Import the extracted class.
-        DeviceUtilityCommands as _Extracted,
-    )
-
-    DEVICE_TYPE_COMPATIBILITY_MAP = _Extracted.DEVICE_TYPE_COMPATIBILITY_MAP  # Re-export compatibility map.
-
-    @staticmethod
-    def traceroute() -> None:  # Run traceroute.
-        """Menu 123: Traceroute from device to destination host."""
-        _get_duc_instance().traceroute()  # Delegate to the impl.
-
-    @staticmethod
-    def show_ospf_neighbors() -> None:  # Show OSPF neighbors.
-        """Menu 124: Show OSPF neighbors on SSR/SRX gateway."""
-        _get_duc_instance().show_ospf_neighbors()  # Delegate to the impl.
-
-    @staticmethod
-    def show_ospf_interfaces() -> None:  # Show OSPF interfaces.
-        """Menu 125: Show OSPF interfaces on SSR/SRX gateway."""
-        _get_duc_instance().show_ospf_interfaces()  # Delegate to the impl.
-
-    @staticmethod
-    def show_ospf_database() -> None:  # Show OSPF database.
-        """Menu 126: Show OSPF database on SSR/SRX gateway."""
-        _get_duc_instance().show_ospf_database()  # Delegate to the impl.
-
-    @staticmethod
-    def show_ospf_summary() -> None:  # Show OSPF summary.
-        """Menu 127: Show OSPF summary on SSR/SRX gateway."""
-        _get_duc_instance().show_ospf_summary()  # Delegate to the impl.
-
-    @staticmethod
-    def resolve_dns() -> None:  # Resolve DNS.
-        """Menu 135: Test DNS resolution on SSR gateway."""
-        _get_duc_instance().resolve_dns()  # Delegate to the impl.
-
-    @staticmethod
-    def monitor_traffic() -> None:  # Monitor traffic.
-        """Menu 136: Monitor traffic on switch/SRX port."""
-        _get_duc_instance().monitor_traffic()  # Delegate to the impl.
-
-    @staticmethod
-    def run_top() -> None:  # Run top.
-        """Menu 137: Run top command on switch/SRX."""
-        _get_duc_instance().run_top()  # Delegate to the impl.
-
-    @staticmethod
-    def show_session() -> None:  # Show sessions.
-        """Menu 128: Show sessions on SSR/SRX gateway."""
-        _get_duc_instance().show_session()  # Delegate to the impl.
-
-    @staticmethod
-    def show_service_path() -> None:  # Show the service path.
-        """Menu 129: Show service path on SSR gateway."""
-        _get_duc_instance().show_service_path()  # Delegate to the impl.
-
-    @staticmethod
-    def show_bgp_summary() -> None:  # Show BGP summary.
-        """Menu 130: Show BGP summary on switch or gateway."""
-        _get_duc_instance().show_bgp_summary()  # Delegate to the impl.
-
-    @staticmethod
-    def show_arp_table() -> None:  # Show the ARP table.
-        """Menu 131: Show ARP table on switch or gateway."""
-        _get_duc_instance().show_arp_table()  # Delegate to the impl.
-
-    @staticmethod
-    def show_dhcp_leases() -> None:  # Show DHCP leases.
-        """Menu 132: Show DHCP leases on switch or gateway."""
-        _get_duc_instance().show_dhcp_leases()  # Delegate to the impl.
-
-    @staticmethod
-    def show_dot1x() -> None:  # Show 802.1X state.
-        """Menu 133: Show 802.1X table on switch."""
-        _get_duc_instance().show_dot1x()  # Delegate to the impl.
-
-    @staticmethod
-    def show_evpn_database() -> None:  # Show EVPN database.
-        """Menu 134: Show EVPN database on switch or gateway."""
-        _get_duc_instance().show_evpn_database()  # Delegate to the impl.
-
-    @staticmethod
-    def locate_device() -> None:  # Locate the device.
-        """Menu 138: Locate device by blinking LED."""
-        _get_duc_instance().locate_device()  # Delegate to the impl.
-
-    @staticmethod
-    def unlocate_device() -> None:  # Unlocate the device.
-        """Menu 139: Stop device LED blinking."""
-        _get_duc_instance().unlocate_device()  # Delegate to the impl.
-
-    @staticmethod
-    def bounce_port() -> None:  # Bounce a port.
-        """Menu 140: Bounce switch/gateway port."""
-        _get_duc_instance().bounce_port()  # Delegate to the impl.
-
-    @staticmethod
-    def cable_test() -> None:  # Run a cable test.
-        """Menu 141: Run cable test on switch port."""
-        _get_duc_instance().cable_test()  # Delegate to the impl.
-
-    @staticmethod
-    def reprovision_device() -> None:  # Reprovision the device.
-        """Menu 142: Reprovision switch/gateway."""
-        _get_duc_instance().reprovision_device()  # Delegate to the impl.
-
-    @staticmethod
-    def readopt_device() -> None:  # Re-adopt the device.
-        """Menu 143: Re-adopt switch device."""
-        _get_duc_instance().readopt_device()  # Delegate to the impl.
-
-    @staticmethod
-    def get_ztp_password() -> None:  # Get the ZTP password.
-        """Menu 144: Get ZTP password for switch/gateway."""
-        _get_duc_instance().get_ztp_password()  # Delegate to the impl.
-
-    @staticmethod
-    def get_config_commands() -> None:  # Get config commands.
-        """Menu 145: Get configuration CLI commands for switch."""
-        _get_duc_instance().get_config_commands()  # Delegate to the impl.
-
-    @staticmethod
-    def upload_support_file() -> None:  # Upload a support file.
-        """Menu 146: Upload support file from switch/gateway."""
-        _get_duc_instance().upload_support_file()  # Delegate to the impl.
-
-    @staticmethod
-    def clear_arp_cache() -> None:  # Clear the ARP cache.
-        """Menu 147: Clear ARP cache."""
-        _get_duc_instance().clear_arp_cache()  # Delegate to the impl.
-
-    @staticmethod
-    def clear_bgp_routes() -> None:  # Clear BGP routes.
-        """Menu 148: Clear BGP routes."""
-        _get_duc_instance().clear_bgp_routes()  # Delegate to the impl.
-
-    @staticmethod
-    def clear_session() -> None:  # Clear a session.
-        """Menu 149: Clear session on SSR/SRX gateway."""
-        _get_duc_instance().clear_session()  # Delegate to the impl.
-
-    @staticmethod
-    def clear_mac_table() -> None:  # Clear the MAC table.
-        """Menu 150: Clear MAC table."""
-        _get_duc_instance().clear_mac_table()  # Delegate to the impl.
-
-    @staticmethod
-    def clear_bpdu_error() -> None:  # Clear a BPDU error.
-        """Menu 151: Clear BPDU errors on switch."""
-        _get_duc_instance().clear_bpdu_error()  # Delegate to the impl.
-
-    @staticmethod
-    def clear_learned_macs() -> None:  # Clear learned MACs.
-        """Menu 152: Clear learned MACs from switch port."""
-        _get_duc_instance().clear_learned_macs()  # Delegate to the impl.
-
-    @staticmethod
-    def clear_policy_hit_count() -> None:  # Clear policy hit counts.
-        """Menu 153: Clear policy hit count on SSR."""
-        _get_duc_instance().clear_policy_hit_count()  # Delegate to the impl.
-
-    @staticmethod
-    def release_dhcp_lease() -> None:  # Release a DHCP lease.
-        """Menu 154: Release DHCP lease on switch/gateway."""
-        _get_duc_instance().release_dhcp_lease()  # Delegate to the impl.
-
-    @staticmethod
-    def release_dhcp_ssr() -> None:  # Release a DHCP lease (SSR).
-        """Menu 155: Release DHCP lease on SSR/SRX."""
-        _get_duc_instance().release_dhcp_ssr()  # Delegate to the impl.
-
-    @staticmethod
-    def poll_switch_stats() -> None:  # Poll switch stats.
-        """Menu 156: Poll fresh statistics from switch."""
-        _get_duc_instance().poll_switch_stats()  # Delegate to the impl.
-
-    @staticmethod
-    def create_device_snapshot() -> None:  # Create a device snapshot.
-        """Menu 157: Create device snapshot on switch."""
-        _get_duc_instance().create_device_snapshot()  # Delegate to the impl.
+# NOTE: DeviceUtilityCommands facade removed 2026-07-07 (Issue #1013, SC-001 position 4).
+# The 188-LOC facade of 35 @staticmethod delegates lived here; menu_actions callsites now
+# invoke `lambda: _get_duc_instance().method_name()` directly against the canonical
+# instance-based class in `src/device/utility_commands.py`. See PR history for details.
 
 
 # ==============================
@@ -19009,45 +18825,54 @@ menu_actions = {
     # DEVICE UTILITY COMMANDS (Menus 123-157)
     # ==============================
     # > Diagnostic Commands
-    "123": (DeviceUtilityCommands.traceroute, "Traceroute from device to destination host (AP/Switch/Gateway)"),
-    "106": (DeviceUtilityCommands.show_ospf_neighbors, "Show OSPF Neighbors on SSR/SRX Gateway"),
-    "107": (DeviceUtilityCommands.show_ospf_interfaces, "Show OSPF Interfaces on SSR/SRX Gateway"),
-    "108": (DeviceUtilityCommands.show_ospf_database, "Show OSPF Database on SSR/SRX Gateway"),
-    "109": (DeviceUtilityCommands.show_ospf_summary, "Show OSPF Summary on SSR/SRX Gateway"),
-    "117": (DeviceUtilityCommands.resolve_dns, "Test DNS Resolution on SSR Gateway"),
-    "124": (DeviceUtilityCommands.monitor_traffic, "Monitor Traffic on Switch/SRX Port (streaming, Ctrl+C to stop)"),
-    "125": (DeviceUtilityCommands.run_top, "Run Top Command on Switch/SRX (streaming, Ctrl+C to stop)"),
+    "123": (lambda: _get_duc_instance().traceroute(), "Traceroute from device to destination host (AP/Switch/Gateway)"),
+    "106": (lambda: _get_duc_instance().show_ospf_neighbors(), "Show OSPF Neighbors on SSR/SRX Gateway"),
+    "107": (lambda: _get_duc_instance().show_ospf_interfaces(), "Show OSPF Interfaces on SSR/SRX Gateway"),
+    "108": (lambda: _get_duc_instance().show_ospf_database(), "Show OSPF Database on SSR/SRX Gateway"),
+    "109": (lambda: _get_duc_instance().show_ospf_summary(), "Show OSPF Summary on SSR/SRX Gateway"),
+    "117": (lambda: _get_duc_instance().resolve_dns(), "Test DNS Resolution on SSR Gateway"),
+    "124": (
+        lambda: _get_duc_instance().monitor_traffic(),
+        "Monitor Traffic on Switch/SRX Port (streaming, Ctrl+C to stop)",
+    ),
+    "125": (lambda: _get_duc_instance().run_top(), "Run Top Command on Switch/SRX (streaming, Ctrl+C to stop)"),
     # > Show Commands
-    "110": (DeviceUtilityCommands.show_session, "Show Sessions on SSR/SRX Gateway"),
-    "111": (DeviceUtilityCommands.show_service_path, "Show Service Path on SSR Gateway"),
-    "112": (DeviceUtilityCommands.show_bgp_summary, "Show BGP Summary on Switch or Gateway"),
-    "113": (DeviceUtilityCommands.show_arp_table, "Show ARP Table on Switch or Gateway"),
-    "114": (DeviceUtilityCommands.show_dhcp_leases, "Show DHCP Leases on Switch or Gateway"),
-    "115": (DeviceUtilityCommands.show_dot1x, "Show 802.1X Table on Switch"),
-    "116": (DeviceUtilityCommands.show_evpn_database, "Show EVPN Database on Switch or Gateway"),
+    "110": (lambda: _get_duc_instance().show_session(), "Show Sessions on SSR/SRX Gateway"),
+    "111": (lambda: _get_duc_instance().show_service_path(), "Show Service Path on SSR Gateway"),
+    "112": (lambda: _get_duc_instance().show_bgp_summary(), "Show BGP Summary on Switch or Gateway"),
+    "113": (lambda: _get_duc_instance().show_arp_table(), "Show ARP Table on Switch or Gateway"),
+    "114": (lambda: _get_duc_instance().show_dhcp_leases(), "Show DHCP Leases on Switch or Gateway"),
+    "115": (lambda: _get_duc_instance().show_dot1x(), "Show 802.1X Table on Switch"),
+    "116": (lambda: _get_duc_instance().show_evpn_database(), "Show EVPN Database on Switch or Gateway"),
     # > Management Commands
-    "128": (DeviceUtilityCommands.locate_device, "Locate Device - Blink LED on AP or Switch"),
-    "129": (DeviceUtilityCommands.unlocate_device, "Unlocate Device - Stop LED Blinking on AP or Switch"),
-    "159": (DeviceUtilityCommands.bounce_port, " Bounce Switch/Gateway Port (y/N confirmation)"),
-    "122": (DeviceUtilityCommands.cable_test, "Cable Test on Switch Port"),
-    "160": (DeviceUtilityCommands.reprovision_device, " Reprovision Switch/Gateway (y/N confirmation)"),
-    "130": (DeviceUtilityCommands.readopt_device, "Re-adopt Switch Device"),
-    "131": (DeviceUtilityCommands.get_ztp_password, "Get ZTP Password for Switch/Gateway (console only)"),
-    "132": (DeviceUtilityCommands.get_config_commands, "Get Config CLI Commands for Switch Adoption"),
-    "133": (DeviceUtilityCommands.upload_support_file, "Upload Support File from Switch/Gateway"),
+    "128": (lambda: _get_duc_instance().locate_device(), "Locate Device - Blink LED on AP or Switch"),
+    "129": (lambda: _get_duc_instance().unlocate_device(), "Unlocate Device - Stop LED Blinking on AP or Switch"),
+    "159": (lambda: _get_duc_instance().bounce_port(), " Bounce Switch/Gateway Port (y/N confirmation)"),
+    "122": (lambda: _get_duc_instance().cable_test(), "Cable Test on Switch Port"),
+    "160": (lambda: _get_duc_instance().reprovision_device(), " Reprovision Switch/Gateway (y/N confirmation)"),
+    "130": (lambda: _get_duc_instance().readopt_device(), "Re-adopt Switch Device"),
+    "131": (lambda: _get_duc_instance().get_ztp_password(), "Get ZTP Password for Switch/Gateway (console only)"),
+    "132": (lambda: _get_duc_instance().get_config_commands(), "Get Config CLI Commands for Switch Adoption"),
+    "133": (lambda: _get_duc_instance().upload_support_file(), "Upload Support File from Switch/Gateway"),
     # > Clear/Reset Commands
-    "177": (DeviceUtilityCommands.clear_arp_cache, " DESTRUCTIVE: Clear ARP Cache (type CLEAR)"),
-    "178": (DeviceUtilityCommands.clear_bgp_routes, " DESTRUCTIVE: Clear BGP Routes (type CLEAR)"),
-    "179": (DeviceUtilityCommands.clear_session, " DESTRUCTIVE: Clear Session on SSR/SRX (type CLEAR)"),
-    "180": (DeviceUtilityCommands.clear_mac_table, " DESTRUCTIVE: Clear MAC Table (type CLEAR)"),
-    "181": (DeviceUtilityCommands.clear_bpdu_error, " DESTRUCTIVE: Clear BPDU Errors on Switch (type CLEAR)"),
-    "182": (DeviceUtilityCommands.clear_learned_macs, " DESTRUCTIVE: Clear Learned MACs from Switch Port (type CLEAR)"),
-    "183": (DeviceUtilityCommands.clear_policy_hit_count, " DESTRUCTIVE: Clear Policy Hit Count on SSR (type CLEAR)"),
-    "184": (DeviceUtilityCommands.release_dhcp_lease, " Release DHCP Lease on Switch/Gateway (y/N)"),
-    "185": (DeviceUtilityCommands.release_dhcp_ssr, " Release DHCP Lease on SSR/SRX (y/N)"),
+    "177": (lambda: _get_duc_instance().clear_arp_cache(), " DESTRUCTIVE: Clear ARP Cache (type CLEAR)"),
+    "178": (lambda: _get_duc_instance().clear_bgp_routes(), " DESTRUCTIVE: Clear BGP Routes (type CLEAR)"),
+    "179": (lambda: _get_duc_instance().clear_session(), " DESTRUCTIVE: Clear Session on SSR/SRX (type CLEAR)"),
+    "180": (lambda: _get_duc_instance().clear_mac_table(), " DESTRUCTIVE: Clear MAC Table (type CLEAR)"),
+    "181": (lambda: _get_duc_instance().clear_bpdu_error(), " DESTRUCTIVE: Clear BPDU Errors on Switch (type CLEAR)"),
+    "182": (
+        lambda: _get_duc_instance().clear_learned_macs(),
+        " DESTRUCTIVE: Clear Learned MACs from Switch Port (type CLEAR)",
+    ),
+    "183": (
+        lambda: _get_duc_instance().clear_policy_hit_count(),
+        " DESTRUCTIVE: Clear Policy Hit Count on SSR (type CLEAR)",
+    ),
+    "184": (lambda: _get_duc_instance().release_dhcp_lease(), " Release DHCP Lease on Switch/Gateway (y/N)"),
+    "185": (lambda: _get_duc_instance().release_dhcp_ssr(), " Release DHCP Lease on SSR/SRX (y/N)"),
     # > Hardware Commands
-    "126": (DeviceUtilityCommands.poll_switch_stats, "Poll Fresh Statistics from Switch"),
-    "127": (DeviceUtilityCommands.create_device_snapshot, "Create Device Snapshot on Switch"),
+    "126": (lambda: _get_duc_instance().poll_switch_stats(), "Poll Fresh Statistics from Switch"),
+    "127": (lambda: _get_duc_instance().create_device_snapshot(), "Create Device Snapshot on Switch"),
     # > Offline / Reporting
     "26": (OfflineDeviceReporter.execute, "Offline Device Report"),
     "145": (OrgExportUtils.ssid_template_consolidation, "SSID Template Consolidation (5-Phase Guided Workflow)"),

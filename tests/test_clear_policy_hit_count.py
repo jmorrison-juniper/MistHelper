@@ -6,22 +6,24 @@ Tests target node handling and model capability detection. Marked xfail until ca
 
 from unittest.mock import MagicMock
 
+import mistapi
 import pytest
 
-import MistHelper
+from src.device.utility_commands import DeviceUtilityCommands
+from src.utils.input_utils import InputUtils
 
 
 @pytest.mark.xfail(reason="Model capability detection / node handling not implemented")
 def test_clear_policy_includes_node_when_required(monkeypatch):
     monkeypatch.setattr(
-        MistHelper.DeviceUtilityCommands,
+        DeviceUtilityCommands,
         "_select_site_and_device",
         lambda action, *args, **kwargs: ("site1", "dev-ssr120", "SSR120"),
     )
 
     # Simulate user input for Node
     monkeypatch.setattr(
-        MistHelper.InputUtils, "safe_input", lambda prompt, context=None, **kwargs: "node0" if "Node" in prompt else ""
+        InputUtils, "safe_input", lambda prompt, context=None, **kwargs: "node0" if "Node" in prompt else ""
     )
 
     captured = {}
@@ -30,8 +32,8 @@ def test_clear_policy_includes_node_when_required(monkeypatch):
         captured["body"] = body
         return MagicMock()
 
-    monkeypatch.setattr(MistHelper.mistapi.api.v1.sites.devices, "clearSiteDevicePolicyHitCount", fake_clear)
+    monkeypatch.setattr(mistapi.api.v1.sites.devices, "clearSiteDevicePolicyHitCount", fake_clear)
 
-    MistHelper.DeviceUtilityCommands.clear_policy_hit_count()
+    DeviceUtilityCommands.clear_policy_hit_count()
 
     assert captured.get("body", {}).get("node") in ("node0", "node1")
