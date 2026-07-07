@@ -20095,14 +20095,12 @@ def _print_systematic_summary(summary, telemetry_path):
     print()  # Blank line before summary.
     print("=" * 80)  # Visual separator for summary section.
     print(" Systematic Test Summary:")  # Label the results block.
-    print(f"   Successful operations: {summary.success_count}")  # Show successful count.
-    print(f"   Failed operations: {summary.error_count}")  # Show failure count.
-    print(f"   Skipped unsafe operations: {summary.skip_count}")  # Show skip count.
-    coverage_pct = summary.success_count / summary.total_ops * 100  # Coverage as a percent.
-    print(
-        f"   Total coverage: {summary.success_count}/{summary.total_ops} ({coverage_pct:.1f}%)"
-    )  # Show coverage percentage.
-    print(f"    Total execution time: {summary.total_time:.2f} seconds")  # Show total elapsed time.
+    print(f"   Successful operations: {summary.passed}")  # Show successful count.
+    print(f"   Failed operations: {summary.failed}")  # Show failure count.
+    print(f"   Skipped unsafe operations: {summary.skipped}")  # Show skip count.
+    coverage_pct = summary.passed / summary.total * 100 if summary.total else 0.0  # Coverage as a percent.
+    print(f"   Total coverage: {summary.passed}/{summary.total} ({coverage_pct:.1f}%)")  # Show coverage percentage.
+    print(f"    Total execution time: {summary.elapsed:.2f} seconds")  # Show total elapsed time.
     print(f"   Telemetry written to: {telemetry_path}")  # Tell operator where telemetry landed.
     print("   Detailed logs in: script.log")  # Remind operator of the log file location.
 
