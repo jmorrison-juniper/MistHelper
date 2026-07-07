@@ -139,6 +139,10 @@ from src.export.site_insights.site_metric_operation import (
     SiteMetricOperation,
 )  # Decomposed Menu 74 entry point
 from src.export.wifi_clients_exporter import WifiClientsExporter  # Import WiFi client export handler
+from src.firmware.firmware_manager import (  # Cat A canonical (1013 SC-002)
+    FirmwareManager,
+    FirmwareManagerConfig,
+)
 from src.gateway.gateway_export_utils import (
     configure_gateway_export_utils_dependencies,
 )  # Import gateway export utility configuration
@@ -17317,28 +17321,24 @@ class DeviceRebootManager:  # Device reboot manager.
 # refactored into DeviceRebootManager class methods.
 
 
-class FirmwareManager:
-    """Factory for the extracted firmware manager (src.firmware.firmware_manager)."""
-
-    @staticmethod
-    def create(apisession: Any, org_id: str) -> Any:
-        """Build the DI-wired firmware-manager impl so menu callbacks invoke it directly."""
-        # Local import keeps firmware deps off the hot startup path
-        from src.firmware.firmware_manager import FirmwareManager as _Impl  # noqa: PLC0415
-        from src.firmware.firmware_manager import FirmwareManagerConfig  # noqa: PLC0415
-
-        logging.debug("Building firmware manager impl for org %s", org_id)  # Trace factory build
-        config = FirmwareManagerConfig(  # Frozen value-object carries identity + six DI hooks
-            apisession=apisession,  # Live Mist API session passed through
-            org_id=org_id,  # Target organization identifier
-            safe_input_fn=InputUtils.safe_input,  # EOF-safe prompt helper
-            select_site_fn=PromptUtils.select_site,  # Interactive site picker
-            check_cache_fn=CacheUtils.check_and_generate_csv,  # Validate/refresh cached CSV
-            get_csv_path_fn=FilePathUtils.get_csv_path,  # Resolve data/ output paths
-            gateway_templates_fn=GatewayExportUtils.templates,  # Fetch gateway templates
-            sites_fn=OrgSiteExporter.sites,  # Fetch org site list
-        )
-        return _Impl(config)  # Single-positional-arg constructor per FR-014
+# NOTE: FirmwareManager facade removed per 1013 SC-002 (Cat A, position 2).
+# Canonical class lives at src/firmware/firmware_manager.py and is imported at top-of-file.
+# DI wiring lives in _build_firmware_manager() below (single seam for menu 137/154/155/156
+# plus the internal src re-check call via _MH._build_firmware_manager).
+def _build_firmware_manager(session: Any, target_org_id: str) -> FirmwareManager:
+    """Build a fully DI-wired FirmwareManager instance for menu callbacks and internal re-checks."""
+    logging.debug("Building firmware manager impl for org %s", target_org_id)  # Trace factory build
+    fw_config = FirmwareManagerConfig(  # Frozen value-object carries identity + six DI hooks
+        apisession=session,  # Live Mist API session passed through
+        org_id=target_org_id,  # Target organization identifier
+        safe_input_fn=InputUtils.safe_input,  # EOF-safe prompt helper
+        select_site_fn=PromptUtils.select_site,  # Interactive site picker
+        check_cache_fn=CacheUtils.check_and_generate_csv,  # Validate/refresh cached CSV
+        get_csv_path_fn=FilePathUtils.get_csv_path,  # Resolve data/ output paths
+        gateway_templates_fn=GatewayExportUtils.templates,  # Fetch gateway templates
+        sites_fn=OrgSiteExporter.sites,  # Fetch org site list
+    )
+    return FirmwareManager(fw_config)  # Single-positional-arg constructor per FR-014
 
 
 # NOTE: check_firmware_upgrade_status_direct removed - use FirmwareManager.create(apisession, org_id).check_firmware_upgrade_status()  # noqa: E501
@@ -18745,7 +18745,7 @@ menu_actions = {
     "50": (OrgConfigExporter.mx_edges, "Export MX Edge information for the organization"),
     # Status & Monitoring
     "137": (
-        lambda: FirmwareManager.create(  # type: ignore[no-untyped-call]
+        lambda: _build_firmware_manager(
             apisession, ConfigUtils.get_cached_or_prompted_org_id()
         ).check_firmware_upgrade_status(),
         "Check current firmware upgrade status across organization with detailed progress monitoring and export to CSV",
@@ -18802,7 +18802,7 @@ menu_actions = {
     "121": (ARPCommandManager.execute, "Run ARP command on an AP and receive output via WebSocket"),
     # ! DESTRUCTIVE OPERATIONS - USE WITH EXTREME CAUTION
     "154": (
-        lambda: FirmwareManager.create(  # type: ignore[no-untyped-call]
+        lambda: _build_firmware_manager(
             apisession, ConfigUtils.get_cached_or_prompted_org_id()
         ).execute_firmware_upgrade_with_mode_selection(),
         " DESTRUCTIVE: Advanced AP firmware upgrade with mode selection - upgrade by site list/selection or by Gateway Template assignment",  # noqa: E501
@@ -18885,7 +18885,7 @@ menu_actions = {
     # SWITCH FIRMWARE OPERATIONS
     # ==============================
     "155": (
-        lambda: FirmwareManager.create(  # type: ignore[no-untyped-call]
+        lambda: _build_firmware_manager(
             apisession, ConfigUtils.get_cached_or_prompted_org_id()
         ).execute_switch_firmware_upgrade_with_mode_selection(),
         " DESTRUCTIVE: Advanced Switch firmware upgrade with mode selection - upgrade by site list/selection or by Gateway Template assignment",  # noqa: E501
@@ -18894,7 +18894,7 @@ menu_actions = {
     # SSR FIRMWARE OPERATIONS
     # ==============================
     "156": (
-        lambda: FirmwareManager.create(  # type: ignore[no-untyped-call]
+        lambda: _build_firmware_manager(
             apisession, ConfigUtils.get_cached_or_prompted_org_id()
         ).execute_ssr_firmware_upgrade_with_mode_selection(),
         " DESTRUCTIVE: Advanced SSR firmware upgrade with mode selection - upgrade by site list/selection or by Gateway Template assignment",  # noqa: E501

@@ -1768,7 +1768,8 @@ class FirmwareManager:
             check_stop_fn=_MH.ConfigUtils.check_stop_signal,  # WHY: cooperative abort polling
             fetch_sites_fn=_MH.APICoreFetchUtils.all_sites_with_limit,  # WHY: cache-aware site fetch
             get_csv_path_fn=_MH.FilePathUtils.get_csv_path,  # WHY: OS-safe CSV path resolution
-            check_firmware_status_fn=lambda: _MH.FirmwareManager.create(  # WHY: lazy status re-check factory
+            # WHY: lazy status re-check factory (1013 SC-002)
+            check_firmware_status_fn=lambda: _MH._build_firmware_manager(
                 _MH.apisession, _MH.ConfigUtils.get_cached_or_prompted_org_id()
             ).check_firmware_upgrade_status(),
             get_org_id_fn=_MH.ConfigUtils.get_cached_or_prompted_org_id,  # WHY: seam so upgrader can re-prompt
