@@ -192,6 +192,7 @@ module = [
     "src.gateway.*",
     "src.inventory.*",
     "src.org.*",
+    "src.device.*",
     "src.site.*",
     "src.troubleshooting.*",
     "src.websocket.*",
