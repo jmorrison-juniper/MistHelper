@@ -191,6 +191,7 @@ module = [
     "src.export.*",
     "src.gateway.*",
     "src.inventory.*",
+    "src.org.*",
     "src.site.*",
     "src.troubleshooting.*",
     "src.websocket.*",

@@ -27,8 +27,7 @@ import mistapi  # WHY: dotted-path API resolution + pagination helper.
 
 class OrgConfigMigrationManager:  # Org config migration manager.
     # pylint: disable=too-many-arguments,too-many-positional-arguments
-    """
-    Export and import org-level WAN/gateway configuration for cross-org migration.
+    """Export and import org-level WAN/gateway configuration for cross-org migration.
 
     Menu 176: Export 6 config types to a timestamped JSON bundle.
     Menu 177: Import a bundle into the current org with conflict detection.
@@ -237,7 +236,6 @@ class OrgConfigMigrationManager:  # Org config migration manager.
 
     def _select_import_file(self) -> str:  # Select an import file.
         """List available export bundles and let the user pick one."""
-
         pattern = os.path.join("data", "OrgConfig_Export_*.json")  # Glob pattern for export bundles
         files = sorted(glob.glob(pattern), reverse=True)  # Most recent files first
         logging.debug("Found %s export bundles in data/", len(files))  # Log discovery count
