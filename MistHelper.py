@@ -142,6 +142,7 @@ from src.export.wifi_clients_exporter import WifiClientsExporter  # Import WiFi 
 from src.gateway.gateway_export_utils import (
     configure_gateway_export_utils_dependencies,
 )  # Import gateway export utility configuration
+from src.gateway.template_config import GatewayTemplateConfigManager  # Cat A canonical (1013 SC-001)
 from src.org_data_collector import OrgDataCollector  # Import org-level data collection orchestrator
 from src.refactors.anomaly_metrics_discovery import (
     AnomalyMetricsDiscovery,  # Extracted anomaly metrics discovery (SC-016)
@@ -15589,66 +15590,9 @@ class TroubleshootUtils:  # Marvis troubleshoot delegators.
         ExtractedMarvisTroubleshootUtils._display_usage_guide()  # Delegate to the impl.
 
 
-# ============================================================================
-# GATEWAY TEMPLATE CONFIGURATION MANAGER CLASS
-# Delegated to src.gateway.template_config
-# ============================================================================
-class GatewayTemplateConfigManager:  # Gateway template config manager.
-    """Delegation stub. Implementation in src.gateway.template_config."""
-
-    @staticmethod
-    def extract():  # Extract a template.
-        """Menu 105: Extract DIA_Pico and Picocell configs. Delegated to src.gateway.template_config."""
-        from src.gateway.template_config import (
-            GatewayTemplateConfigManager as Impl,  # pylint: disable=import-outside-toplevel
-        )
-
-        Impl(  # Run the impl.
-            org_id=ConfigUtils.get_cached_or_prompted_org_id(),
-            apisession=apisession,
-            input_fn=InputUtils.safe_input,
-            get_csv_path_fn=FilePathUtils.get_csv_path,
-            save_data_fn=DataExporter.write_with_format_selection,
-            check_and_generate_csv_fn=CacheUtils.check_and_generate_csv,
-            generate_sites_fn=OrgSiteExporter.sites,
-            sanitize_filename_fn=EnhancedSSHRunner.sanitize_filename,
-        ).extract()
-
-    @staticmethod
-    def apply():  # Apply a template.
-        """Menu 106: Apply extracted configs. Delegated to src.gateway.template_config."""
-        from src.gateway.template_config import (
-            GatewayTemplateConfigManager as Impl,  # pylint: disable=import-outside-toplevel
-        )
-
-        Impl(  # Run the impl.
-            org_id=ConfigUtils.get_cached_or_prompted_org_id(),
-            apisession=apisession,
-            input_fn=InputUtils.safe_input,
-            get_csv_path_fn=FilePathUtils.get_csv_path,
-            save_data_fn=DataExporter.write_with_format_selection,
-            check_and_generate_csv_fn=CacheUtils.check_and_generate_csv,
-            generate_sites_fn=OrgSiteExporter.sites,
-            sanitize_filename_fn=EnhancedSSHRunner.sanitize_filename,
-        ).apply()
-
-    @staticmethod
-    def clone_by_location():  # Clone by location.
-        """Menu 111: Clone template by state/country. Delegated to src.gateway.template_config."""
-        from src.gateway.template_config import (
-            GatewayTemplateConfigManager as Impl,  # pylint: disable=import-outside-toplevel
-        )
-
-        Impl(  # Run the impl.
-            org_id=ConfigUtils.get_cached_or_prompted_org_id(),
-            apisession=apisession,
-            input_fn=InputUtils.safe_input,
-            get_csv_path_fn=FilePathUtils.get_csv_path,
-            save_data_fn=DataExporter.write_with_format_selection,
-            check_and_generate_csv_fn=CacheUtils.check_and_generate_csv,
-            generate_sites_fn=OrgSiteExporter.sites,
-            sanitize_filename_fn=EnhancedSSHRunner.sanitize_filename,
-        ).clone_by_location()
+# NOTE: GatewayTemplateConfigManager facade removed per 1013 SC-001 (Cat A, position 1).
+# Canonical class lives at src/gateway/template_config.py and is imported at top-of-file.
+# Menu 105/106/111 handlers construct it directly with 8 injected deps (see menu_actions).
 
 
 # NOTE: DeviceConfigTemplateClonerManager extracted per SC-020.
@@ -18517,15 +18461,6 @@ class BulkRadiusWLANConfigManager:
         logging.info("Bulk RADIUS WLAN Configuration completed successfully")  # Log completion.
 
 
-# NOTE: GatewayTemplateConfigManager class provides Menu 105, 106, 111 operations.
-# Located earlier in this file after TroubleshootUtils class.
-
-
-# The standalone functions extract_gateway_template_configuration(),
-# apply_gateway_template_configuration(), and clone_gateway_templates_by_state_and_country()
-# have been refactored into GatewayTemplateConfigManager class methods.
-
-
 # SiteAnalyticsConfigurator and SiteInventoryHealthAnalyzer were extracted to
 # src/analytics/site_analytics_configurator.py and
 # src/analytics/site_inventory_health_analyzer.py for phase-1 decomposition.
@@ -18764,11 +18699,29 @@ menu_actions = {
         " DESTRUCTIVE: Update Gateway Templates to Use WAN2 Variable - Replace hardcoded 'ge-0/0/1' references with {{wan2_interface}} variable (Requires uppercase 'MIGRATE' confirmation, supports --dry-run)",  # noqa: E501
     ),
     "150": (
-        GatewayTemplateConfigManager.extract,
+        lambda: GatewayTemplateConfigManager(
+            org_id=ConfigUtils.get_cached_or_prompted_org_id(),
+            apisession=apisession,
+            input_fn=InputUtils.safe_input,
+            get_csv_path_fn=FilePathUtils.get_csv_path,
+            save_data_fn=DataExporter.write_with_format_selection,
+            check_and_generate_csv_fn=CacheUtils.check_and_generate_csv,
+            generate_sites_fn=OrgSiteExporter.sites,
+            sanitize_filename_fn=EnhancedSSHRunner.sanitize_filename,
+        ).extract(),
         "Extract Gateway Template Configuration (DIA_Pico, Picocell) - Save specific configs to JSON for replication",
     ),
     "164": (
-        GatewayTemplateConfigManager.apply,
+        lambda: GatewayTemplateConfigManager(
+            org_id=ConfigUtils.get_cached_or_prompted_org_id(),
+            apisession=apisession,
+            input_fn=InputUtils.safe_input,
+            get_csv_path_fn=FilePathUtils.get_csv_path,
+            save_data_fn=DataExporter.write_with_format_selection,
+            check_and_generate_csv_fn=CacheUtils.check_and_generate_csv,
+            generate_sites_fn=OrgSiteExporter.sites,
+            sanitize_filename_fn=EnhancedSSHRunner.sanitize_filename,
+        ).apply(),
         " DESTRUCTIVE: Apply Gateway Template Configuration - Replicate extracted configs to other templates (Requires uppercase 'APPLY' confirmation)",  # noqa: E501
     ),
     "148": (
@@ -18973,7 +18926,16 @@ menu_actions = {
         " DESTRUCTIVE: Assign APs to Device Profiles matching their model type (AP-{model}) - Skips APs without matching profiles (Requires uppercase 'ASSIGN' confirmation)",  # noqa: E501
     ),
     "165": (
-        GatewayTemplateConfigManager.clone_by_location,
+        lambda: GatewayTemplateConfigManager(
+            org_id=ConfigUtils.get_cached_or_prompted_org_id(),
+            apisession=apisession,
+            input_fn=InputUtils.safe_input,
+            get_csv_path_fn=FilePathUtils.get_csv_path,
+            save_data_fn=DataExporter.write_with_format_selection,
+            check_and_generate_csv_fn=CacheUtils.check_and_generate_csv,
+            generate_sites_fn=OrgSiteExporter.sites,
+            sanitize_filename_fn=EnhancedSSHRunner.sanitize_filename,
+        ).clone_by_location(),
         " DESTRUCTIVE: Clone Gateway Template by State and Country - Create state/country-specific templates and assign sites (Requires uppercase 'CLONE' confirmation)",  # noqa: E501
     ),
     "166": (
