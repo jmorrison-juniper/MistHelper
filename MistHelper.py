@@ -210,6 +210,15 @@ from src.refactors.wlanradius_timer_manager import (
 )
 from src.reports.e911_bssid import E911BSSIDReportGenerator  # Module-level for tests
 from src.site.address_audit import AddressAuditEngine  # Menu 195: read-only CSV site-address audit
+from src.site.site_config_manager import (  # Cat A canonical (1013 SC-003)
+    SiteConfigDependencies as _SiteConfigDependencies,
+)
+from src.site.site_config_manager import (
+    SiteConfigManager,
+)
+from src.site.site_config_manager import (
+    configure_site_config_manager_dependencies as _configure_site_config_dependencies,
+)
 from src.ssh.ssh_runner import EnhancedSSHRunner  # Import SSH command execution and result parsing
 from src.ssh.ssh_runner_manager import (
     SSHRunnerManager as ExtractedSSHRunnerManager,
@@ -16871,49 +16880,24 @@ class VirtualChassisManager:  # Virtual chassis manager.
 # ============================================================================
 # SITE CONFIGURATION MANAGER CLASS
 # ============================================================================
-class SiteConfigManager:  # Site config manager.
-    """Delegation wrapper for extracted site configuration implementation."""
-
-    @staticmethod
-    def _configure_module():  # Configure the module.
-        """Configure extracted module dependencies and return the module handle."""
-        from src.site import site_config_manager as site_config_module  # noqa: PLC0415,I001
-
-        deps = site_config_module.SiteConfigDependencies(  # Build dependency dataclass.
-            apisession=apisession,  # Live Mist API session.
-            config_utils=ConfigUtils,  # Shared org/stop-signal helpers.
-            file_path_utils=FilePathUtils,  # CSV path resolver.
-            input_utils=InputUtils,  # Safe input prompts.
-            data_exporter=DataExporter,  # Output writer.
-            mistapi=mistapi,  # Mist SDK module.
-            default_api_page_limit=DEFAULT_API_PAGE_LIMIT,  # Bulk fetch page size.
+# NOTE: SiteConfigManager facade removed per 1013 SC-003 (Cat A, position 3).
+# Canonical class lives at src/site/site_config_manager.py and is imported at
+# top-of-file. DI wiring lives in _configure_site_config_manager() below
+# (single seam for menu 171/172/173/174 lambdas).
+def _configure_site_config_manager() -> type[SiteConfigManager]:
+    """Wire SiteConfigDependencies and return the canonical SiteConfigManager class."""
+    _configure_site_config_dependencies(
+        _SiteConfigDependencies(  # Frozen container of 7 injected collaborators
+            apisession=apisession,  # Live Mist API session
+            config_utils=ConfigUtils,  # Org id caching + stop-signal check
+            file_path_utils=FilePathUtils,  # Portable CSV path resolver
+            input_utils=InputUtils,  # Safe input for destructive confirmations
+            data_exporter=DataExporter,  # Result-report writer
+            mistapi=mistapi,  # Root SDK module for calls + pagination
+            default_api_page_limit=DEFAULT_API_PAGE_LIMIT,  # Bulk fetch page size
         )
-        site_config_module.configure_site_config_manager_dependencies(deps)  # Wire dependencies.
-        return site_config_module  # Return the module.
-
-    @staticmethod
-    def create_test_sites_from_csv():  # Create test sites from CSV.
-        """Menu #171 delegated entrypoint."""
-        module = SiteConfigManager._configure_module()  # Configure the module.
-        return module.SiteConfigManager.create_test_sites_from_csv()  # Delegate the call.
-
-    @staticmethod
-    def create_country_rf_templates_and_assign():  # Create country RF templates.
-        """Menu #172 delegated entrypoint."""
-        module = SiteConfigManager._configure_module()  # Configure the module.
-        return module.SiteConfigManager.create_country_rf_templates_and_assign()  # Delegate the call.
-
-    @staticmethod
-    def create_ap_model_device_profiles():  # Create AP device profiles.
-        """Menu #173 delegated entrypoint."""
-        module = SiteConfigManager._configure_module()  # Configure the module.
-        return module.SiteConfigManager.create_ap_model_device_profiles()  # Delegate the call.
-
-    @staticmethod
-    def assign_aps_to_matching_device_profiles():  # Assign APs to profiles.
-        """Menu #174 delegated entrypoint."""
-        module = SiteConfigManager._configure_module()  # Configure the module.
-        return module.SiteConfigManager.assign_aps_to_matching_device_profiles()  # Delegate the call.
+    )
+    return SiteConfigManager  # Canonical class ready for menu callback dispatch
 
 
 # ============================================================================
@@ -18910,19 +18894,19 @@ menu_actions = {
     # TEST DATA GENERATION
     # ==============================
     "171": (
-        SiteConfigManager.create_test_sites_from_csv,
+        lambda: _configure_site_config_manager().create_test_sites_from_csv(),
         " DESTRUCTIVE: Create 137 test sites from NorthAmericanTestSites.csv - Real landmarks across 13 North American countries (Requires uppercase 'CREATE' confirmation)",  # noqa: E501
     ),
     "172": (
-        SiteConfigManager.create_country_rf_templates_and_assign,
+        lambda: _configure_site_config_manager().create_country_rf_templates_and_assign(),
         " DESTRUCTIVE: Create country-specific RF templates and assign sites to matching templates (Requires uppercase 'CREATE' confirmation)",  # noqa: E501
     ),
     "173": (
-        SiteConfigManager.create_ap_model_device_profiles,
+        lambda: _configure_site_config_manager().create_ap_model_device_profiles(),
         " DESTRUCTIVE: Scan org for AP models and create Device Profile per model with inherit/auto settings (Requires uppercase 'CREATE' confirmation)",  # noqa: E501
     ),
     "174": (
-        SiteConfigManager.assign_aps_to_matching_device_profiles,
+        lambda: _configure_site_config_manager().assign_aps_to_matching_device_profiles(),
         " DESTRUCTIVE: Assign APs to Device Profiles matching their model type (AP-{model}) - Skips APs without matching profiles (Requires uppercase 'ASSIGN' confirmation)",  # noqa: E501
     ),
     "165": (
