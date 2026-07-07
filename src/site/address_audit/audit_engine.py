@@ -237,13 +237,19 @@ class AddressAuditEngine:
             return candidates[0]  # Use it without prompting.
         return self._prompt_csv_choice(candidates)  # Multiple -> ask the operator.
 
-    def _prompt_csv_choice(self, candidates: list[str]) -> str:
-        """Prompt the operator to choose one CSV from a numbered list."""
+    def _prompt_csv_choice(self, candidates: list[str]) -> str | None:
+        """Prompt the operator to choose one CSV from a numbered list; empty input aborts."""
         print("Available CSV files in data/:")  # Header for the choices.
         for index, path in enumerate(candidates, start=1):  # Enumerate options 1..N.
             print(f"  [{index}] {os.path.basename(path)}")  # Show each filename.
-        while True:  # Loop until a valid selection is made.
+        while True:  # Loop until a valid selection is made or the operator/EOF aborts.
             raw = InputUtils.safe_input("Select file number: ", context="address_audit_csv_pick").strip()
+            if (
+                not raw
+            ):  # Empty response (blank Enter or EOF sentinel from safe_input) -> abort so we cannot infinite-loop under non-interactive stdin (e.g. --test).  # noqa: E501
+                logging.info("No CSV selection made (empty input); skipping address audit")  # Action-log the abort.
+                print("No CSV selected. Skipping address audit.")  # Inform the operator (also covers non-TTY --test).
+                return None  # Caller treats None as "nothing to audit".
             if raw.isdigit() and 1 <= int(raw) <= len(candidates):  # Valid in-range integer.
                 return candidates[int(raw) - 1]  # Return the chosen path.
             print(f"Invalid selection. Please enter a number between 1 and {len(candidates)}: ")  # Re-prompt.
@@ -279,6 +285,13 @@ class AddressAuditEngine:
                 .strip()
                 .lower()
             )  # Normalize once for downstream comparisons.
+            if (
+                not raw
+            ):  # Empty response (blank Enter or EOF sentinel) is treated as explicit skip to avoid infinite loops under non-interactive stdin (e.g. --test).  # noqa: E501
+                logging.info(
+                    "Business-authoritative CSV selection skipped (empty input)"
+                )  # Action-log the implicit skip.
+                return None  # Proceed without authority data.
             picked = self._parse_business_csv_choice(raw, candidates)  # Interpret the raw operator entry.
             if picked is not _INVALID_CHOICE:  # Valid choice (path) or explicit skip (None) -> exit the retry loop.
                 return picked  # type: ignore[no-any-return]  # Sentinel guarantees str|None here.
