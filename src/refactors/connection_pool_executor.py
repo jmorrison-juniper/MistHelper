@@ -110,7 +110,7 @@ class ConnectionPoolExecutor:  # Class-body seam for the connection-pool-managed
             logging.error("! Progress bar update failed: %s", upd_err)  # Log progress bar failure for debugging
 
     @staticmethod
-    def _record_future_outcome(future: Any, item: Any, config: BatchWorkerConfig, accumulator: dict) -> None:
+    def _record_future_outcome(future: Any, item: Any, config: BatchWorkerConfig, accumulator: dict[str, Any]) -> None:
         """Inspect one completed future and update accumulator with the success/failure outcome."""
         outcome, payload = ConnectionPoolExecutor._pool_collect_future_result(  # Resolve future -> (status, payload)
             future, item, config
@@ -124,7 +124,9 @@ class ConnectionPoolExecutor:  # Class-body seam for the connection-pool-managed
         accumulator["failed"].append(payload)  # Empty result or worker exception -- track for retry
 
     @staticmethod
-    def _pool_drain_wait_loop(future_to_item: dict, batch_desc: str, config: BatchWorkerConfig) -> tuple[list, list]:
+    def _pool_drain_wait_loop(
+        future_to_item: dict[Any, Any], batch_desc: str, config: BatchWorkerConfig
+    ) -> tuple[list[Any], list[Any]]:
         """Wait on the futures, collecting successful results and failed items until all have resolved."""
         accumulator: dict[str, Any] = {  # Mutable batch state for successes, failures, and first-log flag
             "successful": [],
@@ -134,7 +136,7 @@ class ConnectionPoolExecutor:  # Class-body seam for the connection-pool-managed
         pending = set(future_to_item.keys())  # Track in-flight futures so the wait loop can detect completion
         with tqdm(  # Show per-batch progress to the operator (issue #431: batch_description from config)
             total=len(pending), desc=batch_desc, unit=config.batch_description.rstrip("s")
-        ) as pbar:  # type: ignore[call-arg, no-untyped-call]
+        ) as pbar:  # progress bar
             while pending:  # Keep collecting futures until all have resolved
                 done, pending = wait(pending, return_when=FIRST_COMPLETED)  # Wake on any future finish
                 for future in done:  # Inspect each completed future before moving on
@@ -242,7 +244,8 @@ class ConnectionPoolExecutor:  # Class-body seam for the connection-pool-managed
             failed_items, connection_semaphore
         )
         successful_results.extend(retry_results)  # Merge recovered items into the success list in place
-        return still_failed  # Return items that still failed after retry so caller can replace its failed list
+        # Cast Any->list[Any] for mypy strict return; retry_function's return type is dynamic
+        return list(still_failed) if still_failed else []
 
     @staticmethod
     def _pool_prepare_execution(  # Resolve pool config + BatchWorkerConfig

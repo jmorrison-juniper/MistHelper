@@ -499,7 +499,9 @@ def _get_latest_pypi_version(package_name: str) -> str:  # Ask PyPI for a packag
         ctx = ssl.create_default_context()  # Default TLS context (validates server certificates)
         request = urllib.request.Request(url)  # Build the HTTP GET request object
         max_bytes = 256 * 1024  # Cap the read at 256 KB to prevent hangs/abuse behind SSL-inspection proxies
-        with urllib.request.urlopen(request, timeout=5, context=ctx) as response:  # nosec B310  # 5s timeout avoids blocking startup on blocked networks
+        with urllib.request.urlopen(
+            request, timeout=5, context=ctx
+        ) as response:  # nosec B310  # 5s timeout avoids blocking startup on blocked networks
             raw = response.read(max_bytes)  # Read at most max_bytes of the JSON response body
             data = json_mod.loads(raw.decode())  # Parse the JSON metadata into a dict
             return data.get("info", {}).get("version", "")  # type: ignore[no-any-return]  # Return latest version string, or '' if absent
@@ -945,7 +947,9 @@ class GlobalImportManager:
         """Probe the UV binary by running 'uv --version' and log the outcome."""
         logging.debug("_probe_uv_binary: probing UV binary via subprocess")  # Log before probe
         try:  # Probing UV may fail if it's not installed
-            result = subprocess.run(["uv", "--version"], capture_output=True, text=True, timeout=10)  # nosec B603 B607  # Run 'uv --version'
+            result = subprocess.run(
+                ["uv", "--version"], capture_output=True, text=True, timeout=10
+            )  # nosec B603 B607  # Run 'uv --version'
             if result.returncode == 0:  # UV ran successfully
                 logging.info("UV package manager found: %s", result.stdout.strip())  # Log detected version
                 return True  # UV is usable
@@ -1134,7 +1138,9 @@ class GlobalImportManager:
         """Check if UV actually needs an update by comparing versions."""
         try:
             # Get current UV version
-            result = subprocess.run(["uv", "--version"], capture_output=True, text=True, timeout=5)  # nosec B603 B607  # Query installed UV version
+            result = subprocess.run(
+                ["uv", "--version"], capture_output=True, text=True, timeout=5
+            )  # nosec B603 B607  # Query installed UV version
             if result.returncode != 0:  # UV is missing or failed to report its version
                 return False  # Can't determine an update is needed
 
@@ -13428,8 +13434,7 @@ class GatewayHaExporter:  # Gateway HA exporter.
         print("\n=== HA Gateway Cluster Summary ===\n")  # Section header for the terminal output
         # Build column header string for the HA cluster summary table
         header = (
-            f"{'Name':<30} {'Node':<8} {'Status':<12}"
-            f" {'Node0 MAC':<20} {'Node1 MAC':<20} {'Cluster MAC':<18}"
+            f"{'Name':<30} {'Node':<8} {'Status':<12}" f" {'Node0 MAC':<20} {'Node1 MAC':<20} {'Cluster MAC':<18}"
         )  # Column headers
         print(header)  # Print headers to terminal
         print("-" * len(header))  # Print separator line
