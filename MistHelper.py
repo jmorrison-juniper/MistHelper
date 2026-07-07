@@ -165,8 +165,8 @@ from src.refactors.data_directory_checker import DataDirectoryChecker  # Early d
 from src.refactors.device_config_template_cloner_manager import (
     DeviceConfigTemplateClonerManager,  # Extracted device config template cloner (SC-020)
 )
-from src.refactors.device_data_fetcher import (
-    DeviceDataFetcher,  # Extracted interactive device data fetcher (SC-017)
+from src.refactors.device_data_fetcher import (  # pylint: disable=unused-import
+    DeviceDataFetcher,  # noqa: F401  # Extracted interactive device data fetcher (SC-017) -- re-export for src.ui.interactive_display_utils lazy access
 )
 from src.refactors.fast_mode_backoff_multiplier import (
     FastModeBackoffMultiplier,  # Extracted fast-mode backoff multiplier constant (SC-028)
@@ -242,6 +242,9 @@ from src.troubleshooting.marvis_troubleshoot_utils import (
 from src.troubleshooting.marvis_troubleshoot_utils import (
     MarvisTroubleshootUtils as ExtractedMarvisTroubleshootUtils,
 )  # Import Marvis troubleshooting utils (renamed to avoid conflicts)
+from src.ui.interactive_display_utils import (  # pylint: disable=unused-import
+    InteractiveDisplayUtils,  # noqa: F401  # Cat B (1013 SC-001 position 10) -- re-export for callers at 17392/17393/17394/17395
+)
 from src.wan_hub_group_manager import WanHubGroupNumberManager  # Import WAN hub group number manager for hub routing
 from src.wan_vpn_builder import WanVpnBuilder  # Import WAN VPN configuration builder
 from src.websocket.commands import MacTableCommand  # Import WebSocket show-MAC-table command handler
@@ -14697,78 +14700,8 @@ class DataCollectionManager:  # Continuous data collector.
 # ============================================================================
 # INTERACTIVE DISPLAY UTILITIES CLASS
 # ============================================================================
-class InteractiveDisplayUtils:  # Interactive display utils.
-    """
-    Centralized interactive display utilities.
-    Groups all interactive_display_* functions for better code organization.
-    All methods are static to avoid unnecessary object instantiation.
-    """
-
-    @staticmethod
-    def site_inventory():  # View site inventory.
-        """
-        Prompts the user to select a site and displays its device inventory.
-        """
-        logging.info("Prompting user to select a site for device inventory view...")  # Log the prompt.
-        print("Select a Site to View Device Inventory:")  # Header.
-        site_id = PromptUtils.select_site_id_from_csv()  # Select a site.
-        if site_id:  # Site selected.
-            logging.info("User selected site_id: %s for inventory display.", site_id)  # Log the selection.
-            SiteDeviceExporter.device_inventory(site_id)  # type: ignore[no-untyped-call]
-        else:
-            logging.warning("No site selected or invalid input provided for site selection.")  # Warn none selected.
-
-    @staticmethod
-    def device_stats(site_id=None, device_id=None):  # View device stats.
-        """
-        Fetches and displays detailed statistics for a specific device.
-
-        Args:
-            site_id: Optional site ID (prompts if not provided)
-            device_id: Optional device ID (prompts if not provided)
-        """
-        logging.info("Prompting user to select a device for detailed statistics view...")  # Log the prompt.
-        DeviceDataFetcher(  # Fetch and display.
-            DeviceFetchConfig(  # Issue #470: bundle fetch params into the config dataclass.
-                fetch_function=mistapi.api.v1.sites.stats.getSiteDeviceStats,
-                filename="DeviceStats.csv",
-                description="Fetching detailed stats",
-                site_id=site_id,
-                device_id=device_id,
-            )
-        ).fetch()
-        logging.info("Completed device_stats execution.")  # Log completion.
-
-    @staticmethod
-    def device_tests():  # View device tests.
-        """
-        Prompts user to select a gateway device and displays its synthetic test stats.
-        """
-        logging.info("Prompting user to select a gateway device for synthetic test stats view...")  # Log the prompt.
-        DeviceDataFetcher(  # Fetch and display.
-            DeviceFetchConfig(  # Issue #470: bundle fetch params into the config dataclass.
-                fetch_function=mistapi.api.v1.sites.devices.getSiteDeviceSyntheticTest,
-                filename="DeviceTestResults.csv",
-                description="Fetching synthetic test stats",
-                device_type="gateway",
-            )
-        ).fetch()
-        logging.info("Completed device_tests execution.")  # Log completion.
-
-    @staticmethod
-    def device_config():  # View device config.
-        """
-        Prompts user to select a device and displays its configuration details.
-        """
-        logging.info("Prompting user to select a device for configuration details view...")  # Log the prompt.
-        DeviceDataFetcher(  # Fetch and display.
-            DeviceFetchConfig(  # Issue #470: bundle fetch params into the config dataclass.
-                fetch_function=mistapi.api.v1.sites.devices.getSiteDevice,
-                filename="DeviceConfig.csv",
-                description="Fetching device configuration",
-            )
-        ).fetch()
-        logging.info("Completed device_config execution.")  # Log completion.
+# NOTE: InteractiveDisplayUtils has been extracted to
+# src/ui/interactive_display_utils.py (issue #1013 SC-001 position 10)
 
 
 # ============================================================================
