@@ -7,6 +7,8 @@ import time  # Measure elapsed duration for fast-mode summary and rate-limit del
 from types import SimpleNamespace  # Bundle runtime dependencies without a formal dataclass
 from typing import Any  # MistHelper surface is dynamic; typed as Any at the boundary
 
+from src.refactors.connection_pool_executor import ConnectionPoolExecutor  # Pool executor extracted per 1012 SC-003
+
 
 def _resolve_runtime_dependencies() -> SimpleNamespace:
     """Resolve MistHelper runtime dependencies without static cross-module imports."""
@@ -23,8 +25,8 @@ def _resolve_runtime_dependencies() -> SimpleNamespace:
         DataProcessingUtils=misthelper_module.DataProcessingUtils,  # Flatten and sanitise helpers
         DataExporter=misthelper_module.DataExporter,  # Persist output to configured backend
         RateLimitingUtils=misthelper_module.RateLimitingUtils,  # Adaptive rate-limit delay calculator
-        # Pool manager — distributes work items across a bounded connection semaphore
-        execute_with_connection_pool_management=misthelper_module.execute_with_connection_pool_management,
+        # Pool manager -- distributes work items across a bounded connection semaphore (1012 SC-003 rename)
+        execute_fn=ConnectionPoolExecutor.execute,
         mistapi=misthelper_module.mistapi,  # Mist SDK root
         apisession=misthelper_module.apisession,  # Active API session
         _api_usage_cache=getattr(misthelper_module, "_api_usage_cache", {}),  # API usage telemetry cache
@@ -102,7 +104,7 @@ class GatewayTestResultsService:
         """Collect results concurrently via connection pool (fast-path)."""
         logging.info("Starting fast-mode concurrent fetch for %d sites", len(site_ids))  # Log before pool
         start_time = time.time()  # Track elapsed time for fast-mode summary logging
-        successful_results, failed_sites = deps.execute_with_connection_pool_management(
+        successful_results, failed_sites = deps.execute_fn(  # Pool run via ConnectionPoolExecutor (1012 SC-003)
             work_items=site_ids,
             worker_function=lambda site_id, sem: cls._fetch_site_tests(deps, site_id, sem),
             batch_description="sites",
@@ -136,9 +138,9 @@ class GatewayTestResultsService:
                 smoothed, deps.apisession, deps._api_usage_cache
             )  # Compute adaptive delay from API usage telemetry
             time.sleep(delay)  # Honour rate-limit delay before the next site
-        logging.info(
-            "Sequential fetch complete: %d total results across %d sites", len(all_results), len(site_ids)
-        )  # noqa: E501
+        total_results = len(all_results)  # Precompute total count for log line brevity
+        total_sites = len(site_ids)  # Precompute site count for log line brevity
+        logging.info("Sequential fetch complete: %d results across %d sites", total_results, total_sites)
         return all_results  # Return accumulated results from all sites
 
     @staticmethod

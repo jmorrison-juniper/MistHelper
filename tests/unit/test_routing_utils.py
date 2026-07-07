@@ -54,7 +54,7 @@ def mock_deps() -> dict[str, MagicMock]:
         "select_device_fn": MagicMock(return_value="dev-1"),
         "safe_input_fn": MagicMock(return_value=""),
         "websocket_manager_factory": MagicMock(),
-        "is_debug_mode_fn": MagicMock(return_value=False),
+        "check_fn": MagicMock(return_value=False),  # WHY: renamed from is_debug_mode_fn per 1012 DI-cluster rename
     }
 
 
@@ -87,8 +87,9 @@ class TestInit:
     def test_stores_websocket_factory(self, ru: RoutingUtils, mock_deps: dict[str, MagicMock]) -> None:
         assert ru.websocket_manager_factory is mock_deps["websocket_manager_factory"]
 
-    def test_stores_is_debug_mode_fn(self, ru: RoutingUtils, mock_deps: dict[str, MagicMock]) -> None:
-        assert ru.is_debug_mode_fn is mock_deps["is_debug_mode_fn"]
+    def test_stores_check_fn(self, ru: RoutingUtils, mock_deps: dict[str, MagicMock]) -> None:
+        # WHY: renamed from test_stores_is_debug_mode_fn per 1012 DI-cluster rename
+        assert ru.check_fn is mock_deps["check_fn"]
 
 
 # ===================================================================

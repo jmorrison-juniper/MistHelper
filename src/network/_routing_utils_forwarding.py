@@ -60,7 +60,9 @@ class _RoutingUtilsForwarding:  # WHY: cluster wrapper matching the parsing/disp
 
     def execute_show_forwarding_table(self) -> None:
         """Execute show forwarding table on a gateway/SSR via WebSocket."""
-        debug_mode = self._ru.is_debug_mode_fn()  # WHY: capture debug flag once for entire flow
+        debug_mode = (
+            self._ru.check_fn()
+        )  # WHY: capture debug flag once for entire flow (renamed from is_debug_mode_fn per 1012)
         self._ru._setup_debug_mode(debug_mode)  # WHY: hoist logger to DEBUG when needed
         logging.info("Starting WebSocket show forwarding table operation...")  # WHY: production log
         logging.debug("ENTER: execute_show_forwarding_table")  # WHY: trace marker for debug logs
@@ -132,7 +134,7 @@ class _RoutingUtilsForwarding:  # WHY: cluster wrapper matching the parsing/disp
         device_id = self._ru.select_device_fn(site_id, "gateway")  # WHY: gateway-scoped chooser
         if not device_id:  # WHY: guard: user cancelled device selection
             print(
-                "! No gateway device selected. Forwarding table command is optimized" " for Layer 3 routing devices."
+                "! No gateway device selected. Forwarding table command is optimized for Layer 3 routing devices."
             )  # WHY: UX preserved
             return None, None, None  # WHY: signal cancellation
         if debug_mode:  # WHY: emit selected device id only when debug is on
@@ -152,9 +154,9 @@ class _RoutingUtilsForwarding:  # WHY: cluster wrapper matching the parsing/disp
         """Print the 3-line device-selection guidance banner."""
         print("-> Forwarding table is available on routers and gateways (Layer 3 devices)")
         print(
-            "-> This shows the Forwarding Information Base (FIB)" " used for packet routing decisions"
+            "-> This shows the Forwarding Information Base (FIB) used for packet routing decisions"
         )  # WHY: UX preserved
-        print("-> SSR gateways provide the most comprehensive" " forwarding table information")  # WHY: UX preserved
+        print("-> SSR gateways provide the most comprehensive forwarding table information")  # WHY: UX preserved
 
     def _display_forwarding_device_guidance(
         self,

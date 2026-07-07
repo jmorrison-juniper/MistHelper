@@ -55,7 +55,7 @@ def _make_migrator(**overrides: object) -> GatewayWan2VariableMigrator:
         "get_csv_path_fn": MagicMock(return_value="/tmp/test.csv"),
         "save_data_fn": MagicMock(),
         "input_fn": MagicMock(return_value="cancel"),
-        "connection_pool_fn": MagicMock(return_value=([], [])),
+        "execute_fn": MagicMock(return_value=([], [])),
     }
     defaults.update(overrides)
     deps = Wan2VariableDeps(**defaults)  # type: ignore[arg-type]
@@ -87,7 +87,7 @@ class TestConstructor:
             get_csv_path_fn=MagicMock(),
             save_data_fn=MagicMock(),
             input_fn=None,
-            connection_pool_fn=None,
+            execute_fn=None,
         )
         migrator = GatewayWan2VariableMigrator(deps)
         assert migrator._input_fn is input
@@ -1061,7 +1061,7 @@ class TestMigrateDevicesFast:
 
     def test_calls_connection_pool(self) -> None:
         pool_fn = MagicMock(return_value=([{"status": "SUCCESS"}], []))
-        migrator = _make_migrator(connection_pool_fn=pool_fn)
+        migrator = _make_migrator(execute_fn=pool_fn)
         devices = [
             {"site_id": "s1", "device_id": "d1", "device_name": "GW-1", "template_id": "t1"},
         ]
@@ -1071,7 +1071,7 @@ class TestMigrateDevicesFast:
 
     def test_logs_failed_items(self) -> None:
         pool_fn = MagicMock(return_value=([], [{"error": "fail"}]))
-        migrator = _make_migrator(connection_pool_fn=pool_fn)
+        migrator = _make_migrator(execute_fn=pool_fn)
         devices = [
             {"site_id": "s1", "device_id": "d1", "device_name": "GW-1", "template_id": "t1"},
         ]
@@ -1127,7 +1127,7 @@ class TestRunDeviceMigrationsExtended:
 
     def test_fast_mode_with_enough_devices(self) -> None:
         pool_fn = MagicMock(return_value=([{"status": "SUCCESS"}] * 6, []))
-        migrator = _make_migrator(connection_pool_fn=pool_fn)
+        migrator = _make_migrator(execute_fn=pool_fn)
         migrator._search_pattern = "ge-0/0/1"
         migrator._replacement_value = "{{wan2_interface}}"
         devices = [

@@ -49,11 +49,9 @@ import time  # Import time for rate limiting, delays, and performance monitoring
 import traceback  # Import traceback for detailed exception context in error logs
 from collections.abc import Callable  # Import Callable type hint for callback functions passed to API methods
 from concurrent.futures import (
-    FIRST_COMPLETED,
     ThreadPoolExecutor,
     as_completed,
-    wait,
-)  # Import thread pool executors for parallel API calls with rate limiting
+)  # Thread-pool primitives (FIRST_COMPLETED/wait migrated to ConnectionPoolExecutor per 1012 SC-003)
 from dataclasses import dataclass, field  # Import dataclass decorators for configuration objects and entity classes
 from datetime import datetime  # Import datetime for timestamping logs and events
 from typing import TYPE_CHECKING, Any, Literal, cast  # Import type hints for static analysis without runtime overhead
@@ -112,9 +110,8 @@ from src.bootstrap.package_installer import (
 from src.capture.packet_capture import (
     PacketCaptureManager,
 )  # Import packet capture manager directly under its canonical name (issue #431: alias removed)
-from src.dataclasses.batch_worker import (
-    BatchWorkerConfig,
-)  # Issue #431: groups thread-pool batch config to keep _pool_process_batch_wait_loop within the 5-Item Rule.
+
+# BatchWorkerConfig import removed: pool machinery moved to ConnectionPoolExecutor (1012 SC-003)
 from src.dataclasses.export_backend_options import (
     ExportBackendOptions,
 )  # Issue #470: groups output-backend overrides to keep write_with_format_selection within the 5-Item Rule.
@@ -149,6 +146,7 @@ from src.org_data_collector import OrgDataCollector  # Import org-level data col
 from src.refactors.anomaly_metrics_discovery import (
     AnomalyMetricsDiscovery,  # Extracted anomaly metrics discovery (SC-016)
 )
+from src.refactors.connection_pool_executor import ConnectionPoolExecutor  # Extracted pool executor (1012 SC-003)
 from src.refactors.data_directory_checker import DataDirectoryChecker  # Early data-dir writable check (SC-005)
 from src.refactors.device_config_template_cloner_manager import (
     DeviceConfigTemplateClonerManager,  # Extracted device config template cloner (SC-020)
@@ -159,9 +157,8 @@ from src.refactors.device_data_fetcher import (
 from src.refactors.fast_mode_backoff_multiplier import (
     FastModeBackoffMultiplier,  # Extracted fast-mode backoff multiplier constant (SC-028)
 )
-from src.refactors.fast_mode_devices_per_thread import (
-    FastModeDevicesPerThread,  # Extracted fast-mode devices-per-thread constant (SC-029)
-)
+
+# FastModeDevicesPerThread import removed: only referenced from within ConnectionPoolExecutor (1012 SC-003)
 from src.refactors.fast_mode_sequential_max_retries import (
     FastModeSequentialMaxRetries,  # Extracted fast-mode sequential-fallback retry ceiling (SC-030)
 )
@@ -174,6 +171,7 @@ from src.refactors.initialize_mist_session_interactive import (
 from src.refactors.inventory_csvcomparator import (
     InventoryCSVComparator,  # Extracted inventory CSV comparator adapter (SC-018)
 )
+from src.refactors.is_debug_mode import IsDebugMode  # Extracted debug-mode predicate (SC-002)
 from src.refactors.keyboard_listener import KeyboardListener  # PR-13 extracted no-op keyboard listener stub (SC-012)
 from src.refactors.main_entrypoint import MainEntrypoint  # Extracted CLI main entrypoint (SC-026)
 from src.refactors.maps_manager_launcher import MapsManagerLauncher  # Extracted Maps Manager launcher (SC-006)
@@ -315,9 +313,7 @@ if sys.version_info < MINIMUM_PYTHON_VERSION:  # Check if Python is below minimu
 
 
 # Debug mode detection helper
-def is_debug_mode():  # Check if debug mode is enabled via CLI flags
-    """Check if debug mode is enabled via command line arguments."""
-    return "--debug" in sys.argv or "-d" in sys.argv  # Return True if debug flag present in command line
+# NOTE: is_debug_mode extracted to IsDebugMode.check. See specs/1012-misthelper-refactor-hot-functions/spec.md.
 
 
 # ============================================================================
@@ -447,7 +443,8 @@ def _extract_version_constraint(spec: str) -> tuple[str, str]:  # Split a spec i
 
 
 def _pad_version_tuples(
-    installed_tuple: tuple, required_tuple: tuple  # type: ignore[type-arg]
+    installed_tuple: tuple,
+    required_tuple: tuple,  # type: ignore[type-arg]
 ) -> tuple[tuple, tuple]:  # type: ignore[type-arg]  # Zero-pad two version tuples to equal length
     """Right-pad both version tuples with zeros so they compare element-by-element."""
     max_len = max(len(installed_tuple), len(required_tuple))  # Longest of the two drives the padding width
@@ -477,7 +474,8 @@ def _version_satisfies(installed: str, spec: str) -> bool:  # Decide whether ins
         return True  # No version requirement, any version satisfies
 
     installed_tuple, required_tuple = _pad_version_tuples(  # Align both versions to equal length for comparison
-        _parse_version(installed), _parse_version(required_version)  # Convert each to a comparable integer tuple
+        _parse_version(installed),
+        _parse_version(required_version),  # Convert each to a comparable integer tuple
     )
 
     comparator = _VERSION_COMPARATORS.get(operator_symbol)  # Look up the predicate for this operator
@@ -632,6 +630,7 @@ mistapi: Any = None  # Placeholder; the real mistapi module is loaded later by G
 
 # tqdm will be properly imported by GlobalImportManager
 # This fallback will be overridden by the real tqdm import
+# NOTE: tqdm extracted to SKIP_ALWAYS (bootstrap-critical). See specs/1012-misthelper-refactor-hot-functions/spec.md.
 def tqdm(iterable, *args, **kwargs):  # No-op progress-bar stand-in until the real tqdm loads
     """Fallback tqdm function - will be replaced by real tqdm after import initialization."""
     return iterable  # Return the iterable unchanged (no progress bar yet)
@@ -5888,17 +5887,6 @@ class EnvironmentUtils:  # Centralized runtime/container environment detection.
         logging.debug("Container detection: no container indicators found - running in direct mode")  # direct mode
         return False  # Default: not containerized
 
-    @staticmethod
-    def is_debug_mode() -> bool:  # Report whether debug logging is on.
-        """
-        Check if debug mode is enabled via command line arguments.
-        Delegates to module-level is_debug_mode() for consistency.
-
-        Returns:
-            bool: True if --debug or -d flag is present in sys.argv
-        """
-        return is_debug_mode()  # type: ignore[no-any-return, no-untyped-call]
-
 
 # ============================================================================
 # VALIDATION UTILITIES CLASS
@@ -6306,7 +6294,7 @@ class APIFetchUtils:  # Higher-level org/site fetchers.
     @staticmethod
     def _gw_collect_fast(apisession, work_items):
         """Fetch gateway configs concurrently through the connection pool with retry; return the successes."""
-        successful_results, _ = execute_with_connection_pool_management(  # Pooled concurrent fetch; discard failures.
+        successful_results, _ = ConnectionPoolExecutor.execute(  # Pooled concurrent fetch; discard failures.
             work_items=work_items,
             worker_function=functools.partial(APIFetchUtils._gw_fetch_one_config, apisession),  # Bind apisession.
             batch_description="gateway device configs",
@@ -7382,198 +7370,8 @@ class APIDataFetcher:  # Fetch, export, display a result.
         return table  # Return the table.
 
 
-def _pool_configure(work_items: list[Any], batch_description: str) -> tuple[int, threading.Semaphore, int, str]:
-    """Determine threading strategy, semaphore, and batch size for a pool run."""
-    if FAST_MODE_USE_CONNECTION_AWARE_THREADING:  # Connection-aware mode limits threads to API connection pool size.
-        max_threads = FAST_MODE_MAX_CONCURRENT_CONNECTIONS  # Cap threads at configured pool capacity.
-        threading_mode = "connection-aware"  # Strategy label for log identification.
-        logging.info("! Connection-aware threading: Using %s threads (respects connection pool limit)", max_threads)
-    else:  # CPU-aware mode maximizes parallelism up to available CPU cores.
-        max_threads = os.cpu_count() or FAST_MODE_FALLBACK_THREADS  # Use cpu_count or fallback.
-        threading_mode = "CPU-aware"  # Strategy label for log identification.
-        logging.info("! CPU-aware threading: Using %s threads (maximum CPU utilization)", max_threads)
-    connection_semaphore = threading.Semaphore(FAST_MODE_MAX_CONCURRENT_CONNECTIONS)  # Bound simultaneous API calls.
-    logging.info("* Connection pool protection: Maximum %s concurrent API calls", FAST_MODE_MAX_CONCURRENT_CONNECTIONS)
-    batch_size = (
-        max_threads * FastModeDevicesPerThread.VALUE
-    )  # Scale batch size to thread count and per-thread setting.
-    logging.info("* Processing %s %s with connection pool management...", len(work_items), batch_description)
-    return (max_threads, connection_semaphore, batch_size, threading_mode)  # Bundle pool configuration values.
-
-
-def _pool_collect_future_result(future: Any, item: Any, config: "BatchWorkerConfig") -> tuple[str, Any]:
-    """Resolve one completed future: return ('success', result) on a truthy result, else ('failed', item)."""
-    try:  # Future.result() can raise if the worker threw an exception.
-        result = future.result()  # Retrieve the worker's return value or propagate its exception.
-        if result:  # Truthy result means the worker succeeded and returned data.
-            return "success", result  # Hand the successful result back to the caller.
-        return "failed", item  # Falsy result (empty/None) -- treat the item as failed for retry.
-    except Exception as exc:  # Worker threw an exception; log and track as failed.
-        logging.error("! Future exception for %s %s: %s", config.batch_description.rstrip("s"), item, exc)  # Log it
-        return "failed", item  # Mark item as failed so retry logic can handle it.
-
-
-def _pool_advance_progress_bar(pbar: Any) -> None:
-    """Advance a tqdm progress bar by one, isolating any tqdm.update error so it cannot mask real results."""
-    try:  # tqdm.update can fail in some environments; isolate that error.
-        pbar.update(1)  # Advance progress bar by one item for each completed future.
-    except Exception as upd_err:  # Progress bar update failure should not mask the real work result.
-        logging.error("! Progress bar update failed: %s", upd_err)  # Log progress bar failure for debugging.
-
-
-def _record_future_outcome(future: Any, item: Any, config: "BatchWorkerConfig", accumulator: dict) -> None:
-    """Inspect one completed future and update accumulator with the success/failure outcome."""
-    outcome, payload = _pool_collect_future_result(future, item, config)  # Resolve future to (status, payload)
-    if outcome == "success":  # Worker returned usable data
-        accumulator["successful"].append(payload)  # Collect successful result
-        if not accumulator["first_logged"]:  # First-result one-shot debug log
-            logging.debug("! First future result type: %s", type(payload))  # One-shot shape debug log
-            accumulator["first_logged"] = True  # Prevent repeated debug log
-        return
-    accumulator["failed"].append(payload)  # Empty result or worker exception — track for retry
-
-
-def _pool_drain_wait_loop(future_to_item: dict, batch_desc: str, config: "BatchWorkerConfig") -> tuple[list, list]:
-    """Wait on the futures, collecting successful results and failed items until all have resolved."""
-    accumulator: dict[str, Any] = {"successful": [], "failed": [], "first_logged": False}  # Mutable batch state
-    pending = set(future_to_item.keys())  # Track in-flight futures so the wait loop can detect completion
-    with tqdm(  # Show per-batch progress to the operator (issue #431: batch_description from config)
-        total=len(pending), desc=batch_desc, unit=config.batch_description.rstrip("s")
-    ) as pbar:  # type: ignore[call-arg, no-untyped-call]
-        while pending:  # Keep collecting futures until all have resolved
-            done, pending = wait(pending, return_when=FIRST_COMPLETED)  # Wake on any future finish
-            for future in done:  # Inspect each completed future before moving on
-                _record_future_outcome(future, future_to_item[future], config, accumulator)  # Resolve + record
-                _pool_advance_progress_bar(pbar)  # Advance progress regardless of success or failure
-    return accumulator["successful"], accumulator["failed"]  # Return batch-level results for caller
-
-
-def _pool_process_batch_wait_loop(  # Submit one batch to a thread pool.
-    batch: list[Any],
-    batch_number: int,
-    total_batches: int,
-    config: "BatchWorkerConfig",
-) -> tuple[list[Any], list[Any]]:
-    """Submit one batch to a thread pool and collect results via a wait loop (Issue #431 config dataclass)."""
-    logging.info(
-        "! Processing batch %s/%s (%s %s, ~%.0f per thread)",
-        batch_number,
-        total_batches,
-        len(batch),
-        config.batch_description,  # Issue #431: from config dataclass.
-        len(batch) / config.max_threads,  # Issue #431: from config dataclass.
-    )  # Log batch progress before dispatching to the thread pool.
-    with ThreadPoolExecutor(max_workers=config.max_threads) as executor:  # Bound thread count to pool size.
-        future_to_item = {
-            executor.submit(config.worker_function, item, config.connection_semaphore): item  # Worker per item
-            for item in batch
-        }  # Map each future back to its source item for error reporting.
-        batch_desc = f"Batch {batch_number}/{total_batches}"  # tqdm progress label.
-        return _pool_drain_wait_loop(future_to_item, batch_desc, config)  # Collect results as futures resolve.
-
-
-def _pool_log_batch_exception(  # Log a batch-level exception with context.
-    batch_exc: Exception, batch_index: int, batch_size: int, max_threads: int, threading_mode: str
-) -> None:
-    """Log a batch-level exception with full context then re-raise it."""
-    logging.error("! Batch-level exception in execute_with_connection_pool_management: %s", batch_exc)
-    logging.error(
-        "! Batch context: batch_index=%s, batch_size=%s, max_threads=%s, threading_mode=%s",
-        batch_index,
-        batch_size,
-        max_threads,
-        threading_mode,
-    )  # Log batch configuration context for post-mortem analysis.
-    _pool_emit_traceback_lines(batch_exc)  # Best-effort traceback capture.
-    raise batch_exc  # Re-raise so outer handlers see the original failure.
-
-
-def _pool_emit_traceback_lines(batch_exc: Exception) -> None:  # Emit traceback lines to log.
-    """Format batch exception traceback and emit each line as an error record (best-effort)."""
-    try:  # Best-effort capture; serialization failure must not suppress the re-raise.
-        import traceback as _tb2  # Local import to avoid affecting module namespace.
-
-        formatted = "".join(_tb2.format_exception(type(batch_exc), batch_exc, batch_exc.__traceback__))
-        for line in formatted.rstrip().splitlines():  # One record per traceback line for log-aggregation tools.
-            logging.error(line)  # Emit one traceback line per log record.
-    except Exception as trace_log_err:  # Traceback serialization failure must not suppress the re-raise.
-        logging.error("! Failed to log batch exception traceback: %s", trace_log_err)
-
-
-def _pool_run_all_batches(
-    work_items: list[Any], batch_size: int, batch_config: "BatchWorkerConfig", total_batches: int, threading_mode: str
-) -> tuple[list[Any], list[Any]]:
-    """Split work items into batches, run each through the thread pool, and accumulate successes and failures."""
-    successful_results: list[Any] = []  # Accumulate all successful worker results across all batches.
-    failed_items: list[Any] = []  # Accumulate all failed items across all batches for optional retry.
-    for batch_index in range(0, len(work_items), batch_size):  # Split work into equal-sized, bounded-memory batches.
-        try:  # Isolate each batch so a single failure doesn't silently skip remaining batches.
-            batch = work_items[batch_index : batch_index + batch_size]  # Slice the current batch from the full list.
-            batch_number = (batch_index // batch_size) + 1  # Compute 1-based batch number for readable progress logs.
-            batch_successful, batch_failed = _pool_process_batch_wait_loop(  # Execute this batch through the pool.
-                batch, batch_number, total_batches, batch_config
-            )  # Collect per-future results for this batch.
-            successful_results.extend(batch_successful)  # Merge batch successes into the overall result list.
-            failed_items.extend(batch_failed)  # Merge batch failures into the overall failed list for retry handling.
-        except Exception as batch_exc:  # Batch-level exceptions need context logging before re-raise.
-            _pool_log_batch_exception(  # Log full batch context then re-raise (issue #431: max_threads from config).
-                batch_exc, batch_index, batch_size, batch_config.max_threads, threading_mode
-            )  # Logs and re-raises with full context.
-    return successful_results, failed_items  # Return accumulated results so the orchestrator can apply retries.
-
-
-def _pool_apply_retry(
-    failed_items: list[Any],
-    retry_function: Any,
-    connection_semaphore: Any,
-    successful_results: list[Any],
-    batch_description: str,
-) -> list[Any]:
-    """Run the caller-provided retry function on failed items, merging recoveries into successful_results in place."""
-    logging.info("! Retrying %s failed %s...", len(failed_items), batch_description)  # Announce the retry phase.
-    retry_results, still_failed = retry_function(
-        failed_items, connection_semaphore
-    )  # Run caller-provided retry logic with the same semaphore constraint.
-    successful_results.extend(retry_results)  # Merge recovered items into the success list in place.
-    return still_failed  # Return items that still failed after retry so the caller can replace its failed list.
-
-
-def _pool_prepare_execution(  # Resolve pool config + BatchWorkerConfig.
-    work_items: list[Any], batch_description: str, worker_function: Any
-) -> tuple["BatchWorkerConfig", int, int, str]:
-    """Resolve threading config, batch sizing, and BatchWorkerConfig for a pool execution run."""
-    max_threads, connection_semaphore, batch_size, threading_mode = _pool_configure(work_items, batch_description)
-    total_batches = (len(work_items) + batch_size - 1) // batch_size  # Pre-compute total batch count.
-    batch_config = BatchWorkerConfig(  # Issue #431: bundle the 4 constant worker params per 5-Item Rule.
-        worker_function=worker_function,
-        connection_semaphore=connection_semaphore,
-        max_threads=max_threads,
-        batch_description=batch_description,
-    )
-    return batch_config, batch_size, total_batches, threading_mode
-
-
-def execute_with_connection_pool_management(
-    work_items: list[Any], worker_function: Any, batch_description: str = "items", retry_function: Any | None = None
-) -> tuple[list[Any], list[Any]]:
-    """Execute work_items via connection-pool-managed threading with semaphore limits, batching, retry, and progress."""
-    if not work_items:  # Empty work list is a valid fast-exit condition.
-        logging.info("* No %s to process.", batch_description)  # Tell caller why nothing ran.
-        return [], []  # Return empty results without configuring a thread pool.
-    batch_config, batch_size, total_batches, threading_mode = _pool_prepare_execution(
-        work_items, batch_description, worker_function
-    )  # Resolve threading + batching config in one helper.
-    successful_results, failed_items = _pool_run_all_batches(  # Run every batch through the bounded thread pool.
-        work_items, batch_size, batch_config, total_batches, threading_mode
-    )  # Accumulate successes and failures across all batches.
-    if failed_items and retry_function:  # Only invoke retry when failures exist and a retry function was provided.
-        failed_items = _pool_apply_retry(  # Retry failed items and merge recoveries into successful_results.
-            failed_items, retry_function, batch_config.connection_semaphore, successful_results, batch_description
-        )  # Replace failed list with items that still failed after retry.
-    logging.info(
-        "! Processed %s %s successfully, %s failed", len(successful_results), batch_description, len(failed_items)
-    )  # Log final success/failure tally for the whole pool run.
-    return successful_results, failed_items  # Both result lists so callers can report or act on failures.
+# NOTE: execute_with_connection_pool_management extracted to ConnectionPoolExecutor.execute.
+# See specs/1012-misthelper-refactor-hot-functions/spec.md.
 
 
 # ============================================================================
@@ -8426,7 +8224,10 @@ class OrgTicketManager:  # Support ticket operations.
             logging.info("Add comment cancelled: no comment or file provided")  # Log cancellation
             return  # Early exit
         OrgTicketManager._submit_comment(  # Submit comment to API
-            org_id, ticket_id, comment_text, file_path  # Pass all user-provided values
+            org_id,
+            ticket_id,
+            comment_text,
+            file_path,  # Pass all user-provided values
         )
 
     @staticmethod
@@ -8545,7 +8346,10 @@ class OrgTicketManager:  # Support ticket operations.
         logging.info("Updating ticket %s with fields: %s", ticket_id, list(body.keys()))  # Log before API call
         try:
             response = mistapi.api.v1.orgs.tickets.updateOrgTicket(  # Call Mist API to update ticket
-                apisession, org_id, ticket_id, body  # Pass session, org, ticket ID, body
+                apisession,
+                org_id,
+                ticket_id,
+                body,  # Pass session, org, ticket ID, body
             )
             logging.debug("Ticket updated: %s", getattr(response, "data", {}))  # Log full response
             print(f"\n  Ticket {ticket_id} updated successfully!")  # Confirm to user
@@ -8605,7 +8409,10 @@ class OrgTicketManager:  # Support ticket operations.
         logging.info("Adding text comment to ticket %s", ticket_id)  # Log before API call
         body = {"comment": comment_text}  # Build comment request body
         mistapi.api.v1.orgs.tickets.addOrgTicketComment(  # Call Mist API to add comment
-            apisession, org_id, ticket_id, body  # Session, org, ticket ID, and comment body
+            apisession,
+            org_id,
+            ticket_id,
+            body,  # Session, org, ticket ID, and comment body
         )
         logging.debug("Text comment submitted to ticket %s", ticket_id)  # Log after API call
         print(f"\n  Comment added to ticket {ticket_id}")  # Confirm to user
@@ -8706,7 +8513,7 @@ class OrgTicketManager:  # Support ticket operations.
         """Print a numbered table of ticket #/status/type/subject for selection."""
         print("\n  Organization Support Tickets:")  # Section header
         print(f"  {'#':<4} {'Status':<10} {'Type':<18} {'Subject'}")  # Column headers
-        print(f"  {'-'*4} {'-'*10} {'-'*18} {'-'*40}")  # Separator line
+        print(f"  {'-' * 4} {'-' * 10} {'-' * 18} {'-' * 40}")  # Separator line
         for index, ticket in enumerate(tickets, 1):  # Display numbered rows
             status = ticket.get("status", "unknown")  # Ticket status field
             ttype = ticket.get("type", "unknown")  # Ticket type field
@@ -8736,7 +8543,10 @@ class OrgTicketManager:  # Support ticket operations.
         logging.info("Fetching detail for ticket %s", ticket_id)  # Log before API call
         try:
             response = mistapi.api.v1.orgs.tickets.getOrgTicket(  # Call SDK for full ticket detail
-                apisession, org_id, ticket_id, duration="365d"  # Look back 1 year for comment history
+                apisession,
+                org_id,
+                ticket_id,
+                duration="365d",  # Look back 1 year for comment history
             )
             ticket_data = getattr(response, "data", {}) or {}  # Extract response data dict
             logging.debug("Received ticket detail: %d fields", len(ticket_data))  # Log field count
@@ -10073,7 +9883,7 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
         start_time = time.time()  # Capture start time for performance summary.
         OrgDeviceStatsExporter._validate_fast_port_stats_start_time(start_time)  # Defensive numeric-type guard.
         successful_results, failed_sites = (
-            execute_with_connection_pool_management(  # Bounded-concurrency site collection with retry.
+            ConnectionPoolExecutor.execute(  # Bounded-concurrency site collection with retry.
                 work_items=sites,
                 worker_function=OrgDeviceStatsExporter._fetch_site_port_stats,
                 batch_description="sites",
@@ -10902,8 +10712,9 @@ class FilterOperatorEngine:  # Filter operator evaluation engine.
     _NULL_BLANK_OPERATORS = {
         "is null": lambda field_value: field_value is None,  # True when the field is absent
         "is not null": lambda field_value: field_value is not None,  # True when the field is present
-        "is blank": lambda field_value: field_value is not None
-        and str(field_value).strip() == "",  # Present but empty/whitespace
+        "is blank": lambda field_value: (
+            field_value is not None and str(field_value).strip() == ""
+        ),  # Present but empty/whitespace
     }
 
     @staticmethod
@@ -13369,7 +13180,7 @@ class SiteExportUtils:  # Site export delegators.
             insight_metrics_utils=InsightMetricsUtils,
             packet_capture_manager=PacketCaptureManager,
             api_core_fetch_utils=APICoreFetchUtils,
-            is_debug_mode_fn=is_debug_mode,
+            check_fn=IsDebugMode.check,
             pretty_table_class=PrettyTable,
             tqdm_module=tqdm,
             mistapi_dependency=mistapi,
@@ -13658,7 +13469,7 @@ def _get_routing_utils_instance():  # Build a RoutingUtils.
             select_device_fn=_pick_device,
             safe_input_fn=InputUtils.safe_input,
             websocket_manager_factory=WebSocketManager,
-            is_debug_mode_fn=is_debug_mode,
+            check_fn=IsDebugMode.check,
         )
     )
 
@@ -15396,7 +15207,7 @@ class GatewayTestExporter:  # Gateway synthetic test exporter.
                 device_info, connection_semaphore=connection_semaphore
             )
 
-        successful_results, failed_devices = execute_with_connection_pool_management(  # Pool run.
+        successful_results, failed_devices = ConnectionPoolExecutor.execute(  # Pool run.
             work_items=gateway_devices,
             worker_function=fetch_device_stats,
             batch_description="devices",
@@ -15561,7 +15372,7 @@ class GatewayExportUtils:  # Gateway export delegators.
             org_inventory_exporter=OrgInventoryExporter,  # For inventory lookups.
             org_site_exporter=OrgSiteExporter,  # For site lookups.
             input_utils=InputUtils,  # safe_input + prompts.
-            connection_pool_fn=execute_with_connection_pool_management,  # Pool wrapper.
+            execute_fn=ConnectionPoolExecutor.execute,  # Pool executor (1012 SC-003; renamed from connection_pool_fn).
             validation_utils=ValidationUtils,  # Input validation.
             rate_limiting_utils=RateLimitingUtils,  # Adaptive delay.
             mist_wan_target_ports=MistWanTargetPorts.VALUE,  # Port list from extracted class attribute.
@@ -17414,9 +17225,7 @@ class DeviceRebootManager:  # Device reboot manager.
         return devices_by_template
 
     @staticmethod
-    def _print_reboot_target_summary(
-        targets: list[dict], devices_by_template: dict[str, list[dict[str, Any]]]
-    ) -> None:  # type: ignore[type-arg]
+    def _print_reboot_target_summary(targets: list[dict], devices_by_template: dict[str, list[dict[str, Any]]]) -> None:  # type: ignore[type-arg]
         """Print the per-template device list followed by the totals summary."""
         for template_name, devices in devices_by_template.items():  # Per template.
             print(f"\n  Template: {template_name}")
@@ -17856,9 +17665,7 @@ class MSPInventoryExporter:
             type_counts[device_type] = type_counts.get(device_type, 0) + 1
         return type_counts
 
-    def _ingest_org_devices(
-        self, devices_data: list, context: MspOrgContext, site_lookup: dict
-    ) -> None:  # type: ignore[type-arg]
+    def _ingest_org_devices(self, devices_data: list, context: MspOrgContext, site_lookup: dict) -> None:  # type: ignore[type-arg]
         """Enrich each device with MSP/Org/Site context and append it to the running all_devices roll-up."""
         for device in devices_data:  # Per-device enrichment.
             self._enrich_device_context(device, context, site_lookup)  # Stamp identity.
@@ -18050,7 +17857,7 @@ class OrgLevelAPFirmwareUpgrader:
             get_org_id_fn=ConfigUtils.get_cached_or_prompted_org_id,
             fetch_sites_fn=APICoreFetchUtils.all_sites_with_limit,
             write_results_fn=DataExporter.write_with_format_selection,
-            is_debug_fn=is_debug_mode,
+            is_debug_fn=IsDebugMode.check,
             msp_privileges=msp_privileges if msp_privileges else [],
             selected_msp=selected_msp if selected_msp else None,
         )
@@ -18071,7 +17878,7 @@ class OrgLevelAPFirmwareUpgrader:
             get_org_id_fn=ConfigUtils.get_cached_or_prompted_org_id,
             fetch_sites_fn=APICoreFetchUtils.all_sites_with_limit,
             write_results_fn=DataExporter.write_with_format_selection,
-            is_debug_fn=is_debug_mode,
+            is_debug_fn=IsDebugMode.check,
         )
         upgrader.execute()
 
@@ -18200,7 +18007,7 @@ class BulkRadiusWLANConfigManager:
         print("=" * 70)
         if self.dry_run:
             print("\n  >> DRY-RUN MODE: No changes will be made <<")
-        if is_debug_mode():  # type: ignore[no-untyped-call]
+        if IsDebugMode.check():  # Emit banner when the operator opted into verbose debug logs
             print("\n  >> DEBUG MODE: Verbose logging enabled <<")
         print("\n  Target configuration loaded from .env:")
         print(f"    - auth_servers_timeout: {self.target_timeout} seconds")
@@ -18231,7 +18038,7 @@ class BulkRadiusWLANConfigManager:
                 print(f"\n[!] Failed to fetch WLANs: HTTP {response.status_code}")
                 return False
             self.all_wlans = response.data
-            if is_debug_mode():  # type: ignore[no-untyped-call]
+            if IsDebugMode.check():  # Dump per-WLAN payload only when debug mode is enabled
                 logging.debug("API response data (%s WLANs): %s", len(self.all_wlans), self.all_wlans)
             logging.info("Found %s total WLANs in organization", len(self.all_wlans))
             print(f"[+] Found {len(self.all_wlans)} total WLANs in organization")
@@ -18263,7 +18070,7 @@ class BulkRadiusWLANConfigManager:
 
     def _log_radius_wlan_classification(self, status: str, wlan: dict[str, Any]) -> None:
         """Emit debug log explaining why a WLAN landed in compliant vs needs-update bucket."""
-        if not is_debug_mode():  # type: ignore[no-untyped-call]  # Only emit when verbose mode is on
+        if not IsDebugMode.check():  # Only emit when verbose mode is on
             return
         logging.debug(
             "%s: %s - timeout=%s, retries=%s, fast=%s",
@@ -18498,7 +18305,7 @@ class BulkRadiusWLANConfigManager:
         ssid = wlan.get("ssid", "Unknown")  # SSID for user-facing messages.
         print("DRY-RUN (would update)")  # Show that no real change was made.
         self._record_change(wlan, "DRY-RUN", "")  # Record the simulated change.
-        if is_debug_mode():  # type: ignore[no-untyped-call]  # Only dump payload when debugging.
+        if IsDebugMode.check():  # Only dump payload when debugging.
             logging.debug("DRY-RUN payload for %s: %s", ssid, payload)  # Log the would-be payload.
         return True  # Count the simulation as a success.
 
@@ -18513,7 +18320,7 @@ class BulkRadiusWLANConfigManager:
             if response.status_code == 200:  # Update succeeded.
                 print("OK")  # Complete the progress line with success.
                 self._record_change(wlan, "success", "")  # Audit the successful change.
-                if is_debug_mode():  # type: ignore[no-untyped-call]  # Debug-only response dump.
+                if IsDebugMode.check():  # Debug-only response dump.
                     logging.debug("API response for %s: %s", ssid, response.data)  # Log body.
                 return True  # Real success.
             print(f"FAILED (HTTP {response.status_code})")  # Complete the progress line with failure.

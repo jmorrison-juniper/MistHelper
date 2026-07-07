@@ -51,7 +51,7 @@ class RoutingDeps:
     select_device_fn: SelectDeviceFn  # WHY: device picker callable
     safe_input_fn: SafeInputFn  # WHY: safe stdin reader
     websocket_manager_factory: WebSocketManagerFactory  # WHY: WSManager constructor
-    is_debug_mode_fn: IsDebugModeFn  # WHY: debug-mode probe
+    check_fn: IsDebugModeFn  # WHY: debug-mode probe (renamed from is_debug_mode_fn per 1012 DI-cluster rename)
 
 
 @dataclass
@@ -121,7 +121,7 @@ class RoutingUtils:
         self.select_device_fn = deps.select_device_fn  # WHY: unpack device picker
         self.safe_input_fn = deps.safe_input_fn  # WHY: unpack safe-input callable
         self.websocket_manager_factory = deps.websocket_manager_factory  # WHY: unpack WS factory
-        self.is_debug_mode_fn = deps.is_debug_mode_fn  # WHY: unpack debug probe
+        self.check_fn = deps.check_fn  # WHY: unpack debug probe (renamed from is_debug_mode_fn per 1012)
         self._parsing = _RoutingUtilsParsing(self)  # WHY: parser cluster binding
         self._display = _RoutingUtilsDisplay(self)  # WHY: renderer cluster binding
         self._payload = _RoutingUtilsPayload(self)  # WHY: payload cluster binding

@@ -20,7 +20,7 @@ class DummyDeps:
         self.DataExporter = MagicMock()  # Output writer
         self.RateLimitingUtils = MagicMock()  # Adaptive rate-limit delay calculator
         self.RateLimitingUtils.get_rate_limited_delay.return_value = (None, 0)  # No delay in tests
-        self.execute_with_connection_pool_management = MagicMock(return_value=([], []))  # Empty pool result
+        self.execute_fn = MagicMock(return_value=([], []))  # Empty pool result (1012 SC-003 rename)
         self.mistapi = MagicMock()  # Mist SDK surface
         self.apisession = MagicMock()  # Active API session
         self._api_usage_cache = {}  # Empty telemetry cache for tests
@@ -82,7 +82,7 @@ def test_execute_sequential_no_export_when_empty_results(mock_resolve):
 
 @patch("src.refactors.serial_cc.test_results_by_site._resolve_runtime_dependencies")
 def test_execute_fast_uses_pool_management(mock_resolve):
-    """Fast mode calls execute_with_connection_pool_management and exports results."""
+    """Fast mode calls execute_fn (pool executor) and exports results."""
     deps = DummyDeps()  # Create synthetic dependency bundle
     mock_resolve.return_value = deps  # Inject synthetic dependencies
     deps.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-abc"  # Provide a test org ID
@@ -90,7 +90,7 @@ def test_execute_fast_uses_pool_management(mock_resolve):
     deps.DataProcessingUtils.escape_multiline.side_effect = lambda rows: rows  # Identity sanitise
 
     fast_result = {"site_id": "site-1", "type": "dns", "status": "ok"}  # Sample fast-mode row
-    deps.execute_with_connection_pool_management.return_value = (
+    deps.execute_fn.return_value = (
         [[fast_result]],  # successful_results: list-of-lists
         [],  # failed_sites: empty
     )  # Pool returns one successful site with one row
@@ -104,7 +104,7 @@ def test_execute_fast_uses_pool_management(mock_resolve):
     ):
         GatewayTestResultsService.execute(fast=True)  # Execute service in fast mode
 
-    deps.execute_with_connection_pool_management.assert_called_once()  # Pool must be used in fast mode
+    deps.execute_fn.assert_called_once()  # Pool must be used in fast mode
     deps.DataExporter.write_with_format_selection.assert_called_once()  # CSV must be written
     call_args = deps.DataExporter.write_with_format_selection.call_args.args  # Inspect positional args
     assert call_args[1] == "AllGatewayTestResults.csv"  # Filename contract preserved in fast mode

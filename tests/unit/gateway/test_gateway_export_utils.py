@@ -26,7 +26,7 @@ def _configure_dependencies() -> None:
         org_inventory_exporter=SimpleNamespace(inventory=MagicMock(), gateways_with_site_info=MagicMock()),
         org_site_exporter=SimpleNamespace(sites=MagicMock(), sites_list_api=MagicMock()),
         input_utils=SimpleNamespace(safe_input=MagicMock(return_value="yes")),
-        connection_pool_fn=MagicMock(return_value=([], [])),
+        execute_fn=MagicMock(return_value=([], [])),
         validation_utils=SimpleNamespace(validate_site_id=MagicMock(), validate_device_id=MagicMock()),
         rate_limiting_utils=SimpleNamespace(get_rate_limited_delay=MagicMock(return_value=(None, 0))),
         mist_wan_target_ports=["ge-0/0/1"],

@@ -20,7 +20,7 @@ def _configure_dependencies() -> None:
         rate_limiting_utils=SimpleNamespace(get_rate_limited_delay=MagicMock(return_value=(None, 0))),
         cache_utils=SimpleNamespace(check_and_generate_csv=MagicMock(return_value=True)),
         file_path_utils=SimpleNamespace(get_csv_path=MagicMock(return_value="test.csv")),
-        connection_pool_fn=MagicMock(return_value=([], [])),
+        execute_fn=MagicMock(return_value=([], [])),
         fast_mode_max_retries=2,
         fast_mode_retry_delay=0.1,
         api_usage_cache={},

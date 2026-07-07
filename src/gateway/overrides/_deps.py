@@ -15,7 +15,11 @@ FilePathUtils: Any = None  # Output path helper; set by configure_gateway_overri
 DataExporter: Any = None  # Multi-backend writer; set by configure_gateway_override_dependencies
 OrgSiteExporter: Any = None  # Site list exporter; set by configure_gateway_override_dependencies
 MIST_WAN_TARGET_PORTS: list[str] = []  # Operator-configured WAN ports list from .env
-execute_with_connection_pool_management: Any = None  # Pool-managed parallel runner
+# NOTE: execute_with_connection_pool_management extracted to ConnectionPoolExecutor.execute.
+# See specs/1012-misthelper-refactor-hot-functions/spec.md.
+execute_fn: Any = (
+    None  # Pool-managed parallel runner (1012 SC-003; renamed from execute_with_connection_pool_management)
+)
 GatewayExportUtilsRef: Any = None  # Gateway export helpers ref (device_configs/templates funcs)
 
 
@@ -30,7 +34,7 @@ class GatewayOverrideDependencies:
     data_exporter: Any  # DataExporter class exposing write_with_format_selection
     org_site_exporter: Any  # OrgSiteExporter class exposing sites_list_api
     mist_wan_target_ports: list[str]  # Operator-configured WAN target ports list from .env
-    connection_pool_fn: Any  # execute_with_connection_pool_management callable
+    execute_fn: Any  # ConnectionPoolExecutor.execute callable (1012 SC-003; renamed from connection_pool_fn)
     gateway_export_utils_ref: Any  # GatewayExportUtils reference (device_configs / templates)
 
 
@@ -38,7 +42,7 @@ def configure_gateway_override_dependencies(deps: GatewayOverrideDependencies) -
     """Configure runtime dependencies for the override analysis collaborators."""
     global apisession, mistapi, CacheUtils, FilePathUtils, DataExporter  # WHY: module-level DI slots.
     global OrgSiteExporter, MIST_WAN_TARGET_PORTS  # WHY: module-level DI slots.
-    global execute_with_connection_pool_management, GatewayExportUtilsRef  # WHY: module-level DI slots.
+    global execute_fn, GatewayExportUtilsRef  # WHY: module-level DI slots.
     apisession = deps.apisession_dependency  # Real Mist session for downstream API calls
     mistapi = deps.mistapi_dependency  # Actual mistapi SDK module
     CacheUtils = deps.cache_utils  # CSV cache helper class
@@ -46,6 +50,6 @@ def configure_gateway_override_dependencies(deps: GatewayOverrideDependencies) -
     DataExporter = deps.data_exporter  # Multi-backend data exporter
     OrgSiteExporter = deps.org_site_exporter  # Site list exporter helper
     MIST_WAN_TARGET_PORTS = deps.mist_wan_target_ports  # Operator-configured target ports
-    execute_with_connection_pool_management = deps.connection_pool_fn  # Pool-managed parallel runner
+    execute_fn = deps.execute_fn  # Pool-managed parallel runner (renamed from connection_pool_fn per 1012 SC-003)
     GatewayExportUtilsRef = deps.gateway_export_utils_ref  # Gateway export helpers reference
     logging.debug(_LOG_CONFIGURED)  # Confirm wiring for operator logs

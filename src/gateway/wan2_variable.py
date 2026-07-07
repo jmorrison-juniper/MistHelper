@@ -52,7 +52,7 @@ class Wan2VariableDeps:
     get_csv_path_fn: Callable[[str], str]  # WHY: resolves CSV filenames to full paths
     save_data_fn: Callable[..., Any]  # WHY: writes audit rows to disk
     input_fn: Callable[[str], str] | None = None  # WHY: overrideable stdin reader (defaults to builtin)
-    connection_pool_fn: Callable[..., Any] | None = None  # WHY: optional fast-mode parallel executor
+    execute_fn: Callable[..., Any] | None = None  # WHY: optional fast-mode parallel executor (1012 SC-003 rename)
 
 
 class GatewayWan2VariableMigrator:  # pylint: disable=too-many-instance-attributes,too-few-public-methods
@@ -102,7 +102,9 @@ class GatewayWan2VariableMigrator:  # pylint: disable=too-many-instance-attribut
         self._get_csv_path = deps.get_csv_path_fn  # WHY: resolves CSV names to paths
         self._save_data = deps.save_data_fn  # WHY: audit CSV writer
         self._input_fn = deps.input_fn or input  # WHY: default to builtin input()
-        self._pool_fn = deps.connection_pool_fn  # WHY: fast-mode parallel executor (may be None)
+        self._pool_fn = (
+            deps.execute_fn
+        )  # WHY: fast-mode parallel executor (may be None); renamed from connection_pool_fn per 1012 SC-003
 
     def __getattr__(self, name: str) -> Any:
         """Proxy cluster-attribute access to helper clusters.
@@ -164,7 +166,7 @@ class GatewayWan2VariableMigrator:  # pylint: disable=too-many-instance-attribut
 
     def _log_no_changes_needed(self) -> None:
         """Print + log the 'no templates require modification' outcome."""
-        print(f"\n  No templates found with {self._search_pattern}" " port configurations.")  # WHY: user feedback
+        print(f"\n  No templates found with {self._search_pattern} port configurations.")  # WHY: user feedback
         print("  No changes needed.")  # WHY: closing line
         logging.info("Menu #104: No templates require modification (searched for %s)", self._search_pattern)
 

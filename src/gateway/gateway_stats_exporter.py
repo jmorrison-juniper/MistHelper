@@ -9,6 +9,8 @@ import threading  # WHY: Semaphore bounds concurrent Mist API connections.
 import time  # WHY: sleep between bounded retries when fetching device stats.
 from typing import Any  # WHY: opaque types for injected utility modules.
 
+# WHY: ConnectionPoolExecutor is DI-injected via the execute_fn slot (1012 SC-003); no direct import needed.
+
 STATS_CSV_FILENAME: str = "AllGatewayDeviceStats.csv"  # WHY: canonical output CSV; consumed by conflict analysis.
 CONFLICTS_CSV_FILENAME: str = "GatewayWANPortConflicts.csv"  # WHY: canonical WAN conflict output filename.
 WAN_PORT_IDS: tuple[str, ...] = ("0/0/0", "0/0/1", "0/0/2")  # WHY: gateway WAN ports monitored for IP conflicts.
@@ -29,7 +31,10 @@ DataExporter: Any = None  # WHY: writes report data with format selection.
 RateLimitingUtils: Any = None  # WHY: adaptive delay helpers for API pacing.
 CacheUtils: Any = None  # WHY: CSV cache generator facade.
 FilePathUtils: Any = None  # WHY: resolves CSV cache file locations.
-execute_with_connection_pool_management: Any = None  # WHY: pool-managed parallel runner facade.
+# NOTE: execute_with_connection_pool_management extracted to ConnectionPoolExecutor.execute.
+# See specs/1012-misthelper-refactor-hot-functions/spec.md.
+# WHY: renamed from execute_with_connection_pool_management per 1012 SC-003; DI-injected pool runner.
+execute_fn: Any = None
 FAST_MODE_MAX_RETRIES: int = 2  # WHY: retry cap for fast-mode API calls.
 FAST_MODE_RETRY_DELAY: float = 0.5  # WHY: base delay (seconds) between retries.
 _api_usage_cache: Any = None  # WHY: shared API usage cache reference.
@@ -48,7 +53,7 @@ _KWARG_TO_MODULE_SLOT: dict[str, str] = {  # WHY: table-driven map collapses 15-
     "rate_limiting_utils": "RateLimitingUtils",
     "cache_utils": "CacheUtils",
     "file_path_utils": "FilePathUtils",
-    "connection_pool_fn": "execute_with_connection_pool_management",
+    "execute_fn": "execute_fn",
     "fast_mode_max_retries": "FAST_MODE_MAX_RETRIES",
     "fast_mode_retry_delay": "FAST_MODE_RETRY_DELAY",
     "api_usage_cache": "_api_usage_cache",

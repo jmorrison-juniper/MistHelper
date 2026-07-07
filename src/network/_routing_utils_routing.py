@@ -358,7 +358,9 @@ class _RoutingUtilsRouting:  # WHY: cluster wrapper matching the parsing/display
 
     def execute_show_routing_table(self) -> None:
         """Execute show route command on switches via WebSocket."""
-        debug_mode = self._ru.is_debug_mode_fn()  # WHY: capture debug flag once for entire flow
+        debug_mode = (
+            self._ru.check_fn()
+        )  # WHY: capture debug flag once for entire flow (renamed from is_debug_mode_fn per 1012)
         self._ru._setup_debug_mode(debug_mode)  # WHY: hoist logger to DEBUG when needed
         logging.info("Starting WebSocket show routing table operation...")  # WHY: production log
         logging.debug("ENTER: execute_show_routing_table")  # WHY: trace marker for debug logs

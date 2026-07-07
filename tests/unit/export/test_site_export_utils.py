@@ -67,7 +67,7 @@ def _configure_dependencies(select_site_return: str | None = "site-1") -> tuple[
             normalize_mac_address=MagicMock(return_value="aa:bb:cc:dd:ee:ff"),
         ),
         api_core_fetch_utils=SimpleNamespace(all_sites_with_limit=MagicMock(return_value=[])),
-        is_debug_mode_fn=MagicMock(return_value=False),
+        check_fn=MagicMock(return_value=False),  # WHY: renamed from is_debug_mode_fn per 1012 DI-cluster rename
         pretty_table_class=SimpleNamespace,
         tqdm_module=MagicMock(side_effect=lambda rows, **kwargs: rows),
         mistapi_dependency=mistapi_dependency,
