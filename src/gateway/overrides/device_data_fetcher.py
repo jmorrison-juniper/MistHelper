@@ -37,7 +37,7 @@ class DeviceDataFetcher:
         """Parallel fetch using the shared connection-pool execution helper."""
         logging.info(" Using fast mode with connection pool management for device data fetching...")  # legacy log
         work_items = list(devices_with_overrides.items())  # Stable ordering for deterministic logs and retries
-        successful_results, failed_devices = _deps.execute_with_connection_pool_management(  # Pool-managed run
+        successful_results, failed_devices = _deps.execute_fn(  # Pool-managed run (1012 SC-003 rename)
             work_items=work_items,
             worker_function=DeviceDataFetcher._worker_fetch_device_data,
             batch_description="override devices",

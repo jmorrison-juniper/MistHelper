@@ -29,7 +29,8 @@ EnhancedSSHRunner: Any = None  # WHY: injected SSH runner for filename sanitizat
 InsightMetricsUtils: Any = None  # WHY: injected insight metric helpers.
 PacketCaptureManager: Any = None  # WHY: injected MAC validation/normalization.
 APICoreFetchUtils: Any = None  # WHY: injected org-wide fetch helpers.
-is_debug_mode: Any = None  # WHY: injected debug-mode predicate.
+# NOTE: renamed from is_debug_mode; wiring source IsDebugMode.check at MistHelper.py:13361.
+check_fn: Any = None  # WHY: injected debug-mode predicate.
 PrettyTable: Any = None  # WHY: injected table renderer for debug output.
 tqdm: Any = None  # WHY: injected progress bar module.
 mistapi: Any = None  # WHY: injected mistapi client module.
@@ -49,7 +50,7 @@ class _ExportDeps:  # WHY: bundle 14 DI kwargs into a single frozen record for h
     insight_metrics_utils: Any  # WHY: insight metric helpers.
     packet_capture_manager: Any  # WHY: MAC validation/normalization.
     api_core_fetch_utils: Any  # WHY: org-wide fetch helpers.
-    is_debug_mode_fn: Any  # WHY: debug-mode predicate.
+    check_fn: Any  # WHY: debug-mode predicate (renamed from is_debug_mode_fn per plan L52).
     pretty_table_class: Any  # WHY: table renderer for debug output.
     tqdm_module: Any  # WHY: progress bar module.
     mistapi_dependency: Any  # WHY: mistapi client module.
@@ -61,7 +62,7 @@ def _apply_module_globals(
     """Assign injected dependencies to module-level globals used by class methods."""
     global apisession, PromptUtils, ConfigUtils, DataProcessingUtils  # WHY: publish session + config + processing.
     global DataExporter, TimeUtils, EnhancedSSHRunner, InsightMetricsUtils  # WHY: publish writer/time/ssh/metrics.
-    global PacketCaptureManager, APICoreFetchUtils, is_debug_mode  # WHY: publish MAC + fetch + debug predicate.
+    global PacketCaptureManager, APICoreFetchUtils, check_fn  # WHY: publish MAC + fetch + debug predicate.
     global PrettyTable, tqdm, mistapi  # WHY: publish table + progress + mistapi module.
     apisession = deps.apisession_dependency  # WHY: bind session for exporters.
     PromptUtils = deps.prompt_utils  # WHY: bind prompt helpers.
@@ -73,7 +74,7 @@ def _apply_module_globals(
     InsightMetricsUtils = deps.insight_metrics_utils  # WHY: bind insight metrics.
     PacketCaptureManager = deps.packet_capture_manager  # WHY: bind packet capture manager.
     APICoreFetchUtils = deps.api_core_fetch_utils  # WHY: bind fetch helpers.
-    is_debug_mode = deps.is_debug_mode_fn  # WHY: bind debug predicate.
+    check_fn = deps.check_fn  # WHY: bind debug predicate.
     PrettyTable = deps.pretty_table_class  # WHY: bind table renderer.
     tqdm = deps.tqdm_module  # WHY: bind progress bar.
     mistapi = deps.mistapi_dependency  # WHY: bind mistapi module.
@@ -334,7 +335,7 @@ class SiteExportUtils(SiteInsightsExporter):  # WHY: inherit insights exporters 
         data: list[dict[str, Any]], data_type: str, filename: str
     ) -> None:  # WHY: post-export operator feedback.
         """Render debug-mode PrettyTable or log completion summary."""
-        if is_debug_mode():  # WHY: debug operators see full table dump.
+        if check_fn():  # WHY: debug operators see full table dump.
             _emit_debug_table(data)  # WHY: extract debug rendering into helper.
             return  # WHY: skip completion log after debug render.
         logging.info(

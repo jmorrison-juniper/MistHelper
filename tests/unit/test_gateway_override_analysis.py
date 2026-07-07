@@ -25,7 +25,7 @@ def test_wan_override_walker_returns_when_ports_not_configured(tmp_path) -> None
             data_exporter=data_exporter,
             org_site_exporter=org_site_exporter,
             mist_wan_target_ports=[],
-            connection_pool_fn=MagicMock(),
+            execute_fn=MagicMock(),
             gateway_export_utils_ref=gateway_ref,
         )
     )

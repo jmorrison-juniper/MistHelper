@@ -3,6 +3,7 @@
 from unittest.mock import MagicMock
 
 import MistHelper
+from src.refactors.is_debug_mode import IsDebugMode  # WHY: replaces removed MistHelper.is_debug_mode per 1012 SC-002
 
 
 def test_ssh_runner_confirm_execution_returns_false_on_eof(monkeypatch):
@@ -95,7 +96,7 @@ def test_service_ping_parameter_prompts_fall_back_to_defaults_on_eof(monkeypatch
         prompt_utils=MistHelper.PromptUtils,
         input_utils=MistHelper.InputUtils,
         websocket_manager_class=MistHelper.WebSocketManager,
-        is_debug_mode=MistHelper.is_debug_mode,
+        is_debug_mode=IsDebugMode.check,  # WHY: rewired to IsDebugMode.check per 1012 SC-002 (module-level is_debug_mode() removed)
         api_tenant_fetch_utils=MistHelper.APITenantFetchUtils,
         config_utils=MistHelper.ConfigUtils,
         api_fetch_utils=MistHelper.APIFetchUtils,

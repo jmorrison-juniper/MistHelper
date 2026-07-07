@@ -17,7 +17,9 @@ mistapi: Any = None  # WHY: lazily-bound mistapi module reference for API calls.
 PromptUtils: Any = None  # WHY: lazily-bound prompt helper for site/device selection.
 InputUtils: Any = None  # WHY: lazily-bound input helper for confirmation prompts.
 WebSocketManager: Any = None  # WHY: lazily-bound websocket transport class.
-is_debug_mode_fn: Any = None  # WHY: lazily-bound debug mode probe used at manager init.
+check_fn: Any = (
+    None  # WHY: lazily-bound debug mode probe used at manager init (renamed from is_debug_mode_fn per 1012).
+)
 APITenantFetchUtils: Any = None  # WHY: lazily-bound tenant discovery class forwarded to mixin.
 ConfigUtils: Any = None  # WHY: lazily-bound cached org lookup helper.
 APIFetchUtils: Any = None  # WHY: lazily-bound service discovery helper class.
@@ -56,13 +58,14 @@ _DEFAULT_TIPS = (  # WHY: fallback guidance when the device type is unknown.
 def configure_service_ping_manager_dependencies(**deps: Any) -> None:  # WHY: variadic collapse.
     """Configure runtime dependencies for the extracted service ping manager."""
     global apisession, mistapi, PromptUtils, InputUtils, WebSocketManager  # WHY: publish bindings.
-    global is_debug_mode_fn, APITenantFetchUtils, ConfigUtils, APIFetchUtils  # WHY: continued globals.
+    # WHY: check_fn renamed from is_debug_mode_fn per 1012 SC-002 (IsDebugMode extraction).
+    global check_fn, APITenantFetchUtils, ConfigUtils, APIFetchUtils  # WHY: continued globals.
     apisession = deps["apisession_dependency"]  # WHY: publish injected apisession handle.
     mistapi = deps["mistapi_dependency"]  # WHY: publish injected mistapi module.
     PromptUtils = deps["prompt_utils"]  # WHY: publish prompt helper for menu flow.
     InputUtils = deps["input_utils"]  # WHY: publish input helper for user confirmation.
     WebSocketManager = deps["websocket_manager_class"]  # WHY: publish websocket transport class.
-    is_debug_mode_fn = deps["is_debug_mode"]  # WHY: publish debug probe closure.
+    check_fn = deps["is_debug_mode"]  # WHY: publish debug probe closure (renamed slot from is_debug_mode_fn per 1012).
     APITenantFetchUtils = deps["api_tenant_fetch_utils"]  # WHY: publish tenant utility class.
     ConfigUtils = deps["config_utils"]  # WHY: publish config utility helper.
     APIFetchUtils = deps["api_fetch_utils"]  # WHY: publish api fetch utility class.
@@ -98,7 +101,9 @@ class ServicePingManager(ServicePingDiscoveryMixin):  # WHY: define ServicePingM
 
     def __init__(self) -> None:  # WHY: constructor initialises manager state and discovery caches.
         """Initialize manager state and discovery caches."""
-        self.debug_mode = bool(is_debug_mode_fn()) if is_debug_mode_fn else False  # WHY: latch debug.
+        self.debug_mode = (
+            bool(check_fn()) if check_fn else False
+        )  # WHY: latch debug (renamed slot from is_debug_mode_fn per 1012).
         self.site_id: str | None = None  # WHY: selected site id populated during workflow start.
         self.device_id: str | None = None  # WHY: selected device id populated during workflow start.
         self.device_info: dict[str, Any] | None = None  # WHY: cached device metadata for gating.

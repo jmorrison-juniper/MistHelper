@@ -13,6 +13,7 @@ from src.gateway.overrides import (  # WHY: import walker + override wiring entr
     WanOverrideWalker,
     configure_gateway_override_dependencies,
 )
+from src.refactors.connection_pool_executor import ConnectionPoolExecutor  # WHY: extracted pool executor (1012 SC-003).
 
 MANAGEMENT_IP_INPUT_CSVS: tuple[str, ...] = (  # WHY: fixed set of correlation inputs for management-IP export.
     "SiteList.csv",
@@ -45,7 +46,8 @@ APICoreFetchUtils: Any = None  # WHY: core unwrap helpers for org inventory.
 OrgInventoryExporter: Any = None  # WHY: org inventory exporter facade.
 OrgSiteExporter: Any = None  # WHY: org site exporter facade.
 InputUtils: Any = None  # WHY: safe_input wrapper for operator prompts.
-execute_with_connection_pool_management: Any = None  # WHY: pool-managed parallel runner.
+# NOTE: execute_with_connection_pool_management extracted to ConnectionPoolExecutor.execute.
+# See specs/1012-misthelper-refactor-hot-functions/spec.md.
 ValidationUtils: Any = None  # WHY: shared input validators.
 RateLimitingUtils: Any = None  # WHY: adaptive delay helpers for API pacing.
 MIST_WAN_TARGET_PORTS: list[str] = []  # WHY: operator-configured WAN port list from .env.
@@ -68,7 +70,7 @@ def _wire_stats_exporter(deps: dict[str, Any]) -> None:  # WHY: forward stats-ex
         rate_limiting_utils=deps["rate_limiting_utils"],
         cache_utils=deps["cache_utils"],
         file_path_utils=deps["file_path_utils"],
-        connection_pool_fn=deps["connection_pool_fn"],
+        execute_fn=deps["execute_fn"],
         fast_mode_max_retries=deps["fast_mode_max_retries"],
         fast_mode_retry_delay=deps["fast_mode_retry_delay"],
         api_usage_cache=deps["api_usage_cache"],
@@ -88,7 +90,7 @@ def _wire_override_subsystem(deps: dict[str, Any]) -> None:  # WHY: forward over
             data_exporter=deps["data_exporter"],
             org_site_exporter=deps["org_site_exporter"],
             mist_wan_target_ports=deps["mist_wan_target_ports"],
-            connection_pool_fn=deps["connection_pool_fn"],
+            execute_fn=deps["execute_fn"],
             gateway_export_utils_ref=GatewayExportUtils,
         )
     )
@@ -113,7 +115,6 @@ _KWARG_TO_MODULE_SLOT: dict[str, str] = {  # WHY: table-driven map from configur
     "org_inventory_exporter": "OrgInventoryExporter",
     "org_site_exporter": "OrgSiteExporter",
     "input_utils": "InputUtils",
-    "connection_pool_fn": "execute_with_connection_pool_management",
     "validation_utils": "ValidationUtils",
     "rate_limiting_utils": "RateLimitingUtils",
     "mist_wan_target_ports": "MIST_WAN_TARGET_PORTS",
@@ -547,7 +548,7 @@ class GatewayExportUtils:  # WHY: centralised gateway export utility class extra
             get_csv_path_fn=FilePathUtils.get_csv_path,
             save_data_fn=DataExporter.write_with_format_selection,
             input_fn=InputUtils.safe_input,
-            connection_pool_fn=execute_with_connection_pool_management,
+            execute_fn=ConnectionPoolExecutor.execute,
         )
         migrator = GatewayWan2VariableMigrator(deps)  # WHY: instantiate migrator with the bundled deps.
         migrator.execute(fast=fast, dry_run=dry_run)  # WHY: run the migration pipeline.

@@ -25,6 +25,8 @@ import logging  # Structured action logging required by coding standards
 from types import SimpleNamespace  # Bundle runtime dependencies without coupling to a dataclass
 from typing import Any  # Loose typing for late-bound module attributes and external manager instance
 
+from src.refactors.is_debug_mode import IsDebugMode  # Debug-mode predicate now owned by extracted seam (1012 SC-002)
+
 
 def _resolve_runtime_dependencies() -> SimpleNamespace:
     """Resolve MistHelper-owned runtime dependencies without static cross-module imports."""
@@ -86,7 +88,7 @@ class ServicePingLauncher:
             prompt_utils=misthelper.PromptUtils,  # Prompt helper class for menu flow
             input_utils=misthelper.InputUtils,  # Input helper class for user confirmation
             websocket_manager_class=misthelper.WebSocketManager,  # WebSocket transport class
-            is_debug_mode=misthelper.is_debug_mode,  # Debug-mode probe closure
+            is_debug_mode=IsDebugMode.check,  # Debug-mode probe closure (rewired to IsDebugMode.check per 1012 SC-002)
             api_tenant_fetch_utils=misthelper.APITenantFetchUtils,  # Tenant utility class
             config_utils=misthelper.ConfigUtils,  # Config utility helper class
             api_fetch_utils=misthelper.APIFetchUtils,  # API fetch utility class

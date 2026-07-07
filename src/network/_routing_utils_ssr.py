@@ -50,7 +50,9 @@ class _RoutingUtilsSSR:  # WHY: cluster wrapper matching parsing/display/payload
 
     def execute_show_ssr_routes(self) -> None:
         """Execute SSR/SRX routing table via dedicated API."""
-        debug_mode = self._ru.is_debug_mode_fn()  # WHY: capture debug flag once for whole flow
+        debug_mode = (
+            self._ru.check_fn()
+        )  # WHY: capture debug flag once for whole flow (renamed from is_debug_mode_fn per 1012)
         self._ru._setup_debug_mode(debug_mode)  # WHY: hoist logger to DEBUG when enabled
         logging.info("Starting SSR/SRX dedicated routing table operation...")  # WHY: production log
         logging.debug("ENTER: execute_show_ssr_routes")  # WHY: trace marker for debug logs
