@@ -244,6 +244,7 @@ omit = [
     "src/export/sites_by_ap_model_exporter.py",
     "src/firmware/firmware_manager.py",
     "src/gateway/gateway_ha_exporter.py",
+    "src/inventory/org_device_inventory_summary_facade.py",
     "src/reports/sfp_transceiver_data_processor.py",
     "src/reports/wired_client_manufacturer_report_generator.py",
     "src/site/bulk_radius_wlan_config_manager.py",

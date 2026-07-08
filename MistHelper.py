@@ -54,7 +54,7 @@ from concurrent.futures import (
 )  # Thread-pool primitives (FIRST_COMPLETED/wait migrated to ConnectionPoolExecutor per 1012 SC-003)
 from dataclasses import dataclass, field  # Import dataclass decorators for configuration objects and entity classes
 from datetime import datetime  # Import datetime for timestamping logs and events
-from typing import TYPE_CHECKING, Any, Literal, cast  # Import type hints for static analysis without runtime overhead
+from typing import TYPE_CHECKING, Any, Literal  # Import type hints for static analysis without runtime overhead
 
 # Type stubs for dynamically imported modules
 # These allow type checking while the actual imports happen at runtime via GlobalImportManager
@@ -190,6 +190,9 @@ from src.gateway.gateway_ha_exporter import (  # pylint: disable=unused-import
     GatewayHaExporter,  # noqa: F401  # Cat B (1013 SC-001 position 23) -- re-export for MistHelper.GatewayHaExporter callers
 )
 from src.gateway.template_config import GatewayTemplateConfigManager  # Cat A canonical (1013 SC-001)
+from src.inventory.org_device_inventory_summary_facade import (  # pylint: disable=unused-import
+    OrgDeviceInventorySummary,  # noqa: F401  # Cat B (1013 SC-001 position 29) -- re-export for MistHelper.OrgDeviceInventorySummary callers
+)
 from src.org.org_config_migration_manager import OrgConfigMigrationManager  # Cat B (1013 SC-001 position 5)
 from src.org_data_collector import OrgDataCollector  # Import org-level data collection orchestrator
 from src.refactors.anomaly_metrics_discovery import (
@@ -9527,75 +9530,8 @@ class OfflineDeviceReporter:
         OfflineDeviceReporter._finalize_offline_report(len(all_devices), offline_records, threshold_hours, start_time)
 
 
-class OrgDeviceInventorySummary:  # Org device inventory summary.
-    """Delegation façade for extracted Org Device Inventory Summary modules."""
-
-    _DEVICE_TYPES: tuple[str, ...] = ("ap", "switch", "gateway")  # Device types to tally.
-
-    @staticmethod
-    def _get_summary_impl() -> Any:  # Build the summary core.
-        """Configure and return extracted single-org summary implementation."""
-        from src.inventory.org_device_inventory_summary import (  # noqa: PLC0415
-            OrgDeviceInventorySummaryCore,
-            configure_org_device_inventory_summary_dependencies,
-        )
-
-        configure_org_device_inventory_summary_dependencies(  # Wire summary dependencies.
-            apisession_dependency=apisession,
-            mistapi_dependency=mistapi,
-            data_exporter=DataExporter,
-            org_id_value=cast(str, org_id),  # Global org_id is set before this runs; assert str for the checker
-        )
-        return OrgDeviceInventorySummaryCore  # Return the core class.
-
-    @staticmethod
-    def _get_msp_impl() -> Any:  # Build the MSP orchestrator.
-        """Configure and return extracted MSP orchestration implementation."""
-        from src.inventory.org_device_inventory_msp import (  # noqa: PLC0415
-            OrgDeviceInventoryMSPOrchestrator,
-            configure_org_device_inventory_msp_dependencies,
-        )
-
-        configure_org_device_inventory_msp_dependencies(  # Wire MSP dependencies.
-            apisession_dependency=apisession,
-            input_utils=InputUtils,
-            data_exporter=DataExporter,
-            msp_privileges_value=msp_privileges,
-        )
-        return OrgDeviceInventoryMSPOrchestrator  # Return the orchestrator.
-
-    @staticmethod
-    def execute() -> None:  # Run the summary.
-        """Single-org entry point for menu operation 13."""
-        OrgDeviceInventorySummary._get_summary_impl().execute()  # Delegate to the core.
-
-    @staticmethod
-    def _resolve_active_msp() -> "dict[str, Any] | None":  # Resolve the active MSP.
-        """Delegate MSP selection prompt to extracted MSP orchestrator."""
-        return OrgDeviceInventorySummary._get_msp_impl()._resolve_active_msp()  # Delegate to the orchestrator.
-
-    @staticmethod
-    def _run_single_msp_org() -> None:  # Run a single MSP org.
-        """Delegate single-org MSP flow to extracted MSP orchestrator."""
-        OrgDeviceInventorySummary._get_msp_impl().run_single_msp_org(
-            OrgDeviceInventorySummary._get_summary_impl().run_for_org  # Bind extracted core run_for_org as callback.
-        )
-
-    @staticmethod
-    def execute_msp() -> None:  # Run the MSP flow.
-        """Delegate batch MSP execution to extracted MSP orchestrator."""
-        OrgDeviceInventorySummary._get_msp_impl().execute_msp(
-            OrgDeviceInventorySummary._get_summary_impl().run_for_org  # Bind extracted core run_for_org as callback.
-        )
-
-    @staticmethod
-    def dispatch() -> None:  # Dispatch summary vs MSP.
-        """Delegate menu operation 13 interactive dispatch to extracted MSP orchestrator."""
-        OrgDeviceInventorySummary._get_msp_impl().dispatch(  # Delegate to the orchestrator.
-            single_org_fn=OrgDeviceInventorySummary.execute,
-            select_org_fn=OrgDeviceInventorySummary._run_single_msp_org,
-            batch_fn=OrgDeviceInventorySummary.execute_msp,
-        )
+# --- OrgDeviceInventorySummary facade removed (1013 SC-001 Cat B pos 29) ---
+# Canonical implementation lives in src/inventory/org_device_inventory_summary_facade.py; re-exported above.
 
 
 # OrgTemplateExporter moved to src/export/org_template_exporter.py (1013 SC-001 position 22)
