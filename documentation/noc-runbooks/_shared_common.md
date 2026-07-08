@@ -2,6 +2,24 @@
 
 This document holds the conventions, cross-cutting guidance, and shared reference material used by every alarm-specific runbook in this library. Each per-alarm document links back to sections here rather than duplicating content.
 
+## 0. Target topology (retail branch)
+
+Every runbook in this library assumes the **retail branch reference topology**:
+
+| Layer | Hardware | Notes |
+|---|---|---|
+| WAN gateway | **1 × Juniper SSR130** | Single node — no local HA peer. BGP + SVR overlay to the DC hub SSR1300 pair (Dallas / Chicago). A total gateway failure isolates the branch. |
+| Access switching | **2 × Juniper EX4100** in a Virtual Chassis | 2-member VC (master + backup). No dedicated distribution layer at the branch. |
+| Downstream | Mist APs, POS terminals, IP phones, back-office endpoints | PoE from EX4100. |
+| WAN transport | Dual ISP (typically) | Underlay to the ISPs is normally static-routed; BGP is the *overlay* to hub. |
+
+Implications that shape the runbooks:
+
+- **Single SSR130.** No gateway HA at the branch — any gateway-side outage is site-impacting. Overlay BGP peers point at the DC hub SSR1300 pair; there is no branch-local BGP peer.
+- **2-member EX4100 VC.** Only master + backup roles (no linecards). Losing the sole VCP path splits the VC into two isolated single-member fragments — split risk is immediate, not gradual.
+- **No dedicated OOB in most branches.** If your branch has no separate OOB management network, treat `sw_alarm_chassis_mgmt_link_down` as `warn` rather than the library-default `critical` (see §2).
+- **DC hub SSR1300 pair is out of scope** for this library — a separate hub-side runbook set covers Dallas/Chicago SSR1300 alarms.
+
 ## 1. Runbook field standard
 
 Every alarm runbook must include the following fields. Fields that don't apply to a given alarm should be marked `n/a` rather than omitted, so the layout stays scannable.
@@ -45,9 +63,9 @@ Every runbook's Closure Criteria section must reference the paired `_clear` or `
 
 ## 4. Correlated alarms and dedup
 
-Many failures cascade. A physical uplink failure will typically fire:
+Many failures cascade. A typical retail-branch example — the EX4100 VC uplink to the SSR130 fails:
 
-`sw_critical_port_down` → `sw_alarm_chassis_mgmt_link_down` *(if mgmt rode that path)* → `switch_down` → `gw_bgp_neighbor_down` *(if BGP peered over that link)*
+`sw_critical_port_down` (EX4100 uplink) → `sw_alarm_chassis_mgmt_link_down` *(if branch mgmt rode that path)* → `switch_down` *(if the affected member also loses its keepalive)* → `gw_bgp_neighbor_down` *(if the SSR130's LAN-side BGP peer sat behind that uplink)*
 
 The runbook for each alarm should list its usual co-fires under **Correlated Alarms**. Triage rule of thumb: **the lowest-layer alarm is usually root cause**; higher-layer alarms are symptoms. Suppress the symptoms in the ticketing layer once the root-cause alarm is acknowledged, not in Mist.
 
