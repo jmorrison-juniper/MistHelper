@@ -188,6 +188,7 @@ strict = false
 # added in a dedicated refactoring pass.
 module = [
     "src.analytics.*",
+    "src.api.*",
     "src.export.*",
     "src.gateway.*",
     "src.inventory.*",
@@ -232,6 +233,7 @@ omit = [
     "setup.py",
     "*/site-packages/*",
     "src/maps/*",
+    "src/api/api_data_fetcher.py",
     "src/export/const_definitions_exporter.py",
     "src/export/org_admin_exporter.py",
     "src/export/org_alarm_event_exporter.py",
