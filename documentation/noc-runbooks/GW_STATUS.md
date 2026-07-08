@@ -1,6 +1,6 @@
 # GW_STATUS
 
-## Overview
+## 1. Overview
 
 | Field | Value |
 |---|---|
@@ -32,7 +32,7 @@ Not every `GW_STATUS` alarm means the same thing. Read the payload state code fi
 
 Confirm which state fired before mobilizing hub-side on-call — a `Degraded` gateway is not the same page as an `Offline` one.
 
-## Impact
+## 2. Impact
 
 - **Full branch outage (Offline / Unreachable):** the SSR130 is the only WAN gateway at the branch — when it is gone, the store is dark. All SD-WAN services stop, both SVR overlays to the DC hubs (Dallas + Chicago) fail, and every DC-hosted or Internet-hosted app becomes unreachable.
 - **Management-plane loss (Disconnected):** Mist cloud can no longer reach the SSR130, so we lose remote monitoring, config push, and Marvis analytics on this device. Data plane may or may not still be forwarding — verify from the branch side (POS pings, IP-phone health, downstream AP status) before declaring an outage.
@@ -42,7 +42,7 @@ Confirm which state fired before mobilizing hub-side on-call — a `Degraded` ga
 - No remote remediation possible — with the gateway down, in-band access is gone; unless the branch has independent OOB (rare in this environment), any fix requires an on-site touch or ISP-side action.
 - Because there is only a single SSR130 at the branch, there is no gateway-side redundancy to fall back on. This alarm is branch-scope by construction.
 
-## Required Information
+## 3. Required Information
 
 | Category | Data to capture |
 |---|---|
@@ -57,7 +57,7 @@ Confirm which state fired before mobilizing hub-side on-call — a `Degraded` ga
 
 See Shared Appendix §5 for the always-required ticket fields.
 
-## Validation
+## 4. Validation
 
 The SSR130 may be unreachable from the NOC when this alarm fires — validate first from the Mist cloud side, then attempt PCLI only if reachability is restored.
 
@@ -98,7 +98,7 @@ If the gateway is `Offline` / `Unreachable` and no OOB path exists, coordinate w
 - Confirm ISP modem / handoff state — did the ISP demarc go down (a cable cut or ISP-side outage will look identical to a gateway fault from Mist's perspective)?
 - Physical console access if a field tech is on site.
 
-## Resolution
+## 5. Resolution
 
 Sequence the response by the reported state — `Offline` and `Unreachable` need on-site / ISP-side action; `Disconnected` may be management-plane only; `Degraded` is usually a specific correlated fault.
 
@@ -116,7 +116,7 @@ Sequence the response by the reported state — `Offline` and `Unreachable` need
 | Firmware | If the state change coincides with a firmware upgrade, be prepared to roll back. Upgrades gone bad on the only branch gateway are a Tier 2 / vendor escalation. |
 | Recovery | Confirm the SSR130 state returns to `Connected` in Mist, both ISP underlays are up, both SVR peer paths (Dallas + Chicago) are `up`, both BGP sessions are `Established`, and the paired clear event has fired. |
 
-## Closure Criteria
+## 6. Closure Criteria
 
 - SSR130 state in Mist is `Connected` (not `Degraded`, `Disconnected`, `Unreachable`, or `Offline`).
 - Both WAN underlay links (ISP-A and ISP-B) are up and within performance baseline.
@@ -128,21 +128,21 @@ Sequence the response by the reported state — `Offline` and `Unreachable` need
 - All co-fired alarms on the SSR130, EX4100 VC, and either ISP underlay have cleared on their own tickets (do not implicitly close them from this ticket).
 - Root cause is documented on the ticket, including which state code(s) the gateway transitioned through during the incident, whether the branch was fully dark or merely degraded, and (if applicable) which correlated alarm was the true root cause.
 
-## Mist GUI Navigation
+## 7. Mist GUI Navigation
 
 | Task | Navigation |
 |---|---|
-| Verify alert | Monitor → Alerts (Alarms) → filter by `gw_status` |
-| Gateway health / state | WAN Edges → *SSR130* → Health / Insights |
-| WAN link history | WAN Assurance → WAN Links |
-| SVR peer-path history | WAN Assurance → Peer Path Insights |
+| Verify alert | Monitor → Alerts → filter by `gw_status` |
+| Gateway health / state | WAN Edges → *SSR130* → Insights |
+| WAN link history | Monitor → Service Levels → WAN |
+| SVR peer-path history | Monitor → Service Levels → WAN → Peer Paths |
 | Gateway events (raw) | Monitor → Events → filter by device |
-| Downstream switch view | Switches → *EX4100 VC* → Health |
+| Downstream switch view | Switches → *EX4100 VC* → Insights |
 | Audit logs | Organization → Audit Logs |
 
 **Legacy path note:** older docs may say `Routers → SSR1300`. Current Mist UI unifies all gateways under `WAN Edges → …`.
 
-## SSR PCLI Commands (quick reference)
+## 8. SSR PCLI Commands (quick reference)
 
 SSR uses PCLI, not Junos. Do not paste Junos syntax into an SSR. These commands assume the gateway is reachable — during an `Offline` / `Unreachable` state they will not run.
 
@@ -164,7 +164,7 @@ SSR uses PCLI, not Junos. Do not paste Junos syntax into an SSR. These commands 
 
 See Shared Appendix §7 for the full SSR PCLI reference.
 
-## Cross-references (sibling alarms)
+## 9. Cross-references (sibling alarms)
 
 `GW_STATUS` is a high-level roll-up alarm — it is often the *symptom* whose root cause is one of the sibling alarms below. When any of these are co-firing, resolve the co-fired alarm first:
 
@@ -178,7 +178,7 @@ See Shared Appendix §7 for the full SSR PCLI reference.
 
 **Triage rule:** `gw_status` alone with no correlated alarms almost always means a gateway-local fault (power, hardware, firmware). `gw_status` co-firing with LAN or WAN sibling alarms means the gateway is a **symptom** — go find the root cause first.
 
-## Escalation
+## 10. Escalation
 
 Per Shared Appendix §8. Because a single SSR130 gateway state change can mean a full branch outage, escalate quickly:
 

@@ -2,7 +2,7 @@
 
 > **Renamed from `INTERFACE_DOWN`.** Mist does not emit a generic "any interface down" alarm — such an alarm would be pure noise (endpoints unplug all day). The closest useful Mist alarm is `sw_critical_port_down`, which fires only for ports explicitly flagged as **critical** in the port profile. Related port-issue alarms (`port_flap`, `port_stuck`, `bad_cable`, `sw_bad_optics`, `sw_negotiation_incomplete`) each have their own runbook — see cross-references below.
 
-## Overview
+## 1. Overview
 
 | Field | Value |
 |---|---|
@@ -21,7 +21,7 @@
 
 Mist ships this as `warn` because port-down events span a wide impact range. Because only *critical* ports fire this alarm, we escalate to **critical** — the port has been explicitly designated as important. If any critical-port designations turn out to be over-tagged (e.g. every access port), retune the port profile rather than lowering NOC severity.
 
-## Impact
+## 2. Impact
 
 - Loss of endpoint or uplink connectivity for the affected port.
 - **Uplink to SSR130.** If the port is a member of the LAG to the SSR130, the LAG loses a member and forwards on the survivor; if the LAG is down to zero members (or the uplink is a single link), the branch loses WAN.
@@ -31,7 +31,7 @@ Mist ships this as `warn` because port-down events span a wide impact range. Bec
 - Reduced fabric redundancy on the affected segment.
 - PoE loss on the affected port for AP / phone / camera endpoints.
 
-## Required Information
+## 3. Required Information
 
 | Category | Data to capture |
 |---|---|
@@ -43,7 +43,7 @@ Mist ships this as `warn` because port-down events span a wide impact range. Bec
 | Timeline | Alert timestamp (UTC), recent configuration changes, related audit log entries |
 | Correlated Alarms | Any active alarms on the EX4100 or on the connected downstream device (e.g. `ap_offline`) in the last 15 min |
 
-## Validation
+## 4. Validation
 
 | Check | Command / Action |
 |---|---|
@@ -64,7 +64,7 @@ Mist ships this as `warn` because port-down events span a wide impact range. Bec
 
 See Shared Appendix §6 for the full Junos command reference.
 
-## Resolution
+## 5. Resolution
 
 | Area | Action |
 |---|---|
@@ -78,7 +78,7 @@ See Shared Appendix §6 for the full Junos command reference.
 | Configuration changes | Review Mist audit logs; restore configuration if a recent change caused the outage. |
 | Recovery | Confirm the port returns to Up, traffic flows, and the paired clear event has fired. |
 
-## Closure Criteria
+## 6. Closure Criteria
 
 - Affected port is operational (`admin up`, `oper up`).
 - Connected device is reachable, VLAN and LACP membership function normally.
@@ -87,19 +87,19 @@ See Shared Appendix §6 for the full Junos command reference.
 - No related Marvis alarms (`port_flap`, `port_stuck`, `bad_cable`) active on the same port.
 - Root cause is documented on the ticket.
 
-## Mist GUI Navigation
+## 7. Mist GUI Navigation
 
 | Task | Navigation |
 |---|---|
-| Verify alert | Monitor → Alerts (Alarms) → filter by `sw_critical_port_down` |
-| Switch health | Switches → *device* → Health |
-| Port status / front panel | Switches → *device* → Front Panel / Port Configuration |
+| Verify alert | Monitor → Alerts → filter by `sw_critical_port_down` |
+| Switch health | Switches → *device* → Insights |
+| Port status / front panel | Switches → *device* → Front Panel |
 | Critical port flag | Switches → *device* → Port Configuration → *Critical Port* toggle |
-| Connected clients on the port | Clients → Connected Devices |
+| Connected clients on the port | Clients → Wired Clients |
 | Switch events | Monitor → Events |
 | Audit logs | Organization → Audit Logs |
 
-## Junos Commands (quick reference)
+## 8. Junos Commands (quick reference)
 
 | Purpose | Command |
 |---|---|
@@ -119,7 +119,7 @@ See Shared Appendix §6 for the full Junos command reference.
 | Chassis alarms | `show chassis alarms` |
 | Ping | `ping <neighbor-ip>` |
 
-## Cross-references (sibling alarms)
+## 9. Cross-references (sibling alarms)
 
 If the current alarm co-fires with any of these, resolve the co-fired alarm first — it is usually the root cause:
 
@@ -131,6 +131,6 @@ If the current alarm co-fires with any of these, resolve the co-fired alarm firs
 - `sw_mtu_mismatch` — MTU mismatch (Marvis)
 - `sw_port_storm_control` — storm control holding port down
 
-## Escalation
+## 10. Escalation
 
 Per Shared Appendix §8. Tier 1 NOC can self-clear cable, optic, and remote-device causes. Escalate to Tier 2 for hardware replacement, or when the affected port is a member of the uplink LAG to the SSR130 and the LAG is currently at zero surviving members (store WAN down).

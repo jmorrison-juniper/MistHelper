@@ -1,6 +1,6 @@
 # SW_ALARM_CHASSIS_MGMT_LINK_DOWN
 
-## Overview
+## 1. Overview
 
 | Field | Value |
 |---|---|
@@ -21,7 +21,7 @@ Mist ships this alarm at `warn` because the production data plane typically keep
 
 **Retail-branch note:** many of our retail sites have no separate OOB management network — mgmt rides the same site LAN as production. In that case there is no independent path to lose, and `warn` is appropriate. Confirm the branch's OOB posture with your SOR before treating this as `critical`.
 
-## Impact
+## 2. Impact
 
 - Loss of out-of-band management connectivity to the branch EX4100 VC (if the branch has an OOB path).
 - Unable to reach the switch through the MGMT interface — `vme` on the 2-member VC (backed by whichever member is currently master).
@@ -30,7 +30,7 @@ Mist ships this alarm at `warn` because the production data plane typically keep
 - Delayed troubleshooting if in-band remote access — which at most retail branches rides the same LAN — becomes unavailable.
 - **VC-specific:** if the master's `me0` drops, `vme` can fail over to the backup member's `me0`. Check `show virtual-chassis` for the current master; the outage may effectively resolve itself if the peer member's `me0` is healthy.
 
-## Required Information
+## 3. Required Information
 
 | Category | Data to capture |
 |---|---|
@@ -44,7 +44,7 @@ Mist ships this alarm at `warn` because the production data plane typically keep
 
 See Shared Appendix §5 for the always-required ticket fields.
 
-## Validation
+## 4. Validation
 
 | Check | Command / Action |
 |---|---|
@@ -61,7 +61,7 @@ See Shared Appendix §5 for the always-required ticket fields.
 
 See Shared Appendix §6 for the full Junos command reference.
 
-## Resolution
+## 5. Resolution
 
 | Area | Action |
 |---|---|
@@ -74,7 +74,7 @@ See Shared Appendix §6 for the full Junos command reference.
 | Audit | Review Mist audit logs for recent changes that may have affected management config. |
 | Recovery | Confirm management interface is up, reachable from the OOB network (or from the branch LAN if in-band), and the paired clear event has fired. |
 
-## Closure Criteria
+## 6. Closure Criteria
 
 - Management interface (`me0` or `vme`) is operational.
 - Remote access from the OOB management network is restored.
@@ -82,17 +82,17 @@ See Shared Appendix §6 for the full Junos command reference.
 - No recurrence of `sw_alarm_chassis_mgmt_link_down` within a 30-minute debounce window.
 - Root cause is documented on the ticket.
 
-## Mist GUI Navigation
+## 7. Mist GUI Navigation
 
 | Task | Navigation |
 |---|---|
-| Verify alert | Monitor → Alerts (Alarms) → filter by `sw_alarm_chassis_mgmt_link_down` |
-| Switch health | Switches → *device* → Health / Insights |
-| Management status | Switches → *device* → Front Panel / Details |
+| Verify alert | Monitor → Alerts → filter by `sw_alarm_chassis_mgmt_link_down` |
+| Switch health | Switches → *device* → Insights |
+| Management status | Switches → *device* → Front Panel |
 | Events (raw) | Monitor → Events |
 | Audit logs | Organization → Audit Logs |
 
-## Junos Commands (quick reference)
+## 8. Junos Commands (quick reference)
 
 | Purpose | Command |
 |---|---|
@@ -108,6 +108,17 @@ See Shared Appendix §6 for the full Junos command reference.
 | Ping gateway | `ping <management-gateway>` |
 | Ping known-reachable host | `ping <reachable-management-host>` |
 
-## Escalation
+## 9. Cross-references (sibling alarms)
+
+If any of these are co-firing, resolve them together — chassis-mgmt-link and VC alarms often cascade:
+
+- `switch_down` — if the switch (or in a VC, a member) is fully offline, the mgmt link alarm is a downstream symptom; resolve `switch_down` first.
+- `sw_vc_port_down` — VCP failure on a 2-member VC can strand `vme` on the wrong member and manifest as a mgmt-link outage; check VC state.
+- `vc_member_deleted` / `vc_master_changed` — a collapsed or re-elected VC can flip which physical `me0` the `vme` bundle rides on.
+- `sw_critical_port_down` — if `me0`/`vme` is designated critical in the site policy, this alarm may be co-firing on the same physical port.
+
+Triage rule: **when `switch_down` or a VC-membership alarm is active, treat this alarm as a symptom, not root cause.**
+
+## 10. Escalation
 
 Per Shared Appendix §8. Tier 1 NOC can self-clear cable, port, and configuration causes. Escalate to Tier 2 for hardware replacement, VC master election changes, or when the OOB management upstream is itself impaired.

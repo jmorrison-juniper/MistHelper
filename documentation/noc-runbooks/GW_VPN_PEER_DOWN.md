@@ -1,6 +1,6 @@
 # GW_VPN_PEER_DOWN
 
-## Overview
+## 1. Overview
 
 | Field | Value |
 |---|---|
@@ -34,7 +34,7 @@ If `gw_vpn_peer_down` fires, expect one or more `gw_vpn_path_down` alarms to be 
 
 **This runbook is for the SVR peer relationship only.** On SSR gateways, SVR (data plane, per-transport peer paths) and BGP (control plane, TCP/179) are two independent overlays. BGP outages fire under `gw_bgp_neighbor_down` and have their own runbook — do not conflate them. See `GW_VPN_PATH_DOWN.md` for the SVR-vs-BGP comparison table.
 
-## Impact
+## 2. Impact
 
 **Direct (SVR):**
 
@@ -51,7 +51,7 @@ If `gw_vpn_peer_down` fires, expect one or more `gw_vpn_path_down` alarms to be 
 
 - If SVR and BGP share the affected WAN transport(s), the BGP session to the same DC hub will also drop — this will surface as a **separate** `gw_bgp_neighbor_down` alarm. Validate BGP independently rather than assuming it followed SVR's state.
 
-## Required Information
+## 3. Required Information
 
 ### SVR peer (always capture)
 
@@ -76,7 +76,7 @@ If `gw_vpn_peer_down` fires, expect one or more `gw_vpn_path_down` alarms to be 
 
 See Shared Appendix §5 for the always-required ticket fields.
 
-## Validation
+## 4. Validation
 
 ### SVR peer checks (this alarm)
 
@@ -107,7 +107,7 @@ See Shared Appendix §5 for the always-required ticket fields.
 
 If BGP is `Established` on some transport while the SVR peer is fully `down`, one or more underlays are up-enough for TCP/179 but not for SVR — investigate SVR-specific causes (MTU/PMTUD, UDP filtering, tenant / service-route / security policy). If BGP is also fully down, treat the shared underlay as the primary suspect and prioritize the underlay-link alarms.
 
-## Resolution
+## 5. Resolution
 
 Because `gw_vpn_peer_down` is the aggregate of all constituent paths failing, resolution is almost always "restore at least one path" — but which path and why depends on the co-fired alarms.
 
@@ -129,7 +129,7 @@ Because `gw_vpn_peer_down` is the aggregate of all constituent paths failing, re
 | Recovery (SVR) | Confirm `show peers` reports the peer back to `up`, at least one constituent path is `up`, and the paired clear event has fired. |
 | Recovery (BGP, if it was also affected) | Confirm BGP transitions back to `Established`. Do not close the SVR ticket until any BGP alarm has also cleared. |
 
-## Closure Criteria
+## 6. Closure Criteria
 
 **SVR (required for this alarm):**
 
@@ -148,20 +148,20 @@ Because `gw_vpn_peer_down` is the aggregate of all constituent paths failing, re
 - BGP neighbor state is `Established` and the paired `gw_bgp_neighbor_up` has been received on its own ticket.
 - Close the BGP ticket per its own runbook — do not implicitly close it from this ticket.
 
-## Mist GUI Navigation
+## 7. Mist GUI Navigation
 
 | Task | Navigation |
 |---|---|
-| Verify alert | Monitor → Alerts (Alarms) → filter by `gw_vpn_peer_down` |
-| Peer path health | WAN Assurance → Peer Path Insights |
-| WAN link health (underlay) | WAN Assurance → WAN Links |
-| SSR health | WAN Edges → *SSR130* → Health / Insights |
+| Verify alert | Monitor → Alerts → filter by `gw_vpn_peer_down` |
+| Peer path health | Monitor → Service Levels → WAN → Peer Paths |
+| WAN link health (underlay) | Monitor → Service Levels → WAN |
+| SSR health | WAN Edges → *SSR130* → Insights |
 | Gateway events | Monitor → Events |
 | Audit logs | Organization → Audit Logs |
 
 **Legacy path note:** older docs may say `Routers → SSR1300`. Current Mist UI unifies all gateways under `WAN Edges → …`.
 
-## SSR PCLI Commands (quick reference)
+## 8. SSR PCLI Commands (quick reference)
 
 SSR uses PCLI, not Junos. Do not paste Junos syntax into an SSR.
 
@@ -197,7 +197,7 @@ SSR uses PCLI, not Junos. Do not paste Junos syntax into an SSR.
 
 See Shared Appendix §7 for the full SSR PCLI reference.
 
-## Cross-references (sibling alarms)
+## 9. Cross-references (sibling alarms)
 
 If any of these are co-firing, resolve the co-fired alarm first — it is usually root cause. Because the branch has a single SSR130 (no local HA), *any* gateway-side symptom here is branch-scope; coordinate with the hub-side on-call if the impairment is on the DC-hub SSR1300's side of the peering:
 
@@ -210,7 +210,7 @@ If any of these are co-firing, resolve the co-fired alarm first — it is usuall
 - `switch_down` — upstream EX4100 VC (or a member) is down; if the SSR130's LAN-side transport rides that VC, SVR paths can go with it.
 - `gw_status` — the gateway itself is offline / unreachable / degraded. If this is co-firing, the SVR peer is a symptom of a gateway-scope fault — chase `gw_status` root cause first.
 
-## Escalation
+## 10. Escalation
 
 Per Shared Appendix §8. Tier 1 NOC can self-clear underlay-transport, reachability, ISP-handoff, cert / NTP, and rollback-driven root causes on the branch SSR130. Escalate to Tier 2 for:
 

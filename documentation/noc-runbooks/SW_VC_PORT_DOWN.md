@@ -1,6 +1,6 @@
 # SW_VC_PORT_DOWN
 
-## Overview
+## 1. Overview
 
 | Field | Value |
 |---|---|
@@ -20,7 +20,7 @@
 
 Unlike most `warn`-shipped port alarms, Mist ships `sw_vc_port_down` as `critical` natively. This is one of the few port-related alarms where Mist's default severity already reflects the blast radius (VC split risk), so no override is applied.
 
-## Impact
+## 2. Impact
 
 - Loss of Virtual Chassis redundancy on the affected VCP link.
 - **Immediate VC split risk (2-member VC).** With only master + backup, if the site is wired with a single VCP link between them, losing it partitions the chassis into two isolated single-member fragments — each attempts to run its own control plane. If the site is wired with redundant VCPs (recommended), the VC survives the loss of one but is now unprotected against a second failure.
@@ -30,7 +30,7 @@ Unlike most `warn`-shipped port alarms, Mist ships `sw_vc_port_down` as `critica
 - Potential service disruption during master/backup failover if the master-election path is affected.
 - Stale MAC/ARP entries until the fabric reconverges.
 
-## Required Information
+## 3. Required Information
 
 | Category | Data to capture |
 |---|---|
@@ -43,7 +43,7 @@ Unlike most `warn`-shipped port alarms, Mist ships `sw_vc_port_down` as `critica
 
 See Shared Appendix §5 for the always-required ticket fields.
 
-## Validation
+## 4. Validation
 
 | Check | Command / Action |
 |---|---|
@@ -62,7 +62,7 @@ See Shared Appendix §5 for the always-required ticket fields.
 
 See Shared Appendix §6 for the full Junos command reference.
 
-## Resolution
+## 5. Resolution
 
 | Area | Action |
 |---|---|
@@ -75,7 +75,7 @@ See Shared Appendix §6 for the full Junos command reference.
 | VC split recovery | If the VC has split into two single-member fragments, follow controlled rejoin procedure — do NOT power-cycle members without a plan, as this can force an unwanted master re-election. Escalate to Tier 2. |
 | Recovery | Confirm the VCP returns to Up, all members are synchronized, master/backup roles are as expected, and the paired clear event has fired. |
 
-## Closure Criteria
+## 6. Closure Criteria
 
 - Virtual Chassis is healthy: both EX4100 members present, master/backup roles as designed.
 - Affected VC port is `Up` and forwarding.
@@ -84,18 +84,18 @@ See Shared Appendix §6 for the full Junos command reference.
 - No co-firing `vc_master_changed`, `vc_backup_failed`, or `vc_member_deleted` still active.
 - Root cause is documented on the ticket, including which VCP link failed and whether the branch was wired with redundant VCPs (i.e. whether the site was one failure away from a split).
 
-## Mist GUI Navigation
+## 7. Mist GUI Navigation
 
 | Task | Navigation |
 |---|---|
-| Verify alert | Monitor → Alerts (Alarms) → filter by `sw_vc_port_down` |
-| Virtual Chassis health | Switches → *Virtual Chassis* → Health (primary/backup) |
-| VC members | Switches → *Virtual Chassis* → Members |
-| VC port status | Switches → *device* → Front Panel / Port Configuration |
+| Verify alert | Monitor → Alerts → filter by `sw_vc_port_down` |
+| Virtual Chassis health | Switches → *device* → Insights |
+| VC members | Switches → *device* → Front Panel (shows all VC members) |
+| VC port status | Switches → *device* → Front Panel |
 | Switch events | Monitor → Events |
 | Audit logs | Organization → Audit Logs |
 
-## Junos Commands (quick reference)
+## 8. Junos Commands (quick reference)
 
 | Purpose | Command |
 |---|---|
@@ -112,7 +112,7 @@ See Shared Appendix §6 for the full Junos command reference.
 | VCP-scoped logs | `show log messages \| match vcp` |
 | VC control-plane logs | `show log messages \| match vccpd` |
 
-## Cross-references (sibling alarms)
+## 9. Cross-references (sibling alarms)
 
 If any of these are co-firing, resolve them together — VC-family alarms tend to cascade:
 
@@ -125,7 +125,7 @@ If any of these are co-firing, resolve them together — VC-family alarms tend t
 
 Triage rule: **`vc_member_deleted` or `switch_down` on a member is usually root cause; `sw_vc_port_down` alone is often the earliest symptom of an impending split.**
 
-## Escalation
+## 10. Escalation
 
 Per Shared Appendix §8. Tier 1 NOC can self-clear cable, optic, and single-VCP-flap causes when the VC remains healthy (both members present, roles as designed). **Escalate to Tier 2 immediately** for:
 
