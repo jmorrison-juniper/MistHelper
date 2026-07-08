@@ -78,7 +78,7 @@ class EnvironmentUtils:
         try:
             import pwd  # noqa: PLC0415  # Unix only
 
-            current_user_name = pwd.getpwuid(os.getuid()).pw_name  # type: ignore[attr-defined]
+            current_user_name = pwd.getpwuid(os.getuid()).pw_name  # os.getuid is Unix-only
             if current_user_name == "misthelper":  # Image runs as the misthelper user.
                 logging.debug("Container detection: running as user 'misthelper'")  # Trace the user-based signal.
                 return True  # Running as misthelper means containerized.
