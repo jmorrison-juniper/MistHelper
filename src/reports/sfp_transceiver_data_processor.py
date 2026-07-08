@@ -32,7 +32,7 @@ class SFPTransceiverDataProcessor:
     OUTPUT_FILENAME = "MergedTransceiverData.csv"
 
     @staticmethod
-    def _ensure_prerequisite_csvs(org_port_stats_path, devices_with_site_info_path):
+    def _ensure_prerequisite_csvs(org_port_stats_path: str, devices_with_site_info_path: str) -> None:
         """Generate prerequisite CSVs (port stats and devices-with-site-info) if missing."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of exporter facades.
         logging.debug(
@@ -55,7 +55,7 @@ class SFPTransceiverDataProcessor:
         logging.debug("EXIT: _ensure_prerequisite_csvs")  # Trace exit
 
     @staticmethod
-    def _load_device_site_context(devices_with_site_info_path):
+    def _load_device_site_context(devices_with_site_info_path: str) -> dict[str, dict[str, str]]:
         """Load device->site mapping keyed by MAC from the devices-with-site-info CSV."""
         logging.debug("ENTRY: _load_device_site_context(%s)", devices_with_site_info_path)  # Trace entry
         logging.debug("File I/O: Reading %s", devices_with_site_info_path)  # Trace the read for I/O auditing
@@ -73,7 +73,9 @@ class SFPTransceiverDataProcessor:
         return site_info  # Return the MAC->site context map
 
     @staticmethod
-    def _extract_transceiver_row(row, site_info):
+    def _extract_transceiver_row(
+        row: dict[str, str], site_info: dict[str, dict[str, str]]
+    ) -> tuple[dict[str, str] | None, bool, str | None]:
         """Return (merged_row|None, has_transceiver, mac_with_transceiver|None) for one port-stats row."""
         mac = row.get("mac")  # Pull MAC for site-info lookup
         transceiver_model = row.get("xcvr_model", "").strip()  # Normalize transceiver model string
@@ -93,7 +95,9 @@ class SFPTransceiverDataProcessor:
         return (merged_row, True, mac)  # Candidate with merged row and matched MAC
 
     @staticmethod
-    def _scan_port_stats(org_port_stats_path, site_info):
+    def _scan_port_stats(
+        org_port_stats_path: str, site_info: dict[str, dict[str, str]]
+    ) -> tuple[list[dict[str, str]], int, int, int, set[str]]:
         """Read port-stats CSV and merge rows whose MAC is in site_info and have a non-empty optic."""
         logging.debug("ENTRY: _scan_port_stats(%s)", org_port_stats_path)  # Trace entry
         merged_data: list[dict[str, str]] = []  # Output rows collected here
@@ -119,7 +123,13 @@ class SFPTransceiverDataProcessor:
         return merged_data, total_rows, candidate_rows, matched_rows, unique_devices_with_transceivers
 
     @staticmethod
-    def _log_merge_summary(matched_rows, total_rows, candidate_rows, site_info_count, unique_devices_count):
+    def _log_merge_summary(
+        matched_rows: int,
+        total_rows: int,
+        candidate_rows: int,
+        site_info_count: int,
+        unique_devices_count: int,
+    ) -> None:
         """Emit the exact INFO log message corresponding to the matched-rows outcome."""
         if matched_rows == 0:  # No matching transceivers found path
             logging.info(
@@ -139,7 +149,7 @@ class SFPTransceiverDataProcessor:
         )  # Preserve the original success-path informational message verbatim
 
     @staticmethod
-    def _finalize_merge_output(merged_data):
+    def _finalize_merge_output(merged_data: list[dict[str, str]]) -> None:
         """Write merged rows to disk and emit the success-path INFO and user-facing messages."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataExporter helper.
         mh.DataExporter.write_with_format_selection(
@@ -154,7 +164,7 @@ class SFPTransceiverDataProcessor:
         logging.debug("EXIT: SFPTransceiverDataProcessor.merge_transceiver_data - success")  # Trace successful exit
 
     @staticmethod
-    def _run_merge_pipeline(org_port_stats_path, devices_with_site_info_path):
+    def _run_merge_pipeline(org_port_stats_path: str, devices_with_site_info_path: str) -> None:
         """Run load->scan->summary->write inside a unified try/except for CSV/IO failures."""
         try:
             site_info = SFPTransceiverDataProcessor._load_device_site_context(devices_with_site_info_path)
@@ -179,7 +189,7 @@ class SFPTransceiverDataProcessor:
             raise  # Re-raise to caller
 
     @staticmethod
-    def merge_transceiver_data():
+    def merge_transceiver_data() -> None:
         """Generate a merged transceiver CSV linking port optics to site + device context.
 
         Steps:
