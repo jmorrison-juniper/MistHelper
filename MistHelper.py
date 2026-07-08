@@ -150,6 +150,9 @@ from src.export.self_export_utils import (  # pylint: disable=unused-import
 from src.export.site_client_exporter import (  # pylint: disable=unused-import
     SiteClientExporter,  # noqa: F401  # Cat B (1013 SC-001 position 14) -- re-export for MistHelper.SiteClientExporter callers
 )
+from src.export.site_config_exporter import (  # pylint: disable=unused-import
+    SiteConfigExporter,  # noqa: F401  # Cat B (1013 SC-001 position 19) -- re-export for MistHelper.SiteConfigExporter callers
+)
 from src.export.site_export_utils import (
     configure_site_export_utils_dependencies,
 )  # Import site export utility configuration
@@ -12187,106 +12190,7 @@ class SiteDeviceExporter:  # Site device exporters.
 # SiteClientExporter moved to src/export/site_client_exporter.py (1013 SC-001 position 14)
 
 
-class SiteConfigExporter:  # Site config exporters.
-    """
-    Site Configuration Exporter
-
-    Handles site-level WLAN, map, zone, and settings exports.
-    Extracted from SiteExportUtils.
-    """
-
-    @staticmethod
-    def _resolve_wlan_site_name(site_id: str) -> str:
-        """Look up site name from org's site list, falling back to site_id on failure."""
-        try:
-            response = mistapi.api.v1.orgs.sites.listOrgSites(  # List org sites.
-                apisession,
-                ConfigUtils.get_cached_or_prompted_org_id(),
-            )
-            sites = mistapi.get_all(response=response, mist_session=apisession)  # Page all rows.
-            return next((site["name"] for site in sites if site["id"] == site_id), site_id)  # Match → name.
-        except Exception as exception:  # Name lookup failed.
-            logging.error("Error getting site name for WLAN export: %s", exception)  # Log the error.
-            return site_id  # Fall back to id.
-
-    @staticmethod
-    def _fetch_wlans_with_fallback(site_id: str) -> list:
-        """Prefer derived WLANs (includes inherited/template); fall back to site-local on failure."""
-        try:
-            derived_response = mistapi.api.v1.sites.wlans.listSiteWlansDerived(  # List derived WLANs.
-                apisession,
-                site_id,
-                resolve=True,
-            )
-            return mistapi.get_all(response=derived_response, mist_session=apisession)  # Page all rows.
-        except Exception as exception:  # Derived fetch failed → site-local fallback.
-            logging.warning(
-                "Failed to fetch derived WLANs for site %s, falling back to site-local WLANs: %s",
-                site_id,
-                exception,
-            )
-            local_response = mistapi.api.v1.sites.wlans.listSiteWlans(apisession, site_id, limit=1000)
-            return mistapi.get_all(response=local_response, mist_session=apisession)  # Page all rows.
-
-    @staticmethod
-    def _persist_site_wlans_csv(rawdata: list, filename: str, site_name: str) -> None:
-        """Flatten + sort by SSID + write WLAN rows (or write empty CSV when none)."""
-        if not rawdata:  # No rows.
-            logging.warning("No data provided for output to %s", filename)  # Warn none.
-            DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]  # Empty CSV.
-            print(f"! 0 records exported to data\\{filename}")  # Tell the user zero.
-            return  # Done.
-        processed = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested fields.
-        processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]  # CSV-safe.
-        processed = sorted(processed, key=lambda row: row.get("ssid", ""))  # Sort by SSID.
-        DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]  # Persist.
-        print(f"! {len(processed)} records exported to data\\{filename}")  # Tell the user.
-        logging.info("Exported %s WLAN records for site %s to %s", len(processed), site_name, filename)
-
-    @staticmethod
-    def wlans(site_id=None):  # Export site WLANs.
-        """Export effective WLANs for a site to SiteWlans.csv."""
-        logging.info("Starting export of site WLANs...")  # Log start.
-        if not site_id:  # No site given.
-            site_id = PromptUtils.select_site()  # Select a site.
-            if not site_id:  # No site.
-                logging.error("No site selected. Exiting.")  # Log the error.
-                return  # Abort.
-        site_name = SiteConfigExporter._resolve_wlan_site_name(site_id)  # Resolve site name.
-        filename = f"SiteWlans_{site_name.replace(' ', '_').replace('-', '_')}.csv"  # Build CSV name.
-        rawdata = SiteConfigExporter._fetch_wlans_with_fallback(site_id)  # Derived → local fallback.
-        SiteConfigExporter._persist_site_wlans_csv(rawdata, filename, site_name)  # Persist (or empty).
-
-    @staticmethod
-    def maps():  # Export site maps.
-        """Export maps for a site to SiteMaps.csv."""
-        SiteExportUtils._export_data(api_call=mistapi.api.v1.sites.maps.listSiteMaps, data_type="maps", sort_key="name")  # type: ignore[no-untyped-call]
-
-    @staticmethod
-    def zones():  # Export site zones.
-        """Export zones for a site to SiteZones.csv."""
-        SiteExportUtils._export_data(  # type: ignore[no-untyped-call]
-            api_call=mistapi.api.v1.sites.zones.listSiteZones, data_type="zones", sort_key="name"
-        )
-
-    @staticmethod
-    def settings():  # Export all site settings.
-        """Export configuration settings for all sites to AllSiteConfigs.csv."""
-        print("Site Configuration Settings:")  # Header.
-        logging.info("Starting export of all site configuration settings...")  # Log start.
-        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
-        logging.debug("Using org_id: %s for site settings export.", current_org_id)  # Trace the org.
-        data = APIFetchUtils.all_site_settings(apisession, current_org_id, limit=1000)  # type: ignore[no-untyped-call]
-        if data:  # Have data.
-            logging.info("Fetched settings for %s sites. Flattening and sanitizing data...", len(data))
-            data = DataProcessingUtils.flatten_nested_fields(data)  # Flatten nested fields.
-            data = DataProcessingUtils.escape_multiline(data)  # type: ignore[no-untyped-call]
-            DataExporter.write_with_format_selection(data, "AllSiteConfigs.csv")  # type: ignore[no-untyped-call]
-            print(f"! {len(data)} site configurations exported to AllSiteConfigs.csv")  # Tell the user.
-            logging.info(" Site configs saved to AllSiteConfigs.csv")  # Log the save.
-        else:
-            logging.warning(" No site configs found.")  # Warn none found.
-            print("! No site configurations found.")  # Tell the user.
+# SiteConfigExporter moved to src/export/site_config_exporter.py (1013 SC-001 position 19)
 
 
 class SiteAnomalyExporter:  # Site anomaly exporters.
