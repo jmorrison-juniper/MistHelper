@@ -8,14 +8,14 @@
 |---|---|
 | **Alert Name** | SW_CRITICAL_PORT_DOWN |
 | **Mist alarm key** | `sw_critical_port_down` |
-| **Platform** | Juniper Mist EX Series Switch (validated against EX4400) |
+| **Platform** | Juniper EX4100 (2-member Virtual Chassis at a retail branch — typically EX4100-48P for PoE). |
 | **Mist native severity** | `warn` |
 | **NOC severity** | **Critical** (override — see rationale below) |
 | **Group** | `infrastructure` |
 | **Clear event key** | `sw_critical_port_up` |
 | **Correlated alarms** | `port_flap`, `port_stuck`, `bad_cable`, `sw_bad_optics`, `sw_negotiation_incomplete`, `sw_mtu_mismatch`, `sw_port_storm_control`, `switch_down`, `ap_offline` |
-| **Prerequisites** | **The port must be flagged as "critical" in the Mist port profile.** Without this flag the alarm will not fire. Configure via Site → Switch → Port Configuration → *Critical Port*, or via port profile template. |
-| **Description** | An EX physical or logical port marked as **critical** has transitioned to the Down state. Critical ports typically include uplinks, IDF/MDF links, LAG members, and ports serving essential downstream devices (APs, IP phones, servers, downstream switches). The failure of a critical port implies loss of connectivity for connected devices or network services. |
+| **Prerequisites** | **The port must be flagged as "critical" in the Mist port profile.** Without this flag the alarm will not fire. Configure via Site → Switch → Port Configuration → *Critical Port*, or via port profile template. At a retail branch, ports typically flagged critical are: the uplink LAG to the SSR130, PoE-served AP ports, POS terminal ports, IP-phone ports, and any back-office server port. |
+| **Description** | An EX4100 physical or logical port marked as **critical** has transitioned to Down. At a retail branch the impact of a critical-port failure is typically visible to the store immediately — an AP drops, a POS lane stops taking cards, a phone goes offline, or in the worst case the uplink to the SSR130 loses a member and store traffic reconverges (or, if the uplink is a single link rather than a LAG, the store loses WAN). |
 
 ### Severity rationale (Mist `warn` → NOC `critical`)
 
@@ -24,24 +24,24 @@ Mist ships this as `warn` because port-down events span a wide impact range. Bec
 ## Impact
 
 - Loss of endpoint or uplink connectivity for the affected port.
-- Client, AP, IP phone, or downstream switch may become unreachable.
+- **Uplink to SSR130.** If the port is a member of the LAG to the SSR130, the LAG loses a member and forwards on the survivor; if the LAG is down to zero members (or the uplink is a single link), the branch loses WAN.
+- **Downstream device offline.** A critical port serving a Mist AP, POS terminal, IP phone, or back-office server takes that device offline. In a store this is user-visible immediately.
 - Potential loss of VLAN or trunk connectivity if the port is a trunk.
-- LACP bundle degradation if the port is a LAG member.
-- Reduced network redundancy on the affected fabric segment.
-- Possible site outage if the port is the sole/primary uplink.
-- If the port is a member of an ESI-LAG in an EVPN fabric, traffic reconverges via the peer, but redundancy is degraded.
+- LACP bundle degradation if the port is a LAG member (uplink or member-to-server bundle).
+- Reduced fabric redundancy on the affected segment.
+- PoE loss on the affected port for AP / phone / camera endpoints.
 
 ## Required Information
 
 | Category | Data to capture |
 |---|---|
-| Device | Site Name, Hostname, Serial Number, Junos Version, Mist device ID |
-| Port classification | `access` / `uplink` / `IDF-MDF` / `server-edge` / `AP` / `VCP` / `LAG-member` (see Shared Appendix §5) |
-| Interface | Interface Name, Description, Admin Status, Oper Status, VLAN(s), Speed, Duplex |
-| Connected device | LLDP neighbor, MAC address, previous known device |
+| Device | Site Name, Hostname (which EX4100 member), Serial Number, Junos Version, Mist device ID |
+| Port classification | `uplink-to-SSR130` / `AP` / `POS` / `IP-phone` / `server` / `back-office` / `access` / `VCP` / `LAG-member` |
+| Interface | Interface Name (e.g. `ge-0/0/47`, `xe-0/2/0`), Description, Admin Status, Oper Status, VLAN(s), Speed, Duplex, PoE state (if applicable) |
+| Connected device | LLDP neighbor (SSR130 hostname if uplink, AP name if AP), MAC address, previous known device |
 | Optics (if fiber) | Media type, DDM Tx/Rx power, laser bias, temperature |
 | Timeline | Alert timestamp (UTC), recent configuration changes, related audit log entries |
-| Correlated Alarms | Any active alarms on the device or connected downstream device in the last 15 min |
+| Correlated Alarms | Any active alarms on the EX4100 or on the connected downstream device (e.g. `ap_offline`) in the last 15 min |
 
 ## Validation
 
@@ -62,7 +62,7 @@ Mist ships this as `warn` because port-down events span a wide impact range. Bec
 | Logs (interface-scoped) | `show log messages \| match <interface>` |
 | Ping neighbor (if L3) | `ping <neighbor-ip>` |
 
-See Shared Appendix §8 for the full Junos command reference.
+See Shared Appendix §6 for the full Junos command reference.
 
 ## Resolution
 
@@ -99,8 +99,6 @@ See Shared Appendix §8 for the full Junos command reference.
 | Switch events | Monitor → Events |
 | Audit logs | Organization → Audit Logs |
 
-See Shared Appendix §6 for full GUI navigation reference.
-
 ## Junos Commands (quick reference)
 
 | Purpose | Command |
@@ -135,4 +133,4 @@ If the current alarm co-fires with any of these, resolve the co-fired alarm firs
 
 ## Escalation
 
-Per Shared Appendix §10. Tier 1 NOC can self-clear cable, optic, and remote-device causes. Escalate to Tier 2 for hardware replacement or when the port is part of an EVPN fabric with unclear failover behavior.
+Per Shared Appendix §8. Tier 1 NOC can self-clear cable, optic, and remote-device causes. Escalate to Tier 2 for hardware replacement, or when the affected port is a member of the uplink LAG to the SSR130 and the LAG is currently at zero surviving members (store WAN down).

@@ -2,6 +2,24 @@
 
 This document holds the conventions, cross-cutting guidance, and shared reference material used by every alarm-specific runbook in this library. Each per-alarm document links back to sections here rather than duplicating content.
 
+## 0. Target topology (retail branch)
+
+Every runbook in this library assumes the **retail branch reference topology**:
+
+| Layer | Hardware | Notes |
+|---|---|---|
+| WAN gateway | **1 × Juniper SSR130** | Single node — no local HA peer. BGP + SVR overlay to the DC hub SSR1300 pair (Dallas / Chicago). A total gateway failure isolates the branch. |
+| Access switching | **2 × Juniper EX4100** in a Virtual Chassis | 2-member VC (master + backup). No dedicated distribution layer at the branch. |
+| Downstream | Mist APs, POS terminals, IP phones, back-office endpoints | PoE from EX4100. |
+| WAN transport | Dual ISP (typically) | Underlay to the ISPs is normally static-routed; BGP is the *overlay* to hub. |
+
+Implications that shape the runbooks:
+
+- **Single SSR130.** No gateway HA at the branch — any gateway-side outage is site-impacting. Overlay BGP peers point at the DC hub SSR1300 pair; there is no branch-local BGP peer.
+- **2-member EX4100 VC.** Only master + backup roles (no linecards). Losing the sole VCP path splits the VC into two isolated single-member fragments — split risk is immediate, not gradual.
+- **No dedicated OOB in most branches.** If your branch has no separate OOB management network, treat `sw_alarm_chassis_mgmt_link_down` as `warn` rather than the library-default `critical` (see §2).
+- **DC hub SSR1300 pair is out of scope** for this library — a separate hub-side runbook set covers Dallas/Chicago SSR1300 alarms.
+
 ## 1. Runbook field standard
 
 Every alarm runbook must include the following fields. Fields that don't apply to a given alarm should be marked `n/a` rather than omitted, so the layout stays scannable.
@@ -22,11 +40,18 @@ Every alarm runbook must include the following fields. Fields that don't apply t
 
 ## 2. Severity override policy
 
-Mist assigns each alarm a native severity based on its own operational model. Our NOC dashboard may need to raise or lower that severity to fit our on-call model.
+Mist assigns each alarm a native severity in the alarm definitions catalog (`GET /api/v1/const/alarm_defs`). This severity is **fixed per alarm key** and is **not configurable** — Mist alarm templates (`POST/PUT /orgs/{org_id}/alarmtemplates`) only control per-alarm `enabled` state and email `delivery`. There is no `severity` field on an alarm-template rule.
+
+Where severity overrides actually live:
+
+- **Downstream paging / ticketing layer** (webhook consumer, PagerDuty, ServiceNow, etc.) — this is where we translate a Mist-native `warn` into a NOC-paged `critical`, or suppress an `info` alarm entirely.
+- Overrides are keyed off the alarm-payload `type` (Mist alarm key), optionally combined with `group`, site tags, or device role.
+
+Rules for this runbook library:
 
 - Any runbook whose **NOC severity** differs from **Mist native severity** must explain the override in the Description or a dedicated "Severity rationale" note.
-- Overrides are set in the alarm template in Mist (**Organization → Alarm Templates**). They are not implicit — someone has to configure them.
-- If two teams need different severities for the same alarm, split alarm templates by site group rather than by teaching operators to reinterpret severities.
+- The override lives in the paging/ticketing layer, not in Mist. Document *which* layer owns the mapping so operators know where to change it.
+- If two teams need different severities for the same alarm, split the mapping by site tag or device role in the downstream layer — do not teach operators to reinterpret severities.
 
 ## 3. Closure criteria and auto-resolution
 
@@ -38,43 +63,13 @@ Every runbook's Closure Criteria section must reference the paired `_clear` or `
 
 ## 4. Correlated alarms and dedup
 
-Many failures cascade. A physical uplink failure will typically fire:
+Many failures cascade. A typical retail-branch example — the EX4100 VC uplink to the SSR130 fails:
 
-`sw_critical_port_down` → `sw_alarm_chassis_mgmt_link_down` *(if mgmt rode that path)* → `switch_down` → `gw_bgp_neighbor_down` *(if BGP peered over that link)*
+`sw_critical_port_down` (EX4100 uplink) → `sw_alarm_chassis_mgmt_link_down` *(if branch mgmt rode that path)* → `switch_down` *(if the affected member also loses its keepalive)* → `gw_bgp_neighbor_down` *(if the SSR130's LAN-side BGP peer sat behind that uplink)*
 
 The runbook for each alarm should list its usual co-fires under **Correlated Alarms**. Triage rule of thumb: **the lowest-layer alarm is usually root cause**; higher-layer alarms are symptoms. Suppress the symptoms in the ticketing layer once the root-cause alarm is acknowledged, not in Mist.
 
-## 5. Peer / port classification
-
-For alarms whose severity depends on *which* port or *which* peer went down, the runbook must require the operator to classify the object before escalating:
-
-- **Ports**: `access` / `uplink` / `IDF-MDF` / `server-edge` / `AP` / `VCP` / `LAG-member`
-- **BGP peers**: `underlay-ISP` / `internal-RR` / `overlay-CE`
-- **VPN peer paths**: `hub` / `spoke` / `mesh`
-
-This classification determines blast radius and whether an alarm should escalate beyond the NOC.
-
-## 6. Standard Mist GUI navigation
-
-Paths as of the current Mist UI. If you find a path is stale, update the shared appendix — do not fork it into individual runbooks.
-
-| Task | Navigation |
-|---|---|
-| Active alarms (org-wide) | Monitor → Alerts (Alarms) |
-| Alarm templates (severity/routing) | Organization → Alarm Templates |
-| Site alarm history | Monitor → Alerts → filter by site |
-| Device health (switch) | Switches → *device* → Health / Insights |
-| Device health (WAN edge / SSR / SRX) | WAN Edges → *device* → Health / Insights |
-| Port state | Switches → *device* → Front Panel / Port Config |
-| Client / connected device | Clients → Connected Devices |
-| SVR peer paths | WAN Assurance → Peer Path Insights |
-| WAN link health | WAN Assurance → WAN Links |
-| Events (raw) | Monitor → Events |
-| Audit logs | Organization → Audit Logs |
-
-**Legacy path note:** older docs may reference `Routers → …` for SSR devices. Current UI unifies all gateways under `WAN Edges → …`.
-
-## 7. Standard information to capture on every ticket
+## 5. Standard information to capture on every ticket
 
 Independent of alarm type, capture on ticket creation:
 
@@ -85,7 +80,7 @@ Independent of alarm type, capture on ticket creation:
 - Whether the device is currently reachable in Mist (`connected` / `disconnected`)
 - Any correlated alarms active in the last 15 minutes on the same device or site
 
-## 8. Common Junos (EX / SRX) commands
+## 6. Common Junos (EX / SRX) commands
 
 Applicable to any Junos-based device (EX switches, SRX gateways). Use these as building blocks in per-alarm runbooks.
 
@@ -111,7 +106,7 @@ Applicable to any Junos-based device (EX switches, SRX gateways). Use these as b
 | Log messages (interface-scoped) | `show log messages \| match <interface>` |
 | Config diff (recent changes) | `show system commit` then `show configuration \| compare rollback N` |
 
-## 9. Common SSR (Session Smart Router) PCLI commands
+## 7. Common SSR (Session Smart Router) PCLI commands
 
 Applicable to SSR gateways. SSR PCLI differs from Junos — do not mix.
 
@@ -133,7 +128,7 @@ Applicable to SSR gateways. SSR PCLI differs from Junos — do not mix.
 | Reachability (correct source) | `ping <target> source <local-transport-ip>` |
 | Traceroute | `traceroute <target>` |
 
-## 10. Standard escalation ladder
+## 8. Standard escalation ladder
 
 Applies to every runbook unless a specific runbook overrides.
 
@@ -144,9 +139,9 @@ Applies to every runbook unless a specific runbook overrides.
 
 Every runbook should note at which step (if earlier than Tier 2) the alarm can be self-cleared.
 
-## 11. Cross-references from per-alarm runbooks
+## 9. Cross-references from per-alarm runbooks
 
 Per-alarm runbooks should reference this appendix by section number, not by copying content. Example:
 
 > Severity override policy: see Shared Appendix §2.
-> Commands: see Shared Appendix §8 (Junos) or §9 (SSR).
+> Commands: see Shared Appendix §6 (Junos) or §7 (SSR).
