@@ -136,6 +136,9 @@ from src.export.msp_inventory_exporter import (  # pylint: disable=unused-import
 from src.export.self_export_utils import (  # pylint: disable=unused-import
     SelfExportUtils,  # noqa: F401  # Cat B (1013 SC-001 position 7) -- re-export for menu tuple at MistHelper:18167
 )
+from src.export.site_client_exporter import (  # pylint: disable=unused-import
+    SiteClientExporter,  # noqa: F401  # Cat B (1013 SC-001 position 14) -- re-export for MistHelper.SiteClientExporter callers
+)
 from src.export.site_export_utils import (
     configure_site_export_utils_dependencies,
 )  # Import site export utility configuration
@@ -145,7 +148,6 @@ from src.export.site_insights.device_metric_operation import (
 from src.export.site_insights.site_metric_operation import (
     SiteMetricOperation,
 )  # Decomposed Menu 74 entry point
-from src.export.wifi_clients_exporter import WifiClientsExporter  # Import WiFi client export handler
 from src.firmware.firmware_manager import (  # Cat A canonical (1013 SC-002)
     FirmwareManager,
     FirmwareManagerConfig,
@@ -12299,91 +12301,7 @@ class SiteDeviceExporter:  # Site device exporters.
             print(f"! Error fetching device data: {e}")  # Tell the user
 
 
-class SiteClientExporter:  # Site client exporters.
-    """
-    Site Client Data Exporter
-
-    Handles site-level client data, WiFi clients, and beacon exports.
-    Extracted from SiteExportUtils.
-    """
-
-    @staticmethod
-    def _persist_site_clients(rawdata: list, site_name: str) -> None:
-        """Flatten + persist site-clients rows to a per-site CSV (or tell the user when empty)."""
-        if not rawdata:  # No clients — tell the user and return.
-            print("! No client data found for this site")  # User notice.
-            return  # Done.
-        flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested fields.
-        sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)  # type: ignore[no-untyped-call]  # CSV-safe.
-        filename = f"SiteClients_{site_name.replace(' ', '_')}.csv"  # Per-site CSV name.
-        DataExporter.write_with_format_selection(sanitized_data, filename)  # type: ignore[no-untyped-call]  # Persist.
-        print(f"! {len(rawdata)} client records exported to {filename}")  # User notice with count.
-
-    @staticmethod
-    def clients():  # Export site client stats.
-        """Export client data for a site to SiteClients.csv."""
-        print("Site Client Statistics:")  # Header
-        logging.info("Starting export of site client statistics...")  # Trace start
-        resolved = SiteDeviceExporter._resolve_site_for_stats(
-            "client statistics"
-        )  # Prompt + org/site resolution (shared)
-        if resolved is None:  # Abort signaled by resolver
-            return
-        site_id, site_name = resolved  # Unpack resolved identifiers
-        try:
-            response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(apisession, site_id, limit=1000)
-            rawdata = mistapi.get_all(response=response, mist_session=apisession)  # Page all rows
-            SiteClientExporter._persist_site_clients(rawdata, site_name)  # Persist or tell user empty
-        except Exception as e:  # Fetch failed
-            logging.error("Error fetching client stats for site %s: %s", site_name, e)  # Log the error
-            print(f"! Error fetching client data: {e}")  # Tell the user
-
-    @staticmethod
-    def client_insights():  # noqa: C901, PLR0912, PLR0915
-        """Delegated site client insights entrypoint preserved for compatibility."""
-        from src.refactors.serial_cc.site_client_insights import SiteClientInsightsService
-
-        SiteClientInsightsService.execute()  # Run the insights export.
-
-    @staticmethod
-    def _normalize_client_mac_or_none(client_mac: str) -> str | None:  # Normalize a client MAC.
-        """Validate and normalize client MAC for site insights endpoints."""
-        if not client_mac:  # Empty input.
-            return None  # Return None.
-        if not PacketCaptureManager.validate_mac_address(client_mac):  # Invalid MAC.
-            return None  # Return None.
-        return PacketCaptureManager.normalize_mac_address(client_mac)  # Return normalized MAC.
-
-    @staticmethod
-    def wifi_clients(site_id=None):  # Export WiFi clients.
-        """Compatibility facade that delegates WiFi client export to extracted exporter."""
-        logging.info(
-            "Delegating wifi_clients to WifiClientsExporter"
-        )  # Log before constructing extracted exporter dependencies.
-        exporter = (
-            WifiClientsExporter(  # Build extracted exporter with existing utility dependencies to preserve behavior.
-                cache_utils=CacheUtils,
-                org_site_exporter=OrgSiteExporter,
-                prompt_utils=PromptUtils,
-                file_path_utils=FilePathUtils,
-                data_processing_utils=DataProcessingUtils,
-                data_exporter=DataExporter,
-                mistapi_module=mistapi,
-                apisession=apisession,
-            )
-        )
-        logging.debug(
-            "Initialized WifiClientsExporter for site_id=%s", site_id
-        )  # Log exporter construction completion.
-        exporter.execute(site_id=site_id)  # Delegate export execution while preserving facade signature.
-        logging.debug("Completed delegated wifi_clients export workflow")  # Log delegated exporter completion.
-
-    @staticmethod
-    def beacons():  # Export beacons.
-        """Export beacons for a site to SiteBeacons.csv."""
-        SiteExportUtils._export_data(  # type: ignore[no-untyped-call]
-            api_call=mistapi.api.v1.sites.beacons.listSiteBeacons, data_type="beacons", sort_key="name"
-        )
+# SiteClientExporter moved to src/export/site_client_exporter.py (1013 SC-001 position 14)
 
 
 class SiteConfigExporter:  # Site config exporters.

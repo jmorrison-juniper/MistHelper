@@ -1,0 +1,107 @@
+"""SiteClientExporter -- site-level client/beacon/wifi export operations.
+
+Extracted from MistHelper.py during initiative 1013 (Cat B, position 14).
+Handles site-level client data, WiFi clients, and beacon exports.  All methods
+are static -- no state is kept on the class.  Callers continue to reach it
+through the ``MistHelper.SiteClientExporter`` re-export alias.
+"""
+
+from __future__ import annotations  # WHY: enable PEP 604 unions on Python 3.9+.
+
+import importlib  # WHY: lazy MistHelper import to reach live helper classes without circular load.
+import logging  # WHY: structured trace for export lifecycle events.
+from typing import Any  # WHY: raw client rows are duck-typed dicts from mistapi.
+
+import mistapi  # WHY: direct SDK access for listSiteWirelessClientsStats + beacons endpoints.
+
+from src.export.wifi_clients_exporter import WifiClientsExporter  # Extracted WiFi export orchestrator.
+
+
+class SiteClientExporter:
+    """Site Client Data Exporter.
+
+    Handles site-level client data, WiFi clients, and beacon exports.
+    Extracted from SiteExportUtils.
+    """
+
+    @staticmethod
+    def _persist_site_clients(rawdata: list[Any], site_name: str) -> None:
+        """Flatten + persist site-clients rows to a per-site CSV (or tell the user when empty)."""
+        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataProcessingUtils + DataExporter helpers.
+        if not rawdata:  # No clients -- tell the user and return.
+            print("! No client data found for this site")  # User notice.
+            return
+        flattened_data = mh.DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested fields.
+        sanitized_data = mh.DataProcessingUtils.escape_multiline(flattened_data)  # CSV-safe.
+        filename = f"SiteClients_{site_name.replace(' ', '_')}.csv"  # Per-site CSV name.
+        mh.DataExporter.write_with_format_selection(sanitized_data, filename)  # Persist.
+        print(f"! {len(rawdata)} client records exported to {filename}")  # User notice with count.
+
+    @staticmethod
+    def clients() -> None:
+        """Export client data for a site to SiteClients.csv."""
+        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of SiteDeviceExporter + apisession module global.
+        print("Site Client Statistics:")  # Header.
+        logging.info("Starting export of site client statistics...")  # Trace start.
+        resolved = mh.SiteDeviceExporter._resolve_site_for_stats(  # Prompt + org/site resolution (shared).
+            "client statistics"
+        )
+        if resolved is None:  # Abort signaled by resolver.
+            return
+        site_id, site_name = resolved  # Unpack resolved identifiers.
+        try:
+            response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(mh.apisession, site_id, limit=1000)
+            rawdata = mistapi.get_all(response=response, mist_session=mh.apisession)  # Page all rows.
+            SiteClientExporter._persist_site_clients(rawdata, site_name)  # Persist or tell user empty.
+        except Exception as e:  # Fetch failed.
+            logging.error("Error fetching client stats for site %s: %s", site_name, e)  # Log the error.
+            print(f"! Error fetching client data: {e}")  # Tell the user.
+
+    @staticmethod
+    def client_insights() -> None:
+        """Delegated site client insights entrypoint preserved for compatibility."""
+        # WHY: local import keeps the serial_cc service optional at module-load time.
+        from src.refactors.serial_cc.site_client_insights import SiteClientInsightsService
+
+        SiteClientInsightsService.execute()  # Run the insights export.
+
+    @staticmethod
+    def _normalize_client_mac_or_none(client_mac: str) -> str | None:
+        """Validate and normalize client MAC for site insights endpoints."""
+        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of PacketCaptureManager helper.
+        if not client_mac:  # Empty input.
+            return None
+        if not mh.PacketCaptureManager.validate_mac_address(client_mac):  # Invalid MAC.
+            return None
+        return mh.PacketCaptureManager.normalize_mac_address(client_mac)  # Normalized MAC.
+
+    @staticmethod
+    def wifi_clients(site_id: str | None = None) -> None:
+        """Compatibility facade that delegates WiFi client export to extracted exporter."""
+        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of live helper globals + apisession.
+        logging.info(
+            "Delegating wifi_clients to WifiClientsExporter"
+        )  # Log before constructing extracted exporter dependencies.
+        exporter = WifiClientsExporter(  # Preserve existing utility wiring to avoid behavior drift.
+            cache_utils=mh.CacheUtils,
+            org_site_exporter=mh.OrgSiteExporter,
+            prompt_utils=mh.PromptUtils,
+            file_path_utils=mh.FilePathUtils,
+            data_processing_utils=mh.DataProcessingUtils,
+            data_exporter=mh.DataExporter,
+            mistapi_module=mistapi,
+            apisession=mh.apisession,
+        )
+        logging.debug(
+            "Initialized WifiClientsExporter for site_id=%s", site_id
+        )  # Log exporter construction completion.
+        exporter.execute(site_id=site_id)  # Delegate export execution while preserving facade signature.
+        logging.debug("Completed delegated wifi_clients export workflow")  # Log delegated exporter completion.
+
+    @staticmethod
+    def beacons() -> None:
+        """Export beacons for a site to SiteBeacons.csv."""
+        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of SiteExportUtils._export_data helper.
+        mh.SiteExportUtils._export_data(  # Shared export scaffolding handles prompting + CSV write.
+            api_call=mistapi.api.v1.sites.beacons.listSiteBeacons, data_type="beacons", sort_key="name"
+        )
