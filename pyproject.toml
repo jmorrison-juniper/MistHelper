@@ -233,6 +233,7 @@ omit = [
     "*/site-packages/*",
     "src/maps/*",
     "src/export/const_definitions_exporter.py",
+    "src/export/org_admin_exporter.py",
     "src/export/org_alarm_event_exporter.py",
     "src/export/site_config_exporter.py",
     "src/firmware/firmware_manager.py",

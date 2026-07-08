@@ -141,6 +141,9 @@ from src.export.device_events_52w_exporter import (  # pylint: disable=unused-im
 from src.export.msp_inventory_exporter import (  # pylint: disable=unused-import
     MSPInventoryExporter,  # noqa: F401  # Cat B (1013 SC-001 position 8) -- re-export for menu tuple + static call rewire
 )
+from src.export.org_admin_exporter import (  # pylint: disable=unused-import
+    OrgAdminExporter,  # noqa: F401  # Cat B (1013 SC-001 position 20) -- re-export for MistHelper.OrgAdminExporter callers
+)
 from src.export.org_alarm_event_exporter import (  # pylint: disable=unused-import
     OrgAlarmEventExporter,  # noqa: F401  # Cat B (1013 SC-001 position 18) -- re-export for MistHelper.OrgAlarmEventExporter callers
 )
@@ -10883,100 +10886,7 @@ class WiredClientManufacturerReportGenerator:  # Wired client manufacturer repor
         logging.info("Manufacturer report exported: %s records for %s -> %s", len(sanitized), label, filename)
 
 
-class OrgAdminExporter:  # Org admin/token exporters.
-    """
-    Organization Admin and License Exporter
-
-    Handles API tokens, admins, SSO, license, and usage exports.
-    Extracted from OrgExportUtils.
-    """
-
-    @staticmethod
-    def api_tokens():  # Export API tokens.
-        """Export organization API tokens to OrgApiTokens.csv."""
-        logging.info("Starting export of organization api tokens...")  # Log start.
-        APIDataFetcher(  # Fetch and write tokens.
-            title="Organization Api Tokens:",
-            api_call=mistapi.api.v1.orgs.apitokens.listOrgApiTokens,
-            filename="OrgApiTokens.csv",
-            sort_key="name",
-        ).execute()
-
-    @staticmethod
-    def admins():  # Export admins.
-        """Export organization admins to OrgAdmins.csv."""
-        logging.info("Starting export of organization admins...")  # Log start.
-        APIDataFetcher(  # Fetch and write admins.
-            title="Organization Admins:",
-            api_call=mistapi.api.v1.orgs.admins.listOrgAdmins,
-            filename="OrgAdmins.csv",
-            sort_key="name",
-        ).execute()
-
-    @staticmethod
-    def sso():  # Export SSO config.
-        """Export organization SSO configuration to OrgSso.csv."""
-        OrgExportUtils.export_data(api_call=mistapi.api.v1.orgs.ssos.listOrgSsos, data_type="sso", sort_key="name")  # type: ignore[no-untyped-call]
-
-    @staticmethod
-    def _fetch_license_payload(current_org_id: str) -> list:
-        """Fetch license rows via the wrapper, or fall back to a raw GET when the wrapper is absent."""
-        list_func = getattr(mistapi.api.v1.orgs.licenses, "listOrgLicenses", None)  # Locate the wrapper if shipped
-        if list_func is None:  # Wrapper missing -> fall back to raw GET
-            logging.debug("listOrgLicenses wrapper not present in mistapi library; performing direct GET /licenses")
-            raw_url = f"/api/v1/orgs/{current_org_id}/licenses"  # Compose raw API path
-            if apisession is None:  # Direct GET requires an initialized session
-                raise ValueError("API session not initialized")
-            response = apisession.mist_get(raw_url)  # Raw GET fallback
-            return getattr(response, "data", response) or []  # Unwrap .data or response, default empty
-        response = list_func(apisession, current_org_id, limit=1000)  # Use wrapper path
-        return mistapi.get_all(response=response, mist_session=apisession) or []  # Page-all wrapper result
-
-    @staticmethod
-    def _fetch_license_records(current_org_id: str) -> list:
-        """Fetch license rows via wrapper or raw GET fallback, normalized to a list."""
-        raw_items = OrgAdminExporter._fetch_license_payload(current_org_id)  # Resolve via wrapper/raw dispatch
-        if not isinstance(raw_items, list):  # Normalize unexpected shapes to a list
-            logging.debug("License endpoint returned non-list payload; normalizing to list")  # Trace normalization
-            raw_items = [raw_items]  # Wrap single item
-        return raw_items  # Caller decides empty/persist
-
-    @staticmethod
-    def licenses():  # Export licenses.
-        """Export organization licenses to OrgLicenses.csv."""
-        logging.info("Starting export of organization licenses (canonical endpoint)...")  # Log start.
-        filename = "OrgLicenses.csv"  # Build the CSV name.
-        current_org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
-        try:
-            raw_items = OrgAdminExporter._fetch_license_records(current_org_id)  # Fetch rows via wrapper/fallback.
-            if not raw_items:  # No records.
-                logging.info("No license records returned from canonical endpoint; writing empty OrgLicenses.csv")
-                DataExporter.write_with_format_selection([], filename, api_function_name="listOrgLicenses")  # type: ignore[no-untyped-call]
-                return  # Abort.
-            processed = DataProcessingUtils.flatten_nested_fields(raw_items)  # Flatten nested fields.
-            processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
-            DataExporter.write_with_format_selection(processed, filename, api_function_name="listOrgLicenses")  # type: ignore[no-untyped-call]
-            logging.info("Exported %s license records to %s.", len(processed), filename)  # Log export count.
-        except Exception as e:  # Export failed.
-            logging.error("Failed to export licenses: %s", e)  # Log the error.
-            try:
-                DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
-            except Exception:  # nosec B110
-                pass  # Best-effort cleanup.
-            raise  # Re-raise to caller.
-
-    @staticmethod
-    def usage():  # Export license usage.
-        """Export organization usage data to OrgUsage.csv."""
-        logging.info("Starting export of organization license usage...")  # Log start.
-        APIDataFetcher(  # Fetch and write usage.
-            title="Organization License Usage:",
-            api_call=mistapi.api.v1.orgs.licenses.getOrgLicensesBySite,
-            filename="OrgUsage",
-            sort_key="site_id",
-        ).execute()
-        logging.info(" License usage data exported to OrgUsage")  # Log completion.
-        print(" License usage data exported to OrgUsage")  # Tell the user.
+# OrgAdminExporter moved to src/export/org_admin_exporter.py (1013 SC-001 position 20)
 
 
 class LicenseExportUtils:  # Hold custom license exporters.
