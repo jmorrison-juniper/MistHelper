@@ -241,6 +241,7 @@ omit = [
     "src/export/org_alarm_event_exporter.py",
     "src/export/org_template_exporter.py",
     "src/export/site_config_exporter.py",
+    "src/export/sites_by_ap_model_exporter.py",
     "src/firmware/firmware_manager.py",
     "src/gateway/gateway_ha_exporter.py",
     "src/reports/sfp_transceiver_data_processor.py",
