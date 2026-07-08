@@ -1,9 +1,4 @@
 {
-  "L11634": {
-    "line": 11634,
-    "pattern": "format_spec_1f",
-    "rendered": "Offline device report completed in 4.6 seconds"
-  },
   "L1343": {
     "line": 1343,
     "pattern": "attribute_access",
