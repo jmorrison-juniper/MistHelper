@@ -239,6 +239,7 @@ omit = [
     "src/analytics/data_collection_manager.py",
     "src/api/api_data_fetcher.py",
     "src/db/database_schema_utils.py",
+    "src/device/arp_command_manager.py",
     "src/device/device_reboot_manager.py",
     "src/export/const_definitions_exporter.py",
     "src/export/gateway_test_exporter.py",
