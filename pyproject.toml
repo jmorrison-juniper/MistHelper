@@ -232,6 +232,7 @@ omit = [
     "setup.py",
     "*/site-packages/*",
     "src/maps/*",
+    "src/export/const_definitions_exporter.py",
     "src/firmware/firmware_manager.py",
     "src/site/bulk_radius_wlan_config_manager.py",
     "src/ui/tui.py",
