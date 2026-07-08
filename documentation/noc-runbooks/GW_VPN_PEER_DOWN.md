@@ -11,7 +11,7 @@
 | **NOC severity** | **Critical** (native — no override) |
 | **Group** | `infrastructure` |
 | **Clear event key** | `gw_vpn_peer_up` |
-| **Correlated alarms** | `gw_vpn_path_down`, `vpn_path_down`, `bad_wan_uplink`, `intermittent_wan_connectivity`, `gw_bgp_neighbor_down`, `gw_critical_port_down`, `switch_down`, `gw_status` |
+| **Correlated alarms** | `gw_vpn_path_down`, `vpn_path_down`, `bad_wan_uplink`, `intermittent_wan_connectivity`, `gw_bgp_neighbor_down`, `gw_critical_port_down`, `switch_down`, `gateway_down` |
 | **Prerequisites** | An SVR peer relationship must be configured between this branch SSR130 and a remote SSR (in this environment, a DC-hub SSR1300). This alarm fires when the aggregate peer state is `down` — i.e., every transport path making up that peer is down. |
 | **Description** | The SVR (Session Smart Routing) peer relationship between the branch SSR130 and a remote SSR is fully down — every underlying transport path has failed. Overlay traffic to that peer cannot flow. This is a strict escalation of `gw_vpn_path_down`; if only one transport failed and another survived, the peer would remain `up` and only the path-down alarm would fire. |
 
@@ -208,7 +208,7 @@ If any of these are co-firing, resolve the co-fired alarm first — it is usuall
 - `gw_bgp_neighbor_down` — BGP control-plane session on the same DC-hub peering is down (distinct from SVR; follow the BGP runbook, not this one). Same DC-hub SSR1300 endpoints, different overlay layer.
 - `gw_critical_port_down` — physical port on the SSR130 serving a transport is down. Fix the port before chasing SVR.
 - `switch_down` — upstream EX4100 VC (or a member) is down; if the SSR130's LAN-side transport rides that VC, SVR paths can go with it.
-- `gw_status` — the gateway itself is offline / unreachable / degraded. If this is co-firing, the SVR peer is a symptom of a gateway-scope fault — chase `gw_status` root cause first.
+- `gateway_down` — Mist has lost heartbeat / telemetry from the gateway. If this is co-firing, the SVR peer is a symptom of a gateway-scope fault — chase `gateway_down` root cause first.
 
 ## 10. Escalation
 
