@@ -239,6 +239,7 @@ omit = [
     "src/analytics/data_collection_manager.py",
     "src/api/api_data_fetcher.py",
     "src/export/const_definitions_exporter.py",
+    "src/export/gateway_test_exporter.py",
     "src/export/license_export_utils.py",
     "src/export/org_admin_exporter.py",
     "src/export/org_alarm_event_exporter.py",
