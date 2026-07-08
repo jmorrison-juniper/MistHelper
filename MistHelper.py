@@ -135,9 +135,14 @@ from src.device.device_utils import (  # pylint: disable=unused-import
 from src.export.const_definitions_exporter import (  # pylint: disable=unused-import
     ConstDefinitionsExporter,  # noqa: F401  # Cat B (1013 SC-001 position 17) -- re-export for MistHelper.ConstDefinitionsExporter callers
 )
-from src.export.device_events_52w_exporter import DeviceEvents52wExporter  # Import 52-week device events export handler
+from src.export.device_events_52w_exporter import (  # pylint: disable=unused-import
+    DeviceEvents52wExporter,  # noqa: F401  # Re-export preserved after OrgAlarmEventExporter extraction (1013 SC-001 position 18)
+)
 from src.export.msp_inventory_exporter import (  # pylint: disable=unused-import
     MSPInventoryExporter,  # noqa: F401  # Cat B (1013 SC-001 position 8) -- re-export for menu tuple + static call rewire
+)
+from src.export.org_alarm_event_exporter import (  # pylint: disable=unused-import
+    OrgAlarmEventExporter,  # noqa: F401  # Cat B (1013 SC-001 position 18) -- re-export for MistHelper.OrgAlarmEventExporter callers
 )
 from src.export.self_export_utils import (  # pylint: disable=unused-import
     SelfExportUtils,  # noqa: F401  # Cat B (1013 SC-001 position 7) -- re-export for menu tuple at MistHelper:18167
@@ -8499,138 +8504,7 @@ class OrgTicketManager:  # Support ticket operations.
         print("  " + "=" * 60)  # Bottom separator bar
 
 
-# ============================================================================
-# ORGANIZATION ALARM & EVENT EXPORTER CLASS
-# ============================================================================
-class OrgAlarmEventExporter:  # Org alarm/event exporters.
-    """
-    Focused exporter for alarm and event time-series data from the Mist API.
-
-    Contains exactly 5 public methods grouped by the 'event/alert' domain:
-      - alarms()            : Organization alarms (24h, unacknowledged)
-      - alarm_templates()   : Alarm rule templates
-      - events()            : Organization events (24h)
-      - device_events()     : Device events (24h)
-      - device_events_52w() : Device events (52 weeks)
-
-    Extraction Pattern (for decomposing OrgExportUtils further):
-      1. Identify up to 5 semantically related methods in OrgExportUtils
-      2. Create a new class immediately before OrgExportUtils
-      3. Duplicate _export_data() as a private helper if any methods use it
-      4. Move methods verbatim (preserve all logic, parameters, API calls)
-      5. Update menu_actions dict entries and cross-references
-      6. Remove the methods from OrgExportUtils
-    """
-
-    @staticmethod
-    def _export_data(api_call, data_type, sort_key="name", **api_kwargs):  # Generic org export helper.
-        """
-        Generic helper to export organization data via APIDataFetcher.
-
-        Args:
-            api_call: The mistapi function to call
-            data_type: Description of the data type
-            sort_key: Field to sort results by
-            **api_kwargs: Additional arguments for the API call
-        """
-        logging.info("Starting export of organization %s...", data_type)  # Log export start.
-        safe_data_type = data_type.replace(" ", "").replace("-", "").title()  # Sanitize data type for filename.
-        filename = f"Org{safe_data_type}.csv"  # Build output CSV name.
-        APIDataFetcher(  # Fetch and write the data.
-            title=f"Organization {data_type.title()}:",
-            api_call=api_call,
-            filename=filename,
-            sort_key=sort_key,
-            limit=1000,
-            **api_kwargs,
-        ).execute()
-
-    @staticmethod
-    def alarms():  # Export open org alarms.
-        """
-        Export open organization alarms from the past 24 hours to OrgAlarms.csv.
-        """
-        logging.info("Menu #20: Starting organization alarms export")  # Log alarms menu start.
-        logging.debug("ENTRY: OrgAlarmEventExporter.alarms()")  # Trace entry for debugging.
-        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)  # Resolve dynamic lookback hours.
-        TimeUtils.log_dynamic_lookback("open org alarms export", hours)  # Log chosen lookback window.
-        try:
-            APIDataFetcher(  # Fetch and write alarms.
-                title="Search all Org Alarms:",
-                api_call=mistapi.api.v1.orgs.alarms.searchOrgAlarms,
-                filename="OrgAlarms.csv",
-                limit=1000,
-                duration=f"{hours}h",
-                acked=False,
-            ).execute()
-            logging.info("Completed org alarms export and wrote results to OrgAlarms.csv.")
-            logging.debug("EXIT: OrgAlarmEventExporter.alarms - success")  # Trace successful exit.
-        except Exception as error:  # Catch export errors.
-            logging.error("Failed to export open org alarms: %s", error)  # Log export failure.
-            logging.debug("EXIT: OrgAlarmEventExporter.alarms - error")  # Trace error exit.
-            raise  # Re-raise to caller.
-
-    @staticmethod
-    def alarm_templates():  # Export org alarm templates.
-        """Export alarm templates to OrgAlarmTemplates.csv."""
-        OrgAlarmEventExporter._export_data(  # type: ignore[no-untyped-call]
-            api_call=mistapi.api.v1.orgs.alarmtemplates.listOrgAlarmTemplates,
-            data_type="alarm templates",
-            sort_key="name",
-        )
-
-    @staticmethod
-    def events():  # Export org events.
-        """Export organization events to OrgEvents.csv."""
-        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)  # Resolve dynamic lookback hours.
-        TimeUtils.log_dynamic_lookback("org events export", hours)  # Log chosen lookback window.
-        OrgAlarmEventExporter._export_data(  # type: ignore[no-untyped-call]
-            api_call=mistapi.api.v1.orgs.events.searchOrgEvents,
-            data_type="events",
-            sort_key="timestamp",
-            duration=f"{hours}h",
-        )
-
-    @staticmethod
-    def device_events():  # Export org device events.
-        """
-        Export all device events from the past 24 hours to OrgDeviceEvents.csv.
-        """
-        logging.info("Menu #21: Starting device events export")  # Log device events menu start.
-        logging.info("Search Org Device Events:")  # Log search start.
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org id.
-        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)  # Resolve dynamic lookback hours.
-        TimeUtils.log_dynamic_lookback("recent device events export", hours)  # Log chosen lookback window.
-        duration_param = f"{hours}h"  # Format duration param.
-        response = mistapi.api.v1.orgs.devices.searchOrgDeviceEvents(  # Search org device events.
-            apisession, org_id, device_type="all", limit=1000, duration=duration_param
-        )
-        rawdata = mistapi.get_all(response=response, mist_session=apisession)  # Page through all events.
-        events = rawdata  # Alias rawdata as events.
-        logging.info(  # Log fetched event count.
-            "Fetched %s device events from the past %s hours (duration=%s).", len(events), hours, duration_param
-        )
-        DataExporter.write_with_format_selection(events, "OrgDeviceEvents.csv")  # type: ignore[no-untyped-call]
-        logging.info("Device events written to OrgDeviceEvents.csv (%s rows).", len(events))  # Log written event count.
-        print(f"! {len(events)} device events exported to OrgDeviceEvents.csv")  # Confirm export to operator.
-        logging.info("Menu #21: Device events export completed - %s events", len(events))
-        if events:  # Branch: events present.
-            logging.debug("Sample device events: %s", json.dumps(events[:3], indent=2))  # Debug-dump sample events.
-
-    @staticmethod
-    def device_events_52w() -> None:  # Export 52-week device events.
-        """Delegated 52-week device event export entrypoint."""
-        exporter = DeviceEvents52wExporter(  # Build the 52w exporter.
-            apisession=apisession,
-            mistapi=mistapi,
-            org_id=ConfigUtils.get_cached_or_prompted_org_id(),
-            data_processing_utils=DataProcessingUtils,
-            data_exporter=DataExporter,
-            output_format=OUTPUT_FORMAT,
-            database_path=DATABASE_PATH,
-            logger=logging,
-        )
-        exporter.export()  # Run the export.
+# OrgAlarmEventExporter moved to src/export/org_alarm_event_exporter.py (1013 SC-001 position 18)
 
 
 # ============================================================================
