@@ -66,7 +66,7 @@ class DatabaseSchemaUtils:  # Build SQLite DDL from data.
         if api_function_name in mh.ENDPOINT_PRIMARY_KEY_STRATEGIES:  # Use a configured strategy.
             strategy = mh.ENDPOINT_PRIMARY_KEY_STRATEGIES[api_function_name].copy()  # Copy to avoid mutation.
             logging.debug("Using configured strategy for %s: %s", api_function_name, strategy["type"])  # Trace pick.
-            return strategy  # type: ignore[no-any-return]  # Return configured strategy.
+            return strategy  # Return configured strategy.
 
         return DatabaseSchemaUtils._build_default_strategy(api_function_name, data_fields)  # Derive from data shape
 
@@ -84,7 +84,7 @@ class DatabaseSchemaUtils:  # Build SQLite DDL from data.
         common_index_fields = ["org_id", "site_id", "device_id", "timestamp", "mac", "serial"]  # Common index columns.
         for field_name in common_index_fields:  # Add indexes when present.
             if field_name in data_fields and field_name not in strategy["indexes"]:  # Avoid duplicate indexes.
-                strategy["indexes"].append(field_name)  # type: ignore[attr-defined]  # Index this present field
+                strategy["indexes"].append(field_name)  # Index this present field
 
         logging.debug("Using enhanced default strategy for %s: %s", api_function_name, strategy)  # Trace strategy.
         return strategy  # Return enhanced strategy.
