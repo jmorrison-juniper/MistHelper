@@ -22,8 +22,7 @@ import os  # WHY: os.path.isfile() to detect attachments before multipart upload
 
 
 class OrgTicketManager:  # Support ticket operations.
-    """
-    Full lifecycle management for Juniper Mist support tickets.
+    """Full lifecycle management for Juniper Mist support tickets.
 
     Provides 6 public operations (list, create, add comment, update, view, export) that
     cover reading, creating, and modifying support tickets via the Mist API.
