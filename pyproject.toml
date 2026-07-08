@@ -262,6 +262,7 @@ omit = [
     "src/troubleshooting/troubleshoot_utils.py",
     "src/ui/tui.py",
     "src/utils/environment_utils.py",
+    "src/utils/filter_operator_engine.py",
     "src/websocket/*"
 ]
 
