@@ -191,6 +191,7 @@ module = [
     "src.api.*",
     "src.export.*",
     "src.gateway.*",
+    "src.input.*",
     "src.inventory.*",
     "src.org.*",
     "src.device.*",

@@ -23,10 +23,5 @@
     "line": 6988,
     "pattern": "format_spec_2f_with_arithmetic",
     "rendered": "Retrying device dev-abc in 2.50s (attempt 2/4)"
-  },
-  "L8684": {
-    "line": 8684,
-    "pattern": "g201_exc_info_in_except",
-    "rendered": "Exception in PromptClientUtils.select_client_mac: fixture-error"
   }
 }
