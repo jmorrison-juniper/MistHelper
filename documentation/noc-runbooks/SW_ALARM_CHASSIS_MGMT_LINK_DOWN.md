@@ -39,7 +39,7 @@ Mist ships this alarm at `warn` because the production data plane typically keep
 | Timeline | Alert time (UTC), recent changes (last 24 h), audit logs |
 | Correlated Alarms | Any active alarms on the device or its management upstream within the last 15 min |
 
-See Shared Appendix §7 for the always-required ticket fields.
+See Shared Appendix §5 for the always-required ticket fields.
 
 ## Validation
 
@@ -55,7 +55,7 @@ See Shared Appendix §7 for the always-required ticket fields.
 | Chassis alarms | `show chassis alarms` |
 | Reachability from switch | `ping <management-gateway>` and `ping <mist-cloud-reachable-host>` |
 
-See Shared Appendix §8 for the full Junos command reference.
+See Shared Appendix §6 for the full Junos command reference.
 
 ## Resolution
 
@@ -87,8 +87,6 @@ See Shared Appendix §8 for the full Junos command reference.
 | Events (raw) | Monitor → Events |
 | Audit logs | Organization → Audit Logs |
 
-See Shared Appendix §6 for full GUI navigation reference.
-
 ## Junos Commands (quick reference)
 
 | Purpose | Command |
@@ -107,4 +105,4 @@ See Shared Appendix §6 for full GUI navigation reference.
 
 ## Escalation
 
-Per Shared Appendix §10. Tier 1 NOC can self-clear cable, port, and configuration causes. Escalate to Tier 2 for hardware replacement, VC master election changes, or when the OOB management upstream is itself impaired.
+Per Shared Appendix §8. Tier 1 NOC can self-clear cable, port, and configuration causes. Escalate to Tier 2 for hardware replacement, VC master election changes, or when the OOB management upstream is itself impaired.

@@ -41,7 +41,7 @@ Unlike most `warn`-shipped port alarms, Mist ships `sw_vc_port_down` as `critica
 | Timeline | Alert timestamp (UTC), recent VC config changes, member reboots, audit log entries |
 | Correlated Alarms | Any active alarms on any VC member (or a co-fired `vc_master_changed` / `vc_member_deleted`) in the last 15 min |
 
-See Shared Appendix §7 for the always-required ticket fields.
+See Shared Appendix §5 for the always-required ticket fields.
 
 ## Validation
 
@@ -60,7 +60,7 @@ See Shared Appendix §7 for the always-required ticket fields.
 | Logs (VCP-scoped) | `show log messages \| match vcp` (or specific interface name) |
 | VC master election events | `show log messages \| match vccpd` |
 
-See Shared Appendix §8 for the full Junos command reference.
+See Shared Appendix §6 for the full Junos command reference.
 
 ## Resolution
 
@@ -95,8 +95,6 @@ See Shared Appendix §8 for the full Junos command reference.
 | Switch events | Monitor → Events |
 | Audit logs | Organization → Audit Logs |
 
-See Shared Appendix §6 for full GUI navigation reference.
-
 ## Junos Commands (quick reference)
 
 | Purpose | Command |
@@ -129,7 +127,7 @@ Triage rule: **`vc_member_deleted` or `switch_down` on a member is usually root 
 
 ## Escalation
 
-Per Shared Appendix §10. Tier 1 NOC can self-clear cable, optic, and single-VCP-flap causes when the VC remains healthy. **Escalate to Tier 2 immediately** for:
+Per Shared Appendix §8. Tier 1 NOC can self-clear cable, optic, and single-VCP-flap causes when the VC remains healthy. **Escalate to Tier 2 immediately** for:
 
 - Suspected or confirmed VC split
 - Any active `vc_master_changed` / `vc_backup_failed` / `vc_member_deleted`

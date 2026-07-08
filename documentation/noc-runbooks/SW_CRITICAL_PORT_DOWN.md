@@ -36,7 +36,7 @@ Mist ships this as `warn` because port-down events span a wide impact range. Bec
 | Category | Data to capture |
 |---|---|
 | Device | Site Name, Hostname, Serial Number, Junos Version, Mist device ID |
-| Port classification | `access` / `uplink` / `IDF-MDF` / `server-edge` / `AP` / `VCP` / `LAG-member` (see Shared Appendix §5) |
+| Port classification | `access` / `uplink` / `IDF-MDF` / `server-edge` / `AP` / `VCP` / `LAG-member` |
 | Interface | Interface Name, Description, Admin Status, Oper Status, VLAN(s), Speed, Duplex |
 | Connected device | LLDP neighbor, MAC address, previous known device |
 | Optics (if fiber) | Media type, DDM Tx/Rx power, laser bias, temperature |
@@ -62,7 +62,7 @@ Mist ships this as `warn` because port-down events span a wide impact range. Bec
 | Logs (interface-scoped) | `show log messages \| match <interface>` |
 | Ping neighbor (if L3) | `ping <neighbor-ip>` |
 
-See Shared Appendix §8 for the full Junos command reference.
+See Shared Appendix §6 for the full Junos command reference.
 
 ## Resolution
 
@@ -99,8 +99,6 @@ See Shared Appendix §8 for the full Junos command reference.
 | Switch events | Monitor → Events |
 | Audit logs | Organization → Audit Logs |
 
-See Shared Appendix §6 for full GUI navigation reference.
-
 ## Junos Commands (quick reference)
 
 | Purpose | Command |
@@ -135,4 +133,4 @@ If the current alarm co-fires with any of these, resolve the co-fired alarm firs
 
 ## Escalation
 
-Per Shared Appendix §10. Tier 1 NOC can self-clear cable, optic, and remote-device causes. Escalate to Tier 2 for hardware replacement or when the port is part of an EVPN fabric with unclear failover behavior.
+Per Shared Appendix §8. Tier 1 NOC can self-clear cable, optic, and remote-device causes. Escalate to Tier 2 for hardware replacement or when the port is part of an EVPN fabric with unclear failover behavior.
