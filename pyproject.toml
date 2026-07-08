@@ -199,6 +199,7 @@ module = [
     "src.websocket.*",
     "src.ssh.ssh_runner",
     "src.ssh.ssh_runner_manager",
+    "src.ssh.cli_shell_manager",
 ]
 disallow_untyped_defs = false
 disallow_incomplete_defs = false
@@ -248,6 +249,7 @@ omit = [
     "src/reports/sfp_transceiver_data_processor.py",
     "src/reports/wired_client_manufacturer_report_generator.py",
     "src/site/bulk_radius_wlan_config_manager.py",
+    "src/ssh/cli_shell_manager.py",
     "src/ui/tui.py",
     "src/websocket/*"
 ]
