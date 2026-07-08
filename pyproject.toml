@@ -240,6 +240,7 @@ omit = [
     "src/export/license_export_utils.py",
     "src/export/org_admin_exporter.py",
     "src/export/org_alarm_event_exporter.py",
+    "src/export/org_config_exporter.py",
     "src/export/org_template_exporter.py",
     "src/export/site_config_exporter.py",
     "src/export/sites_by_ap_model_exporter.py",
