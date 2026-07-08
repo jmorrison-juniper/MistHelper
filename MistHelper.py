@@ -176,6 +176,9 @@ from src.export.site_insights.device_metric_operation import (
 from src.export.site_insights.site_metric_operation import (
     SiteMetricOperation,
 )  # Decomposed Menu 74 entry point
+from src.export.sites_by_ap_model_exporter import (  # pylint: disable=unused-import
+    SitesByAPModelExporter,  # noqa: F401  # Cat B (1013 SC-001 position 28) -- re-export for MistHelper.SitesByAPModelExporter callers
+)
 from src.firmware.firmware_manager import (  # Cat A canonical (1013 SC-002)
     FirmwareManager,
     FirmwareManagerConfig,
@@ -11524,153 +11527,8 @@ class SiteAnomalyExporter:  # Site anomaly exporters.
             SiteAnomalyExporter._anomaly_restore_loggers(original_levels)  # Restore logger levels.
 
 
-class SitesByAPModelExporter:  # Sites-by-AP-model exporter.
-    """
-    Sites by AP Model Exporter.
-
-    Exports a CSV listing every site that contains APs of a user-selected model,
-    including the site address, AP count, and individual AP MAC addresses.
-    Site detail lookups use the mistapi pagination engine, which internally
-    parallelises multi-page fetches across all available CPU cores.
-    """
-
-    @staticmethod
-    def _get_ap_models(org_id: str) -> tuple[list[dict], list[str]]:  # type: ignore[type-arg]
-        """Return (ap_inventory, sorted_unique_models) for the organisation."""
-        inventory = APICoreFetchUtils.all_inventory_with_limit(org_id)  # Fetch org inventory.
-        aps = [d for d in inventory if d.get("type") == "ap"]  # Keep only APs.
-        models = sorted({d.get("model", "") for d in aps if d.get("model")})  # Distinct sorted models.
-        return aps, models  # Return APs and models.
-
-    @staticmethod
-    def _print_model_options(models: list[str], aps: list[dict]) -> None:  # type: ignore[type-arg]
-        """Print numbered list of AP models with per-model device count."""
-        print("\nAvailable AP models:")  # Header
-        for idx, model in enumerate(models, 1):  # List each model
-            count = sum(1 for d in aps if d.get("model") == model)  # APs of this model
-            print(f"  {idx:3d}. {model} ({count} APs)")
-
-    @staticmethod
-    def _resolve_model_choice(choice: str, models: list[str]) -> str | None:
-        """Parse the user's 1-based model selection string and return the chosen model or None on bad input."""
-        try:
-            selected = int(choice.strip()) - 1  # Convert to 0-based index
-            return models[selected] if 0 <= selected < len(models) else None  # Bounds check
-        except (ValueError, IndexError):
-            print("! Invalid selection.")
-            return None
-
-    @staticmethod
-    def _prompt_model_selection(models: list[str], aps: list[dict]) -> str | None:  # type: ignore[type-arg]
-        """Prompt user to select an AP model from the numbered list."""
-        SitesByAPModelExporter._print_model_options(models, aps)  # Render numbered options
-        choice = InputUtils.safe_input(  # Read the choice
-            "\nSelect model number (or Enter to cancel): ",
-            context="ap_model_selection",
-        )
-        if not choice.strip():  # Empty input cancels
-            return None
-        return SitesByAPModelExporter._resolve_model_choice(choice, models)  # Parse + bounds-check
-
-    @staticmethod
-    def _split_address(address: str) -> tuple[str, str, str, str, str]:  # Split an address string.
-        """Split a full address string into street, city, state, zip, country."""
-        try:
-            parts = address.split(", ")  # Split on commas.
-            street = parts[0]  # Street part.
-            city = parts[1]  # City part.
-            state_zip = parts[2].split()  # State/zip part.
-            state = state_zip[0]  # State token.
-            zip_code = state_zip[1]  # Zip token.
-            country = parts[3]  # Country part.
-            return street, city, state, zip_code, country  # Return the parts.
-        except Exception as exception:  # Parse failed.
-            logging.debug("Failed to split address '%s': %s", address, exception)  # Trace the failure.
-            return address, "", "", "", ""  # Return address as street.
-
-    @staticmethod
-    def _build_export_rows(
-        aps: list[dict],  # type: ignore[type-arg]
-        model: str,
-        site_map: dict[str, dict],  # type: ignore[type-arg]
-    ) -> list[dict]:  # type: ignore[type-arg]
-        """Group APs by site and build one CSV row per matching site."""
-        grouped = SitesByAPModelExporter._group_aps_by_site(aps, model)  # APs of this model, grouped by site_id
-        ordered = sorted(grouped.items(), key=lambda x: site_map.get(x[0], {}).get("name", ""))  # Sort by site name
-        return [
-            SitesByAPModelExporter._build_site_row(site_id, devices, model, site_map)  # One row per matching site
-            for site_id, devices in ordered
-        ]  # CSV rows, one per site
-
-    @staticmethod
-    def _build_site_row(
-        site_id: str,
-        devices: list[dict],  # type: ignore[type-arg]
-        model: str,
-        site_map: dict[str, dict],  # type: ignore[type-arg]
-    ) -> dict:  # type: ignore[type-arg]
-        """Build a single CSV row for one site's APs of a given model (count, address parts, MAC list)."""
-        site = site_map.get(site_id, {})  # Look up the site.
-        street, city, state, zip_code, country = SitesByAPModelExporter._split_address(site.get("address", ""))  # Addr
-        return {
-            "site_id": site_id,
-            "site_name": site.get("name", ""),
-            "ap_model": model,
-            "ap_count": len(devices),
-            "address": street,
-            "city": city,
-            "state": state,
-            "zip": zip_code,
-            "country": country,
-            "ap_macs": ", ".join(d.get("mac", "") for d in devices),
-        }
-
-    @staticmethod
-    def _group_aps_by_site(aps: list[dict], model: str) -> dict[str, list[dict]]:  # type: ignore[type-arg]  # Group APs
-        """Group APs matching the given model by their site_id (APs without a model match or site_id are skipped)."""
-        grouped: dict[str, list[dict]] = {}  # type: ignore[type-arg]  # site_id -> matching AP devices
-        for device in aps:  # Walk APs.
-            if device.get("model") == model and device.get("site_id"):  # Match model with a site.
-                grouped.setdefault(device["site_id"], []).append(device)  # Group by site.
-        return grouped  # The site_id -> devices map
-
-    @staticmethod
-    def _finalize_ap_model_export(rows: list, model: str) -> None:
-        """Slugify model, build per-model filename, write CSV, and log + print summary."""
-        safe_model = re.sub(r"[^a-zA-Z0-9_-]", "_", model)  # Slugify the model.
-        filename = f"SitesByAPModel_{safe_model}.csv"  # Build the CSV name.
-        DataExporter.write_with_format_selection(rows, filename, api_function_name="getSitesByAPModel")  # Persist.
-        print(f"\n[OK] Exported {len(rows)} sites with {model} APs to {filename}")  # Tell the user.
-        logging.info("Exported %s sites with AP model %s", len(rows), model)  # Log the export.
-
-    @staticmethod
-    def _build_site_map(all_sites: list) -> dict[str, Any]:
-        """Return a ``{site_id: site}`` map from a sites listing, skipping entries without an ``id``."""
-        return {site["id"]: site for site in all_sites if site.get("id")}  # Index sites for O(1) lookup by id
-
-    @staticmethod
-    def export_sites_by_ap_model() -> None:  # Export sites by AP model.
-        """Export CSV of sites containing APs of a selected model with site address info."""
-        print("Export Sites by AP Model:")  # Header
-        logging.info("Starting export of sites by AP model...")  # Trace start
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org
-        print("! Fetching AP inventory from organization...")  # Tell the user
-        aps, models = SitesByAPModelExporter._get_ap_models(org_id)  # Fetch APs and models
-        if not models:  # No models in inventory
-            print("! No APs found in organization inventory.")
-            return
-        model = SitesByAPModelExporter._prompt_model_selection(models, aps)  # Prompt operator for a model
-        if not model:  # Operator skipped
-            return
-        print(f"! Fetching site details for sites with {model} APs...")  # Tell the user
-        all_sites = APICoreFetchUtils.all_sites_with_limit(org_id)  # List all sites
-        site_map = SitesByAPModelExporter._build_site_map(all_sites)  # Index sites by id for row lookup
-        rows = SitesByAPModelExporter._build_export_rows(aps, model, site_map)  # Build export rows
-        if not rows:  # No rows match the chosen model
-            print(f"! No sites found with {model} APs.")
-            return
-        SitesByAPModelExporter._finalize_ap_model_export(rows, model)  # Slug + filename + write + log
-
+# --- SitesByAPModelExporter facade removed (1013 SC-001 Cat B pos 28) ---
+# Canonical implementation lives in src/export/sites_by_ap_model_exporter.py; re-exported above.
 
 # ============================================================================
 # WEBSOCKET COMMAND FUNCTIONS
