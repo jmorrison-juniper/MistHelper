@@ -143,7 +143,7 @@ class WiredClientManufacturerReportGenerator:
         print(f"\n  Exporting {len(filtered)} records for: {label}")  # Tell the user.
         if filtered:  # Have records.
             flattened = mh.DataProcessingUtils.flatten_nested_fields(filtered)  # Flatten nested fields.
-            sanitized = mh.DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]
+            sanitized = mh.DataProcessingUtils.escape_multiline(flattened)
         else:
             sanitized = []  # No records.
         mh.DataExporter.write_with_format_selection(  # Write via backend.
