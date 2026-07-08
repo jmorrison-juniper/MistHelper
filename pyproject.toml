@@ -249,6 +249,7 @@ omit = [
     "src/export/org_client_security_exporter.py",
     "src/export/org_config_exporter.py",
     "src/export/org_template_exporter.py",
+    "src/export/site_anomaly_exporter.py",
     "src/export/site_config_exporter.py",
     "src/export/site_device_exporter.py",
     "src/export/sites_by_ap_model_exporter.py",
