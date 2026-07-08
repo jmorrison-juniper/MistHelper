@@ -150,6 +150,9 @@ from src.export.org_admin_exporter import (  # pylint: disable=unused-import
 from src.export.org_alarm_event_exporter import (  # pylint: disable=unused-import
     OrgAlarmEventExporter,  # noqa: F401  # Cat B (1013 SC-001 position 18) -- re-export for MistHelper.OrgAlarmEventExporter callers
 )
+from src.export.org_template_exporter import (  # pylint: disable=unused-import
+    OrgTemplateExporter,  # noqa: F401  # Cat B (1013 SC-001 position 22) -- re-export for MistHelper.OrgTemplateExporter callers
+)
 from src.export.self_export_utils import (  # pylint: disable=unused-import
     SelfExportUtils,  # noqa: F401  # Cat B (1013 SC-001 position 7) -- re-export for menu tuple at MistHelper:18167
 )
@@ -9756,150 +9759,7 @@ class OrgDeviceInventorySummary:  # Org device inventory summary.
         )
 
 
-class OrgTemplateExporter:  # Org template exporters.
-    """
-    Organization Template Exporter
-
-    Handles network, RF, AP, switch, and combined template exports.
-    Extracted from OrgExportUtils.
-    """
-
-    @staticmethod
-    def all_templates():  # Export all template types.
-        """
-        Export all organization templates (gateway, network, RF, site, AP) to CSV files.
-        """
-        logging.info("Starting export of organization templates...")  # Log start.
-        for title, api_call, filename, error_label in OrgTemplateExporter._template_export_specs():  # Each type
-            OrgTemplateExporter._export_one_template(title, api_call, filename, error_label)  # One non-fatal export
-        logging.info(" Organization templates export completed")  # Log completion.
-
-    @staticmethod
-    def _template_export_specs() -> list[tuple[str, Any, str, str]]:  # (title, api_call, filename, error_label) specs
-        """Return per-template-type export specs, resolving mistapi endpoints at call time.
-
-        Endpoints must be resolved when this runs, not at class-def time (mistapi populated later).
-        """
-        v1 = mistapi.api.v1.orgs  # Shorten endpoint base for compact spec list.
-        return [
-            (
-                "Gateway Templates:",
-                v1.gatewaytemplates.listOrgGatewayTemplates,
-                "OrgGatewayTemplates.csv",
-                "gateway templates",
-            ),
-            (
-                "Network Templates:",
-                v1.networktemplates.listOrgNetworkTemplates,
-                "OrgNetworkTemplates.csv",
-                "network templates",
-            ),
-            ("RF Templates:", v1.rftemplates.listOrgRfTemplates, "OrgRfTemplates.csv", "RF templates"),
-            ("Site Templates:", v1.sitetemplates.listOrgSiteTemplates, "OrgSiteTemplates.csv", "site templates"),
-            ("AP Templates:", v1.aptemplates.listOrgAptemplates, "OrgApTemplates.csv", "AP templates"),
-        ]
-
-    @staticmethod
-    def _export_one_template(title: str, api_call: Any, filename: str, error_label: str) -> None:  # Export one type
-        """Fetch one template type to its CSV; log (do not raise) on failure so other types still export."""
-        try:
-            APIDataFetcher(  # Fetch this template type and write it to CSV
-                title=title,
-                api_call=api_call,
-                filename=filename,
-                sort_key="name",
-                limit=1000,
-            ).execute()
-        except Exception as e:  # This template type failed -- keep going with the rest
-            logging.error("Failed to export %s: %s", error_label, e)  # Log the per-type failure
-
-    @staticmethod
-    def network_templates():  # Export network templates.
-        """Export network templates to OrgNetworkTemplates.csv."""
-        OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
-            api_call=mistapi.api.v1.orgs.networktemplates.listOrgNetworkTemplates,
-            data_type="network templates",
-            sort_key="name",
-        )
-
-    @staticmethod
-    def rf_templates():  # Export RF templates.
-        """Export RF templates to OrgRfTemplates.csv."""
-        OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
-            api_call=mistapi.api.v1.orgs.rftemplates.listOrgRfTemplates, data_type="rf templates", sort_key="name"
-        )
-
-    @staticmethod
-    def _persist_ap_template_profiles(ap_profiles: list, filename: str) -> None:
-        """Flatten + write AP template profiles to CSV; emit operator + log summary."""
-        if not ap_profiles:  # No AP templates in this org.
-            print("! 0 AP templates exported to OrgApTemplates.csv (no templates found)")  # Inform user.
-            logging.info(
-                "No AP templates returned from canonical endpoint; writing empty OrgApTemplates.csv"
-            )  # Log empty.
-            DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]  # Write empty file for consistency.
-            return
-        processed = DataProcessingUtils.flatten_nested_fields(ap_profiles)  # Flatten nested JSON.
-        processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]  # Escape multiline.
-        DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]  # Persist.
-        print(f"! {len(processed)} AP templates exported to {filename}")  # Tell user.
-        logging.info("Exported %s AP templates to %s.", len(processed), filename)  # Log count.
-
-    @staticmethod
-    def ap_templates():  # Export AP templates.
-        """Export AP templates (canonical deviceprofiles type=ap) to OrgApTemplates.csv."""
-        print("Export Organization AP Templates:")  # Header.
-        logging.info("Starting export of organization AP templates (canonical deviceprofiles type=ap)...")  # Log start.
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org.
-        filename = "OrgApTemplates.csv"  # Output filename.
-        try:
-            response = mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles(
-                apisession, org_id, type="ap", limit=1000
-            )  # Filter to AP profiles.
-            ap_profiles = mistapi.get_all(response=response, mist_session=apisession) or []  # Page all (empty on None).
-            OrgTemplateExporter._persist_ap_template_profiles(ap_profiles, filename)  # Persist + log.
-        except Exception as e:  # AP export failed.
-            logging.error("Failed to export AP templates: %s", e)  # Log AP error.
-            try:
-                DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]  # Best-effort empty file.
-            except Exception:  # nosec B110
-                pass  # Best-effort cleanup.
-            raise  # Re-raise to caller.
-
-    @staticmethod
-    def _persist_switch_template_csv(switch_profiles: list, filename: str) -> None:
-        """Flatten + escape + write switch-template payload, then log/emit a success line."""
-        if not switch_profiles:  # No templates returned from the API.
-            print("! 0 switch templates exported to OrgSwitchTemplates.csv (no templates found)")  # User notice.
-            logging.info(  # Trace empty-result branch.
-                "No switch templates returned from canonical endpoint; writing empty OrgSwitchTemplates.csv"
-            )
-            DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
-            return  # Done; empty CSV written.
-        processed = DataProcessingUtils.flatten_nested_fields(switch_profiles)  # Flatten nested template fields.
-        processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]  # CSV-safe.
-        DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]  # Persist.
-        print(f"! {len(processed)} switch templates exported to {filename}")  # User notice.
-        logging.info("Exported %s switch templates to %s.", len(processed), filename)  # Trace count.
-
-    @staticmethod
-    def switch_templates():  # Export switch templates.
-        """Export switch templates to OrgSwitchTemplates.csv."""
-        print("Export Organization Switch Templates:")  # Header.
-        logging.info("Starting export of organization switch templates (canonical networktemplates)...")  # Log start.
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
-        filename = "OrgSwitchTemplates.csv"  # Build the CSV name.
-        try:
-            response = mistapi.api.v1.orgs.networktemplates.listOrgNetworkTemplates(apisession, org_id, limit=1000)
-            switch_profiles = mistapi.get_all(response=response, mist_session=apisession) or []  # Page all.
-            OrgTemplateExporter._persist_switch_template_csv(switch_profiles, filename)  # Persist + log.
-        except Exception as e:  # Export failed.
-            logging.error("Failed to export switch templates: %s", e)  # log error.
-            try:
-                DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
-            except Exception:  # nosec B110
-                pass  # Best-effort cleanup.
-            raise  # Re-raise to caller.
+# OrgTemplateExporter moved to src/export/org_template_exporter.py (1013 SC-001 position 22)
 
 
 class OrgClientSecurityExporter:  # Org client security exporters.
