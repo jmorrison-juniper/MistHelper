@@ -1,6 +1,6 @@
 # GW_BGP_NEIGHBOR_DOWN
 
-## Overview
+## 1. Overview
 
 | Field | Value |
 |---|---|
@@ -39,7 +39,7 @@ The downstream paging/ticketing tier escalates this alarm to **critical** on tha
 
 The two often correlate: a shared WAN transport can bring both down at once. Validate each separately with its own commands.
 
-## Impact
+## 2. Impact
 
 **Direct (BGP):**
 
@@ -53,7 +53,7 @@ The two often correlate: a shared WAN transport can bring both down at once. Val
 
 - If BGP and SVR share the affected WAN transport, SVR peer paths to the same DC hub may also reconverge or fail — this will surface as a **separate** `vpn_peer_down` / `gw_vpn_path_down` / `vpn_path_down` alarm. Validate SVR independently rather than assuming it followed BGP's state.
 
-## Required Information
+## 3. Required Information
 
 ### BGP peer (always capture)
 
@@ -80,7 +80,7 @@ The two often correlate: a shared WAN transport can bring both down at once. Val
 
 See Shared Appendix §5 for the always-required ticket fields.
 
-## Validation
+## 4. Validation
 
 ### BGP session checks (this alarm)
 
@@ -111,7 +111,7 @@ See Shared Appendix §5 for the always-required ticket fields.
 
 If SVR peer paths are healthy while BGP is down, transport is not the root cause — investigate BGP-specific causes (policy, MD5, peer-side process). If SVR paths are also down on the same transport, treat the shared transport as the primary suspect and prioritize the underlay-link alarms (`bad_wan_uplink`, `intermittent_wan_connectivity`).
 
-## Resolution
+## 5. Resolution
 
 | Area | Action |
 |---|---|
@@ -128,7 +128,7 @@ If SVR peer paths are healthy while BGP is down, transport is not the root cause
 | Recovery (BGP) | Confirm BGP peer transitions back to `Established`, expected prefixes are relearned, and the paired clear event has fired. |
 | Recovery (SVR, if it was also affected) | Confirm `show peers` shows the affected peer path back to `up` on the expected transport(s). Do not close the BGP ticket until any SVR peer-path alarm has also cleared. |
 
-## Closure Criteria
+## 6. Closure Criteria
 
 **BGP (required for this alarm):**
 
@@ -146,15 +146,15 @@ If SVR peer paths are healthy while BGP is down, transport is not the root cause
 - The paired SVR clear event(s) have been received on the correlated ticket(s).
 - Close the SVR ticket per its own runbook — do not implicitly close it from this ticket.
 
-## Mist GUI Navigation
+## 7. Mist GUI Navigation
 
 **BGP-related:**
 
 | Task | Navigation |
 |---|---|
-| Verify alert | Monitor → Alerts (Alarms) → filter by `gw_bgp_neighbor_down` |
-| SSR health | WAN Edges → *SSR1300* → Health / Insights |
-| WAN link health (shared underlay) | WAN Assurance → WAN Links |
+| Verify alert | Monitor → Alerts → filter by `gw_bgp_neighbor_down` |
+| SSR health | WAN Edges → *SSR130* → Insights |
+| WAN link health (shared underlay) | Monitor → Service Levels → WAN |
 | Gateway events | Monitor → Events |
 | Audit logs | Organization → Audit Logs |
 
@@ -162,11 +162,11 @@ If SVR peer paths are healthy while BGP is down, transport is not the root cause
 
 | Task | Navigation |
 |---|---|
-| SVR peer paths | WAN Assurance → Peer Path Insights |
+| SVR peer paths | Monitor → Service Levels → WAN → Peer Paths |
 
 **Legacy path note:** older docs may say `Routers → SSR1300`. Current Mist UI unifies all gateways under `WAN Edges → …`.
 
-## SSR PCLI Commands (quick reference)
+## 8. SSR PCLI Commands (quick reference)
 
 SSR uses PCLI, not Junos. Do not paste Junos syntax into an SSR.
 
@@ -202,7 +202,7 @@ SSR uses PCLI, not Junos. Do not paste Junos syntax into an SSR.
 
 See Shared Appendix §7 for the full SSR PCLI reference.
 
-## Cross-references (sibling alarms)
+## 9. Cross-references (sibling alarms)
 
 If any of these are co-firing, resolve the co-fired alarm first — it is usually root cause. Because the branch has a single SSR130 (no local HA), *any* gateway-side symptom here is branch-scope; coordinate with the hub-side on-call if the impairment is on the DC hub SSR1300's side of the peering:
 
@@ -212,7 +212,7 @@ If any of these are co-firing, resolve the co-fired alarm first — it is usuall
 - `gw_critical_port_down` — physical port on the SSR130 serving the peer transport is down. Fix the port before chasing BGP.
 - `switch_down` — upstream EX4100 VC (or a member) is down; if the SSR130's LAN-side transport rides that VC, BGP can go with it.
 
-## Escalation
+## 10. Escalation
 
 Per Shared Appendix §8. Tier 1 NOC can self-clear underlay-transport, reachability, and rollback-driven root causes on the branch SSR130. Escalate to Tier 2 for:
 
