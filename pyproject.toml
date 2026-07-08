@@ -199,6 +199,7 @@ module = [
     "src.websocket.*",
     "src.ssh.ssh_runner",
     "src.ssh.ssh_runner_manager",
+    "src.ssh.cli_shell_manager",
 ]
 disallow_untyped_defs = false
 disallow_incomplete_defs = false
