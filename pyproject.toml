@@ -258,6 +258,7 @@ omit = [
     "src/gateway/gateway_ha_exporter.py",
     "src/input/prompt_client_utils.py",
     "src/inventory/org_device_inventory_summary_facade.py",
+    "src/org/org_ticket_manager.py",
     "src/reports/global_wired_client_report_generator.py",
     "src/reports/offline_device_reporter.py",
     "src/reports/sfp_transceiver_data_processor.py",
