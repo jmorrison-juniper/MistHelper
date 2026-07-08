@@ -246,8 +246,8 @@ from src.refactors.keyboard_listener import (  # noqa: F401  # pylint: disable=u
 )
 from src.refactors.main_entrypoint import MainEntrypoint  # Extracted CLI main entrypoint (SC-026)
 from src.refactors.maps_manager_launcher import MapsManagerLauncher  # Extracted Maps Manager launcher (SC-006)
-from src.refactors.marvis_data_utils import (
-    MarvisDataUtilsFactory,  # Extracted Marvis data-utils singleton factory (SC-027)
+from src.refactors.marvis_data_utils import (  # pylint: disable=unused-import
+    MarvisDataUtilsFactory,  # noqa: F401  # Cat B (1013 SC-001 position 39) -- re-export for lazy mh.MarvisDataUtilsFactory callers in troubleshoot_utils.py
 )
 from src.refactors.mist_wan_target_ports import (
     MistWanTargetPorts,  # Extracted operator-configured WAN target-ports list (SC-032)
@@ -306,12 +306,15 @@ from src.ssh.ssh_runner_manager import SSHRunnerManagerDeps  # Import SSH runner
 from src.troubleshooting.interactive_test_runner import (
     InteractiveTestRunner,
 )  # Import interactive diagnostic test runner
-from src.troubleshooting.marvis_troubleshoot_utils import (
-    MarvisTroubleshootDeps,
-)  # Import Marvis troubleshooting dependency injection class
-from src.troubleshooting.marvis_troubleshoot_utils import (
-    MarvisTroubleshootUtils as ExtractedMarvisTroubleshootUtils,
-)  # Import Marvis troubleshooting utils (renamed to avoid conflicts)
+from src.troubleshooting.marvis_troubleshoot_utils import (  # pylint: disable=unused-import
+    MarvisTroubleshootDeps,  # noqa: F401  # Cat B (1013 SC-001 position 39) -- re-export for lazy mh.MarvisTroubleshootDeps callers in troubleshoot_utils.py
+)
+from src.troubleshooting.marvis_troubleshoot_utils import (  # pylint: disable=unused-import
+    MarvisTroubleshootUtils as ExtractedMarvisTroubleshootUtils,  # noqa: F401  # Cat B (1013 SC-001 position 39) -- re-export for lazy mh.ExtractedMarvisTroubleshootUtils callers
+)
+from src.troubleshooting.troubleshoot_utils import (  # pylint: disable=unused-import
+    TroubleshootUtils,  # noqa: F401  # Cat B (1013 SC-001 position 39) -- re-export for MistHelper.TroubleshootUtils callers
+)
 from src.ui.display_utils import (  # pylint: disable=unused-import
     DisplayUtils,  # noqa: F401  # Cat B (1013 SC-001 position 11) -- re-export for lazy _MH.DisplayUtils callers
 )
@@ -10946,133 +10949,7 @@ class GatewayExportUtils:  # Gateway export delegators.
 # ============================================================================
 
 
-class TroubleshootUtils:  # Marvis troubleshoot delegators.
-    """Delegation wrapper for extracted Marvis troubleshooting implementation."""
-
-    @staticmethod
-    def _build_deps() -> MarvisTroubleshootDeps:  # Build the deps bundle.
-        """Build dependency container for extracted troubleshooting logic."""
-        return MarvisTroubleshootDeps(  # Assemble the deps.
-            apisession=apisession,
-            mistapi=mistapi,
-            config_utils=ConfigUtils,
-            prompt_client_utils=PromptClientUtils,
-            prompt_utils=PromptUtils,
-            data_exporter=DataExporter,
-            marvis_data_utils=MarvisDataUtilsFactory.instance(),
-            data_processing_utils=DataProcessingUtils,
-        )
-
-    @staticmethod
-    def client_connectivity() -> None:  # Troubleshoot client connectivity.
-        """Delegated client connectivity troubleshooting implementation."""
-        ExtractedMarvisTroubleshootUtils.client_connectivity(TroubleshootUtils._build_deps())  # Delegate to the impl.
-
-    @staticmethod
-    def device_performance() -> None:  # Diagnose device performance.
-        """Delegated device performance troubleshooting implementation."""
-        ExtractedMarvisTroubleshootUtils.device_performance(TroubleshootUtils._build_deps())  # Delegate to the impl.
-
-    @staticmethod
-    def network_connectivity() -> None:  # Analyze network connectivity.
-        """Delegated network connectivity troubleshooting implementation."""
-        ExtractedMarvisTroubleshootUtils.network_connectivity(TroubleshootUtils._build_deps())  # Delegate to the impl.
-
-    @staticmethod
-    def _print_marvis_menu() -> None:
-        """Print the interactive Marvis troubleshooting menu header + numbered options."""
-        print(" Starting Marvis (VNA - Virtual Network Assistant) Troubleshooting")  # Header.
-        print("=" * 65)  # Divider.
-        print()  # Spacer.
-
-    @staticmethod
-    def _print_marvis_options() -> None:
-        """Print the 5 troubleshooting choices a user can pick."""
-        print(" Marvis AI Troubleshooting Options:")  # Menu header.
-        print("1. Troubleshoot client connectivity issues (guided client selection)")  # Option 1.
-        print("2. Diagnose device performance problems (guided device selection)")  # Option 2.
-        print("3. Analyze network connectivity issues (site-level analysis)")  # Option 3.
-        print("4. View organization Marvis insights and capabilities")  # Option 4.
-        print("5. Exit")  # Option 5.
-        print()  # Spacer.
-
-    @staticmethod
-    def _handle_marvis_invalid_choice(choice: str) -> None:
-        """Handle an out-of-range Marvis menu selection (warn + log)."""
-        print(" Invalid option selected.")  # User-facing notice
-        logging.warning("MARVIS DEBUG: Invalid troubleshooting option selected: %s", choice)  # Audit trail
-        logging.debug("MARVIS DEBUG: Exiting launch_interactive() due to invalid choice")  # Trace exit reason
-
-    @staticmethod
-    def _handle_marvis_exit() -> None:
-        """Handle the Marvis exit menu pick."""
-        logging.debug("MARVIS DEBUG: User chose to exit")  # Trace the exit
-        print("Exiting Marvis troubleshooting.")  # Tell the user
-
-    @staticmethod
-    def _invoke_marvis_client_connectivity() -> None:
-        """Run the client-connectivity troubleshooter."""
-        logging.debug("MARVIS DEBUG: Calling TroubleshootUtils.client_connectivity()")  # Trace the call
-        TroubleshootUtils.client_connectivity()  # type: ignore[no-untyped-call]
-
-    @staticmethod
-    def _invoke_marvis_device_performance() -> None:
-        """Run the device-performance troubleshooter."""
-        logging.debug("MARVIS DEBUG: Calling TroubleshootUtils.device_performance()")  # Trace the call
-        TroubleshootUtils.device_performance()  # type: ignore[no-untyped-call]
-
-    @staticmethod
-    def _invoke_marvis_network_connectivity() -> None:
-        """Run the network-connectivity troubleshooter."""
-        logging.debug("MARVIS DEBUG: Calling TroubleshootUtils.network_connectivity()")  # Trace the call
-        TroubleshootUtils.network_connectivity()  # type: ignore[no-untyped-call]
-
-    @staticmethod
-    def _invoke_marvis_view_insights() -> None:
-        """Run the insights viewer."""
-        logging.debug("MARVIS DEBUG: Calling TroubleshootUtils.view_insights()")  # Trace the call
-        TroubleshootUtils.view_insights()  # Show the insights
-
-    @staticmethod
-    def _dispatch_marvis_choice(choice: str) -> None:
-        """Dispatch the user's menu pick to the matching TroubleshootUtils entrypoint."""
-        handlers = {  # Map menu pick → handler (eliminates if/elif chain)
-            "1": TroubleshootUtils._invoke_marvis_client_connectivity,  # Client connectivity
-            "2": TroubleshootUtils._invoke_marvis_device_performance,  # Device performance
-            "3": TroubleshootUtils._invoke_marvis_network_connectivity,  # Network connectivity
-            "4": TroubleshootUtils._invoke_marvis_view_insights,  # View insights
-            "5": TroubleshootUtils._handle_marvis_exit,  # Exit option
-        }
-        handler = handlers.get(choice)  # Lookup the picked handler
-        if handler is None:  # Unknown pick = invalid path
-            TroubleshootUtils._handle_marvis_invalid_choice(choice)  # Warn + log
-            return  # Early return to keep depth flat
-        handler()  # Invoke the matched handler
-
-    @staticmethod
-    def launch_interactive() -> None:  # Launch interactive Marvis.
-        """Interactive Marvis (VNA) troubleshooting menu -- prompt + dispatch."""
-        logging.info("Entering TroubleshootUtils.launch_interactive")  # Entry envelope for logging compliance
-        logging.debug("MARVIS DEBUG: Entering launch_interactive() method")  # Trace the entry.
-        TroubleshootUtils._print_marvis_menu()  # Header + divider.
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
-        logging.debug("MARVIS DEBUG: Using org_id: %s for Marvis troubleshooting", org_id)  # %s not f-string
-        logging.debug("MARVIS DEBUG: Session state - authenticated: %s", apisession is not None)  # %s not f-string
-        TroubleshootUtils._print_marvis_options()  # Show numbered choices.
-        choice = InputUtils.safe_input("Select an option (1-5): ", context="marvis_launch_menu").strip()
-        logging.debug("MARVIS DEBUG: User selected option: %s", choice)  # %s not f-string
-        TroubleshootUtils._dispatch_marvis_choice(choice)  # Route to handler.
-        logging.info("Exiting TroubleshootUtils.launch_interactive with choice: %s", choice)  # Exit envelope
-
-    @staticmethod
-    def view_insights() -> None:  # View Marvis insights.
-        """Delegated Marvis insights and capabilities view implementation."""
-        ExtractedMarvisTroubleshootUtils.view_insights(TroubleshootUtils._build_deps())  # Delegate to the impl.
-
-    @staticmethod
-    def _display_usage_guide() -> None:  # Show the usage guide.
-        """Delegated helper for usage guide display."""
-        ExtractedMarvisTroubleshootUtils._display_usage_guide()  # Delegate to the impl.
+# TroubleshootUtils moved to src/troubleshooting/troubleshoot_utils.py (1013 SC-001 position 39)
 
 
 # NOTE: GatewayTemplateConfigManager facade removed per 1013 SC-001 (Cat A, position 1).

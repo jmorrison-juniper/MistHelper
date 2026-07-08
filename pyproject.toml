@@ -259,6 +259,7 @@ omit = [
     "src/reports/wired_client_manufacturer_report_generator.py",
     "src/site/bulk_radius_wlan_config_manager.py",
     "src/ssh/cli_shell_manager.py",
+    "src/troubleshooting/troubleshoot_utils.py",
     "src/ui/tui.py",
     "src/utils/environment_utils.py",
     "src/websocket/*"
