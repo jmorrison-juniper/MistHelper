@@ -240,6 +240,7 @@ omit = [
     "src/export/org_template_exporter.py",
     "src/export/site_config_exporter.py",
     "src/firmware/firmware_manager.py",
+    "src/gateway/gateway_ha_exporter.py",
     "src/site/bulk_radius_wlan_config_manager.py",
     "src/ui/tui.py",
     "src/websocket/*"
