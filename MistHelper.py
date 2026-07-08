@@ -114,6 +114,9 @@ from src.capture.packet_capture import (
 )  # Import packet capture manager directly under its canonical name (issue #431: alias removed)
 
 # BatchWorkerConfig import removed: pool machinery moved to ConnectionPoolExecutor (1012 SC-003)
+from src.dataclasses.endpoint_config import (  # pylint: disable=unused-import
+    EndpointConfig,  # noqa: F401  # Cat B (1013 SC-001 position 16) -- re-export for MistHelper.EndpointConfig callers
+)
 from src.dataclasses.export_backend_options import (
     ExportBackendOptions,
 )  # Issue #470: groups output-backend overrides to keep write_with_format_selection within the 5-Item Rule.
@@ -13279,17 +13282,7 @@ def _get_duc_instance():  # Build DeviceUtilityCommands.
 # ==============================
 
 
-@dataclass
-class EndpointConfig:  # Const endpoint descriptor.
-    """Configuration for a discovered const endpoint."""
-
-    endpoint_name: str  # Endpoint name.
-    module: object  # Source module.
-    function_name: str  # API function name.
-    filename: str  # Output filename.
-    description: str  # Human description.
-    modname: str  # Module path.
-    special_handling: str | None = None  # 'all_models', 'all_countries', 'all_countries_channels', or None
+# EndpointConfig moved to src/dataclasses/endpoint_config.py (1013 SC-001 position 16)
 
 
 class ConstDefinitionsExporter:  # Const definitions exporter.
