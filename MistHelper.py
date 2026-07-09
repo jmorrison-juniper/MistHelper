@@ -48,7 +48,7 @@ import subprocess  # nosec B404  # Import subprocess for executing external comm
 import time  # Import time for rate limiting, delays, and performance monitoring
 import traceback  # Import traceback for detailed exception context in error logs
 from collections.abc import Callable  # Import Callable type hint for callback functions passed to API methods
-from dataclasses import dataclass, field  # Import dataclass decorators for configuration objects and entity classes
+from dataclasses import dataclass  # Import dataclass decorator for configuration objects and entity classes
 from datetime import datetime  # Import datetime for timestamping logs and events
 from typing import TYPE_CHECKING, Any, Literal  # Import type hints for static analysis without runtime overhead
 
@@ -466,17 +466,9 @@ class SSHConnectionConfig:
     use_shell: bool = True  # Whether to allocate an interactive shell vs exec a single command
 
 
-@dataclass
-class SSHExecutionConfig:
-    """Configuration for SSH command execution - groups execution parameters."""
-
-    commands: list[str] = field(
-        default_factory=list
-    )  # Commands to run; default_factory avoids a shared mutable default list
-    max_threads: int = 5  # Cap on concurrent SSH sessions to avoid overloading devices/network
-    use_shell: bool = True  # Whether commands run in an interactive shell context
-
-
+# NOTE: SSHExecutionConfig removed (1014 P1) - was a dead duplicate of src/ssh/ssh_runner.py:167;
+#       nothing in MistHelper.py imported the local copy, and all src/ssh/batch/*.py callers
+#       already imported from src.ssh.ssh_runner. Import from src.ssh.ssh_runner instead.
 # NOTE: WebSocketListenerConfig removed - use ARPCommandManager._listen_for_output parameters directly
 # NOTE: MapViewerConfig removed (SC-002) - unused dataclass, MapsManager builds runtime state directly
 
