@@ -208,6 +208,9 @@ from src.firmware.firmware_manager import (  # Cat A canonical (1013 SC-002)
     FirmwareManager,
     FirmwareManagerConfig,
 )
+from src.firmware.org_ap_upgrader import (  # Cat A canonical (1014 P7)
+    OrgLevelAPFirmwareUpgrader as _OrgLevelAPFirmwareUpgrader,
+)
 from src.firmware.site_auto_upgrade import (  # Cat A canonical (1014 P2)
     SiteAutoUpgradeConfigurator,
 )
@@ -8780,85 +8783,35 @@ def _build_firmware_manager(session: Any, target_org_id: str) -> FirmwareManager
 # src/firmware/site_auto_upgrade.py:105. Menu 168 now inlines DI via lambda (see below).
 
 
-class OrgLevelAPFirmwareUpgrader:
-    """Thin wrapper that delegates to src.firmware.org_ap_upgrader."""
+# NOTE: OrgLevelAPFirmwareUpgrader facade removed per initiative 1014 SC-001 position 7
+# (FR-004 fold-in / FR-003 no wrapper shim). The canonical body lives at
+# src/firmware/org_ap_upgrader.py; menu 157 + menu 168 callbacks now build the
+# implementation directly via _build_org_ap_upgrader() and inline DI.
 
-    def __init__(self, org_id, dry_run=False):
-        """Initialize the org-level AP firmware upgrader."""
-        self.org_id = org_id
-        self.dry_run = dry_run
 
-    @staticmethod
-    def run():
-        """Static entry point - delegates to extracted module."""
-        from src.firmware.org_ap_upgrader import OrgLevelAPFirmwareUpgrader as _Impl
+def _build_org_ap_upgrader(**overrides: Any) -> _OrgLevelAPFirmwareUpgrader:
+    """Construct an OrgLevelAPFirmwareUpgrader with MistHelper.py DI wiring.
 
-        global msp_privileges, apisession, selected_msp
-
-        dry_run = getattr(globals().get("args", None), "dry_run", False)
-        upgrader = _Impl(
-            org_id=ConfigUtils.get_cached_or_prompted_org_id() or "",
-            apisession=apisession,
-            dry_run=dry_run,
-            safe_input_fn=InputUtils.safe_input,
-            check_stop_fn=ConfigUtils.check_stop_signal,
-            get_org_id_fn=ConfigUtils.get_cached_or_prompted_org_id,
-            fetch_sites_fn=APICoreFetchUtils.all_sites_with_limit,
-            write_results_fn=DataExporter.write_with_format_selection,
-            is_debug_fn=IsDebugMode.check,
-            msp_privileges=msp_privileges if msp_privileges else [],
-            selected_msp=selected_msp if selected_msp else None,
-        )
-        upgrader.run()
-
-    def execute(self):
-        """Execute - delegates to extracted module."""
-        from src.firmware.org_ap_upgrader import OrgLevelAPFirmwareUpgrader as _Impl
-
-        global apisession
-
-        upgrader = _Impl(
-            org_id=self.org_id,
-            apisession=apisession,
-            dry_run=self.dry_run,
-            safe_input_fn=InputUtils.safe_input,
-            check_stop_fn=ConfigUtils.check_stop_signal,
-            get_org_id_fn=ConfigUtils.get_cached_or_prompted_org_id,
-            fetch_sites_fn=APICoreFetchUtils.all_sites_with_limit,
-            write_results_fn=DataExporter.write_with_format_selection,
-            is_debug_fn=IsDebugMode.check,
-        )
-        upgrader.execute()
-
-    @staticmethod
-    def _select_msps():
-        """Delegate MSP selection to extracted module."""
-        from src.firmware.org_ap_upgrader import OrgLevelAPFirmwareUpgrader as _Impl
-
-        global msp_privileges, apisession, selected_msp
-
-        upgrader = _Impl(
-            org_id="",
-            apisession=apisession,
-            safe_input_fn=InputUtils.safe_input,
-            msp_privileges=msp_privileges if msp_privileges else [],
-            selected_msp=selected_msp if selected_msp else None,
-        )
-        return upgrader._select_msps()
-
-    @staticmethod
-    def _select_orgs_from_msp(msp):
-        """Delegate org selection to extracted module."""
-        from src.firmware.org_ap_upgrader import OrgLevelAPFirmwareUpgrader as _Impl
-
-        global apisession
-
-        upgrader = _Impl(
-            org_id="",
-            apisession=apisession,
-            safe_input_fn=InputUtils.safe_input,
-        )
-        return upgrader._select_orgs_from_msp(msp)
+    Callers may override ``org_id``, ``dry_run``, ``msp_privileges``, or
+    ``selected_msp`` via keyword. All remaining hooks bind to canonical
+    MistHelper.py collaborators.
+    """
+    global msp_privileges, apisession, selected_msp  # noqa: PLW0602  # WHY: read module globals
+    kwargs: dict[str, Any] = dict(  # WHY: build DI kwargs dict for src class
+        org_id=ConfigUtils.get_cached_or_prompted_org_id() or "",
+        apisession=apisession,
+        dry_run=getattr(globals().get("args", None), "dry_run", False),
+        safe_input_fn=InputUtils.safe_input,
+        check_stop_fn=ConfigUtils.check_stop_signal,
+        get_org_id_fn=ConfigUtils.get_cached_or_prompted_org_id,
+        fetch_sites_fn=APICoreFetchUtils.all_sites_with_limit,
+        write_results_fn=DataExporter.write_with_format_selection,
+        is_debug_fn=IsDebugMode.check,
+        msp_privileges=msp_privileges if msp_privileges else [],
+        selected_msp=selected_msp if selected_msp else None,
+    )
+    kwargs.update(overrides)  # WHY: caller overrides win over defaults
+    return _OrgLevelAPFirmwareUpgrader(**kwargs)  # WHY: single src-class construction path
 
 
 # NOTE: BulkSwitchFirmwareUpgrader folded into FirmwareManager per initiative 1011 SC-033
@@ -9330,7 +9283,7 @@ menu_actions = {
     # ORG-LEVEL FIRMWARE OPERATIONS
     # ==============================
     "157": (
-        OrgLevelAPFirmwareUpgrader.run,
+        lambda: _build_org_ap_upgrader().run(),
         " DESTRUCTIVE: Org-Level AP Firmware Upgrade - Efficient multi-site upgrade using org-level API (1 call per version vs 1 per site), MSP multi-org support, supports --dry-run",  # noqa: E501
     ),
     # ==============================
@@ -9352,8 +9305,8 @@ menu_actions = {
             fetch_sites_fn=APICoreFetchUtils.all_sites_with_limit,
             check_stop_fn=ConfigUtils.check_stop_signal,
             dry_run=getattr(globals().get("args", None), "dry_run", False),
-            select_msps_fn=OrgLevelAPFirmwareUpgrader._select_msps,
-            select_orgs_fn=OrgLevelAPFirmwareUpgrader._select_orgs_from_msp,
+            select_msps_fn=lambda: _build_org_ap_upgrader(org_id="")._select_msps(),
+            select_orgs_fn=lambda msp: _build_org_ap_upgrader(org_id="")._select_orgs_from_msp(msp),
         ),
         "Site Auto-Upgrade Configuration - Configure AP auto-upgrade settings for sites with MSP multi-org support (supports --dry-run)",  # noqa: E501
     ),
