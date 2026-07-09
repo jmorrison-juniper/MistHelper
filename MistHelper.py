@@ -345,10 +345,7 @@ from src.site.site_config_manager import (
 )
 from src.ssh.cli_shell_manager import CLIShellManager  # pylint: disable=unused-import  # noqa: F401
 from src.ssh.ssh_runner import EnhancedSSHRunner  # Import SSH command execution and result parsing
-from src.ssh.ssh_runner_manager import (
-    SSHRunnerManager as ExtractedSSHRunnerManager,
-)  # Import SSH runner manager (renamed to avoid conflicts)
-from src.ssh.ssh_runner_manager import SSHRunnerManagerDeps  # Import SSH runner manager dependency injection class
+from src.ssh.ssh_runner_manager import SSHRunnerManager, SSHRunnerManagerDeps  # Cat A canonical (1014 P15)
 from src.time.time_utils import TimeUtils  # Cat E canonical (1014 P6)
 from src.troubleshooting.interactive_test_runner import (
     InteractiveTestRunner,
@@ -7572,35 +7569,23 @@ def _dispatch_gateway_device_configs(debug: bool = False, fast: bool = False) ->
 
 
 # ============================================================================
-# SSH RUNNER MANAGER CLASS
+# SSH RUNNER MANAGER FACADE REMOVED (1014 P15, Cat A)
 # ============================================================================
-class SSHRunnerManager:  # SSH runner delegators.
-    """Delegation wrapper for extracted SSH runner manager implementation."""
-
-    @staticmethod
-    def _build_deps() -> SSHRunnerManagerDeps:  # Build the deps bundle.
-        """Build dependency container for extracted SSH runner logic."""
-        cli_args = globals().get("args") if "args" in globals() else None  # Read parsed CLI args.
-        _configure_gateway_module()  # 1014 P13: DI wire canonical gateway module before packaging class ref.
-        return SSHRunnerManagerDeps(  # Assemble the deps.
-            args=cli_args,
-            progress_emitter=PROGRESS_EMITTER,
-            enhanced_ssh_runner=EnhancedSSHRunner,
-            input_utils=InputUtils,
-            cache_utils=CacheUtils,
-            gateway_export_utils=GatewayExportUtils,
-            file_path_utils=FilePathUtils,
-        )
-
-    @staticmethod
-    def interactive():  # Run interactive SSH.
-        """Delegated interactive SSH runner entrypoint."""
-        return ExtractedSSHRunnerManager.interactive(SSHRunnerManager._build_deps())  # Delegate to the impl.
-
-    @staticmethod
-    def _load_gateway_data():  # Load gateway data.
-        """Delegated helper to load gateway management data."""
-        return ExtractedSSHRunnerManager._load_gateway_data(SSHRunnerManager._build_deps())  # Delegate to the impl.
+# Canonical class lives at src/ssh/ssh_runner_manager.py; imported at top of file.
+# The helper below builds the DI container from MistHelper module globals.
+def _build_ssh_runner_deps() -> SSHRunnerManagerDeps:  # Build the deps bundle for SSHRunnerManager entrypoints.
+    """Build dependency container for SSH runner logic (reads MistHelper globals)."""
+    cli_args = globals().get("args") if "args" in globals() else None  # Read parsed CLI args.
+    _configure_gateway_module()  # 1014 P13: DI wire canonical gateway module before packaging class ref.
+    return SSHRunnerManagerDeps(  # Assemble the deps.
+        args=cli_args,
+        progress_emitter=PROGRESS_EMITTER,
+        enhanced_ssh_runner=EnhancedSSHRunner,
+        input_utils=InputUtils,
+        cache_utils=CacheUtils,
+        gateway_export_utils=GatewayExportUtils,
+        file_path_utils=FilePathUtils,
+    )
 
 
 # CLIShellManager was extracted to src/ssh/cli_shell_manager.py in initiative 1013 (Cat B, position 30).
@@ -8171,12 +8156,12 @@ menu_actions = {
         "Check and export gateways with duplicate WAN port IP addresses (0/0/0, 0/0/1, 0/0/2)",
     ),
     "175": (
-        SSHRunnerManager.interactive,
+        lambda: SSHRunnerManager.interactive(_build_ssh_runner_deps()),
         "Enhanced SSH Command Runner - Execute commands on remote network devices via SSH",
     ),
     "176": (
-        # Wire menu directly to extracted SSH runner impl (facade wrapper removed).
-        lambda: ExtractedSSHRunnerManager.by_gateway_template(SSHRunnerManager._build_deps()),
+        # Wire menu directly to canonical SSH runner impl (facade wrapper removed, 1014 P15).
+        lambda: SSHRunnerManager.by_gateway_template(_build_ssh_runner_deps()),
         "SSH Runner - Target gateways by template name (online gateways with management IPs only)",
     ),
     # ==============================
