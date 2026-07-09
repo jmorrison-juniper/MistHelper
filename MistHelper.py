@@ -225,9 +225,10 @@ from src.firmware.org_ap_upgrader import (  # Cat A canonical (1014 P7)
 from src.firmware.site_auto_upgrade import (  # Cat A canonical (1014 P2)
     SiteAutoUpgradeConfigurator,
 )
-from src.gateway.gateway_export_utils import (
+from src.gateway.gateway_export_utils import (  # Cat A canonical (1014 SC-001 position 13)
+    GatewayExportUtils,  # noqa: F401  # re-export for MistHelper.GatewayExportUtils callers
     configure_gateway_export_utils_dependencies,
-)  # Import gateway export utility configuration
+)
 from src.gateway.gateway_ha_exporter import (  # pylint: disable=unused-import
     GatewayHaExporter,  # noqa: F401  # Cat B (1013 SC-001 position 23) -- re-export for MistHelper.GatewayHaExporter callers
 )
@@ -7722,121 +7723,89 @@ def _get_duc_instance():  # Build DeviceUtilityCommands.
 
 # GatewayStatsExporter moved to src/gateway/gateway_stats_exporter.py (1014 SC-001 position 12)
 # Top-level import above re-exports the canonical class. Menu dispatch uses the
-# dispatch shims below to ensure GatewayExportUtils._configure_module() runs (which
-# cascades DI wiring through configure_gateway_stats_exporter_dependencies) before
-# the canonical class methods execute.
+# dispatch shims below to ensure _configure_gateway_module() runs (which cascades
+# DI wiring through configure_gateway_stats_exporter_dependencies and the WAN
+# override subsystem) before the canonical class methods execute.
+
+
+def _build_gateway_export_kwargs() -> dict:
+    """Build the kwargs dict passed to configure_gateway_export_utils_dependencies()."""
+    return dict(  # Single dependency-wiring payload assembled in one place.
+        apisession_dependency=apisession,  # Live mistapi session.
+        mistapi_dependency=mistapi,  # mistapi root module.
+        config_utils=ConfigUtils,  # Shared config helpers.
+        cache_utils=CacheUtils,  # Disk-cache helpers.
+        file_path_utils=FilePathUtils,  # Path helpers.
+        data_exporter=DataExporter,  # Output backend writer.
+        data_processing_utils=DataProcessingUtils,  # Flatten/normalize helpers.
+        api_fetch_utils=APIFetchUtils,  # Paged fetch helpers.
+        api_core_fetch_utils=APICoreFetchUtils,  # Core unwrap helpers.
+        org_inventory_exporter=OrgInventoryExporter,  # For inventory lookups.
+        org_site_exporter=OrgSiteExporter,  # For site lookups.
+        input_utils=InputUtils,  # safe_input + prompts.
+        execute_fn=ConnectionPoolExecutor.execute,  # Pool executor (1012 SC-003).
+        validation_utils=ValidationUtils,  # Input validation.
+        rate_limiting_utils=RateLimitingUtils,  # Adaptive delay.
+        mist_wan_target_ports=MistWanTargetPorts.VALUE,  # Port list from extracted class attribute.
+        mist_site_exclude_prefix=MIST_SITE_EXCLUDE_PREFIX,  # Site filter prefix.
+        fast_mode_max_retries=FAST_MODE_MAX_RETRIES,  # Retry cap.
+        fast_mode_retry_delay=FAST_MODE_RETRY_DELAY,  # Delay between retries.
+        api_usage_cache=_api_usage_cache,  # Shared API usage cache.
+        tqdm_module=tqdm,  # Progress bar dependency.
+    )
+
+
+def _configure_gateway_module() -> None:
+    """Wire DI into the canonical gateway_export_utils module (cascades to stats + WAN override)."""
+    configure_gateway_export_utils_dependencies(**_build_gateway_export_kwargs())
 
 
 def _dispatch_gateway_stats_device_stats_with_freshness(fast: bool = False) -> None:
     """Wire gateway DI then delegate to canonical GatewayStatsExporter.device_stats_with_freshness."""
-    GatewayExportUtils._configure_module()  # WHY: cascades DI wiring for stats exporter.
+    _configure_gateway_module()  # WHY: cascades DI wiring for stats exporter.
     GatewayStatsExporter.device_stats_with_freshness(fast=fast)
 
 
 def _dispatch_gateway_stats_wan_port_conflicts() -> None:
     """Wire gateway DI then delegate to canonical GatewayStatsExporter.wan_port_conflicts."""
-    GatewayExportUtils._configure_module()  # WHY: cascades DI wiring for stats exporter.
+    _configure_gateway_module()  # WHY: cascades DI wiring for stats exporter.
     GatewayStatsExporter.wan_port_conflicts()
 
 
-class GatewayExportUtils:  # Gateway export delegators.
-    """Delegation wrapper for extracted gateway export utility implementation."""
+def _dispatch_gateway_management_ips(fast: bool = False) -> None:
+    """Wire gateway DI then delegate to canonical GatewayExportUtils.management_ips."""
+    _configure_gateway_module()  # WHY: cascades DI wiring before canonical call.
+    GatewayExportUtils.management_ips(fast=fast)
 
-    @staticmethod
-    @staticmethod
-    def _gateway_export_dependency_kwargs() -> dict:
-        """Build the kwargs dict passed to configure_gateway_export_utils_dependencies()."""
-        return dict(  # Single dependency-wiring payload assembled in one place.
-            apisession_dependency=apisession,  # Live mistapi session.
-            mistapi_dependency=mistapi,  # mistapi root module.
-            config_utils=ConfigUtils,  # Shared config helpers.
-            cache_utils=CacheUtils,  # Disk-cache helpers.
-            file_path_utils=FilePathUtils,  # Path helpers.
-            data_exporter=DataExporter,  # Output backend writer.
-            data_processing_utils=DataProcessingUtils,  # Flatten/normalize helpers.
-            api_fetch_utils=APIFetchUtils,  # Paged fetch helpers.
-            api_core_fetch_utils=APICoreFetchUtils,  # Core unwrap helpers.
-            org_inventory_exporter=OrgInventoryExporter,  # For inventory lookups.
-            org_site_exporter=OrgSiteExporter,  # For site lookups.
-            input_utils=InputUtils,  # safe_input + prompts.
-            execute_fn=ConnectionPoolExecutor.execute,  # Pool executor (1012 SC-003; renamed from connection_pool_fn).
-            validation_utils=ValidationUtils,  # Input validation.
-            rate_limiting_utils=RateLimitingUtils,  # Adaptive delay.
-            mist_wan_target_ports=MistWanTargetPorts.VALUE,  # Port list from extracted class attribute.
-            mist_site_exclude_prefix=MIST_SITE_EXCLUDE_PREFIX,  # Site filter prefix.
-            fast_mode_max_retries=FAST_MODE_MAX_RETRIES,  # Retry cap.
-            fast_mode_retry_delay=FAST_MODE_RETRY_DELAY,  # Delay between retries.
-            api_usage_cache=_api_usage_cache,  # Shared API usage cache.
-            tqdm_module=tqdm,  # Progress bar dependency.
-        )
 
-    @staticmethod
-    def _configure_module():  # Configure the module.
-        """Configure extracted gateway modules and return gateway export module handle."""
-        from src.gateway import gateway_export_utils as gateway_export_module  # noqa: PLC0415,I001
+def _dispatch_gateway_templates() -> None:
+    """Wire gateway DI then delegate to canonical GatewayExportUtils.templates."""
+    _configure_gateway_module()  # WHY: cascades DI wiring before canonical call.
+    GatewayExportUtils.templates()
 
-        configure_gateway_export_utils_dependencies(**GatewayExportUtils._gateway_export_dependency_kwargs())
-        return gateway_export_module  # Return the module.
 
-    @staticmethod
-    def _with_site_info():  # Attach site info.
-        """Delegated gateways-with-site-info export entrypoint."""
-        module = GatewayExportUtils._configure_module()  # Configure the module.
-        return module.GatewayExportUtils._with_site_info()  # Delegate the call.
+def _dispatch_gateway_with_wan_overrides(fast: bool = False) -> None:
+    """Wire gateway DI then delegate to canonical GatewayExportUtils.with_wan_overrides."""
+    _configure_gateway_module()  # WHY: cascades DI wiring before canonical call.
+    GatewayExportUtils.with_wan_overrides(fast=fast)
 
-    @staticmethod
-    def management_ips(fast: bool = False) -> None:  # Export management IPs.
-        """Delegated gateway management IPs export entrypoint."""
-        module = GatewayExportUtils._configure_module()  # Configure the module.
-        return module.GatewayExportUtils.management_ips(fast=fast)  # Delegate the export.
 
-    @staticmethod
-    def device_configs(debug: bool = False, fast: bool = False) -> None:  # Export device configs.
-        """Delegated gateway device configs export entrypoint."""
-        module = GatewayExportUtils._configure_module()  # Configure the module.
-        return module.GatewayExportUtils.device_configs(debug=debug, fast=fast)  # Delegate the export.
+def _dispatch_gateway_wan2_variable_migration(fast: bool = False, dry_run: bool = False) -> None:
+    """Wire gateway DI then delegate to canonical GatewayExportUtils.wan2_variable_migration."""
+    _configure_gateway_module()  # WHY: cascades DI wiring before canonical call.
+    GatewayExportUtils.wan2_variable_migration(fast=fast, dry_run=dry_run)
 
-    @staticmethod
-    def templates():  # Export gateway templates.
-        """Delegated gateway template export entrypoint."""
-        module = GatewayExportUtils._configure_module()  # Configure the module.
-        return module.GatewayExportUtils.templates()  # Delegate the export.
 
-    @staticmethod
-    def with_wan_overrides(fast: bool = False) -> None:  # Export with WAN overrides.
-        """Delegated gateway WAN override analysis entrypoint."""
-        module = GatewayExportUtils._configure_module()  # Configure the module.
-        return module.GatewayExportUtils.with_wan_overrides(fast=fast)  # Delegate the export.
+def _dispatch_gateway_device_configs(debug: bool = False, fast: bool = False) -> None:
+    """Wire gateway DI then delegate to canonical GatewayExportUtils.device_configs."""
+    _configure_gateway_module()  # WHY: cascades DI wiring before canonical call.
+    GatewayExportUtils.device_configs(debug=debug, fast=fast)
 
-    @staticmethod
-    def _get_devices_with_sites(org_id: str, fast: bool = False) -> list[tuple[str, str, str, str]]:
-        """Delegated gateway device+site inventory helper entrypoint."""
-        module = GatewayExportUtils._configure_module()  # Configure the module.
-        return module.GatewayExportUtils._get_devices_with_sites(org_id, fast=fast)  # Delegate the call.
 
-    @staticmethod
-    def _get_devices_from_cache() -> list[tuple[str, str, str, str]]:  # List gateways from cache.
-        """Delegated cached gateway inventory helper entrypoint."""
-        module = GatewayExportUtils._configure_module()  # Configure the module.
-        return module.GatewayExportUtils._get_devices_from_cache()  # Delegate the call.
-
-    @staticmethod
-    def _get_devices_from_api(org_id: str) -> list[tuple[str, str, str, str]]:  # List gateways from API.
-        """Delegated API-based gateway inventory helper entrypoint."""
-        module = GatewayExportUtils._configure_module()  # Configure the module.
-        return module.GatewayExportUtils._get_devices_from_api(org_id)  # Delegate the call.
-
-    @staticmethod
-    def _get_site_ids_with_devices(org_id: str) -> list[str]:  # List sites with devices.
-        """Delegated site-ID-with-gateway helper entrypoint."""
-        module = GatewayExportUtils._configure_module()  # Configure the module.
-        return module.GatewayExportUtils._get_site_ids_with_devices(org_id)  # Delegate the call.
-
-    @staticmethod
-    def wan2_variable_migration(fast: bool = False, dry_run: bool = False) -> None:  # Migrate WAN2 variables.
-        """Delegated WAN2 variable migration entrypoint."""
-        module = GatewayExportUtils._configure_module()  # Configure the module.
-        return module.GatewayExportUtils.wan2_variable_migration(fast=fast, dry_run=dry_run)  # Delegate the migration.
+# NOTE: GatewayExportUtils facade removed per 1013 SC-001 (Cat A, position 13).
+# Canonical class lives at src/gateway/gateway_export_utils.py and is imported at
+# top-of-file. DI wiring lives in _configure_gateway_module() above; menu callbacks
+# route through _dispatch_gateway_* shims to ensure DI cascade runs first.
 
 
 # NOTE: generate_support_package moved to DataCollectionManager.generate_support_packages
@@ -7870,6 +7839,7 @@ class SSHRunnerManager:  # SSH runner delegators.
     def _build_deps() -> SSHRunnerManagerDeps:  # Build the deps bundle.
         """Build dependency container for extracted SSH runner logic."""
         cli_args = globals().get("args") if "args" in globals() else None  # Read parsed CLI args.
+        _configure_gateway_module()  # 1014 P13: DI wire canonical gateway module before packaging class ref.
         return SSHRunnerManagerDeps(  # Assemble the deps.
             args=cli_args,
             progress_emitter=PROGRESS_EMITTER,
@@ -8033,6 +8003,7 @@ def _configure_site_config_manager() -> type[SiteConfigManager]:
 def _build_firmware_manager(session: Any, target_org_id: str) -> FirmwareManager:
     """Build a fully DI-wired FirmwareManager instance for menu callbacks and internal re-checks."""
     logging.debug("Building firmware manager impl for org %s", target_org_id)  # Trace factory build
+    _configure_gateway_module()  # 1014 P13: DI wire canonical gateway module before packaging bound method.
     fw_config = FirmwareManagerConfig(  # Frozen value-object carries identity + six DI hooks
         apisession=session,  # Live Mist API session passed through
         org_id=target_org_id,  # Target organization identifier
@@ -8164,7 +8135,7 @@ menu_actions = {
         "Export audit logs for the organization (last 24 hours)",
     ),
     "31": (
-        lambda fast=False: GatewayExportUtils.management_ips(fast=fast),  # type: ignore[misc]
+        _dispatch_gateway_management_ips,  # 1014 P13: DI-wiring shim (cascades to canonical GatewayExportUtils)
         "Export gateway management overlay IPs grouped by template association",
     ),
     # > WebSocket Device Commands
@@ -8264,13 +8235,13 @@ menu_actions = {
         OrgInventoryExporter.combined_inventory_with_site_info,
         "Export combined inventory with site and address info by calendar week",
     ),
-    "32": (GatewayExportUtils.templates, "Export gateway templates from the organization"),
+    "32": (_dispatch_gateway_templates, "Export gateway templates from the organization"),
     "3": (
         OrgSiteExporter.sites_list_api,
         "Export all sites using the 'list' sites API endpoint (to SiteList_ListAPI.csv, only if not already present)",
     ),
     "35": (
-        lambda fast=False: GatewayExportUtils.with_wan_overrides(fast=fast),  # type: ignore[misc]
+        _dispatch_gateway_with_wan_overrides,  # 1014 P13: DI-wiring shim (cascades to canonical)
         "Find gateway ports overridden from template (outliers for compliance correction)",
     ),
     # Site-Specific Data Exports
@@ -8321,7 +8292,7 @@ menu_actions = {
         "Set WAN2 Interface Site Variable - Configure 'wan2_interface' site variable for template-based WAN migration (Reports sites with ge-0/0/1 overrides)",  # noqa: E501
     ),
     "163": (
-        lambda fast=False, dry_run=False: GatewayExportUtils.wan2_variable_migration(fast=fast, dry_run=dry_run),  # type: ignore[misc]
+        _dispatch_gateway_wan2_variable_migration,  # 1014 P13: DI-wiring shim (cascades to canonical)
         " DESTRUCTIVE: Update Gateway Templates to Use WAN2 Variable - Replace hardcoded 'ge-0/0/1' references with {{wan2_interface}} variable (Requires uppercase 'MIGRATE' confirmation, supports --dry-run)",  # noqa: E501
     ),
     "150": (
@@ -8396,7 +8367,7 @@ menu_actions = {
         "Export ALL audit logs for the organization (last 52 weeks)",
     ),
     "99": (
-        GatewayExportUtils.device_configs,
+        _dispatch_gateway_device_configs,  # 1014 P13: DI-wiring shim (cascades to canonical)
         "Export configuration details for all gateway devices across all sites",
     ),
     # ==============================
