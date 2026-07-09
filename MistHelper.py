@@ -231,6 +231,9 @@ from src.gateway.gateway_export_utils import (
 from src.gateway.gateway_ha_exporter import (  # pylint: disable=unused-import
     GatewayHaExporter,  # noqa: F401  # Cat B (1013 SC-001 position 23) -- re-export for MistHelper.GatewayHaExporter callers
 )
+from src.gateway.gateway_stats_exporter import (  # pylint: disable=unused-import
+    GatewayStatsExporter,  # noqa: F401  # Cat A (1014 SC-001 position 12) -- re-export for MistHelper.GatewayStatsExporter callers
+)
 from src.gateway.template_config import GatewayTemplateConfigManager  # Cat A canonical (1013 SC-001)
 from src.input.prompt_client_utils import (  # pylint: disable=unused-import
     PromptClientUtils,  # noqa: F401  # Cat B (1013 SC-001 position 35) -- re-export for MistHelper.PromptClientUtils callers
@@ -7717,34 +7720,23 @@ def _get_duc_instance():  # Build DeviceUtilityCommands.
 # GatewayTestExporter moved to src/export/gateway_test_exporter.py (1013 SC-001 position 37)  # noqa: E501
 
 
-class GatewayStatsExporter:  # Gateway stats delegators.
-    """Delegation wrapper for extracted gateway stats exporter implementation."""
+# GatewayStatsExporter moved to src/gateway/gateway_stats_exporter.py (1014 SC-001 position 12)
+# Top-level import above re-exports the canonical class. Menu dispatch uses the
+# dispatch shims below to ensure GatewayExportUtils._configure_module() runs (which
+# cascades DI wiring through configure_gateway_stats_exporter_dependencies) before
+# the canonical class methods execute.
 
-    @staticmethod
-    def _configure_module():  # Configure the module.
-        """Configure extracted gateway modules and return stats module handle."""
-        from src.gateway import gateway_stats_exporter as stats_module  # noqa: PLC0415,I001
 
-        GatewayExportUtils._configure_module()  # Wire dependencies.
-        return stats_module  # Return the module.
+def _dispatch_gateway_stats_device_stats_with_freshness(fast: bool = False) -> None:
+    """Wire gateway DI then delegate to canonical GatewayStatsExporter.device_stats_with_freshness."""
+    GatewayExportUtils._configure_module()  # WHY: cascades DI wiring for stats exporter.
+    GatewayStatsExporter.device_stats_with_freshness(fast=fast)
 
-    @staticmethod
-    def device_stats(fast=False):  # Export gateway device stats.
-        """Delegated gateway device stats export entrypoint."""
-        module = GatewayStatsExporter._configure_module()  # Configure the module.
-        return module.GatewayStatsExporter.device_stats(fast=fast)  # Delegate the export.
 
-    @staticmethod
-    def device_stats_with_freshness(fast: bool = False) -> None:  # Export with freshness.
-        """Delegated freshness-aware gateway device stats export entrypoint."""
-        module = GatewayStatsExporter._configure_module()  # Configure the module.
-        return module.GatewayStatsExporter.device_stats_with_freshness(fast=fast)  # Delegate the export.
-
-    @staticmethod
-    def wan_port_conflicts():  # Export WAN port conflicts.
-        """Delegated WAN port conflict analysis entrypoint."""
-        module = GatewayStatsExporter._configure_module()  # Configure the module.
-        return module.GatewayStatsExporter.wan_port_conflicts()  # Delegate the export.
+def _dispatch_gateway_stats_wan_port_conflicts() -> None:
+    """Wire gateway DI then delegate to canonical GatewayStatsExporter.wan_port_conflicts."""
+    GatewayExportUtils._configure_module()  # WHY: cascades DI wiring for stats exporter.
+    GatewayStatsExporter.wan_port_conflicts()
 
 
 class GatewayExportUtils:  # Gateway export delegators.
@@ -8458,11 +8450,11 @@ menu_actions = {
         "Check virtual chassis to virtual MAC conversion status for all switches",
     ),
     "18": (
-        lambda fast=False: GatewayStatsExporter.device_stats_with_freshness(fast=fast),  # type: ignore[misc]
+        lambda fast=False: _dispatch_gateway_stats_device_stats_with_freshness(fast=fast),  # type: ignore[misc]
         "Export detailed device statistics for all gateways (with freshness check)",
     ),
     "36": (
-        GatewayStatsExporter.wan_port_conflicts,
+        _dispatch_gateway_stats_wan_port_conflicts,
         "Check and export gateways with duplicate WAN port IP addresses (0/0/0, 0/0/1, 0/0/2)",
     ),
     "175": (
