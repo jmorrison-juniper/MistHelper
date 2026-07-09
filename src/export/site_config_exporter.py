@@ -14,6 +14,8 @@ from typing import Any  # WHY: raw WLAN rows are duck-typed dicts from mistapi.
 
 import mistapi  # WHY: direct SDK access for sites/orgs endpoints.
 
+from src.api.api_fetch_utils import APIFetchUtils  # WHY: 1014 P8 direct import (FR-005).
+
 
 class SiteConfigExporter:
     """Site Configuration Exporter.
@@ -114,7 +116,7 @@ class SiteConfigExporter:
         logging.info("Starting export of all site configuration settings...")  # Log start.
         current_org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
         logging.debug("Using org_id: %s for site settings export.", current_org_id)  # Trace the org.
-        data = mh.APIFetchUtils.all_site_settings(mh.apisession, current_org_id, limit=1000)
+        data = APIFetchUtils.all_site_settings(mh.apisession, current_org_id, limit=1000)
         if data:  # Have data.
             logging.info("Fetched settings for %s sites. Flattening and sanitizing data...", len(data))
             data = mh.DataProcessingUtils.flatten_nested_fields(data)  # Flatten nested fields.
