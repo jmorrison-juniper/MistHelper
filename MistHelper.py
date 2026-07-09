@@ -92,6 +92,9 @@ from src.analytics.site_inventory_health_analyzer import (
 from src.analytics.telemetry_emitter import (  # pylint: disable=unused-import
     TelemetryEmitter,  # noqa: F401  # Cat B (1013 SC-001 position 9) -- re-export for callers at 18629/18632/18711/19062
 )
+from src.api.api_core_fetch_utils import (
+    APICoreFetchUtils,
+)  # Cat E canonical (1014 P10) -- re-export for MistHelper.APICoreFetchUtils callers
 from src.api.api_data_fetcher import (  # pylint: disable=unused-import
     APIDataFetcher,  # noqa: F401  # Cat B (1013 SC-001 position 21) -- re-export for MistHelper.APIDataFetcher callers
 )
@@ -5716,53 +5719,7 @@ class ConfigUtils:  # Org id and run-control helpers.
 # ============================================================================
 # API FETCH UTILITIES CLASS
 # ============================================================================
-class APICoreFetchUtils:  # Low-level Mist API fetch helpers.
-    """
-    Core API Fetch Utilities
-
-    Handles site and inventory fetching with pagination.
-    Extracted from APIFetchUtils.
-    """
-
-    @staticmethod
-    def all_sites_with_limit(org_id: str) -> list[dict]:  # type: ignore[type-arg]
-        """
-        Fetch all sites with unified pagination.
-
-        Args:
-            org_id: The organization ID
-
-        Returns:
-            List of site dictionaries
-
-        SECURITY: Read-only; no sensitive data logged.
-        """
-        response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id, limit=DEFAULT_API_PAGE_LIMIT)
-        return mistapi.get_all(response=response, mist_session=apisession)  # type: ignore[no-any-return]
-
-    @staticmethod
-    def all_inventory_with_limit(org_id: str) -> list[dict]:  # type: ignore[type-arg]
-        """
-        Fetch full org inventory with unified pagination.
-
-        Args:
-            org_id: The organization ID
-
-        Returns:
-            List of inventory dictionaries (includes all VC physical members)
-
-        SECURITY: Read-only; no secrets in inventory object fields.
-        """
-        response = mistapi.api.v1.orgs.inventory.getOrgInventory(
-            apisession, org_id, vc=True, limit=DEFAULT_API_PAGE_LIMIT
-        )  # vc=True includes all physical VC member devices
-        return mistapi.get_all(response=response, mist_session=apisession)  # type: ignore[no-any-return]
-
-    @staticmethod
-    def get_api_response_data(response: Any) -> Any:
-        """Return a mistapi response's .data payload, or the response itself when .data is absent."""
-        logging.debug("Unwrapping API response payload (type=%s)", type(response).__name__)  # Trace unwrap calls
-        return getattr(response, "data", response)  # mistapi carries parsed JSON on .data; fall back to the raw object
+# NOTE: APICoreFetchUtils removed (1014 P10, Cat E) - canonical body at src/api/api_core_fetch_utils.py.
 
 
 # APITenantFetchUtils extracted to src/api/tenant_fetch.py (issue #331).
