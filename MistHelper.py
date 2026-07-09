@@ -457,18 +457,9 @@ if sys.version_info < MINIMUM_PYTHON_VERSION:  # Check if Python is below minimu
 # per function. Each dataclass encapsulates configuration for a specific domain.
 
 
-@dataclass
-class SSHConnectionConfig:
-    """Configuration for SSH connections - groups connection parameters."""
-
-    hostname: str  # Target device hostname or IP address to connect to
-    username: str  # SSH login username for authentication
-    password: str  # SSH login password (treated as a secret; never logged in plaintext)
-    port: int = 22  # TCP port for SSH (default 22; override for non-standard device setups)
-    timeout: int = 30  # Seconds to wait before giving up on a connection attempt
-    use_shell: bool = True  # Whether to allocate an interactive shell vs exec a single command
-
-
+# NOTE: SSHConnectionConfig removed (1014 P3) - was a dead duplicate of src/ssh/ssh_runner.py:155;
+#       nothing in MistHelper.py imported the local copy, and all src/ssh/*.py callers
+#       already imported from src.ssh.ssh_runner. Import from src.ssh.ssh_runner instead.
 # NOTE: SSHExecutionConfig removed (1014 P1) - was a dead duplicate of src/ssh/ssh_runner.py:167;
 #       nothing in MistHelper.py imported the local copy, and all src/ssh/batch/*.py callers
 #       already imported from src.ssh.ssh_runner. Import from src.ssh.ssh_runner instead.
