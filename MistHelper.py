@@ -225,6 +225,10 @@ from src.input.prompt_client_utils import (  # pylint: disable=unused-import
 from src.inventory.org_device_inventory_summary_facade import (  # pylint: disable=unused-import
     OrgDeviceInventorySummary,  # noqa: F401  # Cat B (1013 SC-001 position 29) -- re-export for MistHelper.OrgDeviceInventorySummary callers
 )
+from src.network.routing_utils import (  # Cat A canonical (1014 P4)
+    RoutingDeps,
+    RoutingUtils,
+)
 from src.org.org_config_migration_manager import OrgConfigMigrationManager  # Cat B (1013 SC-001 position 5)
 from src.org.org_ticket_manager import (  # pylint: disable=unused-import
     OrgTicketManager,  # noqa: F401  # Cat B (1013 SC-001 position 46) -- re-export for MistHelper.OrgTicketManager callers
@@ -8119,48 +8123,9 @@ class SiteExportUtils:  # Site export delegators.
 # ============================================================================
 
 
-def _get_routing_utils_instance():  # Build a RoutingUtils.
-    """Create RoutingUtils instance with MistHelper globals."""
-    from src.network.routing_utils import RoutingDeps as _RD  # Deps dataclass wrapper.
-    from src.network.routing_utils import RoutingUtils as _RU  # Import the extracted class.
-
-    def _pick_device(site_id, dtype):  # Local wrapper for keyword-arg selector.
-        return PromptUtils.select_device_id_from_inventory(site_id, device_type=dtype)
-
-    return _RU(  # Wire dependencies via RoutingDeps.
-        _RD(
-            apisession=apisession,
-            select_site_fn=PromptUtils.select_site_id_from_csv,
-            select_device_fn=_pick_device,
-            safe_input_fn=InputUtils.safe_input,
-            websocket_manager_factory=WebSocketManager,
-            check_fn=IsDebugMode.check,
-        )
-    )
-
-
-class RoutingUtils:  # Routing utils facade.
-    """Routing utilities (Menus 6-8).
-
-    Implementation extracted to src/network/routing_utils.py.
-    This stub delegates to the extracted module while providing
-    access to MistHelper globals (apisession, utility classes).
-    """
-
-    @staticmethod
-    def execute_show_forwarding_table():  # Show the forwarding table.
-        """Execute show forwarding table on a gateway/SSR device via WebSocket."""
-        _get_routing_utils_instance().execute_show_forwarding_table()  # Delegate to the impl.
-
-    @staticmethod
-    def execute_show_routing_table():  # Show the routing table.
-        """Execute show route command on switches via WebSocket."""
-        _get_routing_utils_instance().execute_show_routing_table()  # Delegate to the impl.
-
-    @staticmethod
-    def execute_show_ssr_routes():  # Show SSR routes.
-        """Execute SSR/SRX routing table via dedicated API."""
-        _get_routing_utils_instance().execute_show_ssr_routes()  # Delegate to the impl.
+# NOTE: RoutingUtils facade + _get_routing_utils_instance() removed (1014 P4, Cat A) -
+#       canonical body at src/network/routing_utils.py:106. Menus 103-105 now inline
+#       DI via lambdas (see MENU_ENTRIES).
 
 
 # ============================================================================
@@ -9074,15 +9039,48 @@ menu_actions = {
         "Show MAC table on switch device via WebSocket (Layer 2 switching table)",
     ),
     "103": (
-        RoutingUtils.execute_show_forwarding_table,
+        lambda: RoutingUtils(
+            RoutingDeps(
+                apisession=apisession,
+                select_site_fn=PromptUtils.select_site_id_from_csv,
+                select_device_fn=lambda site_id, dtype: PromptUtils.select_device_id_from_inventory(
+                    site_id, device_type=dtype
+                ),
+                safe_input_fn=InputUtils.safe_input,
+                websocket_manager_factory=WebSocketManager,
+                check_fn=IsDebugMode.check,
+            )
+        ).execute_show_forwarding_table(),
         "Show forwarding table on gateway device via WebSocket (Layer 3 routing table)",
     ),
     "104": (
-        RoutingUtils.execute_show_routing_table,
+        lambda: RoutingUtils(
+            RoutingDeps(
+                apisession=apisession,
+                select_site_fn=PromptUtils.select_site_id_from_csv,
+                select_device_fn=lambda site_id, dtype: PromptUtils.select_device_id_from_inventory(
+                    site_id, device_type=dtype
+                ),
+                safe_input_fn=InputUtils.safe_input,
+                websocket_manager_factory=WebSocketManager,
+                check_fn=IsDebugMode.check,
+            )
+        ).execute_show_routing_table(),
         "Show routing table on switches via WebSocket (Switch L3 routing - BGP/OSPF/Static)",
     ),
     "105": (
-        RoutingUtils.execute_show_ssr_routes,
+        lambda: RoutingUtils(
+            RoutingDeps(
+                apisession=apisession,
+                select_site_fn=PromptUtils.select_site_id_from_csv,
+                select_device_fn=lambda site_id, dtype: PromptUtils.select_device_id_from_inventory(
+                    site_id, device_type=dtype
+                ),
+                safe_input_fn=InputUtils.safe_input,
+                websocket_manager_factory=WebSocketManager,
+                check_fn=IsDebugMode.check,
+            )
+        ).execute_show_ssr_routes(),
         "Show SSR/SRX routing table via dedicated API (128T/SRX gateways - Advanced BGP analysis)",
     ),
     # > Packet Capture Operations
