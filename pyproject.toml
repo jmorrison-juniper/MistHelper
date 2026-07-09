@@ -189,6 +189,7 @@ strict = false
 module = [
     "src.analytics.*",
     "src.api.*",
+    "src.cache.*",
     "src.export.*",
     "src.gateway.*",
     "src.input.*",
@@ -241,6 +242,7 @@ omit = [
     "src/api/api_data_fetcher.py",
     "src/api/api_fetch_utils.py",
     "src/api/api_core_fetch_utils.py",
+    "src/cache/cache_utils.py",
     "src/db/database_schema_utils.py",
     "src/device/arp_command_manager.py",
     "src/device/device_reboot_manager.py",
