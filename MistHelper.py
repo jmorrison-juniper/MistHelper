@@ -209,6 +209,9 @@ from src.firmware.firmware_manager import (  # Cat A canonical (1013 SC-002)
     FirmwareManager,
     FirmwareManagerConfig,
 )
+from src.firmware.site_auto_upgrade import (  # Cat A canonical (1014 P2)
+    SiteAutoUpgradeConfigurator,
+)
 from src.gateway.gateway_export_utils import (
     configure_gateway_export_utils_dependencies,
 )  # Import gateway export utility configuration
@@ -8929,28 +8932,8 @@ def _build_firmware_manager(session: Any, target_org_id: str) -> FirmwareManager
 # NOTE: MSPInventoryExporter has been extracted to src/export/msp_inventory_exporter.py (issue #1013 SC-001 position 8)
 
 
-class SiteAutoUpgradeConfigurator:
-    """Thin wrapper that delegates to src.firmware.site_auto_upgrade."""
-
-    @staticmethod
-    def execute():
-        """Static entry point - delegates to extracted module."""
-        from src.firmware.site_auto_upgrade import SiteAutoUpgradeConfigurator as _Impl
-
-        global msp_privileges
-
-        dry_run = getattr(globals().get("args", None), "dry_run", False)
-        _Impl.execute(
-            apisession=apisession,
-            msp_privileges=msp_privileges if msp_privileges else [],
-            safe_input_fn=InputUtils.safe_input,
-            get_org_id_fn=ConfigUtils.get_cached_or_prompted_org_id,
-            fetch_sites_fn=APICoreFetchUtils.all_sites_with_limit,
-            check_stop_fn=ConfigUtils.check_stop_signal,
-            dry_run=dry_run,
-            select_msps_fn=OrgLevelAPFirmwareUpgrader._select_msps,
-            select_orgs_fn=OrgLevelAPFirmwareUpgrader._select_orgs_from_msp,
-        )
+# NOTE: SiteAutoUpgradeConfigurator facade removed (1014 P2, Cat A) - canonical body at
+# src/firmware/site_auto_upgrade.py:105. Menu 168 now inlines DI via lambda (see below).
 
 
 class OrgLevelAPFirmwareUpgrader:
@@ -9484,7 +9467,17 @@ menu_actions = {
     # SITE AUTO-UPGRADE CONFIGURATION
     # ==============================
     "168": (
-        SiteAutoUpgradeConfigurator.execute,
+        lambda: SiteAutoUpgradeConfigurator.execute(
+            apisession=apisession,
+            msp_privileges=msp_privileges if msp_privileges else [],
+            safe_input_fn=InputUtils.safe_input,
+            get_org_id_fn=ConfigUtils.get_cached_or_prompted_org_id,
+            fetch_sites_fn=APICoreFetchUtils.all_sites_with_limit,
+            check_stop_fn=ConfigUtils.check_stop_signal,
+            dry_run=getattr(globals().get("args", None), "dry_run", False),
+            select_msps_fn=OrgLevelAPFirmwareUpgrader._select_msps,
+            select_orgs_fn=OrgLevelAPFirmwareUpgrader._select_orgs_from_msp,
+        ),
         "Site Auto-Upgrade Configuration - Configure AP auto-upgrade settings for sites with MSP multi-org support (supports --dry-run)",  # noqa: E501
     ),
     # ==============================
