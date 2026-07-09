@@ -29,8 +29,8 @@ from tqdm import tqdm  # WHY: progress bar for long-running site/device fetches.
 
 
 class APIFetchUtils:  # Higher-level org/site fetchers.
-    """
-    Centralized API fetch utilities.
+    """Centralized API fetch utilities.
+
     Groups all data fetching functions for better code organization.
     All methods are static to avoid unnecessary object instantiation.
     """
