@@ -14,6 +14,7 @@ from typing import Any  # WHY: raw client rows are duck-typed dicts from mistapi
 
 import mistapi  # WHY: direct SDK access for listSiteWirelessClientsStats + beacons endpoints.
 
+from src.export.site_export_utils import SiteExportUtils  # WHY: Pattern 1 inline construction for beacons export.
 from src.export.wifi_clients_exporter import WifiClientsExporter  # Extracted WiFi export orchestrator.
 
 
@@ -101,7 +102,22 @@ class SiteClientExporter:
     @staticmethod
     def beacons() -> None:
         """Export beacons for a site to SiteBeacons.csv."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of SiteExportUtils._export_data helper.
-        mh.SiteExportUtils._export_data(  # Shared export scaffolding handles prompting + CSV write.
+        mh = importlib.import_module("MistHelper")  # WHY: fetch live dep symbols for SiteExportUtils construction.
+        SiteExportUtils(
+            apisession=mh.apisession,
+            PromptUtils=mh.PromptUtils,
+            ConfigUtils=mh.ConfigUtils,
+            DataProcessingUtils=mh.DataProcessingUtils,
+            DataExporter=mh.DataExporter,
+            TimeUtils=mh.TimeUtils,
+            EnhancedSSHRunner=mh.EnhancedSSHRunner,
+            InsightMetricsUtils=mh.InsightMetricsUtils,
+            PacketCaptureManager=mh.PacketCaptureManager,
+            APICoreFetchUtils=mh.APICoreFetchUtils,
+            check_fn=mh.IsDebugMode.check,
+            PrettyTable=mh.PrettyTable,
+            tqdm=mh.tqdm,
+            mistapi=mh.mistapi,
+        )._export_data(  # Shared export scaffolding handles prompting + CSV write.
             api_call=mistapi.api.v1.sites.beacons.listSiteBeacons, data_type="beacons", sort_key="name"
         )

@@ -15,6 +15,7 @@ from typing import Any  # WHY: raw WLAN rows are duck-typed dicts from mistapi.
 import mistapi  # WHY: direct SDK access for sites/orgs endpoints.
 
 from src.api.api_fetch_utils import APIFetchUtils  # WHY: 1014 P8 direct import (FR-005).
+from src.export.site_export_utils import SiteExportUtils  # WHY: Pattern 1 inline construction for maps/zones exports.
 
 
 class SiteConfigExporter:
@@ -93,16 +94,46 @@ class SiteConfigExporter:
     @staticmethod
     def maps() -> None:
         """Export maps for a site to SiteMaps.csv."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of SiteExportUtils._export_data helper.
-        mh.SiteExportUtils._export_data(  # Shared export scaffolding handles prompting + CSV write.
+        mh = importlib.import_module("MistHelper")  # WHY: fetch live dep symbols for SiteExportUtils construction.
+        SiteExportUtils(
+            apisession=mh.apisession,
+            PromptUtils=mh.PromptUtils,
+            ConfigUtils=mh.ConfigUtils,
+            DataProcessingUtils=mh.DataProcessingUtils,
+            DataExporter=mh.DataExporter,
+            TimeUtils=mh.TimeUtils,
+            EnhancedSSHRunner=mh.EnhancedSSHRunner,
+            InsightMetricsUtils=mh.InsightMetricsUtils,
+            PacketCaptureManager=mh.PacketCaptureManager,
+            APICoreFetchUtils=mh.APICoreFetchUtils,
+            check_fn=mh.IsDebugMode.check,
+            PrettyTable=mh.PrettyTable,
+            tqdm=mh.tqdm,
+            mistapi=mh.mistapi,
+        )._export_data(  # Shared export scaffolding handles prompting + CSV write.
             api_call=mistapi.api.v1.sites.maps.listSiteMaps, data_type="maps", sort_key="name"
         )
 
     @staticmethod
     def zones() -> None:
         """Export zones for a site to SiteZones.csv."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of SiteExportUtils._export_data helper.
-        mh.SiteExportUtils._export_data(  # Shared export scaffolding handles prompting + CSV write.
+        mh = importlib.import_module("MistHelper")  # WHY: fetch live dep symbols for SiteExportUtils construction.
+        SiteExportUtils(
+            apisession=mh.apisession,
+            PromptUtils=mh.PromptUtils,
+            ConfigUtils=mh.ConfigUtils,
+            DataProcessingUtils=mh.DataProcessingUtils,
+            DataExporter=mh.DataExporter,
+            TimeUtils=mh.TimeUtils,
+            EnhancedSSHRunner=mh.EnhancedSSHRunner,
+            InsightMetricsUtils=mh.InsightMetricsUtils,
+            PacketCaptureManager=mh.PacketCaptureManager,
+            APICoreFetchUtils=mh.APICoreFetchUtils,
+            check_fn=mh.IsDebugMode.check,
+            PrettyTable=mh.PrettyTable,
+            tqdm=mh.tqdm,
+            mistapi=mh.mistapi,
+        )._export_data(  # Shared export scaffolding handles prompting + CSV write.
             api_call=mistapi.api.v1.sites.zones.listSiteZones, data_type="zones", sort_key="name"
         )
 

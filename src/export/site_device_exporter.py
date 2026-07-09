@@ -21,6 +21,8 @@ from typing import Any  # WHY: mistapi response payloads + inventory rows are du
 import mistapi  # WHY: direct calls to sites.devices + sites.stats endpoints + get_all pager.
 from prettytable import PrettyTable  # WHY: debug-log a formatted inventory table.
 
+from src.export.site_export_utils import SiteExportUtils  # WHY: Pattern 1 inline construction for port_stats export.
+
 
 class SiteDeviceExporter:
     """Site Device Data Exporter.
@@ -140,12 +142,27 @@ class SiteDeviceExporter:
         """Export port statistics for a site to SitePortStats.csv."""
         mh = importlib.import_module(
             "MistHelper"
-        )  # WHY: lazy fetch of PROGRESS_EMITTER + ProgressContext + SiteExport.
+        )  # WHY: fetch live dep symbols for SiteExportUtils construction + progress emitter access.
         emitter = mh.PROGRESS_EMITTER  # Progress emitter.
         if emitter:  # Emitter present.
             emitter.emit_progress_start("29", "port_stats", 1)  # Signal progress start.
         op_start = time.time()  # Start the timer.
-        mh.SiteExportUtils._export_data(
+        SiteExportUtils(
+            apisession=mh.apisession,
+            PromptUtils=mh.PromptUtils,
+            ConfigUtils=mh.ConfigUtils,
+            DataProcessingUtils=mh.DataProcessingUtils,
+            DataExporter=mh.DataExporter,
+            TimeUtils=mh.TimeUtils,
+            EnhancedSSHRunner=mh.EnhancedSSHRunner,
+            InsightMetricsUtils=mh.InsightMetricsUtils,
+            PacketCaptureManager=mh.PacketCaptureManager,
+            APICoreFetchUtils=mh.APICoreFetchUtils,
+            check_fn=mh.IsDebugMode.check,
+            PrettyTable=mh.PrettyTable,
+            tqdm=mh.tqdm,
+            mistapi=mh.mistapi,
+        )._export_data(
             api_call=mistapi.api.v1.sites.stats.searchSiteSwOrGwPorts, data_type="port stats", sort_key="mac"
         )
         if emitter:  # Emitter present.

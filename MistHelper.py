@@ -205,9 +205,9 @@ from src.export.site_config_exporter import (  # pylint: disable=unused-import
 from src.export.site_device_exporter import (  # pylint: disable=unused-import
     SiteDeviceExporter,  # noqa: F401  # Cat B (1013 SC-001 position 34) -- re-export for MistHelper.SiteDeviceExporter callers
 )
-from src.export.site_export_utils import (
-    configure_site_export_utils_dependencies,
-)  # Import site export utility configuration
+from src.export.site_export_utils import (  # Cat A canonical (1014 P16)
+    SiteExportUtils,
+)
 from src.export.site_insights.device_metric_operation import (
     DeviceMetricOperation,
 )  # Decomposed Menu 76 entry point
@@ -7233,153 +7233,7 @@ class OrgInventoryExporter:  # Org inventory exporters.
 # ============================================================================
 
 
-class SiteExportUtils:  # Site export delegators.
-    """Delegation wrapper for extracted site export implementation."""
-
-    @staticmethod
-    def _configure_module():  # Configure the export module.
-        """Configure extracted module dependencies and return module handle."""
-        from src.export import site_export_utils as site_export_module  # noqa: PLC0415,I001
-
-        configure_site_export_utils_dependencies(  # Wire dependencies.
-            apisession_dependency=apisession,
-            prompt_utils=PromptUtils,
-            config_utils=ConfigUtils,
-            data_processing_utils=DataProcessingUtils,
-            data_exporter=DataExporter,
-            time_utils=TimeUtils,
-            enhanced_ssh_runner=EnhancedSSHRunner,
-            insight_metrics_utils=InsightMetricsUtils,
-            packet_capture_manager=PacketCaptureManager,
-            api_core_fetch_utils=APICoreFetchUtils,
-            check_fn=IsDebugMode.check,
-            pretty_table_class=PrettyTable,
-            tqdm_module=tqdm,
-            mistapi_dependency=mistapi,
-        )
-        return site_export_module  # Return the module.
-
-    @staticmethod
-    def _export_data(api_call, data_type, sort_key="name", **api_kwargs):  # Export a site endpoint.
-        """Delegate generic site export flow to extracted module."""
-        module = SiteExportUtils._configure_module()  # Configure the module.
-        return module.SiteExportUtils._export_data(api_call, data_type, sort_key=sort_key, **api_kwargs)
-
-    @staticmethod
-    def insight_metrics():  # Export site insight metrics.
-        """Menu #74 entry: configures deps then runs decomposed SiteMetricOperation."""
-        SiteExportUtils._configure_module()  # Wire apisession / mistapi / DataExporter globals on the extracted module
-        SiteMetricOperation.execute()  # Run the decomposed operation directly (no inheritance delegation)
-
-    @staticmethod
-    def device_insights():  # Export device insights.
-        """Menu #76 entry: configures deps then runs decomposed DeviceMetricOperation."""
-        SiteExportUtils._configure_module()  # Wire apisession / mistapi / DataExporter globals on the extracted module
-        DeviceMetricOperation.execute()  # Run the decomposed operation directly (no inheritance delegation)
-
-    @staticmethod
-    def insights():  # Export site insights.
-        """Menu #73 delegated entrypoint."""
-        module = SiteExportUtils._configure_module()  # Configure the module.
-        return module.SiteExportUtils.insights()  # Delegate the export.
-
-    @staticmethod
-    def _system_events():  # Export system events.
-        """Delegated site system events export."""
-        module = SiteExportUtils._configure_module()  # Configure the module.
-        return module.SiteExportUtils._system_events()  # Delegate the export.
-
-    @staticmethod
-    def _fast_roam_events():  # Export fast-roam events.
-        """Delegated site fast-roam events export."""
-        module = SiteExportUtils._configure_module()  # Configure the module.
-        return module.SiteExportUtils._fast_roam_events()  # Delegate the export.
-
-    @staticmethod
-    def ospf_stats():  # Export OSPF stats.
-        """Menu #70 delegated entrypoint."""
-        module = SiteExportUtils._configure_module()  # Configure the module.
-        return module.SiteExportUtils.ospf_stats()  # Delegate the export.
-
-    @staticmethod
-    def mxedge_upgrade_status():  # Export Mist Edge upgrades.
-        """Menu #71 delegated entrypoint."""
-        module = SiteExportUtils._configure_module()  # Configure the module.
-        return module.SiteExportUtils.mxedge_upgrade_status()  # Delegate the export.
-
-    @staticmethod
-    def auto_map_assignment_status():  # Export auto-map status.
-        """Menu #72 delegated entrypoint."""
-        module = SiteExportUtils._configure_module()  # Configure the module.
-        return module.SiteExportUtils.auto_map_assignment_status()  # Delegate the export.
-
-    @staticmethod
-    def site_stats() -> None:  # Export site stats.
-        """Menu #80 delegated entrypoint."""
-        module = SiteExportUtils._configure_module()  # Configure the module.
-        return module.SiteExportUtils.site_stats()  # Delegate the export.
-
-    @staticmethod
-    def gateway_metrics() -> None:  # Export gateway metrics.
-        """Menu #81 delegated entrypoint."""
-        module = SiteExportUtils._configure_module()  # Configure the module.
-        return module.SiteExportUtils.gateway_metrics()  # Delegate the export.
-
-    @staticmethod
-    def switches_metrics() -> None:  # Export switch metrics.
-        """Menu #82 delegated entrypoint."""
-        module = SiteExportUtils._configure_module()  # Configure the module.
-        return module.SiteExportUtils.switches_metrics()  # Delegate the export.
-
-    @staticmethod
-    def beacons_stats() -> None:  # Export beacon stats.
-        """Menu #83 delegated entrypoint."""
-        module = SiteExportUtils._configure_module()  # Configure the module.
-        return module.SiteExportUtils.beacons_stats()  # Delegate the export.
-
-    @staticmethod
-    def wxrules_usage() -> None:  # Export WxRules usage.
-        """Menu #84 delegated entrypoint."""
-        module = SiteExportUtils._configure_module()  # Configure the module.
-        return module.SiteExportUtils.wxrules_usage()  # Delegate the export.
-
-    @staticmethod
-    def assets_stats() -> None:  # Export asset stats.
-        """Menu #85 delegated entrypoint."""
-        module = SiteExportUtils._configure_module()  # Configure the module.
-        return module.SiteExportUtils.assets_stats()  # Delegate the export.
-
-    @staticmethod
-    def current_channel_planning() -> None:  # Export channel planning.
-        """Menu #86 delegated entrypoint."""
-        module = SiteExportUtils._configure_module()  # Configure the module.
-        return module.SiteExportUtils.current_channel_planning()  # Delegate the export.
-
-    @staticmethod
-    def zone_config_analysis() -> None:  # Export zone analysis.
-        """Menu #6 delegated entrypoint."""
-        module = SiteExportUtils._configure_module()  # Configure the module.
-        return module.SiteExportUtils.zone_config_analysis()  # Delegate the export.
-
-    @staticmethod
-    def _classify_device_platform(device_model: str) -> str:  # Classify a device platform.
-        """Delegate device platform classification helper."""
-        module = SiteExportUtils._configure_module()  # Configure the module.
-        return module.SiteExportUtils._classify_device_platform(device_model)  # Delegate the call.
-
-    @staticmethod
-    def _metric_supported_on_platform(metric_name: str, device_platform: str) -> bool:  # Check metric platform support.
-        """Delegate metric/platform support check to the extracted SiteExportUtils impl."""
-        module = SiteExportUtils._configure_module()  # resolve wired src module
-        return module.SiteExportUtils._metric_compatible_with_platform(metric_name, device_platform)  # call src impl
-
-    @staticmethod
-    def _normalize_device_mac_or_none(device_mac: str) -> str | None:  # Normalize a device MAC.
-        """Delegate device MAC normalization helper."""
-        module = SiteExportUtils._configure_module()  # Configure the module.
-        return module.SiteExportUtils._normalize_device_mac_or_none(device_mac)  # Delegate the call.
-
-
+# SiteExportUtils moved to src/export/site_export_utils.py (1014 P16 Cat A) — imported at top
 # GatewayHaExporter moved to src/gateway/gateway_ha_exporter.py (1013 SC-001 position 23)
 
 
@@ -8010,7 +7864,25 @@ menu_actions = {
     "66": (SiteClientExporter.beacons, "Export beacon information for a selected site"),
     "67": (SiteConfigExporter.maps, "Export map information for a selected site"),
     "68": (SiteConfigExporter.zones, "Export zone information for a selected site"),
-    "73": (SiteExportUtils.insights, "Export SLE (Service Level Experience) metrics insights for a selected site"),
+    "73": (
+        lambda: SiteExportUtils(
+            apisession=apisession,
+            PromptUtils=PromptUtils,
+            ConfigUtils=ConfigUtils,
+            DataProcessingUtils=DataProcessingUtils,
+            DataExporter=DataExporter,
+            TimeUtils=TimeUtils,
+            EnhancedSSHRunner=EnhancedSSHRunner,
+            InsightMetricsUtils=InsightMetricsUtils,
+            PacketCaptureManager=PacketCaptureManager,
+            APICoreFetchUtils=APICoreFetchUtils,
+            check_fn=IsDebugMode.check,
+            PrettyTable=PrettyTable,
+            tqdm=tqdm,
+            mistapi=mistapi,
+        ).insights(),
+        "Export SLE (Service Level Experience) metrics insights for a selected site",
+    ),
     # ==============================
     # GATEWAY TEMPLATE VARIABLE OPERATIONS
     # ==============================
@@ -8169,9 +8041,32 @@ menu_actions = {
     # ==============================
     "51": (OrgExportUtils.sle_metrics, "Export Organization SLE Metrics (Service Level Experience)"),
     "52": (OrgExportUtils.sites_sle_summary, "Export SLE summary metrics for all sites in the organization"),
-    "74": (SiteExportUtils.insight_metrics, "Export general insight metrics for a selected site"),
+    "74": (
+        lambda: SiteMetricOperation(
+            apisession=apisession,
+            PromptUtils=PromptUtils,
+            DataProcessingUtils=DataProcessingUtils,
+            DataExporter=DataExporter,
+            EnhancedSSHRunner=EnhancedSSHRunner,
+            InsightMetricsUtils=InsightMetricsUtils,
+            mistapi=mistapi,
+        ).execute(),
+        "Export general insight metrics for a selected site",
+    ),
     "75": (SiteClientExporter.client_insights, "Export client-specific insight metrics for a selected site"),
-    "76": (SiteExportUtils.device_insights, "Export device-specific insight metrics for a selected site"),
+    "76": (
+        lambda: DeviceMetricOperation(
+            apisession=apisession,
+            PromptUtils=PromptUtils,
+            DataProcessingUtils=DataProcessingUtils,
+            DataExporter=DataExporter,
+            EnhancedSSHRunner=EnhancedSSHRunner,
+            InsightMetricsUtils=InsightMetricsUtils,
+            PacketCaptureManager=PacketCaptureManager,
+            mistapi=mistapi,
+        ).execute(),
+        "Export device-specific insight metrics for a selected site",
+    ),
     "54": (
         lambda: ConstDefinitionsExporter(apisession).export_all(),  # type: ignore[no-untyped-call]
         "Export all available const definitions from the Mist API (comprehensive endpoint coverage)",
@@ -8305,7 +8200,22 @@ menu_actions = {
     # ZONE & ENGAGEMENT CONFIGURATION ANALYSIS
     # ==============================
     "6": (
-        SiteExportUtils.zone_config_analysis,
+        lambda: SiteExportUtils(
+            apisession=apisession,
+            PromptUtils=PromptUtils,
+            ConfigUtils=ConfigUtils,
+            DataProcessingUtils=DataProcessingUtils,
+            DataExporter=DataExporter,
+            TimeUtils=TimeUtils,
+            EnhancedSSHRunner=EnhancedSSHRunner,
+            InsightMetricsUtils=InsightMetricsUtils,
+            PacketCaptureManager=PacketCaptureManager,
+            APICoreFetchUtils=APICoreFetchUtils,
+            check_fn=IsDebugMode.check,
+            PrettyTable=PrettyTable,
+            tqdm=tqdm,
+            mistapi=mistapi,
+        ).zone_config_analysis(),
         "Site Config Analysis - Scan all sites for zone, engagement dwell tag, and occupancy setting deviations",
     ),
     # ==============================
@@ -8440,9 +8350,63 @@ menu_actions = {
     "56": (OrgExportUtils.jsi_pbn, "Export JSI PBN (Product Bulletin Notifications) data"),
     "57": (OrgExportUtils.jsi_sirt, "Export JSI SIRT (Security Incident Response) advisories"),
     "55": (OrgExportUtils.ospf_stats, "Export OSPF adjacency statistics for the organization"),
-    "70": (SiteExportUtils.ospf_stats, "Export OSPF adjacency statistics for a selected site"),
-    "71": (SiteExportUtils.mxedge_upgrade_status, "Export MxEdge upgrade status for a selected site"),
-    "72": (SiteExportUtils.auto_map_assignment_status, "Export auto-map assignment status for a selected site"),
+    "70": (
+        lambda: SiteExportUtils(
+            apisession=apisession,
+            PromptUtils=PromptUtils,
+            ConfigUtils=ConfigUtils,
+            DataProcessingUtils=DataProcessingUtils,
+            DataExporter=DataExporter,
+            TimeUtils=TimeUtils,
+            EnhancedSSHRunner=EnhancedSSHRunner,
+            InsightMetricsUtils=InsightMetricsUtils,
+            PacketCaptureManager=PacketCaptureManager,
+            APICoreFetchUtils=APICoreFetchUtils,
+            check_fn=IsDebugMode.check,
+            PrettyTable=PrettyTable,
+            tqdm=tqdm,
+            mistapi=mistapi,
+        ).ospf_stats(),
+        "Export OSPF adjacency statistics for a selected site",
+    ),
+    "71": (
+        lambda: SiteExportUtils(
+            apisession=apisession,
+            PromptUtils=PromptUtils,
+            ConfigUtils=ConfigUtils,
+            DataProcessingUtils=DataProcessingUtils,
+            DataExporter=DataExporter,
+            TimeUtils=TimeUtils,
+            EnhancedSSHRunner=EnhancedSSHRunner,
+            InsightMetricsUtils=InsightMetricsUtils,
+            PacketCaptureManager=PacketCaptureManager,
+            APICoreFetchUtils=APICoreFetchUtils,
+            check_fn=IsDebugMode.check,
+            PrettyTable=PrettyTable,
+            tqdm=tqdm,
+            mistapi=mistapi,
+        ).mxedge_upgrade_status(),
+        "Export MxEdge upgrade status for a selected site",
+    ),
+    "72": (
+        lambda: SiteExportUtils(
+            apisession=apisession,
+            PromptUtils=PromptUtils,
+            ConfigUtils=ConfigUtils,
+            DataProcessingUtils=DataProcessingUtils,
+            DataExporter=DataExporter,
+            TimeUtils=TimeUtils,
+            EnhancedSSHRunner=EnhancedSSHRunner,
+            InsightMetricsUtils=InsightMetricsUtils,
+            PacketCaptureManager=PacketCaptureManager,
+            APICoreFetchUtils=APICoreFetchUtils,
+            check_fn=IsDebugMode.check,
+            PrettyTable=PrettyTable,
+            tqdm=tqdm,
+            mistapi=mistapi,
+        ).auto_map_assignment_status(),
+        "Export auto-map assignment status for a selected site",
+    ),
     "88": (SitesByAPModelExporter.export_sites_by_ap_model, "Export sites by AP model with site address (CSV)"),
     "25": (AuditAnalysisOps.audit_log_analysis, "Audit Log Analysis - Mermaid timeline + interactive HTML report"),
     "186": (CacheUtils.clear_cache, "Clear CSV Cache Files (delete all generated cache CSVs)"),
@@ -8461,13 +8425,139 @@ menu_actions = {
     # ==============================
     # SITE STATS, METRICS & CHANNEL PLANNING
     # ==============================
-    "80": (SiteExportUtils.site_stats, "Export site aggregate health & capacity statistics"),
-    "81": (SiteExportUtils.gateway_metrics, "Export site gateway performance metrics summary"),
-    "82": (SiteExportUtils.switches_metrics, "Export site switch performance metrics summary"),
-    "83": (SiteExportUtils.beacons_stats, "Export site BLE beacon statistics"),
-    "84": (SiteExportUtils.wxrules_usage, "Export site WxLAN rule usage statistics"),
-    "85": (SiteExportUtils.assets_stats, "Export site asset statistics"),
-    "86": (SiteExportUtils.current_channel_planning, "Export current RRM channel & power plan per AP radio"),
+    "80": (
+        lambda: SiteExportUtils(
+            apisession=apisession,
+            PromptUtils=PromptUtils,
+            ConfigUtils=ConfigUtils,
+            DataProcessingUtils=DataProcessingUtils,
+            DataExporter=DataExporter,
+            TimeUtils=TimeUtils,
+            EnhancedSSHRunner=EnhancedSSHRunner,
+            InsightMetricsUtils=InsightMetricsUtils,
+            PacketCaptureManager=PacketCaptureManager,
+            APICoreFetchUtils=APICoreFetchUtils,
+            check_fn=IsDebugMode.check,
+            PrettyTable=PrettyTable,
+            tqdm=tqdm,
+            mistapi=mistapi,
+        ).site_stats(),
+        "Export site aggregate health & capacity statistics",
+    ),
+    "81": (
+        lambda: SiteExportUtils(
+            apisession=apisession,
+            PromptUtils=PromptUtils,
+            ConfigUtils=ConfigUtils,
+            DataProcessingUtils=DataProcessingUtils,
+            DataExporter=DataExporter,
+            TimeUtils=TimeUtils,
+            EnhancedSSHRunner=EnhancedSSHRunner,
+            InsightMetricsUtils=InsightMetricsUtils,
+            PacketCaptureManager=PacketCaptureManager,
+            APICoreFetchUtils=APICoreFetchUtils,
+            check_fn=IsDebugMode.check,
+            PrettyTable=PrettyTable,
+            tqdm=tqdm,
+            mistapi=mistapi,
+        ).gateway_metrics(),
+        "Export site gateway performance metrics summary",
+    ),
+    "82": (
+        lambda: SiteExportUtils(
+            apisession=apisession,
+            PromptUtils=PromptUtils,
+            ConfigUtils=ConfigUtils,
+            DataProcessingUtils=DataProcessingUtils,
+            DataExporter=DataExporter,
+            TimeUtils=TimeUtils,
+            EnhancedSSHRunner=EnhancedSSHRunner,
+            InsightMetricsUtils=InsightMetricsUtils,
+            PacketCaptureManager=PacketCaptureManager,
+            APICoreFetchUtils=APICoreFetchUtils,
+            check_fn=IsDebugMode.check,
+            PrettyTable=PrettyTable,
+            tqdm=tqdm,
+            mistapi=mistapi,
+        ).switches_metrics(),
+        "Export site switch performance metrics summary",
+    ),
+    "83": (
+        lambda: SiteExportUtils(
+            apisession=apisession,
+            PromptUtils=PromptUtils,
+            ConfigUtils=ConfigUtils,
+            DataProcessingUtils=DataProcessingUtils,
+            DataExporter=DataExporter,
+            TimeUtils=TimeUtils,
+            EnhancedSSHRunner=EnhancedSSHRunner,
+            InsightMetricsUtils=InsightMetricsUtils,
+            PacketCaptureManager=PacketCaptureManager,
+            APICoreFetchUtils=APICoreFetchUtils,
+            check_fn=IsDebugMode.check,
+            PrettyTable=PrettyTable,
+            tqdm=tqdm,
+            mistapi=mistapi,
+        ).beacons_stats(),
+        "Export site BLE beacon statistics",
+    ),
+    "84": (
+        lambda: SiteExportUtils(
+            apisession=apisession,
+            PromptUtils=PromptUtils,
+            ConfigUtils=ConfigUtils,
+            DataProcessingUtils=DataProcessingUtils,
+            DataExporter=DataExporter,
+            TimeUtils=TimeUtils,
+            EnhancedSSHRunner=EnhancedSSHRunner,
+            InsightMetricsUtils=InsightMetricsUtils,
+            PacketCaptureManager=PacketCaptureManager,
+            APICoreFetchUtils=APICoreFetchUtils,
+            check_fn=IsDebugMode.check,
+            PrettyTable=PrettyTable,
+            tqdm=tqdm,
+            mistapi=mistapi,
+        ).wxrules_usage(),
+        "Export site WxLAN rule usage statistics",
+    ),
+    "85": (
+        lambda: SiteExportUtils(
+            apisession=apisession,
+            PromptUtils=PromptUtils,
+            ConfigUtils=ConfigUtils,
+            DataProcessingUtils=DataProcessingUtils,
+            DataExporter=DataExporter,
+            TimeUtils=TimeUtils,
+            EnhancedSSHRunner=EnhancedSSHRunner,
+            InsightMetricsUtils=InsightMetricsUtils,
+            PacketCaptureManager=PacketCaptureManager,
+            APICoreFetchUtils=APICoreFetchUtils,
+            check_fn=IsDebugMode.check,
+            PrettyTable=PrettyTable,
+            tqdm=tqdm,
+            mistapi=mistapi,
+        ).assets_stats(),
+        "Export site asset statistics",
+    ),
+    "86": (
+        lambda: SiteExportUtils(
+            apisession=apisession,
+            PromptUtils=PromptUtils,
+            ConfigUtils=ConfigUtils,
+            DataProcessingUtils=DataProcessingUtils,
+            DataExporter=DataExporter,
+            TimeUtils=TimeUtils,
+            EnhancedSSHRunner=EnhancedSSHRunner,
+            InsightMetricsUtils=InsightMetricsUtils,
+            PacketCaptureManager=PacketCaptureManager,
+            APICoreFetchUtils=APICoreFetchUtils,
+            check_fn=IsDebugMode.check,
+            PrettyTable=PrettyTable,
+            tqdm=tqdm,
+            mistapi=mistapi,
+        ).current_channel_planning(),
+        "Export current RRM channel & power plan per AP radio",
+    ),
     "23": (SelfExportUtils.audit_logs, "Export self (admin account) audit log"),
     "87": (GatewayHaExporter.ha_cluster_info, "Export HA gateway cluster info, stats & node pair for a site"),
     "13": (

@@ -9,6 +9,7 @@ import sqlite3
 from unittest.mock import MagicMock
 
 import MistHelper
+from src.export.site_insights_exporter import SiteInsightsExporter
 
 
 def test_device_events_52w_streams_and_writes_csv(monkeypatch, tmp_path):
@@ -106,17 +107,19 @@ def test_classify_device_platform_by_model_prefix():
 
 
 def test_metric_compatibility_filters_switch_metrics_for_ap():
-    assert MistHelper.SiteExportUtils._metric_supported_on_platform("switch-metrics", "ap") is False
-    assert MistHelper.SiteExportUtils._metric_supported_on_platform("switch-metrics", "switch") is True
-    assert MistHelper.SiteExportUtils._metric_supported_on_platform("switch-metrics", "unknown") is True
+    assert MistHelper.SiteExportUtils._metric_compatible_with_platform("switch-metrics", "ap") is False
+    assert MistHelper.SiteExportUtils._metric_compatible_with_platform("switch-metrics", "switch") is True
+    assert MistHelper.SiteExportUtils._metric_compatible_with_platform("switch-metrics", "unknown") is True
 
 
 def test_normalize_device_mac_or_none_accepts_and_normalizes():
-    assert MistHelper.SiteExportUtils._normalize_device_mac_or_none("209339051780") == "20:93:39:05:17:80"
+    exporter = SiteInsightsExporter(PacketCaptureManager=MistHelper.PacketCaptureManager)
+    assert exporter._normalize_device_mac_or_none("209339051780") == "20:93:39:05:17:80"
 
 
 def test_normalize_device_mac_or_none_rejects_invalid():
-    assert MistHelper.SiteExportUtils._normalize_device_mac_or_none("not-a-mac") is None
+    exporter = SiteInsightsExporter(PacketCaptureManager=MistHelper.PacketCaptureManager)
+    assert exporter._normalize_device_mac_or_none("not-a-mac") is None
 
 
 def test_normalize_client_mac_or_none_accepts_and_normalizes():
