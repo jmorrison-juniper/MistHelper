@@ -13,6 +13,8 @@ import logging  # WHY: emit structured trace for export progress + failures.
 
 import mistapi  # WHY: dotted-path API resolution + pagination helper.
 
+from src.time.time_utils import TimeUtils  # WHY: 1014 P6 direct import (FR-005).
+
 
 class SelfExportUtils:  # Self/account exporters.
     # pylint: disable=too-few-public-methods  # WHY: static-method utility class; grouping by domain is the point.
@@ -43,9 +45,9 @@ class SelfExportUtils:  # Self/account exporters.
         logging.info("Starting export of self (admin account) audit logs...")  # Log before operation.
         filename = "SelfAuditLogs.csv"  # Output filename for self audit log entries.
         try:
-            mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of live session + time helpers.
-            hours = mh.TimeUtils.get_dynamic_lookback_hours(24, 1)  # Same lookback as other audit log exports.
-            mh.TimeUtils.log_dynamic_lookback("self audit logs export", hours)  # Log lookback window selection.
+            mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of live session.
+            hours = TimeUtils.get_dynamic_lookback_hours(24, 1)  # Same lookback as other audit log exports.
+            TimeUtils.log_dynamic_lookback("self audit logs export", hours)  # Log lookback window selection.
             logging.info("Fetching self audit logs for last %d hours...", hours)  # Log before API call.
             response = mistapi.api.v1.self.logs.listSelfAuditLogs(  # Call Mist API for admin account audit log.
                 mh.apisession,

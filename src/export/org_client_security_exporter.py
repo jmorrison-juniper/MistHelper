@@ -23,6 +23,8 @@ from typing import Any  # WHY: mistapi response payloads + site rows are duck-ty
 import mistapi  # WHY: direct calls to orgs.clients + sites.insights list endpoints + get_all pager.
 from tqdm import tqdm  # WHY: per-site progress bar for rogue fan-out.
 
+from src.time.time_utils import TimeUtils  # WHY: 1014 P6 direct import (FR-005).
+
 
 class OrgClientSecurityExporter:
     """Organization Client and Security Exporter.
@@ -64,14 +66,14 @@ class OrgClientSecurityExporter:
     @staticmethod
     def rogue_clients(fast: bool = False) -> None:
         """Export rogue clients to OrgRogueClients.csv with fast-mode cache reuse."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of TimeUtils/CacheUtils/OrgSiteExporter.
+        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of CacheUtils/OrgSiteExporter.
         output_file = "OrgRogueClients.csv"  # Destination CSV for this export
         if OrgClientSecurityExporter._check_csv_cache_fresh(output_file, fast):  # Fast-mode cache hit short-circuits
             return  # Skip the API calls entirely
         logging.info("Starting export of rogue clients from all sites...")  # Log the start of the export
-        lookback_hours = mh.TimeUtils.get_dynamic_lookback_hours(168, 1)  # 7 days normally, 1 hour in test mode
+        lookback_hours = TimeUtils.get_dynamic_lookback_hours(168, 1)  # 7 days normally, 1 hour in test mode
         rogue_duration = f"{lookback_hours}h"  # Format the lookback as the API's duration string
-        mh.TimeUtils.log_dynamic_lookback("rogue clients fetch", lookback_hours)  # Log which lookback window is used
+        TimeUtils.log_dynamic_lookback("rogue clients fetch", lookback_hours)  # Log which lookback window is used
         mh.CacheUtils.check_and_generate_csv(
             "SiteList.csv", mh.OrgSiteExporter.sites
         )  # Ensure site list CSV is current
@@ -87,14 +89,14 @@ class OrgClientSecurityExporter:
     @staticmethod
     def rogue_aps(fast: bool = False) -> None:
         """Export rogue APs to OrgRogueAPs.csv with fast-mode cache reuse."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of TimeUtils/CacheUtils/OrgSiteExporter.
+        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of CacheUtils/OrgSiteExporter.
         output_file = "OrgRogueAPs.csv"  # Destination CSV for this export
         if OrgClientSecurityExporter._check_csv_cache_fresh(output_file, fast):  # Fast-mode cache hit short-circuits
             return  # Skip the API calls entirely
         logging.info("Starting export of rogue APs from all sites...")  # Log the start of the export
-        lookback_hours = mh.TimeUtils.get_dynamic_lookback_hours(168, 1)  # 7 days normally, 1 hour in test mode
+        lookback_hours = TimeUtils.get_dynamic_lookback_hours(168, 1)  # 7 days normally, 1 hour in test mode
         rogue_duration = f"{lookback_hours}h"  # Format the lookback as the API's duration string
-        mh.TimeUtils.log_dynamic_lookback("rogue APs fetch", lookback_hours)  # Log which lookback window is used
+        TimeUtils.log_dynamic_lookback("rogue APs fetch", lookback_hours)  # Log which lookback window is used
         mh.CacheUtils.check_and_generate_csv(
             "SiteList.csv", mh.OrgSiteExporter.sites
         )  # Ensure site list CSV is current
