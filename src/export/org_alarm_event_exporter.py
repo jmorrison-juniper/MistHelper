@@ -18,6 +18,7 @@ from typing import Any  # WHY: api_call is duck-typed mistapi callable.
 import mistapi  # WHY: direct SDK access for alarms/events endpoints.
 
 from src.export.device_events_52w_exporter import DeviceEvents52wExporter  # 52-week device events exporter.
+from src.time.time_utils import TimeUtils  # WHY: 1014 P6 direct import (FR-005).
 
 
 class OrgAlarmEventExporter:
@@ -57,11 +58,11 @@ class OrgAlarmEventExporter:
     @staticmethod
     def alarms() -> None:
         """Export open organization alarms from the past 24 hours to OrgAlarms.csv."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of TimeUtils + APIDataFetcher.
+        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of APIDataFetcher helper.
         logging.info("Menu #20: Starting organization alarms export")  # Log alarms menu start.
         logging.debug("ENTRY: OrgAlarmEventExporter.alarms()")  # Trace entry for debugging.
-        hours = mh.TimeUtils.get_dynamic_lookback_hours(24, 1)  # Resolve dynamic lookback hours.
-        mh.TimeUtils.log_dynamic_lookback("open org alarms export", hours)  # Log chosen lookback window.
+        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)  # Resolve dynamic lookback hours.
+        TimeUtils.log_dynamic_lookback("open org alarms export", hours)  # Log chosen lookback window.
         try:
             mh.APIDataFetcher(  # Fetch and write alarms.
                 title="Search all Org Alarms:",
@@ -90,9 +91,8 @@ class OrgAlarmEventExporter:
     @staticmethod
     def events() -> None:
         """Export organization events to OrgEvents.csv."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of TimeUtils helper.
-        hours = mh.TimeUtils.get_dynamic_lookback_hours(24, 1)  # Resolve dynamic lookback hours.
-        mh.TimeUtils.log_dynamic_lookback("org events export", hours)  # Log chosen lookback window.
+        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)  # Resolve dynamic lookback hours.
+        TimeUtils.log_dynamic_lookback("org events export", hours)  # Log chosen lookback window.
         OrgAlarmEventExporter._export_data(
             api_call=mistapi.api.v1.orgs.events.searchOrgEvents,
             data_type="events",
@@ -103,14 +103,12 @@ class OrgAlarmEventExporter:
     @staticmethod
     def device_events() -> None:
         """Export all device events from the past 24 hours to OrgDeviceEvents.csv."""
-        mh = importlib.import_module(
-            "MistHelper"
-        )  # WHY: lazy fetch of ConfigUtils/TimeUtils/DataExporter + apisession.
+        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ConfigUtils/DataExporter + apisession.
         logging.info("Menu #21: Starting device events export")  # Log device events menu start.
         logging.info("Search Org Device Events:")  # Log search start.
         org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org id.
-        hours = mh.TimeUtils.get_dynamic_lookback_hours(24, 1)  # Resolve dynamic lookback hours.
-        mh.TimeUtils.log_dynamic_lookback("recent device events export", hours)  # Log chosen lookback window.
+        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)  # Resolve dynamic lookback hours.
+        TimeUtils.log_dynamic_lookback("recent device events export", hours)  # Log chosen lookback window.
         duration_param = f"{hours}h"  # Format duration param.
         response = mistapi.api.v1.orgs.devices.searchOrgDeviceEvents(  # Search org device events.
             mh.apisession, org_id, device_type="all", limit=1000, duration=duration_param

@@ -31,6 +31,8 @@ from concurrent.futures import ThreadPoolExecutor  # WHY: bounded retry worker p
 
 from tqdm import tqdm  # WHY: progress bar during retry pool.
 
+from src.time.time_utils import TimeUtils  # WHY: 1014 P6 direct import (FR-005).
+
 
 class OrgDeviceStatsExporter:  # Org device-stats exporters.
     """Organization Device Statistics Exporter.
@@ -73,8 +75,8 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
         if emitter:
             emitter.emit_progress_start("13", "device_stats", 1)  # Emit progress start
         op_start = time.time()  # Record operation start time
-        hours = mh.TimeUtils.get_dynamic_lookback_hours(24, 1)  # Dynamic lookback hours
-        mh.TimeUtils.log_dynamic_lookback("org device statistics export", hours)  # Log lookback window
+        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)  # Dynamic lookback hours
+        TimeUtils.log_dynamic_lookback("org device statistics export", hours)  # Log lookback window
         mh.APIDataFetcher(  # Fetch and write device stats
             title="Org Device Stats:",
             api_call=mh.mistapi.api.v1.orgs.stats.listOrgDevicesStats,
@@ -383,13 +385,13 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
         Fast mode caches recent CSV (CSV_FRESHNESS_MINUTES) and parallelizes site fetches with
         bounded concurrency. Non-fast mode issues one org-level paginated call. SECURITY: read-only.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of TimeUtils/APIDataFetcher/mistapi.
+        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of APIDataFetcher/mistapi.
         output_file = "OrgDevicePortStats.csv"  # Stable filename for cache + downstream consumers.
         if OrgDeviceStatsExporter._port_stats_cache_hit(output_file, fast):  # Honor fast cache before API.
             return  # Fresh cache satisfied the request.
         logging.info("Starting export of organization device port statistics...")  # Log export start.
-        hours = mh.TimeUtils.get_dynamic_lookback_hours(24, 1)  # Resolve test-aware lookback window.
-        mh.TimeUtils.log_dynamic_lookback("org device port statistics export", hours)  # Record chosen window.
+        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)  # Resolve test-aware lookback window.
+        TimeUtils.log_dynamic_lookback("org device port statistics export", hours)  # Record chosen window.
         if fast:  # Fast mode = site-parallel collection.
             OrgDeviceStatsExporter._run_fast_device_port_stats(output_file)  # Execute decomposed fast-mode workflow.
             return  # Fast-mode path owns the full export.
@@ -438,8 +440,8 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
         if emitter:  # Emitter present.
             emitter.emit_progress_start("15", "vpn_peer_stats", 1)  # Signal progress start.
         op_start = time.time()  # Start timer.
-        hours = mh.TimeUtils.get_dynamic_lookback_hours(24, 1)  # Test-aware lookback.
-        mh.TimeUtils.log_dynamic_lookback("org vpn peer path statistics export", hours)  # Record lookback.
+        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)  # Test-aware lookback.
+        TimeUtils.log_dynamic_lookback("org vpn peer path statistics export", hours)  # Record lookback.
         mh.APIDataFetcher(
             title="Org VPN Peer Stats:",
             api_call=mh.mistapi.api.v1.orgs.stats.searchOrgPeerPathStats,

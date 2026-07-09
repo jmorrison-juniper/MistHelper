@@ -329,6 +329,7 @@ from src.ssh.ssh_runner_manager import (
     SSHRunnerManager as ExtractedSSHRunnerManager,
 )  # Import SSH runner manager (renamed to avoid conflicts)
 from src.ssh.ssh_runner_manager import SSHRunnerManagerDeps  # Import SSH runner manager dependency injection class
+from src.time.time_utils import TimeUtils  # Cat E canonical (1014 P6)
 from src.troubleshooting.interactive_test_runner import (
     InteractiveTestRunner,
 )  # Import interactive diagnostic test runner
@@ -1984,35 +1985,8 @@ IS_TEST_MODE = "--test" in sys.argv or "--testinteractive" in sys.argv
 LAST_SELECTED_SITE_ID: str | None = None
 
 
-class TimeUtils:
-    """
-    Centralized time-related utilities.
-    Handles dynamic lookback windows, timestamp conversions, etc.
-    """
-
-    @staticmethod
-    def get_dynamic_lookback_hours(default_hours: int = 24, test_hours: int = 1) -> int:
-        """Return lookback hours adjusted for test mode (shrinks to test_hours under --test).
-
-        Outside test mode the caller's default_hours window is honored. Both values are
-        clamped to a 1-hour minimum so a misconfiguration never yields a sub-hour window.
-        """
-        try:
-            chosen_hours = test_hours if IS_TEST_MODE else default_hours  # Pick the window for the active mode
-            return max(1, chosen_hours)  # Never return less than 1 hour (clamp misconfigured values)
-        except Exception as error:  # Never let lookback math crash a caller
-            logging.debug("get_dynamic_lookback_hours fallback due to error: %s", error)  # Log the unexpected failure
-            return test_hours if IS_TEST_MODE else default_hours  # Fall back to a sensible default per mode
-
-    @staticmethod
-    def log_dynamic_lookback(context: str, hours: int) -> None:
-        """Helper to produce a consistent log line when dynamic lookback applies."""
-        if IS_TEST_MODE:  # Surface the reduced window prominently during tests
-            logging.info(
-                "[TEST MODE] Using reduced lookback window of %sh for %s (normally 24h)", hours, context
-            )  # Visible test-mode notice
-        else:  # Production: keep the note at debug level
-            logging.debug("Using standard lookback window of %sh for %s", hours, context)  # Quiet production notice
+# NOTE: TimeUtils removed (1014 P6, Cat E) - canonical body at src/time/time_utils.py.
+#       Import from src.time.time_utils. MistHelper.py re-exports at top import block.
 
 
 # ============================================================================

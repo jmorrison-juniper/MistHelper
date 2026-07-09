@@ -16,6 +16,8 @@ from typing import Any  # WHY: raw insight rows are duck-typed dicts from mistap
 
 import mistapi  # WHY: direct SDK access for org export endpoints.
 
+from src.time.time_utils import TimeUtils  # WHY: 1014 P6 direct import (FR-005).
+
 
 class OrgExportUtils:
     """Centralized organization-level data export utilities.
@@ -516,9 +518,8 @@ class OrgExportUtils:
     @staticmethod
     def _nac_events():  # Export NAC events.
         """Export NAC events to OrgNacEvents.csv."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of TimeUtils helper.
-        hours = mh.TimeUtils.get_dynamic_lookback_hours(24, 1)  # Resolve lookback hours.
-        mh.TimeUtils.log_dynamic_lookback("org NAC events export", hours)  # Log the window.
+        hours = TimeUtils.get_dynamic_lookback_hours(24, 1)  # Resolve lookback hours.
+        TimeUtils.log_dynamic_lookback("org NAC events export", hours)  # Log the window.
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
             api_call=mistapi.api.v1.orgs.nac_clients.searchOrgNacClientEvents,
             data_type="nac events",
@@ -617,15 +618,14 @@ class OrgExportUtils:
     @staticmethod
     def _build_audit_log_kwargs(full_history: bool, duration: str | None) -> dict[str, Any]:
         """Resolve API kwargs (limit + duration/start) for org audit-log listing based on caller flags."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of TimeUtils helper.
         kwargs: dict[str, Any] = {"limit": 1000}  # Base API params.
         if duration:  # Caller-supplied duration takes priority.
             kwargs["duration"] = duration  # Set explicit duration string.
             logging.info("Exporting audit logs for duration: %s", duration)  # Log the window.
             return kwargs  # Done.
         if not full_history:  # No duration, recent-only mode.
-            hours = mh.TimeUtils.get_dynamic_lookback_hours(24, 1)  # Resolve lookback hours.
-            mh.TimeUtils.log_dynamic_lookback("audit logs export", hours)  # Log the window.
+            hours = TimeUtils.get_dynamic_lookback_hours(24, 1)  # Resolve lookback hours.
+            TimeUtils.log_dynamic_lookback("audit logs export", hours)  # Log the window.
             kwargs["duration"] = f"{hours}h"  # Set the duration.
             logging.info("Exporting only last %s hours of audit logs (duration=%sh).", hours, hours)
             return kwargs  # Done.
