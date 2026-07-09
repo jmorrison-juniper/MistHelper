@@ -237,6 +237,7 @@ omit = [
     "*/site-packages/*",
     "src/maps/*",
     "src/analytics/data_collection_manager.py",
+    "src/analytics/insight_metrics_utils.py",
     "src/api/api_data_fetcher.py",
     "src/api/api_fetch_utils.py",
     "src/api/api_core_fetch_utils.py",
