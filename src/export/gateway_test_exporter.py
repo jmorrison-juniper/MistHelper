@@ -6,9 +6,10 @@ paced path), tags each result with site/device identifiers, and writes a CSV
 via the standard export backend. ``test_results_by_site`` remains a thin
 delegator to the ``src.refactors.serial_cc.test_results_by_site`` service.
 
-Direct imports cover stdlib + installed packages (mistapi, tqdm). Live-global
-reads (``apisession``, ``PROGRESS_EMITTER``, ``ProgressContext``, ``ConfigUtils``,
-``GatewayExportUtils``, ``ValidationUtils``, ``ConnectionPoolExecutor``,
+Direct imports cover stdlib + installed packages (mistapi, tqdm) plus the
+extracted ``ValidationUtils`` (1014 P5). Live-global reads
+(``apisession``, ``PROGRESS_EMITTER``, ``ProgressContext``, ``ConfigUtils``,
+``GatewayExportUtils``, ``ConnectionPoolExecutor``,
 ``RateLimitingUtils``, ``DataProcessingUtils``, ``DataExporter``,
 ``FAST_MODE_*``, ``FastModeBackoffMultiplier``, ``FastModeSequentialMaxRetries``,
 ``_api_usage_cache``) are resolved via lazy ``mh = importlib.import_module("MistHelper")``
@@ -26,6 +27,8 @@ from typing import Any  # WHY: mistapi payloads + heterogeneous stats dicts are 
 
 import mistapi  # WHY: direct call to getSiteDeviceSyntheticTest endpoint.
 from tqdm import tqdm  # WHY: progress bar for sequential + retry loops.
+
+from src.validation.validation_utils import ValidationUtils  # WHY: 1014 P5 direct import (FR-005).
 
 
 class GatewayTestExporter:
@@ -121,11 +124,10 @@ class GatewayTestExporter:
         device_info: tuple[str, str, str, str], attempt: int, connection_semaphore: Any
     ) -> dict[str, Any] | None:
         """Single attempt: validate inputs, call API, tag stats, log success. Return stats or None."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ValidationUtils.
         site_id, device_id, _, _ = device_info  # Unpack for the call + logging (names unused directly here).
         try:
-            mh.ValidationUtils.validate_site_id(site_id, "synthetic_tests")  # Validate the site id.
-            mh.ValidationUtils.validate_device_id(device_id, "synthetic_tests")  # Validate the device id.
+            ValidationUtils.validate_site_id(site_id, "synthetic_tests")  # Validate the site id.
+            ValidationUtils.validate_device_id(device_id, "synthetic_tests")  # Validate the device id.
             stats = GatewayTestExporter._call_synthetic_endpoint(site_id, device_id, connection_semaphore)  # Call API.
             GatewayTestExporter._tag_synthetic_stats(stats, device_info, attempt)  # Tag + log success.
             return stats  # Return tagged stats.

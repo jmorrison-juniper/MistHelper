@@ -40,7 +40,6 @@ warnings.filterwarnings(
 import argparse  # Import argparse for command-line argument parsing (--menu, --test, --fast flags)
 import csv  # Import csv module for writing CSV export files to data/ directory
 import functools  # Import functools for partial-binding apisession to connection-pool worker callables
-import ipaddress  # Import ipaddress for parsing and validating IP addresses in device/client data
 import logging  # Import logging for structured logging to script.log and console
 import os  # Import os for file path operations, environment variables, and data/ directory setup
 import re  # Import re for regex pattern matching in data parsing (SSIDs, descriptions, etc.)
@@ -357,6 +356,7 @@ from src.utils.filter_operator_engine import (  # pylint: disable=unused-import
 from src.utils.operation_registry import (  # pylint: disable=unused-import
     OperationRegistry,  # noqa: F401  # Cat B (1013 SC-001 position 13) -- re-export for menu safety classification
 )
+from src.validation.validation_utils import ValidationUtils  # Cat E canonical (1014 P5)
 from src.wan_hub_group_manager import WanHubGroupNumberManager  # Import WAN hub group number manager for hub routing
 from src.wan_vpn_builder import WanVpnBuilder  # Import WAN VPN configuration builder
 from src.websocket.commands import MacTableCommand  # Import WebSocket show-MAC-table command handler
@@ -5652,96 +5652,10 @@ class FilePathUtils:
 # ============================================================================
 # VALIDATION UTILITIES CLASS
 # ============================================================================
-class ValidationUtils:  # Input validators for API identifiers.
-    """
-    Centralized validation utilities for input validation and sanitization.
-    All validation functions should be static methods in this class.
-    """
-
-    @staticmethod
-    def validate_site_id(site_id: str | None, function_name: str = "unknown") -> bool:  # Guard site_id before API use.
-        """
-        Validates that site_id is not None or empty before making API calls.
-
-        Args:
-            site_id: The site ID to validate
-            function_name: Name of the calling function for logging
-
-        Returns:
-            bool: True if valid, False otherwise
-
-        Raises:
-            ValueError: If site_id is None or empty
-        """
-        if site_id is None:  # Reject a missing site_id.
-            error_msg = f"! site_id is None in {function_name}. Cannot make API call."  # Build the failure message.
-            logging.error(error_msg)  # Log before raising.
-            raise ValueError(error_msg)  # Abort the call with context.
-
-        if isinstance(site_id, str) and site_id.strip() == "":  # Reject empty/whitespace site_id.
-            error_msg = f"! site_id is empty string in {function_name}. Cannot make API call."  # empty-string msg.
-            logging.error(error_msg)  # Log before raising.
-            raise ValueError(error_msg)  # Abort the call.
-
-        return True  # site_id passed validation.
-
-    @staticmethod
-    def validate_device_id(device_id: str | None, function_name: str = "unknown") -> bool:  # Guard device_id.
-        """
-        Validates that device_id is not None or empty before making API calls.
-
-        Args:
-            device_id: The device ID to validate
-            function_name: Name of the calling function for logging
-
-        Returns:
-            bool: True if valid, False otherwise
-
-        Raises:
-            ValueError: If device_id is None or empty
-        """
-        if device_id is None:  # Reject a missing device_id.
-            error_msg = f"! device_id is None in {function_name}. Cannot make API call."  # Build the failure message.
-            logging.error(error_msg)  # Log before raising.
-            raise ValueError(error_msg)  # Abort the call with context.
-
-        if isinstance(device_id, str) and device_id.strip() == "":  # Reject empty/whitespace device_id.
-            error_msg = f"! device_id is empty string in {function_name}. Cannot make API call."  # empty-string msg.
-            logging.error(error_msg)  # Log before raising.
-            raise ValueError(error_msg)  # Abort the call.
-
-        return True  # device_id passed validation.
-
-    @staticmethod
-    def validate_ping_target(target: str) -> bool:  # Validate a ping destination string.
-        """
-        Validate ping target hostname or IP address.
-
-        Args:
-            target: Target hostname or IP address
-
-        Returns:
-            bool: True if valid target, False otherwise
-        """
-        if not target or len(target.strip()) == 0:  # Reject empty targets.
-            return False  # Invalid: no target given.
-
-        target = target.strip()  # Normalize surrounding whitespace.
-
-        try:  # A literal IP address is always a valid target.
-            ipaddress.ip_address(target)  # Parse as a literal IP.
-            return True  # Valid IP target.
-        except ValueError:  # Not an IP; fall through to hostname validation.
-            pass  # Hostname check happens below.
-
-        return ValidationUtils._is_valid_hostname(target)  # Accept only well-formed hostnames
-
-    @staticmethod
-    def _is_valid_hostname(target: str) -> bool:  # Check a string is a syntactically valid hostname
-        """Return True when target uses the hostname charset, is <= 253 chars, and has no edge dot/hyphen."""
-        if not re.match(r"^[a-zA-Z0-9.-]+$", target) or len(target) > 253:  # Reject bad charset or over-length names
-            return False  # Not a valid hostname
-        return not target.startswith((".", "-")) and not target.endswith((".", "-"))  # Reject leading/trailing dot/dash
+# NOTE: ValidationUtils removed (1014 P5, Cat E) - canonical body at
+#       src/validation/validation_utils.py. Import from src.validation.validation_utils
+#       instead. MistHelper.py re-exports ValidationUtils at the top import block
+#       for legacy in-file callsites.
 
 
 # ============================================================================
