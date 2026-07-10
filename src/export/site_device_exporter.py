@@ -21,6 +21,9 @@ from typing import Any  # WHY: mistapi response payloads + inventory rows are du
 import mistapi  # WHY: direct calls to sites.devices + sites.stats endpoints + get_all pager.
 from prettytable import PrettyTable  # WHY: debug-log a formatted inventory table.
 
+from src.data.data_processing_utils import (
+    DataProcessingUtils,
+)  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
 from src.export.site_export_utils import SiteExportUtils  # WHY: Pattern 1 inline construction for port_stats export.
 from src.utils.tqdm_wrapper import tqdm  # WHY: 1015 T-14 -- canonical wrapper import (eliminates mh.tqdm).
 
@@ -54,9 +57,9 @@ class SiteDeviceExporter:
             if rawdata is None:  # No devices remained after filtering (already logged/printed).
                 return  # Abort.
         inventory = sorted(rawdata, key=lambda x: x.get("model", ""))  # Sort by model for easier viewing.
-        inventory = mh.DataProcessingUtils.flatten_nested_fields(inventory)  # Flatten nested fields.
-        inventory = mh.DataProcessingUtils.escape_multiline(inventory)
-        fields = mh.DataProcessingUtils.get_unique_keys(inventory)
+        inventory = DataProcessingUtils.flatten_nested_fields(inventory)  # Flatten nested fields.
+        inventory = DataProcessingUtils.escape_multiline(inventory)
+        fields = DataProcessingUtils.get_unique_keys(inventory)
         mh.DataExporter.write_with_format_selection(inventory, csv_filename)
         logging.info("Device inventory written to %s (%s rows)", csv_filename, len(inventory))  # Log the write.
         SiteDeviceExporter._display_inventory_table(inventory, fields)  # Debug-log a PrettyTable of the inventory.
@@ -95,8 +98,8 @@ class SiteDeviceExporter:
         if not rawdata:  # No data -- tell the user and return.
             print("! No device statistics found for this site")  # User notice.
             return  # Done.
-        flattened_data = mh.DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested fields.
-        sanitized_data = mh.DataProcessingUtils.escape_multiline(flattened_data)  # CSV-safe.
+        flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested fields.
+        sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)  # CSV-safe.
         filename = f"SiteDeviceStats_{site_name.replace(' ', '_')}.csv"  # Build per-site CSV name.
         mh.DataExporter.write_with_format_selection(sanitized_data, filename)  # Persist.
         print(f"! {len(rawdata)} device stats exported to {filename}")  # User notice with count.
@@ -152,7 +155,7 @@ class SiteDeviceExporter:
             apisession=mh.apisession,
             PromptUtils=mh.PromptUtils,
             ConfigUtils=mh.ConfigUtils,
-            DataProcessingUtils=mh.DataProcessingUtils,
+            DataProcessingUtils=DataProcessingUtils,
             DataExporter=mh.DataExporter,
             TimeUtils=mh.TimeUtils,
             EnhancedSSHRunner=mh.EnhancedSSHRunner,
@@ -213,8 +216,8 @@ class SiteDeviceExporter:
                 print(f"! No virtual chassis data found for device {device_name}")  # Tell the user.
                 return  # Nothing to export.
             vc_data = [response.data] if isinstance(response.data, dict) else response.data  # Normalize to a list.
-            flattened = mh.DataProcessingUtils.flatten_nested_fields(vc_data)  # Flatten nested fields.
-            sanitized = mh.DataProcessingUtils.escape_multiline(flattened)
+            flattened = DataProcessingUtils.flatten_nested_fields(vc_data)  # Flatten nested fields.
+            sanitized = DataProcessingUtils.escape_multiline(flattened)
             filename = f"VirtualChassis_{device_name.replace(' ', '_')}.csv"  # Build the CSV name.
             mh.DataExporter.write_with_format_selection(sanitized, filename)
             logging.info("! Virtual chassis information exported to %s", filename)  # Log the export.
@@ -243,8 +246,8 @@ class SiteDeviceExporter:
         if not rawdata:  # No devices -- tell the user and return.
             print("! No devices found for this site")  # User notice.
             return  # Done.
-        flattened_data = mh.DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested fields.
-        sanitized_data = mh.DataProcessingUtils.escape_multiline(flattened_data)  # CSV-safe.
+        flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested fields.
+        sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)  # CSV-safe.
         filename = f"SiteDevices_{site_name.replace(' ', '_')}.csv"  # Per-site CSV name.
         mh.DataExporter.write_with_format_selection(sanitized_data, filename)  # Persist.
         print(f"! {len(rawdata)} devices exported to {filename}")  # User notice with count.

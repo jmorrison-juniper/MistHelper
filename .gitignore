@@ -47,6 +47,8 @@ DEVICE*.csv
 data/
 Data/
 DATA/
+!src/data/
+!src/data/**
 compliance_report.md
 output/
 Output/

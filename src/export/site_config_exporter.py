@@ -15,6 +15,9 @@ from typing import Any  # WHY: raw WLAN rows are duck-typed dicts from mistapi.
 import mistapi  # WHY: direct SDK access for sites/orgs endpoints.
 
 from src.api.api_fetch_utils import APIFetchUtils  # WHY: 1014 P8 direct import (FR-005).
+from src.data.data_processing_utils import (
+    DataProcessingUtils,
+)  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
 from src.export.site_export_utils import SiteExportUtils  # WHY: Pattern 1 inline construction for maps/zones exports.
 from src.utils.tqdm_wrapper import tqdm  # WHY: 1015 T-14 -- canonical wrapper import (eliminates mh.tqdm).
 
@@ -70,8 +73,8 @@ class SiteConfigExporter:
             mh.DataExporter.write_with_format_selection([], filename)  # Empty CSV.
             print(f"! 0 records exported to data\\{filename}")  # Tell the user zero.
             return  # Done.
-        processed = mh.DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested fields.
-        processed = mh.DataProcessingUtils.escape_multiline(processed)  # CSV-safe.
+        processed = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested fields.
+        processed = DataProcessingUtils.escape_multiline(processed)  # CSV-safe.
         processed = sorted(processed, key=lambda row: row.get("ssid", ""))  # Sort by SSID.
         mh.DataExporter.write_with_format_selection(processed, filename)  # Persist.
         print(f"! {len(processed)} records exported to data\\{filename}")  # Tell the user.
@@ -100,7 +103,7 @@ class SiteConfigExporter:
             apisession=mh.apisession,
             PromptUtils=mh.PromptUtils,
             ConfigUtils=mh.ConfigUtils,
-            DataProcessingUtils=mh.DataProcessingUtils,
+            DataProcessingUtils=DataProcessingUtils,
             DataExporter=mh.DataExporter,
             TimeUtils=mh.TimeUtils,
             EnhancedSSHRunner=mh.EnhancedSSHRunner,
@@ -123,7 +126,7 @@ class SiteConfigExporter:
             apisession=mh.apisession,
             PromptUtils=mh.PromptUtils,
             ConfigUtils=mh.ConfigUtils,
-            DataProcessingUtils=mh.DataProcessingUtils,
+            DataProcessingUtils=DataProcessingUtils,
             DataExporter=mh.DataExporter,
             TimeUtils=mh.TimeUtils,
             EnhancedSSHRunner=mh.EnhancedSSHRunner,
@@ -151,8 +154,8 @@ class SiteConfigExporter:
         data = APIFetchUtils.all_site_settings(mh.apisession, current_org_id, limit=1000)
         if data:  # Have data.
             logging.info("Fetched settings for %s sites. Flattening and sanitizing data...", len(data))
-            data = mh.DataProcessingUtils.flatten_nested_fields(data)  # Flatten nested fields.
-            data = mh.DataProcessingUtils.escape_multiline(data)  # CSV-safe.
+            data = DataProcessingUtils.flatten_nested_fields(data)  # Flatten nested fields.
+            data = DataProcessingUtils.escape_multiline(data)  # CSV-safe.
             mh.DataExporter.write_with_format_selection(data, "AllSiteConfigs.csv")  # Persist.
             print(f"! {len(data)} site configurations exported to AllSiteConfigs.csv")  # Tell the user.
             logging.info(" Site configs saved to AllSiteConfigs.csv")  # Log the save.

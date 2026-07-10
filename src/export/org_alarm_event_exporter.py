@@ -17,6 +17,9 @@ from typing import Any  # WHY: api_call is duck-typed mistapi callable.
 
 import mistapi  # WHY: direct SDK access for alarms/events endpoints.
 
+from src.data.data_processing_utils import (
+    DataProcessingUtils,
+)  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
 from src.export.device_events_52w_exporter import DeviceEvents52wExporter  # 52-week device events exporter.
 from src.time.time_utils import TimeUtils  # WHY: 1014 P6 direct import (FR-005).
 
@@ -133,7 +136,7 @@ class OrgAlarmEventExporter:
             apisession=mh.apisession,
             mistapi=mistapi,
             org_id=mh.ConfigUtils.get_cached_or_prompted_org_id(),
-            data_processing_utils=mh.DataProcessingUtils,
+            data_processing_utils=DataProcessingUtils,
             data_exporter=mh.DataExporter,
             output_format=mh.OUTPUT_FORMAT,
             database_path=mh.DATABASE_PATH,

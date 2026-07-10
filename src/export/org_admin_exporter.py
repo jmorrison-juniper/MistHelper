@@ -14,6 +14,10 @@ from typing import Any  # WHY: raw license rows are duck-typed dicts from mistap
 
 import mistapi  # WHY: direct SDK access for org admin/license endpoints.
 
+from src.data.data_processing_utils import (
+    DataProcessingUtils,
+)  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
+
 
 class OrgAdminExporter:
     """Organization Admin and License Exporter.
@@ -93,8 +97,8 @@ class OrgAdminExporter:
                 logging.info("No license records returned from canonical endpoint; writing empty OrgLicenses.csv")
                 mh.DataExporter.write_with_format_selection([], filename, api_function_name="listOrgLicenses")
                 return  # Abort.
-            processed = mh.DataProcessingUtils.flatten_nested_fields(raw_items)  # Flatten nested fields.
-            processed = mh.DataProcessingUtils.escape_multiline(processed)  # CSV-safe.
+            processed = DataProcessingUtils.flatten_nested_fields(raw_items)  # Flatten nested fields.
+            processed = DataProcessingUtils.escape_multiline(processed)  # CSV-safe.
             mh.DataExporter.write_with_format_selection(processed, filename, api_function_name="listOrgLicenses")
             logging.info("Exported %s license records to %s.", len(processed), filename)  # Log export count.
         except Exception as e:  # Export failed.

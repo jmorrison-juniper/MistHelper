@@ -31,6 +31,9 @@ from concurrent.futures import ThreadPoolExecutor  # WHY: bounded retry worker p
 
 from tqdm import tqdm  # WHY: progress bar during retry pool.
 
+from src.data.data_processing_utils import (
+    DataProcessingUtils,
+)  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
 from src.time.time_utils import TimeUtils  # WHY: 1014 P6 direct import (FR-005).
 
 
@@ -314,10 +317,10 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
             )  # Sort by MAC to produce deterministic CSV ordering.
         except Exception as exception:  # Sorting failures should not block export.
             logging.debug("Could not sort by MAC: %s", exception)  # Record sort failure while continuing unsorted.
-        flattened = mh.DataProcessingUtils.flatten_nested_fields(
+        flattened = DataProcessingUtils.flatten_nested_fields(
             all_port_stats
         )  # Normalize nested API payloads into flat CSV-friendly records.
-        sanitized = mh.DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]  # Escape embedded newlines so CSV stays row-stable.
+        sanitized = DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]  # Escape embedded newlines so CSV stays row-stable.
         mh.DataExporter.write_with_format_selection(sanitized, output_file, api_function_name="searchSiteSwOrGwPorts")  # type: ignore[no-untyped-call]  # Persist to configured backend with endpoint metadata.
         print(
             f"! {len(all_port_stats)} port stat records exported to {output_file}"

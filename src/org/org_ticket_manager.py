@@ -20,6 +20,10 @@ import importlib  # WHY: lazy MistHelper import avoids circular load at module i
 import logging  # WHY: structured trace + info/warn/error logging.
 import os  # WHY: os.path.isfile() to detect attachments before multipart upload.
 
+from src.data.data_processing_utils import (
+    DataProcessingUtils,
+)  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
+
 
 class OrgTicketManager:  # Support ticket operations.
     """Full lifecycle management for Juniper Mist support tickets.
@@ -467,7 +471,6 @@ class OrgTicketManager:  # Support ticket operations.
     @staticmethod
     def _collect_ticket_details(org_id: str, tickets: list) -> list:
         """For each summary in tickets, fetch + flatten its full detail. Returns list of flat dicts."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataProcessingUtils.
         all_details = []  # Accumulate flattened ticket+comment records
         print(f"\n  Fetching details for {len(tickets)} tickets...")  # Progress indicator
         for index, ticket in enumerate(tickets, 1):  # Iterate each ticket summary
@@ -477,7 +480,7 @@ class OrgTicketManager:  # Support ticket operations.
             logging.info("Fetching detail %d/%d: ticket %s", index, len(tickets), tid)  # Progress log
             detail = OrgTicketManager._fetch_ticket_detail(org_id, tid)  # Get full ticket data
             if detail:  # Only include tickets that returned data
-                all_details.append(mh.DataProcessingUtils.flatten_dict(detail))  # Flatten and add
+                all_details.append(DataProcessingUtils.flatten_dict(detail))  # Flatten and add
             logging.debug("Fetched detail %d/%d", index, len(tickets))  # Progress debug log
         return all_details  # All flattened records (may be empty)
 

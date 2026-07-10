@@ -16,6 +16,9 @@ from typing import Any  # WHY: raw insight rows are duck-typed dicts from mistap
 
 import mistapi  # WHY: direct SDK access for org export endpoints.
 
+from src.data.data_processing_utils import (
+    DataProcessingUtils,
+)  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
 from src.time.time_utils import TimeUtils  # WHY: 1014 P6 direct import (FR-005).
 
 
@@ -78,8 +81,8 @@ class OrgExportUtils:
         """Persist aggregated sites-SLE rows to OrgSitesSLESummary.csv (or write empty + warn)."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataProcessingUtils + DataExporter.
         if all_sites_sle_data:  # Have data -- flatten + write + tell user.
-            processed = mh.DataProcessingUtils.flatten_nested_fields(all_sites_sle_data)  # Flatten nested fields.
-            processed = mh.DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]  # CSV-safe.
+            processed = DataProcessingUtils.flatten_nested_fields(all_sites_sle_data)  # Flatten nested fields.
+            processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]  # CSV-safe.
             mh.DataExporter.write_with_format_selection(processed, "OrgSitesSLESummary.csv")  # type: ignore[no-untyped-call]
             print(f"! {len(processed)} sites SLE summary exported to OrgSitesSLESummary.csv")  # Tell the user.
             logging.info("Exported %s sites SLE summary to OrgSitesSLESummary.csv", len(processed))  # Log count.
@@ -399,7 +402,7 @@ class OrgExportUtils:
             (buckets["sites_data"], "OrgSitesData.csv", "sites"),  # Sites file + label.
         ]
         for rows, filename, label in outputs:  # Write each normalized bucket to its CSV.
-            processed = mh.DataProcessingUtils.escape_multiline(rows)  # type: ignore[no-untyped-call]  # Escape newlines.
+            processed = DataProcessingUtils.escape_multiline(rows)  # type: ignore[no-untyped-call]  # Escape newlines.
             mh.DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]  # Write it.
             print(f"  !? {len(processed)} {label} records -> {filename}")  # Report this file's row count.
         print(
@@ -416,8 +419,8 @@ class OrgExportUtils:
     def _insight_write_combined(all_insight_data: list[dict[str, Any]]) -> None:
         """Write the flattened combined insight file (OrgInsightMetrics_Legacy.csv) for backward compatibility."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataProcessingUtils + DataExporter helpers.
-        processed_combined = mh.DataProcessingUtils.flatten_nested_fields(all_insight_data)  # Flatten for combined.
-        processed_combined = mh.DataProcessingUtils.escape_multiline(processed_combined)  # type: ignore[no-untyped-call]
+        processed_combined = DataProcessingUtils.flatten_nested_fields(all_insight_data)  # Flatten for combined.
+        processed_combined = DataProcessingUtils.escape_multiline(processed_combined)  # type: ignore[no-untyped-call]
         mh.DataExporter.write_with_format_selection(processed_combined, "OrgInsightMetrics_Legacy.csv")  # type: ignore[no-untyped-call]
         print("  !? Legacy format maintained -> OrgInsightMetrics_Legacy.csv")  # Confirm the file write.
 
@@ -649,8 +652,8 @@ class OrgExportUtils:
                 logging.warning(" No audit logs returned from API.")  # Warn none returned.
                 logging.debug("EXIT: OrgExportUtils.audit_logs - no data")  # Trace exit.
                 return  # Abort.
-            data = mh.DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested fields.
-            data = mh.DataProcessingUtils.escape_multiline(data)  # type: ignore[no-untyped-call]
+            data = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested fields.
+            data = DataProcessingUtils.escape_multiline(data)  # type: ignore[no-untyped-call]
             mh.DataExporter.write_with_format_selection(data, "OrgAuditLogs.csv")  # type: ignore[no-untyped-call]
             print(f"! {len(data)} audit logs exported to OrgAuditLogs.csv")  # Tell the user.
             logging.info("Completed audit logs export and wrote results to OrgAuditLogs.csv.")  # Log completion.

@@ -15,6 +15,9 @@ import importlib  # WHY: lazy MistHelper import to reach DataExporter + DataProc
 import logging  # WHY: structured trace for discovery/fetch/export lifecycle events.
 from typing import Any  # WHY: helper return types normalize heterogenous mistapi payloads.
 
+from src.data.data_processing_utils import (
+    DataProcessingUtils,
+)  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
 from src.dataclasses.endpoint_config import EndpointConfig  # Const endpoint descriptor.
 
 
@@ -677,7 +680,7 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
             return  # Abort.
 
         data_list = self._convert_to_list(config.endpoint_name, const_data)  # Normalize to a list.
-        processed = mh.DataProcessingUtils.escape_multiline(data_list)  # type: ignore[no-untyped-call]
+        processed = DataProcessingUtils.escape_multiline(data_list)  # type: ignore[no-untyped-call]
         mh.DataExporter.write_with_format_selection(processed, config.filename)  # type: ignore[no-untyped-call]
 
         print(f"  ! {len(processed)} {config.description.lower()} exported to {config.filename}")  # Tell the user.

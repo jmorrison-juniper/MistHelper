@@ -25,6 +25,10 @@ from typing import Any, Literal  # WHY: Literal[False] to distinguish user cance
 
 import mistapi  # WHY: direct SDK access for search + pagination helpers.
 
+from src.data.data_processing_utils import (
+    DataProcessingUtils,
+)  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
+
 
 class GlobalWiredClientReportGenerator:
     """Generates organization-wide wired client reports with operator-based MAC/manufacturer filtering."""
@@ -258,8 +262,8 @@ class GlobalWiredClientReportGenerator:
         """Write matched records through the standard CSV/SQLite export path."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataProcessingUtils + DataExporter.
         if matched:  # Have matches.
-            flattened = mh.DataProcessingUtils.flatten_nested_fields(matched)  # Flatten nested fields.
-            sanitized = mh.DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]
+            flattened = DataProcessingUtils.flatten_nested_fields(matched)  # Flatten nested fields.
+            sanitized = DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]
         else:
             sanitized = []  # No matches.
         mh.DataExporter.write_with_format_selection(  # Write via backend.

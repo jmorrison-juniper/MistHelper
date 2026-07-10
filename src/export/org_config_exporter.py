@@ -18,6 +18,10 @@ from typing import Any  # WHY: mistapi response payloads are duck-typed here.
 
 import mistapi  # WHY: direct calls to orgs.psks/webhooks/wlans/mxedges list endpoints.
 
+from src.data.data_processing_utils import (
+    DataProcessingUtils,
+)  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
+
 
 class OrgConfigExporter:
     """Organization Configuration Exporter.
@@ -176,9 +180,8 @@ class OrgConfigExporter:
     @staticmethod
     def _process_msp_orgs(orgs_data: list, msp_id: str, msp_name: str) -> list:  # type: ignore[type-arg]
         """Flatten + escape + tag each org dict with its parent ``msp_id`` and ``msp_name``."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataProcessingUtils facade.
-        processed = mh.DataProcessingUtils.flatten_nested_fields(orgs_data)  # Flatten nested fields.
-        processed = mh.DataProcessingUtils.escape_multiline(processed)  # Escape multiline text.
+        processed = DataProcessingUtils.flatten_nested_fields(orgs_data)  # Flatten nested fields.
+        processed = DataProcessingUtils.escape_multiline(processed)  # Escape multiline text.
         for record in processed:  # Tag each org.
             record["msp_id"] = msp_id  # Add MSP id.
             record["msp_name"] = msp_name  # Add MSP name.

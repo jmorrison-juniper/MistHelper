@@ -22,6 +22,10 @@ import importlib  # WHY: lazy MistHelper import avoids circular load at module i
 import logging  # WHY: structured trace for menu-dispatch lifecycle events.
 from typing import Any  # WHY: MarvisTroubleshootDeps is resolved lazily; annotate as Any.
 
+from src.data.data_processing_utils import (
+    DataProcessingUtils,
+)  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
+
 
 class TroubleshootUtils:  # Marvis troubleshoot delegators.
     """Delegation wrapper for extracted Marvis troubleshooting implementation."""
@@ -38,7 +42,7 @@ class TroubleshootUtils:  # Marvis troubleshoot delegators.
             prompt_utils=mh.PromptUtils,
             data_exporter=mh.DataExporter,
             marvis_data_utils=mh.MarvisDataUtilsFactory.instance(),
-            data_processing_utils=mh.DataProcessingUtils,
+            data_processing_utils=DataProcessingUtils,
         )
 
     @staticmethod
