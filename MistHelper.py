@@ -132,6 +132,9 @@ from src.dataclasses.endpoint_config import (  # pylint: disable=unused-import
 from src.dataclasses.export_backend_options import (
     ExportBackendOptions,
 )  # Issue #470: groups output-backend overrides to keep write_with_format_selection within the 5-Item Rule.
+from src.dataclasses.progress_event import (  # pylint: disable=unused-import
+    ProgressContext,  # noqa: F401  # kept for MistHelper.ProgressContext test access + mh.ProgressContext usage from extracted modules
+)
 from src.dataclasses.systematic_test_option import (
     SystematicTestOption,
 )  # Issue #470: groups menu-option identity to keep _systematic_test_run_option within the 5-Item Rule.

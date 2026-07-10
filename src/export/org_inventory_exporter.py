@@ -34,7 +34,6 @@ from prettytable import PrettyTable  # Debug-log summary tables.
 from tqdm import tqdm  # Progress bars for per-device enrichment loops.
 
 from src.api.api_core_fetch_utils import APICoreFetchUtils  # all_sites/all_inventory helpers.
-from src.api.api_data_fetcher import APIDataFetcher  # Standard fetch+CSV pipeline.
 from src.cache.cache_utils import CacheUtils  # check_and_generate_csv gate.
 from src.config.config_utils import ConfigUtils  # Cached-or-prompted org id.
 from src.data.data_processing_utils import DataProcessingUtils  # Flatten/escape helpers.
@@ -73,13 +72,13 @@ class OrgInventoryExporter:  # Org inventory exporters.
         Fetches and exports the full inventory of devices in the organization to OrgInventory.csv.
         Uses APIDataFetcher to handle API call, CSV writing, and table display.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of PROGRESS_EMITTER module global.
+        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of PROGRESS_EMITTER + APIDataFetcher.
         logging.info("Starting export of organization device inventory...")  # Log inventory export start.
         emitter = mh.PROGRESS_EMITTER  # Capture progress emitter.
         if emitter:  # Branch: emitter present.
             emitter.emit_progress_start("12", "inventory", 1)  # Emit progress start.
         op_start = time.time()  # Record operation start time.
-        APIDataFetcher(
+        mh.APIDataFetcher(
             title="Org Inventory:",
             api_call=mistapi.api.v1.orgs.inventory.getOrgInventory,
             filename="OrgInventory.csv",
@@ -97,13 +96,13 @@ class OrgInventoryExporter:  # Org inventory exporters.
         Fetches and exports a list of all devices in the organization to OrgDevices.csv.
         Uses APIDataFetcher to handle API call, CSV writing, and table display.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of PROGRESS_EMITTER module global.
+        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of PROGRESS_EMITTER + APIDataFetcher.
         logging.info("Starting export of all organization devices...")  # Log devices export start.
         emitter = mh.PROGRESS_EMITTER  # Capture progress emitter.
         if emitter:  # Branch: emitter present.
             emitter.emit_progress_start("17", "devices", 1)  # Emit progress start.
         op_start = time.time()  # Record operation start time.
-        APIDataFetcher(  # Fetch and write devices.
+        mh.APIDataFetcher(  # Fetch and write devices.
             title="Org Devices:",
             api_call=mistapi.api.v1.orgs.devices.listOrgDevices,
             filename="OrgDevices.csv",
