@@ -14,19 +14,22 @@ MistHelper.py still owns the ``apisession`` and ``msp_privileges``
 module globals plus the three private helpers
 (``_msp_fetch_user_data``, ``_msp_extract_from_user_data``,
 ``_msp_cache_and_report``) that this detector delegates to. Those
-attributes are resolved lazily via ``importlib.import_module("MistHelper")``
+attributes are resolved via a call-time ``import MistHelper as mh``
 inside the function body so the extracted module stays free of a
-top-level MistHelper import (avoids a circular src<->MistHelper load)
-and honours monkeypatched attributes in tests.
+top-level MistHelper import (which would create a circular
+src<->MistHelper load, since MistHelper imports this function at
+module load) and continues to honour monkeypatched attributes in
+tests. The call-time import is also cheap because ``import`` after the
+module is loaded is a plain ``sys.modules`` lookup.
 """
 
 from __future__ import annotations  # Enable postponed evaluation for forward-ref typing on 3.10+
 
-import importlib  # Late-import MistHelper module to reach live globals + helper functions
 import logging  # Structured action logging per Constitution VII
+from typing import Any  # apisession + priv-grant values are dynamically typed at the mistapi seam
 
 
-def detect_msp_privileges(session=None):  # type: ignore[no-untyped-def]
+def detect_msp_privileges(session: Any = None) -> list[dict[str, Any]]:
     """Detect MSP-level privileges from the authenticated user's profile via GET /api/v1/self.
 
     An explicit ``session`` (passed by the interactive login before the module-global
@@ -35,8 +38,11 @@ def detect_msp_privileges(session=None):  # type: ignore[no-untyped-def]
     """
     # BEFORE: log entry with session presence for observability
     logging.info("detect_msp_privileges: entry (session=%s)", "provided" if session is not None else "None")
-    # WHY: MSP detection reads/writes MistHelper globals + delegates to three private helpers
-    mh = importlib.import_module("MistHelper")
+    # Call-time import breaks the circular src<->MistHelper load; mypy treats MistHelper
+    # as Any via [tool.mypy.overrides] follow_imports="skip", so mh's attributes are Any
+    # and no attr-defined error is raised on mh.apisession / mh._msp_* helpers.
+    import MistHelper as mh  # noqa: PLC0415  # Deliberate call-time import to avoid circular load
+
     if session is not None:  # Caller supplied an explicit session (interactive login, before publish).
         # Promote it to the MistHelper module global so helpers use the same session.
         mh.apisession = session
@@ -51,7 +57,9 @@ def detect_msp_privileges(session=None):  # type: ignore[no-untyped-def]
             # AFTER: trace no-user-data path
             logging.debug("detect_msp_privileges: _msp_fetch_user_data returned None; returning empty list")
             return []  # No privileges could be detected.
-        detected_msps = mh._msp_extract_from_user_data(user_data)  # Parse every MSP-scoped grant.
+        # Explicitly-typed variable coerces the Any return of the follow_imports=skip'd helper
+        # into the concrete list[dict[str, Any]] we contract to return -- satisfies warn_return_any.
+        detected_msps: list[dict[str, Any]] = mh._msp_extract_from_user_data(user_data)
         mh._msp_cache_and_report(detected_msps)  # Cache to the MistHelper module global and log the outcome.
         # AFTER: trace success path with count
         logging.debug("detect_msp_privileges: exit -- returning %d MSP grant(s)", len(detected_msps))

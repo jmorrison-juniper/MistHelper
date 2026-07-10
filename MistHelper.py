@@ -2339,7 +2339,7 @@ def _attempt_interactive_login_with_rollback(old_session, old_org_id) -> bool:
         print("  X Login failed - restoring previous session")  # Inform the user of the rollback
         apisession = old_session  # Restore the prior API session
         org_id = old_org_id  # Restore the prior org selection
-        detect_msp_privileges()  # type: ignore[no-untyped-call]  # Re-detect MSP grants for the restored session
+        detect_msp_privileges()  # Re-detect MSP grants for the restored session
         logging.warning("Interactive login failed - restored previous API session")  # Log the failed attempt
         return False  # Signal failure to the caller
     logging.debug("Interactive login succeeded")  # Trace the successful login
@@ -6824,7 +6824,7 @@ def _establish_mist_session(args: argparse.Namespace) -> None:
             logging.error("Failed to initialize Mist API session")  # Log token auth failure
             print(" Failed to initialize Mist API session. Check your credentials.")  # Inform user
             sys.exit(1)  # Exit -- cannot proceed without authenticated session
-        detect_msp_privileges()  # type: ignore[no-untyped-call]  # Check if token has MSP-level scope
+        detect_msp_privileges()  # Check if token has MSP-level scope
     logging.debug("_establish_mist_session: session established successfully")  # Log successful auth
 
 
