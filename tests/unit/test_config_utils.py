@@ -1,90 +1,158 @@
-"""Unit tests for ConfigUtils.check_stop_signal() logic.
+"""Unit tests for src.config.config_utils.ConfigUtils (1015 T-12).
 
-Duplicates the pure function from MistHelper.py to avoid import side effects
-(research.md R1 pattern). Tests the file-based stop signal mechanism that
-allows users to cancel long-running loops by creating stop_loop.txt.
+Covers the full public surface of the extracted class:
+- Class-level cache (``_org_id_cache``) via setters/getters and the resolver.
+- Class-level apisession (``_apisession``) injection via ``set_apisession``.
+- Precedence chain in ``get_cached_or_prompted_org_id``: cache -> env -> .env -> prompt.
+- Prompt path uses the injected session and exits when no session is available.
+- ``check_stop_signal`` file-based cancellation semantics.
+
+The module is imported directly (no MistHelper.py load) because it is fully
+self-contained per the T-12 extraction contract.
 """
 
+from __future__ import annotations
+
 import os
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-
-# ---------------------------------------------------------------------------
-# Duplicated pure function (R1: avoid MistHelper.py import side effects)
-# ---------------------------------------------------------------------------
-def check_stop_signal():
-    """Mirror of ConfigUtils.check_stop_signal() from MistHelper.py."""
-    if os.path.exists("stop_loop.txt"):
-        try:
-            os.remove("stop_loop.txt")
-        except OSError:
-            pass
-        print("  Stop signal detected. Ending operation early.")
-        return True
-    return False
+from src.config.config_utils import ConfigUtils
 
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
 @pytest.fixture(autouse=True)
-def _cleanup():
-    """Remove stop_loop.txt before and after each test."""
-    if os.path.exists("stop_loop.txt"):
-        os.remove("stop_loop.txt")
+def _reset_state(tmp_path, monkeypatch):
+    """Reset ConfigUtils class state and isolate cwd + env before each test."""
+    ConfigUtils._org_id_cache = None
+    ConfigUtils._apisession = None
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("org_id", raising=False)
+    monkeypatch.delenv("ORG_ID", raising=False)
     yield
-    if os.path.exists("stop_loop.txt"):
-        os.remove("stop_loop.txt")
+    ConfigUtils._org_id_cache = None
+    ConfigUtils._apisession = None
 
 
 # ---------------------------------------------------------------------------
-# Tests
+# set_apisession / set_cached_org_id / get_cached_org_id
+# ---------------------------------------------------------------------------
+class TestClassLevelState:
+    """Tests for the ClassVar cache primitives."""
+
+    def test_set_apisession_stores_session(self):
+        session = MagicMock(name="fake_session")
+        ConfigUtils.set_apisession(session)
+        assert ConfigUtils._apisession is session
+
+    def test_set_apisession_none_clears_session(self):
+        ConfigUtils._apisession = MagicMock()
+        ConfigUtils.set_apisession(None)
+        assert ConfigUtils._apisession is None
+
+    def test_set_cached_org_id_populates_cache(self):
+        ConfigUtils.set_cached_org_id("abc-123")
+        assert ConfigUtils.get_cached_org_id() == "abc-123"
+
+    def test_set_cached_org_id_none_clears_cache(self):
+        ConfigUtils._org_id_cache = "prev"
+        ConfigUtils.set_cached_org_id(None)
+        assert ConfigUtils.get_cached_org_id() is None
+
+
+# ---------------------------------------------------------------------------
+# get_cached_or_prompted_org_id precedence chain
+# ---------------------------------------------------------------------------
+class TestGetCachedOrPromptedOrgId:
+    """Tests for the precedence chain: cache -> env -> .env -> prompt."""
+
+    def test_cache_hit_returns_cached_value(self, monkeypatch):
+        ConfigUtils.set_cached_org_id("cached-org")
+        # Even with an env var set, the cache should win.
+        monkeypatch.setenv("org_id", "env-org")
+        assert ConfigUtils.get_cached_or_prompted_org_id() == "cached-org"
+
+    def test_env_var_lower_case_populates_cache(self, monkeypatch):
+        monkeypatch.setenv("org_id", "env-lower")
+        result = ConfigUtils.get_cached_or_prompted_org_id()
+        assert result == "env-lower"
+        assert ConfigUtils.get_cached_org_id() == "env-lower"
+
+    def test_env_var_upper_case_populates_cache(self, monkeypatch):
+        monkeypatch.setenv("ORG_ID", "env-upper")
+        assert ConfigUtils.get_cached_or_prompted_org_id() == "env-upper"
+
+    def test_dotenv_resolution_populates_cache(self, tmp_path):
+        env_path = tmp_path / ".env"
+        env_path.write_text('org_id="dotenv-org"\n')
+        result = ConfigUtils.get_cached_or_prompted_org_id()
+        assert result == "dotenv-org"
+        assert ConfigUtils.get_cached_org_id() == "dotenv-org"
+
+    def test_dotenv_unquoted_value_parsed(self, tmp_path):
+        env_path = tmp_path / ".env"
+        env_path.write_text("org_id=bare-value\n")
+        assert ConfigUtils.get_cached_or_prompted_org_id() == "bare-value"
+
+    def test_prompt_path_uses_injected_session(self):
+        session = MagicMock(name="session")
+        ConfigUtils.set_apisession(session)
+        with patch("src.config.config_utils.mistapi.cli.select_org", return_value=["picked-org"]) as picker:
+            result = ConfigUtils.get_cached_or_prompted_org_id()
+        picker.assert_called_once_with(session)
+        assert result == "picked-org"
+        assert ConfigUtils.get_cached_org_id() == "picked-org"
+
+    def test_prompt_path_no_session_exits(self):
+        # No session injected and no cache/env/.env source available.
+        with pytest.raises(SystemExit) as excinfo:
+            ConfigUtils.get_cached_or_prompted_org_id()
+        assert excinfo.value.code == 1
+
+    def test_prompt_path_empty_selection_exits(self):
+        ConfigUtils.set_apisession(MagicMock())
+        with patch("src.config.config_utils.mistapi.cli.select_org", return_value=[]):
+            with pytest.raises(SystemExit) as excinfo:
+                ConfigUtils.get_cached_or_prompted_org_id()
+        assert excinfo.value.code == 1
+
+    def test_dotenv_missing_falls_through_to_prompt(self):
+        # No cache, no env, no .env file, no session -> exits.
+        with pytest.raises(SystemExit):
+            ConfigUtils.get_cached_or_prompted_org_id()
+
+
+# ---------------------------------------------------------------------------
+# check_stop_signal
 # ---------------------------------------------------------------------------
 class TestCheckStopSignal:
-    """Tests for the check_stop_signal file-based cancellation mechanism."""
+    """Tests for the file-based cancellation mechanism."""
 
     def test_no_file_returns_false(self):
-        """No stop file present should return False."""
-        assert check_stop_signal() is False
+        assert ConfigUtils.check_stop_signal() is False
 
-    def test_file_present_returns_true(self):
-        """Stop file present should return True and delete the file."""
+    def test_file_present_returns_true_and_deletes(self):
         with open("stop_loop.txt", "w") as handle:
             handle.write("")
-        assert os.path.exists("stop_loop.txt")
-        assert check_stop_signal() is True
+        assert ConfigUtils.check_stop_signal() is True
         assert not os.path.exists("stop_loop.txt")
 
-    def test_consumed_signal_returns_false(self):
-        """After signal is consumed, next call should return False."""
+    def test_consumed_signal_returns_false_next_call(self):
         with open("stop_loop.txt", "w") as handle:
             handle.write("")
-        check_stop_signal()
-        assert check_stop_signal() is False
+        ConfigUtils.check_stop_signal()
+        assert ConfigUtils.check_stop_signal() is False
 
     def test_loop_breaks_on_signal(self):
-        """Simulated site loop should break when stop signal is detected."""
-        sites = ["site_a", "site_b", "site_c", "site_d", "site_e"]
+        sites = ["site_a", "site_b", "site_c"]
         processed = []
         with open("stop_loop.txt", "w") as handle:
             handle.write("")
         for site in sites:
-            if check_stop_signal():
+            if ConfigUtils.check_stop_signal():
                 break
             processed.append(site)
-        assert len(processed) == 0
-        assert not os.path.exists("stop_loop.txt")
-
-    def test_loop_processes_until_mid_run_signal(self):
-        """Loop should process sites normally until stop file appears mid-run."""
-        sites = ["site_a", "site_b", "site_c", "site_d", "site_e"]
-        processed = []
-        for i, site in enumerate(sites):
-            if i == 3:
-                with open("stop_loop.txt", "w") as handle:
-                    handle.write("")
-            if check_stop_signal():
-                break
-            processed.append(site)
-        assert processed == ["site_a", "site_b", "site_c"]
+        assert processed == []

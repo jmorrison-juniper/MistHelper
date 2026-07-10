@@ -236,6 +236,8 @@ config/
 configs/
 !src/ssh/config/
 !src/ssh/config/*.py
+!src/config/
+!src/config/*.py
 
 # Archives
 *.zip
