@@ -62,6 +62,41 @@ class _ConvertTarget:
     device_id: str  # WHY: mistapi convert endpoint requires device_id.
 
 
+# ---------------------------------------------------------------------------
+# Pattern 1 module-level dependency container (initiative 1015 T-11)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class VirtualChassisDependencies:
+    """Immutable bundle of MistHelper-owned collaborators wired at menu-dispatch time."""
+
+    apisession: Any = None  # WHY: authenticated mistapi session shared across all VC calls.
+    file_path_utils: Any = None  # WHY: resolves cache CSV paths and creates VCConvert templates.
+    cache_utils: Any = None  # WHY: check_and_generate_csv gate for OrgInventory/SiteList freshness.
+    org_inventory_exporter: Any = None  # WHY: regenerates OrgInventory.csv on cache miss.
+    org_site_exporter: Any = None  # WHY: regenerates SiteList.csv on cache miss.
+    input_utils: Any = None  # WHY: safe_input gate for destructive prompts (Menu 92/93).
+    prompt_utils: Any = None  # WHY: select_site interactive prompt for Menu 92.
+    data_processing_utils: Any = None  # WHY: flatten_nested_fields + escape_multiline for Menu 94 export.
+    data_exporter: Any = None  # WHY: write_with_format_selection writer for Menu 94 CSV output.
+
+
+_DEPS: VirtualChassisDependencies = VirtualChassisDependencies()  # WHY: shared holder mutated by wire-up.
+
+
+def _deps() -> VirtualChassisDependencies:  # WHY: single accessor used by every launch method.
+    """Return the active dependency container so launchers can pull collaborators."""
+    return _DEPS  # WHY: indirection keeps tests able to swap the whole graph atomically.
+
+
+def configure_virtual_chassis_dependencies(deps: VirtualChassisDependencies) -> None:
+    """Wire runtime collaborators from the MistHelper orchestration layer (Menus 92/93/94)."""
+    global _DEPS  # WHY: rebind the module-level holder used by every launch method.
+    logging.info("configure_virtual_chassis_dependencies: wiring MistHelper globals for VC menus")  # WHY.
+    _DEPS = deps  # WHY: single assignment ensures atomic swap of collaborators.
+
+
 class VirtualChassisManager:
     """Manage virtual chassis to virtual MAC conversion operations.
 
@@ -72,6 +107,65 @@ class VirtualChassisManager:
 
     # ------------------------------------------------------------------
     # Public entry-points (menus 92, 93, 94)
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def launch_convert_single(cls, dry_run: bool = False) -> None:
+        """Menu 92 launcher: build IO deps from `_deps()` and delegate to `convert_single`."""
+        logging.info("VirtualChassisManager.launch_convert_single: wiring VCIODeps (dry_run=%s)", dry_run)  # WHY.
+        deps = _deps()  # WHY: pull the shared dependency container populated at menu wire-up.
+        io_deps = VCIODeps(  # WHY: bundle IO/cache dependencies to satisfy the 5-param limit.
+            get_csv_path_fn=deps.file_path_utils.get_csv_path,  # WHY: resolve cache paths.
+            check_and_generate_csv_fn=deps.cache_utils.check_and_generate_csv,  # WHY: refresh cached CSV.
+            inventory_generator=deps.org_inventory_exporter.inventory,  # WHY: rebuild OrgInventory.csv.
+            sites_generator=deps.org_site_exporter.sites,  # WHY: rebuild SiteList.csv (unused here).
+        )
+        cls.convert_single(  # WHY: delegate to the injected static entry-point.
+            apisession=deps.apisession,  # WHY: authenticated mistapi session for API calls.
+            io_deps=io_deps,  # WHY: bundled IO/cache dependencies.
+            safe_input_fn=deps.input_utils.safe_input,  # WHY: gated input for destructive prompts.
+            select_site_fn=deps.prompt_utils.select_site,  # WHY: interactive site picker.
+            dry_run=dry_run,  # WHY: forward operator's --dry-run flag.
+        )
+
+    @classmethod
+    def launch_convert_by_site_list(cls) -> None:
+        """Menu 93 launcher: build IO deps from `_deps()` and delegate to `convert_by_site_list`."""
+        logging.info("VirtualChassisManager.launch_convert_by_site_list: wiring VCIODeps for bulk")  # WHY.
+        deps = _deps()  # WHY: pull the shared dependency container populated at menu wire-up.
+        io_deps = VCIODeps(  # WHY: bundle IO/cache dependencies for the bulk path.
+            get_csv_path_fn=deps.file_path_utils.get_csv_path,  # WHY: cache path resolver.
+            check_and_generate_csv_fn=deps.cache_utils.check_and_generate_csv,  # WHY: refresh cached CSV.
+            inventory_generator=deps.org_inventory_exporter.inventory,  # WHY: rebuild OrgInventory.csv.
+            sites_generator=deps.org_site_exporter.sites,  # WHY: rebuild SiteList.csv.
+            create_csv_template_fn=deps.file_path_utils.create_csv_template,  # WHY: write empty VCConvert.CSV.
+        )
+        cls.convert_by_site_list(  # WHY: delegate to the injected static entry-point.
+            apisession=deps.apisession,  # WHY: authenticated mistapi session for API calls.
+            io_deps=io_deps,  # WHY: bundled IO/cache dependencies.
+            safe_input_fn=deps.input_utils.safe_input,  # WHY: gated input for destructive prompts.
+        )
+
+    @classmethod
+    def launch_check_status(cls) -> None:
+        """Menu 94 launcher: build IO+export deps from `_deps()` and delegate to `check_status`."""
+        logging.info("VirtualChassisManager.launch_check_status: wiring VCIODeps + VCExportDeps")  # WHY.
+        deps = _deps()  # WHY: pull the shared dependency container populated at menu wire-up.
+        io_deps = VCIODeps(  # WHY: bundle IO/cache dependencies for status check.
+            get_csv_path_fn=deps.file_path_utils.get_csv_path,  # WHY: cache path resolver.
+            check_and_generate_csv_fn=deps.cache_utils.check_and_generate_csv,  # WHY: refresh cached CSV.
+            inventory_generator=deps.org_inventory_exporter.inventory,  # WHY: rebuild OrgInventory.csv.
+            sites_generator=deps.org_site_exporter.sites,  # WHY: rebuild SiteList.csv.
+        )
+        export_deps = VCExportDeps(  # WHY: bundle export dependencies for CSV writer.
+            flatten_fields_fn=deps.data_processing_utils.flatten_nested_fields,  # WHY: flatten nested rows.
+            escape_multiline_fn=deps.data_processing_utils.escape_multiline,  # WHY: escape multiline content.
+            save_data_fn=deps.data_exporter.write_with_format_selection,  # WHY: physical writer.
+        )
+        cls.check_status(io_deps=io_deps, export_deps=export_deps)  # WHY: delegate the check.
+
+    # ------------------------------------------------------------------
+    # Static per-call entry-points (kept for direct-injection callers + tests)
     # ------------------------------------------------------------------
 
     @staticmethod

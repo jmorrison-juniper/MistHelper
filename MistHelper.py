@@ -153,6 +153,15 @@ from src.device.device_reboot_manager import (  # pylint: disable=unused-import
 from src.device.device_utils import (  # pylint: disable=unused-import
     DeviceUtils,  # noqa: F401  # Cat B (1013 SC-001 position 6) -- re-export for dynamic _mh.DeviceUtils lookup
 )
+from src.device.virtual_chassis import (  # Cat E canonical (1015 T-11) -- fold-in of stub facade
+    VirtualChassisDependencies as _VirtualChassisDependencies,
+)
+from src.device.virtual_chassis import (
+    VirtualChassisManager,
+)
+from src.device.virtual_chassis import (
+    configure_virtual_chassis_dependencies as _configure_virtual_chassis_dependencies,
+)
 from src.export.const_definitions_exporter import (  # pylint: disable=unused-import
     ConstDefinitionsExporter,  # noqa: F401  # Cat B (1013 SC-001 position 17) -- re-export for MistHelper.ConstDefinitionsExporter callers
 )
@@ -4932,84 +4941,26 @@ from src.utils.rate_limiting import RateLimitingUtils  # noqa: E402
 # ============================================================================
 # VIRTUAL CHASSIS MANAGER CLASS
 # ============================================================================
-class VirtualChassisManager:  # Virtual chassis manager.
-    """Virtual chassis to virtual MAC conversion operations (Menus 92-94).
-
-    Implementation extracted to src/device/virtual_chassis.py.
-    This stub delegates to the extracted module while providing
-    access to MistHelper globals (apisession, utility classes).
-    """
-
-    @staticmethod
-    def convert_single(dry_run: bool = False) -> None:  # Convert a single VC.
-        """Convert a single VC switch to virtual MAC (Menu 92)."""
-        from src.device.virtual_chassis import (  # Import the impl.
-            VCIODeps,
+# NOTE: VirtualChassisManager folded fully into src/device/virtual_chassis.py
+# per 1015 T-11 (Cat E). Menu wire-up lives in _configure_virtual_chassis_manager()
+# below (single seam for menu 161/162/14 dispatch lambdas). No stub or delegator
+# remains in MistHelper.py after this extraction.
+def _configure_virtual_chassis_manager() -> type[VirtualChassisManager]:
+    """Wire VirtualChassisDependencies and return the canonical VirtualChassisManager class."""
+    _configure_virtual_chassis_dependencies(  # Publish MistHelper globals into the impl module.
+        _VirtualChassisDependencies(  # Frozen container of 9 injected collaborators.
+            apisession=apisession,  # Live Mist API session.
+            file_path_utils=FilePathUtils,  # Portable CSV path resolver + template writer.
+            cache_utils=CacheUtils,  # check_and_generate_csv freshness gate.
+            org_inventory_exporter=OrgInventoryExporter,  # Regenerates OrgInventory.csv.
+            org_site_exporter=OrgSiteExporter,  # Regenerates SiteList.csv.
+            input_utils=InputUtils,  # safe_input for destructive prompts.
+            prompt_utils=PromptUtils,  # select_site interactive picker.
+            data_processing_utils=DataProcessingUtils,  # flatten + escape helpers for CSV export.
+            data_exporter=DataExporter,  # write_with_format_selection CSV writer.
         )
-        from src.device.virtual_chassis import (
-            VirtualChassisManager as _VC,
-        )
-
-        io_deps = VCIODeps(  # Bundle IO/cache dependencies to satisfy the 5-param limit.
-            get_csv_path_fn=FilePathUtils.get_csv_path,  # Resolve cache paths.
-            check_and_generate_csv_fn=CacheUtils.check_and_generate_csv,  # Refresh cached CSV.
-            inventory_generator=OrgInventoryExporter.inventory,  # Rebuild OrgInventory.csv.
-            sites_generator=OrgSiteExporter.sites,  # Rebuild SiteList.csv (unused here).
-        )
-        _VC.convert_single(  # Delegate the conversion.
-            apisession=apisession,
-            io_deps=io_deps,
-            safe_input_fn=InputUtils.safe_input,
-            select_site_fn=PromptUtils.select_site,
-            dry_run=dry_run,
-        )
-
-    @staticmethod
-    def convert_by_site_list() -> None:  # Convert by site list.
-        """Bulk convert VC switches from site list CSV (Menu 93)."""
-        from src.device.virtual_chassis import (  # Import the impl.
-            VCIODeps,
-        )
-        from src.device.virtual_chassis import (
-            VirtualChassisManager as _VC,
-        )
-
-        io_deps = VCIODeps(  # Bundle IO/cache dependencies for the bulk path.
-            get_csv_path_fn=FilePathUtils.get_csv_path,  # Cache path resolver.
-            check_and_generate_csv_fn=CacheUtils.check_and_generate_csv,  # Refresh cached CSV.
-            inventory_generator=OrgInventoryExporter.inventory,  # Rebuild OrgInventory.csv.
-            sites_generator=OrgSiteExporter.sites,  # Rebuild SiteList.csv.
-            create_csv_template_fn=FilePathUtils.create_csv_template,  # Write empty VCConvert.CSV.
-        )
-        _VC.convert_by_site_list(  # Delegate the conversion.
-            apisession=apisession,
-            io_deps=io_deps,
-            safe_input_fn=InputUtils.safe_input,
-        )
-
-    @staticmethod
-    def check_status() -> None:  # Check VC status.
-        """Check conversion status of all VC switches (Menu 94)."""
-        from src.device.virtual_chassis import (  # Import the impl.
-            VCExportDeps,
-            VCIODeps,
-        )
-        from src.device.virtual_chassis import (
-            VirtualChassisManager as _VC,
-        )
-
-        io_deps = VCIODeps(  # Bundle IO/cache dependencies.
-            get_csv_path_fn=FilePathUtils.get_csv_path,  # Cache path resolver.
-            check_and_generate_csv_fn=CacheUtils.check_and_generate_csv,  # Refresh cached CSV.
-            inventory_generator=OrgInventoryExporter.inventory,  # Rebuild OrgInventory.csv.
-            sites_generator=OrgSiteExporter.sites,  # Rebuild SiteList.csv.
-        )
-        export_deps = VCExportDeps(  # Bundle export dependencies.
-            flatten_fields_fn=DataProcessingUtils.flatten_nested_fields,  # Flatten nested rows.
-            escape_multiline_fn=DataProcessingUtils.escape_multiline,  # Escape multiline content.
-            save_data_fn=DataExporter.write_with_format_selection,  # Physical writer.
-        )
-        _VC.check_status(io_deps=io_deps, export_deps=export_deps)  # Delegate the check.
+    )
+    return VirtualChassisManager  # Canonical class ready for menu callback dispatch.
 
 
 # ============================================================================
@@ -5473,15 +5424,15 @@ menu_actions = {
         " DESTRUCTIVE: Reboot all devices associated with templates listed in GatewayTemplateRebootList.CSV and log results",  # noqa: E501
     ),
     "161": (
-        lambda dry_run=False: VirtualChassisManager.convert_single(dry_run=dry_run),  # type: ignore[misc]
+        lambda dry_run=False: _configure_virtual_chassis_manager().launch_convert_single(dry_run=dry_run),  # type: ignore[misc]
         " DESTRUCTIVE: Convert a virtual chassis switch to virtual MAC (interactive, supports --dry-run)",
     ),
     "162": (
-        VirtualChassisManager.convert_by_site_list,
+        lambda: _configure_virtual_chassis_manager().launch_convert_by_site_list(),
         " DESTRUCTIVE: Convert all virtual chassis switches in sites listed in VCConvert.CSV (bulk operation)",
     ),
     "14": (
-        VirtualChassisManager.check_status,
+        lambda: _configure_virtual_chassis_manager().launch_check_status(),
         "Check virtual chassis to virtual MAC conversion status for all switches",
     ),
     "18": (
