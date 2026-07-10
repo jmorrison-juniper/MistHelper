@@ -15,10 +15,27 @@ from __future__ import annotations  # Enable postponed evaluation for forward-re
 
 import importlib  # Late-import MistHelper to avoid circular src<->MistHelper dependency
 import logging  # Structured action logging required by Constitution VII
-from typing import TYPE_CHECKING, Any  # Loose typing for late-bound MistHelper attributes
+from dataclasses import dataclass  # Underpins the DeviceFetchConfig configuration container
+from typing import Any  # Loose typing for late-bound MistHelper attributes and fetch callables
 
-if TYPE_CHECKING:  # Only import DeviceFetchConfig for static type analysis, never at runtime
-    from MistHelper import DeviceFetchConfig  # Configuration dataclass owned by MistHelper.py
+# ============================================================================
+# CONFIGURATION DATACLASS (5-Item Rule Compliance)
+# ============================================================================
+# DeviceFetchConfig groups the six parameters needed for an interactive fetch
+# so callers stay within the 5-parameter limit per function (Constitution).
+# Extracted from MistHelper.py per initiative 1015 (T-01, Cat E).
+
+
+@dataclass
+class DeviceFetchConfig:
+    """Configuration for interactive device data fetching - groups fetch parameters."""
+
+    fetch_function: Any  # Callable that performs the actual API fetch for the chosen data
+    filename: str  # Output filename for the exported data
+    description: str  # Human-readable description shown to the user during the fetch
+    device_type: str = "all"  # Device type filter (all/ap/switch/gateway); 'all' avoids the AP-only API default
+    site_id: str | None = None  # Optional site scope; None means an org-wide fetch
+    device_id: str | None = None  # Optional single-device scope; None means all matching devices
 
 
 class _MistHelperProxy:  # Attribute forwarder to MistHelper module attributes
