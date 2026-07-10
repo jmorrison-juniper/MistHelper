@@ -15,6 +15,10 @@ import time  # WHY: pace API calls between exporters and back off on failure.
 from datetime import datetime  # WHY: timestamp banner per loop iteration.
 from typing import Any  # WHY: callable/step tuple lists are duck-typed.
 
+from src.export.org_inventory_exporter import (
+    OrgInventoryExporter,  # WHY: 1015 T-06 canonical import (eliminates mh.OrgInventoryExporter).
+)
+
 
 class DataCollectionManager:
     """Manages automated data collection and support package generation operations.
@@ -65,7 +69,7 @@ class DataCollectionManager:
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of exporter facades.
         return [  # Each tuple = printed banner + exporter function.
             ("  Collecting site list...", mh.OrgSiteExporter.sites),
-            ("  Collecting organization inventory...", mh.OrgInventoryExporter.inventory),
+            ("  Collecting organization inventory...", OrgInventoryExporter.inventory),
             ("  Collecting organization device stats...", mh.OrgDeviceStatsExporter.device_stats),
             ("  Collecting organization device port stats...", mh.OrgDeviceStatsExporter.device_port_stats),
             ("  Collecting VPN peer path stats...", mh.OrgDeviceStatsExporter.vpn_peer_stats),
@@ -118,7 +122,7 @@ class DataCollectionManager:
             ("OrgAlarms.csv", mh.OrgAlarmEventExporter.alarms),
             ("OrgDeviceEvents.csv", mh.OrgAlarmEventExporter.device_events),
             ("SiteList.csv", mh.OrgSiteExporter.sites),
-            ("OrgDevices.csv", mh.OrgInventoryExporter.devices),
+            ("OrgDevices.csv", OrgInventoryExporter.devices),
             ("OrgDeviceStats.csv", mh.OrgDeviceStatsExporter.device_stats),
             ("OrgDevicePortStats.csv", mh.OrgDeviceStatsExporter.device_port_stats),
             ("AllGatewayTestResults.csv", mh.GatewayTestExporter.test_results_by_site),

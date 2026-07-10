@@ -25,6 +25,10 @@ import os  # WHY: existence check for the input reboot-list CSV.
 from datetime import UTC, datetime  # WHY: ISO timestamp payload for restartSiteDevice call body.
 from typing import Any  # WHY: response payloads and dict rows are heterogeneous.
 
+from src.export.org_inventory_exporter import (
+    OrgInventoryExporter,  # WHY: 1015 T-06 canonical import (eliminates mh.OrgInventoryExporter).
+)
+
 
 class DeviceRebootManager:  # Device reboot manager.
     """Manage device reboot operations with comprehensive safety checks and audit logging.
@@ -109,7 +113,7 @@ class DeviceRebootManager:  # Device reboot manager.
     def _ensure_fresh_csv_cache() -> None:  # Refresh the CSV cache.
         """Ensure required CSV files are fresh."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of CacheUtils + exporters.
-        mh.CacheUtils.check_and_generate_csv("OrgDevices.csv", mh.OrgInventoryExporter.devices)  # Refresh devices CSV.
+        mh.CacheUtils.check_and_generate_csv("OrgDevices.csv", OrgInventoryExporter.devices)  # Refresh devices CSV.
         mh.CacheUtils.check_and_generate_csv("SiteList.csv", mh.OrgSiteExporter.sites)  # Refresh sites CSV.
         mh.CacheUtils.check_and_generate_csv("OrgGatewayTemplates.csv", mh.GatewayExportUtils.templates)
         mh.CacheUtils.check_and_generate_csv(  # Refresh gateway configs CSV.

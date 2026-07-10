@@ -14,6 +14,10 @@ import importlib  # WHY: lazy MistHelper import avoids circular load at module i
 import logging  # WHY: structured trace for merge lifecycle events.
 import os  # WHY: filesystem existence checks for prerequisite CSVs.
 
+from src.export.org_inventory_exporter import (
+    OrgInventoryExporter,  # WHY: 1015 T-06 canonical import (eliminates mh.OrgInventoryExporter).
+)
+
 
 class SFPTransceiverDataProcessor:
     """Process and correlate SFP / transceiver data with site & device context.
@@ -51,7 +55,7 @@ class SFPTransceiverDataProcessor:
             logging.info(
                 "AllDevicesWithSiteInfo.csv missing; invoking OrgInventoryExporter.devices_with_site_info()"
             )  # Action log before generating devices+site CSV
-            mh.OrgInventoryExporter.devices_with_site_info()  # Generate the devices+site CSV
+            OrgInventoryExporter.devices_with_site_info()  # Generate the devices+site CSV
         logging.debug("EXIT: _ensure_prerequisite_csvs")  # Trace exit
 
     @staticmethod
