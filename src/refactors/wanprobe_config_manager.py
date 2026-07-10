@@ -6,12 +6,16 @@ WANProbeConfigManager in MistHelper.py.
 
 Runtime dependencies (apisession module-global, and the utility
 classes ConfigUtils / InputUtils / CacheUtils / GatewayExportUtils /
-OrgSiteExporter / FilePathUtils / DataExporter along with the
-MIST_SITE_EXCLUDE_PREFIX constant) are still owned by MistHelper.py.
-They are resolved lazily via the module-level _MH proxy so the
-extracted module keeps its import graph flat, live re-bindings of
-apisession (e.g. after interactive login) are always honoured, and
+OrgSiteExporter / FilePathUtils / DataExporter) are still owned by
+MistHelper.py. They are resolved lazily via the module-level _MH proxy
+so the extracted module keeps its import graph flat, live re-bindings
+of apisession (e.g. after interactive login) are always honoured, and
 monkeypatched attributes in tests continue to work.
+
+The ``MIST_SITE_EXCLUDE_PREFIX`` constant is imported directly from
+``src.refactors.mist_site_exclude_prefix`` (initiative 1015 T-15) --
+it is a static string captured at env-init time, so no live rebind
+is needed.
 """
 
 from __future__ import annotations  # Enable postponed evaluation for forward-ref typing
@@ -146,7 +150,11 @@ class WANProbeConfigManager:  # WAN probe config manager (Menu 166 destructive e
 
     def _build_template_site_counts(self) -> None:
         """Tally how many sites reference each gateway template (skipping MIST_SITE_EXCLUDE_PREFIX names)."""
-        exclude_prefix = _MH.MIST_SITE_EXCLUDE_PREFIX  # Read exclude prefix once for the loop
+        from src.refactors.mist_site_exclude_prefix import (  # noqa: PLC0415 - local import.
+            MIST_SITE_EXCLUDE_PREFIX,
+        )
+
+        exclude_prefix = MIST_SITE_EXCLUDE_PREFIX  # Read exclude prefix once for the loop (canonical import).
         for site in self.sites:  # Walk sites.
             if exclude_prefix and site.get("name", "").startswith(exclude_prefix):
                 continue  # Skip it.
