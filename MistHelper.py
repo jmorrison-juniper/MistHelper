@@ -121,6 +121,9 @@ from src.cache.cache_utils import (
 from src.capture.packet_capture import (
     PacketCaptureManager,
 )  # Import packet capture manager directly under its canonical name (issue #431: alias removed)
+from src.config.config_utils import (  # pylint: disable=unused-import
+    ConfigUtils,  # noqa: F401  # Cat E canonical (1015 T-12) -- re-export for MistHelper.ConfigUtils callers
+)
 
 # BatchWorkerConfig import removed: pool machinery moved to ConnectionPoolExecutor (1012 SC-003)
 from src.dataclasses.endpoint_config import (  # pylint: disable=unused-import
@@ -2195,6 +2198,8 @@ def _restore_session_globals_from_state(state: dict) -> None:
     msp_privileges = state.get("msp_privileges", msp_privileges)  # Copy detected MSP grants back
     selected_msp = state.get("selected_msp", selected_msp)  # Copy the selected MSP back
     org_id = state.get("org_id", org_id)  # Copy the selected org ID back
+    ConfigUtils.set_apisession(apisession)  # Mirror the restored session into ConfigUtils class cache (1015 T-12)
+    ConfigUtils.set_cached_org_id(org_id)  # Mirror the restored org_id into ConfigUtils class cache (1015 T-12)
 
 
 # NOTE: initialize_mist_session_interactive() extracted to
@@ -2241,6 +2246,8 @@ def _attempt_interactive_login_with_rollback(old_session, old_org_id) -> bool:
     apisession = None  # Drop the current session so the interactive flow starts clean
     msp_privileges = []  # Clear cached MSP grants from the old session
     org_id = None  # Clear the selected org from the old session
+    ConfigUtils.set_apisession(None)  # Clear the ConfigUtils session cache to match (1015 T-12)
+    ConfigUtils.set_cached_org_id(None)  # Clear the ConfigUtils org_id cache to match (1015 T-12)
 
     if not MistSessionInteractiveInitializer.initialize():  # Attempt the interactive login
         print("")  # Blank spacer line
@@ -2248,9 +2255,12 @@ def _attempt_interactive_login_with_rollback(old_session, old_org_id) -> bool:
         apisession = old_session  # Restore the prior API session
         org_id = old_org_id  # Restore the prior org selection
         msp_privileges = detect_msp_privileges(apisession)  # Re-detect MSP grants and publish to module global
+        ConfigUtils.set_apisession(apisession)  # Mirror the restored session into ConfigUtils cache (1015 T-12)
+        ConfigUtils.set_cached_org_id(org_id)  # Mirror the restored org_id into ConfigUtils cache (1015 T-12)
         logging.warning("Interactive login failed - restored previous API session")  # Log the failed attempt
         return False  # Signal failure to the caller
     logging.debug("Interactive login succeeded")  # Trace the successful login
+    ConfigUtils.set_apisession(apisession)  # Publish new interactive session to ConfigUtils cache (1015 T-12)
     return True  # Signal success to the caller
 
 
@@ -2320,6 +2330,8 @@ def _select_msp_and_org():
     msp_privileges = state.get("msp_privileges", msp_privileges)  # Copy MSP grants back
     selected_msp = state.get("selected_msp", selected_msp)  # Copy the chosen MSP back
     org_id = state.get("org_id", org_id)  # Copy the chosen org ID back
+    ConfigUtils.set_apisession(apisession)  # Mirror the switched session into ConfigUtils cache (1015 T-12)
+    ConfigUtils.set_cached_org_id(org_id)  # Mirror the chosen org_id into ConfigUtils cache (1015 T-12)
 
 
 def _invoke_mistapi_org_picker_and_apply() -> None:
@@ -2330,6 +2342,7 @@ def _invoke_mistapi_org_picker_and_apply() -> None:
         org_id_list = mistapi.cli.select_org(apisession)  # Let mistapi present an org picker and return the choice
         if org_id_list and len(org_id_list) > 0:  # The user selected at least one org
             org_id = org_id_list[0]  # Use the first selected org ID
+            ConfigUtils.set_cached_org_id(org_id)  # Mirror the picker's choice into ConfigUtils cache (1015 T-12)
             print(f"  + Organization ID set: {org_id}")  # Confirm the selection to the user
             logging.info("User selected org from session: %s", org_id)  # Log the chosen org
         else:  # Nothing was selected
@@ -2909,76 +2922,10 @@ def _configure_session_timeout(session_obj: Any) -> None:
 # ============================================================================
 # CONFIGURATION UTILITIES CLASS
 # ============================================================================
-class ConfigUtils:  # Org id and run-control helpers.
-    """
-    Centralized configuration utilities.
-    Handles org_id retrieval, credentials, and configuration management.
-    """
-
-    @staticmethod
-    def _resolve_org_id_from_dotenv() -> str | None:
-        """Try to parse org_id from a sibling .env file; return value or None."""
-        try:
-            with open(".env") as env_file:  # Fall back to the .env file
-                for line in env_file:  # Scan each line for org_id
-                    if line.strip().startswith("org_id="):  # Match the org_id assignment
-                        return line.strip().split("=", 1)[1].strip().strip('"')  # Extract and unquote
-        except FileNotFoundError:  # No .env file present
-            logging.warning("! .env file not found.")
-        return None  # No value found
-
-    @staticmethod
-    def _resolve_org_id_via_prompt() -> str:
-        """Prompt the user (via mistapi) to select an org; sys.exit on failure."""
-        logging.info("* No org_id found in .env or CLI. Prompting user...")  # Prompt the user as last resort
-        org_id_list = mistapi.cli.select_org(apisession)  # Interactive org selection
-        if not org_id_list:  # Selection returned nothing
-            logging.error("Failed to retrieve org list. Check your API token and authentication.")
-            print("[ERROR] Unable to retrieve organizations. Your API token may be invalid or expired.")
-            print("[ERROR] Please update MIST_API_TOKEN in your .env file and try again.")
-            sys.exit(1)  # Abort: no org to proceed with
-        return org_id_list[0]  # Use the first selected org
-
-    @staticmethod
-    def get_cached_or_prompted_org_id() -> str:  # Resolve org_id from cache/env/.env/prompt.
-        """Resolve org_id by precedence: module global -> env vars -> .env file -> interactive prompt."""
-        global org_id  # Cache resolved id in the module global
-        if org_id:  # Reuse an already-resolved id
-            logging.info("! Using org_id from global variable: %s", org_id)
-            return org_id  # type: ignore[no-any-return]
-        org_id_env = os.environ.get("org_id") or os.environ.get("ORG_ID")  # Try environment variables next
-        if org_id_env:  # Environment provided the id
-            org_id = org_id_env  # Cache the env value
-            logging.info("! Loaded org_id from environment: %s", org_id)
-            return org_id
-        dotenv_org = ConfigUtils._resolve_org_id_from_dotenv()  # Try the .env file fallback
-        if dotenv_org:  # .env file provided the id
-            org_id = dotenv_org  # Cache the .env value
-            logging.info("! Loaded org_id from .env: %s", org_id)
-            return org_id
-        org_id = ConfigUtils._resolve_org_id_via_prompt()  # Last resort: interactive prompt
-        return org_id  # type: ignore[no-any-return]
-
-    @staticmethod
-    def check_stop_signal() -> bool:  # Check for the user stop sentinel.
-        """Check for stop_loop.txt signal file and remove if found.
-
-        Any long-running loop that iterates over sites or devices with API
-        calls should call this once per iteration so the user can cancel
-        gracefully by creating the stop file.
-
-        Returns:
-            True if the stop signal was detected (caller should break).
-        """
-        if os.path.exists("stop_loop.txt"):  # Sentinel file requests a stop.
-            try:
-                os.remove("stop_loop.txt")  # Consume the sentinel once.
-            except OSError:  # Ignore removal races.
-                pass  # Best-effort cleanup only.
-            print(" Stop signal detected. Ending operation early.")  # Notify the user of early stop.
-            logging.info("Stop signal (stop_loop.txt) detected - operation stopped by user.")  # Log user stop.
-            return True  # Signal callers to stop.
-        return False  # No stop requested.
+# NOTE: ConfigUtils removed (1015 T-12, Cat E) - canonical body at
+#       src/config/config_utils.py. Import from src.config.config_utils
+#       instead. MistHelper.py re-exports ConfigUtils at the top import block
+#       for legacy in-file callsites.
 
 
 # ============================================================================
@@ -6685,11 +6632,13 @@ def _establish_mist_session(args: argparse.Namespace) -> None:
             logging.error("Failed to initialize Mist API session via interactive login")  # Log auth failure
             print(" Failed to initialize Mist API session. Check your credentials.")  # Inform user
             sys.exit(1)  # Exit -- cannot proceed without authenticated session
+        ConfigUtils.set_apisession(apisession)  # Publish authenticated session to ConfigUtils cache (1015 T-12)
     else:  # Default path: use API token from .env or environment variables
         if not MistSessionInitializer.initialize():  # Attempt token-based session init
             logging.error("Failed to initialize Mist API session")  # Log token auth failure
             print(" Failed to initialize Mist API session. Check your credentials.")  # Inform user
             sys.exit(1)  # Exit -- cannot proceed without authenticated session
+        ConfigUtils.set_apisession(apisession)  # Publish authenticated session to ConfigUtils cache (1015 T-12)
         msp_privileges = detect_msp_privileges(apisession)  # Detect MSP grants for token session and publish to global
     logging.debug("_establish_mist_session: session established successfully")  # Log successful auth
 
