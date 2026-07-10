@@ -20,7 +20,6 @@ class DummyDeps:
         self.apisession = MagicMock()  # Active API session
         self.tqdm = lambda items=None, **_kwargs: items if items is not None else _TqdmContext()  # Progress wrapper
         self.FAST_MODE_ENABLED = False  # Default to sequential path in tests
-        self.FAST_MODE_MAX_CONCURRENT_CONNECTIONS = 4  # Fast-mode worker cap used by parallel path
 
 
 class _TqdmContext:

@@ -198,13 +198,15 @@ class GatewayTestExporter:
         failed_devices: list[Any], connection_semaphore: Any
     ) -> tuple[list[Any], list[Any]]:
         """Retry failed devices through a small dedicated pool. Return (results, still_failed)."""
-        mh = importlib.import_module(
-            "MistHelper"
-        )  # WHY: lazy fetch of FAST_MODE_RETRY_THREADS + FAST_MODE_MAX_CONCURRENT_CONNECTIONS.
+        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of FAST_MODE_RETRY_THREADS.
+        from src.refactors.fast_mode_constants import (
+            FAST_MODE_MAX_CONCURRENT_CONNECTIONS,
+        )  # WHY: post-T-02 direct import from landing module (no more mh.SYMBOL bypass)
+
         retry_threads = min(  # Size the retry pool.
             mh.FAST_MODE_RETRY_THREADS,
             len(failed_devices),
-            max(1, mh.FAST_MODE_MAX_CONCURRENT_CONNECTIONS - 2),
+            max(1, FAST_MODE_MAX_CONCURRENT_CONNECTIONS - 2),
         )
         if retry_threads <= 0:  # No threads available.
             logging.warning(" FAST MODE: No available threads for retry; skipping retries")

@@ -35,12 +35,20 @@ def _resolve_fast_mode_env() -> tuple[bool, int, int]:  # Late-bind MistHelper m
     load time (MistHelper.py imports ConnectionPoolExecutor and vice-versa
     would deadlock). By the time these executor methods are called at
     runtime, MistHelper is fully initialized and the constants are readable.
+
+    Note: FAST_MODE_MAX_CONCURRENT_CONNECTIONS is now imported directly from
+    src/refactors/fast_mode_constants.py per initiative 1015 T-02 (no more
+    ``MistHelper.FAST_MODE_MAX_CONCURRENT_CONNECTIONS`` module-attribute
+    bypass); the other two remain on MistHelper pending later extractions.
     """
     import MistHelper  # Late-binding import; MistHelper is fully loaded by the time methods run
+    from src.refactors.fast_mode_constants import (
+        FAST_MODE_MAX_CONCURRENT_CONNECTIONS,
+    )  # Direct import of the extracted concurrent-connection cap (post-T-02)
 
     return (  # Bundle the 3 fast-mode env-derived constants into a tuple
         MistHelper.FAST_MODE_USE_CONNECTION_AWARE_THREADING,  # Threading strategy toggle
-        MistHelper.FAST_MODE_MAX_CONCURRENT_CONNECTIONS,  # Cap on simultaneous API calls
+        FAST_MODE_MAX_CONCURRENT_CONNECTIONS,  # Cap on simultaneous API calls (from landing module)
         MistHelper.FAST_MODE_FALLBACK_THREADS,  # CPU-aware fallback thread count
     )
 
