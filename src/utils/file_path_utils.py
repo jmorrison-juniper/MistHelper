@@ -20,16 +20,15 @@ import os  # Filesystem primitives for data/ directory management.
 
 
 class FilePathUtils:
-    """
-    Centralized file path utilities for consistent data directory handling.
+    """Centralized file path utilities for consistent data directory handling.
+
     Ensures all CSV and data files are placed in the correct data directory.
     All methods are static to avoid unnecessary object instantiation.
     """
 
     @staticmethod
     def get_csv_path(filename: str) -> str:  # Resolve a CSV name to a path under data/.
-        """
-        Helper function to ensure consistent CSV file paths in the data directory.
+        """Ensure consistent CSV file paths in the data directory.
 
         Args:
             filename (str): The CSV filename (with or without path)
