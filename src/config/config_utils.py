@@ -108,7 +108,7 @@ class ConfigUtils:
             print("[ERROR] Unable to retrieve organizations. Your API token may be invalid or expired.")
             print("[ERROR] Please update MIST_API_TOKEN in your .env file and try again.")
             sys.exit(1)  # Abort: no org to proceed with.
-        return org_id_list[0]  # Use the first selected org.
+        return str(org_id_list[0])  # Use the first selected org (explicit str cast: mistapi returns Any).
 
     @classmethod
     def get_cached_or_prompted_org_id(cls) -> str:
