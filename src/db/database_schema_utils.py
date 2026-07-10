@@ -6,21 +6,26 @@ generation for the polyglot persistence layer. Dispatches by strategy type
 (natural_pk / composite_pk / autoincrement) and appends the standard audit
 timestamp columns to every generated table.
 
-Direct imports cover stdlib only (inspect, logging, re, datetime). The single
-live-global read (``ENDPOINT_PRIMARY_KEY_STRATEGIES``) is resolved via lazy
-``mh = importlib.import_module("MistHelper")`` inside the two methods that
-consult the strategy catalog. Callers continue to reach the class through the
+Direct imports cover stdlib only (inspect, logging, re, datetime). The
+strategy catalog (``ENDPOINT_PRIMARY_KEY_STRATEGIES``) is imported directly
+from ``src.refactors.endpoint_primary_key_strategies`` after initiative 1015
+T-04 -- the previous ``importlib.import_module("MistHelper")`` bypass is no
+longer necessary because the catalog lives in a leaf module with no circular
+edge back into MistHelper. Callers continue to reach the class through the
 ``MistHelper.DatabaseSchemaUtils`` re-export alias.
 """
 
 from __future__ import annotations  # WHY: PEP 604 unions for return types.
 
-import importlib  # WHY: lazy MistHelper import avoids circular load at module init.
 import inspect  # WHY: walk the call stack to infer the calling API function name.
 import logging  # WHY: structured trace for schema-build lifecycle events.
 import re  # WHY: sanitize SQL identifiers before interpolation into DDL.
 from datetime import UTC, datetime  # WHY: preserve legacy timestamp-build side effect in build_create_table_sql.
 from typing import Any  # WHY: strategy dict payloads are heterogeneous.
+
+from src.refactors.endpoint_primary_key_strategies import (  # WHY: PK catalog leaf module (1015 T-04).
+    ENDPOINT_PRIMARY_KEY_STRATEGIES,  # Direct import replaces the lazy `mh.ENDPOINT_PRIMARY_KEY_STRATEGIES` bypass.
+)
 
 
 class DatabaseSchemaUtils:  # Build SQLite DDL from data.
@@ -61,10 +66,9 @@ class DatabaseSchemaUtils:  # Build SQLite DDL from data.
         Returns:
             dict: Strategy configuration including primary key, indexes, etc.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ENDPOINT_PRIMARY_KEY_STRATEGIES catalog.
         # First check if we have a specific strategy for this endpoint
-        if api_function_name in mh.ENDPOINT_PRIMARY_KEY_STRATEGIES:  # Use a configured strategy.
-            strategy = mh.ENDPOINT_PRIMARY_KEY_STRATEGIES[api_function_name].copy()  # Copy to avoid mutation.
+        if api_function_name in ENDPOINT_PRIMARY_KEY_STRATEGIES:  # Use a configured strategy.
+            strategy = ENDPOINT_PRIMARY_KEY_STRATEGIES[api_function_name].copy()  # Copy to avoid mutation.
             logging.debug("Using configured strategy for %s: %s", api_function_name, strategy["type"])  # Trace pick.
             return strategy  # Return configured strategy.
 
@@ -73,8 +77,7 @@ class DatabaseSchemaUtils:  # Build SQLite DDL from data.
     @staticmethod
     def _build_default_strategy(api_function_name: str, data_fields: list[str]) -> dict[str, Any]:  # Field-derived PK
         """Build a default PK strategy enhanced by the data's available fields (id + common index columns)."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ENDPOINT_PRIMARY_KEY_STRATEGIES catalog.
-        strategy: dict[str, Any] = mh.ENDPOINT_PRIMARY_KEY_STRATEGIES["default"].copy()  # Start from default template
+        strategy: dict[str, Any] = ENDPOINT_PRIMARY_KEY_STRATEGIES["default"].copy()  # Start from default template
 
         if "id" in data_fields:  # Data carries an 'id' -- use it as the unique key
             strategy["unique_constraints"] = ["id"]  # Enforce unique id.
