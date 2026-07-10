@@ -264,11 +264,15 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
     @staticmethod
     def _retry_failed_site_port_stats(failed_sites, connection_semaphore):  # Retry failed site port stats.
         """Retry previously failed site fetches using a smaller worker pool."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of FAST_MODE_RETRY_THREADS/MAX_CONCURRENT.
+        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of FAST_MODE_RETRY_THREADS.
+        from src.refactors.fast_mode_constants import (
+            FAST_MODE_MAX_CONCURRENT_CONNECTIONS,
+        )  # WHY: post-T-02 direct import from landing module (no more mh.SYMBOL bypass)
+
         retry_results: list = []  # Successful retry rows
         still_failed: list = []  # Sites remaining failed after retries
         retry_threads = min(
-            mh.FAST_MODE_RETRY_THREADS, len(failed_sites), max(1, mh.FAST_MODE_MAX_CONCURRENT_CONNECTIONS - 2)
+            mh.FAST_MODE_RETRY_THREADS, len(failed_sites), max(1, FAST_MODE_MAX_CONCURRENT_CONNECTIONS - 2)
         )  # Smaller retry pool
         if retry_threads <= 0:  # Defensive guard
             logging.warning(" FAST MODE: No available threads for retry; skipping retries")  # Explain skip

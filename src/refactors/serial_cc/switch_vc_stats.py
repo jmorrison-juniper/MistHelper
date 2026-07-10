@@ -7,6 +7,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed  # Parallelize p
 from types import SimpleNamespace  # Bundle resolved runtime dependencies
 from typing import Any  # Runtime dependency surface is dynamic from MistHelper module
 
+from src.refactors.fast_mode_constants import (
+    FAST_MODE_MAX_CONCURRENT_CONNECTIONS,
+)  # Post-T-02 direct import of the fast-mode concurrent-connection cap
+
 _VC_PREVIEW_FIELDS = (  # Summary columns kept aligned with prior in-method PrettyTable preview
     "name",
     "mac",
@@ -34,11 +38,6 @@ def _resolve_runtime_dependencies() -> SimpleNamespace:
         apisession=misthelper_module.apisession,  # Active API session object
         tqdm=misthelper_module.tqdm,  # Existing progress-bar implementation used throughout MistHelper
         FAST_MODE_ENABLED=getattr(misthelper_module, "FAST_MODE_ENABLED", False),  # Fast-mode toggle flag
-        FAST_MODE_MAX_CONCURRENT_CONNECTIONS=getattr(
-            misthelper_module,
-            "FAST_MODE_MAX_CONCURRENT_CONNECTIONS",
-            8,
-        ),  # Fast-mode worker cap (defaults to 8)
     )
 
 
@@ -99,7 +98,7 @@ class SwitchVcStatsService:
     @classmethod
     def _collect_vc_stats_parallel(cls, deps: SimpleNamespace, switches: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Fetch VC stats concurrently with a bounded thread pool for fast mode."""
-        max_workers = deps.FAST_MODE_MAX_CONCURRENT_CONNECTIONS  # Respect configured worker cap
+        max_workers = FAST_MODE_MAX_CONCURRENT_CONNECTIONS  # Respect configured worker cap (post-T-02 module import)
         logging.info(
             "Fast mode: fetching VC stats for %d switches with %d concurrent workers", len(switches), max_workers
         )  # Log concurrency plan before pool starts

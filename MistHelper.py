@@ -2112,9 +2112,9 @@ org_id = None  # Active organization ID, populated after the user selects an org
 FAST_MODE_RETRY_THREADS = int(os.getenv("FAST_MODE_RETRY_THREADS", "4"))  # Thread count for the retry pass
 FAST_MODE_RETRY_MAX_RETRIES = int(os.getenv("FAST_MODE_RETRY_MAX_RETRIES", "2"))  # Retry ceiling within the retry pass
 FAST_MODE_FALLBACK_THREADS = int(os.getenv("FAST_MODE_FALLBACK_THREADS", "8"))  # Thread count for the fallback pass
-FAST_MODE_MAX_CONCURRENT_CONNECTIONS = int(
-    os.getenv("FAST_MODE_MAX_CONCURRENT_CONNECTIONS", "8")
-)  # Cap on simultaneous API connections
+# NOTE: FAST_MODE_MAX_CONCURRENT_CONNECTIONS extracted to
+# src/refactors/fast_mode_constants.py::FAST_MODE_MAX_CONCURRENT_CONNECTIONS.
+# See specs/1015-misthelper-refactor-final-15/spec.md.
 FAST_MODE_USE_CONNECTION_AWARE_THREADING = (  # Whether to size threads based on connection limits
     os.getenv("FAST_MODE_USE_CONNECTION_AWARE_THREADING", "true").lower() == "true"  # Parse the boolean env flag
 )
