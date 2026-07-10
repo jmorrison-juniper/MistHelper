@@ -1,9 +1,8 @@
 """tqdm wrapper extracted from MistHelper (initiative 1015 T-14).
 
 Owns the ``tqdm`` progress-bar wrapper originally defined at
-MistHelper.py:774-780 as a no-op fallback that was later overridden by
-``GlobalImportManager`` with the real ``tqdm`` package after import
-initialization.
+MistHelper.py:774-780 as a no-op fallback that was later overridden
+with the real ``tqdm`` package during import initialization.
 
 This module resolves the tension at import time: it tries to import the
 real ``tqdm`` package and re-exports it under the name ``tqdm``; when
@@ -12,7 +11,7 @@ that preserves caller code unchanged. Callers therefore always get a
 callable named ``tqdm`` that accepts the same signature regardless of
 package availability -- no runtime rebinding of a module-global is
 required, which removes the fragile ordering dependency between the
-fallback definition and ``GlobalImportManager``.
+fallback definition and its later overrider.
 
 MistHelper.py re-exports ``tqdm`` at the top of the file so historical
 ``MistHelper.tqdm`` / ``mh.tqdm`` callers keep working transparently --
