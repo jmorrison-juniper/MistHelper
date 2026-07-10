@@ -31,7 +31,7 @@ class DataProcessingUtils:
     """
 
     @staticmethod
-    def _flatten_list_value(new_key: str, sep: str, v: list) -> list[tuple[str, Any]]:
+    def _flatten_list_value(new_key: str, sep: str, v: list[Any]) -> list[tuple[str, Any]]:
         """Flatten a list value: list-of-dicts gets index keys; scalar lists join as CSV."""
         out: list[tuple[str, Any]] = []  # Accumulator for produced pairs.
         if all(isinstance(i, dict) for i in v):  # List of dicts: index each entry.
@@ -112,7 +112,7 @@ class DataProcessingUtils:
         new_entry[key] = ",".join(map(str, value))  # Scalar list -- join as CSV.
 
     @staticmethod
-    def _is_list_of_dicts(value: list) -> bool:
+    def _is_list_of_dicts(value: list[Any]) -> bool:
         """Return ``True`` when every element of ``value`` is a dict."""
         return all(isinstance(i, dict) for i in value)  # Check every element is dict-typed.
 
