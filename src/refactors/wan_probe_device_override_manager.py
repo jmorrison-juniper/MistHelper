@@ -9,10 +9,12 @@ The heavy implementation continues to live in
 is the thin orchestration seam that wires MistHelper globals into that
 implementation. Wiring targets (apisession, ConfigUtils, CacheUtils,
 OrgSiteExporter, GatewayExportUtils, FilePathUtils, InputUtils,
-DataExporter, mistapi, MIST_SITE_EXCLUDE_PREFIX) are resolved lazily via
-the `_MH` proxy so live re-bindings after interactive login and test
-monkeypatching are always honoured. No wrapper shim remains in
-MistHelper.py after this extraction.
+DataExporter, mistapi) are resolved lazily via the `_MH` proxy so
+live re-bindings after interactive login and test monkeypatching are
+always honoured. The ``MIST_SITE_EXCLUDE_PREFIX`` constant is imported
+directly from ``src.refactors.mist_site_exclude_prefix`` (initiative
+1015 T-15) since it is a static string captured at env-init time.
+No wrapper shim remains in MistHelper.py after this extraction.
 """
 
 from __future__ import annotations  # Enable postponed evaluation for forward-ref typing
@@ -21,6 +23,9 @@ import importlib  # Late-import MistHelper module to avoid circular src<->MistHe
 from typing import Any  # Loose typing for late-bound MistHelper attributes
 
 from src.gateway import wan_probe_device_override_manager as _wan_probe_module  # Heavy Menu #167 impl
+from src.refactors.mist_site_exclude_prefix import (  # 1015 T-15: canonical constant import.
+    MIST_SITE_EXCLUDE_PREFIX,
+)
 
 
 class _MistHelperProxy:  # Attribute forwarder to MistHelper module attributes
@@ -52,7 +57,7 @@ class WANProbeDeviceOverrideManager:  # Menu #167 orchestration seam
                 input_utils=_MH.InputUtils,  # safe_input wrapper for operator prompts
                 data_exporter=_MH.DataExporter,  # Report writer with format selection
                 mistapi=_MH.mistapi,  # Mist REST client library reference
-                site_exclude_prefix=_MH.MIST_SITE_EXCLUDE_PREFIX,  # Exclude lab/test site prefix
+                site_exclude_prefix=MIST_SITE_EXCLUDE_PREFIX,  # 1015 T-15: canonical import (no _MH.* reach-back).
             )
         )
         return _wan_probe_module.WANProbeDeviceOverrideManager.configure(dry_run=dry_run)  # Delegate the config

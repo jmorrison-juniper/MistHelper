@@ -2135,12 +2135,13 @@ FAST_MODE_ENABLED: bool = False  # Set to True via --fast CLI flag at startup
 # NOTE: MIST_WAN_TARGET_PORTS extracted to src/refactors/mist_wan_target_ports.py
 # per initiative 1011 SC-032 (FR-003: no wrapper shim; FR-005: assignment->classattr).
 
-# Site Exclusion Configuration from .env (REQUIRED - no defaults)
-# MIST_SITE_EXCLUDE_PREFIX: Site name prefix to exclude from destructive operations
-# Example: "VRE" to exclude Juniper internal VRE sites
-MIST_SITE_EXCLUDE_PREFIX = os.getenv(
-    "MIST_SITE_EXCLUDE_PREFIX", ""
-)  # Name prefix that shields sites from destructive ops
+# NOTE: MIST_SITE_EXCLUDE_PREFIX extracted to src/refactors/mist_site_exclude_prefix.py (T-15, Cat E).
+# Site Exclusion Configuration from .env (REQUIRED - no defaults).
+# The re-export below preserves MistHelper.MIST_SITE_EXCLUDE_PREFIX for backward-compat consumers
+# (guardrail tests, historical mh.* callers) -- the canonical body lives in the extracted module.
+from src.refactors.mist_site_exclude_prefix import (  # noqa: E402 - re-export after top-of-file imports.
+    MIST_SITE_EXCLUDE_PREFIX,
+)
 
 # Global configuration for output format (CSV or Redis/SQLite)
 # Default to CSV for general use, can be overridden by CLI flag

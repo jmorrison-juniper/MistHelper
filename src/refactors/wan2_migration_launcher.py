@@ -7,11 +7,15 @@ MistHelper-owned runtime dependencies into
 
 Runtime dependencies (``apisession`` global, ``mistapi`` module, the
 utility classes ``ConfigUtils``/``CacheUtils``/``OrgSiteExporter``/
-``GatewayExportUtils``/``FilePathUtils``/``InputUtils``/``DataExporter``,
-and the ``MIST_SITE_EXCLUDE_PREFIX`` constant) are still owned by
-MistHelper.py. They are resolved lazily via ``importlib.import_module``
-so the extracted module import-graph stays flat and monkeypatched
-attributes are honoured in tests.
+``GatewayExportUtils``/``FilePathUtils``/``InputUtils``/``DataExporter``)
+are still owned by MistHelper.py. They are resolved lazily via
+``importlib.import_module`` so the extracted module import-graph stays
+flat and monkeypatched attributes are honoured in tests.
+
+The ``MIST_SITE_EXCLUDE_PREFIX`` constant is imported directly from
+``src.refactors.mist_site_exclude_prefix`` (initiative 1015 T-15) --
+it is a static string captured at env-init time, so no lazy rebind is
+needed.
 
 This module replaces the previous ``WAN2MigrationManager`` delegator
 shim (mirror-and-forward pattern) with a proper launcher whose only
@@ -24,6 +28,10 @@ import importlib  # Late-import MistHelper module to avoid circular src<->MistHe
 import logging  # Structured action logging required by coding standards
 from types import SimpleNamespace  # Bundle runtime dependencies without coupling to a dataclass
 from typing import Any  # Loose typing for late-bound module attributes and external manager instance
+
+from src.refactors.mist_site_exclude_prefix import (  # 1015 T-15: canonical constant import.
+    MIST_SITE_EXCLUDE_PREFIX,
+)
 
 
 def _resolve_runtime_dependencies() -> SimpleNamespace:
@@ -92,7 +100,7 @@ class WAN2MigrationLauncher:
                 input_utils=misthelper.InputUtils,  # Input helper class for user confirmation prompts
                 data_exporter=misthelper.DataExporter,  # DataExporter for CSV audit output
                 mistapi=misthelper.mistapi,  # Bound mistapi module (attribute access on MistHelper)
-                site_exclude_prefix=misthelper.MIST_SITE_EXCLUDE_PREFIX,  # Global excluded-prefix constant
+                site_exclude_prefix=MIST_SITE_EXCLUDE_PREFIX,  # 1015 T-15: canonical import.
             )
         )
         logging.debug("WAN2MigrationLauncher: runtime dependencies wired successfully")  # Log wire completion
