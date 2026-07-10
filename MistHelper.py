@@ -45,7 +45,6 @@ import re  # Import re for regex pattern matching in data parsing (SSIDs, descri
 import subprocess  # nosec B404  # Import subprocess for executing external commands (SSH, JSON parsing) with security review
 import time  # Import time for rate limiting, delays, and performance monitoring
 import traceback  # Import traceback for detailed exception context in error logs
-from dataclasses import dataclass  # Import dataclass decorator for configuration objects and entity classes
 from datetime import datetime  # Import datetime for timestamping logs and events
 from typing import TYPE_CHECKING, Any, Literal  # Import type hints for static analysis without runtime overhead
 
@@ -489,16 +488,8 @@ if sys.version_info < MINIMUM_PYTHON_VERSION:  # Check if Python is below minimu
 # NOTE: MapViewerConfig removed (SC-002) - unused dataclass, MapsManager builds runtime state directly
 
 
-@dataclass
-class DeviceFetchConfig:
-    """Configuration for interactive device data fetching - groups fetch parameters."""
-
-    fetch_function: Any  # Callable that performs the actual API fetch for the chosen data
-    filename: str  # Output filename for the exported data
-    description: str  # Human-readable description shown to the user during the fetch
-    device_type: str = "all"  # Device type filter (all/ap/switch/gateway); 'all' avoids the AP-only API default
-    site_id: str | None = None  # Optional site scope; None means an org-wide fetch
-    device_id: str | None = None  # Optional single-device scope; None means all matching devices
+# NOTE: DeviceFetchConfig extracted to src/refactors/device_data_fetcher.py::DeviceFetchConfig.
+# See specs/1015-misthelper-refactor-final-15/spec.md.
 
 
 # ============================================================================

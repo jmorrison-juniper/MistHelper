@@ -13,6 +13,10 @@ import logging  # WHY: emit structured trace for each menu entry.
 
 import mistapi  # WHY: dotted-path API resolution for device stats / test / config endpoints.
 
+from src.refactors.device_data_fetcher import (
+    DeviceFetchConfig,
+)  # T-01: DeviceFetchConfig now lives with DeviceDataFetcher.
+
 
 class InteractiveDisplayUtils:
     """Centralized interactive display utilities.
@@ -42,10 +46,12 @@ class InteractiveDisplayUtils:
             site_id: Optional site ID (prompts if not provided)
             device_id: Optional device ID (prompts if not provided)
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DeviceDataFetcher + DeviceFetchConfig.
+        mh = importlib.import_module(
+            "MistHelper"
+        )  # WHY: lazy fetch of DeviceDataFetcher (still lives in MistHelper.py).
         logging.info("Prompting user to select a device for detailed statistics view...")  # Log the prompt.
         mh.DeviceDataFetcher(  # Fetch and display.
-            mh.DeviceFetchConfig(  # Issue #470: bundle fetch params into the config dataclass.
+            DeviceFetchConfig(  # Issue #470: bundle fetch params (T-01: imported from src.refactors).
                 fetch_function=mistapi.api.v1.sites.stats.getSiteDeviceStats,
                 filename="DeviceStats.csv",
                 description="Fetching detailed stats",
@@ -58,10 +64,12 @@ class InteractiveDisplayUtils:
     @staticmethod
     def device_tests() -> None:
         """Prompt user to select a gateway device and display its synthetic test stats."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DeviceDataFetcher + DeviceFetchConfig.
+        mh = importlib.import_module(
+            "MistHelper"
+        )  # WHY: lazy fetch of DeviceDataFetcher (still lives in MistHelper.py).
         logging.info("Prompting user to select a gateway device for synthetic test stats view...")  # Log the prompt.
         mh.DeviceDataFetcher(  # Fetch and display.
-            mh.DeviceFetchConfig(  # Issue #470: bundle fetch params into the config dataclass.
+            DeviceFetchConfig(  # Issue #470: bundle fetch params (T-01: imported from src.refactors).
                 fetch_function=mistapi.api.v1.sites.devices.getSiteDeviceSyntheticTest,
                 filename="DeviceTestResults.csv",
                 description="Fetching synthetic test stats",
@@ -73,10 +81,12 @@ class InteractiveDisplayUtils:
     @staticmethod
     def device_config() -> None:
         """Prompt user to select a device and display its configuration details."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DeviceDataFetcher + DeviceFetchConfig.
+        mh = importlib.import_module(
+            "MistHelper"
+        )  # WHY: lazy fetch of DeviceDataFetcher (still lives in MistHelper.py).
         logging.info("Prompting user to select a device for configuration details view...")  # Log the prompt.
         mh.DeviceDataFetcher(  # Fetch and display.
-            mh.DeviceFetchConfig(  # Issue #470: bundle fetch params into the config dataclass.
+            DeviceFetchConfig(  # Issue #470: bundle fetch params (T-01: imported from src.refactors).
                 fetch_function=mistapi.api.v1.sites.devices.getSiteDevice,
                 filename="DeviceConfig.csv",
                 description="Fetching device configuration",
