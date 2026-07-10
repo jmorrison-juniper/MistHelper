@@ -2159,111 +2159,16 @@ msp_privileges: list[dict[str, Any]] = []  # List of {msp_id, msp_name, role, sc
 selected_msp: dict[str, Any] | None = None  # Currently selected MSP (from menu 115 or elsewhere)
 
 
-def _msp_resolve_name(msp_id: str, priv: dict) -> str:
-    """Resolve a human-readable MSP name from a grant, falling back to the MSP API or a short id label."""
-    msp_name = priv.get("msp_name") or priv.get("name")  # The API uses different keys across versions.
-    if not msp_name or msp_name == "Unknown":  # Name absent or placeholder.
-        return _fetch_msp_name(msp_id) or f"MSP-{msp_id[:8]}"  # Look it up, else derive a short label.
-    return msp_name  # The grant already carried a usable name.
-
-
-def _msp_parse_one_privilege(priv: Any) -> dict | None:  # type: ignore[type-arg]
-    """Parse one privilege grant into a normalized MSP record, or None when it is not a valid MSP grant."""
-    if not (isinstance(priv, dict) and priv.get("msp_id")):  # Only MSP-scoped dict grants qualify.
-        return None  # Not an MSP grant; skip it.
-    logging.debug(
-        "MSP privilege found: scope=%s, role=%s", priv.get("scope"), priv.get("role")
-    )  # Log the grant details.
-    msp_id = priv.get("msp_id")  # Extract the MSP identifier.
-    if not msp_id or not isinstance(msp_id, str):  # Guard against missing/invalid IDs.
-        return None  # Skip malformed grants.
-    msp_name = _msp_resolve_name(msp_id, priv)  # Resolve the human-readable MSP name.
-    msp_info = {  # Build a normalized record for this MSP grant.
-        "msp_id": msp_id,  # The MSP's unique identifier.
-        "msp_name": msp_name,  # Human-readable MSP name.
-        "role": priv.get("role", "unknown"),  # The user's role within this MSP.
-        "scope": priv.get("scope", "unknown"),  # The scope of the grant.
-    }
-    logging.info(
-        "Detected MSP privilege: %s (ID: %s..., role: %s, scope: %s)",
-        msp_info["msp_name"],
-        msp_info["msp_id"][:8],
-        msp_info["role"],
-        msp_info["scope"],
-    )  # Report the detected grant.
-    return msp_info  # Hand back the normalized MSP record.
-
-
-def _msp_extract_from_user_data(user_data: dict) -> list[dict]:  # type: ignore[type-arg]
-    """Extract all MSP-scoped privilege records from a getSelf user-data payload."""
-    privileges = user_data.get("privileges", [])  # Pull the list of privilege grants.
-    logging.debug("MSP detection: parsing %s privilege entries", len(privileges))  # Log how many grants we'll scan.
-    detected_msps = []  # Accumulate any MSP-scoped privileges we find.
-    for priv in privileges:  # Examine each privilege grant.
-        msp_info = _msp_parse_one_privilege(priv)  # Normalize this grant (None when not an MSP grant).
-        if msp_info is not None:  # The grant was a valid MSP grant.
-            detected_msps.append(msp_info)  # Record it.
-    return detected_msps  # Return every MSP grant found in the payload.
-
-
-def _msp_fetch_user_data() -> dict | None:  # type: ignore[type-arg]
-    """Call getSelf and return the validated user-data dict, or None when unavailable or malformed."""
-    import mistapi.api.v1.self.self as self_api  # Import the "self" endpoint module lazily.
-
-    assert apisession is not None  # Caller guarantees session is initialized before MSP detection.
-    response = self_api.getSelf(apisession)  # Ask the API who the authenticated user is.
-    if not response or not hasattr(response, "data"):  # No usable payload came back.
-        logging.warning("getSelf returned no data - cannot detect MSP privileges")  # Warn we can't determine access.
-        return None  # No privileges could be detected.
-    user_data = response.data  # Extract the decoded JSON body.
-    if not isinstance(user_data, dict):  # The body should be a JSON object.
-        logging.warning("getSelf returned unexpected type: %s", type(user_data))  # Warn about the malformed shape.
-        return None  # Cannot parse privileges from this.
-    return user_data  # Hand back the validated user-data payload.
-
-
-def _msp_cache_and_report(detected_msps: list[dict]) -> None:  # type: ignore[type-arg]
-    """Cache detected MSP grants to the module global and log the outcome."""
-    global msp_privileges  # We publish the detected grants for later menus to reuse.
-    if detected_msps:  # At least one MSP grant was found.
-        msp_privileges = detected_msps  # Cache the grants in the module-level global.
-        logging.info("User has MSP-level access to %s MSP(s)", len(detected_msps))  # Report the count.
-    else:  # No MSP grants present.
-        logging.debug("No MSP privileges detected for current user")  # Note the absence at debug level.
-
-
-# NOTE: detect_msp_privileges extracted to src/refactors/msp_privilege_detection.py::detect_msp_privileges.
-# See specs/1015-misthelper-refactor-final-15/spec.md.
-
-
-def _extract_msp_name(response: Any) -> str | None:  # Pull the MSP name out of a getMspDetails response
-    """Return the 'name' string from an MSP details response, or None when absent/malformed."""
-    data = getattr(response, "data", None)  # Unwrap the response payload if present
-    if not isinstance(data, dict):  # Need a dict payload to read the name field
-        return None  # Malformed or empty response
-    name = data.get("name")  # Extract the MSP's name field
-    return name if isinstance(name, str) else None  # Return the name only if it's a valid string
-
-
-def _fetch_msp_name(msp_id: str) -> str | None:
-    """Helper to fetch MSP name from MSP API when not provided in privileges.
-
-    Args:
-        msp_id: The MSP ID to look up
-
-    Returns:
-        MSP name string, or None if lookup fails
-    """
-    if apisession is None:  # No active session to query with
-        return None  # Can't look anything up
-    try:
-        import mistapi.api.v1.msps.msps as msps_api  # Import the MSP details endpoint lazily
-
-        response = msps_api.getMspDetails(apisession, msp_id)  # Fetch the MSP record by ID
-        return _extract_msp_name(response)  # Pull the name from the payload (None when absent/malformed)
-    except Exception as e:  # Lookup failed (network, permissions, etc.)
-        logging.debug("Could not fetch MSP name for %s...: %s", msp_id[:8], e)  # Note the failure at debug level
-        return None  # Default to None when the name can't be resolved
+# NOTE: detect_msp_privileges and its entire private helper chain (formerly
+# _msp_resolve_name, _msp_parse_one_privilege, _msp_extract_from_user_data,
+# _msp_fetch_user_data, _msp_cache_and_report, _extract_msp_name, _fetch_msp_name)
+# were co-migrated to src/refactors/msp_privilege_detection.py during the T-05
+# cleanup pass on initiative 1015. That module is fully self-contained and
+# takes ``session`` as a required positional argument (no MistHelper reach-back,
+# no module-global reads). Callers that want to publish the result into this
+# module's ``msp_privileges`` global do so explicitly at the callsite:
+# ``msp_privileges = detect_msp_privileges(apisession)``. See
+# specs/1015-misthelper-refactor-final-15/spec.md.
 
 
 def _snapshot_session_globals_to_state() -> dict:
@@ -2339,7 +2244,7 @@ def _attempt_interactive_login_with_rollback(old_session, old_org_id) -> bool:
         print("  X Login failed - restoring previous session")  # Inform the user of the rollback
         apisession = old_session  # Restore the prior API session
         org_id = old_org_id  # Restore the prior org selection
-        detect_msp_privileges()  # Re-detect MSP grants for the restored session
+        msp_privileges = detect_msp_privileges(apisession)  # Re-detect MSP grants and publish to module global
         logging.warning("Interactive login failed - restored previous API session")  # Log the failed attempt
         return False  # Signal failure to the caller
     logging.debug("Interactive login succeeded")  # Trace the successful login
@@ -6812,6 +6717,7 @@ def _initialize_dependencies(args: argparse.Namespace) -> None:
 
 def _establish_mist_session(args: argparse.Namespace) -> None:
     """Initialize Mist API session using interactive login or API token, then detect MSP privileges."""
+    global msp_privileges  # We publish detected MSP grants to the module global for later menus/exporters to reuse
     logging.debug("_establish_mist_session: starting session initialization")  # Log entry
     if args.login:  # Interactive login requested via --login flag
         logging.info("Interactive login mode requested via --login flag")  # Log before interactive login
@@ -6824,7 +6730,7 @@ def _establish_mist_session(args: argparse.Namespace) -> None:
             logging.error("Failed to initialize Mist API session")  # Log token auth failure
             print(" Failed to initialize Mist API session. Check your credentials.")  # Inform user
             sys.exit(1)  # Exit -- cannot proceed without authenticated session
-        detect_msp_privileges()  # Check if token has MSP-level scope
+        msp_privileges = detect_msp_privileges(apisession)  # Detect MSP grants for token session and publish to global
     logging.debug("_establish_mist_session: session established successfully")  # Log successful auth
 
 
