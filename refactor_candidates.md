@@ -1,10 +1,10 @@
 # Refactor candidates: MistHelper.py
 
 - Entrypoint: `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`
-- Module graph size: 250 first-party files
-- Definitions analyzed: 16
-- LOC saveable (unused + single-use): 6
-- Category counts: unused=0, single-use=2, low-use=2, hot=11, skipped=1
+- Module graph size: 251 first-party files
+- Definitions analyzed: 15
+- LOC saveable (unused + single-use): 3
+- Category counts: unused=0, single-use=1, low-use=2, hot=11, skipped=1
 
 ## How to read this report
 
@@ -45,24 +45,10 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
 | `FilePathUtils` | class | 46 | 50 | hot |  | oversize_25_lines,missing_inline_comments |
 | `detect_msp_privileges` | function | 25 | 2 | low-use | DetectMspPrivilegesManager | missing_action_logging |
 | `tqdm` | function | 3 | 51 | hot |  | missing_action_logging |
-| `FAST_MODE_MAX_CONCURRENT_CONNECTIONS` | assignment | 3 | 1 | single-use | FastModeMaxConcurrentConnectionsManager | missing_inline_comments,missing_action_logging |
 | `FAST_MODE_USE_CONNECTION_AWARE_THREADING` | assignment | 3 | 1 | single-use | FastModeUseConnectionAwareThreadingManager | missing_action_logging |
 | `MIST_SITE_EXCLUDE_PREFIX` | assignment | 3 | 11 | hot |  | missing_inline_comments,missing_action_logging |
 
-## Single-Use (2)
-
-### `FAST_MODE_MAX_CONCURRENT_CONNECTIONS` (assignment, 3 lines)
-
-- Def site: line 2115-2117
-- References: 1
-- Suggested class: `FastModeMaxConcurrentConnectionsManager`
-- Suggested module: `src/refactors/fast__mode__max__concurrent__connections.py`
-- Rationale: single-use: sole caller lives inside MistHelper.py; extract `FAST_MODE_MAX_CONCURRENT_CONNECTIONS` OUT of the entrypoint into a new `src/refactors/fast__mode__max__concurrent__connections.py` module and rewrite the callsite(s) to import from there
-- Guideline flags (address during the move):
-  - [ ] missing_inline_comments
-  - [ ] missing_action_logging
-- Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 2115
+## Single-Use (1)
 
 ### `FAST_MODE_USE_CONNECTION_AWARE_THREADING` (assignment, 3 lines)
 
@@ -274,7 +260,7 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 1373, 2013, 2013, 2013, 2025, 2031, 7008, 7119, 7338, 7872, 8207, 8225, 8358, 8377, 8396, 8433, 8452, 8471, 8490, 8509, 8528, 8547
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\api\api_data_fetcher.py`: lines 359
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\api\api_fetch_utils.py`: lines 104, 227
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\export\gateway_test_exporter.py`: lines 218, 268
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\export\gateway_test_exporter.py`: lines 220, 270
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\export\org_client_security_exporter.py`: lines 179
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\export\org_device_stats_exporter.py`: lines 259
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\gateway\gateway_export_utils.py`: lines 58
@@ -283,7 +269,7 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\gateway\wan2_migration_manager.py`: lines 509
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\inventory\csv_comparator.py`: lines 727, 1068
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\maps\maps_manager.py`: lines 579, 699, 707, 866, 1152, 1752
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\refactors\connection_pool_executor.py`: lines 137
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\refactors\connection_pool_executor.py`: lines 145
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\refactors\wanprobe_config_manager.py`: lines 243, 363
   - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\site\address_audit\audit_engine.py`: lines 56, 916, 918
 
