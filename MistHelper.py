@@ -2021,80 +2021,15 @@ LAST_SELECTED_SITE_ID: str | None = None
 # ============================================================================
 
 
-class InputUtils:
-    """
-    Centralized input handling utilities.
-    Handles safe input with EOF handling, tqdm availability, etc.
-    """
-
-    @staticmethod
-    def ensure_tqdm_available() -> bool:
-        """Ensure tqdm is available and properly imported."""
-        global tqdm  # Rebind the module-level tqdm if we recover a better implementation
-        if hasattr(tqdm, "__module__") and tqdm.__module__ == "tqdm":  # Real tqdm already active
-            logging.debug("tqdm is properly imported and available")  # Nothing to do
-            return True  # Progress bars are functional
-        return InputUtils._try_recover_tqdm()  # Probe import_manager then direct import
-
-    @staticmethod
-    def _try_recover_tqdm() -> bool:
-        """Try to recover tqdm from import_manager cache, then by direct import."""
-        global tqdm  # We may rebind the module global with the recovered implementation
-        logging.debug("_try_recover_tqdm: probing import_manager.imports and direct import")  # Log before probe
-        tqdm_from_manager = import_manager.imports.get("tqdm")  # Issue #431: inlined get_import.
-        if tqdm_from_manager:  # The manager has a usable tqdm
-            tqdm = tqdm_from_manager  # Replace the fallback with the real implementation
-            logging.info("Retrieved tqdm from import manager")  # Record the recovery
-            return True  # Progress bars are now functional
-        try:  # Last-resort direct import path
-            from tqdm import tqdm as real_tqdm  # Last-resort direct import
-
-            tqdm = real_tqdm  # Adopt the directly-imported progress bar
-            logging.info("Successfully imported tqdm directly")  # Record the successful import
-            return True  # Progress bars are now functional
-        except ImportError:  # tqdm simply is not installed
-            logging.warning("tqdm package is not available - progress bars will be disabled")  # Warn of degraded UX
-            return False  # Caller should proceed without progress bars
-
-    @staticmethod
-    def safe_input(prompt: str, default_value: str = "", allow_empty: bool = True, context: str = "unknown") -> str:
-        """EOF/Interrupt-safe input wrapper that returns default_value on EOF and "" on Ctrl+C.
-
-        allow_empty: when False, blank input returns "" (the caller decides what to do).
-        context: short label used in the EOF/interrupt messages and logs.
-        """
-        try:  # Read may raise EOFError on disconnect or KeyboardInterrupt on Ctrl+C
-            user_input = input(prompt).strip()  # Read a line and trim surrounding whitespace
-            if not user_input:  # Blank input -- delegate the 3-way decision to the helper
-                return InputUtils._resolve_empty_input(default_value, allow_empty, context)  # Default/empty/reject
-            return user_input  # Normal path: return the trimmed user response
-        except EOFError:  # Stream closed (Ctrl+D, broken pipe, SSH disconnect)
-            print(
-                f"\n[EOF] Input stream closed during {context}. Using default value: '{default_value}'"
-            )  # Inform the user
-            logging.info(
-                "EOF encountered on input during %s - returning default: '%s'", context, default_value
-            )  # Log the disconnect
-            return default_value  # Degrade gracefully to the default instead of crashing
-        except KeyboardInterrupt:  # User pressed Ctrl+C
-            print(f"\n[INTERRUPT] User interrupted {context}. Canceling...")  # Acknowledge the cancellation
-            logging.info("KeyboardInterrupt encountered during %s", context)  # Log the interrupt
-            return ""  # Return empty to signal the caller should abort this prompt
-
-    @staticmethod
-    def _resolve_empty_input(default_value: str, allow_empty: bool, context: str) -> str:
-        """Decide what to return when safe_input received a blank line."""
-        if default_value:  # A default is configured -- substitute it
-            logging.debug(
-                "Empty input for %s, using default: '%s'", context, default_value
-            )  # Note the default substitution
-            return default_value  # Return the caller-supplied default
-        if allow_empty:  # Blank entry is acceptable here
-            return ""  # Return the empty string as-is
-        logging.warning(
-            "Empty input not allowed for %s, returning empty string", context
-        )  # Warn about the rejected blank
-        return ""  # Signal an invalid/empty response to the caller
+# NOTE: ``InputUtils`` extracted to ``src/utils/input_utils.py`` per initiative
+# 1015 T-09 (Cat E fold-in). ``MistHelper.py`` re-exports the class so
+# ``MistHelper.InputUtils`` / ``mh.InputUtils`` callers keep working
+# transparently -- the re-exported symbol is the same class, not a delegator.
+# The rebind dance ``ensure_tqdm_available`` used to perform is no longer
+# needed since T-14 makes ``tqdm`` resolve through ``src.utils.tqdm_wrapper``
+# at import time; the probe was retained for its logging side effect at the
+# single caller (``src/refactors/main_entrypoint.py``).
+from src.utils.input_utils import InputUtils  # noqa: E402, I001  # Cat E canonical (1015 T-09) -- re-export.
 
 
 # ============================================================================
