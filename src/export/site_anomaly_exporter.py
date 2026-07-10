@@ -23,6 +23,10 @@ import logging  # WHY: structured trace + mistapi logger suppression by name.
 from collections.abc import Callable  # WHY: fetch_builder is Callable[[str], Callable].
 from typing import Any  # WHY: row rows are dict[str, Any].
 
+from src.data.data_processing_utils import (
+    DataProcessingUtils,
+)  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
+
 
 class SiteAnomalyExporter:  # Site anomaly exporters.
     """
@@ -194,8 +198,8 @@ class SiteAnomalyExporter:  # Site anomaly exporters.
         """Flatten + escape + write the aggregated anomaly rows, or write an empty CSV when there is no data."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataProcessingUtils + DataExporter.
         if data_list:  # At least one metric returned data.
-            processed = mh.DataProcessingUtils.flatten_nested_fields(data_list)  # Flatten nested fields.
-            processed = mh.DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
+            processed = DataProcessingUtils.flatten_nested_fields(data_list)  # Flatten nested fields.
+            processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
             mh.DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]
             print(f"! {success_count} {label} types exported to {filename}")  # Tell the user the count.
             logging.info("Exported %s %s types for %s to %s", success_count, label, scope_name, filename)  # Log.
@@ -324,8 +328,8 @@ class SiteAnomalyExporter:  # Site anomaly exporters.
         """Flatten and write the collected client anomaly rows to CSV (writes an empty file when there is no data)."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataProcessingUtils + DataExporter.
         if all_data:  # At least one metric returned data.
-            processed = mh.DataProcessingUtils.flatten_nested_fields(all_data)  # Flatten nested fields.
-            processed = mh.DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
+            processed = DataProcessingUtils.flatten_nested_fields(all_data)  # Flatten nested fields.
+            processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
             mh.DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]
             print(f"! {metrics_retrieved} client anomaly event types exported to {filename}")  # Tell the user.
             logging.info(

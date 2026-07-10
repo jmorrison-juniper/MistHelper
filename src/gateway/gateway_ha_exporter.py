@@ -14,6 +14,10 @@ from typing import Any  # WHY: raw gateway rows are duck-typed dicts from mistap
 
 import mistapi  # WHY: direct SDK access for site device stats + HA cluster endpoints.
 
+from src.data.data_processing_utils import (
+    DataProcessingUtils,
+)  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
+
 
 class GatewayHaExporter:
     """Exporter for HA (High-Availability) gateway cluster information.
@@ -52,7 +56,7 @@ class GatewayHaExporter:
     def _persist_ha_export(rows: list[Any]) -> None:
         """Flatten + write HA gateway rows to CSV/backend and log the count."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataProcessingUtils + DataExporter helpers.
-        flat_rows = mh.DataProcessingUtils.flatten_nested_fields(rows)  # Flatten nested dicts for CSV/DB.
+        flat_rows = DataProcessingUtils.flatten_nested_fields(rows)  # Flatten nested dicts for CSV/DB.
         filename = "GatewayHaClusterInfo.csv"  # Output filename for the export.
         mh.DataExporter.write_with_format_selection(
             flat_rows, filename, api_function_name="listSiteGatewayHaStats"

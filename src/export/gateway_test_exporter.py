@@ -28,6 +28,9 @@ from typing import Any  # WHY: mistapi payloads + heterogeneous stats dicts are 
 import mistapi  # WHY: direct call to getSiteDeviceSyntheticTest endpoint.
 from tqdm import tqdm  # WHY: progress bar for sequential + retry loops.
 
+from src.data.data_processing_utils import (
+    DataProcessingUtils,
+)  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
 from src.validation.validation_utils import ValidationUtils  # WHY: 1014 P5 direct import (FR-005).
 
 
@@ -290,8 +293,8 @@ class GatewayTestExporter:
             print("! No synthetic test results found. CSV not created.")  # Tell the user.
             return  # Nothing to write.
         filename = "AllGatewaySyntheticTests.csv"  # Build the CSV name.
-        flattened = mh.DataProcessingUtils.flatten_nested_fields(all_stats)  # Flatten nested fields.
-        sanitized = mh.DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]
+        flattened = DataProcessingUtils.flatten_nested_fields(all_stats)  # Flatten nested fields.
+        sanitized = DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]
         mh.DataExporter.write_with_format_selection(sanitized, filename)  # type: ignore[no-untyped-call]
         print(f"! {len(all_stats)} gateway synthetic test results exported to {filename}")  # Tell user.
         logging.info("! Synthetic test results saved to %s (%s records).", filename, len(all_stats))

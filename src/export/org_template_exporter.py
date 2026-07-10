@@ -14,6 +14,10 @@ from typing import Any  # WHY: raw template rows are duck-typed dicts from mista
 
 import mistapi  # WHY: direct SDK access for org template endpoints.
 
+from src.data.data_processing_utils import (
+    DataProcessingUtils,
+)  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
+
 
 class OrgTemplateExporter:
     """Organization Template Exporter.
@@ -99,8 +103,8 @@ class OrgTemplateExporter:
             )  # Log empty.
             mh.DataExporter.write_with_format_selection([], filename)  # Write empty file for consistency.
             return
-        processed = mh.DataProcessingUtils.flatten_nested_fields(ap_profiles)  # Flatten nested JSON.
-        processed = mh.DataProcessingUtils.escape_multiline(processed)  # Escape multiline.
+        processed = DataProcessingUtils.flatten_nested_fields(ap_profiles)  # Flatten nested JSON.
+        processed = DataProcessingUtils.escape_multiline(processed)  # Escape multiline.
         mh.DataExporter.write_with_format_selection(processed, filename)  # Persist.
         print(f"! {len(processed)} AP templates exported to {filename}")  # Tell user.
         logging.info("Exported %s AP templates to %s.", len(processed), filename)  # Log count.
@@ -138,8 +142,8 @@ class OrgTemplateExporter:
             )
             mh.DataExporter.write_with_format_selection([], filename)
             return  # Done; empty CSV written.
-        processed = mh.DataProcessingUtils.flatten_nested_fields(switch_profiles)  # Flatten nested template fields.
-        processed = mh.DataProcessingUtils.escape_multiline(processed)  # CSV-safe.
+        processed = DataProcessingUtils.flatten_nested_fields(switch_profiles)  # Flatten nested template fields.
+        processed = DataProcessingUtils.escape_multiline(processed)  # CSV-safe.
         mh.DataExporter.write_with_format_selection(processed, filename)  # Persist.
         print(f"! {len(processed)} switch templates exported to {filename}")  # User notice.
         logging.info("Exported %s switch templates to %s.", len(processed), filename)  # Trace count.

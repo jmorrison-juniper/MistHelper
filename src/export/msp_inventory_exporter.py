@@ -13,6 +13,9 @@ import logging  # WHY: emit structured trace for MSP + org iteration.
 import os  # WHY: build cross-platform output path for CSV artifact.
 from typing import Any  # WHY: duck-typed device dicts + Mist API responses.
 
+from src.data.data_processing_utils import (
+    DataProcessingUtils,
+)  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
 from src.dataclasses.msp_org_context import MspOrgContext  # Bundled MSP/org identity (issue #470).
 from src.refactors.initialize_mist_session_interactive import (
     MistSessionInteractiveInitializer,  # Extracted interactive login initializer (SC-023).
@@ -374,7 +377,7 @@ class MSPInventoryExporter:
         """Write all devices to CSV."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataProcessingUtils + DataExporter.
         priority_fields = self._get_priority_fields()
-        flattened = mh.DataProcessingUtils.flatten_nested_fields(self.all_devices)
+        flattened = DataProcessingUtils.flatten_nested_fields(self.all_devices)
 
         all_fields: set[str] = set()
         for device in flattened:

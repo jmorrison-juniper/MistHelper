@@ -23,6 +23,9 @@ from typing import Any  # WHY: mistapi response payloads + site rows are duck-ty
 import mistapi  # WHY: direct calls to orgs.clients + sites.insights list endpoints + get_all pager.
 from tqdm import tqdm  # WHY: per-site progress bar for rogue fan-out.
 
+from src.data.data_processing_utils import (
+    DataProcessingUtils,
+)  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
 from src.time.time_utils import TimeUtils  # WHY: 1014 P6 direct import (FR-005).
 
 
@@ -194,8 +197,8 @@ class OrgClientSecurityExporter:
         """Flatten + escape + write the aggregated rogue list, or report the empty-result case."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataProcessingUtils + DataExporter.
         if rogues:  # At least one rogue was found
-            flattened = mh.DataProcessingUtils.flatten_nested_fields(rogues)  # Flatten nested JSON to CSV rows
-            sanitized = mh.DataProcessingUtils.escape_multiline(flattened)
+            flattened = DataProcessingUtils.flatten_nested_fields(rogues)  # Flatten nested JSON to CSV rows
+            sanitized = DataProcessingUtils.escape_multiline(flattened)
             mh.DataExporter.write_with_format_selection(sanitized, csv_basename)
             logging.info("! %s %s exported to %s", len(rogues), label, csv_basename)  # Log the export
             print(f"! {len(rogues)} {label} exported to {csv_basename}")  # Report the count to the user

@@ -14,6 +14,9 @@ from typing import Any  # WHY: raw client rows are duck-typed dicts from mistapi
 
 import mistapi  # WHY: direct SDK access for listSiteWirelessClientsStats + beacons endpoints.
 
+from src.data.data_processing_utils import (
+    DataProcessingUtils,
+)  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
 from src.export.site_export_utils import SiteExportUtils  # WHY: Pattern 1 inline construction for beacons export.
 from src.export.wifi_clients_exporter import WifiClientsExporter  # Extracted WiFi export orchestrator.
 from src.utils.tqdm_wrapper import (
@@ -35,8 +38,8 @@ class SiteClientExporter:
         if not rawdata:  # No clients -- tell the user and return.
             print("! No client data found for this site")  # User notice.
             return
-        flattened_data = mh.DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested fields.
-        sanitized_data = mh.DataProcessingUtils.escape_multiline(flattened_data)  # CSV-safe.
+        flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested fields.
+        sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)  # CSV-safe.
         filename = f"SiteClients_{site_name.replace(' ', '_')}.csv"  # Per-site CSV name.
         mh.DataExporter.write_with_format_selection(sanitized_data, filename)  # Persist.
         print(f"! {len(rawdata)} client records exported to {filename}")  # User notice with count.
@@ -91,7 +94,7 @@ class SiteClientExporter:
             org_site_exporter=mh.OrgSiteExporter,
             prompt_utils=mh.PromptUtils,
             file_path_utils=mh.FilePathUtils,
-            data_processing_utils=mh.DataProcessingUtils,
+            data_processing_utils=DataProcessingUtils,
             data_exporter=mh.DataExporter,
             mistapi_module=mistapi,
             apisession=mh.apisession,
@@ -110,7 +113,7 @@ class SiteClientExporter:
             apisession=mh.apisession,
             PromptUtils=mh.PromptUtils,
             ConfigUtils=mh.ConfigUtils,
-            DataProcessingUtils=mh.DataProcessingUtils,
+            DataProcessingUtils=DataProcessingUtils,
             DataExporter=mh.DataExporter,
             TimeUtils=mh.TimeUtils,
             EnhancedSSHRunner=mh.EnhancedSSHRunner,

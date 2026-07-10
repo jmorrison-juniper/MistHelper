@@ -22,6 +22,10 @@ import time  # WHY: epoch math for historical guest window + progress timing.
 
 import mistapi  # WHY: dotted-path Mist API resolution + pagination helper.
 
+from src.data.data_processing_utils import (
+    DataProcessingUtils,
+)  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
+
 
 class OrgSiteExporter:  # Org site exporters.
     """Organization Site Data Exporter.
@@ -76,10 +80,10 @@ class OrgSiteExporter:  # Org site exporters.
             logging.warning(" No sites returned from API.")  # Log empty result.
             print(" No sites returned from API.")  # Inform operator none returned.
             return  # Skip write.
-        sites = mh.DataProcessingUtils.flatten_nested_fields(sites)  # Flatten nested site fields.
+        sites = DataProcessingUtils.flatten_nested_fields(sites)  # Flatten nested site fields.
         # Normalize nested JSON structures into a flat row-per-record format for CSV/DB output
-        sites = mh.DataProcessingUtils.flatten_nested_fields(sites)  # Flatten again post-merge.
-        sites = mh.DataProcessingUtils.escape_multiline(sites)  # type: ignore[no-untyped-call]
+        sites = DataProcessingUtils.flatten_nested_fields(sites)  # Flatten again post-merge.
+        sites = DataProcessingUtils.escape_multiline(sites)  # type: ignore[no-untyped-call]
         # Write to the configured output backend (CSV or SQLite) via the DataExporter abstraction
         mh.DataExporter.write_with_format_selection(sites, output_file)  # type: ignore[no-untyped-call]
         logging.info("! Sites exported to %s", output_file)  # Log the successful export
@@ -97,8 +101,8 @@ class OrgSiteExporter:  # Org site exporters.
         logging.debug("Using org_id: %s for site location export.", org_id)  # Log org id used.
         sites = mh.APICoreFetchUtils.all_sites_with_limit(org_id)  # Fetch all sites.
         logging.info("Fetched %s sites from the organization.", len(sites))  # Log fetched site count.
-        flattened_sites = mh.DataProcessingUtils.flatten_nested_fields(sites)  # Flatten nested site fields.
-        sanitized_sites = mh.DataProcessingUtils.escape_multiline(flattened_sites)  # type: ignore[no-untyped-call]
+        flattened_sites = DataProcessingUtils.flatten_nested_fields(sites)  # Flatten nested site fields.
+        sanitized_sites = DataProcessingUtils.escape_multiline(flattened_sites)  # type: ignore[no-untyped-call]
         mh.DataExporter.write_with_format_selection(sanitized_sites, "SitesWithLocations.csv")  # type: ignore[no-untyped-call]
         print(f"! {len(sanitized_sites)} sites exported to SitesWithLocations.csv")  # Confirm export to operator.
         logging.info(" Full site data written to SitesWithLocations.csv")  # Log write success.
@@ -116,8 +120,8 @@ class OrgSiteExporter:  # Org site exporters.
         response = mistapi.api.v1.orgs.guests.searchOrgGuestAuthorization(mh.apisession, org_id, limit=1000)
         guests = mistapi.get_all(response=response, mist_session=mh.apisession)  # Page through all guests.
         logging.info("Fetched %s current guest users from API.", len(guests))  # Log fetched guest count.
-        guests = mh.DataProcessingUtils.flatten_nested_fields(guests)  # Flatten nested guest fields.
-        guests = mh.DataProcessingUtils.escape_multiline(guests)  # type: ignore[no-untyped-call]
+        guests = DataProcessingUtils.flatten_nested_fields(guests)  # Flatten nested guest fields.
+        guests = DataProcessingUtils.escape_multiline(guests)  # type: ignore[no-untyped-call]
         mh.DataExporter.write_with_format_selection(guests, "OrgCurrentGuests.csv")  # type: ignore[no-untyped-call]
         print(f"! {len(guests)} current guest users exported to OrgCurrentGuests.csv")  # Confirm export to operator.
         logging.info(" Current guests exported to OrgCurrentGuests.csv")  # Log write success.
@@ -138,8 +142,8 @@ class OrgSiteExporter:  # Org site exporters.
         )
         guests = mistapi.get_all(response=response, mist_session=mh.apisession)  # Page through all guests.
         logging.info("Fetched %s historical guest users from API.", len(guests))  # Log fetched guest count.
-        guests = mh.DataProcessingUtils.flatten_nested_fields(guests)  # Flatten nested guest fields.
-        guests = mh.DataProcessingUtils.escape_multiline(guests)  # type: ignore[no-untyped-call]
+        guests = DataProcessingUtils.flatten_nested_fields(guests)  # Flatten nested guest fields.
+        guests = DataProcessingUtils.escape_multiline(guests)  # type: ignore[no-untyped-call]
         mh.DataExporter.write_with_format_selection(guests, "OrgHistoricalGuests.csv")  # type: ignore[no-untyped-call]
         print(f"! {len(guests)} historical guest users exported to OrgHistoricalGuests.csv")
         logging.info(" Historical guests exported to OrgHistoricalGuests.csv")  # Log write success.

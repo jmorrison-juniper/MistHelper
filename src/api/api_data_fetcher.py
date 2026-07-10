@@ -18,6 +18,10 @@ import mistapi  # WHY: direct SDK access for mistapi.get_all pagination.
 from prettytable import PrettyTable  # WHY: render result rows for logging.
 from tqdm import tqdm  # WHY: progress bar during table build.
 
+from src.data.data_processing_utils import (
+    DataProcessingUtils,
+)  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
+
 
 class APIDataFetcher:
     """Fetches data from Mist API, processes it, and exports to CSV/SQLite.
@@ -329,9 +333,8 @@ class APIDataFetcher:
 
     def _display_table(self) -> None:  # Build and log a table.
         """Prepare and display data in PrettyTable format."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataProcessingUtils helper.
         data = self._prepare_data_for_display()  # Normalize rows.
-        fields = mh.DataProcessingUtils.get_unique_keys(data)
+        fields = DataProcessingUtils.get_unique_keys(data)
         logging.debug("Unique fields for table: %s", fields)  # Trace fields.
 
         table = self._build_pretty_table(data, fields)  # Build the table.
@@ -339,15 +342,14 @@ class APIDataFetcher:
 
     def _prepare_data_for_display(self) -> list[dict[str, Any]]:  # Filter, sort, flatten rows.
         """Prepare raw data for table display."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataProcessingUtils helper.
         data = [entry for entry in self.rawdata if isinstance(entry, dict)]  # Dict rows only.
 
         if self.sort_key:  # Optional sort.
             sort_key_str: str = self.sort_key  # Type narrowing
             data = sorted(data, key=lambda x: x.get(sort_key_str, ""))  # Sort by key.
 
-        data = mh.DataProcessingUtils.flatten_nested_fields(data)  # Flatten nested fields.
-        data = mh.DataProcessingUtils.escape_multiline(data)
+        data = DataProcessingUtils.flatten_nested_fields(data)  # Flatten nested fields.
+        data = DataProcessingUtils.escape_multiline(data)
         return data  # type: ignore[no-any-return]
 
     def _build_pretty_table(self, data: list[dict[str, Any]], fields: list[str]) -> Any:  # Build a PrettyTable.

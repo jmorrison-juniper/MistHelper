@@ -8,11 +8,14 @@ kept on the class.
 
 from __future__ import annotations  # WHY: enable PEP 604 unions on Python 3.9+.
 
-import importlib  # WHY: lazy MistHelper import to reach DataProcessingUtils without circular load.
 import logging  # WHY: emit rendered PrettyTable at debug level.
 from typing import Any  # WHY: duck-typed row dicts flow through PrettyTable.
 
 from prettytable import PrettyTable  # WHY: rendering engine for dict_list_as_pretty_table.
+
+from src.data.data_processing_utils import (
+    DataProcessingUtils,
+)  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
 
 
 class DisplayUtils:
@@ -45,8 +48,7 @@ class DisplayUtils:
         if not data:  # Nothing to render
             return
         if fields is None:
-            mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataProcessingUtils helper.
-            fields = mh.DataProcessingUtils.get_unique_keys(data)
+            fields = DataProcessingUtils.get_unique_keys(data)
         table = PrettyTable()  # Build a fresh table per call
         table.field_names = fields  # Apply column ordering
         DisplayUtils._apply_sort_if_valid(table, sortby, fields)  # Optional sort

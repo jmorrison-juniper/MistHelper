@@ -13,6 +13,9 @@ import logging  # WHY: emit structured trace for export progress + failures.
 
 import mistapi  # WHY: dotted-path API resolution + pagination helper.
 
+from src.data.data_processing_utils import (
+    DataProcessingUtils,
+)  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
 from src.time.time_utils import TimeUtils  # WHY: 1014 P6 direct import (FR-005).
 
 
@@ -33,7 +36,7 @@ class SelfExportUtils:  # Self/account exporters.
             logging.warning("No self audit log records returned for the last %d hours", hours)  # Warn empty.
             mh.DataExporter.write_with_format_selection([], filename)  # Empty file signals successful run.
             return  # Done.
-        rows = mh.DataProcessingUtils.flatten_nested_fields(rows)  # Flatten nested change-detail dicts for CSV.
+        rows = DataProcessingUtils.flatten_nested_fields(rows)  # Flatten nested change-detail dicts for CSV.
         mh.DataExporter.write_with_format_selection(  # Persist to disk with format selection.
             rows, filename, api_function_name="listSelfAuditLogs"
         )

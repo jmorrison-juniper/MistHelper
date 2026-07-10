@@ -736,7 +736,6 @@ def _early_dependency_check():  # Public entry point; delegates to the extracted
 _early_dependency_check()  # type: ignore[no-untyped-call]  # Run the bootstrap immediately at import time
 
 # Additional standard library imports
-import ast  # Safely parse Python literals from strings (config/data deserialization)
 import concurrent.futures  # High-level parallelism primitives for batched API calls
 import inspect  # Introspect functions/classes at runtime (signatures, source lookup)
 import json  # Encode/decode JSON for API payloads and cache files
@@ -2883,171 +2882,16 @@ def _configure_session_timeout(session_obj: Any) -> None:
 from src.api.tenant_fetch import APITenantFetchUtils  # noqa: F401  # Re-exported for ServicePingLauncher late-binding
 
 # NOTE: APIFetchUtils removed (1014 P8, Cat E) - canonical body at src/api/api_fetch_utils.py.
-
 # ============================================================================
 # DATA PROCESSING UTILITIES CLASS
 # ============================================================================
-
-
-class DataProcessingUtils:  # JSON flattening/normalization.
-    """
-    Centralized data processing utilities.
-    Groups all data transformation functions for better code organization.
-    All methods are static to avoid unnecessary object instantiation.
-
-    Implementation Note: Methods contain the actual logic rather than delegating
-    to standalone functions, per the 5-Item Rule class organization requirement.
-    """
-
-    @staticmethod
-    def _flatten_list_value(new_key: str, sep: str, v: list) -> list[tuple[str, Any]]:
-        """Flatten a list value: list-of-dicts gets index keys; scalar lists join as CSV. Returns pairs to extend."""
-        out: list[tuple[str, Any]] = []  # Accumulator for produced pairs
-        if all(isinstance(i, dict) for i in v):  # List of dicts: index each
-            for idx, item in enumerate(v):  # Walk list items
-                out.extend(DataProcessingUtils.flatten_dict(item, f"{new_key}{sep}{idx}", sep=sep).items())
-            return out
-        out.append((new_key, ",".join(map(str, v))))  # Join scalar list as CSV
-        return out
-
-    @staticmethod
-    def flatten_dict(d: dict[str, Any], parent_key: str = "", sep: str = "_") -> dict[str, Any]:  # Flatten nested dict.
-        """Recursively flatten nested dict for CSV/JSON; lists-of-dicts get index keys, scalar lists join as CSV."""
-        items: list[tuple[str, Any]] = []  # Accumulate flattened pairs
-        for k, v in d.items():  # Walk each key/value
-            k_str = str(k)  # Stringify the key
-            new_key = f"{parent_key}{sep}{k_str}" if parent_key else k_str  # Compose the dotted key
-            if isinstance(v, dict):  # Recurse into nested dicts
-                items.extend(DataProcessingUtils.flatten_dict(v, new_key, sep=sep).items())
-                continue
-            if isinstance(v, list):  # Lists need index expansion
-                items.extend(DataProcessingUtils._flatten_list_value(new_key, sep, v))
-                continue
-            items.append((new_key, v))  # Keep scalar value as-is
-        return dict(items)  # Return the flat dict
-
-    @staticmethod
-    def flatten_nested_fields(data: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """
-        Flatten nested fields in a list of dictionaries.
-        Attempts to parse stringified dicts/lists.
-        Recursively flattens nested dicts and lists of dicts.
-        Joins non-dict lists as comma-separated strings.
-
-        Args:
-            data: List of dictionaries to process
-
-        Returns:
-            list: List of dictionaries with flattened nested fields
-        """
-        flattened = []  # Collect flattened rows.
-        for entry in data:  # Process each record.
-            if not isinstance(entry, dict):  # Skip non-dict records.
-                logging.debug("Skipping non-dictionary entry: %s", type(entry).__name__)  # Trace skipped entry.
-                continue  # Move to next record.
-            flattened.append(DataProcessingUtils._flatten_entry(entry))  # Delegate per-entry flattening.
-        return flattened  # Return all flattened rows.
-
-    @staticmethod
-    def _flatten_entry(entry):
-        """Flatten a single dict entry, returning a new dict with nested values expanded."""
-        new_entry = {}  # Accumulator for the flattened output of this entry
-        for key, value in entry.items():  # Walk every field of the entry
-            parsed = DataProcessingUtils._parse_stringified_value(value)  # Maybe parse stringified JSON
-            DataProcessingUtils._flatten_value_into(new_entry, key, parsed)  # Expand nested into new_entry
-        return new_entry  # Return the flattened entry
-
-    @staticmethod
-    def _parse_stringified_value(value):
-        """Try to parse a string starting with { or [ as Python literal or JSON; return original on failure."""
-        if not isinstance(value, str):  # Non-string values pass through unchanged
-            return value  # Nothing to parse
-        if not value.startswith(("{", "[")):  # Not embedded JSON-ish - skip parsing
-            return value  # Return as-is
-        try:
-            return ast.literal_eval(value)  # Try Python-literal parse first
-        except Exception:  # ast.literal_eval failed
-            try:
-                return json.loads(value)  # Fall back to JSON parse
-            except Exception:  # nosec B110 - both parses failed, leave as string
-                return value  # Final fallback: original string
-
-    @staticmethod
-    def _flatten_value_into(new_entry, key, value):
-        """Merge a single (key, value) into new_entry, expanding nested dicts/lists per legacy rules."""
-        if isinstance(value, dict):  # Nested dict needs flattening
-            new_entry.update(DataProcessingUtils.flatten_dict(value, parent_key=key))  # Merge flattened keys
-            return  # Done for dict path
-        if not isinstance(value, list):  # Scalar (non-dict, non-list)
-            new_entry[key] = value  # Keep scalar value as-is
-            return  # Done for scalar path
-        if DataProcessingUtils._is_list_of_dicts(value):  # List of dicts: index each element
-            for idx, item in enumerate(value):  # Walk list items
-                new_entry.update(DataProcessingUtils.flatten_dict(item, parent_key=f"{key}_{idx}"))  # Merge item keys
-            return  # Done for list-of-dicts path
-        new_entry[key] = ",".join(map(str, value))  # Scalar list - join as CSV
-
-    @staticmethod
-    def _is_list_of_dicts(value):
-        """Return True when every element of value is a dict (used by _flatten_value_into)."""
-        return all(isinstance(i, dict) for i in value)  # Check every element is dict-typed
-
-    @staticmethod
-    def convert_list_values_to_strings(data):  # Stringify list-valued fields.
-        """
-        Convert list, tuple, or set values to CSV-compatible comma-separated strings.
-
-        Args:
-            data: List of dictionaries containing list values
-
-        Returns:
-            Data with list values converted to strings
-        """
-        for entry in data:  # Process each record.
-            for key, value in entry.items():  # Walk each field.
-                if isinstance(value, (list, tuple, set)):  # Only convert collections.
-                    logging.debug("Converting list/tuple/set at key '%s' to string", key)  # Trace the conversion.
-                    entry[key] = ",".join(map(str, value))  # Join as CSV string.
-        return data  # Return converted records.
-
-    @staticmethod
-    def get_unique_keys(data):  # Collect the union of all keys.
-        """
-        Get all unique dictionary keys from a list of dictionaries.
-        Returns a sorted list of string keys.
-
-        Args:
-            data: List of dictionaries
-
-        Returns:
-            list: Sorted list of unique keys as strings
-        """
-        fields = set()  # Accumulate distinct keys.
-        for entry in data:  # Scan each record.
-            fields.update(entry.keys())  # Add this record's keys.
-        return sorted(str(f) for f in fields)  # Return sorted field names.
-
-    @staticmethod
-    def escape_multiline(data):  # Escape newlines for CSV safety.
-        """
-        Escape multiline strings for CSV compatibility.
-        Joins list values as comma-separated strings.
-        Replaces newline characters with escaped versions.
-
-        Args:
-            data: List of dictionaries containing multiline strings
-
-        Returns:
-            Data with escaped multiline strings
-        """
-        for entry in data:  # Process each record.
-            for key, value in entry.items():  # Walk each field.
-                if isinstance(value, list):  # Join lists to a string.
-                    entry[key] = ",".join(map(str, value))  # CSV-join the list.
-                elif isinstance(value, str):  # Escape string newlines.
-                    entry[key] = value.replace("\n", "\\n").replace("\r", "")  # Escape CR/LF for CSV.
-        return data  # Return escaped records.
-
+# NOTE: ``DataProcessingUtils`` extracted to ``src/data/data_processing_utils.py``
+# per initiative 1015 T-10 (Cat E). ``MistHelper.py`` re-exports the class so
+# historical ``MistHelper.DataProcessingUtils`` / ``mh.DataProcessingUtils``
+# callers keep working transparently -- the re-exported symbol is the same
+# class, not a delegator. All methods are ``@staticmethod`` with no runtime
+# dependencies, so no Pattern 1 wrapper is required.
+from src.data.data_processing_utils import DataProcessingUtils  # noqa: E402, I001  # Cat E canonical (1015 T-10).
 
 # MarvisDataUtils extracted to src/marvis/marvis_utils.py (issue #330).
 # Dependency injection is used so the module has no circular import with MistHelper.
