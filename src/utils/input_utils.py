@@ -1,29 +1,53 @@
 """EOF-safe input helpers used across MistHelper and its src/ packages.
 
-The legacy ``InputUtils.safe_input`` lives on a class inside ``MistHelper.py``
-which makes it awkward to import from sibling ``src/`` modules without
-introducing circular imports. This module exposes the same behavior as a
-standalone class-method so any src/ module can ``from src.utils.input_utils
-import InputUtils`` and call ``InputUtils.safe_input(prompt, context=...)``.
+This module is the canonical home of the ``InputUtils`` class after
+initiative 1015 T-09. ``MistHelper.py`` re-exports the class so historical
+``MistHelper.InputUtils`` / ``mh.InputUtils`` callers keep working
+transparently -- the re-exported symbol is the same class, not a
+delegator.
 
-The implementation matches the original line-for-line so log output and
-return semantics stay identical for both call paths.
+The ``ensure_tqdm_available()`` probe was retained for the single call
+site in ``src/refactors/main_entrypoint.py``. Since initiative 1015 T-14
+made ``tqdm`` resolve through ``src.utils.tqdm_wrapper`` at import time
+(with a no-op fallback when the real package is missing), no runtime
+rebinding of a module global is required -- the probe simply reports
+whether the real ``tqdm`` package is active.
 
-Issue: https://github.com/jmorrison-juniper/MistHelper/issues/433 (Phase C)
+Issue: https://github.com/jmorrison-juniper/MistHelper/issues/433 (Phase C).
 """
 
 from __future__ import annotations  # Enable PEP 604 union syntax on Python 3.13.
 
 import logging  # Used by every action-log line below per the project's NON-NEGOTIABLE rule.
 
+from src.utils.tqdm_wrapper import tqdm as _tqdm  # Canonical tqdm handle (T-14) for the availability probe.
+
 
 class InputUtils:
-    """Centralized input handling utilities (extracted to ``src/utils/`` for reuse).
+    """Centralized input handling utilities (canonical home in ``src/utils/``).
 
-    Same name and same public API as the MistHelper.py class. Any future
-    consolidation should re-export this implementation from MistHelper.py
-    rather than maintain two copies.
+    ``MistHelper.py`` re-exports this class so ``MistHelper.InputUtils``
+    callers keep working without a delegator.
     """
+
+    @staticmethod
+    def ensure_tqdm_available() -> bool:
+        """Return True when the real ``tqdm`` package is active; False when the wrapper's fallback is in use.
+
+        The rebind dance that lived in ``MistHelper.InputUtils`` before
+        initiative 1015 T-09 is no longer needed: T-14 made
+        ``src.utils.tqdm_wrapper`` resolve the real ``tqdm`` at import
+        time and expose a no-op iterable-passthrough when the package is
+        missing. Callers still invoke this probe for its logging side
+        effect; the return value is informational.
+        """
+        if hasattr(_tqdm, "__module__") and _tqdm.__module__.startswith("tqdm"):  # Real tqdm package is active.
+            logging.debug("ensure_tqdm_available: real tqdm package is active")  # Action-log the healthy path.
+            return True  # Progress bars are functional.
+        logging.warning(  # Warn once that progress bars are degraded to the no-op fallback.
+            "ensure_tqdm_available: tqdm fallback in use - progress bars will be disabled"
+        )
+        return False  # Caller may proceed without progress bars.
 
     @staticmethod
     def safe_input(
