@@ -375,6 +375,9 @@ from src.ui.interactive_display_utils import (  # pylint: disable=unused-import
 from src.utils.environment_utils import (  # pylint: disable=unused-import
     EnvironmentUtils,  # noqa: F401  # Cat B (1013 SC-001 position 33) -- re-export for MistHelper.EnvironmentUtils callers
 )
+from src.utils.file_path_utils import (  # pylint: disable=unused-import
+    FilePathUtils,  # noqa: F401  # Cat E canonical (1015 T-13) -- re-export for MistHelper.FilePathUtils callers
+)
 from src.utils.filter_operator_engine import (  # pylint: disable=unused-import
     FilterOperatorEngine,  # noqa: F401  # Cat B (1013 SC-001 position 40) -- re-export for MistHelper.FilterOperatorEngine callers
 )
@@ -2883,52 +2886,9 @@ def _configure_session_timeout(session_obj: Any) -> None:
 # (1013 SC-001 position 27)
 
 
-class FilePathUtils:
-    """
-    Centralized file path utilities for consistent data directory handling.
-    Ensures all CSV and data files are placed in the correct data directory.
-    All methods are static to avoid unnecessary object instantiation.
-    """
-
-    @staticmethod
-    def get_csv_path(filename: str) -> str:  # Resolve a CSV name to a path under data/.
-        """
-        Helper function to ensure consistent CSV file paths in the data directory.
-
-        Args:
-            filename (str): The CSV filename (with or without path)
-
-        Returns:
-            str: Full path to the CSV file in the data directory
-        """
-        # Ensure data directory exists
-        data_dir = "data"  # All exports are confined to the data/ directory.
-        os.makedirs(data_dir, exist_ok=True)  # Create data/ on first use; no error if it exists.
-
-        # If filename already includes a path, use it as-is
-        if os.path.dirname(filename):  # Caller supplied an explicit directory.
-            return filename  # Respect caller-provided paths verbatim.
-
-        # Otherwise, place it in the data directory
-        return os.path.join(data_dir, filename)  # Join bare names under data/ portably.
-
-    @staticmethod
-    def create_csv_template(
-        filename: str, headers: list[str] | None = None, sample_data: list[list[str]] | None = None
-    ) -> str:  # Create an empty CSV placeholder with optional headers.
-        """Create an empty CSV under data/ with optional header row; sample_data is intentionally ignored."""
-        del sample_data  # Kept in signature for API compatibility; explicitly discard so linters do not flag it.
-        file_path = FilePathUtils.get_csv_path(filename)  # Normalize the destination under data/.
-        try:
-            with open(file_path, "w", newline="", encoding="utf-8") as f:  # Truncate/create the file.
-                if headers:  # Only write a header row when headers were provided.
-                    writer = csv.writer(f)  # Wrap the handle in a CSV writer.
-                    writer.writerow(headers)  # Emit the single header row.
-            logging.info("Created template file: %s", file_path)  # Record the created placeholder.
-            return file_path  # Hand the path back to the caller.
-        except Exception as error:  # Never leave a partial file without surfacing the cause.
-            logging.error("Failed to create template file %s: %s", filename, error)  # Log the failure cause.
-            raise  # Re-raise so callers can handle the failure.
+# FilePathUtils moved to src/utils/file_path_utils.py (initiative 1015 T-13).
+# The top-level from src.utils.file_path_utils import FilePathUtils re-export
+# alias keeps historical MistHelper.FilePathUtils callers working unchanged.
 
 
 # ============================================================================
