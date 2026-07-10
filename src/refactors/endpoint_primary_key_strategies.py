@@ -7,18 +7,12 @@ per-endpoint primary-key extraction strategies used by the data-processing
 pipeline in ``src/db/database_schema_utils.py`` when generating SQLite/Redis
 schemas and upsert plans.
 
-Two callsite classes are rewritten in the same PR:
-
-1. Direct import (MistHelper.py:5678) -- the ``strategies=`` kwarg passed
-   into the database schema generation pipeline now flows through
-   ``from src.refactors.endpoint_primary_key_strategies import
-   ENDPOINT_PRIMARY_KEY_STRATEGIES``.
-2. Lazy-module bypass (src/db/database_schema_utils.py:66-77) -- the
-   ``mh.ENDPOINT_PRIMARY_KEY_STRATEGIES`` lookups previously resolved via
-   ``importlib.import_module("MistHelper")`` continue to work because
-   MistHelper.py re-imports the symbol at the top of the file, preserving
-   the ``mh.ENDPOINT_PRIMARY_KEY_STRATEGIES`` attribute for existing
-   dynamic-import consumers without a facade class.
+All consumers import the symbol directly from this module. There is no
+re-export from MistHelper.py, no facade, and no lazy ``importlib`` bypass.
+Historical callsites in ``src/db/database_schema_utils.py`` and
+``tests/test_ticket_manager.py`` have been rewritten to ``from
+src.refactors.endpoint_primary_key_strategies import
+ENDPOINT_PRIMARY_KEY_STRATEGIES``.
 
 Bare module-level dict per spec: no wrapper class, no facade, no shim.
 The analyzer's ``EndpointPrimaryKeyStrategiesManager`` naming hint is

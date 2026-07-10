@@ -263,8 +263,10 @@ from src.refactors.device_config_template_cloner_manager import (
 from src.refactors.device_data_fetcher import (  # pylint: disable=unused-import
     DeviceDataFetcher,  # noqa: F401  # Extracted interactive device data fetcher (SC-017) -- re-export for src.ui.interactive_display_utils lazy access
 )
-from src.refactors.endpoint_primary_key_strategies import (  # pylint: disable=unused-import
-    ENDPOINT_PRIMARY_KEY_STRATEGIES,  # noqa: F401  # Extracted PK strategy catalog (initiative 1015 T-04, Cat E) -- re-export preserves mh.ENDPOINT_PRIMARY_KEY_STRATEGIES for lazy `importlib.import_module("MistHelper")` consumers in src/db/database_schema_utils.py
+from src.refactors.endpoint_primary_key_strategies import (
+    # Extracted PK strategy catalog (initiative 1015 T-04, Cat E); used internally at
+    # DatabaseRouter init below. No re-export -- external callers import directly.
+    ENDPOINT_PRIMARY_KEY_STRATEGIES,
 )
 from src.refactors.fast_mode_backoff_multiplier import (  # pylint: disable=unused-import
     FastModeBackoffMultiplier,  # noqa: F401  # Extracted fast-mode backoff multiplier constant (SC-028); re-export for src.export.org_device_stats_exporter lazy access
@@ -2964,11 +2966,12 @@ def _configure_session_timeout(session_obj: Any) -> None:
 # ENDPOINT PRIMARY KEY STRATEGY CONFIGURATION
 # ============================================================================
 # NOTE: ENDPOINT_PRIMARY_KEY_STRATEGIES has been extracted to
-# src/refactors/endpoint_primary_key_strategies.py (initiative 1015 T-04, Cat E)
-# The top-level `from src.refactors.endpoint_primary_key_strategies import
-# ENDPOINT_PRIMARY_KEY_STRATEGIES` re-export keeps historical
-# `MistHelper.ENDPOINT_PRIMARY_KEY_STRATEGIES` and `mh.ENDPOINT_PRIMARY_KEY_STRATEGIES`
-# lazy-import callers (src/db/database_schema_utils.py) working unchanged.
+# src/refactors/endpoint_primary_key_strategies.py (initiative 1015 T-04, Cat E).
+# External consumers (src/db/database_schema_utils.py, tests/test_ticket_manager.py)
+# import the symbol directly from that module. MistHelper.py imports it at the
+# top of the file solely for internal use at DatabaseRouter init -- there is no
+# re-export shim, no facade, and no lazy `importlib.import_module("MistHelper")`
+# lookup.
 
 
 # ============================================================================
