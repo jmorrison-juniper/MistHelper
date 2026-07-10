@@ -21,6 +21,10 @@ from __future__ import annotations  # Enable postponed evaluation for forward-re
 import importlib  # Late-import MistHelper module to avoid circular src<->MistHelper dependency
 from typing import Any  # Loose typing for late-bound MistHelper attributes
 
+from src.refactors.msp_privilege_detection import (
+    detect_msp_privileges,  # Direct import: MSP detector was extracted per 1015 T-05
+)
+
 
 class _MistHelperProxy:  # Attribute forwarder to MistHelper module attributes
     """Forward attribute access to the currently-loaded MistHelper module."""
@@ -44,7 +48,7 @@ class MistSessionInteractiveInitializer:  # Interactive login orchestration seam
 
         def _detect_msp_for_login() -> Any:  # DI adapter binding MSP detection to freshly-authenticated session
             """Delegate MSP detection to the freshly-authenticated session in state."""
-            return _MH.detect_msp_privileges(  # Call MistHelper's live detector
+            return detect_msp_privileges(  # Call the extracted MSP detector directly (no MistHelper bypass)
                 state.get("apisession")  # Orchestrator stores the new session in state before this runs
             )
 

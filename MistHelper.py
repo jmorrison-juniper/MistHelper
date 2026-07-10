@@ -297,6 +297,9 @@ from src.refactors.marvis_data_utils import (  # pylint: disable=unused-import
 from src.refactors.mist_wan_target_ports import (
     MistWanTargetPorts,  # Extracted operator-configured WAN target-ports list (SC-032)
 )
+from src.refactors.msp_privilege_detection import (
+    detect_msp_privileges,  # Extracted MSP privilege detector (1015 T-05, Cat E)
+)
 from src.refactors.package_import_map import (
     PackageImportMapManager,  # Extracted pip-name -> import-name mapping (SC-025)
 )
@@ -2229,31 +2232,8 @@ def _msp_cache_and_report(detected_msps: list[dict]) -> None:  # type: ignore[ty
         logging.debug("No MSP privileges detected for current user")  # Note the absence at debug level.
 
 
-def detect_msp_privileges(session=None):
-    """Detect MSP-level privileges from the authenticated user's profile via GET /api/v1/self.
-
-    An explicit ``session`` (passed by the interactive login before the module-global
-    ``apisession`` is published) is promoted to the global. Returns MSP privilege dicts
-    (msp_id, msp_name, role, scope), or [] when there is no MSP access or detection fails.
-    """
-    global apisession  # Session promotion below may update the module-global session.
-    if session is not None:  # Caller supplied an explicit session (interactive login, before the global is published).
-        apisession = session  # Promote it to the global so getSelf and _fetch_msp_name use the same session.
-
-    if not apisession:  # Still no usable session from either the argument or the global.
-        logging.warning("Cannot detect MSP privileges - no active session")  # Warn that detection cannot proceed.
-        return []  # Treat as no MSP access.
-
-    try:  # API or parsing failures must degrade to "no MSP access" rather than crash the session.
-        user_data = _msp_fetch_user_data()  # Call getSelf and validate the payload (None when unavailable).
-        if user_data is None:  # getSelf failed or returned a malformed payload.
-            return []  # No privileges could be detected.
-        detected_msps = _msp_extract_from_user_data(user_data)  # Parse every MSP-scoped grant.
-        _msp_cache_and_report(detected_msps)  # Cache to the global and log the outcome.
-        return detected_msps  # Hand the parsed MSP list back to the caller.
-    except Exception as e:  # Any API or parsing failure.
-        logging.warning("Failed to detect MSP privileges: %s", e)  # Warn but don't crash the session.
-        return []  # Treat as no MSP access on error.
+# NOTE: detect_msp_privileges extracted to src/refactors/msp_privilege_detection.py::detect_msp_privileges.
+# See specs/1015-misthelper-refactor-final-15/spec.md.
 
 
 def _extract_msp_name(response: Any) -> str | None:  # Pull the MSP name out of a getMspDetails response

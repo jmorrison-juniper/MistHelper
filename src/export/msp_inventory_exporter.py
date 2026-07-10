@@ -17,6 +17,9 @@ from src.dataclasses.msp_org_context import MspOrgContext  # Bundled MSP/org ide
 from src.refactors.initialize_mist_session_interactive import (
     MistSessionInteractiveInitializer,  # Extracted interactive login initializer (SC-023).
 )
+from src.refactors.msp_privilege_detection import (
+    detect_msp_privileges,  # Extracted MSP privilege detector (1015 T-05, Cat E)
+)
 
 
 class MSPInventoryExporter:
@@ -116,14 +119,14 @@ class MSPInventoryExporter:
 
     def _execute_login_and_validate(self) -> bool:
         """Execute login and validate MSP privileges obtained."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of detect_msp_privileges + msp_privileges global.
+        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of msp_privileges module global.
 
         if not MistSessionInteractiveInitializer.initialize():
             print("")
             print("  X Login failed.")
             return False
 
-        mh.detect_msp_privileges()  # Populates mh.msp_privileges module global.
+        detect_msp_privileges()  # Populates mh.msp_privileges module global (direct call, no MistHelper bypass).
 
         if not mh.msp_privileges:
             print("")
