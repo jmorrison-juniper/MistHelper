@@ -2115,9 +2115,9 @@ FAST_MODE_FALLBACK_THREADS = int(os.getenv("FAST_MODE_FALLBACK_THREADS", "8"))  
 # NOTE: FAST_MODE_MAX_CONCURRENT_CONNECTIONS extracted to
 # src/refactors/fast_mode_constants.py::FAST_MODE_MAX_CONCURRENT_CONNECTIONS.
 # See specs/1015-misthelper-refactor-final-15/spec.md.
-FAST_MODE_USE_CONNECTION_AWARE_THREADING = (  # Whether to size threads based on connection limits
-    os.getenv("FAST_MODE_USE_CONNECTION_AWARE_THREADING", "true").lower() == "true"  # Parse the boolean env flag
-)
+# NOTE: FAST_MODE_USE_CONNECTION_AWARE_THREADING extracted to
+# src/refactors/fast_mode_constants.py::FAST_MODE_USE_CONNECTION_AWARE_THREADING (T-03).
+# See specs/1015-misthelper-refactor-final-15/spec.md.
 FAST_MODE_ENABLED: bool = False  # Set to True via --fast CLI flag at startup
 
 # NOTE: MIST_WAN_TARGET_PORTS extracted to src/refactors/mist_wan_target_ports.py
