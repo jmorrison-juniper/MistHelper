@@ -771,12 +771,10 @@ except ImportError:  # Extremely unlikely for a stdlib module, but guard anyway
 mistapi: Any = None  # Placeholder; the real mistapi module is loaded later by GlobalImportManager
 
 
-# tqdm will be properly imported by GlobalImportManager
-# This fallback will be overridden by the real tqdm import
-# NOTE: tqdm extracted to SKIP_ALWAYS (bootstrap-critical). See specs/1012-misthelper-refactor-hot-functions/spec.md.
-def tqdm(iterable, *args, **kwargs):  # No-op progress-bar stand-in until the real tqdm loads
-    """Fallback tqdm function - will be replaced by real tqdm after import initialization."""
-    return iterable  # Return the iterable unchanged (no progress bar yet)
+# tqdm wrapper: canonical home is src/utils/tqdm_wrapper.py (1015 T-14, Cat E).
+# The wrapper resolves to the real tqdm package if installed, else a no-op pass-through.
+# Re-exported here so ``MistHelper.tqdm`` / ``mh.tqdm`` callers keep working unchanged.
+from src.utils.tqdm_wrapper import tqdm  # noqa: E402, I001  # Cat E canonical (1015 T-14) -- re-export.
 
 
 try:  # requests is required for all HTTP calls

@@ -22,6 +22,7 @@ import mistapi  # WHY: direct calls to sites.devices + sites.stats endpoints + g
 from prettytable import PrettyTable  # WHY: debug-log a formatted inventory table.
 
 from src.export.site_export_utils import SiteExportUtils  # WHY: Pattern 1 inline construction for port_stats export.
+from src.utils.tqdm_wrapper import tqdm  # WHY: 1015 T-14 -- canonical wrapper import (eliminates mh.tqdm).
 
 
 class SiteDeviceExporter:
@@ -160,7 +161,7 @@ class SiteDeviceExporter:
             APICoreFetchUtils=mh.APICoreFetchUtils,
             check_fn=mh.IsDebugMode.check,
             PrettyTable=mh.PrettyTable,
-            tqdm=mh.tqdm,
+            tqdm=tqdm,  # 1015 T-14: canonical import from src.utils.tqdm_wrapper (no mh.* reach-back).
             mistapi=mh.mistapi,
         )._export_data(
             api_call=mistapi.api.v1.sites.stats.searchSiteSwOrGwPorts, data_type="port stats", sort_key="mac"

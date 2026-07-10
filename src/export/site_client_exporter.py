@@ -16,6 +16,9 @@ import mistapi  # WHY: direct SDK access for listSiteWirelessClientsStats + beac
 
 from src.export.site_export_utils import SiteExportUtils  # WHY: Pattern 1 inline construction for beacons export.
 from src.export.wifi_clients_exporter import WifiClientsExporter  # Extracted WiFi export orchestrator.
+from src.utils.tqdm_wrapper import (
+    tqdm,
+)  # WHY: 1015 T-14 -- import directly from canonical wrapper (eliminates mh.tqdm).
 
 
 class SiteClientExporter:
@@ -116,7 +119,7 @@ class SiteClientExporter:
             APICoreFetchUtils=mh.APICoreFetchUtils,
             check_fn=mh.IsDebugMode.check,
             PrettyTable=mh.PrettyTable,
-            tqdm=mh.tqdm,
+            tqdm=tqdm,  # 1015 T-14: canonical import from src.utils.tqdm_wrapper (no mh.* reach-back).
             mistapi=mh.mistapi,
         )._export_data(  # Shared export scaffolding handles prompting + CSV write.
             api_call=mistapi.api.v1.sites.beacons.listSiteBeacons, data_type="beacons", sort_key="name"

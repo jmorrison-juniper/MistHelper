@@ -16,6 +16,7 @@ import mistapi  # WHY: direct SDK access for sites/orgs endpoints.
 
 from src.api.api_fetch_utils import APIFetchUtils  # WHY: 1014 P8 direct import (FR-005).
 from src.export.site_export_utils import SiteExportUtils  # WHY: Pattern 1 inline construction for maps/zones exports.
+from src.utils.tqdm_wrapper import tqdm  # WHY: 1015 T-14 -- canonical wrapper import (eliminates mh.tqdm).
 
 
 class SiteConfigExporter:
@@ -108,7 +109,7 @@ class SiteConfigExporter:
             APICoreFetchUtils=mh.APICoreFetchUtils,
             check_fn=mh.IsDebugMode.check,
             PrettyTable=mh.PrettyTable,
-            tqdm=mh.tqdm,
+            tqdm=tqdm,  # 1015 T-14: canonical import from src.utils.tqdm_wrapper (no mh.* reach-back).
             mistapi=mh.mistapi,
         )._export_data(  # Shared export scaffolding handles prompting + CSV write.
             api_call=mistapi.api.v1.sites.maps.listSiteMaps, data_type="maps", sort_key="name"
@@ -131,7 +132,7 @@ class SiteConfigExporter:
             APICoreFetchUtils=mh.APICoreFetchUtils,
             check_fn=mh.IsDebugMode.check,
             PrettyTable=mh.PrettyTable,
-            tqdm=mh.tqdm,
+            tqdm=tqdm,  # 1015 T-14: canonical import from src.utils.tqdm_wrapper (no mh.* reach-back).
             mistapi=mh.mistapi,
         )._export_data(  # Shared export scaffolding handles prompting + CSV write.
             api_call=mistapi.api.v1.sites.zones.listSiteZones, data_type="zones", sort_key="name"
