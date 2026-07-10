@@ -119,14 +119,18 @@ class MSPInventoryExporter:
 
     def _execute_login_and_validate(self) -> bool:
         """Execute login and validate MSP privileges obtained."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of msp_privileges module global.
+        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of live apisession + msp_privileges module global.
 
         if not MistSessionInteractiveInitializer.initialize():
             print("")
             print("  X Login failed.")
             return False
 
-        detect_msp_privileges()  # Populates mh.msp_privileges module global (direct call, no MistHelper bypass).
+        logging.info("MSP inventory export: detecting MSP privileges post-login")  # BEFORE: trace detection call
+        mh.msp_privileges = detect_msp_privileges(mh.apisession)  # Detect via extracted module and publish to mh global
+        logging.debug(
+            "MSP inventory export: detection returned %d MSP grant(s)", len(mh.msp_privileges)
+        )  # AFTER: trace outcome for observability
 
         if not mh.msp_privileges:
             print("")
