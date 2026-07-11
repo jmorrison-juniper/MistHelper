@@ -199,6 +199,7 @@ module = [
     "src.reports.*",
     "src.site.*",
     "src.troubleshooting.*",
+    "src.ui.*",
     "src.websocket.*",
     "src.ssh.ssh_runner",
     "src.ssh.ssh_runner_manager",

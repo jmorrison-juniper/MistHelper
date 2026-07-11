@@ -27,8 +27,8 @@ from src.utils.input_utils import InputUtils
 
 
 class PromptUtils:  # General prompt helpers.
-    """
-    Centralized prompt utilities for user input and selection operations.
+    """Centralized prompt utilities for user input and selection operations.
+
     Groups all interactive selection functions (sites, devices, ports, clients).
     All methods are static to avoid unnecessary object instantiation.
     """
@@ -174,8 +174,8 @@ class PromptUtils:  # General prompt helpers.
 
     @staticmethod
     def select_site() -> str | None:  # Convenience site selector.
-        """
-        Prompts the user to select a site and returns the site_id.
+        """Prompt the user to select a site and return the site_id.
+
         Uses the existing CSV-based site selection functionality.
 
         Returns:
@@ -185,8 +185,7 @@ class PromptUtils:  # General prompt helpers.
 
     @staticmethod
     def select_site_with_logging() -> str | None:  # Site selector with logging.
-        """
-        Prompts the user to select a site from the CSV list and logs the selection.
+        """Prompt the user to select a site from the CSV list and log the selection.
 
         Returns:
             str: The selected site ID or None if no selection made
@@ -226,8 +225,7 @@ class PromptUtils:  # General prompt helpers.
 
     @staticmethod
     def _fetch_all_clients(org_id: str, site_id: str | None) -> list[dict]:  # type: ignore[type-arg]
-        """
-        Fetches wireless and wired clients from site or org.
+        """Fetch wireless and wired clients from site or org.
 
         Returns:
             List of client dictionaries with client_type added.
