@@ -248,6 +248,7 @@ omit = [
     "src/device/arp_command_manager.py",
     "src/device/device_reboot_manager.py",
     "src/export/const_definitions_exporter.py",
+    "src/export/data_exporter.py",
     "src/export/gateway_test_exporter.py",
     "src/export/license_export_utils.py",
     "src/export/org_admin_exporter.py",
