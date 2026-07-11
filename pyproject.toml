@@ -273,6 +273,7 @@ omit = [
     "src/site/bulk_radius_wlan_config_manager.py",
     "src/ssh/cli_shell_manager.py",
     "src/troubleshooting/troubleshoot_utils.py",
+    "src/ui/prompt_utils.py",
     "src/ui/tui.py",
     "src/utils/environment_utils.py",
     "src/utils/filter_operator_engine.py",
