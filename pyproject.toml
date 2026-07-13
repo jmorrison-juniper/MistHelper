@@ -122,6 +122,10 @@ known-first-party = ["src"]
 # rendered verbatim into subagent task payloads; reflowing the lines would
 # change the prompt content sent to the model.
 "tools/plan_wave_builder.py" = ["E501"]
+# refactor_analyzer/reporting.py emits literal markdown strings for the
+# refactor_candidates.md report; reflowing the lines would break the rendered
+# markdown structure of the generated report.
+"tools/refactor_analyzer/reporting.py" = ["E501"]
 
 [tool.mypy]
 python_version = "3.13"
