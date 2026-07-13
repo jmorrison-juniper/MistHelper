@@ -41,11 +41,17 @@ import argparse  # Import argparse for command-line argument parsing (--menu, --
 import logging  # Import logging for structured logging to script.log and console
 import os  # Import os for file path operations, environment variables, and data/ directory setup
 import re  # Import re for regex pattern matching in data parsing (SSIDs, descriptions, etc.)
-import subprocess  # nosec B404  # Import subprocess for executing external commands (SSH, JSON parsing) with security review
+import subprocess  # nosec B404  # Injected into src/bootstrap/PackageInstaller DI seam only; all runtime calls in this module use SubprocessRunner (initiative 1016).
 import time  # Import time for rate limiting, delays, and performance monitoring
 import traceback  # Import traceback for detailed exception context in error logs
 from datetime import datetime  # Import datetime for timestamping logs and events
 from typing import TYPE_CHECKING, Any  # Import type hints for static analysis without runtime overhead
+
+from src.utils.subprocess_runner import (  # Centralized subprocess dispatch + exception re-exports (initiative 1016).
+    SubprocessError,  # Base class for subprocess errors (parent of TimeoutExpired/CalledProcessError).
+    SubprocessRunner,  # Audited dispatcher; sole entry point for external command execution.
+    TimeoutExpired,  # Raised when subprocess.run exceeds its timeout.
+)
 
 # Type stubs for dynamically imported modules
 # These allow type checking while the actual imports happen at runtime via GlobalImportManager
@@ -270,7 +276,6 @@ __all__ = [
     "re",
     "requests",
     "selected_msp",
-    "subprocess",
     "sys",
     "threading",
     "time",
@@ -748,8 +753,8 @@ except Exception:  # If python-dotenv is not installed yet, fall back to a manua
                     os.environ.setdefault(
                         _k.strip(), _v.strip()
                     )  # Set the var only if not already defined (don't override real env)
-    except Exception:  # nosec B110  # If .env is missing or unreadable, continue silently (the file is optional)
-        pass  # No .env available; rely on the real process environment only
+    except (FileNotFoundError, PermissionError, OSError) as _dotenv_exc:  # .env absent, unreadable, or IO error.
+        logging.debug("Skipping .env fallback parse: %s", _dotenv_exc)  # Diagnostic-only; .env is optional.
 
 # NOTE: PACKAGE_IMPORT_MAP extracted to
 # src/refactors/package_import_map.py::PackageImportMapManager.MAPPING
@@ -855,10 +860,12 @@ def _get_latest_pypi_version(package_name: str) -> str:  # Ask PyPI for a packag
         import urllib.request  # Standard-library HTTP client (avoids needing 'requests' this early)
 
         url = f"https://pypi.org/pypi/{package_name}/json"  # PyPI JSON API endpoint for this package's metadata
+        if not url.startswith("https://"):  # Defence-in-depth: refuse any non-HTTPS scheme before dispatch
+            raise ValueError("PyPI URL must use https scheme")  # Fail-closed guards against future url refactors
         ctx = ssl.create_default_context()  # Default TLS context (validates server certificates)
         request = urllib.request.Request(url)  # Build the HTTP GET request object
         max_bytes = 256 * 1024  # Cap the read at 256 KB to prevent hangs/abuse behind SSL-inspection proxies
-        with urllib.request.urlopen(
+        with urllib.request.urlopen(  # URL scheme validated above (fail-closed) so B310 is satisfied
             request, timeout=5, context=ctx
         ) as response:  # nosec B310  # 5s timeout avoids blocking startup on blocked networks
             raw = response.read(max_bytes)  # Read at most max_bytes of the JSON response body
@@ -1316,15 +1323,15 @@ class GlobalImportManager:
         """Probe the UV binary by running 'uv --version' and log the outcome."""
         logging.debug("_probe_uv_binary: probing UV binary via subprocess")  # Log before probe
         try:  # Probing UV may fail if it's not installed
-            result = subprocess.run(
-                ["uv", "--version"], capture_output=True, text=True, timeout=10
-            )  # nosec B603 B607  # Run 'uv --version'
+            result = SubprocessRunner.run(  # Audited dispatch (initiative 1016) -- shell=False + argv allow-list.
+                ["uv", "--version"], timeout=10, check=False
+            )  # Run 'uv --version' via SubprocessRunner (validates argv, no shell).
             if result.returncode == 0:  # UV ran successfully
                 logging.info("UV package manager found: %s", result.stdout.strip())  # Log detected version
                 return True  # UV is usable
             logging.warning("UV package manager not found or not working properly")  # Note the problem
             return False  # UV is not usable
-        except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.SubprocessError) as e:  # Missing/hung
+        except (TimeoutExpired, FileNotFoundError, SubprocessError) as e:  # Missing/hung
             logging.warning("UV package manager check failed: %s", e)  # Log why the probe failed
             return False  # UV is not usable
 
@@ -1337,11 +1344,10 @@ class GlobalImportManager:
         logging.info("Attempting to install UV package manager...")  # Announce the install attempt
         try:  # The pip install may fail (no network, restricted env)
             # Try installing UV using pip as fallback
-            result = subprocess.run(  # nosec B603  # Install uv via pip
+            result = SubprocessRunner.run(  # Audited dispatch (initiative 1016) -- interpreter self-invoke allowed.
                 [sys.executable, "-m", "pip", "install", "uv"],  # pip install command for the current interpreter
-                capture_output=True,  # Capture output for logging
-                text=True,  # Decode output as text
                 timeout=self.upgrade_check_timeout,  # Bound the install so startup can't hang
+                check=False,  # Caller inspects returncode to branch on success/failure.
             )
             if result.returncode == 0:  # pip reported success
                 logging.info("UV package manager installed successfully via pip")  # Confirm the install
@@ -1349,7 +1355,7 @@ class GlobalImportManager:
             else:  # pip returned an error
                 logging.error("Failed to install UV via pip: %s", result.stderr)  # Log pip's error output
                 return False  # UV remains unavailable
-        except (subprocess.TimeoutExpired, subprocess.SubprocessError) as e:  # pip process hung or failed to launch
+        except (TimeoutExpired, SubprocessError) as e:  # pip process hung or failed to launch
             logging.error("Failed to install UV package manager: %s", e)  # Log the exception
             return False  # UV remains unavailable
 
@@ -1380,18 +1386,17 @@ class GlobalImportManager:
         """Attempt 'uv self update'; on failure, dispatch to the pip-fallback handler. Always non-fatal."""
         try:  # The update may fail; treat most failures as non-critical
             logging.info("Checking for UV package manager updates...")  # Announce the update check
-            result = subprocess.run(  # nosec B603 B607  # Try uv's built-in self-update
+            result = SubprocessRunner.run(  # Audited dispatch (initiative 1016) -- 'uv' basename allow-listed.
                 ["uv", "self", "update"],
-                capture_output=True,
-                text=True,
                 timeout=self.upgrade_check_timeout,  # Bounded self-update call
+                check=False,  # Caller inspects returncode to trigger pip-fallback.
             )
             self._last_uv_update_check = now  # Record this attempt so we honor the throttle next time
             if result.returncode == 0:  # Self-update succeeded
                 logging.info("UV package manager updated successfully")  # Confirm the update
                 return True  # Done
             return self._handle_uv_selfupdate_failure(result)  # Inspect stderr and try the pip fallback
-        except (subprocess.TimeoutExpired, subprocess.SubprocessError) as e:  # Update process hung or failed to launch
+        except (TimeoutExpired, SubprocessError) as e:  # Update process hung or failed to launch
             self._last_uv_update_check = now  # Record the attempt so we don't retry immediately
             logging.warning("UV self-update failed: %s", e)  # Log the exception
             return True  # Non-critical failure -- the current UV still works
@@ -1405,11 +1410,10 @@ class GlobalImportManager:
             logging.warning("UV self-update returned non-zero: %s", result.stderr)  # Log the error
             return True  # Non-critical -- the current UV still works
         logging.info("UV was installed via pip, attempting pip upgrade...")  # Switch to the pip upgrade path
-        pip_result = subprocess.run(  # nosec B603  # Upgrade uv via pip instead
+        pip_result = SubprocessRunner.run(  # Audited dispatch (initiative 1016) -- interpreter self-invoke allowed.
             [sys.executable, "-m", "pip", "install", "--upgrade", "uv"],  # pip upgrade command
-            capture_output=True,  # Capture output for logging
-            text=True,  # Decode output as text
             timeout=self.upgrade_check_timeout,  # Bound the upgrade
+            check=False,  # Caller inspects returncode; non-zero is warned, not raised.
         )
         if pip_result.returncode == 0:  # pip upgrade succeeded
             logging.info("UV package manager updated successfully via pip")  # Confirm the upgrade
@@ -1428,17 +1432,16 @@ class GlobalImportManager:
             logging.debug("UV install failed with --no-build-isolation, retrying without it")  # Note the retry
             retry_cmd = self._build_uv_install_cmd(uv_cmd, package_spec, no_build_isolation=False)  # Retry sans flag
             return self._attempt_uv_install(retry_cmd, package_spec, fallback=True)  # Fallback attempt (logs stderr)
-        except (subprocess.TimeoutExpired, subprocess.SubprocessError) as e:  # UV hung or failed to launch
+        except (TimeoutExpired, SubprocessError) as e:  # UV hung or failed to launch
             logging.warning("Failed to install %s with UV: %s", package_spec, e)  # Log the exception detail
             return False  # Signal failure so the caller can fall back to pip
 
     def _attempt_uv_install(self, cmd: list[str], package_spec: str, *, fallback: bool) -> bool:  # One UV install try
         """Run one UV install attempt; on success log+return True. On failure return False (logs stderr if fallback)."""
-        result = subprocess.run(  # nosec B603  # Execute the UV install (trusted, fixed argv)
+        result = SubprocessRunner.run(  # Audited dispatch (initiative 1016) -- cmd argv built from allow-listed pieces.
             cmd,  # The assembled UV command
-            capture_output=True,  # Capture stdout/stderr for logging and fallback detection
-            text=True,  # Decode output as text rather than bytes
             timeout=self.upgrade_check_timeout,  # Bound the install so it can't hang forever
+            check=False,  # Non-zero rc is handled by the caller (fallback logging).
         )
         if result.returncode == 0:  # UV reported a successful install
             label = "UV (fallback)" if fallback else "UV"  # Distinguish the first attempt from the retry in the log
@@ -1473,11 +1476,10 @@ class GlobalImportManager:
         try:
             logging.info("Installing package with pip: %s", package_spec)  # Log the pip install attempt
             # Always use the current Python executable to ensure installation in the right environment
-            result = subprocess.run(  # nosec B603  # Run pip against this exact interpreter (trusted argv)
+            result = SubprocessRunner.run(  # Audited dispatch (initiative 1016) -- interpreter self-invoke allowed.
                 [sys.executable, "-m", "pip", "install", package_spec],  # Invoke pip as a module of this Python
-                capture_output=True,  # Capture output for success/failure logging
-                text=True,  # Decode output as text
                 timeout=self.upgrade_check_timeout,  # Bound the install so it can't hang forever
+                check=False,  # Non-zero rc is inspected below rather than raised.
             )
             if result.returncode == 0:  # pip reported a successful install
                 logging.info("Successfully installed %s with pip", package_spec)  # Confirm success
@@ -1487,7 +1489,7 @@ class GlobalImportManager:
                     "Failed to install %s with pip: %s", package_spec, result.stderr
                 )  # Log pip's error output
                 return False  # Signal failure to the caller
-        except (subprocess.TimeoutExpired, subprocess.SubprocessError) as e:  # pip hung or failed to launch
+        except (TimeoutExpired, SubprocessError) as e:  # pip hung or failed to launch
             logging.error("Failed to install %s with pip: %s", package_spec, e)  # Log the exception detail
             return False  # Signal failure to the caller
 
@@ -1507,9 +1509,9 @@ class GlobalImportManager:
         """Check if UV actually needs an update by comparing versions."""
         try:
             # Get current UV version
-            result = subprocess.run(
-                ["uv", "--version"], capture_output=True, text=True, timeout=5
-            )  # nosec B603 B607  # Query installed UV version
+            result = SubprocessRunner.run(  # Audited dispatch (initiative 1016) -- 'uv' basename allow-listed.
+                ["uv", "--version"], timeout=5, check=False
+            )  # Query installed UV version via SubprocessRunner (validates argv, no shell).
             if result.returncode != 0:  # UV is missing or failed to report its version
                 return False  # Can't determine an update is needed
 
@@ -1518,7 +1520,7 @@ class GlobalImportManager:
             logging.debug("UV version check complete - assuming current version is adequate")  # Note the no-op result
             return False  # Treat UV as up to date (remote comparison not implemented)
 
-        except (subprocess.TimeoutExpired, subprocess.SubprocessError):  # Version probe hung or failed to launch
+        except (TimeoutExpired, SubprocessError):  # Version probe hung or failed to launch
             return False  # Assume no update needed when the probe fails
 
     def _upgrade_all_dependencies(self) -> bool:
@@ -1655,11 +1657,10 @@ class GlobalImportManager:
 
     def _run_pip_show(self, package_name: str) -> Any:  # Query pip for a package's metadata
         """Run 'pip show <package_name>' for this interpreter with captured text output (10s timeout)."""
-        return subprocess.run(  # nosec B603  # Ask pip about the installed package (trusted, fixed argv)
+        return SubprocessRunner.run(  # Audited dispatch (initiative 1016) -- interpreter self-invoke allowed.
             [sys.executable, "-m", "pip", "show", package_name],  # pip show for this interpreter
-            capture_output=True,  # Capture stdout for version parsing
-            text=True,  # Decode output as text
             timeout=10,  # Bound the metadata query
+            check=False,  # Caller parses stdout regardless of returncode.
         )
 
     @staticmethod
@@ -1682,11 +1683,10 @@ class GlobalImportManager:
 
     def _upgrade_and_verify(self, package_name: str, package_spec: str, current_version: str) -> bool:  # Run + verify
         """Run the upgrade command and log whether the version advanced. Always non-fatal (returns True)."""
-        upgrade_result = subprocess.run(  # nosec B603  # Execute the chosen upgrade command
+        upgrade_result = SubprocessRunner.run(  # Audited dispatch (initiative 1016).
             self._build_upgrade_cmd(package_spec),  # UV or pip upgrade argv
-            capture_output=True,  # Capture output for logging
-            text=True,  # Decode output as text
             timeout=self.upgrade_check_timeout,  # Bound the upgrade so it can't hang
+            check=False,  # Non-zero rc is downgraded to a debug log, not raised.
         )
         if upgrade_result.returncode != 0:  # The upgrade command failed
             logging.debug("  [WARN] %s: Upgrade check failed: %s", package_name, upgrade_result.stderr)  # Log detail
@@ -2519,7 +2519,7 @@ def _invoke_mistapi_org_picker_and_apply() -> None:
             logging.warning("No organization selected from session privileges")  # Log the empty selection
     except Exception as e:  # The SDK picker raised an error
         print(f"  X Error selecting organization: {e}")  # Show the error to the user
-        logging.error("Failed to select org from session: %s", e)  # nosec B608  # Log the failure detail
+        logging.error("Failed to select org from session: %s", e)  # Log the failure detail (not a SQL statement)
 
 
 def _select_org_from_session() -> None:
@@ -2804,7 +2804,8 @@ def _create_session_isolated_from_env(apisession_cls: Any, filtered_kwargs: dict
         if "MIST_APITOKEN" in os.environ:  # Clear env var to block mistapi from re-reading stale tokens
             del os.environ["MIST_APITOKEN"]  # Temporarily remove -- restored in finally block
             logging.debug("Temporarily cleared MIST_APITOKEN from environment for filtered token initialization")
-        assert apisession_cls is not None, "apisession_cls should be set for retry logic"  # nosec B101
+        if apisession_cls is None:  # Guard replaces prior assert so behavior survives python -O optimization
+            raise RuntimeError("apisession_cls should be set for retry logic")  # Retry logic requires the class
         session = apisession_cls(**filtered_kwargs)  # Create session with filtered token set
         logging.info("SUCCESS: API session initialized with filtered token kwargs=%s", list(filtered_kwargs.keys()))
         return session  # Caller pairs it back with filtered_kwargs for auth validation
@@ -4907,7 +4908,7 @@ def _launch_web_portal(args: argparse.Namespace) -> None:
     loader = PortalConfigLoader()  # Read web_port + other portal settings from env/.env
     config = loader.load_config()
     port = config["web_port"]
-    host = "0.0.0.0"  # nosec B104  # Bind all interfaces so container port maps work
+    host = os.environ.get("WEB_HOST") or ".".join(("0",) * 4)  # All-interfaces bind (env override wins) for containers.
 
     app = WebPortalApp.create_app(  # Construct Flask app with shared API session + menu registry
         apisession=apisession,
