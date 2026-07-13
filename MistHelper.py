@@ -1754,7 +1754,10 @@ class GlobalImportManager:
             logging.error("Import still failed after installation for %s: %s", module_name, retry_e)  # Log failure.
             if not required:  # Optional dependency -- degrade gracefully.
                 logging.info(
-                    "Optional package %s installation succeeded but import failed - likely needs system restart or different Python session",  # noqa: E501
+                    (
+                        "Optional package %s installation succeeded but import failed - likely needs system restart or "
+                        "different Python session"
+                    ),
                     module_name,
                 )
             return None  # The retry import did not succeed.
@@ -2058,7 +2061,7 @@ class GlobalImportManager:
             @staticmethod
             def spawn(*args, **kwargs):
                 raise ImportError(  # Fail loudly with install guidance when redexpect is used but absent
-                    "Cross-platform SSH automation requires 'redexpect' package. Install with: pip install redexpect"  # noqa: E501
+                    "Cross-platform SSH automation requires 'redexpect' package. Install with: pip install redexpect"
                 )
 
         global_vars["redexpect"] = RedexpectFallback()  # Install the redexpect shim with a clear error path
@@ -3059,7 +3062,7 @@ def _configure_session_timeout(session_obj: Any) -> None:
 # was removed. The canonical name is now imported directly at module top.
 
 
-# SFPTransceiverDataProcessor moved to src/reports/sfp_transceiver_data_processor.py  # noqa: E501
+# SFPTransceiverDataProcessor moved to src/reports/sfp_transceiver_data_processor.py
 # (1013 SC-001 position 27)
 
 
@@ -3181,10 +3184,11 @@ from src.ui.prompt_utils import PromptUtils  # noqa: E402,F401  # T-07 re-export
 # FilterOperatorEngine moved to src/utils/filter_operator_engine.py (1013 SC-001 position 40)
 
 
-# GlobalWiredClientReportGenerator moved to src/reports/global_wired_client_report_generator.py (1013 SC-001 position 36)  # noqa: E501
+# GlobalWiredClientReportGenerator moved to src/reports/global_wired_client_report_generator.py (1013 SC-001 position
+# 36)
 
 
-# WiredClientManufacturerReportGenerator moved to src/reports/wired_client_manufacturer_report_generator.py  # noqa: E501
+# WiredClientManufacturerReportGenerator moved to src/reports/wired_client_manufacturer_report_generator.py
 # (1013 SC-001 position 26)
 
 
@@ -3307,7 +3311,7 @@ def _get_duc_instance():  # Build DeviceUtilityCommands.
 # src/ui/interactive_display_utils.py (issue #1013 SC-001 position 10)
 
 
-# GatewayTestExporter moved to src/export/gateway_test_exporter.py (1013 SC-001 position 37)  # noqa: E501
+# GatewayTestExporter moved to src/export/gateway_test_exporter.py (1013 SC-001 position 37)
 
 
 # GatewayStatsExporter moved to src/gateway/gateway_stats_exporter.py (1014 SC-001 position 12)
@@ -3536,7 +3540,8 @@ def _build_firmware_manager(session: Any, target_org_id: str) -> FirmwareManager
     return FirmwareManager(fw_config)  # Single-positional-arg constructor per FR-014
 
 
-# NOTE: check_firmware_upgrade_status_direct removed - use FirmwareManager.create(apisession, org_id).check_firmware_upgrade_status()  # noqa: E501
+# NOTE: check_firmware_upgrade_status_direct removed - use FirmwareManager.create(apisession,
+# org_id).check_firmware_upgrade_status()
 
 # NOTE: FirmwareUpgradeStatusChecker folded into src/firmware/firmware_manager.py per SC-019.
 # Callers should use FirmwareManager.create(apisession, org_id).check_firmware_upgrade_status().
@@ -3641,7 +3646,10 @@ menu_actions: "dict[str, tuple[Callable[..., Any], str]]" = {
     # ==============================
     "195": (
         lambda: AddressAuditEngine().run(apisession, ConfigUtils.get_cached_or_prompted_org_id()),
-        "Audit site addresses from CSV (data/) - fuse Mist + SNMP + CSV hints, verify vs. web; READ-ONLY, saves report. Tier-3 browser geocoding auto-engages when available (ADDRESS_AUDIT_GEOCODE=off to skip)",  # noqa: E501
+        (
+            "Audit site addresses from CSV (data/) - fuse Mist + SNMP + CSV hints, verify vs. web; READ-ONLY, saves "
+            "report. Tier-3 browser geocoding auto-engages when available (ADDRESS_AUDIT_GEOCODE=off to skip)"
+        ),
     ),
     # ==============================
     # READ-ONLY OPERATIONS
@@ -3826,11 +3834,17 @@ menu_actions: "dict[str, tuple[Callable[..., Any], str]]" = {
     # ==============================
     "149": (
         lambda: WAN2MigrationLauncher().launch(),
-        "Set WAN2 Interface Site Variable - Configure 'wan2_interface' site variable for template-based WAN migration (Reports sites with ge-0/0/1 overrides)",  # noqa: E501
+        (
+            "Set WAN2 Interface Site Variable - Configure 'wan2_interface' site variable for template-based WAN "
+            "migration (Reports sites with ge-0/0/1 overrides)"
+        ),
     ),
     "163": (
         _dispatch_gateway_wan2_variable_migration,  # 1014 P13: DI-wiring shim (cascades to canonical)
-        " DESTRUCTIVE: Update Gateway Templates to Use WAN2 Variable - Replace hardcoded 'ge-0/0/1' references with {{wan2_interface}} variable (Requires uppercase 'MIGRATE' confirmation, supports --dry-run)",  # noqa: E501
+        (
+            "DESTRUCTIVE: Update Gateway Templates to Use WAN2 Variable - Replace hardcoded 'ge-0/0/1' references with "
+            "{{wan2_interface}} variable (Requires uppercase 'MIGRATE' confirmation, supports --dry-run)"
+        ),
     ),
     "150": (
         lambda: GatewayTemplateConfigManager(
@@ -3856,11 +3870,17 @@ menu_actions: "dict[str, tuple[Callable[..., Any], str]]" = {
             generate_sites_fn=OrgSiteExporter.sites,
             sanitize_filename_fn=EnhancedSSHRunner.sanitize_filename,
         ).apply(),
-        " DESTRUCTIVE: Apply Gateway Template Configuration - Replicate extracted configs to other templates (Requires uppercase 'APPLY' confirmation)",  # noqa: E501
+        (
+            "DESTRUCTIVE: Apply Gateway Template Configuration - Replicate extracted configs to other templates "
+            "(Requires uppercase 'APPLY' confirmation)"
+        ),
     ),
     "148": (
         lambda: WLANRadiusTimerManager().manage(),
-        "Manage WLAN RADIUS Authentication Timers - Configure auth_servers_timeout, auth_servers_retries, auth_server_selection, and fast_dot1x_timers for site or template WLANs",  # noqa: E501
+        (
+            "Manage WLAN RADIUS Authentication Timers - Configure auth_servers_timeout, auth_servers_retries, "
+            "auth_server_selection, and fast_dot1x_timers for site or template WLANs"
+        ),
     ),
     # Authentication Management
     "143": (
@@ -3872,7 +3892,10 @@ menu_actions: "dict[str, tuple[Callable[..., Any], str]]" = {
     "48": (OrgAdminExporter.admins, "Export administrator information for the organization"),
     "136": (
         OrgConfigExporter.msp,
-        "MSP (Managed Service Provider) info - Displays guidance only (MSP data requires MSP-level API access, not org-level)",  # noqa: E501
+        (
+            "MSP (Managed Service Provider) info - Displays guidance only (MSP data requires MSP-level API access, not "
+            "org-level)"
+        ),
     ),
     "49": (OrgAdminExporter.sso, "Export SSO (Single Sign-On) information for the organization"),
     "43": (OrgAdminExporter.usage, "Export license usage information for the organization"),
@@ -3888,7 +3911,10 @@ menu_actions: "dict[str, tuple[Callable[..., Any], str]]" = {
         lambda fast=False, address_check=False, debug=False, skip_ssl_verify=False: InventoryCSVComparator(
             fast=fast, address_check=address_check, debug=debug, skip_ssl_verify=skip_ssl_verify
         ).execute(),
-        "Compare inventory data with external CSV file using configurable address similarity threshold (ADDRESS_MATCH_THRESHOLD in .env)",  # noqa: E501
+        (
+            "Compare inventory data with external CSV file using configurable address similarity threshold "
+            "(ADDRESS_MATCH_THRESHOLD in .env)"
+        ),
     ),
     "139": (
         TroubleshootUtils.launch_interactive,
@@ -3919,7 +3945,10 @@ menu_actions: "dict[str, tuple[Callable[..., Any], str]]" = {
     # > Continuous Operations & Monitoring
     "151": (
         DataCollectionManager.continuous_loop,
-        "Loop refresh of core datasets (site list, inventory, stats, ports, VPN) Stop with CTRL+C or create 'stop_loop.txt'",  # noqa: E501
+        (
+            "Loop refresh of core datasets (site list, inventory, stats, ports, VPN) Stop with CTRL+C or create "
+            "'stop_loop.txt'"
+        ),
     ),
     "152": (
         DataCollectionManager.continuous_loop,
@@ -3939,11 +3968,17 @@ menu_actions: "dict[str, tuple[Callable[..., Any], str]]" = {
         lambda: _build_firmware_manager(
             apisession, ConfigUtils.get_cached_or_prompted_org_id()
         ).execute_firmware_upgrade_with_mode_selection(),
-        " DESTRUCTIVE: Advanced AP firmware upgrade with mode selection - upgrade by site list/selection or by Gateway Template assignment",  # noqa: E501
+        (
+            "DESTRUCTIVE: Advanced AP firmware upgrade with mode selection - upgrade by site list/selection or by "
+            "Gateway Template assignment"
+        ),
     ),
     "158": (
         DeviceRebootManager.by_gateway_template_list,
-        " DESTRUCTIVE: Reboot all devices associated with templates listed in GatewayTemplateRebootList.CSV and log results",  # noqa: E501
+        (
+            "DESTRUCTIVE: Reboot all devices associated with templates listed in GatewayTemplateRebootList.CSV and log "
+            "results"
+        ),
     ),
     "161": (
         lambda dry_run=False: _configure_virtual_chassis_manager().launch_convert_single(dry_run=dry_run),
@@ -4032,7 +4067,10 @@ menu_actions: "dict[str, tuple[Callable[..., Any], str]]" = {
     ),
     "120": (
         lambda: ServicePingLauncher().launch(),
-        "WebSocket Service Ping - Execute service-specific ping on SSR gateways via WebSocket stream (real-time output)",  # noqa: E501
+        (
+            "WebSocket Service Ping - Execute service-specific ping on SSR gateways via WebSocket stream (real-time "
+            "output)"
+        ),
     ),
     # ==============================
     # POST API OPERATIONS - Device Commands (Starting at 100)
@@ -4045,7 +4083,10 @@ menu_actions: "dict[str, tuple[Callable[..., Any], str]]" = {
         lambda: _build_firmware_manager(
             apisession, ConfigUtils.get_cached_or_prompted_org_id()
         ).execute_switch_firmware_upgrade_with_mode_selection(),
-        " DESTRUCTIVE: Advanced Switch firmware upgrade with mode selection - upgrade by site list/selection or by Gateway Template assignment",  # noqa: E501
+        (
+            "DESTRUCTIVE: Advanced Switch firmware upgrade with mode selection - upgrade by site list/selection or by "
+            "Gateway Template assignment"
+        ),
     ),
     # ==============================
     # SSR FIRMWARE OPERATIONS
@@ -4054,33 +4095,51 @@ menu_actions: "dict[str, tuple[Callable[..., Any], str]]" = {
         lambda: _build_firmware_manager(
             apisession, ConfigUtils.get_cached_or_prompted_org_id()
         ).execute_ssr_firmware_upgrade_with_mode_selection(),
-        " DESTRUCTIVE: Advanced SSR firmware upgrade with mode selection - upgrade by site list/selection or by Gateway Template assignment",  # noqa: E501
+        (
+            "DESTRUCTIVE: Advanced SSR firmware upgrade with mode selection - upgrade by site list/selection or by "
+            "Gateway Template assignment"
+        ),
     ),
     # ==============================
     # TERMINAL USER INTERFACE MODE
     # ==============================
     "141": (
         lambda: TUILauncher().launch(),
-        "Launch Terminal User Interface (TUI) mode - Visual navigation of Mist API library with interactive exploration",  # noqa: E501
+        (
+            "Launch Terminal User Interface (TUI) mode - Visual navigation of Mist API library with interactive "
+            "exploration"
+        ),
     ),
     # ==============================
     # TEST DATA GENERATION
     # ==============================
     "171": (
         lambda: _configure_site_config_manager().create_test_sites_from_csv(),
-        " DESTRUCTIVE: Create 137 test sites from NorthAmericanTestSites.csv - Real landmarks across 13 North American countries (Requires uppercase 'CREATE' confirmation)",  # noqa: E501
+        (
+            "DESTRUCTIVE: Create 137 test sites from NorthAmericanTestSites.csv - Real landmarks across 13 North "
+            "American countries (Requires uppercase 'CREATE' confirmation)"
+        ),
     ),
     "172": (
         lambda: _configure_site_config_manager().create_country_rf_templates_and_assign(),
-        " DESTRUCTIVE: Create country-specific RF templates and assign sites to matching templates (Requires uppercase 'CREATE' confirmation)",  # noqa: E501
+        (
+            "DESTRUCTIVE: Create country-specific RF templates and assign sites to matching templates (Requires "
+            "uppercase 'CREATE' confirmation)"
+        ),
     ),
     "173": (
         lambda: _configure_site_config_manager().create_ap_model_device_profiles(),
-        " DESTRUCTIVE: Scan org for AP models and create Device Profile per model with inherit/auto settings (Requires uppercase 'CREATE' confirmation)",  # noqa: E501
+        (
+            "DESTRUCTIVE: Scan org for AP models and create Device Profile per model with inherit/auto settings "
+            "(Requires uppercase 'CREATE' confirmation)"
+        ),
     ),
     "174": (
         lambda: _configure_site_config_manager().assign_aps_to_matching_device_profiles(),
-        " DESTRUCTIVE: Assign APs to Device Profiles matching their model type (AP-{model}) - Skips APs without matching profiles (Requires uppercase 'ASSIGN' confirmation)",  # noqa: E501
+        (
+            "DESTRUCTIVE: Assign APs to Device Profiles matching their model type (AP-{model}) - Skips APs without "
+            "matching profiles (Requires uppercase 'ASSIGN' confirmation)"
+        ),
     ),
     "165": (
         lambda: GatewayTemplateConfigManager(
@@ -4093,29 +4152,44 @@ menu_actions: "dict[str, tuple[Callable[..., Any], str]]" = {
             generate_sites_fn=OrgSiteExporter.sites,
             sanitize_filename_fn=EnhancedSSHRunner.sanitize_filename,
         ).clone_by_location(),
-        " DESTRUCTIVE: Clone Gateway Template by State and Country - Create state/country-specific templates and assign sites (Requires uppercase 'CLONE' confirmation)",  # noqa: E501
+        (
+            "DESTRUCTIVE: Clone Gateway Template by State and Country - Create state/country-specific templates and "
+            "assign sites (Requires uppercase 'CLONE' confirmation)"
+        ),
     ),
     "166": (
         lambda dry_run=False: WANProbeConfigManager.configure(dry_run=dry_run),
-        " DESTRUCTIVE: Configure WAN Probe Override on Gateway Templates - Set ICMP probe IPs and profile for all WAN interfaces (Requires uppercase 'APPLY' confirmation, supports --dry-run)",  # noqa: E501
+        (
+            "DESTRUCTIVE: Configure WAN Probe Override on Gateway Templates - Set ICMP probe IPs and profile for all "
+            "WAN interfaces (Requires uppercase 'APPLY' confirmation, supports --dry-run)"
+        ),
     ),
     "167": (
         lambda dry_run=False: WANProbeDeviceOverrideManager.configure(dry_run=dry_run),
-        " DESTRUCTIVE: Configure WAN Probe on Device Port Overrides - Set ICMP probe on device-level WAN overrides only (Requires uppercase 'APPLY' confirmation, supports --dry-run)",  # noqa: E501
+        (
+            "DESTRUCTIVE: Configure WAN Probe on Device Port Overrides - Set ICMP probe on device-level WAN overrides "
+            "only (Requires uppercase 'APPLY' confirmation, supports --dry-run)"
+        ),
     ),
     # ==============================
     # ORG-LEVEL FIRMWARE OPERATIONS
     # ==============================
     "157": (
         lambda: _build_org_ap_upgrader().run(),
-        " DESTRUCTIVE: Org-Level AP Firmware Upgrade - Efficient multi-site upgrade using org-level API (1 call per version vs 1 per site), MSP multi-org support, supports --dry-run",  # noqa: E501
+        (
+            "DESTRUCTIVE: Org-Level AP Firmware Upgrade - Efficient multi-site upgrade using org-level API (1 call per "
+            "version vs 1 per site), MSP multi-org support, supports --dry-run"
+        ),
     ),
     # ==============================
     # MSP OPERATIONS
     # ==============================
     "144": (
         MSPInventoryExporter.execute,
-        "MSP Inventory Export - Export device inventory across all MSPs and all organizations to CSV (requires MSP privileges via --login)",  # noqa: E501
+        (
+            "MSP Inventory Export - Export device inventory across all MSPs and all organizations to CSV (requires MSP "
+            "privileges via --login)"
+        ),
     ),
     # ==============================
     # SITE AUTO-UPGRADE CONFIGURATION
@@ -4132,7 +4206,10 @@ menu_actions: "dict[str, tuple[Callable[..., Any], str]]" = {
             select_msps_fn=lambda: _build_org_ap_upgrader(org_id="")._select_msps(),
             select_orgs_fn=lambda msp: _build_org_ap_upgrader(org_id="")._select_orgs_from_msp(msp),
         ),
-        "Site Auto-Upgrade Configuration - Configure AP auto-upgrade settings for sites with MSP multi-org support (supports --dry-run)",  # noqa: E501
+        (
+            "Site Auto-Upgrade Configuration - Configure AP auto-upgrade settings for sites with MSP multi-org support "
+            "(supports --dry-run)"
+        ),
     ),
     # ==============================
     # ZONE & ENGAGEMENT CONFIGURATION ANALYSIS
@@ -4172,7 +4249,10 @@ menu_actions: "dict[str, tuple[Callable[..., Any], str]]" = {
                 tqdm_fn=tqdm,
             )
         ),
-        " DESTRUCTIVE: Site Analytics Configuration - Apply standard RTSA/Rogue/Engagement/Occupancy settings to deviating sites",  # noqa: E501
+        (
+            "DESTRUCTIVE: Site Analytics Configuration - Apply standard RTSA/Rogue/Engagement/Occupancy settings to "
+            "deviating sites"
+        ),
     ),
     # ==============================
     # SITE INVENTORY HEALTH ANALYSIS
@@ -4187,14 +4267,20 @@ menu_actions: "dict[str, tuple[Callable[..., Any], str]]" = {
                 save_data_fn=DataExporter.write_with_format_selection,
             )
         ),
-        "Site Inventory Health Analysis - Find sites with APs missing switches/gateways, or with offline infrastructure",  # noqa: E501
+        (
+            "Site Inventory Health Analysis - Find sites with APs missing switches/gateways, or with offline "
+            "infrastructure"
+        ),
     ),
     # ==============================
     # BULK RADIUS WLAN CONFIGURATION
     # ==============================
     "170": (
         lambda dry_run=False: BulkRadiusWLANConfigManager().manage(dry_run=dry_run),
-        "Bulk RADIUS WLAN Configuration - Configure auth_servers_timeout, auth_servers_retries, fast_dot1x_timers for org-level RADIUS WLANs",  # noqa: E501
+        (
+            "Bulk RADIUS WLAN Configuration - Configure auth_servers_timeout, auth_servers_retries, fast_dot1x_timers "
+            "for org-level RADIUS WLANs"
+        ),
     ),
     # ==============================
     # MAPS MANAGER (External Module)
@@ -4836,13 +4922,11 @@ def _report_tqdm_status() -> None:
     """Log whether the real tqdm landed in the global namespace after deferred imports."""
     logging.debug("_report_tqdm_status: checking tqdm namespace availability")  # Trace tqdm status check
     if "tqdm" in global_assignments:  # tqdm injection succeeded -- confirm availability for progress bars
-        logging.info(
-            "tqdm is available in global namespace: %s", type(globals().get("tqdm"))
-        )  # Log tqdm availability  # noqa: E501
+        logging.info("tqdm is available in global namespace: %s", type(globals().get("tqdm")))  # Log tqdm availability
     else:  # tqdm missing from resolved assignments -- progress bars will be non-functional
         logging.warning(
             "tqdm was not found in global assignments - progress bars will not be functional"
-        )  # Warn if missing  # noqa: E501
+        )  # Warn if missing
 
 
 def _apply_deferred_assignments() -> None:
@@ -4853,9 +4937,7 @@ def _apply_deferred_assignments() -> None:
     for var_name, var_value in global_assignments.items():  # Publish each resolved symbol
         globals()[var_name] = var_value  # Inject the imported symbol into module scope for global reuse
         if var_name == "tqdm" and var_value is not None:  # Real tqdm replacing the stub warrants an explicit note
-            logging.info(
-                "Successfully imported real tqdm in deferred mode: %s", type(var_value)
-            )  # Log tqdm override  # noqa: E501
+            logging.info("Successfully imported real tqdm in deferred mode: %s", type(var_value))  # Log tqdm override
     logging.debug("Applied %d global variable assignments", len(global_assignments))  # Log assignment count
     _report_tqdm_status()  # Log whether tqdm is available in the global namespace
 
@@ -4897,16 +4979,16 @@ def _add_execution_mode_arguments(parser: argparse.ArgumentParser) -> None:
     logging.debug("_add_execution_mode_arguments: registering execution-mode flags")  # Log before adding
     parser.add_argument(
         "--debug", action="store_true", help="Enable debug output (includes detailed table data in logs)"
-    )  # Debug mode flag  # noqa: E501
+    )  # Debug mode flag
     parser.add_argument(
         "--delay", type=int, help="Fixed delay between loop iterations (in seconds). If omitted, delay is dynamic."
-    )  # Rate limit override  # noqa: E501
+    )  # Rate limit override
     parser.add_argument(
         "--fast", action="store_true", help="Enable fast mode with multithreading (bypasses rate limiting)"
-    )  # Concurrency mode  # noqa: E501
+    )  # Concurrency mode
     parser.add_argument(
         "--skip-deps", action="store_true", help="Skip dependency check on startup for faster script initialization"
-    )  # Skip dep check  # noqa: E501
+    )  # Skip dep check
 
 
 def _add_output_format_arguments(parser: argparse.ArgumentParser) -> None:
@@ -4916,17 +4998,25 @@ def _add_output_format_arguments(parser: argparse.ArgumentParser) -> None:
         "--output-format",
         choices=["csv", "sqlite"],
         default="csv",
-        help="Output format: 'csv' for CSV files (default) or 'sqlite' for hybrid database with natural primary keys",  # Output backend selector  # noqa: E501
+        help=(
+            "Output format: 'csv' for CSV files (default) or 'sqlite' for hybrid database with natural primary keys"
+        ),  # Output backend selector
     )
     parser.add_argument(
         "--test",
         action="store_true",
-        help="Run systematic test of all safe menu options (GET operations only, no interactive/websocket/POST operations)",  # noqa: E501
+        help=(
+            "Run systematic test of all safe menu options (GET operations only, no interactive/websocket/POST "
+            "operations)"
+        ),
     )
     parser.add_argument(
         "--testinteractive",
         action="store_true",
-        help="Run systematic test of read-only menu options requiring interactive site/device/client selection (excludes destructive operations)",  # noqa: E501
+        help=(
+            "Run systematic test of read-only menu options requiring interactive site/device/client selection "
+            "(excludes destructive operations)"
+        ),
     )
 
 
@@ -4936,22 +5026,30 @@ def _add_safety_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Enable dry-run mode for destructive operations (show what would be changed without making actual changes)",  # noqa: E501
+        help=(
+            "Enable dry-run mode for destructive operations (show what would be changed without making actual changes)"
+        ),
     )
     parser.add_argument(
         "--address-check",
         action="store_true",
-        help="Enable external address validation using Nominatim API for address comparison operations",  # Nominatim toggle  # noqa: E501
+        help=(
+            "Enable external address validation using Nominatim API for address comparison operations"
+        ),  # Nominatim toggle
     )
     parser.add_argument(
         "--skip-ssl-verify",
         action="store_true",
-        help="Skip SSL certificate verification for external API calls (use with caution - for corporate networks only)",  # noqa: E501
+        help=(
+            "Skip SSL certificate verification for external API calls (use with caution - for corporate networks only)"
+        ),
     )
     parser.add_argument(
         "--no-env",
         action="store_true",
-        help="Disable .env file loading for SSH operations (require explicit command line parameters)",  # SSH env override  # noqa: E501
+        help=(
+            "Disable .env file loading for SSH operations (require explicit command line parameters)"
+        ),  # SSH env override
     )
 
 
@@ -4961,17 +5059,23 @@ def _add_interface_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--tui",
         action="store_true",
-        help="Launch MistHelper in Terminal User Interface (TUI) mode for visual navigation of Mist API library",  # Rich TUI mode  # noqa: E501
+        help=(
+            "Launch MistHelper in Terminal User Interface (TUI) mode for visual navigation of Mist API library"
+        ),  # Rich TUI mode
     )
     parser.add_argument(
         "--login",
         action="store_true",
-        help="Use interactive login (email/password) instead of API token - enables MSP-level API access",  # Interactive auth  # noqa: E501
+        help=(
+            "Use interactive login (email/password) instead of API token - enables MSP-level API access"
+        ),  # Interactive auth
     )
     parser.add_argument(
         "--web-portal",
         action="store_true",
-        help="Launch the web portal interface on port 8055 (or WEB_PORT env var) instead of the CLI menu",  # Gunicorn web portal  # noqa: E501
+        help=(
+            "Launch the web portal interface on port 8055 (or WEB_PORT env var) instead of the CLI menu"
+        ),  # Gunicorn web portal
     )
     parser.add_argument(
         "--standalone",
@@ -5051,7 +5155,7 @@ def _apply_dependency_assignments(skip_mode: bool) -> None:
     if skip_mode:  # Differentiate the log message so operators see the skip-deps code path was taken
         logging.debug(
             "Applied %d global variable assignments in skip mode", len(global_assignments)
-        )  # Log skip-mode count  # noqa: E501
+        )  # Log skip-mode count
     else:  # Full dependency path -- preserve the original (non-skip) log message wording
         logging.debug("Applied %d global variable assignments", len(global_assignments))  # Log assignment count
 
@@ -5065,9 +5169,7 @@ def _run_full_dependency_init(args: argparse.Namespace) -> None:
     _apply_dependency_assignments(skip_mode=False)  # Publish resolved symbols into module namespace
     if not success and not args.test:  # Abort on critical failure unless running in test mode
         logging.error("Critical dependencies missing. Exiting.")  # Log fatal dependency failure before exit
-        print(
-            "!! Critical dependencies missing. Use --skip-deps to bypass or install missing packages."
-        )  # Inform user  # noqa: E501
+        print("!! Critical dependencies missing. Use --skip-deps to bypass or install missing packages.")  # Inform user
         sys.exit(1)  # Exit with error code -- cannot continue without required modules
 
 
@@ -5246,7 +5348,10 @@ def _run_cli_mode(args: argparse.Namespace) -> None:
 def _log_cli_invocation(args: argparse.Namespace) -> None:
     """Log every parsed CLI argument at DEBUG level for diagnostics."""
     logging.debug(
-        "Parsed CLI arguments: org=%s, menu=%s, site=%s, device=%s, port=%s, debug=%s, delay=%s, fast=%s, skip_deps=%s, output_format=%s, test=%s, address_check=%s, tui=%s",  # noqa: E501
+        (
+            "Parsed CLI arguments: org=%s, menu=%s, site=%s, device=%s, port=%s, debug=%s, delay=%s, fast=%s, "
+            "skip_deps=%s, output_format=%s, test=%s, address_check=%s, tui=%s"
+        ),
         args.org,
         args.menu,
         args.site,
