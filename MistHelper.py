@@ -3585,7 +3585,8 @@ def _build_org_ap_upgrader(**overrides: Any) -> _OrgLevelAPFirmwareUpgrader:
     ``selected_msp`` via keyword. All remaining hooks bind to canonical
     MistHelper.py collaborators.
     """
-    global msp_privileges, apisession, selected_msp  # noqa: PLW0602  # WHY: read module globals
+    # WHY: read-only references to module globals msp_privileges/apisession/selected_msp;
+    # no assignment means `global` is unnecessary (drops PLW0602 site, initiative 1016).
     kwargs: dict[str, Any] = dict(  # WHY: build DI kwargs dict for src class
         org_id=ConfigUtils.get_cached_or_prompted_org_id() or "",
         apisession=apisession,
