@@ -51,7 +51,9 @@ from typing import TYPE_CHECKING, Any  # Import type hints for static analysis w
 # These allow type checking while the actual imports happen at runtime via GlobalImportManager
 # Pylance uses these unconditionally; runtime try/except blocks below handle actual loading.
 if TYPE_CHECKING:  # These imports only used by static type checkers (Pylance, mypy), not at runtime
-    import pyte  # Type stub for pyte (terminal emulator for WebSocket output parsing)
+    from collections.abc import Callable  # Callable protocol for typed optional-import fallbacks
+    from types import ModuleType  # ModuleType annotation for optional-module fallback typing
+
     import requests  # Type stub for requests (HTTP library used by mistapi)
     from prettytable import PrettyTable  # Type stub for prettytable (ASCII table formatting)
 
@@ -63,14 +65,18 @@ if TYPE_CHECKING:  # These imports only used by static type checkers (Pylance, m
 # Conditional import for ArangoDB + Redis TimeSeries backends.
 # Falls back gracefully in standalone mode (no python-arango/redis installed).
 try:  # Attempt to import polyglot database layer for ArangoDB/Redis export backends
-    from src.db import DatabaseConfig, configure_db_logging  # Import database configuration classes
-    from src.db.router import DatabaseRouter  # Import database router for multi-backend write operations
+    from src.db import DatabaseConfig as _DatabaseConfigImpl
+    from src.db import configure_db_logging as _configure_db_logging_impl
+    from src.db.router import DatabaseRouter as _DatabaseRouterImpl
 
+    DatabaseConfig: type[_DatabaseConfigImpl] | None = _DatabaseConfigImpl  # Class reference for DB config construction
+    configure_db_logging: "Callable[[], None] | None" = _configure_db_logging_impl  # Logging setup callable
+    DatabaseRouter: type[_DatabaseRouterImpl] | None = _DatabaseRouterImpl  # Class reference for DB router construction
     DB_LAYER_AVAILABLE = True  # Set flag indicating database backends are available for export operations
 except ImportError:  # If database dependencies (python-arango, redis) not installed, gracefully disable
-    DatabaseConfig = None  # type: ignore[assignment, misc]  # None lets runtime guards detect DB-layer absence
-    configure_db_logging = None  # type: ignore[assignment]  # None lets runtime guards detect DB-layer absence
-    DatabaseRouter = None  # type: ignore[assignment, misc]  # None lets runtime guards detect DB-layer absence
+    DatabaseConfig = None  # None lets runtime guards detect DB-layer absence
+    configure_db_logging = None  # None lets runtime guards detect DB-layer absence
+    DatabaseRouter = None  # None lets runtime guards detect DB-layer absence
     DB_LAYER_AVAILABLE = False  # Set flag to disable database output formats (CSV/SQLite only)
 
 # Explicit public API surface (issue #895).
@@ -807,7 +813,7 @@ def _pad_version_tuples(
 
 
 # Operator symbol -> comparison predicate; dict dispatch keeps _version_satisfies flat (no if/elif chain).
-_VERSION_COMPARATORS = {
+_VERSION_COMPARATORS: "dict[str, Callable[[tuple[int, ...], tuple[int, ...]], bool]]" = {
     ">=": lambda installed, required: installed >= required,  # 'at least' constraint
     ">": lambda installed, required: installed > required,  # 'strictly newer' constraint
     "<=": lambda installed, required: installed <= required,  # 'at most' constraint
@@ -857,7 +863,8 @@ def _get_latest_pypi_version(package_name: str) -> str:  # Ask PyPI for a packag
         ) as response:  # nosec B310  # 5s timeout avoids blocking startup on blocked networks
             raw = response.read(max_bytes)  # Read at most max_bytes of the JSON response body
             data = json_mod.loads(raw.decode())  # Parse the JSON metadata into a dict
-            return data.get("info", {}).get("version", "")  # type: ignore[no-any-return]  # Return latest version string, or '' if absent
+            version = data.get("info", {}).get("version", "")  # Return latest version string, or '' if absent
+            return str(version) if version else ""  # Cast to str for strict typing
     except Exception:  # Any error (offline, proxy block, parse failure) means we can't determine the latest version
         return ""  # Empty string signals 'latest unknown' so callers skip the upgrade check
 
@@ -956,9 +963,11 @@ except ImportError as _pt_err:  # Required dependency is missing
     ) from _pt_err  # Fail fast with install guidance
 
 try:  # numpy is optional (only some analytics need it)
-    import numpy as np  # Numerical arrays for analytics calculations
+    import numpy as _np_impl  # Numerical arrays for analytics calculations
+
+    np: "ModuleType | None" = _np_impl  # Union type lets guards detect absence
 except ImportError:  # numpy not installed
-    np = None  # type: ignore[assignment]  # Optional - analytics features limited  # None lets runtime guards detect absence
+    np = None  # None lets runtime guards detect absence
 
 try:  # websocket-client is required for live device diagnostics
     import websocket  # WebSocket client fail-fast install guard (used by src.device.arp_command_manager)
@@ -968,9 +977,11 @@ except ImportError as _ws_err:  # Required dependency is missing
     ) from _ws_err  # Fail fast with install guidance
 
 try:  # SequenceMatcher is optional (used for fuzzy string comparisons)
-    from difflib import SequenceMatcher  # Stdlib similarity-ratio helper
+    from difflib import SequenceMatcher as _SequenceMatcherImpl  # Stdlib similarity-ratio helper
+
+    SequenceMatcher: type[_SequenceMatcherImpl] | None = _SequenceMatcherImpl  # Class handle for guarded use
 except ImportError:  # Extremely unlikely for a stdlib module, but guard anyway
-    SequenceMatcher = None  # type: ignore[assignment, misc]  # None lets callers detect absence
+    SequenceMatcher = None  # None lets callers detect absence
 
 # Import mistapi later through GlobalImportManager for better dependency management
 # Using Any type since mistapi is dynamically loaded but guaranteed to be available before use
@@ -991,25 +1002,33 @@ except ImportError as _req_err:  # Required dependency is missing
     ) from _req_err  # Fail fast with install guidance
 
 try:  # urllib3 is optional (used to suppress noisy SSL warnings)
-    import urllib3  # Low-level HTTP library underlying requests
+    import urllib3 as _urllib3_impl  # Low-level HTTP library underlying requests
+
+    urllib3: "ModuleType | None" = _urllib3_impl  # Union type lets guards detect absence
 except ImportError:  # urllib3 not installed
-    urllib3 = None  # type: ignore[assignment]  # Optional - SSL warning suppression  # None lets guards detect absence
+    urllib3 = None  # None lets guards detect absence
 
 try:  # pyte is optional (terminal emulation for parsing WebSocket output)
-    import pyte  # In-memory terminal emulator to render device CLI screens
+    import pyte as _pyte_impl  # In-memory terminal emulator to render device CLI screens
 
+    pyte: "ModuleType | None" = _pyte_impl  # Union type lets guards detect absence
     _has_pyte = True  # Flag that terminal-emulation features are available
 except ImportError:  # pyte not installed
-    pyte = None  # type: ignore[assignment]  # Optional - terminal emulation  # None lets guards detect absence
+    pyte = None  # None lets guards detect absence
     _has_pyte = False  # Flag that terminal-emulation features are unavailable
 
 try:  # paramiko is optional (used for direct SSH operations)
-    import paramiko  # type: ignore[import-untyped]  # SSH client library
-    from paramiko import RejectPolicy, SSHClient  # Strict host-key policy and the SSH client class
+    import paramiko as _paramiko_impl  # SSH client library
+    from paramiko import RejectPolicy as _RejectPolicyImpl  # Strict host-key policy
+    from paramiko import SSHClient as _SSHClientImpl  # SSH client class
+
+    paramiko: "ModuleType | None" = _paramiko_impl  # Union type lets guards detect absence
+    SSHClient: type[_SSHClientImpl] | None = _SSHClientImpl  # Class handle for guarded use
+    RejectPolicy: type[_RejectPolicyImpl] | None = _RejectPolicyImpl  # Class handle for guarded use
 except ImportError:  # paramiko not installed
-    paramiko = None  # type: ignore[assignment]  # Optional - SSH operations  # None lets guards detect absence
-    SSHClient = None  # type: ignore[assignment, misc]  # Optional - SSH operations  # None lets guards detect absence
-    RejectPolicy = None  # type: ignore[assignment, misc]  # Optional - SSH operations  # None lets guards detect absence
+    paramiko = None  # None lets guards detect absence
+    SSHClient = None  # None lets guards detect absence
+    RejectPolicy = None  # None lets guards detect absence
 
 # Optional imports with fallbacks
 try:  # scourgify is optional (US street-address normalization)
@@ -1018,9 +1037,11 @@ except ImportError:  # scourgify not installed
     normalize_address_record = None  # None lets callers fall back to raw address strings
 
 try:  # rapidfuzz is optional (fast fuzzy string matching)
-    from rapidfuzz import fuzz  # High-performance fuzzy match scoring
+    from rapidfuzz import fuzz as _fuzz_impl  # High-performance fuzzy match scoring
+
+    fuzz: "ModuleType | None" = _fuzz_impl  # Union type lets guards detect absence
 except ImportError:  # rapidfuzz not installed
-    fuzz = None  # type: ignore[assignment]  # None lets callers skip fuzzy matching
+    fuzz = None  # None lets callers skip fuzzy matching
 
 # Keyboard listener functionality was extracted to src/refactors/keyboard_listener.py
 # (PR-13). The extracted class KeyboardListener preserves the no-op stub for the
@@ -1083,14 +1104,15 @@ def _fallback_load_dotenv() -> None:  # Minimal .env parser used when python-dot
 
 
 try:  # Prefer the full-featured python-dotenv loader when available
-    from dotenv import load_dotenv  # Robust .env parser from python-dotenv
+    from dotenv import load_dotenv as _load_dotenv_impl  # Robust .env parser from python-dotenv
 
+    load_dotenv: "Callable[..., object]" = _load_dotenv_impl  # Common signature: no-arg call, ignored return
     DOTENV_AVAILABLE = True  # Flag that the real loader is in use
     load_dotenv()  # Load .env now so config is available to the import manager
 except ImportError:  # python-dotenv not installed
     DOTENV_AVAILABLE = False  # Flag that we're using the minimal fallback
     # Use fallback loader and create an alias for later calls
-    load_dotenv = _fallback_load_dotenv  # type: ignore[assignment]  # Alias so later load_dotenv() calls still work
+    load_dotenv = _fallback_load_dotenv  # Alias so later load_dotenv() calls still work
     _fallback_load_dotenv()  # Load .env now using the fallback parser
 
 
@@ -1743,13 +1765,14 @@ class GlobalImportManager:
         """Install a missing dependency (when permitted) and retry the import; return the module or None."""
         if not self._auto_install_allowed(package_spec, skip_deps):  # Auto-install must be permitted.
             return None  # Installation not allowed -- nothing to retry.
+        assert package_spec is not None  # _auto_install_allowed rejects None; narrow for type-checker.
         logging.info("Attempting to install missing dependency: %s", package_spec)  # Announce the install attempt.
-        if not self._attempt_install(package_spec):  # type: ignore[arg-type]  # No installer succeeded.
+        if not self._attempt_install(package_spec):  # No installer succeeded.
             logging.error("Failed to install %s", package_spec)  # Report the install failure.
             return None  # Cannot retry without a successful install.
         self._clear_failed_import_cache(module_name)  # Purge stale caches before the retry.
         time.sleep(0.5)  # Brief pause to let filesystem writes settle before retrying.
-        return self._retry_import_after_install(module_name, package_spec, required)  # type: ignore[arg-type]  # Retry.
+        return self._retry_import_after_install(module_name, package_spec, required)  # Retry.
 
     def _record_import_failure(self, module_name: str, required: bool) -> None:
         """Record a terminal import failure (hard error for required deps, warning for optional)."""
@@ -1793,7 +1816,8 @@ class GlobalImportManager:
         self.imports[module_name] = module  # Cache the imported module for later global assignment.
         logging.debug("Successfully imported %s", module_name)  # Record the successful import.
         if self._should_upgrade_package(package_spec, skip_deps, skip_upgrade):  # Opportunistic upgrade gate.
-            self._check_and_upgrade_package(module_name, package_spec)  # type: ignore[arg-type]  # Upgrade package.
+            assert package_spec is not None  # _should_upgrade_package rejects None; narrow for type-checker.
+            self._check_and_upgrade_package(module_name, package_spec)  # Upgrade package.
 
     def _partition_dependencies(self, packages_dict):
         """Split a package map into (builtin, external) dicts by whether a spec is present."""
@@ -1934,7 +1958,9 @@ class GlobalImportManager:
         try:  # The function may be an attribute or require a direct import
             normalize_func = getattr(module_obj, "normalize_address_record", None)  # Look for the normalize function
             if not normalize_func:  # Attribute missing -- import directly from scourgify
-                from scourgify import normalize_address_record as normalize_func  # Direct import fallback
+                from scourgify import normalize_address_record  # Direct import fallback
+
+                normalize_func = normalize_address_record  # Rebind the direct-import result
             globals()["normalize_address_record"] = normalize_func  # Bind the resolved function globally
         except (ImportError, AttributeError):  # Package present but function unavailable
             logging.debug("Could not import normalize_address_record from scourgify, using fallback")  # Note fallback
@@ -3607,7 +3633,7 @@ def _ws_cmd_deps() -> WebSocketCmdDeps:
 # src/audit/audit_analysis_ops.py (issue #1013 SC-001 position 12)
 
 
-menu_actions = {
+menu_actions: "dict[str, tuple[Callable[..., Any], str]]" = {
     # ==============================
     # SYSTEM OPERATIONS
     # ==============================
@@ -3616,7 +3642,7 @@ menu_actions = {
     # SITE ADDRESS AUDIT (read-only)
     # ==============================
     "195": (
-        lambda: AddressAuditEngine().run(apisession, ConfigUtils.get_cached_or_prompted_org_id()),  # type: ignore[misc]
+        lambda: AddressAuditEngine().run(apisession, ConfigUtils.get_cached_or_prompted_org_id()),
         "Audit site addresses from CSV (data/) - fuse Mist + SNMP + CSV hints, verify vs. web; READ-ONLY, saves report. Tier-3 browser geocoding auto-engages when available (ADDRESS_AUDIT_GEOCODE=off to skip)",  # noqa: E501
     ),
     # ==============================
@@ -3635,7 +3661,7 @@ menu_actions = {
     ),
     # > WebSocket Device Commands
     "102": (
-        lambda: MacTableCommand.execute(_ws_cmd_deps()),  # type: ignore[misc]
+        lambda: MacTableCommand.execute(_ws_cmd_deps()),
         "Show MAC table on switch device via WebSocket (Layer 2 switching table)",
     ),
     "103": (
@@ -3685,13 +3711,13 @@ menu_actions = {
     ),
     # > Packet Capture Operations
     "134": (
-        lambda: PacketCaptureManager(  # type: ignore[no-untyped-call]
+        lambda: PacketCaptureManager(
             apisession, ConfigUtils.get_cached_or_prompted_org_id()
         ).start_site_packet_capture(),
         "Start Site Packet Capture - Wireless/Wired/Gateway/Scan captures with WebSocket streaming",
     ),
     "135": (
-        lambda: PacketCaptureManager(  # type: ignore[no-untyped-call]
+        lambda: PacketCaptureManager(
             apisession, ConfigUtils.get_cached_or_prompted_org_id()
         ).start_org_packet_capture(),
         "Start Organization Packet Capture - MxEdge captures for org-level Mist Edges only",
@@ -3801,7 +3827,7 @@ menu_actions = {
     # GATEWAY TEMPLATE VARIABLE OPERATIONS
     # ==============================
     "149": (
-        lambda: WAN2MigrationLauncher().launch(),  # type: ignore[no-untyped-call]
+        lambda: WAN2MigrationLauncher().launch(),
         "Set WAN2 Interface Site Variable - Configure 'wan2_interface' site variable for template-based WAN migration (Reports sites with ge-0/0/1 overrides)",  # noqa: E501
     ),
     "163": (
@@ -3840,7 +3866,7 @@ menu_actions = {
     ),
     # Authentication Management
     "143": (
-        lambda: SwitchToInteractiveLoginManager().run(),  # type: ignore[no-untyped-call]
+        lambda: SwitchToInteractiveLoginManager().run(),
         "Switch to interactive login (email/password) - Enables MSP-level API access for current session",
     ),
     # Organization Management (Read-Only)
@@ -3861,7 +3887,7 @@ menu_actions = {
         "Check current firmware upgrade status across organization with detailed progress monitoring and export to CSV",
     ),
     "138": (
-        lambda fast=False, address_check=False, debug=False, skip_ssl_verify=False: InventoryCSVComparator(  # type: ignore[misc]
+        lambda fast=False, address_check=False, debug=False, skip_ssl_verify=False: InventoryCSVComparator(
             fast=fast, address_check=address_check, debug=debug, skip_ssl_verify=skip_ssl_verify
         ).execute(),
         "Compare inventory data with external CSV file using configurable address similarity threshold (ADDRESS_MATCH_THRESHOLD in .env)",  # noqa: E501
@@ -3922,7 +3948,7 @@ menu_actions = {
         " DESTRUCTIVE: Reboot all devices associated with templates listed in GatewayTemplateRebootList.CSV and log results",  # noqa: E501
     ),
     "161": (
-        lambda dry_run=False: _configure_virtual_chassis_manager().launch_convert_single(dry_run=dry_run),  # type: ignore[misc]
+        lambda dry_run=False: _configure_virtual_chassis_manager().launch_convert_single(dry_run=dry_run),
         " DESTRUCTIVE: Convert a virtual chassis switch to virtual MAC (interactive, supports --dry-run)",
     ),
     "162": (
@@ -3934,7 +3960,7 @@ menu_actions = {
         "Check virtual chassis to virtual MAC conversion status for all switches",
     ),
     "18": (
-        lambda fast=False: _dispatch_gateway_stats_device_stats_with_freshness(fast=fast),  # type: ignore[misc]
+        lambda fast=False: _dispatch_gateway_stats_device_stats_with_freshness(fast=fast),
         "Export detailed device statistics for all gateways (with freshness check)",
     ),
     "36": (
@@ -3999,15 +4025,15 @@ menu_actions = {
         "Export Site Client Anomaly Events (client-specific anomaly detection: connectivity, roaming, throughput)",
     ),
     "118": (
-        lambda: PingDeviceExecutor().execute(_ws_cmd_deps()),  # type: ignore[misc]
+        lambda: PingDeviceExecutor().execute(_ws_cmd_deps()),
         "WebSocket Device Ping - Execute ping command on device via WebSocket stream (real-time output)",
     ),
     "119": (
-        lambda: ArpDeviceExecutor().execute(_ws_cmd_deps()),  # type: ignore[misc]
+        lambda: ArpDeviceExecutor().execute(_ws_cmd_deps()),
         "WebSocket Device ARP - Execute ARP command on device via WebSocket stream (real-time output)",
     ),
     "120": (
-        lambda: ServicePingLauncher().launch(),  # type: ignore[misc]
+        lambda: ServicePingLauncher().launch(),
         "WebSocket Service Ping - Execute service-specific ping on SSR gateways via WebSocket stream (real-time output)",  # noqa: E501
     ),
     # ==============================
@@ -4036,7 +4062,7 @@ menu_actions = {
     # TERMINAL USER INTERFACE MODE
     # ==============================
     "141": (
-        lambda: TUILauncher().launch(),  # type: ignore[no-untyped-call]
+        lambda: TUILauncher().launch(),
         "Launch Terminal User Interface (TUI) mode - Visual navigation of Mist API library with interactive exploration",  # noqa: E501
     ),
     # ==============================
@@ -4072,11 +4098,11 @@ menu_actions = {
         " DESTRUCTIVE: Clone Gateway Template by State and Country - Create state/country-specific templates and assign sites (Requires uppercase 'CLONE' confirmation)",  # noqa: E501
     ),
     "166": (
-        lambda dry_run=False: WANProbeConfigManager.configure(dry_run=dry_run),  # type: ignore[misc]
+        lambda dry_run=False: WANProbeConfigManager.configure(dry_run=dry_run),
         " DESTRUCTIVE: Configure WAN Probe Override on Gateway Templates - Set ICMP probe IPs and profile for all WAN interfaces (Requires uppercase 'APPLY' confirmation, supports --dry-run)",  # noqa: E501
     ),
     "167": (
-        lambda dry_run=False: WANProbeDeviceOverrideManager.configure(dry_run=dry_run),  # type: ignore[misc]
+        lambda dry_run=False: WANProbeDeviceOverrideManager.configure(dry_run=dry_run),
         " DESTRUCTIVE: Configure WAN Probe on Device Port Overrides - Set ICMP probe on device-level WAN overrides only (Requires uppercase 'APPLY' confirmation, supports --dry-run)",  # noqa: E501
     ),
     # ==============================
@@ -4169,14 +4195,14 @@ menu_actions = {
     # BULK RADIUS WLAN CONFIGURATION
     # ==============================
     "170": (
-        lambda dry_run=False: BulkRadiusWLANConfigManager().manage(dry_run=dry_run),  # type: ignore[misc]
+        lambda dry_run=False: BulkRadiusWLANConfigManager().manage(dry_run=dry_run),
         "Bulk RADIUS WLAN Configuration - Configure auth_servers_timeout, auth_servers_retries, fast_dot1x_timers for org-level RADIUS WLANs",  # noqa: E501
     ),
     # ==============================
     # MAPS MANAGER (External Module)
     # ==============================
     "142": (
-        lambda: MapsManagerLauncher().launch(),  # type: ignore[no-untyped-call]
+        lambda: MapsManagerLauncher().launch(),
         "Maps Manager - Interactive site floorplan and map operations (sub-menu)",
     ),
     # ==============================
@@ -4545,7 +4571,7 @@ def _resolve_systematic_test_invoke_kwargs(func: Any, fast_enabled: bool) -> dic
     """Inspect a menu function's signature and build invoke kwargs (fast=True only if supported)."""
     supports_fast = False  # Default to no fast-mode support until introspection confirms it.
     try:  # inspect.signature can raise on built-in callables; degrade gracefully.
-        sig = inspect.signature(func)  # type: ignore[arg-type]  # Detect optional 'fast' parameter
+        sig = inspect.signature(func)  # Detect optional 'fast' parameter
         supports_fast = "fast" in sig.parameters  # True when function accepts fast-mode
     except Exception:  # Signature inspection failure is non-fatal
         supports_fast = False  # Treat as non-fast-capable when signature is uninspectable
@@ -4561,7 +4587,7 @@ def _invoke_one_systematic_test(
     """Call one menu func with the resolved kwargs; record pass/fail in telemetry and return (success, duration)."""
     option, func, description = case.option, case.func, case.description  # Unpack identity (issue #470)
     try:  # Each option runs independently so one failure does not abort remaining tests
-        func(**invoke_kwargs)  # type: ignore[operator, no-untyped-call]  # Call menu action
+        func(**invoke_kwargs)  # Call menu action
         duration = time.time() - op_start  # Elapsed seconds
         print(f"   [SUCCESS] Option {option} completed successfully")
         emitter.emit_test_pass(option, description, duration, "systematic")  # Record pass
@@ -5197,11 +5223,11 @@ def _run_tui_event_loop(args: argparse.Namespace) -> None:
     try:
         from src.ui.tui import MistHelperTUI  # PLC0415: lazy import avoids loading Rich at startup
 
-        tui = MistHelperTUI(debug_mode=args.debug)  # type: ignore[no-untyped-call]  # Create TUI with debug flag
+        tui = MistHelperTUI(debug_mode=args.debug)  # Create TUI with debug flag
         tui.apisession = apisession  # Pass global API session so TUI can execute live API calls
         if args.debug:  # Debug: record that TUI was launched with debug enabled
             logging.debug("TUI_MODE: Debug mode is ACTIVE - enhanced logging enabled")  # Log debug state
-        tui.run()  # type: ignore[no-untyped-call]  # Launch TUI event loop (blocks until user exits)
+        tui.run()  # Launch TUI event loop (blocks until user exits)
     except KeyboardInterrupt:  # User pressed Ctrl+C inside the TUI
         _handle_tui_keyboard_interrupt(args.debug)  # Log and inform user of clean exit
     except Exception as error:  # Unexpected error inside the TUI event loop
@@ -5243,7 +5269,7 @@ def _resolve_cli_org_id(args: argparse.Namespace) -> str:
     """Return --org if given, otherwise resolve from cache / interactive prompt."""
     if args.org:  # CLI explicitly provided the org ID.
         logging.info("Using org_id from CLI argument: %s", args.org)  # Log CLI org ID.
-        return args.org  # Return the CLI org ID.
+        return str(args.org)  # Return the CLI org ID (argparse gives Any; narrow to str).
     return ConfigUtils.get_cached_or_prompted_org_id()  # Fall back to cache or prompt.
 
 
@@ -5290,7 +5316,7 @@ def _resolve_cli_device_id(args: argparse.Namespace, site_id: str | None) -> str
         print(f"! Device name '{args.device}' not found at site '{args.site}'.")  # Inform user.
         sys.exit(1)  # Exit -- cannot proceed with unknown device.
     logging.info("Resolved device name '%s' to device_id '%s'.", args.device, device_id)  # Log resolution success.
-    return device_id  # Return the resolved device_id.
+    return str(device_id)  # Return the resolved device_id (dev["id"] is Any; narrow to str).
 
 
 def _dispatch_cli_menu_action(args: argparse.Namespace, site_id: str | None, device_id: str | None) -> None:
@@ -5302,11 +5328,11 @@ def _dispatch_cli_menu_action(args: argparse.Namespace, site_id: str | None, dev
     func, _ = menu_actions[args.menu]  # Extract callable from menu_actions dispatch table.
     logging.info("Executing menu action '%s'.", args.menu)  # Log before function dispatch.
     func_args = _build_cli_func_kwargs(args, site_id, device_id)  # Build the full candidate kwargs dict.
-    sig = inspect.signature(func)  # type: ignore[arg-type]  # Introspect signature to keep only valid kwargs.
+    sig = inspect.signature(func)  # Introspect signature to keep only valid kwargs.
     accepted_args = {
         k: v for k, v in func_args.items() if k in sig.parameters and v is not None
     }  # Filter to accepted params.
-    func(**accepted_args)  # type: ignore[operator, no-untyped-call]  # Call menu function with filtered args.
+    func(**accepted_args)  # Call menu function with filtered args.
     logging.info("CLI execution complete. Exiting.")  # Log successful CLI completion.
     logging.debug("EXIT: _run_cli_mode - CLI success")  # Log exit point.
     sys.exit(0)  # Clean exit after successful CLI execution.
@@ -5421,7 +5447,7 @@ def _execute_interactive_menu_action(iwant: str, func, container_mode: bool) -> 
             logging.info("Exit option selected by user.")  # Log user-requested exit.
             logging.debug("EXIT: _run_interactive_mode - user requested exit")  # Log exit point.
             sys.exit(0)  # Exit cleanly on user selection of option 0.
-        func()  # type: ignore[operator, no-untyped-call]  # Execute the selected menu function.
+        func()  # Execute the selected menu function.
         logging.info("Menu option '%s' execution complete.", iwant)  # Log completion after function returns.
         _dispatch_post_menu_success(iwant, container_mode)  # Branch on container vs direct + session-management ops.
     except KeyboardInterrupt:  # User pressed Ctrl+C during operation.
