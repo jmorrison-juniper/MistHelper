@@ -776,7 +776,7 @@ def _leading_digits(segment: str) -> str:  # Extract the numeric prefix of one v
     return numeric  # Caller defaults empty results to 0
 
 
-def _parse_version(version_str: str) -> tuple:  # type: ignore[type-arg]  # Convert a version string into a comparable integer tuple
+def _parse_version(version_str: str) -> tuple[int, ...]:  # Convert a version string into a comparable integer tuple
     """Parse version string into comparable tuple (e.g., '0.59.3' -> (0, 59, 3))."""
     try:  # Malformed input is handled by the except below
         parts = [
@@ -802,9 +802,9 @@ def _extract_version_constraint(spec: str) -> tuple[str, str]:  # Split a spec i
 
 
 def _pad_version_tuples(
-    installed_tuple: tuple,
-    required_tuple: tuple,  # type: ignore[type-arg]
-) -> tuple[tuple, tuple]:  # type: ignore[type-arg]  # Zero-pad two version tuples to equal length
+    installed_tuple: tuple[int, ...],
+    required_tuple: tuple[int, ...],
+) -> tuple[tuple[int, ...], tuple[int, ...]]:  # Zero-pad two version tuples to equal length
     """Right-pad both version tuples with zeros so they compare element-by-element."""
     max_len = max(len(installed_tuple), len(required_tuple))  # Longest of the two drives the padding width
     installed_padded = installed_tuple + (0,) * (max_len - len(installed_tuple))  # Pad installed (e.g., 1.2 -> 1.2.0)
