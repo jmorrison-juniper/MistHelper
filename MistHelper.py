@@ -1890,7 +1890,7 @@ class GlobalImportManager:
     def initialize_all_imports(
         self,
         skip_deps: bool = False,
-    ) -> tuple[bool, dict[str, Any]]:  # noqa: C901, PLR0912, PLR0915
+    ) -> tuple[bool, dict[str, Any]]:
         """
         Initialize all imports and dependencies upfront.
 
@@ -1904,7 +1904,7 @@ class GlobalImportManager:
 
         return ImportInitializationService.execute(self, skip_deps=skip_deps)
 
-    def _get_global_assignments(self):  # noqa: C901, PLR0912, PLR0915
+    def _get_global_assignments(self):
         """Get dictionary of global variable assignments for imported modules."""
         from src.refactors.serial_cc.global_assignments_builder import GlobalAssignmentsBuilderService
 
@@ -3003,9 +3003,7 @@ def _install_default_request_timeout(inner_session: Any) -> None:
             self.default_timeout = default_timeout  # Reused when send() gets timeout=None
             super().__init__(**kwargs)  # Real adapter setup (connection pool, retries)
 
-        def send(  # noqa: PLR0913, STRUCT-PARAMS  # external contract: requests.HTTPAdapter.send signature
-            self, request, stream=False, timeout=None, verify=True, cert=None, proxies=None
-        ):
+        def send(self, request, stream=False, timeout=None, verify=True, cert=None, proxies=None):
             if timeout is None:  # Caller did not supply a per-call timeout -- substitute our default
                 timeout = self.default_timeout
             # Issue #431: forward args verbatim; signature must match parent for adapter contract.
