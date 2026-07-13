@@ -73,8 +73,212 @@ except ImportError:  # If database dependencies (python-arango, redis) not insta
     DatabaseRouter = None  # type: ignore[assignment, misc]  # None lets runtime guards detect DB-layer absence
     DB_LAYER_AVAILABLE = False  # Set flag to disable database output formats (CSV/SQLite only)
 
-from src.analytics.data_collection_manager import (  # pylint: disable=unused-import
-    DataCollectionManager,  # noqa: F401  # Cat B (1013 SC-001 position 25) -- re-export for MistHelper.DataCollectionManager callers
+# Explicit public API surface (issue #895).
+# Every name below is re-exported from a src.* submodule for external
+# consumers. Adding a name here MUST accompany a corresponding update to
+# specs/1016-misthelper-suppression-cleanup/contracts/public_api_snapshot.txt.
+__all__ = [
+    "APICoreFetchUtils",
+    "APIDataFetcher",
+    "APIFetchUtils",
+    "APITenantFetchUtils",
+    "API_REQUEST_MAX_RETRIES",
+    "API_REQUEST_RETRY_DELAY",
+    "API_REQUEST_TIMEOUT",
+    "ARPCommandManager",
+    "AUTO_UPGRADE_DEPENDENCIES",
+    "AUTO_UPGRADE_UV",
+    "AddressAuditEngine",
+    "AnomalyMetricsDiscovery",
+    "Any",
+    "ArpDeviceExecutor",
+    "AuditAnalysisOps",
+    "BulkRadiusWLANConfigManager",
+    "CLIShellManager",
+    "CSV_FRESHNESS_MINUTES",
+    "CacheUtils",
+    "ConfigUtils",
+    "ConnectionPoolExecutor",
+    "ConstDefinitionsExporter",
+    "DATABASE_PATH",
+    "DB_LAYER_AVAILABLE",
+    "DEFAULT_API_PAGE_LIMIT",
+    "DOTENV_AVAILABLE",
+    "DataCollectionManager",
+    "DataDirectoryChecker",
+    "DataExporter",
+    "DataProcessingUtils",
+    "DatabaseConfig",
+    "DatabaseRouter",
+    "DatabaseSchemaUtils",
+    "DependencyCheckOrchestrator",
+    "DeviceConfigTemplateClonerManager",
+    "DeviceDataFetcher",
+    "DeviceEvents52wExporter",
+    "DeviceMetricOperation",
+    "DeviceRebootManager",
+    "DeviceUtils",
+    "DisplayUtils",
+    "E911BSSIDReportGenerator",
+    "EndpointConfig",
+    "EnhancedSSHRunner",
+    "EnvironmentUtils",
+    "ExtractedMarvisTroubleshootUtils",
+    "ExtractedSiteAnalyticsConfigurator",
+    "ExtractedSiteInventoryHealthAnalyzer",
+    "FAST_MODE_ENABLED",
+    "FAST_MODE_FALLBACK_THREADS",
+    "FAST_MODE_MAX_RETRIES",
+    "FAST_MODE_RETRY_DELAY",
+    "FAST_MODE_RETRY_MAX_RETRIES",
+    "FAST_MODE_RETRY_THREADS",
+    "FastModeBackoffMultiplier",
+    "FastModeSequentialMaxRetries",
+    "FilePathUtils",
+    "FilterOperatorEngine",
+    "FirmwareManager",
+    "FirmwareManagerConfig",
+    "GatewayExportUtils",
+    "GatewayHaExporter",
+    "GatewayStatsExporter",
+    "GatewayTemplateConfigManager",
+    "GatewayTestExporter",
+    "GlobalImportManager",
+    "GlobalWiredClientReportGenerator",
+    "IS_TEST_MODE",
+    "InputUtils",
+    "InsightMetricsUtils",
+    "InteractiveDisplayUtils",
+    "InteractiveTestRunner",
+    "InventoryCSVComparator",
+    "IsDebugMode",
+    "KeyboardListener",
+    "LAST_SELECTED_SITE_ID",
+    "LicenseExportUtils",
+    "LogSanitizer",
+    "LoginOrchestrator",
+    "MINIMUM_PYTHON_VERSION",
+    "MIST_SITE_EXCLUDE_PREFIX",
+    "MSPInventoryExporter",
+    "MacTableCommand",
+    "MainEntrypoint",
+    "MapsManagerLauncher",
+    "MarvisDataUtilsFactory",
+    "MarvisTroubleshootDeps",
+    "MistSessionInitializer",
+    "MistSessionInteractiveInitializer",
+    "MistWanTargetPorts",
+    "MspOrgSelector",
+    "OUTPUT_FORMAT",
+    "OfflineDeviceReporter",
+    "OperationRegistry",
+    "OrgAdminExporter",
+    "OrgAlarmEventExporter",
+    "OrgClientSecurityExporter",
+    "OrgConfigExporter",
+    "OrgConfigMigrationManager",
+    "OrgDataCollector",
+    "OrgDeviceInventorySummary",
+    "OrgDeviceStatsExporter",
+    "OrgExportUtils",
+    "OrgInventoryExporter",
+    "OrgSiteExporter",
+    "OrgTemplateExporter",
+    "OrgTicketManager",
+    "PROGRESS_EMITTER",
+    "PackageImportMapManager",
+    "PackageInstaller",
+    "PacketCaptureManager",
+    "PingDeviceExecutor",
+    "PrettyTable",
+    "ProgressContext",
+    "PromptClientUtils",
+    "PromptUtils",
+    "RateLimitingUtils",
+    "RejectPolicy",
+    "RoutingDeps",
+    "RoutingUtils",
+    "RunInteractiveTestManager",
+    "SFPTransceiverDataProcessor",
+    "SQLiteDatabaseWriter",
+    "SSHClient",
+    "SSHRunnerManager",
+    "SSHRunnerManagerDeps",
+    "SelfExportUtils",
+    "SequenceMatcher",
+    "ServicePingLauncher",
+    "SiteAnalyticsConfiguratorDeps",
+    "SiteAnomalyExporter",
+    "SiteAutoUpgradeConfigurator",
+    "SiteClientExporter",
+    "SiteConfigExporter",
+    "SiteConfigManager",
+    "SiteDeviceExporter",
+    "SiteExportUtils",
+    "SiteInventoryHealthAnalyzerDeps",
+    "SiteMetricOperation",
+    "SitesByAPModelExporter",
+    "SwitchToInteractiveLoginManager",
+    "SystematicTestOption",
+    "TUILauncher",
+    "TYPE_CHECKING",
+    "TelemetryEmitter",
+    "TimeUtils",
+    "TroubleshootUtils",
+    "UPGRADE_CHECK_TIMEOUT",
+    "UTC",
+    "ValidationUtils",
+    "VirtualChassisManager",
+    "WAN2MigrationLauncher",
+    "WANProbeConfigManager",
+    "WANProbeDeviceOverrideManager",
+    "WLANRadiusTimerManager",
+    "WanHubGroupNumberManager",
+    "WanVpnBuilder",
+    "WebSocketCmdDeps",
+    "WebSocketManager",
+    "WebSocketStreamTarget",
+    "WiredClientManufacturerReportGenerator",
+    "apisession",
+    "argparse",
+    "concurrent",
+    "config",
+    "configure_db_logging",
+    "configure_gateway_export_utils_dependencies",
+    "datetime",
+    "detect_msp_privileges",
+    "fuzz",
+    "import_manager",
+    "inspect",
+    "load_dotenv",
+    "logging",
+    "menu_actions",
+    "mistapi",
+    "msp_privileges",
+    "normalize_address_record",
+    "np",
+    "org_id",
+    "os",
+    "paramiko",
+    "pyte",
+    "re",
+    "requests",
+    "selected_msp",
+    "subprocess",
+    "sys",
+    "threading",
+    "time",
+    "timezone",
+    "tqdm",
+    "traceback",
+    "tuning_data_file",
+    "urllib3",
+    "warnings",
+    "websocket",
+]
+
+from src.analytics.data_collection_manager import (
+    DataCollectionManager,  # Cat B (1013 SC-001 position 25) -- re-export for MistHelper.DataCollectionManager callers
 )
 from src.analytics.insight_metrics_utils import (
     InsightMetricsUtils,
@@ -89,23 +293,23 @@ from src.analytics.site_inventory_health_analyzer import (  # Import site invent
 from src.analytics.site_inventory_health_analyzer import (
     SiteInventoryHealthAnalyzerDeps,
 )  # Import dependency injection class
-from src.analytics.telemetry_emitter import (  # pylint: disable=unused-import
-    TelemetryEmitter,  # noqa: F401  # Cat B (1013 SC-001 position 9) -- re-export for callers at 18629/18632/18711/19062
+from src.analytics.telemetry_emitter import (
+    TelemetryEmitter,  # Cat B (1013 SC-001 position 9) -- re-export for callers at 18629/18632/18711/19062
 )
 from src.api.api_core_fetch_utils import (
     APICoreFetchUtils,
 )  # Cat E canonical (1014 P10) -- re-export for MistHelper.APICoreFetchUtils callers
-from src.api.api_data_fetcher import (  # pylint: disable=unused-import
-    APIDataFetcher,  # noqa: F401  # Cat B (1013 SC-001 position 21) -- re-export for MistHelper.APIDataFetcher callers
+from src.api.api_data_fetcher import (
+    APIDataFetcher,  # Cat B (1013 SC-001 position 21) -- re-export for MistHelper.APIDataFetcher callers
 )
 from src.api.api_fetch_utils import (
     APIFetchUtils,
 )  # Cat E canonical (1014 P8) -- re-export for MistHelper.APIFetchUtils callers
-from src.audit.audit_analysis_ops import (  # pylint: disable=unused-import
-    AuditAnalysisOps,  # noqa: F401  # Cat B (1013 SC-001 position 12) -- re-export for menu_actions #25/#174 dispatch
+from src.audit.audit_analysis_ops import (
+    AuditAnalysisOps,  # Cat B (1013 SC-001 position 12) -- re-export for menu_actions #25/#174 dispatch
 )
 from src.auth.interactive import (
-    LoginOrchestrator,  # noqa: F401  # Re-exported so extracted refactors can resolve it via MistHelper (SC-023)
+    LoginOrchestrator,  # Re-exported so extracted refactors can resolve it via MistHelper (SC-023)
     MspOrgSelector,
 )  # Duplicate import (re-stated with comment below); kept to preserve module load behavior
 from src.bootstrap.dependency_check import (
@@ -120,34 +324,34 @@ from src.cache.cache_utils import (
 from src.capture.packet_capture import (
     PacketCaptureManager,
 )  # Import packet capture manager directly under its canonical name (issue #431: alias removed)
-from src.config.config_utils import (  # pylint: disable=unused-import
-    ConfigUtils,  # noqa: F401  # Cat E canonical (1015 T-12) -- re-export for MistHelper.ConfigUtils callers
+from src.config.config_utils import (
+    ConfigUtils,  # Cat E canonical (1015 T-12) -- re-export for MistHelper.ConfigUtils callers
 )
 
 # BatchWorkerConfig import removed: pool machinery moved to ConnectionPoolExecutor (1012 SC-003)
-from src.dataclasses.endpoint_config import (  # pylint: disable=unused-import
-    EndpointConfig,  # noqa: F401  # Cat B (1013 SC-001 position 16) -- re-export for MistHelper.EndpointConfig callers
+from src.dataclasses.endpoint_config import (
+    EndpointConfig,  # Cat B (1013 SC-001 position 16) -- re-export for MistHelper.EndpointConfig callers
 )
-from src.dataclasses.progress_event import (  # pylint: disable=unused-import
-    ProgressContext,  # noqa: F401  # kept for MistHelper.ProgressContext test access + mh.ProgressContext usage from extracted modules
+from src.dataclasses.progress_event import (
+    ProgressContext,  # test access + mh.ProgressContext usage from extracted modules
 )
 from src.dataclasses.systematic_test_option import (
     SystematicTestOption,
 )  # Issue #470: groups menu-option identity to keep _systematic_test_run_option within the 5-Item Rule.
-from src.dataclasses.websocket_stream_target import (  # pylint: disable=unused-import
-    WebSocketStreamTarget,  # noqa: F401  # Re-export for MistHelper.WebSocketStreamTarget consumers after ARPCommandManager extraction (1013 SC-001 position 42)
+from src.dataclasses.websocket_stream_target import (
+    WebSocketStreamTarget,  # Re-export after ARPCommandManager extraction (1013 SC-001 position 42)
 )
-from src.db.database_schema_utils import (  # pylint: disable=unused-import
-    DatabaseSchemaUtils,  # noqa: F401  # Cat B (1013 SC-001 position 38) -- re-export for MistHelper.DatabaseSchemaUtils callers
+from src.db.database_schema_utils import (
+    DatabaseSchemaUtils,  # Cat B (1013 SC-001 position 38) -- re-export for MistHelper.DatabaseSchemaUtils callers
 )
-from src.device.arp_command_manager import (  # pylint: disable=unused-import
-    ARPCommandManager,  # noqa: F401  # Cat B (1013 SC-001 position 42) -- re-export for MistHelper.ARPCommandManager callers
+from src.device.arp_command_manager import (
+    ARPCommandManager,  # Cat B (1013 SC-001 position 42) -- re-export for MistHelper.ARPCommandManager callers
 )
-from src.device.device_reboot_manager import (  # pylint: disable=unused-import
-    DeviceRebootManager,  # noqa: F401  # Cat B (1013 SC-001 position 41) -- re-export for MistHelper.DeviceRebootManager callers
+from src.device.device_reboot_manager import (
+    DeviceRebootManager,  # Cat B (1013 SC-001 position 41) -- re-export for MistHelper.DeviceRebootManager callers
 )
-from src.device.device_utils import (  # pylint: disable=unused-import
-    DeviceUtils,  # noqa: F401  # Cat B (1013 SC-001 position 6) -- re-export for dynamic _mh.DeviceUtils lookup
+from src.device.device_utils import (
+    DeviceUtils,  # Cat B (1013 SC-001 position 6) -- re-export for dynamic _mh.DeviceUtils lookup
 )
 from src.device.virtual_chassis import (  # Cat E canonical (1015 T-11) -- fold-in of stub facade
     VirtualChassisDependencies as _VirtualChassisDependencies,
@@ -158,62 +362,62 @@ from src.device.virtual_chassis import (
 from src.device.virtual_chassis import (
     configure_virtual_chassis_dependencies as _configure_virtual_chassis_dependencies,
 )
-from src.export.const_definitions_exporter import (  # pylint: disable=unused-import
-    ConstDefinitionsExporter,  # noqa: F401  # Cat B (1013 SC-001 position 17) -- re-export for MistHelper.ConstDefinitionsExporter callers
+from src.export.const_definitions_exporter import (
+    ConstDefinitionsExporter,  # Cat B (1013 SC-001 position 17) -- re-export
 )
-from src.export.device_events_52w_exporter import (  # pylint: disable=unused-import
-    DeviceEvents52wExporter,  # noqa: F401  # Re-export preserved after OrgAlarmEventExporter extraction (1013 SC-001 position 18)
+from src.export.device_events_52w_exporter import (
+    DeviceEvents52wExporter,  # Re-export preserved after OrgAlarmEventExporter extraction (1013 SC-001 position 18)
 )
-from src.export.gateway_test_exporter import (  # pylint: disable=unused-import
-    GatewayTestExporter,  # noqa: F401  # Cat B (1013 SC-001 position 37) -- re-export for MistHelper.GatewayTestExporter callers
+from src.export.gateway_test_exporter import (
+    GatewayTestExporter,  # Cat B (1013 SC-001 position 37) -- re-export for MistHelper.GatewayTestExporter callers
 )
-from src.export.license_export_utils import (  # pylint: disable=unused-import
-    LicenseExportUtils,  # noqa: F401  # Cat B (1013 SC-001 position 24) -- re-export for MistHelper.LicenseExportUtils callers
+from src.export.license_export_utils import (
+    LicenseExportUtils,  # Cat B (1013 SC-001 position 24) -- re-export for MistHelper.LicenseExportUtils callers
 )
-from src.export.msp_inventory_exporter import (  # pylint: disable=unused-import
-    MSPInventoryExporter,  # noqa: F401  # Cat B (1013 SC-001 position 8) -- re-export for menu tuple + static call rewire
+from src.export.msp_inventory_exporter import (
+    MSPInventoryExporter,  # Cat B (1013 SC-001 position 8) -- re-export for menu tuple + static call rewire
 )
-from src.export.org_admin_exporter import (  # pylint: disable=unused-import
-    OrgAdminExporter,  # noqa: F401  # Cat B (1013 SC-001 position 20) -- re-export for MistHelper.OrgAdminExporter callers
+from src.export.org_admin_exporter import (
+    OrgAdminExporter,  # Cat B (1013 SC-001 position 20) -- re-export for MistHelper.OrgAdminExporter callers
 )
-from src.export.org_alarm_event_exporter import (  # pylint: disable=unused-import
-    OrgAlarmEventExporter,  # noqa: F401  # Cat B (1013 SC-001 position 18) -- re-export for MistHelper.OrgAlarmEventExporter callers
+from src.export.org_alarm_event_exporter import (
+    OrgAlarmEventExporter,  # Cat B (1013 SC-001 position 18) -- re-export for MistHelper.OrgAlarmEventExporter callers
 )
-from src.export.org_client_security_exporter import (  # pylint: disable=unused-import
-    OrgClientSecurityExporter,  # noqa: F401  # Cat B (1013 SC-001 position 32) -- re-export for MistHelper.OrgClientSecurityExporter callers
+from src.export.org_client_security_exporter import (
+    OrgClientSecurityExporter,  # Cat B (1013 SC-001 position 32) -- re-export
 )
-from src.export.org_config_exporter import (  # pylint: disable=unused-import
-    OrgConfigExporter,  # noqa: F401  # Cat B (1013 SC-001 position 31) -- re-export for MistHelper.OrgConfigExporter callers
+from src.export.org_config_exporter import (
+    OrgConfigExporter,  # Cat B (1013 SC-001 position 31) -- re-export for MistHelper.OrgConfigExporter callers
 )
-from src.export.org_device_stats_exporter import (  # pylint: disable=unused-import
-    OrgDeviceStatsExporter,  # noqa: F401  # Cat B (1013 SC-001 position 45) -- re-export for MistHelper.OrgDeviceStatsExporter callers
+from src.export.org_device_stats_exporter import (
+    OrgDeviceStatsExporter,  # Cat B (1013 SC-001 position 45) -- re-export
 )
-from src.export.org_export_utils import (  # pylint: disable=unused-import
-    OrgExportUtils,  # noqa: F401  # Cat B (1013 SC-001 position 47) -- re-export for MistHelper.OrgExportUtils callers
+from src.export.org_export_utils import (
+    OrgExportUtils,  # Cat B (1013 SC-001 position 47) -- re-export for MistHelper.OrgExportUtils callers
 )
-from src.export.org_inventory_exporter import (  # pylint: disable=unused-import
-    OrgInventoryExporter,  # noqa: F401  # Cat E canonical (1015 T-06) -- re-export for MistHelper.OrgInventoryExporter callers
+from src.export.org_inventory_exporter import (
+    OrgInventoryExporter,  # Cat E canonical (1015 T-06) -- re-export for MistHelper.OrgInventoryExporter callers
 )
-from src.export.org_site_exporter import (  # pylint: disable=unused-import
-    OrgSiteExporter,  # noqa: F401  # Cat E canonical (1014 P9) -- re-export for MistHelper.OrgSiteExporter callers
+from src.export.org_site_exporter import (
+    OrgSiteExporter,  # Cat E canonical (1014 P9) -- re-export for MistHelper.OrgSiteExporter callers
 )
-from src.export.org_template_exporter import (  # pylint: disable=unused-import
-    OrgTemplateExporter,  # noqa: F401  # Cat B (1013 SC-001 position 22) -- re-export for MistHelper.OrgTemplateExporter callers
+from src.export.org_template_exporter import (
+    OrgTemplateExporter,  # Cat B (1013 SC-001 position 22) -- re-export for MistHelper.OrgTemplateExporter callers
 )
-from src.export.self_export_utils import (  # pylint: disable=unused-import
-    SelfExportUtils,  # noqa: F401  # Cat B (1013 SC-001 position 7) -- re-export for menu tuple at MistHelper:18167
+from src.export.self_export_utils import (
+    SelfExportUtils,  # Cat B (1013 SC-001 position 7) -- re-export for menu tuple at MistHelper:18167
 )
-from src.export.site_anomaly_exporter import (  # pylint: disable=unused-import
-    SiteAnomalyExporter,  # noqa: F401  # Cat B (1013 SC-001 position 43) -- re-export for MistHelper.SiteAnomalyExporter callers
+from src.export.site_anomaly_exporter import (
+    SiteAnomalyExporter,  # Cat B (1013 SC-001 position 43) -- re-export for MistHelper.SiteAnomalyExporter callers
 )
-from src.export.site_client_exporter import (  # pylint: disable=unused-import
-    SiteClientExporter,  # noqa: F401  # Cat B (1013 SC-001 position 14) -- re-export for MistHelper.SiteClientExporter callers
+from src.export.site_client_exporter import (
+    SiteClientExporter,  # Cat B (1013 SC-001 position 14) -- re-export for MistHelper.SiteClientExporter callers
 )
-from src.export.site_config_exporter import (  # pylint: disable=unused-import
-    SiteConfigExporter,  # noqa: F401  # Cat B (1013 SC-001 position 19) -- re-export for MistHelper.SiteConfigExporter callers
+from src.export.site_config_exporter import (
+    SiteConfigExporter,  # Cat B (1013 SC-001 position 19) -- re-export for MistHelper.SiteConfigExporter callers
 )
-from src.export.site_device_exporter import (  # pylint: disable=unused-import
-    SiteDeviceExporter,  # noqa: F401  # Cat B (1013 SC-001 position 34) -- re-export for MistHelper.SiteDeviceExporter callers
+from src.export.site_device_exporter import (
+    SiteDeviceExporter,  # Cat B (1013 SC-001 position 34) -- re-export for MistHelper.SiteDeviceExporter callers
 )
 from src.export.site_export_utils import (  # Cat A canonical (1014 P16)
     SiteExportUtils,
@@ -224,8 +428,8 @@ from src.export.site_insights.device_metric_operation import (
 from src.export.site_insights.site_metric_operation import (
     SiteMetricOperation,
 )  # Decomposed Menu 74 entry point
-from src.export.sites_by_ap_model_exporter import (  # pylint: disable=unused-import
-    SitesByAPModelExporter,  # noqa: F401  # Cat B (1013 SC-001 position 28) -- re-export for MistHelper.SitesByAPModelExporter callers
+from src.export.sites_by_ap_model_exporter import (
+    SitesByAPModelExporter,  # Cat B (1013 SC-001 position 28) -- re-export
 )
 from src.firmware.firmware_manager import (  # Cat A canonical (1013 SC-002)
     FirmwareManager,
@@ -238,49 +442,49 @@ from src.firmware.site_auto_upgrade import (  # Cat A canonical (1014 P2)
     SiteAutoUpgradeConfigurator,
 )
 from src.gateway.gateway_export_utils import (  # Cat A canonical (1014 SC-001 position 13)
-    GatewayExportUtils,  # noqa: F401  # re-export for MistHelper.GatewayExportUtils callers
+    GatewayExportUtils,  # re-export for MistHelper.GatewayExportUtils callers
     configure_gateway_export_utils_dependencies,
 )
-from src.gateway.gateway_ha_exporter import (  # pylint: disable=unused-import
-    GatewayHaExporter,  # noqa: F401  # Cat B (1013 SC-001 position 23) -- re-export for MistHelper.GatewayHaExporter callers
+from src.gateway.gateway_ha_exporter import (
+    GatewayHaExporter,  # Cat B (1013 SC-001 position 23) -- re-export for MistHelper.GatewayHaExporter callers
 )
-from src.gateway.gateway_stats_exporter import (  # pylint: disable=unused-import
-    GatewayStatsExporter,  # noqa: F401  # Cat A (1014 SC-001 position 12) -- re-export for MistHelper.GatewayStatsExporter callers
+from src.gateway.gateway_stats_exporter import (
+    GatewayStatsExporter,  # Cat A (1014 SC-001 position 12) -- re-export for MistHelper.GatewayStatsExporter callers
 )
 from src.gateway.template_config import GatewayTemplateConfigManager  # Cat A canonical (1013 SC-001)
-from src.input.prompt_client_utils import (  # pylint: disable=unused-import
-    PromptClientUtils,  # noqa: F401  # Cat B (1013 SC-001 position 35) -- re-export for MistHelper.PromptClientUtils callers
+from src.input.prompt_client_utils import (
+    PromptClientUtils,  # Cat B (1013 SC-001 position 35) -- re-export for MistHelper.PromptClientUtils callers
 )
-from src.inventory.org_device_inventory_summary_facade import (  # pylint: disable=unused-import
-    OrgDeviceInventorySummary,  # noqa: F401  # Cat B (1013 SC-001 position 29) -- re-export for MistHelper.OrgDeviceInventorySummary callers
+from src.inventory.org_device_inventory_summary_facade import (
+    OrgDeviceInventorySummary,  # Cat B (1013 SC-001 position 29) -- re-export
 )
 from src.network.routing_utils import (  # Cat A canonical (1014 P4)
     RoutingDeps,
     RoutingUtils,
 )
 from src.org.org_config_migration_manager import OrgConfigMigrationManager  # Cat B (1013 SC-001 position 5)
-from src.org.org_ticket_manager import (  # pylint: disable=unused-import
-    OrgTicketManager,  # noqa: F401  # Cat B (1013 SC-001 position 46) -- re-export for MistHelper.OrgTicketManager callers
+from src.org.org_ticket_manager import (
+    OrgTicketManager,  # Cat B (1013 SC-001 position 46) -- re-export for MistHelper.OrgTicketManager callers
 )
 from src.org_data_collector import OrgDataCollector  # Import org-level data collection orchestrator
-from src.refactors.anomaly_metrics_discovery import (  # pylint: disable=unused-import
-    AnomalyMetricsDiscovery,  # noqa: F401  # Cat B (1013 SC-001 pos 43) -- lazy access via mh.AnomalyMetricsDiscovery
+from src.refactors.anomaly_metrics_discovery import (
+    AnomalyMetricsDiscovery,  # Cat B (1013 SC-001 pos 43) -- lazy access via mh.AnomalyMetricsDiscovery
 )
 from src.refactors.connection_pool_executor import ConnectionPoolExecutor  # Extracted pool executor (1012 SC-003)
 from src.refactors.data_directory_checker import DataDirectoryChecker  # Early data-dir writable check (SC-005)
 from src.refactors.device_config_template_cloner_manager import (
     DeviceConfigTemplateClonerManager,  # Extracted device config template cloner (SC-020)
 )
-from src.refactors.device_data_fetcher import (  # pylint: disable=unused-import
-    DeviceDataFetcher,  # noqa: F401  # Extracted interactive device data fetcher (SC-017) -- re-export for src.ui.interactive_display_utils lazy access
+from src.refactors.device_data_fetcher import (
+    DeviceDataFetcher,  # Extracted device fetcher (SC-017); lazy re-export for interactive_display_utils
 )
-from src.refactors.fast_mode_backoff_multiplier import (  # pylint: disable=unused-import
-    FastModeBackoffMultiplier,  # noqa: F401  # Extracted fast-mode backoff multiplier constant (SC-028); re-export for src.export.org_device_stats_exporter lazy access
+from src.refactors.fast_mode_backoff_multiplier import (
+    FastModeBackoffMultiplier,  # Extracted backoff multiplier (SC-028); lazy re-export for org_device_stats_exporter
 )
 
 # FastModeDevicesPerThread import removed: only referenced from within ConnectionPoolExecutor (1012 SC-003)
-from src.refactors.fast_mode_sequential_max_retries import (  # pylint: disable=unused-import
-    FastModeSequentialMaxRetries,  # noqa: F401  # Cat E (1014 P8) -- re-export for lazy mh.FastModeSequentialMaxRetries in api_fetch_utils.py
+from src.refactors.fast_mode_sequential_max_retries import (
+    FastModeSequentialMaxRetries,  # Cat E (1014 P8) -- re-export for lazy access in api_fetch_utils.py
 )
 from src.refactors.initialize_mist_session import (
     MistSessionInitializer,  # Extracted token-based session initializer (SC-024)
@@ -292,13 +496,13 @@ from src.refactors.inventory_csvcomparator import (
     InventoryCSVComparator,  # Extracted inventory CSV comparator adapter (SC-018)
 )
 from src.refactors.is_debug_mode import IsDebugMode  # Extracted debug-mode predicate (SC-002)
-from src.refactors.keyboard_listener import (  # noqa: F401  # pylint: disable=unused-import
+from src.refactors.keyboard_listener import (
     KeyboardListener,  # Re-exported for src.ssh.cli_shell_manager.CLIShellManager lazy `mh.KeyboardListener` access
 )
 from src.refactors.main_entrypoint import MainEntrypoint  # Extracted CLI main entrypoint (SC-026)
 from src.refactors.maps_manager_launcher import MapsManagerLauncher  # Extracted Maps Manager launcher (SC-006)
-from src.refactors.marvis_data_utils import (  # pylint: disable=unused-import
-    MarvisDataUtilsFactory,  # noqa: F401  # Cat B (1013 SC-001 position 39) -- re-export for lazy mh.MarvisDataUtilsFactory callers in troubleshoot_utils.py
+from src.refactors.marvis_data_utils import (
+    MarvisDataUtilsFactory,  # Cat B (1013 SC-001 position 39) -- re-export for lazy access in troubleshoot_utils.py
 )
 from src.refactors.mist_wan_target_ports import (
     MistWanTargetPorts,  # Extracted operator-configured WAN target-ports list (SC-032)
@@ -314,7 +518,7 @@ from src.refactors.run_interactive_test import (
 )
 from src.refactors.service_ping_launcher import ServicePingLauncher  # Extracted Service Ping launcher (SC-008)
 from src.refactors.sqlite_database_writer import (
-    SQLiteDatabaseWriter,  # noqa: F401  # Extracted SQLite writer (SC-003) -- re-export for MistHelper.SQLiteDatabaseWriter callers
+    SQLiteDatabaseWriter,  # Extracted SQLite writer (SC-003) -- re-export for MistHelper.SQLiteDatabaseWriter callers
 )
 from src.refactors.switch_to_interactive_login import (
     SwitchToInteractiveLoginManager,  # Extracted switch-to-interactive-login manager (SC-010)
@@ -330,24 +534,24 @@ from src.refactors.wanprobe_config_manager import (
 from src.refactors.wlanradius_timer_manager import (
     WLANRadiusTimerManager,  # Extracted WLAN RADIUS timer manager (SC-014)
 )
-from src.reports.e911_bssid import (  # pylint: disable=unused-import
-    E911BSSIDReportGenerator,  # noqa: F401  # Module-level for tests + lazy-import re-export for src.export.org_export_utils
+from src.reports.e911_bssid import (
+    E911BSSIDReportGenerator,  # Module-level for tests + lazy-import re-export for src.export.org_export_utils
 )
-from src.reports.global_wired_client_report_generator import (  # pylint: disable=unused-import
-    GlobalWiredClientReportGenerator,  # noqa: F401  # Cat B (1013 SC-001 position 36) -- re-export for MistHelper.GlobalWiredClientReportGenerator callers
+from src.reports.global_wired_client_report_generator import (
+    GlobalWiredClientReportGenerator,  # Cat B (1013 SC-001 position 36) -- re-export
 )
-from src.reports.offline_device_reporter import (  # pylint: disable=unused-import
-    OfflineDeviceReporter,  # noqa: F401  # Cat B (1013 SC-001 position 44) -- re-export for MistHelper.OfflineDeviceReporter callers
+from src.reports.offline_device_reporter import (
+    OfflineDeviceReporter,  # Cat B (1013 SC-001 position 44) -- re-export for MistHelper.OfflineDeviceReporter callers
 )
-from src.reports.sfp_transceiver_data_processor import (  # pylint: disable=unused-import
-    SFPTransceiverDataProcessor,  # noqa: F401  # Cat B (1013 SC-001 position 27) -- re-export for MistHelper.SFPTransceiverDataProcessor callers
+from src.reports.sfp_transceiver_data_processor import (
+    SFPTransceiverDataProcessor,  # Cat B (1013 SC-001 position 27) -- re-export
 )
-from src.reports.wired_client_manufacturer_report_generator import (  # pylint: disable=unused-import
-    WiredClientManufacturerReportGenerator,  # noqa: F401  # Cat B (1013 SC-001 position 26) -- re-export for MistHelper.WiredClientManufacturerReportGenerator callers
+from src.reports.wired_client_manufacturer_report_generator import (
+    WiredClientManufacturerReportGenerator,  # Cat B (1013 SC-001 position 26) -- re-export
 )
 from src.site.address_audit import AddressAuditEngine  # Menu 195: read-only CSV site-address audit
-from src.site.bulk_radius_wlan_config_manager import (  # pylint: disable=unused-import
-    BulkRadiusWLANConfigManager,  # noqa: F401  # Cat B (1013 SC-001 position 15) -- re-export for MistHelper.BulkRadiusWLANConfigManager callers
+from src.site.bulk_radius_wlan_config_manager import (
+    BulkRadiusWLANConfigManager,  # Cat B (1013 SC-001 position 15) -- re-export
 )
 from src.site.site_config_manager import (  # Cat A canonical (1013 SC-003)
     SiteConfigDependencies as _SiteConfigDependencies,
@@ -358,39 +562,39 @@ from src.site.site_config_manager import (
 from src.site.site_config_manager import (
     configure_site_config_manager_dependencies as _configure_site_config_dependencies,
 )
-from src.ssh.cli_shell_manager import CLIShellManager  # pylint: disable=unused-import  # noqa: F401
+from src.ssh.cli_shell_manager import CLIShellManager
 from src.ssh.ssh_runner import EnhancedSSHRunner  # Import SSH command execution and result parsing
 from src.ssh.ssh_runner_manager import SSHRunnerManager, SSHRunnerManagerDeps  # Cat A canonical (1014 P15)
 from src.time.time_utils import TimeUtils  # Cat E canonical (1014 P6)
 from src.troubleshooting.interactive_test_runner import (
     InteractiveTestRunner,
 )  # Import interactive diagnostic test runner
-from src.troubleshooting.marvis_troubleshoot_utils import (  # pylint: disable=unused-import
-    MarvisTroubleshootDeps,  # noqa: F401  # Cat B (1013 SC-001 position 39) -- re-export for lazy mh.MarvisTroubleshootDeps callers in troubleshoot_utils.py
+from src.troubleshooting.marvis_troubleshoot_utils import (
+    MarvisTroubleshootDeps,  # Cat B (1013 SC-001 position 39) -- re-export for lazy access in troubleshoot_utils.py
 )
-from src.troubleshooting.marvis_troubleshoot_utils import (  # pylint: disable=unused-import
-    MarvisTroubleshootUtils as ExtractedMarvisTroubleshootUtils,  # noqa: F401  # Cat B (1013 SC-001 position 39) -- re-export for lazy mh.ExtractedMarvisTroubleshootUtils callers
+from src.troubleshooting.marvis_troubleshoot_utils import (
+    MarvisTroubleshootUtils as ExtractedMarvisTroubleshootUtils,  # Cat B (1013 SC-001 position 39) -- re-export
 )
-from src.troubleshooting.troubleshoot_utils import (  # pylint: disable=unused-import
-    TroubleshootUtils,  # noqa: F401  # Cat B (1013 SC-001 position 39) -- re-export for MistHelper.TroubleshootUtils callers
+from src.troubleshooting.troubleshoot_utils import (
+    TroubleshootUtils,  # Cat B (1013 SC-001 position 39) -- re-export for MistHelper.TroubleshootUtils callers
 )
-from src.ui.display_utils import (  # pylint: disable=unused-import
-    DisplayUtils,  # noqa: F401  # Cat B (1013 SC-001 position 11) -- re-export for lazy _MH.DisplayUtils callers
+from src.ui.display_utils import (
+    DisplayUtils,  # Cat B (1013 SC-001 position 11) -- re-export for lazy _MH.DisplayUtils callers
 )
-from src.ui.interactive_display_utils import (  # pylint: disable=unused-import
-    InteractiveDisplayUtils,  # noqa: F401  # Cat B (1013 SC-001 position 10) -- re-export for callers at 17392/17393/17394/17395
+from src.ui.interactive_display_utils import (
+    InteractiveDisplayUtils,  # Cat B (1013 SC-001 position 10) -- re-export for callers at 17392/17393/17394/17395
 )
-from src.utils.environment_utils import (  # pylint: disable=unused-import
-    EnvironmentUtils,  # noqa: F401  # Cat B (1013 SC-001 position 33) -- re-export for MistHelper.EnvironmentUtils callers
+from src.utils.environment_utils import (
+    EnvironmentUtils,  # Cat B (1013 SC-001 position 33) -- re-export for MistHelper.EnvironmentUtils callers
 )
-from src.utils.file_path_utils import (  # pylint: disable=unused-import
-    FilePathUtils,  # noqa: F401  # Cat E canonical (1015 T-13) -- re-export for MistHelper.FilePathUtils callers
+from src.utils.file_path_utils import (
+    FilePathUtils,  # Cat E canonical (1015 T-13) -- re-export for MistHelper.FilePathUtils callers
 )
-from src.utils.filter_operator_engine import (  # pylint: disable=unused-import
-    FilterOperatorEngine,  # noqa: F401  # Cat B (1013 SC-001 position 40) -- re-export for MistHelper.FilterOperatorEngine callers
+from src.utils.filter_operator_engine import (
+    FilterOperatorEngine,  # Cat B (1013 SC-001 position 40) -- re-export for MistHelper.FilterOperatorEngine callers
 )
-from src.utils.operation_registry import (  # pylint: disable=unused-import
-    OperationRegistry,  # noqa: F401  # Cat B (1013 SC-001 position 13) -- re-export for menu safety classification
+from src.utils.operation_registry import (
+    OperationRegistry,  # Cat B (1013 SC-001 position 13) -- re-export for menu safety classification
 )
 from src.validation.validation_utils import ValidationUtils  # Cat E canonical (1014 P5)
 from src.wan_hub_group_manager import WanHubGroupNumberManager  # Import WAN hub group number manager for hub routing
@@ -757,7 +961,7 @@ except ImportError:  # numpy not installed
     np = None  # type: ignore[assignment]  # Optional - analytics features limited  # None lets runtime guards detect absence
 
 try:  # websocket-client is required for live device diagnostics
-    import websocket  # noqa: F401  # WebSocket client fail-fast install guard (used by src.device.arp_command_manager)
+    import websocket  # WebSocket client fail-fast install guard (used by src.device.arp_command_manager)
 except ImportError as _ws_err:  # Required dependency is missing
     raise ImportError(
         "websocket-client is required but not installed. Run: pip install websocket-client"
@@ -780,7 +984,7 @@ from src.utils.tqdm_wrapper import tqdm  # noqa: E402, I001  # Cat E canonical (
 
 
 try:  # requests is required for all HTTP calls
-    import requests  # noqa: F401  # HTTP library fail-fast install guard (also used via function-local imports)
+    import requests  # HTTP library fail-fast install guard (also used via function-local imports)
 except ImportError as _req_err:  # Required dependency is missing
     raise ImportError(
         "requests is required but not installed. Run: pip install requests"
@@ -2873,7 +3077,7 @@ def _configure_session_timeout(session_obj: Any) -> None:
 # APITenantFetchUtils extracted to src/api/tenant_fetch.py (issue #331).
 # Dependency injection is used so the module has no circular import with MistHelper.
 # Instances are created at each call site using the runtime apisession and org ID resolver.
-from src.api.tenant_fetch import APITenantFetchUtils  # noqa: F401  # Re-exported for ServicePingLauncher late-binding
+from src.api.tenant_fetch import APITenantFetchUtils  # Re-exported for ServicePingLauncher late-binding
 
 # NOTE: APIFetchUtils removed (1014 P8, Cat E) - canonical body at src/api/api_fetch_utils.py.
 # ============================================================================
