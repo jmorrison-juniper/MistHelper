@@ -138,6 +138,8 @@ SiteExportUtils
 SiteInventoryHealthAnalyzerDeps
 SiteMetricOperation
 SitesByAPModelExporter
+SubprocessError
+SubprocessRunner
 SwitchToInteractiveLoginManager
 SystematicTestOption
 TUILauncher
@@ -145,6 +147,7 @@ TYPE_CHECKING
 TelemetryEmitter
 ThreadPoolExecutor
 TimeUtils
+TimeoutExpired
 TroubleshootUtils
 UPGRADE_CHECK_TIMEOUT
 UTC
