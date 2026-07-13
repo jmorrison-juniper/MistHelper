@@ -108,7 +108,7 @@ class OrgSiteExporter:  # Org site exporters.
         logging.info(" Full site data written to SitesWithLocations.csv")  # Log write success.
 
     @staticmethod
-    def current_guests():  # Export current guest users.
+    def current_guests() -> None:  # Export current guest users.
         """Export all current guest users in the org to OrgCurrentGuests.csv."""
         mh = importlib.import_module(
             "MistHelper"
@@ -127,7 +127,7 @@ class OrgSiteExporter:  # Org site exporters.
         logging.info(" Current guests exported to OrgCurrentGuests.csv")  # Log write success.
 
     @staticmethod
-    def historical_guests():  # Export 7-day guest history.
+    def historical_guests() -> None:  # Export 7-day guest history.
         """Export all guest users from the last 7 days to OrgHistoricalGuests.csv."""
         mh = importlib.import_module(
             "MistHelper"
