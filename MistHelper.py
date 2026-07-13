@@ -916,7 +916,7 @@ def _parse_requirements_file(filepath="requirements.txt"):  # Read dependency sp
 
 
 # Simplified facade delegating dependency bootstrap logic to extracted src/bootstrap modules.
-def _early_dependency_check():  # Public entry point; delegates to the extracted bootstrap modules
+def _early_dependency_check() -> None:  # Public entry point; delegates to the extracted bootstrap modules
     """Run early dependency checks through the extracted bootstrap orchestrator."""
     installer = PackageInstaller(  # Build the installer with stdlib modules injected (enables testing/mocking)
         os_module=os,  # Inject os for path/env operations
@@ -940,7 +940,7 @@ def _early_dependency_check():  # Public entry point; delegates to the extracted
 
 
 # Run early dependency check (will be skipped if DISABLE_AUTO_INSTALL=true)
-_early_dependency_check()  # type: ignore[no-untyped-call]  # Run the bootstrap immediately at import time
+_early_dependency_check()  # Run the bootstrap immediately at import time
 
 # Additional standard library imports
 import concurrent.futures  # High-level parallelism primitives for batched API calls
@@ -1175,14 +1175,14 @@ class GlobalImportManager:
         "matplotlib": "matplotlib>=3.5.0",  # Static plotting for analytics
     }
 
-    def __init__(self):  # Read config from env and prepare dependency-tracking state
+    def __init__(self) -> None:  # Read config from env and prepare dependency-tracking state
         """Initialize the import manager with configuration from environment variables."""
         self._load_upgrade_configuration()  # Read env-driven upgrade/UV/CSV freshness settings
         self._initialize_dependency_tracking()  # Prepare package-tracking lists and import/UV caches
         self._initialize_import_mappings()  # Build package->import name maps and special import handlers
-        self._setup_logging()  # type: ignore[no-untyped-call]  # Configure handlers/levels before other init runs
-        self._detect_virtual_environment()  # type: ignore[no-untyped-call]  # Log whether we're in a venv (affects installs)
-        self._define_package_requirements()  # type: ignore[no-untyped-call]  # Populate the required/optional package dicts
+        self._setup_logging()  # Configure handlers/levels before other init runs
+        self._detect_virtual_environment()  # Log whether we're in a venv (affects installs)
+        self._define_package_requirements()  # Populate the required/optional package dicts
 
     def _load_upgrade_configuration(self):  # Read upgrade/UV/CSV settings from the environment
         """Load upgrade, UV-check, and CSV-freshness settings from environment variables."""
@@ -1236,7 +1236,7 @@ class GlobalImportManager:
             "tqdm": self._import_tqdm,  # Custom handler that swaps in the real tqdm
         }
 
-    def _detect_virtual_environment(self):  # Determine and log whether a venv is active
+    def _detect_virtual_environment(self) -> None:  # Determine and log whether a venv is active
         """Detect if we're running in a virtual environment and log info."""
         self.in_venv = hasattr(sys, "real_prefix") or (
             hasattr(sys, "base_prefix") and sys.base_prefix != sys.prefix
@@ -1250,7 +1250,7 @@ class GlobalImportManager:
             logging.info("Running in system Python environment")  # Note the non-venv environment
             logging.info("Python executable: %s", sys.executable)  # Log which interpreter is in use
 
-    def _setup_logging(self):  # Build console+file handlers with env-driven levels
+    def _setup_logging(self) -> None:  # Build console+file handlers with env-driven levels
         """Setup basic logging configuration with environment-specific levels."""
         console_log_level = int(os.environ.get("CONSOLE_LOG_LEVEL", logging.INFO))  # Console verbosity (default INFO)
         file_log_level = int(os.environ.get("LOGGING_LOG_LEVEL", logging.INFO))  # Log-file verbosity (default INFO)
@@ -1289,7 +1289,7 @@ class GlobalImportManager:
         logging.debug("_build_file_log_handler: file handler ready at %s", log_file_path)  # Log after build
         return file_handler  # Caller wires this into basicConfig
 
-    def _define_package_requirements(self):  # Populate the required/optional package dictionaries
+    def _define_package_requirements(self) -> None:  # Populate the required/optional package dictionaries
         """Define all required and optional package dependencies from class constants."""
         logging.debug("_define_package_requirements: loading spec maps from class constants")  # Log before copy
         self.required_packages = dict(self._REQUIRED_PACKAGES)  # Copy class-level required spec map (defensive copy)
@@ -1570,7 +1570,7 @@ class GlobalImportManager:
             logging.warning("Error processing package %s: %s", pkg_spec, e)  # Log and continue with remaining packages
             return False  # Treat as a failed package
 
-    def _import_concurrent_futures(self):
+    def _import_concurrent_futures(self) -> Any:
         """Special handler for concurrent.futures import."""
         from concurrent.futures import ThreadPoolExecutor, as_completed  # Import the thread-pool primitives on demand
 
@@ -1581,7 +1581,7 @@ class GlobalImportManager:
     class _DateTimeHandler:  # Adapter exposing both class-like and module-like datetime access
         """Adapter exposing both class-like and module-like datetime access."""
 
-        def __init__(self):
+        def __init__(self) -> None:
             from datetime import datetime, timedelta  # Local import keeps handler self-contained
 
             self._datetime_cls = datetime  # Capture class for __call__ forwarding
@@ -1599,12 +1599,12 @@ class GlobalImportManager:
         def __call__(self, *args, **kwargs):
             return self._datetime_cls(*args, **kwargs)  # Forward calls to the datetime constructor
 
-    def _import_datetime(self):
+    def _import_datetime(self) -> Any:
         """Special handler for datetime import."""
         logging.debug("_import_datetime: returning _DateTimeHandler adapter")  # Log before construction
-        return self._DateTimeHandler()  # type: ignore[no-untyped-call]  # Hand back the dual-purpose adapter
+        return self._DateTimeHandler()  # Hand back the dual-purpose adapter
 
-    def _import_tqdm(self):
+    def _import_tqdm(self) -> Any:
         """Special handler for tqdm import to ensure proper functionality."""
         try:
             from tqdm import tqdm  # Attempt to import the real progress-bar library
@@ -1704,7 +1704,7 @@ class GlobalImportManager:
     def _resolve_and_import(self, module_name: str) -> Any:
         """Import a module via its special handler or its real import name (issue #470: shared by attempt + retry)."""
         if module_name in self.special_import_handlers:  # Some modules need custom construction logic.
-            return self.special_import_handlers[module_name]()  # type: ignore[no-untyped-call]  # Invoke special handler.
+            return self.special_import_handlers[module_name]()  # Invoke special handler.
         actual_import_name = self.import_name_mappings.get(module_name, module_name)  # Resolve package -> import name.
         return __import__(actual_import_name)  # Import the module by its real import name.
 
@@ -2167,7 +2167,7 @@ _api_usage_cache = {  # Module-level cache for Mist API rate-limit accounting
 # ============================================================================
 
 # Create global import manager instance
-import_manager = GlobalImportManager()  # type: ignore[no-untyped-call]  # Single shared manager for all dependency imports
+import_manager = GlobalImportManager()  # Single shared manager for all dependency imports
 
 # Initialize imports immediately (unless deferred by CLI flags)
 # Test mode and skip-deps both defer initialization to main() for better control
@@ -2446,9 +2446,9 @@ def _handle_interactive_login_success():
         )  # Log the success without MSPs
 
     if msp_privileges:  # Choose the selection flow based on MSP access
-        _select_msp_and_org()  # type: ignore[no-untyped-call]  # MSP users pick an MSP then an org
+        _select_msp_and_org()  # MSP users pick an MSP then an org
     else:  # No MSP access
-        _select_org_from_session()  # type: ignore[no-untyped-call]  # Non-MSP users pick an org directly
+        _select_org_from_session()  # Non-MSP users pick an org directly
 
 
 def _prompt_switch_login_confirmation() -> bool:
@@ -2472,7 +2472,7 @@ def _prompt_switch_login_confirmation() -> bool:
     return True  # User explicitly chose to proceed
 
 
-def _select_msp_and_org():
+def _select_msp_and_org() -> None:
     """Select MSP and organization via extracted interactive session manager."""
     global apisession, mistapi, msp_privileges, selected_msp, org_id  # These globals are updated by the selection flow
 
@@ -2519,7 +2519,7 @@ def _invoke_mistapi_org_picker_and_apply() -> None:
         logging.error("Failed to select org from session: %s", e)  # nosec B608  # Log the failure detail
 
 
-def _select_org_from_session():
+def _select_org_from_session() -> None:
     """Pick an org via mistapi's built-in selector (non-MSP path)."""
     logging.debug("Entering _select_org_from_session()")  # Trace entry for debugging
     print("")  # Blank spacer line
@@ -3746,7 +3746,7 @@ menu_actions: "dict[str, tuple[Callable[..., Any], str]]" = {
         "Export a list of all devices with associated site and address info",
     ),
     "4": (
-        lambda: (OrgSiteExporter.current_guests(), OrgSiteExporter.historical_guests()),  # type: ignore[no-untyped-call]
+        lambda: (OrgSiteExporter.current_guests(), OrgSiteExporter.historical_guests()),
         "Export all current guest users and last 7 days of historical guests to CSV",
     ),
     "17": (OrgDeviceStatsExporter.switch_vc_stats, "Export all switch virtual chassis (VC/stacking) stats to CSV"),
@@ -4006,7 +4006,7 @@ menu_actions: "dict[str, tuple[Callable[..., Any], str]]" = {
         "Export device-specific insight metrics for a selected site",
     ),
     "54": (
-        lambda: ConstDefinitionsExporter(apisession).export_all(),  # type: ignore[no-untyped-call]
+        lambda: ConstDefinitionsExporter(apisession).export_all(),
         "Export all available const definitions from the Mist API (comprehensive endpoint coverage)",
     ),
     "53": (OrgExportUtils.insight_metrics, "Export Organization Insight Metrics (comprehensive operational insights)"),
@@ -4807,7 +4807,7 @@ def _run_web_portal_server(app: Any, host: str, port: int, dev_debug: bool) -> N
         app.run(host=host, port=port, debug=dev_debug)  # Honor caller's debug flag locally
 
 
-def _launch_web_portal(args):
+def _launch_web_portal(args: argparse.Namespace) -> None:
     """Launch the Flask web portal.
 
     Determines whether to use Gunicorn (container)
@@ -5528,7 +5528,7 @@ def _run_tui_mode_and_exit(args: argparse.Namespace) -> None:
 def _run_web_portal_mode(args: argparse.Namespace) -> None:
     """Launch the Gunicorn web portal on port 8055 and exit cleanly on shutdown."""
     logging.info("WEB_PORTAL: Starting web portal mode")  # Trace before launch
-    _launch_web_portal(args)  # type: ignore[no-untyped-call]  # Blocks until shutdown
+    _launch_web_portal(args)  # Blocks until shutdown
     sys.exit(0)
 
 

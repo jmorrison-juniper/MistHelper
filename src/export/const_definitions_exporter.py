@@ -42,7 +42,7 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
     FALLBACK_COUNTRIES = ["US", "CA", "GB", "AU", "DE", "FR", "JP", "CN", "IN", "BR"]  # Fallback country list.
     FALLBACK_CHANNEL_COUNTRIES = ["US", "CA", "GB", "AU", "DE", "FR", "JP"]  # Fallback channel countries.
 
-    def __init__(self, api_session):  # Capture the session.
+    def __init__(self, api_session: Any) -> None:  # Capture the session.
         """Initialize exporter with API session and counters."""
         self.api_session = api_session  # Store the session.
         self.discovered_endpoints: dict[str, EndpointConfig] = {}  # Discovered endpoints.
