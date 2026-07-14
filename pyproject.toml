@@ -269,7 +269,6 @@ omit = [
     "src/export/sites_by_ap_model_exporter.py",
     "src/firmware/firmware_manager.py",
     "src/gateway/gateway_ha_exporter.py",
-    "src/input/prompt_client_utils.py",
     "src/inventory/org_device_inventory_summary_facade.py",
     "src/org/org_ticket_manager.py",
     "src/reports/global_wired_client_report_generator.py",
@@ -278,11 +277,8 @@ omit = [
     "src/reports/wired_client_manufacturer_report_generator.py",
     "src/site/bulk_radius_wlan_config_manager.py",
     "src/ssh/cli_shell_manager.py",
-    "src/troubleshooting/troubleshoot_utils.py",
     "src/ui/prompt_utils.py",
     "src/ui/tui.py",
-    "src/utils/environment_utils.py",
-    "src/utils/filter_operator_engine.py",
     "src/websocket/*"
 ]
 
