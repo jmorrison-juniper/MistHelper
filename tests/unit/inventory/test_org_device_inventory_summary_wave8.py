@@ -8,7 +8,6 @@ from unittest.mock import MagicMock  # WHY: MagicMock(spec=Callable) is mandator
 
 import pytest  # WHY: capsys, monkeypatch fixtures drive banner assertions and env-var patching
 
-from src.inventory import org_device_inventory_summary as sut  # WHY: module handle for global patching
 from src.inventory.org_device_inventory_summary import (  # WHY: SUT plus DI seam
     OrgDeviceInventorySummaryCore,
     configure_org_device_inventory_summary_dependencies,
