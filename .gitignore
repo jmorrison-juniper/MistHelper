@@ -272,3 +272,6 @@ specs/*-audit-menu-*/
 # Throwaway evidence snapshots from spec decomposition runs (CodeQL false positives)
 specs/**/evidence/.tmp_*
 
+# uv lockfile — project uses pip via hatchling, not uv
+uv.lock
+
