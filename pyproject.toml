@@ -86,6 +86,7 @@ Issues = "https://github.com/jmorrison-juniper/MistHelper/issues"
 
 [project.scripts]
 misthelper = "MistHelper:main"
+test-quality-analyzer = "tools.test_quality_analyzer.__main__:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -126,6 +127,14 @@ known-first-party = ["src"]
 # refactor_candidates.md report; reflowing the lines would break the rendered
 # markdown structure of the generated report.
 "tools/refactor_analyzer/reporting.py" = ["E501"]
+# test_quality_analyzer subtree: internal style uses %-format for diagnostic
+# messages and str-subclass Enums for JSON .value serialization (see
+# detection/types.py docstring). Neither is a correctness issue.
+"tools/test_quality_analyzer/**" = ["UP031", "UP042"]
+"tests/tools/test_quality_analyzer/**" = ["UP031"]
+# Bad fixtures deliberately embody the anti-patterns the analyzer detects;
+# ruff must not "fix" the material under test.
+"tools/test_quality_analyzer/fixtures/bad/**" = ["UP031", "UP042", "B017", "G", "F", "E"]
 
 [tool.mypy]
 python_version = "3.13"
