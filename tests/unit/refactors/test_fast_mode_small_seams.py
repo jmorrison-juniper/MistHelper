@@ -19,7 +19,9 @@ from __future__ import annotations  # WHY: enable PEP 604 unions on Python 3.9+.
 
 import importlib  # WHY: reload the target modules after env changes.
 import logging  # WHY: emit action logs around each test's setup/teardown.
+import os  # WHY: belt-and-suspenders env cleanup in teardown fixture.
 import sys  # WHY: monkeypatch sys.argv for is_debug_mode.check().
+from types import ModuleType  # WHY: precise type for importlib.reload() argument annotation.
 
 import pytest  # WHY: parametrized fixtures + monkeypatch integration.
 
@@ -32,6 +34,43 @@ from src.refactors import is_debug_mode as idm  # noqa: E402
 from src.refactors import mist_site_exclude_prefix as msep  # noqa: E402
 from src.refactors import mist_wan_target_ports as mwtp  # noqa: E402
 from src.refactors import package_import_map as pim  # noqa: E402
+
+# WHY: env vars that our importlib.reload() tests mutate. Kept in sync with _ENV_MUTATED_MODULES below
+# so the teardown fixture can strip them from os.environ before reloading each module to defaults.
+_ENV_VARS_TO_CLEAR: tuple[str, ...] = (
+    "FAST_MODE_BACKOFF_MULTIPLIER",  # WHY: read by fast_mode_backoff_multiplier at class-body eval.
+    "FAST_MODE_MAX_CONCURRENT_CONNECTIONS",  # WHY: read by fast_mode_constants at module import.
+    "FAST_MODE_USE_CONNECTION_AWARE_THREADING",  # WHY: read by fast_mode_constants at module import.
+    "FAST_MODE_DEVICES_PER_THREAD",  # WHY: read by fast_mode_devices_per_thread at class-body eval.
+    "FAST_MODE_SEQUENTIAL_MAX_RETRIES",  # WHY: read by fast_mode_sequential_max_retries at class-body eval.
+    "MIST_SITE_EXCLUDE_PREFIX",  # WHY: read by mist_site_exclude_prefix at module import.
+    "MIST_WAN_TARGET_PORTS",  # WHY: read by mist_wan_target_ports at class-body eval.
+)
+
+# WHY: env-derived modules that our tests reload. The autouse fixture reloads each after every test
+# so a "VRE" (etc.) override does not leak into unrelated test files that import these modules.
+_ENV_MUTATED_MODULES: tuple[ModuleType, ...] = (fmbm, fmc, fmdpt, fmsmr, msep, mwtp)
+
+
+@pytest.fixture(autouse=True)
+def _restore_env_module_state() -> object:
+    """Reload env-derived refactor modules to pristine defaults after every test.
+
+    Without this, ``monkeypatch.setenv(...) + importlib.reload(module)`` leaves the module's
+    class/module-level constant permanently overridden for the rest of the process, which
+    poisons subsequent test files that read those constants at import time (e.g. wan_probe
+    device override manager tests expecting ``MIST_SITE_EXCLUDE_PREFIX == ""``).
+    """  # WHY: prevent cross-file state leakage per Constitution VII.
+    logging.info("_restore_env_module_state: setup begin")  # WHY: BEFORE action log.
+    yield  # WHY: hand control to the test.
+    logging.info("_restore_env_module_state: teardown begin - clearing env vars")  # WHY: BEFORE teardown action log.
+    for var in _ENV_VARS_TO_CLEAR:  # WHY: strip any env override monkeypatch may not have reverted yet.
+        os.environ.pop(var, None)  # WHY: no-op if unset; guarantees clean env for reload.
+    for mod in _ENV_MUTATED_MODULES:  # WHY: re-run each module body under clean env to reset constants.
+        importlib.reload(mod)  # WHY: restore original defaults for downstream test files.
+    logging.debug(
+        "_restore_env_module_state: teardown done, reloaded %d modules", len(_ENV_MUTATED_MODULES)
+    )  # WHY: AFTER teardown action log.
 
 
 class TestFastModeBackoffMultiplier:
