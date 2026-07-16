@@ -165,7 +165,8 @@ mindmap
 * Robust flattening + sanitization pipeline for nested API JSON
 * Optional fuzzy address normalization (scourgify + rapidfuzz; safe fallbacks if not installed)
 * Enhanced SSH execution framework (Paramiko) with validation, shell mode, per-host logging stubs (option 97)
-* Systematic safe-operation test harness (`--test`) with skip logic for unsafe / interactive / destructive items
+* Systematic safe-operation test harness (`--test` / `--testinteractive`) with **fail-closed** classification: `OperationRegistry` skips any menu option not explicitly classified `safe`/`interactive_safe` (unregistered options fail closed instead of defaulting to safe), so destructive/interactive/resource-intensive operations — including menu 194 — never auto-run. An exhaustive menu/registry coverage guardrail (`tests/guardrails/test_operation_registry_menu_coverage.py`) fails CI the instant `menu_actions` and the registry diverge.
+* Safety preflights before any live systematic run: an isolated-virtual-environment guard blocks automatic dependency install/upgrade into system Python by default (override with `MISTHELPER_ALLOW_SYSTEM_PYTHON_INSTALL=true`), and a secret-safe credential/config preflight exits with a redacted, actionable message (pointing at `deploy/.env.example`) when `MIST_HOST`/`MIST_APITOKEN`/`MIST_API_TOKEN` or the org id are missing/placeholder — before mistapi can build a malformed URL.
 * Container ready (Podman first, Docker compatible) with two build profiles (`Containerfile` simple, `Dockerfile` with HEALTHCHECK + UV logic)
 * Defensive logging: `script.log` plus targeted debug gating
 

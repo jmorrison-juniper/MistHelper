@@ -16,3 +16,14 @@ class TestWave1EntryRoutingGuardrails:
     def test_critical_menu_keys_exist_in_menu_actions(self):
         required_options = set(MistHelper.OperationRegistry.wave1_entry_routing_baseline().keys())
         assert required_options.issubset(set(MistHelper.menu_actions.keys()))
+
+    def test_registered_safe_options_unaffected_by_fail_closed_default(self):
+        """Feature 1020 (FR-006): the fail-closed default must not regress already-correct classifications."""
+        # Already-registered safe options still run in --test.
+        for option in ("26", "58", "23"):
+            assert MistHelper.OperationRegistry.is_safe(option) is True, f"Safe option {option} regressed"
+            assert MistHelper.OperationRegistry.is_interactive_safe(option) is False
+        # Already-registered interactive_safe options still run in --testinteractive, not --test.
+        for option in ("62", "60", "89"):
+            assert MistHelper.OperationRegistry.is_interactive_safe(option) is True, f"Option {option} regressed"
+            assert MistHelper.OperationRegistry.is_safe(option) is False

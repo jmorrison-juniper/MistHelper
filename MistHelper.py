@@ -2583,6 +2583,50 @@ def _parse_api_tokens() -> tuple[str, list[str]]:
     return host, tokens  # Return host string and parsed token list to caller
 
 
+# Feature 1020: config values shipped in deploy/.env.example that must never be treated as real credentials.
+_CREDENTIAL_PLACEHOLDER_MARKERS = ("your_", "_here", "changeme", "example.com", "<", ">")  # Copy-paste sentinels
+
+
+def _looks_like_placeholder(value: str) -> bool:
+    """Return True when *value* is blank or an obvious copy-paste placeholder (feature 1020, local-only)."""
+    candidate = value.strip().lower()  # Normalize for case-insensitive marker matching.
+    if not candidate:  # Empty/blank values are never valid credentials.
+        return True
+    return any(marker in candidate for marker in _CREDENTIAL_PLACEHOLDER_MARKERS)  # Flag known placeholder markers.
+
+
+def _preflight_verify_credentials(require_token: bool = True) -> None:
+    """Fail closed before any mistapi/requests call when host/token config is missing or a placeholder.
+
+    Feature 1020 (US3): invoked at the top of ``_establish_mist_session()`` for every dispatch mode. It
+    performs only local string validation - it never imports ``requests``/``mistapi`` and never issues an
+    HTTP request - so a misconfigured run exits with a redacted, actionable message instead of letting
+    mistapi build a malformed URL. Token presence is required for token-based modes
+    (``--test``/``--testinteractive``/TUI/CLI); ``require_token`` is False for interactive ``--login``,
+    which authenticates via email/password rather than a token. Any token value present is shown only via
+    ``_redact_tokens()`` previews, never raw (FR-015/SC-005).
+    """
+    logging.info("Running credential/config preflight (require_token=%s)", require_token)  # Before-action log.
+    host, tokens = _parse_api_tokens()  # Reuse the canonical host/token reader (env only, no network).
+    problems: list[str] = []  # Collect all issues so the operator sees every fix in one pass.
+    if _looks_like_placeholder(host):  # Blank/placeholder host makes mistapi build malformed URLs.
+        problems.append("MIST_HOST is blank or a placeholder - set a real host (e.g. api.mist.com)")
+    if require_token and not tokens:  # No MIST_APITOKEN/MIST_API_TOKEN resolved to a non-empty value.
+        problems.append("no API token found - set MIST_APITOKEN or MIST_API_TOKEN")
+    elif require_token and all(_looks_like_placeholder(token) for token in tokens):  # Only placeholders present.
+        problems.append(f"API token is a placeholder value (redacted: {_redact_tokens(tokens)})")
+    if not problems:  # Host present and (when required) a real token present -> continue to session init.
+        logging.debug("Credential/config preflight passed (require_token=%s)", require_token)  # After-action log.
+        return
+    logging.error("Credential/config preflight failed: %s", "; ".join(problems))  # Names only - never secrets.
+    print("[ERROR] Cannot start a Mist session - credential/config preflight failed:")  # Operator-facing header.
+    for problem in problems:  # Enumerate each distinct problem on its own line.
+        print(f"[ERROR]   - {problem}")
+    print("[ERROR] Copy deploy/.env.example to deploy/.env, then set MIST_HOST and MIST_APITOKEN/MIST_API_TOKEN.")
+    print("[ERROR] For --test/--testinteractive, also set org_id (or ORG_ID) - not MIST_ORG_ID - for this path.")
+    sys.exit(1)  # Exit non-zero before any session/network object is constructed.
+
+
 def _check_token_rate_limit(token: str, test_host: str) -> bool:
     """Probe a token via GET /self; True if rate-limited/unreachable, False if usable."""
     try:
@@ -5202,6 +5246,13 @@ def _establish_mist_session(args: argparse.Namespace) -> None:
     """Initialize Mist API session using interactive login or API token, then detect MSP privileges."""
     global msp_privileges  # We publish detected MSP grants to the module global for later menus/exporters to reuse
     logging.debug("_establish_mist_session: starting session initialization")  # Log entry
+    # Feature 1020 (US3, R4 insertion-point 1): host/token preflight for every dispatch mode. Runs before
+    # the --login/token branches so a missing/placeholder host or token exits with a redacted, actionable
+    # message BEFORE mistapi/requests can build a malformed URL. require_token is False for interactive
+    # --login (email/password auth needs no token); host is still validated in both modes. The second,
+    # distinct failure mode - a non-interactive org-id miss - is guarded separately in ConfigUtils (R4
+    # insertion-point 2), since org selection is interactive-vs-non-interactive dependent.
+    _preflight_verify_credentials(require_token=not args.login)  # Fail closed pre-network on bad host/token
     if args.login:  # Interactive login requested via --login flag
         logging.info("Interactive login mode requested via --login flag")  # Log before interactive login
         if not MistSessionInteractiveInitializer.initialize():  # Attempt email/password login
