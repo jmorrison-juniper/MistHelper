@@ -9,7 +9,6 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.export import site_export_utils as module
 from src.export.site_export_utils import (
     SiteExportUtils,
     _api_supports_limit,
