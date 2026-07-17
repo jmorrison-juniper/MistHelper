@@ -37,6 +37,16 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
   preventing malformed-URL requests on a blank host and never leaking token contents.
 - **`deploy/.env.example` clarification (Docs)**: documented that the non-interactive
   org-id path reads `org_id`/`ORG_ID` (not `MIST_ORG_ID`).
+- **Gateway test runtime wiring (Fixed)**: menus 33 and 34 now configure the
+  gateway runtime dependencies before either gateway inventory lookup or
+  site-result service delegation. This fixes the credentialed menu-33
+  systematic-test failure caused by an uninitialized `APICoreFetchUtils`.
+- **Windows type-check compatibility (Fixed)**: the Unix-only container user
+  detector now explicitly skips non-POSIX platforms and dynamically resolves
+  Unix account APIs after that guard, preserving container behavior while
+  allowing the configured `mypy src` check to pass on Windows.
+- **Formatting baseline (Fixed)**: applied the repository's Black formatting to
+  `MistHelper.py` and `tests/unit/test_lint_diagram_refs.py`.
 
 ### Mist API Coverage Audit
 

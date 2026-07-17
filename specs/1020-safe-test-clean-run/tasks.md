@@ -24,13 +24,26 @@ description: "Task list for Safe, Repeatable MistHelper `--test` Clean-Run Workf
 
 Single-project CLI layout (confirmed in `plan.md` Project Structure): `MistHelper.py` at repo root, `src/` package, `tests/` package. No `backend`/`frontend` split applies.
 
-## Execution Status (2026-07-16)
+## Execution Status (2026-07-17)
 
-- **Completed:** T001-T039, T041-T043, T046-T049. The workflow implementation, focused guardrails, documentation, non-integration validation, script structure check, diff check, and secret scan are complete.
-- **T040 remains repository-baseline blocked:** `py_compile` and Ruff pass. Full Black still reports the pre-existing `MistHelper.py` and `tests/unit/test_lint_diagram_refs.py` formatting debt; mypy still reports pre-existing Windows stub errors for `os.getuid`/`os.getpwuid` in `src/utils/environment_utils.py:81`. Both Black failures reproduce against `HEAD^`; the mypy line predates this feature.
-- **T044-T045 remain externally blocked:** no repository-root `.env` and no required Mist environment variables are available. Both CLI modes were verified to exit at local credential preflight before any API session or request begins.
-- **T047 was executed:** the worktree-local gate runner correctly reaches `black_check` and stops at the documented baseline formatting debt; it no longer uses a developer-specific interpreter or auto-runs live integration tests.
-- **Final validation verdict (T046):** **externally blocked - operator-supplied credentials required**. To finish live validation, create a repository-root `.env` from `deploy/.env.example` with `MIST_HOST`, `MIST_APITOKEN` or `MIST_API_TOKEN`, and `org_id` or `ORG_ID`, then run T044 and T045 manually.
+- **Completed:** T001-T049. The workflow implementation, guardrails,
+  documentation, static gates, non-integration validation, and live
+  credentialed validation are complete.
+- **T040 clean:** `py_compile`, Ruff, Black, and configured `mypy src` pass.
+  The Black baseline formatting and Windows Unix-UID type-check blocker were
+  repaired without altering Unix container behavior.
+- **T044 complete:** a credentialed `MistHelper.py --test` run passed all 59
+  safe operations, skipped all 138 unsafe operations, and wrote a zero-failure
+  telemetry summary. A menu-33 runtime dependency failure discovered during
+  this run was fixed with focused regression coverage.
+- **T045 complete:** a credentialed `MistHelper.py --testinteractive` run
+  passed all 37 interactive-safe operations and skipped all 160 other options,
+  with a zero-failure telemetry summary.
+- **T047 clean:** the worktree-local Wave 1 gate passed all six stages,
+  including a final 59/59 credentialed systematic sweep.
+- **Final validation verdict (T046):** **clean run achieved**. The fresh
+  isolated venv contains 6,306 passing non-integration tests at 91.56%
+  coverage, and both live test modes complete with zero failed operations.
 
 ---
 
