@@ -22,7 +22,7 @@ rather than inventing new tooling.
 - Dependencies installed: `pip install -r requirements.txt` (or `uv sync` if
   using UV, per constitution's tooling preference).
 - No real credentials are required for Stages 1-2 below. Stage 3 (live
-  credentialed run) requires a valid `deploy/.env` copied from
+  credentialed run) requires a valid repository-root `.env` copied from
   `deploy/.env.example` with a real `MIST_HOST`, `MIST_APITOKEN` (or
   `MIST_API_TOKEN`), and `org_id` — see `contracts/preflight_failure_contract.md`
   for the exact variable names the code reads (note: `deploy/.env.example`'s
@@ -54,17 +54,19 @@ python -m pytest tests/bootstrap/test_dependency_check_venv_guard.py -v         
 python -m pytest tests/unit/test_credential_preflight.py -v                     # credential preflight (US3)
 python -m pytest tests/unit/test_config_utils_org_id_preflight.py -v            # org-id preflight (US3)
 
-# Full suite with coverage gate (fail_under = 90 per pyproject.toml):
-python -m pytest --cov=src --cov=tests --cov-report=term-missing
+# Full suite with coverage gate (fail_under = 90 per pyproject.toml), excluding live API integration:
+python -m pytest -m "not integration" --cov=src --cov=tests --cov-report=term-missing
 ```
 
 Expected: `test_operation_registry_menu_coverage.py` asserts exhaustive
 key-parity between `MistHelper.menu_actions` and
 `OperationRegistry.registered_options()` — this is the durable coverage
 guardrail (see `research.md` R2 / `contracts/operation_registry_classification_contract.md`).
-All new/updated tests pass with zero real network calls (verify no test in
-this run is marked `integration`: `python -m pytest --collect-only -m integration`
-should list none of the new tests).
+All new/updated tests pass with zero real network calls. The full command
+explicitly excludes tests marked `integration`, because they perform real,
+state-changing API operations and require a separately authorized operator run.
+Verify no new test is marked `integration` with
+`python -m pytest --collect-only -m integration`.
 
 ## Stage 3 — Diagnose failures at the root cause
 
@@ -84,7 +86,7 @@ If any Stage 1/2 command fails:
 python MistHelper.py --test
 ```
 
-- Requires a real `deploy/.env` with valid, reachable credentials (see
+- Requires a real repository-root `.env` with valid, reachable credentials (see
   Prerequisites). This is the only step in this quickstart that performs a
   real HTTP call.
 - If credentials are unavailable in the current environment, this step is

@@ -255,9 +255,11 @@ generate tasks without re-discovering the code.
      `black --check`, targeted guardrail/unit pytest selection. All are
      read-only against the working tree and safe to re-run automatically
      after each source fix.
-  2. **Full test suite** (safe to auto-repeat): `pytest --cov=src --cov=tests
-     --cov-report=term-missing` — exercises registry/preflight/venv-guard
-     unit tests without touching the network or real credentials.
+  2. **Full test suite** (safe to auto-repeat): `pytest -m "not integration"
+     --cov=src --cov=tests --cov-report=term-missing` — exercises
+     registry/preflight/venv-guard unit tests without touching the network or
+     real credentials. Marked integration tests are explicitly excluded because
+     they perform live API operations.
   3. **Root-cause diagnosis on failure**: any failure in stage 1/2 is
      resolved by reading the failing assertion/traceback/log line, not by
      loosening the assertion or adding a suppression (Constitution "Security
@@ -299,7 +301,7 @@ generate tasks without re-discovering the code.
   - `python -m ruff check MistHelper.py src tests`
   - `python -m black --check MistHelper.py src tests`
   - `python -m mypy src --config-file pyproject.toml`
-  - `python -m pytest --cov=src --cov=tests --cov-report=term-missing`
+  - `python -m pytest -m "not integration" --cov=src --cov=tests --cov-report=term-missing`
     (targeted subset for fast iteration:
     `pytest tests/guardrails/test_operation_registry_menu_coverage.py
     tests/guardrails/test_wave1_safety_classification_guardrails.py
@@ -316,11 +318,11 @@ generate tasks without re-discovering the code.
   (`fail_under = 90`, with a long-standing `omit` list that does not
   currently include the files this feature touches, so new code must carry
   real test coverage, not rely on `omit`).
-- **Rationale**: reusing the existing gate runner as-is (rather than a
-  parallel command set) means this feature's tests slot into
-  `run_wave1_gate.ps1` and its guardrail test with zero changes required to
-  either, other than adding new pytest files that the existing
-  `pytest_cov` step already discovers via `testpaths = ["tests"]`.
+- **Rationale**: retaining the existing gate runner's six-step structure while
+  correcting its developer-specific interpreter path and excluding marked live
+  integration tests makes the auto-repeatable validation safe in any worktree.
+  The feature's pytest files remain discovered by the existing `testpaths =
+  ["tests"]` configuration.
 
 ## R7. Contracts applicability
 

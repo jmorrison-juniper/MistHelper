@@ -2622,7 +2622,7 @@ def _preflight_verify_credentials(require_token: bool = True) -> None:
     print("[ERROR] Cannot start a Mist session - credential/config preflight failed:")  # Operator-facing header.
     for problem in problems:  # Enumerate each distinct problem on its own line.
         print(f"[ERROR]   - {problem}")
-    print("[ERROR] Copy deploy/.env.example to deploy/.env, then set MIST_HOST and MIST_APITOKEN/MIST_API_TOKEN.")
+    print("[ERROR] Copy deploy/.env.example to .env, then set MIST_HOST and MIST_APITOKEN/MIST_API_TOKEN.")
     print("[ERROR] For --test/--testinteractive, also set org_id (or ORG_ID) - not MIST_ORG_ID - for this path.")
     sys.exit(1)  # Exit non-zero before any session/network object is constructed.
 
@@ -5253,6 +5253,17 @@ def _establish_mist_session(args: argparse.Namespace) -> None:
     # distinct failure mode - a non-interactive org-id miss - is guarded separately in ConfigUtils (R4
     # insertion-point 2), since org selection is interactive-vs-non-interactive dependent.
     _preflight_verify_credentials(require_token=not args.login)  # Fail closed pre-network on bad host/token
+    is_systematic_test = bool(  # WHY: both systematic modes need a resolved org before any API session work.
+        getattr(args, "test", False) or getattr(args, "testinteractive", False)
+    )
+    if is_systematic_test:  # WHY: no session or MSP privilege request is useful without the required org context.
+        logging.info(
+            "SYSTEMATIC_TEST: validating org_id before Mist session initialization"
+        )  # Log before local org-id resolution.
+        ConfigUtils.get_cached_or_prompted_org_id()  # Fail closed before session construction or MSP HTTP calls.
+        logging.debug(
+            "SYSTEMATIC_TEST: org_id preflight passed before Mist session initialization"
+        )  # Log successful local validation.
     if args.login:  # Interactive login requested via --login flag
         logging.info("Interactive login mode requested via --login flag")  # Log before interactive login
         if not MistSessionInteractiveInitializer.initialize():  # Attempt email/password login

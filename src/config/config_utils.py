@@ -106,9 +106,9 @@ class ConfigUtils:
         if "--test" in sys.argv or "--testinteractive" in sys.argv:  # Non-interactive systematic test mode.
             logging.error("Cannot resolve org_id non-interactively for --test/--testinteractive: none configured.")
             print("[ERROR] No organization id configured for --test/--testinteractive.")
-            print("[ERROR] Set 'org_id' (or 'ORG_ID') in your environment, or add an 'org_id=' line to deploy/.env.")
+            print("[ERROR] Set 'org_id' (or 'ORG_ID') in your environment, or add an 'org_id=' line to .env.")
             print(
-                "[ERROR] Copy deploy/.env.example to deploy/.env for the full variable list (note: org_id, "
+                "[ERROR] Copy deploy/.env.example to .env for the full variable list (note: org_id, "
                 "not MIST_ORG_ID, is read by this path)."
             )
             sys.exit(1)  # Fail closed before mistapi.cli.select_org() can issue a malformed-URL request.

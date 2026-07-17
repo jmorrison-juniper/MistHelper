@@ -10,17 +10,13 @@ behavior is unchanged. Zero network, zero real credentials.
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
-import mistapi.cli  # noqa: F401  # WHY: eager-load the lazily-imported submodule so patching is robust to
-# suite-wide sys.modules churn (e.g. test_bulk_switch_upgrader swaps sys.modules["mistapi"] for a Mock).
 import pytest
 
-from src.config.config_utils import ConfigUtils
+from src.config import config_utils  # WHY: patch the module-global SDK reference without relying on sys.modules.
 
-# WHY: patch at the module-attribute path used by the code under test - mirrors the existing, isolation-robust
-#      pattern in tests/unit/test_config_utils.py so mistapi's lazy __getattr__ is not re-triggered at runtime.
-_SELECT_ORG_TARGET = "src.config.config_utils.mistapi.cli.select_org"
+ConfigUtils = config_utils.ConfigUtils  # WHY: retain the direct class alias used throughout these focused tests.
 
 
 def _reset_config_state(monkeypatch):
@@ -31,6 +27,17 @@ def _reset_config_state(monkeypatch):
     monkeypatch.delenv("ORG_ID", raising=False)
 
 
+def _install_select_org_spy(monkeypatch, return_value=None):
+    """Replace the module-local SDK with a zero-network organization-selection spy."""
+    select_org_spy = MagicMock(
+        return_value=return_value
+    )  # WHY: control the prompt result without importing mistapi.cli.
+    fake_mistapi = MagicMock(name="mistapi")  # WHY: isolated substitute avoids suite-wide sys.modules mutations.
+    fake_mistapi.cli.select_org = select_org_spy  # WHY: mirror only the SDK member ConfigUtils calls.
+    monkeypatch.setattr(config_utils, "mistapi", fake_mistapi)  # WHY: patch the exact global lookup used at runtime.
+    return select_org_spy  # WHY: callers assert whether the prompt path made a network-capable SDK call.
+
+
 class TestConfigUtilsOrgIdPreflight:
     """Fail-closed org-id resolution in systematic test modes; unchanged interactive behavior."""
 
@@ -39,25 +46,30 @@ class TestConfigUtilsOrgIdPreflight:
         """Test mode + no org id anywhere -> exit with actionable message; select_org never called."""
         _reset_config_state(monkeypatch)
         monkeypatch.setattr("sys.argv", ["MistHelper.py", flag])  # WHY: simulate the systematic test invocation.
+        select_org_spy = _install_select_org_spy(
+            monkeypatch
+        )  # WHY: prove the guarded path never reaches SDK selection.
 
-        with patch(_SELECT_ORG_TARGET) as select_org_spy:  # WHY: assert it is NEVER invoked (zero HTTP).
-            with pytest.raises(SystemExit) as exc_info:
-                ConfigUtils.get_cached_or_prompted_org_id()
+        with pytest.raises(SystemExit) as exc_info:
+            ConfigUtils.get_cached_or_prompted_org_id()
 
         assert exc_info.value.code == 1
         select_org_spy.assert_not_called()  # WHY: the whole point - no malformed-URL request is issued.
         out = capsys.readouterr().out
         assert "org_id" in out and "ORG_ID" in out, "must name the exact env vars the code reads"
         assert "deploy/.env.example" in out, "must reference the template file to copy"
+        assert "to .env" in out, "must direct operators to the root .env file ConfigUtils reads"
 
     def test_interactive_mode_still_calls_select_org(self, monkeypatch):
         """No test-mode flag + injected session -> select_org is called exactly as before (no regression)."""
         _reset_config_state(monkeypatch)
         monkeypatch.setattr("sys.argv", ["MistHelper.py"])  # WHY: genuine interactive run, no systematic flag.
         ConfigUtils.set_apisession(MagicMock(name="apisession"))  # WHY: interactive prompt path needs a session.
+        select_org_spy = _install_select_org_spy(
+            monkeypatch, return_value=["org-123"]
+        )  # WHY: isolate SDK prompt behavior.
 
-        with patch(_SELECT_ORG_TARGET, return_value=["org-123"]) as select_org_spy:
-            resolved = ConfigUtils.get_cached_or_prompted_org_id()
+        resolved = ConfigUtils.get_cached_or_prompted_org_id()
 
         select_org_spy.assert_called_once()  # WHY: interactive behavior must be unaffected by the new guard.
         assert resolved == "org-123"

@@ -121,7 +121,7 @@ establishes.
 | **I. Five-Item Rule** (functions/classes stay small, single-responsibility, ≤5 major branches/collaborators as a guideline) | **PASS.** Each new unit is a small, single-purpose addition: `OperationRegistry.registered_options()` (one-line accessor), the new `unregistered` fallback branch inside the existing `get()` (no new branching structure, just a changed literal), `_is_running_in_isolated_venv()` (single boolean predicate, mirrors existing `_is_auto_install_disabled()`), `_preflight_verify_credentials()` (single validate-and-exit-or-continue function), and the `ConfigUtils` non-interactive org-id guard (one added conditional inside an existing method). None of these introduce a god-function or god-class. |
 | **II. Class-Based Architecture** | **PASS.** All changes extend existing classes (`OperationRegistry`, `DependencyCheckOrchestrator`, `ConfigUtils`) or add module-level helper functions colocated with existing peers (`_establish_mist_session()`'s siblings in `MistHelper.py`) — no new bare/global mutable state is introduced. |
 | **III. Safety-First (NON-NEGOTIABLE)** | **PASS — this principle is the direct subject of the feature.** The fail-open→fail-closed registry default, the exhaustive coverage guardrail, the destructive-confirmation preservation for menu 194 (unchanged, still requires typed `'CREATE'`), and the credential/venv preflights are all safety-hardening measures that strictly narrow, never widen, what can execute automatically. No new destructive automatic behavior is introduced. |
-| **IV. Full Deployment Pipeline (NON-NEGOTIABLE)** | **PASS — reused, not bypassed.** This feature reuses the existing `scripts/wave1/run_wave1_gate.ps1` 6-step pipeline (`py_compile`→`ruff`→`black_check`→`mypy`→`pytest_cov`→`misthelper_test`) verbatim; no step is skipped, weakened, or replaced by a parallel ad hoc pipeline. |
+| **IV. Full Deployment Pipeline (NON-NEGOTIABLE)** | **PASS — preserved and safety-corrected.** This feature retains the existing `scripts/wave1/run_wave1_gate.ps1` 6-step pipeline (`py_compile`→`ruff`→`black_check`→`mypy`→`pytest_cov`→`misthelper_test`) while deriving its interpreter from the active worktree and excluding marked live integration tests from the auto-repeatable coverage step. No pipeline step is skipped or replaced. |
 | **V. Observability & Logging** | **PASS.** The registry fallback emits an actionable warning (as it does today, just with a corrected category); the credential preflight prints a clear, redacted remediation message; the venv guard prints a diagnostic distinguishing missing-vs-broken `.venv`. No new logging framework is introduced — existing `logging`/telemetry conventions (`TelemetryEmitter`, `_redact_tokens()`) are reused. |
 | **VI. Inline Comments (NON-NEGOTIABLE)** | **PASS (implementation-time requirement, carried forward).** `research.md`/`data-model.md` document the "why" for every non-obvious change (e.g., why two preflight insertion points instead of one; why `sys.real_prefix` fallback; why the `MIST_ORG_ID` naming nuance must be avoided in remediation text) so implementation tasks can translate these directly into inline comments at the actual code sites, per this principle's requirement that non-obvious logic carry a brief "why" comment. |
 | **VII. Action Logging (NON-NEGOTIABLE)** | **PASS.** No new state-mutating action is introduced by this feature (it only narrows what *can* run); the existing action-logging conventions for any operation that does run (e.g., destructive menu 194's existing confirmation/logging) are unchanged. The preflight/guard functions themselves are read-only checks, not loggable mutating actions. |
@@ -194,12 +194,11 @@ tests/
     └── test_dependency_check_venv_guard.py             # [NEW] unit tests for the isolated-venv predicate.
 
 deploy/
-└── .env.example                                # Unchanged (referenced by remediation text only; the
-                                                #   MIST_ORG_ID vs org_id naming nuance is documented in
-                                                #   research.md, not fixed by this feature).
+└── .env.example                                # Clarified: systematic tests use root .env's org_id/ORG_ID,
+                                                # while MIST_ORG_ID remains for other module fallbacks.
 
 scripts/wave1/
-└── run_wave1_gate.ps1                          # Unchanged — reused verbatim as the test-layer command set.
+└── run_wave1_gate.ps1                          # Updated: worktree-local venv and non-integration coverage gate.
 ```
 
 **Structure Decision**: Single-project CLI structure (no `backend`/

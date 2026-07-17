@@ -11,6 +11,9 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import MistHelper
+from src.utils.operation_registry import (
+    OperationRegistry,
+)  # WHY: assert against the canonical fail-closed registry module.
 
 # WHY: a synthetic key injected into menu_actions to exercise the fail-closed path end-to-end.
 _SYNTHETIC_KEY = "9998"
@@ -40,8 +43,8 @@ class TestSystematicTestUnregisteredSemantics:
         """The skip carries category 'unregistered' with a non-empty, named reason (FR-002)."""
         _install_synthetic_option(monkeypatch)
 
-        assert MistHelper.OperationRegistry.skip_category(_SYNTHETIC_KEY) == "unregistered"
-        reason = MistHelper.OperationRegistry.skip_reason(_SYNTHETIC_KEY)
+        assert OperationRegistry.skip_category(_SYNTHETIC_KEY) == "unregistered"
+        reason = OperationRegistry.skip_reason(_SYNTHETIC_KEY)
         assert reason, "Unregistered skip must have a non-empty, actionable reason"
 
     def test_skip_emission_records_unregistered_category(self, monkeypatch):

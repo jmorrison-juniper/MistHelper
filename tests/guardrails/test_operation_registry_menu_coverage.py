@@ -10,7 +10,10 @@ for the four guarantees enforced here.
 
 from __future__ import annotations
 
-import MistHelper  # WHY: menu_actions + OperationRegistry are re-exported by the MistHelper script module.
+import MistHelper  # WHY: menu_actions remains the authoritative runtime mapping of reachable menu options.
+from src.utils.operation_registry import (
+    OperationRegistry,
+)  # WHY: exercise the canonical registry module, not its legacy facade.
 
 # WHY: the eight categories documented in the operation_registry module docstring; the ninth value
 #      ``unregistered`` is a fail-closed fallback only and must NEVER appear inside _REGISTRY itself.
@@ -34,7 +37,7 @@ class TestOperationRegistryMenuCoverage:
     def test_registered_options_matches_menu_actions_exactly(self):
         """Guarantee 3: registered_options() covers every menu_actions key (superset), with no stray keys."""
         menu_keys = set(MistHelper.menu_actions.keys())  # WHY: authoritative set of reachable options.
-        registered = MistHelper.OperationRegistry.registered_options()  # WHY: new classmethod under test.
+        registered = OperationRegistry.registered_options()  # WHY: canonical registry accessor under test.
 
         missing = menu_keys - registered  # WHY: any menu option lacking an explicit classification is a defect.
         assert not missing, f"menu_actions keys missing from OperationRegistry._REGISTRY: {sorted(missing)}"
@@ -44,30 +47,30 @@ class TestOperationRegistryMenuCoverage:
 
     def test_every_registered_category_is_documented(self):
         """Guarantee: every _REGISTRY entry uses one of the eight documented categories (catches typos)."""
-        for option in sorted(MistHelper.OperationRegistry.registered_options()):
-            category = MistHelper.OperationRegistry.get(option)["category"]  # WHY: read the classified category.
+        for option in sorted(OperationRegistry.registered_options()):
+            category = OperationRegistry.get(option)["category"]  # WHY: read the canonical classification.
             assert (
                 category in _DOCUMENTED_REGISTRY_CATEGORIES
             ), f"Option {option} has undocumented category {category!r}"
 
     def test_every_destructive_entry_carries_destructive_marker(self):
         """Guarantee 4: every destructive entry has a skip_reason containing the 'DESTRUCTIVE' substring."""
-        for option in sorted(MistHelper.OperationRegistry.registered_options()):
-            if MistHelper.OperationRegistry.get(option)["category"] != "destructive":
+        for option in sorted(OperationRegistry.registered_options()):
+            if OperationRegistry.get(option)["category"] != "destructive":
                 continue  # WHY: only destructive entries must carry the operator-visible marker.
-            reason = MistHelper.OperationRegistry.skip_reason(option)  # WHY: skip_reason is what operators scan.
+            reason = OperationRegistry.skip_reason(option)  # WHY: skip_reason is what operators scan.
             assert reason, f"Destructive option {option} must have a non-empty skip reason"
             assert "DESTRUCTIVE" in reason.upper(), f"Destructive option {option} lost its DESTRUCTIVE marker"
 
     def test_menu_194_is_destructive_and_never_eligible(self):
         """Guarantee: menu 194 (clone device config) is destructive and excluded from both test modes (FR-004)."""
-        entry = MistHelper.OperationRegistry.get("194")  # WHY: 194 clones config into a new gateway template.
+        entry = OperationRegistry.get("194")  # WHY: 194 clones config into a new gateway template.
         assert entry["category"] == "destructive", "Menu 194 must be classified destructive"
-        assert "DESTRUCTIVE" in MistHelper.OperationRegistry.skip_reason("194").upper()
+        assert "DESTRUCTIVE" in OperationRegistry.skip_reason("194").upper()
 
         all_options = list(MistHelper.menu_actions.keys())  # WHY: evaluate over the full reachable key set.
-        assert "194" not in MistHelper.OperationRegistry.safe_options(all_options), "194 must not run in --test"
-        assert "194" not in MistHelper.OperationRegistry.interactive_safe_options(
+        assert "194" not in OperationRegistry.safe_options(all_options), "194 must not run in --test"
+        assert "194" not in OperationRegistry.interactive_safe_options(
             all_options
         ), "194 must not run in --testinteractive"
 
@@ -78,8 +81,6 @@ class TestOperationRegistryMenuCoverage:
         forgotten, this fails loudly instead of silently defaulting safe *or* silently skipping forever.
         """
         unregistered = [
-            option
-            for option in MistHelper.menu_actions
-            if MistHelper.OperationRegistry.get(option)["category"] == "unregistered"
+            option for option in MistHelper.menu_actions if OperationRegistry.get(option)["category"] == "unregistered"
         ]
         assert not unregistered, f"Menu options resolve to fail-closed 'unregistered' (classify them): {unregistered}"
