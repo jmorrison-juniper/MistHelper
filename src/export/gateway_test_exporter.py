@@ -42,11 +42,24 @@ class GatewayTestExporter:
     """
 
     @staticmethod
-    def synthetic_tests(fast: bool = False) -> None:
-        """Collect + export synthetic test stats for all gateways (optional fast/concurrent path)."""
+    def _resolve_misthelper_runtime() -> Any:
+        """Load MistHelper and wire gateway dependencies before a gateway-test export begins."""
         mh = importlib.import_module(
             "MistHelper"
-        )  # WHY: lazy fetch of PROGRESS_EMITTER + ConfigUtils + GatewayExportUtils.
+        )  # WHY: lazy import preserves the extracted module's circular-import boundary.
+        logging.info("Configuring gateway dependencies for gateway test export")  # WHY: record the required DI setup.
+        mh._configure_gateway_module()  # WHY: gateway inventory needs its APICoreFetchUtils dependency.
+        logging.debug(
+            "Gateway dependencies configured for gateway test export"
+        )  # WHY: confirm DI completed before API work.
+        return mh  # WHY: callers also need MistHelper's session and runtime configuration.
+
+    @staticmethod
+    def synthetic_tests(fast: bool = False) -> None:
+        """Collect + export synthetic test stats for all gateways (optional fast/concurrent path)."""
+        mh = (
+            GatewayTestExporter._resolve_misthelper_runtime()
+        )  # WHY: wire GatewayExportUtils before its inventory lookup.
         logging.debug("[DEBUG] GatewayTestExporter.synthetic_tests invoked with fast=%s", fast)  # Entry trace.
         logging.info("[INFO] Collecting synthetic test stats for all gateways in the org...")  # Log start.
         if fast:  # Fast mode.
@@ -306,6 +319,7 @@ class GatewayTestExporter:
     @staticmethod
     def test_results_by_site(fast: bool = False) -> None:  # Export tests by site.
         """Delegator: all logic lives in src/refactors/serial_cc/test_results_by_site.py."""
+        GatewayTestExporter._resolve_misthelper_runtime()  # WHY: the service uses wired gateway helpers.
         from src.refactors.serial_cc.test_results_by_site import GatewayTestResultsService  # noqa: PLC0415
 
         GatewayTestResultsService.execute(fast=fast)  # Delegate to extracted service; keeps CC at A(1)

@@ -9,6 +9,7 @@ re-export alias.
 
 from __future__ import annotations  # WHY: PEP 604 unions for return types.
 
+import importlib  # WHY: dynamically load Unix-only pwd without static Windows-stub access.
 import logging  # WHY: structured trace for container detection lifecycle events.
 import os  # WHY: environment variable + filesystem probes for container detection.
 
@@ -75,15 +76,39 @@ class EnvironmentUtils:
     @staticmethod
     def _check_runtime_user() -> bool:  # Detect the container's dedicated service user.
         """Check if running as the 'misthelper' user."""
+        if os.name != "posix":  # WHY: the image-specific account check only applies to Unix containers.
+            logging.debug(
+                "Container detection: runtime-user check unavailable on this platform"
+            )  # WHY: trace the safe fallback.
+            return False  # WHY: Windows cannot provide the Unix account identity used by this heuristic.
         try:
-            import pwd  # noqa: PLC0415  # Unix only
-
-            current_user_name = pwd.getpwuid(os.getuid()).pw_name  # os.getuid is Unix-only
-            if current_user_name == "misthelper":  # Image runs as the misthelper user.
-                logging.debug("Container detection: running as user 'misthelper'")  # Trace the user-based signal.
-                return True  # Running as misthelper means containerized.
-        except Exception:  # nosec B110
-            pass  # Ignore lookup failures on host systems.
+            pwd_module = importlib.import_module(
+                "pwd"
+            )  # WHY: defer Unix-only module resolution until after platform validation.
+        except ModuleNotFoundError:  # WHY: minimal or unusual Unix runtimes can omit the account database module.
+            logging.debug(
+                "Container detection: pwd module unavailable"
+            )  # WHY: record why this optional detector was skipped.
+            return False  # WHY: without pwd, this detector cannot confirm the image user.
+        getuid = getattr(os, "getuid", None)  # WHY: protect Windows type stubs from a Unix-only attribute access.
+        getpwuid = getattr(pwd_module, "getpwuid", None)  # WHY: avoid static access to a Windows-incomplete pwd stub.
+        if not callable(getuid) or not callable(getpwuid):  # WHY: nonstandard runtimes can omit either required lookup.
+            logging.debug(
+                "Container detection: UID account lookup unavailable"
+            )  # WHY: trace why the optional detector was skipped.
+            return False  # WHY: without both lookups, account resolution is not possible.
+        try:
+            current_user_name = getpwuid(
+                getuid()
+            ).pw_name  # WHY: resolve the effective Unix account used by this process.
+        except KeyError:  # WHY: account databases can omit an otherwise valid numeric UID.
+            logging.debug(
+                "Container detection: no account found for current UID"
+            )  # WHY: record the benign lookup miss.
+            return False  # WHY: no matching account means this detector cannot confirm the image user.
+        if current_user_name == "misthelper":  # Image runs as the misthelper user.
+            logging.debug("Container detection: running as user 'misthelper'")  # Trace the user-based signal.
+            return True  # Running as misthelper means containerized.
         return False  # User signal absent: inconclusive.
 
     @staticmethod

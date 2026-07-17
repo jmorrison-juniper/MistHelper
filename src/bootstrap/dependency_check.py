@@ -11,11 +11,29 @@ from src.bootstrap.package_installer import PackageInstaller  # WHY: UV/pip inst
 _ENV_DISABLE_AUTO_INSTALL = "DISABLE_AUTO_INSTALL"  # WHY: Env var toggling auto-install off
 _ENV_AUTO_UPGRADE_LATEST = "AUTO_UPGRADE_TO_LATEST"  # WHY: Preferred env for latest-version upgrades
 _ENV_AUTO_UPGRADE_DEPS = "AUTO_UPGRADE_DEPENDENCIES"  # WHY: Legacy env fallback for upgrade toggle
+# Feature 1020: explicit opt-in to install into a non-isolated (system) Python; default is fail-closed.
+_ENV_ALLOW_SYSTEM_PYTHON_INSTALL = "MISTHELPER_ALLOW_SYSTEM_PYTHON_INSTALL"  # WHY: override for system-Python installs
+_ENV_VIRTUAL_ENV = "VIRTUAL_ENV"  # WHY: set by venv activation; used only to pick the diagnostic message text
 
 _FLAG_TRUE = "true"  # WHY: Case-normalized truthy sentinel for env flags
 _FLAG_FALSE = "false"  # WHY: Case-normalized falsy sentinel for env-flag defaults
 
 _MSG_DISABLED = "Early dependency auto-install disabled via DISABLE_AUTO_INSTALL"  # WHY: Debug log
+# Feature 1020: fail-closed diagnostics when the active interpreter is not an isolated virtual environment.
+_MSG_SYSTEM_PYTHON_NO_VENV = (  # WHY: Warn log - no venv was ever created/activated (VIRTUAL_ENV unset)
+    "Refusing to auto-install dependencies into system Python: no virtual environment is active "
+    "(sys.prefix == sys.base_prefix and no .venv detected). Create and activate one "
+    "(python -m venv .venv) or set MISTHELPER_ALLOW_SYSTEM_PYTHON_INSTALL=true to override"
+)
+_MSG_SYSTEM_PYTHON_BROKEN_VENV = (  # WHY: Warn log - a .venv appears configured but its launcher is not active
+    "Refusing to auto-install dependencies into system Python: a virtual environment appears configured "
+    "(VIRTUAL_ENV is set) but its launcher is not active (sys.prefix == sys.base_prefix). Recreate/repair "
+    "the .venv, or set MISTHELPER_ALLOW_SYSTEM_PYTHON_INSTALL=true to override"
+)
+_MSG_SYSTEM_PYTHON_OVERRIDE = (  # WHY: Loud warn log - operator explicitly opted into system-Python installs
+    "MISTHELPER_ALLOW_SYSTEM_PYTHON_INSTALL is set: proceeding with dependency install/upgrade into a "
+    "non-isolated (system) Python interpreter - this can modify the base environment"
+)
 _MSG_NO_REQS = "No packages found in requirements.txt - skipping dependency check"  # WHY: Warn log
 _MSG_ALL_OK = "All %s dependencies present and up-to-date"  # WHY: Debug log when nothing to do
 _MSG_UV_FOUND = "UV package manager detected: %s (cmd: %s)"  # WHY: Info log for first-pass UV find
@@ -62,6 +80,8 @@ class DependencyCheckOrchestrator:  # WHY: Public entry-point object called from
         if self._is_auto_install_disabled():  # WHY: Short-circuit when explicitly disabled
             self.logging_module.debug(_MSG_DISABLED)  # WHY: Debug log so operators can audit skips
             return  # WHY: Nothing more to do when disabled
+        if not self._install_permitted_for_interpreter():  # WHY: Feature 1020 - block install into system Python
+            return  # WHY: Diagnostic already logged; never mutate the base interpreter by default
         all_packages = self.parse_requirements_file_fn()  # WHY: Load the required-package list
         if not all_packages:  # WHY: Empty requirements is not an error - just nothing to do
             self.logging_module.warning(_MSG_NO_REQS)  # WHY: Warn so misconfig is visible in logs
@@ -73,6 +93,42 @@ class DependencyCheckOrchestrator:  # WHY: Public entry-point object called from
         context = self._prepare_installer()  # WHY: Resolve UV availability once for both loops
         self._install_missing_packages(missing, context)  # WHY: Fresh installs first
         self._upgrade_outdated_packages(outdated, context)  # WHY: Then upgrades
+
+    def _install_permitted_for_interpreter(self) -> bool:  # WHY: Feature 1020 fail-closed interpreter gate
+        """Return True when install/upgrade may proceed for the current interpreter.
+
+        Fails closed for a non-isolated (system) Python: blocks by default and logs an actionable
+        diagnostic, unless the operator explicitly opts in via MISTHELPER_ALLOW_SYSTEM_PYTHON_INSTALL.
+        Independent of, and additional to, the DISABLE_AUTO_INSTALL gate checked earlier in run().
+        """
+        if self._is_running_in_isolated_venv():  # WHY: genuine venv - always permitted, no behavior change
+            return True
+        if self._is_system_python_install_allowed():  # WHY: explicit operator override for system Python
+            self.logging_module.warning(_MSG_SYSTEM_PYTHON_OVERRIDE)  # WHY: loud warn, distinct from routine info
+            return True
+        self.logging_module.warning(self._non_isolated_diagnostic())  # WHY: surface the block clearly, not silently
+        return False  # WHY: fail closed - do not install/upgrade into the base interpreter
+
+    def _is_running_in_isolated_venv(self) -> bool:  # WHY: single boolean predicate, easily unit-tested via DI
+        """Return True when the active interpreter is an isolated virtual environment."""
+        # WHY: canonical PEP 405 signal - a venv points sys.prefix at the venv dir while base_prefix stays system.
+        if self.sys_module.prefix != self.sys_module.base_prefix:
+            return True
+        # WHY: legacy virtualenv (<20) leaves base_prefix untouched and instead sets sys.real_prefix.
+        return getattr(self.sys_module, "real_prefix", None) is not None
+
+    def _is_system_python_install_allowed(self) -> bool:  # WHY: Predicate isolates the override env parse
+        """Return True when the operator explicitly opted into system-Python installs."""
+        raw = self.os_module.getenv(_ENV_ALLOW_SYSTEM_PYTHON_INSTALL, _FLAG_FALSE)  # WHY: Read env once
+        return bool(raw.lower() == _FLAG_TRUE)  # WHY: bool() cast since Any-typed compare
+
+    def _non_isolated_diagnostic(self) -> str:  # WHY: Message-only distinction (research R3), predicate stays simple
+        """Pick the diagnostic distinguishing a missing venv from a broken venv launcher."""
+        # WHY: VIRTUAL_ENV set while not isolated implies an activated-but-broken launcher fell back to system Python.
+        virtual_env = self.os_module.getenv(_ENV_VIRTUAL_ENV, "")  # WHY: read the activation marker once
+        if virtual_env:  # WHY: activation happened yet we are not isolated -> launcher looks broken
+            return _MSG_SYSTEM_PYTHON_BROKEN_VENV
+        return _MSG_SYSTEM_PYTHON_NO_VENV  # WHY: no marker -> no venv was ever created/activated
 
     def _is_auto_install_disabled(self) -> bool:  # WHY: Predicate isolates DISABLE_AUTO_INSTALL parse
         """Return True when early auto-install behavior is disabled."""

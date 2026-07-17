@@ -27,7 +27,7 @@ _CS1_STEP_NAMES = [
     "black_check",  # Format check step
     "mypy",  # Type check step
     "pytest_cov",  # Test + coverage step
-    "misthelper_test",  # Full integration test step
+    "misthelper_test",  # Credential-gated systematic test step
 ]
 
 # CS1 module/tool markers that must appear in command arguments
@@ -38,7 +38,7 @@ _CS1_MODULE_MARKERS = [
     "black",  # Black formatter invocation marker
     "mypy",  # Mypy type checker invocation marker
     "pytest",  # Pytest test runner invocation marker
-    "MistHelper.py",  # Main script invoked in the integration test step
+    "MistHelper.py",  # Main script invoked in the systematic test step
 ]
 
 
@@ -108,3 +108,20 @@ class TestGateRunnerStructure:
         ), (  # Explicit 0 required so callers confirm all steps passed
             "Gate runner must have 'exit 0' to signal a clean gate pass"
         )
+
+    def test_gate_runner_uses_the_current_worktree_venv(self) -> None:
+        """The runner must derive its interpreter from projectRoot, never a developer-specific absolute path."""
+        script_text = _GATE_RUNNER_PATH.read_text(encoding="utf-8")  # Read script for interpreter path validation.
+        assert (
+            'Join-Path $projectRoot ".venv\\Scripts\\python.exe"' in script_text
+        )  # WHY: each worktree uses its own venv.
+        assert (
+            "c:/Users/jmorrison/" not in script_text
+        )  # WHY: a user-specific checkout path breaks alternate worktrees.
+
+    def test_gate_runner_excludes_live_integration_tests_from_auto_repeat(self) -> None:
+        """The coverage step must not execute credentialed, state-changing integration tests automatically."""
+        script_text = _GATE_RUNNER_PATH.read_text(encoding="utf-8")  # Read script for the pytest marker expression.
+        assert (
+            '"-m", "not integration"' in script_text
+        )  # WHY: live VPN CRUD tests require an explicit operator command.

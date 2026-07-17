@@ -96,6 +96,7 @@ class TestCheckRuntimeUser:
     def test_true_when_misthelper_user(self, monkeypatch):
         fake_pwd = MagicMock()
         fake_pwd.getpwuid.return_value.pw_name = "misthelper"
+        monkeypatch.setattr(env_mod.os, "name", "posix")  # Force the Unix-only image-user detector path.
         monkeypatch.setitem(__import__("sys").modules, "pwd", fake_pwd)
         monkeypatch.setattr(env_mod.os, "getuid", lambda: 1000, raising=False)
         assert EnvironmentUtils._check_runtime_user() is True
@@ -103,15 +104,28 @@ class TestCheckRuntimeUser:
     def test_false_when_other_user(self, monkeypatch):
         fake_pwd = MagicMock()
         fake_pwd.getpwuid.return_value.pw_name = "root"
+        monkeypatch.setattr(env_mod.os, "name", "posix")  # Force the Unix-only image-user detector path.
         monkeypatch.setitem(__import__("sys").modules, "pwd", fake_pwd)
         monkeypatch.setattr(env_mod.os, "getuid", lambda: 0, raising=False)
         assert EnvironmentUtils._check_runtime_user() is False
 
-    def test_false_when_exception(self, monkeypatch):
+    def test_false_when_user_lookup_fails(self, monkeypatch):
         fake_pwd = MagicMock()
         fake_pwd.getpwuid.side_effect = KeyError("no user")
+        monkeypatch.setattr(env_mod.os, "name", "posix")  # Force the Unix-only image-user detector path.
         monkeypatch.setitem(__import__("sys").modules, "pwd", fake_pwd)
         monkeypatch.setattr(env_mod.os, "getuid", lambda: 1000, raising=False)
+        assert EnvironmentUtils._check_runtime_user() is False
+
+    def test_false_when_platform_is_not_posix(self, monkeypatch):
+        monkeypatch.setattr(env_mod.os, "name", "nt")  # Simulate Windows, where Unix account lookup is unavailable.
+        assert EnvironmentUtils._check_runtime_user() is False
+
+    def test_false_when_getuid_is_unavailable(self, monkeypatch):
+        fake_pwd = MagicMock()
+        monkeypatch.setattr(env_mod.os, "name", "posix")  # Force the Unix-only image-user detector path.
+        monkeypatch.setitem(__import__("sys").modules, "pwd", fake_pwd)
+        monkeypatch.delattr(env_mod.os, "getuid", raising=False)  # Simulate a nonstandard runtime without getuid.
         assert EnvironmentUtils._check_runtime_user() is False
 
 

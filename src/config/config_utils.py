@@ -97,6 +97,21 @@ class ConfigUtils:
         ``set_apisession``. If no session has been injected, the interactive
         prompt cannot run and this helper exits with a clear error.
         """
+        # Feature 1020 (US3, R4 insertion-point 2): non-interactive fail-closed guard. This method is only
+        # reached after cache/env/.env resolution all miss. In a systematic test mode there is no human to
+        # answer a prompt, and calling mistapi.cli.select_org() on a blank-host session issues the exact
+        # malformed-URL HTTP request the 2026-07-16 defect exhibited. Detect the mode via local sys.argv
+        # inspection (preserving this module's "no import MistHelper" self-containment) and exit with an
+        # actionable message naming the real variable (org_id, not MIST_ORG_ID) before any network call.
+        if "--test" in sys.argv or "--testinteractive" in sys.argv:  # Non-interactive systematic test mode.
+            logging.error("Cannot resolve org_id non-interactively for --test/--testinteractive: none configured.")
+            print("[ERROR] No organization id configured for --test/--testinteractive.")
+            print("[ERROR] Set 'org_id' (or 'ORG_ID') in your environment, or add an 'org_id=' line to .env.")
+            print(
+                "[ERROR] Copy deploy/.env.example to .env for the full variable list (note: org_id, "
+                "not MIST_ORG_ID, is read by this path)."
+            )
+            sys.exit(1)  # Fail closed before mistapi.cli.select_org() can issue a malformed-URL request.
         logging.info("* No org_id found in .env or CLI. Prompting user...")  # Prompt the user as last resort.
         if cls._apisession is None:  # No session was ever injected.
             logging.error("Cannot prompt for org selection: no mistapi session injected via set_apisession().")

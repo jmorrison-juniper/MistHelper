@@ -7,6 +7,51 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Safe, Repeatable `--test` Clean Run (feature 1020)
+
+- **Fail-closed `OperationRegistry` default (Fixed, Security)**: `OperationRegistry.get()`
+  no longer defaults unregistered menu options to `safe` (a fail-**open** default that
+  would let a credentialed `--test`/`--testinteractive` run silently invoke any
+  unclassified option, including destructive menu 194). Unknown options now resolve to a
+  new fail-**closed** `unregistered` category (a `SKIP_CATEGORIES` member), so they are
+  ineligible for both test modes and surface a loud, actionable skip reason. All 60
+  previously-unregistered `menu_actions` keys received explicit classifications
+  (read-only exports -> `safe`; heavy sweeps 14/18 -> `resource_intensive`; ticket
+  writes 189/190/191 and clone 194 -> `destructive`; ticket view 192 -> `interactive`),
+  and three pre-existing destructive entries (175/176/186) gained the required
+  `DESTRUCTIVE` marker.
+- **Exhaustive menu/registry coverage guardrail (Added)**: replaced the brittle 11-key
+  `WAVE1_ENTRY_ROUTING_BASELINE` sample as the sole coverage mechanism with
+  `tests/guardrails/test_operation_registry_menu_coverage.py`, which asserts exact
+  key-parity between `menu_actions` and the new
+  `OperationRegistry.registered_options()` and fails CI the instant they diverge.
+- **Isolated-venv install guard (Added, Security)**: `DependencyCheckOrchestrator` now
+  refuses to auto-install/upgrade dependencies into a non-isolated (system) Python
+  interpreter by default, distinguishing "no `.venv`" from "broken `.venv` launcher" in
+  the diagnostic text. Override with `MISTHELPER_ALLOW_SYSTEM_PYTHON_INSTALL=true`; the
+  existing `DISABLE_AUTO_INSTALL` gate is unchanged.
+- **Secret-safe credential/config preflight (Added)**: `_establish_mist_session()` now
+  runs a host/token preflight (all modes) and `ConfigUtils` a non-interactive org-id
+  guard (`--test`/`--testinteractive`) that fail closed with redacted, actionable
+  messages referencing `deploy/.env.example` **before** any `mistapi`/`requests` call —
+  preventing malformed-URL requests on a blank host and never leaking token contents.
+- **`deploy/.env.example` clarification (Docs)**: documented that the non-interactive
+  org-id path reads `org_id`/`ORG_ID` (not `MIST_ORG_ID`).
+- **Gateway test runtime wiring (Fixed)**: menus 33 and 34 now configure the
+  gateway runtime dependencies before either gateway inventory lookup or
+  site-result service delegation. This fixes the credentialed menu-33
+  systematic-test failure caused by an uninitialized `APICoreFetchUtils`.
+- **Windows type-check compatibility (Fixed)**: the Unix-only container user
+  detector now explicitly skips non-POSIX platforms and dynamically resolves
+  Unix account APIs after that guard, preserving container behavior while
+  allowing the configured `mypy src` check to pass on Windows.
+- **Formatting baseline (Fixed)**: applied the repository's Black formatting to
+  `MistHelper.py` and `tests/unit/test_lint_diagram_refs.py`.
+- **Root security scan baseline (Fixed)**: replaced two runtime `assert`
+  statements in dependency installation and upgrade paths with explicit
+  package-specification guards, preventing optimization from removing the
+  checks and leaving the root `MistHelper.py` Bandit scan clean.
+
 ### Mist API Coverage Audit
 
 - **OpenAPI GET endpoint catalog + diff**: Added `tools/openapi_endpoint_catalog.py`
