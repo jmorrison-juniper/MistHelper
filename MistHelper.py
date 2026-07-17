@@ -332,6 +332,9 @@ from src.bootstrap.package_installer import (
 from src.cache.cache_utils import (
     CacheUtils,
 )  # Cat E canonical (1014 P14) -- re-export for MistHelper.CacheUtils callers
+from src.capture.client_pcap_downloader import (
+    ClientPacketCaptureDownloader,
+)  # Menu 197: interactive client PCAP downloader (issue #421)
 from src.capture.packet_capture import (
     PacketCaptureManager,
 )  # Import packet capture manager directly under its canonical name (issue #431: alias removed)
@@ -3857,6 +3860,10 @@ menu_actions: "dict[str, tuple[Callable[..., Any], str]]" = {
     "196": (
         LicenseExportUtils.export_org_license_async_claim_status,
         "Export async organization license-claim status summary (and optional per-device details)",
+    ),
+    "197": (
+        lambda: ClientPacketCaptureDownloader(apisession).run(),
+        "Download client packet captures grouped by VLAN (site -> client -> VLAN -> data/packet_captures/)",
     ),
     "44": (OrgConfigExporter.psks, "Export PSK (Pre-Shared Key) information for the organization"),
     "45": (OrgConfigExporter.webhooks, "Export webhook configuration for the organization"),

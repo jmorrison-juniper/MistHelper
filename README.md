@@ -428,6 +428,7 @@ This README is intentionally lean. The full, up-to-date menu reference (each opt
 For quick category guidance, see the Wiki Menu Reference page linked above.
 
 - New in this branch: Menu `196` exports org async license-claim status summary and optional per-device detail rows.
+- New in this branch: Menu `197` interactively downloads client packet captures grouped by VLAN (site -> client -> VLAN -> `data/packet_captures/<mac>/vlan_<id>/`).
 ## Security & Safety
 
 | Area | Practice |

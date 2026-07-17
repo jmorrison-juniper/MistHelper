@@ -25,6 +25,7 @@ _CAPTURE_MODULE_BASELINE = {
     "_packet_capture_org.py",  # Approved post-Wave-1: extracted org/mxedge cluster
     "_packet_capture_prompts.py",  # Approved post-Wave-1: extracted prompts/summary cluster
     "_packet_capture_tcpdump.py",  # Approved post-Wave-1: extracted tcpdump menu cluster
+    "client_pcap_downloader.py",  # Approved post-Wave-1: menu 197 (issue #421) client pcap downloader
     "multi_ap_scan_workflow.py",  # Approved post-Wave-1: multi-AP scan orchestration
     "org_capture_workflow.py",  # Approved post-Wave-1: org-level capture workflow
     "org_pcap_wait_download_workflow.py",  # Approved post-Wave-1: org pcap download poller

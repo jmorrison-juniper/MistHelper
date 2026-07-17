@@ -261,6 +261,7 @@ class OperationRegistry:
         "88": {"category": "interactive_safe", "skip_reason": "Requires AP model selection"},
         "25": {"category": "safe"},
         "196": {"category": "safe"},
+        "197": {"category": "interactive_safe", "skip_reason": "Requires site + client + VLAN selection"},
         "186": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Deletes all generated cache CSV files"},
         "58": {"category": "safe"},
         "187": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Creates config objects in destination org"},
