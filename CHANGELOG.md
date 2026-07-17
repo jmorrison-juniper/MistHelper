@@ -7,6 +7,18 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Menu 197: Client Packet Capture Downloader (issue #421)
+
+- **New menu 197 (Added)**: `ClientPacketCaptureDownloader` guides the operator through
+  a four-step interactive flow — pick a site, pick a wireless client (by index or MAC
+  in any punctuation), pick a VLAN grouping, then stream every completed PCAP for that
+  VLAN into `data/packet_captures/<mac>/vlan_<id>/`. Uses
+  `mistapi.api.v1.sites.clients.searchSiteWirelessClients` (7-day window, paginated via
+  `mistapi.get_all`) and `mistapi.api.v1.sites.pcaps.listSitePacketCaptures`
+  (client-MAC-filtered). Captures still in progress (no `pcap_url`) are skipped.
+  Downloads stream in 8 KiB chunks with a 300 s timeout. Menu slots 195 and 196 were
+  already occupied, so this feature registers as slot 197.
+
 ### Safe, Repeatable `--test` Clean Run (feature 1020)
 
 - **Fail-closed `OperationRegistry` default (Fixed, Security)**: `OperationRegistry.get()`
