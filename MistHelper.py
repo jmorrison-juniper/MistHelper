@@ -1767,7 +1767,11 @@ class GlobalImportManager:
         """Install a missing dependency (when permitted) and retry the import; return the module or None."""
         if not self._auto_install_allowed(package_spec, skip_deps):  # Auto-install must be permitted.
             return None  # Installation not allowed -- nothing to retry.
-        assert package_spec is not None  # _auto_install_allowed rejects None; narrow for type-checker.
+        if package_spec is None:  # Defensive guard: an overridden gate must never trigger an unbounded install.
+            logging.error(
+                "Cannot install %s: package specification is missing", module_name
+            )  # Surface the invalid state.
+            return None  # Refuse installation without an explicit package constraint.
         logging.info("Attempting to install missing dependency: %s", package_spec)  # Announce the install attempt.
         if not self._attempt_install(package_spec):  # No installer succeeded.
             logging.error("Failed to install %s", package_spec)  # Report the install failure.
@@ -1817,9 +1821,16 @@ class GlobalImportManager:
         logging.debug("_record_successful_import: caching '%s' and checking upgrade", module_name)  # Log before
         self.imports[module_name] = module  # Cache the imported module for later global assignment.
         logging.debug("Successfully imported %s", module_name)  # Record the successful import.
-        if self._should_upgrade_package(package_spec, skip_deps, skip_upgrade):  # Opportunistic upgrade gate.
-            assert package_spec is not None  # _should_upgrade_package rejects None; narrow for type-checker.
-            self._check_and_upgrade_package(module_name, package_spec)  # Upgrade package.
+        if not self._should_upgrade_package(
+            package_spec, skip_deps, skip_upgrade
+        ):  # Exit when any upgrade gate blocks.
+            return  # Nothing else is required when upgrades are disabled.
+        if package_spec is None:  # Defensive guard: an overridden gate must never trigger an unbounded upgrade.
+            logging.warning(
+                "Skipping upgrade for %s: package specification is missing", module_name
+            )  # Surface the invalid state.
+            return  # Refuse upgrade without an explicit package constraint.
+        self._check_and_upgrade_package(module_name, package_spec)  # Upgrade the explicitly requested package.
 
     def _partition_dependencies(self, packages_dict):
         """Split a package map into (builtin, external) dicts by whether a spec is present."""

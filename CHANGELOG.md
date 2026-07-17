@@ -47,6 +47,10 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
   allowing the configured `mypy src` check to pass on Windows.
 - **Formatting baseline (Fixed)**: applied the repository's Black formatting to
   `MistHelper.py` and `tests/unit/test_lint_diagram_refs.py`.
+- **Root security scan baseline (Fixed)**: replaced two runtime `assert`
+  statements in dependency installation and upgrade paths with explicit
+  package-specification guards, preventing optimization from removing the
+  checks and leaving the root `MistHelper.py` Bandit scan clean.
 
 ### Mist API Coverage Audit
 
