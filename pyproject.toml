@@ -279,7 +279,6 @@ omit = [
     "src/org/org_ticket_manager.py",
     "src/reports/global_wired_client_report_generator.py",
     "src/reports/offline_device_reporter.py",
-    "src/reports/sfp_transceiver_data_processor.py",
     "src/site/bulk_radius_wlan_config_manager.py",
     "src/ssh/cli_shell_manager.py",
     "src/ui/prompt_utils.py",
