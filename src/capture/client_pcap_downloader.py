@@ -21,7 +21,7 @@ try:  # WHY: mistapi is required at runtime but tolerated missing during static 
 
     MISTAPI_AVAILABLE = True  # WHY: feature flag consumed by callers to guard SDK usage.
 except ImportError:  # WHY: allow module import without SDK for offline tooling/tests.
-    mistapi = None  # type: ignore[assignment]  # WHY: sentinel so accidental use fails loudly.
+    mistapi = None  # WHY: sentinel so accidental use fails loudly.
     MISTAPI_AVAILABLE = False  # WHY: signals disabled state to downstream consumers.
 
 _HTTP_OK = 200  # WHY: named constant replaces repeated magic 200 across status checks.
@@ -116,7 +116,7 @@ class ClientPacketCaptureDownloader:
         print("\n[Step 1/4] Select a site")  # WHY: operator-visible step banner.
         site_id = _get_prompt_utils().select_site_with_logging()  # WHY: shared CSV-driven chooser.
         logging.info("Step 1 selected site_id=%s", site_id)  # WHY: audit selection outcome.
-        return site_id  # WHY: None means operator cancelled.
+        return str(site_id) if site_id else None  # WHY: normalise Any->str|None for typing.
 
     def _step2_select_client(self, site_id: str) -> str | None:
         """Fetch site wireless clients and let operator pick by index or MAC."""
@@ -136,10 +136,10 @@ class ClientPacketCaptureDownloader:
             logging.error("mistapi unavailable; cannot fetch wireless clients")  # WHY: audit failure.
             return []  # WHY: empty list drives operator-visible abort.
         try:  # WHY: network/SDK errors must not crash the menu dispatcher.
-            response = mistapi.api.v1.sites.clients.searchSiteWirelessClients(  # type: ignore[union-attr]
+            response = mistapi.api.v1.sites.clients.searchSiteWirelessClients(
                 self._session, site_id, duration=_DEFAULT_DURATION, limit=_CLIENT_PAGE_LIMIT
             )  # WHY: 7-day window scoped to the chosen site.
-            clients = mistapi.get_all(response=response, mist_session=self._session) or []  # type: ignore[union-attr]
+            clients = mistapi.get_all(response=response, mist_session=self._session) or []
             logging.info("Fetched %s wireless clients for site %s", len(clients), site_id)  # WHY: audit count.
             return clients  # WHY: caller renders and prompts.
         except Exception as exc:  # pylint: disable=broad-exception-caught  # WHY: keep menu resilient.
@@ -206,14 +206,14 @@ class ClientPacketCaptureDownloader:
             logging.error("mistapi unavailable; cannot fetch PCAPs")  # WHY: audit failure.
             return []  # WHY: empty list drives operator-visible abort.
         try:  # WHY: network/SDK errors must not crash the menu dispatcher.
-            response = mistapi.api.v1.sites.pcaps.listSitePacketCaptures(  # type: ignore[union-attr]
+            response = mistapi.api.v1.sites.pcaps.listSitePacketCaptures(
                 self._session,
                 site_id,
                 client_mac=mac.replace(":", ""),
                 duration=_DEFAULT_DURATION,
                 limit=_PCAP_PAGE_LIMIT,
             )  # WHY: Mist expects unpunctuated MAC in query filter.
-            captures = mistapi.get_all(response=response, mist_session=self._session) or []  # type: ignore[union-attr]
+            captures = mistapi.get_all(response=response, mist_session=self._session) or []
             logging.info("Fetched %s PCAPs for %s", len(captures), mac)  # WHY: audit count.
             return captures  # WHY: caller normalises/groups.
         except Exception as exc:  # pylint: disable=broad-exception-caught  # WHY: keep menu resilient.

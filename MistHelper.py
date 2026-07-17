@@ -332,12 +332,12 @@ from src.bootstrap.package_installer import (
 from src.cache.cache_utils import (
     CacheUtils,
 )  # Cat E canonical (1014 P14) -- re-export for MistHelper.CacheUtils callers
-from src.capture.packet_capture import (
-    PacketCaptureManager,
-)  # Import packet capture manager directly under its canonical name (issue #431: alias removed)
 from src.capture.client_pcap_downloader import (
     ClientPacketCaptureDownloader,
 )  # Menu 197: interactive client PCAP downloader (issue #421)
+from src.capture.packet_capture import (
+    PacketCaptureManager,
+)  # Import packet capture manager directly under its canonical name (issue #431: alias removed)
 from src.config.config_utils import (
     ConfigUtils,  # Cat E canonical (1015 T-12) -- re-export for MistHelper.ConfigUtils callers
 )
