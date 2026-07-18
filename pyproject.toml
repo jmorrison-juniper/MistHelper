@@ -251,7 +251,6 @@ omit = [
     "setup.py",
     "*/site-packages/*",
     "src/maps/*",
-    "src/export/sites_by_ap_model_exporter.py",
     "src/firmware/firmware_manager.py",
     "src/gateway/gateway_ha_exporter.py",
     "src/inventory/org_device_inventory_summary_facade.py",
