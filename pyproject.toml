@@ -257,7 +257,6 @@ omit = [
     "src/reports/offline_device_reporter.py",
     "src/site/bulk_radius_wlan_config_manager.py",
     "src/ui/prompt_utils.py",
-    "src/ui/tui.py",
     "src/websocket/*"
 ]
 
