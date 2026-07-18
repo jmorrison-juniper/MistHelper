@@ -253,7 +253,6 @@ omit = [
     "src/maps/*",
     "src/firmware/firmware_manager.py",
     "src/org/org_ticket_manager.py",
-    "src/reports/offline_device_reporter.py",
     "src/site/bulk_radius_wlan_config_manager.py",
     "src/ui/prompt_utils.py",
     "src/websocket/*"
