@@ -251,7 +251,6 @@ omit = [
     "setup.py",
     "*/site-packages/*",
     "src/maps/*",
-    "src/api/api_data_fetcher.py",
     "src/cache/cache_utils.py",
     "src/db/database_schema_utils.py",
     "src/device/arp_command_manager.py",
