@@ -252,7 +252,6 @@ omit = [
     "*/site-packages/*",
     "src/maps/*",
     "src/firmware/firmware_manager.py",
-    "src/org/org_ticket_manager.py",
     "src/site/bulk_radius_wlan_config_manager.py",
     "src/websocket/*"
 ]
