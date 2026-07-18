@@ -251,7 +251,6 @@ omit = [
     "setup.py",
     "*/site-packages/*",
     "src/maps/*",
-    "src/export/const_definitions_exporter.py",
     "src/export/data_exporter.py",
     "src/export/gateway_test_exporter.py",
     "src/export/org_alarm_event_exporter.py",
