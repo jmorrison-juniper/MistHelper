@@ -252,7 +252,17 @@ omit = [
     "*/site-packages/*",
     "src/maps/*",
     "src/firmware/firmware_manager.py",
-    "src/websocket/*"
+    "src/websocket/commands.py",
+    "src/websocket/manager.py",
+    "src/websocket/service_ping_discovery.py",
+    "src/websocket/service_ping_manager.py",
+    "src/websocket/diagnostics/arp_executor.py",
+    "src/websocket/diagnostics/common.py",
+    "src/websocket/diagnostics/ping_executor.py",
+    "src/websocket/polling/completion_detector.py",
+    "src/websocket/polling/message_router.py",
+    "src/websocket/polling/result_collector.py",
+    "src/websocket/polling/result_combiner.py",
 ]
 
 [tool.coverage.report]
