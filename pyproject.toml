@@ -252,7 +252,6 @@ omit = [
     "*/site-packages/*",
     "src/maps/*",
     "src/firmware/firmware_manager.py",
-    "src/websocket/diagnostics/arp_executor.py",
     "src/websocket/diagnostics/ping_executor.py",
     "src/websocket/polling/completion_detector.py",
     "src/websocket/polling/message_router.py",
