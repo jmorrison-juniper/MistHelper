@@ -101,15 +101,15 @@ class TestExportAll:
 
 class TestDiscoverEndpoints:
     def test_iterates_modules_and_skips_subpackages(self, exporter):
-        fake_pkg = types.ModuleType("mistapi.api.v1.const")
-        fake_pkg.__path__ = ["/fake/path"]
-        fake_pkg.__name__ = "mistapi.api.v1.const"
+        # WHY: use the real mistapi.api.v1.const package (with real __name__
+        # and __path__) and mock only pkgutil.iter_modules. Installing a
+        # ModuleType stub via patch.dict(sys.modules, ...) works on Windows but
+        # can be shadowed by a leaked MagicMock from a prior test on Linux CI.
         fake_modules = [
             types.SimpleNamespace(name="mistapi.api.v1.const.foo", ispkg=False),
             types.SimpleNamespace(name="mistapi.api.v1.const.sub", ispkg=True),
         ]
         with (
-            patch.dict(sys.modules, {"mistapi.api.v1.const": fake_pkg}),
             patch("pkgutil.iter_modules", return_value=iter(fake_modules)),
             patch.object(exporter, "_inspect_module") as inspect_mod,
         ):
