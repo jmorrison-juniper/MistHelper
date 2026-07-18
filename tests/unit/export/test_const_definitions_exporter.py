@@ -101,10 +101,19 @@ class TestExportAll:
 
 class TestDiscoverEndpoints:
     def test_iterates_modules_and_skips_subpackages(self, exporter):
-        # WHY: use the real mistapi.api.v1.const package (with real __name__
-        # and __path__) and mock only pkgutil.iter_modules. Installing a
-        # ModuleType stub via patch.dict(sys.modules, ...) works on Windows but
-        # can be shadowed by a leaked MagicMock from a prior test on Linux CI.
+        # WHY: on Linux CI a prior test can leave a spec'd MagicMock installed
+        # at sys.modules["mistapi.api.v1.const"], which the source's
+        # `import mistapi.api.v1.const as const_package` will then resolve to,
+        # causing AttributeError on const_package.__name__. Evict any non-real
+        # mistapi entries from sys.modules and force a fresh import so the
+        # source picks up the real package (with real __name__ and __path__).
+        import importlib
+
+        for mod_key in list(sys.modules):
+            if mod_key == "mistapi" or mod_key.startswith("mistapi."):
+                if not isinstance(sys.modules[mod_key], types.ModuleType):
+                    del sys.modules[mod_key]
+        importlib.import_module("mistapi.api.v1.const")
         fake_modules = [
             types.SimpleNamespace(name="mistapi.api.v1.const.foo", ispkg=False),
             types.SimpleNamespace(name="mistapi.api.v1.const.sub", ispkg=True),
