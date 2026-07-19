@@ -162,12 +162,28 @@ module = ["dash", "dash.*"]
 follow_imports = "skip"
 
 [[tool.mypy.overrides]]
-# Skip type-checking for imported modules that are not part of the CI target (MistHelper.py).
-# maps_manager: large module with its own type issues — Phase 2 target
-# web_portal: Flask app with its own type issues — Phase 2 target
-# Others: third-party or legacy code not under active development
-module = ["MistHelper", "MistHelper.*", "maps_manager", "maps_manager.*", "src.maps", "src.maps.*", "mist-ops-platform.*", "ops-portal.*", "web_portal.*", "scripts.*", "specs.*"]
-follow_imports = "skip"
+# Non-CI-target modules: MistHelper.py (monolith being refactored), src.maps.*
+# (matplotlib/plotly viewer subtree — its own Phase-2 target), and web_portal.*
+# (Flask app — needs types-flask + per-view annotations). Using `follow_imports = "silent"`
+# means mypy still follows imports to resolve real types at call sites but suppresses
+# error reporting from these files themselves. This is deliberately narrower than
+# `follow_imports = "skip"` (the old blanket setting, forbidden by issue #883 AC), which
+# treated every symbol imported from these modules as `Any` and hid cross-module bugs
+# like the one caught in src/capture/packet_capture.py (a `PromptNetworkDeviceUtils`
+# reference that no longer existed after issue #33xx extracted it out of MistHelper).
+#
+# Graduated in this PR (issue #883):
+#   maps_manager, maps_manager.*      -- root module never existed; only src.maps.maps_manager
+#   mist-ops-platform.*, ops-portal.* -- hyphenated names are not valid Python modules;
+#                                         patterns never matched anything
+#   scripts.*, specs.*                -- dev tooling and planning artifacts; not imported
+#                                         by src/, so no follow_imports effect
+#   MistHelper.*                      -- MistHelper.py is a single module, no submodules
+#
+# Follow-ups: as MistHelper monolith classes graduate, the `MistHelper` entry shrinks;
+# src.maps.* and web_portal.* need their own dedicated typing sweeps (out of scope here).
+module = ["MistHelper", "src.maps.*", "web_portal.*"]
+follow_imports = "silent"
 
 [[tool.mypy.overrides]]
 # src.db: polyglot database modules use python-arango and redis SDKs which have
