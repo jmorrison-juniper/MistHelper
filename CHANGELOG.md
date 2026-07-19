@@ -7,6 +7,24 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Menu 205: Search Org Mist Edge Events (spec 866 / issue #1374)
+
+- **New menu 205 (Added)**: `OrgExportUtils.mist_edge_events()` wraps the
+  previously unreachable Mist API `searchOrgMistEdgeEvents` operation
+  (`GET /api/v1/orgs/{org_id}/mxedges/events/search`). Provides the org-scope
+  peer of the site-scoped `SiteMistEdgeEventsExporter` (menu 201) so operators
+  can pull Mist Edge event history across every mxedge in the org in one shot
+  rather than iterating sites. Delegates to the shared
+  `OrgExportUtils.export_data` scaffold used by sibling `jsi_*` entrypoints:
+  prompts for org (via `ConfigUtils.get_cached_or_prompted_org_id`), pages all
+  rows through `APIDataFetcher` / `mistapi.get_all`, and persists via
+  `DataExporter.write_with_format_selection` so CSV / SQLite / ArangoDB
+  backends all work uniformly. `ENDPOINT_PRIMARY_KEY_STRATEGIES` already
+  registers the endpoint as `composite_pk` on `(id, mxedge_id, timestamp)` with
+  indexes on `org_id` and `type` -- no schema changes required. Sort order
+  stabilised on `timestamp` to align with the composite PK and yield newest-
+  first output. Fulfills spec 866.
+
 ### Menu 204: Search Org JSI Assets and Contracts (spec 865 / issue #1373)
 
 - **New menu 204 (Added)**: `OrgExportUtils.jsi_assets()` wraps the previously

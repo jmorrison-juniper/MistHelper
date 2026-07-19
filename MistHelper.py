@@ -4477,6 +4477,9 @@ menu_actions: "dict[str, tuple[Callable[..., Any], str]]" = {
     # Spec 865 / issue #1373 -- surfaces mistapi.api.v1.orgs.jsi.searchOrgJsiAssetsAndContracts
     # alongside the existing PBN/SIRT reports so operators can pull JSI inventory + contracts.
     "204": (OrgExportUtils.jsi_assets, "Export JSI assets and contract search results"),
+    # Spec 866 / issue #1374 -- surfaces mistapi.api.v1.orgs.mxedges.searchOrgMistEdgeEvents
+    # (org-scope peer of the site-scoped SiteMistEdgeEventsExporter registered on menu 201).
+    "205": (OrgExportUtils.mist_edge_events, "Export Org Mist Edge event search results"),
     "55": (OrgExportUtils.ospf_stats, "Export OSPF adjacency statistics for the organization"),
     "70": (
         lambda: SiteExportUtils(

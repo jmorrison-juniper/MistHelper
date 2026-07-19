@@ -436,6 +436,7 @@ For quick category guidance, see the Wiki Menu Reference page linked above.
 - New in this branch: Menu `202` searches site NAC client events (`searchSiteNacClientEvents`) and exports them to `SiteNacClientEvents_<site>.csv` (CSV/SQLite/ArangoDB via `DataExporter`).
 - New in this branch: Menu `203` searches WAN client events for a selected site via `searchSiteWanClientEvents` (spec 899 / issue #1407) and persists paginated results to `SiteWanClientEvents.CSV` (or the configured SQLite/ArangoDB backend).
 - New in this branch: Menu `204` searches org JSI assets and contract coverage via `searchOrgJsiAssetsAndContracts` (spec 865 / issue #1373) and exports the paginated results to `OrgJsiAssets.CSV` (CSV/SQLite/ArangoDB via `DataExporter`).
+- New in this branch: Menu `205` searches org-wide Mist Edge events via `searchOrgMistEdgeEvents` (spec 866 / issue #1374) -- org-scope peer of the site-scoped Menu `201` -- and persists paginated results to `OrgMistEdgeEvents.CSV` (CSV/SQLite/ArangoDB via `DataExporter`).
 ## Security & Safety
 
 | Area | Practice |

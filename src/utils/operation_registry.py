@@ -346,6 +346,7 @@ class OperationRegistry:
         "56": {"category": "safe"},  # OrgExportUtils.jsi_pbn - read-only export.
         "57": {"category": "safe"},  # OrgExportUtils.jsi_sirt - read-only export.
         "204": {"category": "safe"},  # OrgExportUtils.jsi_assets - read-only export (spec 865 / #1373).
+        "205": {"category": "safe"},  # OrgExportUtils.mist_edge_events - read-only export (spec 866 / #1374).
         "188": {"category": "safe"},  # OrgTicketManager.list_tickets - read-only ticket list export (no selection).
         "193": {"category": "safe"},  # OrgTicketManager.export_ticket_details - read-only (exports all, no selection).
         "195": {"category": "safe"},  # Site address audit - self-described READ-ONLY report.
