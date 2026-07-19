@@ -98,14 +98,48 @@ packages = ["."]
 [tool.ruff]
 line-length = 120
 target-version = "py313"
-extend-exclude = ["mist-ops-platform", "ops-portal", "web_portal", "scripts", "specs", "src/maps"]
+# extend-exclude: per-entry justified under #886. Each entry is a subtree ruff
+# currently silences; the goal is to shrink this list over time as sibling
+# gates (#879 Black, #881 Bandit, #883/#884 mypy) also clean up their exclude
+# lists on the same subtrees.
+#   mist-ops-platform -- vendored subtree, 95 .py files with 183 ruff violations
+#                        (mostly UP*). Non-trivial fix; also excluded from mypy
+#                        (#884). Follow-up: dedicated vendor-sweep issue.
+#   web_portal        -- Flask app, 16 .py files with ~23 ruff violations
+#                        (UP045 etc). Also excluded from mypy (#884). Follow-up:
+#                        Phase-2 web_portal typing/lint sweep.
+#   scripts           -- dev tooling, 32 .py files with ~24 ruff violations.
+#                        Also excluded from mypy (#884). Follow-up: scripts-lint
+#                        sweep issue.
+#   src/maps          -- matplotlib/plotly viewer subtree, 27 .py files with
+#                        183 ruff violations (mostly E501). Also excluded from
+#                        mypy (#884) and coverage (#878). Follow-up: Phase-2
+#                        src/maps typing/lint sweep.
+# Dropped in #886 (this commit):
+#   ops-portal -- 0 .py files (JS/React frontend), never scanned; also dropped
+#                 from mypy in #884.
+#   specs      -- 2 .py files, ruff-clean after fixing 1 B007 and applying
+#                 ruff --fix (UP015/I001/F541).
+extend-exclude = ["mist-ops-platform", "web_portal", "scripts", "src/maps"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "G"]
 # Phase 1 ignores (2026-03-12) -- tighten these incrementally:
-#   E402: module-import-not-at-top (33) -- intentional: version check runs before imports
+#   E402: module-import-not-at-top (34 sites across MistHelper.py, e911_bssid.py,
+#         scripts/, tests/maps/, tests/unit/). Actual patterns are NOT the
+#         "version check" the earlier comment claimed -- they are:
+#         (a) Cat E canonical re-exports after mid-file class-block imports
+#             in MistHelper.py (7 sites, part of 1015 refactor);
+#         (b) `import mistapi  # noqa: E402  # WHY: lazy import keeps CLI
+#             startup fast` in src/reports/e911_bssid.py (8 sites);
+#         (c) sys.path manipulation before imports in scripts (2 sites);
+#         (d) test-module bootstrapping in tests/maps + tests/unit (15 sites).
+#         Follow-up under #886: move to per-file-ignores scoped to just the
+#         files that need it, rather than a repo-wide ignore.
 #   RESOLVED: F402, B007, PLR0913, E501, PLR0915/C901/PLR0912 (166 noqa annotations)
 # Phase 2 goal: re-enable T20 (print) after migrating prints to logging
+#   -- follow-up under #886: 5053 T20 violations across src/, MistHelper.py,
+#      wsgi.py, and starlink_dashboard.py; too large for a single PR.
 # Issue #429 (2026-06-23): enabled `G` rule family after sweeping all 695 G003/G004/G201 sites in MistHelper.py
 ignore = ["E402"]
 

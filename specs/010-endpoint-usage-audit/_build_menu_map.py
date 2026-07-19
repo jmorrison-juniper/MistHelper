@@ -1,15 +1,15 @@
 """Build menu-to-API-call mapping for the audit."""
 
-import re
 import json
+import re
 
-with open("MistHelper.py", "r", encoding="utf-8") as f:
+with open("MistHelper.py", encoding="utf-8") as f:
     lines = f.readlines()
 
 # Extract menu entries
 menu_map = {}
 in_menu = False
-for i, line in enumerate(lines):
+for _i, line in enumerate(lines):
     if "menu_actions = {" in line:
         in_menu = True
         continue
@@ -107,7 +107,7 @@ with open("specs/010-endpoint-usage-audit/menu_map.json", "w") as f:
 # Stats
 with_menus = sum(1 for cs in catalog if cs.get("menu_operations"))
 print(f"Call sites with menu mapping: {with_menus} / {len(catalog)}")
-print(f"Saved catalog_matched.json and menu_map.json")
+print("Saved catalog_matched.json and menu_map.json")
 
 # Show unmapped call sites
 unmapped = [cs for cs in catalog if not cs.get("menu_operations") and cs["source_file"] == "MistHelper.py"]

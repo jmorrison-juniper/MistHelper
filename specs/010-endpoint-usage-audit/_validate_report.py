@@ -1,7 +1,7 @@
 import json
 
 # T028: Cross-validate sample findings against source
-with open("MistHelper.py", "r", encoding="utf-8") as f:
+with open("MistHelper.py", encoding="utf-8") as f:
     lines = f.readlines()
 
 # F-001: getSiteSettings typo at L42487
@@ -32,11 +32,11 @@ has_type = "type=" in ctx3
 print("F-005 OK: listSiteDevicesStats near L31810, type param=" + str(has_type))
 
 # T029: Verify catalog counts
-with open("specs/010-endpoint-usage-audit/catalog_misthelper.json", "r") as f:
+with open("specs/010-endpoint-usage-audit/catalog_misthelper.json") as f:
     mh = json.load(f)
-with open("specs/010-endpoint-usage-audit/catalog_maps_manager.json", "r") as f:
+with open("specs/010-endpoint-usage-audit/catalog_maps_manager.json") as f:
     mm = json.load(f)
-with open("specs/010-endpoint-usage-audit/catalog_wsgi.json", "r") as f:
+with open("specs/010-endpoint-usage-audit/catalog_wsgi.json") as f:
     ws = json.load(f)
 
 total_sites = len(mh) + len(mm) + len(ws)
