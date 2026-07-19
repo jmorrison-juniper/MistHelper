@@ -30,23 +30,30 @@ class MSP(Base, TimestampMixin):
     __tablename__ = "msps"
 
     msp_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True,
+        UUID(as_uuid=True),
+        primary_key=True,
     )
     name: Mapped[str] = mapped_column(Text, nullable=False)
     api_host: Mapped[str] = mapped_column(Text, nullable=False)
     auth_method: Mapped[str] = mapped_column(
-        String(20), nullable=False, default="session",
+        String(20),
+        nullable=False,
+        default="session",
     )
     last_sync_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True,
+        DateTime(timezone=True),
+        nullable=True,
     )
     sync_enabled: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default="true",
+        Boolean,
+        nullable=False,
+        server_default="true",
     )
 
     # relationships
     organizations: Mapped[list[Organization]] = relationship(
-        back_populates="msp", lazy="selectin",
+        back_populates="msp",
+        lazy="selectin",
     )
 
 
@@ -59,7 +66,8 @@ class Organization(Base, TimestampMixin):
     __tablename__ = "orgs"
 
     org_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True,
+        UUID(as_uuid=True),
+        primary_key=True,
     )
     msp_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
@@ -69,16 +77,20 @@ class Organization(Base, TimestampMixin):
     name: Mapped[str] = mapped_column(Text, nullable=False)
     api_host: Mapped[str] = mapped_column(Text, nullable=False)
     last_sync_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True,
+        DateTime(timezone=True),
+        nullable=True,
     )
     sync_enabled: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default="true",
+        Boolean,
+        nullable=False,
+        server_default="true",
     )
 
     # relationships
     msp: Mapped[MSP | None] = relationship(back_populates="organizations")
     sites: Mapped[list[Site]] = relationship(
-        back_populates="organization", lazy="selectin",
+        back_populates="organization",
+        lazy="selectin",
     )
 
 
@@ -91,7 +103,8 @@ class Site(Base, TimestampMixin):
     __tablename__ = "sites"
 
     site_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True,
+        UUID(as_uuid=True),
+        primary_key=True,
     )
     org_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -103,7 +116,8 @@ class Site(Base, TimestampMixin):
     address: Mapped[str | None] = mapped_column(Text, nullable=True)
     location: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     last_sync_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True,
+        DateTime(timezone=True),
+        nullable=True,
     )
 
     # relationships
@@ -111,7 +125,8 @@ class Site(Base, TimestampMixin):
         back_populates="sites",
     )
     devices: Mapped[list[Device]] = relationship(
-        back_populates="site", lazy="selectin",
+        back_populates="site",
+        lazy="selectin",
     )
 
 
@@ -124,7 +139,8 @@ class Device(Base, TimestampMixin):
     __tablename__ = "devices"
 
     device_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True,
+        UUID(as_uuid=True),
+        primary_key=True,
     )
     org_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -140,26 +156,34 @@ class Device(Base, TimestampMixin):
     )
     name: Mapped[str | None] = mapped_column(Text, nullable=True)
     serial: Mapped[str] = mapped_column(
-        Text, nullable=False, unique=True,
+        Text,
+        nullable=False,
+        unique=True,
     )
     model: Mapped[str] = mapped_column(Text, nullable=False)
     device_type: Mapped[str] = mapped_column(
-        String(20), nullable=False,
+        String(20),
+        nullable=False,
     )
     firmware_version: Mapped[str | None] = mapped_column(
-        Text, nullable=True,
+        Text,
+        nullable=True,
     )
     status: Mapped[str] = mapped_column(
-        String(20), nullable=False, server_default="unknown",
+        String(20),
+        nullable=False,
+        server_default="unknown",
     )
     mac_address: Mapped[str | None] = mapped_column(Text, nullable=True)
     ip_address: Mapped[str | None] = mapped_column(Text, nullable=True)
     uptime: Mapped[int | None] = mapped_column(Integer, nullable=True)
     last_seen_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True,
+        DateTime(timezone=True),
+        nullable=True,
     )
     last_sync_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True,
+        DateTime(timezone=True),
+        nullable=True,
     )
 
     # relationships
@@ -175,7 +199,9 @@ class SyncLedgerEntry(Base):
     __tablename__ = "sync_ledger"
 
     id: Mapped[int] = mapped_column(
-        BigInteger, primary_key=True, autoincrement=True,
+        BigInteger,
+        primary_key=True,
+        autoincrement=True,
     )
     org_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -185,15 +211,21 @@ class SyncLedgerEntry(Base):
     )
     job_type: Mapped[str] = mapped_column(String(30), nullable=False)
     started_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now(),
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
     )
     ended_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True,
+        DateTime(timezone=True),
+        nullable=True,
     )
     status: Mapped[str] = mapped_column(
-        String(20), nullable=False, server_default="running",
+        String(20),
+        nullable=False,
+        server_default="running",
     )
     rows_affected: Mapped[int | None] = mapped_column(
-        Integer, nullable=True,
+        Integer,
+        nullable=True,
     )
     error_text: Mapped[str | None] = mapped_column(Text, nullable=True)

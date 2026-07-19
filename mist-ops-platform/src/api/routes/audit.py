@@ -58,7 +58,11 @@ async def list_audit_records(
 ) -> ResponseEnvelope[list[AuditRecordResponse]]:
     """Query the change audit trail (SC-006 <5s for 12 months)."""
     stmt = _build_record_query(
-        org_id, entity_type, entity_id, actor, change_type,
+        org_id,
+        entity_type,
+        entity_id,
+        actor,
+        change_type,
     )
     total = await _count_records(db, stmt)
     stmt = stmt.offset((page - 1) * per_page).limit(per_page)
@@ -66,7 +70,9 @@ async def list_audit_records(
 
     items = [AuditRecordResponse.model_validate(r) for r in rows]
     meta = PaginationMeta(
-        total=total, page=page, page_size=per_page,
+        total=total,
+        page=page,
+        page_size=per_page,
         has_next=(page * per_page < total),
     )
     return ResponseEnvelope(data=items, meta=meta)
@@ -106,7 +112,9 @@ async def export_records(
 
     filters = body.filters.model_dump(by_alias=True)
     export_audit_records.delay(
-        str(body.org_id), body.format, filters,
+        str(body.org_id),
+        body.format,
+        filters,
     )
     import uuid as _uuid
 
@@ -136,10 +144,7 @@ async def list_correlations(
     _user: CurrentUser = Depends(get_authenticated_user),
 ) -> ResponseEnvelope[list[CorrelationResponse]]:
     """Query incident-change correlations."""
-    stmt = (
-        select(IncidentChangeCorrelation)
-        .where(IncidentChangeCorrelation.org_id == org_id)
-    )
+    stmt = select(IncidentChangeCorrelation).where(IncidentChangeCorrelation.org_id == org_id)
     if incident_type:
         stmt = stmt.where(
             IncidentChangeCorrelation.incident_type == incident_type,
@@ -147,11 +152,7 @@ async def list_correlations(
     stmt = stmt.where(
         IncidentChangeCorrelation.confidence_score >= min_confidence,
     )
-    stmt = (
-        stmt.order_by(IncidentChangeCorrelation.detected_at.desc())
-        .offset((page - 1) * per_page)
-        .limit(per_page)
-    )
+    stmt = stmt.order_by(IncidentChangeCorrelation.detected_at.desc()).offset((page - 1) * per_page).limit(per_page)
     rows = (await db.execute(stmt)).scalars().all()
     items = [CorrelationResponse.model_validate(r) for r in rows]
     return ResponseEnvelope(data=items)
@@ -225,11 +226,7 @@ def _build_record_query(
     change_type: str | None,
 ):
     """Build filtered AuditRecord select statement."""
-    stmt = (
-        select(AuditRecord)
-        .where(AuditRecord.org_id == org_id)
-        .order_by(AuditRecord.timestamp.desc())
-    )
+    stmt = select(AuditRecord).where(AuditRecord.org_id == org_id).order_by(AuditRecord.timestamp.desc())
     if entity_type:
         stmt = stmt.where(AuditRecord.entity_type == entity_type)
     if entity_id:
@@ -250,10 +247,6 @@ async def _count_records(db: AsyncSession, base_stmt) -> int:
 
 async def _estimate_records(db: AsyncSession, org_id: UUID) -> int:
     """Estimate total records for an org (for export status)."""
-    stmt = (
-        select(func.count())
-        .select_from(AuditRecord)
-        .where(AuditRecord.org_id == org_id)
-    )
+    stmt = select(func.count()).select_from(AuditRecord).where(AuditRecord.org_id == org_id)
     result = await db.execute(stmt)
     return result.scalar_one()

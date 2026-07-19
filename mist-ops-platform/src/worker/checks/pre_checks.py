@@ -73,9 +73,7 @@ class PreCheckService:
                 ids={"org_id": org_id},
             )
             data_list = api_result.data if isinstance(api_result.data, list) else []
-            device_data = next(
-                (d for d in data_list if d.get("id") == device_id), None
-            )
+            device_data = next((d for d in data_list if d.get("id") == device_id), None)
             if device_data is None:
                 return CheckResult(
                     name=f"reachability:{device_id}",
@@ -110,9 +108,11 @@ class PreCheckService:
         """
         results: list[CheckResult] = []
         for device_id in target_ids:
-            results.append(CheckResult(
-                name=f"version_compat:{device_id}",
-                passed=True,
-                message="Version compatibility check passed (basic)",
-            ))
+            results.append(
+                CheckResult(
+                    name=f"version_compat:{device_id}",
+                    passed=True,
+                    message="Version compatibility check passed (basic)",
+                )
+            )
         return results

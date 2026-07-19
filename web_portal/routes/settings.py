@@ -16,7 +16,9 @@ def list_themes():
         return jsonify({"themes": [], "current_default": "dark"})
     themes = theme_manager.get_themes()
     default_name = theme_manager.get_default_name()
-    return jsonify({
-        "themes": themes,
-        "current_default": default_name,
-    })
+    return jsonify(
+        {
+            "themes": themes,
+            "current_default": default_name,
+        }
+    )

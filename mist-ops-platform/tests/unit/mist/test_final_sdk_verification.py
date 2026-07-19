@@ -37,17 +37,11 @@ class TestFinalSDKVerification:
             if method_name is None:
                 continue
             func = getattr(module, method_name, None)
-            assert func is not None, (
-                f"{entity_type}: {method_name} not found on {mod_path}"
-            )
-            assert callable(func), (
-                f"{entity_type}: {method_name} is not callable"
-            )
+            assert func is not None, f"{entity_type}: {method_name} not found on {mod_path}"
+            assert callable(func), f"{entity_type}: {method_name} is not callable"
             methods_checked += 1
 
-        assert methods_checked >= 1, (
-            f"{entity_type} has no callable methods"
-        )
+        assert methods_checked >= 1, f"{entity_type} has no callable methods"
 
     def test_total_entity_count(self) -> None:
         assert len(ALL_TYPES) == 23

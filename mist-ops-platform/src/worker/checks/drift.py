@@ -61,7 +61,8 @@ class DriftScanner:
         return self._create_alerts(baseline, revision, diffs)
 
     def _latest_revision(
-        self, baseline: Baseline,
+        self,
+        baseline: Baseline,
     ) -> ConfigRevision | None:
         """Find latest config revision matching baseline scope."""
         stmt = (
@@ -112,12 +113,16 @@ class DriftScanner:
         self._db.flush()
         logger.info(
             "Drift detected: baseline=%s device=%s changes=%d",
-            baseline.baseline_id, device_id, len(diffs),
+            baseline.baseline_id,
+            device_id,
+            len(diffs),
         )
         return 1
 
     def _open_alert_exists(
-        self, baseline: Baseline, device_id: UUID,
+        self,
+        baseline: Baseline,
+        device_id: UUID,
     ) -> bool:
         """Check if an open alert already exists for this scope."""
         stmt = (

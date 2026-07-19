@@ -19,6 +19,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.engine = engine
 
     from src.shared.db import ensure_tables_exist
+
     await ensure_tables_exist(engine)
 
     yield

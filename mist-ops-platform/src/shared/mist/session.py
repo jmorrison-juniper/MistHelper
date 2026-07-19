@@ -114,6 +114,7 @@ class MistSessionFactory:
         """Connect to Redis for token caching."""
         try:
             import redis as redis_lib
+
             client = redis_lib.Redis.from_url(self._settings.redis_url)
             client.ping()
             return client

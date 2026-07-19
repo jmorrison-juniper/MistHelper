@@ -124,7 +124,9 @@ class ConfigPushExecutor:
         batch = BatchPushResult(total=len(targets))
         for entity_ids in targets:
             result = self.push_revision(
-                entity_type, entity_ids, config_payload,
+                entity_type,
+                entity_ids,
+                config_payload,
             )
             batch.results.append(result)
             if result.success:

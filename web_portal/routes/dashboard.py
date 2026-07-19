@@ -28,13 +28,15 @@ def health():
     data_dir = current_app.config.get("DATA_DIR", "data")
     file_count = _count_data_files(data_dir)
     uptime = int(time.time() - _start_time)
-    return jsonify({
-        "status": "healthy",
-        "services": {"web_portal": "running"},
-        "uptime_seconds": uptime,
-        "data_directory": data_dir,
-        "data_files_count": file_count,
-    })
+    return jsonify(
+        {
+            "status": "healthy",
+            "services": {"web_portal": "running"},
+            "uptime_seconds": uptime,
+            "data_directory": data_dir,
+            "data_files_count": file_count,
+        }
+    )
 
 
 def _build_data_summary(data_dir: str) -> dict:
@@ -68,13 +70,15 @@ def _get_recent_files(data_dir: str, limit: int = 5) -> list:
         if entry.name.startswith(".") or not entry.is_file():
             continue
         stat = entry.stat()
-        files.append({
-            "name": entry.name,
-            "size_bytes": stat.st_size,
-            "size_display": _format_file_size(stat.st_size),
-            "last_modified": stat.st_mtime,
-            "modified_display": _format_timestamp(stat.st_mtime),
-        })
+        files.append(
+            {
+                "name": entry.name,
+                "size_bytes": stat.st_size,
+                "size_display": _format_file_size(stat.st_size),
+                "last_modified": stat.st_mtime,
+                "modified_display": _format_timestamp(stat.st_mtime),
+            }
+        )
     files.sort(key=lambda f: f["last_modified"], reverse=True)
     return files[:limit]
 

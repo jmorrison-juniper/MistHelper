@@ -51,17 +51,21 @@ class TestAuthUsesRegistry:
                 [{"privileges": [{"scope": "org", "org_id": "o1"}]}],
             )
 
-            with patch(
-                "src.shared.services.auth.MistEndpointService",
-                return_value=mock_mist,
-            ), patch("src.shared.services.auth.mistapi"):
+            with (
+                patch(
+                    "src.shared.services.auth.MistEndpointService",
+                    return_value=mock_mist,
+                ),
+                patch("src.shared.services.auth.mistapi"),
+            ):
                 service = AuthService.__new__(AuthService)
                 service._factory = MagicMock()
                 service._redis = None
                 service._fetch_self("fake-token")
 
             mock_mist.list_all_entities.assert_called_once_with(
-                "self_identity", {},
+                "self_identity",
+                {},
             )
         finally:
             for key, original in saved.items():

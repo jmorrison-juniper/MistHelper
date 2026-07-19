@@ -42,7 +42,9 @@ class CsvAuditor:  # Public class exposing the audit workflow.
         with open(self._path, encoding="utf-8-sig") as handle:  # UTF-8 BOM tolerated.
             return list(csv.DictReader(handle))  # Materialize so we can iterate multiple times.
 
-    def _print_field_emptiness(self, rows: Iterable[dict[str, Any]], total: int) -> None:  # Print empty-field stats block.
+    def _print_field_emptiness(
+        self, rows: Iterable[dict[str, Any]], total: int
+    ) -> None:  # Print empty-field stats block.
         """Print emptiness percentages for every field we care about."""
         rows = list(rows)  # Local copy lets us iterate seven times without consuming a generator.
         stats = self._compute_field_emptiness(rows)  # Single pass returns dict of counts.

@@ -43,7 +43,8 @@ class TestExecutorBranchesOnSuccess:
     def test_failure_branch_returns_error_message(self) -> None:
         mock_mist = MagicMock()
         mock_mist.write_entity.return_value = _api_result(
-            404, {"detail": "Device not found"},
+            404,
+            {"detail": "Device not found"},
         )
 
         executor = ConfigPushExecutor.__new__(ConfigPushExecutor)
@@ -67,14 +68,16 @@ class TestRollbackBranchesOnSuccess:
 
         mock_mist = MagicMock()
         mock_mist.read_entity.return_value = _api_result(
-            200, {"name": "test-ap"},
+            200,
+            {"name": "test-ap"},
         )
 
         service = RollbackService.__new__(RollbackService)
         service._mist = mock_mist
 
         data = service._read_current_config(
-            "device", {"site_id": "s1", "device_id": "d1"},
+            "device",
+            {"site_id": "s1", "device_id": "d1"},
         )
         assert data is not None
         assert data["name"] == "test-ap"
@@ -84,13 +87,15 @@ class TestRollbackBranchesOnSuccess:
 
         mock_mist = MagicMock()
         mock_mist.read_entity.return_value = _api_result(
-            404, {"detail": "Not found"},
+            404,
+            {"detail": "Not found"},
         )
 
         service = RollbackService.__new__(RollbackService)
         service._mist = mock_mist
 
         data = service._read_current_config(
-            "device", {"site_id": "s1", "device_id": "d1"},
+            "device",
+            {"site_id": "s1", "device_id": "d1"},
         )
         assert data is None

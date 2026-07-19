@@ -9,6 +9,7 @@ Usage:
     1. Start server: python scripts/mist_scraper_receiver.py
     2. Run scraper:  python scripts/mist_ideas_scraper_standalone.py
 """
+
 import csv
 import json
 import logging
@@ -38,9 +39,19 @@ SERVER = "http://localhost:8099"
 
 # ── CSV headers (match server) ────────────────────────────────
 HEADERS = [
-    "idea_id", "url", "title", "description_full", "votes",
-    "comments_count", "category", "status", "submitter",
-    "submitter_url", "submit_date", "tags", "comments_json",
+    "idea_id",
+    "url",
+    "title",
+    "description_full",
+    "votes",
+    "comments_count",
+    "category",
+    "status",
+    "submitter",
+    "submitter_url",
+    "submit_date",
+    "tags",
+    "comments_json",
 ]
 
 
@@ -80,7 +91,8 @@ class MistIdeasScraper:
 
     def extract_data(self, page, url):
         """Extract all idea data from the current page."""
-        return page.evaluate("""() => {
+        return page.evaluate(
+            """() => {
             const titleEl = document.querySelector('h1.uvIdeaTitle');
             const title = titleEl ? titleEl.textContent.trim() : '';
 
@@ -119,7 +131,8 @@ class MistIdeasScraper:
                 submitter, submitterUrl, submitDate, tags, comments,
                 currentUrl: window.location.href,
             };
-        }""")
+        }"""
+        )
 
     def validate_page(self, page, expected_id):
         """Check that the loaded page matches the expected idea ID."""
@@ -175,8 +188,13 @@ class MistIdeasScraper:
 
             browser.close()
 
-        logger.info("DONE. Saved=%d, Errors=%d, Skipped=%d, EmptyDesc=%d",
-                     self.saved, self.errors, self.skipped, self.empty_desc)
+        logger.info(
+            "DONE. Saved=%d, Errors=%d, Skipped=%d, EmptyDesc=%d",
+            self.saved,
+            self.errors,
+            self.skipped,
+            self.empty_desc,
+        )
 
     def scrape_one(self, page, idea_url, idea_id, index, total):
         """Scrape a single idea page with URL validation."""
@@ -241,9 +259,15 @@ class MistIdeasScraper:
         # Log progress
         if self.saved % 25 == 0 or self.saved <= 5:
             title_preview = row["title"][:50]
-            logger.info("[%d/%d] id=%s votes=%s desc=%dch title=%s",
-                        self.saved, total, idea_id, row["votes"],
-                        len(row["description_full"]), title_preview)
+            logger.info(
+                "[%d/%d] id=%s votes=%s desc=%dch title=%s",
+                self.saved,
+                total,
+                idea_id,
+                row["votes"],
+                len(row["description_full"]),
+                title_preview,
+            )
 
 
 if __name__ == "__main__":

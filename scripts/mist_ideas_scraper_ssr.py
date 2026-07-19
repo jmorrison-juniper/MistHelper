@@ -11,6 +11,7 @@ Usage:
     pip install beautifulsoup4
     python scripts/mist_ideas_scraper_ssr.py
 """
+
 import csv
 import json
 import logging
@@ -45,9 +46,19 @@ DONE_FILE = DATA_DIR / "mist_ideas_done_urls.txt"
 
 # ── CSV headers ───────────────────────────────────────────────
 HEADERS = [
-    "idea_id", "url", "title", "description_full", "votes",
-    "comments_count", "category", "status", "submitter",
-    "submitter_url", "submit_date", "tags", "comments_json",
+    "idea_id",
+    "url",
+    "title",
+    "description_full",
+    "votes",
+    "comments_count",
+    "category",
+    "status",
+    "submitter",
+    "submitter_url",
+    "submit_date",
+    "tags",
+    "comments_json",
 ]
 
 # ── SSL context for Zscaler corporate proxy ───────────────────
@@ -56,14 +67,16 @@ SSL_CTX.check_hostname = False
 SSL_CTX.verify_mode = ssl.CERT_NONE  # nosec B323 — required for Zscaler SSL inspection proxy
 
 # ── Boilerplate lines to strip from descriptions ──────────────
-BOILERPLATE_LINES = frozenset([
-    "Submitted ideas will be reviewed and responded to by our Product team.",
-    "Submitted ideas will be reviewed and responded to by our Product team.",
-    "Please do not submit cases here.",
-    "Please do not submit support cases here.",
-    "All feature requests will be evaluated on the basis of demand (votes), technical feasibility, strategic alignment, and other factors.",
-    "All feature requests will be evaluated on the basis of demand (votes), technical feasibility, strategic alignment, and other factors.",
-])
+BOILERPLATE_LINES = frozenset(
+    [
+        "Submitted ideas will be reviewed and responded to by our Product team.",
+        "Submitted ideas will be reviewed and responded to by our Product team.",
+        "Please do not submit cases here.",
+        "Please do not submit support cases here.",
+        "All feature requests will be evaluated on the basis of demand (votes), technical feasibility, strategic alignment, and other factors.",
+        "All feature requests will be evaluated on the basis of demand (votes), technical feasibility, strategic alignment, and other factors.",
+    ]
+)
 
 
 class MistIdeasSSRScraper:
@@ -85,8 +98,7 @@ class MistIdeasSSRScraper:
             done_set = set(DONE_FILE.read_text(encoding="utf-8").strip().splitlines())
 
         remaining = [u for u in all_urls if u not in done_set]
-        logger.info("Total: %d, Done: %d, Remaining: %d",
-                     len(all_urls), len(done_set), len(remaining))
+        logger.info("Total: %d, Done: %d, Remaining: %d", len(all_urls), len(done_set), len(remaining))
         return remaining
 
     def mark_done(self, url):
@@ -101,11 +113,14 @@ class MistIdeasSSRScraper:
 
     def fetch_html(self, url):
         """Fetch raw HTML from URL."""
-        req = Request(url, headers={
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "Accept": "text/html,application/xhtml+xml",
-            "Accept-Language": "en-US,en;q=0.9",
-        })
+        req = Request(
+            url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "Accept": "text/html,application/xhtml+xml",
+                "Accept-Language": "en-US,en;q=0.9",
+            },
+        )
         resp = urlopen(req, context=SSL_CTX, timeout=30)  # nosec B310 — URL is from our curated list
         return resp.read().decode("utf-8")
 
@@ -164,11 +179,13 @@ class MistIdeasSSRScraper:
             author_el = article.select_one('a[href*="/users/"]')
             date_el = article.select_one("time")
             body_el = article.select_one(".typeset")
-            comments.append({
-                "author": author_el.get_text(strip=True) if author_el else "",
-                "date": date_el.get_text(strip=True) if date_el else "",
-                "body": body_el.get_text(strip=True) if body_el else "",
-            })
+            comments.append(
+                {
+                    "author": author_el.get_text(strip=True) if author_el else "",
+                    "date": date_el.get_text(strip=True) if date_el else "",
+                    "body": body_el.get_text(strip=True) if body_el else "",
+                }
+            )
 
         return {
             "title": title,
@@ -210,17 +227,16 @@ class MistIdeasSSRScraper:
                 self.scrape_one(idea_url, idea_id, index, len(remaining))
             except Exception as error:
                 self.errors += 1
-                logger.error("[%d/%d] ERROR %s: %s",
-                             index + 1, len(remaining),
-                             idea_url[:60], str(error)[:120])
+                logger.error("[%d/%d] ERROR %s: %s", index + 1, len(remaining), idea_url[:60], str(error)[:120])
                 self.mark_done(idea_url)
 
             # Polite delay to avoid rate limiting
             if (index + 1) % 10 == 0:
                 time.sleep(0.5)
 
-        logger.info("DONE. Saved=%d Errors=%d Skipped=%d EmptyDesc=%d",
-                     self.saved, self.errors, self.skipped, self.empty_desc)
+        logger.info(
+            "DONE. Saved=%d Errors=%d Skipped=%d EmptyDesc=%d", self.saved, self.errors, self.skipped, self.empty_desc
+        )
 
     def scrape_one(self, idea_url, idea_id, index, total):
         """Scrape a single idea page."""
@@ -253,10 +269,16 @@ class MistIdeasSSRScraper:
         # Progress logging
         if self.saved % 50 == 0 or self.saved <= 5:
             title_preview = row["title"][:50]
-            logger.info("[%d/%d] id=%s votes=%s status=[%s] desc=%dch title=%s",
-                        self.saved, total, idea_id, row["votes"],
-                        row["status"][:20], len(row["description_full"]),
-                        title_preview)
+            logger.info(
+                "[%d/%d] id=%s votes=%s status=[%s] desc=%dch title=%s",
+                self.saved,
+                total,
+                idea_id,
+                row["votes"],
+                row["status"][:20],
+                len(row["description_full"]),
+                title_preview,
+            )
 
 
 if __name__ == "__main__":

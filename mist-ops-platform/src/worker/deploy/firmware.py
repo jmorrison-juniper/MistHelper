@@ -28,13 +28,17 @@ class FirmwareOrchestrator:
     """
 
     def __init__(
-        self, db: Session, mist: MistEndpointService,
+        self,
+        db: Session,
+        mist: MistEndpointService,
     ) -> None:
         self._db = db
         self._mist = mist
 
     def validate_upgrade(
-        self, image_id: UUID, target_device_ids: list[UUID],
+        self,
+        image_id: UUID,
+        target_device_ids: list[UUID],
     ) -> dict:
         """Validate firmware upgrade eligibility."""
         image = self._load_image(image_id)
@@ -55,7 +59,9 @@ class FirmwareOrchestrator:
         }
 
     def build_upgrade_payload(
-        self, image_id: UUID, target_device_ids: list[UUID],
+        self,
+        image_id: UUID,
+        target_device_ids: list[UUID],
     ) -> dict:
         """Build the change payload for a firmware upgrade."""
         image = self._load_image(image_id)
@@ -92,12 +98,14 @@ class FirmwareOrchestrator:
         if result.success:
             logger.info(
                 "Firmware upgrade initiated: site=%s devices=%d",
-                site_id, len(target_device_ids),
+                site_id,
+                len(target_device_ids),
             )
         else:
             logger.error(
                 "Firmware upgrade failed: site=%s error=%s",
-                site_id, result.error,
+                site_id,
+                result.error,
             )
         return result
 
@@ -115,7 +123,8 @@ class FirmwareOrchestrator:
         return image
 
     def _load_devices(
-        self, device_ids: list[UUID],
+        self,
+        device_ids: list[UUID],
     ) -> list[Device]:
         """Load devices by IDs."""
         stmt = select(Device).where(Device.device_id.in_(device_ids))
@@ -126,14 +135,13 @@ def _validate_image_state(image: GoldenImage) -> list[str]:
     """Check that the image is in a deployable state."""
     errors: list[str] = []
     if image.lifecycle_state != GoldenImageStatus.APPROVED.value:
-        errors.append(
-            f"Image must be approved, current: {image.lifecycle_state}"
-        )
+        errors.append(f"Image must be approved, current: {image.lifecycle_state}")
     return errors
 
 
 def _check_compatibility(
-    image: GoldenImage, devices: list[Device],
+    image: GoldenImage,
+    devices: list[Device],
 ) -> list[str]:
     """Check device model compatibility with golden image."""
     errors: list[str] = []
@@ -141,7 +149,6 @@ def _check_compatibility(
         model = (device.extra_fields or {}).get("model", "")
         if model and model != image.device_model:
             errors.append(
-                f"Device {device.device_id} model '{model}' "
-                f"incompatible with image model '{image.device_model}'"
+                f"Device {device.device_id} model '{model}' " f"incompatible with image model '{image.device_model}'"
             )
     return errors

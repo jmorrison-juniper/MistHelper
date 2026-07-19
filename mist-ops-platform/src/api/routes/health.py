@@ -35,9 +35,7 @@ async def readyz(request) -> dict[str, str]:  # noqa: ANN001
         return {"status": "unavailable"}
     try:
         async with engine.connect() as conn:
-            await conn.execute(
-                __import__("sqlalchemy").text("SELECT 1")
-            )
+            await conn.execute(__import__("sqlalchemy").text("SELECT 1"))
         return {"status": "ready"}
     except Exception:
         return {"status": "unavailable"}
@@ -50,6 +48,7 @@ async def metrics() -> dict[str, str]:
 
 
 # -- Notification channel schemas ----------------------------------------
+
 
 class ChannelCreate(BaseModel):
     """Request body for creating a notification channel."""
@@ -77,15 +76,14 @@ class ChannelResponse(BaseModel):
 
 # -- Notification channel CRUD ------------------------------------------
 
+
 @router.get("/notifications/channels")
 async def list_channels(
     org_id: UUID = Query(...),
     db: AsyncSession = Depends(get_db_session),
 ) -> ResponseEnvelope[list[ChannelResponse]]:
     """List notification channels for an org."""
-    stmt = select(NotificationChannel).where(
-        NotificationChannel.org_id == org_id
-    )
+    stmt = select(NotificationChannel).where(NotificationChannel.org_id == org_id)
     rows = (await db.execute(stmt)).scalars().all()
     items = [ChannelResponse.model_validate(r) for r in rows]
     return ResponseEnvelope(data=items)
@@ -200,6 +198,7 @@ async def login(
     # Cache token in Redis so Celery workers can use it for API calls
     import redis as redis_lib
     from src.shared.config.settings import get_settings
+
     _settings = get_settings()
     try:
         _redis = redis_lib.Redis.from_url(_settings.redis_url)
@@ -212,6 +211,7 @@ async def login(
     # Trigger immediate inventory sync for each org
     try:
         from src.worker.tasks.sync_tasks import sync_org_inventory
+
         for oid in privs.org_ids:
             sync_org_inventory.delay(oid)
     except Exception:
@@ -220,10 +220,7 @@ async def login(
     session_id = secrets.token_urlsafe(32)
     expires = datetime.now(timezone.utc) + timedelta(hours=8)
     role = "msp" if privs.is_msp else "org_admin"
-    orgs = [
-        OrgRefResponse(orgId=oid, name=privs.org_names.get(oid, oid))
-        for oid in privs.org_ids
-    ]
+    orgs = [OrgRefResponse(orgId=oid, name=privs.org_names.get(oid, oid)) for oid in privs.org_ids]
     operator = OperatorResponse(
         email=privs.email,
         name=privs.name,
@@ -238,6 +235,7 @@ async def login(
         ),
     )
     from fastapi.responses import JSONResponse
+
     response = JSONResponse(content=envelope.model_dump(mode="json"))
     response.set_cookie(
         key="mist_session",
@@ -267,6 +265,7 @@ async def refresh_token() -> ResponseEnvelope[TokenRefreshResponse]:
 async def logout() -> JSONResponse:
     """Invalidate current session and clear cookie."""
     from fastapi.responses import JSONResponse
+
     response = JSONResponse(content={"status": "logged_out"})
     response.delete_cookie(key="mist_session", path="/")
     return response

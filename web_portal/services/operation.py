@@ -95,8 +95,20 @@ def _build_registry() -> dict:
 
     # --- Simple site-only operations (1 prompt: site) ---
     site_only_menus = [
-        "29", "30", "31", "32", "34", "49", "50",
-        "51", "52", "53", "68", "70", "71", "84",
+        "29",
+        "30",
+        "31",
+        "32",
+        "34",
+        "49",
+        "50",
+        "51",
+        "52",
+        "53",
+        "68",
+        "70",
+        "71",
+        "84",
     ]
     for menu in site_only_menus:
         registry[menu] = {
@@ -186,16 +198,26 @@ def _build_registry() -> dict:
         "category": "interactive",
         "parameters": [
             _site_param(),
-            {"name": "client_mac", "label": "Client", "param_type": "client",
-             "required": True, "depends_on": "site_id"},
+            {
+                "name": "client_mac",
+                "label": "Client",
+                "param_type": "client",
+                "required": True,
+                "depends_on": "site_id",
+            },
         ],
     }
     registry["86"] = {
         "category": "interactive",
         "parameters": [
             _site_param(),
-            {"name": "client_mac", "label": "Client", "param_type": "client",
-             "required": True, "depends_on": "site_id"},
+            {
+                "name": "client_mac",
+                "label": "Client",
+                "param_type": "client",
+                "required": True,
+                "depends_on": "site_id",
+            },
         ],
     }
 
@@ -216,14 +238,18 @@ def _build_registry() -> dict:
     registry["9"] = {
         "category": "interactive",
         "parameters": [
-            _choice_param("capture_type", "Capture Type", [
-                {"value": "1", "label": "Wireless Client"},
-                {"value": "2", "label": "Wired Client"},
-                {"value": "3", "label": "Gateway"},
-                {"value": "4", "label": "Switch"},
-                {"value": "5", "label": "New Association"},
-                {"value": "6", "label": "Scan Radio"},
-            ]),
+            _choice_param(
+                "capture_type",
+                "Capture Type",
+                [
+                    {"value": "1", "label": "Wireless Client"},
+                    {"value": "2", "label": "Wired Client"},
+                    {"value": "3", "label": "Gateway"},
+                    {"value": "4", "label": "Switch"},
+                    {"value": "5", "label": "New Association"},
+                    {"value": "6", "label": "Scan Radio"},
+                ],
+            ),
             _site_param(),
             _text_param("client_mac", "Client MAC", placeholder="e.g. aa:bb:cc:dd:ee:ff"),
             _number_param("duration", "Duration (seconds)", default="60", min_value=10, max_value=300),
@@ -249,16 +275,14 @@ def _build_registry() -> dict:
         "category": "cli_only",
         "parameters": [],
         "cli_only_message": (
-            "Interactive troubleshooting requires multi-step keyboard input. "
-            "Use SSH access on port 2200."
+            "Interactive troubleshooting requires multi-step keyboard input. " "Use SSH access on port 2200."
         ),
     }
     registry["79"] = {
         "category": "cli_only",
         "parameters": [],
         "cli_only_message": (
-            "Interactive CLI shell requires persistent keyboard input. "
-            "Use SSH access on port 2200."
+            "Interactive CLI shell requires persistent keyboard input. " "Use SSH access on port 2200."
         ),
     }
 
@@ -291,12 +315,8 @@ class OperationExecutor:
         self._lock = threading.Lock()
         cpu_count = os.cpu_count() or 2
         max_workers = max(1, cpu_count - 1)
-        logging.info(
-            "Operation pool: %d workers (CPUs detected: %d)", max_workers, cpu_count
-        )
-        self._pool = ThreadPoolExecutor(
-            max_workers=max_workers, thread_name_prefix="op"
-        )
+        logging.info("Operation pool: %d workers (CPUs detected: %d)", max_workers, cpu_count)
+        self._pool = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="op")
 
     def start_operation(self, menu_number: str, parameters: dict) -> dict:
         """Validate and start an operation in a background thread."""
@@ -321,11 +341,7 @@ class OperationExecutor:
     def get_active_runs(self) -> list:
         """Return list of currently running operations."""
         with self._lock:
-            return [
-                self._run_to_summary(run)
-                for run in self._runs.values()
-                if run["status"] in ("pending", "running")
-            ]
+            return [self._run_to_summary(run) for run in self._runs.values() if run["status"] in ("pending", "running")]
 
     def stop_operation(self, run_id: str) -> dict:
         """Request graceful stop of a running operation.
@@ -369,15 +385,14 @@ class OperationExecutor:
             op_category = reg_entry["category"] if reg_entry else "non_interactive"
             if category not in categories:
                 categories[category] = []
-            categories[category].append({
-                "menu_number": key,
-                "description": desc,
-                "category": op_category,
-            })
-        return [
-            {"name": name, "operations": ops}
-            for name, ops in sorted(categories.items(), key=lambda x: x[0])
-        ]
+            categories[category].append(
+                {
+                    "menu_number": key,
+                    "description": desc,
+                    "category": op_category,
+                }
+            )
+        return [{"name": name, "operations": ops} for name, ops in sorted(categories.items(), key=lambda x: x[0])]
 
     def get_operation_parameters(self, menu_number: str) -> Optional[dict]:
         """Return parameter requirements for an operation."""
@@ -494,26 +509,32 @@ class OperationExecutor:
             if status in ("completed", "failed"):
                 run["completed_at"] = time.time()
         if self._event_bus:
-            self._event_bus.publish("status", {
-                "run_id": run["run_id"],
-                "status": status,
-                "progress_pct": progress,
-                "menu_number": run["menu_number"],
-                "description": run["description"],
-            })
+            self._event_bus.publish(
+                "status",
+                {
+                    "run_id": run["run_id"],
+                    "status": status,
+                    "progress_pct": progress,
+                    "menu_number": run["menu_number"],
+                    "description": run["description"],
+                },
+            )
 
     def _publish_complete(self, run: dict) -> None:
         """Publish completion SSE event."""
         if not self._event_bus:
             return
         duration = (run["completed_at"] or time.time()) - run["started_at"]
-        self._event_bus.publish("complete", {
-            "run_id": run["run_id"],
-            "status": "completed",
-            "message": "Operation completed",
-            "output_files": run["output_files"],
-            "duration_seconds": round(duration, 1),
-        })
+        self._event_bus.publish(
+            "complete",
+            {
+                "run_id": run["run_id"],
+                "status": "completed",
+                "message": "Operation completed",
+                "output_files": run["output_files"],
+                "duration_seconds": round(duration, 1),
+            },
+        )
 
     def _handle_failure(self, run: dict, message: str) -> None:
         """Update run to failed state and publish error event."""
@@ -523,13 +544,16 @@ class OperationExecutor:
             run["completed_at"] = time.time()
         if self._event_bus:
             duration = run["completed_at"] - run["started_at"]
-            self._event_bus.publish("error_event", {
-                "run_id": run["run_id"],
-                "status": "failed",
-                "message": message,
-                "error_message": message,
-                "duration_seconds": round(duration, 1),
-            })
+            self._event_bus.publish(
+                "error_event",
+                {
+                    "run_id": run["run_id"],
+                    "status": "failed",
+                    "message": message,
+                    "error_message": message,
+                    "duration_seconds": round(duration, 1),
+                },
+            )
 
     def _run_to_dict(self, run: dict) -> dict:
         """Convert run record to API response format."""
@@ -584,26 +608,42 @@ class _RunLogHandler(logging.Handler):
     """
 
     # Logger name prefixes whose output always goes to debug panel
-    _DEBUG_LOGGERS = frozenset((
-        "urllib3", "requests", "werkzeug", "flask", "mistapi",
-    ))
+    _DEBUG_LOGGERS = frozenset(
+        (
+            "urllib3",
+            "requests",
+            "werkzeug",
+            "flask",
+            "mistapi",
+        )
+    )
 
     # Message prefixes that indicate internal plumbing (even at INFO)
     _INTERNAL_PREFIXES = (
-        "apiresponse:", "apirequest:", "apitoken:",
-        "Rate limiting:", "Hour boundary crossed",
-        "Adaptive delay", "PID controller",
-        "request headers:", "_gen_query:", "_check_next", "_url:",
-        "Processing ", "Connection-aware threading:",
-        "CPU-aware threading:", "Connection pool protection:",
-        "API Optimization:", "Fast mode:",
-        "Retry ", "FAST RETRY",
+        "apiresponse:",
+        "apirequest:",
+        "apitoken:",
+        "Rate limiting:",
+        "Hour boundary crossed",
+        "Adaptive delay",
+        "PID controller",
+        "request headers:",
+        "_gen_query:",
+        "_check_next",
+        "_url:",
+        "Processing ",
+        "Connection-aware threading:",
+        "CPU-aware threading:",
+        "Connection pool protection:",
+        "API Optimization:",
+        "Fast mode:",
+        "Retry ",
+        "FAST RETRY",
     )
 
     # Regex to extract output filenames from log messages
     _OUTPUT_FILE_RE = re.compile(
-        r"(?:wrote \d+ rows to|written to|wrote results to)"
-        r"\s+(?:data[/\\])?(\S+\.(?:csv|db|json|sqlite))",
+        r"(?:wrote \d+ rows to|written to|wrote results to)" r"\s+(?:data[/\\])?(\S+\.(?:csv|db|json|sqlite))",
         re.IGNORECASE,
     )
 
@@ -617,9 +657,7 @@ class _RunLogHandler(logging.Handler):
         """Capture a log record and route to appropriate SSE channel."""
         message = self.format(record)
         level = record.levelname.lower()
-        timestamp = time.strftime(
-            "%Y-%m-%dT%H:%M:%SZ", time.gmtime(record.created)
-        )
+        timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(record.created))
         is_main = self._is_user_facing(record, message)
         event_type = "log" if is_main else "debug_log"
         storage = "log_messages" if is_main else "debug_messages"
@@ -627,12 +665,15 @@ class _RunLogHandler(logging.Handler):
         if is_main:
             self._check_output_file(message)
         if self._event_bus:
-            self._event_bus.publish(event_type, {
-                "run_id": self._run["run_id"],
-                "message": message,
-                "level": level,
-                "timestamp": timestamp,
-            })
+            self._event_bus.publish(
+                event_type,
+                {
+                    "run_id": self._run["run_id"],
+                    "message": message,
+                    "level": level,
+                    "timestamp": timestamp,
+                },
+            )
 
     def _is_user_facing(self, record: logging.LogRecord, message: str) -> bool:
         """Decide if a message belongs in the main execution log."""

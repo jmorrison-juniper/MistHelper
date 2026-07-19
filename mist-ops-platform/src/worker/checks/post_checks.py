@@ -56,7 +56,9 @@ class PostCheckService:
         return results
 
     def _get_device_health(
-        self, org_id: str, device_id: str,
+        self,
+        org_id: str,
+        device_id: str,
     ) -> CheckResult:
         """Check a single device's health metrics."""
         try:
@@ -64,12 +66,8 @@ class PostCheckService:
                 "org_device_list",
                 ids={"org_id": org_id},
             )
-            data_list = (
-                api_result.data if isinstance(api_result.data, list) else []
-            )
-            device_data: dict[str, Any] = next(
-                (d for d in data_list if d.get("id") == device_id), {}
-            )
+            data_list = api_result.data if isinstance(api_result.data, list) else []
+            device_data: dict[str, Any] = next((d for d in data_list if d.get("id") == device_id), {})
             status_val = device_data.get("status", "unknown")
             is_healthy = status_val == "connected"
             return CheckResult(
@@ -98,9 +96,11 @@ class PostCheckService:
         """
         results: list[CheckResult] = []
         for device_id in target_ids:
-            results.append(CheckResult(
-                name=f"client_connectivity:{device_id}",
-                passed=True,
-                message="Client connectivity check passed (basic)",
-            ))
+            results.append(
+                CheckResult(
+                    name=f"client_connectivity:{device_id}",
+                    passed=True,
+                    message="Client connectivity check passed (basic)",
+                )
+            )
         return results

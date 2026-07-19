@@ -89,9 +89,7 @@ class WebPortalApp:
     @staticmethod
     def _setup_theme_manager(app: Flask, config: dict) -> None:
         """Initialize ThemeManager and store on app.config."""
-        themes_dir = os.path.join(
-            WebPortalApp._get_static_dir(), "css", "themes"
-        )
+        themes_dir = os.path.join(WebPortalApp._get_static_dir(), "css", "themes")
         manager = ThemeManager(themes_dir, config.get("theme", "dark"))
         manager.load_themes()
         app.config["THEME_MANAGER"] = manager

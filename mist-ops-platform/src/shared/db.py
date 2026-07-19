@@ -87,9 +87,11 @@ async def ensure_org_partitions(engine, org_id: str) -> None:  # noqa: ANN001
     async with engine.begin() as conn:
         for table_name in PARTITIONED_TABLES:
             partition_name = f"{table_name}_org_{safe_suffix}"
-            await conn.execute(text(
-                f"CREATE TABLE IF NOT EXISTS {partition_name} "
-                f"PARTITION OF {table_name} "
-                f"FOR VALUES IN ('{validated!s}')"
-            ))
+            await conn.execute(
+                text(
+                    f"CREATE TABLE IF NOT EXISTS {partition_name} "
+                    f"PARTITION OF {table_name} "
+                    f"FOR VALUES IN ('{validated!s}')"
+                )
+            )
     logger.info("Org partitions ensured for %s", validated)

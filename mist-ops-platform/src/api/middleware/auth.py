@@ -44,6 +44,7 @@ async def get_current_user(
             detail="Missing authentication credentials",
         )
     from src.shared.services.auth import AuthService
+
     svc = AuthService(redis=None)
     privs = svc.validate_token(token)
     if not privs.email and not privs.org_ids:

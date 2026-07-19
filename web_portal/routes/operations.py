@@ -29,6 +29,7 @@ def operations_page():
 def list_operations():
     """Return categorized list of non-destructive operations."""
     from web_portal.services.operation import OperationExecutor
+
     menu_actions = current_app.config.get("MENU_ACTIONS", {})
     executor = _get_executor()
     categories = executor.build_category_list(menu_actions)
@@ -155,11 +156,13 @@ def list_site_devices(site_id):
     device_type = request.args.get("type", "all")
     apisession = current_app.config.get("APISESSION")
     devices = _fetch_site_devices(apisession, site_id, device_type)
-    return jsonify({
-        "devices": devices,
-        "total_count": len(devices),
-        "site_id": site_id,
-    })
+    return jsonify(
+        {
+            "devices": devices,
+            "total_count": len(devices),
+            "site_id": site_id,
+        }
+    )
 
 
 @operations_bp.route("/api/operations/sites/<site_id>/clients")
@@ -167,11 +170,13 @@ def list_site_clients(site_id):
     """Return clients at a site (wireless + wired merged)."""
     apisession = current_app.config.get("APISESSION")
     clients = _fetch_site_clients(apisession, site_id)
-    return jsonify({
-        "clients": clients,
-        "total_count": len(clients),
-        "site_id": site_id,
-    })
+    return jsonify(
+        {
+            "clients": clients,
+            "total_count": len(clients),
+            "site_id": site_id,
+        }
+    )
 
 
 def _get_executor():
@@ -179,6 +184,7 @@ def _get_executor():
     executor = current_app.config.get("OPERATION_EXECUTOR")
     if executor is None:
         from web_portal.services.operation import OperationExecutor
+
         executor = OperationExecutor(
             menu_actions=current_app.config.get("MENU_ACTIONS", {}),
             apisession=current_app.config.get("APISESSION"),
@@ -204,34 +210,54 @@ def _build_replay(executor, run_id: str):
     for entry in status.get("log_messages") or []:
         msg = entry.get("message", entry) if isinstance(entry, dict) else entry
         lvl = entry.get("level", "info") if isinstance(entry, dict) else "info"
-        events.append(_format_sse("log", {
-            "run_id": run_id,
-            "message": msg,
-            "level": lvl,
-        }))
+        events.append(
+            _format_sse(
+                "log",
+                {
+                    "run_id": run_id,
+                    "message": msg,
+                    "level": lvl,
+                },
+            )
+        )
     for entry in status.get("debug_messages") or []:
         msg = entry.get("message", entry) if isinstance(entry, dict) else entry
         lvl = entry.get("level", "debug") if isinstance(entry, dict) else "debug"
-        events.append(_format_sse("debug_log", {
-            "run_id": run_id,
-            "message": msg,
-            "level": lvl,
-        }))
+        events.append(
+            _format_sse(
+                "debug_log",
+                {
+                    "run_id": run_id,
+                    "message": msg,
+                    "level": lvl,
+                },
+            )
+        )
     if status["status"] == "completed":
-        events.append(_format_sse("complete", {
-            "run_id": run_id,
-            "status": "completed",
-            "message": "Operation completed",
-            "output_files": status.get("output_files", []),
-            "duration_seconds": _calc_duration(status),
-        }))
+        events.append(
+            _format_sse(
+                "complete",
+                {
+                    "run_id": run_id,
+                    "status": "completed",
+                    "message": "Operation completed",
+                    "output_files": status.get("output_files", []),
+                    "duration_seconds": _calc_duration(status),
+                },
+            )
+        )
     else:
-        events.append(_format_sse("error_event", {
-            "run_id": run_id,
-            "status": "failed",
-            "message": status.get("error_message", "Operation failed"),
-            "duration_seconds": _calc_duration(status),
-        }))
+        events.append(
+            _format_sse(
+                "error_event",
+                {
+                    "run_id": run_id,
+                    "status": "failed",
+                    "message": status.get("error_message", "Operation failed"),
+                    "duration_seconds": _calc_duration(status),
+                },
+            )
+        )
     return events
 
 
@@ -256,6 +282,7 @@ def _fetch_org_sites(apisession, org_id: str) -> list:
         return []
     try:
         import mistapi
+
         response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id)
         sites = response.data if hasattr(response, "data") else []
         return [
@@ -278,6 +305,7 @@ def _fetch_site_devices(apisession, site_id: str, device_type: str) -> list:
         return []
     try:
         import mistapi
+
         kwargs = {"site_id": site_id}
         if device_type and device_type != "all":
             kwargs["type"] = device_type
@@ -307,6 +335,7 @@ def _fetch_site_clients(apisession, site_id: str) -> list:
     clients = []
     try:
         import mistapi
+
         wireless = _fetch_wireless_clients(mistapi, apisession, site_id)
         wired = _fetch_wired_clients(mistapi, apisession, site_id)
         clients = wireless + wired
@@ -318,9 +347,7 @@ def _fetch_site_clients(apisession, site_id: str) -> list:
 def _fetch_wireless_clients(mistapi, apisession, site_id: str) -> list:
     """Fetch wireless clients for a site."""
     try:
-        response = mistapi.api.v1.sites.clients.searchSiteWirelessClients(
-            apisession, site_id
-        )
+        response = mistapi.api.v1.sites.clients.searchSiteWirelessClients(apisession, site_id)
         raw = response.data if hasattr(response, "data") else []
         results = raw.get("results", []) if isinstance(raw, dict) else raw
         return [
@@ -330,7 +357,9 @@ def _fetch_wireless_clients(mistapi, apisession, site_id: str) -> list:
                 "ip": client.get("ip", ""),
                 "type": "wireless",
                 "ssid": client.get("ssid", ""),
-                "ap_name": client.get("ap", [None])[0] if isinstance(client.get("ap"), list) else client.get("ap_name", ""),
+                "ap_name": (
+                    client.get("ap", [None])[0] if isinstance(client.get("ap"), list) else client.get("ap_name", "")
+                ),
             }
             for client in results
         ]
@@ -341,9 +370,7 @@ def _fetch_wireless_clients(mistapi, apisession, site_id: str) -> list:
 def _fetch_wired_clients(mistapi, apisession, site_id: str) -> list:
     """Fetch wired clients for a site."""
     try:
-        response = mistapi.api.v1.sites.clients.searchSiteWiredClients(
-            apisession, site_id
-        )
+        response = mistapi.api.v1.sites.clients.searchSiteWiredClients(apisession, site_id)
         raw = response.data if hasattr(response, "data") else []
         results = raw.get("results", []) if isinstance(raw, dict) else raw
         return [

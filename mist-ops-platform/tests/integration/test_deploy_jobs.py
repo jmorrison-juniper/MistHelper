@@ -26,9 +26,7 @@ class TestDeployJobLifecycle:
             "target_entities": [
                 {"entity_type": "device", "entity_id": str(uuid.uuid4())},
             ],
-            "scheduled_at": (
-                datetime.now(tz=UTC) + timedelta(hours=2)
-            ).isoformat(),
+            "scheduled_at": (datetime.now(tz=UTC) + timedelta(hours=2)).isoformat(),
         }
 
     def test_initial_status_is_pending(self) -> None:

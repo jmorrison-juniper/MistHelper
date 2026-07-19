@@ -25,6 +25,7 @@ def data_browser():
 def list_files():
     """Return JSON list of all data files with metadata."""
     from web_portal.services.data_browser import DataBrowserService
+
     data_dir = current_app.config.get("DATA_DIR", "data")
     service = DataBrowserService(data_dir)
     files = service.list_files()
@@ -35,6 +36,7 @@ def list_files():
 def preview_file(filepath):
     """Return paginated preview of a CSV or SQLite table list."""
     from web_portal.services.data_browser import DataBrowserService
+
     data_dir = current_app.config.get("DATA_DIR", "data")
     service = DataBrowserService(data_dir)
     page = request.args.get("page", 1, type=int)
@@ -52,6 +54,7 @@ def preview_file(filepath):
 def preview_table(filepath, table_name):
     """Return paginated preview of a specific SQLite table."""
     from web_portal.services.data_browser import DataBrowserService
+
     data_dir = current_app.config.get("DATA_DIR", "data")
     service = DataBrowserService(data_dir)
     page = request.args.get("page", 1, type=int)
@@ -69,6 +72,7 @@ def preview_table(filepath, table_name):
 def download_file(filepath):
     """Download a file from the data directory."""
     from web_portal.services.data_browser import DataBrowserService
+
     data_dir = current_app.config.get("DATA_DIR", "data")
     service = DataBrowserService(data_dir)
     resolved = service.resolve_safe_path(filepath)

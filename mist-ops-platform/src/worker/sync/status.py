@@ -65,7 +65,9 @@ class StatusSyncService:
         self._update_device_live_fields(device, data)
 
     def _update_device_live_fields(
-        self, device: Device, data: dict,
+        self,
+        device: Device,
+        data: dict,
     ) -> None:
         """Push uptime and last_seen from stats into the Device row."""
         raw_uptime = data.get("uptime")
@@ -73,7 +75,8 @@ class StatusSyncService:
         raw_last_seen = data.get("last_seen")
         if raw_last_seen is not None:
             device.last_seen_at = datetime.fromtimestamp(
-                float(raw_last_seen), tz=UTC,
+                float(raw_last_seen),
+                tz=UTC,
             )
 
     def _load_devices(self) -> list[Device]:
