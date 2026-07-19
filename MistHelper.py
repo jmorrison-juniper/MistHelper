@@ -448,6 +448,9 @@ from src.export.site_insights.site_metric_operation import (
 from src.export.site_mist_edge_events_exporter import (
     SiteMistEdgeEventsExporter,  # Spec 890 / issue #1398 -- searchSiteMistEdgeEvents menu 201
 )
+from src.export.site_nac_client_events_exporter import (
+    SiteNacClientEventsExporter,  # Spec 891 / issue #1399 -- searchSiteNacClientEvents menu 202
+)
 from src.export.site_wan_usage_exporter import (
     SiteWanUsageExporter,  # Spec 901 / issue #1409 -- searchSiteWanUsage menu 198
 )
@@ -3892,6 +3895,10 @@ menu_actions: "dict[str, tuple[Callable[..., Any], str]]" = {
     "201": (
         SiteMistEdgeEventsExporter.mist_edge_events,
         "Search Site Mist Edge Events (searchSiteMistEdgeEvents) - Per-site Mist Edge event CSV",
+    ),
+    "202": (
+        SiteNacClientEventsExporter.nac_client_events,
+        "Search Site NAC Client Events (searchSiteNacClientEvents) - Per-site NAC client event CSV",
     ),
     "44": (OrgConfigExporter.psks, "Export PSK (Pre-Shared Key) information for the organization"),
     "45": (OrgConfigExporter.webhooks, "Export webhook configuration for the organization"),

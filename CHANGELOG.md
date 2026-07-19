@@ -7,6 +7,20 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Menu 202: Search Site NAC Client Events (spec 891 / issue #1399)
+
+- **New menu 202 (Added)**: `SiteNacClientEventsExporter.nac_client_events()` wraps
+  the previously unreachable Mist API `searchSiteNacClientEvents` operation
+  (`GET /api/v1/sites/{site_id}/nac_clients/events/search`). Operator picks a site
+  (shared `SiteDeviceExporter._resolve_site_for_stats` helper), the exporter pages all
+  NAC client event rows via `mistapi.get_all`, flattens + escapes them with
+  `DataProcessingUtils`, then persists through `DataExporter.write_with_format_selection`
+  so CSV / SQLite / ArangoDB backends all work. Empty responses surface a friendly
+  "no NAC client event data" notice instead of failing. `ENDPOINT_PRIMARY_KEY_STRATEGIES`
+  already defined a composite PK (`id`, `mac`, `timestamp`) for this operationId -- no
+  schema changes required. Registered as `interactive_safe` in `OperationRegistry`
+  (requires site selection).
+
 ### Menu 201: Search Site Mist Edge Events (spec 890 / issue #1398)
 
 - **New menu 201 (Added)**: `SiteMistEdgeEventsExporter.mist_edge_events()` wraps
