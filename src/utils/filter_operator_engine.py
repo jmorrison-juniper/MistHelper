@@ -82,8 +82,9 @@ class FilterOperatorEngine:  # Filter operator evaluation engine.
         """Validate that value-required operators have non-empty normalized values."""
         if operator in FilterOperatorEngine.VALUE_REQUIRED_OPERATORS:  # Value-required operator?
             if not value or not value.strip():  # Missing value.
-                logging.warning("Operator '%s' for %s requires a non-empty value", operator, field_name)
-                print(f"\n  Operator '{operator}' requires a value for {field_name}. Please try again.")
+                logging.warning(
+                    "Operator '%s' for %s requires a non-empty value. Please try again.", operator, field_name
+                )  # Single WARNING (retired duplicate print() per #886 Phase 2) surfaces on operator terminal.
                 return False  # Invalid.
         return True  # Valid.
 

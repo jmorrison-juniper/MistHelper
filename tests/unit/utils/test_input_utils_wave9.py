@@ -105,33 +105,33 @@ class TestSafeInputEmptyBranches:
 class TestSafeInputExceptionBranches:
     """Cover the EOF and KeyboardInterrupt exception branches."""
 
-    def test_eof_returns_default_and_prints_notice(
-        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    def test_eof_returns_default_and_logs_notice(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
     ) -> None:
-        # WHY: EOFError -> degrade to default_value + print [EOF] notice
+        # WHY: EOFError -> degrade to default_value + WARNING log notice (#886 Phase 2 print->logger)
         def _raise_eof(_prompt: str) -> str:  # WHY: patched input raises EOFError
-            logging.info("Simulating EOFError from input")  # WHY: pre-action trace
             raise EOFError("stream closed")  # WHY: hit the except EOFError branch
 
         monkeypatch.setattr("builtins.input", _raise_eof)  # WHY: patched input
-        result = InputUtils.safe_input(
-            "Enter: ", default_value="fallback", context="testctx"
-        )  # WHY: exercise EOF branch
+        with caplog.at_level(logging.WARNING):  # WHY: capture warning surface
+            result = InputUtils.safe_input(
+                "Enter: ", default_value="fallback", context="testctx"
+            )  # WHY: exercise EOF branch
         assert result == "fallback"  # WHY: default substituted
-        assert "[EOF]" in capsys.readouterr().out  # WHY: user-facing notice surfaced
+        assert "[EOF]" in caplog.text  # WHY: operator notice surfaced via logger
 
-    def test_keyboard_interrupt_returns_empty_and_prints_notice(
-        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    def test_keyboard_interrupt_returns_empty_and_logs_notice(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
     ) -> None:
-        # WHY: KeyboardInterrupt -> return "" + print [INTERRUPT] notice
+        # WHY: KeyboardInterrupt -> return "" + WARNING log notice (#886 Phase 2 print->logger)
         def _raise_interrupt(_prompt: str) -> str:  # WHY: patched input raises KeyboardInterrupt
-            logging.info("Simulating KeyboardInterrupt from input")  # WHY: pre-action trace
             raise KeyboardInterrupt()  # WHY: hit the except KeyboardInterrupt branch
 
         monkeypatch.setattr("builtins.input", _raise_interrupt)  # WHY: patched input
-        result = InputUtils.safe_input("Enter: ", context="testctx")  # WHY: exercise interrupt branch
+        with caplog.at_level(logging.WARNING):  # WHY: capture warning surface
+            result = InputUtils.safe_input("Enter: ", context="testctx")  # WHY: exercise interrupt branch
         assert result == ""  # WHY: interrupt returns empty sentinel
-        assert "[INTERRUPT]" in capsys.readouterr().out  # WHY: user-facing notice surfaced
+        assert "[INTERRUPT]" in caplog.text  # WHY: operator notice surfaced via logger
 
 
 class TestPrivateHelpersDirect:
@@ -154,17 +154,19 @@ class TestPrivateHelpersDirect:
         assert result == ""  # WHY: sentinel empty returned
         assert any("not allowed" in rec.message for rec in caplog.records)  # WHY: warning logged
 
-    def test_handle_eof_returns_default(self, capsys: pytest.CaptureFixture[str]) -> None:
-        # WHY: EOF handler returns the default and prints a notice
-        result = InputUtils._handle_eof("ctx", "def")  # WHY: direct call
+    def test_handle_eof_returns_default(self, caplog: pytest.LogCaptureFixture) -> None:
+        # WHY: EOF handler returns the default and logs a WARNING notice (#886 Phase 2)
+        with caplog.at_level(logging.WARNING):  # WHY: capture warning surface
+            result = InputUtils._handle_eof("ctx", "def")  # WHY: direct call
         assert result == "def"  # WHY: default returned
-        assert "[EOF]" in capsys.readouterr().out  # WHY: notice surfaced
+        assert "[EOF]" in caplog.text  # WHY: operator notice surfaced via logger
 
-    def test_handle_interrupt_returns_empty(self, capsys: pytest.CaptureFixture[str]) -> None:
-        # WHY: interrupt handler returns "" and prints a notice
-        result = InputUtils._handle_interrupt("ctx")  # WHY: direct call
+    def test_handle_interrupt_returns_empty(self, caplog: pytest.LogCaptureFixture) -> None:
+        # WHY: interrupt handler returns "" and logs a WARNING notice (#886 Phase 2)
+        with caplog.at_level(logging.WARNING):  # WHY: capture warning surface
+            result = InputUtils._handle_interrupt("ctx")  # WHY: direct call
         assert result == ""  # WHY: sentinel empty returned
-        assert "[INTERRUPT]" in capsys.readouterr().out  # WHY: notice surfaced
+        assert "[INTERRUPT]" in caplog.text  # WHY: operator notice surfaced via logger
 
 
 class TestSafeInputDefaultArguments:

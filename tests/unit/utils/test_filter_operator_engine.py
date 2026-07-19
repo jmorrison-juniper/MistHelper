@@ -67,12 +67,12 @@ class TestNormalizeText:
 
 
 class TestValidateOperatorValue:
-    def test_value_required_with_empty_warns_and_returns_false(self, caplog, capsys):
+    def test_value_required_with_empty_warns_and_returns_false(self, caplog):
         caplog.set_level(logging.WARNING)
         assert FilterOperatorEngine.validate_operator_value("is", "", "hostname") is False
+        # WHY (#886 Phase 2): print() consolidated into single WARNING log line.
         assert "requires a non-empty value" in caplog.text
-        captured = capsys.readouterr()
-        assert "requires a value for hostname" in captured.out
+        assert "Please try again." in caplog.text
 
     def test_value_required_with_whitespace_only_returns_false(self):
         assert FilterOperatorEngine.validate_operator_value("contains", "   ", "mac") is False

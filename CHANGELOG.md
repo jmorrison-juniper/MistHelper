@@ -7,6 +7,22 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 1/N: retire `print()` in `src/utils/` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced the 3 remaining `print()`
+  calls in `src/utils/` with `logging.warning(...)` so the print-avoidance rule
+  (T20 selector target of #886) can eventually be enabled repo-wide. Touched
+  `src/utils/input_utils.py` (`_handle_eof` / `_handle_interrupt`) and
+  `src/utils/filter_operator_engine.py` (`validate_operator_value`). Collapsed
+  the previous `print(...)` + `logging.info(...)` pairs into a single WARNING
+  line each so operators still see the notice on the default root-logger
+  configuration (INFO is suppressed by default; WARNING is not). Companion
+  unit tests in `tests/unit/utils/test_input_utils_wave9.py` and
+  `tests/unit/utils/test_filter_operator_engine.py` were updated to assert
+  against `caplog.text` instead of `capsys.readouterr().out`. First of ~20+
+  per-subdirectory slices of #886; T20 selector flip and E402 audit will land
+  after all `src/` subdirs are print-free.
+
 ### Menu 205: Search Org Mist Edge Events (spec 866 / issue #1374)
 
 - **New menu 205 (Added)**: `OrgExportUtils.mist_edge_events()` wraps the

@@ -90,13 +90,17 @@ class InputUtils:
 
     @staticmethod
     def _handle_eof(context: str, default_value: str) -> str:
-        """Handle a closed input stream by degrading to ``default_value``."""
-        # WHY: extracted to keep safe_input CC<=5 and length<=25 lines.
-        print(  # Notify operator at the terminal before degrading gracefully.
-            f"\n[EOF] Input stream closed during {context}. " f"Using default value: '{default_value}'"
-        )
-        logging.info(  # Action-log the disconnect with the substituted default.
-            "EOF encountered on input during %s - returning default: '%s'",
+        """Handle a closed input stream by degrading to ``default_value``.
+
+        Why:
+            Extracted from ``safe_input`` to keep it CC<=5 and length<=25.
+            Emits at WARNING (not INFO) so the operator sees the disconnect
+            notice on the default root-logger config -- previously we relied
+            on a raw ``print()``, which #886 Phase 2 (T20) is retiring in
+            favour of logger calls across ``src/``.
+        """
+        logging.warning(  # WARNING surfaces on the operator terminal under the default root-logger level.
+            "[EOF] Input stream closed during %s. Using default value: '%s'",
             context,
             default_value,
         )
@@ -104,8 +108,15 @@ class InputUtils:
 
     @staticmethod
     def _handle_interrupt(context: str) -> str:
-        """Handle a Ctrl+C interrupt by returning an empty sentinel."""
-        # WHY: extracted to keep safe_input CC<=5 and length<=25 lines.
-        print(f"\n[INTERRUPT] User interrupted {context}. Canceling...")  # Acknowledge cancellation.
-        logging.info("KeyboardInterrupt encountered during %s", context)  # Action-log the interrupt.
+        """Handle a Ctrl+C interrupt by returning an empty sentinel.
+
+        Why:
+            Extracted from ``safe_input`` to keep it CC<=5 and length<=25.
+            Uses WARNING so the operator sees the acknowledgement without
+            needing INFO enabled -- part of the #886 Phase 2 print-to-logger
+            migration for ``src/utils/``.
+        """
+        logging.warning(
+            "[INTERRUPT] User interrupted %s. Canceling...", context
+        )  # Surface at WARNING so operator sees it.
         return ""  # Return empty so the caller can detect the abort.
