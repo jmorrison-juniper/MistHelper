@@ -117,7 +117,8 @@ class CLIShellManager:
         if debug:  # Verbose troubleshooting output is enabled.
             print(f"[DEBUG] Raw recv: {repr(data)}")  # Show the raw received payload.
         if data and isinstance(data, str):  # We have a non-empty text frame to render.
-            return data  # Renderable text.
+            # WHY: cast narrows Any->str for mypy strict (no-any-return); runtime check above ensures str.
+            return str(data)  # Renderable text.
         return None  # Nothing to render for this frame.
 
     @staticmethod
