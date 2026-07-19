@@ -250,7 +250,9 @@ def _purge_table(db: Session, table: str, days: int) -> int:
     from sqlalchemy import text
 
     ts_col = _timestamp_column(table)
-    sql = text(f"DELETE FROM {table} " f"WHERE {ts_col} < NOW() - INTERVAL ':days days'")
+    # `table` and `ts_col` are sourced from module-local dicts (_RETENTION_DAYS,
+    # _timestamp_column mapping) — never from user input. Only `days` is bound.
+    sql = text(f"DELETE FROM {table} WHERE {ts_col} < NOW() - INTERVAL ':days days'")  # nosec B608
     result = db.execute(sql, {"days": days})
     return result.rowcount
 

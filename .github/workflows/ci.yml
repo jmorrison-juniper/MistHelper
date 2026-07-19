@@ -212,9 +212,11 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
-      - run: pip install bandit
+      - run: pip install 'bandit[toml]'
       - name: Run Bandit
-        run: bandit -r ${{ env.SRC_PATH }} -ll
+        # -c pyproject.toml picks up [tool.bandit] targets/exclude_dirs (issue #881)
+        # -ll gates on MEDIUM+ severity (LOW findings surface in logs but don't fail)
+        run: bandit -c pyproject.toml -r . -ll
 
   pip_audit:
     name: "pip-audit (CVE scan)"
