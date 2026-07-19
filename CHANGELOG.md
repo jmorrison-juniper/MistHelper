@@ -7,6 +7,34 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 6/N: retire `print()` in `src/input/` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced the 24 remaining `print()`
+  calls in `src/input/prompt_client_utils.py` with `logging.warning(...)` /
+  `logging.error(...)` / `logging.exception(...)` so the print-avoidance rule
+  (T20 selector target of #886) can eventually be enabled repo-wide. Touched
+  `select_client_mac` (empty-state notice, fetch-failure exception), the ten
+  header/table/options lines in `_render_client_selection_prompt` (moved from
+  `print()` to `logging.warning` so the interactive prompt UI still surfaces
+  on the default root-logger config where INFO is suppressed),
+  `_handle_client_selection_input` (non-digit and out-of-range validation
+  hints), `_finalize_client_choice` ("Selected: ..." confirmation),
+  `_parse_client_choice` (Exiting/valid-number/Invalid-index hints),
+  `select_client` (heading + fetch-error), `_run_client_selection_flow`
+  (no-clients notice), and `select_site_and_device_ids` (no-site / no-device
+  notices). WARNING level chosen for operator-visible summaries so they
+  surface on the default root-logger configuration (INFO is suppressed by
+  default); ERROR level for the `select_client` failure path;
+  `logging.exception` for `select_client_mac` so the fetch stack trace is
+  preserved. Existing `print(...)` + `logging.info/error/warning(...)` pairs
+  were collapsed into single log calls to avoid double-emission. Companion
+  unit tests in `tests/unit/input/test_prompt_client_utils.py` (12 tests
+  across 7 classes) were updated to assert against `caplog.text` under
+  `caplog.at_level(logging.WARNING/ERROR)` instead of
+  `capsys.readouterr().out`. Sixth of ~20+ per-subdirectory slices of #886;
+  T20 selector flip and E402 audit will land after all `src/` subdirs are
+  print-free.
+
 ### #886 Phase 2 slice 5/N: retire `print()` in `src/api/` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced the 14 remaining `print()`
