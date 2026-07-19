@@ -7,6 +7,36 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 7/N: retire `print()` in `src/ui/` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced the remaining `print()`
+  calls in `src/ui/prompt_utils.py`, `src/ui/tui.py`,
+  `src/ui/runtime/tui_runner.py`, and `src/ui/interactive_display_utils.py`
+  with `logging.warning(...)` / `logging.error(...)` / `logging.exception(...)`
+  so the print-avoidance rule (T20 selector target of #886) can eventually be
+  enabled repo-wide. Existing paired `print(...)` + `logging.info/error/warning(...)`
+  emit sites were collapsed into single log calls to avoid double-emission
+  (notably the Rich-missing fatal in `MistHelperTUI._init_rich` and the
+  TUI exit banner in `TuiRunner.run`). WARNING level chosen for operator-visible
+  interactive UI surfaces (site/device selection headers, "Loading site
+  information", "Found N clients", legend/summary lines, per-selection
+  "Site: ..." confirmations, "Invalid site index", "No devices ..." notices,
+  "site" vs "organization" fetch scope hints, "No site selected", and the TUI
+  "\[EXIT] ... closed" banner) so they surface on the default root-logger
+  configuration (INFO is suppressed by default); ERROR level retained for the
+  Rich-import fatal in `MistHelperTUI._init_rich`. Companion unit tests in
+  `tests/unit/ui/test_prompt_utils.py` (~13 tests across the site-selection,
+  device-inventory, client-fetch, sites-cache, client-summary, client-table,
+  and extract-selected-client suites) and
+  `tests/unit/ui/test_tui.py::TestInitRich::test_import_error_triggers_sys_exit`
+  were updated to assert against `caplog.text` under
+  `caplog.at_level(logging.WARNING/ERROR)` instead of `capsys.readouterr().out`;
+  the Rich-missing assertion string was updated from `"Rich library required"`
+  to `"Rich library not available"` to match the collapsed
+  `logging.error(...)` message. Seventh of ~20+ per-subdirectory slices of #886;
+  T20 selector flip and E402 audit will land after all `src/` subdirs are
+  print-free.
+
 ### #886 Phase 2 slice 6/N: retire `print()` in `src/input/` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced the 24 remaining `print()`

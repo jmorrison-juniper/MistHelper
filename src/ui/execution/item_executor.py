@@ -34,11 +34,11 @@ _PREVIEW_ITEM_REPR_CAP = 100  # WHY: char cap for per-item repr in sequence prev
 
 _MSG_NOT_CALLABLE = "Selected item is not callable"  # WHY: user-facing error stored on tui.last_error
 _MSG_SESSION_ERROR = "API session not initialized"  # WHY: user-facing error when tui.apisession is None
-_MSG_SESSION_PRINT = "[ERROR] API session not available"  # WHY: printed banner when tui.apisession is None
-_MSG_CANCEL_BANNER = "\n[CANCELLED] Execution cancelled by user"  # WHY: printed banner on KeyboardInterrupt
-_MSG_EXECUTING = "\nExecuting API call..."  # WHY: printed status line before the API call
-_MSG_SUCCESS = "\n[SUCCESS]"  # WHY: printed success banner after the API call
-_MSG_PRESS_KEY = "\nPress any key to return to explorer..."  # WHY: printed cue before wait-and-restore
+_MSG_SESSION_PRINT = "[ERROR] API session not available"  # WHY: logged banner when tui.apisession is None
+_MSG_CANCEL_BANNER = "\n[CANCELLED] Execution cancelled by user"  # WHY: logged banner on KeyboardInterrupt
+_MSG_EXECUTING = "\nExecuting API call..."  # WHY: logged status line before the API call
+_MSG_SUCCESS = "\n[SUCCESS]"  # WHY: logged success banner after the API call
+_MSG_PRESS_KEY = "\nPress any key to return to explorer..."  # WHY: logged cue before wait-and-restore
 
 _LOG_START = "TUI: prompt-exec start for %s"  # WHY: log format for pre-run breadcrumb
 _LOG_DONE = "TUI: prompt-exec done for %s"  # WHY: log format for post-run breadcrumb
@@ -116,13 +116,16 @@ class ItemExecutor:  # WHY: extracted from MistHelperTUI to own the synchronous 
 
     def _on_cancel(self, func_name: str) -> None:  # WHY: KeyboardInterrupt path
         """Print the cancel banner and log the cancelled run."""
-        print(_MSG_CANCEL_BANNER)  # WHY: user-visible banner
+        # WHY (#886 Phase 2): retire print() in favor of logging.warning so the cancel banner
+        # reaches the operator on the default root-logger config (INFO is suppressed by default).
+        logging.warning(_MSG_CANCEL_BANNER)  # User-visible banner
         logging.info(_LOG_CANCEL, func_name)  # WHY: action-log the cancellation
 
     def _on_error(self, func_name: str, error: BaseException) -> None:  # WHY: generic exception path
         """Capture the error on the TUI, print a banner, and log with traceback."""
         self._tui.last_error = str(error)  # WHY: expose to caller for render
-        print(f"\n[ERROR] {error}")  # WHY: user-visible banner
+        # WHY (#886 Phase 2): retire print() in favor of logging.exception which already emits the
+        # error string plus traceback via the shared handler chain (banner + triage in one call).
         logging.exception(_LOG_FAIL, func_name, error)  # WHY: include traceback for triage
 
     def _validated_selection(self) -> dict[str, Any] | None:  # WHY: bounds + type guard
@@ -150,8 +153,10 @@ class ItemExecutor:  # WHY: extracted from MistHelperTUI to own the synchronous 
         """Walk the signature, prompting for each param; ``None`` on hard error."""
         sig = inspect.signature(func)  # WHY: signature for introspection
         params: dict[str, Any] = {}  # WHY: accumulator for collected values
-        print(f"\n[Executing] {func_name}")  # WHY: banner before prompts
-        print(f"Signature: {func_name}{sig}\n")  # WHY: show signature for user context
+        # WHY (#886 Phase 2): retire print() in favor of logging.warning so the pre-prompt banners
+        # reach the operator on the default root-logger config (INFO is suppressed by default).
+        logging.warning("\n[Executing] %s", func_name)  # Banner before prompts
+        logging.warning("Signature: %s%s\n", func_name, sig)  # Show signature for user context
         for param_name, param in sig.parameters.items():  # WHY: walk each parameter
             if param_name == "self":  # WHY: skip implicit self
                 continue
@@ -186,7 +191,9 @@ class ItemExecutor:  # WHY: extracted from MistHelperTUI to own the synchronous 
         if not env_value:  # WHY: no env value - defer to prompt
             return None
         params[param_name] = env_value  # WHY: store env value on accumulator
-        print(f"  {param_name}: [from .env] {env_value}")  # WHY: show autofill provenance to user
+        # WHY (#886 Phase 2): retire print() in favor of logging.warning so the autofill provenance
+        # reaches the operator on the default root-logger config (INFO is suppressed by default).
+        logging.warning("  %s: [from .env] %s", param_name, env_value)  # Show autofill provenance to user
         return _OUTCOME_OK
 
     def _prompt_outcome(
@@ -196,7 +203,9 @@ class ItemExecutor:  # WHY: extracted from MistHelperTUI to own the synchronous 
         has_default = param.default != inspect.Parameter.empty  # WHY: required-vs-optional flag
         value = self._prompt_for_value(param_name, param.default, has_default)  # WHY: EOF-safe stdin read
         if not value and not has_default:  # WHY: required-but-empty - hard error
-            print(f"[ERROR] {param_name} is required")  # WHY: user-visible error banner
+            # WHY (#886 Phase 2): retire print() in favor of logging.error so the required-param
+            # banner reaches the operator on the default root-logger config.
+            logging.error("[ERROR] %s is required", param_name)  # User-visible error banner
             self._tui.last_error = f"Missing required parameter: {param_name}"  # WHY: expose to caller for render
             return _OUTCOME_ABORT
         if value:  # WHY: store user-provided value only when supplied
@@ -209,7 +218,9 @@ class ItemExecutor:  # WHY: extracted from MistHelperTUI to own the synchronous 
             return False
         tui = self._tui  # WHY: local alias
         if getattr(tui, "apisession", None) is None:  # WHY: guard - no session available
-            print(_MSG_SESSION_PRINT)  # WHY: user-visible banner
+            # WHY (#886 Phase 2): retire print() in favor of logging.error so the missing-session
+            # banner reaches the operator on the default root-logger config.
+            logging.error(_MSG_SESSION_PRINT)  # User-visible banner
             tui.last_error = _MSG_SESSION_ERROR  # WHY: expose to caller for render
             return False
         params[param_name] = tui.apisession  # WHY: inject the session reference
@@ -230,11 +241,13 @@ class ItemExecutor:  # WHY: extracted from MistHelperTUI to own the synchronous 
         tui = self._tui  # WHY: local alias
         redacted = {k: _redact(k, v) for k, v in params.items()}  # WHY: redact secrets before logging
         logging.info(_LOG_CALL, func_name, redacted)  # WHY: log the redacted call site
-        print(_MSG_EXECUTING)  # WHY: status line for user
+        # WHY (#886 Phase 2): retire print() in favor of logging.warning so the executing/success/
+        # preview banners reach the operator on the default root-logger config.
+        logging.warning(_MSG_EXECUTING)  # Status line for user
         result = func(**params)  # WHY: the actual API call
         tui.last_result = result  # WHY: stash for caller / details panel
-        print(_MSG_SUCCESS)  # WHY: success banner
-        print(f"\n{_ResultPreview.build(result)}")  # WHY: smart preview (no full repr)
+        logging.warning(_MSG_SUCCESS)  # Success banner
+        logging.warning("\n%s", _ResultPreview.build(result))  # Smart preview (no full repr)
         self._maybe_print_export_hint(result)  # WHY: hint when result is large enough
         logging.info(_LOG_SUCCESS, func_name)  # WHY: action-log after success
 
@@ -245,15 +258,19 @@ class ItemExecutor:  # WHY: extracted from MistHelperTUI to own the synchronous 
             return
         if len(result) <= _LARGE_RESULT_HINT_THRESHOLD:  # WHY: only large enough to warrant the tip
             return
-        print(  # WHY: user-visible tip banner
-            f"\n[TIP] Result has {len(result)} items. Consider using main menu options "
-            "to save full data to CSV/SQLite."
+        # WHY (#886 Phase 2): retire print() in favor of logging.warning so the export tip reaches
+        # the operator on the default root-logger config (INFO is suppressed by default).
+        logging.warning(  # User-visible tip banner
+            "\n[TIP] Result has %d items. Consider using main menu options " "to save full data to CSV/SQLite.",
+            len(result),
         )
 
     def _wait_and_restore_raw(self) -> None:  # WHY: wait-for-key + restore raw mode
         """Block on a single keypress, then restore Unix raw mode for the TUI."""
         tui = self._tui  # WHY: local alias
-        print(_MSG_PRESS_KEY)  # WHY: user cue
+        # WHY (#886 Phase 2): retire print() in favor of logging.warning so the press-key cue
+        # reaches the operator on the default root-logger config.
+        logging.warning(_MSG_PRESS_KEY)  # User cue
         self._read_single_keypress(tui)  # WHY: platform-specific single-char read
         if not tui.IS_WINDOWS:  # WHY: restore raw mode for the TUI on Unix
             tui.tty.setcbreak(sys.stdin.fileno())

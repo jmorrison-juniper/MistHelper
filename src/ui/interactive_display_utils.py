@@ -30,7 +30,9 @@ class InteractiveDisplayUtils:
         """Prompt the user to select a site and display its device inventory."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of PromptUtils + SiteDeviceExporter.
         logging.info("Prompting user to select a site for device inventory view...")  # Log the prompt.
-        print("Select a Site to View Device Inventory:")  # Header.
+        # WHY (#886 Phase 2): retire print() in favor of logging.warning so operator sees the
+        # header on the default root-logger config (INFO is suppressed by default).
+        logging.warning("Select a Site to View Device Inventory:")  # Header.
         site_id = mh.PromptUtils.select_site_id_from_csv()  # Select a site.
         if site_id:  # Site selected.
             logging.info("User selected site_id: %s for inventory display.", site_id)  # Log the selection.

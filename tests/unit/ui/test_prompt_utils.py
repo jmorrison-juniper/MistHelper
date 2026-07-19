@@ -12,6 +12,8 @@ Why:
 
 from __future__ import annotations
 
+# WHY (#886 Phase 2): PromptUtils now emits via logging.warning instead of print, so tests capture via caplog.
+import logging
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -76,8 +78,8 @@ def test_filter_inventory_by_type_missing_type_key() -> None:
 # ---------- _fetch_and_filter_devices ----------
 
 
-def test_fetch_and_filter_devices_empty_rawdata(capsys: pytest.CaptureFixture[str]) -> None:
-    """Empty API response prints + logs and returns None."""
+def test_fetch_and_filter_devices_empty_rawdata(caplog: pytest.LogCaptureFixture) -> None:
+    """Empty API response logs a warning and returns None."""
     fake_mh = _make_mh()
     fake_response = SimpleNamespace(data=[])
     with (
@@ -86,14 +88,15 @@ def test_fetch_and_filter_devices_empty_rawdata(capsys: pytest.CaptureFixture[st
             return_value=fake_response,
         ),
         patch("src.ui.prompt_utils.importlib.import_module", return_value=fake_mh),
+        caplog.at_level(logging.WARNING),
     ):
         result = PromptUtils._fetch_and_filter_devices("site-1", "all")
     assert result is None
-    assert "No devices found" in capsys.readouterr().out
+    assert "No devices found" in caplog.text
 
 
-def test_fetch_and_filter_devices_empty_after_filter(capsys: pytest.CaptureFixture[str]) -> None:
-    """Empty post-filter set prints + logs and returns None."""
+def test_fetch_and_filter_devices_empty_after_filter(caplog: pytest.LogCaptureFixture) -> None:
+    """Empty post-filter set logs a warning and returns None."""
     fake_mh = _make_mh()
     fake_response = SimpleNamespace(data=[{"type": "ap"}])
     with (
@@ -102,10 +105,11 @@ def test_fetch_and_filter_devices_empty_after_filter(capsys: pytest.CaptureFixtu
             return_value=fake_response,
         ),
         patch("src.ui.prompt_utils.importlib.import_module", return_value=fake_mh),
+        caplog.at_level(logging.WARNING),
     ):
         result = PromptUtils._fetch_and_filter_devices("site-1", "gateway")
     assert result is None
-    assert "No devices of type 'gateway'" in capsys.readouterr().out
+    assert "No devices of type 'gateway'" in caplog.text
 
 
 def test_fetch_and_filter_devices_happy_path() -> None:
@@ -187,7 +191,7 @@ def test_select_device_id_from_inventory_nothing_matched_aborts() -> None:
         assert PromptUtils.select_device_id_from_inventory("site-1") is None
 
 
-def test_select_device_id_from_inventory_happy_path(capsys: pytest.CaptureFixture[str]) -> None:
+def test_select_device_id_from_inventory_happy_path(caplog: pytest.LogCaptureFixture) -> None:
     """End-to-end: fetch, export, prompt, resolve returns device id."""
     fake_table = MagicMock(name="table")
     with (
@@ -199,10 +203,11 @@ def test_select_device_id_from_inventory_happy_path(capsys: pytest.CaptureFixtur
         ),
         patch("src.ui.prompt_utils.InputUtils.safe_input", return_value="0  "),
         patch.object(PromptUtils, "_resolve_device_selection", return_value="d1"),
+        caplog.at_level(logging.WARNING),
     ):
         assert PromptUtils.select_device_id_from_inventory("site-1") == "d1"
-    # Ensures ``print(table)`` executed the render path.
-    assert capsys.readouterr().out  # Non-empty stdout captured.
+    # Ensures the table render path emitted at least one log record.
+    assert caplog.records  # Non-empty log captured.
 
 
 # ---------- _load_site_csv_maps ----------
@@ -232,30 +237,33 @@ def test_load_site_csv_maps_skips_rows_without_name(tmp_path) -> None:
 # ---------- _pick_site_by_index / _pick_site_by_name ----------
 
 
-def test_pick_site_by_index_invalid(capsys: pytest.CaptureFixture[str]) -> None:
-    """Out-of-range index prints ``Invalid index`` and returns None."""
-    assert PromptUtils._pick_site_by_index(9, {0: {"id": "x"}}) is None
-    assert "Invalid index" in capsys.readouterr().out
+def test_pick_site_by_index_invalid(caplog: pytest.LogCaptureFixture) -> None:
+    """Out-of-range index logs ``Invalid index`` and returns None."""
+    with caplog.at_level(logging.WARNING):
+        assert PromptUtils._pick_site_by_index(9, {0: {"id": "x"}}) is None
+    assert "Invalid site index" in caplog.text
 
 
-def test_pick_site_by_index_valid(capsys: pytest.CaptureFixture[str]) -> None:
+def test_pick_site_by_index_valid(caplog: pytest.LogCaptureFixture) -> None:
     """Valid index returns the site id."""
-    result = PromptUtils._pick_site_by_index(0, {0: {"id": "id-1", "name": "Alpha"}})
+    with caplog.at_level(logging.WARNING):
+        result = PromptUtils._pick_site_by_index(0, {0: {"id": "id-1", "name": "Alpha"}})
     assert result == "id-1"
-    assert "Selected site: Alpha" in capsys.readouterr().out
+    assert "Selected site: Alpha" in caplog.text
 
 
-def test_pick_site_by_name(capsys: pytest.CaptureFixture[str]) -> None:
-    """Name lookup returns site id and prints confirmation."""
-    result = PromptUtils._pick_site_by_name("Alpha", {"Alpha": {"id": "id-1"}})
+def test_pick_site_by_name(caplog: pytest.LogCaptureFixture) -> None:
+    """Name lookup returns site id and logs confirmation."""
+    with caplog.at_level(logging.WARNING):
+        result = PromptUtils._pick_site_by_name("Alpha", {"Alpha": {"id": "id-1"}})
     assert result == "id-1"
-    assert "Selected site: Alpha" in capsys.readouterr().out
+    assert "Selected site: Alpha" in caplog.text
 
 
 # ---------- select_site_id_from_csv ----------
 
 
-def test_select_site_id_from_csv_by_index(capsys: pytest.CaptureFixture[str]) -> None:
+def test_select_site_id_from_csv_by_index(caplog: pytest.LogCaptureFixture) -> None:
     """Digit input picks site by index and caches to ``mh.LAST_SELECTED_SITE_ID``."""
     fake_mh = _make_mh()
     with (
@@ -267,11 +275,12 @@ def test_select_site_id_from_csv_by_index(capsys: pytest.CaptureFixture[str]) ->
         ),
         patch("src.ui.prompt_utils.InputUtils.safe_input", return_value="0"),
         patch("src.ui.prompt_utils.importlib.import_module", return_value=fake_mh),
+        caplog.at_level(logging.WARNING),
     ):
         result = PromptUtils.select_site_id_from_csv()
     assert result == "s0"
     assert fake_mh.LAST_SELECTED_SITE_ID == "s0"
-    assert "Available Sites" in capsys.readouterr().out
+    assert "Available Sites" in caplog.text
 
 
 def test_select_site_id_from_csv_index_invalid_keeps_last_selected_unset() -> None:
@@ -310,8 +319,8 @@ def test_select_site_id_from_csv_by_name() -> None:
     assert fake_mh.LAST_SELECTED_SITE_ID == "s0"
 
 
-def test_select_site_id_from_csv_not_found(capsys: pytest.CaptureFixture[str]) -> None:
-    """Unmatched input prints ``Site not found`` and returns None."""
+def test_select_site_id_from_csv_not_found(caplog: pytest.LogCaptureFixture) -> None:
+    """Unmatched input logs ``Site not found`` and returns None."""
     fake_mh = _make_mh()
     with (
         patch("src.ui.prompt_utils.CacheUtils.check_and_generate_csv"),
@@ -322,10 +331,11 @@ def test_select_site_id_from_csv_not_found(capsys: pytest.CaptureFixture[str]) -
         ),
         patch("src.ui.prompt_utils.InputUtils.safe_input", return_value="Zed"),
         patch("src.ui.prompt_utils.importlib.import_module", return_value=fake_mh),
+        caplog.at_level(logging.WARNING),
     ):
         result = PromptUtils.select_site_id_from_csv()
     assert result is None
-    assert "Site not found" in capsys.readouterr().out
+    assert "Site not found" in caplog.text
 
 
 # ---------- select_site / select_site_with_logging ----------
@@ -371,14 +381,15 @@ def test_determine_search_scope_site_selected() -> None:
         assert PromptUtils._determine_search_scope(None) == "site-pick"
 
 
-def test_determine_search_scope_site_cancelled(capsys: pytest.CaptureFixture[str]) -> None:
+def test_determine_search_scope_site_cancelled(caplog: pytest.LogCaptureFixture) -> None:
     """``'s'`` scope with cancelled site pick returns False."""
     with (
         patch("src.ui.prompt_utils.InputUtils.safe_input", return_value="s"),
         patch.object(PromptUtils, "select_site", return_value=None),
+        caplog.at_level(logging.WARNING),
     ):
         assert PromptUtils._determine_search_scope(None) is False
-    assert "No site selected" in capsys.readouterr().out
+    assert "No site selected" in caplog.text
 
 
 def test_determine_search_scope_org_wide() -> None:
@@ -535,7 +546,7 @@ def test_fetch_org_wired_clients_exception_returns_empty() -> None:
 # ---------- _fetch_all_clients ----------
 
 
-def test_fetch_all_clients_site_branch(capsys: pytest.CaptureFixture[str]) -> None:
+def test_fetch_all_clients_site_branch(caplog: pytest.LogCaptureFixture) -> None:
     """Site branch calls site-scoped fetchers and returns sorted combined list."""
     with (
         patch.object(
@@ -548,35 +559,41 @@ def test_fetch_all_clients_site_branch(capsys: pytest.CaptureFixture[str]) -> No
             "_fetch_site_wired_clients",
             return_value=[{"hostname": "a", "mac": "1"}],
         ),
+        caplog.at_level(logging.WARNING),
     ):
         result = PromptUtils._fetch_all_clients("org-1", "site-1")
     assert [c["hostname"] for c in result] == ["a", "b"]
-    assert "site" in capsys.readouterr().out
+    assert "site" in caplog.text
 
 
-def test_fetch_all_clients_org_branch(capsys: pytest.CaptureFixture[str]) -> None:
+def test_fetch_all_clients_org_branch(caplog: pytest.LogCaptureFixture) -> None:
     """Org branch calls org-scoped fetchers when ``site_id`` is None."""
     with (
         patch.object(PromptUtils, "_fetch_org_wireless_clients", return_value=[{"hostname": "x"}]),
         patch.object(PromptUtils, "_fetch_org_wired_clients", return_value=[{"hostname": "y"}]),
+        caplog.at_level(logging.WARNING),
     ):
         result = PromptUtils._fetch_all_clients("org-1", None)
     assert len(result) == 2
-    assert "organization" in capsys.readouterr().out
+    assert "organization" in caplog.text
 
 
 # ---------- _load_sites_cache ----------
 
 
-def test_load_sites_cache_success(capsys: pytest.CaptureFixture[str]) -> None:
+def test_load_sites_cache_success(caplog: pytest.LogCaptureFixture) -> None:
     """Builds id-to-name mapping from ``all_sites_with_limit`` result."""
-    with patch(
-        "src.ui.prompt_utils.APICoreFetchUtils.all_sites_with_limit",
-        return_value=[{"id": "a", "name": "Alpha"}, {"id": "b", "name": "Beta"}],
+    # WHY (#886 Phase 2): PromptUtils now emits via logging.warning instead of print, so tests capture via caplog.
+    with (
+        patch(
+            "src.ui.prompt_utils.APICoreFetchUtils.all_sites_with_limit",
+            return_value=[{"id": "a", "name": "Alpha"}, {"id": "b", "name": "Beta"}],
+        ),
+        caplog.at_level(logging.WARNING),
     ):
         cache = PromptUtils._load_sites_cache("org-1")
     assert cache == {"a": "Alpha", "b": "Beta"}
-    assert "Loading site information" in capsys.readouterr().out
+    assert "Loading site information" in caplog.text
 
 
 def test_load_sites_cache_exception_returns_empty() -> None:
@@ -591,12 +608,14 @@ def test_load_sites_cache_exception_returns_empty() -> None:
 # ---------- _print_client_type_summary ----------
 
 
-def test_print_client_type_summary(capsys: pytest.CaptureFixture[str]) -> None:
+def test_print_client_type_summary(caplog: pytest.LogCaptureFixture) -> None:
     """Prints wireless/wired counts and legend."""
-    PromptUtils._print_client_type_summary(
-        [{"client_type": "wireless"}, {"client_type": "wired"}, {"client_type": "wired"}]
-    )
-    out = capsys.readouterr().out
+    # WHY (#886 Phase 2): PromptUtils now emits via logging.warning instead of print, so tests capture via caplog.
+    with caplog.at_level(logging.WARNING):
+        PromptUtils._print_client_type_summary(
+            [{"client_type": "wireless"}, {"client_type": "wired"}, {"client_type": "wired"}]
+        )
+    out = caplog.text
     assert "1 wireless" in out
     assert "2 wired" in out
     assert "[+]" in out and "[~]" in out and "[-]" in out
@@ -652,15 +671,17 @@ def test_format_client_row_composes_all_cells() -> None:
 # ---------- _display_client_table ----------
 
 
-def test_display_client_table_returns_index_map(capsys: pytest.CaptureFixture[str]) -> None:
+def test_display_client_table_returns_index_map(caplog: pytest.LogCaptureFixture) -> None:
     """Returns a 0-based ``dict`` mapping index to client."""
+    # WHY (#886 Phase 2): PromptUtils now emits via logging.warning instead of print, so tests capture via caplog.
     clients = [
         {"client_type": "wireless", "hostname": "a", "mac": "1", "connected": True},
         {"client_type": "wired", "hostname": "b", "mac": "2", "connected": True},
     ]
-    result = PromptUtils._display_client_table(clients, {})
+    with caplog.at_level(logging.WARNING):
+        result = PromptUtils._display_client_table(clients, {})
     assert result == {0: clients[0], 1: clients[1]}
-    assert "Found 2 clients" in capsys.readouterr().out
+    assert "Found 2 clients" in caplog.text
 
 
 # ---------- _get_client_site_name ----------
@@ -817,23 +838,27 @@ def test_handle_client_selection_valid_index() -> None:
 
 
 def test_extract_selected_client_site_in_cache_prints_site(
-    capsys: pytest.CaptureFixture[str],
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Known site prints resolved site name."""
+    # WHY (#886 Phase 2): PromptUtils now emits via logging.warning instead of print, so tests capture via caplog.
     client = {"mac": "aa", "client_type": "wireless", "site_id": "s-1", "hostname": "h"}
-    result = PromptUtils._extract_selected_client(client, {"s-1": "Alpha"}, None)
+    with caplog.at_level(logging.WARNING):
+        result = PromptUtils._extract_selected_client(client, {"s-1": "Alpha"}, None)
     assert result == ("aa", "wireless", "s-1")
-    assert "Site: Alpha" in capsys.readouterr().out
+    assert "Site: Alpha" in caplog.text
 
 
 def test_extract_selected_client_site_not_in_cache_skips_site_line(
-    capsys: pytest.CaptureFixture[str],
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Unknown site skips the ``Site:`` line but still returns the id."""
+    # WHY (#886 Phase 2): PromptUtils now emits via logging.warning instead of print, so tests capture via caplog.
     client = {"mac": "bb", "client_type": "wired", "site_id": "unknown", "name": "n"}
-    result = PromptUtils._extract_selected_client(client, {}, None)
+    with caplog.at_level(logging.WARNING):
+        result = PromptUtils._extract_selected_client(client, {}, None)
     assert result == ("bb", "wired", "unknown")
-    assert "Site:" not in capsys.readouterr().out
+    assert "Site:" not in caplog.text
 
 
 def test_extract_selected_client_defaults_to_default_site_id() -> None:
