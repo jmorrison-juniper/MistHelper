@@ -594,6 +594,25 @@ class OrgExportUtils:
         )
 
     @staticmethod
+    def jsi_assets():  # Export JSI Assets and Contracts.
+        """Export JSI assets & contract search results to OrgJsiAssets.csv.
+
+        Why:
+            Spec 865 / issue #1373 registers the ``searchOrgJsiAssetsAndContracts``
+            endpoint so operators can pull the JSI inventory (assets plus their
+            contract coverage) alongside the existing ``jsi_pbn`` / ``jsi_sirt``
+            reports.  Delegating to :meth:`export_data` keeps this consistent with
+            the sibling JSI exports (prompt for org, paginate, multi-backend write)
+            and lets the pre-registered primary-key strategy for
+            ``searchOrgJsiAssetsAndContracts`` drive downstream dedup / SQL loads.
+        """
+        OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
+            api_call=mistapi.api.v1.orgs.jsi.searchOrgJsiAssetsAndContracts,
+            data_type="jsi assets",  # Drives the export filename -> OrgJsiAssets.csv.
+            sort_key="serial",  # Matches the PK strategy index on `serial` for stable ordering.
+        )
+
+    @staticmethod
     def ospf_stats():  # Export OSPF stats.
         """Export OSPF adjacency statistics for the organization to OrgOspfStats.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]

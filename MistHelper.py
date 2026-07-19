@@ -4474,6 +4474,9 @@ menu_actions: "dict[str, tuple[Callable[..., Any], str]]" = {
     "5": (OrgExportUtils.e911_report, "Export E911 report for the organization"),
     "56": (OrgExportUtils.jsi_pbn, "Export JSI PBN (Product Bulletin Notifications) data"),
     "57": (OrgExportUtils.jsi_sirt, "Export JSI SIRT (Security Incident Response) advisories"),
+    # Spec 865 / issue #1373 -- surfaces mistapi.api.v1.orgs.jsi.searchOrgJsiAssetsAndContracts
+    # alongside the existing PBN/SIRT reports so operators can pull JSI inventory + contracts.
+    "204": (OrgExportUtils.jsi_assets, "Export JSI assets and contract search results"),
     "55": (OrgExportUtils.ospf_stats, "Export OSPF adjacency statistics for the organization"),
     "70": (
         lambda: SiteExportUtils(
