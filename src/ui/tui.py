@@ -72,8 +72,11 @@ class MistHelperTUI:  # WHY: public TUI entrypoint composing all collaborators
             from rich.syntax import Syntax  # Code syntax highlighter
             from rich.table import Table  # Table primitive for grids
         except ImportError:  # Rich missing -> fatal in TUI mode
-            logging.error("TUI_MODE: Rich library not available - cannot start TUI mode")  # Diagnose fatal
-            print("[ERROR] Rich library required for TUI mode. Install with: pip install rich")  # User hint
+            # WHY (#886 Phase 2): collapse paired logger+print into a single logging.error so the
+            # install hint reaches the operator via the same handler chain as the diagnostic line.
+            logging.error(
+                "TUI_MODE: Rich library not available - cannot start TUI mode. " "Install with: pip install rich"
+            )  # Diagnose fatal + surface install hint
             sys.exit(1)  # Cannot render without Rich
         self.Console = Console  # Public attrs reused by collaborators
         self.Live = Live  # Cached class for TuiRunner

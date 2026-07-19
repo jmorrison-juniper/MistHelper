@@ -13,6 +13,7 @@ free of real Rich work while still exercising the wiring code paths.
 from __future__ import annotations
 
 import builtins
+import logging  # WHY (#886 Phase 2): capture Rich-missing error via caplog since tui.py now uses logging.error.
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -105,8 +106,9 @@ class TestInitRich:
             assert hasattr(tui, name)
         assert tui.console is not None  # Console instance created
 
-    def test_import_error_triggers_sys_exit(self, capsys):
+    def test_import_error_triggers_sys_exit(self, caplog: pytest.LogCaptureFixture) -> None:
         """Missing Rich library aborts the process with sys.exit(1)."""
+        # WHY (#886 Phase 2): tui.py now emits the diagnostic via logging.error, so assert via caplog.
         import sys as _sys
 
         from src.ui import tui as tui_module
@@ -123,12 +125,13 @@ class TestInitRich:
             patch.object(tui_module.platform, "system", return_value="Linux"),
             patch.dict(_sys.modules, _fake_unix_modules()),
             patch.object(builtins, "__import__", side_effect=blocked_import),
+            caplog.at_level(logging.ERROR),
             pytest.raises(SystemExit) as exc_info,
         ):
             tui_module.MistHelperTUI()
 
         assert exc_info.value.code == 1
-        assert "Rich library required" in capsys.readouterr().out
+        assert "Rich library not available" in caplog.text
 
 
 # ---------------------------------------------------------------------------

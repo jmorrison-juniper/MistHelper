@@ -36,7 +36,9 @@ class TuiRunner:  # WHY: extracted from MistHelperTUI.run (was CC=33)
         finally:
             self._teardown_terminal()  # Restore terminal even on error
             logging.info("TUI: Explorer exited cleanly")  # Action log after teardown
-            print("\n[EXIT] MistHelper TUI - Hierarchical API Explorer closed")  # WHY: user-visible exit banner
+            # WHY (#886 Phase 2): retire print() in favor of logging.warning so the exit banner
+            # reaches the operator on the default root-logger config (INFO is suppressed by default).
+            logging.warning("\n[EXIT] MistHelper TUI - Hierarchical API Explorer closed")  # User-visible exit banner
 
     def _setup_terminal(self) -> None:  # WHY: enter cbreak so keys read w/o Enter
         """Put the Unix terminal into raw (cbreak) mode for keypress capture."""
