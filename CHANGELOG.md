@@ -7,6 +7,20 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Menu 204: Search Org JSI Assets and Contracts (spec 865 / issue #1373)
+
+- **New menu 204 (Added)**: `OrgExportUtils.jsi_assets()` wraps the previously
+  unreachable Mist API `searchOrgJsiAssetsAndContracts` operation
+  (`GET /api/v1/orgs/{org_id}/jsi/inventory/search`). Delegates to the shared
+  `OrgExportUtils.export_data` scaffold used by sibling `jsi_pbn` / `jsi_sirt`
+  entrypoints: prompts for org (via `ConfigUtils.get_cached_or_prompted_org_id`),
+  pages all rows through `APIDataFetcher` / `mistapi.get_all`, and persists via
+  `DataExporter.write_with_format_selection` so CSV / SQLite / ArangoDB backends
+  all work uniformly. `ENDPOINT_PRIMARY_KEY_STRATEGIES` already registered the
+  endpoint as `auto_increment_with_unique` with indexes on `org_id` and `serial`
+  -- no schema changes required. Sort order stabilised on `serial` to match the
+  PK index. Fulfills spec 865.
+
 ### Menu 203: Search Site WAN Client Events (spec 899 / issue #1407)
 
 - **New menu 203 (Added)**: `WanClientEventsExporter` (delegated from
