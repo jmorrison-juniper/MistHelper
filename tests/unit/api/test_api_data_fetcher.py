@@ -223,19 +223,19 @@ class TestLogRetryAttempt:
         self,
         fake_mh: _FakeMH,
         caplog: pytest.LogCaptureFixture,
-        capsys: pytest.CaptureFixture[str],
     ) -> None:
-        """Method must warn, print, and sleep for the exact backoff window.
+        """Method must warn and sleep for the exact backoff window.
 
         Why:
-            All three side-effects are user-visible (log stream, stdout, real
-            wall-clock time) so any regression there hides retry timing bugs.
+            Both side-effects are user-visible (log stream, real wall-clock
+            time) so any regression there hides retry timing bugs. Per #886
+            Phase 2 the duplicate print() was retired; the WARNING log now
+            carries the "retrying in" notice.
         """
         with caplog.at_level(logging.WARNING):
             APIDataFetcher._log_retry_attempt("listOrgSites", attempt=0, delay=2.0)
         assert "listOrgSites" in caplog.text
-        out = capsys.readouterr().out
-        assert "retrying in 2s" in out or "retrying in 2s" in out
+        assert "retrying in 2s" in caplog.text
 
 
 # ---------------------------------------------------------------------------
@@ -453,63 +453,78 @@ class TestSaveHelpers:
         self,
         fake_mh: _FakeMH,
         api_call: MagicMock,
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
-        """Recovered data must flow through ``DataExporter.write_with_format_selection``."""
+        """Recovered data must flow through ``DataExporter.write_with_format_selection``.
+
+        Why:
+            Per #886 Phase 2, the recovery notices moved from print() to
+            ``logging.warning``; the assertion reads ``caplog.text`` so the
+            operator-visible surface is still verified.
+        """
         fetcher = _make_fetcher(api_call)
         fetcher.rawdata = [{"id": 1}]
-        fetcher._save_recovered_data()
+        with caplog.at_level(logging.WARNING):
+            fetcher._save_recovered_data()
         fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(
             [{"id": 1}], "sites.csv", api_function_name="listOrgSites"
         )
-        assert "Recovered 1" in capsys.readouterr().out
+        assert "Recovered 1" in caplog.text
 
     def test_handle_no_recovery_prints_and_logs(
         self,
         fake_mh: _FakeMH,
         api_call: MagicMock,
-        capsys: pytest.CaptureFixture[str],
         caplog: pytest.LogCaptureFixture,
     ) -> None:
         """No-recovery branch must inform both user and logs.
 
         Why:
-            Users need CLI feedback that no rows survived; ops need a log
-            entry so post-mortems can find the run.
+            Ops need a log entry so post-mortems can find the run. Per #886
+            Phase 2 the redundant print() was retired; both the user-facing
+            notice and the ERROR log now flow through ``caplog``.
         """
         fetcher = _make_fetcher(api_call)
         with caplog.at_level(logging.ERROR):
             fetcher._handle_no_recovery()
-        assert "No data could be recovered" in capsys.readouterr().out
+        assert "No data could be recovered" in caplog.text
         assert "Unable to recover" in caplog.text
 
     def test_save_partial_data_on_error_success(
-        self, fake_mh: _FakeMH, api_call: MagicMock, capsys: pytest.CaptureFixture[str]
+        self, fake_mh: _FakeMH, api_call: MagicMock, caplog: pytest.LogCaptureFixture
     ) -> None:
-        """Happy path must write partial rows and print the summary block."""
+        """Happy path must write partial rows and emit the summary block.
+
+        Why:
+            Per #886 Phase 2 the summary block moved to WARNING logs so a
+            single stream carries the notice; ``caplog`` replaces the retired
+            capsys assertion.
+        """
         fetcher = _make_fetcher(api_call)
         fetcher.rawdata = [{"id": 1}]
-        fetcher._save_partial_data_on_error(RuntimeError("boom"))
+        with caplog.at_level(logging.WARNING):
+            fetcher._save_partial_data_on_error(RuntimeError("boom"))
         fake_mh.DataExporter.write_with_format_selection.assert_called_once()
-        out = capsys.readouterr().out
-        assert "PARTIAL DATA SAVED" in out
-        assert "boom" in out
+        assert "PARTIAL DATA SAVED" in caplog.text
+        assert "boom" in caplog.text
 
     def test_save_partial_data_on_error_write_failure(
-        self, fake_mh: _FakeMH, api_call: MagicMock, capsys: pytest.CaptureFixture[str]
+        self, fake_mh: _FakeMH, api_call: MagicMock, caplog: pytest.LogCaptureFixture
     ) -> None:
         """DataExporter failures inside the save must be caught and reported.
 
         Why:
             The outer error handler already re-raises the original exception;
             swallowing the save error is intentional so we don't mask the
-            root cause with a secondary failure.
+            root cause with a secondary failure. Per #886 Phase 2 the notice
+            now flows through ``logging.error``.
         """
         fake_mh.DataExporter.write_with_format_selection.side_effect = OSError("disk full")
         fetcher = _make_fetcher(api_call)
         fetcher.rawdata = [{"id": 1}]
-        fetcher._save_partial_data_on_error(RuntimeError("boom"))
-        assert "Could not save partial data" in capsys.readouterr().out
+        with caplog.at_level(logging.ERROR):
+            fetcher._save_partial_data_on_error(RuntimeError("boom"))
+        assert "Could not save partial data" in caplog.text
 
 
 # ---------------------------------------------------------------------------
@@ -537,14 +552,20 @@ class TestRateLimitHelpers:
         assert fetcher._is_rate_limit_error(e2) is False
 
     def test_handle_rate_limit_saves_partial_when_data_present(
-        self, fake_mh: _FakeMH, api_call: MagicMock, capsys: pytest.CaptureFixture[str]
+        self, fake_mh: _FakeMH, api_call: MagicMock, caplog: pytest.LogCaptureFixture
     ) -> None:
-        """Partial rows must be flushed to disk on 429."""
+        """Partial rows must be flushed to disk on 429.
+
+        Why:
+            Per #886 Phase 2 the "Partial data saved" notice moved to
+            ``logging.warning``; ``caplog`` replaces the retired capsys check.
+        """
         fetcher = _make_fetcher(api_call)
         fetcher.rawdata = [{"id": 1}, {"id": 2}]
-        fetcher._handle_rate_limit()
+        with caplog.at_level(logging.WARNING):
+            fetcher._handle_rate_limit()
         fake_mh.DataExporter.write_with_format_selection.assert_called_once()
-        assert "Partial data saved: 2 records" in capsys.readouterr().out
+        assert "Partial data saved: 2 records" in caplog.text
 
     def test_handle_rate_limit_skips_save_when_no_data(self, fake_mh: _FakeMH, api_call: MagicMock) -> None:
         """Empty raw data on 429 must not invoke DataExporter."""
@@ -554,15 +575,20 @@ class TestRateLimitHelpers:
         fake_mh.DataExporter.write_with_format_selection.assert_not_called()
 
     def test_emergency_save_and_raise_saves_and_reraises(
-        self, fake_mh: _FakeMH, api_call: MagicMock, capsys: pytest.CaptureFixture[str]
+        self, fake_mh: _FakeMH, api_call: MagicMock, caplog: pytest.LogCaptureFixture
     ) -> None:
-        """Emergency path must persist partial rows before re-raising."""
+        """Emergency path must persist partial rows before re-raising.
+
+        Why:
+            Per #886 Phase 2 the "Emergency save" notice moved to
+            ``logging.warning``; ``caplog`` replaces the retired capsys check.
+        """
         fetcher = _make_fetcher(api_call)
         fetcher.rawdata = [{"id": 1}]
-        with pytest.raises(RuntimeError, match="kaboom"):
+        with caplog.at_level(logging.WARNING), pytest.raises(RuntimeError, match="kaboom"):
             fetcher._emergency_save_and_raise(RuntimeError("kaboom"))
         fake_mh.DataExporter.write_with_format_selection.assert_called_once()
-        assert "Emergency save: 1 partial" in capsys.readouterr().out
+        assert "Emergency save: 1 partial" in caplog.text
 
     def test_emergency_save_swallows_secondary_save_error(
         self, fake_mh: _FakeMH, api_call: MagicMock, caplog: pytest.LogCaptureFixture
@@ -626,18 +652,24 @@ class TestHandleKeyError:
         fake_mh.DataExporter.write_with_format_selection.assert_called_once()
 
     def test_reports_when_recovery_fails(
-        self, fake_mh: _FakeMH, api_call: MagicMock, capsys: pytest.CaptureFixture[str]
+        self, fake_mh: _FakeMH, api_call: MagicMock, caplog: pytest.LogCaptureFixture
     ) -> None:
-        """Unrecoverable payload must fall through to the no-recovery path."""
+        """Unrecoverable payload must fall through to the no-recovery path.
+
+        Why:
+            Per #886 Phase 2 the no-recovery notice moved to
+            ``logging.error``; ``caplog`` replaces the retired capsys check.
+        """
 
         class NoData:
             pass
 
         fetcher = _make_fetcher(api_call)
-        fetcher._handle_key_error(NoData(), KeyError("results"))
+        with caplog.at_level(logging.ERROR):
+            fetcher._handle_key_error(NoData(), KeyError("results"))
         assert fetcher.rawdata == []
         fake_mh.DataExporter.write_with_format_selection.assert_not_called()
-        assert "No data could be recovered" in capsys.readouterr().out
+        assert "No data could be recovered" in caplog.text
 
 
 # ---------------------------------------------------------------------------
@@ -656,12 +688,18 @@ class TestHandleOuterException:
         fake_mh.DataExporter.write_with_format_selection.assert_called_once()
 
     def test_reports_no_data_when_rawdata_empty(
-        self, fake_mh: _FakeMH, api_call: MagicMock, capsys: pytest.CaptureFixture[str]
+        self, fake_mh: _FakeMH, api_call: MagicMock, caplog: pytest.LogCaptureFixture
     ) -> None:
-        """Empty rawdata must inform the user without invoking DataExporter."""
+        """Empty rawdata must inform the user without invoking DataExporter.
+
+        Why:
+            Per #886 Phase 2 the "No data was collected" notice moved to
+            ``logging.warning``; ``caplog`` replaces the retired capsys check.
+        """
         fetcher = _make_fetcher(api_call)
-        fetcher._handle_outer_exception(RuntimeError("outer"))
-        assert "No data was collected" in capsys.readouterr().out
+        with caplog.at_level(logging.WARNING):
+            fetcher._handle_outer_exception(RuntimeError("outer"))
+        assert "No data was collected" in caplog.text
         fake_mh.DataExporter.write_with_format_selection.assert_not_called()
 
 
@@ -806,9 +844,14 @@ class TestExportAndDisplayData:
     """Coverage for :meth:`_export_and_display_data`."""
 
     def test_calls_exporter_and_display(
-        self, fake_mh: _FakeMH, api_call: MagicMock, capsys: pytest.CaptureFixture[str]
+        self, fake_mh: _FakeMH, api_call: MagicMock, caplog: pytest.LogCaptureFixture
     ) -> None:
-        """Method must invoke DataExporter with correct args and render a table."""
+        """Method must invoke DataExporter with correct args and render a table.
+
+        Why:
+            Per #886 Phase 2 the "N records exported" notice moved to
+            ``logging.warning``; ``caplog`` replaces the retired capsys check.
+        """
         fetcher = _make_fetcher(api_call, sort_key="id")
         fetcher.rawdata = [{"id": 1}]
         with (
@@ -824,12 +867,13 @@ class TestExportAndDisplayData:
                 "src.api.api_data_fetcher.DataProcessingUtils.get_unique_keys",
                 return_value=["id"],
             ),
+            caplog.at_level(logging.WARNING),
         ):
             fetcher._export_and_display_data()
         fake_mh.DataExporter.export_with_processing.assert_called_once_with(
             [{"id": 1}], "sites.csv", sort_key="id", api_function_name="listOrgSites"
         )
-        assert "1 records exported" in capsys.readouterr().out
+        assert "1 records exported" in caplog.text
 
 
 # ---------------------------------------------------------------------------
@@ -840,8 +884,14 @@ class TestExportAndDisplayData:
 class TestExecute:
     """End-to-end coverage of :meth:`execute`."""
 
-    def test_success_path(self, fake_mh: _FakeMH, api_call: MagicMock, capsys: pytest.CaptureFixture[str]) -> None:
-        """Happy path must resolve org, fetch, export, and display."""
+    def test_success_path(self, fake_mh: _FakeMH, api_call: MagicMock, caplog: pytest.LogCaptureFixture) -> None:
+        """Happy path must resolve org, fetch, export, and display.
+
+        Why:
+            Per #886 Phase 2 the "Starting data fetch"/"N records exported"
+            notices moved to ``logging.warning``; ``caplog`` replaces the
+            retired capsys check.
+        """
         api_call.return_value = MagicMock(status_code=200)
         fetcher = _make_fetcher(api_call)
         with (
@@ -858,13 +908,13 @@ class TestExecute:
                 "src.api.api_data_fetcher.DataProcessingUtils.get_unique_keys",
                 return_value=["id"],
             ),
+            caplog.at_level(logging.WARNING),
         ):
             fetcher.execute()
         assert fetcher.org_id == "org-123"
         fake_mh.DataExporter.export_with_processing.assert_called_once()
-        out = capsys.readouterr().out
-        assert "Sites" in out
-        assert "1 records exported" in out
+        assert "Sites" in caplog.text
+        assert "1 records exported" in caplog.text
 
     def test_returns_early_when_no_data(
         self, fake_mh: _FakeMH, api_call: MagicMock, caplog: pytest.LogCaptureFixture
@@ -894,9 +944,15 @@ class TestExecute:
         assert "No data returned" in caplog.text
 
     def test_outer_exception_logs_and_reraises(
-        self, fake_mh: _FakeMH, api_call: MagicMock, capsys: pytest.CaptureFixture[str]
+        self, fake_mh: _FakeMH, api_call: MagicMock, caplog: pytest.LogCaptureFixture
     ) -> None:
-        """A raised exception must go through the outer handler and re-raise."""
+        """A raised exception must go through the outer handler and re-raise.
+
+        Why:
+            Per #886 Phase 2 the "PARTIAL DATA SAVED"/"Emergency save"
+            notices moved to ``logging.warning``; ``caplog`` replaces the
+            retired capsys check.
+        """
         api_call.return_value = MagicMock(status_code=200)
         fetcher = _make_fetcher(api_call)
         fetcher.rawdata = [{"id": 99}]  # simulate partial fetch before failure
@@ -905,11 +961,11 @@ class TestExecute:
                 "src.api.api_data_fetcher.mistapi.get_all",
                 side_effect=RuntimeError("boom"),
             ),
+            caplog.at_level(logging.WARNING),
             pytest.raises(RuntimeError, match="boom"),
         ):
             fetcher.execute()
         # emergency save happened *inside* _handle_api_exception,
         # then outer handler ran again on the re-raise
         assert fake_mh.DataExporter.write_with_format_selection.call_count >= 1
-        out = capsys.readouterr().out
-        assert "PARTIAL DATA SAVED" in out or "Emergency save" in out
+        assert "PARTIAL DATA SAVED" in caplog.text or "Emergency save" in caplog.text

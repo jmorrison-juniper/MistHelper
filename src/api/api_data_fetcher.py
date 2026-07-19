@@ -90,8 +90,9 @@ class APIDataFetcher:
             self.sort_key,
             self.kwargs,
         )
-        logging.info("Starting data fetch: %s", self.title)  # Log fetch start.
-        print(self.title)  # Show the title.
+        # WHY (#886 Phase 2): consolidated print()+logging.info into a single WARNING so the title
+        # remains operator-visible without duplicating notices on the terminal.
+        logging.warning("Starting data fetch: %s", self.title)  # Fetch-start notice (operator-visible).
 
     # =========================================================================
     # API CALL METHODS
@@ -138,14 +139,15 @@ class APIDataFetcher:
         """Log a warning, print user-visible retry notice, and sleep for the backoff window."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of retry-ceiling constant.
         max_retries = mh.API_REQUEST_MAX_RETRIES  # Retry ceiling.
-        logging.warning(  # Warn and back off.
+        # WHY (#886 Phase 2): retired duplicate print(); logging.warning below already reaches the
+        # operator terminal via the WARNING-level default handler.
+        logging.warning(  # Warn and back off (operator-visible).
             "API call %s failed (attempt %s/%s) - retrying in %.0fs",
             api_name,
             attempt + 1,
             max_retries + 1,
             delay,
         )
-        print(f"! API call timed out - retrying in {delay:.0f}s (attempt {attempt + 2}/{max_retries + 1})")
         time.sleep(delay)  # Wait before retry.
 
     @staticmethod
@@ -230,22 +232,27 @@ class APIDataFetcher:
     def _save_recovered_data(self) -> None:  # Persist recovered rows.
         """Save recovered data and notify user."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataExporter helper.
-        print(f"! API returned unexpected structure. Recovered {len(self.rawdata)} records.")  # Tell the user.
+        # WHY (#886 Phase 2): promoted print() + logging.info to WARNING so the recovery notice
+        # remains operator-visible without duplicate terminal output.
+        logging.warning("API returned unexpected structure. Recovered %s records.", len(self.rawdata))
         api_name = self.api_call.__name__  # API callable name.
         mh.DataExporter.write_with_format_selection(self.rawdata, self.filename, api_function_name=api_name)
-        logging.info("Recovered data saved to %s (%s rows)", self.filename, len(self.rawdata))  # log saved.
+        logging.warning("Recovered data saved to %s (%s rows)", self.filename, len(self.rawdata))
 
     def _handle_no_recovery(self) -> None:  # Report unrecoverable response.
         """Handle case where no data could be recovered."""
-        print("! API response missing expected 'results' key. No data could be recovered.")  # Tell the user.
+        # WHY (#886 Phase 2): print() replaced with logging.error so the failure notice stays
+        # operator-visible via the ERROR-level default handler.
+        logging.error("API response missing expected 'results' key. No data could be recovered.")
         logging.error("Unable to recover any data from malformed response for %s", self.title)  # log no recovery.
         logging.debug("EXIT: APIDataFetcher - structure error, no recovery")  # Trace exit.
 
     def _handle_api_exception(self, error: Exception) -> None:  # Handle a fetch exception.
         """Handle exceptions during API data retrieval."""
+        # WHY (#886 Phase 2): retired duplicate print(); the logging.error calls below already
+        # surface the failure via the ERROR-level default handler.
         logging.error("Exception occurred during API data retrieval: %s", error)  # log exception.
         logging.error("Exception type: %s", type(error).__name__)  # log type.
-        print(f"! Exception occurred during API call: {error}")  # Tell the user.
 
         if self._is_rate_limit_error(error):  # Rate limited?
             self._handle_rate_limit()  # Save partial and stop.
@@ -266,8 +273,9 @@ class APIDataFetcher:
         if self.rawdata:  # Have partial data?
             api_name = self.api_call.__name__  # API callable name.
             mh.DataExporter.write_with_format_selection(self.rawdata, self.filename, api_function_name=api_name)
-            logging.info("Partial results saved to %s (%s rows)", self.filename, len(self.rawdata))  # log partial.
-            print(f"* Partial data saved: {len(self.rawdata)} records written to {self.filename}")  # Tell the user.
+            # WHY (#886 Phase 2): consolidated print()+logging.info into a single WARNING so the
+            # partial-save notice stays operator-visible without duplicate terminal output.
+            logging.warning("Partial data saved: %s records written to %s", len(self.rawdata), self.filename)
 
         logging.debug("EXIT: APIDataFetcher - rate limited")  # Trace exit.
 
@@ -278,8 +286,9 @@ class APIDataFetcher:
             try:
                 api_name = self.api_call.__name__  # API callable name.
                 mh.DataExporter.write_with_format_selection(self.rawdata, self.filename, api_function_name=api_name)
-                logging.info("Emergency save: %s partial records saved before error exit", len(self.rawdata))
-                print(f"* Emergency save: {len(self.rawdata)} partial records written to {self.filename}")
+                # WHY (#886 Phase 2): consolidated print()+logging.info into a single WARNING so
+                # the emergency-save notice remains operator-visible via the default handler.
+                logging.warning("Emergency save: %s partial records written to %s", len(self.rawdata), self.filename)
             except Exception as save_error:  # Save failed.
                 logging.error("Failed to save partial data during error handling: %s", save_error)  # log save fail.
 
@@ -294,7 +303,9 @@ class APIDataFetcher:
         if self.rawdata:  # Have partial data?
             self._save_partial_data_on_error(error)  # Save what we have.
         else:
-            print("! No data was collected before the error occurred")  # Tell the user none saved.
+            # WHY (#886 Phase 2): print() replaced with logging.warning so operator terminal
+            # still surfaces the "nothing collected" notice via the default WARNING handler.
+            logging.warning("No data was collected before the error occurred")
 
         logging.debug("EXIT: APIDataFetcher - error")  # Trace exit.
 
@@ -304,15 +315,22 @@ class APIDataFetcher:
         try:
             api_name = self.api_call.__name__  # API callable name.
             mh.DataExporter.write_with_format_selection(self.rawdata, self.filename, api_function_name=api_name)
-            logging.info("Partial results saved to %s (%s rows)", self.filename, len(self.rawdata))  # log partial.
-
-            print("\n!! PARTIAL DATA SAVED !!")  # Notify the user.
-            print(f"   * Despite the error, {len(self.rawdata)} records were successfully saved to {self.filename}")
-            print(f"   * Error: {str(error)}")  # Show the error.
-            print("   * You can retry the operation later to get remaining data")  # Suggest a retry.
+            # WHY (#886 Phase 2): consolidated logging.info + 4 print() calls into WARNING lines
+            # so the "partial data saved" banner remains operator-visible without duplicates.
+            logging.warning("Partial results saved to %s (%s rows)", self.filename, len(self.rawdata))
+            logging.warning("PARTIAL DATA SAVED")
+            logging.warning(
+                "Despite the error, %s records were successfully saved to %s",
+                len(self.rawdata),
+                self.filename,
+            )
+            logging.warning("Error: %s", str(error))
+            logging.warning("You can retry the operation later to get remaining data")
         except Exception as save_error:  # Save failed.
-            logging.error("Failed to save partial data in outer exception handler: %s", save_error)  # log save fail.
-            print(f"! Critical: Could not save partial data. Error: {save_error}")  # Tell the user.
+            # WHY (#886 Phase 2): consolidated print() with logging.error so the critical failure
+            # surfaces once through the ERROR-level default handler.
+            logging.error("Failed to save partial data in outer exception handler: %s", save_error)
+            logging.error("Critical: Could not save partial data. Error: %s", save_error)
 
     # =========================================================================
     # DATA PROCESSING AND DISPLAY METHODS
@@ -327,7 +345,9 @@ class APIDataFetcher:
         mh.DataExporter.export_with_processing(
             self.rawdata, self.filename, sort_key=self.sort_key, api_function_name=api_name
         )
-        print(f"! {len(self.rawdata)} records exported to {self.filename}")  # Tell the user.
+        # WHY (#886 Phase 2): print() replaced with logging.warning so the export-count notice
+        # remains operator-visible via the WARNING-level default handler.
+        logging.warning("%s records exported to %s", len(self.rawdata), self.filename)
 
         self._display_table()  # Render the table.
 

@@ -7,6 +7,31 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 5/N: retire `print()` in `src/api/` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced the 14 remaining `print()`
+  calls in `src/api/api_data_fetcher.py` with `logging.warning(...)` /
+  `logging.error(...)` so the print-avoidance rule (T20 selector target of
+  #886) can eventually be enabled repo-wide. Touched `_log_entry` (fetch-start
+  banner), `_log_retry_attempt` (retry backoff notice), `_save_recovered_data`
+  (unexpected-structure + recovered-rows notices), `_handle_no_recovery`
+  (unrecoverable-data notice), `_handle_rate_limit` (partial-save notice),
+  `_emergency_save_and_raise` (emergency-save notice), `_handle_outer_exception`
+  (no-data-collected notice), `_save_partial_data_on_error` (five-line summary
+  block + save-failure error), and `_export_and_display_data` (records-exported
+  notice). WARNING level chosen for operator-visible summaries so they surface
+  on the default root-logger configuration (INFO is suppressed by default);
+  ERROR level for the two failure paths (`_handle_no_recovery`,
+  `_save_partial_data_on_error` write failure). Existing `print(...)` +
+  `logging.info(...)` pairs were collapsed into single WARNING lines and the
+  redundant error-path `print(...)` in `_handle_api_exception` was retired.
+  Companion unit tests in `tests/unit/api/test_api_data_fetcher.py` (12 tests)
+  were updated to assert against `caplog.text` under
+  `caplog.at_level(logging.WARNING/ERROR)` instead of
+  `capsys.readouterr().out`. Fifth of ~20+ per-subdirectory slices of #886;
+  T20 selector flip and E402 audit will land after all `src/` subdirs are
+  print-free.
+
 ### #886 Phase 2 slice 4/N: retire `print()` in `src/cache/` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced the 9 remaining `print()`
