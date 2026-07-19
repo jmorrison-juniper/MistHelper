@@ -7,6 +7,21 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Menu 203: Search Site WAN Client Events (spec 899 / issue #1407)
+
+- **New menu 203 (Added)**: `WanClientEventsExporter` (delegated from
+  `SiteClientExporter.wan_client_events`) prompts the operator to select a site from
+  `SiteList.csv`, then calls
+  `mistapi.api.v1.sites.wan_clients.events.search.searchSiteWanClientEvents` (paginated
+  via `mistapi.get_all`, page size 1000). Site identifiers (`site_id` and `site_name`)
+  are stamped onto every event row before the flattened, CSV-safe payload is persisted
+  through `DataExporter.write_with_format_selection` — so CSV, SQLite, and
+  ArangoDB+Redis backends all work uniformly. An empty response emits a fixed-schema
+  sentinel CSV so downstream tooling still receives an artifact. Registered in
+  `ENDPOINT_PRIMARY_KEY_STRATEGIES` as a `composite_pk` on `(id, timestamp)` with
+  indexes on `site_id`, `ev_type`, and `wcid` so repeated runs upsert instead of
+  duplicating. Fulfills spec 899.
+
 ### Menu 202: Search Site NAC Client Events (spec 891 / issue #1399)
 
 - **New menu 202 (Added)**: `SiteNacClientEventsExporter.nac_client_events()` wraps

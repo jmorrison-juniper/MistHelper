@@ -3900,6 +3900,10 @@ menu_actions: "dict[str, tuple[Callable[..., Any], str]]" = {
         SiteNacClientEventsExporter.nac_client_events,
         "Search Site NAC Client Events (searchSiteNacClientEvents) - Per-site NAC client event CSV",
     ),
+    "203": (
+        SiteClientExporter.wan_client_events,
+        "Search WAN client events for a selected site (spec 899 / issue #1407)",
+    ),
     "44": (OrgConfigExporter.psks, "Export PSK (Pre-Shared Key) information for the organization"),
     "45": (OrgConfigExporter.webhooks, "Export webhook configuration for the organization"),
     "46": (OrgConfigExporter.wlans, "Export WLAN configuration for the organization"),
