@@ -34,7 +34,9 @@ class ScheduledJob(Base, TimestampMixin):
     __tablename__ = "scheduled_jobs"
 
     job_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4,
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
     )
     org_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -45,22 +47,29 @@ class ScheduledJob(Base, TimestampMixin):
     target_entities: Mapped[dict] = mapped_column(JSONB, nullable=False)
     change_payload: Mapped[dict] = mapped_column(JSONB, nullable=False)
     scheduled_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False,
+        DateTime(timezone=True),
+        nullable=False,
     )
     status: Mapped[str] = mapped_column(
-        String(30), nullable=False, server_default="pending",
+        String(30),
+        nullable=False,
+        server_default="pending",
     )
     pre_check_defs: Mapped[dict | None] = mapped_column(
-        JSONB, nullable=True,
+        JSONB,
+        nullable=True,
     )
     post_check_defs: Mapped[dict | None] = mapped_column(
-        JSONB, nullable=True,
+        JSONB,
+        nullable=True,
     )
     pre_check_result: Mapped[dict | None] = mapped_column(
-        JSONB, nullable=True,
+        JSONB,
+        nullable=True,
     )
     post_check_result: Mapped[dict | None] = mapped_column(
-        JSONB, nullable=True,
+        JSONB,
+        nullable=True,
     )
     created_by: Mapped[str] = mapped_column(Text, nullable=False)
     approved_by: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -70,16 +79,19 @@ class ScheduledJob(Base, TimestampMixin):
         nullable=True,
     )
     started_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True,
+        DateTime(timezone=True),
+        nullable=True,
     )
     completed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True,
+        DateTime(timezone=True),
+        nullable=True,
     )
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # relationships
     checkpoints: Mapped[list[JobCheckpoint]] = relationship(
-        back_populates="job", lazy="selectin",
+        back_populates="job",
+        lazy="selectin",
     )
 
 
@@ -92,7 +104,9 @@ class JobCheckpoint(Base):
     __tablename__ = "job_checkpoints"
 
     checkpoint_id: Mapped[int] = mapped_column(
-        BigInteger, primary_key=True, autoincrement=True,
+        BigInteger,
+        primary_key=True,
+        autoincrement=True,
     )
     job_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -101,7 +115,8 @@ class JobCheckpoint(Base):
         nullable=False,
     )
     entity_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), nullable=False,
+        UUID(as_uuid=True),
+        nullable=False,
     )
     step: Mapped[str] = mapped_column(String(30), nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False)
@@ -123,12 +138,12 @@ class AuditRecord(Base):
     """Field-level change audit trail entry."""
 
     __tablename__ = "audit_records"
-    __table_args__ = (
-        {"postgresql_partition_by": "LIST (org_id)"},
-    )
+    __table_args__ = ({"postgresql_partition_by": "LIST (org_id)"},)
 
     record_id: Mapped[int] = mapped_column(
-        BigInteger, primary_key=True, autoincrement=True,
+        BigInteger,
+        primary_key=True,
+        autoincrement=True,
     )
     org_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -137,21 +152,26 @@ class AuditRecord(Base):
         nullable=False,
     )
     timestamp: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now(),
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
     )
     actor: Mapped[str] = mapped_column(Text, nullable=False)
     entity_type: Mapped[str] = mapped_column(String(30), nullable=False)
     entity_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), nullable=False,
+        UUID(as_uuid=True),
+        nullable=False,
     )
     change_type: Mapped[str] = mapped_column(String(20), nullable=False)
     old_values: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     new_values: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     revision_id: Mapped[int | None] = mapped_column(
-        BigInteger, nullable=True,
+        BigInteger,
+        nullable=True,
     )
     job_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), nullable=True,
+        UUID(as_uuid=True),
+        nullable=True,
     )
 
 
@@ -164,7 +184,9 @@ class RolloutPlan(Base, TimestampMixin):
     __tablename__ = "rollout_plans"
 
     plan_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4,
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
     )
     org_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -174,19 +196,25 @@ class RolloutPlan(Base, TimestampMixin):
     )
     name: Mapped[str] = mapped_column(Text, nullable=False)
     promotion_mode: Mapped[str] = mapped_column(
-        String(20), nullable=False, server_default="manual",
+        String(20),
+        nullable=False,
+        server_default="manual",
     )
     health_gate_criteria: Mapped[dict] = mapped_column(
-        JSONB, nullable=False,
+        JSONB,
+        nullable=False,
     )
     status: Mapped[str] = mapped_column(
-        String(30), nullable=False, server_default="draft",
+        String(30),
+        nullable=False,
+        server_default="draft",
     )
     created_by: Mapped[str] = mapped_column(Text, nullable=False)
 
     # relationships
     waves: Mapped[list[RolloutWave]] = relationship(
-        back_populates="plan", lazy="selectin",
+        back_populates="plan",
+        lazy="selectin",
     )
 
 
@@ -205,20 +233,27 @@ class RolloutWave(Base):
         nullable=False,
     )
     wave_number: Mapped[int] = mapped_column(
-        Integer, primary_key=True, nullable=False,
+        Integer,
+        primary_key=True,
+        nullable=False,
     )
     target_entities: Mapped[dict] = mapped_column(JSONB, nullable=False)
     status: Mapped[str] = mapped_column(
-        String(20), nullable=False, server_default="pending",
+        String(20),
+        nullable=False,
+        server_default="pending",
     )
     started_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True,
+        DateTime(timezone=True),
+        nullable=True,
     )
     completed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True,
+        DateTime(timezone=True),
+        nullable=True,
     )
     health_check_result: Mapped[dict | None] = mapped_column(
-        JSONB, nullable=True,
+        JSONB,
+        nullable=True,
     )
 
     # relationships
@@ -234,7 +269,9 @@ class NotificationChannel(Base, TimestampMixin):
     __tablename__ = "notification_channels"
 
     channel_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4,
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
     )
     org_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -246,9 +283,12 @@ class NotificationChannel(Base, TimestampMixin):
     name: Mapped[str] = mapped_column(Text, nullable=False)
     destination: Mapped[str] = mapped_column(Text, nullable=False)
     alert_subscriptions: Mapped[list[str]] = mapped_column(
-        ARRAY(Text), nullable=False,
+        ARRAY(Text),
+        nullable=False,
     )
     enabled: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default="true",
+        Boolean,
+        nullable=False,
+        server_default="true",
     )
     auth_config: Mapped[dict | None] = mapped_column(JSONB, nullable=True)

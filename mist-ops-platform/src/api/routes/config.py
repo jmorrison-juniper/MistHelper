@@ -74,8 +74,7 @@ async def list_revisions(
         stmt = stmt.where(ConfigRevision.entity_type == entity_type)
 
     total_result = await db.execute(
-        select(ConfigRevision.id)
-        .where(
+        select(ConfigRevision.id).where(
             ConfigRevision.org_id == str(org_id),
             ConfigRevision.entity_id == entity_id,
         )
@@ -136,7 +135,11 @@ async def time_travel(
     ``WHERE entity_id = ? AND captured_at <= ? ORDER BY captured_at DESC LIMIT 1``
     """
     config_result = await _find_revision_at(
-        db, org_id, entity_id, entity_type, timestamp,
+        db,
+        org_id,
+        entity_id,
+        entity_type,
+        timestamp,
     )
 
     if config_result is None:
@@ -372,11 +375,7 @@ async def list_baselines(
     _user: CurrentUser = Depends(get_authenticated_user),
 ) -> ResponseEnvelope[list[BaselineResponse]]:
     """List baselines for an organization."""
-    stmt = (
-        select(Baseline)
-        .where(Baseline.org_id == org_id)
-        .order_by(Baseline.updated_at.desc())
-    )
+    stmt = select(Baseline).where(Baseline.org_id == org_id).order_by(Baseline.updated_at.desc())
     if entity_type:
         stmt = stmt.where(Baseline.entity_type == entity_type)
     stmt = stmt.offset((page - 1) * per_page).limit(per_page)
@@ -394,7 +393,10 @@ async def create_baseline(
 ) -> ResponseEnvelope[BaselineResponse]:
     """Create or update a baseline (intended state)."""
     existing = await _find_baseline_by_scope(
-        db, body.org_id, body.entity_type, body.entity_scope,
+        db,
+        body.org_id,
+        body.entity_type,
+        body.entity_scope,
     )
     if existing:
         existing.config_payload = body.config_payload
@@ -438,6 +440,7 @@ async def accept_drift(
     alert.status = "accepted"
     alert.resolved_by = user.email
     from datetime import UTC, datetime as _dt
+
     alert.resolved_at = _dt.now(UTC)
 
     await db.flush()
@@ -462,27 +465,32 @@ async def remediate(
         alert.status = "remediated"
         alert.resolved_by = user.email
         from datetime import UTC, datetime as _dt
+
         alert.resolved_at = _dt.now(UTC)
 
     from src.worker.tasks.deploy_tasks import install_from_revision
+
     install_from_revision.delay(
         str(baseline.org_id),
         str(baseline.baseline_id),
         [str(baseline.entity_scope)],
     )
     await db.flush()
-    return ResponseEnvelope(data={
-        "baseline_id": str(baseline_id),
-        "alerts_remediated": len(body.alert_ids),
-        "status": "remediation_queued",
-    })
+    return ResponseEnvelope(
+        data={
+            "baseline_id": str(baseline_id),
+            "alerts_remediated": len(body.alert_ids),
+            "status": "remediation_queued",
+        }
+    )
 
 
 # -- Baseline helpers ---
 
 
 async def _load_baseline(
-    db: AsyncSession, baseline_id: UUID,
+    db: AsyncSession,
+    baseline_id: UUID,
 ) -> Baseline:
     """Load a baseline or raise 404."""
     stmt = select(Baseline).where(Baseline.baseline_id == baseline_id)
@@ -493,7 +501,8 @@ async def _load_baseline(
 
 
 async def _load_drift_alert(
-    db: AsyncSession, alert_id: UUID,
+    db: AsyncSession,
+    alert_id: UUID,
 ) -> DriftAlert:
     """Load a drift alert or raise 404."""
     stmt = select(DriftAlert).where(DriftAlert.alert_id == alert_id)
@@ -519,7 +528,8 @@ async def _find_baseline_by_scope(
 
 
 async def _latest_revision_for_baseline(
-    db: AsyncSession, baseline: Baseline,
+    db: AsyncSession,
+    baseline: Baseline,
 ) -> ConfigRevision | None:
     """Find latest revision matching baseline scope."""
     stmt = (

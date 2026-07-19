@@ -7,9 +7,9 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
-### Menu 198: Search Site WAN Client Events (issue #1407)
+### Menu 203: Search Site WAN Client Events (spec 899 / issue #1407)
 
-- **New menu 198 (Added)**: `WanClientEventsExporter` (delegated from
+- **New menu 203 (Added)**: `WanClientEventsExporter` (delegated from
   `SiteClientExporter.wan_client_events`) prompts the operator to select a site from
   `SiteList.csv`, then calls
   `mistapi.api.v1.sites.wan_clients.events.search.searchSiteWanClientEvents` (paginated
@@ -21,6 +21,73 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
   `ENDPOINT_PRIMARY_KEY_STRATEGIES` as a `composite_pk` on `(id, timestamp)` with
   indexes on `site_id`, `ev_type`, and `wcid` so repeated runs upsert instead of
   duplicating. Fulfills spec 899.
+
+### Menu 202: Search Site NAC Client Events (spec 891 / issue #1399)
+
+- **New menu 202 (Added)**: `SiteNacClientEventsExporter.nac_client_events()` wraps
+  the previously unreachable Mist API `searchSiteNacClientEvents` operation
+  (`GET /api/v1/sites/{site_id}/nac_clients/events/search`). Operator picks a site
+  (shared `SiteDeviceExporter._resolve_site_for_stats` helper), the exporter pages all
+  NAC client event rows via `mistapi.get_all`, flattens + escapes them with
+  `DataProcessingUtils`, then persists through `DataExporter.write_with_format_selection`
+  so CSV / SQLite / ArangoDB backends all work. Empty responses surface a friendly
+  "no NAC client event data" notice instead of failing. `ENDPOINT_PRIMARY_KEY_STRATEGIES`
+  already defined a composite PK (`id`, `mac`, `timestamp`) for this operationId -- no
+  schema changes required. Registered as `interactive_safe` in `OperationRegistry`
+  (requires site selection).
+
+### Menu 201: Search Site Mist Edge Events (spec 890 / issue #1398)
+
+- **New menu 201 (Added)**: `SiteMistEdgeEventsExporter.mist_edge_events()` wraps
+  the previously unreachable Mist API `searchSiteMistEdgeEvents` operation
+  (`GET /api/v1/sites/{site_id}/mxedges/events/search`). Operator picks a site (shared
+  `SiteDeviceExporter._resolve_site_for_stats` helper), the exporter pages all Mist Edge
+  event rows via `mistapi.get_all`, flattens + escapes them with `DataProcessingUtils`,
+  then persists through `DataExporter.write_with_format_selection` so CSV / SQLite /
+  ArangoDB backends all work. Empty responses surface a friendly "no Mist Edge event
+  data" notice instead of failing. `ENDPOINT_PRIMARY_KEY_STRATEGIES` already defined a PK
+  for this operationId -- no schema changes required. Registered as `interactive_safe` in
+  `OperationRegistry` (requires site selection).
+
+### Menu 200: Search Site Guest Authorization (spec 889 / issue #1397)
+
+- **New menu 200 (Added)**: `SiteGuestAuthorizationExporter.guest_authorizations()` wraps
+  the previously unreachable Mist API `searchSiteGuestAuthorization` operation
+  (`GET /api/v1/sites/{site_id}/guests/search`). Operator picks a site (shared
+  `SiteDeviceExporter._resolve_site_for_stats` helper), the exporter pages all authorized
+  guest rows via `mistapi.get_all`, flattens + escapes them with `DataProcessingUtils`,
+  then persists through `DataExporter.write_with_format_selection` so CSV / SQLite /
+  ArangoDB backends all work. Empty responses surface a friendly "no guest authorization
+  data" notice instead of failing. `ENDPOINT_PRIMARY_KEY_STRATEGIES` already defined a PK
+  for this operationId -- no schema changes required. Registered as `interactive_safe` in
+  `OperationRegistry` (requires site selection).
+
+### Menu 199: Search Site Webhook Deliveries (spec 902 / issue #1410)
+
+- **New menu 199 (Added)**: `SiteWebhookDeliveriesExporter.deliveries()` wraps the
+  previously unreachable Mist API `searchSiteWebhooksDeliveries` operation
+  (`GET /api/v1/sites/{site_id}/webhooks/{webhook_id}/events/search`). Operator picks a
+  site (shared `SiteDeviceExporter._resolve_site_for_stats` helper), then picks a webhook
+  by 1-based index from `listSiteWebhooks`, and the exporter pages all delivery attempts
+  via `mistapi.get_all`, flattens + escapes them with `DataProcessingUtils`, then persists
+  through `DataExporter.write_with_format_selection` so CSV / SQLite / ArangoDB backends
+  all work. Empty responses surface a friendly "no webhook delivery data" notice instead
+  of failing. `ENDPOINT_PRIMARY_KEY_STRATEGIES` already defined a composite PK on
+  `(id, timestamp)` for this operationId -- no schema changes required. Registered as
+  `interactive_safe` in `OperationRegistry` (requires site + webhook selection).
+
+### Menu 198: Search Site WAN Usages (spec 901 / issue #1409)
+
+- **New menu 198 (Added)**: `SiteWanUsageExporter.wan_usages()` wraps the previously
+  unreachable Mist API `searchSiteWanUsage` operation
+  (`GET /api/v1/sites/{site_id}/wan_usages/search`). Operator picks a site (shared
+  `SiteDeviceExporter._resolve_site_for_stats` helper), the exporter pages all rows via
+  `mistapi.get_all`, flattens + escapes them with `DataProcessingUtils`, then persists
+  through `DataExporter.write_with_format_selection` so CSV / SQLite / ArangoDB backends
+  all work. Empty responses surface a friendly "no WAN usage data" notice instead of
+  failing. `ENDPOINT_PRIMARY_KEY_STRATEGIES` already defined a composite PK on
+  `(mac, port_id, peer_mac)` for this operationId, and `arango_writer` already routed it
+  to the `wan_usage` collection -- no schema changes required.
 
 ### Menu 197: Client Packet Capture Downloader (issue #421)
 

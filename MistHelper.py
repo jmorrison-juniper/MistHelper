@@ -436,12 +436,27 @@ from src.export.site_device_exporter import (
 from src.export.site_export_utils import (  # Cat A canonical (1014 P16)
     SiteExportUtils,
 )
+from src.export.site_guest_authorization_exporter import (
+    SiteGuestAuthorizationExporter,  # Spec 889 / issue #1397 -- searchSiteGuestAuthorization menu 200
+)
 from src.export.site_insights.device_metric_operation import (
     DeviceMetricOperation,
 )  # Decomposed Menu 76 entry point
 from src.export.site_insights.site_metric_operation import (
     SiteMetricOperation,
 )  # Decomposed Menu 74 entry point
+from src.export.site_mist_edge_events_exporter import (
+    SiteMistEdgeEventsExporter,  # Spec 890 / issue #1398 -- searchSiteMistEdgeEvents menu 201
+)
+from src.export.site_nac_client_events_exporter import (
+    SiteNacClientEventsExporter,  # Spec 891 / issue #1399 -- searchSiteNacClientEvents menu 202
+)
+from src.export.site_wan_usage_exporter import (
+    SiteWanUsageExporter,  # Spec 901 / issue #1409 -- searchSiteWanUsage menu 198
+)
+from src.export.site_webhook_deliveries_exporter import (
+    SiteWebhookDeliveriesExporter,  # Spec 902 / issue #1410 -- searchSiteWebhooksDeliveries menu 199
+)
 from src.export.sites_by_ap_model_exporter import (
     SitesByAPModelExporter,  # Cat B (1013 SC-001 position 28) -- re-export
 )
@@ -3866,6 +3881,26 @@ menu_actions: "dict[str, tuple[Callable[..., Any], str]]" = {
         "Download client packet captures grouped by VLAN (site -> client -> VLAN -> data/packet_captures/)",
     ),
     "198": (
+        SiteWanUsageExporter.wan_usages,
+        "Search Site WAN Usages (searchSiteWanUsage) - Export per-site WAN usage records to SiteWanUsages.csv",
+    ),
+    "199": (
+        SiteWebhookDeliveriesExporter.deliveries,
+        "Search Site Webhook Deliveries (searchSiteWebhooksDeliveries) - Per site+webhook delivery audit CSV",
+    ),
+    "200": (
+        SiteGuestAuthorizationExporter.guest_authorizations,
+        "Search Site Guest Authorization (searchSiteGuestAuthorization) - Per-site authorized guest CSV",
+    ),
+    "201": (
+        SiteMistEdgeEventsExporter.mist_edge_events,
+        "Search Site Mist Edge Events (searchSiteMistEdgeEvents) - Per-site Mist Edge event CSV",
+    ),
+    "202": (
+        SiteNacClientEventsExporter.nac_client_events,
+        "Search Site NAC Client Events (searchSiteNacClientEvents) - Per-site NAC client event CSV",
+    ),
+    "203": (
         SiteClientExporter.wan_client_events,
         "Search WAN client events for a selected site (spec 899 / issue #1407)",
     ),

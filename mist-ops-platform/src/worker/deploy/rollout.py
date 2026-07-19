@@ -56,7 +56,10 @@ class RolloutOrchestrator:
         return self._execute_wave(plan, next_wave)
 
     def rollback_wave(
-        self, plan_id: UUID, wave_number: int, reason: str,
+        self,
+        plan_id: UUID,
+        wave_number: int,
+        reason: str,
     ) -> dict:
         """Roll back a specific wave and pause the plan."""
         plan = self._load_plan(plan_id)
@@ -103,7 +106,9 @@ class RolloutOrchestrator:
         return plan
 
     def _load_wave(
-        self, plan_id: UUID, wave_number: int,
+        self,
+        plan_id: UUID,
+        wave_number: int,
     ) -> RolloutWave:
         """Load a specific wave."""
         stmt = select(RolloutWave).where(
@@ -124,7 +129,9 @@ class RolloutOrchestrator:
         return None
 
     def _execute_wave(
-        self, plan: RolloutPlan, wave: RolloutWave,
+        self,
+        plan: RolloutPlan,
+        wave: RolloutWave,
     ) -> dict:
         """Execute a single wave — mark executing, do work, evaluate."""
         wave.status = WaveStatus.EXECUTING.value
@@ -149,10 +156,7 @@ class RolloutOrchestrator:
             "health": health,
         }
 
-        if (
-            wave.status == WaveStatus.COMPLETED.value
-            and plan.promotion_mode == "automatic"
-        ):
+        if wave.status == WaveStatus.COMPLETED.value and plan.promotion_mode == "automatic":
             result["auto_promote"] = True
 
         return result
@@ -166,7 +170,8 @@ def _mark_plan_complete(db: Session, plan: RolloutPlan) -> dict:
 
 
 def _evaluate_health_gate(
-    plan: RolloutPlan, wave: RolloutWave,
+    plan: RolloutPlan,
+    wave: RolloutWave,
 ) -> dict:
     """Evaluate health criteria for a wave.
 
@@ -177,6 +182,5 @@ def _evaluate_health_gate(
     return {
         "passed": True,
         "criteria": criteria,
-        "wave_targets": len(wave.target_entities)
-        if isinstance(wave.target_entities, list) else 0,
+        "wave_targets": len(wave.target_entities) if isinstance(wave.target_entities, list) else 0,
     }

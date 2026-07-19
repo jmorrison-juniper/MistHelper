@@ -118,7 +118,9 @@ class RollbackService:
         """Push sequentially; rollback on first failure."""
         for entity_ids in targets:
             result = self._executor.push_revision(
-                entity_type, entity_ids, new_config,
+                entity_type,
+                entity_ids,
+                new_config,
             )
             if result.success:
                 state.pushed.append(entity_ids)
@@ -151,7 +153,9 @@ class RollbackService:
                 continue
 
             result = self._executor.push_revision(
-                entity_type, entity_ids, snapshot,
+                entity_type,
+                entity_ids,
+                snapshot,
             )
             state.rollback_results.append(result)
             if not result.success:

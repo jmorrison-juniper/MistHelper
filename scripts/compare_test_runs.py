@@ -63,8 +63,7 @@ class TestComparator:
                     event = json.loads(stripped)
                 except json.JSONDecodeError:
                     print(
-                        f"Warning: Skipping invalid JSON at "
-                        f"{file_path}:{line_num}",
+                        f"Warning: Skipping invalid JSON at " f"{file_path}:{line_num}",
                         file=sys.stderr,
                     )
                     continue
@@ -98,12 +97,8 @@ class TestComparator:
             run_b_file=str(run_b_path),
         )
 
-        comparison.run_a_timestamp = self._extract_timestamp(
-            data_a["summary"], events_a
-        )
-        comparison.run_b_timestamp = self._extract_timestamp(
-            data_b["summary"], events_b
-        )
+        comparison.run_a_timestamp = self._extract_timestamp(data_a["summary"], events_a)
+        comparison.run_b_timestamp = self._extract_timestamp(data_b["summary"], events_b)
 
         all_options = sorted(
             set(events_a.keys()) | set(events_b.keys()),
@@ -113,9 +108,7 @@ class TestComparator:
         for option in all_options:
             event_a = events_a.get(option)
             event_b = events_b.get(option)
-            self._classify_change(
-                option, event_a, event_b, comparison
-            )
+            self._classify_change(option, event_a, event_b, comparison)
 
         return comparison
 
@@ -143,9 +136,7 @@ class TestComparator:
                 comparison.resolved_failures,
             )
         )
-        lines.extend(
-            self._format_timing_section(comparison.timing_regressions)
-        )
+        lines.extend(self._format_timing_section(comparison.timing_regressions))
         lines.extend(
             self._format_section(
                 "OTHER STATUS CHANGES",
@@ -153,17 +144,12 @@ class TestComparator:
             )
         )
 
-        total_issues = (
-            len(comparison.new_failures)
-            + len(comparison.timing_regressions)
-        )
+        total_issues = len(comparison.new_failures) + len(comparison.timing_regressions)
         lines.append("-" * 60)
         if total_issues == 0:
             lines.append("Result: No regressions detected.")
         else:
-            lines.append(
-                f"Result: {total_issues} regression(s) detected."
-            )
+            lines.append(f"Result: {total_issues} regression(s) detected.")
         lines.append("")
 
         return "\n".join(lines)
@@ -173,11 +159,7 @@ class TestComparator:
         if summary and summary.get("timestamp"):
             return summary["timestamp"]
         if events:
-            timestamps = [
-                ev.get("timestamp", "")
-                for ev in events.values()
-                if ev.get("timestamp")
-            ]
+            timestamps = [ev.get("timestamp", "") for ev in events.values() if ev.get("timestamp")]
             if timestamps:
                 return max(timestamps)
         return "unknown"
@@ -202,9 +184,7 @@ class TestComparator:
         )
 
         if status_b == "fail" and status_a in ("pass", "absent"):
-            item.error_message = (
-                event_b.get("error_message", "") if event_b else ""
-            )
+            item.error_message = event_b.get("error_message", "") if event_b else ""
             comparison.new_failures.append(item)
         elif status_a == "fail" and status_b in ("pass", "absent"):
             comparison.resolved_failures.append(item)
@@ -273,11 +253,7 @@ class TestComparator:
                 label = f"Menu {item.menu_option}"
                 if item.operation_name:
                     label += f" ({item.operation_name})"
-                label += (
-                    f": {item.run_a_duration:.2f}s -> "
-                    f"{item.run_b_duration:.2f}s "
-                    f"({item.ratio}x slower)"
-                )
+                label += f": {item.run_a_duration:.2f}s -> " f"{item.run_b_duration:.2f}s " f"({item.ratio}x slower)"
                 lines.append(f"  {label}")
         lines.append("")
         return lines
@@ -286,8 +262,7 @@ class TestComparator:
 def main():
     """CLI entry point for comparing two test run JSONL files."""
     parser = argparse.ArgumentParser(
-        description="Compare two MistHelper test run JSONL files "
-        "and report regressions."
+        description="Compare two MistHelper test run JSONL files " "and report regressions."
     )
     parser.add_argument(
         "run_a",
@@ -304,10 +279,7 @@ def main():
     report = comparator.format_report(comparison)
     print(report)
 
-    has_regressions = (
-        len(comparison.new_failures) > 0
-        or len(comparison.timing_regressions) > 0
-    )
+    has_regressions = len(comparison.new_failures) > 0 or len(comparison.timing_regressions) > 0
     sys.exit(1 if has_regressions else 0)
 
 

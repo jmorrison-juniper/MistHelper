@@ -79,7 +79,8 @@ class TestRollbackReadEntitySignature:
         service._mist = mock_mist
 
         config = service._read_current_config(
-            "device", {"site_id": "s1", "device_id": "d1"},
+            "device",
+            {"site_id": "s1", "device_id": "d1"},
         )
 
         mock_mist.read_entity.assert_called_once_with(
@@ -96,7 +97,8 @@ class TestRollbackReadEntitySignature:
         service._mist = MagicMock()
 
         config = service._read_current_config(
-            "nonexistent_entity", {"org_id": "o1"},
+            "nonexistent_entity",
+            {"org_id": "o1"},
         )
 
         assert config is None

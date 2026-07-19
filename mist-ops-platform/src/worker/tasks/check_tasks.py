@@ -64,10 +64,7 @@ def _execute_pre_checks(
     results = service.run_all(org_id, target_ids)
 
     all_passed = all(result.passed for result in results)
-    checkpoint_data = [
-        {"name": r.name, "passed": r.passed, "message": r.message}
-        for r in results
-    ]
+    checkpoint_data = [{"name": r.name, "passed": r.passed, "message": r.message} for r in results]
 
     _save_checkpoint(db, job_id, "pre_check", checkpoint_data, all_passed)
 
@@ -93,10 +90,7 @@ def _execute_post_checks(
     results = service.run_all(org_id, target_ids)
 
     all_passed = all(result.passed for result in results)
-    checkpoint_data = [
-        {"name": r.name, "passed": r.passed, "message": r.message}
-        for r in results
-    ]
+    checkpoint_data = [{"name": r.name, "passed": r.passed, "message": r.message} for r in results]
 
     _save_checkpoint(db, job_id, "post_check", checkpoint_data, all_passed)
 

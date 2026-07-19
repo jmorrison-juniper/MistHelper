@@ -29,15 +29,17 @@ from urllib.parse import urlparse
 # Boilerplate strings injected by UserVoice around/after descriptions.
 # Include both straight-apostrophe and curly-apostrophe (U+2019) variants
 # because UserVoice renders the curly form which won't match a straight quote.
-BOILERPLATE_LINES = frozenset([
-    "Please sign in to leave feedback",
-    "We'll send you updates on this idea",
-    "We\u2019ll send you updates on this idea",
-    "Signing you in. Just a sec...",
-    "Thanks for the feedback!",
-    "We\u2019ll send you updates on this idea.",
-    "We'll send you updates on this idea.",
-])
+BOILERPLATE_LINES = frozenset(
+    [
+        "Please sign in to leave feedback",
+        "We'll send you updates on this idea",
+        "We\u2019ll send you updates on this idea",
+        "Signing you in. Just a sec...",
+        "Thanks for the feedback!",
+        "We\u2019ll send you updates on this idea.",
+        "We'll send you updates on this idea.",
+    ]
+)
 
 
 def extract_idea_id_from_url(url: str) -> str:
@@ -51,6 +53,7 @@ def clean_description(text: str) -> str:
     lines = text.splitlines()
     cleaned = [line for line in lines if line.strip() not in BOILERPLATE_LINES]
     return "\n".join(cleaned).strip()
+
 
 DATA_DIR = Path(__file__).parent.parent / "data"
 CSV_PATH = DATA_DIR / "mist_ideas.csv"
@@ -98,9 +101,7 @@ def ensure_csv_headers() -> None:
 def append_csv_row(row: dict) -> None:
     # utf-8-sig keeps the BOM intact for Excel; append mode is safe after initial header write
     with CSV_PATH.open("a", newline="", encoding="utf-8-sig") as file_handle:
-        writer = csv.DictWriter(
-            file_handle, fieldnames=CSV_HEADERS, extrasaction="ignore"
-        )
+        writer = csv.DictWriter(file_handle, fieldnames=CSV_HEADERS, extrasaction="ignore")
         writer.writerow(row)
 
 
@@ -141,19 +142,11 @@ class ScraperHandler(BaseHTTPRequestHandler):
             self.end_headers()
 
     def _handle_get_done(self):
-        content = (
-            DONE_URLS_PATH.read_text(encoding="utf-8")
-            if DONE_URLS_PATH.exists()
-            else ""
-        )
+        content = DONE_URLS_PATH.read_text(encoding="utf-8") if DONE_URLS_PATH.exists() else ""
         self._send_text(content)
 
     def _handle_get_all_urls(self):
-        content = (
-            ALL_URLS_PATH.read_text(encoding="utf-8")
-            if ALL_URLS_PATH.exists()
-            else ""
-        )
+        content = ALL_URLS_PATH.read_text(encoding="utf-8") if ALL_URLS_PATH.exists() else ""
         self._send_text(content)
 
     def _handle_get_status(self):
@@ -229,9 +222,7 @@ class ScraperHandler(BaseHTTPRequestHandler):
                 done_count = len(load_done_urls())
             total = len(load_all_urls())
             title_short = row.get("title", "")[:60]
-            print(
-                f"[SERVER] [{done_count}/{total}] {title_short}", flush=True
-            )
+            print(f"[SERVER] [{done_count}/{total}] {title_short}", flush=True)
             self._respond_ok(f"Saved row {done_count}")
         except Exception as exc:
             print(f"[SERVER] Error saving idea: {exc}", flush=True)

@@ -134,6 +134,7 @@ def _run_drift_scan(engine, org_id: str) -> dict:  # noqa: ANN001
     try:
         with Session(engine) as db:
             from src.shared.models.inventory import Organization
+
             org = db.execute(
                 select(Organization).where(
                     Organization.org_id == org_id,
@@ -153,6 +154,7 @@ def _run_drift_scan(engine, org_id: str) -> dict:  # noqa: ANN001
 # ========================================================================
 # Daily automated backup (T115, FR-034, SC-018)
 # ========================================================================
+
 
 @app.task(name="src.worker.tasks.sync_tasks.run_daily_backup")
 def run_daily_backup() -> dict:
@@ -188,11 +190,15 @@ def _export_table_backup(
 
     try:
         with Session(engine) as db:
-            rows = db.execute(text(f"SELECT * FROM {table_name} LIMIT 50000"))
+            # `table_name` is drawn from the hardcoded tuple above (line 170),
+            # never from user input. LIMIT is a literal integer.
+            rows = db.execute(text(f"SELECT * FROM {table_name} LIMIT 50000"))  # nosec B608
             data = [dict(row._mapping) for row in rows]
             logger.info(
                 "Backup %s: %d rows at %s",
-                table_name, len(data), timestamp,
+                table_name,
+                len(data),
+                timestamp,
             )
             return len(data)
     except Exception:

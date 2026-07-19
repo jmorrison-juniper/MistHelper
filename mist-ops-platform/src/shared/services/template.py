@@ -51,22 +51,23 @@ class TemplateService:
                 raise ValueError(msg)
 
     def _render(
-        self, obj: Any, params: dict[str, Any],
+        self,
+        obj: Any,
+        params: dict[str, Any],
     ) -> Any:
         """Recursively render template placeholders."""
         if isinstance(obj, str):
             return self._render_string(obj, params)
         if isinstance(obj, dict):
-            return {
-                self._render(k, params): self._render(v, params)
-                for k, v in obj.items()
-            }
+            return {self._render(k, params): self._render(v, params) for k, v in obj.items()}
         if isinstance(obj, list):
             return [self._render(item, params) for item in obj]
         return obj
 
     def _render_string(
-        self, text: str, params: dict[str, Any],
+        self,
+        text: str,
+        params: dict[str, Any],
     ) -> Any:
         """Replace {{key}} placeholders with parameter values."""
         full_match = _PLACEHOLDER_RE.fullmatch(text)

@@ -42,9 +42,7 @@ class TestListAllEntitiesPagination:
                     list_method="listOrgSites",
                 ),
             ):
-                result = service.list_all_entities(
-                    "org_site_list", {"org_id": "test-org"}
-                )
+                result = service.list_all_entities("org_site_list", {"org_id": "test-org"})
 
         assert result.status_code == 200
         assert result.data == [{"id": "a"}]
@@ -73,9 +71,7 @@ class TestListAllEntitiesPagination:
                     list_method="listOrgSites",
                 ),
             ):
-                result = service.list_all_entities(
-                    "org_site_list", {"org_id": "test-org"}
-                )
+                result = service.list_all_entities("org_site_list", {"org_id": "test-org"})
 
         assert result.status_code == 200
         assert len(result.data) == 3
@@ -100,9 +96,7 @@ class TestListAllEntitiesPagination:
                     list_method="listOrgSites",
                 ),
             ):
-                result = service.list_all_entities(
-                    "org_site_list", {"org_id": "test-org"}
-                )
+                result = service.list_all_entities("org_site_list", {"org_id": "test-org"})
 
         assert result.data == []
 
@@ -122,6 +116,4 @@ class TestListAllEntitiesPagination:
             ),
         ):
             with pytest.raises(AttributeError, match="No list_method"):
-                service.list_all_entities(
-                    "device", {"site_id": "s1", "device_id": "d1"}
-                )
+                service.list_all_entities("device", {"site_id": "s1", "device_id": "d1"})

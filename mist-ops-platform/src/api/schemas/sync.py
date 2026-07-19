@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 
 # -- Inventory response schemas ------------------------------------------
 
+
 class SiteResponse(BaseModel):
     """Site detail returned by inventory endpoints."""
 
@@ -34,7 +35,8 @@ class DeviceResponse(BaseModel):
     serial: str | None = None
     mac: str | None = Field(default=None, validation_alias="mac_address")
     firmwareVersion: str | None = Field(
-        default=None, validation_alias="firmware_version",
+        default=None,
+        validation_alias="firmware_version",
     )
     connectionStatus: str = Field(default="disconnected", validation_alias="status")
     uptime: int | None = None
@@ -55,6 +57,7 @@ class OrganizationResponse(BaseModel):
 
 
 # -- Sync status schemas ------------------------------------------------
+
 
 class EntitySyncCount(BaseModel):
     """Per-entity-type sync counts."""

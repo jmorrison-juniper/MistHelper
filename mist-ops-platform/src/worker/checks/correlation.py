@@ -45,7 +45,10 @@ class CorrelationEngine:
         """Find changes that may have caused an incident."""
         window_start = incident_at - CORRELATION_WINDOW
         candidates = await self._find_candidates(
-            org_id, window_start, incident_at, affected_entity_ids,
+            org_id,
+            window_start,
+            incident_at,
+            affected_entity_ids,
         )
 
         correlations: list[IncidentChangeCorrelation] = []
@@ -96,7 +99,8 @@ class CorrelationEngine:
 
 
 def _compute_confidence(
-    record: AuditRecord, incident_at: datetime,
+    record: AuditRecord,
+    incident_at: datetime,
 ) -> float:
     """Score 0-1 based on temporal proximity."""
     delta = abs((incident_at - record.timestamp).total_seconds())
@@ -109,7 +113,8 @@ def _compute_confidence(
 
 
 def _detection_method(
-    record: AuditRecord, affected_ids: list[UUID],
+    record: AuditRecord,
+    affected_ids: list[UUID],
 ) -> str:
     """Classify the detection approach used."""
     if record.entity_id in affected_ids:

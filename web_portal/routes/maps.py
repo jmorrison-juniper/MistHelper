@@ -58,6 +58,7 @@ def map_image(map_id):
     if image_data is None:
         return jsonify({"error": "Image not found"}), 404
     from flask import Response
+
     return Response(
         image_data["content"],
         mimetype=image_data.get("content_type", "image/png"),
@@ -68,12 +69,10 @@ def _fetch_sites(apisession, org_id: str) -> list:
     """Fetch site list from Mist API."""
     try:
         import mistapi
+
         response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id)
         sites = response.data if hasattr(response, "data") else []
-        return [
-            {"id": site.get("id", ""), "name": site.get("name", "")}
-            for site in sites
-        ]
+        return [{"id": site.get("id", ""), "name": site.get("name", "")} for site in sites]
     except Exception:
         return []
 
@@ -82,6 +81,7 @@ def _fetch_site_maps(apisession, site_id: str) -> list:
     """Fetch map list for a specific site from Mist API."""
     try:
         import mistapi
+
         response = mistapi.api.v1.sites.maps.listSiteMaps(apisession, site_id)
         maps = response.data if hasattr(response, "data") else []
         return [
@@ -102,9 +102,8 @@ def _fetch_map_data(apisession, site_id: str, map_id: str) -> dict:
     """Fetch map data with device positions for rendering."""
     try:
         import mistapi
-        response = mistapi.api.v1.sites.maps.getSiteMap(
-            apisession, site_id, map_id
-        )
+
+        response = mistapi.api.v1.sites.maps.getSiteMap(apisession, site_id, map_id)
         map_info = response.data if hasattr(response, "data") else {}
         devices = _get_map_devices(apisession, site_id, map_id)
         return {
@@ -123,9 +122,8 @@ def _get_map_devices(apisession, site_id: str, map_id: str) -> list:
     """Fetch devices positioned on a specific map."""
     try:
         import mistapi
-        response = mistapi.api.v1.sites.devices.listSiteDevices(
-            apisession, site_id, type="all"
-        )
+
+        response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="all")
         devices = response.data if hasattr(response, "data") else []
         return [
             {
@@ -147,6 +145,7 @@ def _fetch_map_image(apisession, map_id: str) -> dict:
     """Fetch map background image binary data."""
     try:
         import mistapi
+
         response = mistapi.api.v1.orgs.maps.getOrgMapImage(
             apisession,
             current_app.config.get("ORG_ID"),

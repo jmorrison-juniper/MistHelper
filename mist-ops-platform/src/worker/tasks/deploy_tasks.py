@@ -52,7 +52,11 @@ def install_from_revision(
 
     with Session(engine) as db:
         result = _execute_install(
-            db, job_id, revision_id, target_entity_ids, org_id,
+            db,
+            job_id,
+            revision_id,
+            target_entity_ids,
+            org_id,
         )
 
     engine.dispose()
@@ -81,10 +85,7 @@ def _execute_install(
     targets = _build_targets(revision, target_entity_ids)
     state = _push_with_rollback(db, org_id, revision, targets)
 
-    final_status = (
-        JobStatus.COMPLETED if state.status == "completed"
-        else JobStatus.FAILED
-    )
+    final_status = JobStatus.COMPLETED if state.status == "completed" else JobStatus.FAILED
     _update_job_status(db, job, final_status)
 
     return {
@@ -102,7 +103,9 @@ def _load_job(db: Session, job_id: str) -> ScheduledJob | None:
 
 
 def _load_revision(
-    db: Session, revision_id: int, org_id: str,
+    db: Session,
+    revision_id: int,
+    org_id: str,
 ) -> ConfigRevision | None:
     """Retrieve the config revision."""
     stmt = select(ConfigRevision).where(
@@ -140,12 +143,16 @@ def _push_with_rollback(
     service = RollbackService(db, mist)
     config_payload = revision.config_blob or {}
     return service.execute_with_rollback(
-        revision.entity_type, targets, config_payload,
+        revision.entity_type,
+        targets,
+        config_payload,
     )
 
 
 def _update_job_status(
-    db: Session, job: ScheduledJob, status: JobStatus,
+    db: Session,
+    job: ScheduledJob,
+    status: JobStatus,
 ) -> None:
     """Update job status and timestamp."""
     job.status = status.value
@@ -255,7 +262,8 @@ def execute_rollout_wave(plan_id: str) -> dict:
 
 @app.task(name="src.worker.tasks.deploy_tasks.promote_rollout_wave")
 def promote_rollout_wave(
-    plan_id: str, wave_number: int,
+    plan_id: str,
+    wave_number: int,
 ) -> dict:
     """Manually promote to the next wave."""
     from src.worker.deploy.rollout import RolloutOrchestrator

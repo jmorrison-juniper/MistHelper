@@ -132,9 +132,7 @@ class InventorySyncService:
     def _do_sync(self) -> dict[str, int]:
         """Execute the full sync pipeline; return counts."""
         org_uuid = self._db.execute(
-            select(Organization.org_id).where(
-                Organization.org_id == UUID(self._org_id)
-            )
+            select(Organization.org_id).where(Organization.org_id == UUID(self._org_id))
         ).scalar()
         if not org_uuid:
             logger.warning("Org %s not found in DB -- skipping", self._org_id)
@@ -147,9 +145,7 @@ class InventorySyncService:
     def _create_ledger_entry(self) -> SyncLedgerEntry:
         """Record the start of a sync run."""
         org_uuid = self._db.execute(
-            select(Organization.org_id).where(
-                Organization.org_id == UUID(self._org_id)
-            )
+            select(Organization.org_id).where(Organization.org_id == UUID(self._org_id))
         ).scalar()
         entry = SyncLedgerEntry(
             org_id=org_uuid,

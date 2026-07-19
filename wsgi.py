@@ -11,6 +11,7 @@ exposes the real menu_actions with working callables.
 import logging
 import os
 import sys
+from typing import Any
 
 # Ensure project root is on sys.path so MistHelper imports resolve
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -23,14 +24,14 @@ logging.basicConfig(
 )
 
 
-def _bootstrap_api_session():
+def _bootstrap_api_session() -> tuple[Any, str]:
     """Create a Mist API session from environment/.env file.
 
     Returns (apisession, org_id) tuple. Both may be None
     if authentication is not configured.
     """
     apisession = None
-    org_id = None
+    org_id = ""
     try:
         import mistapi
 
@@ -52,7 +53,7 @@ def _bootstrap_api_session():
     return apisession, org_id
 
 
-def _resolve_org_id(apisession) -> str:
+def _resolve_org_id(apisession: Any) -> str:
     """Resolve org_id from the authenticated API session."""
     try:
         import mistapi
@@ -62,13 +63,13 @@ def _resolve_org_id(apisession) -> str:
         privileges = data.get("privileges", [])
         for priv in privileges:
             if priv.get("org_id"):
-                return priv["org_id"]
+                return str(priv["org_id"])
     except Exception as exc:
         logging.warning("WSGI: Could not resolve org_id: %s", exc)
     return ""
 
 
-def _load_menu_actions(wsgi_session, wsgi_org_id):
+def _load_menu_actions(wsgi_session: Any, wsgi_org_id: str) -> Any:
     """Import MistHelper and extract real menu_actions with live callables.
 
     Sets MistHelper module globals so lambdas and class methods

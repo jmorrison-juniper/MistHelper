@@ -71,9 +71,5 @@ class TestDriftDetectionIntegration:
     ) -> None:
         svc = DiffService()
         result = svc.compute_diff(baseline_config, drifted_config)
-        total = (
-            result.summary.fields_changed
-            + result.summary.fields_added
-            + result.summary.fields_removed
-        )
+        total = result.summary.fields_changed + result.summary.fields_added + result.summary.fields_removed
         assert total == len(result.changes)

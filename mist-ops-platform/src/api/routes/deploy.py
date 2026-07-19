@@ -63,7 +63,8 @@ router = APIRouter(prefix="/deploy", tags=["deploy"])
 
 
 async def _load_job(
-    db: AsyncSession, job_id: UUID,
+    db: AsyncSession,
+    job_id: UUID,
 ) -> ScheduledJob:
     """Load a job or raise 404."""
     stmt = select(ScheduledJob).where(ScheduledJob.job_id == job_id)
@@ -94,11 +95,7 @@ async def list_jobs(
     _user: CurrentUser = Depends(get_authenticated_user),
 ) -> ResponseEnvelope[list[JobSummary]]:
     """List scheduled deployment jobs for an org."""
-    stmt = (
-        select(ScheduledJob)
-        .where(ScheduledJob.org_id == org_id)
-        .order_by(ScheduledJob.scheduled_at.desc())
-    )
+    stmt = select(ScheduledJob).where(ScheduledJob.org_id == org_id).order_by(ScheduledJob.scheduled_at.desc())
     if status:
         stmt = stmt.where(ScheduledJob.status == status)
     stmt = stmt.offset((page - 1) * per_page).limit(per_page)
@@ -225,7 +222,9 @@ async def cancel_job(
 
     return ResponseEnvelope(
         data=JobCancelledResponse(
-            job_id=job.job_id, status="cancelled", cancelled_at=now,
+            job_id=job.job_id,
+            status="cancelled",
+            cancelled_at=now,
         ),
     )
 
@@ -240,7 +239,8 @@ async def approve_job(
     """Approve a job (maker-checker FR-033)."""
     if not body.confirm:
         raise HTTPException(
-            status_code=400, detail="confirm must be true",
+            status_code=400,
+            detail="confirm must be true",
         )
 
     job = await _load_job(db, job_id)
@@ -282,16 +282,20 @@ async def dry_run(
 
 
 async def _check_conflicts(
-    db: AsyncSession, body: JobCreate,
+    db: AsyncSession,
+    body: JobCreate,
 ) -> str | None:
     """Check for scheduling conflicts on the same targets."""
     entity_ids = [t.entity_id for t in body.target_entities]
     stmt = select(ScheduledJob).where(
         ScheduledJob.org_id == body.org_id,
         ScheduledJob.scheduled_at == body.scheduled_at,
-        ScheduledJob.status.in_([
-            JobStatus.PENDING.value, JobStatus.APPROVED.value,
-        ]),
+        ScheduledJob.status.in_(
+            [
+                JobStatus.PENDING.value,
+                JobStatus.APPROVED.value,
+            ]
+        ),
     )
     existing = (await db.execute(stmt)).scalars().all()
     for job in existing:
@@ -299,11 +303,7 @@ async def _check_conflicts(
         for target in targets:
             tid = target.get("entity_id")
             if tid and UUID(tid) in entity_ids:
-                return (
-                    f"Device {tid} has a pending job "
-                    f"at {job.scheduled_at}. "
-                    f"Conflicting job: {job.job_id}"
-                )
+                return f"Device {tid} has a pending job " f"at {job.scheduled_at}. " f"Conflicting job: {job.job_id}"
     return None
 
 
@@ -374,11 +374,7 @@ async def list_rollouts(
     _user: CurrentUser = Depends(get_authenticated_user),
 ) -> ResponseEnvelope[list[RolloutSummary]]:
     """List rollout plans for an org."""
-    stmt = (
-        select(RolloutPlan)
-        .where(RolloutPlan.org_id == org_id)
-        .order_by(RolloutPlan.created_at.desc())
-    )
+    stmt = select(RolloutPlan).where(RolloutPlan.org_id == org_id).order_by(RolloutPlan.created_at.desc())
     if status:
         stmt = stmt.where(RolloutPlan.status == status)
     stmt = stmt.offset((page - 1) * per_page).limit(per_page)
@@ -438,6 +434,7 @@ async def activate_rollout(
     await db.flush()
 
     from src.worker.tasks.deploy_tasks import execute_rollout_wave
+
     execute_rollout_wave.delay(str(plan_id))
 
     return ResponseEnvelope(data={"plan_id": str(plan_id), "status": "active"})
@@ -472,6 +469,7 @@ async def resume_rollout(
     await db.flush()
 
     from src.worker.tasks.deploy_tasks import execute_rollout_wave
+
     execute_rollout_wave.delay(str(plan_id))
 
     return ResponseEnvelope(data={"plan_id": str(plan_id), "status": "active"})
@@ -490,6 +488,7 @@ async def promote_wave(
         raise HTTPException(status_code=400, detail="confirm required")
 
     from src.worker.tasks.deploy_tasks import promote_rollout_wave
+
     promote_rollout_wave.delay(str(plan_id), wave_number)
 
     return ResponseEnvelope(
@@ -541,11 +540,7 @@ async def list_golden_images(
     _user: CurrentUser = Depends(get_authenticated_user),
 ) -> ResponseEnvelope[list[GoldenImageResponse]]:
     """List golden images for an org."""
-    stmt = (
-        select(GoldenImage)
-        .where(GoldenImage.org_id == org_id)
-        .order_by(GoldenImage.created_at.desc())
-    )
+    stmt = select(GoldenImage).where(GoldenImage.org_id == org_id).order_by(GoldenImage.created_at.desc())
     if image_type:
         stmt = stmt.where(GoldenImage.image_type == image_type)
     if device_model:
@@ -597,7 +592,8 @@ async def approve_golden_image(
         raise HTTPException(status_code=409, detail="Image must be draft")
     if image.created_by == user.email:
         raise HTTPException(
-            status_code=403, detail="Approver must differ from creator",
+            status_code=403,
+            detail="Approver must differ from creator",
         )
 
     image.lifecycle_state = "approved"
@@ -640,7 +636,8 @@ async def _load_plan(db: AsyncSession, plan_id: UUID) -> RolloutPlan:
 
 
 async def _load_golden_image(
-    db: AsyncSession, image_id: UUID,
+    db: AsyncSession,
+    image_id: UUID,
 ) -> GoldenImage:
     """Load a golden image or raise 404."""
     stmt = select(GoldenImage).where(GoldenImage.image_id == image_id)
@@ -651,13 +648,13 @@ async def _load_golden_image(
 
 
 def _plan_to_summary(
-    plan: RolloutPlan, waves: list | None = None,
+    plan: RolloutPlan,
+    waves: list | None = None,
 ) -> RolloutSummary:
     """Convert plan to summary, counting waves and targets."""
     plan_waves = waves or getattr(plan, "waves", []) or []
     total = sum(
-        len(w.target_entities) if hasattr(w, "target_entities")
-        and isinstance(w.target_entities, list) else 0
+        len(w.target_entities) if hasattr(w, "target_entities") and isinstance(w.target_entities, list) else 0
         for w in plan_waves
     )
     return RolloutSummary(
@@ -686,11 +683,7 @@ async def list_templates(
     _user: CurrentUser = Depends(get_authenticated_user),
 ) -> ResponseEnvelope[list[TemplateResponse]]:
     """List change templates (FR-031)."""
-    stmt = (
-        select(ChangeTemplate)
-        .where(ChangeTemplate.org_id == org_id)
-        .order_by(ChangeTemplate.name)
-    )
+    stmt = select(ChangeTemplate).where(ChangeTemplate.org_id == org_id).order_by(ChangeTemplate.name)
     if category:
         stmt = stmt.where(ChangeTemplate.category == category)
     stmt = stmt.offset((page - 1) * per_page).limit(per_page)
@@ -751,10 +744,12 @@ async def instantiate_template(
             "entity_id": str(body.target_entity_id),
             "config": payload,
         },
-        target_entities=[{
-            "entity_type": tmpl.target_entity_type,
-            "entity_id": str(body.target_entity_id),
-        }],
+        target_entities=[
+            {
+                "entity_type": tmpl.target_entity_type,
+                "entity_id": str(body.target_entity_id),
+            }
+        ],
         status=JobStatus.PENDING.value,
         scheduled_at=body.scheduled_at,
         created_by=user.email,
@@ -766,7 +761,8 @@ async def instantiate_template(
 
 
 async def _load_template(
-    db: AsyncSession, template_id: UUID,
+    db: AsyncSession,
+    template_id: UUID,
 ) -> ChangeTemplate:
     """Load a change template or raise 404."""
     stmt = select(ChangeTemplate).where(
