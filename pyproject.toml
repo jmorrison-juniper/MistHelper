@@ -125,23 +125,21 @@ extend-exclude = ["mist-ops-platform", "web_portal", "scripts", "src/maps"]
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "G"]
 # Phase 1 ignores (2026-03-12) -- tighten these incrementally:
-#   E402: module-import-not-at-top (34 sites across MistHelper.py, e911_bssid.py,
-#         scripts/, tests/maps/, tests/unit/). Actual patterns are NOT the
-#         "version check" the earlier comment claimed -- they are:
-#         (a) Cat E canonical re-exports after mid-file class-block imports
-#             in MistHelper.py (7 sites, part of 1015 refactor);
-#         (b) `import mistapi  # noqa: E402  # WHY: lazy import keeps CLI
-#             startup fast` in src/reports/e911_bssid.py (8 sites);
-#         (c) sys.path manipulation before imports in scripts (2 sites);
-#         (d) test-module bootstrapping in tests/maps + tests/unit (15 sites).
-#         Follow-up under #886: move to per-file-ignores scoped to just the
-#         files that need it, rather than a repo-wide ignore.
+#   RESOLVED (2026-07-19, #886 slice): E402 moved from repo-wide ignore to
+#     scoped per-file-ignores; see the E402 block in [tool.ruff.lint.per-file-ignores]
+#     below. Actual pattern breakdown at time of migration (160 sites):
+#       (a) MistHelper.py -- 144 sites -- Cat E canonical re-exports after
+#           the argparse/warnings preamble (1015 refactor).
+#       (b) tests/unit/*.py -- 14 sites across 8 files -- sys.path/pytest
+#           bootstrap before test imports.
+#       (c) tools/test_quality_analyzer/__main__.py -- 2 sites -- CLI
+#           bootstrap.
 #   RESOLVED: F402, B007, PLR0913, E501, PLR0915/C901/PLR0912 (166 noqa annotations)
 # Phase 2 goal: re-enable T20 (print) after migrating prints to logging
 #   -- follow-up under #886: 5053 T20 violations across src/, MistHelper.py,
 #      wsgi.py, and starlink_dashboard.py; too large for a single PR.
 # Issue #429 (2026-06-23): enabled `G` rule family after sweeping all 695 G003/G004/G201 sites in MistHelper.py
-ignore = ["E402"]
+ignore = []
 
 [tool.ruff.lint.isort]
 known-first-party = ["src"]
@@ -172,6 +170,24 @@ known-first-party = ["src"]
 # Bad fixtures deliberately embody the anti-patterns the analyzer detects;
 # ruff must not "fix" the material under test.
 "tools/test_quality_analyzer/fixtures/bad/**" = ["UP031", "UP042", "B017", "G", "F", "E"]
+# E402 (module-level import not at top): scoped per-file after #886 removed
+# the repo-wide ignore. Each file legitimately needs pre-import statements:
+#   MistHelper.py -- warnings.filterwarnings() must run before the stdlib
+#     import block, and the Cat E canonical re-exports at the bottom follow
+#     mid-file class-block definitions from the 1015 refactor (144 sites).
+#   tests/unit/*.py -- test-module bootstrapping (sys.path/os.environ
+#     manipulation) before importing the module under test.
+#   tools/test_quality_analyzer/__main__.py -- CLI entrypoint sys.path setup.
+"MistHelper.py" = ["E402"]
+"tests/unit/test_bulk_switch_upgrader.py" = ["E402"]
+"tests/unit/test_csv_comparator.py" = ["E402"]
+"tests/unit/test_device_utility_commands.py" = ["E402"]
+"tests/unit/test_routing_utils.py" = ["E402"]
+"tests/unit/test_site_auto_upgrade.py" = ["E402"]
+"tests/unit/test_template_config.py" = ["E402"]
+"tests/unit/test_wan2_variable.py" = ["E402"]
+"tests/unit/test_zone_analyzer.py" = ["E402"]
+"tools/test_quality_analyzer/__main__.py" = ["E402"]
 
 [tool.mypy]
 python_version = "3.13"
