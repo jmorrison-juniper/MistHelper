@@ -54,20 +54,22 @@ class TestPromptAuditTimeRangeInput:
         assert result == "7d"  # WHY: contract-mandated default in test-mode.
 
     def test_interactive_mode_uses_input_utils_and_strips(
-        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
     ) -> None:
-        """Interactive mode prints examples banner and returns stripped safe_input result."""
+        """Interactive mode logs examples banner and returns stripped safe_input result."""
         mh = _make_mh(test_mode=False)  # WHY: interactive branch.
         mh.InputUtils.safe_input = MagicMock(return_value="  4w  ")  # WHY: stripped result asserted.
         _install_fake_mist_helper(monkeypatch, mh)
 
-        result = AuditAnalysisOps._prompt_audit_time_range_input()  # WHY: exercise interactive branch.
+        with caplog.at_level(logging.WARNING):
+            result = AuditAnalysisOps._prompt_audit_time_range_input()  # WHY: exercise interactive branch.
 
         assert result == "4w"  # WHY: whitespace trimmed per SUT.
         mh.InputUtils.safe_input.assert_called_once_with(  # WHY: prompt string is user-visible contract.
             "Enter time range [7d]: ", context="audit_analysis"
         )
-        assert "Time range examples" in capsys.readouterr().out  # WHY: banner is user-visible contract.
+        # WHY (#886 Phase 2): print() replaced with logging.warning; assert against caplog not capsys.
+        assert "Time range examples" in caplog.text
 
 
 class TestFetchFilteredAuditEntries:
@@ -133,8 +135,8 @@ class TestFetchFilteredAuditEntries:
 class TestRenderAuditAnalysisReports:
     """``_render_audit_analysis_reports`` writes both mermaid + html reports and prints paths."""
 
-    def test_delegates_to_renderer_and_prints_both_paths(self, capsys: pytest.CaptureFixture[str]) -> None:
-        """Both render methods are invoked with the analysis + report paths, and paths are printed."""
+    def test_delegates_to_renderer_and_prints_both_paths(self, caplog: pytest.LogCaptureFixture) -> None:
+        """Both render methods are invoked with the analysis + report paths, and paths are logged."""
         analysis = MagicMock(spec=object)  # WHY: opaque analysis object passed through unmodified.
         with patch("src.audit.audit_analysis_ops.AuditReportRenderer") as fake_renderer_cls:
             fake_renderer = MagicMock(spec=object)
@@ -142,15 +144,16 @@ class TestRenderAuditAnalysisReports:
             fake_renderer.render_html = MagicMock()
             fake_renderer_cls.return_value = fake_renderer
 
-            AuditAnalysisOps._render_audit_analysis_reports(analysis)
+            with caplog.at_level(logging.WARNING):
+                AuditAnalysisOps._render_audit_analysis_reports(analysis)
 
         expected_md = os.path.join("data", "OrgAuditAnalysis.md")  # WHY: mirror SUT's os.path.join contract.
         expected_html = os.path.join("data", "OrgAuditAnalysis.html")  # WHY: mirror SUT's os.path.join contract.
         fake_renderer.render_mermaid.assert_called_once_with(analysis, expected_md)  # WHY: mermaid delegation.
         fake_renderer.render_html.assert_called_once_with(analysis, expected_html)  # WHY: html delegation.
-        output = capsys.readouterr().out  # WHY: user-visible paths in stdout.
-        assert f"Mermaid report: {expected_md}" in output
-        assert f"HTML report: {expected_html}" in output
+        # WHY (#886 Phase 2): print() replaced with logging.warning; assert against caplog not capsys.
+        assert f"Mermaid report: {expected_md}" in caplog.text
+        assert f"HTML report: {expected_html}" in caplog.text
 
 
 class TestAuditLogAnalysisOrchestration:
@@ -203,7 +206,7 @@ class TestAuditLogAnalysisOrchestration:
         assert "Invalid time range: bad range" in caplog.text  # WHY: error log line contract.
 
     def test_api_failure_returns_before_analyzing(
-        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
     ) -> None:
         """When _fetch_filtered_audit_entries returns None the SUT stops before AuditLogFilter runs."""
         self._prime_helpers(monkeypatch, cache_hit=False, org_id="org-x")
@@ -216,19 +219,21 @@ class TestAuditLogAnalysisOrchestration:
             patch("src.audit.audit_analysis_ops.AuditLogFilter") as fake_filter_cls,
         ):
             fake_parser_cls.return_value.parse.return_value = time_range
-            AuditAnalysisOps.audit_log_analysis()
+            with caplog.at_level(logging.WARNING):
+                AuditAnalysisOps.audit_log_analysis()
 
         fake_filter_cls.assert_not_called()  # WHY: API-failure aborts before filter+analyze.
-        assert "Fetching audit logs for: 7d desc" in capsys.readouterr().out  # WHY: pre-fetch banner still printed.
+        # WHY (#886 Phase 2): print() replaced with logging.warning; assert against caplog not capsys.
+        assert "Fetching audit logs for: 7d desc" in caplog.text
 
     def test_happy_path_orchestrates_full_pipeline(
-        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
     ) -> None:
-        """End-to-end: parse -> fetch -> filter -> analyze -> render, with all summary prints."""
+        """End-to-end: parse -> fetch -> filter -> analyze -> render, with all summary log lines."""
         self._prime_helpers(monkeypatch, cache_hit=False, org_id="org-42")
         time_range = ParsedTimeRange(duration="7d", description="7 days")
         fake_entries = [{"id": "a"}, {"id": "b"}, {"id": "c"}]  # WHY: 3 raw entries for print-count assertion.
-        filter_stats = {"kept_count": 2, "removed_count": 1}  # WHY: exact numbers appear in printed summary.
+        filter_stats = {"kept_count": 2, "removed_count": 1}  # WHY: exact numbers appear in logged summary.
         fake_filtered = [{"id": "a"}, {"id": "b"}]  # WHY: represents post-noise-filter entries.
 
         with (
@@ -248,12 +253,13 @@ class TestAuditLogAnalysisOrchestration:
             fake_analyzer.analyze = MagicMock(return_value=fake_analysis)
             fake_analyzer_cls.return_value = fake_analyzer
 
-            AuditAnalysisOps.audit_log_analysis()
+            with caplog.at_level(logging.WARNING):
+                AuditAnalysisOps.audit_log_analysis()
 
         fake_analyzer.analyze.assert_called_once_with(
             fake_filtered, "7 days"
         )  # WHY: analyzer called with filtered+desc.
         fake_render.assert_called_once_with(fake_analysis)  # WHY: rendering delegated to helper method.
-        out = capsys.readouterr().out
-        assert "Retrieved 3 raw entries" in out  # WHY: raw entry count printed.
-        assert "Filtered: 2 kept, 1 noise removed" in out  # WHY: filter summary printed.
+        # WHY (#886 Phase 2): print() replaced with logging.warning; assert against caplog not capsys.
+        assert "Retrieved 3 raw entries" in caplog.text  # WHY: raw entry count logged.
+        assert "Filtered: 2 kept, 1 noise removed" in caplog.text  # WHY: filter summary logged.

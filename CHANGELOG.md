@@ -7,6 +7,21 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 2/N: retire `print()` in `src/audit/` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced the 6 remaining `print()`
+  calls in `src/audit/audit_analysis_ops.py` with `logging.warning(...)` so the
+  print-avoidance rule (T20 selector target of #886) can eventually be enabled
+  repo-wide. Touched `_prompt_audit_time_range_input` (time-range examples
+  banner), `_render_audit_analysis_reports` (Mermaid + HTML report paths), and
+  `audit_log_analysis` (fetch banner, raw-entry count, filter summary). WARNING
+  level chosen so operators still see the summary on the default root-logger
+  configuration (INFO is suppressed by default; WARNING is not). Companion
+  unit tests in `tests/unit/audit/test_audit_analysis_ops.py` were updated to
+  assert against `caplog.text` instead of `capsys.readouterr().out`. Second of
+  ~20+ per-subdirectory slices of #886; T20 selector flip and E402 audit will
+  land after all `src/` subdirs are print-free.
+
 ### #886 Phase 2 slice 1/N: retire `print()` in `src/utils/` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced the 3 remaining `print()`
