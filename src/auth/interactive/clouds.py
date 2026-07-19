@@ -50,23 +50,27 @@ class CloudSelector:
         if cloud_choice == "" or cloud_choice not in MIST_CLOUDS:  # Default to Global 01
             cloud_choice = "1"  # Preserve legacy default behaviour
         cloud_name, host = MIST_CLOUDS[cloud_choice]  # Resolve label + host from catalog
-        print(f"  Using cloud: {cloud_name} ({host})")  # Legacy console echo preserved verbatim
-        print("")  # Blank spacer matches the original output exactly
+        logging.warning("  Using cloud: %s (%s)", cloud_name, host)  # Legacy console echo routed via logger
+        logging.warning("")  # Blank spacer matches the original output exactly
         logging.debug("Cloud selected: %s (%s)", cloud_name, host)  # Trace selection result
         return (cloud_name, host)  # Hand off to the login orchestrator
 
     @staticmethod
     def _render_menu() -> None:
         """Print the interactive cloud menu using the legacy formatting."""
-        print("")  # Leading blank line matches the original banner spacing
-        print("=" * 60)  # Top divider preserved verbatim
-        print("  INTERACTIVE MIST API LOGIN")  # Banner heading preserved verbatim
-        print("=" * 60)  # Bottom divider preserved verbatim
-        print("")  # Blank spacer matches original output
-        print("  This authentication method uses session/cookie-based login,")  # Legacy explainer preserved
-        print("  which can access MSP-level APIs (unlike org-scoped API tokens).")  # Legacy explainer preserved
-        print("")  # Blank spacer matches original output
-        print("  Available Mist Clouds:")  # Legacy header preserved verbatim
+        logging.warning("")  # Leading blank line matches the original banner spacing
+        logging.warning("=" * 60)  # Top divider routed via logger
+        logging.warning("  INTERACTIVE MIST API LOGIN")  # Banner heading routed via logger
+        logging.warning("=" * 60)  # Bottom divider routed via logger
+        logging.warning("")  # Blank spacer matches original output
+        logging.warning(
+            "  This authentication method uses session/cookie-based login,"
+        )  # Legacy explainer routed via logger
+        logging.warning(
+            "  which can access MSP-level APIs (unlike org-scoped API tokens)."
+        )  # Legacy explainer routed via logger
+        logging.warning("")  # Blank spacer matches original output
+        logging.warning("  Available Mist Clouds:")  # Legacy header routed via logger
         for key, (name, host) in MIST_CLOUDS.items():  # Iterate catalog in insertion order
-            print(f"    {key:>2}. {name:<12} ({host})")  # Legacy format string preserved exactly
-        print("")  # Blank spacer matches original output
+            logging.warning("    %2s. %-12s (%s)", key, name, host)  # Legacy format string preserved exactly
+        logging.warning("")  # Blank spacer matches original output

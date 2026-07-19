@@ -116,7 +116,7 @@ class TestResolveMistapi:
         assert "Resolving mistapi SDK via fallback import" in caplog.text  # WHY: pre-action info log.
 
     def test_fallback_import_error_returns_none(
-        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
     ) -> None:
         """When mistapi cannot be imported, log error, print banner, return None."""
         import builtins  # WHY: patch built-in __import__ to inject the ImportError.
@@ -132,10 +132,9 @@ class TestResolveMistapi:
 
         monkeypatch.setattr(builtins, "__import__", _fail_only_mistapi)
         orch = _make_orchestrator()  # WHY: empty state triggers fallback branch.
-        with caplog.at_level(logging.ERROR):
+        with caplog.at_level(logging.DEBUG):
             assert orch._resolve_mistapi() is None  # WHY: SUT returns None on ImportError.
-        captured = capsys.readouterr()
-        assert "X Failed to import mistapi library" in captured.out  # WHY: legacy console message.
+        assert "X Failed to import mistapi library" in caplog.text  # WHY: legacy console message.
         assert "Cannot import mistapi: boom" in caplog.text  # WHY: legacy error log preserved.
 
 
@@ -172,14 +171,15 @@ class TestCollectCredentials:
 class TestAuthenticate:
     """``_authenticate`` dispatches exceptions to the matching handler."""
 
-    def test_happy_path_delegates_to_pipeline(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_happy_path_delegates_to_pipeline(self, caplog: pytest.LogCaptureFixture) -> None:
         """No exception → returns whatever _run_login_pipeline returned."""
         orch = _make_orchestrator()  # WHY: default orchestrator with empty state.
         with patch.object(LoginOrchestrator, "_run_login_pipeline", return_value=True) as fake_pipe:
-            result = orch._authenticate(MagicMock(spec=object), "Global 01", "api.mist.com", "u@e.com", "pw")
+            with caplog.at_level(logging.WARNING):
+                result = orch._authenticate(MagicMock(spec=object), "Global 01", "api.mist.com", "u@e.com", "pw")
         assert result is True  # WHY: SUT contract.
         fake_pipe.assert_called_once()  # WHY: exactly one delegation call.
-        assert "Authenticating..." in capsys.readouterr().out  # WHY: legacy console banner.
+        assert "Authenticating..." in caplog.text  # WHY: legacy console banner routed via logger.
 
     def test_connection_error_dispatched(self) -> None:
         """ConnectionError → routed to _handle_connection_error and returns False."""
@@ -295,16 +295,14 @@ class TestLogLoginInputs:
 class TestCreateApiSession:
     """``_create_api_session`` constructs SDK session and clears the pre-existing token."""
 
-    def test_none_session_returns_none_and_warns(
-        self, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_none_session_returns_none_and_warns(self, caplog: pytest.LogCaptureFixture) -> None:
         """When APISession returns None, log error, print banner, return None."""
         fake_sdk = MagicMock()  # WHY: unspec'd because we swap the constructor attribute.
         fake_sdk.APISession = MagicMock(return_value=None)  # WHY: soft-failure surface.
-        with caplog.at_level(logging.ERROR):
+        with caplog.at_level(logging.WARNING):
             result = LoginOrchestrator._create_api_session(fake_sdk, "h", "e", "p")
         assert result is None  # WHY: SUT contract.
-        assert "X Failed to create API session" in capsys.readouterr().out  # WHY: legacy console.
+        assert "X Failed to create API session" in caplog.text  # WHY: legacy console routed via logger.
         assert "APISession constructor returned None" in caplog.text  # WHY: legacy error log.
 
     def test_returns_session_and_clears_token(self) -> None:
@@ -385,16 +383,17 @@ class TestNeedsTwoFactor:
 class TestHandleTwoFactor:
     """``_handle_two_factor`` prompts for 2FA and replays the login."""
 
-    def test_none_when_user_aborts(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_none_when_user_aborts(self, caplog: pytest.LogCaptureFixture) -> None:
         """CredentialPrompter returns None → state cleared and None propagated."""
         orch = _make_orchestrator()
         orch.state["apisession"] = "stale"  # WHY: pre-existing partial session must be cleared.
         fake_session = MagicMock()
         with patch.object(CredentialPrompter, "prompt_two_factor", return_value=None):
-            result = orch._handle_two_factor(fake_session)
+            with caplog.at_level(logging.WARNING):
+                result = orch._handle_two_factor(fake_session)
         assert result is None  # WHY: SUT contract.
         assert orch.state["apisession"] is None  # WHY: partial session cleared.
-        assert "Two-factor authentication required." in capsys.readouterr().out  # WHY: legacy banner.
+        assert "Two-factor authentication required." in caplog.text  # WHY: legacy banner routed via logger.
 
     def test_success_calls_login_with_return_with_two_factor(self, caplog: pytest.LogCaptureFixture) -> None:
         """Prompt returns a code → login_with_return replayed with two_factor kwarg."""
@@ -429,48 +428,49 @@ class TestIsAuthenticated:
 class TestReportAuthFailure:
     """``_report_auth_failure`` prints legacy message and clears state."""
 
-    def test_none_response_uses_no_response_default(
-        self, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_none_response_uses_no_response_default(self, caplog: pytest.LogCaptureFixture) -> None:
         """None login result → 'No response' is printed and logged."""
         orch = _make_orchestrator()
-        with caplog.at_level(logging.ERROR):
+        with caplog.at_level(logging.WARNING):
             orch._report_auth_failure(None)
-        assert "X Authentication failed: No response" in capsys.readouterr().out  # WHY: legacy.
+        assert "X Authentication failed: No response" in caplog.text  # WHY: legacy banner routed via logger.
         assert "Interactive login failed: No response" in caplog.text  # WHY: legacy.
         assert orch.state["apisession"] is None  # WHY: state cleanup.
 
-    def test_dict_error_uses_detail_field(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_dict_error_uses_detail_field(self, caplog: pytest.LogCaptureFixture) -> None:
         """Error dict → the 'detail' field is preferred."""
         orch = _make_orchestrator()
-        orch._report_auth_failure({"error": {"detail": "bad token"}})
-        assert "X Authentication failed: bad token" in capsys.readouterr().out  # WHY: detail wins.
+        with caplog.at_level(logging.WARNING):
+            orch._report_auth_failure({"error": {"detail": "bad token"}})
+        assert "X Authentication failed: bad token" in caplog.text  # WHY: detail wins.
 
-    def test_dict_error_without_detail_uses_string(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_dict_error_without_detail_uses_string(self, caplog: pytest.LogCaptureFixture) -> None:
         """Error dict without 'detail' → falls back to str(dict)."""
         orch = _make_orchestrator()
-        orch._report_auth_failure({"error": {"code": 401}})
-        out = capsys.readouterr().out
-        assert "X Authentication failed:" in out  # WHY: prefix preserved.
-        assert "401" in out  # WHY: dict-string contains the code.
+        with caplog.at_level(logging.WARNING):
+            orch._report_auth_failure({"error": {"code": 401}})
+        assert "X Authentication failed:" in caplog.text  # WHY: prefix preserved.
+        assert "401" in caplog.text  # WHY: dict-string contains the code.
 
-    def test_string_error_used_verbatim(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_string_error_used_verbatim(self, caplog: pytest.LogCaptureFixture) -> None:
         """Non-dict error field is used verbatim (coerced to str)."""
         orch = _make_orchestrator()
-        orch._report_auth_failure({"error": "bad creds"})
-        assert "X Authentication failed: bad creds" in capsys.readouterr().out  # WHY: verbatim.
+        with caplog.at_level(logging.WARNING):
+            orch._report_auth_failure({"error": "bad creds"})
+        assert "X Authentication failed: bad creds" in caplog.text  # WHY: verbatim.
 
-    def test_missing_error_field_uses_unknown_default(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_missing_error_field_uses_unknown_default(self, caplog: pytest.LogCaptureFixture) -> None:
         """Missing 'error' key → 'Unknown error' default."""
         orch = _make_orchestrator()
-        orch._report_auth_failure({"authenticated": False})
-        assert "X Authentication failed: Unknown error" in capsys.readouterr().out  # WHY: legacy default.
+        with caplog.at_level(logging.WARNING):
+            orch._report_auth_failure({"authenticated": False})
+        assert "X Authentication failed: Unknown error" in caplog.text  # WHY: legacy default.
 
 
 class TestFinalizeSession:
     """``_finalize_session`` caches session, configures timeout, announces MSPs."""
 
-    def test_full_finalize_sequence(self, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture) -> None:
+    def test_full_finalize_sequence(self, caplog: pytest.LogCaptureFixture) -> None:
         """State cached, timeout configured, MSP privileges announced."""
         orch = _make_orchestrator()
         fake_session = MagicMock(spec=object)
@@ -483,7 +483,7 @@ class TestFinalizeSession:
         assert orch.state["apisession"] is fake_session  # WHY: state cache-back.
         fake_timeout.assert_called_once_with(fake_session)  # WHY: timeout helper invoked.
         fake_msp.assert_called_once()  # WHY: MSP announcement invoked.
-        assert "+ Login successful!" in capsys.readouterr().out  # WHY: legacy console.
+        assert "+ Login successful!" in caplog.text  # WHY: legacy console routed via logger.
         assert "Interactive login successful for u@e.com to api.mist.com" in caplog.text  # WHY: legacy log.
 
 
@@ -528,7 +528,7 @@ class TestConfigureSessionTimeout:
 class TestAnnounceMspPrivileges:
     """``_announce_msp_privileges`` echoes MSP grants or the empty-list banner."""
 
-    def test_with_grants_populates_state_and_echoes_each(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_with_grants_populates_state_and_echoes_each(self, caplog: pytest.LogCaptureFixture) -> None:
         """Non-empty grants → state cached and each grant printed."""
         grants = [
             {"msp_name": "MSP-A", "role": "admin"},  # WHY: two grants exercises the loop.
@@ -536,35 +536,34 @@ class TestAnnounceMspPrivileges:
         ]
         detect_fn = MagicMock(spec=Callable, return_value=grants)
         orch = _make_orchestrator(detect_msp_privileges=detect_fn)
-        orch._announce_msp_privileges()
-        out = capsys.readouterr().out
+        with caplog.at_level(logging.WARNING):
+            orch._announce_msp_privileges()
         assert orch.state["msp_privileges"] == grants  # WHY: cache-back.
-        assert "MSP access detected: 2 MSP(s) available" in out  # WHY: legacy banner.
-        assert "- MSP-A (role: admin)" in out  # WHY: per-grant line.
-        assert "- MSP-B (role: viewer)" in out  # WHY: per-grant line.
+        assert "MSP access detected: 2 MSP(s) available" in caplog.text  # WHY: legacy banner routed via logger.
+        assert "- MSP-A (role: admin)" in caplog.text  # WHY: per-grant line.
+        assert "- MSP-B (role: viewer)" in caplog.text  # WHY: per-grant line.
 
-    def test_no_grants_prints_org_level_message(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_no_grants_prints_org_level_message(self, caplog: pytest.LogCaptureFixture) -> None:
         """Empty grants list → org-level banner printed and state untouched."""
         detect_fn = MagicMock(spec=Callable, return_value=[])
         orch = _make_orchestrator(detect_msp_privileges=detect_fn)
-        orch._announce_msp_privileges()
-        out = capsys.readouterr().out
-        assert "No MSP privileges detected (org-level access only)" in out  # WHY: legacy banner.
+        with caplog.at_level(logging.WARNING):
+            orch._announce_msp_privileges()
+        assert "No MSP privileges detected (org-level access only)" in caplog.text  # WHY: legacy banner.
         assert "msp_privileges" not in orch.state  # WHY: state left untouched.
 
 
 class TestHandleConnectionError:
     """``_handle_connection_error`` prints legacy line + logs + clears state."""
 
-    def test_prints_and_logs_and_clears_state(
-        self, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_prints_and_logs_and_clears_state(self, caplog: pytest.LogCaptureFixture) -> None:
+        """Print + log + state clear on ConnectionError."""
         orch = _make_orchestrator()
         orch.state["apisession"] = "partial"  # WHY: verify cleanup runs.
         exc = ConnectionError("network down")
-        with caplog.at_level(logging.ERROR):
+        with caplog.at_level(logging.WARNING):
             assert orch._handle_connection_error(exc) is False  # WHY: contract.
-        assert "X Connection failed: network down" in capsys.readouterr().out  # WHY: legacy console.
+        assert "X Connection failed: network down" in caplog.text  # WHY: legacy console routed via logger.
         assert "Interactive login connection error: network down" in caplog.text  # WHY: legacy log.
         assert orch.state["apisession"] is None  # WHY: state cleared.
 
@@ -572,31 +571,31 @@ class TestHandleConnectionError:
 class TestHandleValueError:
     """``_handle_value_error`` branches on 'token'/'401' substrings."""
 
-    def test_token_branch_uses_generic_line(
-        self, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_token_branch_uses_generic_line(self, caplog: pytest.LogCaptureFixture) -> None:
         """'token' substring → 'Invalid API token or credentials' line."""
         orch = _make_orchestrator()
         exc = ValueError("bad token payload")
-        with caplog.at_level(logging.ERROR):
+        with caplog.at_level(logging.WARNING):
             assert orch._handle_value_error(exc) is False
-        assert "X Invalid API token or credentials" in capsys.readouterr().out  # WHY: specific branch.
+        assert "X Invalid API token or credentials" in caplog.text  # WHY: specific branch routed via logger.
         assert "Interactive login value error: bad token payload" in caplog.text  # WHY: legacy log.
         assert orch.state["apisession"] is None  # WHY: state cleared.
 
-    def test_401_branch_uses_generic_line(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_401_branch_uses_generic_line(self, caplog: pytest.LogCaptureFixture) -> None:
         """'401' substring → same 'Invalid API token or credentials' line."""
         orch = _make_orchestrator()
         exc = ValueError("HTTP 401 returned")
-        orch._handle_value_error(exc)
-        assert "X Invalid API token or credentials" in capsys.readouterr().out  # WHY: specific branch.
+        with caplog.at_level(logging.WARNING):
+            orch._handle_value_error(exc)
+        assert "X Invalid API token or credentials" in caplog.text  # WHY: specific branch routed via logger.
 
-    def test_generic_branch_uses_error_verbatim(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_generic_branch_uses_error_verbatim(self, caplog: pytest.LogCaptureFixture) -> None:
         """No token / 401 substring → verbatim 'Authentication error: ...' line."""
         orch = _make_orchestrator()
         exc = ValueError("some random validation")
-        orch._handle_value_error(exc)
-        assert "X Authentication error: some random validation" in capsys.readouterr().out
+        with caplog.at_level(logging.WARNING):
+            orch._handle_value_error(exc)
+        assert "X Authentication error: some random validation" in caplog.text
 
 
 class TestHandleGenericError:
@@ -619,26 +618,30 @@ class TestHandleGenericError:
 class TestPrintGenericErrorMessage:
     """``_print_generic_error_message`` branches: credential / 2FA / 401 / fallback."""
 
-    def test_credential_branch(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_credential_branch(self, caplog: pytest.LogCaptureFixture) -> None:
         """'invalid' substring → credential message."""
-        LoginOrchestrator._print_generic_error_message(RuntimeError("x"), "invalid whatever", "invalid whatever")
-        assert "X Invalid email or password" in capsys.readouterr().out
+        with caplog.at_level(logging.WARNING):
+            LoginOrchestrator._print_generic_error_message(RuntimeError("x"), "invalid whatever", "invalid whatever")
+        assert "X Invalid email or password" in caplog.text
 
-    def test_two_factor_branch(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_two_factor_branch(self, caplog: pytest.LogCaptureFixture) -> None:
         """'2fa' substring → 2FA message."""
-        LoginOrchestrator._print_generic_error_message(RuntimeError("x"), "2fa broken", "2fa broken")
-        assert "X Two-factor authentication failed" in capsys.readouterr().out
+        with caplog.at_level(logging.WARNING):
+            LoginOrchestrator._print_generic_error_message(RuntimeError("x"), "2fa broken", "2fa broken")
+        assert "X Two-factor authentication failed" in caplog.text
 
-    def test_401_branch(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_401_branch(self, caplog: pytest.LogCaptureFixture) -> None:
         """'401' substring in the original error message → auth-failure message."""
-        LoginOrchestrator._print_generic_error_message(RuntimeError("x"), "HTTP 401", "http 401")
-        assert "X Invalid email or password (authentication failed)" in capsys.readouterr().out
+        with caplog.at_level(logging.WARNING):
+            LoginOrchestrator._print_generic_error_message(RuntimeError("x"), "HTTP 401", "http 401")
+        assert "X Invalid email or password (authentication failed)" in caplog.text
 
-    def test_fallback_branch(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_fallback_branch(self, caplog: pytest.LogCaptureFixture) -> None:
         """No matching substring → generic 'X Login failed: <exc>' line."""
         exc = RuntimeError("mystery")  # WHY: __str__ used in the fallback line.
-        LoginOrchestrator._print_generic_error_message(exc, "mystery", "mystery")
-        assert "X Login failed: mystery" in capsys.readouterr().out
+        with caplog.at_level(logging.WARNING):
+            LoginOrchestrator._print_generic_error_message(exc, "mystery", "mystery")
+        assert "X Login failed: mystery" in caplog.text
 
 
 class TestIsCredentialError:

@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import logging  # WHY: caplog level control after #886 print->logger migration
 from types import SimpleNamespace  # WHY: lightweight stand-in for mistapi/SDK responses
 from typing import Any  # WHY: matches Selector's state bag typing
 from unittest.mock import MagicMock  # WHY: MagicMock(spec=Callable) is mandatory per project standard
 
-import pytest  # WHY: capsys/monkeypatch fixtures for output + state assertions
+import pytest  # WHY: caplog/monkeypatch fixtures for log + state assertions
 
 from src.auth.interactive.msp_org_selector import MspOrgSelector  # WHY: SUT under test
 
@@ -46,7 +47,7 @@ def test_select_no_msp_delegates_to_fallback() -> None:
 
 
 def test_select_single_msp_autopicks_and_selects_org(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     """One MSP auto-picks; then selector prompts for an org and records the pick."""
     apisession = MagicMock()  # WHY: sentinel session passed through to SDK
@@ -74,11 +75,12 @@ def test_select_single_msp_autopicks_and_selects_org(
         "mistapi": mistapi_stub,  # WHY: avoids the fallback import path
     }
     selector, fallback = _make_selector(state=state, answers=["1"])  # WHY: pick org #1 in the picker
-    selector.select()  # WHY: run full workflow
+    with caplog.at_level(logging.WARNING):
+        selector.select()  # WHY: run full workflow
     fallback.assert_not_called()  # WHY: single-MSP path never uses the fallback
     assert state["selected_msp"]["msp_id"] == "m1"  # WHY: MSP recorded
     assert state["org_id"] == "org-A"  # WHY: sorted-first org selected via "1"
-    assert "Selected organization: Alpha" in capsys.readouterr().out  # WHY: user confirmation printed
+    assert "Selected organization: Alpha" in caplog.text  # WHY: user confirmation logged
 
 
 def test_prompt_msp_blank_input_skips() -> None:
@@ -138,18 +140,19 @@ def test_prompt_msp_valueerror_from_safe_input_falls_back() -> None:
     fallback.assert_called_once_with()  # WHY: fallback triggered by exception handler
 
 
-def test_msp_org_selector_missing_apisession(capsys: pytest.CaptureFixture[str]) -> None:
+def test_msp_org_selector_missing_apisession(caplog: pytest.LogCaptureFixture) -> None:
     """Missing apisession in state prints an error and returns without selecting an org."""
     state = {
         "msp_privileges": [{"msp_id": "m1", "msp_name": "MSP One", "role": "admin"}],  # WHY: single MSP
     }  # WHY: apisession intentionally missing
     selector, fallback = _make_selector(state=state)  # WHY: no scripted input needed; fallback not used
-    selector.select()  # WHY: run and hit the missing-session guard
-    assert "API session not initialized" in capsys.readouterr().out  # WHY: legacy error preserved
+    with caplog.at_level(logging.WARNING):
+        selector.select()  # WHY: run and hit the missing-session guard
+    assert "API session not initialized" in caplog.text  # WHY: legacy error preserved
     assert "org_id" not in state  # WHY: no org selection performed
 
 
-def test_msp_org_selector_fetch_exception(capsys: pytest.CaptureFixture[str]) -> None:
+def test_msp_org_selector_fetch_exception(caplog: pytest.LogCaptureFixture) -> None:
     """Exception during listMspOrgs is caught and printed; no org is selected."""
     apisession = MagicMock()  # WHY: passed through to the SDK
     mistapi_stub = SimpleNamespace(
@@ -169,12 +172,13 @@ def test_msp_org_selector_fetch_exception(capsys: pytest.CaptureFixture[str]) ->
         "mistapi": mistapi_stub,
     }
     selector, _ = _make_selector(state=state)  # WHY: exception path needs no scripted answer
-    selector.select()  # WHY: run the failing SDK call
-    assert "Error fetching MSP organizations" in capsys.readouterr().out  # WHY: legacy error message
+    with caplog.at_level(logging.WARNING):
+        selector.select()  # WHY: run the failing SDK call
+    assert "Error fetching MSP organizations" in caplog.text  # WHY: legacy error message
     assert "org_id" not in state  # WHY: no selection recorded
 
 
-def test_fetch_msp_orgs_invalid_response(capsys: pytest.CaptureFixture[str]) -> None:
+def test_fetch_msp_orgs_invalid_response(caplog: pytest.LogCaptureFixture) -> None:
     """Response without .data returns None and prints the legacy error message."""
     mistapi_stub = SimpleNamespace(
         api=SimpleNamespace(
@@ -187,12 +191,13 @@ def test_fetch_msp_orgs_invalid_response(capsys: pytest.CaptureFixture[str]) -> 
     )
     state: dict[str, Any] = {"mistapi": mistapi_stub}  # WHY: SDK stub is enough for this path
     selector, _ = _make_selector(state=state)  # WHY: no user input needed
-    result = selector._fetch_msp_orgs(MagicMock(), "m1")  # WHY: direct method to isolate branch
+    with caplog.at_level(logging.WARNING):
+        result = selector._fetch_msp_orgs(MagicMock(), "m1")  # WHY: direct method to isolate branch
     assert result is None  # WHY: falsy-response guard returns None
-    assert "Failed to retrieve MSP organizations" in capsys.readouterr().out  # WHY: legacy warning
+    assert "Failed to retrieve MSP organizations" in caplog.text  # WHY: legacy warning
 
 
-def test_fetch_msp_orgs_empty_data_returns_empty(capsys: pytest.CaptureFixture[str]) -> None:
+def test_fetch_msp_orgs_empty_data_returns_empty(caplog: pytest.LogCaptureFixture) -> None:
     """Empty MSP org list prints the 'no organizations' message and returns []."""
     mistapi_stub = SimpleNamespace(
         api=SimpleNamespace(
@@ -207,9 +212,10 @@ def test_fetch_msp_orgs_empty_data_returns_empty(capsys: pytest.CaptureFixture[s
     )
     state: dict[str, Any] = {"mistapi": mistapi_stub}  # WHY: minimal state
     selector, _ = _make_selector(state=state)  # WHY: no input needed
-    result = selector._fetch_msp_orgs(MagicMock(), "m1")  # WHY: exercise empty-list branch
+    with caplog.at_level(logging.WARNING):
+        result = selector._fetch_msp_orgs(MagicMock(), "m1")  # WHY: exercise empty-list branch
     assert result == []  # WHY: empty branch returns []
-    assert "No organizations found under this MSP" in capsys.readouterr().out  # WHY: legacy message
+    assert "No organizations found under this MSP" in caplog.text  # WHY: legacy message
 
 
 def test_fetch_msp_orgs_single_org_normalizes_to_list() -> None:
@@ -242,13 +248,14 @@ def test_resolve_mistapi_fallback_import() -> None:
     assert state["mistapi"] is module  # WHY: cached in state for later reuse
 
 
-def test_paginated_pick_quit_shortcut(capsys: pytest.CaptureFixture[str]) -> None:
+def test_paginated_pick_quit_shortcut(caplog: pytest.LogCaptureFixture) -> None:
     """Entering 'q' in the org picker returns None and prints the skip message."""
     orgs = [{"id": "org-1", "name": "Alpha"}]  # WHY: any non-empty org list satisfies the picker
     selector, _ = _make_selector(answers=["q"])  # WHY: scripted 'q' triggers quit path
-    result = selector._paginated_pick(orgs)  # WHY: exercise the quit branch directly
+    with caplog.at_level(logging.WARNING):
+        result = selector._paginated_pick(orgs)  # WHY: exercise the quit branch directly
     assert result is None  # WHY: quit returns None
-    assert "Skipping org selection" in capsys.readouterr().out  # WHY: legacy skip message printed
+    assert "Skipping org selection" in caplog.text  # WHY: legacy skip message logged
 
 
 def test_paginated_pick_eof_returns_none() -> None:
@@ -260,25 +267,27 @@ def test_paginated_pick_eof_returns_none() -> None:
     assert result is None  # WHY: EOF returns None silently
 
 
-def test_paginated_pick_invalid_then_valid(capsys: pytest.CaptureFixture[str]) -> None:
+def test_paginated_pick_invalid_then_valid(caplog: pytest.LogCaptureFixture) -> None:
     """Non-numeric input reprompts; a valid numeric selection returns the picked org."""
     orgs = [
         {"id": "org-A", "name": "Alpha"},
         {"id": "org-B", "name": "Beta"},
     ]  # WHY: two orgs so index 2 is valid
     selector, _ = _make_selector(answers=["not-a-number", "2"])  # WHY: first invalid, then valid
-    result = selector._paginated_pick(orgs)  # WHY: exercise the invalid+retry branches
+    with caplog.at_level(logging.WARNING):
+        result = selector._paginated_pick(orgs)  # WHY: exercise the invalid+retry branches
     assert result == orgs[1]  # WHY: index "2" maps to orgs[1]
-    assert "Invalid input" in capsys.readouterr().out  # WHY: legacy invalid-input message printed
+    assert "Invalid input" in caplog.text  # WHY: legacy invalid-input message logged
 
 
-def test_paginated_pick_out_of_range_then_valid(capsys: pytest.CaptureFixture[str]) -> None:
+def test_paginated_pick_out_of_range_then_valid(caplog: pytest.LogCaptureFixture) -> None:
     """Out-of-range index reprompts; the next valid index returns the picked org."""
     orgs = [{"id": "org-A", "name": "Alpha"}]  # WHY: single org so "5" is out of range
     selector, _ = _make_selector(answers=["5", "1"])  # WHY: out-of-range then valid
-    result = selector._paginated_pick(orgs)  # WHY: exercise the range-guard branch
+    with caplog.at_level(logging.WARNING):
+        result = selector._paginated_pick(orgs)  # WHY: exercise the range-guard branch
     assert result == orgs[0]  # WHY: index "1" maps to orgs[0]
-    assert "Invalid number" in capsys.readouterr().out  # WHY: legacy range-error message printed
+    assert "Invalid number" in caplog.text  # WHY: legacy range-error message logged
 
 
 def test_interpret_choice_navigation() -> None:
@@ -290,22 +299,24 @@ def test_interpret_choice_navigation() -> None:
     assert (action, next_page, picked) == ("nav", 1, None)  # WHY: paged backward
 
 
-def test_render_msp_menu_prints_all_msps(capsys: pytest.CaptureFixture[str]) -> None:
+def test_render_msp_menu_prints_all_msps(caplog: pytest.LogCaptureFixture) -> None:
     """_render_msp_menu prints one line per MSP with role annotation."""
-    MspOrgSelector._render_msp_menu(
-        [
-            {"msp_name": "MSP One", "role": "admin"},  # WHY: full-shape row
-            {},  # WHY: missing fields exercises the fallback labels
-        ]
-    )  # WHY: static method call — no instance state required
-    out = capsys.readouterr().out  # WHY: capture printed menu
+    with caplog.at_level(logging.WARNING):
+        MspOrgSelector._render_msp_menu(
+            [
+                {"msp_name": "MSP One", "role": "admin"},  # WHY: full-shape row
+                {},  # WHY: missing fields exercises the fallback labels
+            ]
+        )  # WHY: static method call — no instance state required
+    out = caplog.text  # WHY: capture logged menu
     assert "MSP One" in out  # WHY: named MSP surfaced
     assert "Unknown" in out  # WHY: fallback name label used for the empty dict
     assert "unknown" in out  # WHY: fallback role label used for the empty dict
 
 
-def test_render_page_shows_multi_page_hint(capsys: pytest.CaptureFixture[str]) -> None:
+def test_render_page_shows_multi_page_hint(caplog: pytest.LogCaptureFixture) -> None:
     """When total_pages > 1 the multi-page hint is printed."""
     selector, _ = _make_selector()  # WHY: build a bare selector to reach the instance method
-    selector._render_page([{"id": "org-A", "name": "A"}], 0, 2)  # WHY: total_pages=2 triggers hint
-    assert "Page 1/2" in capsys.readouterr().out  # WHY: multi-page hint surfaced
+    with caplog.at_level(logging.WARNING):
+        selector._render_page([{"id": "org-A", "name": "A"}], 0, 2)  # WHY: total_pages=2 triggers hint
+    assert "Page 1/2" in caplog.text  # WHY: multi-page hint surfaced
