@@ -7,6 +7,25 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 4/N: retire `print()` in `src/cache/` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced the 9 remaining `print()`
+  calls in `src/cache/cache_utils.py` with `logging.warning(...)` /
+  `logging.error(...)` so the print-avoidance rule (T20 selector target of
+  #886) can eventually be enabled repo-wide. Touched `clear_cache` (empty
+  state, discovered-files banner, per-file list, cleared-summary), `_scan_cache_candidates`
+  (I/O error path), `_delete_cache_files` (per-file OSError path),
+  `create_address_parse_failures_csv` (success and failure notices), and
+  `fast_cache_hit` (cache-hit notice). WARNING level chosen for operator-visible
+  summaries so they surface on the default root-logger configuration (INFO is
+  suppressed by default); ERROR level for the two failure paths. Existing
+  `print(...)` + `logging.info(...)` pairs were collapsed into single WARNING
+  lines to avoid double-emission. Companion unit tests in
+  `tests/unit/cache/test_cache_utils.py` were updated to assert against
+  `caplog.text` instead of `capsys.readouterr().out`. Fourth of ~20+
+  per-subdirectory slices of #886; T20 selector flip and E402 audit will
+  land after all `src/` subdirs are print-free.
+
 ### #886 Phase 2 slice 3/N: retire `print()` in `src/config/` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced the 7 remaining `print()`

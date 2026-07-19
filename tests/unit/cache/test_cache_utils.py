@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import csv
 import importlib
+import logging  # WHY (#886 Phase 2): assert against caplog after print()->logging migration.
 import os
 import time
 from datetime import datetime, timedelta
@@ -323,31 +324,36 @@ class TestDeleteCacheFiles:
 class TestClearCache:
     """End-to-end orchestration for the Menu 175 clear-cache path."""
 
-    def test_clears_generated_files(self, tmp_path, monkeypatch, capsys):
+    def test_clears_generated_files(self, tmp_path, monkeypatch, caplog):
         """Discovers, prints, and deletes matching files, then reports totals."""
         data_dir = tmp_path / "data"
         data_dir.mkdir()
         (data_dir / "SiteList.csv").write_text("x", encoding="utf-8")
         (data_dir / "unrelated.txt").write_text("x", encoding="utf-8")
         monkeypatch.chdir(tmp_path)
-        CacheUtils.clear_cache()
+        # WHY (#886 Phase 2): operator-visible summary is now WARNING-level via logging, not print().
+        with caplog.at_level(logging.WARNING):
+            CacheUtils.clear_cache()
         assert not (data_dir / "SiteList.csv").exists()
         assert (data_dir / "unrelated.txt").exists()
-        out = capsys.readouterr().out
-        assert "Cache cleared" in out
+        assert "Cache cleared" in caplog.text
 
-    def test_no_files_message_when_empty(self, tmp_path, monkeypatch, capsys):
+    def test_no_files_message_when_empty(self, tmp_path, monkeypatch, caplog):
         """Empty data dir prints the empty-state message without errors."""
         (tmp_path / "data").mkdir()
         monkeypatch.chdir(tmp_path)
-        CacheUtils.clear_cache()
-        assert "No generated cache CSV files found to delete." in capsys.readouterr().out
+        # WHY (#886 Phase 2): empty-state notice now WARNING via logging (see cache_utils.clear_cache).
+        with caplog.at_level(logging.WARNING):
+            CacheUtils.clear_cache()
+        assert "No generated cache CSV files found to delete." in caplog.text
 
-    def test_aborts_when_scan_fails(self, monkeypatch, capsys):
+    def test_aborts_when_scan_fails(self, monkeypatch, caplog):
         """Scan failure (None) short-circuits clear_cache without printing summary."""
         monkeypatch.setattr(CacheUtils, "_scan_cache_candidates", staticmethod(lambda _: None))
-        CacheUtils.clear_cache()
-        assert "Cache cleared" not in capsys.readouterr().out
+        # WHY (#886 Phase 2): summary line is now WARNING via logging; capture it to assert absence.
+        with caplog.at_level(logging.WARNING):
+            CacheUtils.clear_cache()
+        assert "Cache cleared" not in caplog.text
 
 
 # ---------------------------------------------------------------------------
@@ -363,7 +369,7 @@ class TestCreateAddressParseFailuresCsv:
         CacheUtils.create_address_parse_failures_csv([])
         assert not (tmp_path / "AddressParseFailures.csv").exists()
 
-    def test_writes_expected_rows(self, fake_mh, tmp_path, capsys):
+    def test_writes_expected_rows(self, fake_mh, tmp_path, caplog):
         """One row per failure record is written under FilePathUtils path."""
         failures = [
             {
@@ -378,21 +384,25 @@ class TestCreateAddressParseFailuresCsv:
                 "timestamp": "2026-01-01",
             }
         ]
-        CacheUtils.create_address_parse_failures_csv(failures, "custom.csv")
+        # WHY (#886 Phase 2): operator-visible "documented in" notice is now WARNING via logging, not print().
+        with caplog.at_level(logging.WARNING):
+            CacheUtils.create_address_parse_failures_csv(failures, "custom.csv")
         content = (tmp_path / "custom.csv").read_text(encoding="utf-8").splitlines()
         assert content[0].startswith("site_id,")
         assert "123 Main" in content[1]
-        assert "documented in" in capsys.readouterr().out
+        assert "documented in" in caplog.text
 
-    def test_swallows_write_exception(self, fake_mh, monkeypatch, capsys):
-        """OSError during write is logged and printed but does not raise."""
+    def test_swallows_write_exception(self, fake_mh, monkeypatch, caplog):
+        """OSError during write is logged but does not raise."""
 
         def _bad_open(*_a, **_kw):
             raise OSError("disk full")
 
         monkeypatch.setattr("src.cache.cache_utils.open", _bad_open, raising=False)
-        CacheUtils.create_address_parse_failures_csv([{"site_id": "x"}])
-        assert "Failed to create address parse failures CSV" in capsys.readouterr().out
+        # WHY (#886 Phase 2): failure notice migrated from print() to logging.error; capture via caplog.
+        with caplog.at_level(logging.ERROR):
+            CacheUtils.create_address_parse_failures_csv([{"site_id": "x"}])
+        assert "Failed to create address parse failures CSV" in caplog.text
 
 
 # ---------------------------------------------------------------------------
@@ -407,11 +417,13 @@ class TestFastCacheHit:
         """Missing file is a cache miss."""
         assert CacheUtils.fast_cache_hit("nope.csv") is False
 
-    def test_returns_true_when_fresh(self, fake_mh, tmp_path, capsys):
-        """Fresh file returns True and prints the operator-facing message."""
+    def test_returns_true_when_fresh(self, fake_mh, tmp_path, caplog):
+        """Fresh file returns True and emits the operator-facing message."""
         (tmp_path / "fresh.csv").write_text("x", encoding="utf-8")
-        assert CacheUtils.fast_cache_hit("fresh.csv", max_age_minutes=60) is True
-        assert "Using cached fresh.csv" in capsys.readouterr().out
+        # WHY (#886 Phase 2): cache-hit notice migrated from print() to logging.warning.
+        with caplog.at_level(logging.WARNING):
+            assert CacheUtils.fast_cache_hit("fresh.csv", max_age_minutes=60) is True
+        assert "Using cached fresh.csv" in caplog.text
 
     def test_returns_false_when_stale(self, fake_mh, tmp_path):
         """Stale file returns False so caller regenerates."""

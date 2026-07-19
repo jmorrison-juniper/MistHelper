@@ -208,15 +208,18 @@ class CacheUtils:
         if candidates is None:  # Directory could not be listed (already reported by the scanner)
             return  # Abort -- nothing to delete if we can't list the directory
         if not candidates:  # Nothing to delete -- inform operator and return early
-            print("! No generated cache CSV files found to delete.")  # User-friendly empty state message
-            logging.info("No generated cache CSVs found in %s", data_dir)  # Log empty result
+            # WHY (#886 Phase 2): consolidate print+info into single WARNING so operator sees notice
+            # on the default root-logger config (INFO is suppressed by default).
+            logging.warning("No generated cache CSV files found to delete.")
             return  # Early return -- nothing to do
-        print(f"Found {len(candidates)} generated cache CSV file(s) to delete:")  # Show operator what will be removed
+        logging.warning(
+            "Found %d generated cache CSV file(s) to delete:", len(candidates)
+        )  # Show operator what will be removed (WARNING surfaces on default root-logger)
         for name in sorted(candidates):  # Sort for readable output
-            print(f"  {name}")  # List each file so operator knows exactly what is affected
+            logging.warning("  %s", name)  # List each file so operator knows exactly what is affected
         deleted, errors = CacheUtils._delete_cache_files(data_dir, candidates)  # Delete each file, counting outcomes
-        print(f"! Cache cleared: {deleted} file(s) deleted, {errors} error(s).")  # Summary line for operator
-        logging.info("Cache clear complete: %d deleted, %d errors", deleted, errors)  # Log summary for post-run review
+        # WHY (#886 Phase 2): consolidate print+info into single WARNING for post-run operator summary.
+        logging.warning("Cache cleared: %d file(s) deleted, %d error(s).", deleted, errors)
 
     @staticmethod
     def _scan_cache_candidates(data_dir: str) -> list[str] | None:  # List generated cache files, or None on error
@@ -228,7 +231,8 @@ class CacheUtils:
             ]  # Keep only MistHelper-generated cache files (safe to delete)
         except OSError as scan_error:  # Permission or missing-directory error
             logging.error("Failed to list data directory %s: %s", data_dir, scan_error)  # Log I/O failure with context
-            print(f"! Error scanning data directory: {scan_error}")  # Surface error to operator
+            # WHY (#886 Phase 2): retire print() in favor of logging.error (surfaces on default root-logger).
+            logging.error("Error scanning data directory: %s", scan_error)
             return None  # Signal the caller to abort
 
     @staticmethod
@@ -245,7 +249,8 @@ class CacheUtils:
                 deleted += 1  # Increment success counter
             except OSError as delete_error:  # Handle individual file deletion failures
                 logging.error("Failed to delete %s: %s", full_path, delete_error)  # Log failure with path and reason
-                print(f"  ! Could not delete {name}: {delete_error}")  # Surface individual failure to operator
+                # WHY (#886 Phase 2): retire print() in favor of logging.error (surfaces on default root-logger).
+                logging.error("  Could not delete %s: %s", name, delete_error)
                 errors += 1  # Increment error counter
         return deleted, errors  # Report totals to the caller
 
@@ -266,10 +271,13 @@ class CacheUtils:
                 for failure in parse_failures:
                     writer.writerow(failure)  # One row per failure record
             logging.info("Address parsing failures documented in: %s (%s records)", filename, len(parse_failures))
-            print(f"! Address parsing failures documented in: {filename} ({len(parse_failures)} records)")
+            # WHY (#886 Phase 2): consolidate print+info into single WARNING so operator sees notice
+            # on the default root-logger config (INFO is suppressed by default).
+            logging.warning("Address parsing failures documented in: %s (%d records)", filename, len(parse_failures))
         except Exception as e:
             logging.error("Failed to create address parse failures CSV: %s", e)
-            print(f"! Failed to create address parse failures CSV: {e}")
+            # WHY (#886 Phase 2): retire print() in favor of logging.error (surfaces on default root-logger).
+            logging.error("Failed to create address parse failures CSV: %s", e)
 
     @staticmethod
     def fast_cache_hit(filename: str, max_age_minutes: int = 60) -> bool:  # Check if cached output file is fresh
@@ -284,8 +292,9 @@ class CacheUtils:
             age_seconds = time.time() - os.path.getmtime(full_path)  # Seconds since last modification
             age_minutes = age_seconds / 60.0  # Convert to minutes for readable comparison
             if age_minutes <= max_age_minutes:  # File is within the freshness window
-                logging.info("fast_cache_hit HIT: %s (%.1f min old)", filename, age_minutes)  # Log cache hit
-                print(f"! Using cached {filename} ({age_minutes:.0f} min old) -- skipping re-generation.")
+                # WHY (#886 Phase 2): consolidate print+info into single WARNING so operator sees
+                # the cache-hit notice on the default root-logger config (INFO is suppressed).
+                logging.warning("Using cached %s (%.0f min old) -- skipping re-generation.", filename, age_minutes)
                 return True  # Cache hit -- caller can skip expensive work
             logging.debug("fast_cache_hit MISS: %s is stale (%.1f min old)", filename, age_minutes)  # Log stale
             return False  # File is too old -- cache miss
