@@ -7,6 +7,28 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 9/N: retire `print()` in `src/auth/` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced the remaining `print()`
+  calls in `src/auth/interactive/clouds.py`,
+  `src/auth/interactive/credential_prompter.py`,
+  `src/auth/interactive/login_orchestrator.py`, and
+  `src/auth/interactive/msp_org_selector.py` with `logging.warning(...)` /
+  `logging.error(...)` / `logging.info(...)` / `logging.debug(...)` so the
+  print-avoidance rule (T20 selector target of #886) can eventually be
+  enabled repo-wide. WARNING level chosen for operator-visible cloud/MSP/org
+  menu banners, credential-validation banners, auth-failure messages, 2FA
+  prompts, and paginated-picker status output so they surface on the default
+  root-logger configuration (INFO is suppressed by default). Companion unit
+  tests in `tests/unit/auth/interactive/test_credential_prompter.py`,
+  `tests/unit/auth/interactive/test_login_orchestrator.py`, and
+  `tests/unit/auth/interactive/test_msp_org_selector.py` were migrated from
+  `capsys`/`captured.out` to `caplog`/`caplog.text` with a
+  `caplog.at_level(logging.WARNING)` wrapper around each call site so the
+  suite continues to assert operator-visible output through the logging path.
+  No behavioural change beyond the emit channel; all 96 tests under
+  `tests/unit/auth/` remain green.
+
 ### #886 Phase 2 slice 8/N: retire `print()` in `src/ssid_consolidation/` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced the remaining `print()`

@@ -23,7 +23,7 @@ class CredentialPrompter:
             logging.info("Email prompt aborted via EOF")  # Trace abort path
             return None  # Signal caller to cancel the login flow
         if not email:  # Treat blank as a hard validation failure
-            print("X Email is required")  # Legacy console message preserved verbatim
+            logging.warning("X Email is required")  # Legacy console message routed via logger
             logging.debug("Email prompt returned empty string")  # Trace validation failure
             return None  # Caller will short-circuit the login
         logging.debug("Email prompt accepted")  # Trace acceptance without leaking the value
@@ -39,10 +39,10 @@ class CredentialPrompter:
             return None  # Signal caller to cancel the login flow
         except Exception as password_error:  # Any other terminal failure (e.g., closed stdin)
             logging.error("Failed to read password: %s", password_error)  # Legacy error log preserved
-            print(f"X Failed to read password: {password_error}")  # Legacy console message preserved
+            logging.warning("X Failed to read password: %s", password_error)  # Legacy console message routed via logger
             return None  # Caller will short-circuit the login
         if not password:  # Treat blank password as validation failure
-            print("X Password is required")  # Legacy console message preserved verbatim
+            logging.warning("X Password is required")  # Legacy console message routed via logger
             logging.debug("Password prompt returned empty string")  # Trace validation failure
             return None  # Caller will short-circuit the login
         logging.debug("Password prompt accepted (length=%d)", len(password))  # Trace length only
@@ -57,7 +57,7 @@ class CredentialPrompter:
             logging.info("2FA prompt aborted via EOF")  # Trace abort path
             return None  # Signal caller to cancel the login flow
         if not code:  # Empty 2FA code is treated as a hard failure by the legacy flow
-            print("  X 2FA code is required")  # Legacy console message preserved verbatim
+            logging.warning("  X 2FA code is required")  # Legacy console message routed via logger
             logging.debug("2FA prompt returned empty string")  # Trace validation failure
             return None  # Caller will short-circuit the login
         logging.debug("2FA prompt accepted")  # Trace acceptance without leaking the value

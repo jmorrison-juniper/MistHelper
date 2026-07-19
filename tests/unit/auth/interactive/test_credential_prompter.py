@@ -8,7 +8,10 @@ safe_input/getpass that returns Optional[str]. Cover every branch
 
 from __future__ import annotations  # WHY: enable PEP 604 unions on older type checkers
 
+import logging  # WHY: caplog level control for legacy warning-level messages
 from unittest.mock import MagicMock  # WHY: MagicMock spec + patch for getpass
+
+import pytest  # WHY: LogCaptureFixture type for caplog assertions
 
 from src.auth.interactive.credential_prompter import CredentialPrompter  # WHY: subject under test
 
@@ -43,12 +46,13 @@ def test_prompt_email_returns_none_on_eof() -> None:
     assert prompter.prompt_email() is None  # WHY: EOF must cancel the flow
 
 
-def test_prompt_email_returns_none_on_blank(capsys) -> None:
+def test_prompt_email_returns_none_on_blank(caplog: pytest.LogCaptureFixture) -> None:
     """Blank email prints the legacy validation banner and returns None."""
     stub = _SafeInputStub(return_value="")  # WHY: blank input is a hard validation failure
     prompter = CredentialPrompter(safe_input=stub)
-    assert prompter.prompt_email() is None
-    assert "X Email is required" in capsys.readouterr().out  # WHY: legacy console message preserved
+    with caplog.at_level(logging.WARNING):
+        assert prompter.prompt_email() is None
+    assert "X Email is required" in caplog.text  # WHY: legacy console message preserved
 
 
 def test_prompt_password_returns_value(monkeypatch) -> None:
@@ -71,26 +75,28 @@ def test_prompt_password_returns_none_on_eof(monkeypatch) -> None:
     assert prompter.prompt_password() is None
 
 
-def test_prompt_password_returns_none_on_terminal_error(monkeypatch, capsys) -> None:
+def test_prompt_password_returns_none_on_terminal_error(monkeypatch, caplog: pytest.LogCaptureFixture) -> None:
     """Non-EOF exceptions from getpass are logged and returned as None."""
     monkeypatch.setattr(
         "src.auth.interactive.credential_prompter.getpass.getpass",
         MagicMock(side_effect=OSError("closed stdin")),
     )
     prompter = CredentialPrompter(safe_input=_SafeInputStub())
-    assert prompter.prompt_password() is None
-    assert "Failed to read password" in capsys.readouterr().out  # WHY: legacy console banner
+    with caplog.at_level(logging.WARNING):
+        assert prompter.prompt_password() is None
+    assert "Failed to read password" in caplog.text  # WHY: legacy console banner
 
 
-def test_prompt_password_returns_none_on_blank(monkeypatch, capsys) -> None:
+def test_prompt_password_returns_none_on_blank(monkeypatch, caplog: pytest.LogCaptureFixture) -> None:
     """Blank password prints validation banner and returns None."""
     monkeypatch.setattr(
         "src.auth.interactive.credential_prompter.getpass.getpass",
         MagicMock(return_value=""),
     )
     prompter = CredentialPrompter(safe_input=_SafeInputStub())
-    assert prompter.prompt_password() is None
-    assert "X Password is required" in capsys.readouterr().out
+    with caplog.at_level(logging.WARNING):
+        assert prompter.prompt_password() is None
+    assert "X Password is required" in caplog.text
 
 
 def test_prompt_two_factor_returns_trimmed_value() -> None:
@@ -108,9 +114,10 @@ def test_prompt_two_factor_returns_none_on_eof() -> None:
     assert prompter.prompt_two_factor() is None
 
 
-def test_prompt_two_factor_returns_none_on_blank(capsys) -> None:
+def test_prompt_two_factor_returns_none_on_blank(caplog: pytest.LogCaptureFixture) -> None:
     """Blank 2FA prints legacy banner and returns None."""
     stub = _SafeInputStub(return_value="   ")  # WHY: whitespace-only trims to empty
     prompter = CredentialPrompter(safe_input=stub)
-    assert prompter.prompt_two_factor() is None
-    assert "X 2FA code is required" in capsys.readouterr().out
+    with caplog.at_level(logging.WARNING):
+        assert prompter.prompt_two_factor() is None
+    assert "X 2FA code is required" in caplog.text

@@ -40,17 +40,19 @@ class MspOrgSelector:
     @staticmethod
     def _print_banner() -> None:
         """Print the legacy 'SELECT MSP AND ORGANIZATION' banner verbatim."""
-        print("")  # Blank spacer matches legacy output exactly
-        print("=" * 60)  # Top divider preserved verbatim
-        print("  SELECT MSP AND ORGANIZATION")  # Banner heading preserved verbatim
-        print("=" * 60)  # Bottom divider preserved verbatim
-        print("")  # Blank spacer matches legacy output exactly
+        logging.warning("")  # Blank spacer matches legacy output exactly
+        logging.warning("=" * 60)  # Top divider routed via logger
+        logging.warning("  SELECT MSP AND ORGANIZATION")  # Banner heading routed via logger
+        logging.warning("=" * 60)  # Bottom divider routed via logger
+        logging.warning("")  # Blank spacer matches legacy output exactly
 
     def _choose_msp(self, msps: list[dict[str, Any]]) -> dict[str, Any] | None:
         """Return the chosen MSP dict, auto-selecting when only one is available."""
         if len(msps) == 1:  # Auto-pick path preserves the legacy convenience behaviour
             only = msps[0]  # Single MSP available
-            print(f"  Using MSP: {only['msp_name']} (only one available)")  # Legacy message preserved
+            logging.warning(
+                "  Using MSP: %s (only one available)", only["msp_name"]
+            )  # Legacy message routed via logger
             logging.debug("Auto-selected the only available MSP: %s", only.get("msp_id"))  # Trace
             return only  # Caller will proceed straight to org selection
         return self._prompt_msp(msps)  # Multi-MSP case requires an interactive prompt
@@ -64,18 +66,18 @@ class MspOrgSelector:
                 "  Select MSP (number, or Enter to skip): ", context="msp_select"
             ).strip()
         except (ValueError, SystemExit):  # Preserve legacy combined exception handling
-            print("  X Invalid input - skipping MSP selection")  # Legacy console message preserved
+            logging.warning("  X Invalid input - skipping MSP selection")  # Legacy console message routed via logger
             return None  # Caller will fall back to direct org selection
         if choice == "":  # Blank input means "skip MSP selection" in the legacy flow
-            print("  Skipping MSP selection - using direct org access")  # Legacy message preserved
+            logging.warning("  Skipping MSP selection - using direct org access")  # Legacy message routed via logger
             return None  # Caller will fall back to direct org selection
         try:
             index = int(choice) - 1  # Convert 1-based selection to 0-based list index
         except ValueError:  # Non-numeric input falls into the legacy invalid path
-            print("  X Invalid selection - skipping MSP selection")  # Legacy message preserved
+            logging.warning("  X Invalid selection - skipping MSP selection")  # Legacy message routed via logger
             return None  # Caller will fall back to direct org selection
         if not (0 <= index < len(msps)):  # Out-of-range index falls into the legacy invalid path
-            print("  X Invalid selection - skipping MSP selection")  # Legacy message preserved
+            logging.warning("  X Invalid selection - skipping MSP selection")  # Legacy message routed via logger
             return None  # Caller will fall back to direct org selection
         logging.debug("MSP selected at index %d", index)  # Trace the picked index
         return msps[index]  # Hand the chosen MSP dict back to the caller
@@ -83,29 +85,29 @@ class MspOrgSelector:
     @staticmethod
     def _render_msp_menu(msps: list[dict[str, Any]]) -> None:
         """Print the numbered MSP menu using the legacy formatting."""
-        print("  Available MSPs:")  # Legacy header preserved verbatim
+        logging.warning("  Available MSPs:")  # Legacy header routed via logger
         for index, msp in enumerate(msps, start=1):  # 1-based numbering matches legacy UI
             msp_name = msp.get("msp_name", "Unknown")  # Preserve legacy fallback label
             msp_role = msp.get("role", "unknown")  # Preserve legacy fallback role
-            print(f"    {index}. {msp_name} (role: {msp_role})")  # Legacy format preserved verbatim
-        print("")  # Blank spacer matches legacy output exactly
+            logging.warning("    %d. %s (role: %s)", index, msp_name, msp_role)  # Legacy format routed via logger
+        logging.warning("")  # Blank spacer matches legacy output exactly
 
     def _select_org_under_msp(self, msp: dict[str, Any]) -> None:
         """Fetch orgs under the chosen MSP and persist the operator's pick to state."""
         self.state["selected_msp"] = msp  # Cache the chosen MSP regardless of org outcome
         msp_id = msp["msp_id"]  # Required field per the MSP detection contract
         msp_name = msp.get("msp_name", "Unknown")  # Preserve legacy fallback label
-        print(f"  + Selected MSP: {msp_name}")  # Legacy console message preserved verbatim
-        print(f"  Fetching organizations under {msp_name}...")  # Legacy console message preserved
+        logging.warning("  + Selected MSP: %s", msp_name)  # Legacy console message routed via logger
+        logging.warning("  Fetching organizations under %s...", msp_name)  # Legacy console message routed via logger
         apisession = self.state.get("apisession")  # Pull the live session from shared state
         if apisession is None:  # Defensive guard preserved from the legacy code path
-            print("  X API session not initialized")  # Legacy console message preserved verbatim
+            logging.warning("  X API session not initialized")  # Legacy console message routed via logger
             logging.error("API session not initialized when selecting MSP org")  # Legacy error log
             return  # Cannot continue without a session
         try:
             orgs = self._fetch_msp_orgs(apisession, msp_id)  # Sorted list of org dicts (or None)
         except Exception as org_error:  # noqa: BLE001  Preserve legacy catch-all surface
-            print(f"  X Error fetching MSP organizations: {org_error}")  # Legacy message preserved
+            logging.warning("  X Error fetching MSP organizations: %s", org_error)  # Legacy message routed via logger
             logging.error("Failed to fetch MSP organizations: %s", org_error)  # Legacy error log
             return  # Bail out without mutating org_id
         if not orgs:  # Empty list or None means "no orgs to choose from"
@@ -121,19 +123,19 @@ class MspOrgSelector:
         logging.info("Calling listMspOrgs for msp_id=%s", msp_id)  # Trace before SDK call
         response = mistapi_module.api.v1.msps.orgs.listMspOrgs(apisession, msp_id)  # SDK call
         if not response or not hasattr(response, "data"):  # Legacy guard for empty/invalid response
-            print("  X Failed to retrieve MSP organizations")  # Legacy console message preserved
+            logging.warning("  X Failed to retrieve MSP organizations")  # Legacy console message routed via logger
             logging.debug("listMspOrgs returned an empty or invalid response")  # Trace bad response
             return None  # Caller will treat as "no orgs"
         orgs_data = response.data  # SDK response payload (list or dict)
         if not isinstance(orgs_data, list):  # Normalize single-object responses to a list
             orgs_data = [orgs_data] if orgs_data else []  # Empty falsy values become empty list
         if not orgs_data:  # Empty list short-circuits to the legacy "no orgs" message
-            print("  No organizations found under this MSP")  # Legacy console message preserved
+            logging.warning("  No organizations found under this MSP")  # Legacy console message routed via logger
             logging.debug("listMspOrgs returned an empty org list")  # Trace empty list
             return []  # Caller will short-circuit on empty list
         orgs_data = sorted(orgs_data, key=lambda org: org.get("name", "").lower())  # Stable sort
-        print(f"  Found {len(orgs_data)} organization(s):")  # Legacy console message preserved
-        print("")  # Blank spacer matches legacy output exactly
+        logging.warning("  Found %d organization(s):", len(orgs_data))  # Legacy console message routed via logger
+        logging.warning("")  # Blank spacer matches legacy output exactly
         logging.debug("listMspOrgs returned %d orgs (sorted by name)", len(orgs_data))  # Trace
         return orgs_data  # Hand the sorted list back to the picker
 
@@ -180,13 +182,17 @@ class MspOrgSelector:
             org = orgs[org_index]  # Current org dict
             org_name = org.get("name", "Unknown")  # Preserve legacy fallback label
             org_id_preview = org.get("id", "N/A")[:8]  # Preserve legacy 8-char id preview
-            print(f"    {org_index + 1:>3}. {org_name} ({org_id_preview}...)")  # Legacy format preserved
-        print("")  # Blank spacer matches legacy output exactly
+            logging.warning(
+                "    %3d. %s (%s...)", org_index + 1, org_name, org_id_preview
+            )  # Legacy format routed via logger
+        logging.warning("")  # Blank spacer matches legacy output exactly
         if total_pages > 1:  # Multi-page mode prints the page counter + nav hint
-            print(f"  Page {current_page + 1}/{total_pages}")  # Legacy page indicator preserved
-            print("  Enter number to select, 'n' for next page, 'p' for previous, 'q' to skip")  # Legacy hint
+            logging.warning("  Page %d/%d", current_page + 1, total_pages)  # Legacy page indicator routed via logger
+            logging.warning(
+                "  Enter number to select, 'n' for next page, 'p' for previous, 'q' to skip"
+            )  # Legacy hint routed via logger
         else:
-            print("  Enter number to select, or 'q' to skip")  # Legacy single-page hint preserved
+            logging.warning("  Enter number to select, or 'q' to skip")  # Legacy single-page hint routed via logger
 
     @staticmethod
     def _interpret_choice(
@@ -197,7 +203,7 @@ class MspOrgSelector:
     ) -> tuple[str, int, dict[str, Any] | None]:
         """Decode the operator's choice into (action, next_page, picked_org)."""
         if choice in {"", "q"}:  # Blank or 'q' both mean "skip" in the legacy flow
-            print("  Skipping org selection")  # Legacy console message preserved verbatim
+            logging.warning("  Skipping org selection")  # Legacy console message routed via logger
             return ("quit", current_page, None)  # Loop caller will exit with None
         if choice == "n" and current_page < total_pages - 1:  # Next-page navigation
             return ("nav", current_page + 1, None)  # Loop caller will re-render the next page
@@ -206,11 +212,11 @@ class MspOrgSelector:
         try:
             index = int(choice) - 1  # Convert 1-based selection to 0-based list index
         except ValueError:  # Non-numeric input falls into the legacy invalid-input path
-            print("  X Invalid input - try again")  # Legacy console message preserved verbatim
+            logging.warning("  X Invalid input - try again")  # Legacy console message routed via logger
             return ("nav", current_page, None)  # Stay on the same page and loop again
         if 0 <= index < len(orgs):  # Index is in range: this is a valid selection
             return ("select", current_page, orgs[index])  # Hand the picked org back via loop caller
-        print("  X Invalid number - try again")  # Out-of-range index falls into the legacy path
+        logging.warning("  X Invalid number - try again")  # Out-of-range index routed via logger
         return ("nav", current_page, None)  # Stay on the same page and loop again
 
     def _record_org_selection(self, msp_name: str, org: dict[str, Any]) -> None:
@@ -218,9 +224,9 @@ class MspOrgSelector:
         selected_org_id = org.get("id")  # Pull the org UUID from the chosen entry
         selected_org_name = org.get("name", "Unknown")  # Preserve legacy fallback label
         self.state["org_id"] = selected_org_id  # Update shared state with the new org id
-        print("")  # Blank spacer matches legacy output exactly
-        print(f"  + Selected organization: {selected_org_name}")  # Legacy console message preserved
-        print(f"  + Organization ID: {selected_org_id}")  # Legacy console message preserved verbatim
+        logging.warning("")  # Blank spacer matches legacy output exactly
+        logging.warning("  + Selected organization: %s", selected_org_name)  # Legacy console message routed via logger
+        logging.warning("  + Organization ID: %s", selected_org_id)  # Legacy console message routed via logger
         logging.info(  # Legacy info log preserved verbatim
             "User selected org: %s (%s) under MSP: %s",
             selected_org_name,
