@@ -7,6 +7,19 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Menu 198: Search Site WAN Usages (spec 901 / issue #1409)
+
+- **New menu 198 (Added)**: `SiteWanUsageExporter.wan_usages()` wraps the previously
+  unreachable Mist API `searchSiteWanUsage` operation
+  (`GET /api/v1/sites/{site_id}/wan_usages/search`). Operator picks a site (shared
+  `SiteDeviceExporter._resolve_site_for_stats` helper), the exporter pages all rows via
+  `mistapi.get_all`, flattens + escapes them with `DataProcessingUtils`, then persists
+  through `DataExporter.write_with_format_selection` so CSV / SQLite / ArangoDB backends
+  all work. Empty responses surface a friendly "no WAN usage data" notice instead of
+  failing. `ENDPOINT_PRIMARY_KEY_STRATEGIES` already defined a composite PK on
+  `(mac, port_id, peer_mac)` for this operationId, and `arango_writer` already routed it
+  to the `wan_usage` collection -- no schema changes required.
+
 ### Menu 197: Client Packet Capture Downloader (issue #421)
 
 - **New menu 197 (Added)**: `ClientPacketCaptureDownloader` guides the operator through

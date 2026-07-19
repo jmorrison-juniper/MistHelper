@@ -429,6 +429,7 @@ For quick category guidance, see the Wiki Menu Reference page linked above.
 
 - New in this branch: Menu `196` exports org async license-claim status summary and optional per-device detail rows.
 - New in this branch: Menu `197` interactively downloads client packet captures grouped by VLAN (site -> client -> VLAN -> `data/packet_captures/<mac>/vlan_<id>/`).
+- New in this branch: Menu `198` searches site WAN usage records (`searchSiteWanUsage`) and exports them to `SiteWanUsages_<site>.csv` (CSV/SQLite/ArangoDB via `DataExporter`).
 ## Security & Safety
 
 | Area | Practice |

@@ -442,6 +442,9 @@ from src.export.site_insights.device_metric_operation import (
 from src.export.site_insights.site_metric_operation import (
     SiteMetricOperation,
 )  # Decomposed Menu 74 entry point
+from src.export.site_wan_usage_exporter import (
+    SiteWanUsageExporter,  # Spec 901 / issue #1409 -- searchSiteWanUsage menu 198
+)
 from src.export.sites_by_ap_model_exporter import (
     SitesByAPModelExporter,  # Cat B (1013 SC-001 position 28) -- re-export
 )
@@ -3864,6 +3867,10 @@ menu_actions: "dict[str, tuple[Callable[..., Any], str]]" = {
     "197": (
         lambda: ClientPacketCaptureDownloader(apisession).run(),
         "Download client packet captures grouped by VLAN (site -> client -> VLAN -> data/packet_captures/)",
+    ),
+    "198": (
+        SiteWanUsageExporter.wan_usages,
+        "Search Site WAN Usages (searchSiteWanUsage) - Export per-site WAN usage records to SiteWanUsages.csv",
     ),
     "44": (OrgConfigExporter.psks, "Export PSK (Pre-Shared Key) information for the organization"),
     "45": (OrgConfigExporter.webhooks, "Export webhook configuration for the organization"),
