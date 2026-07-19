@@ -56,9 +56,11 @@ def _get_prompt_client_utils() -> Any:  # WHY: module-level factory for deferred
 
 def _get_prompt_network_device_utils() -> Any:  # WHY: module-level factory for deferred PromptNetworkDeviceUtils access
     """Lazy import PromptNetworkDeviceUtils to avoid circular imports."""
-    import MistHelper as _mh  # pylint: disable=import-outside-toplevel  # WHY: deferred to break capture<->MistHelper cycle
+    from src.device.prompt_utils import (
+        PromptNetworkDeviceUtils,
+    )  # pylint: disable=import-outside-toplevel  # WHY: extracted from MistHelper monolith under issue #33xx
 
-    return _mh.PromptNetworkDeviceUtils  # WHY: caller invokes device/port selection prompts
+    return PromptNetworkDeviceUtils  # WHY: caller invokes device/port selection prompts
 
 
 def _get_data_exporter() -> Any:  # WHY: module-level factory for deferred DataExporter access
