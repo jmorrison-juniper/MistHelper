@@ -62,13 +62,13 @@ _TEMPLATE_BASENAME_ENV = "MIST_TEMPLATE_BASENAME"  # WHY: env override for the s
 _DEVIATION_CONTEXT = "ssid_consolidation_deviation_resolution"  # WHY: safe_input_fn context tag
 _PHASE4_ID = 4  # WHY: phase index for save_phase_results / write_data_fn dispatch
 _PHASE4_LABEL = "Phase 4"  # WHY: label used by _print_phase_summary for the templates phase
-_PHASE4_HEADER = "\n=== Phase 4: Create Consolidated Templates ==="  # WHY: user-facing banner
+_PHASE4_HEADER = "=== Phase 4: Create Consolidated Templates ==="  # WHY: user-facing banner
 _PHASE4_START_LOG = "Phase 4: Starting template creation"  # WHY: startup log line for phase 4
 _PHASE4_WRITE_FILENAME = "ssid_consolidation_templates"  # WHY: parquet/table sink label for phase 4
 _PHASE4_WRITE_API_NAME = "ssidConsolidationTemplates"  # WHY: mist API function tag for phase 4 write
 _PHASE5_ID = 5  # WHY: phase index for save_phase_results / offer_resume dispatch
 _PHASE5_LABEL = "Phase 5"  # WHY: label used by _print_phase_summary for the disable phase
-_PHASE5_HEADER = "\n=== Phase 5: Disable Old SSIDs ==="  # WHY: user-facing banner
+_PHASE5_HEADER = "=== Phase 5: Disable Old SSIDs ==="  # WHY: user-facing banner
 _PHASE5_START_LOG = "Phase 5: Starting old SSID disable"  # WHY: startup log line for phase 5
 _PHASE5_WRITE_FILENAME = "ssid_consolidation_disable"  # WHY: parquet/table sink label for phase 5
 _PHASE5_WRITE_API_NAME = "ssidConsolidationDisable"  # WHY: mist API function tag for phase 5 write
@@ -162,7 +162,7 @@ def _print_deviation_choices(
     unique_values: list[dict[str, Any]],
 ) -> None:
     """Print the numbered list of candidate values for a deviation."""
-    print(f"\n  Deviation: {param} in cluster '{cluster}'")  # WHY: header per deviation
+    logging.warning("Deviation: %s in cluster '%s'", param, cluster)  # WHY: header per deviation
     for index, entry in enumerate(unique_values, 1):  # WHY: 1-based menu numbering for operator
         _print_choice_entry(index, entry)  # WHY: delegate row rendering to keep loop body tight
 
@@ -170,10 +170,12 @@ def _print_deviation_choices(
 def _print_choice_entry(index: int, entry: dict[str, Any]) -> None:
     """Print one candidate value row plus optional 'and N more sites' tail."""
     sites_preview = ", ".join(entry["sites"][:_SITES_PREVIEW_LIMIT])  # WHY: bounded preview
-    print(f"    {index}. {entry['value']} ({entry['count']} sites: {sites_preview})")  # WHY: candidate line
+    logging.warning(
+        "%d. %s (%d sites: %s)", index, entry["value"], entry["count"], sites_preview
+    )  # WHY: candidate line
     remaining = len(entry["sites"]) - _SITES_PREVIEW_LIMIT  # WHY: tail count when list exceeds preview
     if remaining > 0:  # WHY: only emit tail hint when overflow rows exist
-        print(f"       ... and {remaining} more sites")  # WHY: report tail count without noise
+        logging.warning("... and %d more sites", remaining)  # WHY: report tail count without noise
 
 
 def _record_deviation_choice(
@@ -199,7 +201,7 @@ def _parse_choice_index(choice: str, param: str) -> int | None:
     try:
         return int(choice) - 1  # WHY: 1-based menu -> 0-based index
     except ValueError:  # WHY: non-integer input is a soft failure — skip param, keep loop
-        print(f"  ! Invalid input. Skipping {param}.")  # WHY: user-visible skip reason
+        logging.warning("Invalid input. Skipping %s.", param)  # WHY: user-visible skip reason
         return None  # WHY: caller treats None as skip signal
 
 
@@ -212,7 +214,7 @@ def _apply_choice(
 ) -> None:
     """Validate the index and either record the resolution or emit a skip message."""
     if not 0 <= selected_index < len(unique_values):  # WHY: out-of-range index is a soft failure
-        print(f"  ! Invalid selection. Skipping {param}.")  # WHY: user-visible skip reason
+        logging.warning("Invalid selection. Skipping %s.", param)  # WHY: user-visible skip reason
         return  # WHY: skip when index falls outside the menu bounds
     selected = unique_values[selected_index]["value"]  # WHY: canonical value chosen
     resolutions[(cluster, param)] = selected  # WHY: cluster+param uniquely keys the resolution
@@ -342,7 +344,7 @@ def _display_template_plan(
     group_plan: dict[str, dict[str, str]],
 ) -> None:
     """Print template creation plan."""
-    print("\n  Template Plan:")  # WHY: header separates the plan from prior output
+    logging.warning("Template Plan:")  # WHY: header separates the plan from prior output
     for group_name, config in configs.items():  # WHY: one block per group in the plan
         group_info = group_plan.get(group_name, {})  # WHY: recover group_id for display
         _print_template_row(group_name, group_info, config)  # WHY: delegate row rendering
@@ -355,11 +357,11 @@ def _print_template_row(
 ) -> None:
     """Print one template plan block (group header + SSID + remaining fields)."""
     group_id = group_info.get("group_id", "new")  # WHY: 'new' sentinel when the group is not yet created
-    print(f"    {group_name} (group_id={group_id})")  # WHY: block header
-    print(f"      SSID: {config.get('ssid', '')}")  # WHY: SSID always printed first for readability
+    logging.warning("%s (group_id=%s)", group_name, group_id)  # WHY: block header
+    logging.warning("SSID: %s", config.get("ssid", ""))  # WHY: SSID always printed first for readability
     for key, value in config.items():  # WHY: iterate remaining config fields
         if key != "ssid":  # WHY: ssid already emitted above
-            print(f"      {key}: {value}")  # WHY: two-space indent aligns with header
+            logging.warning("%s: %s", key, value)  # WHY: two-space indent aligns with header
 
 
 # ---------------------------------------------------------------------------
@@ -423,10 +425,10 @@ def _display_disable_plan(
 ) -> None:
     """Print disable plan summary."""
     counts = _partition_disable_plan(plan)  # WHY: single pass over the plan
-    print("\n  Disable Plan:")  # WHY: header separates the plan from prior output
-    print(f"    To disable:       {counts[_STATUS_TO_DISABLE]}")  # WHY: actionable count first
-    print(f"    Already disabled: {counts[_STATUS_ALREADY_DISABLED]}")  # WHY: idempotent-skip count
-    print(f"    Skipped:          {counts[_STATUS_SKIPPED]}")  # WHY: other-skip count last
+    logging.warning("Disable Plan:")  # WHY: header separates the plan from prior output
+    logging.warning("To disable:       %d", counts[_STATUS_TO_DISABLE])  # WHY: actionable count first
+    logging.warning("Already disabled: %d", counts[_STATUS_ALREADY_DISABLED])  # WHY: idempotent-skip count
+    logging.warning("Skipped:          %d", counts[_STATUS_SKIPPED])  # WHY: other-skip count last
 
 
 def _partition_disable_plan(plan: list[dict[str, Any]]) -> dict[str, int]:
@@ -456,9 +458,9 @@ def _set_ssid_disabled(wlans: list[dict[str, Any]], ssid_id: str) -> bool:
 def _print_phase_summary(phase_label: str, results: list[dict[str, Any]]) -> None:
     """Print a summary of phase results by status."""
     status_counts = _tally_status(results)  # WHY: aggregate over heterogeneous status field
-    print(f"\n  {phase_label} Summary:")  # WHY: header per phase for the summary block
+    logging.warning("%s Summary:", phase_label)  # WHY: header per phase for the summary block
     for status, count in sorted(status_counts.items()):  # WHY: deterministic status ordering
-        print(f"    {status}: {count}")  # WHY: single indent aligns with plan blocks
+        logging.warning("%s: %d", status, count)  # WHY: single indent aligns with plan blocks
 
 
 def _tally_status(results: list[dict[str, Any]]) -> dict[str, int]:
@@ -481,7 +483,7 @@ class _SsidTemplatePhase45Cluster(_ClusterBase):
     def phase4_templates(self) -> None:
         """Phase 4 orchestrator — resolve deviations, create templates."""
         parent = self._mm  # WHY: proxy alias for readability + W0212 avoidance
-        print(_PHASE4_HEADER)  # WHY: user-facing banner
+        logging.warning(_PHASE4_HEADER)  # WHY: user-facing banner
         logging.info(_PHASE4_START_LOG)  # WHY: audit-log start of phase 4
         preflight = self._phase4_preflight()  # WHY: split cache + plan build out of orchestrator
         if preflight is None:  # WHY: preflight already printed the bail message
@@ -514,7 +516,7 @@ class _SsidTemplatePhase45Cluster(_ClusterBase):
             return None  # WHY: cache preamble already printed the bail message
         phase3_results = parent._load_phase_results(3)  # noqa: SLF001
         if not phase3_results:  # WHY: phase 4 depends on Phase 3 groups being materialized
-            print("! Phase 3 results not found. Run Phase 3 first.")  # WHY: operator-visible reason
+            logging.warning("Phase 3 results not found. Run Phase 3 first.")  # WHY: operator-visible reason
             return None  # WHY: abort until phase 3 has been executed
         resolutions = _resolve_deviations(parent.cache, parent.safe_input_fn)  # WHY: interactive step
         group_plan = _load_group_plan_from_results(phase3_results)  # WHY: shape the group plan map
@@ -571,14 +573,14 @@ class _SsidTemplatePhase45Cluster(_ClusterBase):
     def phase5_disable_old(self) -> None:
         """Phase 5 orchestrator — disable matching SSIDs in old templates."""
         parent = self._mm  # WHY: proxy alias
-        print(_PHASE5_HEADER)  # WHY: user-facing banner
+        logging.warning(_PHASE5_HEADER)  # WHY: user-facing banner
         logging.info(_PHASE5_START_LOG)  # WHY: audit-log start of phase 5
         prep = self._phase5_prepare_plan()  # WHY: split cache + plan build out of orchestrator
         if prep is None:  # WHY: preflight already printed the bail message
             return  # WHY: abort when cache is missing
         resuming, prior_results, plan, to_disable = prep  # WHY: unpack the four preflight artifacts
         if not to_disable:  # WHY: nothing to do — empty actionable slice
-            print("  No SSIDs to disable.")  # WHY: operator-visible reason for the no-op
+            logging.warning("No SSIDs to disable.")  # WHY: operator-visible reason for the no-op
             return  # WHY: skip persistence when the plan is empty
         prompt = f"Disable {len(to_disable)} SSIDs in old templates?"  # WHY: confirmation prompt copy
         if not parent._confirm_or_cancel(prompt):  # noqa: SLF001 — shared preamble helper

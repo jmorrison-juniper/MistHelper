@@ -7,6 +7,28 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 8/N: retire `print()` in `src/ssid_consolidation/` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced the remaining `print()`
+  calls in `src/ssid_consolidation/ssid_template_consolidation.py`,
+  `src/ssid_consolidation/_ssid_template_cache.py`,
+  `src/ssid_consolidation/_ssid_template_cluster.py`,
+  `src/ssid_consolidation/_ssid_template_phase1.py`,
+  `src/ssid_consolidation/_ssid_template_phase2.py`,
+  `src/ssid_consolidation/_ssid_template_phase3.py`, and
+  `src/ssid_consolidation/_ssid_template_phase45.py` with `logging.warning(...)`
+  so the print-avoidance rule (T20 selector target of #886) can eventually be
+  enabled repo-wide. WARNING level chosen for operator-visible phase banners,
+  plan-summary tables, conflict listings, phase-menu output, "Phase 1 cache
+  not found" bail messages, and per-phase status footers so they surface on
+  the default root-logger configuration (INFO is suppressed by default).
+  Companion unit tests in `tests/unit/test_ssid_template_consolidation.py`
+  were migrated from `capsys`/`captured.out` to `caplog`/`caplog.text` with
+  a `caplog.at_level(logging.WARNING)` wrapper around each call site so the
+  suite continues to assert operator-visible output through the logging path.
+  No behavioural change beyond the emit channel; all 241 tests in the module
+  remain green.
+
 ### #886 Phase 2 slice 7/N: retire `print()` in `src/ui/` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced the remaining `print()`

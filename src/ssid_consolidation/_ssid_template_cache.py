@@ -49,7 +49,7 @@ def _check_prerequisite_for_all(phase_number: int) -> bool:  # WHY: run-all shor
 def _check_cache_exists(cache_file: str) -> bool:  # WHY: gate downstream phases on phase-1 artefact
     """Check if Phase 1 cache file exists."""
     if not os.path.exists(cache_file):  # WHY: guard first-run before phase 1 completes
-        print("! Phase 1 cache not found. Run Phase 1 first.")  # WHY: teach operator the fix
+        logging.warning("Phase 1 cache not found. Run Phase 1 first.")  # WHY: teach operator the fix
         return False  # WHY: signal caller to abort the current phase
     return True  # WHY: cache present, downstream phase may proceed
 
@@ -61,7 +61,9 @@ def _handle_completed_resume(  # WHY: UX branch when prior run finished all rows
     safe_input_fn: SafeInputFn,
 ) -> tuple[bool, list[dict[str, Any]]]:
     """Handle resume when phase is already complete."""
-    print(f"Phase {phase} already completed ({completed_count}/{total}). Re-running will overwrite.")  # WHY: warn
+    logging.warning(
+        "Phase %d already completed (%d/%d). Re-running will overwrite.", phase, completed_count, total
+    )  # WHY: warn
     choice: str = safe_input_fn(  # WHY: ask before re-running a completed phase
         "Re-run from scratch? (y/N): ",
         context="ssid_consolidation_resume",
@@ -79,7 +81,9 @@ def _handle_partial_resume(  # WHY: UX branch when prior run stopped mid-phase
     safe_input_fn: SafeInputFn,
 ) -> tuple[bool, list[dict[str, Any]]]:
     """Handle resume when phase is partially complete."""
-    print(f"Phase {phase} partially completed ({completed_count}/{total}).")  # WHY: report progress to operator
+    logging.warning(
+        "Phase %d partially completed (%d/%d).", phase, completed_count, total
+    )  # WHY: report progress to operator
     choice: str = safe_input_fn(  # WHY: default (Y) is resume — matches operator intent
         "Resume from last checkpoint? (Y/n): ",
         context="ssid_consolidation_resume",
@@ -106,7 +110,7 @@ class _SsidTemplateCacheCluster(_ClusterBase):  # WHY: proxy cluster grouping ca
             return _check_cache_exists(parent.CACHE_FILE)  # WHY: reuse shared cache-existence guard
         prior_file = parent.PHASE_RESULT_FILES.get(phase - 1)  # WHY: chain phases via results file
         if prior_file and not os.path.exists(prior_file):  # WHY: prior artefact absent blocks this phase
-            print(f"! Phase {phase - 1} results not found. Run Phase {phase - 1} first.")  # WHY: teach fix
+            logging.warning("Phase %d results not found. Run Phase %d first.", phase - 1, phase - 1)  # WHY: teach fix
             return False  # WHY: signal caller to abort
         return True  # WHY: prior artefact present, proceed
 

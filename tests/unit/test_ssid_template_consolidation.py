@@ -11,6 +11,7 @@ and display/summary functions.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import sys
@@ -206,30 +207,30 @@ class TestInit:
 class TestExecute:
     """SSIDTemplateConsolidationManager.execute tests."""
 
-    def test_exits_when_no_org_id(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_exits_when_no_org_id(self, caplog: pytest.LogCaptureFixture) -> None:
         get_org = MagicMock(return_value=None)
-        SSIDTemplateConsolidationManager.execute(
-            apisession=MagicMock(),
-            page_limit=100,
-            safe_input_fn=MagicMock(),
-            write_data_fn=MagicMock(),
-            get_org_id_fn=get_org,
-        )
-        captured = capsys.readouterr()
-        assert "No organization selected" in captured.out
+        with caplog.at_level(logging.WARNING):
+            SSIDTemplateConsolidationManager.execute(
+                apisession=MagicMock(),
+                page_limit=100,
+                safe_input_fn=MagicMock(),
+                write_data_fn=MagicMock(),
+                get_org_id_fn=get_org,
+            )
+        assert "No organization selected" in caplog.text
 
-    def test_exits_when_no_ssid(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_exits_when_no_ssid(self, caplog: pytest.LogCaptureFixture) -> None:
         get_org = MagicMock(return_value="org-1")
         safe_fn = MagicMock(return_value="")
-        SSIDTemplateConsolidationManager.execute(
-            apisession=MagicMock(),
-            page_limit=100,
-            safe_input_fn=safe_fn,
-            write_data_fn=MagicMock(),
-            get_org_id_fn=get_org,
-        )
-        captured = capsys.readouterr()
-        assert "No target SSID specified" in captured.out
+        with caplog.at_level(logging.WARNING):
+            SSIDTemplateConsolidationManager.execute(
+                apisession=MagicMock(),
+                page_limit=100,
+                safe_input_fn=safe_fn,
+                write_data_fn=MagicMock(),
+                get_org_id_fn=get_org,
+            )
+        assert "No target SSID specified" in caplog.text
 
     @patch.object(SSIDTemplateConsolidationManager, "run_phase_menu")
     def test_launches_phase_menu(self, mock_menu: MagicMock) -> None:
@@ -268,13 +269,13 @@ class TestPhaseMenu:
         dispatch = manager._build_phase_dispatch()
         assert set(dispatch.keys()) == {"1", "2", "3", "4", "5"}
 
-    def test_display_phase_menu(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_display_phase_menu(self, caplog: pytest.LogCaptureFixture) -> None:
         manager = _make_manager()
         labels = {"1": "Phase 1: Audit"}
-        manager._display_phase_menu(labels)
-        captured = capsys.readouterr()
-        assert "Phase 1: Audit" in captured.out
-        assert "q." in captured.out
+        with caplog.at_level(logging.WARNING):
+            manager._display_phase_menu(labels)
+        assert "Phase 1: Audit" in caplog.text
+        assert "q." in caplog.text
 
 
 # ===================================================================
@@ -292,7 +293,7 @@ class TestPrerequisites:
             result = manager._check_prerequisite(1)
         assert result is True
 
-    def test_phase_2_needs_cache(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_phase_2_needs_cache(self) -> None:
         manager = _make_manager()
         manager.cache = {}
         with patch.object(manager, "_load_cache", return_value=None):
@@ -318,11 +319,11 @@ class TestConfirmOrCancel:
         manager = _make_manager(safe_input_fn=MagicMock(return_value="CONFIRM"))
         assert manager._confirm_or_cancel("Proceed?") is True
 
-    def test_confirm_rejected(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_confirm_rejected(self, caplog: pytest.LogCaptureFixture) -> None:
         manager = _make_manager(safe_input_fn=MagicMock(return_value="no"))
-        assert manager._confirm_or_cancel("Proceed?") is False
-        captured = capsys.readouterr()
-        assert "cancelled" in captured.out.lower()
+        with caplog.at_level(logging.WARNING):
+            assert manager._confirm_or_cancel("Proceed?") is False
+        assert "cancelled" in caplog.text.lower()
 
 
 # ===================================================================
@@ -359,10 +360,10 @@ class TestCheckCacheExists:
         assert _check_cache_exists("data/cache.json") is True
 
     @patch("os.path.exists", return_value=False)
-    def test_cache_not_found(self, _mock: MagicMock, capsys: pytest.CaptureFixture[str]) -> None:
-        assert _check_cache_exists("data/cache.json") is False
-        captured = capsys.readouterr()
-        assert "Phase 1 cache not found" in captured.out
+    def test_cache_not_found(self, _mock: MagicMock, caplog: pytest.LogCaptureFixture) -> None:
+        with caplog.at_level(logging.WARNING):
+            assert _check_cache_exists("data/cache.json") is False
+        assert "Phase 1 cache not found" in caplog.text
 
 
 # ===================================================================
@@ -821,7 +822,7 @@ class TestGroupPlanHelpers:
 class TestResumeHelpers:
     """_handle_completed_resume, _handle_partial_resume tests."""
 
-    def test_handle_completed_resume(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_handle_completed_resume(self) -> None:
         result = _handle_completed_resume(2, 10, 10, MagicMock(return_value="y"))
         assert isinstance(result, tuple)
 
@@ -844,7 +845,7 @@ class TestResumeHelpers:
 class TestDisplayHelpers:
     """Display/print helper tests."""
 
-    def test_display_variable_summary(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_display_variable_summary(self, caplog: pytest.LogCaptureFixture) -> None:
         plan = [
             {"status": "pending", "variable_name": "V"},
             {"status": "skipped", "variable_name": "V"},
@@ -858,11 +859,11 @@ class TestDisplayHelpers:
                 "proposed_value": "100",
             },
         ]
-        _display_variable_summary(plan)
-        captured = capsys.readouterr()
-        assert len(captured.out) > 0
+        with caplog.at_level(logging.WARNING):
+            _display_variable_summary(plan)
+        assert len(caplog.text) > 0
 
-    def test_print_conflicts(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_print_conflicts(self, caplog: pytest.LogCaptureFixture) -> None:
         conflicts = [
             {
                 "site_name": "Site-A",
@@ -872,11 +873,11 @@ class TestDisplayHelpers:
                 "proposed_value": "100",
             },
         ]
-        _print_conflicts(conflicts)
-        captured = capsys.readouterr()
-        assert "Site-A" in captured.out
+        with caplog.at_level(logging.WARNING):
+            _print_conflicts(conflicts)
+        assert "Site-A" in caplog.text
 
-    def test_display_group_plan(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_display_group_plan(self, caplog: pytest.LogCaptureFixture) -> None:
         plan = {
             "groups": [
                 {
@@ -887,46 +888,46 @@ class TestDisplayHelpers:
                 }
             ]
         }
-        _display_group_plan(plan)
-        captured = capsys.readouterr()
-        assert "G1" in captured.out
+        with caplog.at_level(logging.WARNING):
+            _display_group_plan(plan)
+        assert "G1" in caplog.text
 
-    def test_display_template_plan(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_display_template_plan(self, caplog: pytest.LogCaptureFixture) -> None:
         configs = {
             "G1": {"ssid": "Corp", "enabled": True},
         }
         group_plan = {"G1": {"cluster_name": "East"}}
-        _display_template_plan(configs, group_plan)
-        captured = capsys.readouterr()
-        assert "G1" in captured.out
+        with caplog.at_level(logging.WARNING):
+            _display_template_plan(configs, group_plan)
+        assert "G1" in caplog.text
 
-    def test_display_disable_plan(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_display_disable_plan(self, caplog: pytest.LogCaptureFixture) -> None:
         plan = [
             {"site_name": "A", "ssid_name": "Corp", "action": "to_disable", "status": "pending"},
         ]
-        _display_disable_plan(plan)
-        captured = capsys.readouterr()
-        assert len(captured.out) > 0
+        with caplog.at_level(logging.WARNING):
+            _display_disable_plan(plan)
+        assert len(caplog.text) > 0
 
-    def test_print_phase1_summary(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_print_phase1_summary(self, caplog: pytest.LogCaptureFixture) -> None:
         matrix = [
             {"anomaly": False, "psk_detected": False, "target_group": "East"},
             {"anomaly": True, "psk_detected": False, "target_group": "East"},
         ]
         deviations = [{"parameter": "vlan_id"}]
-        _print_phase1_summary(matrix, deviations)
-        captured = capsys.readouterr()
-        assert "eligible" in captured.out.lower() or "Eligible" in captured.out
+        with caplog.at_level(logging.WARNING):
+            _print_phase1_summary(matrix, deviations)
+        assert "eligible" in caplog.text.lower() or "Eligible" in caplog.text
 
-    def test_print_phase_summary(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_print_phase_summary(self, caplog: pytest.LogCaptureFixture) -> None:
         results = [
             {"status": "success"},
             {"status": "failed"},
             {"status": "skipped"},
         ]
-        _print_phase_summary("Test Phase", results)
-        captured = capsys.readouterr()
-        assert "success" in captured.out.lower() or "Success" in captured.out
+        with caplog.at_level(logging.WARNING):
+            _print_phase_summary("Test Phase", results)
+        assert "success" in caplog.text.lower() or "Success" in caplog.text
 
 
 # ===================================================================
@@ -1865,23 +1866,23 @@ class TestPhaseOrchestrators:
 
     def test_display_phase_menu(
         self,
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         mgr = self._make_manager()
         labels = {"1": "Audit", "2": "Variables"}
-        mgr._display_phase_menu(labels)
-        captured = capsys.readouterr()
-        assert "Audit" in captured.out
+        with caplog.at_level(logging.WARNING):
+            mgr._display_phase_menu(labels)
+        assert "Audit" in caplog.text
 
     def test_phase1_audit_no_data(
         self,
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         mgr = self._make_manager()
         mgr._phase1_load_or_fetch = MagicMock(return_value=None)  # type: ignore[method-assign]
-        mgr.phase1_audit()
-        captured = capsys.readouterr()
-        assert "Failed" in captured.out or "failed" in captured.out.lower()
+        with caplog.at_level(logging.WARNING):
+            mgr.phase1_audit()
+        assert "Failed" in caplog.text or "failed" in caplog.text.lower()
 
     def test_phase1_load_or_fetch_uses_cache(self) -> None:
         mgr = self._make_manager()
@@ -1896,43 +1897,43 @@ class TestPhaseOrchestrators:
 
     def test_phase2_no_cache(
         self,
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         mgr = self._make_manager()
         mgr._load_cache = MagicMock(return_value=None)  # type: ignore[method-assign]
-        mgr.phase2_site_variables()
-        captured = capsys.readouterr()
-        assert "not found" in captured.out.lower() or "no cache" in captured.out.lower()
+        with caplog.at_level(logging.WARNING):
+            mgr.phase2_site_variables()
+        assert "not found" in caplog.text.lower() or "no cache" in caplog.text.lower()
 
     def test_phase3_no_cache(
         self,
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         mgr = self._make_manager()
         mgr._load_cache = MagicMock(return_value=None)  # type: ignore[method-assign]
-        mgr.phase3_site_groups()
-        captured = capsys.readouterr()
-        assert "not found" in captured.out.lower() or "no cache" in captured.out.lower()
+        with caplog.at_level(logging.WARNING):
+            mgr.phase3_site_groups()
+        assert "not found" in caplog.text.lower() or "no cache" in caplog.text.lower()
 
     def test_phase4_no_cache(
         self,
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         mgr = self._make_manager()
         mgr._load_cache = MagicMock(return_value=None)  # type: ignore[method-assign]
-        mgr.phase4_templates()
-        captured = capsys.readouterr()
-        assert "not found" in captured.out.lower() or "no cache" in captured.out.lower()
+        with caplog.at_level(logging.WARNING):
+            mgr.phase4_templates()
+        assert "not found" in caplog.text.lower() or "no cache" in caplog.text.lower()
 
     def test_phase5_no_cache(
         self,
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         mgr = self._make_manager()
         mgr._load_cache = MagicMock(return_value=None)  # type: ignore[method-assign]
-        mgr.phase5_disable_old()
-        captured = capsys.readouterr()
-        assert "not found" in captured.out.lower() or "no cache" in captured.out.lower()
+        with caplog.at_level(logging.WARNING):
+            mgr.phase5_disable_old()
+        assert "not found" in caplog.text.lower() or "no cache" in caplog.text.lower()
 
 
 class TestFetchAllOrgData:
