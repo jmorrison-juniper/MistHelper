@@ -445,6 +445,9 @@ from src.export.site_insights.device_metric_operation import (
 from src.export.site_insights.site_metric_operation import (
     SiteMetricOperation,
 )  # Decomposed Menu 74 entry point
+from src.export.site_mist_edge_events_exporter import (
+    SiteMistEdgeEventsExporter,  # Spec 890 / issue #1398 -- searchSiteMistEdgeEvents menu 201
+)
 from src.export.site_wan_usage_exporter import (
     SiteWanUsageExporter,  # Spec 901 / issue #1409 -- searchSiteWanUsage menu 198
 )
@@ -3885,6 +3888,10 @@ menu_actions: "dict[str, tuple[Callable[..., Any], str]]" = {
     "200": (
         SiteGuestAuthorizationExporter.guest_authorizations,
         "Search Site Guest Authorization (searchSiteGuestAuthorization) - Per-site authorized guest CSV",
+    ),
+    "201": (
+        SiteMistEdgeEventsExporter.mist_edge_events,
+        "Search Site Mist Edge Events (searchSiteMistEdgeEvents) - Per-site Mist Edge event CSV",
     ),
     "44": (OrgConfigExporter.psks, "Export PSK (Pre-Shared Key) information for the organization"),
     "45": (OrgConfigExporter.webhooks, "Export webhook configuration for the organization"),

@@ -7,6 +7,19 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Menu 201: Search Site Mist Edge Events (spec 890 / issue #1398)
+
+- **New menu 201 (Added)**: `SiteMistEdgeEventsExporter.mist_edge_events()` wraps
+  the previously unreachable Mist API `searchSiteMistEdgeEvents` operation
+  (`GET /api/v1/sites/{site_id}/mxedges/events/search`). Operator picks a site (shared
+  `SiteDeviceExporter._resolve_site_for_stats` helper), the exporter pages all Mist Edge
+  event rows via `mistapi.get_all`, flattens + escapes them with `DataProcessingUtils`,
+  then persists through `DataExporter.write_with_format_selection` so CSV / SQLite /
+  ArangoDB backends all work. Empty responses surface a friendly "no Mist Edge event
+  data" notice instead of failing. `ENDPOINT_PRIMARY_KEY_STRATEGIES` already defined a PK
+  for this operationId -- no schema changes required. Registered as `interactive_safe` in
+  `OperationRegistry` (requires site selection).
+
 ### Menu 200: Search Site Guest Authorization (spec 889 / issue #1397)
 
 - **New menu 200 (Added)**: `SiteGuestAuthorizationExporter.guest_authorizations()` wraps
