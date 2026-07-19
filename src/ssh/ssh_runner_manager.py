@@ -234,7 +234,8 @@ class SSHRunnerManager:  # WHY: staticmethod facade preserves the MistHelper pub
     @staticmethod
     def _prompt_username(deps: SSHRunnerManagerDeps) -> str | None:  # WHY: username-only prompt path.
         """Prompt operator for SSH username; return value or None on cancel."""
-        username = deps.input_utils.safe_input("Enter SSH username: ", context="ssh_runner_username").strip()
+        # WHY: safe_input is Any-typed via deps; cast to str for mypy strict (no-any-return).
+        username: str = str(deps.input_utils.safe_input("Enter SSH username: ", context="ssh_runner_username")).strip()
         if not username:  # WHY: cancel path.
             print("X  SSH username is required")
             logging.info("Exiting SSHRunnerManager._collect_missing_data: cancelled (no username provided)")
@@ -297,7 +298,7 @@ class SSHRunnerManager:  # WHY: staticmethod facade preserves the MistHelper pub
             _ = env_file  # WHY: retained for signature parity with the real loader.
             return {"hosts": hosts, "username": username, "password": password, "commands": commands}
 
-        EnvSshConfigLoader.load = mock_load  # type: ignore[method-assign]  # WHY: inject mocked loader.
+        EnvSshConfigLoader.load = mock_load  # type: ignore[assignment,method-assign]  # WHY: inject mocked loader.
 
     @staticmethod
     def _execute_multi_host(hosts: Any, username: Any, password: Any, commands: Any) -> bool:  # WHY: fan-out path.

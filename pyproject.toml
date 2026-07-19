@@ -197,12 +197,28 @@ strict = false
 [[tool.mypy.overrides]]
 # Wave 2 extracted modules: legacy code extracted as-is from MistHelper.py monolith.
 # Uses module-level dependency injection (Any-typed globals) and mixin patterns that
-# produce attr-defined errors. Relax strict checks; tighten after type annotations are
-# added in a dedicated refactoring pass.
+# produce attr-defined errors. Relax strict checks per module with narrower per-flag
+# opt-outs (no blanket ignore_errors); graduate individual modules off the override
+# once type annotations are added and mypy passes at strict mode.
+#
+# Graduated (removed from list) — pass strict mypy as of issue #882:
+#   src.cache.*                    (0 errs pre-graduation)
+#   src.ssh.ssh_runner             (0 errs pre-graduation)
+#   src.ssh.cli_shell_manager      (1 err  fixed pre-graduation: no-any-return cast)
+#   src.ssh.ssh_runner_manager     (2 errs fixed pre-graduation: no-any-return cast + ignore code)
+#
+# Remaining (still overridden) — error counts at strict mypy captured 2026-07-19,
+# tracked for follow-up under issue #882 comments (module list to graduate next):
+#   src.analytics.*     ( 15 errs)  src.api.*           ( 23 errs)
+#   src.device.*        ( 36 errs)  src.export.*        (189 errs)
+#   src.gateway.*       ( 92 errs)  src.input.*         ( 14 errs)
+#   src.inventory.*     ( 94 errs)  src.org.*           ( 55 errs)
+#   src.reports.*       (  7 errs)  src.site.*          ( 17 errs)
+#   src.troubleshooting.* ( 7 errs) src.ui.*            ( 12 errs)
+#   src.websocket.*     ( 79 errs)
 module = [
     "src.analytics.*",
     "src.api.*",
-    "src.cache.*",
     "src.export.*",
     "src.gateway.*",
     "src.input.*",
@@ -214,18 +230,37 @@ module = [
     "src.troubleshooting.*",
     "src.ui.*",
     "src.websocket.*",
-    "src.ssh.ssh_runner",
-    "src.ssh.ssh_runner_manager",
-    "src.ssh.cli_shell_manager",
 ]
-disallow_untyped_defs = false
-disallow_incomplete_defs = false
-disallow_untyped_calls = false
-disallow_any_generics = false
-warn_return_any = false
-check_untyped_defs = false
-warn_unused_ignores = false
-ignore_errors = true
+# WHY (per-flag opt-outs): each flag below is relaxed for a specific documented
+# reason -- collectively they replace the blanket `ignore_errors = true`, so mypy
+# still runs and catches regressions in these subtrees; only the specific patterns
+# below are permitted.
+disallow_untyped_defs = false      # Wave-2 legacy functions lack annotations; add over time.
+disallow_incomplete_defs = false   # Same reason as disallow_untyped_defs.
+disallow_untyped_calls = false     # Many callees are still Any-typed (deps.* mixins).
+disallow_any_generics = false      # Legacy uses bare list/dict; graduate as we add generics.
+warn_return_any = false            # Any-typed helper chains propagate; tighten with casts later.
+check_untyped_defs = false         # Untyped legacy defs would otherwise flood errors.
+warn_unused_ignores = false        # Existing type: ignore comments predate current mypy version.
+# WHY (per-code disables): each code below is disabled for a specific documented
+# Wave-2 pattern -- collectively narrower than `ignore_errors = true` (which the
+# AC forbids), so mypy still catches every OTHER category of error in these
+# subtrees. Graduate individual modules off the override as annotations land.
+# Error counts captured 2026-07-19 across the 13 modules in `module` above.
+disable_error_code = [
+    "attr-defined",   # 60 errs: Wave-2 mixin pattern (e.g. ServicePingDiscoveryMixin
+                      # references self.site_id / self._debug_print supplied by the
+                      # host class that mixes it in). Real fix = ABC + Protocol.
+    "arg-type",       # 5 errs: Any-typed helper results flow into typed callees.
+    "index",          # 5 errs: legacy code indexes Any-typed dicts (e.g. deps.state[...]).
+    "return-value",   # 4 errs: Wave-2 helpers return Any where callers annotate a type.
+    "call-overload",  # 3 errs: int()/str() called on Any-typed values from deps.*.
+    "assignment",     # 2 errs: Any values assigned into typed slots.
+    "union-attr",     # 1 err : Any-typed vars treated as unions in legacy branches.
+    "var-annotated",  # 1 err : bare `foo = {}` needs annotation; add during graduation.
+    "misc",           # 4 errs: mypy "miscellaneous" bucket (mixin base-class subclass
+                      # detection, method-assign in test fixtures, etc.).
+]
 
 [tool.bandit]
 targets = ["MistHelper.py", "maps_manager.py", "wsgi.py", "web_portal", "mist-ops-platform", "ops-portal", "src"]
