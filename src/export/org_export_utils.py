@@ -613,6 +613,26 @@ class OrgExportUtils:
         )
 
     @staticmethod
+    def mist_edge_events():  # Export Org Mist Edge Events.
+        """Export Org Mist Edge Events search results to OrgMistEdgeEvents.csv.
+
+        Why:
+            Spec 866 / issue #1374 registers the ``searchOrgMistEdgeEvents``
+            endpoint so operators can pull org-wide Mist Edge event history
+            alongside the sibling per-site ``SiteMistEdgeEventsExporter``
+            (menu 201).  Delegating to :meth:`export_data` reuses the shared
+            prompt-for-org + paginate + multi-backend write scaffold, and
+            lets the pre-registered composite PK strategy for
+            ``searchOrgMistEdgeEvents`` (id + mxedge_id + timestamp) drive
+            downstream dedup / SQL loads without duplicates.
+        """
+        OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
+            api_call=mistapi.api.v1.orgs.mxedges.searchOrgMistEdgeEvents,
+            data_type="mist edge events",  # Drives the export filename -> OrgMistEdgeEvents.csv.
+            sort_key="timestamp",  # Matches the composite PK ordering (newest events sort naturally).
+        )
+
+    @staticmethod
     def ospf_stats():  # Export OSPF stats.
         """Export OSPF adjacency statistics for the organization to OrgOspfStats.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
