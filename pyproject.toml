@@ -113,15 +113,18 @@ ignore = ["E402"]
 known-first-party = ["src"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["B011"]
 # Issue #433 Phase A swept G003/G004/G201 from src/, tools/, web_portal/,
 # starlink_dashboard.py, wsgi.py, and maps_manager.py (#429 had previously
 # cleaned up MistHelper.py). Only the codemod synthetic input fixture
 # retains G violations on purpose -- they are the test material.
+# Both #429 and #433 are CLOSED; the fixture is still exercised by
+# tests/test_issue_429_codemod_idempotent.py (verified live under #885).
 "tests/fixtures/issue_429_codemod_synthetic_input.py" = ["G"]
 # plan_wave_builder.py embeds a literal multi-line prompt template that is
 # rendered verbatim into subagent task payloads; reflowing the lines would
-# change the prompt content sent to the model.
+# change the prompt content sent to the model. Externalizing the prompt
+# to a .txt fixture is possible but is a behavioral refactor tracked
+# separately -- see #885 discussion.
 "tools/plan_wave_builder.py" = ["E501"]
 # refactor_analyzer/reporting.py emits literal markdown strings for the
 # refactor_candidates.md report; reflowing the lines would break the rendered
