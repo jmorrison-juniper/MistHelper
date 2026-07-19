@@ -7,6 +7,19 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Menu 200: Search Site Guest Authorization (spec 889 / issue #1397)
+
+- **New menu 200 (Added)**: `SiteGuestAuthorizationExporter.guest_authorizations()` wraps
+  the previously unreachable Mist API `searchSiteGuestAuthorization` operation
+  (`GET /api/v1/sites/{site_id}/guests/search`). Operator picks a site (shared
+  `SiteDeviceExporter._resolve_site_for_stats` helper), the exporter pages all authorized
+  guest rows via `mistapi.get_all`, flattens + escapes them with `DataProcessingUtils`,
+  then persists through `DataExporter.write_with_format_selection` so CSV / SQLite /
+  ArangoDB backends all work. Empty responses surface a friendly "no guest authorization
+  data" notice instead of failing. `ENDPOINT_PRIMARY_KEY_STRATEGIES` already defined a PK
+  for this operationId -- no schema changes required. Registered as `interactive_safe` in
+  `OperationRegistry` (requires site selection).
+
 ### Menu 199: Search Site Webhook Deliveries (spec 902 / issue #1410)
 
 - **New menu 199 (Added)**: `SiteWebhookDeliveriesExporter.deliveries()` wraps the

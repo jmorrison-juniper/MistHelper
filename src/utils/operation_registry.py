@@ -264,6 +264,7 @@ class OperationRegistry:
         "197": {"category": "interactive_safe", "skip_reason": "Requires site + client + VLAN selection"},
         "198": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
         "199": {"category": "interactive_safe", "skip_reason": "Requires site + webhook selection"},
+        "200": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
         "186": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Deletes all generated cache CSV files"},
         "58": {"category": "safe"},
         "187": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Creates config objects in destination org"},
