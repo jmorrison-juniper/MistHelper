@@ -436,6 +436,9 @@ from src.export.site_device_exporter import (
 from src.export.site_export_utils import (  # Cat A canonical (1014 P16)
     SiteExportUtils,
 )
+from src.export.site_guest_authorization_exporter import (
+    SiteGuestAuthorizationExporter,  # Spec 889 / issue #1397 -- searchSiteGuestAuthorization menu 200
+)
 from src.export.site_insights.device_metric_operation import (
     DeviceMetricOperation,
 )  # Decomposed Menu 76 entry point
@@ -3878,6 +3881,10 @@ menu_actions: "dict[str, tuple[Callable[..., Any], str]]" = {
     "199": (
         SiteWebhookDeliveriesExporter.deliveries,
         "Search Site Webhook Deliveries (searchSiteWebhooksDeliveries) - Per site+webhook delivery audit CSV",
+    ),
+    "200": (
+        SiteGuestAuthorizationExporter.guest_authorizations,
+        "Search Site Guest Authorization (searchSiteGuestAuthorization) - Per-site authorized guest CSV",
     ),
     "44": (OrgConfigExporter.psks, "Export PSK (Pre-Shared Key) information for the organization"),
     "45": (OrgConfigExporter.webhooks, "Export webhook configuration for the organization"),
