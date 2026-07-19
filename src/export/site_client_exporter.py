@@ -18,6 +18,9 @@ from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
 from src.export.site_export_utils import SiteExportUtils  # WHY: Pattern 1 inline construction for beacons export.
+from src.export.wan_client_events_exporter import (
+    WanClientEventsExporter,
+)  # WHY: spec 899 / issue #1407 -- delegate WAN client event search to dedicated exporter.
 from src.export.wifi_clients_exporter import WifiClientsExporter  # Extracted WiFi export orchestrator.
 from src.utils.tqdm_wrapper import (
     tqdm,
@@ -104,6 +107,43 @@ class SiteClientExporter:
         )  # Log exporter construction completion.
         exporter.execute(site_id=site_id)  # Delegate export execution while preserving facade signature.
         logging.debug("Completed delegated wifi_clients export workflow")  # Log delegated exporter completion.
+
+    @staticmethod
+    def wan_client_events(site_id: str | None = None) -> None:
+        """Facade delegating WAN client event search to :class:`WanClientEventsExporter`.
+
+        Why:
+            Spec 899 / issue #1407 registers a new menu item that surfaces
+            ``mistapi.api.v1.sites.wan_clients.events.search.searchSiteWanClientEvents``.
+            Keeping the delegation shape identical to :meth:`wifi_clients`
+            preserves the SiteClientExporter facade pattern and avoids
+            leaking dataclass wiring into ``MistHelper.py``'s menu dict.
+
+        Args:
+            site_id: Optional preselected site UUID; ``None`` prompts the
+                operator for a site via the injected ``PromptUtils``.
+        """
+        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of MistHelper globals to avoid circular import.
+        logging.info(
+            "Delegating wan_client_events to WanClientEventsExporter"
+        )  # WHY: trace facade dispatch for the WAN client event exporter.
+        exporter = WanClientEventsExporter(  # WHY: build orchestrator with the same injected deps used by wifi_clients.
+            cache_utils=mh.CacheUtils,  # WHY: reuse cached site-name resolver so we skip a redundant listSites call.
+            org_site_exporter=mh.OrgSiteExporter,  # WHY: shared site-list emitter feeds the CSV cache fallback lookup.
+            prompt_utils=mh.PromptUtils,  # WHY: interactive site selection mirrors sibling site exporters.
+            file_path_utils=mh.FilePathUtils,  # WHY: shared SiteList.csv discovery keeps behavior consistent.
+            data_processing_utils=DataProcessingUtils,  # WHY: canonical flatten/escape helper for CSV safety.
+            data_exporter=mh.DataExporter,  # WHY: multi-backend writer via write_with_format_selection.
+            mistapi_module=mistapi,  # WHY: SDK module hosting the wan_clients.events.search endpoint + get_all pager.
+            apisession=mh.apisession,  # WHY: authenticated mistapi session shared across all menu actions.
+        )
+        logging.debug(
+            "Initialized WanClientEventsExporter for site_id=%s", site_id
+        )  # WHY: capture construction for diagnostics.
+        exporter.execute(site_id=site_id)  # WHY: run the fetch + persist pipeline defined by the extracted exporter.
+        logging.debug(
+            "Completed delegated wan_client_events export workflow"
+        )  # WHY: mark facade completion for log timeline correlation.
 
     @staticmethod
     def beacons() -> None:
