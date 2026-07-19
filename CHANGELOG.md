@@ -7,6 +7,20 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Menu 199: Search Site Webhook Deliveries (spec 902 / issue #1410)
+
+- **New menu 199 (Added)**: `SiteWebhookDeliveriesExporter.deliveries()` wraps the
+  previously unreachable Mist API `searchSiteWebhooksDeliveries` operation
+  (`GET /api/v1/sites/{site_id}/webhooks/{webhook_id}/events/search`). Operator picks a
+  site (shared `SiteDeviceExporter._resolve_site_for_stats` helper), then picks a webhook
+  by 1-based index from `listSiteWebhooks`, and the exporter pages all delivery attempts
+  via `mistapi.get_all`, flattens + escapes them with `DataProcessingUtils`, then persists
+  through `DataExporter.write_with_format_selection` so CSV / SQLite / ArangoDB backends
+  all work. Empty responses surface a friendly "no webhook delivery data" notice instead
+  of failing. `ENDPOINT_PRIMARY_KEY_STRATEGIES` already defined a composite PK on
+  `(id, timestamp)` for this operationId -- no schema changes required. Registered as
+  `interactive_safe` in `OperationRegistry` (requires site + webhook selection).
+
 ### Menu 198: Search Site WAN Usages (spec 901 / issue #1409)
 
 - **New menu 198 (Added)**: `SiteWanUsageExporter.wan_usages()` wraps the previously
