@@ -41,7 +41,7 @@ _PILOT_GROUP_NAME = "misthelper_pilot"  # WHY: fixed name for the pilot site-gro
 _PILOT_TARGET = "pilot"  # WHY: matrix rows targeting pilot cluster route to the pilot group
 _PHASE_ID = 3  # WHY: phase index for offer_resume / save_phase_results dispatch
 _PHASE_LABEL = "Phase 3"  # WHY: label used by _print_phase_summary for report output
-_PHASE3_HEADER = "\n=== Phase 3: Create / Assign Site Groups ==="  # WHY: user-facing banner
+_PHASE3_HEADER = "=== Phase 3: Create / Assign Site Groups ==="  # WHY: user-facing banner
 _PHASE3_START_LOG = "Phase 3: Starting site group configuration"  # WHY: startup log line
 _GROUP_EXISTS_LOG = "Group '%s' already exists (id=%s)"  # WHY: reuse-existing skip message
 _WRITE_FILENAME = "ssid_consolidation_site_groups"  # WHY: parquet/table sink filename
@@ -175,7 +175,7 @@ def _assign_matrix_sites(
 
 def _display_group_plan(plan: dict[str, Any]) -> None:  # WHY: exported for tests + re-export
     """Print the group assignment plan."""
-    print("\n  Site Group Plan:")  # WHY: section header for the console preview
+    logging.warning("Site Group Plan:")  # WHY: section header for the console preview
     for group in plan.get("groups", []):  # WHY: preview one group entry at a time
         _print_group_header(group)  # WHY: header line with exists/create + site count
         _print_group_preview(group)  # WHY: bounded preview of member sites
@@ -185,16 +185,16 @@ def _print_group_header(group: dict[str, Any]) -> None:  # WHY: extracted from _
     """Print a single group header row (status + site count)."""
     status = "exists" if group["exists"] else "to create"  # WHY: preview action verb
     site_count = len(group["sites"])  # WHY: total members before truncation
-    print(f"    {group['group_name']} ({status}) - {site_count} sites")  # WHY: single header line
+    logging.warning("%s (%s) - %d sites", group["group_name"], status, site_count)  # WHY: single header line
 
 
 def _print_group_preview(group: dict[str, Any]) -> None:  # WHY: extracted from _display_group_plan
     """Print a bounded preview of a group's assigned sites."""
     sites = group["sites"]  # WHY: alias for readability
     for site in sites[:_DISPLAY_SITE_LIMIT]:  # WHY: bound console noise per group
-        print(f"      - {site['site_name']}")  # WHY: one visible site name per line
+        logging.warning("- %s", site["site_name"])  # WHY: one visible site name per line
     if len(sites) > _DISPLAY_SITE_LIMIT:  # WHY: only mention overflow when it exists
-        print(f"      ... and {len(sites) - _DISPLAY_SITE_LIMIT} more")  # WHY: overflow marker
+        logging.warning("... and %d more", len(sites) - _DISPLAY_SITE_LIMIT)  # WHY: overflow marker
 
 
 def _build_assign_results(
@@ -340,7 +340,7 @@ class _SsidTemplatePhase3Cluster(_ClusterBase):  # WHY: exported for parent __in
 
 def _log_phase3_start() -> None:  # WHY: extracted from phase3_site_groups
     """Print the banner and emit the startup log line for Phase 3."""
-    print(_PHASE3_HEADER)  # WHY: user-facing banner marks phase entry
+    logging.warning(_PHASE3_HEADER)  # WHY: user-facing banner marks phase entry
     logging.info(_PHASE3_START_LOG)  # WHY: telemetry alongside the banner
 
 

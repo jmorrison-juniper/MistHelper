@@ -71,7 +71,7 @@ def _fetch_and_log(  # WHY: mirror parent's fetch helper so mistapi patching lan
     shared ``mistapi`` MagicMock injected via ``sys.modules``) in effect
     for ``_fetch_all_org_data`` callers.
     """
-    print(f"    Fetching {label}...")  # WHY: operator telemetry during multi-call fetch
+    logging.warning("Fetching %s...", label)  # WHY: operator telemetry during multi-call fetch
     response = api_fn(session, org_id, **kwargs)  # WHY: mistapi list endpoint call
     data: list[dict[str, Any]] = (  # WHY: paginate response; None -> [] keeps callers dict-safe
         mistapi.get_all(response=response, mist_session=session) or []
@@ -579,11 +579,11 @@ def _print_phase1_summary(
 ) -> None:
     """Print Phase 1 audit summary."""
     eligible, psk_count, anomaly_count = _phase1_counts(matrix)  # WHY: single-pass tallies
-    print(f"\n  Total sites:   {len(matrix)}")  # WHY: operator-visible tally
-    print(f"  Eligible:      {eligible}")  # WHY: operator-visible eligible count
-    print(f"  PSK excluded:  {psk_count}")  # WHY: operator-visible PSK excluded count
-    print(f"  Anomalies:     {anomaly_count}")  # WHY: operator-visible anomaly count
-    print(f"  Deviations:    {len(deviations)}")  # WHY: operator-visible deviation count
+    logging.warning("Total sites:   %d", len(matrix))  # WHY: operator-visible tally
+    logging.warning("Eligible:      %d", eligible)  # WHY: operator-visible eligible count
+    logging.warning("PSK excluded:  %d", psk_count)  # WHY: operator-visible PSK excluded count
+    logging.warning("Anomalies:     %d", anomaly_count)  # WHY: operator-visible anomaly count
+    logging.warning("Deviations:    %d", len(deviations))  # WHY: operator-visible deviation count
     logging.info(  # WHY: durable log record mirrors console summary
         "Phase 1 complete: %d sites, %d eligible, %d deviations",
         len(matrix),
@@ -613,7 +613,7 @@ class _SsidTemplatePhase1Cluster(_ClusterBase):
     def phase1_audit(self) -> None:
         """Phase 1 orchestrator — fetch data, build matrix, analyze."""
         parent = self._mm  # WHY: proxy alias for readability + W0212 avoidance
-        print("\n=== Phase 1: Read-Only Audit ===")  # WHY: operator-visible section banner
+        logging.warning("=== Phase 1: Read-Only Audit ===")  # WHY: operator-visible section banner
         logging.info(  # WHY: audit-log start-of-phase entry with SSID context
             "Phase 1: Starting read-only audit for SSID '%s'",
             parent.target_ssid,
@@ -621,7 +621,7 @@ class _SsidTemplatePhase1Cluster(_ClusterBase):
         # WHY: route through parent so `patch.object(mgr, "_phase1_load_or_fetch", ...)` intercepts.
         org_data = self._call("_phase1_load_or_fetch")
         if not org_data:  # WHY: prerequisite fetch failure aborts the phase gracefully
-            print("! Failed to load or fetch organization data.")
+            logging.warning("Failed to load or fetch organization data.")
             return
         matrix = self._call("_build_matrix", org_data)  # WHY: allow test patches on parent
         deviations = self._call("_analyze_deviations", matrix, org_data)  # WHY: allow test patches
@@ -632,7 +632,7 @@ class _SsidTemplatePhase1Cluster(_ClusterBase):
         cached_data = self._try_load_cached()  # WHY: helper isolates cache-read + prompt branch
         if cached_data is not None:  # WHY: sentinel None means proceed to fresh fetch
             return cached_data
-        print("  Fetching fresh organization data...")  # WHY: operator telemetry for fetch path
+        logging.warning("Fetching fresh organization data...")  # WHY: operator telemetry for fetch path
         # WHY: route through parent so tests may patch _fetch_all_org_data on mgr directly.
         fresh: dict[str, Any] = self._call("_fetch_all_org_data")
         return fresh
@@ -646,7 +646,7 @@ class _SsidTemplatePhase1Cluster(_ClusterBase):
         if not cached or not cached.get("data"):  # WHY: no cache => caller performs fresh fetch
             return None
         age = _cache_age_minutes(cached.get("collected_at", ""))  # WHY: minutes since cache stamp
-        print(f"  Cached data found ({age:.0f} minutes old).")  # WHY: operator sees freshness
+        logging.warning("Cached data found (%.0f minutes old).", age)  # WHY: operator sees freshness
         choice = parent.safe_input_fn(  # WHY: prompt operator with default-Y reuse
             _CACHE_REUSE_PROMPT,
             default_value="Y",
@@ -708,7 +708,7 @@ class _SsidTemplatePhase1Cluster(_ClusterBase):
             kwargs = {"limit": parent.page_limit} if spec.limited else {}  # WHY: only some paginated
             result[spec.key] = _fetch_and_log(spec.label, spec.api_fn, parent.apisession, parent.org_id, **kwargs)
         logging.info("Total org-level API calls: %d", _TOTAL_BULK_CALLS)  # WHY: audit trail count
-        print(f"    Done ({_TOTAL_BULK_CALLS} API calls)")  # WHY: operator-visible finalizer
+        logging.warning("Done (%d API calls)", _TOTAL_BULK_CALLS)  # WHY: operator-visible finalizer
         return result
 
     def _build_matrix(self, org_data: dict[str, Any]) -> list[dict[str, Any]]:

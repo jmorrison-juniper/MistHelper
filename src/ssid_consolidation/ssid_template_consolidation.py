@@ -186,7 +186,7 @@ def _fetch_and_log(  # WHY: parent-owned so its __globals__ points here for mist
     ``patch.object(ssid_template_consolidation, "mistapi", ...)``
     observable when they call ``_mod._fetch_and_log`` directly.
     """
-    print(f"    Fetching {label}...")  # WHY: operator telemetry during multi-call fetch
+    logging.warning("Fetching %s...", label)  # WHY: operator telemetry during multi-call fetch
     response = api_fn(session, org_id, **kwargs)  # WHY: mistapi list endpoint call
     data: list[dict[str, Any]] = mistapi.get_all(response=response, mist_session=session) or []  # WHY: paginate
     logging.info("%s fetched: %d", label.capitalize(), len(data))  # WHY: audit trail per collection
@@ -308,7 +308,9 @@ class SSIDTemplateConsolidationManager:  # pylint: disable=too-many-instance-att
         get_org_id_fn: GetOrgIdFn,
     ) -> None:
         """Menu 159 entry point — prompt for SSID, launch phase menu."""
-        print("\n=== SSID Template Consolidation (5-Phase Guided Workflow) ===")  # WHY: banner for operator context
+        logging.warning(
+            "=== SSID Template Consolidation (5-Phase Guided Workflow) ==="
+        )  # WHY: banner for operator context
         logging.info("Starting SSID Template Consolidation workflow")  # WHY: audit-log workflow entry
         context = SSIDTemplateConsolidationManager._resolve_target_context(  # WHY: extracted for STRUCT-LENGTH
             get_org_id_fn, safe_input_fn
@@ -333,11 +335,11 @@ class SSIDTemplateConsolidationManager:  # pylint: disable=too-many-instance-att
         """Resolve (org_id, target_ssid) or None when either is missing."""
         current_org_id: str | None = get_org_id_fn()  # WHY: pull active org from injected getter
         if not current_org_id:
-            print("! No organization selected. Exiting.")  # WHY: fail fast when no org is bound
+            logging.warning("No organization selected. Exiting.")  # WHY: fail fast when no org is bound
             return None  # WHY: caller treats None as an aborted workflow
         target_ssid = SSIDTemplateConsolidationManager._prompt_target_ssid(safe_input_fn)  # WHY: prompt operator
         if not target_ssid:
-            print("! No target SSID specified. Exiting.")  # WHY: empty SSID -> nothing to consolidate
+            logging.warning("No target SSID specified. Exiting.")  # WHY: empty SSID -> nothing to consolidate
             return None  # WHY: caller treats None as an aborted workflow
         return current_org_id, target_ssid  # WHY: hand off validated pair to execute()
 
@@ -383,13 +385,13 @@ class SSIDTemplateConsolidationManager:  # pylint: disable=too-many-instance-att
     def _handle_menu_choice(self, choice: str, dispatch: dict[str, Any]) -> bool:  # WHY: extracted so complexity <= 5
         """Route one menu selection; return True when the menu should exit."""
         if choice.lower() in ("q", "quit", ""):  # WHY: quit tokens include blank enter
-            print("Returning to main menu.")  # WHY: operator feedback before unwinding
+            logging.warning("Returning to main menu.")  # WHY: operator feedback before unwinding
             return True  # WHY: signal caller to exit the menu loop
         if choice == "6":  # WHY: 6 = sequential run of all phases
             self._run_all_phases(dispatch)  # WHY: delegates to shared runner
             return True  # WHY: sequential run is terminal like quit
         if choice not in dispatch:  # WHY: guard against typos before int() cast
-            print(f"! Invalid selection: {choice}")  # WHY: surface the bad token
+            logging.warning("Invalid selection: %s", choice)  # WHY: surface the bad token
             return False  # WHY: stay in the menu after typo
         phase_number = int(choice)  # WHY: dispatch keys are digit strings
         if not self._check_prerequisite(phase_number):  # WHY: bail if the preceding phase artifact missing
@@ -409,28 +411,28 @@ class SSIDTemplateConsolidationManager:  # pylint: disable=too-many-instance-att
 
     def _display_phase_menu(self, labels: dict[str, str]) -> None:  # WHY: printer split from loop for clarity
         """Print the numbered phase menu."""
-        print(f"\n--- SSID Template Consolidation: {self.target_ssid} ---")  # WHY: banner shows target SSID
+        logging.warning("--- SSID Template Consolidation: %s ---", self.target_ssid)  # WHY: banner shows target SSID
         for key, description in labels.items():  # WHY: iterate the ordered menu rows
-            print(f"  {key}. {description}")  # WHY: numbered menu row
-        print("  q. Return to main menu")  # WHY: escape hatch back to the top-level CLI
+            logging.warning("%s. %s", key, description)  # WHY: numbered menu row
+        logging.warning("q. Return to main menu")  # WHY: escape hatch back to the top-level CLI
 
     def _run_all_phases(self, dispatch: dict[str, Any]) -> None:  # WHY: sequential all-phases runner
         """Execute phases 1-5 sequentially, stopping on failure."""
         for phase_key in ("1", "2", "3", "4", "5"):  # WHY: run every phase in order
             phase_number = int(phase_key)  # WHY: dispatch keys are digit strings
-            print(f"\n{'=' * 60}")  # WHY: visual separator between phases
-            print(f"  Starting Phase {phase_number}")  # WHY: operator sees which phase started
-            print(f"{'=' * 60}")  # WHY: closing separator for banner symmetry
+            logging.warning("%s", "=" * 60)  # WHY: visual separator between phases
+            logging.warning("Starting Phase %d", phase_number)  # WHY: operator sees which phase started
+            logging.warning("%s", "=" * 60)  # WHY: closing separator for banner symmetry
             if not _check_prerequisite_for_all(phase_number):  # WHY: gate the phase on its prerequisite artifact
-                print(f"! Phase {phase_number} prerequisite not met. Stopping.")  # WHY: fail-fast message
+                logging.warning("Phase %d prerequisite not met. Stopping.", phase_number)  # WHY: fail-fast message
                 return  # WHY: stop the run-all when prereqs are missing
             try:
                 dispatch[phase_key]()  # WHY: invoke the phase's bound handler
             except Exception as error:  # WHY: convert phase failures into operator-visible messages
                 logging.exception("Phase %d failed: %s", phase_number, error)  # WHY: audit-log full traceback
-                print(f"! Phase {phase_number} failed: {error}")  # WHY: surface the error to the operator
+                logging.warning("Phase %d failed: %s", phase_number, error)  # WHY: surface the error to the operator
                 return  # WHY: halt the sequence on the first failure
-        print("\nAll 5 phases completed successfully.")  # WHY: success message after full sequence
+        logging.warning("All 5 phases completed successfully.")  # WHY: success message after full sequence
 
     # ------------------------------------------------------------------
     # Shared helpers
@@ -438,14 +440,14 @@ class SSIDTemplateConsolidationManager:  # pylint: disable=too-many-instance-att
 
     def _confirm_or_cancel(self, summary: str) -> bool:  # WHY: shared CONFIRM gate for write phases
         """Display summary and require CONFIRM to proceed."""
-        print(f"\n{summary}")  # WHY: print the operator-facing plan summary before prompting
+        logging.warning("%s", summary)  # WHY: print the operator-facing plan summary before prompting
         confirmation = self.safe_input_fn(  # WHY: EOF-safe stdin reader with confirmation context tag
             f'Type "{self.CONFIRM_KEYWORD}" to proceed: ',
             context="ssid_consolidation_confirm",
         )
         if confirmation != self.CONFIRM_KEYWORD:  # WHY: literal-match gate blocks accidental writes
             logging.warning("Operation cancelled - confirmation not provided")  # WHY: audit-log cancel
-            print("! Operation cancelled.")  # WHY: user-visible cancel message
+            logging.warning("Operation cancelled.")  # WHY: user-visible cancel message
             return False  # WHY: caller aborts the write path
         logging.info("Operation confirmed at %s", datetime.now().isoformat())  # WHY: audit-log confirmation time
         return True  # WHY: caller proceeds with the write
@@ -570,14 +572,14 @@ def _create_site_group(group: dict[str, Any], org_id: str, apisession: Any) -> N
             group["group_name"],
             group["group_id"],
         )
-        print(f"  Created group: {group['group_name']}")  # WHY: operator feedback for the create
+        logging.warning("Created group: %s", group["group_name"])  # WHY: operator feedback for the create
     except Exception as error:  # WHY: convert API/network failure into an audit-log + user message
         logging.error(  # WHY: audit-log the failure with the group name
             "Failed to create group '%s': %s",
             group["group_name"],
             error,
         )
-        print(f"  ! Failed to create group: " f"{group['group_name']}: {error}")  # WHY: user-visible failure line
+        logging.warning("Failed to create group: %s: %s", group["group_name"], error)  # WHY: user-visible failure line
 
 
 def _assign_group_sites(  # WHY: mistapi-touching site-group assigner (parent-owned for test patching)

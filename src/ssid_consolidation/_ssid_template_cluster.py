@@ -18,6 +18,7 @@ on.
 
 from __future__ import annotations  # WHY: postponed evaluation for forward-ref parent type
 
+import logging  # WHY (#886 Phase 2): cluster helper emits bail msg via logger instead of print
 from typing import TYPE_CHECKING, Any  # WHY: Any lets __getattr__ proxy any parent method
 
 if TYPE_CHECKING:  # WHY: only pulled in by type checkers; skipped at runtime
@@ -67,7 +68,7 @@ class _ClusterBase:  # WHY: shared wrapper base for every ssid_template cluster
         parent = self._mm  # WHY: proxy alias
         cached = parent._load_cache()  # noqa: SLF001 — cluster helper is intra-package
         if not cached:  # WHY: cache missing means Phase 1 was skipped
-            print("! Phase 1 cache not found. Run Phase 1 first.")  # WHY: user bail msg
+            logging.warning("Phase 1 cache not found. Run Phase 1 first.")  # WHY: user bail msg
             return False  # WHY: signal to caller to abort the phase
         parent.cache = cached  # WHY: hand loaded cache to parent state
         return True  # WHY: cache loaded successfully, phase can proceed
