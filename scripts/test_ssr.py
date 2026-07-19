@@ -1,10 +1,13 @@
 """Quick test: does ideas.mist.com do SSR?"""
+
 import urllib.request
 import ssl
 import re
 
 url = "https://ideas.mist.com/forums/912934-product-features/suggestions/50598263-modify-port-configuration-button"
-req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"})
+req = urllib.request.Request(
+    url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+)
 ctx = ssl.create_default_context()
 ctx.check_hostname = False
 ctx.verify_mode = ssl.CERT_NONE

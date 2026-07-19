@@ -46,9 +46,7 @@ class TestRegistryMethodResolution:
             pytest.skip("No read_method for this entity type")
         module = _resolve_module(endpoint)
         func = getattr(module, endpoint.read_method, None)
-        assert func is not None, (
-            f"{entity_type}: {endpoint.read_method} not found"
-        )
+        assert func is not None, f"{entity_type}: {endpoint.read_method} not found"
         assert callable(func)
 
     @pytest.mark.parametrize("entity_type", ALL_ENTITY_TYPES)
@@ -58,9 +56,7 @@ class TestRegistryMethodResolution:
             pytest.skip("No write_method for this entity type")
         module = _resolve_module(endpoint)
         func = getattr(module, endpoint.write_method, None)
-        assert func is not None, (
-            f"{entity_type}: {endpoint.write_method} not found"
-        )
+        assert func is not None, f"{entity_type}: {endpoint.write_method} not found"
         assert callable(func)
 
     @pytest.mark.parametrize("entity_type", ALL_ENTITY_TYPES)
@@ -70,9 +66,7 @@ class TestRegistryMethodResolution:
             pytest.skip("No list_method for this entity type")
         module = _resolve_module(endpoint)
         func = getattr(module, endpoint.list_method, None)
-        assert func is not None, (
-            f"{entity_type}: {endpoint.list_method} not found"
-        )
+        assert func is not None, f"{entity_type}: {endpoint.list_method} not found"
         assert callable(func)
 
 
@@ -89,6 +83,4 @@ class TestRegistryCompleteness:
                 or endpoint.write_method is not None
                 or endpoint.list_method is not None
             )
-            assert has_method, (
-                f"{entity_type} has no read, write, or list method"
-            )
+            assert has_method, f"{entity_type} has no read, write, or list method"

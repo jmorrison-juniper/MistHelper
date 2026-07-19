@@ -113,6 +113,7 @@ class SecurityMiddleware:
 
     def _register_csp_headers(self, app: Flask) -> None:
         """Add security headers to every response."""
+
         @app.after_request
         def add_security_headers(response):
             response.headers["Content-Security-Policy"] = self.CSP_POLICY
@@ -137,6 +138,7 @@ class SecurityMiddleware:
     def _configure_csrf(self, app: Flask) -> None:
         """Initialize CSRF protection via flask-wtf."""
         from flask_wtf.csrf import CSRFProtect
+
         csrf = CSRFProtect()
         csrf.init_app(app)
         app.config["csrf"] = csrf
@@ -203,11 +205,13 @@ class ThemeManager:
                 continue
             name = filename.removesuffix(".css")
             label = self.DISPLAY_LABELS.get(name, name.replace("-", " ").title())
-            themes.append({
-                "name": name,
-                "display_label": label,
-                "is_default": False,
-            })
+            themes.append(
+                {
+                    "name": name,
+                    "display_label": label,
+                    "is_default": False,
+                }
+            )
         return themes
 
     def _apply_default_flag(self) -> None:

@@ -63,7 +63,8 @@ class AuthService:
         try:
             mist_service = MistEndpointService(session)
             result = mist_service.list_all_entities(
-                "self_identity", {},
+                "self_identity",
+                {},
             )
             data = result.data[0] if result.data else {}
             return self._parse_privileges(data)

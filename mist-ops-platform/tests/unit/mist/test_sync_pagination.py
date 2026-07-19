@@ -35,7 +35,8 @@ class TestInventorySyncPagination:
         assert count == 250
         assert service._upsert_site.call_count == 250
         service._mist.list_all_entities.assert_called_once_with(
-            "org_site_list", ids={"org_id": "org-1"},
+            "org_site_list",
+            ids={"org_id": "org-1"},
         )
 
     def test_sync_devices_gets_all_pages(self) -> None:
@@ -47,9 +48,7 @@ class TestInventorySyncPagination:
         service._db = MagicMock()
         service._upsert_device = MagicMock()
 
-        all_devices = [
-            {"id": f"d{i}", "mac": f"aa:bb:{i:04d}"} for i in range(300)
-        ]
+        all_devices = [{"id": f"d{i}", "mac": f"aa:bb:{i:04d}"} for i in range(300)]
         service._mist.list_all_entities.return_value = _api_result(
             all_devices,
         )
@@ -70,14 +69,13 @@ class TestEventSyncPagination:
         service._mist = MagicMock()
         service._org_id = str(uuid4())
 
-        all_events = [
-            {"id": f"e{i}", "message": f"event {i}"} for i in range(150)
-        ]
+        all_events = [{"id": f"e{i}", "message": f"event {i}"} for i in range(150)]
         service._mist.list_all_entities.return_value = _api_result(all_events)
 
         result = service._fetch_events()
 
         assert len(result) == 150
         service._mist.list_all_entities.assert_called_once_with(
-            "audit_log", ids={"org_id": service._org_id},
+            "audit_log",
+            ids={"org_id": service._org_id},
         )

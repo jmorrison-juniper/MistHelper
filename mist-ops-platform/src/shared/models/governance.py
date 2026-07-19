@@ -33,7 +33,9 @@ class ChangeTemplate(Base, TimestampMixin):
     __tablename__ = "change_templates"
 
     template_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4,
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
     )
     org_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -46,10 +48,12 @@ class ChangeTemplate(Base, TimestampMixin):
     parameter_schema: Mapped[dict] = mapped_column(JSONB, nullable=False)
     config_template: Mapped[dict] = mapped_column(JSONB, nullable=False)
     target_entity_type: Mapped[str] = mapped_column(
-        String(30), nullable=False,
+        String(30),
+        nullable=False,
     )
     approval_required: Mapped[bool] = mapped_column(
-        default=False, server_default="false",
+        default=False,
+        server_default="false",
     )
     author: Mapped[str] = mapped_column(Text, nullable=False)
 
@@ -63,13 +67,18 @@ class GoldenImage(Base, TimestampMixin):
     __tablename__ = "golden_images"
     __table_args__ = (
         UniqueConstraint(
-            "org_id", "image_type", "device_model", "version",
+            "org_id",
+            "image_type",
+            "device_model",
+            "version",
             name="uq_golden_image",
         ),
     )
 
     image_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4,
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
     )
     org_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -81,13 +90,16 @@ class GoldenImage(Base, TimestampMixin):
     device_model: Mapped[str] = mapped_column(Text, nullable=False)
     version: Mapped[str] = mapped_column(Text, nullable=False)
     lifecycle_state: Mapped[str] = mapped_column(
-        String(20), nullable=False, server_default="draft",
+        String(20),
+        nullable=False,
+        server_default="draft",
     )
     content_hash: Mapped[str] = mapped_column(Text, nullable=False)
     artifact_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     approved_by: Mapped[str | None] = mapped_column(Text, nullable=True)
     approved_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True,
+        DateTime(timezone=True),
+        nullable=True,
     )
     created_by: Mapped[str] = mapped_column(Text, nullable=False)
 
@@ -101,7 +113,9 @@ class ComplianceAuditPack(Base):
     __tablename__ = "compliance_audit_packs"
 
     pack_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4,
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
     )
     org_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -111,15 +125,19 @@ class ComplianceAuditPack(Base):
     )
     framework: Mapped[str] = mapped_column(String(20), nullable=False)
     date_range_start: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False,
+        DateTime(timezone=True),
+        nullable=False,
     )
     date_range_end: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False,
+        DateTime(timezone=True),
+        nullable=False,
     )
     included_records: Mapped[dict] = mapped_column(JSONB, nullable=False)
     artifact_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     export_format: Mapped[str] = mapped_column(
-        String(10), nullable=False, server_default="json",
+        String(10),
+        nullable=False,
+        server_default="json",
     )
     generated_by: Mapped[str] = mapped_column(Text, nullable=False)
     generated_at: Mapped[datetime] = mapped_column(
@@ -138,7 +156,9 @@ class NetworkPolicy(Base):
     __tablename__ = "network_policies"
 
     policy_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4,
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
     )
     org_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -147,25 +167,33 @@ class NetworkPolicy(Base):
         index=True,
     )
     mist_entity_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), nullable=False,
+        UUID(as_uuid=True),
+        nullable=False,
     )
     policy_type: Mapped[str] = mapped_column(String(30), nullable=False)
     name: Mapped[str] = mapped_column(Text, nullable=False)
     lifecycle_state: Mapped[str] = mapped_column(
-        String(20), nullable=False, server_default="active",
+        String(20),
+        nullable=False,
+        server_default="active",
     )
     version: Mapped[int] = mapped_column(
-        Integer, nullable=False, server_default="1",
+        Integer,
+        nullable=False,
+        server_default="1",
     )
     effective_from: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True,
+        DateTime(timezone=True),
+        nullable=True,
     )
     expires_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True,
+        DateTime(timezone=True),
+        nullable=True,
     )
     dependencies: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     last_reviewed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True,
+        DateTime(timezone=True),
+        nullable=True,
     )
     reviewed_by: Mapped[str | None] = mapped_column(Text, nullable=True)
 
@@ -179,7 +207,9 @@ class IncidentChangeCorrelation(Base):
     __tablename__ = "incident_change_correlations"
 
     correlation_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4,
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
     )
     org_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -190,19 +220,23 @@ class IncidentChangeCorrelation(Base):
     incident_type: Mapped[str] = mapped_column(String(30), nullable=False)
     incident_id: Mapped[str] = mapped_column(Text, nullable=False)
     incident_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False,
+        DateTime(timezone=True),
+        nullable=False,
     )
     change_revision_id: Mapped[int | None] = mapped_column(
         nullable=True,
     )
     change_job_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), nullable=True,
+        UUID(as_uuid=True),
+        nullable=True,
     )
     confidence_score: Mapped[float] = mapped_column(
-        Float, nullable=False,
+        Float,
+        nullable=False,
     )
     detection_method: Mapped[str] = mapped_column(
-        String(20), nullable=False,
+        String(20),
+        nullable=False,
     )
     detected_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

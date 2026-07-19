@@ -51,10 +51,7 @@ class TestOrganization:
         assert cols == {"org_id"}
 
     def test_has_msp_fk(self) -> None:
-        fk_cols = {
-            fk.parent.name
-            for fk in Organization.__table__.foreign_keys
-        }
+        fk_cols = {fk.parent.name for fk in Organization.__table__.foreign_keys}
         assert "msp_id" in fk_cols
 
 

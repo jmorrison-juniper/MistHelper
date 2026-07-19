@@ -26,10 +26,16 @@ logger = logging.getLogger(__name__)
 # Risk thresholds
 HIGH_DEVICE_THRESHOLD = 50
 MEDIUM_DEVICE_THRESHOLD = 10
-HIGH_RISK_KEYS = frozenset({
-    "firmware_version", "radio_config", "ip_config",
-    "port_config", "vlan_config", "routing",
-})
+HIGH_RISK_KEYS = frozenset(
+    {
+        "firmware_version",
+        "radio_config",
+        "ip_config",
+        "port_config",
+        "vlan_config",
+        "routing",
+    }
+)
 
 
 class DryRunValidator:
@@ -64,7 +70,8 @@ class DryRunValidator:
         )
 
     async def _estimate_blast_radius(
-        self, request: DryRunRequest,
+        self,
+        request: DryRunRequest,
     ) -> BlastRadius:
         """Count affected devices, sites, and estimated clients."""
         device_ids: list[UUID] = []
@@ -96,38 +103,31 @@ class DryRunValidator:
         )
 
     async def _count_devices_in_sites(
-        self, site_ids: list[UUID],
+        self,
+        site_ids: list[UUID],
     ) -> int:
         """Count devices belonging to given sites."""
-        stmt = (
-            select(func.count())
-            .select_from(Device)
-            .where(Device.site_id.in_(site_ids))
-        )
+        stmt = select(func.count()).select_from(Device).where(Device.site_id.in_(site_ids))
         result = await self._db.execute(stmt)
         return result.scalar_one()
 
     async def _count_distinct_sites(
-        self, device_ids: list[UUID],
+        self,
+        device_ids: list[UUID],
     ) -> int:
         """Count distinct sites for given devices."""
-        stmt = (
-            select(func.count(func.distinct(Device.site_id)))
-            .where(Device.device_id.in_(device_ids))
-        )
+        stmt = select(func.count(func.distinct(Device.site_id))).where(Device.device_id.in_(device_ids))
         result = await self._db.execute(stmt)
         return result.scalar_one()
 
     async def _check_policies(
-        self, request: DryRunRequest,
+        self,
+        request: DryRunRequest,
     ) -> list[str]:
         """Check change payload against active network policies."""
-        stmt = (
-            select(NetworkPolicy)
-            .where(
-                NetworkPolicy.org_id == request.org_id,
-                NetworkPolicy.status == "active",
-            )
+        stmt = select(NetworkPolicy).where(
+            NetworkPolicy.org_id == request.org_id,
+            NetworkPolicy.status == "active",
         )
         policies = (await self._db.execute(stmt)).scalars().all()
         violations: list[str] = []
@@ -162,16 +162,10 @@ def _check_warnings(request: DryRunRequest) -> list[str]:
         band = radio_cfg.get(band_key, {})
         power = band.get("power")
         if isinstance(power, int) and power > 20:
-            warnings.append(
-                f"Power level {power} exceeds recommended maximum "
-                f"(20) for indoor APs on {band_key}"
-            )
+            warnings.append(f"Power level {power} exceeds recommended maximum " f"(20) for indoor APs on {band_key}")
 
     if "firmware_version" in payload:
-        warnings.append(
-            "Firmware changes carry elevated risk; "
-            "consider a phased rollout"
-        )
+        warnings.append("Firmware changes carry elevated risk; " "consider a phased rollout")
 
     return warnings
 
@@ -206,20 +200,18 @@ def _score_to_level(score: float) -> str:
 
 
 def _evaluate_policy(
-    rules: dict, payload: dict, violations: list[str],
+    rules: dict,
+    payload: dict,
+    violations: list[str],
 ) -> None:
     """Evaluate a single policy's rules against the payload."""
     blocked_keys = rules.get("blocked_keys", [])
     for key in blocked_keys:
         if key in payload:
-            violations.append(
-                f"Policy violation: key '{key}' is blocked"
-            )
+            violations.append(f"Policy violation: key '{key}' is blocked")
 
     max_devices = rules.get("max_devices_per_change")
     if max_devices is not None:
         targets = payload.get("target_count", 0)
         if isinstance(targets, int) and targets > max_devices:
-            violations.append(
-                f"Exceeds max devices per change ({max_devices})"
-            )
+            violations.append(f"Exceeds max devices per change ({max_devices})")

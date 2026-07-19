@@ -73,7 +73,8 @@ def generate_compliance_pack(
 
     with Session(engine) as db:
         records = _query_date_range(
-            db, org_id,
+            db,
+            org_id,
             datetime.fromisoformat(date_start),
             datetime.fromisoformat(date_end),
         )
@@ -104,14 +105,12 @@ def generate_compliance_pack(
 
 
 def _query_filtered(
-    db: Session, org_id: str, filters: dict,
+    db: Session,
+    org_id: str,
+    filters: dict,
 ) -> list[AuditRecord]:
     """Apply filters to audit record query."""
-    stmt = (
-        select(AuditRecord)
-        .where(AuditRecord.org_id == UUID(org_id))
-        .order_by(AuditRecord.timestamp.desc())
-    )
+    stmt = select(AuditRecord).where(AuditRecord.org_id == UUID(org_id)).order_by(AuditRecord.timestamp.desc())
     entity_type = filters.get("entity_type")
     if entity_type:
         stmt = stmt.where(AuditRecord.entity_type == entity_type)
@@ -145,7 +144,8 @@ def _query_date_range(
 
 
 def _serialize(
-    records: list[AuditRecord], fmt: str,
+    records: list[AuditRecord],
+    fmt: str,
 ) -> str:
     """Serialize records to the requested format."""
     if fmt == "csv":
@@ -157,19 +157,27 @@ def _to_csv(records: list[AuditRecord]) -> str:
     """Convert records to CSV string."""
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow([
-        "record_id", "timestamp", "actor", "entity_type",
-        "entity_id", "change_type",
-    ])
+    writer.writerow(
+        [
+            "record_id",
+            "timestamp",
+            "actor",
+            "entity_type",
+            "entity_id",
+            "change_type",
+        ]
+    )
     for record in records:
-        writer.writerow([
-            record.record_id,
-            record.timestamp.isoformat(),
-            record.actor,
-            record.entity_type,
-            str(record.entity_id),
-            record.change_type,
-        ])
+        writer.writerow(
+            [
+                record.record_id,
+                record.timestamp.isoformat(),
+                record.actor,
+                record.entity_type,
+                str(record.entity_id),
+                record.change_type,
+            ]
+        )
     return output.getvalue()
 
 
@@ -190,14 +198,13 @@ def _to_json(records: list[AuditRecord]) -> str:
 
 
 def _build_pack_summary(
-    records: list[AuditRecord], framework: str,
+    records: list[AuditRecord],
+    framework: str,
 ) -> dict:
     """Build summary metadata for a compliance pack."""
     by_type: dict[str, int] = {}
     for record in records:
-        by_type[record.change_type] = (
-            by_type.get(record.change_type, 0) + 1
-        )
+        by_type[record.change_type] = by_type.get(record.change_type, 0) + 1
     return {
         "framework": framework,
         "total_records": len(records),
@@ -243,10 +250,7 @@ def _purge_table(db: Session, table: str, days: int) -> int:
     from sqlalchemy import text
 
     ts_col = _timestamp_column(table)
-    sql = text(
-        f"DELETE FROM {table} "
-        f"WHERE {ts_col} < NOW() - INTERVAL ':days days'"
-    )
+    sql = text(f"DELETE FROM {table} " f"WHERE {ts_col} < NOW() - INTERVAL ':days days'")
     result = db.execute(sql, {"days": days})
     return result.rowcount
 

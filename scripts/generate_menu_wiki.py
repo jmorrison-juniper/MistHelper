@@ -95,69 +95,117 @@ class WikiMenuReferenceGenerator:
     def build_categories(self) -> list[CategorySummary]:
         return [
             CategorySummary("0", "Exit", "Exit and session control"),
-            CategorySummary("1-4", "Alarms & Definitions", "Org alarms, device events, audit logs, and gateway management IPs"),
-            CategorySummary("5-8", "WebSocket Commands", "MAC table, forwarding table, routing table, and SSR/SRX routing tools"),
+            CategorySummary(
+                "1-4", "Alarms & Definitions", "Org alarms, device events, audit logs, and gateway management IPs"
+            ),
+            CategorySummary(
+                "5-8", "WebSocket Commands", "MAC table, forwarding table, routing table, and SSR/SRX routing tools"
+            ),
             CategorySummary("9-10", "Packet Capture", "Site and org packet capture workflows with WebSocket streaming"),
-            CategorySummary("11-15", "Org Inventory Core", "Sites, inventory, device stats, port stats, and VPN peer stats"),
-            CategorySummary("16-19", "Gateway Exports", "Synthetic tests, device lists, site settings, and test results"),
-            CategorySummary("20-28", "Location & Enrichment", "Sites, gateways, devices, guests, VC stats, combined inventory, and WAN overrides"),
+            CategorySummary(
+                "11-15", "Org Inventory Core", "Sites, inventory, device stats, port stats, and VPN peer stats"
+            ),
+            CategorySummary(
+                "16-19", "Gateway Exports", "Synthetic tests, device lists, site settings, and test results"
+            ),
+            CategorySummary(
+                "20-28",
+                "Location & Enrichment",
+                "Sites, gateways, devices, guests, VC stats, combined inventory, and WAN overrides",
+            ),
             CategorySummary("29-34", "Site-Scoped", "Per-site ports, clients, devices, stats, VC, and Wi-Fi clients"),
             CategorySummary("35-39", "Template Bundles", "All templates plus network, RF, AP, and switch subsets"),
-            CategorySummary("40-44", "Clients & Security", "Wireless and wired clients, security events, rogue clients, and rogue APs"),
-            CategorySummary("45-53", "Configuration", "Licenses, PSKs, webhooks, WLANs, beacons, maps, zones, and insights"),
+            CategorySummary(
+                "40-44",
+                "Clients & Security",
+                "Wireless and wired clients, security events, rogue clients, and rogue APs",
+            ),
+            CategorySummary(
+                "45-53", "Configuration", "Licenses, PSKs, webhooks, WLANs, beacons, maps, zones, and insights"
+            ),
             CategorySummary("54-59", "Admin & Org Mgmt", "API tokens, admins, MSP info, SSO, usage, and MX Edge"),
-            CategorySummary("60-62", "Monitoring / Analytics", "Firmware status, inventory comparison, and Marvis troubleshooting"),
-            CategorySummary("63-65", "WIP Bulk History", "52-week device events, 52-week audit logs, and gateway configs"),
-            CategorySummary("66-69", "Insights API", "Org SLE metrics, site summaries, site insights, and client insights"),
-            CategorySummary("70-74", "Interactive Views", "Site selection, inventory browser, device stats, tests, and config views"),
+            CategorySummary(
+                "60-62", "Monitoring / Analytics", "Firmware status, inventory comparison, and Marvis troubleshooting"
+            ),
+            CategorySummary(
+                "63-65", "WIP Bulk History", "52-week device events, 52-week audit logs, and gateway configs"
+            ),
+            CategorySummary(
+                "66-69", "Insights API", "Org SLE metrics, site summaries, site insights, and client insights"
+            ),
+            CategorySummary(
+                "70-74", "Interactive Views", "Site selection, inventory browser, device stats, tests, and config views"
+            ),
             CategorySummary("75-76", "Continuous Loops", "Continuous collection and refresh loops"),
             CategorySummary("77-78", "Processing & Support", "SFP merge and support package generation"),
             CategorySummary("79-80", "CLI / WebSocket", "Interactive CLI shell and ARP via WebSocket"),
             CategorySummary("81-86", "Advanced Insights", "Device insights and anomaly event exports"),
             CategorySummary("87-89", "WebSocket Device Commands", "Real-time ping, ARP, and service ping streams"),
-            CategorySummary("90-100", "Destructive Operations", "Firmware upgrades, reboots, VC operations, SSH runner, and switch/SSR firmware"),
-            CategorySummary("101-114", "Advanced Configuration", "TUI, RADIUS timers, WAN2 migration, template config, test-site creation, WAN probe, and maps"),
-            CategorySummary("115-121", "Access / MSP / Health", "Interactive login, org firmware, MSP inventory, auto-upgrade, and health analysis"),
-            CategorySummary("122-160", "Device Utilities & Reports", "Bulk WLAN config, device commands, clear actions, DHCP, snapshots, offline reports, SSID consolidation, and E911"),
+            CategorySummary(
+                "90-100",
+                "Destructive Operations",
+                "Firmware upgrades, reboots, VC operations, SSH runner, and switch/SSR firmware",
+            ),
+            CategorySummary(
+                "101-114",
+                "Advanced Configuration",
+                "TUI, RADIUS timers, WAN2 migration, template config, test-site creation, WAN probe, and maps",
+            ),
+            CategorySummary(
+                "115-121",
+                "Access / MSP / Health",
+                "Interactive login, org firmware, MSP inventory, auto-upgrade, and health analysis",
+            ),
+            CategorySummary(
+                "122-160",
+                "Device Utilities & Reports",
+                "Bulk WLAN config, device commands, clear actions, DHCP, snapshots, offline reports, SSID consolidation, and E911",
+            ),
         ]
 
     def render_markdown(self, entries: list[MenuEntry], categories: list[CategorySummary]) -> str:
         lines: list[str] = []
-        lines.extend([
-            "# Menu Reference",
-            "",
-            f"Operation Count: MistHelper currently defines {len(entries)} actionable menu entries (0-160) with some gaps for future expansion.",
-            "",
-            "Below is the authoritative list derived directly from `menu_actions` in code. WIP = unstable schema, DESTRUCTIVE = requires explicit user confirmation.",
-            "",
-            "## Important Notes",
-            "",
-            "- Options 14 and 18 are resource-intensive and may take a long time during large exports.",
-            "- Options 63-65 are intentionally marked WIP and may evolve as the bulk-history workflows settle.",
-            "- Destructive ranges should never be scripted unattended without explicit human review and confirmation.",
-            "",
-            "## Operation Categories",
-            "",
-            "| Range | Category | Summary |",
-            "|---|---|---|",
-        ])
+        lines.extend(
+            [
+                "# Menu Reference",
+                "",
+                f"Operation Count: MistHelper currently defines {len(entries)} actionable menu entries (0-160) with some gaps for future expansion.",
+                "",
+                "Below is the authoritative list derived directly from `menu_actions` in code. WIP = unstable schema, DESTRUCTIVE = requires explicit user confirmation.",
+                "",
+                "## Important Notes",
+                "",
+                "- Options 14 and 18 are resource-intensive and may take a long time during large exports.",
+                "- Options 63-65 are intentionally marked WIP and may evolve as the bulk-history workflows settle.",
+                "- Destructive ranges should never be scripted unattended without explicit human review and confirmation.",
+                "",
+                "## Operation Categories",
+                "",
+                "| Range | Category | Summary |",
+                "|---|---|---|",
+            ]
+        )
         for category in categories:
             lines.append(f"| {category.menu_range} | {self.escape(category.title)} | {self.escape(category.summary)} |")
-        lines.extend([
-            "",
-            "## Full Menu Table",
-            "",
-            "| Menu ID | Short description | Safety | Callable/Handler |",
-            "|---:|---|---|---|",
-        ])
+        lines.extend(
+            [
+                "",
+                "## Full Menu Table",
+                "",
+                "| Menu ID | Short description | Safety | Callable/Handler |",
+                "|---:|---|---|---|",
+            ]
+        )
         for entry in entries:
             lines.append(
                 f"| {entry.menu_id} | {self.escape(entry.description)} | {entry.safety} | `{self.escape(entry.handler)}` |"
             )
-        lines.extend([
-            "",
-            "This page should be regenerated whenever `menu_actions` changes so the wiki stays aligned with `MistHelper.py`.",
-        ])
+        lines.extend(
+            [
+                "",
+                "This page should be regenerated whenever `menu_actions` changes so the wiki stays aligned with `MistHelper.py`.",
+            ]
+        )
         return "\n".join(lines) + "\n"
 
     def escape(self, text: str) -> str:

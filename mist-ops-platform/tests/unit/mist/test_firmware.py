@@ -25,26 +25,31 @@ class TestFirmwareExecuteUpgrade:
 
         mock_mist = MagicMock()
         mock_mist.write_entity.return_value = ApiResult(
-            status_code=200, data={"upgrade_id": "u-123"},
+            status_code=200,
+            data={"upgrade_id": "u-123"},
         )
 
         orch = FirmwareOrchestrator.__new__(FirmwareOrchestrator)
         orch._db = MagicMock()
         orch._mist = mock_mist
 
-        orch.validate_upgrade = MagicMock(return_value={
-            "valid": True,
-            "image_version": "1.0",
-            "device_count": 1,
-            "device_model": "AP45",
-        })
-        orch.build_upgrade_payload = MagicMock(return_value={
-            "firmware_version": "1.0",
-            "image_type": "ap",
-            "device_model": "AP45",
-            "target_device_ids": ["d1"],
-            "content_hash": "abc123",
-        })
+        orch.validate_upgrade = MagicMock(
+            return_value={
+                "valid": True,
+                "image_version": "1.0",
+                "device_count": 1,
+                "device_model": "AP45",
+            }
+        )
+        orch.build_upgrade_payload = MagicMock(
+            return_value={
+                "firmware_version": "1.0",
+                "image_type": "ap",
+                "device_model": "AP45",
+                "target_device_ids": ["d1"],
+                "content_hash": "abc123",
+            }
+        )
 
         result = orch.execute_upgrade(
             site_id="site-1",
@@ -65,10 +70,12 @@ class TestFirmwareExecuteUpgrade:
         orch._db = MagicMock()
         orch._mist = MagicMock()
 
-        orch.validate_upgrade = MagicMock(return_value={
-            "valid": False,
-            "errors": ["Image not approved"],
-        })
+        orch.validate_upgrade = MagicMock(
+            return_value={
+                "valid": False,
+                "errors": ["Image not approved"],
+            }
+        )
 
         with pytest.raises(RuntimeError, match="Pre-upgrade validation"):
             orch.execute_upgrade(
@@ -92,15 +99,19 @@ class TestFirmwareExecuteUpgrade:
         orch._db = MagicMock()
         orch._mist = mock_mist
 
-        orch.validate_upgrade = MagicMock(return_value={
-            "valid": True,
-            "image_version": "1.0",
-            "device_count": 1,
-            "device_model": "AP45",
-        })
-        orch.build_upgrade_payload = MagicMock(return_value={
-            "firmware_version": "1.0",
-        })
+        orch.validate_upgrade = MagicMock(
+            return_value={
+                "valid": True,
+                "image_version": "1.0",
+                "device_count": 1,
+                "device_model": "AP45",
+            }
+        )
+        orch.build_upgrade_payload = MagicMock(
+            return_value={
+                "firmware_version": "1.0",
+            }
+        )
 
         result = orch.execute_upgrade(
             site_id="site-1",

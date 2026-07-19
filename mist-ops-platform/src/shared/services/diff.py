@@ -119,12 +119,14 @@ class DiffService:
     ) -> None:
         """Extract value_changed items."""
         for item in raw.get("values_changed", []):
-            changes.append(DiffChange(
-                path=_tree_path(item),
-                old_value=item.t1,
-                new_value=item.t2,
-                change_type="value_changed",
-            ))
+            changes.append(
+                DiffChange(
+                    path=_tree_path(item),
+                    old_value=item.t1,
+                    new_value=item.t2,
+                    change_type="value_changed",
+                )
+            )
             summary.fields_changed += 1
 
     @staticmethod
@@ -136,12 +138,14 @@ class DiffService:
         """Extract dictionary_item_added and iterable_item_added."""
         for key in ("dictionary_item_added", "iterable_item_added"):
             for item in raw.get(key, []):
-                changes.append(DiffChange(
-                    path=_tree_path(item),
-                    old_value=None,
-                    new_value=item.t2,
-                    change_type="item_added",
-                ))
+                changes.append(
+                    DiffChange(
+                        path=_tree_path(item),
+                        old_value=None,
+                        new_value=item.t2,
+                        change_type="item_added",
+                    )
+                )
                 summary.fields_added += 1
 
     @staticmethod
@@ -153,12 +157,14 @@ class DiffService:
         """Extract dictionary_item_removed and iterable_item_removed."""
         for key in ("dictionary_item_removed", "iterable_item_removed"):
             for item in raw.get(key, []):
-                changes.append(DiffChange(
-                    path=_tree_path(item),
-                    old_value=item.t1,
-                    new_value=None,
-                    change_type="item_removed",
-                ))
+                changes.append(
+                    DiffChange(
+                        path=_tree_path(item),
+                        old_value=item.t1,
+                        new_value=None,
+                        change_type="item_removed",
+                    )
+                )
                 summary.fields_removed += 1
 
     @staticmethod
@@ -169,12 +175,14 @@ class DiffService:
     ) -> None:
         """Extract type_changes items."""
         for item in raw.get("type_changes", []):
-            changes.append(DiffChange(
-                path=_tree_path(item),
-                old_value=item.t1,
-                new_value=item.t2,
-                change_type="type_changed",
-            ))
+            changes.append(
+                DiffChange(
+                    path=_tree_path(item),
+                    old_value=item.t1,
+                    new_value=item.t2,
+                    change_type="type_changed",
+                )
+            )
             summary.fields_changed += 1
 
 

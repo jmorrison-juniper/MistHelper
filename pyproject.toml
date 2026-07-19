@@ -272,7 +272,6 @@ exclude_lines = [
 [tool.black]
 line-length = 120
 target-version = ["py313"]
-extend-exclude = "mist-ops-platform|ops-portal|web_portal|scripts|specs"
 
 # --- Pylint ---
 [tool.pylint.main]

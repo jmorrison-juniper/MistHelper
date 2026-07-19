@@ -114,10 +114,13 @@ class PortalEventBus:
             if not self._running:
                 break
             active_count = self._count_active()
-            self.publish("heartbeat", {
-                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                "active_operations": active_count,
-            })
+            self.publish(
+                "heartbeat",
+                {
+                    "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                    "active_operations": active_count,
+                },
+            )
             self._cleanup_stale_subscribers()
 
     def _count_active(self) -> int:
@@ -129,10 +132,7 @@ class PortalEventBus:
         """Remove subscribers older than 1 hour."""
         cutoff = time.time() - 3600
         with self._lock:
-            stale = [
-                sid for sid, info in self._subscribers.items()
-                if info["created_at"] < cutoff
-            ]
+            stale = [sid for sid, info in self._subscribers.items() if info["created_at"] < cutoff]
             for sid in stale:
                 del self._subscribers[sid]
                 logging.info("Cleaned up stale SSE subscriber %s", sid[:8])

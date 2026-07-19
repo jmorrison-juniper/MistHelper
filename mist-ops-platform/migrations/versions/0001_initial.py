@@ -169,12 +169,7 @@ def upgrade() -> None:
         )
     )
     _create_hash_partitions("config_revisions")
-    op.execute(
-        sa.text(
-            "CREATE INDEX ix_config_revisions_entity "
-            "ON config_revisions (entity_type, entity_id)"
-        )
-    )
+    op.execute(sa.text("CREATE INDEX ix_config_revisions_entity " "ON config_revisions (entity_type, entity_id)"))
 
     # -- E-05 DeviceStatusSnapshots (HASH partitioned) --------------------
     op.execute(
@@ -197,11 +192,7 @@ def upgrade() -> None:
         )
     )
     _create_hash_partitions("device_status_snapshots")
-    op.execute(
-        sa.text(
-            "CREATE INDEX ix_dss_device ON device_status_snapshots (device_id)"
-        )
-    )
+    op.execute(sa.text("CREATE INDEX ix_dss_device ON device_status_snapshots (device_id)"))
 
     # -- E-06 AuditRecords (HASH partitioned) -----------------------------
     op.execute(
@@ -224,12 +215,7 @@ def upgrade() -> None:
         )
     )
     _create_hash_partitions("audit_records")
-    op.execute(
-        sa.text(
-            "CREATE INDEX ix_audit_entity "
-            "ON audit_records (entity_type, entity_id)"
-        )
-    )
+    op.execute(sa.text("CREATE INDEX ix_audit_entity " "ON audit_records (entity_type, entity_id)"))
 
     # -- E-07 ScheduledJobs -----------------------------------------------
     op.create_table(
@@ -372,9 +358,7 @@ def upgrade() -> None:
             sa.DateTime(timezone=True),
             server_default=sa.func.now(),
         ),
-        sa.UniqueConstraint(
-            "org_id", "entity_type", "entity_scope", name="uq_baseline_scope"
-        ),
+        sa.UniqueConstraint("org_id", "entity_type", "entity_scope", name="uq_baseline_scope"),
     )
 
     # -- E-12 DriftAlerts -------------------------------------------------
@@ -407,9 +391,7 @@ def upgrade() -> None:
             server_default=sa.func.now(),
         ),
     )
-    op.create_index(
-        "ix_drift_alerts_baseline_id", "drift_alerts", ["baseline_id"]
-    )
+    op.create_index("ix_drift_alerts_baseline_id", "drift_alerts", ["baseline_id"])
 
     # -- E-13 ChangeTemplates ---------------------------------------------
     op.create_table(
@@ -432,9 +414,7 @@ def upgrade() -> None:
             server_default=sa.func.now(),
         ),
     )
-    op.create_index(
-        "ix_change_templates_org_id", "change_templates", ["org_id"]
-    )
+    op.create_index("ix_change_templates_org_id", "change_templates", ["org_id"])
 
     # -- E-14 GoldenImages ------------------------------------------------
     op.create_table(
@@ -530,9 +510,7 @@ def upgrade() -> None:
             server_default=sa.func.now(),
         ),
     )
-    op.create_index(
-        "ix_network_policies_org_id", "network_policies", ["org_id"]
-    )
+    op.create_index("ix_network_policies_org_id", "network_policies", ["org_id"])
 
     # -- E-17 IncidentChangeCorrelations ----------------------------------
     op.create_table(
@@ -620,9 +598,7 @@ def upgrade() -> None:
             server_default=sa.func.now(),
         ),
     )
-    op.create_index(
-        "ix_sync_ledger_org_id", "sync_ledger_entries", ["org_id"]
-    )
+    op.create_index("ix_sync_ledger_org_id", "sync_ledger_entries", ["org_id"])
 
     # -- E-20 WebhookEnvelopes -------------------------------------------
     op.create_table(
@@ -644,9 +620,7 @@ def upgrade() -> None:
             server_default=sa.func.now(),
         ),
     )
-    op.create_index(
-        "ix_webhook_envelopes_topic", "webhook_envelopes", ["topic"]
-    )
+    op.create_index("ix_webhook_envelopes_topic", "webhook_envelopes", ["topic"])
 
 
 # ---------------------------------------------------------------------------

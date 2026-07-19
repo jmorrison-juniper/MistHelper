@@ -14,6 +14,7 @@ For each wave the script:
 
 Idempotent: running the same wave twice is a no-op.
 """
+
 from __future__ import annotations
 
 import ast
@@ -231,7 +232,7 @@ def _method_signature(node: ast.FunctionDef, src_lines: list[str]) -> tuple[str,
     first_body_stmt = node.body[0]
     body_start_line = first_body_stmt.lineno
     header_end = body_start_line - 2  # index of last signature line (0-based, inclusive)
-    header = "".join(src_lines[header_start:header_end + 1])
+    header = "".join(src_lines[header_start : header_end + 1])
     args = [a.arg for a in node.args.args if a.arg != "self"]
     if node.args.vararg:
         args.append("*" + node.args.vararg.arg)
@@ -261,13 +262,15 @@ def do_wave(wave_key: str) -> None:
     for item in cls.body:
         if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and item.name in all_methods:
             start, end = _method_range(item)
-            blocks.append({
-                "name": item.name,
-                "start": start,
-                "end": end,
-                "text": "".join(src_lines[start - 1:end]),
-                "node": item,
-            })
+            blocks.append(
+                {
+                    "name": item.name,
+                    "start": start,
+                    "end": end,
+                    "text": "".join(src_lines[start - 1 : end]),
+                    "node": item,
+                }
+            )
 
     missing = all_methods - {b["name"] for b in blocks}
     if missing:
@@ -285,7 +288,7 @@ def do_wave(wave_key: str) -> None:
         helper_body_parts.append("\n")
 
     # Assemble the file
-    file_content = (target.read_text(encoding="utf-8") if target.exists() else "")
+    file_content = target.read_text(encoding="utf-8") if target.exists() else ""
     if not file_content.strip():
         raise SystemExit(f"target {target} must be pre-seeded with header + register(app)")
     # Splice: replace `# METHODS_INSERT_HERE` marker with method bodies.

@@ -110,9 +110,7 @@ class ConfigSyncService:
             content_hash=content_hash,
             captured_at=datetime.now(UTC),
         )
-        stmt = stmt.on_conflict_do_nothing(
-            constraint="uq_revision_dedup"
-        )
+        stmt = stmt.on_conflict_do_nothing(constraint="uq_revision_dedup")
         result = self._db.execute(stmt)
         return result.rowcount > 0
 

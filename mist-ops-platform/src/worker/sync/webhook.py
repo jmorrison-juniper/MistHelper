@@ -24,12 +24,14 @@ logger = logging.getLogger(__name__)
 class WebhookProcessor:
     """Parse and dispatch Mist webhook payloads."""
 
-    SUPPORTED_TOPICS = frozenset({
-        "audit",
-        "device-events",
-        "alarms",
-        "device-updowns",
-    })
+    SUPPORTED_TOPICS = frozenset(
+        {
+            "audit",
+            "device-events",
+            "alarms",
+            "device-updowns",
+        }
+    )
 
     def __init__(self, webhook_secret: str) -> None:
         self._secret = webhook_secret

@@ -54,9 +54,7 @@ class DataBrowserService:
             return self._preview_log(resolved, page, per_page, search)
         return {"error": "Preview not supported for this file type"}
 
-    def preview_sqlite_table(
-        self, rel_path: str, table_name: str, page: int, per_page: int, search: str
-    ) -> dict:
+    def preview_sqlite_table(self, rel_path: str, table_name: str, page: int, per_page: int, search: str) -> dict:
         """Preview rows from a specific SQLite table."""
         resolved = self.resolve_safe_path(rel_path)
         if resolved is None:
@@ -116,6 +114,7 @@ class DataBrowserService:
         """Read and paginate a JSON or JSONL file as tabular data."""
         try:
             import json
+
             with open(filepath, "r", encoding="utf-8", errors="replace") as fh:
                 content = fh.read()
             data = self._parse_json_or_jsonl(content)
@@ -128,6 +127,7 @@ class DataBrowserService:
     def _parse_json_or_jsonl(self, content: str):
         """Parse standard JSON, falling back to JSONL (one object per line)."""
         import json
+
         try:
             return json.loads(content)
         except json.JSONDecodeError:
@@ -172,7 +172,7 @@ class DataBrowserService:
         start = (page - 1) * per_page
         return {
             "columns": columns,
-            "rows": rows[start:start + per_page],
+            "rows": rows[start : start + per_page],
             "total_rows": total,
             "page": page,
             "per_page": per_page,
@@ -184,19 +184,14 @@ class DataBrowserService:
         if not search:
             return rows
         search_lower = search.lower()
-        return [
-            row for row in rows
-            if any(search_lower in cell.lower() for cell in row)
-        ]
+        return [row for row in rows if any(search_lower in cell.lower() for cell in row)]
 
     def _list_sqlite_tables(self, filepath: str) -> dict:
         """List tables and metadata in a SQLite database."""
         try:
             conn = sqlite3.connect(f"file:{filepath}?mode=ro", uri=True)
             cursor = conn.cursor()
-            cursor.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
-            )
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
             tables = []
             for (name,) in cursor.fetchall():
                 info = self._get_table_info(conn, name)
@@ -238,9 +233,7 @@ class DataBrowserService:
         except Exception:
             return False
 
-    def _preview_sqlite(
-        self, filepath: str, table_name: str, page: int, per_page: int, search: str
-    ) -> dict:
+    def _preview_sqlite(self, filepath: str, table_name: str, page: int, per_page: int, search: str) -> dict:
         """Read and paginate rows from a SQLite table."""
         try:
             conn = sqlite3.connect(f"file:{filepath}?mode=ro", uri=True)
@@ -251,29 +244,20 @@ class DataBrowserService:
                 conn.close()
                 return {"error": "Table not found"}
             columns = [row[1] for row in col_info]
-            result = self._query_sqlite_page(
-                conn, table_name, columns, page, per_page, search
-            )
+            result = self._query_sqlite_page(conn, table_name, columns, page, per_page, search)
             conn.close()
             return result
         except Exception as exc:
             return {"error": f"Failed to read SQLite table: {exc}"}
 
-    def _query_sqlite_page(
-        self, conn, table_name: str, columns: list,
-        page: int, per_page: int, search: str
-    ) -> dict:
+    def _query_sqlite_page(self, conn, table_name: str, columns: list, page: int, per_page: int, search: str) -> dict:
         """Execute paginated query on a SQLite table."""
         cursor = conn.cursor()
         if search:
-            where = " OR ".join(
-                f'CAST("{col}" AS TEXT) LIKE ?' for col in columns
-            )
+            where = " OR ".join(f'CAST("{col}" AS TEXT) LIKE ?' for col in columns)
             pattern = f"%{search}%"
             params = [pattern] * len(columns)
-            cursor.execute(
-                f'SELECT COUNT(*) FROM "{table_name}" WHERE {where}', params  # nosec B608 — validated
-            )
+            cursor.execute(f'SELECT COUNT(*) FROM "{table_name}" WHERE {where}', params)  # nosec B608 — validated
             total = cursor.fetchone()[0]
             offset = (max(1, min(page, max(1, math.ceil(total / per_page)))) - 1) * per_page
             cursor.execute(

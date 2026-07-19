@@ -16,6 +16,7 @@ Usage:
     # Scrape (uses saved cookies):
     python scripts/mist_ideas_scraper_auth.py
 """
+
 import argparse
 import csv
 import json
@@ -44,20 +45,32 @@ FORUM_URL = "https://ideas.mist.com/forums/912934-product-features"
 
 # ── CSV headers ───────────────────────────────────────────────
 HEADERS = [
-    "idea_id", "url", "title", "description_full", "votes",
-    "comments_count", "category", "status", "submitter",
-    "submitter_url", "submit_date", "tags", "comments_json",
+    "idea_id",
+    "url",
+    "title",
+    "description_full",
+    "votes",
+    "comments_count",
+    "category",
+    "status",
+    "submitter",
+    "submitter_url",
+    "submit_date",
+    "tags",
+    "comments_json",
 ]
 
 # ── Boilerplate to strip ─────────────────────────────────────
-BOILERPLATE_LINES = frozenset([
-    "Submitted ideas will be reviewed and responded to by our Product team.",
-    "Submitted ideas will be reviewed and responded to by our Product team.\u2019",
-    "Please do not submit cases here.",
-    "Please do not submit support cases here.",
-    "All feature requests will be evaluated on the basis of demand (votes), technical feasibility, strategic alignment, and other factors.",
-    "All feature requests will be evaluated on the basis of demand (votes), technical feasibility, strategic alignment, and other factors.\u2019",
-])
+BOILERPLATE_LINES = frozenset(
+    [
+        "Submitted ideas will be reviewed and responded to by our Product team.",
+        "Submitted ideas will be reviewed and responded to by our Product team.\u2019",
+        "Please do not submit cases here.",
+        "Please do not submit support cases here.",
+        "All feature requests will be evaluated on the basis of demand (votes), technical feasibility, strategic alignment, and other factors.",
+        "All feature requests will be evaluated on the basis of demand (votes), technical feasibility, strategic alignment, and other factors.\u2019",
+    ]
+)
 
 
 def do_login():
@@ -131,8 +144,7 @@ class AuthenticatedScraper:
             done_set = set(DONE_FILE.read_text(encoding="utf-8").strip().splitlines())
 
         remaining = [url for url in all_urls if url not in done_set]
-        logger.info("Total: %d, Done: %d, Remaining: %d",
-                     len(all_urls), len(done_set), len(remaining))
+        logger.info("Total: %d, Done: %d, Remaining: %d", len(all_urls), len(done_set), len(remaining))
         return remaining
 
     def mark_done(self, url):
@@ -155,7 +167,8 @@ class AuthenticatedScraper:
 
     def extract_data(self, page):
         """Extract all idea data from the current page via JS."""
-        return page.evaluate("""() => {
+        return page.evaluate(
+            """() => {
             const title_element = document.querySelector('h1.uvIdeaTitle');
             const title = title_element ? title_element.textContent.trim() : '';
 
@@ -196,7 +209,8 @@ class AuthenticatedScraper:
                 submitter, submitter_url, submit_date, tags, comments,
                 current_url: window.location.href,
             };
-        }""")
+        }"""
+        )
 
     def save_to_csv(self, row):
         """Append a row to CSV."""
@@ -244,9 +258,7 @@ class AuthenticatedScraper:
                     self.scrape_one(page, url, idea_id, index, len(remaining))
                 except Exception as error:
                     self.errors += 1
-                    logger.error("[%d/%d] ERROR %s: %s",
-                                 index + 1, len(remaining),
-                                 url[:60], str(error)[:120])
+                    logger.error("[%d/%d] ERROR %s: %s", index + 1, len(remaining), url[:60], str(error)[:120])
                     self.mark_done(url)
 
                 # Polite delay
@@ -255,8 +267,9 @@ class AuthenticatedScraper:
 
             browser.close()
 
-        logger.info("DONE. Saved=%d Errors=%d Skipped=%d EmptyDesc=%d",
-                     self.saved, self.errors, self.skipped, self.empty_desc)
+        logger.info(
+            "DONE. Saved=%d Errors=%d Skipped=%d EmptyDesc=%d", self.saved, self.errors, self.skipped, self.empty_desc
+        )
 
     def verify_auth(self, page):
         """Verify auth cookies work by loading the forum page."""
@@ -271,9 +284,7 @@ class AuthenticatedScraper:
             return False
 
         # Check for idea list content
-        has_ideas = page.evaluate(
-            "() => document.querySelectorAll('.uvIdeaTitle, .uvIdeaList').length > 0"
-        )
+        has_ideas = page.evaluate("() => document.querySelectorAll('.uvIdeaTitle, .uvIdeaList').length > 0")
         if has_ideas:
             logger.info("Auth verified - forum content visible!")
             return True
@@ -296,8 +307,7 @@ class AuthenticatedScraper:
         # Validate URL matches
         current_id = self.extract_idea_id(page.url)
         if current_id != idea_id:
-            logger.warning("[%d/%d] URL mismatch: expected %s, got %s",
-                           index + 1, total, idea_id, current_id)
+            logger.warning("[%d/%d] URL mismatch: expected %s, got %s", index + 1, total, idea_id, current_id)
             self.skipped += 1
             self.mark_done(url)
             return
@@ -319,9 +329,7 @@ class AuthenticatedScraper:
             "submitter_url": data.get("submitter_url", ""),
             "submit_date": data.get("submit_date", ""),
             "tags": data.get("tags", ""),
-            "comments_json": json.dumps(
-                data.get("comments", []), ensure_ascii=False
-            ),
+            "comments_json": json.dumps(data.get("comments", []), ensure_ascii=False),
         }
 
         self.save_to_csv(row)
@@ -336,15 +344,19 @@ class AuthenticatedScraper:
             title_preview = row["title"][:50]
             logger.info(
                 "[%d/%d] id=%s votes=%s status=[%s] desc=%dch title=%s",
-                self.saved, total, idea_id, row["votes"],
-                row["status"][:20], len(description), title_preview,
+                self.saved,
+                total,
+                idea_id,
+                row["votes"],
+                row["status"][:20],
+                len(description),
+                title_preview,
             )
 
 
 def main():
     parser = argparse.ArgumentParser(description="Scrape ideas.mist.com with auth")
-    parser.add_argument("--login", action="store_true",
-                        help="Open browser for manual SSO login")
+    parser.add_argument("--login", action="store_true", help="Open browser for manual SSO login")
     args = parser.parse_args()
 
     if args.login:

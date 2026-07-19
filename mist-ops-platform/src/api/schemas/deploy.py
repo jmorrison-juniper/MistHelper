@@ -293,4 +293,3 @@ class TemplateInstantiateRequest(BaseModel):
     target_entity_id: UUID
     parameters: dict[str, Any] = Field(default_factory=dict)
     scheduled_at: datetime | None = None
-

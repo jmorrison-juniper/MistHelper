@@ -37,7 +37,9 @@ class ComplianceService:
     ) -> ComplianceAuditPack:
         """Create a compliance pack from audit records in range."""
         records = await self._query_records(
-            org_id, date_start, date_end,
+            org_id,
+            date_start,
+            date_end,
         )
         summary = _build_summary(records, framework)
 
@@ -75,16 +77,15 @@ class ComplianceService:
 
 
 def _build_summary(
-    records: list[AuditRecord], framework: str,
+    records: list[AuditRecord],
+    framework: str,
 ) -> dict:
     """Build a structured summary of audit evidence."""
     by_type: dict[str, int] = {}
     by_actor: dict[str, int] = {}
 
     for record in records:
-        by_type[record.change_type] = (
-            by_type.get(record.change_type, 0) + 1
-        )
+        by_type[record.change_type] = by_type.get(record.change_type, 0) + 1
         by_actor[record.actor] = by_actor.get(record.actor, 0) + 1
 
     return {

@@ -89,9 +89,7 @@ def test_loop_processes_until_signal():
             break
         processed.append(site)
 
-    assert processed == ["site_a", "site_b", "site_c"], (
-        f"expected 3 sites, got {processed}"
-    )
+    assert processed == ["site_a", "site_b", "site_c"], f"expected 3 sites, got {processed}"
 
 
 def main():
