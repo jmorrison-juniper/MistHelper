@@ -152,7 +152,40 @@ ignore_missing_imports = true
 warn_unused_configs = true
 warn_unused_ignores = true
 explicit_package_bases = true
-exclude = ["mist-ops-platform", "ops-portal", "web_portal", "maps_manager", "scripts", "specs", "tests", "src/maps"]
+# exclude: each entry justified per issue #884 AC.
+#   mist-ops-platform     -- vendored subtree ships its own ./src/__init__.py, which
+#                            would collide with the project's top-level src/ package if
+#                            both were scanned (duplicate-module error). Hard requirement.
+#   web_portal            -- Flask app; Phase-2 typing target (needs types-flask + per-view
+#                            annotations). Also covered by follow_imports=silent (#883).
+#   src/maps              -- matplotlib/plotly viewer subtree; Phase-2 typing target. Also
+#                            covered by follow_imports=silent (#883) and coverage omit (#878).
+#   tests                 -- test suite; strict mode not appropriate for pytest fixtures.
+#                            The [[overrides]] block for tests below is now dead config —
+#                            AC (#884) says "pick one"; we picked exclude. Track re-scan
+#                            under a future Phase-2 tests-typing issue.
+#   scripts               -- 584 mypy errors at strict; out of scope for #884. Dev tooling
+#                            typing sweep will be tracked separately.
+#   tools                 -- 47 mypy errors; dev tooling with codemod fixtures whose bad/
+#                            files deliberately embody anti-patterns. Track under a future
+#                            tools-typing sweep.
+#   MistHelper.py         -- monolith being refactored (Wave 2); 118 strict errors. Already
+#                            covered by follow_imports=silent (#883) for cross-module bug
+#                            catches. Shrinks as classes graduate out into src/*.
+#   starlink_dashboard.py -- standalone dashboard app; 76 strict errors. Needs its own
+#                            typing sweep — track separately.
+# Dropped from prior list in #884: ops-portal (0 .py files), maps_manager (never existed
+# as top-level module), specs (no runtime Python; one inline script annotation fixed).
+exclude = [
+    "mist-ops-platform",
+    "web_portal",
+    "src/maps",
+    "tests",
+    "scripts",
+    "tools",
+    "MistHelper.py",
+    "starlink_dashboard.py",
+]
 
 [[tool.mypy.overrides]]
 # Dash dynamically generates HTML/DCC component classes (Div, Span, P, Button, etc.)
@@ -192,23 +225,6 @@ module = ["src.db", "src.db.*"]
 disallow_untyped_calls = false
 disallow_any_generics = false
 warn_return_any = false
-
-[[tool.mypy.overrides]]
-# Tests: relax strict mode — test functions rarely benefit from full type annotations.
-# Phase 2 target: incrementally add annotations to test helpers.
-module = [
-    "tests",
-    "tests.*",
-    "tests.unit.*",
-    "tests.e2e.*",
-]
-disallow_untyped_defs = false
-disallow_incomplete_defs = false
-disallow_untyped_calls = false
-disallow_any_generics = false
-warn_return_any = false
-check_untyped_defs = false
-strict = false
 
 [[tool.mypy.overrides]]
 # Wave 2 extracted modules: legacy code extracted as-is from MistHelper.py monolith.

@@ -61,7 +61,7 @@ for cs in catalog:
 
 # Build handler -> class lookup from menu_map
 # Extract a mapping from menu handler class names to menu numbers
-handler_to_menus = {}
+handler_to_menus: dict[str, list[int]] = {}
 for mn, info in menu_map.items():
     handler = info["handler"]
     # Clean up lambda wrappers
