@@ -105,23 +105,27 @@ class ConfigUtils:
         # actionable message naming the real variable (org_id, not MIST_ORG_ID) before any network call.
         if "--test" in sys.argv or "--testinteractive" in sys.argv:  # Non-interactive systematic test mode.
             logging.error("Cannot resolve org_id non-interactively for --test/--testinteractive: none configured.")
-            print("[ERROR] No organization id configured for --test/--testinteractive.")
-            print("[ERROR] Set 'org_id' (or 'ORG_ID') in your environment, or add an 'org_id=' line to .env.")
-            print(
-                "[ERROR] Copy deploy/.env.example to .env for the full variable list (note: org_id, "
+            # WHY (#886 Phase 2): retiring print() in favor of logging.error so operators still see the
+            # actionable guidance on the default root-logger config (ERROR is always emitted).
+            logging.error("No organization id configured for --test/--testinteractive.")
+            logging.error("Set 'org_id' (or 'ORG_ID') in your environment, or add an 'org_id=' line to .env.")
+            logging.error(
+                "Copy deploy/.env.example to .env for the full variable list (note: org_id, "
                 "not MIST_ORG_ID, is read by this path)."
             )
             sys.exit(1)  # Fail closed before mistapi.cli.select_org() can issue a malformed-URL request.
         logging.info("* No org_id found in .env or CLI. Prompting user...")  # Prompt the user as last resort.
         if cls._apisession is None:  # No session was ever injected.
             logging.error("Cannot prompt for org selection: no mistapi session injected via set_apisession().")
-            print("[ERROR] Cannot select an organization without an authenticated API session.")
+            # WHY (#886 Phase 2): retire print() in favor of logging.error (surfaces on default root-logger).
+            logging.error("Cannot select an organization without an authenticated API session.")
             sys.exit(1)  # Abort: prompt path is unreachable without a session.
         org_id_list = mistapi.cli.select_org(cls._apisession)  # Interactive org selection using injected session.
         if not org_id_list:  # Selection returned nothing.
             logging.error("Failed to retrieve org list. Check your API token and authentication.")
-            print("[ERROR] Unable to retrieve organizations. Your API token may be invalid or expired.")
-            print("[ERROR] Please update MIST_API_TOKEN in your .env file and try again.")
+            # WHY (#886 Phase 2): retire print() in favor of logging.error (surfaces on default root-logger).
+            logging.error("Unable to retrieve organizations. Your API token may be invalid or expired.")
+            logging.error("Please update MIST_API_TOKEN in your .env file and try again.")
             sys.exit(1)  # Abort: no org to proceed with.
         return str(org_id_list[0])  # Use the first selected org (explicit str cast: mistapi returns Any).
 
@@ -167,7 +171,8 @@ class ConfigUtils:
                 os.remove("stop_loop.txt")  # Consume the sentinel once.
             except OSError:  # Ignore removal races.
                 pass  # Best-effort cleanup only.
-            print(" Stop signal detected. Ending operation early.")  # Notify the user of early stop.
-            logging.info("Stop signal (stop_loop.txt) detected - operation stopped by user.")  # Log user stop.
+            # WHY (#886 Phase 2): consolidate print+info into single WARNING so operator sees stop
+            # notification on the default root-logger config (INFO is suppressed by default).
+            logging.warning("Stop signal (stop_loop.txt) detected - operation stopped by user.")
             return True  # Signal callers to stop.
         return False  # No stop requested.

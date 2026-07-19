@@ -10,6 +10,7 @@ behavior is unchanged. Zero network, zero real credentials.
 
 from __future__ import annotations
 
+import logging  # WHY (#886 Phase 2): assert against caplog after print()->logging.error migration.
 from unittest.mock import MagicMock
 
 import pytest
@@ -42,7 +43,7 @@ class TestConfigUtilsOrgIdPreflight:
     """Fail-closed org-id resolution in systematic test modes; unchanged interactive behavior."""
 
     @pytest.mark.parametrize("flag", ["--test", "--testinteractive"])
-    def test_test_mode_fails_closed_without_calling_select_org(self, monkeypatch, capsys, flag):
+    def test_test_mode_fails_closed_without_calling_select_org(self, monkeypatch, caplog, flag):
         """Test mode + no org id anywhere -> exit with actionable message; select_org never called."""
         _reset_config_state(monkeypatch)
         monkeypatch.setattr("sys.argv", ["MistHelper.py", flag])  # WHY: simulate the systematic test invocation.
@@ -50,12 +51,14 @@ class TestConfigUtilsOrgIdPreflight:
             monkeypatch
         )  # WHY: prove the guarded path never reaches SDK selection.
 
-        with pytest.raises(SystemExit) as exc_info:
-            ConfigUtils.get_cached_or_prompted_org_id()
+        # WHY (#886 Phase 2): print() replaced with logging.error; assert against caplog not capsys.
+        with caplog.at_level(logging.ERROR):
+            with pytest.raises(SystemExit) as exc_info:
+                ConfigUtils.get_cached_or_prompted_org_id()
 
         assert exc_info.value.code == 1
         select_org_spy.assert_not_called()  # WHY: the whole point - no malformed-URL request is issued.
-        out = capsys.readouterr().out
+        out = caplog.text
         assert "org_id" in out and "ORG_ID" in out, "must name the exact env vars the code reads"
         assert "deploy/.env.example" in out, "must reference the template file to copy"
         assert "to .env" in out, "must direct operators to the root .env file ConfigUtils reads"

@@ -7,6 +7,25 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 3/N: retire `print()` in `src/config/` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced the 7 remaining `print()`
+  calls in `src/config/config_utils.py` with `logging.error(...)` /
+  `logging.warning(...)` so the print-avoidance rule (T20 selector target of
+  #886) can eventually be enabled repo-wide. Touched
+  `_resolve_org_id_via_prompt` (three `--test`/`--testinteractive`
+  fail-closed messages, no-session guard, no-orgs-returned guard) and
+  `check_stop_signal` (stop-signal detection notice). ERROR level chosen for
+  the fatal-abort paths and WARNING for the operator-visible stop notice so
+  both surface on the default root-logger configuration (INFO is suppressed by
+  default). The `check_stop_signal` `print(...)` + `logging.info(...)` pair
+  was collapsed into a single WARNING line. Companion unit test
+  `tests/unit/test_config_utils_org_id_preflight.py::test_test_mode_fails_closed_without_calling_select_org`
+  was updated to assert against `caplog.text` instead of
+  `capsys.readouterr().out`. Third of ~20+ per-subdirectory slices of #886;
+  T20 selector flip and E402 audit will land after all `src/` subdirs are
+  print-free.
+
 ### #886 Phase 2 slice 2/N: retire `print()` in `src/audit/` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced the 6 remaining `print()`
