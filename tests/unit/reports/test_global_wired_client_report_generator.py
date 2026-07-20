@@ -18,6 +18,7 @@ matches, OSError branch).
 
 from __future__ import annotations
 
+import logging
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -84,8 +85,9 @@ def test_execute_returns_when_user_cancels_filter_prompt() -> None:
     fetch.assert_not_called()
 
 
-def test_execute_returns_when_no_records(capsys: pytest.CaptureFixture[str]) -> None:
+def test_execute_returns_when_no_records(caplog: pytest.LogCaptureFixture) -> None:
     """Empty fetch prints notice and skips write."""
+    caplog.set_level(logging.WARNING)
     fake_mh = _make_mh()
     fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-uuid"
     with (
@@ -96,7 +98,7 @@ def test_execute_returns_when_no_records(capsys: pytest.CaptureFixture[str]) -> 
     ):
         R.execute()
     write_outputs.assert_not_called()
-    assert "No wired clients found" in capsys.readouterr().out
+    assert "No wired clients found" in caplog.text
 
 
 def test_execute_happy_path_invokes_write_outputs() -> None:
@@ -223,31 +225,34 @@ def test_resolve_operator_choice_returns_catalog_entry_for_valid_index() -> None
         assert R._resolve_operator_choice("3", "MAC") == "contains"
 
 
-def test_resolve_operator_choice_returns_none_when_out_of_range(capsys: pytest.CaptureFixture[str]) -> None:
+def test_resolve_operator_choice_returns_none_when_out_of_range(caplog: pytest.LogCaptureFixture) -> None:
     """Index outside catalog -> None + warning."""
+    caplog.set_level(logging.WARNING)
     with _patch_mh(_make_mh()):
         assert R._resolve_operator_choice("99", "MAC") is None
-    assert "Invalid selection" in capsys.readouterr().out
+    assert "Invalid selection" in caplog.text
 
 
-def test_resolve_operator_choice_returns_none_for_non_numeric(capsys: pytest.CaptureFixture[str]) -> None:
+def test_resolve_operator_choice_returns_none_for_non_numeric(caplog: pytest.LogCaptureFixture) -> None:
     """Non-numeric input -> None + warning."""
+    caplog.set_level(logging.WARNING)
     with _patch_mh(_make_mh()):
         assert R._resolve_operator_choice("abc", "MAC") is None
-    assert "Invalid selection" in capsys.readouterr().out
+    assert "Invalid selection" in caplog.text
 
 
 # ---------- _prompt_operator ----------
 
 
-def test_prompt_operator_delegates_to_resolve(capsys: pytest.CaptureFixture[str]) -> None:
+def test_prompt_operator_delegates_to_resolve(caplog: pytest.LogCaptureFixture) -> None:
     """Prompt shows menu, reads input, then delegates parsing."""
+    caplog.set_level(logging.WARNING)
     fake_mh = _make_mh()
     fake_mh.InputUtils.safe_input.return_value = "1"
     with _patch_mh(fake_mh):
         result = R._prompt_operator("MAC")
     assert result == "equals"
-    out = capsys.readouterr().out
+    out = caplog.text
     assert "MAC filter operator" in out
     assert "No filter" in out
     fake_mh.InputUtils.safe_input.assert_called_once()
@@ -292,8 +297,9 @@ def test_fetch_clients_success_with_pushable_criteria() -> None:
     assert kwargs["mac"] == "aa"
 
 
-def test_fetch_clients_returns_empty_on_exception(capsys: pytest.CaptureFixture[str]) -> None:
+def test_fetch_clients_returns_empty_on_exception(caplog: pytest.LogCaptureFixture) -> None:
     """API failure returns ([], False) and prints error."""
+    caplog.set_level(logging.WARNING)
     fake_mh = _make_mh()
     fake_mistapi = MagicMock(name="mistapi")
     fake_mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients.side_effect = RuntimeError("boom")
@@ -304,7 +310,7 @@ def test_fetch_clients_returns_empty_on_exception(capsys: pytest.CaptureFixture[
         records, remote_used = R._fetch_clients("org-uuid", None)
     assert records == []
     assert remote_used is False
-    assert "Error retrieving wired clients" in capsys.readouterr().out
+    assert "Error retrieving wired clients" in caplog.text
 
 
 # ---------- _build_remote_params ----------
@@ -476,8 +482,9 @@ def test_build_metadata_with_both_filters() -> None:
 # ---------- _write_outputs / _write_standard_export / _write_local_report ----------
 
 
-def test_write_outputs_prints_zero_match_message(capsys: pytest.CaptureFixture[str]) -> None:
+def test_write_outputs_prints_zero_match_message(caplog: pytest.LogCaptureFixture) -> None:
     """Zero matched records prints the no-matches notice."""
+    caplog.set_level(logging.WARNING)
     metadata = {"records_matched": 0, "records_retrieved": 5}
     with (
         patch.object(R, "_write_standard_export") as write_export,
@@ -486,11 +493,12 @@ def test_write_outputs_prints_zero_match_message(capsys: pytest.CaptureFixture[s
         R._write_outputs([], metadata)
     write_export.assert_called_once_with([])
     write_report.assert_called_once_with([], metadata)
-    assert "No records matched" in capsys.readouterr().out
+    assert "No records matched" in caplog.text
 
 
-def test_write_outputs_with_matches_skips_no_match_notice(capsys: pytest.CaptureFixture[str]) -> None:
+def test_write_outputs_with_matches_skips_no_match_notice(caplog: pytest.LogCaptureFixture) -> None:
     """When records match, only summary is printed; no zero-match notice."""
+    caplog.set_level(logging.WARNING)
     metadata = {"records_matched": 1, "records_retrieved": 5}
     matched = [{"mac": "aa"}]
     with (
@@ -498,7 +506,7 @@ def test_write_outputs_with_matches_skips_no_match_notice(capsys: pytest.Capture
         patch.object(R, "_write_local_report"),
     ):
         R._write_outputs(matched, metadata)
-    out = capsys.readouterr().out
+    out = caplog.text
     assert "Matched 1 of 5" in out
     assert "No records matched" not in out
 
@@ -534,23 +542,25 @@ def test_write_standard_export_runs_pipeline_when_populated() -> None:
     )
 
 
-def test_write_local_report_writes_summary_json(tmp_path, monkeypatch, capsys: pytest.CaptureFixture[str]) -> None:
+def test_write_local_report_writes_summary_json(tmp_path, monkeypatch, caplog: pytest.LogCaptureFixture) -> None:
     """Writes JSON summary file to the data/ directory."""
+    caplog.set_level(logging.WARNING)
     monkeypatch.chdir(tmp_path)
     (tmp_path / "data").mkdir()
     metadata = {"records_matched": 1, "records_retrieved": 5}
     R._write_local_report([{"mac": "aa"}], metadata)
     written = (tmp_path / "data" / "GlobalWiredClientReport_summary.json").read_text(encoding="utf-8")
     assert "records_matched" in written
-    assert "Report summary written" in capsys.readouterr().out
+    assert "Report summary written" in caplog.text
 
 
-def test_write_local_report_handles_os_error(capsys: pytest.CaptureFixture[str]) -> None:
+def test_write_local_report_handles_os_error(caplog: pytest.LogCaptureFixture) -> None:
     """OSError during write logs + warns without raising."""
+    caplog.set_level(logging.WARNING)
     metadata = {"records_matched": 0, "records_retrieved": 0}
     with patch(
         "src.reports.global_wired_client_report_generator.open",
         side_effect=OSError("disk full"),
     ):
         R._write_local_report([], metadata)
-    assert "Could not write report summary" in capsys.readouterr().out
+    assert "Could not write report summary" in caplog.text

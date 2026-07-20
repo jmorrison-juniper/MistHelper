@@ -45,13 +45,17 @@ class SFPTransceiverDataProcessor:
             devices_with_site_info_path,
         )  # Trace entry with both target paths
         if not os.path.exists(org_port_stats_path):  # Port-stats CSV missing -> regenerate it
-            print("* OrgDevicePortStats.csv not found. Generating it now...")  # User-facing notice
+            logging.warning(
+                "* OrgDevicePortStats.csv not found. Generating it now..."
+            )  # Legacy console echo routed via logger
             logging.info(
                 "OrgDevicePortStats.csv missing; invoking OrgDeviceStatsExporter.device_port_stats()"
             )  # Action log before generating port-stats CSV
             mh.OrgDeviceStatsExporter.device_port_stats()  # Generate the port-stats CSV
         if not os.path.exists(devices_with_site_info_path):  # Devices+site CSV missing -> regenerate it
-            print("* AllDevicesWithSiteInfo.csv not found. Generating it now...")  # User-facing notice
+            logging.warning(
+                "* AllDevicesWithSiteInfo.csv not found. Generating it now..."
+            )  # Legacy console echo routed via logger
             logging.info(
                 "AllDevicesWithSiteInfo.csv missing; invoking OrgInventoryExporter.devices_with_site_info()"
             )  # Action log before generating devices+site CSV
@@ -162,9 +166,9 @@ class SFPTransceiverDataProcessor:
         logging.info(
             "Wrote %s rows to %s", len(merged_data), SFPTransceiverDataProcessor.OUTPUT_FILENAME
         )  # Log the row count written
-        print(
-            f"! Merged data written to {SFPTransceiverDataProcessor.OUTPUT_FILENAME}"
-        )  # Tell the user where the file landed
+        logging.warning(
+            "! Merged data written to %s", SFPTransceiverDataProcessor.OUTPUT_FILENAME
+        )  # Legacy console echo routed via logger
         logging.debug("EXIT: SFPTransceiverDataProcessor.merge_transceiver_data - success")  # Trace successful exit
 
     @staticmethod

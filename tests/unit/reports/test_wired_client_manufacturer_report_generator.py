@@ -13,6 +13,7 @@ non-numeric / in-range / out-of-range), ``_prompt_selection``,
 
 from __future__ import annotations
 
+import logging
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -38,8 +39,9 @@ def _make_mh(**extra):
 # ---------- execute ----------
 
 
-def test_execute_aborts_when_no_records(capsys: pytest.CaptureFixture[str]) -> None:
+def test_execute_aborts_when_no_records(caplog: pytest.LogCaptureFixture) -> None:
     """Empty fetch -> warning + user notice, no exports invoked."""
+    caplog.set_level(logging.WARNING)
     fake_mh = _make_mh()
     fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-uuid"
     with (
@@ -52,7 +54,7 @@ def test_execute_aborts_when_no_records(capsys: pytest.CaptureFixture[str]) -> N
     ):
         R.execute()
     write_outputs.assert_not_called()
-    assert "No wired clients found" in capsys.readouterr().out
+    assert "No wired clients found" in caplog.text
 
 
 def test_execute_writes_all_only_when_selection_skipped() -> None:
@@ -136,8 +138,9 @@ def test_fetch_all_clients_defaults_none_pagination_to_empty_list() -> None:
         assert R._fetch_all_clients("org-uuid") == []
 
 
-def test_fetch_all_clients_returns_empty_on_api_exception(capsys: pytest.CaptureFixture[str]) -> None:
+def test_fetch_all_clients_returns_empty_on_api_exception(caplog: pytest.LogCaptureFixture) -> None:
     """API failure logs + prints and returns an empty list (no re-raise)."""
+    caplog.set_level(logging.WARNING)
     fake_mh = _make_mh()
     fake_mistapi = MagicMock(name="mistapi")
     fake_mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients.side_effect = RuntimeError("boom")
@@ -149,7 +152,7 @@ def test_fetch_all_clients_returns_empty_on_api_exception(capsys: pytest.Capture
         ),
     ):
         assert R._fetch_all_clients("org-uuid") == []
-    assert "Error retrieving wired clients" in capsys.readouterr().out
+    assert "Error retrieving wired clients" in caplog.text
 
 
 # ---------- _build_manufacturer_summary ----------
@@ -180,20 +183,22 @@ def test_build_manufacturer_summary_uses_unknown_for_missing_or_empty() -> None:
 # ---------- _print_manufacturer_table ----------
 
 
-def test_print_manufacturer_table_renders_totals_and_rows(capsys: pytest.CaptureFixture[str]) -> None:
+def test_print_manufacturer_table_renders_totals_and_rows(caplog: pytest.LogCaptureFixture) -> None:
     """Header shows totals; rows list each manufacturer with count."""
+    caplog.set_level(logging.WARNING)
     R._print_manufacturer_table([("Cisco", 3), ("Juniper", 1)])
-    output = capsys.readouterr().out
+    output = caplog.text
     assert "Found 4 clients from 2 manufacturers" in output
     assert "Cisco" in output
     assert "Juniper" in output
 
 
-def test_print_manufacturer_table_truncates_long_names(capsys: pytest.CaptureFixture[str]) -> None:
+def test_print_manufacturer_table_truncates_long_names(caplog: pytest.LogCaptureFixture) -> None:
     """Names longer than 44 characters are truncated for column alignment."""
+    caplog.set_level(logging.WARNING)
     long_name = "X" * 60
     R._print_manufacturer_table([(long_name, 1)])
-    output = capsys.readouterr().out
+    output = caplog.text
     assert "X" * 44 in output
     assert "X" * 45 not in output
 
@@ -206,10 +211,11 @@ def test_parse_manufacturer_choice_returns_none_for_empty_input() -> None:
     assert R._parse_manufacturer_choice("", [("Cisco", 1)]) is None
 
 
-def test_parse_manufacturer_choice_returns_none_for_non_numeric(capsys: pytest.CaptureFixture[str]) -> None:
+def test_parse_manufacturer_choice_returns_none_for_non_numeric(caplog: pytest.LogCaptureFixture) -> None:
     """Non-numeric input prints an error and returns None."""
+    caplog.set_level(logging.WARNING)
     assert R._parse_manufacturer_choice("abc", [("Cisco", 1)]) is None
-    assert "Invalid selection" in capsys.readouterr().out
+    assert "Invalid selection" in caplog.text
 
 
 def test_parse_manufacturer_choice_returns_selected_name_for_valid_index() -> None:
@@ -218,10 +224,11 @@ def test_parse_manufacturer_choice_returns_selected_name_for_valid_index() -> No
     assert R._parse_manufacturer_choice("2", summary) == "Juniper"
 
 
-def test_parse_manufacturer_choice_returns_none_when_out_of_range(capsys: pytest.CaptureFixture[str]) -> None:
+def test_parse_manufacturer_choice_returns_none_when_out_of_range(caplog: pytest.LogCaptureFixture) -> None:
     """Out-of-range indexes print an error and return None."""
+    caplog.set_level(logging.WARNING)
     assert R._parse_manufacturer_choice("99", [("Cisco", 1)]) is None
-    assert "out of range" in capsys.readouterr().out
+    assert "out of range" in caplog.text
 
 
 # ---------- _prompt_selection ----------

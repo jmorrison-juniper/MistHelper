@@ -15,6 +15,7 @@ resolves paths and delegates to helpers).
 from __future__ import annotations
 
 import csv
+import logging
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -52,13 +53,14 @@ def test_ensure_prereq_csvs_does_nothing_when_both_exist() -> None:
     inv_exporter.devices_with_site_info.assert_not_called()
 
 
-def test_ensure_prereq_csvs_generates_port_stats_when_missing(capsys: pytest.CaptureFixture[str]) -> None:
+def test_ensure_prereq_csvs_generates_port_stats_when_missing(caplog: pytest.LogCaptureFixture) -> None:
     """When only the port-stats CSV is missing OrgDeviceStatsExporter is invoked."""
     fake_mh = _make_mh()
 
     def exists(path: str) -> bool:
         return path != "port.csv"
 
+    caplog.set_level(logging.WARNING)
     with (
         patch("src.reports.sfp_transceiver_data_processor.OrgInventoryExporter") as inv_exporter,
         patch("src.reports.sfp_transceiver_data_processor.os.path.exists", side_effect=exists),
@@ -67,16 +69,17 @@ def test_ensure_prereq_csvs_generates_port_stats_when_missing(capsys: pytest.Cap
         P._ensure_prerequisite_csvs("port.csv", "devices.csv")
     fake_mh.OrgDeviceStatsExporter.device_port_stats.assert_called_once_with()
     inv_exporter.devices_with_site_info.assert_not_called()
-    assert "OrgDevicePortStats.csv not found" in capsys.readouterr().out
+    assert "OrgDevicePortStats.csv not found" in caplog.text
 
 
-def test_ensure_prereq_csvs_generates_devices_when_missing(capsys: pytest.CaptureFixture[str]) -> None:
+def test_ensure_prereq_csvs_generates_devices_when_missing(caplog: pytest.LogCaptureFixture) -> None:
     """When only the devices CSV is missing OrgInventoryExporter is invoked."""
     fake_mh = _make_mh()
 
     def exists(path: str) -> bool:
         return path != "devices.csv"
 
+    caplog.set_level(logging.WARNING)
     with (
         patch("src.reports.sfp_transceiver_data_processor.OrgInventoryExporter") as inv_exporter,
         patch("src.reports.sfp_transceiver_data_processor.os.path.exists", side_effect=exists),
@@ -85,7 +88,7 @@ def test_ensure_prereq_csvs_generates_devices_when_missing(capsys: pytest.Captur
         P._ensure_prerequisite_csvs("port.csv", "devices.csv")
     fake_mh.OrgDeviceStatsExporter.device_port_stats.assert_not_called()
     inv_exporter.devices_with_site_info.assert_called_once_with()
-    assert "AllDevicesWithSiteInfo.csv not found" in capsys.readouterr().out
+    assert "AllDevicesWithSiteInfo.csv not found" in caplog.text
 
 
 def test_ensure_prereq_csvs_generates_both_when_missing() -> None:
@@ -209,15 +212,16 @@ def test_log_merge_summary_emits_success_message(caplog: pytest.LogCaptureFixtur
 
 
 def test_finalize_merge_output_writes_via_backend_and_notifies_user(
-    capsys: pytest.CaptureFixture[str],
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Writes via DataExporter and prints the user-facing filename notice."""
     fake_mh = _make_mh()
     rows = [{"site_name": "HQ"}]
+    caplog.set_level(logging.WARNING)
     with patch("src.reports.sfp_transceiver_data_processor.importlib.import_module", return_value=fake_mh):
         P._finalize_merge_output(rows)
     fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(rows, "MergedTransceiverData.csv")
-    assert "Merged data written to MergedTransceiverData.csv" in capsys.readouterr().out
+    assert "Merged data written to MergedTransceiverData.csv" in caplog.text
 
 
 # ---------- _run_merge_pipeline ----------

@@ -33,7 +33,7 @@ class WiredClientManufacturerReportGenerator:
         records = WiredClientManufacturerReportGenerator._fetch_all_clients(org_id)  # Fetch all clients.
         if not records:  # No records.
             logging.warning("No wired clients retrieved from API")  # Warn none retrieved.
-            print("\n  No wired clients found in the organization.")  # Tell the user.
+            logging.warning("\n  No wired clients found in the organization.")  # Legacy console echo routed via logger.
             return  # Abort.
         WiredClientManufacturerReportGenerator._write_outputs(records, "")  # Write the full export.
         summary = WiredClientManufacturerReportGenerator._build_manufacturer_summary(records)
@@ -49,7 +49,9 @@ class WiredClientManufacturerReportGenerator:
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of live apisession global.
         try:
             logging.info("Fetching all organization wired clients for manufacturer report...")  # Log the fetch.
-            print("\n  Retrieving all wired clients from organization...")  # Tell the user.
+            logging.warning(
+                "\n  Retrieving all wired clients from organization..."
+            )  # Legacy console echo routed via logger.
             response = mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients(  # Call the API.
                 mh.apisession,
                 org_id,
@@ -57,11 +59,15 @@ class WiredClientManufacturerReportGenerator:
             )
             records = mistapi.get_all(response=response, mist_session=mh.apisession) or []  # Page all; default empty.
             logging.info("Retrieved %s wired client records", len(records))  # Log the count.
-            print(f"  Retrieved {len(records)} wired client records")  # Tell the user.
+            logging.warning(
+                "  Retrieved %s wired client records", len(records)
+            )  # Legacy console echo routed via logger.
             return records  # Return records.
         except Exception as exception:  # Fetch failed.
             logging.exception("Failed to fetch wired clients: %s", exception)  # Log the exception.
-            print(f"\n  Error retrieving wired clients: {exception}")  # Tell the user.
+            logging.warning(
+                "\n  Error retrieving wired clients: %s", exception
+            )  # Legacy console echo routed via logger.
             return []  # Return empty.
 
     @staticmethod
@@ -78,12 +84,14 @@ class WiredClientManufacturerReportGenerator:
     def _print_manufacturer_table(summary: list[tuple[str, int]]) -> None:
         """Render the manufacturer/count picker table to stdout."""
         total_clients = sum(count for _, count in summary)  # Aggregate total client count for header line.
-        print(f"\n  Found {total_clients} clients from {len(summary)} manufacturers\n")  # Tell the user totals.
-        print(f"  {'#':<5} {'Manufacturer':<45} {'Count':>8}")  # Column header.
-        print(f"  {'-' * 5} {'-' * 45} {'-' * 8}")  # Separator row.
+        logging.warning(
+            "\n  Found %s clients from %s manufacturers\n", total_clients, len(summary)
+        )  # Legacy totals echo.
+        logging.warning("  %-5s %-45s %8s", "#", "Manufacturer", "Count")  # Column header.
+        logging.warning("  %s %s %s", "-" * 5, "-" * 45, "-" * 8)  # Separator row.
         for index, (manufacturer, count) in enumerate(summary, 1):  # List each manufacturer.
             display_name = manufacturer[:44]  # Truncate long names so column stays aligned.
-            print(f"  {index:<5} {display_name:<45} {count:>8}")  # Print the row.
+            logging.warning("  %-5s %-45s %8s", index, display_name, count)  # Legacy row echo routed via logger.
 
     @staticmethod
     def _parse_manufacturer_choice(choice: str, summary: list[tuple[str, int]]) -> str | None:
@@ -93,13 +101,13 @@ class WiredClientManufacturerReportGenerator:
         try:
             selection_index = int(choice)  # Parse the numeric selection.
         except ValueError:  # Non-numeric input.
-            print("  Invalid selection.")  # Tell the user.
+            logging.warning("  Invalid selection.")  # Legacy console echo routed via logger.
             return None  # Abort.
         if 1 <= selection_index <= len(summary):  # In valid range.
             selected_manufacturer = summary[selection_index - 1][0]  # Pick the manufacturer name.
             logging.info("User selected manufacturer: %s", selected_manufacturer)  # Log the choice.
             return selected_manufacturer  # Return chosen manufacturer.
-        print("  Selection out of range.")  # Out-of-range selection.
+        logging.warning("  Selection out of range.")  # Legacy console echo routed via logger.
         return None  # Abort.
 
     @staticmethod
@@ -144,7 +152,9 @@ class WiredClientManufacturerReportGenerator:
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataProcessingUtils + DataExporter helpers.
         label = manufacturer if manufacturer else "ALL manufacturers"  # Label for messages.
         filename = WiredClientManufacturerReportGenerator._build_filename(manufacturer)  # Build the filename.
-        print(f"\n  Exporting {len(filtered)} records for: {label}")  # Tell the user.
+        logging.warning(
+            "\n  Exporting %s records for: %s", len(filtered), label
+        )  # Legacy console echo routed via logger.
         if filtered:  # Have records.
             flattened = DataProcessingUtils.flatten_nested_fields(filtered)  # Flatten nested fields.
             sanitized = DataProcessingUtils.escape_multiline(flattened)
@@ -155,5 +165,5 @@ class WiredClientManufacturerReportGenerator:
             filename,
             api_function_name="wiredClientManufacturerReport",
         )
-        print(f"  Exported to: data/{filename}.csv")  # Tell the user.
+        logging.warning("  Exported to: data/%s.csv", filename)  # Legacy console echo routed via logger.
         logging.info("Manufacturer report exported: %s records for %s -> %s", len(sanitized), label, filename)

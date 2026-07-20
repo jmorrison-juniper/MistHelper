@@ -1,5 +1,6 @@
 """Unit tests for E911BSSIDReportGenerator in src/reports/e911_bssid.py."""
 
+import logging
 import os
 import sys
 import time
@@ -450,18 +451,20 @@ class TestBuildBssidRows:
 class TestDisplaySummary:
     """Tests for report summary output."""
 
-    def test_no_gaps(self, capsys):
+    def test_no_gaps(self, caplog: pytest.LogCaptureFixture):
         """Summary without gaps shows clean message."""
+        caplog.set_level(logging.WARNING)
         E911BSSIDReportGenerator._display_summary(5, 20, 320, [])
-        output = capsys.readouterr().out
+        output = caplog.text
         assert "Sites processed: 5" in output
         assert "No compliance gaps" in output
 
-    def test_with_gaps(self, capsys):
+    def test_with_gaps(self, caplog: pytest.LogCaptureFixture):
         """Summary with gaps lists each one."""
+        caplog.set_level(logging.WARNING)
         gaps = [{"ap_name": "AP-1", "ap_mac": "aa:bb", "reason": "No map"}]
         E911BSSIDReportGenerator._display_summary(5, 20, 320, gaps)
-        output = capsys.readouterr().out
+        output = caplog.text
         assert "Compliance Gaps: 1" in output
         assert "AP-1" in output
 
@@ -553,8 +556,9 @@ class TestRestoreOrInit:
 class TestHandleRateLimit:
     """Tests for rate limit handling."""
 
-    def test_saves_checkpoint_and_returns_false(self, capsys):
+    def test_saves_checkpoint_and_returns_false(self, caplog: pytest.LogCaptureFixture):
         """Rate limit handler saves state and returns False."""
+        caplog.set_level(logging.WARNING)
         org_data = {"sites": {}}
         batch = SiteBatchContext(
             org_id="org-1",
@@ -568,7 +572,7 @@ class TestHandleRateLimit:
         result = E911BSSIDReportGenerator._handle_rate_limit(batch, 5)
         assert result is False
         assert os.path.exists(E911BSSIDReportGenerator.CHECKPOINT_FILE)
-        output = capsys.readouterr().out
+        output = caplog.text
         assert "Rate limited" in output
 
 
@@ -578,7 +582,7 @@ class TestHandleRateLimit:
 class TestWriteReport:
     """Tests for report writing and cleanup."""
 
-    def test_calls_write_fn(self, lookups, capsys):
+    def test_calls_write_fn(self, lookups):
         """Write function is called with rows and filename."""
         write_fn = MagicMock()
         radio_data = [
@@ -665,8 +669,9 @@ class TestAppendApRows:
 class TestExecute:
     """Integration tests for the top-level execute method."""
 
-    def test_no_aps_exits_early(self, capsys):
+    def test_no_aps_exits_early(self, caplog: pytest.LogCaptureFixture):
         """If no APs found, report exits with message."""
+        caplog.set_level(logging.WARNING)
         mock_api = MagicMock()
 
         def fake_fetch_bulk(*args, **kwargs):
@@ -692,7 +697,7 @@ class TestExecute:
                 safe_input_fn=lambda *a, **kw: "n",
                 write_data_fn=MagicMock(),
             )
-        output = capsys.readouterr().out
+        output = caplog.text
         assert "No APs found" in output
 
     def test_full_run_writes_report(self, lookups):
@@ -743,7 +748,7 @@ class TestExecute:
             )
         write_fn.assert_called_once()
 
-    def test_rate_limited_run_stops_early(self, lookups, capsys):
+    def test_rate_limited_run_stops_early(self, lookups):
         """Execution stops when rate-limited, doesn't call write."""
         mock_api = MagicMock()
         write_fn = MagicMock()
@@ -1069,8 +1074,9 @@ class TestResolveSiteSsids:
 class TestProcessSites:
     """Tests for _process_sites with mocked API methods."""
 
-    def test_all_cached_returns_true(self, capsys):
+    def test_all_cached_returns_true(self, caplog: pytest.LogCaptureFixture):
         """When all sites are already cached, returns True immediately."""
+        caplog.set_level(logging.WARNING)
         org_data = {
             "aps": {"aa": {"site_id": "s1"}},
             "sites": {"s1": {}},
@@ -1091,7 +1097,7 @@ class TestProcessSites:
             site_state,
         )
         assert result is True
-        assert "already cached" in capsys.readouterr().out
+        assert "already cached" in caplog.text
 
     def test_processes_remaining_sites(self):
         """Processes remaining sites and returns True when complete."""
