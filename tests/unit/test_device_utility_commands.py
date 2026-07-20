@@ -9,6 +9,7 @@ Uses identity-checked teardown to avoid cross-test sys.modules contamination.
 
 from __future__ import annotations
 
+import logging
 import sys
 from unittest.mock import MagicMock, patch
 
@@ -229,26 +230,29 @@ class TestGetDeviceInfo:
 class TestPrintApiResult:
     """Tests for _print_api_result (static method)."""
 
-    def test_success_prints_message(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_success_prints_message(self, caplog: pytest.LogCaptureFixture) -> None:
         resp = _mock_api_response(200)
-        result = DeviceUtilityCommands._print_api_result(resp, "OK", "FAIL")
+        with caplog.at_level(logging.INFO, logger="root"):
+            result = DeviceUtilityCommands._print_api_result(resp, "OK", "FAIL")
         assert result is True
-        assert "OK" in capsys.readouterr().out
+        assert "OK" in "\n".join(r.getMessage() for r in caplog.records)
 
-    def test_failure_prints_error(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_failure_prints_error(self, caplog: pytest.LogCaptureFixture) -> None:
         resp = _mock_api_response(400, {"detail": "bad request"})
-        result = DeviceUtilityCommands._print_api_result(resp, "OK", "FAIL")
+        with caplog.at_level(logging.ERROR, logger="root"):
+            result = DeviceUtilityCommands._print_api_result(resp, "OK", "FAIL")
         assert result is False
-        out = capsys.readouterr().out
+        out = "\n".join(r.getMessage() for r in caplog.records)
         assert "FAIL" in out
         assert "400" in out
         assert "bad request" in out
 
-    def test_failure_without_detail(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_failure_without_detail(self, caplog: pytest.LogCaptureFixture) -> None:
         resp = _mock_api_response(500)
-        result = DeviceUtilityCommands._print_api_result(resp, "OK", "Server Error")
+        with caplog.at_level(logging.ERROR, logger="root"):
+            result = DeviceUtilityCommands._print_api_result(resp, "OK", "Server Error")
         assert result is False
-        assert "500" in capsys.readouterr().out
+        assert "500" in "\n".join(r.getMessage() for r in caplog.records)
 
 
 # ===================================================================
@@ -601,14 +605,15 @@ class TestLocateDevice:
         duc: DeviceUtilityCommands,
         mock_deps: dict[str, MagicMock],
         mock_api: MagicMock,
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         mock_deps["safe_input_fn"].return_value = "10"
         resp = _mock_api_response(200)
         mock_api.api.v1.sites.devices.startSiteLocateDevice.return_value = resp
         with patch.object(duc, "_select_site_and_device", return_value=("s1", "d1", "ap")):
-            duc.locate_device()
-            out = capsys.readouterr().out
+            with caplog.at_level(logging.INFO, logger="root"):
+                duc.locate_device()
+            out = "\n".join(r.getMessage() for r in caplog.records)
             assert "blinking" in out.lower() or "LED" in out
 
     def test_clamps_duration(
@@ -647,13 +652,15 @@ class TestUnlocateDevice:
         self,
         duc: DeviceUtilityCommands,
         mock_api: MagicMock,
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         resp = _mock_api_response(200)
         mock_api.api.v1.sites.devices.stopSiteLocateDevice.return_value = resp
         with patch.object(duc, "_select_site_and_device", return_value=("s1", "d1", "switch")):
-            duc.unlocate_device()
-            assert "stopped" in capsys.readouterr().out.lower()
+            with caplog.at_level(logging.INFO, logger="root"):
+                duc.unlocate_device()
+            out = "\n".join(r.getMessage() for r in caplog.records)
+            assert "stopped" in out.lower()
 
     def test_api_exception(
         self,
@@ -751,13 +758,15 @@ class TestPollSwitchStats:
         self,
         duc: DeviceUtilityCommands,
         mock_api: MagicMock,
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         resp = _mock_api_response(200)
         mock_api.api.v1.sites.devices.pollSiteSwitchStats.return_value = resp
         with patch.object(duc, "_select_site_and_device", return_value=("s1", "d1", "switch")):
-            duc.poll_switch_stats()
-            assert "poll" in capsys.readouterr().out.lower()
+            with caplog.at_level(logging.INFO, logger="root"):
+                duc.poll_switch_stats()
+            out = "\n".join(r.getMessage() for r in caplog.records)
+            assert "poll" in out.lower()
 
 
 class TestCreateDeviceSnapshot:
@@ -771,13 +780,15 @@ class TestCreateDeviceSnapshot:
         self,
         duc: DeviceUtilityCommands,
         mock_api: MagicMock,
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         resp = _mock_api_response(200)
         mock_api.api.v1.sites.devices.createSiteDeviceSnapshot.return_value = resp
         with patch.object(duc, "_select_site_and_device", return_value=("s1", "d1", "switch")):
-            duc.create_device_snapshot()
-            assert "snapshot" in capsys.readouterr().out.lower()
+            with caplog.at_level(logging.INFO, logger="root"):
+                duc.create_device_snapshot()
+            out = "\n".join(r.getMessage() for r in caplog.records)
+            assert "snapshot" in out.lower()
 
     def test_api_exception(
         self,
@@ -832,15 +843,16 @@ class TestUploadSupportFile:
         duc: DeviceUtilityCommands,
         mock_deps: dict[str, MagicMock],
         mock_api: MagicMock,
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         mock_deps["safe_input_fn"].side_effect = ["1", ""]
         resp = _mock_api_response(200)
         mock_api.api.v1.sites.devices.uploadSiteDeviceSupportFile.return_value = resp
         with patch.object(duc, "_select_site_and_device", return_value=("s1", "d1", "switch")):
-            duc.upload_support_file()
+            with caplog.at_level(logging.INFO, logger="root"):
+                duc.upload_support_file()
             mock_api.api.v1.sites.devices.uploadSiteDeviceSupportFile.assert_called_once()
-            out = capsys.readouterr().out
+            out = "\n".join(r.getMessage() for r in caplog.records)
             assert "upload" in out.lower() or "initiated" in out.lower()
 
     def test_invalid_type_defaults_full(
@@ -1966,14 +1978,15 @@ class TestReprovisionDeviceExtended:
         duc: DeviceUtilityCommands,
         mock_deps: dict[str, MagicMock],
         mock_api: MagicMock,
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         mock_deps["safe_input_fn"].return_value = "y"
         resp = _mock_api_response(200)
         mock_api.api.v1.sites.devices.reprovisionSiteOctermDevice.return_value = resp
         with patch.object(duc, "_select_site_and_device", return_value=("s1", "d1", "switch")):
-            duc.reprovision_device()
-            out = capsys.readouterr().out
+            with caplog.at_level(logging.INFO, logger="root"):
+                duc.reprovision_device()
+            out = "\n".join(r.getMessage() for r in caplog.records)
             assert "reprovisioning" in out.lower()
 
     def test_exception(
@@ -2014,7 +2027,7 @@ class TestReadoptDevice:
         self,
         duc: DeviceUtilityCommands,
         mock_api: MagicMock,
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         vc_resp = MagicMock()
         vc_resp.data = {"is_virtual_chassis": True}
@@ -2022,21 +2035,24 @@ class TestReadoptDevice:
         resp = _mock_api_response(200)
         mock_api.api.v1.sites.devices.readoptSiteOctermDevice.return_value = resp
         with patch.object(duc, "_select_site_and_device", return_value=("s1", "d1", "switch")):
-            duc.readopt_device()
-            assert "re-adoption" in capsys.readouterr().out.lower()
+            with caplog.at_level(logging.INFO, logger="root"):
+                duc.readopt_device()
+            out = "\n".join(r.getMessage() for r in caplog.records)
+            assert "re-adoption" in out.lower()
 
     def test_vc_preflight_exception(
         self,
         duc: DeviceUtilityCommands,
         mock_api: MagicMock,
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         mock_api.api.v1.sites.devices.getSiteDeviceVirtualChassis.side_effect = RuntimeError("vc fail")
         resp = _mock_api_response(200)
         mock_api.api.v1.sites.devices.readoptSiteOctermDevice.return_value = resp
         with patch.object(duc, "_select_site_and_device", return_value=("s1", "d1", "switch")):
-            duc.readopt_device()
-            out = capsys.readouterr().out
+            with caplog.at_level(logging.INFO, logger="root"):
+                duc.readopt_device()
+            out = "\n".join(r.getMessage() for r in caplog.records)
             assert "re-adoption" in out.lower()
 
     def test_readopt_exception(
@@ -2279,15 +2295,16 @@ class TestClearSession:
         duc: DeviceUtilityCommands,
         mock_deps: dict[str, MagicMock],
         mock_api: MagicMock,
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         mock_deps["safe_input_fn"].side_effect = ["svc", "", "", "CLEAR"]
         error = RuntimeError("bad input")
         error.status_code = 400  # type: ignore[attr-defined]
         mock_api.api.v1.sites.devices.clearSiteDeviceSession.side_effect = error
         with patch.object(duc, "_select_site_and_device", return_value=("s1", "d1", "gateway")):
-            duc.clear_session()
-            out = capsys.readouterr().out
+            with caplog.at_level(logging.ERROR, logger="root"):
+                duc.clear_session()
+            out = "\n".join(r.getMessage() for r in caplog.records)
             assert "400" in out or "service_name" in out
 
 
@@ -2731,11 +2748,13 @@ class TestDisplayAndSelectIfstatExtended:
 class TestHandleClearSessionError:
     """Tests for _handle_clear_session_error."""
 
-    def test_generic_error(self, capsys: pytest.CaptureFixture[str]) -> None:
-        DeviceUtilityCommands._handle_clear_session_error(RuntimeError("generic"))
-        assert "generic" in capsys.readouterr().out
+    def test_generic_error(self, caplog: pytest.LogCaptureFixture) -> None:
+        with caplog.at_level(logging.ERROR, logger="root"):
+            DeviceUtilityCommands._handle_clear_session_error(RuntimeError("generic"))
+        out = "\n".join(r.getMessage() for r in caplog.records)
+        assert "generic" in out
 
-    def test_nested_exception(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_nested_exception(self, caplog: pytest.LogCaptureFixture) -> None:
         """Cover the inner except branch."""
 
         class BadError(Exception):
@@ -2743,5 +2762,7 @@ class TestHandleClearSessionError:
             def status_code(self) -> int:
                 raise ValueError("no code")
 
-        DeviceUtilityCommands._handle_clear_session_error(BadError("bad"))
-        assert "bad" in capsys.readouterr().out
+        with caplog.at_level(logging.ERROR, logger="root"):
+            DeviceUtilityCommands._handle_clear_session_error(BadError("bad"))
+        out = "\n".join(r.getMessage() for r in caplog.records)
+        assert "bad" in out

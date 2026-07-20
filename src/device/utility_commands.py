@@ -11,6 +11,7 @@ Dependencies are injected via constructor for testability.
 
 from __future__ import annotations  # WHY: postponed evaluation for forward-ref type hints
 
+import logging  # WHY: route operator-facing API result/error output through the logger (issue #886)
 from collections.abc import Callable  # WHY: type aliases for DI callables
 from dataclasses import dataclass  # WHY: bundle 6 injected deps into a frozen struct
 from typing import Any  # WHY: broad response typing for mistapi wrappers
@@ -76,7 +77,8 @@ def _print_api_error(response: Any, fail_msg: str, status_code: int) -> None:  #
     error_text = f"! {fail_msg} (HTTP {status_code})"  # WHY: base line always includes status
     if detail:  # WHY: append server-side context when available
         error_text += f": {detail}"  # WHY: keep detail on same line for grep-ability
-    print(error_text)  # WHY: single write to keep operator output atomic
+    # WHY: preserve error line verbatim; route through logger for capture/redirection.
+    logging.error("%s", error_text)  # WHY: single write to keep operator output atomic
 
 
 class DeviceUtilityCommands:  # WHY: parent class hosting 35 device-command operations
@@ -179,7 +181,8 @@ class DeviceUtilityCommands:  # WHY: parent class hosting 35 device-command oper
         if isinstance(status, int) and status >= _HTTP_ERROR_THRESHOLD:  # WHY: only ints compare
             _print_api_error(response, fail_msg, status)  # WHY: delegate detail extraction
             return False  # WHY: caller treats False as failure
-        print(f"-> {success_msg}")  # WHY: emit success line
+        # WHY: preserve success arrow verbatim; route through logger for capture/redirection.
+        logging.info("-> %s", success_msg)  # WHY: emit success line
         return True  # WHY: caller treats True as success
 
     @staticmethod
@@ -192,15 +195,16 @@ class DeviceUtilityCommands:  # WHY: parent class hosting 35 device-command oper
                 None,
             )  # WHY: try both mistapi error shapes
             if code == 400:  # WHY: 400 == missing service_name/session_ids body key
-                print(
+                # WHY: preserve error guidance verbatim; route through logger for capture/redirection.
+                logging.error(
                     "! API returned 400. The API expects either"
                     " 'service_name' or 'session_ids' in the"
                     " request body."
                 )  # WHY: teach operator the fix
-                print(
+                logging.error(
                     "  Provide a service name or a comma-separated list of session IDs, and retry."
                 )  # WHY: guide follow-up input
             else:
-                print(f"! Clear session failed: {error}")  # WHY: generic fallback
+                logging.error("! Clear session failed: %s", error)  # WHY: generic fallback
         except Exception:  # pylint: disable=broad-exception-caught
-            print(f"! Clear session failed: {error}")  # WHY: never let error-handler raise
+            logging.error("! Clear session failed: %s", error)  # WHY: never let error-handler raise

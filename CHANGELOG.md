@@ -7,6 +7,21 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 54/N: retire `print()` in `src/device/utility_commands.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced the 6 remaining `print()`
+  calls in `src/device/utility_commands.py` with `logging.info(...)` /
+  `logging.error(...)` using `%`-style deferred formatting. Migrations cover
+  `_print_api_error` (formatted HTTP-error line including status and any
+  server-side detail), `_print_api_result` (success arrow line), and
+  `_handle_clear_session_error` (the 400-status two-line operator guidance
+  about `service_name`/`session_ids` request-body keys plus the generic
+  fallback and the nested-exception guard). Error and success text preserved
+  verbatim; no behavior change beyond routing through the configured logger.
+  Companion `capsys` → `caplog` migration in
+  `tests/unit/test_device_utility_commands.py` covers the 11 affected
+  success/error-path assertions.
+
 ### #886 Phase 2 slice 53/N: retire `print()` in `src/capture/site_capture_loop.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced the 6 remaining `print()`
