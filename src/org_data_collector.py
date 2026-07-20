@@ -523,7 +523,7 @@ def _confirm_run(safe_input_fn: Callable[..., str], total: int) -> bool:
     if reply.strip().lower() == _CONFIRM_YES:  # WHY: Normalize whitespace/case before comparing
         return True
     logging.info("Org Data Collector: cancelled by user")  # WHY: Audit trail for the cancel path
-    print("Cancelled.")  # WHY: User-visible confirmation that the run was aborted
+    logging.warning("Cancelled.")  # WHY: Operator-visible cancel confirmation via logger.
     return False
 
 
@@ -549,9 +549,7 @@ def _maybe_print_category(category: str, previous: str) -> str:
     """Print the category banner when ``category`` differs from ``previous`` and return the new tag."""
     if category == previous:  # WHY: Guard clause avoids reprinting the banner for adjacent same-category ops
         return previous
-    print(f"\n{_SEPARATOR}")  # WHY: Top rule of the new category banner
-    print(f"  {category}")  # WHY: Indented category label
-    print(_SEPARATOR)  # WHY: Bottom rule matches the top so blocks are visually paired
+    logging.warning("\n%s\n  %s\n%s", _SEPARATOR, category, _SEPARATOR)  # WHY: Category banner via logger.
     return category  # WHY: Return the new tag so the caller updates its watermark
 
 
@@ -564,12 +562,12 @@ def _run_single(
     """Execute one operation and return one of ``_RESULT_OK`` / ``_RESULT_FAILED`` / ``_RESULT_SKIPPED``."""
     api_name = operation.api_call.__name__  # WHY: Human-readable function name for progress + logging
     progress = f"[{index}/{total}]"  # WHY: Pre-format progress token so the print stays a single f-string
-    print(f"{progress} {api_name} ({operation.data_type})...", end=" ", flush=True)  # WHY: Inline status line
+    logging.warning("%s %s (%s)...", progress, api_name, operation.data_type)  # WHY: Progress line via logger.
     try:
         export_data_fn(**_build_export_kwargs(operation))  # WHY: Delegate to the shared export pipeline
     except Exception as error:  # WHY: Catch broadly so one flaky API never aborts the entire sweep
         return _report_failure(api_name, error)  # WHY: Emit failure line + log and return the sentinel
-    print("OK")  # WHY: Trailing status token confirming success on stdout
+    logging.warning("OK")  # WHY: Trailing status token confirming success via logger.
     return _RESULT_OK
 
 
@@ -590,7 +588,7 @@ def _build_export_kwargs(operation: Operation) -> dict[str, Any]:
 def _report_failure(api_name: str, error: BaseException) -> str:
     """Print, log, and return the failure sentinel for a raised exception."""  # WHY: Isolates error-path I/O
     error_name = type(error).__name__  # WHY: Compact class name suffices in the console line
-    print(f"FAILED ({error_name})")  # WHY: Replace the trailing 'OK' with a failure marker
+    logging.warning("FAILED (%s)", error_name)  # WHY: Failure marker via logger.
     logging.error("Org Data Collector: %s failed: %s: %s", api_name, error_name, error)  # WHY: Full detail log
     return _RESULT_FAILED
 
@@ -618,12 +616,21 @@ def _split_elapsed(elapsed: float) -> tuple[int, int]:
 
 def _print_summary_banner(total: int, totals: _RunTotals, minutes: int, seconds: int) -> None:
     """Emit the operator-facing summary banner for the completed run."""  # WHY: Pure console output helper
-    print(f"\n{_SEPARATOR}")  # WHY: Top rule of the summary banner
-    print("  Org Data Collection Complete")  # WHY: Banner title matching category banner style
-    print(_SEPARATOR)  # WHY: Rule closes the banner header
-    print(f"  Total:     {total}")  # WHY: Total registered operations that were attempted
-    print(f"  Succeeded: {totals.succeeded}")  # WHY: Success tally from the loop
-    print(f"  Failed:    {totals.failed}")  # WHY: Failure tally from the loop
-    print(f"  Skipped:   {totals.skipped}")  # WHY: Skip tally reserved for future opt-outs
-    print(f"  Duration:  {minutes}m {seconds}s")  # WHY: Human-readable wall clock duration
-    print(_SEPARATOR)  # WHY: Bottom rule closes the summary block
+    logging.warning(  # WHY: Summary banner via logger; single call preserves block cohesion.
+        "\n%s\n  Org Data Collection Complete\n%s\n"
+        "  Total:     %s\n"
+        "  Succeeded: %s\n"
+        "  Failed:    %s\n"
+        "  Skipped:   %s\n"
+        "  Duration:  %sm %ss\n"
+        "%s",
+        _SEPARATOR,
+        _SEPARATOR,
+        total,
+        totals.succeeded,
+        totals.failed,
+        totals.skipped,
+        minutes,
+        seconds,
+        _SEPARATOR,
+    )
