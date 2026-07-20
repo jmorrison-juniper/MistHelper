@@ -5,16 +5,34 @@ Why:
     update, view, export-details) plus all 15 private helpers. Every
     ``importlib.import_module("MistHelper")`` call is patched with a
     ``SimpleNamespace`` fake so no real MistHelper live-globals load.
+    User-facing output migrated from print() to logging.warning/error under
+    issue #886, so tests use ``caplog`` at WARNING level rather than ``capsys``.
 """
 
 from __future__ import annotations
 
+import logging
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from src.org.org_ticket_manager import OrgTicketManager
+
+
+@pytest.fixture(autouse=True)
+def _capture_warnings(caplog):
+    """Capture WARNING+ records for every test so caplog.text is populated.
+
+    Why:
+        After #886 slice 16/N, user-visible strings are emitted via
+        ``logging.warning`` / ``logging.error`` on the root logger. Tests
+        assert on these strings by inspecting ``caplog.text``; without an
+        explicit level, pytest's default capture threshold (WARNING) is fine,
+        but propagate=True on the module logger is not always the default in
+        CI environments. Setting it here keeps the tests deterministic.
+    """
+    caplog.set_level(logging.WARNING)
 
 
 def _make_mh(**extra):
@@ -78,14 +96,14 @@ def test_list_tickets_reraises_on_error(caplog):
 # ---------- create_ticket ----------
 
 
-def test_create_ticket_blank_subject_cancels(capsys):
+def test_create_ticket_blank_subject_cancels(caplog):
     """create_ticket aborts when subject is blank."""
     fake_mh = _make_mh()
     fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-1"
     fake_mh.InputUtils.safe_input.return_value = ""
     with patch("src.org.org_ticket_manager.importlib.import_module", return_value=fake_mh):
         OrgTicketManager.create_ticket()
-    assert "subject is required" in capsys.readouterr().out
+    assert "subject is required" in caplog.text
 
 
 def test_create_ticket_full_flow_with_comment():
@@ -119,17 +137,17 @@ def test_create_ticket_flow_without_comment():
 # ---------- add_comment ----------
 
 
-def test_add_comment_cancels_when_no_ticket_selected(capsys):
+def test_add_comment_cancels_when_no_ticket_selected(caplog):
     """add_comment prints cancellation when no ticket is chosen."""
     fake_mh = _make_mh()
     fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-1"
     fake_mh.mistapi.api.v1.orgs.tickets.listOrgTickets.return_value = SimpleNamespace(data=[])
     with patch("src.org.org_ticket_manager.importlib.import_module", return_value=fake_mh):
         OrgTicketManager.add_comment()
-    assert "no ticket selected" in capsys.readouterr().out
+    assert "no ticket selected" in caplog.text
 
 
-def test_add_comment_cancels_when_no_comment_or_file(capsys):
+def test_add_comment_cancels_when_no_comment_or_file(caplog):
     """add_comment aborts if user gives neither comment nor file path."""
     fake_mh = _make_mh()
     fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-1"
@@ -140,7 +158,7 @@ def test_add_comment_cancels_when_no_comment_or_file(capsys):
     fake_mh.InputUtils.safe_input.side_effect = ["1", "", ""]
     with patch("src.org.org_ticket_manager.importlib.import_module", return_value=fake_mh):
         OrgTicketManager.add_comment()
-    assert "provide a comment or file" in capsys.readouterr().out
+    assert "provide a comment or file" in caplog.text
 
 
 def test_add_comment_success_text_only(tmp_path):
@@ -159,17 +177,17 @@ def test_add_comment_success_text_only(tmp_path):
 # ---------- update_ticket ----------
 
 
-def test_update_ticket_cancels_when_no_ticket_selected(capsys):
+def test_update_ticket_cancels_when_no_ticket_selected(caplog):
     """update_ticket prints cancellation on no selection."""
     fake_mh = _make_mh()
     fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-1"
     fake_mh.mistapi.api.v1.orgs.tickets.listOrgTickets.return_value = SimpleNamespace(data=[])
     with patch("src.org.org_ticket_manager.importlib.import_module", return_value=fake_mh):
         OrgTicketManager.update_ticket()
-    assert "no ticket selected" in capsys.readouterr().out
+    assert "no ticket selected" in caplog.text
 
 
-def test_update_ticket_cancels_when_no_fields_changed(capsys):
+def test_update_ticket_cancels_when_no_fields_changed(caplog):
     """update_ticket aborts if user provides no updates."""
     fake_mh = _make_mh()
     fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-1"
@@ -180,10 +198,10 @@ def test_update_ticket_cancels_when_no_fields_changed(capsys):
     fake_mh.InputUtils.safe_input.side_effect = ["1", "", "", ""]
     with patch("src.org.org_ticket_manager.importlib.import_module", return_value=fake_mh):
         OrgTicketManager.update_ticket()
-    assert "No changes specified" in capsys.readouterr().out
+    assert "No changes specified" in caplog.text
 
 
-def test_update_ticket_success_updates_selected_fields(capsys):
+def test_update_ticket_success_updates_selected_fields(caplog):
     """update_ticket calls updateOrgTicket with only user-provided fields."""
     fake_mh = _make_mh()
     fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-1"
@@ -244,35 +262,35 @@ def test_prompt_ticket_id_returns_input_value():
 # ---------- _print_ticket_created_summary ----------
 
 
-def test_print_ticket_created_summary(capsys):
+def test_print_ticket_created_summary(caplog):
     """_print_ticket_created_summary prints ID, subject, type and status."""
     OrgTicketManager._print_ticket_created_summary({"id": "t-1", "status": "open"}, "subj", "problem")
-    out = capsys.readouterr().out
-    assert "t-1" in out
-    assert "subj" in out
-    assert "problem" in out
-    assert "open" in out
+    text = caplog.text
+    assert "t-1" in text
+    assert "subj" in text
+    assert "problem" in text
+    assert "open" in text
 
 
-def test_print_ticket_created_summary_missing_id_status(capsys):
+def test_print_ticket_created_summary_missing_id_status(caplog):
     """_print_ticket_created_summary tolerates missing id/status."""
     OrgTicketManager._print_ticket_created_summary({}, "subj", "question")
-    out = capsys.readouterr().out
-    assert "unknown" in out
-    assert "open" in out
+    text = caplog.text
+    assert "unknown" in text
+    assert "open" in text
 
 
 # ---------- _submit_create_ticket ----------
 
 
-def test_submit_create_ticket_reraises_on_api_error(capsys):
+def test_submit_create_ticket_reraises_on_api_error(caplog):
     """_submit_create_ticket logs, prints and re-raises API errors."""
     fake_mh = _make_mh()
     fake_mh.mistapi.api.v1.orgs.tickets.createOrgTicket.side_effect = RuntimeError("api down")
     with patch("src.org.org_ticket_manager.importlib.import_module", return_value=fake_mh):
         with pytest.raises(RuntimeError, match="api down"):
             OrgTicketManager._submit_create_ticket("org-1", {"subject": "s"}, "s", "problem")
-    assert "Error creating ticket" in capsys.readouterr().out
+    assert "Error creating ticket" in caplog.text
 
 
 # ---------- _build_update_body ----------
@@ -290,25 +308,25 @@ def test_build_update_body_returns_only_provided_fields():
 # ---------- _update_via_api ----------
 
 
-def test_update_via_api_success_prints_changes(capsys):
+def test_update_via_api_success_prints_changes(caplog):
     """_update_via_api prints each changed field."""
     fake_mh = _make_mh()
     fake_mh.mistapi.api.v1.orgs.tickets.updateOrgTicket.return_value = SimpleNamespace(data={"ok": True})
     with patch("src.org.org_ticket_manager.importlib.import_module", return_value=fake_mh):
         OrgTicketManager._update_via_api("org-1", "t-1", {"subject": "x"})
-    out = capsys.readouterr().out
-    assert "updated successfully" in out
-    assert "subject: x" in out
+    text = caplog.text
+    assert "updated successfully" in text
+    assert "subject: x" in text
 
 
-def test_update_via_api_reraises_on_error(capsys):
+def test_update_via_api_reraises_on_error(caplog):
     """_update_via_api logs, prints, and re-raises API errors."""
     fake_mh = _make_mh()
     fake_mh.mistapi.api.v1.orgs.tickets.updateOrgTicket.side_effect = RuntimeError("x")
     with patch("src.org.org_ticket_manager.importlib.import_module", return_value=fake_mh):
         with pytest.raises(RuntimeError):
             OrgTicketManager._update_via_api("org-1", "t-1", {"subject": "x"})
-    assert "Error updating ticket" in capsys.readouterr().out
+    assert "Error updating ticket" in caplog.text
 
 
 # ---------- _prompt_comment_and_file ----------
@@ -325,7 +343,7 @@ def test_prompt_comment_and_file_returns_tuple():
 # ---------- _submit_comment ----------
 
 
-def test_submit_comment_with_valid_file_uses_multipart(tmp_path, capsys):
+def test_submit_comment_with_valid_file_uses_multipart(tmp_path, caplog):
     """_submit_comment picks addOrgTicketCommentFile when file exists."""
     fake_mh = _make_mh()
     file_path = tmp_path / "attach.txt"
@@ -333,10 +351,10 @@ def test_submit_comment_with_valid_file_uses_multipart(tmp_path, capsys):
     with patch("src.org.org_ticket_manager.importlib.import_module", return_value=fake_mh):
         OrgTicketManager._submit_comment("org-1", "t-1", "hello", str(file_path))
     fake_mh.mistapi.api.v1.orgs.tickets.addOrgTicketCommentFile.assert_called_once()
-    assert "with attachment" in capsys.readouterr().out
+    assert "with attachment" in caplog.text
 
 
-def test_submit_comment_with_missing_file_falls_back_to_text(capsys):
+def test_submit_comment_with_missing_file_falls_back_to_text(caplog):
     """_submit_comment warns and submits text-only when path is missing."""
     fake_mh = _make_mh()
     with (
@@ -344,8 +362,7 @@ def test_submit_comment_with_missing_file_falls_back_to_text(capsys):
         patch("src.org.org_ticket_manager.importlib.import_module", return_value=fake_mh),
     ):
         OrgTicketManager._submit_comment("org-1", "t-1", "hello", "/nope/x")
-    out = capsys.readouterr().out
-    assert "File not found" in out
+    assert "File not found" in caplog.text
     fake_mh.mistapi.api.v1.orgs.tickets.addOrgTicketComment.assert_called_once()
 
 
@@ -371,30 +388,30 @@ def test_submit_comment_with_file_and_no_text_passes_none(tmp_path):
 # ---------- _submit_text_comment ----------
 
 
-def test_submit_text_comment_calls_api(capsys):
+def test_submit_text_comment_calls_api(caplog):
     """_submit_text_comment sends addOrgTicketComment with body dict."""
     fake_mh = _make_mh()
     with patch("src.org.org_ticket_manager.importlib.import_module", return_value=fake_mh):
         OrgTicketManager._submit_text_comment("org-1", "t-1", "hi")
     args = fake_mh.mistapi.api.v1.orgs.tickets.addOrgTicketComment.call_args.args
     assert args[3] == {"comment": "hi"}
-    assert "Comment added" in capsys.readouterr().out
+    assert "Comment added" in caplog.text
 
 
 # ---------- view_ticket ----------
 
 
-def test_view_ticket_cancels_when_no_ticket_selected(capsys):
+def test_view_ticket_cancels_when_no_ticket_selected(caplog):
     """view_ticket prints cancellation when no ticket chosen."""
     fake_mh = _make_mh()
     fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-1"
     fake_mh.mistapi.api.v1.orgs.tickets.listOrgTickets.return_value = SimpleNamespace(data=[])
     with patch("src.org.org_ticket_manager.importlib.import_module", return_value=fake_mh):
         OrgTicketManager.view_ticket()
-    assert "no ticket selected" in capsys.readouterr().out
+    assert "no ticket selected" in caplog.text
 
 
-def test_view_ticket_prints_details_on_success(capsys):
+def test_view_ticket_prints_details_on_success(caplog):
     """view_ticket calls fetch + display when ticket found."""
     fake_mh = _make_mh()
     fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-1"
@@ -407,10 +424,10 @@ def test_view_ticket_prints_details_on_success(capsys):
     fake_mh.InputUtils.safe_input.return_value = "1"
     with patch("src.org.org_ticket_manager.importlib.import_module", return_value=fake_mh):
         OrgTicketManager.view_ticket()
-    assert "Ticket" in capsys.readouterr().out
+    assert "Ticket" in caplog.text
 
 
-def test_view_ticket_empty_detail_prints_message(capsys):
+def test_view_ticket_empty_detail_prints_message(caplog):
     """view_ticket prints 'Could not retrieve' when detail is empty."""
     fake_mh = _make_mh()
     fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-1"
@@ -421,20 +438,20 @@ def test_view_ticket_empty_detail_prints_message(capsys):
     fake_mh.InputUtils.safe_input.return_value = "1"
     with patch("src.org.org_ticket_manager.importlib.import_module", return_value=fake_mh):
         OrgTicketManager.view_ticket()
-    assert "Could not retrieve" in capsys.readouterr().out
+    assert "Could not retrieve" in caplog.text
 
 
 # ---------- export_ticket_details ----------
 
 
-def test_export_ticket_details_no_tickets(capsys):
+def test_export_ticket_details_no_tickets(caplog):
     """export_ticket_details prints 'No tickets' when list is empty."""
     fake_mh = _make_mh()
     fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-1"
     fake_mh.mistapi.api.v1.orgs.tickets.listOrgTickets.return_value = SimpleNamespace(data=[])
     with patch("src.org.org_ticket_manager.importlib.import_module", return_value=fake_mh):
         OrgTicketManager.export_ticket_details()
-    assert "No tickets found" in capsys.readouterr().out
+    assert "No tickets found" in caplog.text
 
 
 def test_export_ticket_details_writes_when_details_exist():
@@ -448,7 +465,7 @@ def test_export_ticket_details_writes_when_details_exist():
     fake_mh.DataExporter.write_with_format_selection.assert_called_once()
 
 
-def test_export_ticket_details_no_details_retrieved(capsys):
+def test_export_ticket_details_no_details_retrieved(caplog):
     """export_ticket_details prints message when no details are collected."""
     fake_mh = _make_mh()
     fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-1"
@@ -456,7 +473,7 @@ def test_export_ticket_details_no_details_retrieved(capsys):
     fake_mh.mistapi.api.v1.orgs.tickets.getOrgTicket.side_effect = RuntimeError("nope")
     with patch("src.org.org_ticket_manager.importlib.import_module", return_value=fake_mh):
         OrgTicketManager.export_ticket_details()
-    assert "No ticket details could be retrieved" in capsys.readouterr().out
+    assert "No ticket details could be retrieved" in caplog.text
 
 
 # ---------- _select_ticket ----------
@@ -506,28 +523,28 @@ def test_select_ticket_blank_input_cancels():
 # ---------- _fetch_tickets_for_selection ----------
 
 
-def test_fetch_tickets_for_selection_prints_when_empty(capsys):
+def test_fetch_tickets_for_selection_prints_when_empty(caplog):
     """_fetch_tickets_for_selection prints message when API returns []."""
     fake_mh = _make_mh()
     fake_mh.mistapi.api.v1.orgs.tickets.listOrgTickets.return_value = SimpleNamespace(data=[])
     with patch("src.org.org_ticket_manager.importlib.import_module", return_value=fake_mh):
         assert OrgTicketManager._fetch_tickets_for_selection("org-1") == []
-    assert "No tickets found" in capsys.readouterr().out
+    assert "No tickets found" in caplog.text
 
 
-def test_fetch_tickets_for_selection_handles_api_error(capsys):
+def test_fetch_tickets_for_selection_handles_api_error(caplog):
     """_fetch_tickets_for_selection returns [] and prints error on exception."""
     fake_mh = _make_mh()
     fake_mh.mistapi.api.v1.orgs.tickets.listOrgTickets.side_effect = RuntimeError("x")
     with patch("src.org.org_ticket_manager.importlib.import_module", return_value=fake_mh):
         assert OrgTicketManager._fetch_tickets_for_selection("org-1") == []
-    assert "Error fetching tickets" in capsys.readouterr().out
+    assert "Error fetching tickets" in caplog.text
 
 
 # ---------- _render_ticket_list_table ----------
 
 
-def test_render_ticket_list_table_prints_rows(capsys):
+def test_render_ticket_list_table_prints_rows(caplog):
     """_render_ticket_list_table prints one row per ticket."""
     OrgTicketManager._render_ticket_list_table(
         [
@@ -535,37 +552,37 @@ def test_render_ticket_list_table_prints_rows(capsys):
             {},
         ]
     )
-    out = capsys.readouterr().out
-    assert "open" in out
-    assert "problem" in out
-    assert "abc" in out
-    assert "(no subject)" in out
-    assert "unknown" in out
+    text = caplog.text
+    assert "open" in text
+    assert "problem" in text
+    assert "abc" in text
+    assert "(no subject)" in text
+    assert "unknown" in text
 
 
 # ---------- _resolve_ticket_choice ----------
 
 
-def test_resolve_ticket_choice_valid_returns_id(capsys):
+def test_resolve_ticket_choice_valid_returns_id(caplog):
     """_resolve_ticket_choice returns id and prints subject on valid pick."""
     result = OrgTicketManager._resolve_ticket_choice(
         "1",
         [{"id": "t-1", "subject": "s"}],
     )
     assert result == "t-1"
-    assert "Selected" in capsys.readouterr().out
+    assert "Selected" in caplog.text
 
 
-def test_resolve_ticket_choice_non_numeric(capsys):
+def test_resolve_ticket_choice_non_numeric(caplog):
     """_resolve_ticket_choice returns '' on non-numeric input."""
     assert OrgTicketManager._resolve_ticket_choice("abc", [{"id": "t-1"}]) == ""
-    assert "Invalid selection" in capsys.readouterr().out
+    assert "Invalid selection" in caplog.text
 
 
-def test_resolve_ticket_choice_out_of_range(capsys):
+def test_resolve_ticket_choice_out_of_range(caplog):
     """_resolve_ticket_choice returns '' on out-of-range index."""
     assert OrgTicketManager._resolve_ticket_choice("5", [{"id": "t-1"}]) == ""
-    assert "Invalid selection" in capsys.readouterr().out
+    assert "Invalid selection" in caplog.text
 
 
 # ---------- _fetch_ticket_detail ----------
@@ -579,13 +596,13 @@ def test_fetch_ticket_detail_returns_data():
         assert OrgTicketManager._fetch_ticket_detail("org-1", "t-1") == {"id": "t-1"}
 
 
-def test_fetch_ticket_detail_returns_empty_dict_on_error(capsys):
+def test_fetch_ticket_detail_returns_empty_dict_on_error(caplog):
     """_fetch_ticket_detail returns {} and prints on failure."""
     fake_mh = _make_mh()
     fake_mh.mistapi.api.v1.orgs.tickets.getOrgTicket.side_effect = RuntimeError("x")
     with patch("src.org.org_ticket_manager.importlib.import_module", return_value=fake_mh):
         assert OrgTicketManager._fetch_ticket_detail("org-1", "t-1") == {}
-    assert "Error fetching ticket" in capsys.readouterr().out
+    assert "Error fetching ticket" in caplog.text
 
 
 def test_fetch_ticket_detail_returns_empty_when_data_none():
@@ -607,14 +624,14 @@ def test_fetch_all_ticket_summaries_returns_list():
         assert OrgTicketManager._fetch_all_ticket_summaries("org-1") == [{"id": "t-1"}]
 
 
-def test_fetch_all_ticket_summaries_reraises_on_error(capsys):
+def test_fetch_all_ticket_summaries_reraises_on_error(caplog):
     """_fetch_all_ticket_summaries re-raises API error after logging."""
     fake_mh = _make_mh()
     fake_mh.mistapi.api.v1.orgs.tickets.listOrgTickets.side_effect = RuntimeError("x")
     with patch("src.org.org_ticket_manager.importlib.import_module", return_value=fake_mh):
         with pytest.raises(RuntimeError):
             OrgTicketManager._fetch_all_ticket_summaries("org-1")
-    assert "Error fetching tickets" in capsys.readouterr().out
+    assert "Error fetching tickets" in caplog.text
 
 
 def test_fetch_all_ticket_summaries_none_data_returns_empty():
@@ -628,7 +645,7 @@ def test_fetch_all_ticket_summaries_none_data_returns_empty():
 # ---------- _collect_ticket_details ----------
 
 
-def test_collect_ticket_details_skips_ticket_without_id(capsys):
+def test_collect_ticket_details_skips_ticket_without_id(caplog):
     """_collect_ticket_details skips tickets that have no id."""
     fake_mh = _make_mh()
     fake_mh.mistapi.api.v1.orgs.tickets.getOrgTicket.return_value = SimpleNamespace(data={"id": "t-1", "subject": "s"})
@@ -637,7 +654,7 @@ def test_collect_ticket_details_skips_ticket_without_id(capsys):
     assert len(details) == 1
 
 
-def test_collect_ticket_details_returns_empty_for_all_failed(capsys):
+def test_collect_ticket_details_returns_empty_for_all_failed(caplog):
     """_collect_ticket_details returns [] when every fetch fails."""
     fake_mh = _make_mh()
     fake_mh.mistapi.api.v1.orgs.tickets.getOrgTicket.side_effect = RuntimeError("x")
@@ -648,7 +665,7 @@ def test_collect_ticket_details_returns_empty_for_all_failed(capsys):
 # ---------- _display_ticket_detail ----------
 
 
-def test_display_ticket_detail_prints_metadata_and_comments(capsys):
+def test_display_ticket_detail_prints_metadata_and_comments(caplog):
     """_display_ticket_detail prints subject, id, comments."""
     OrgTicketManager._display_ticket_detail(
         {
@@ -666,23 +683,23 @@ def test_display_ticket_detail_prints_metadata_and_comments(capsys):
             ],
         }
     )
-    out = capsys.readouterr().out
-    assert "s" in out
-    assert "t-1" in out
-    assert "hi" in out
-    assert "Attachment" in out
+    text = caplog.text
+    assert "s" in text
+    assert "t-1" in text
+    assert "hi" in text
+    assert "Attachment" in text
 
 
 # ---------- _render_comments_block ----------
 
 
-def test_render_comments_block_no_comments(capsys):
+def test_render_comments_block_no_comments(caplog):
     """_render_comments_block prints 'No comments' when list is empty."""
     OrgTicketManager._render_comments_block([])
-    assert "No comments" in capsys.readouterr().out
+    assert "No comments" in caplog.text
 
 
-def test_render_comments_block_prints_each_comment(capsys):
+def test_render_comments_block_prints_each_comment(caplog):
     """_render_comments_block prints author, timestamp, body, attachments."""
     OrgTicketManager._render_comments_block(
         [
@@ -695,14 +712,14 @@ def test_render_comments_block_prints_each_comment(capsys):
             {"attachments": None},
         ]
     )
-    out = capsys.readouterr().out
-    assert "hello" in out
-    assert "x.txt" in out
-    assert "unknown" in out
-    assert "(no text)" in out
+    text = caplog.text
+    assert "hello" in text
+    assert "x.txt" in text
+    assert "unknown" in text
+    assert "(no text)" in text
 
 
-def test_render_comments_block_uses_content_url_when_no_name(capsys):
+def test_render_comments_block_uses_content_url_when_no_name(caplog):
     """_render_comments_block falls back to content_url when name missing."""
     OrgTicketManager._render_comments_block(
         [
@@ -714,6 +731,6 @@ def test_render_comments_block_uses_content_url_when_no_name(capsys):
             }
         ]
     )
-    out = capsys.readouterr().out
-    assert "http://x" in out
-    assert "file" in out
+    text = caplog.text
+    assert "http://x" in text
+    assert "file" in text

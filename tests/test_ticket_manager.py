@@ -7,6 +7,7 @@ ticket selector, and edge cases (blank subject, blank ticket ID, no changes).
 """
 
 import csv
+import logging
 from unittest.mock import MagicMock
 
 import pytest
@@ -15,6 +16,21 @@ import MistHelper
 from src.refactors.endpoint_primary_key_strategies import (
     ENDPOINT_PRIMARY_KEY_STRATEGIES,  # Direct import: no MistHelper re-export shim (initiative 1015 T-04)
 )
+
+
+@pytest.fixture(autouse=True)
+def _capture_warnings(caplog):
+    """Ensure caplog captures WARNING+ records for every test in this module.
+
+    Why:
+        After #886 slice 16/N, OrgTicketManager emits user-visible messages via
+        ``logging.warning`` / ``logging.error`` rather than ``print()``. Tests
+        assert on those strings via ``caplog.text``; setting the level here
+        keeps the behavior deterministic across CI runners regardless of the
+        default logger propagation state.
+    """
+    caplog.set_level(logging.WARNING)
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -155,7 +171,7 @@ class TestCreateTicket:
         assert captured["body"]["type"] == "problem"  # Verify type selection (2 = problem)
         assert captured["body"]["comment"] == "Happens every morning"  # Verify comment was included
 
-    def test_create_ticket_blank_subject_cancels(self, monkeypatch, capsys):
+    def test_create_ticket_blank_subject_cancels(self, monkeypatch, caplog):
         """Verify create_ticket aborts when subject is blank."""
         _stub_org_id(monkeypatch)  # Fix org_id to avoid prompt
 
@@ -175,7 +191,7 @@ class TestCreateTicket:
         MistHelper.OrgTicketManager.create_ticket()  # Execute with blank subject
 
         fake_create.assert_not_called()  # API should not be called when subject is blank
-        output = capsys.readouterr().out  # Capture printed output
+        output = caplog.text  # Capture printed output
         assert "cancelled" in output.lower()  # User should see cancellation message
 
 
@@ -274,7 +290,7 @@ class TestAddComment:
         assert captured["comment"] == "See attached screenshot"  # Verify comment text passed
         assert captured["file"] == str(test_file)  # Verify file path passed
 
-    def test_add_comment_blank_ticket_id_cancels(self, monkeypatch, capsys):
+    def test_add_comment_blank_ticket_id_cancels(self, monkeypatch, caplog):
         """Verify add_comment aborts when no ticket is selected."""
         _stub_org_id(monkeypatch)  # Fix org_id to avoid prompt
 
@@ -294,10 +310,10 @@ class TestAddComment:
         MistHelper.OrgTicketManager.add_comment()  # Execute with blank ID
 
         fake_api.assert_not_called()  # API should not be called
-        output = capsys.readouterr().out  # Capture printed output
+        output = caplog.text  # Capture printed output
         assert "cancelled" in output.lower()  # User should see cancellation message
 
-    def test_add_comment_no_content_cancels(self, monkeypatch, capsys):
+    def test_add_comment_no_content_cancels(self, monkeypatch, caplog):
         """Verify add_comment aborts when neither comment nor file is provided."""
         _stub_org_id(monkeypatch)  # Fix org_id to avoid prompt
 
@@ -329,10 +345,10 @@ class TestAddComment:
         MistHelper.OrgTicketManager.add_comment()  # Execute with no content
 
         fake_api.assert_not_called()  # API should not be called
-        output = capsys.readouterr().out  # Capture printed output
+        output = caplog.text  # Capture printed output
         assert "cancelled" in output.lower()  # User should see cancellation message
 
-    def test_add_comment_missing_file_falls_back(self, monkeypatch, capsys):
+    def test_add_comment_missing_file_falls_back(self, monkeypatch, caplog):
         """Verify add_comment falls back to text-only when file path doesn't exist."""
         _stub_org_id(monkeypatch)  # Fix org_id to avoid prompt
 
@@ -372,7 +388,7 @@ class TestAddComment:
 
         assert captured["ticket_id"] == "ticket-uuid-abc"  # Should fall back to text comment
         assert captured["body"]["comment"] == "Here is my comment"  # Comment text preserved
-        output = capsys.readouterr().out  # Capture printed output
+        output = caplog.text  # Capture printed output
         assert "not found" in output.lower()  # User should see warning about missing file
 
 
@@ -428,7 +444,7 @@ class TestUpdateTicket:
         assert captured["body"]["status"] == "closed"  # Verify status change
         assert "type" not in captured["body"]  # Type was skipped (blank input)
 
-    def test_update_ticket_blank_id_cancels(self, monkeypatch, capsys):
+    def test_update_ticket_blank_id_cancels(self, monkeypatch, caplog):
         """Verify update_ticket aborts when no ticket is selected."""
         _stub_org_id(monkeypatch)  # Fix org_id to avoid prompt
 
@@ -448,10 +464,10 @@ class TestUpdateTicket:
         MistHelper.OrgTicketManager.update_ticket()  # Execute with cancelled selection
 
         fake_update.assert_not_called()  # API should not be called
-        output = capsys.readouterr().out  # Capture printed output
+        output = caplog.text  # Capture printed output
         assert "cancelled" in output.lower()  # User should see cancellation message
 
-    def test_update_ticket_no_changes_cancels(self, monkeypatch, capsys):
+    def test_update_ticket_no_changes_cancels(self, monkeypatch, caplog):
         """Verify update_ticket aborts when all fields are left blank."""
         _stub_org_id(monkeypatch)  # Fix org_id to avoid prompt
 
@@ -484,7 +500,7 @@ class TestUpdateTicket:
         MistHelper.OrgTicketManager.update_ticket()  # Execute with no changes
 
         fake_update.assert_not_called()  # API should not be called
-        output = capsys.readouterr().out  # Capture printed output
+        output = caplog.text  # Capture printed output
         assert "cancelled" in output.lower() or "no changes" in output.lower()  # User should see message
 
 
@@ -550,7 +566,7 @@ class TestMenuRegistration:
 class TestViewTicket:
     """Tests for OrgTicketManager.view_ticket (Menu 192)."""
 
-    def test_view_ticket_displays_detail(self, monkeypatch, capsys):
+    def test_view_ticket_displays_detail(self, monkeypatch, caplog):
         """Verify view_ticket fetches and displays ticket with comments."""
         _stub_org_id(monkeypatch)  # Fix org_id to avoid prompt
 
@@ -581,13 +597,13 @@ class TestViewTicket:
 
         MistHelper.OrgTicketManager.view_ticket()  # Execute the menu operation
 
-        output = capsys.readouterr().out  # Capture printed output
+        output = caplog.text  # Capture printed output
         assert "AP keeps dropping clients" in output  # Subject should be displayed
         assert "jmorrison" in output  # First comment author should appear
         assert "Started investigation" in output  # First comment text should appear
         assert "Collecting logs" in output  # Second comment text should appear
 
-    def test_view_ticket_cancelled(self, monkeypatch, capsys):
+    def test_view_ticket_cancelled(self, monkeypatch, caplog):
         """Verify view_ticket aborts when no ticket is selected."""
         _stub_org_id(monkeypatch)  # Fix org_id to avoid prompt
 
@@ -599,7 +615,7 @@ class TestViewTicket:
 
         MistHelper.OrgTicketManager.view_ticket()  # Execute with cancelled selection
 
-        output = capsys.readouterr().out  # Capture printed output
+        output = caplog.text  # Capture printed output
         assert "cancelled" in output.lower()  # User should see cancellation message
 
 
@@ -657,7 +673,7 @@ class TestExportTicketDetails:
 
         assert len(rows) == 2  # Should have 2 ticket detail rows
 
-    def test_export_details_no_tickets(self, monkeypatch, capsys):
+    def test_export_details_no_tickets(self, monkeypatch, caplog):
         """Verify export_ticket_details handles empty ticket list."""
         _stub_org_id(monkeypatch)  # Fix org_id to avoid prompt
 
@@ -673,7 +689,7 @@ class TestExportTicketDetails:
 
         MistHelper.OrgTicketManager.export_ticket_details()  # Execute with no tickets
 
-        output = capsys.readouterr().out  # Capture printed output
+        output = caplog.text  # Capture printed output
         assert "no tickets" in output.lower()  # User should see empty message
 
 
@@ -736,7 +752,7 @@ class TestSelectTicket:
 
         assert result == ""  # Should return empty string for cancellation
 
-    def test_select_no_tickets(self, monkeypatch, capsys):
+    def test_select_no_tickets(self, monkeypatch, caplog):
         """Verify _select_ticket returns empty when no tickets exist."""
 
         def fake_list(session, org_id, **kwargs):
@@ -752,5 +768,5 @@ class TestSelectTicket:
         result = MistHelper.OrgTicketManager._select_ticket("org-test-1")  # Execute selector
 
         assert result == ""  # Should return empty string
-        output = capsys.readouterr().out  # Capture printed output
+        output = caplog.text  # Capture printed output
         assert "no tickets" in output.lower()  # User should see empty message
