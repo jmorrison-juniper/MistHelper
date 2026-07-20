@@ -71,13 +71,15 @@ class SiteConfigExporter:
         if not rawdata:  # No rows.
             logging.warning("No data provided for output to %s", filename)  # Warn none.
             mh.DataExporter.write_with_format_selection([], filename)  # Empty CSV.
-            print(f"! 0 records exported to data\\{filename}")  # Tell the user zero.
+            # WHY: Preserve user-facing zero-record notice verbatim; INFO-level structured emit.
+            logging.info("! 0 records exported to data\\%s", filename)
             return  # Done.
         processed = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested fields.
         processed = DataProcessingUtils.escape_multiline(processed)  # CSV-safe.
         processed = sorted(processed, key=lambda row: row.get("ssid", ""))  # Sort by SSID.
         mh.DataExporter.write_with_format_selection(processed, filename)  # Persist.
-        print(f"! {len(processed)} records exported to data\\{filename}")  # Tell the user.
+        # WHY: Preserve user-facing record-count notice verbatim.
+        logging.info("! %s records exported to data\\%s", len(processed), filename)
         logging.info("Exported %s WLAN records for site %s to %s", len(processed), site_name, filename)
 
     @staticmethod
@@ -147,7 +149,8 @@ class SiteConfigExporter:
         mh = importlib.import_module(
             "MistHelper"
         )  # WHY: lazy fetch of ConfigUtils/APIFetchUtils/DataProcessingUtils/DataExporter + apisession.
-        print("Site Configuration Settings:")  # Header.
+        # WHY: Preserve user-facing banner verbatim.
+        logging.info("Site Configuration Settings:")
         logging.info("Starting export of all site configuration settings...")  # Log start.
         current_org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
         logging.debug("Using org_id: %s for site settings export.", current_org_id)  # Trace the org.
@@ -157,8 +160,10 @@ class SiteConfigExporter:
             data = DataProcessingUtils.flatten_nested_fields(data)  # Flatten nested fields.
             data = DataProcessingUtils.escape_multiline(data)  # CSV-safe.
             mh.DataExporter.write_with_format_selection(data, "AllSiteConfigs.csv")  # Persist.
-            print(f"! {len(data)} site configurations exported to AllSiteConfigs.csv")  # Tell the user.
+            # WHY: Preserve user-facing record-count notice verbatim.
+            logging.info("! %s site configurations exported to AllSiteConfigs.csv", len(data))
             logging.info(" Site configs saved to AllSiteConfigs.csv")  # Log the save.
         else:
             logging.warning(" No site configs found.")  # Warn none found.
-            print("! No site configurations found.")  # Tell the user.
+            # WHY: Preserve user-facing empty-result notice verbatim.
+            logging.warning("! No site configurations found.")
