@@ -70,15 +70,18 @@ class OrgSiteExporter:  # Org site exporters.
         output_file = "SiteList_ListAPI.csv"  # Define output filename.
         if os.path.exists(output_file):  # Branch: cached file exists.
             logging.info("! Using cached %s (already exists)", output_file)  # Log cache reuse.
-            print(f"! Using cached {output_file} (already exists)")  # Inform operator of cache.
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logging.info("! Using cached %s (already exists)", output_file)
             return  # Skip re-fetch.
         logging.info("Fetching all sites using the 'list' sites API endpoint...")  # Log fetch start.
-        print("Fetching all sites using the 'list' sites API endpoint...")  # Inform operator of fetch.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logging.info("Fetching all sites using the 'list' sites API endpoint...")
         org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org id.
         sites = mh.APICoreFetchUtils.all_sites_with_limit(org_id)  # Fetch all sites.
         if not sites:  # Branch: no sites returned.
             logging.warning(" No sites returned from API.")  # Log empty result.
-            print(" No sites returned from API.")  # Inform operator none returned.
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logging.info(" No sites returned from API.")
             return  # Skip write.
         sites = DataProcessingUtils.flatten_nested_fields(sites)  # Flatten nested site fields.
         # Normalize nested JSON structures into a flat row-per-record format for CSV/DB output
@@ -87,7 +90,8 @@ class OrgSiteExporter:  # Org site exporters.
         # Write to the configured output backend (CSV or SQLite) via the DataExporter abstraction
         mh.DataExporter.write_with_format_selection(sites, output_file)  # type: ignore[no-untyped-call]
         logging.info("! Sites exported to %s", output_file)  # Log the successful export
-        print(f"! Sites exported to {output_file}")  # Inform the user on stdout
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logging.info("! Sites exported to %s", output_file)
 
     @staticmethod
     def sites_with_location():  # Export sites with location.
@@ -95,7 +99,8 @@ class OrgSiteExporter:  # Org site exporters.
         mh = importlib.import_module(
             "MistHelper"
         )  # WHY: lazy fetch of ConfigUtils/APICoreFetchUtils/DataProcessingUtils/DataExporter.
-        print("Sites with Location and Timezone Info:")  # Inform operator of export.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logging.info("Sites with Location and Timezone Info:")
         logging.info("Listing Sites with Full Info:")  # Log listing start.
         org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org id.
         logging.debug("Using org_id: %s for site location export.", org_id)  # Log org id used.
@@ -104,7 +109,8 @@ class OrgSiteExporter:  # Org site exporters.
         flattened_sites = DataProcessingUtils.flatten_nested_fields(sites)  # Flatten nested site fields.
         sanitized_sites = DataProcessingUtils.escape_multiline(flattened_sites)  # type: ignore[no-untyped-call]
         mh.DataExporter.write_with_format_selection(sanitized_sites, "SitesWithLocations.csv")  # type: ignore[no-untyped-call]
-        print(f"! {len(sanitized_sites)} sites exported to SitesWithLocations.csv")  # Confirm export to operator.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logging.info("! %s sites exported to SitesWithLocations.csv", len(sanitized_sites))
         logging.info(" Full site data written to SitesWithLocations.csv")  # Log write success.
 
     @staticmethod
@@ -113,7 +119,8 @@ class OrgSiteExporter:  # Org site exporters.
         mh = importlib.import_module(
             "MistHelper"
         )  # WHY: lazy fetch of ConfigUtils/DataProcessingUtils/DataExporter + apisession.
-        print("Current and Historical Guest Users:")  # Inform operator of export.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logging.info("Current and Historical Guest Users:")
         logging.info("Exporting all current guest users in the org...")  # Log guest export start.
         org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org id.
         logging.debug("Using org_id: %s for current guest export.", org_id)  # Log org id used.
@@ -123,7 +130,8 @@ class OrgSiteExporter:  # Org site exporters.
         guests = DataProcessingUtils.flatten_nested_fields(guests)  # Flatten nested guest fields.
         guests = DataProcessingUtils.escape_multiline(guests)  # type: ignore[no-untyped-call]
         mh.DataExporter.write_with_format_selection(guests, "OrgCurrentGuests.csv")  # type: ignore[no-untyped-call]
-        print(f"! {len(guests)} current guest users exported to OrgCurrentGuests.csv")  # Confirm export to operator.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logging.info("! %s current guest users exported to OrgCurrentGuests.csv", len(guests))
         logging.info(" Current guests exported to OrgCurrentGuests.csv")  # Log write success.
 
     @staticmethod
@@ -145,5 +153,6 @@ class OrgSiteExporter:  # Org site exporters.
         guests = DataProcessingUtils.flatten_nested_fields(guests)  # Flatten nested guest fields.
         guests = DataProcessingUtils.escape_multiline(guests)  # type: ignore[no-untyped-call]
         mh.DataExporter.write_with_format_selection(guests, "OrgHistoricalGuests.csv")  # type: ignore[no-untyped-call]
-        print(f"! {len(guests)} historical guest users exported to OrgHistoricalGuests.csv")
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logging.info("! %s historical guest users exported to OrgHistoricalGuests.csv", len(guests))
         logging.info(" Historical guests exported to OrgHistoricalGuests.csv")  # Log write success.
