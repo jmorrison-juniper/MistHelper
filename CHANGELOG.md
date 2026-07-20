@@ -7,6 +7,26 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 46/N: retire `print()` in `src/ssh/config/command_parser.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced the 4 remaining `print()`
+  calls in `src/ssh/config/command_parser.py` with `logger.warning(...)`
+  using `%`-style deferred formatting. Migrated callsites: the oversize-input
+  truncation notice in `_truncate_oversize`, the two invalid-command warnings
+  in `_warn_invalid_commands` (summary line plus "... and N more" tail), and
+  the too-many-commands cap notice in `_enforce_command_cap`. All user-facing
+  strings (including the `[WARNING]` prefixes and "... and N more" tail line)
+  are preserved verbatim.
+- **Docstring (Changed)**: updated `_warn_invalid_commands` summary line from
+  "Print the same user-facing warning..." to "Emit the same user-facing
+  warning..." to match the logger-based emission.
+- **Rationale**: incremental progress toward ruff `T20` (T201/T203) selector
+  enablement (issue #886). Behavior-preserving; the module already imported
+  `logging` and defined `logger = logging.getLogger(__name__)`, so no new
+  imports were introduced. `logger.warning` is used (rather than
+  `logging.info` as in the pivot_renderer slice) because the original
+  strings carried a `[WARNING]` prefix — the semantic level is warning.
+
 ### #886 Phase 2 slice 45/N: retire `print()` in `src/inventory/inventory_summary/pivot_renderer.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced the 4 remaining `print()`
