@@ -224,12 +224,12 @@ def test_licenses_swallows_secondary_write_failure() -> None:
 # ---------- usage ----------
 
 
-def test_usage_delegates_to_apidata_fetcher_execute(capsys: pytest.CaptureFixture[str]) -> None:
-    """usage must run APIDataFetcher for the by-site usage endpoint and print completion."""
+def test_usage_delegates_to_apidata_fetcher_execute(caplog: pytest.LogCaptureFixture) -> None:
+    """usage must run APIDataFetcher for the by-site usage endpoint and log completion."""
     fake_mh = _make_mh()
     with patch("src.export.org_admin_exporter.importlib.import_module", return_value=fake_mh):
         OrgAdminExporter.usage()
     kwargs = fake_mh.APIDataFetcher.call_args.kwargs
     assert kwargs["filename"] == "OrgUsage"
     fake_mh.APIDataFetcher.return_value.execute.assert_called_once_with()
-    assert "License usage data exported to OrgUsage" in capsys.readouterr().out
+    assert "License usage data exported to OrgUsage" in caplog.text

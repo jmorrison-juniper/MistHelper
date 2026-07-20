@@ -121,4 +121,5 @@ class OrgAdminExporter:
             sort_key="site_id",
         ).execute()
         logging.info(" License usage data exported to OrgUsage")  # Log completion.
-        print(" License usage data exported to OrgUsage")  # Tell the user.
+        # WHY: user-visible completion banner (replaces prior print()).
+        logging.warning(" License usage data exported to OrgUsage")
