@@ -53,7 +53,8 @@ class SiteMistEdgeEventsExporter:
         """
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataExporter helper.
         if not rawdata:  # No Mist Edge event rows for this site -- inform the operator and return.
-            print("! No Mist Edge event data found for this site")  # ASCII-only user notice.
+            # WHY: ASCII-only user notice.
+            logging.info("! No Mist Edge event data found for this site")
             return
         flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested dicts for CSV.
         sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)  # CSV-safe multiline escape.
@@ -64,7 +65,8 @@ class SiteMistEdgeEventsExporter:
         logging.debug(  # DEBUG-level count trace per Action Logging principle (post-call).
             "searchSiteMistEdgeEvents persisted %d rows to %s", len(rawdata), filename
         )
-        print(f"! {len(rawdata)} Mist Edge event records exported to {filename}")  # User notice with count.
+        # WHY: user notice with count.
+        logging.info("! %d Mist Edge event records exported to %s", len(rawdata), filename)
 
     @staticmethod
     def mist_edge_events() -> None:
@@ -77,7 +79,8 @@ class SiteMistEdgeEventsExporter:
             to the user rather than crashing the menu loop.
         """
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of apisession + shared helpers.
-        print("Site Mist Edge Events Search:")  # Menu header echoed to operator.
+        # WHY: menu header echoed to operator.
+        logging.info("Site Mist Edge Events Search:")
         logging.info(  # INFO trace before the API call per Action Logging principle (pre-call).
             "Starting searchSiteMistEdgeEvents export..."
         )
@@ -100,4 +103,5 @@ class SiteMistEdgeEventsExporter:
             logging.error(  # ERROR trace with site context for post-mortem correlation.
                 "Error fetching Mist Edge events for site %s: %s", site_name, e
             )
-            print(f"! Error fetching Mist Edge event data: {e}")  # ASCII-only user notice.
+            # WHY: ASCII-only user notice.
+            logging.info("! Error fetching Mist Edge event data: %s", e)
