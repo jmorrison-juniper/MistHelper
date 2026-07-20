@@ -7,6 +7,23 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 61/N: retire `print()` in `src/export/wan_client_events_exporter.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced the 7 remaining `print()`
+  calls in `src/export/wan_client_events_exporter.py` with `logging.info(...)`
+  / `logging.error(...)` (module already imports `logging` and emits via root
+  `logging.<level>(...)` for info/warning/error/exception traces) using
+  `%`-style deferred formatting. Migrations cover the `_announce_start`
+  banner, the `_announce_fetch` pre-fetch operator line, the
+  `_log_export_failure` operator-facing error line (routed via
+  `logging.error`), the `_ensure_site_selected` cancel-path notice, the
+  `_write_no_data_placeholder` empty-result notice, and the two success-
+  summary lines in `_print_success_summary` (header + record count). Each
+  migrated call carries the standard `# WHY: preserve operator notice
+  verbatim; route through logger for capture/redirection.` annotation.
+- **Test migration (Changed)**: none required — no `capsys`-based tests
+  currently target `WanClientEventsExporter`.
+
 ### #886 Phase 2 slice 60/N: retire `print()` in `src/export/site_insights/site_metric_operation.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced the 7 remaining `print()`
