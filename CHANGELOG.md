@@ -7,6 +7,27 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 24/N: retire `print()` in `src/export/org_admin_exporter.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced the 1 remaining `print()`
+  call in `src/export/org_admin_exporter.py` with `logging.warning(...)`. The
+  completion banner at the tail of `OrgAdminExporter.usage()` now emits
+  `logging.warning(" License usage data exported to OrgUsage")` so the
+  operator-visible confirmation flows through the same handler chain as the
+  pre-existing `logging.info(...)` companion record. `import logging` was
+  already present at module scope.
+- **Test posture**: `tests/unit/export/test_org_admin_exporter.py::
+  test_usage_delegates_to_apidata_fetcher_execute` was rewritten from
+  `capsys.readouterr().out` to `caplog.text`. Pytest's default WARNING-level
+  caplog capture is sufficient here (no autouse DEBUG fixture required); the
+  assertion substring `"License usage data exported to OrgUsage"` is preserved
+  verbatim.
+- **Verification**: `ruff check` reports 0 issues; `black --check` clean;
+  0 remaining T201 matches in `src/export/org_admin_exporter.py`; targeted
+  `pytest tests/unit/export/test_org_admin_exporter.py` runs 14 passed; full
+  `pytest` suite green (8949 passed, 0 failed, 77 skipped, 5 xfailed,
+  1 xpassed).
+
 ### #886 Phase 2 slice 23/N: retire `print()` in `src/export/data_exporter.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced the 1 remaining `print()`
