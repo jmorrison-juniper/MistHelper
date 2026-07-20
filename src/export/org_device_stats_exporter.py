@@ -60,7 +60,8 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
                     age_minutes,
                     mh.CSV_FRESHNESS_MINUTES,
                 )
-                print(f"* Fast mode: Using cached {output_file} (age {age_minutes:.1f}m)")  # User notice
+                # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+                logging.info("* Fast mode: Using cached %s (age %.1fm)", output_file, age_minutes)  # User notice
                 return True  # Caller skips re-fetch
         except Exception as e:  # Freshness-check error
             logging.debug("Fast mode freshness check failed for %s: %s", output_file, e)  # Log
@@ -110,7 +111,8 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
                     age_minutes,
                     mh.CSV_FRESHNESS_MINUTES,
                 )  # Record why no API calls were made
-                print(f"* Fast mode: Using cached {output_file} (age {age_minutes:.1f}m)")  # User notice
+                # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+                logging.info("* Fast mode: Using cached %s (age %.1fm)", output_file, age_minutes)  # User notice
                 return True  # Caller can return early
         except Exception as exception:  # Cache metadata problems degrade gracefully
             logging.debug("Fast mode freshness check failed for %s: %s", output_file, exception)  # Log fallback
@@ -309,7 +311,8 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataProcessingUtils/DataExporter.
         if not all_port_stats:  # Empty dataset should skip file creation and clearly tell the operator why.
             logging.warning(" No port statistics collected. CSV not created.")  # Log absence of exportable data.
-            print("! No port statistics collected. CSV not created.")  # Tell operator no file was written.
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logging.warning("! No port statistics collected. CSV not created.")  # Tell operator no file was written.
             return  # Nothing to sort or write.
         try:  # Sorting is best-effort because some rows may lack MACs.
             all_port_stats = sorted(
@@ -322,8 +325,9 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
         )  # Normalize nested API payloads into flat CSV-friendly records.
         sanitized = DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]  # Escape embedded newlines so CSV stays row-stable.
         mh.DataExporter.write_with_format_selection(sanitized, output_file, api_function_name="searchSiteSwOrGwPorts")  # type: ignore[no-untyped-call]  # Persist to configured backend with endpoint metadata.
-        print(
-            f"! {len(all_port_stats)} port stat records exported to {output_file}"
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logging.info(
+            "! %s port stat records exported to %s", len(all_port_stats), output_file
         )  # Confirm output row count to the operator.
         logging.info(
             "! Port statistics saved to %s (%s records)", output_file, len(all_port_stats)
@@ -353,8 +357,13 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
             record_count,
             duration,
         )  # Structured run summary.
-        print(
-            f"* Fast mode: Collected {record_count} port stat records from {ok_count}/{len(sites)} sites in {duration:.1f}s"  # noqa: E501
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logging.info(
+            "* Fast mode: Collected %s port stat records from %s/%s sites in %.1fs",
+            record_count,
+            ok_count,
+            len(sites),
+            duration,
         )  # Operator timing summary.
 
     @staticmethod
@@ -426,7 +435,8 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
                     age_minutes,
                     mh.CSV_FRESHNESS_MINUTES,
                 )  # Structured log.
-                print(f"* Fast mode: Using cached {output_file} (age {age_minutes:.1f}m)")  # Operator-facing.
+                # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+                logging.info("* Fast mode: Using cached %s (age %.1fm)", output_file, age_minutes)  # Operator-facing.
                 return True
         except Exception as e:  # Freshness check failed -- fall through to fetch.
             logging.debug("Fast mode freshness check failed for %s: %s", output_file, e)  # Debug-only.

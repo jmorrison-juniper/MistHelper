@@ -7,6 +7,22 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 55/N: retire `print()` in `src/export/org_device_stats_exporter.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced the 6 remaining `print()`
+  calls in `src/export/org_device_stats_exporter.py` with `logging.info(...)`
+  and `logging.warning(...)` using `%`-style deferred formatting. Migrations
+  cover the fast-mode cache-hit operator notices in
+  `_device_stats_cache_hit`, `_port_stats_cache_hit`, and
+  `_vpn_peer_stats_cache_hit`; the empty-rows "no port statistics" warning
+  and post-export record-count confirmation in `_save_device_port_stats_output`;
+  and the fast-mode collected-records summary line in
+  `_log_fast_port_stats_summary`. Operator-facing text preserved verbatim; no
+  behavior change beyond routing through the configured logger. Companion
+  `capsys` → `caplog` migration in
+  `tests/unit/export/test_org_device_stats_exporter.py` covers the 6 affected
+  cache-hit/summary/export assertions.
+
 ### #886 Phase 2 slice 54/N: retire `print()` in `src/device/utility_commands.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced the 6 remaining `print()`
