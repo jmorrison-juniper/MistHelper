@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import logging  # WHY: caplog assertions verify migrated logger output
 import time as _stdlib_time  # WHY: patch time.time on the shared module (mypy-strict friendly)
 from types import SimpleNamespace  # WHY: light stand-in for mistapi SDK modules and responses
 from unittest.mock import MagicMock  # WHY: MagicMock(spec=Callable) is mandatory per project standard
 
-import pytest  # WHY: capsys, monkeypatch fixtures drive banner assertions and env-var patching
+import pytest  # WHY: caplog, monkeypatch fixtures drive banner assertions and env-var patching
 
 from src.inventory.org_device_inventory_summary import (  # WHY: SUT plus DI seam
     OrgDeviceInventorySummaryCore,
@@ -57,11 +58,13 @@ def _reset_dependencies(
     return exporter  # WHY: caller asserts exporter usage
 
 
-def test_execute_guard_prints_error_when_org_missing(capsys: pytest.CaptureFixture[str]) -> None:
-    """execute() prints error + returns early when no org has been configured."""
+def test_execute_guard_prints_error_when_org_missing(caplog: pytest.LogCaptureFixture) -> None:
+    """execute() logs error + returns early when no org has been configured."""
     _reset_dependencies(org="")  # WHY: empty org triggers the guard clause
-    OrgDeviceInventorySummaryCore.execute()  # WHY: exercise the guard branch
-    assert "No organization selected" in capsys.readouterr().out  # WHY: user-visible error surfaced
+    with caplog.at_level(logging.INFO, logger="root"):
+        OrgDeviceInventorySummaryCore.execute()  # WHY: exercise the guard branch
+    out = "\n".join(r.getMessage() for r in caplog.records)
+    assert "No organization selected" in out  # WHY: user-visible error surfaced
 
 
 def test_execute_delegates_to_run_for_org(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -180,30 +183,32 @@ def test_resolve_safe_org_name_falls_back_to_org_id(monkeypatch: pytest.MonkeyPa
     )  # WHY: id branch preserves hyphens
 
 
-def test_print_summary_banner_prints_label_and_table(capsys: pytest.CaptureFixture[str]) -> None:
-    """_print_summary_banner prints the labelled banner then the table body."""
+def test_print_summary_banner_prints_label_and_table(caplog: pytest.LogCaptureFixture) -> None:
+    """_print_summary_banner logs the labelled banner then the table body."""
     from prettytable import PrettyTable  # WHY: local import to avoid touching the SUT's shared reference
 
     table = PrettyTable()  # WHY: real PrettyTable instance so the __str__ output matches production
     table.field_names = ["Device Type", "Model", "Count"]  # WHY: canonical columns
     table.add_row(["ap", "AP41", 3])  # WHY: at least one row so the printed table has content
-    OrgDeviceInventorySummaryCore._print_summary_banner("model", table)  # WHY: exercise the banner helper
-    out = capsys.readouterr().out  # WHY: capture stdout
+    with caplog.at_level(logging.INFO, logger="root"):
+        OrgDeviceInventorySummaryCore._print_summary_banner("model", table)  # WHY: exercise the banner helper
+    out = "\n".join(r.getMessage() for r in caplog.records)
     assert "Model Distribution Summary" in out  # WHY: capitalized label surfaced
     assert "AP41" in out  # WHY: table body rendered under the banner
 
 
-def test_display_and_export_renders_and_persists(capsys: pytest.CaptureFixture[str]) -> None:
+def test_display_and_export_renders_and_persists(caplog: pytest.LogCaptureFixture) -> None:
     """_display_and_export builds the export rows, renders the banner, and calls the exporter."""
     exporter = _reset_dependencies()  # WHY: capture the injected exporter mock
     rows = [
         {"device_type": "ap", "model": "AP41", "count": 4},  # WHY: mixed rows to exercise the loop
         {"device_type": "switch", "model": "EX2300", "count": 2},
     ]
-    OrgDeviceInventorySummaryCore._display_and_export(  # WHY: exercise render + export
-        rows, "model", "Acme_Models", "orgDeviceModelSummary"
-    )
-    out = capsys.readouterr().out  # WHY: banner + table go to stdout
+    with caplog.at_level(logging.INFO, logger="root"):
+        OrgDeviceInventorySummaryCore._display_and_export(  # WHY: exercise render + export
+            rows, "model", "Acme_Models", "orgDeviceModelSummary"
+        )
+    out = "\n".join(r.getMessage() for r in caplog.records)  # WHY: banner + table go through logger
     assert "Model Distribution Summary" in out  # WHY: banner label present
     exporter.assert_called_once()  # WHY: exporter called exactly once
     args, kwargs = exporter.call_args  # WHY: unpack invocation
@@ -541,9 +546,7 @@ def test_with_unassigned_falls_back_on_aggregate_error(monkeypatch: pytest.Monke
     assert result == base  # WHY: fell back to base rows verbatim
 
 
-def test_run_for_org_returns_expected_tuple(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_run_for_org_returns_expected_tuple(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
     """run_for_org runs each report once and returns the tuple in the documented order."""
     _reset_dependencies()  # WHY: hydrate module DI seams
 
@@ -581,6 +584,8 @@ def test_run_for_org_returns_expected_tuple(
         staticmethod(lambda org, safe, mr, un, ap: pivot_rows),
     )
     monkeypatch.setattr(_stdlib_time, "time", lambda: 0.0)  # WHY: pin elapsed to 0 for deterministic output
-    result = OrgDeviceInventorySummaryCore.run_for_org("org-1")  # WHY: exercise the entry point
+    with caplog.at_level(logging.INFO, logger="root"):  # WHY: capture logger output for the summary line
+        result = OrgDeviceInventorySummaryCore.run_for_org("org-1")  # WHY: exercise the entry point
     assert result == (model_rows, version_rows, pivot_rows, "SafeOrg")  # WHY: tuple order documented
-    assert "Summary for SafeOrg completed" in capsys.readouterr().out  # WHY: user-visible summary printed
+    out = "\n".join(r.getMessage() for r in caplog.records)  # WHY: aggregate captured log lines
+    assert "Summary for SafeOrg completed" in out  # WHY: user-visible summary logged

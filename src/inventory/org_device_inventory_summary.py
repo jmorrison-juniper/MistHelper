@@ -318,10 +318,14 @@ class OrgDeviceInventorySummaryCore:  # WHY: single-org inventory summarization 
     def _print_summary_banner(distinct: str, table: PrettyTable) -> None:  # WHY: keep display method concise
         """Print the labelled banner and table for one summary."""
         separator = "=" * _SEPARATOR_WIDTH  # WHY: reuse the constant width for both borders
-        print(f"\n{separator}")  # WHY: leading blank line separates from preceding output
-        print(f"  {distinct.capitalize()} Distribution Summary")  # WHY: operator-facing label matches column
-        print(separator)  # WHY: trailing border closes the banner block
-        print(table)  # WHY: rendered PrettyTable follows the banner
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logging.info("\n%s", separator)  # WHY: leading blank line separates from preceding output
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logging.info("  %s Distribution Summary", distinct.capitalize())  # WHY: operator label matches column
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logging.info(separator)  # WHY: trailing border closes the banner block
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logging.info("%s", table)  # WHY: rendered PrettyTable follows the banner
 
     @staticmethod
     def _display_and_export(rows: list[dict], distinct: str, filename: str, api_func: str) -> None:  # WHY: I/O leaf
@@ -433,14 +437,16 @@ class OrgDeviceInventorySummaryCore:  # WHY: single-org inventory summarization 
         logging.info(  # WHY: log outcome so ops can tune inventory volume
             "Org device inventory summary for %s completed in %.1f seconds", target_org_id, elapsed
         )
-        print(f"\nSummary for {safe_org} completed in {elapsed:.1f} seconds")  # WHY: operator feedback
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logging.info("\nSummary for %s completed in %.1f seconds", safe_org, elapsed)  # operator feedback
         return model_rows, version_rows, ver_per_model, safe_org  # WHY: public tuple preserved for callers
 
     @staticmethod
     def execute() -> None:  # WHY: menu-level entry point requires configured org
         """Run inventory summaries for the currently selected org."""
         if not org_id:  # WHY: guard clause reports the misconfiguration instead of crashing
-            print("X No organization selected")  # WHY: user-visible error mirrors the rest of the CLI
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logging.info("X No organization selected")  # WHY: user-visible error mirrors the rest of the CLI
             logging.error("OrgDeviceInventorySummaryCore.execute called with empty org_id")  # WHY: audit trail
             return  # WHY: early return keeps the happy path un-indented
         OrgDeviceInventorySummaryCore.run_for_org(org_id)  # WHY: delegate to the parameterized pipeline
