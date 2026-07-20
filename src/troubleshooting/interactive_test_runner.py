@@ -78,15 +78,19 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
 
     @staticmethod
     def _log_selector_miss(site_selector: str) -> None:
-        """Log selector-miss and print legacy warning banner."""
-        print(
-            f"   Warning: MIST_INTERACTIVE_TEST_SITE='{site_selector}' not found; "
-            "falling back to first available site."
-        )  # WHY: preserve legacy operator-facing warning banner.
+        """Log selector-miss warning banner via ``logging.warning``.
+
+        Why:
+            #886 slice 18/N migrates ``print()`` to ``logging.warning`` so
+            ruff T20 can stay armed globally. Legacy operator banner and
+            diagnostic log are consolidated into a single warning record so
+            the miss notification arrives atomically in handlers that buffer
+            per-record.
+        """
         logging.warning(
-            "INTERACTIVE_TEST: MIST_INTERACTIVE_TEST_SITE '%s' not found; using first available site.",
+            "INTERACTIVE_TEST: MIST_INTERACTIVE_TEST_SITE '%s' not found; " "falling back to first available site.",
             site_selector,
-        )  # WHY: log fallback path for operations diagnostics.
+        )  # WHY: consolidated operator banner + diagnostic log.
 
     def _lookup_selector_site(self, org_id: str, site_selector: str) -> tuple[str | None, str]:
         """Return site matching the environment selector by UUID or case-insensitive name."""
@@ -99,9 +103,11 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
             return None, "Unknown"  # WHY: signal caller to attempt fallback lookup.
         site_id = matching_site["id"]  # WHY: capture matched site id for downstream operations.
         site_name = matching_site.get("name", "Unknown")  # WHY: capture matched site name for context.
-        print(
-            f"   Using test site from MIST_INTERACTIVE_TEST_SITE: {site_name} ({site_id})"
-        )  # WHY: preserve legacy explicit selector-success message.
+        logging.warning(
+            "   Using test site from MIST_INTERACTIVE_TEST_SITE: %s (%s)",
+            site_name,
+            site_id,
+        )  # WHY: #886 slice 18/N — legacy selector-success message via logging.warning.
         logging.debug(
             "Selector matched site_id=%s site_name=%s", site_id, site_name
         )  # WHY: log selector match details for traceability.
@@ -121,9 +127,11 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
         site_name = sites_response.data[0].get(
             "name", "Unknown"
         )  # WHY: capture fallback site name for user-visible context.
-        print(
-            f"   Using first available test site: {site_name} ({site_id})"
-        )  # WHY: preserve legacy fallback message output.
+        logging.warning(
+            "   Using first available test site: %s (%s)",
+            site_name,
+            site_id,
+        )  # WHY: #886 slice 18/N — legacy fallback message via logging.warning.
         return site_id, site_name  # WHY: return resolved fallback context to orchestrator.
 
     def _resolve_test_site(self, org_id: str) -> tuple[str | None, str]:
@@ -151,15 +159,21 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
         return site_id, site_name  # WHY: return resolved site context used by execute() workflow.
 
     def _print_suite_header(self) -> None:
-        """Print suite banner preserved verbatim from legacy execute() output."""
-        print(" Starting interactive test of MistHelper menu options...")  # WHY: preserve legacy header text.
-        print(
-            "  Note: This tests read-only operations requiring site/device/client selection"
-        )  # WHY: preserve legacy operator note.
-        print(
-            f"! Test started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-        )  # WHY: preserve legacy start-time line.
-        print("=" * 80)  # WHY: preserve legacy visual divider.
+        """Emit the interactive-test suite banner as a single ``logging.warning``.
+
+        Why:
+            #886 slice 18/N. Header, note, timestamp, and divider are
+            consolidated into one atomic warning so the banner cannot be
+            interleaved with other records under concurrent log producers.
+        """
+        logging.warning(
+            " Starting interactive test of MistHelper menu options...\n"
+            "  Note: This tests read-only operations requiring site/device/client selection\n"
+            "! Test started at: %s\n"
+            "%s",
+            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "=" * 80,
+        )
 
     def _build_option_lists(self) -> tuple[list[str], list[str], list[str]]:
         """Return (all_options, interactive_options, skip_list) using stable legacy ordering."""
@@ -179,31 +193,50 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
         return all_options, interactive_options, skip_list  # WHY: return triple consumed by execute().
 
     def _print_tested_options(self, interactive_options: list[str]) -> None:
-        """Print the tested-options listing verbatim from legacy output."""
-        print(" Testing interactive read-only operations:")  # WHY: preserve tested section header.
+        """Emit the tested-options listing via a single ``logging.warning``.
+
+        Why:
+            #886 slice 18/N. Consolidated into one warning record so the
+            listing arrives atomically and cannot be interleaved with other
+            log output under concurrent producers.
+        """
+        lines = [" Testing interactive read-only operations:"]
         for option in interactive_options:
             if option in self.menu_actions:
                 _, description = self.menu_actions[option]  # WHY: resolve description for option listing.
-                print(f"   {option:>3}: {description}")  # WHY: preserve per-option tested listing.
+                lines.append(f"   {option:>3}: {description}")  # WHY: preserve per-option tested listing.
+        logging.warning("%s", "\n".join(lines))
 
     def _print_skipped_options(self, skip_list: list[str]) -> None:
-        """Print the skipped-options listing verbatim from legacy output."""
-        print(" Skipping non-interactive-safe operations:")  # WHY: preserve skipped section header.
+        """Emit the skipped-options listing via a single ``logging.warning``.
+
+        Why:
+            #886 slice 18/N. Consolidated so the skip listing prints as one
+            atomic record, matching the tested-listing helper.
+        """
+        lines = [" Skipping non-interactive-safe operations:"]
         for option in skip_list:
             if option in self.menu_actions:
                 reason = self.operation_registry.skip_reason(option)  # WHY: resolve registry skip reason.
                 if reason:
-                    print(f"   {option:>3}: {reason}")  # WHY: preserve per-option skip-reason listing.
+                    lines.append(f"   {option:>3}: {reason}")  # WHY: preserve per-option skip-reason listing.
+        logging.warning("%s", "\n".join(lines))
 
     def _print_option_listings(self, interactive_options: list[str], skip_list: list[str]) -> None:
-        """Print the tested-and-skipped option listings preserving legacy formatting."""
-        print(f"! Found {len(interactive_options)} interactive read-only options to test")  # WHY: preserve count line.
-        print(f"! {len(skip_list)} options will be skipped")  # WHY: preserve skip-count line.
-        print()  # WHY: preserve blank-line spacing before tested listing.
-        self._print_tested_options(interactive_options)  # WHY: delegate tested-listing print to helper.
-        print()  # WHY: preserve spacing between sections.
-        self._print_skipped_options(skip_list)  # WHY: delegate skipped-listing print to helper.
-        print()  # WHY: preserve spacing before telemetry setup.
+        """Emit the tested-and-skipped option listings via ``logging.warning``.
+
+        Why:
+            #886 slice 18/N. Counts and blank-line separators are folded into
+            a single warning record; delegated tested/skipped listings each
+            emit one further warning to preserve section boundaries.
+        """
+        logging.warning(
+            "! Found %d interactive read-only options to test\n! %d options will be skipped",
+            len(interactive_options),
+            len(skip_list),
+        )  # WHY: preserve count lines as one atomic warning.
+        self._print_tested_options(interactive_options)  # WHY: delegate tested-listing emission.
+        self._print_skipped_options(skip_list)  # WHY: delegate skipped-listing emission.
 
     def _create_emitter(self) -> tuple[Any, Any]:
         """Initialize telemetry emitter; return (emitter, path) tuple."""
@@ -244,19 +277,19 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
     def _resolve_site_or_close(self, org_id: str, emitter: Any) -> tuple[str | None, str]:
         """Resolve test site context; close emitter and return (None, '') on failure paths."""
         try:
-            print("   Fetching test site for interactive operations...")  # WHY: preserve legacy cue.
+            logging.warning("   Fetching test site for interactive operations...")  # WHY: #886 s18 legacy cue.
             test_site_id, test_site_name = self._resolve_test_site(org_id)  # WHY: resolve test site.
             if test_site_id:
                 logging.info(
                     "INTERACTIVE_TEST: Using test site_id=%s name=%s", test_site_id, test_site_name
                 )  # WHY: log selected site context.
                 return test_site_id, test_site_name  # WHY: return resolved context on success.
-            print(
+            logging.error(
                 "[ERROR] No sites found in organization - cannot run interactive tests"
-            )  # WHY: preserve legacy no-site error message.
+            )  # WHY: #886 slice 18/N — legacy no-site error via logging.error.
             logging.error("INTERACTIVE_TEST: No sites available for testing")  # WHY: log no-site terminal condition.
         except Exception as error:
-            print(f"[ERROR] Failed to fetch test site: {error}")  # WHY: preserve fetch-failure message.
+            logging.error("[ERROR] Failed to fetch test site: %s", error)  # WHY: #886 s18 fetch-failure msg.
             logging.error("INTERACTIVE_TEST: Failed to fetch test site: %s", error)  # WHY: log exception context.
         logging.info("Closing telemetry emitter after site-resolution failure")  # WHY: log before close on failure.
         emitter.close()  # WHY: close emitter to flush events on failure path.
@@ -277,7 +310,7 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
 
     def _emit_option_pass(self, option: str, description: str, duration: float, emitter: Any) -> bool:
         """Emit telemetry pass event and preserve legacy success output for an option."""
-        print(f"   [SUCCESS] Option {option} completed successfully")  # WHY: preserve success message.
+        logging.warning("   [SUCCESS] Option %s completed successfully", option)  # WHY: #886 s18 success msg.
         logging.info("Emitting telemetry pass event for option %s", option)  # WHY: log before pass emission.
         emitter.emit_test_pass(option, description, duration, "interactive")  # WHY: emit pass event.
         logging.debug("Telemetry pass event emitted for option %s", option)  # WHY: log pass completion.
@@ -288,9 +321,9 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
 
     def _emit_option_fail(self, option: str, description: str, duration: float, error: Exception, emitter: Any) -> bool:
         """Emit telemetry fail event and preserve legacy failure output for an option."""
-        print(
-            f"   [FAILED]  Option {option} failed: {str(error)[:100]}..."
-        )  # WHY: preserve failure message with legacy truncation.
+        logging.warning(
+            "   [FAILED]  Option %s failed: %s...", option, str(error)[:100]
+        )  # WHY: #886 slice 18/N — failure message via logging.warning with legacy truncation.
         logging.info("Emitting telemetry fail event for option %s", option)  # WHY: log before fail emission.
         emitter.emit_test_fail(
             option, description, duration, error, "interactive"
@@ -302,9 +335,9 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
     def _run_single_option(self, index: int, total: int, option: str, test_site_id: str | None, emitter: Any) -> bool:
         """Run a single interactive option, emit telemetry, and return True on success."""
         _function, description = self.menu_actions[option]  # WHY: resolve description for progress output.
-        print(
-            f"   [{index:2}/{total}] Testing option {option:>3}: {description[:60]}..."
-        )  # WHY: preserve per-option progress line.
+        logging.warning(
+            "   [%2d/%d] Testing option %3s: %s...", index, total, option, description[:60]
+        )  # WHY: #886 slice 18/N — per-option progress line via logging.warning.
         logging.info("Emitting telemetry start event for option %s", option)  # WHY: log before start emission.
         emitter.emit_test_start(option, description, "interactive")  # WHY: emit start event.
         logging.debug("Telemetry start event emitted for option %s", option)  # WHY: log start emission completion.
@@ -361,35 +394,47 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
         logging.debug("Telemetry retention policy enforcement completed")  # WHY: log retention completion.
 
     def _print_summary_stats(self, tallies: SuiteTallies, interactive_total: int, telemetry_path: Any) -> None:
-        """Print the legacy stats block preserving exact formatting and message text."""
-        print()  # WHY: preserve blank line before summary.
-        print("=" * 80)  # WHY: preserve summary separator line.
-        print(" Interactive Test Summary:")  # WHY: preserve summary title.
-        print(f"   Successful operations: {tallies.success_count}")  # WHY: preserve success count line.
-        print(f"   Failed operations: {tallies.error_count}")  # WHY: preserve failure count line.
-        print(f"   Skipped operations: {tallies.skip_count}")  # WHY: preserve skip count line.
+        """Emit the legacy stats block as one atomic ``logging.warning``.
+
+        Why:
+            #886 slice 18/N. The 10-line summary block was 10 separate
+            ``print()`` calls; consolidating into one warning record
+            guarantees the block arrives contiguously in any handler.
+        """
         coverage_pct = tallies.success_count / interactive_total * 100  # WHY: precompute coverage %.
-        print(
-            f"   Total interactive read-only coverage: {tallies.success_count}/{interactive_total} "
-            f"({coverage_pct:.1f}%)"
-        )  # WHY: preserve coverage formatting.
-        print(f"   Total execution time: {tallies.total_time:.2f} seconds")  # WHY: preserve duration line.
-        print(f"   Telemetry written to: {telemetry_path}")  # WHY: preserve telemetry-path line.
-        print("   Detailed logs in: script.log")  # WHY: preserve log-guidance line.
+        logging.warning(
+            "\n%s\n Interactive Test Summary:\n"
+            "   Successful operations: %d\n"
+            "   Failed operations: %d\n"
+            "   Skipped operations: %d\n"
+            "   Total interactive read-only coverage: %d/%d (%.1f%%)\n"
+            "   Total execution time: %.2f seconds\n"
+            "   Telemetry written to: %s\n"
+            "   Detailed logs in: script.log",
+            "=" * 80,
+            tallies.success_count,
+            tallies.error_count,
+            tallies.skip_count,
+            tallies.success_count,
+            interactive_total,
+            coverage_pct,
+            tallies.total_time,
+            telemetry_path,
+        )
 
     def _print_summary_verdict(self, tallies: SuiteTallies, interactive_total: int) -> bool:
         """Print final verdict banner and return suite pass/fail status."""
         if tallies.error_count == 0:
-            print("   All tested interactive operations completed successfully!")  # WHY: preserve all-pass banner.
+            logging.warning("   All tested interactive operations completed successfully!")  # WHY: #886 s18.
             logging.info(
                 "INTERACTIVE_TEST: All %s tested operations completed successfully in %.2fs",
                 tallies.success_count,
                 tallies.total_time,
             )  # WHY: log all-pass suite outcome.
             return True  # WHY: return pass status.
-        print(
-            f"   {tallies.error_count} operations failed - check logs for details"
-        )  # WHY: preserve failure summary line.
+        logging.warning(
+            "   %d operations failed - check logs for details", tallies.error_count
+        )  # WHY: #886 slice 18/N — failure summary line via logging.warning.
         logging.warning(
             "INTERACTIVE_TEST: %s operations failed out of %s tested",
             tallies.error_count,
@@ -404,7 +449,6 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
 
     def _run_and_finalize(self, ctx: SuiteContext) -> bool:
         """Run per-option loop, finalize telemetry, and print the summary block."""
-        print()  # WHY: preserve spacing before per-option execution loop.
         success_count, error_count = self._run_option_loop(
             ctx.interactive_options, ctx.test_site_id, ctx.emitter
         )  # WHY: execute option loop.

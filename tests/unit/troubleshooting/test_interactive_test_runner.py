@@ -7,6 +7,7 @@ failure branches, and option-loop failure telemetry.
 
 from __future__ import annotations
 
+import logging  # WHY: #886 slice 18/N — caplog level control for logger-based output
 from unittest.mock import MagicMock
 
 import pytest  # WHY: pytest monkeypatch fixture for os.environ selector control
@@ -17,6 +18,21 @@ from src.troubleshooting.interactive_test_runner import (
     SuiteContext,
     SuiteTallies,
 )
+
+
+@pytest.fixture(autouse=True)
+def _capture_warnings(caplog: pytest.LogCaptureFixture) -> None:
+    """Capture WARNING+ logger output for every test in this module.
+
+    Why:
+        #886 slice 18/N migrated operator-facing ``print()`` calls in
+        ``interactive_test_runner.py`` to ``logging.warning`` /
+        ``logging.error``. Setting the caplog level at WARNING makes all
+        migrated banners visible via ``caplog.text`` without per-test
+        boilerplate, keeping the assertion shape identical to the legacy
+        ``capsys`` pattern.
+    """
+    caplog.set_level(logging.WARNING)
 
 
 class _TelemetryStub:
@@ -158,17 +174,16 @@ def test_find_selector_match_returns_none_when_missing() -> None:
     assert InteractiveTestRunner._find_selector_match(sites, "gamma") is None
 
 
-def test_log_selector_miss_prints_and_logs(capsys, caplog) -> None:
-    """_log_selector_miss emits the legacy warning banner and a warning log."""
+def test_log_selector_miss_prints_and_logs(caplog: pytest.LogCaptureFixture) -> None:
+    """_log_selector_miss emits the consolidated selector-miss warning record."""
     with caplog.at_level("WARNING"):
         InteractiveTestRunner._log_selector_miss("selector-xyz")
-    captured = capsys.readouterr()
-    assert "selector-xyz" in captured.out  # WHY: legacy operator-facing banner
-    assert any("not found" in rec.message for rec in caplog.records)  # WHY: warning log preserved
+    assert "selector-xyz" in caplog.text  # WHY: operator-facing selector id preserved in the record
+    assert any("not found" in rec.message for rec in caplog.records)  # WHY: diagnostic wording preserved
 
 
-def test_lookup_selector_site_returns_match(capsys) -> None:
-    """_lookup_selector_site returns the matched site tuple and prints the legacy success line."""
+def test_lookup_selector_site_returns_match(caplog: pytest.LogCaptureFixture) -> None:
+    """_lookup_selector_site returns the matched site tuple and logs the legacy success line."""
     mistapi_module = MagicMock()
     site_response = MagicMock()
     mistapi_module.api.v1.orgs.sites.listOrgSites.return_value = site_response
@@ -176,7 +191,7 @@ def test_lookup_selector_site_returns_match(capsys) -> None:
     runner = _make_runner(mistapi_module=mistapi_module)
     site_id, site_name = runner._lookup_selector_site("org-1", "site-a")
     assert (site_id, site_name) == ("site-a", "Alpha")
-    assert "Alpha" in capsys.readouterr().out  # WHY: legacy success message printed
+    assert "Alpha" in caplog.text  # WHY: legacy success message routed through the logger
 
 
 def test_lookup_selector_site_miss_returns_none() -> None:
@@ -190,7 +205,7 @@ def test_lookup_selector_site_miss_returns_none() -> None:
     assert site_name == "Unknown"
 
 
-def test_lookup_first_available_site_returns_none_when_empty(capsys) -> None:
+def test_lookup_first_available_site_returns_none_when_empty() -> None:
     """_lookup_first_available_site returns (None, 'Unknown') when the org has no sites."""
     mistapi_module = MagicMock()
     site_response = MagicMock()
@@ -233,35 +248,37 @@ def test_ensure_org_id_resolves_when_cache_empty() -> None:
     assert stored["org_id"] == "resolved-org"  # WHY: setter persisted the id
 
 
-def test_resolve_site_or_close_returns_none_when_no_sites(capsys) -> None:
-    """_resolve_site_or_close closes the emitter and prints the no-site banner when nothing is found."""
+def test_resolve_site_or_close_returns_none_when_no_sites(caplog: pytest.LogCaptureFixture) -> None:
+    """_resolve_site_or_close closes the emitter and logs the no-site banner when nothing is found."""
     mistapi_module = MagicMock()
     site_response = MagicMock()
     site_response.data = []  # WHY: no sites -> abort path
     mistapi_module.api.v1.orgs.sites.listOrgSites.return_value = site_response
     runner = _make_runner(mistapi_module=mistapi_module)
     emitter = _TelemetryStub("data/x.jsonl")
-    site_id, site_name = runner._resolve_site_or_close("org-1", emitter)
+    with caplog.at_level("ERROR"):  # WHY: no-site path now uses logging.error
+        site_id, site_name = runner._resolve_site_or_close("org-1", emitter)
     assert site_id is None
     assert site_name == ""
     assert emitter.closed is True  # WHY: emitter flushed on failure
-    assert "No sites found" in capsys.readouterr().out  # WHY: legacy error banner
+    assert "No sites found" in caplog.text  # WHY: legacy error banner now routed through the logger
 
 
-def test_resolve_site_or_close_handles_exception(capsys) -> None:
+def test_resolve_site_or_close_handles_exception(caplog: pytest.LogCaptureFixture) -> None:
     """_resolve_site_or_close catches exceptions from _resolve_test_site and closes the emitter."""
     mistapi_module = MagicMock()
     mistapi_module.api.v1.orgs.sites.listOrgSites.side_effect = RuntimeError("api boom")
     runner = _make_runner(mistapi_module=mistapi_module)
     emitter = _TelemetryStub("data/x.jsonl")
-    site_id, site_name = runner._resolve_site_or_close("org-1", emitter)
+    with caplog.at_level("ERROR"):  # WHY: failure path now uses logging.error
+        site_id, site_name = runner._resolve_site_or_close("org-1", emitter)
     assert site_id is None
     assert site_name == ""
     assert emitter.closed is True  # WHY: emitter flushed on failure
-    assert "Failed to fetch test site" in capsys.readouterr().out  # WHY: legacy failure banner
+    assert "Failed to fetch test site" in caplog.text  # WHY: legacy failure banner now via logger
 
 
-def test_emit_skip_events_records_skip_per_option(capsys) -> None:
+def test_emit_skip_events_records_skip_per_option() -> None:
     """_emit_skip_events emits telemetry for each option present in menu_actions."""
 
     def _noop_with_site(site_id: str | None = None) -> None:  # WHY: named callable so mypy can type-check
@@ -281,7 +298,7 @@ def test_emit_skip_events_records_skip_per_option(capsys) -> None:
     assert emitter.events[0][0] == "skip"  # WHY: skip event emitted first
 
 
-def test_print_skipped_options_writes_reason_lines(capsys) -> None:
+def test_print_skipped_options_writes_reason_lines(caplog: pytest.LogCaptureFixture) -> None:
     """_print_skipped_options renders one reason line per skipped option present in menu_actions."""
 
     def _noop_with_site(site_id: str | None = None) -> None:  # WHY: named callable so mypy can type-check
@@ -296,20 +313,18 @@ def test_print_skipped_options_writes_reason_lines(capsys) -> None:
     }
     runner = _make_runner(menu_actions=menu_actions, registry=_RegistryWithSkip)
     runner._print_skipped_options(["2"])
-    output = capsys.readouterr().out
-    assert "not-safe-in-tests" in output  # WHY: skip reason surfaces in output
-    assert "2" in output  # WHY: option id present
+    assert "not-safe-in-tests" in caplog.text  # WHY: skip reason surfaces in the log record
+    assert "2" in caplog.text  # WHY: option id present in the log record
 
 
-def test_print_summary_verdict_returns_false_when_failures(capsys, caplog) -> None:
+def test_print_summary_verdict_returns_false_when_failures(caplog: pytest.LogCaptureFixture) -> None:
     """_print_summary_verdict returns False and logs a warning when there are failures."""
     runner = _make_runner()
     tallies = SuiteTallies(success_count=1, error_count=2, skip_count=0, total_time=1.5)
     with caplog.at_level("WARNING"):
         result = runner._print_summary_verdict(tallies, interactive_total=3)
     assert result is False
-    assert "2 operations failed" in capsys.readouterr().out  # WHY: legacy failure banner
-    assert any("2 operations failed" in rec.message for rec in caplog.records)  # WHY: warning log
+    assert "2 operations failed" in caplog.text  # WHY: legacy failure banner routed through the logger
 
 
 def test_run_option_loop_records_failure_via_telemetry() -> None:
