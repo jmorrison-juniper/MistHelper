@@ -7,6 +7,32 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 32/N: retire `print()` in `src/gateway/overrides/wan_override_walker.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced the 2 remaining `print()`
+  calls in `src/gateway/overrides/wan_override_walker.py` with module-level
+  `logging.info(...)` / `logging.warning(...)`, matching the file's
+  pre-existing convention (no module `logger` binding is used elsewhere in
+  this module). `WanOverrideWalker.walk` now emits the legacy compliance
+  header via `logging.info("Gateway Ports Overridden from Template (Compliance Outliers):")`
+  and the `MIST_WAN_TARGET_PORTS`-missing operator banner via
+  `logging.warning(" MIST_WAN_TARGET_PORTS not configured in .env - skipping port override analysis")`,
+  sitting next to the existing
+  `logging.warning("MIST_WAN_TARGET_PORTS environment variable not set")`
+  operator-hint pair. `import logging` was already present at module scope.
+- **Test posture**: `test_walk_early_exits_when_no_target_ports_configured`
+  in `tests/unit/gateway/test_wan_override_walker_extended.py` was migrated
+  off the `capsys` fixture; the assertion now reads `caplog.text` under
+  `caplog.at_level("WARNING")` (which the test already declared) to verify
+  the migrated operator banner. The unused `capsys` parameter was removed.
+- **Verification**: `ruff check --select T201,T203 src/gateway/overrides/wan_override_walker.py`
+  reports 0 issues; `ruff check` and `black --check` clean on both source
+  and test files; targeted pytest for
+  `tests/unit/gateway/test_wan_override_walker.py` +
+  `tests/unit/gateway/test_wan_override_walker_extended.py` = 16 passed;
+  full `pytest` suite green (8949 passed, 0 failed, 77 skipped, 5 xfailed,
+  1 xpassed).
+
 ### #886 Phase 2 slice 31/N: retire `print()` in `src/export/gateway_test_exporter.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced the 2 remaining `print()`

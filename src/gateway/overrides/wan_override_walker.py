@@ -19,13 +19,15 @@ class WanOverrideWalker:
     def walk(fast: bool = False) -> None:
         """Generate the GatewayOverriddenPorts.csv compliance report end-to-end."""
         logging.info("WAN override walker starting (fast=%s)", fast)  # Trace entry for operator timeline
-        print("Gateway Ports Overridden from Template (Compliance Outliers):")  # Legacy header preserved
+        logging.info("Gateway Ports Overridden from Template (Compliance Outliers):")  # Legacy header preserved
         logging.info(  # Legacy info line preserved verbatim for downstream log parsers
             " Identifying gateway ports with template overrides (outliers for compliance correction)..."
         )
         target_ports = _deps.MIST_WAN_TARGET_PORTS  # Read from configured module-level dependency
         if not target_ports:  # Early exit when operator has not configured WAN ports to audit
-            print(" MIST_WAN_TARGET_PORTS not configured in .env - skipping port override analysis")  # legacy
+            logging.warning(  # legacy operator banner preserved verbatim for downstream log parsers
+                " MIST_WAN_TARGET_PORTS not configured in .env - skipping port override analysis"
+            )
             logging.warning("MIST_WAN_TARGET_PORTS environment variable not set")  # operator hint in logs
             return  # No work possible without target ports; abort the walker
         WanOverrideWalker._run_pipeline(fast=fast, target_ports=target_ports)  # Delegate the full pipeline
