@@ -84,8 +84,10 @@ class MapsManagerLauncher:
     def _handle_import_error(self, error: ImportError) -> None:
         """Log and display import failure message."""
         logging.error("Failed to import MapsManager from src/maps/maps_manager.py: %s", error)  # Log the error
-        print("\nERROR: Could not load Maps Manager module.")  # User-visible failure banner
-        print("Ensure src/maps/maps_manager.py exists")  # Suggest the fix
+        # User-visible failure banner
+        logging.info("\nERROR: Could not load Maps Manager module.")
+        # Suggest the fix
+        logging.info("Ensure src/maps/maps_manager.py exists")
 
     def _get_org_id(self) -> bool:
         """Get organization ID from cache or prompt."""
@@ -113,4 +115,5 @@ class MapsManagerLauncher:
     def _handle_fatal_error(self, error: Exception) -> None:
         """Log and display fatal error message."""
         logging.error("Error running Maps Manager: %s", error, exc_info=True)  # Log with traceback for postmortem
-        print(f"\nERROR: {error}")  # Surface error to user without stack details
+        # Surface error to user without stack details
+        logging.info("\nERROR: %s", error)

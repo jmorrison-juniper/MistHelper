@@ -7,6 +7,39 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 36/N: retire `print()` in `src/refactors/maps_manager_launcher.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced the 3 remaining `print()`
+  calls in `src/refactors/maps_manager_launcher.py` with module-level
+  `logging.info(...)` using `%`-style deferred formatting. Two of the calls
+  live in `MapsManagerLauncher._handle_import_error` (the "Could not load
+  Maps Manager module." failure banner and the "Ensure src/maps/maps_manager.py
+  exists" remediation hint) and one in `MapsManagerLauncher._handle_fatal_error`
+  (the user-visible `ERROR: <error>` banner). Each print's inline
+  `# User-facing ... banner.` comment was moved one line above the migrated
+  `logging.info(...)` call to keep the source under the 120-char E501 gate.
+  `import logging` was already present at module scope.
+- **Test posture (Changed)**: six tests in
+  `tests/unit/refactors/test_maps_manager_launcher.py`
+  (`TestLaunchImportFailure.test_import_failure_prints_and_aborts`,
+  `TestLaunchImportFailure.test_import_failure_direct_call`,
+  `TestLaunchOrgIdFailure.test_get_org_id_raises`,
+  `TestRunInteractiveMenuFailures.test_external_class_unset_raises_and_handled`,
+  `TestRunInteractiveMenuFailures.test_run_interactive_menu_raises`,
+  `TestHandleFatalError.test_prints_and_logs`) previously asserted on
+  `capsys.readouterr().out` for the removed `print()` output; they now use
+  `caplog.at_level(logging.INFO)` and assert on `caplog.text`, with the
+  fixture signature switched from `capsys: pytest.CaptureFixture` to
+  `caplog: pytest.LogCaptureFixture`. No behavior asserted by the tests
+  changed - only the capture mechanism moved from stdout to the logging
+  system. The module-import `import pytest` comment updated from
+  `capsys/caplog` to `caplog` fixtures.
+- **Verification**: `ruff check --select T201,T203 src/refactors/maps_manager_launcher.py`
+  → No issues (0 T20 violations remaining in this file). `ruff check` + `black --check`
+  clean on both changed files. Targeted `pytest tests/unit/refactors/test_maps_manager_launcher.py`
+  → **13 passed, 0 failed, 0 skipped**. Full-suite `pytest` → **8949 passed,
+  0 failed, 77 skipped, 5 xfailed, 1 xpassed** — matches the pre-slice baseline exactly.
+
 ### #886 Phase 2 slice 35/N: retire `print()` in `src/export/org_client_security_exporter.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced the 3 remaining `print()`
