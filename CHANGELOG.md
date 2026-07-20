@@ -7,6 +7,31 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 49/N: retire `print()` in `src/export/site_config_exporter.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced the 5 remaining `print()`
+  calls in `src/export/site_config_exporter.py` with `logging.info(...)` /
+  `logging.warning(...)` using `%`-style deferred formatting. Migrated
+  callsites in `_persist_site_wlans_csv` (the "! 0 records exported..." and
+  "! N records exported..." user-facing notices) and in `settings()` (the
+  "Site Configuration Settings:" banner, "! N site configurations exported
+  to AllSiteConfigs.csv" record-count notice, and "! No site configurations
+  found." empty-result notice). All user-facing strings — including the
+  leading `!` sentinel and the literal `data\` path fragment — are preserved
+  verbatim.
+- **Tests (Changed)**: swapped `capsys.readouterr().out` assertions in the
+  two `TestSettings` cases (`test_no_data_warns_and_returns` and
+  `test_with_data_flattens_and_writes`) for `caplog.records` scans under
+  `caplog.at_level("WARNING"/"INFO", logger="root")` so the assertions read
+  from the logger channel the code now emits on.
+- **Rationale**: incremental progress toward ruff `T20` (T201/T203) selector
+  enablement (issue #886). Behavior-preserving; the module already imported
+  `logging` and used `logging.info/warning` at module level, so no new
+  imports were introduced. `logging.warning` is used for the empty-result
+  notice because the original string carried an implicit warning semantic
+  ("No site configurations found."); the other four callsites remain
+  informational.
+
 ### #886 Phase 2 slice 48/N: retire `print()` in `src/analytics/insight_metrics_utils.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced the 5 remaining `print()`

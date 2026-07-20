@@ -133,22 +133,26 @@ class TestFetchWlansWithFallback:
 class TestPersistSiteWlansCsv:
     """Cover SiteConfigExporter._persist_site_wlans_csv."""
 
-    def test_empty_writes_empty_csv(self, fake_mh, capsys):
-        """Empty list → writes empty CSV and prints a zero-record notice."""
+    def test_empty_writes_empty_csv(self, fake_mh, caplog):
+        """Empty list → writes empty CSV and logs a zero-record notice."""
         from src.export.site_config_exporter import SiteConfigExporter
 
-        SiteConfigExporter._persist_site_wlans_csv([], "SiteWlans_HQ.csv", "HQ")
+        with caplog.at_level("INFO", logger="root"):
+            SiteConfigExporter._persist_site_wlans_csv([], "SiteWlans_HQ.csv", "HQ")
 
         fake_mh.DataExporter.write_with_format_selection.assert_called_once_with([], "SiteWlans_HQ.csv")
-        captured = capsys.readouterr()
-        assert "0 records" in captured.out
+        messages = " ".join(rec.getMessage() for rec in caplog.records)
+        assert "0 records" in messages
 
-    def test_non_empty_flattens_sorts_and_writes(self, fake_mh, capsys):
+    def test_non_empty_flattens_sorts_and_writes(self, fake_mh, caplog):
         """Non-empty list flows through flatten/escape/sort/write with SSID ordering."""
         from src.export.site_config_exporter import SiteConfigExporter
 
         rows = [{"ssid": "B"}, {"ssid": "A"}]
-        with patch("src.export.site_config_exporter.DataProcessingUtils") as dpu:
+        with (
+            caplog.at_level("INFO", logger="root"),
+            patch("src.export.site_config_exporter.DataProcessingUtils") as dpu,
+        ):
             dpu.flatten_nested_fields.return_value = rows
             dpu.escape_multiline.return_value = rows
             SiteConfigExporter._persist_site_wlans_csv(rows, "SiteWlans_HQ.csv", "HQ")
@@ -158,8 +162,8 @@ class TestPersistSiteWlansCsv:
         # Sorted rows: A then B.
         written = fake_mh.DataExporter.write_with_format_selection.call_args.args[0]
         assert [r["ssid"] for r in written] == ["A", "B"]
-        captured = capsys.readouterr()
-        assert "2 records" in captured.out
+        messages = " ".join(rec.getMessage() for rec in caplog.records)
+        assert "2 records" in messages
 
 
 class TestWlans:
@@ -249,23 +253,27 @@ class TestZones:
 class TestSettings:
     """Cover SiteConfigExporter.settings."""
 
-    def test_no_data_warns_and_returns(self, fake_mh, capsys):
+    def test_no_data_warns_and_returns(self, fake_mh, caplog):
         """No data returned → warns "no site configurations" and skips the write."""
         from src.export.site_config_exporter import SiteConfigExporter
 
-        with patch("src.export.site_config_exporter.APIFetchUtils.all_site_settings", return_value=[]):
+        with (
+            caplog.at_level("WARNING", logger="root"),
+            patch("src.export.site_config_exporter.APIFetchUtils.all_site_settings", return_value=[]),
+        ):
             SiteConfigExporter.settings()
 
         fake_mh.DataExporter.write_with_format_selection.assert_not_called()
-        captured = capsys.readouterr()
-        assert "No site configurations" in captured.out
+        messages = " ".join(rec.getMessage() for rec in caplog.records)
+        assert "No site configurations" in messages
 
-    def test_with_data_flattens_and_writes(self, fake_mh, capsys):
+    def test_with_data_flattens_and_writes(self, fake_mh, caplog):
         """Data returned → flows through flatten/escape/write and reports the count."""
         from src.export.site_config_exporter import SiteConfigExporter
 
         rows = [{"id": "s1"}]
         with (
+            caplog.at_level("INFO", logger="root"),
             patch("src.export.site_config_exporter.APIFetchUtils.all_site_settings", return_value=rows),
             patch("src.export.site_config_exporter.DataProcessingUtils") as dpu,
         ):
@@ -276,5 +284,5 @@ class TestSettings:
         dpu.flatten_nested_fields.assert_called_once_with(rows)
         dpu.escape_multiline.assert_called_once_with(rows)
         fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(rows, "AllSiteConfigs.csv")
-        captured = capsys.readouterr()
-        assert "1 site configurations exported" in captured.out
+        messages = " ".join(rec.getMessage() for rec in caplog.records)
+        assert "1 site configurations exported" in messages
