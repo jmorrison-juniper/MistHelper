@@ -7,6 +7,41 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 18/N: retire `print()` in `src/troubleshooting/interactive_test_runner.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced all 35 `print()` calls in
+  `src/troubleshooting/interactive_test_runner.py` (interactive-safe
+  systematic test suite runner) with `logging.warning(...)` for
+  operator-visible banners and `logging.error(...)` for site-resolution
+  failures. Multi-line UI blocks were consolidated into single
+  `logging.warning` records so banners arrive atomically at every configured
+  log handler and cannot interleave with concurrent producers:
+  `_print_suite_header` (4 → 1 record for the header/note/timestamp/divider),
+  `_print_summary_stats` (10 → 1 record covering the entire summary block),
+  and `_print_option_listings` (2 static header lines → 1 record). Dynamic
+  lists (`_print_tested_options`, `_print_skipped_options`) use the
+  `logging.warning("%s", "\n".join(lines))` pattern to guard against
+  format-string surprises from option descriptions or skip reasons. Dropped
+  cosmetic blank-line `print()` spacers rather than emitting empty log
+  records that would clutter handler output. `_log_selector_miss` combined
+  its 2 diagnostic records into a single warning so the selector-miss
+  notification stays atomic.
+- **Test migration (Changed)**:
+  `tests/unit/troubleshooting/test_interactive_test_runner.py` swapped
+  `capsys.readouterr().out` assertions for `caplog.text` across the 5
+  affected tests (`_log_selector_miss`, `_lookup_selector_site`,
+  `_resolve_site_or_close` no-site, `_resolve_site_or_close` exception,
+  `_print_skipped_options`, `_print_summary_verdict`) and added a
+  module-level `autouse` fixture (`_capture_warnings`) that calls
+  `caplog.set_level(logging.WARNING)` so migrated warnings are captured
+  deterministically across CI runners. `_resolve_site_or_close` assertions
+  were tightened with `caplog.at_level("ERROR")` because that path now
+  routes via `logging.error`.
+- **Verification**: `ruff check src/troubleshooting/interactive_test_runner.py
+  tests/unit/troubleshooting/test_interactive_test_runner.py` reports 0
+  issues; `black --check` clean; full `pytest` suite green (8949 passed, 0
+  failed, 77 skipped, 5 xfailed, 1 xpassed).
+
 ### #886 Phase 2 slice 17/N: retire `print()` in `src/troubleshooting/troubleshoot_utils.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 12 `print()` calls in
