@@ -7,6 +7,28 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 14/N: retire `print()` in `src/wan_vpn_builder.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced all 40 `print()` calls in
+  `src/wan_vpn_builder.py` (the WAN Hub-Spoke VPN Builder backing Menu 164)
+  with `logging.warning(...)` for operator-visible output (headers, existing-
+  VPN table, profile list, VPN preview, path-keys preview, role legend,
+  cancellation / no-op acks, per-profile update summary) and
+  `logging.error(...)` for API-failure paths (missing org, VPN create
+  failures, profile update failures). Multi-line table headers
+  (`_display_existing_vpns` and `_display_profile_list` three-line preambles;
+  the four-line `_display_vpn_preview` header + threshold warning) were
+  consolidated into single `logging.warning` records with embedded `\n` to
+  keep header output atomic under logging's one-record-per-call model. Blank
+  separator `print()`s became `logging.warning("")` for the same reason. All
+  f-string formatting was converted to %-style deferred args per the
+  print-avoidance rule (T20 selector target of #886). Companion unit tests
+  in `tests/unit/test_wan_vpn_builder.py` were migrated from
+  `capsys`/`captured.out` to `caplog`/`caplog.text` with
+  `caplog.set_level(logging.WARNING)` on all five affected tests. Full unit
+  suite still passes (8529/8529). No behavior change; only the emission
+  channel moves from `stdout` to the root logger's WARNING/ERROR streams.
+
 ### #886 Phase 2 slice 13/N: retire `print()` in `src/wan_hub_group_manager.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 30 `print()` calls in

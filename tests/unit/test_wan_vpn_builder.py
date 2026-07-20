@@ -8,6 +8,7 @@ Tests cover all user stories:
 Task coverage: T006, T011, T022, T027, T029
 """
 
+import logging
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -539,21 +540,24 @@ class TestPromptProfileUpdates:
 class TestDisplayExistingVpns:
     """Test _display_existing_vpns output."""
 
-    def test_with_vpns(self, builder, sample_vpns, capsys):
+    def test_with_vpns(self, builder, sample_vpns, caplog):
+        caplog.set_level(logging.WARNING)
         builder._display_existing_vpns(sample_vpns)
-        output = capsys.readouterr().out
+        output = caplog.text
         assert "OrgOverlay" in output
         assert "BackupVPN" in output
         assert "hub_spoke" in output
 
-    def test_no_vpns(self, builder, capsys):
+    def test_no_vpns(self, builder, caplog):
+        caplog.set_level(logging.WARNING)
         builder._display_existing_vpns([])
-        output = capsys.readouterr().out
+        output = caplog.text
         assert "No existing VPN definitions" in output
 
-    def test_shows_path_count(self, builder, sample_vpns, capsys):
+    def test_shows_path_count(self, builder, sample_vpns, caplog):
+        caplog.set_level(logging.WARNING)
         builder._display_existing_vpns(sample_vpns)
-        output = capsys.readouterr().out
+        output = caplog.text
         assert "2" in output
         assert "1" in output
 
@@ -561,14 +565,16 @@ class TestDisplayExistingVpns:
 class TestDisplayProfileList:
     """Test _display_profile_list output."""
 
-    def test_shows_wan_lan_counts(self, builder, sample_profiles, capsys):
+    def test_shows_wan_lan_counts(self, builder, sample_profiles, caplog):
+        caplog.set_level(logging.WARNING)
         builder._display_profile_list(sample_profiles)
-        output = capsys.readouterr().out
+        output = caplog.text
         assert "VREPOL69" in output
         assert "SPOKE01" in output
 
-    def test_warns_no_wan(self, builder, capsys):
+    def test_warns_no_wan(self, builder, caplog):
+        caplog.set_level(logging.WARNING)
         profiles = [{"name": "LAN_ONLY", "port_config": {"LAN1": {"usage": "lan"}}}]
         builder._display_profile_list(profiles)
-        output = capsys.readouterr().out
+        output = caplog.text
         assert "No WAN interfaces" in output
