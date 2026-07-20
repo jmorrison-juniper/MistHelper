@@ -7,6 +7,21 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 68/N: retire `print()` in `src/export/org_site_exporter.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced all 9 `print()` calls in
+  `src/export/org_site_exporter.py` with `logging.info(...)` using `%`-style
+  deferred formatting to satisfy G004. Covers the cache-reuse and fetch-start
+  notices plus the empty-result branch in `sites_list_api`, the export-success
+  notice in `sites_list_api`, the header banner and export-count summary in
+  `sites_with_location`, the guest-header banner and count summary in
+  `current_guests`, and the count summary in `historical_guests`. Each migrated
+  call carries the standard `# WHY:` annotation preserving legacy
+  operator-visible text via the logger.
+- **Tests (Unchanged)**: `tests/unit/export/test_org_site_exporter.py` uses
+  mock-based assertions with no `capsys` / `readouterr` usage, so no test
+  migration was required. All 9 tests continue to pass locally.
+
 ### #886 Phase 2 slice 67/N: retire `print()` in `src/refactors/tui_launcher.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced the 8 remaining `print()`
