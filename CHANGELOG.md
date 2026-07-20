@@ -7,6 +7,32 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 27/N: retire `print()` in `src/refactors/wan2_migration_launcher.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced the 1 remaining `print()`
+  call in `src/refactors/wan2_migration_launcher.py` with `logging.warning(...)`
+  using `%`-style deferred formatting. `WAN2MigrationLauncher._handle_fatal_error`
+  now surfaces the user-visible error banner via
+  `logging.warning("ERROR: %s", error)` so the operator-facing message flows
+  through the same handler chain as the paired
+  `logging.error("Error running WAN2 Migration: %s", error, exc_info=True)`
+  record. `import logging` was already present at module scope.
+- **Test posture**: `tests/unit/refactors/test_wan2_migration_launcher.py` had
+  three tests (`TestLaunchFatalError::test_launch_wire_failure_logs_and_prints`,
+  `TestLaunchFatalError::test_launch_execute_failure_logs_and_prints`, and
+  `TestHandleFatalError::test_prints_and_logs`) rewritten from
+  `capsys.readouterr().out` to `caplog.text`. Each `caplog.at_level(logging.ERROR)`
+  context was widened to `logging.WARNING` so the new banner emission is
+  captured alongside the pre-existing ERROR log entry. Assertion substrings
+  (`"ERROR: wire boom"`, `"ERROR: flow boom"`, `"ERROR: boom-direct"`) are
+  preserved verbatim. The `capsys` parameter and the header comment
+  mentioning `capsys` were removed.
+- **Verification**: `ruff check` reports 0 issues; `black --check` clean;
+  0 remaining T201 matches in `src/refactors/wan2_migration_launcher.py`;
+  targeted `pytest tests/unit/refactors/test_wan2_migration_launcher.py` runs
+  8 passed; full `pytest` suite green (8949 passed, 0 failed, 77 skipped,
+  5 xfailed, 1 xpassed).
+
 ### #886 Phase 2 slice 26/N: retire `print()` in `src/refactors/service_ping_launcher.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced the 1 remaining `print()`

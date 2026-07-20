@@ -14,7 +14,7 @@ import logging  # WHY: verify structured logs emitted at launch/wire/build stage
 from typing import Any  # WHY: dict-of-mocks return-type annotation.
 from unittest.mock import MagicMock  # WHY: FR-008 mandates MagicMock(spec=...) doubles.
 
-import pytest  # WHY: monkeypatch/capsys/caplog fixtures.
+import pytest  # WHY: monkeypatch/caplog fixtures.
 
 from src.refactors.wan2_migration_launcher import (  # WHY: SUT + helper direct imports.
     WAN2MigrationLauncher,
@@ -156,23 +156,20 @@ class TestLaunchFatalError:
     def test_launch_wire_failure_logs_and_prints(
         self,
         wired_deps: dict[str, Any],
-        capsys: pytest.CaptureFixture[str],
         caplog: pytest.LogCaptureFixture,
     ) -> None:
-        """When configure_wan2_migration_dependencies raises, error is logged + printed, no crash."""
+        """When configure_wan2_migration_dependencies raises, error is logged, no crash."""
         wired_deps["configure"].side_effect = RuntimeError("wire boom")  # WHY: raise during wire step.
         launcher = WAN2MigrationLauncher()  # WHY: build launcher.
-        with caplog.at_level(logging.ERROR):  # WHY: fatal path logs at ERROR.
+        with caplog.at_level(logging.WARNING):  # WHY: fatal path logs WARNING banner + ERROR record.
             launcher.launch()  # WHY: exercise exception branch; must not re-raise.
-        captured = capsys.readouterr()  # WHY: read printed error.
-        assert "ERROR: wire boom" in captured.out  # WHY: user-visible error printed.
+        assert "ERROR: wire boom" in caplog.text  # WHY: user-visible warning banner emitted.
         assert "Error running WAN2 Migration" in caplog.text  # WHY: structured error log emitted.
         assert wired_deps["manager_class"].call_count == 0  # WHY: manager never built when wire fails.
 
     def test_launch_execute_failure_logs_and_prints(
         self,
         wired_deps: dict[str, Any],
-        capsys: pytest.CaptureFixture[str],
         caplog: pytest.LogCaptureFixture,
     ) -> None:
         """When manager.set_site_variable() raises, the error surfaces via _handle_fatal_error."""
@@ -180,22 +177,20 @@ class TestLaunchFatalError:
             "flow boom"
         )  # WHY: raise on execute.
         launcher = WAN2MigrationLauncher()  # WHY: build launcher.
-        with caplog.at_level(logging.ERROR):  # WHY: capture the ERROR log.
+        with caplog.at_level(logging.WARNING):  # WHY: capture both WARNING banner and ERROR log.
             launcher.launch()  # WHY: exercise post-build exception branch.
-        captured = capsys.readouterr()  # WHY: capture printed banner.
-        assert "ERROR: flow boom" in captured.out  # WHY: user-visible error present.
+        assert "ERROR: flow boom" in caplog.text  # WHY: user-visible warning banner emitted.
         assert "Error running WAN2 Migration" in caplog.text  # WHY: structured error log emitted.
 
 
 class TestHandleFatalError:
-    """`_handle_fatal_error` prints and logs directly (unit level)."""
+    """`_handle_fatal_error` logs at WARNING + ERROR directly (unit level)."""
 
-    def test_prints_and_logs(self, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture) -> None:
-        """Direct call prints and logs without invoking sys.exit."""
+    def test_prints_and_logs(self, caplog: pytest.LogCaptureFixture) -> None:
+        """Direct call logs banner + error without invoking sys.exit."""
         launcher = WAN2MigrationLauncher()  # WHY: build instance to reach the method.
         error = ValueError("boom-direct")  # WHY: sentinel error we can grep for.
-        with caplog.at_level(logging.ERROR):  # WHY: assert on the ERROR log entry.
+        with caplog.at_level(logging.WARNING):  # WHY: assert on both WARNING banner and ERROR log entry.
             launcher._handle_fatal_error(error)  # WHY: direct-call exercises the branch.
-        captured = capsys.readouterr()  # WHY: capture print output.
-        assert "ERROR: boom-direct" in captured.out  # WHY: printed banner content.
+        assert "ERROR: boom-direct" in caplog.text  # WHY: warning banner content.
         assert "Error running WAN2 Migration" in caplog.text  # WHY: log entry present.
