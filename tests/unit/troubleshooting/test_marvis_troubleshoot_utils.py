@@ -2,10 +2,27 @@
 
 from __future__ import annotations
 
+import logging
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import MagicMock
 
+import pytest
+
 from src.troubleshooting.marvis_troubleshoot_utils import MarvisTroubleshootDeps, MarvisTroubleshootUtils
+
+
+@pytest.fixture(autouse=True)
+def _capture_warnings(caplog: Any) -> None:
+    """Autouse fixture ensuring caplog captures WARNING-level records module-wide.
+
+    Why:
+        User-visible output was migrated from print() to logging.warning under #886;
+        pytest's caplog defaults to WARNING for the root logger only when explicitly
+        set. Applying it via an autouse fixture avoids repeating caplog.set_level in
+        every test body and keeps this module aligned with the extended test file.
+    """
+    caplog.set_level(logging.WARNING)
 
 
 def _make_deps() -> MarvisTroubleshootDeps:
