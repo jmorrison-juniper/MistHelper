@@ -123,7 +123,8 @@ class OrgAlarmEventExporter:
         )
         mh.DataExporter.write_with_format_selection(events, "OrgDeviceEvents.csv")  # Persist events.
         logging.info("Device events written to OrgDeviceEvents.csv (%s rows).", len(events))
-        print(f"! {len(events)} device events exported to OrgDeviceEvents.csv")  # Confirm export to operator.
+        # WHY: operator-visible export confirmation (replaces prior print()).
+        logging.warning("! %s device events exported to OrgDeviceEvents.csv", len(events))
         logging.info("Menu #21: Device events export completed - %s events", len(events))
         if events:  # Branch: events present.
             logging.debug("Sample device events: %s", json.dumps(events[:3], indent=2))  # Debug-dump sample events.
