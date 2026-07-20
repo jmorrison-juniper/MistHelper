@@ -166,7 +166,8 @@ class SiteExportUtils(SiteInsightsExporter):  # WHY: inherit insights exporters 
         for item in self.tqdm(data, desc="Processing", unit="record"):  # WHY: progress bar per row.
             row = [item.get(field, "") for field in table.field_names]  # WHY: row in stable order.
             table.add_row(row)  # WHY: append to table.
-        print(table)  # WHY: legacy debug console output.
+        # WHY: legacy debug console output preserved via INFO-level structured emit.
+        logging.info("%s", table)
         logging.debug("Site data displayed in table format (debug mode).")  # WHY: audit debug render.
 
     def _write_site_report(  # WHY: single-endpoint export helper reused by many exports.
@@ -233,12 +234,14 @@ class SiteExportUtils(SiteInsightsExporter):  # WHY: inherit insights exporters 
         """Write insight rows to CSV, emitting operator messages for empty-payload cases."""
         if rows:  # WHY: happy-path when metric availability payload had data.
             self.DataExporter.write_with_format_selection(rows, filename)  # WHY: persist rows.
-            print(f"! {len(rows)} records exported to data\\{filename}")  # WHY: legacy operator message.
+            # WHY: preserve legacy operator record-count notice verbatim.
+            logging.info("! %s records exported to data\\%s", len(rows), filename)
             logging.info(
                 "Exported %s site SLE metric insight records to %s", len(rows), filename
             )  # WHY: success audit log.
             return  # WHY: skip empty-file emission when rows exist.
-        print(f"! 0 records exported to data\\{filename} (no metrics available)")  # WHY: legacy empty message.
+        # WHY: preserve legacy empty-payload operator notice verbatim.
+        logging.warning("! 0 records exported to data\\%s (no metrics available)", filename)
         logging.warning("No site SLE metric insight data available for site %s", site_name)  # WHY: warn empty.
         self.DataExporter.write_with_format_selection([], filename)  # WHY: still emit empty file for pipeline.
 
@@ -301,7 +304,8 @@ class SiteExportUtils(SiteInsightsExporter):  # WHY: inherit insights exporters 
             data = self._prepare_rows(rawdata, sort_key)  # WHY: sort, flatten, escape.
             logging.info("Saving exported site data to %s", filename)  # WHY: pre-save log.
             self.DataExporter.write_with_format_selection(data, filename)  # WHY: legacy writer entry.
-            print(f"! {len(data)} records exported to {_resolve_site_display_path(filename)}")
+            # WHY: preserve legacy operator record-count notice verbatim.
+            logging.info("! %s records exported to %s", len(data), _resolve_site_display_path(filename))
             logging.info("Site %s data written to %s (%s rows).", data_type, filename, len(data))
             self._display_or_log_results(data, data_type, filename)  # WHY: display or log.
         except Exception as e:
@@ -326,7 +330,8 @@ class SiteExportUtils(SiteInsightsExporter):  # WHY: inherit insights exporters 
             )
             self._write_insight_rows(rows, filename, site_name)  # WHY: persist and log.
         except Exception as exception:  # noqa: BLE001
-            print(f"! Error exporting site SLE metric insights: {exception}")  # WHY: legacy operator msg.
+            # WHY: preserve legacy operator error notice verbatim.
+            logging.error("! Error exporting site SLE metric insights: %s", exception)
             logging.error("Failed to export site SLE metric insights for site %s: %s", site_name, exception)
             self.DataExporter.write_with_format_selection([], filename)  # WHY: empty file preserves pipeline.
 
