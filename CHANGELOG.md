@@ -7,6 +7,23 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 60/N: retire `print()` in `src/export/site_insights/site_metric_operation.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced the 7 remaining `print()`
+  calls in `src/export/site_insights/site_metric_operation.py` with
+  `logging.info(...)` (module already uses root `logging.<level>(...)` for its
+  info/warning/error/debug traces) using `%`-style deferred formatting.
+  Migrations cover the operation banner, refresh-in-progress notice, empty-
+  metrics operator prompt, retrieval progress line, per-metric success summary,
+  zero-data summary, and the exception-path summary in `_export_error`. Each
+  migrated call carries the standard `# WHY: preserve operator notice
+  verbatim; route through logger for capture/redirection.` annotation.
+- **Test migration (Changed)**: converted the 5 `capsys` assertions in
+  `tests/unit/export/site_insights/test_site_metric_operation_wave9.py` to
+  `caplog` capture (`with caplog.at_level(logging.INFO, logger="root"):`,
+  followed by joining `r.getMessage() for r in caplog.records`) so the tests
+  read from the logger channel the code now emits on.
+
 ### #886 Phase 2 slice 59/N: retire `print()` in `src/ssh/config/csv_loader.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced the 6 remaining `print()`

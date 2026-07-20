@@ -10,6 +10,8 @@ from __future__ import annotations  # WHY: PEP 604 unions module-wide
 import logging  # WHY: emit before/after action logs per project contract
 from unittest.mock import MagicMock  # WHY: build interchangeable injected collaborators
 
+import pytest  # WHY: caplog fixture typing for logger capture assertions
+
 from src.export.site_insights.site_metric_operation import (  # WHY: SUTs under test
     SiteMetricOperation,
     SiteRunContext,
@@ -58,21 +60,23 @@ def _make_context(**overrides) -> SiteRunContext:
 class TestExecuteCancelBranch:
     """Cover the cancel branch where the user does not select a site."""
 
-    def test_no_site_selected_returns_without_running_export(self, capsys) -> None:
+    def test_no_site_selected_returns_without_running_export(self, caplog: pytest.LogCaptureFixture) -> None:
         # WHY: PromptUtils.select_site returning falsy must exit cleanly with no export attempt
         deps = _make_deps()  # WHY: fresh baseline
         deps["PromptUtils"].select_site.return_value = None  # WHY: simulate cancel
         op = SiteMetricOperation(**deps)  # WHY: build SUT
-        op.execute()  # WHY: exercise cancel path
+        with caplog.at_level(logging.INFO, logger="root"):  # WHY: SUT uses root logging.info
+            op.execute()  # WHY: exercise cancel path
         assert not deps["InsightMetricsUtils"].export_const_insight_metrics.called  # WHY: never refreshed
         assert not deps["DataExporter"].write_with_format_selection.called  # WHY: never wrote file
-        assert "Export Site Insight Metrics" in capsys.readouterr().out  # WHY: banner still printed
+        out = "\n".join(r.getMessage() for r in caplog.records)  # WHY: aggregate captured log records
+        assert "Export Site Insight Metrics" in out  # WHY: banner still logged
 
 
 class TestExecuteEmptyMetricsBranch:
     """Cover the empty-metric-list branch after site selection succeeds."""
 
-    def test_empty_metrics_writes_empty_file(self, capsys) -> None:
+    def test_empty_metrics_writes_empty_file(self, caplog: pytest.LogCaptureFixture) -> None:
         # WHY: when InsightMetricsUtils.get_by_scope returns [], the empty-file branch fires
         deps = _make_deps()  # WHY: baseline
         deps["PromptUtils"].select_site.return_value = "site-xyz"  # WHY: valid site
@@ -80,19 +84,21 @@ class TestExecuteEmptyMetricsBranch:
         deps["mistapi"].api.v1.sites.listSites.return_value = MagicMock()  # WHY: minimal API stub
         deps["mistapi"].get_all.return_value = [{"id": "site-xyz", "name": "HQ Site"}]  # WHY: name lookup
         op = SiteMetricOperation(**deps)  # WHY: build SUT
-        op.execute()  # WHY: exercise empty-metrics branch
+        with caplog.at_level(logging.INFO, logger="root"):  # WHY: SUT uses root logging.info
+            op.execute()  # WHY: exercise empty-metrics branch
         # WHY: empty file must be written with [] payload
         deps["DataExporter"].write_with_format_selection.assert_called_once()
         args, _kwargs = deps["DataExporter"].write_with_format_selection.call_args  # WHY: inspect call
         assert args[0] == []  # WHY: first positional is the empty list
         assert "SiteInsightMetrics_HQ_Site.csv" in args[1]  # WHY: filename includes sanitized site name
-        assert "No metrics found for site scope" in capsys.readouterr().out  # WHY: user warning surfaced
+        out = "\n".join(r.getMessage() for r in caplog.records)  # WHY: aggregate captured log records
+        assert "No metrics found for site scope" in out  # WHY: user warning surfaced
 
 
 class TestExecuteHappyPath:
     """Cover the non-empty-payload success branch end-to-end."""
 
-    def test_success_writes_processed_rows(self, capsys) -> None:
+    def test_success_writes_processed_rows(self, caplog: pytest.LogCaptureFixture) -> None:
         # WHY: get_by_scope returns metric list; API returns data; final export emits processed rows
         deps = _make_deps()  # WHY: baseline
         deps["PromptUtils"].select_site.return_value = "site-xyz"  # WHY: valid site
@@ -108,7 +114,8 @@ class TestExecuteHappyPath:
 
         deps["mistapi"].api.v1.sites.insights.getSiteInsightMetrics.side_effect = _fresh_response
         op = SiteMetricOperation(**deps)  # WHY: build SUT
-        op.execute()  # WHY: exercise full happy path
+        with caplog.at_level(logging.INFO, logger="root"):  # WHY: SUT uses root logging.info
+            op.execute()  # WHY: exercise full happy path
         # WHY: DataExporter must be called once with the annotated rows
         deps["DataExporter"].write_with_format_selection.assert_called_once()
         rows = deps["DataExporter"].write_with_format_selection.call_args.args[0]  # WHY: first positional
@@ -118,7 +125,8 @@ class TestExecuteHappyPath:
         assert metric_types == {"metric-a", "metric-b"}  # WHY: both metrics annotated
         assert all(row["site_id"] == "site-xyz" for row in rows)  # WHY: annotate stamps site id
         assert all(row["site_name"] == "HQ Site" for row in rows)  # WHY: annotate stamps site name
-        assert "2 site insight metrics exported" in capsys.readouterr().out  # WHY: user summary surfaced
+        out = "\n".join(r.getMessage() for r in caplog.records)  # WHY: aggregate captured log records
+        assert "2 site insight metrics exported" in out  # WHY: user summary surfaced
 
 
 class TestFetchOneMetricBranches:
@@ -211,28 +219,32 @@ class TestAnnotateRow:
 class TestFinalizeErrorBranch:
     """Cover the ``_finalize`` exception branch that emits an empty file on failure."""
 
-    def test_flatten_exception_emits_empty_file(self, capsys) -> None:
+    def test_flatten_exception_emits_empty_file(self, caplog: pytest.LogCaptureFixture) -> None:
         # WHY: exception from flatten_nested_fields must be caught by _finalize and route to _export_error
         deps = _make_deps()  # WHY: baseline
         deps["DataProcessingUtils"].flatten_nested_fields.side_effect = RuntimeError("flatten failed")  # WHY: force
         op = SiteMetricOperation(**deps)  # WHY: build SUT
         ctx = _make_context()  # WHY: context bundle
-        op._finalize([{"row": 1}], 1, "out.csv", ctx)  # WHY: exercise error branch directly
+        with caplog.at_level(logging.INFO, logger="root"):  # WHY: SUT uses root logging.info
+            op._finalize([{"row": 1}], 1, "out.csv", ctx)  # WHY: exercise error branch directly
         # WHY: _export_error always writes an empty file so downstream consumers still get output
         deps["DataExporter"].write_with_format_selection.assert_called_once()
         args, _kwargs = deps["DataExporter"].write_with_format_selection.call_args  # WHY: inspect call
         assert args[0] == []  # WHY: empty payload on error path
-        assert "Error exporting site insight metrics" in capsys.readouterr().out  # WHY: user warning surfaced
+        out = "\n".join(r.getMessage() for r in caplog.records)  # WHY: aggregate captured log records
+        assert "Error exporting site insight metrics" in out  # WHY: user warning surfaced
 
-    def test_empty_data_emits_zero_data_summary(self, capsys) -> None:
+    def test_empty_data_emits_zero_data_summary(self, caplog: pytest.LogCaptureFixture) -> None:
         # WHY: zero-data path emits the "no data available" summary and an empty file
         deps = _make_deps()  # WHY: baseline
         op = SiteMetricOperation(**deps)  # WHY: build SUT
         ctx = _make_context()  # WHY: context bundle
-        op._finalize([], 0, "out.csv", ctx)  # WHY: exercise zero-data branch
+        with caplog.at_level(logging.INFO, logger="root"):  # WHY: SUT uses root logging.info
+            op._finalize([], 0, "out.csv", ctx)  # WHY: exercise zero-data branch
         # WHY: empty-data path still writes empty file for consistency
         deps["DataExporter"].write_with_format_selection.assert_called_once_with([], "out.csv")
-        assert "0 insight metrics exported" in capsys.readouterr().out  # WHY: user summary surfaced
+        out = "\n".join(r.getMessage() for r in caplog.records)  # WHY: aggregate captured log records
+        assert "0 insight metrics exported" in out  # WHY: user summary surfaced
 
 
 class TestBuildFilename:
