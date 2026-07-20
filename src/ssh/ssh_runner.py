@@ -406,7 +406,9 @@ class EnhancedSSHRunner:
         exit_status = stdout.channel.recv_exit_status()  # type: ignore[attr-defined]  # WHY: paramiko exit code
         elapsed = time.time() - start_time  # WHY: measure wall-clock time spent on the exec
         self._log_exec_details(stdout_output, stderr_output, exit_status, elapsed, with_pty)  # WHY: bounded log
-        print(f"- [{hostname}] Command completed with exit status: {exit_status}")  # WHY: keep CLI UX unchanged
+        logging.warning(  # WHY: user-visible per-host completion banner (previously print()).
+            "- [%s] Command completed with exit status: %s", hostname, exit_status
+        )
         return exit_status == 0, stdout_output, stderr_output  # WHY: legacy success/stdout/stderr tuple shape
 
     def _log_exec_details(
@@ -445,7 +447,7 @@ class EnhancedSSHRunner:
             self.logger.debug("Closing SSH connection")  # WHY: trace so users can confirm clean teardown
             self.client.close()  # WHY: releases paramiko file descriptors and server-side session
             self.client = None  # WHY: reset so subsequent _execute_command calls fail fast with a clear message
-            print(">> SSH connection closed")  # WHY: keep CLI UX identical to legacy
+            logging.warning(">> SSH connection closed")  # WHY: user-visible teardown banner (previously print()).
         else:
             self.logger.debug("No SSH connection to close")  # WHY: helpful trace during teardown of failed connect
 

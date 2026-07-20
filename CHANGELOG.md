@@ -7,6 +7,27 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 20/N: retire `print()` in `src/ssh/ssh_runner.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced the 2 remaining `print()`
+  calls in `src/ssh/ssh_runner.py` with `logging.warning(...)`. The
+  per-host command-completion banner (`_read_and_log_outputs`) now emits
+  `logging.warning("- [%s] Command completed with exit status: %s", hostname,
+  exit_status)` so operator-visible status arrives through the same handler
+  chain as the rest of the SSH runner's structured logs. The disconnect
+  banner (`_disconnect`) now emits `logging.warning(">> SSH connection
+  closed")` for the same reason. Both records are WARNING level (not INFO)
+  to preserve their default visibility on CLI runs where the root logger is
+  typically configured to filter INFO.
+- **Test posture**: no test changes required — the existing tests in
+  `tests/unit/test_ssh_runner.py` and `tests/unit/ssh/test_ssh_runner_manager*.py`
+  do not assert on either migrated banner, and neither uses
+  `capsys.readouterr()` against those emission sites.
+- **Verification**: `ruff check src/ssh/ssh_runner.py` reports 0 issues;
+  `black --check` clean; targeted `pytest tests/unit/test_ssh_runner.py
+  tests/unit/ssh/` runs 359 passed; full `pytest` suite green
+  (8949 passed, 0 failed, 77 skipped, 5 xfailed, 1 xpassed).
+
 ### #886 Phase 2 slice 19/N: retire `print()` in `src/troubleshooting/marvis_troubleshoot_utils.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all `print()` calls in
