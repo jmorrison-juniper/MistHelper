@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import inspect
+import logging
 from unittest.mock import MagicMock
 
 import pytest
@@ -30,35 +31,38 @@ def _clear_credential_env(monkeypatch):
 class TestCredentialPreflight:
     """Unit tests for the fail-closed host/token preflight."""
 
-    def test_missing_token_fails_closed_with_actionable_message(self, monkeypatch, capsys):
+    def test_missing_token_fails_closed_with_actionable_message(self, monkeypatch, caplog):
         """No token env var set -> exits non-zero, naming the token vars and deploy/.env.example."""
         _clear_credential_env(monkeypatch)  # WHY: host now defaults to api.mist.com; only the token is missing.
+        caplog.set_level(logging.ERROR)  # WHY: preflight failure emits via logging.error since #886 slice 11.
         with pytest.raises(SystemExit) as exc_info:
             MistHelper._preflight_verify_credentials()
         assert exc_info.value.code == 1
-        out = capsys.readouterr().out
+        out = caplog.text
         assert "MIST_APITOKEN" in out and "MIST_API_TOKEN" in out, "must name the token env vars"
         assert "deploy/.env.example" in out, "must reference the template file to copy"
         assert "to .env" in out, "must direct operators to the root .env file the runtime loads"
 
-    def test_blank_host_fails_closed(self, monkeypatch, capsys):
+    def test_blank_host_fails_closed(self, monkeypatch, caplog):
         """MIST_HOST explicitly blank -> exits non-zero with a specific host message (token present)."""
         _clear_credential_env(monkeypatch)
         monkeypatch.setenv("MIST_HOST", "")  # WHY: explicit blank host reproduces the malformed-URL defect.
         monkeypatch.setenv("MIST_APITOKEN", "realtoken0123456789")  # WHY: a real token isolates the host failure.
+        caplog.set_level(logging.ERROR)  # WHY: preflight failure emits via logging.error since #886 slice 11.
         with pytest.raises(SystemExit) as exc_info:
             MistHelper._preflight_verify_credentials()
         assert exc_info.value.code == 1
-        assert "MIST_HOST" in capsys.readouterr().out
+        assert "MIST_HOST" in caplog.text
 
-    def test_placeholder_host_fails_closed(self, monkeypatch, capsys):
+    def test_placeholder_host_fails_closed(self, monkeypatch, caplog):
         """MIST_HOST left at a copy-paste placeholder -> exits non-zero with a host message."""
         _clear_credential_env(monkeypatch)
         monkeypatch.setenv("MIST_HOST", "your_host_here")  # WHY: unedited .env.example-style placeholder.
         monkeypatch.setenv("MIST_APITOKEN", "realtoken0123456789")
+        caplog.set_level(logging.ERROR)  # WHY: preflight failure emits via logging.error since #886 slice 11.
         with pytest.raises(SystemExit):
             MistHelper._preflight_verify_credentials()
-        assert "MIST_HOST" in capsys.readouterr().out
+        assert "MIST_HOST" in caplog.text
 
     def test_valid_host_and_token_passes(self, monkeypatch):
         """Real non-placeholder host + present token -> returns without exiting."""
@@ -80,15 +84,16 @@ class TestCredentialPreflight:
         assert "import requests" not in source, "preflight must not import requests"
         assert "import mistapi" not in source, "preflight must not import mistapi"
 
-    def test_no_raw_token_leaks_in_failure_message(self, monkeypatch, capsys):
+    def test_no_raw_token_leaks_in_failure_message(self, monkeypatch, caplog):
         """SC-005: only redacted token previews (first4...last4) may appear, never the raw token value."""
         _clear_credential_env(monkeypatch)
         monkeypatch.setenv("MIST_HOST", "api.mist.com")
         raw_token = "your_verylongsecret_here"  # WHY: a placeholder token (>=8 chars) so a preview is emitted.
         monkeypatch.setenv("MIST_APITOKEN", raw_token)
+        caplog.set_level(logging.ERROR)  # WHY: preflight failure emits via logging.error since #886 slice 11.
         with pytest.raises(SystemExit):
             MistHelper._preflight_verify_credentials()
-        out = capsys.readouterr().out
+        out = caplog.text
         assert raw_token not in out, "raw token must never appear verbatim in output"
         assert "your...here" in out, "only the redacted first4...last4 preview may appear"
 
