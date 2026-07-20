@@ -7,6 +7,17 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 52/N: retire `print()` in `src/site/address_audit/comparison_display.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced the 5 remaining `print()`
+  calls in `src/site/address_audit/comparison_display.py` with
+  `logging.info(...)` / `logging.warning(...)` using `%`-style deferred
+  formatting. Migrated callsites in `render` (PrettyTable render),
+  `prompt_post_table` (per-state summary line plus the `[1] Save` / `[q] Quit`
+  menu), and the invalid-choice re-prompt branch. User-facing message text
+  preserved verbatim; no behavior change beyond routing through the configured
+  logger.
+
 ### #886 Phase 2 slice 51/N: retire `print()` in `src/gateway/_wan2_variable_template.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced the 5 remaining `print()`
