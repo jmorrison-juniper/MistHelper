@@ -7,6 +7,25 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 63/N: retire `print()` in `src/refactors/serial_cc/sle_metrics.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced the 7 remaining `print()`
+  calls in `src/refactors/serial_cc/sle_metrics.py` with `logging.info(...)`
+  (module already uses root `logging.<level>(...)` for its info/warning/error
+  traces) using `%`-style deferred formatting. Migrations cover the exported/
+  empty summary lines in `_export_results`, the retrieval-complete summary
+  and top-level error notice in `_run_retrieval`, the workflow banner in
+  `execute`, and the two "retrieving/attempting" info lines in `execute`
+  covering the service-category and specialized-metric counts. Each migrated
+  call carries the standard `# WHY: preserve operator notice verbatim; route
+  through logger for capture/redirection.` annotation.
+- **Test migration (Changed)**: converted the 1 `capsys` assertion in
+  `tests/unit/serial_cc/test_sle_metrics.py::test_sle_metrics_fast_mode_reduces_scope`
+  to `caplog` capture (`with caplog.at_level(logging.INFO, logger="root"):`,
+  aggregating `record.getMessage()` values before substring assertion on
+  "SLE data retrieval completed"). All 4 tests across the unit + integration
+  sle_metrics suites pass locally.
+
 ### #886 Phase 2 slice 62/N: retire `print()` in `src/refactors/serial_cc/security_events.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced the 7 remaining `print()`
