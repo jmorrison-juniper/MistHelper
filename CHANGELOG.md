@@ -7,6 +7,28 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 12/N: retire `print()` in `src/org_data_collector.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced all 16 `print()` calls in
+  `src/org_data_collector.py` (the bulk org-level read sweep) with
+  `logging.warning(...)` so the print-avoidance rule (T20 selector target of
+  #886) can eventually be enabled repo-wide. WARNING level chosen for
+  operator-visible cancel confirmation, category banners, per-operation
+  progress lines (`... OK` / `FAILED (ExceptionClass)`), and the closing
+  summary banner (Total / Succeeded / Failed / Skipped / Duration) so they
+  surface on the default root-logger configuration (INFO is suppressed by
+  default). The original streaming `print(..., end=" ", flush=True)` progress
+  pattern was restructured into two complete lines per operation because the
+  logging module has no partial-line output capability; the visible outcome
+  is preserved. Companion unit tests in
+  `tests/unit/test_org_data_collector.py` were migrated from
+  `capsys`/`captured.out` to `caplog`/`caplog.text` with a
+  `caplog.set_level(logging.WARNING)` prefix so the suite continues to assert
+  the operator-visible output through the logging path. `_report_failure`
+  keeps its `(api_name, error)` signature so the direct-call test needs no
+  update beyond the fixture swap. No behavioural change beyond the emit
+  channel; all 8529 unit tests remain green.
+
 ### #886 Phase 2 slice 11/N: retire `print()` in root `MistHelper.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 98 `print()` calls in
