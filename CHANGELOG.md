@@ -7,6 +7,25 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 57/N: retire `print()` in `src/gateway/gateway_ha_exporter.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced the 6 remaining `print()`
+  calls in `src/gateway/gateway_ha_exporter.py` with `logging.info(...)` using
+  `%`-style deferred formatting. Migrations cover the "no HA gateways found"
+  operator notice in `_collect_ha_gateways()` plus the terminal summary
+  table rendered by `_print_ha_summary()` (section header, column header
+  row, separator line, per-row data lines, trailing blank line). Row
+  formatting now uses `%-30s %-8s %-12s %-20s %-20s %-18s` positional
+  parameters so the operator-visible layout is preserved verbatim while the
+  emission runs through the logger for capture/redirection. A `# WHY:`
+  comment tags each migrated line.
+- **Tests**: migrated 3 `capsys.readouterr().out` assertions in
+  `tests/unit/gateway/test_gateway_ha_exporter.py` (in `TestCollectHaGateways`
+  and `TestPrintHaSummary`) to `caplog.at_level(logging.INFO, logger="root")`
+  + `"\n".join(r.getMessage() for r in caplog.records)`. `import logging`
+  added. 18/18 tests pass.
+- **Lint**: `ruff --select T20 src/gateway/gateway_ha_exporter.py` now clean.
+
 ### #886 Phase 2 slice 56/N: retire `print()` in `src/export/org_template_exporter.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced the 6 remaining `print()`

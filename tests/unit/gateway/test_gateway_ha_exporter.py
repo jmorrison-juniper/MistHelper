@@ -13,6 +13,7 @@ monolith.
 
 from __future__ import annotations
 
+import logging
 import sys
 from types import ModuleType
 from unittest.mock import MagicMock, patch
@@ -111,20 +112,23 @@ class TestCollectHaGateways:
         api_call.assert_called_once_with(fake_mh.apisession, "site-x", type="gateway")
         assert result == [{"id": "g1", "is_ha": True}, {"id": "g3", "is_ha": True}]
 
-    def test_no_ha_gateways_returns_none_and_prints(self, fake_mh, capsys):
-        """No HA gateways -> prints notice and returns None."""
+    def test_no_ha_gateways_returns_none_and_prints(self, fake_mh, caplog):
+        """No HA gateways -> logs notice and returns None."""
         from src.gateway.gateway_ha_exporter import GatewayHaExporter
 
         fake_mh.APICoreFetchUtils.get_api_response_data.return_value = [{"id": "g1", "is_ha": False}]
 
-        with patch(
-            "src.gateway.gateway_ha_exporter.mistapi.api.v1.sites.stats.listSiteDevicesStats",
-            return_value=MagicMock(),
+        with (
+            patch(
+                "src.gateway.gateway_ha_exporter.mistapi.api.v1.sites.stats.listSiteDevicesStats",
+                return_value=MagicMock(),
+            ),
+            caplog.at_level(logging.INFO, logger="root"),
         ):
             result = GatewayHaExporter._collect_ha_gateways("site-x")
 
         assert result is None
-        assert "No HA gateways found" in capsys.readouterr().out
+        assert "No HA gateways found" in "\n".join(r.getMessage() for r in caplog.records)
 
 
 class TestHaClusterInfo:
@@ -319,8 +323,8 @@ class TestBuildHaRows:
 class TestPrintHaSummary:
     """Cover GatewayHaExporter._print_ha_summary."""
 
-    def test_prints_header_separator_and_rows(self, capsys):
-        """Prints section header, table header, separator, and one line per row."""
+    def test_prints_header_separator_and_rows(self, caplog):
+        """Logs section header, table header, separator, and one line per row."""
         from src.gateway.gateway_ha_exporter import GatewayHaExporter
 
         rows = [
@@ -342,8 +346,9 @@ class TestPrintHaSummary:
             },
         ]
 
-        GatewayHaExporter._print_ha_summary(rows)
-        out = capsys.readouterr().out
+        with caplog.at_level(logging.INFO, logger="root"):
+            GatewayHaExporter._print_ha_summary(rows)
+        out = "\n".join(r.getMessage() for r in caplog.records)
 
         assert "HA Gateway Cluster Summary" in out
         assert "Name" in out and "Node0 MAC" in out
@@ -351,11 +356,12 @@ class TestPrintHaSummary:
         # The truncation caps at 28 chars, then padded to 30 -- confirm the truncated prefix appears.
         assert "very-very-long-gateway-name-" in out
 
-    def test_empty_rows_prints_header_only(self, capsys):
+    def test_empty_rows_prints_header_only(self, caplog):
         """Empty row list -> header + separator + trailing blank line, no data rows."""
         from src.gateway.gateway_ha_exporter import GatewayHaExporter
 
-        GatewayHaExporter._print_ha_summary([])
-        out = capsys.readouterr().out
+        with caplog.at_level(logging.INFO, logger="root"):
+            GatewayHaExporter._print_ha_summary([])
+        out = "\n".join(r.getMessage() for r in caplog.records)
         assert "HA Gateway Cluster Summary" in out
         assert "Node0 MAC" in out
