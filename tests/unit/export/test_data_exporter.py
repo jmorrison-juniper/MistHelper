@@ -494,12 +494,11 @@ class TestWriteCsvWithExceptionHandling:
             DataExporter._write_csv_with_exception_handling("p", [{"a": 1}], ["a"])
         inner.assert_called_once()
 
-    def test_permission_error_reraises(self, capsys):
+    def test_permission_error_reraises(self, caplog):
         with patch.object(DataExporter, "_write_csv_open_and_emit", side_effect=PermissionError("locked")):
             with pytest.raises(PermissionError):
                 DataExporter._write_csv_with_exception_handling("p", [{"a": 1}], ["a"])
-        captured = capsys.readouterr()
-        assert "another program" in captured.out
+        assert "another program" in caplog.text
 
     def test_os_error_reraises(self):
         with patch.object(DataExporter, "_write_csv_open_and_emit", side_effect=OSError("disk full")):
