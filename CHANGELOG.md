@@ -7,6 +7,27 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 66/N: retire `print()` in `src/gateway/overrides/override_report_writer.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced the 8 remaining `print()`
+  calls in `src/gateway/overrides/override_report_writer.py` with
+  `logging.info(...)` (module already uses root `logging.<level>(...)` for its
+  debug/info traces) using `%`-style deferred formatting. Migrations cover the
+  header-only fast-path in `OverrideReportWriter.write_empty` (report-written
+  banner + repeated compliant-fleet notice), and all six operator-facing lines
+  in `OverrideReportWriter._print_summary_lines` (report-written banner,
+  overridden-ports summary, API-optimization saved-calls line, target-ports
+  echo, outliers-hint line, and the conditional zero-entry compliant-fleet
+  repeat). Each migrated call carries the standard `# WHY:` annotation
+  preserving legacy operator-visible text via the logger.
+- **Tests (Migrated)**: `tests/unit/gateway/overrides/test_override_report_writer.py`
+  had four `capsys.readouterr().out` assertions covering write_empty,
+  write_full (both entry-count branches), and the direct `_print_summary`
+  parity test. All four were converted to `caplog.at_level(logging.INFO,
+  logger="root")` + record-based assertions (`stdout = "\n".join(rec.getMessage()
+  for rec in caplog.records)`). Full local run: 5/5 pass on
+  `tests/unit/gateway/overrides/test_override_report_writer.py`.
+
 ### #886 Phase 2 slice 65/N: retire `print()` in `src/export/wifi_clients_exporter.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced the 8 remaining `print()`
