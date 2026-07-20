@@ -7,6 +7,22 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 56/N: retire `print()` in `src/export/org_template_exporter.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced the 6 remaining `print()`
+  calls in `src/export/org_template_exporter.py` with `logging.info(...)`
+  using `%`-style deferred formatting. Migrations cover the AP template
+  export header, empty-branch operator notice, and success count summary in
+  `_persist_ap_template_profiles()` / `ap_templates()`, plus the switch
+  template export header, empty-branch operator notice, and success count
+  summary in `_persist_switch_template_csv()` / `switch_templates()`.
+  Operator-visible text preserved verbatim; a `# WHY:` comment tags each
+  migrated line to make the redirection intent explicit for reviewers.
+- **Tests**: existing suite `tests/unit/export/test_org_template_exporter.py`
+  contained no `capsys` assertions on the migrated lines; 18/18 tests pass
+  unchanged.
+- **Lint**: `ruff --select T20 src/export/org_template_exporter.py` now clean.
+
 ### #886 Phase 2 slice 55/N: retire `print()` in `src/export/org_device_stats_exporter.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced the 6 remaining `print()`
