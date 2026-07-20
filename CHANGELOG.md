@@ -7,6 +7,48 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 19/N: retire `print()` in `src/troubleshooting/marvis_troubleshoot_utils.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced all `print()` calls in
+  `src/troubleshooting/marvis_troubleshoot_utils.py` (the extracted Marvis
+  client/device/network troubleshooting + insights workflows) with
+  `logging.warning(...)` for operator-visible banners, `logging.info(...)` for
+  structured pre/post API call records, `logging.debug(...)` for trace-level
+  entry/exit, and `logging.error(...)` / `logging.exception(...)` for
+  failure paths. Multi-line banners were consolidated into single
+  `logging.warning` records so headers arrive atomically at every configured
+  log handler: workflow entry banners (`client_connectivity`,
+  `device_performance`, `network_connectivity`, `view_insights`) each collapse
+  their menu header + divider into one record via
+  `logging.warning("%s\n%s", _MENU_HEADER_X, _HEADER_SEP)`; the shared error
+  guidance emitter (`_print_error_guidance`) assembles the failure message
+  plus canned bullets into a `list[str]` and emits one
+  `logging.warning("%s", "\n".join(lines))`; the raw-response preview helper
+  (`_print_raw_response_preview`) emits a single record with the truncation
+  suffix baked in; the raw-key preview helper (`_print_raw_keys_preview`)
+  builds its diagnostic lines and emits atomically. Cancel-path messages and
+  the static Marvis usage guide were folded into single WARNING records
+  rather than one-print-per-line. Cosmetic blank `print()` spacers were
+  dropped rather than emitted as empty log records.
+- **Test migration (Changed)**:
+  `tests/unit/troubleshooting/test_marvis_troubleshoot_utils_extended.py`
+  swapped all `capsys.readouterr().out` assertions for `caplog.text` across
+  every affected test and added a module-level autouse fixture
+  (`_capture_warnings`) that calls `caplog.set_level(logging.WARNING)` so
+  migrated warnings are captured deterministically across CI runners. The
+  two ERROR-routed paths (`test_view_insights_exception_hits_error_handler`,
+  `test_handle_insights_error_prints_guidance`) are wrapped with
+  `with caplog.at_level(logging.ERROR):` because `_handle_insights_error`
+  emits at ERROR level. The small companion `test_marvis_troubleshoot_utils.py`
+  received the same autouse fixture (even though it had no capsys usage) so
+  both test modules share a consistent capture posture.
+- **Verification**: `ruff check
+  src/troubleshooting/marvis_troubleshoot_utils.py
+  tests/unit/troubleshooting/test_marvis_troubleshoot_utils.py
+  tests/unit/troubleshooting/test_marvis_troubleshoot_utils_extended.py`
+  reports 0 issues; `black --check` clean; full `pytest` suite green
+  (8949 passed, 0 failed, 77 skipped, 5 xfailed, 1 xpassed).
+
 ### #886 Phase 2 slice 18/N: retire `print()` in `src/troubleshooting/interactive_test_runner.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 35 `print()` calls in
