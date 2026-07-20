@@ -318,7 +318,7 @@ class DataExporter:  # Multi-backend export facade.
             DataExporter._write_csv_open_and_emit(csv_file_path, escaped_data, fields)  # Open + emit
         except PermissionError as perm_error:  # File locked or write denied
             logging.error("File I/O: Permission denied when writing to %s: %s", csv_file_path, perm_error)
-            print(f"! Cannot write to {csv_file_path}. Is it open in another program?")  # User-facing hint
+            logging.warning("! Cannot write to %s. Is it open in another program?", csv_file_path)  # User-facing hint
             logging.debug("EXIT: DataExporter.write_to_csv - permission error")  # Trace exit on perm denial
             raise  # Propagate to the caller
         except OSError as os_error:  # OS-level write failure (disk full, path invalid, etc.)
