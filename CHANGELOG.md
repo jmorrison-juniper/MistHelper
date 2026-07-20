@@ -7,6 +7,25 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 59/N: retire `print()` in `src/ssh/config/csv_loader.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced the 6 remaining `print()`
+  calls in `src/ssh/config/csv_loader.py` with `logger.info(...)` using the
+  module's pre-existing `logger = logging.getLogger(__name__)` and `%`-style
+  deferred formatting. Migrations cover the legacy-fallback notice in
+  `_resolve_csv_path()`, the broad-except read-failure warning in
+  `_read_validated_commands()`, the 3-line invalid-row warning summary in
+  `_warn_invalid_rows()` (header + first 3 rows + `and N more` truncation
+  notice), and the too-many-commands warning in `_enforce_command_cap()`.
+  Each migration is annotated with `# WHY: preserve operator notice verbatim;
+  route through logger for capture/redirection.`
+- **Test migration (Changed)**: updated
+  `tests/unit/ssh/config/test_csv_loader.py` to switch five `capsys.readouterr().out`
+  assertions to `caplog.at_level(logging.INFO, logger="src.ssh.config.csv_loader")`
+  + joined `caplog.records`, aligning coverage with the logger channel the code
+  now emits on. Added `import logging` and a module-scoped `_LOGGER_NAME`
+  constant.
+
 ### #886 Phase 2 slice 58/N: retire `print()` in `src/inventory/org_device_inventory_summary.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced the 6 remaining `print()`
