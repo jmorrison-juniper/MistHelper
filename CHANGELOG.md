@@ -7,6 +7,33 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 34/N: retire `print()` in `src/refactors/serial_cc/switch_vc_stats.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced the 2 remaining `print()`
+  calls in `src/refactors/serial_cc/switch_vc_stats.py` (both inside
+  `SwitchVcStatsService.execute`) with module-level `logging.info(...)` using
+  `%`-style deferred formatting, matching the file's pre-existing
+  `logging.info(...)` / `logging.warning(...)` / `logging.debug(...)`
+  convention (no module `logger` binding is used elsewhere in this module).
+  The operator banner `print("Switch Virtual Chassis Statistics:")` becomes
+  `logging.info("Switch Virtual Chassis Statistics:")`, sitting next to the
+  existing `logging.info("Exporting all switch virtual chassis stats...")`.
+  The f-string
+  `print(f"! {len(all_vc_stats)} switch VC stats exported to OrgSwitchVCStats.csv")`
+  becomes
+  `logging.info("! %d switch VC stats exported to OrgSwitchVCStats.csv", len(all_vc_stats))`,
+  which produces a near-duplicate of the immediately following
+  `logging.info("! Switch VC stats exported to OrgSwitchVCStats.csv (%d records).", ...)`
+  line; the duplication is intentional to preserve the original operator UX
+  under the migration (same conservative pattern used in slices 32/33).
+  `import logging` was already present at module scope.
+- **Test posture**: no existing test asserts on the two migrated banners
+  (verified via ripgrep against `tests/`), so the test suite is unchanged.
+- **Verification**: `ruff check --select T201,T203 src/refactors/serial_cc/switch_vc_stats.py`
+  reports 0 issues; `ruff check` and `black --check` clean on the source
+  file; targeted `pytest tests/unit/refactors/` = 294 passed; full `pytest`
+  suite green (8949 passed, 0 failed, 77 skipped, 5 xfailed, 1 xpassed).
+
 ### #886 Phase 2 slice 33/N: retire `print()` in `src/gateway/wan2_variable.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced the 2 remaining `print()`
