@@ -7,6 +7,32 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 39/N: retire `print()` in `src/ssh/batch/interactive_batch_executor.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced the 3 remaining `print()`
+  calls in `src/ssh/batch/interactive_batch_executor.py` with module-level
+  `logging.info(...)` using `%`-style deferred formatting. The migrated
+  callsites are (1) `InteractiveBatchExecutor._setup_log_context` per-host
+  "Logging to: …" destination banner, (2) `InteractiveBatchExecutor._handle_step_interrupt`
+  "[INTERRUPT] … Ctrl+C detected!" notice, and (3) `InteractiveBatchExecutor._write_step_header`
+  per-step "Executing step N: …" redacted console line. Each `# WHY: …`
+  comment was moved one line above the migrated call so the source stays
+  under the 120-char E501 gate. `import logging` was already present at
+  module scope.
+- **Test posture**: no `capsys.readouterr()` assertions in the interactive
+  batch executor test module targeted the removed prints (existing `capsys`
+  hits under `tests/unit/test_ssh_runner.py` cover unrelated host-validation
+  flows), so no test migration was required for this slice.
+- **Verification**:
+  - `ruff check --select T201,T203 src/ssh/batch/interactive_batch_executor.py` — no issues.
+  - `ruff check src/ssh/batch/interactive_batch_executor.py` — no issues.
+  - `black --check src/ssh/batch/interactive_batch_executor.py` — clean.
+  - Targeted pytest (`tests/unit/ssh/batch/` + `tests/unit/test_ssh_runner.py`): 173 passed, 0 failed.
+  - Full-suite pytest baseline held: 8949 passed, 0 failed, 77 skipped, 5 xfailed, 1 xpassed.
+- **Scope guardrail**: T20 stays scoped to migrated files; the global selector
+  flip in `pyproject.toml` is deferred to the final wrap-up PR after every
+  remaining offender has been migrated file-by-file.
+
 ### #886 Phase 2 slice 38/N: retire `print()` in `src/ssh/batch/batch_executor.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced the 3 remaining `print()`
