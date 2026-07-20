@@ -99,7 +99,8 @@ class WanClientEventsExporter:
             header line before the SiteList prompt and a structured info log
             marking the workflow boundary for tracing.
         """
-        print("Export Site WAN Client Events:")  # WHY: header text mirroring sibling exporters for UX parity.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logging.info("Export Site WAN Client Events:")
         logging.info("Starting export of site WAN client events...")  # WHY: log workflow start boundary.
 
     @staticmethod
@@ -118,7 +119,8 @@ class WanClientEventsExporter:
         logging.info(
             "Fetching WAN client events for site: %s (ID: %s)", site_name, site_id
         )  # WHY: log before API calls for tracing.
-        print(f"! Fetching WAN client events for site: {site_name}")  # WHY: operator-facing pre-fetch text.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logging.info("! Fetching WAN client events for site: %s", site_name)
 
     @staticmethod
     def _log_export_failure(site_id: str, exception: BaseException) -> None:
@@ -136,7 +138,8 @@ class WanClientEventsExporter:
         logging.exception(
             "! Failed to fetch WAN client events for site %s: %s", site_id, exception
         )  # WHY: full traceback log.
-        print(f"! Failed to fetch WAN client events: {exception}")  # WHY: operator-facing error output.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logging.error("! Failed to fetch WAN client events: %s", exception)
 
     def _run_export_pipeline(self, stamp: _SiteStamp) -> None:
         """Execute the fetch + finalize stages under exception-guard protection.
@@ -180,7 +183,8 @@ class WanClientEventsExporter:
         logging.debug("Site selection prompt completed with site_id=%s", chosen)  # WHY: result for traceability.
         if not chosen:
             logging.error(_NO_SITE_TEXT)  # WHY: cancel-path log preserved for operator debugging.
-            print(_NO_SITE_TEXT)  # WHY: operator-facing cancel-path message.
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logging.info(_NO_SITE_TEXT)
             return None  # WHY: signal abort to orchestrator so no artifacts are written.
         return chosen  # WHY: resolved site identifier to operate on for the remainder of the workflow.
 
@@ -264,7 +268,8 @@ class WanClientEventsExporter:
             stamp: Site identifiers used to populate the sentinel row.
         """
         logging.warning(_NO_DATA_TEXT)  # WHY: preserve empty-result log severity + text from sibling exporters.
-        print(_NO_DATA_TEXT)  # WHY: preserve operator-facing empty-result message text.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logging.info(_NO_DATA_TEXT)
         logging.info("Writing no-data placeholder CSV for %s", _OUTPUT_CSV)  # WHY: log before placeholder write.
         output_path = self.file_path_utils.get_csv_path(_OUTPUT_CSV)  # WHY: resolve canonical output path.
         with open(output_path, "w", newline="", encoding="utf-8") as file_handle:
@@ -371,5 +376,6 @@ class WanClientEventsExporter:
         logging.info(
             "! WAN client events exported to %s (%d records)", _OUTPUT_CSV, total_records
         )  # WHY: structured log mirrors the operator print block for tracing parity.
-        print(f"! WAN client events exported to {_OUTPUT_CSV}")  # WHY: success confirmation line.
-        print(f"   {total_records} WAN client event records")  # WHY: detailed summary with record count.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logging.info("! WAN client events exported to %s", _OUTPUT_CSV)
+        logging.info("   %d WAN client event records", total_records)
