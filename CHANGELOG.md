@@ -7,6 +7,22 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 58/N: retire `print()` in `src/inventory/org_device_inventory_summary.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced the 6 remaining `print()`
+  calls in `src/inventory/org_device_inventory_summary.py` with
+  `logging.info(...)` using `%`-style deferred formatting. Migrations cover
+  the four-line distribution-summary banner helper (separator, capitalized
+  label, separator, tabulated table), the `run_for_org` elapsed-time summary,
+  and the `execute()` guard-clause "No organization selected" operator error.
+  Each migration is annotated with `# WHY: preserve operator notice verbatim;
+  route through logger for capture/redirection.`
+- **Test migration (Changed)**: updated
+  `tests/unit/inventory/test_org_device_inventory_summary_wave8.py` to switch
+  four assertions from `capsys.readouterr().out` to
+  `caplog.at_level(logging.INFO, logger="root")` + joined `caplog.records`,
+  aligning coverage with the logger channel the code now emits on.
+
 ### #886 Phase 2 slice 57/N: retire `print()` in `src/gateway/gateway_ha_exporter.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced the 6 remaining `print()`
