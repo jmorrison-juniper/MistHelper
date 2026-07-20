@@ -10,6 +10,7 @@ _attach_latest_session zero-session path).
 from __future__ import annotations  # WHY: postponed annotations keep forward refs cheap under strict typing.
 
 import csv  # WHY: build CSV placeholders inline to verify _write_no_data_placeholder output shape.
+import logging  # WHY: caplog level filtering after print() → logger migration in wifi_clients_exporter.
 import os  # WHY: mkdir/write temporary fixture files under tests/fixtures for CSV-backed helpers.
 from pathlib import Path  # WHY: build platform-neutral tmp_path strings for CSV fixtures under pytest tmp_path.
 from typing import Any  # WHY: annotate mixed-value dict literals so mypy --strict accepts str/int co-occurrence.
@@ -79,7 +80,7 @@ def test_execute_exports_merged_records() -> None:
     data_exporter.write_with_format_selection.assert_called_once()
 
 
-def test_execute_logs_failure_when_pipeline_raises(capsys, caplog) -> None:
+def test_execute_logs_failure_when_pipeline_raises(caplog) -> None:
     """execute() should log + print the operator-facing failure line when the pipeline raises."""
     exporter, _prompt_utils, mistapi_module, data_exporter = _build_exporter()
     exporter.file_path_utils.get_csv_path.return_value = "tests/fixtures/site_list.csv"  # WHY: prevent lookup crash
@@ -88,11 +89,12 @@ def test_execute_logs_failure_when_pipeline_raises(capsys, caplog) -> None:
     with open("tests/fixtures/site_list.csv", "w", encoding="utf-8") as file_handle:  # WHY: minimal SiteList
         file_handle.write("id,name\nsite-1,Site One\n")
 
-    with caplog.at_level("ERROR"):
+    with caplog.at_level(logging.INFO, logger="root"):
         exporter.execute(site_id="site-1")
 
     data_exporter.write_with_format_selection.assert_not_called()  # WHY: pipeline aborted before final write
-    assert "Failed to fetch WiFi data" in capsys.readouterr().out  # WHY: legacy operator-facing failure text
+    out = "\n".join(record.getMessage() for record in caplog.records)  # WHY: caplog captures logged operator text
+    assert "Failed to fetch WiFi data" in out  # WHY: legacy operator-facing failure text routed via logger
     assert any("Failed to fetch WiFi data" in rec.message for rec in caplog.records)  # WHY: log captured
 
 
@@ -112,7 +114,7 @@ def test_execute_writes_placeholder_when_no_data(tmp_path: Path) -> None:
     assert "site-1" in contents  # WHY: site id stamped in placeholder body row
 
 
-def test_execute_logs_empty_merge_when_no_enriched_rows(tmp_path: Path, capsys) -> None:
+def test_execute_logs_empty_merge_when_no_enriched_rows(tmp_path: Path, caplog) -> None:
     """execute() should log + print the empty-merge banner when merge produces zero rows."""
     exporter, _prompt_utils, mistapi_module, data_exporter = _build_exporter()
     exporter.file_path_utils.get_csv_path.return_value = str(tmp_path / "site_list.csv")  # WHY: unused; safe path
@@ -124,10 +126,12 @@ def test_execute_logs_empty_merge_when_no_enriched_rows(tmp_path: Path, capsys) 
         [{"start_time": 1}],  # WHY: session without MAC — orphan pass skips it
     ]
 
-    exporter.execute(site_id="site-1")
+    with caplog.at_level(logging.INFO, logger="root"):
+        exporter.execute(site_id="site-1")
 
     data_exporter.write_with_format_selection.assert_not_called()  # WHY: empty-merge aborts before final write
-    assert "No data to export after processing" in capsys.readouterr().out  # WHY: legacy empty-merge banner
+    out = "\n".join(record.getMessage() for record in caplog.records)  # WHY: caplog captures the operator banner
+    assert "No data to export after processing" in out  # WHY: legacy empty-merge banner routed via logger
 
 
 def test_ensure_site_selected_returns_prompt_choice() -> None:
