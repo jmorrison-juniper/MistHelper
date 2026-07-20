@@ -56,7 +56,8 @@ class DeviceMetricOperation:
 
     def execute(self) -> None:  # WHY: Menu 76 dispatcher entry point invoked by MistHelper top-level menu
         """Top-level entry point invoked by the menu dispatcher for menu 76."""
-        print("Export Site Device Insights:")  # WHY: User-facing banner preserved verbatim from legacy implementation
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logging.info("Export Site Device Insights:")
         logging.info("Starting export of site device insights...")  # WHY: Trace operation start for ops visibility
         self._refresh_const_metrics()  # WHY: Refresh ConstInsightMetrics.csv before reading it
         prompts = self._prompt_site_and_device()  # WHY: Run both selection prompts up front
@@ -69,7 +70,8 @@ class DeviceMetricOperation:
 
     def _refresh_const_metrics(self) -> None:  # WHY: Isolated call keeps execute() short and testable
         """Refresh ConstInsightMetrics.csv so metric lists reflect the latest API surface."""
-        print("! Refreshing available insight metrics from Mist API...")  # WHY: User-facing progress preserved verbatim
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logging.info("! Refreshing available insight metrics from Mist API...")
         self.InsightMetricsUtils.export_const_insight_metrics()  # WHY: Refresh cache before scope-filtering metrics
 
     def _prompt_site_and_device(self) -> tuple[str, str] | None:  # WHY: Two prompts share cancel semantics
@@ -116,7 +118,8 @@ class DeviceMetricOperation:
 
     def _emit_empty_metric_list(self, filename: str) -> None:  # WHY: Defensive branch used when const file is empty
         """Emit the empty-file + error trio when scope filter yields zero metrics."""
-        print(_EMPTY_METRICS_PROMPT)  # WHY: User-facing error preserved verbatim
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logging.info(_EMPTY_METRICS_PROMPT)
         logging.error(_EMPTY_METRICS_LOG)  # WHY: Persist failure cause in the log
         self.DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
 
@@ -166,12 +169,14 @@ class DeviceMetricOperation:
     ) -> str | None:  # WHY: Guard MAC use
         """Confirm MAC is present and well-formed; print + log error and return None on failure."""
         if not device_mac:
-            print(_MISSING_MAC_PROMPT.format(name=device_name))  # WHY: User-facing error preserved verbatim
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logging.info(_MISSING_MAC_PROMPT.format(name=device_name))
             logging.error("Could not find MAC address for device %s", device_id)  # WHY: Persist failure cause
             return None
         normalized = self._insights_exporter._normalize_device_mac_or_none(device_mac)  # WHY: Reuse normalizer
         if not normalized:
-            print(_INVALID_MAC_PROMPT.format(name=device_name, mac=device_mac))  # WHY: User-facing error preserved
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logging.info(_INVALID_MAC_PROMPT.format(name=device_name, mac=device_mac))
             logging.error(  # WHY: Persist failure cause with device id + raw MAC for triage
                 "Invalid device MAC address format for device %s: %s", device_id, device_mac
             )
@@ -204,8 +209,11 @@ class DeviceMetricOperation:
         """Iterate the device-scope metric list and collect any insight data the API returns."""
         all_device_data: list[dict] = []  # WHY: Accumulator for every non-empty metric response
         retrieved = 0  # WHY: User-facing counter shown in final summary line
-        print(  # WHY: Progress preserved verbatim with original device-name interpolation
-            f"! Retrieving {len(device_metrics)} different device insight metrics for {context.device_name}..."
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logging.info(
+            "! Retrieving %s different device insight metrics for %s...",
+            len(device_metrics),
+            context.device_name,
         )
         for metric in device_metrics:  # WHY: One API call per metric; individual failures must not abort the batch
             data = self._fetch_one_metric(context, metric)  # WHY: Enriched dict or None
@@ -277,7 +285,8 @@ class DeviceMetricOperation:
         processed = self.DataProcessingUtils.flatten_nested_fields(all_device_data)  # WHY: Flatten nested API objs
         processed = self.DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
         self.DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]
-        print(f"! {retrieved} device insight metrics exported to {filename}")  # WHY: User-facing summary preserved
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logging.info("! %s device insight metrics exported to %s", retrieved, filename)
         logging.info(  # WHY: Persist success summary at info level for ops visibility
             "Exported %s device insight metrics for %s at %s to %s",
             retrieved,
@@ -288,7 +297,8 @@ class DeviceMetricOperation:
 
     def _export_empty(self, filename: str, context: DeviceRunContext) -> None:  # WHY: Zero-data emit path
         """Emit user-visible zero-data summary and write an empty file for consistency."""
-        print(f"! 0 device insights exported to {filename} (no data available)")  # WHY: User-facing summary preserved
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logging.info("! 0 device insights exported to %s (no data available)", filename)
         logging.warning(  # WHY: Distinguish empty result from error for ops triage
             "No device insight data available for %s at %s",
             context.device_name,
@@ -303,7 +313,8 @@ class DeviceMetricOperation:
         context: DeviceRunContext,
     ) -> None:
         """Log the failure with full context and emit an empty file so downstream consumers still see output."""
-        print(f"! Error exporting device insights: {exception}")  # WHY: User-facing error preserved verbatim
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logging.info("! Error exporting device insights: %s", exception)
         logging.error(  # WHY: Persist failure cause with both site and device context for triage
             "Failed to export device insights for %s at %s: %s",
             context.device_name,

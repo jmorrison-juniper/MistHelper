@@ -7,6 +7,22 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 69/N: retire `print()` in `src/export/site_insights/device_metric_operation.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced all 9 `print()` calls in
+  `src/export/site_insights/device_metric_operation.py` with `logging.info(...)`
+  using `%`-style deferred formatting to satisfy G004. Covers the menu-banner
+  and metrics-refresh notices in `execute` / `_refresh_const_metrics`, the
+  empty-metric-list branch in `_emit_empty_metric_list`, the missing-MAC and
+  invalid-MAC user-facing errors in `_validate_mac`, the per-metric progress
+  line in `_collect_metrics`, and the success / zero-data / error summary lines
+  in `_export_with_data` / `_export_empty` / `_export_error`. Each migrated
+  call carries the standard `# WHY:` annotation preserving legacy
+  operator-visible text via the logger.
+- **Tests (Unchanged)**: `tests/unit/export/site_insights/test_device_metric_operation_wave3.py`
+  already uses `caplog` exclusively (no `capsys` / `readouterr` usage), so no
+  test migration was required. All 41 tests continue to pass locally.
+
 ### #886 Phase 2 slice 68/N: retire `print()` in `src/export/org_site_exporter.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 9 `print()` calls in
