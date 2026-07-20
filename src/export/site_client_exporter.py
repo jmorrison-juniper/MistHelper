@@ -39,19 +39,21 @@ class SiteClientExporter:
         """Flatten + persist site-clients rows to a per-site CSV (or tell the user when empty)."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataProcessingUtils + DataExporter helpers.
         if not rawdata:  # No clients -- tell the user and return.
-            print("! No client data found for this site")  # User notice.
+            # WHY: user notice.
+            logging.info("! No client data found for this site")
             return
         flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested fields.
         sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)  # CSV-safe.
         filename = f"SiteClients_{site_name.replace(' ', '_')}.csv"  # Per-site CSV name.
         mh.DataExporter.write_with_format_selection(sanitized_data, filename)  # Persist.
-        print(f"! {len(rawdata)} client records exported to {filename}")  # User notice with count.
+        # WHY: user notice with count.
+        logging.info("! %d client records exported to %s", len(rawdata), filename)
 
     @staticmethod
     def clients() -> None:
         """Export client data for a site to SiteClients.csv."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of SiteDeviceExporter + apisession module global.
-        print("Site Client Statistics:")  # Header.
+        logging.info("Site Client Statistics:")  # WHY: header.
         logging.info("Starting export of site client statistics...")  # Trace start.
         resolved = mh.SiteDeviceExporter._resolve_site_for_stats(  # Prompt + org/site resolution (shared).
             "client statistics"
@@ -65,7 +67,8 @@ class SiteClientExporter:
             SiteClientExporter._persist_site_clients(rawdata, site_name)  # Persist or tell user empty.
         except Exception as e:  # Fetch failed.
             logging.error("Error fetching client stats for site %s: %s", site_name, e)  # Log the error.
-            print(f"! Error fetching client data: {e}")  # Tell the user.
+            # WHY: tell the user.
+            logging.info("! Error fetching client data: %s", e)
 
     @staticmethod
     def client_insights() -> None:

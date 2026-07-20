@@ -7,6 +7,24 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 40/N: retire `print()` in `src/export/site_client_exporter.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced the 4 remaining `print()`
+  calls in `src/export/site_client_exporter.py` with module-level
+  `logging.info(...)` using `%`-style deferred formatting. Migrated callsites
+  cover the empty-rows notice in `_persist_site_clients`, the per-site
+  record-count notice, the `clients` header + start-of-export trace, and
+  the user-facing error notice on the API-failure branch. Hoisted the
+  inline `# WHY:` comments above the migrated calls to keep line length
+  under 120 chars.
+- **Tests (Changed)**: migrated three assertions in
+  `tests/unit/export/test_site_client_exporter.py` from `capsys.readouterr()`
+  stdout checks to `caplog` INFO-level record checks
+  (`test_empty_rows_logs_notice_and_returns`,
+  `test_non_empty_rows_flattens_escapes_writes_and_logs`,
+  `test_api_error_is_logged_and_user_notice_emitted`). Full baseline holds:
+  8949 passed, 0 failed, 77 skipped, 5 xfailed, 1 xpassed.
+
 ### #886 Phase 2 slice 39/N: retire `print()` in `src/ssh/batch/interactive_batch_executor.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced the 3 remaining `print()`

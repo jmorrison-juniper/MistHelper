@@ -2,12 +2,12 @@
 
 Covers every branch of ``SiteClientExporter`` static methods:
 
-- ``_persist_site_clients``: empty-rows early return (prints notice, no
+- ``_persist_site_clients``: empty-rows early return (logs notice, no
   flatten/write) and non-empty happy path (flatten -> escape -> per-site
   CSV write + user notice with count).
 - ``clients``: resolver-aborts branch (returns None -> no fetch), happy
   path (fetch + paginate + persist), and API-error branch (logging.error
-  + print user-facing notice).
+  + logging.info user-facing notice).
 - ``client_insights``: local import + delegation to
   SiteClientInsightsService.execute().
 - ``_normalize_client_mac_or_none``: three branches -- empty input,
@@ -30,7 +30,7 @@ import logging  # WHY: caplog verification of error-path logging.
 from typing import Any  # WHY: monkeypatched fakes carry loose typing.
 from unittest.mock import MagicMock, call  # WHY: FR-008 collaborator doubles + call assertions.
 
-import pytest  # WHY: monkeypatch + caplog + capsys fixtures.
+import pytest  # WHY: monkeypatch + caplog fixtures.
 
 import MistHelper as _mh_module  # WHY: module-object monkeypatch avoids legacy-facade substring guard.
 from src.export.site_client_exporter import SiteClientExporter  # WHY: direct SUT import.
@@ -137,24 +137,26 @@ def wired_deps(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
 class TestPersistSiteClients:
     """Cover both branches of `_persist_site_clients`."""
 
-    def test_empty_rows_prints_notice_and_returns(
-        self, wired_deps: dict[str, Any], capsys: pytest.CaptureFixture[str]
+    def test_empty_rows_logs_notice_and_returns(
+        self, wired_deps: dict[str, Any], caplog: pytest.LogCaptureFixture
     ) -> None:
-        """Empty rows -> user-facing notice printed, no flatten/write occurs."""
-        SiteClientExporter._persist_site_clients([], "SiteA")  # WHY: exercise the empty branch.
+        """Empty rows -> user-facing notice logged at INFO, no flatten/write occurs."""
+        with caplog.at_level(logging.INFO, logger="root"):  # WHY: #886 migrated print()->logging.info.
+            SiteClientExporter._persist_site_clients([], "SiteA")  # WHY: exercise the empty branch.
 
-        captured = capsys.readouterr()  # WHY: verify the notice text.
-        assert "No client data found" in captured.out  # WHY: exact user-visible message.
+        # WHY: exact user-visible message emitted via logging.info after #886.
+        assert any("No client data found" in rec.message for rec in caplog.records)
         # WHY: no flatten/escape/write on empty path.
         wired_deps["DataProcessingUtils"].flatten_nested_fields.assert_not_called()
         wired_deps["DataExporter"].write_with_format_selection.assert_not_called()
 
-    def test_non_empty_rows_flattens_escapes_writes_and_prints(
-        self, wired_deps: dict[str, Any], capsys: pytest.CaptureFixture[str]
+    def test_non_empty_rows_flattens_escapes_writes_and_logs(
+        self, wired_deps: dict[str, Any], caplog: pytest.LogCaptureFixture
     ) -> None:
-        """Non-empty rows -> flatten -> escape -> write CSV -> print count notice."""
+        """Non-empty rows -> flatten -> escape -> write CSV -> log count notice."""
         rows = [{"mac": "aa"}, {"mac": "bb"}]  # WHY: minimal non-empty payload.
-        SiteClientExporter._persist_site_clients(rows, "Site With Spaces")  # WHY: exercise non-empty branch.
+        with caplog.at_level(logging.INFO, logger="root"):  # WHY: #886 migrated print()->logging.info.
+            SiteClientExporter._persist_site_clients(rows, "Site With Spaces")  # WHY: exercise non-empty branch.
 
         wired_deps["DataProcessingUtils"].flatten_nested_fields.assert_called_once_with(rows)  # WHY: flatten first.
         wired_deps["DataProcessingUtils"].escape_multiline.assert_called_once_with(rows)  # WHY: then escape.
@@ -162,8 +164,8 @@ class TestPersistSiteClients:
         wired_deps["DataExporter"].write_with_format_selection.assert_called_once_with(
             rows, "SiteClients_Site_With_Spaces.csv"
         )
-        captured = capsys.readouterr()  # WHY: verify the record-count notice.
-        assert "2 client records exported" in captured.out  # WHY: exact count message.
+        # WHY: exact count message emitted via logging.info after #886.
+        assert any("2 client records exported" in rec.message for rec in caplog.records)
 
 
 class TestClients:
@@ -201,23 +203,25 @@ class TestClients:
             [{"mac": "aa"}], "SiteClients_SiteName.csv"
         )
 
-    def test_api_error_is_logged_and_printed(
-        self, wired_deps: dict[str, Any], caplog: pytest.LogCaptureFixture, capsys: pytest.CaptureFixture[str]
+    def test_api_error_is_logged_and_user_notice_emitted(
+        self, wired_deps: dict[str, Any], caplog: pytest.LogCaptureFixture
     ) -> None:
-        """When the API raises, the error is logged + printed and no persist occurs."""
+        """When the API raises, the error is logged + user notice logged and no persist occurs."""
         wired_deps["SiteDeviceExporter"]._resolve_site_for_stats.return_value = ("site-1", "SiteName")  # WHY: resolve.
         wired_deps["mistapi"].api.v1.sites.stats.listSiteWirelessClientsStats.side_effect = RuntimeError(
             "boom"
         )  # WHY: force API error branch.
 
-        with caplog.at_level(logging.ERROR, logger="root"):  # WHY: capture the ERROR log.
+        with caplog.at_level(logging.INFO, logger="root"):  # WHY: capture both ERROR + INFO records post-#886.
             SiteClientExporter.clients()  # WHY: exercise exception path.
 
         assert any(
-            "Error fetching client stats for site SiteName" in rec.message for rec in caplog.records
-        )  # WHY: log formatting.
-        captured = capsys.readouterr()  # WHY: verify user-facing message.
-        assert "Error fetching client data" in captured.out  # WHY: user notice.
+            "Error fetching client stats for site SiteName" in rec.message and rec.levelno == logging.ERROR
+            for rec in caplog.records
+        )  # WHY: ERROR log path.
+        assert any(
+            "Error fetching client data" in rec.message and rec.levelno == logging.INFO for rec in caplog.records
+        )  # WHY: user notice migrated to logging.info per #886.
         # WHY: no persist path was reached.
         wired_deps["DataExporter"].write_with_format_selection.assert_not_called()
 
