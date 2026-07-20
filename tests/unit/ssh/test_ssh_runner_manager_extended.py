@@ -10,13 +10,26 @@ config resolver, and report emitter.
 from __future__ import annotations
 
 import getpass  # WHY: needed to monkeypatch getpass.getpass in password prompt tests.
+import logging  # WHY: caplog.set_level(logging.DEBUG) so logger output is captured.
 from pathlib import Path  # WHY: type annotation for tmp_path fixture.
 from types import SimpleNamespace  # WHY: cheap attribute bag for mock injection.
 from unittest.mock import MagicMock, patch  # WHY: standard mocking primitives.
 
-import pytest  # WHY: capsys fixture + parametrize.
+import pytest  # WHY: caplog fixture + parametrize.
 
 from src.ssh.ssh_runner_manager import SSHRunnerManager, SSHRunnerManagerDeps
+
+
+@pytest.fixture(autouse=True)
+def _capture_all_log_levels(caplog: pytest.LogCaptureFixture) -> None:
+    """Capture all log levels so warning/info/debug records show up in caplog.text.
+
+    Why:
+        The source module was migrated from ``print()`` to ``logging.warning``/``info``
+        in #886. Root-logger propagation is the default, but caplog's own handler
+        starts at WARNING — DEBUG assertions would silently fail without this hook.
+    """
+    caplog.set_level(logging.DEBUG)
 
 
 class _Args:
@@ -48,27 +61,25 @@ def _make_deps(*, no_env: bool = True, safe_input_return: str | list[str] = "") 
 # ---------------------------------------------------------------------------
 
 
-def test_print_banner_emits_expected_output(capsys: pytest.CaptureFixture[str]) -> None:
-    """Banner prints title + divider."""
+def test_print_banner_emits_expected_output(caplog: pytest.LogCaptureFixture) -> None:
+    """Banner logs title + divider."""
     SSHRunnerManager._print_banner()
-    captured = capsys.readouterr()
-    assert "Enhanced SSH Command Runner" in captured.out
-    assert "=" * 60 in captured.out
+    assert "Enhanced SSH Command Runner" in caplog.text
+    assert "=" * 60 in caplog.text
 
 
-def test_echo_plan_prints_hosts_username_commands(capsys: pytest.CaptureFixture[str]) -> None:
-    """Echo helper prints resolved plan."""
+def test_echo_plan_prints_hosts_username_commands(caplog: pytest.LogCaptureFixture) -> None:
+    """Echo helper logs resolved plan."""
     SSHRunnerManager._echo_plan(["h1", "h2"], "admin", ["cmd"])
-    output = capsys.readouterr().out
-    assert "h1, h2" in output
-    assert "admin" in output
-    assert "1 command" in output
+    assert "h1, h2" in caplog.text
+    assert "admin" in caplog.text
+    assert "1 command" in caplog.text
 
 
-def test_echo_plan_handles_none_commands(capsys: pytest.CaptureFixture[str]) -> None:
+def test_echo_plan_handles_none_commands(caplog: pytest.LogCaptureFixture) -> None:
     """Echo helper handles None command list with a zero count."""
     SSHRunnerManager._echo_plan(["h1"], "u", None)
-    assert "0 command" in capsys.readouterr().out
+    assert "0 command" in caplog.text
 
 
 def test_emit_completion_noop_when_emitter_none() -> None:
@@ -120,11 +131,11 @@ def test_prompt_hosts_returns_split_list() -> None:
     assert SSHRunnerManager._prompt_hosts(deps) == ["h1", "h2", "h3"]
 
 
-def test_prompt_hosts_returns_none_on_empty(capsys: pytest.CaptureFixture[str]) -> None:
-    """Empty input returns None and prints error notice."""
+def test_prompt_hosts_returns_none_on_empty(caplog: pytest.LogCaptureFixture) -> None:
+    """Empty input returns None and logs error notice."""
     deps = _make_deps(safe_input_return="")
     assert SSHRunnerManager._prompt_hosts(deps) is None
-    assert "SSH host is required" in capsys.readouterr().out
+    assert "SSH host is required" in caplog.text
 
 
 def test_prompt_username_returns_value() -> None:
@@ -133,11 +144,11 @@ def test_prompt_username_returns_value() -> None:
     assert SSHRunnerManager._prompt_username(deps) == "admin"
 
 
-def test_prompt_username_returns_none_on_empty(capsys: pytest.CaptureFixture[str]) -> None:
+def test_prompt_username_returns_none_on_empty(caplog: pytest.LogCaptureFixture) -> None:
     """Empty username returns None with error notice."""
     deps = _make_deps(safe_input_return="")
     assert SSHRunnerManager._prompt_username(deps) is None
-    assert "SSH username is required" in capsys.readouterr().out
+    assert "SSH username is required" in caplog.text
 
 
 def test_prompt_password_returns_value(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -146,9 +157,7 @@ def test_prompt_password_returns_value(monkeypatch: pytest.MonkeyPatch) -> None:
     assert SSHRunnerManager._prompt_password() == "secret"
 
 
-def test_prompt_password_returns_none_on_eof(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_prompt_password_returns_none_on_eof(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
     """EOFError treated as cancellation."""
 
     def raise_eof(_prompt: str) -> str:
@@ -156,11 +165,11 @@ def test_prompt_password_returns_none_on_eof(
 
     monkeypatch.setattr(getpass, "getpass", raise_eof)
     assert SSHRunnerManager._prompt_password() is None
-    assert "CANCELLED" in capsys.readouterr().out
+    assert "CANCELLED" in caplog.text
 
 
 def test_prompt_password_returns_none_on_keyboard_interrupt(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     """KeyboardInterrupt treated as cancellation."""
 
@@ -169,16 +178,16 @@ def test_prompt_password_returns_none_on_keyboard_interrupt(
 
     monkeypatch.setattr(getpass, "getpass", raise_kb)
     assert SSHRunnerManager._prompt_password() is None
-    assert "CANCELLED" in capsys.readouterr().out
+    assert "CANCELLED" in caplog.text
 
 
 def test_prompt_password_returns_none_on_empty(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     """Empty password treated as cancellation."""
     monkeypatch.setattr(getpass, "getpass", lambda _prompt: "")
     assert SSHRunnerManager._prompt_password() is None
-    assert "SSH password is required" in capsys.readouterr().out
+    assert "SSH password is required" in caplog.text
 
 
 def test_prompt_commands_returns_list_with_value() -> None:
@@ -243,22 +252,22 @@ def test_load_gateway_data_returns_parsed_rows(tmp_path: Path) -> None:
     assert rows == [{"Gateway Template": "A", "Online Status": "Online", "Management IP": "10.0.0.1"}]
 
 
-def test_load_gateway_data_returns_none_when_empty(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    """Empty CSV returns None and prints notice."""
+def test_load_gateway_data_returns_none_when_empty(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    """Empty CSV returns None and logs notice."""
     csv_path = tmp_path / "empty.csv"
     csv_path.write_text("Gateway Template,Online Status,Management IP\n")
     deps = _make_deps()
     deps.file_path_utils.get_csv_path = MagicMock(return_value=str(csv_path))
     assert SSHRunnerManager._load_gateway_data(deps) is None
-    assert "No gateway data" in capsys.readouterr().out
+    assert "No gateway data" in caplog.text
 
 
-def test_load_gateway_data_returns_none_on_missing_file(capsys: pytest.CaptureFixture[str]) -> None:
-    """Missing file returns None and prints error."""
+def test_load_gateway_data_returns_none_on_missing_file(caplog: pytest.LogCaptureFixture) -> None:
+    """Missing file returns None and logs error."""
     deps = _make_deps()
     deps.file_path_utils.get_csv_path = MagicMock(return_value="_nonexistent_.csv")
     assert SSHRunnerManager._load_gateway_data(deps) is None
-    assert "not found" in capsys.readouterr().out
+    assert "not found" in caplog.text
 
 
 # ---------------------------------------------------------------------------
@@ -266,19 +275,19 @@ def test_load_gateway_data_returns_none_on_missing_file(capsys: pytest.CaptureFi
 # ---------------------------------------------------------------------------
 
 
-def test_select_gateway_template_no_templates(capsys: pytest.CaptureFixture[str]) -> None:
+def test_select_gateway_template_no_templates(caplog: pytest.LogCaptureFixture) -> None:
     """No template names → None and notice."""
     deps = _make_deps()
     assert SSHRunnerManager._select_gateway_template(deps, [{"Gateway Template": "Unknown"}]) is None
-    assert "No gateway templates" in capsys.readouterr().out
+    assert "No gateway templates" in caplog.text
 
 
-def test_select_gateway_template_cancel_on_empty_input(capsys: pytest.CaptureFixture[str]) -> None:
+def test_select_gateway_template_cancel_on_empty_input(caplog: pytest.LogCaptureFixture) -> None:
     """Empty selection returns None and cancels."""
     deps = _make_deps(safe_input_return="")
     gateways = [{"Gateway Template": "T1", "Online Status": "Online"}]
     assert SSHRunnerManager._select_gateway_template(deps, gateways) is None
-    assert "cancelled" in capsys.readouterr().out.lower()
+    assert "cancelled" in caplog.text.lower()
 
 
 def test_select_gateway_template_numeric_selection() -> None:
@@ -307,17 +316,16 @@ def test_collect_template_names_dedup_and_sort() -> None:
     assert SSHRunnerManager._collect_template_names(gateways) == ["A", "B"]
 
 
-def test_print_template_menu_prints_counts(capsys: pytest.CaptureFixture[str]) -> None:
-    """Menu prints numbered template lines with total/online counts."""
+def test_print_template_menu_prints_counts(caplog: pytest.LogCaptureFixture) -> None:
+    """Menu logs numbered template lines with total/online counts."""
     gateways = [
         {"Gateway Template": "A", "Online Status": "Online"},
         {"Gateway Template": "A", "Online Status": "Offline"},
         {"Gateway Template": "B", "Online Status": "Online"},
     ]
     SSHRunnerManager._print_template_menu(["A", "B"], gateways)
-    output = capsys.readouterr().out
-    assert "1. A (2 total, 1 online)" in output
-    assert "2. B (1 total, 1 online)" in output
+    assert "1. A (2 total, 1 online)" in caplog.text
+    assert "2. B (1 total, 1 online)" in caplog.text
 
 
 def test_count_template_gateways_returns_expected_counts() -> None:
@@ -336,10 +344,10 @@ def test_resolve_template_selection_valid_number() -> None:
     assert SSHRunnerManager._resolve_template_selection("2", ["A", "B", "C"]) == "B"
 
 
-def test_resolve_template_selection_out_of_range(capsys: pytest.CaptureFixture[str]) -> None:
-    """Out-of-range numeric index prints error and returns None."""
+def test_resolve_template_selection_out_of_range(caplog: pytest.LogCaptureFixture) -> None:
+    """Out-of-range numeric index logs error and returns None."""
     assert SSHRunnerManager._resolve_template_selection("99", ["A"]) is None
-    assert "Invalid selection" in capsys.readouterr().out
+    assert "Invalid selection" in caplog.text
 
 
 def test_resolve_template_selection_delegates_to_substring() -> None:
@@ -353,16 +361,16 @@ def test_resolve_template_by_substring_single_match() -> None:
     assert SSHRunnerManager._resolve_template_by_substring("alp", ["Alpha", "Beta"]) == "Alpha"
 
 
-def test_resolve_template_by_substring_ambiguous(capsys: pytest.CaptureFixture[str]) -> None:
-    """Multiple substring matches print ambiguity notice and return None."""
+def test_resolve_template_by_substring_ambiguous(caplog: pytest.LogCaptureFixture) -> None:
+    """Multiple substring matches log ambiguity notice and return None."""
     assert SSHRunnerManager._resolve_template_by_substring("a", ["Alpha", "Aztec"]) is None
-    assert "Ambiguous" in capsys.readouterr().out
+    assert "Ambiguous" in caplog.text
 
 
-def test_resolve_template_by_substring_no_match(capsys: pytest.CaptureFixture[str]) -> None:
-    """No substring match prints not-found notice and returns None."""
+def test_resolve_template_by_substring_no_match(caplog: pytest.LogCaptureFixture) -> None:
+    """No substring match logs not-found notice and returns None."""
     assert SSHRunnerManager._resolve_template_by_substring("zzz", ["Alpha", "Beta"]) is None
-    assert "not found" in capsys.readouterr().out
+    assert "not found" in caplog.text
 
 
 # ---------------------------------------------------------------------------
@@ -370,15 +378,14 @@ def test_resolve_template_by_substring_no_match(capsys: pytest.CaptureFixture[st
 # ---------------------------------------------------------------------------
 
 
-def test_display_filtered_gateways_prints_rows(capsys: pytest.CaptureFixture[str]) -> None:
-    """Each filtered row printed with name/ip/site."""
+def test_display_filtered_gateways_prints_rows(caplog: pytest.LogCaptureFixture) -> None:
+    """Each filtered row logged with name/ip/site."""
     SSHRunnerManager._display_filtered_gateways(
         [{"Gateway Name": "gw1", "Management IP": "10.0.0.1", "Site Name": "SiteA"}]
     )
-    output = capsys.readouterr().out
-    assert "gw1" in output
-    assert "10.0.0.1" in output
-    assert "SiteA" in output
+    assert "gw1" in caplog.text
+    assert "10.0.0.1" in caplog.text
+    assert "SiteA" in caplog.text
 
 
 # ---------------------------------------------------------------------------
@@ -386,11 +393,11 @@ def test_display_filtered_gateways_prints_rows(capsys: pytest.CaptureFixture[str
 # ---------------------------------------------------------------------------
 
 
-def test_confirm_execution_cancels_on_empty(capsys: pytest.CaptureFixture[str]) -> None:
-    """Empty input returns False + prints cancel notice."""
+def test_confirm_execution_cancels_on_empty(caplog: pytest.LogCaptureFixture) -> None:
+    """Empty input returns False + logs cancel notice."""
     deps = _make_deps(safe_input_return="")
     assert SSHRunnerManager._confirm_execution(deps, 3) is False
-    assert "cancelled" in capsys.readouterr().out.lower()
+    assert "cancelled" in caplog.text.lower()
 
 
 def test_confirm_execution_rejects_non_yes() -> None:
@@ -425,7 +432,7 @@ def test_install_mock_env_loader_replaces_loader_and_returns_selection() -> None
 # ---------------------------------------------------------------------------
 
 
-def test_by_gateway_template_returns_early_when_no_data(capsys: pytest.CaptureFixture[str]) -> None:
+def test_by_gateway_template_returns_early_when_no_data(caplog: pytest.LogCaptureFixture) -> None:
     """No gateway data → early return without executing SSH batch."""
     deps = _make_deps()
     with (
@@ -464,7 +471,7 @@ def test_by_gateway_template_executes_when_confirmed() -> None:
     executor.assert_called_once()
 
 
-def test_prepare_gateway_selection_returns_none_when_filter_empty(capsys: pytest.CaptureFixture[str]) -> None:
+def test_prepare_gateway_selection_returns_none_when_filter_empty(caplog: pytest.LogCaptureFixture) -> None:
     """Selected template with no online rows → None + notice."""
     deps = _make_deps()
     gateways = [{"Gateway Template": "A", "Online Status": "Offline", "Management IP": "10.0.0.1"}]
@@ -473,7 +480,7 @@ def test_prepare_gateway_selection_returns_none_when_filter_empty(capsys: pytest
         patch.object(SSHRunnerManager, "_select_gateway_template", return_value="A"),
     ):
         assert SSHRunnerManager._prepare_gateway_selection(deps) is None
-    assert "No online gateways" in capsys.readouterr().out
+    assert "No online gateways" in caplog.text
 
 
 def test_prepare_gateway_selection_cancel_when_no_template() -> None:
@@ -496,10 +503,10 @@ def test_refresh_gateway_export_invokes_cache_utils() -> None:
     assert args[0] == "GatewayManagementIPs.csv"
 
 
-def test_print_by_template_banner(capsys: pytest.CaptureFixture[str]) -> None:
-    """Banner prints title + divider."""
+def test_print_by_template_banner(caplog: pytest.LogCaptureFixture) -> None:
+    """Banner logs title + divider."""
     SSHRunnerManager._print_by_template_banner()
-    assert "Gateway Template Targeting" in capsys.readouterr().out
+    assert "Gateway Template Targeting" in caplog.text
 
 
 # ---------------------------------------------------------------------------
@@ -508,17 +515,17 @@ def test_print_by_template_banner(capsys: pytest.CaptureFixture[str]) -> None:
 
 
 def test_resolve_by_template_config_returns_none_when_creds_missing(
-    capsys: pytest.CaptureFixture[str],
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Missing username/password → None + notice."""
     with patch("src.ssh.ssh_runner_manager.EnvSshConfigLoader") as loader:
         loader.return_value.load.return_value = {"username": "", "password": ""}
         assert SSHRunnerManager._resolve_by_template_config() is None
-    assert "SSH credentials not found" in capsys.readouterr().out
+    assert "SSH credentials not found" in caplog.text
 
 
 def test_resolve_by_template_config_returns_none_when_no_commands(
-    capsys: pytest.CaptureFixture[str],
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Missing commands (env + CSV fallback both empty) → None + notice."""
     with (
@@ -528,7 +535,7 @@ def test_resolve_by_template_config_returns_none_when_no_commands(
         loader.return_value.load.return_value = {"username": "u", "password": "p", "commands": []}
         csv_loader.return_value.load.return_value = []
         assert SSHRunnerManager._resolve_by_template_config() is None
-    assert "No SSH commands" in capsys.readouterr().out
+    assert "No SSH commands" in caplog.text
 
 
 def test_resolve_by_template_config_returns_resolved_trio() -> None:
@@ -553,21 +560,19 @@ def test_resolve_by_template_config_uses_csv_fallback() -> None:
         assert SSHRunnerManager._resolve_by_template_config() == ("u", "p", ["cmd1"])
 
 
-def test_echo_by_template_plan(capsys: pytest.CaptureFixture[str]) -> None:
-    """Echo prints host + command counts."""
+def test_echo_by_template_plan(caplog: pytest.LogCaptureFixture) -> None:
+    """Echo logs host + command counts."""
     SSHRunnerManager._echo_by_template_plan(["10.0.0.1", "10.0.0.2"], ["c1", "c2"])
-    output = capsys.readouterr().out
-    assert "2 gateways" in output
-    assert "Commands: 2" in output
+    assert "2 gateways" in caplog.text
+    assert "Commands: 2" in caplog.text
 
 
-def test_report_by_template_results(capsys: pytest.CaptureFixture[str]) -> None:
-    """Report prints template + success/failure counts."""
+def test_report_by_template_results(caplog: pytest.LogCaptureFixture) -> None:
+    """Report logs template + success/failure counts."""
     SSHRunnerManager._report_by_template_results("TplA", ["10.0.0.1"], {"successful": 1, "failed": 0, "total": 1})
-    output = capsys.readouterr().out
-    assert "TplA" in output
-    assert "Successful: 1" in output
-    assert "Failed: 0" in output
+    assert "TplA" in caplog.text
+    assert "Successful: 1" in caplog.text
+    assert "Failed: 0" in caplog.text
 
 
 def test_run_by_template_batch_delegates_to_multihostrunner() -> None:
@@ -606,12 +611,12 @@ def test_execute_by_template_happy_path() -> None:
     reporter.assert_called_once()
 
 
-def test_execute_by_template_swallows_exception(capsys: pytest.CaptureFixture[str]) -> None:
+def test_execute_by_template_swallows_exception(caplog: pytest.LogCaptureFixture) -> None:
     """Any exception surfaces as user-visible '! Error:' notice."""
     deps = _make_deps()
     with patch.object(SSHRunnerManager, "_resolve_by_template_config", side_effect=RuntimeError("boom")):
         SSHRunnerManager._execute_by_template(deps, ["10.0.0.1"], "TplA")
-    assert "boom" in capsys.readouterr().out
+    assert "boom" in caplog.text
 
 
 # ---------------------------------------------------------------------------
@@ -637,20 +642,20 @@ def test_interactive_returns_false_when_workflow_fails() -> None:
         assert SSHRunnerManager.interactive(deps) is False
 
 
-def test_interactive_handles_keyboard_interrupt(capsys: pytest.CaptureFixture[str]) -> None:
+def test_interactive_handles_keyboard_interrupt(caplog: pytest.LogCaptureFixture) -> None:
     """KeyboardInterrupt from workflow yields False + cancel notice."""
     deps = _make_deps()
     with patch.object(SSHRunnerManager, "_run_interactive_workflow", side_effect=KeyboardInterrupt):
         assert SSHRunnerManager.interactive(deps) is False
-    assert "cancelled" in capsys.readouterr().out.lower()
+    assert "cancelled" in caplog.text.lower()
 
 
-def test_interactive_handles_exception(capsys: pytest.CaptureFixture[str]) -> None:
+def test_interactive_handles_exception(caplog: pytest.LogCaptureFixture) -> None:
     """Unhandled exception yields False + fatal error notice."""
     deps = _make_deps()
     with patch.object(SSHRunnerManager, "_run_interactive_workflow", side_effect=RuntimeError("boom")):
         assert SSHRunnerManager.interactive(deps) is False
-    assert "Fatal error" in capsys.readouterr().out
+    assert "Fatal error" in caplog.text
 
 
 def test_run_interactive_workflow_aborts_when_missing_fields() -> None:

@@ -7,6 +7,30 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 22/N: retire `print()` in `src/ssh/ssh_runner_manager.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced the 40 remaining `print()`
+  calls in `src/ssh/ssh_runner_manager.py` with `logging.warning(...)` for
+  user-visible banners covering the full SSH-runner setup flow: prompt
+  headers, missing-data notices, gateway-template listing and selection
+  errors, online-gateway target listing, cancellation notices, credential
+  and command validation errors, and post-execution success/failure counts.
+  All migrated call sites use `%`-style deferred formatting so record args
+  stay unrendered when the level is filtered out. `import logging` was
+  already present at module scope.
+- **Test posture**: `tests/unit/ssh/test_ssh_runner_manager_extended.py`
+  gains an autouse `_capture_all_log_levels` fixture that pins
+  `caplog.set_level(logging.DEBUG)` for parity with earlier SSH slices, and
+  all 26 `capsys.readouterr().out` assertions against migrated banners were
+  rewritten to read `caplog.text`. Assertion substrings and their case
+  sensitivity were preserved verbatim so behavioral coverage is unchanged.
+- **Verification**: `ruff check` reports 0 issues; `black --check` clean;
+  0 remaining `print(` matches in `src/ssh/ssh_runner_manager.py`; targeted
+  `pytest tests/unit/ssh/test_ssh_runner_manager.py
+  tests/unit/ssh/test_ssh_runner_manager_extended.py` runs 70 passed; full
+  `pytest` suite green (8949 passed, 0 failed, 77 skipped, 5 xfailed,
+  1 xpassed).
+
 ### #886 Phase 2 slice 21/N: retire `print()` in `src/ssh/cli_shell_manager.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced the 11 remaining `print()`
