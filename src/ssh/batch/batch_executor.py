@@ -176,7 +176,8 @@ class BatchExecutor:
 
         runner = EnhancedSSHRunner(timeout=request.timeout, logger=logger)  # WHY: owns timeout + client.
         host_log_file, write_to_host_log = runner._create_secure_log_file(request.hostname)  # WHY: existing helper.
-        print(f"- [{request.hostname}] Logging to: {host_log_file}")  # WHY: verbatim user-facing status line.
+        # WHY: verbatim user-facing status line surfacing the per-host log destination.
+        logging.info("- [%s] Logging to: %s", request.hostname, host_log_file)
         header = BatchExecutor._build_header(request.hostname, len(request.commands))  # WHY: verbatim header.
         write_to_host_log(header)  # WHY: persist the header to the per-host log file.
         return _LogContext(runner=runner, writer=write_to_host_log, log_file=host_log_file)  # WHY: bundle.
@@ -302,7 +303,8 @@ class BatchExecutor:
         writer(f"\n{_COMMAND_BAR}")  # WHY: verbatim visual separator between commands.
         writer(f"X  Command {ctx.index}/{ctx.total}: {ctx.command}")  # WHY: verbatim command header line.
         writer(_COMMAND_BAR)  # WHY: verbatim trailing separator that closes the header block.
-        print(f"!? [{ctx.hostname}] Executing command: {ctx.command}")  # WHY: verbatim console status line.
+        # WHY: verbatim console status line announcing the current command.
+        logging.info("!? [%s] Executing command: %s", ctx.hostname, ctx.command)
 
     @staticmethod
     def _write_command_output(
@@ -342,7 +344,8 @@ class BatchExecutor:
         logger: logging.Logger,
     ) -> None:
         """Print + log the Ctrl+C interrupt block (verbatim text)."""
-        print(f"\nX  [{ctx.hostname}] Ctrl+C detected! Skipping remaining commands...")  # WHY: verbatim.
+        # WHY: verbatim console notice for the Ctrl+C interrupt.
+        logging.info("\nX  [%s] Ctrl+C detected! Skipping remaining commands...", ctx.hostname)
         interrupt_msg = (  # WHY: verbatim two-line interrupt block written to the log.
             f"\n[ERROR] Command {ctx.index} interrupted by user (Ctrl+C)\n"
             f"[SKIP] Skipping remaining {ctx.total - ctx.index} commands"

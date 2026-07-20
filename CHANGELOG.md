@@ -7,6 +7,30 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 38/N: retire `print()` in `src/ssh/batch/batch_executor.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced the 3 remaining `print()`
+  calls in `src/ssh/batch/batch_executor.py` with module-level
+  `logging.info(...)` using `%`-style deferred formatting. The migrated
+  callsites are (1) `BatchExecutor._setup_host_log` "Logging to: …" per-host
+  destination banner, (2) `BatchExecutor._write_command_header` per-command
+  "Executing command: …" console line, and (3) `BatchExecutor._handle_interrupt`
+  "Ctrl+C detected!" interrupt notice. Each inline `# WHY: …` comment was
+  moved one line above the migrated call so the source stays under the
+  120-char E501 gate. `import logging` was already present at module scope.
+- **Test posture**: no `capsys.readouterr()` assertions targeted the removed
+  prints (the `capsys` hits in `tests/unit/test_ssh_runner.py` cover unrelated
+  host-validation flows), so no test migration was required for this slice.
+- **Verification**:
+  - `ruff check --select T201,T203 src/ssh/batch/batch_executor.py` — no issues.
+  - `ruff check src/ssh/batch/batch_executor.py` — no issues.
+  - `black --check src/ssh/batch/batch_executor.py` — clean.
+  - Targeted pytest (`tests/unit/test_ssh_runner.py` + `tests/unit/ssh/batch/test_interactive_batch_executor_scrubbing.py`): 173 passed, 0 failed.
+  - Full-suite pytest baseline held: 8949 passed, 0 failed, 77 skipped, 5 xfailed, 1 xpassed.
+- **Scope guardrail**: T20 stays scoped to migrated files; the global selector
+  flip in `pyproject.toml` is deferred to the final wrap-up PR after every
+  remaining offender has been migrated file-by-file.
+
 ### #886 Phase 2 slice 37/N: retire `print()` in `src/refactors/serial_cc/test_results_by_site.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced the 3 remaining `print()`
