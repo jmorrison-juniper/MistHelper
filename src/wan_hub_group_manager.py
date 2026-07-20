@@ -100,7 +100,7 @@ class WanHubGroupNumberManager:  # WHY: single public surface consumed by Menu 1
         """Static entry point called by menu_actions lambda."""
         org_id = get_org_id_func()  # WHY: resolves org lazily so menu can share cached value.
         if not org_id:  # WHY: guard clause - no org means nothing to manage.
-            print(_MSG_NO_ORG)  # WHY: surface the exit reason to the operator.
+            logging.warning(_MSG_NO_ORG)  # WHY: operator-visible exit reason via logger.
             return  # WHY: bail before constructing a useless manager.
         manager = WanHubGroupNumberManager(apisession, org_id, safe_input_func)  # WHY: build with resolved org.
         manager.run()  # WHY: delegate to the interactive workflow.
@@ -111,12 +111,12 @@ class WanHubGroupNumberManager:  # WHY: single public surface consumed by Menu 1
 
     def run(self) -> None:  # WHY: top-level workflow orchestrator called from execute().
         """Main workflow: fetch, display, select, act."""
-        print(_HEADER)  # WHY: banner establishes menu context for the operator.
+        logging.warning(_HEADER)  # WHY: operator-visible menu banner via logger.
         logging.info(_MSG_START)  # WHY: emit start marker before any API traffic.
 
         profiles = self._fetch_profiles()  # WHY: source-of-truth list to display and index against.
         if not profiles:  # WHY: guard clause - no profiles means nothing to configure.
-            print(_MSG_NO_PROFILES)  # WHY: explain the empty-list exit.
+            logging.warning(_MSG_NO_PROFILES)  # WHY: operator-visible empty-list exit via logger.
             return  # WHY: no further work possible.
 
         vpns, all_vpns = self._fetch_hub_spoke_vpns()  # WHY: need hub_spoke overlays that carry pods.
@@ -151,7 +151,7 @@ class WanHubGroupNumberManager:  # WHY: single public surface consumed by Menu 1
             return profiles  # WHY: caller drives display and match building.
         except Exception:  # WHY: broad catch - any API/network fault must not raise into menu loop.
             logging.exception("Failed to fetch device profiles")  # WHY: full traceback for triage.
-            print(_MSG_ERR_PROFILES)  # WHY: user-visible hint to check connectivity.
+            logging.error(_MSG_ERR_PROFILES)  # WHY: operator-visible connectivity hint via logger.
             return []  # WHY: empty list flows into no-profiles guard clause.
 
     def _fetch_hub_spoke_vpns(
@@ -171,14 +171,14 @@ class WanHubGroupNumberManager:  # WHY: single public surface consumed by Menu 1
             return hub_spoke, all_vpns  # WHY: caller distinguishes 'no VPNs' from 'no hub-spoke VPNs'.
         except Exception:  # WHY: same broad-catch degradation as _fetch_profiles.
             logging.exception("Failed to fetch org VPNs")  # WHY: full traceback for triage.
-            print(_MSG_ERR_VPNS)  # WHY: user-visible connectivity hint.
+            logging.error(_MSG_ERR_VPNS)  # WHY: operator-visible connectivity hint via logger.
             return [], []  # WHY: signal both lists empty to caller.
 
     @staticmethod
     def _report_no_hub_spoke(all_vpns: list[dict[str, Any]]) -> None:  # WHY: helper for empty-hub-spoke UX branch.
         """Tell the user what VPN types were found instead of hub_spoke."""
         if not all_vpns:  # WHY: guard clause - distinguish 'zero VPNs' from 'no hub-spoke'.
-            print(_MSG_NO_VPNS)  # WHY: unambiguous message for empty inventory.
+            logging.warning(_MSG_NO_VPNS)  # WHY: operator-visible empty-inventory msg via logger.
             return  # WHY: nothing further to summarize.
         type_counts: dict[str, int] = {}  # WHY: histogram of type -> count for operator context.
         for vpn in all_vpns:  # WHY: single-pass tally keeps helper cheap.
@@ -187,9 +187,11 @@ class WanHubGroupNumberManager:  # WHY: single public surface consumed by Menu 1
         summary = ", ".join(
             f"{count} {vtype}" for vtype, count in sorted(type_counts.items())
         )  # WHY: deterministic sorted summary aids log diff review.
-        print(
-            f"! No hub-spoke VPN definitions found. Found {len(all_vpns)} VPN(s): {summary}."
-        )  # WHY: guides operator toward creating a hub_spoke overlay.
+        logging.warning(
+            "! No hub-spoke VPN definitions found. Found %d VPN(s): %s.",
+            len(all_vpns),
+            summary,
+        )  # WHY: operator-visible guidance toward creating a hub_spoke overlay via logger.
 
     # ------------------------------------------------------------------
     # Path matching
@@ -238,13 +240,13 @@ class WanHubGroupNumberManager:  # WHY: single public surface consumed by Menu 1
         vpn_data: dict[str, list[tuple[str, str, str, int]]],
     ) -> None:  # WHY: pure I/O helper - no state mutation, just formatted print.
         """Print numbered, alphabetized profile list with pod values."""
-        print(_MSG_HEADING_PROFILES)  # WHY: heading above the numbered list.
+        logging.warning(_MSG_HEADING_PROFILES)  # WHY: operator-visible list heading via logger.
         for index, profile in enumerate(profiles, start=1):  # WHY: 1-based numbering matches prompt.
             name = profile.get("name", "")  # WHY: default matches _build_vpn_data key.
             matches = vpn_data.get(name, [])  # WHY: precomputed match cache lookup.
             pod_display = self._format_pod_display(matches)  # WHY: uniform pod summary.
-            print(f"   {index}. {name:<30s} {pod_display}")  # WHY: 30-char pad keeps columns aligned.
-        print()  # WHY: trailing blank line separates list from prompt.
+            logging.warning("   %d. %-30s %s", index, name, pod_display)  # WHY: aligned row via logger.
+        logging.warning("")  # WHY: trailing blank line separates list from prompt via logger.
 
     @staticmethod
     def _format_pod_display(
@@ -277,12 +279,12 @@ class WanHubGroupNumberManager:  # WHY: single public surface consumed by Menu 1
                 context=_CTX_PROFILE_SELECT,
             )  # WHY: EOF-safe input with structured context tag.
             if choice.lower() == _QUIT_CHAR:  # WHY: case-insensitive cancel handling.
-                print(_MSG_CANCELLED)  # WHY: acknowledge cancel to operator.
+                logging.warning(_MSG_CANCELLED)  # WHY: operator-visible cancel ack via logger.
                 return None  # WHY: sentinel drives run() to exit workflow.
             selected = self._resolve_choice_index(choice, profiles, count)  # WHY: pure parse + range check.
             if selected is not None:  # WHY: valid index found, return match.
                 return selected  # WHY: caller uses this profile for subsequent action.
-            print(f"  Please enter a number between 1 and {count}.")  # WHY: guide operator on retry.
+            logging.warning("  Please enter a number between 1 and %d.", count)  # WHY: retry hint via logger.
 
     @staticmethod
     def _resolve_choice_index(
@@ -298,7 +300,7 @@ class WanHubGroupNumberManager:  # WHY: single public surface consumed by Menu 1
         if not (1 <= index <= count):  # WHY: out-of-range index also drives retry.
             return None  # WHY: keep loop responsibility in caller.
         selected = profiles[index - 1]  # WHY: display list is 1-based, list is 0-based.
-        print(f"  Selected: {selected.get('name', '')}")  # WHY: echo selection for operator confidence.
+        logging.warning("  Selected: %s", selected.get("name", ""))  # WHY: selection echo via logger.
         return selected  # WHY: signal success to caller.
 
     def _prompt_action(
@@ -310,7 +312,7 @@ class WanHubGroupNumberManager:  # WHY: single public surface consumed by Menu 1
         name = profile.get("name", "")  # WHY: canonical name used for lookup + messages.
         matches = vpn_data.get(name, [])  # WHY: precomputed match cache for the profile.
         if not matches:  # WHY: guard clause - nothing to update for this profile.
-            print(f"  No VPN paths found for profile '{name}'.")  # WHY: explicit exit reason.
+            logging.warning("  No VPN paths found for profile '%s'.", name)  # WHY: exit reason via logger.
             return  # WHY: bail before any prompts.
         self._log_inconsistent_pods(name, matches)  # WHY: warn operator on drift before choice.
         self._display_action_menu(name, matches)  # WHY: render menu after any inconsistency warning.
@@ -324,12 +326,16 @@ class WanHubGroupNumberManager:  # WHY: single public surface consumed by Menu 1
     ) -> None:  # WHY: extracted from _prompt_action so it stays under STRUCT-LENGTH.
         """Print the profile header and set/clear/cancel labels."""
         pod_display = self._format_pod_display(matches)  # WHY: reuse formatter for consistent display.
-        print(f"\n  Profile: {name}")  # WHY: header pins the operator to selected profile.
-        print(f"  Current {pod_display}  ({len(matches)} VPN paths)")  # WHY: show current pod + path count.
-        print(_MSG_HEADING_ACTIONS)  # WHY: heading above the numbered menu.
-        print(_MSG_ACTION_SET)  # WHY: action 1 label.
-        print(_MSG_ACTION_CLEAR)  # WHY: action 2 label.
-        print(_MSG_ACTION_CANCEL)  # WHY: action 3 label.
+        logging.warning(
+            "\n  Profile: %s\n  Current %s  (%d VPN paths)\n%s\n%s\n%s\n%s",
+            name,
+            pod_display,
+            len(matches),
+            _MSG_HEADING_ACTIONS,
+            _MSG_ACTION_SET,
+            _MSG_ACTION_CLEAR,
+            _MSG_ACTION_CANCEL,
+        )  # WHY: consolidated action-menu banner via logger.
 
     def _dispatch_action(
         self,
@@ -345,7 +351,7 @@ class WanHubGroupNumberManager:  # WHY: single public surface consumed by Menu 1
         }
         handler = handlers.get(choice)  # WHY: unknown / '3' falls through to cancel branch.
         if handler is None:  # WHY: '3' or garbage input is the cancel path.
-            print(_MSG_CANCELLED)  # WHY: single canonical cancel message.
+            logging.warning(_MSG_CANCELLED)  # WHY: canonical cancel message via logger.
             return  # WHY: no state change.
         handler(profile, vpn_data)  # WHY: invoke selected handler with the profile + cached matches.
 
@@ -360,7 +366,7 @@ class WanHubGroupNumberManager:  # WHY: single public surface consumed by Menu 1
             return  # WHY: caller loop is unchanged.
         confirm_prompt = f"  Update all matching paths to pod {new_pod}? (y/N): "  # WHY: build prompt once.
         if not self._confirm(confirm_prompt, _CTX_CONFIRM_SET):  # WHY: explicit y required to proceed.
-            print(_MSG_CANCELLED)  # WHY: acknowledge cancel to operator.
+            logging.warning(_MSG_CANCELLED)  # WHY: cancel ack via logger.
             return  # WHY: skip API call when operator declines.
         self.set_pod(profile, vpn_data, new_pod)  # WHY: proceed with the batched update.
 
@@ -373,10 +379,14 @@ class WanHubGroupNumberManager:  # WHY: single public surface consumed by Menu 1
         try:  # WHY: any non-numeric input is a normal validation failure.
             new_pod = int(raw)  # WHY: pod is stored as integer in Mist API.
         except ValueError:  # WHY: friendlier than raising to menu.
-            print(f"  Pod value must be between {self.POD_MIN} and {self.POD_MAX}.")  # WHY: rejection hint.
+            logging.warning(
+                "  Pod value must be between %d and %d.", self.POD_MIN, self.POD_MAX
+            )  # WHY: rejection hint via logger.
             return None  # WHY: sentinel drives caller cancel path.
         if not (self.POD_MIN <= new_pod <= self.POD_MAX):  # WHY: enforce API-accepted range.
-            print(f"  Pod value must be between {self.POD_MIN} and {self.POD_MAX}.")  # WHY: same message.
+            logging.warning(
+                "  Pod value must be between %d and %d.", self.POD_MIN, self.POD_MAX
+            )  # WHY: same rejection hint via logger.
             return None  # WHY: consistent None sentinel for both failure modes.
         return new_pod  # WHY: valid integer returned to caller.
 
@@ -399,7 +409,7 @@ class WanHubGroupNumberManager:  # WHY: single public surface consumed by Menu 1
         name = profile.get("name", "")  # WHY: index into precomputed cache.
         matches = vpn_data.get(name, [])  # WHY: cached matches from _build_vpn_data.
         if not matches:  # WHY: guard clause - nothing to update.
-            print(f"  No VPN paths found for profile '{name}'.")  # WHY: explicit no-op reason.
+            logging.warning("  No VPN paths found for profile '%s'.", name)  # WHY: no-op reason via logger.
             return  # WHY: no API call needed.
         vpn_updates = self._group_by_vpn(matches, new_pod)  # WHY: batch by VPN id for fewer API calls.
         self._apply_vpn_updates(vpn_updates, name, new_pod)  # WHY: perform grouped update.
@@ -414,13 +424,15 @@ class WanHubGroupNumberManager:  # WHY: single public surface consumed by Menu 1
         matches = vpn_data.get(name, [])  # WHY: cached matches from _build_vpn_data.
         pod_values = {pod for (_, _, _, pod) in matches}  # WHY: dedupe pods to short-circuit no-ops.
         if pod_values == {self.POD_DEFAULT}:  # WHY: already at default = no-op.
-            print(f"  Pod for '{name}' is already at default (1). No action needed.")  # WHY: explain no-op.
+            logging.warning(
+                "  Pod for '%s' is already at default (1). No action needed.", name
+            )  # WHY: no-op explanation via logger.
             return  # WHY: skip API call and prompt.
         if not self._confirm(
             f"  Reset pod to default (1) on {len(matches)} paths? (y/N): ",
             _CTX_CONFIRM_CLEAR,
         ):  # WHY: destructive reset requires explicit y.
-            print(_MSG_CANCELLED)  # WHY: acknowledge cancel to operator.
+            logging.warning(_MSG_CANCELLED)  # WHY: cancel ack via logger.
             return  # WHY: skip API call.
         self.set_pod(profile, vpn_data, self.POD_DEFAULT)  # WHY: delegate to set_pod with default value.
 
@@ -455,9 +467,12 @@ class WanHubGroupNumberManager:  # WHY: single public surface consumed by Menu 1
             if updated is None:  # WHY: None signals failure - abort remaining VPNs.
                 return  # WHY: preserve partial-success state for triage.
             total_updated += updated  # WHY: accumulate successful mutation count.
-        print(
-            f"  Updated {total_updated} paths for '{profile_name}' to pod {new_pod}."
-        )  # WHY: final success summary line.
+        logging.warning(
+            "  Updated %d paths for '%s' to pod %d.",
+            total_updated,
+            profile_name,
+            new_pod,
+        )  # WHY: final success summary via logger.
 
     def _apply_one_vpn(
         self,
@@ -479,7 +494,9 @@ class WanHubGroupNumberManager:  # WHY: single public surface consumed by Menu 1
             return updated  # WHY: caller aggregates counts across VPNs.
         except Exception:  # WHY: broad catch - preserves partial-success reporting.
             logging.exception("Failed to update VPN '%s'", vpn_name)  # WHY: full traceback for triage.
-            print(f"  Error updating VPN '{vpn_name}'. Check logs for details.")  # WHY: user hint.
+            logging.error(
+                "  Error updating VPN '%s'. Check logs for details.", vpn_name
+            )  # WHY: operator-visible failure hint via logger.
             return None  # WHY: sentinel telling caller to abort remaining VPNs.
 
     def _update_single_vpn(
@@ -522,11 +539,11 @@ class WanHubGroupNumberManager:  # WHY: single public surface consumed by Menu 1
         logging.warning(
             "Paths for %s have mixed pod values: %s", name, sorted_pods
         )  # WHY: raise operations attention to drift.
-        print(
-            f"  Warning: Paths for {name} have mixed pod values "
-            f"({', '.join(str(p) for p in sorted_pods)}). "
-            "All will be updated to the new value."
-        )  # WHY: operator-facing warning mirrors the log message.
+        logging.warning(
+            "  Warning: Paths for %s have mixed pod values (%s). " "All will be updated to the new value.",
+            name,
+            ", ".join(str(p) for p in sorted_pods),
+        )  # WHY: operator-facing warning mirrors the log message via logger.
 
     @staticmethod
     def _fallback_input(prompt: str, **_kwargs: Any) -> str:

@@ -7,6 +7,31 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 13/N: retire `print()` in `src/wan_hub_group_manager.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced all 30 `print()` calls in
+  `src/wan_hub_group_manager.py` (the WAN Hub Group Number Manager backing
+  Menu 163) with `logging.warning(...)` for operator-visible output
+  (banners, profile list rows, action menu, selection echoes, pod-value
+  validation errors, cancel acks, no-op reasons, mixed-pod warnings, final
+  update summary) and `logging.error(...)` for API-failure paths
+  (`_MSG_ERR_PROFILES`, `_MSG_ERR_VPNS`, per-VPN `updateOrgVpn` failure).
+  WARNING/ERROR are the two levels visible under the default root-logger
+  configuration, preserving the pre-migration UX. The six-line action-menu
+  banner (`_display_action_menu`) was consolidated into a single multi-line
+  `logging.warning` with embedded `\n` because logging emits one record per
+  call and per-line emission would fragment the output visually. The blank
+  separator `print()` between the profile list header and the numbered
+  entries became `logging.warning("")` for the same reason. All f-string
+  formatting was converted to %-style deferred args per the print-avoidance
+  rule (T20 selector target of #886). Companion unit tests in
+  `tests/unit/test_wan_hub_group_manager.py` were migrated from
+  `capsys`/`captured.out` to `caplog`/`caplog.text` with a
+  `caplog.set_level(logging.WARNING)` (or `logging.ERROR` for the two
+  API-failure assertions) prefix so the suite continues to assert the
+  operator-visible output through the logging path. No behavioural change
+  beyond the emit channel; all 8529 unit tests remain green.
+
 ### #886 Phase 2 slice 12/N: retire `print()` in `src/org_data_collector.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 16 `print()` calls in

@@ -7,6 +7,7 @@ Tests cover all user stories:
 - US4: Module import and instantiation
 """
 
+import logging
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -138,22 +139,22 @@ class TestFetchHubSpokeVpns:
 class TestReportNoHubSpoke:
     """Test _report_no_hub_spoke output messages."""
 
-    def test_empty_vpns_reports_none(self, capsys):
+    def test_empty_vpns_reports_none(self, caplog: pytest.LogCaptureFixture):
+        caplog.set_level(logging.WARNING)
         WanHubGroupNumberManager._report_no_hub_spoke([])
-        output = capsys.readouterr().out
-        assert "No VPN definitions found" in output
+        assert "No VPN definitions found" in caplog.text
 
-    def test_reports_found_types(self, capsys):
+    def test_reports_found_types(self, caplog: pytest.LogCaptureFixture):
+        caplog.set_level(logging.WARNING)
         all_vpns = [
             {"name": "V1", "type": "mesh"},
             {"name": "V2", "type": "mesh"},
             {"name": "V3", "type": None},
         ]
         WanHubGroupNumberManager._report_no_hub_spoke(all_vpns)
-        output = capsys.readouterr().out
-        assert "No hub-spoke" in output
-        assert "3 VPN(s)" in output
-        assert "mesh" in output
+        assert "No hub-spoke" in caplog.text
+        assert "3 VPN(s)" in caplog.text
+        assert "mesh" in caplog.text
 
 
 class TestFindMatchingPaths:
@@ -293,37 +294,37 @@ class TestSetPod:
 class TestPromptSetPod:
     """Test pod value input prompt and validation."""
 
-    def test_non_numeric_rejected(self, manager, sample_vpns, capsys):
+    def test_non_numeric_rejected(self, manager, sample_vpns, caplog: pytest.LogCaptureFixture):
+        caplog.set_level(logging.WARNING)
         profile = {"id": "uuid-alpha", "name": "ALPHA"}
         vpn_data = manager._build_vpn_data([profile], sample_vpns)
         manager._safe_input = MagicMock(return_value="abc")
         manager._prompt_set_pod(profile, vpn_data)
-        output = capsys.readouterr().out
-        assert "must be between" in output
+        assert "must be between" in caplog.text
 
-    def test_zero_rejected(self, manager, sample_vpns, capsys):
+    def test_zero_rejected(self, manager, sample_vpns, caplog: pytest.LogCaptureFixture):
+        caplog.set_level(logging.WARNING)
         profile = {"id": "uuid-alpha", "name": "ALPHA"}
         vpn_data = manager._build_vpn_data([profile], sample_vpns)
         manager._safe_input = MagicMock(return_value="0")
         manager._prompt_set_pod(profile, vpn_data)
-        output = capsys.readouterr().out
-        assert "must be between" in output
+        assert "must be between" in caplog.text
 
-    def test_over_128_rejected(self, manager, sample_vpns, capsys):
+    def test_over_128_rejected(self, manager, sample_vpns, caplog: pytest.LogCaptureFixture):
+        caplog.set_level(logging.WARNING)
         profile = {"id": "uuid-alpha", "name": "ALPHA"}
         vpn_data = manager._build_vpn_data([profile], sample_vpns)
         manager._safe_input = MagicMock(return_value="129")
         manager._prompt_set_pod(profile, vpn_data)
-        output = capsys.readouterr().out
-        assert "must be between" in output
+        assert "must be between" in caplog.text
 
-    def test_negative_rejected(self, manager, sample_vpns, capsys):
+    def test_negative_rejected(self, manager, sample_vpns, caplog: pytest.LogCaptureFixture):
+        caplog.set_level(logging.WARNING)
         profile = {"id": "uuid-alpha", "name": "ALPHA"}
         vpn_data = manager._build_vpn_data([profile], sample_vpns)
         manager._safe_input = MagicMock(return_value="-5")
         manager._prompt_set_pod(profile, vpn_data)
-        output = capsys.readouterr().out
-        assert "must be between" in output
+        assert "must be between" in caplog.text
 
 
 # ---------------------------------------------------------------------------
@@ -334,12 +335,12 @@ class TestPromptSetPod:
 class TestClearPod:
     """Test clear_pod reset logic."""
 
-    def test_already_default_no_action(self, manager, sample_vpns, capsys):
+    def test_already_default_no_action(self, manager, sample_vpns, caplog: pytest.LogCaptureFixture):
+        caplog.set_level(logging.WARNING)
         profile = {"id": "uuid-bravo", "name": "BRAVO"}
         vpn_data = manager._build_vpn_data([profile], sample_vpns)
         manager.clear_pod(profile, vpn_data)
-        output = capsys.readouterr().out
-        assert "already at default" in output
+        assert "already at default" in caplog.text
 
     @patch.object(WanHubGroupNumberManager, "set_pod")
     def test_delegates_to_set_pod(self, mock_set, manager, sample_vpns):
@@ -383,12 +384,12 @@ class TestModuleArchitecture:
             WanHubGroupNumberManager.execute(mock_session, mock_get_org, mock_input)
             mock_run.assert_called_once()
 
-    def test_execute_exits_on_no_org(self, mock_session, capsys):
+    def test_execute_exits_on_no_org(self, mock_session, caplog: pytest.LogCaptureFixture):
+        caplog.set_level(logging.WARNING)
         mock_get_org = MagicMock(return_value=None)
         mock_input = MagicMock()
         WanHubGroupNumberManager.execute(mock_session, mock_get_org, mock_input)
-        output = capsys.readouterr().out
-        assert "No organization" in output
+        assert "No organization" in caplog.text
 
 
 # ---------------------------------------------------------------------------
@@ -399,19 +400,19 @@ class TestModuleArchitecture:
 class TestLogInconsistentPods:
     """Test warning for mixed pod values."""
 
-    def test_warns_on_mixed_pods(self, manager, mixed_pod_vpns, capsys):
+    def test_warns_on_mixed_pods(self, manager, mixed_pod_vpns, caplog: pytest.LogCaptureFixture):
+        caplog.set_level(logging.WARNING)
         matches = manager._find_matching_paths("MIXED", mixed_pod_vpns)
         manager._log_inconsistent_pods("MIXED", matches)
-        output = capsys.readouterr().out
-        assert "mixed pod values" in output
-        assert "5" in output
-        assert "10" in output
+        assert "mixed pod values" in caplog.text
+        assert "5" in caplog.text
+        assert "10" in caplog.text
 
-    def test_no_warning_on_consistent_pods(self, manager, sample_vpns, capsys):
+    def test_no_warning_on_consistent_pods(self, manager, sample_vpns, caplog: pytest.LogCaptureFixture):
+        caplog.set_level(logging.WARNING)
         matches = manager._find_matching_paths("ALPHA", sample_vpns)
         manager._log_inconsistent_pods("ALPHA", matches)
-        output = capsys.readouterr().out
-        assert "mixed" not in output.lower()
+        assert "mixed" not in caplog.text.lower()
 
 
 # ---------------------------------------------------------------------------
@@ -423,11 +424,11 @@ class TestRunWorkflow:
     """Test the main run() orchestration method."""
 
     @patch.object(WanHubGroupNumberManager, "_fetch_profiles")
-    def test_no_profiles_exits(self, mock_fetch, manager, capsys):
+    def test_no_profiles_exits(self, mock_fetch, manager, caplog: pytest.LogCaptureFixture):
+        caplog.set_level(logging.WARNING)
         mock_fetch.return_value = []
         manager.run()
-        output = capsys.readouterr().out
-        assert "No WAN Hub Profiles" in output
+        assert "No WAN Hub Profiles" in caplog.text
 
     @patch.object(WanHubGroupNumberManager, "_prompt_action")
     @patch.object(WanHubGroupNumberManager, "_prompt_profile_selection")
@@ -435,8 +436,16 @@ class TestRunWorkflow:
     @patch.object(WanHubGroupNumberManager, "_fetch_hub_spoke_vpns")
     @patch.object(WanHubGroupNumberManager, "_fetch_profiles")
     def test_no_hub_spoke_vpns_exits(
-        self, mock_profiles, mock_vpns, mock_display, mock_select, mock_action, manager, capsys
+        self,
+        mock_profiles,
+        mock_vpns,
+        mock_display,
+        mock_select,
+        mock_action,
+        manager,
+        caplog: pytest.LogCaptureFixture,
     ):
+        caplog.set_level(logging.WARNING)
         mock_profiles.return_value = [{"name": "P1"}]
         mock_vpns.return_value = ([], [{"type": "mesh"}])
         manager.run()
@@ -480,13 +489,13 @@ class TestFetchHubSpokeVpnsError:
     """Test _fetch_hub_spoke_vpns error handling."""
 
     @patch("src.wan_hub_group_manager.mistapi.api.v1.orgs.vpns.listOrgVpns")
-    def test_api_error_returns_empty(self, mock_list, manager, capsys):
+    def test_api_error_returns_empty(self, mock_list, manager, caplog: pytest.LogCaptureFixture):
+        caplog.set_level(logging.ERROR)
         mock_list.side_effect = Exception("Connection failed")
         hub_spoke, all_vpns = manager._fetch_hub_spoke_vpns()
         assert hub_spoke == []
         assert all_vpns == []
-        output = capsys.readouterr().out
-        assert "Error retrieving VPN" in output
+        assert "Error retrieving VPN" in caplog.text
 
 
 # ---------------------------------------------------------------------------
@@ -497,18 +506,18 @@ class TestFetchHubSpokeVpnsError:
 class TestDisplayProfileList:
     """Test profile list display rendering."""
 
-    def test_renders_profile_names(self, manager, sample_vpns, capsys):
+    def test_renders_profile_names(self, manager, sample_vpns, caplog: pytest.LogCaptureFixture):
+        caplog.set_level(logging.WARNING)
         profiles = [
             {"name": "ALPHA"},
             {"name": "BRAVO"},
         ]
         vpn_data = manager._build_vpn_data(profiles, sample_vpns)
         manager._display_profile_list(profiles, vpn_data)
-        output = capsys.readouterr().out
-        assert "1." in output
-        assert "ALPHA" in output
-        assert "2." in output
-        assert "BRAVO" in output
+        assert "1." in caplog.text
+        assert "ALPHA" in caplog.text
+        assert "2." in caplog.text
+        assert "BRAVO" in caplog.text
 
 
 # ---------------------------------------------------------------------------
@@ -519,12 +528,12 @@ class TestDisplayProfileList:
 class TestPromptAction:
     """Test the set/clear/cancel action menu."""
 
-    def test_no_matches_exits(self, manager, capsys):
+    def test_no_matches_exits(self, manager, caplog: pytest.LogCaptureFixture):
+        caplog.set_level(logging.WARNING)
         profile = {"name": "EMPTY"}
         vpn_data = {"EMPTY": []}
         manager._prompt_action(profile, vpn_data)
-        output = capsys.readouterr().out
-        assert "No VPN paths found" in output
+        assert "No VPN paths found" in caplog.text
 
     @patch.object(WanHubGroupNumberManager, "_prompt_set_pod")
     def test_action_1_calls_set_pod(self, mock_set, manager, sample_vpns):
@@ -542,13 +551,13 @@ class TestPromptAction:
         manager._prompt_action(profile, vpn_data)
         mock_clear.assert_called_once()
 
-    def test_action_3_cancels(self, manager, sample_vpns, capsys):
+    def test_action_3_cancels(self, manager, sample_vpns, caplog: pytest.LogCaptureFixture):
+        caplog.set_level(logging.WARNING)
         profile = {"name": "ALPHA"}
         vpn_data = manager._build_vpn_data([profile], sample_vpns)
         manager._safe_input = MagicMock(return_value="3")
         manager._prompt_action(profile, vpn_data)
-        output = capsys.readouterr().out
-        assert "Cancelled" in output
+        assert "Cancelled" in caplog.text
 
 
 # ---------------------------------------------------------------------------
@@ -567,13 +576,13 @@ class TestPromptSetPodConfirmation:
         manager._prompt_set_pod(profile, vpn_data)
         mock_set.assert_called_once_with(profile, vpn_data, 42)
 
-    def test_declined_cancels(self, manager, sample_vpns, capsys):
+    def test_declined_cancels(self, manager, sample_vpns, caplog: pytest.LogCaptureFixture):
+        caplog.set_level(logging.WARNING)
         profile = {"name": "ALPHA"}
         vpn_data = manager._build_vpn_data([profile], sample_vpns)
         manager._safe_input = MagicMock(side_effect=["42", "n"])
         manager._prompt_set_pod(profile, vpn_data)
-        output = capsys.readouterr().out
-        assert "Cancelled" in output
+        assert "Cancelled" in caplog.text
 
 
 # ---------------------------------------------------------------------------
@@ -585,12 +594,12 @@ class TestApplyVpnUpdatesError:
     """Test _apply_vpn_updates error handling."""
 
     @patch("src.wan_hub_group_manager.mistapi.api.v1.orgs.vpns.getOrgVpn")
-    def test_api_error_prints_message(self, mock_get, manager, capsys):
+    def test_api_error_prints_message(self, mock_get, manager, caplog: pytest.LogCaptureFixture):
+        caplog.set_level(logging.ERROR)
         mock_get.side_effect = Exception("Network error")
         vpn_updates = {"vpn-1": {"name": "OrgOverlay", "paths": ["ALPHA-WAN1"]}}
         manager._apply_vpn_updates(vpn_updates, "ALPHA", 99)
-        output = capsys.readouterr().out
-        assert "Error updating VPN" in output
+        assert "Error updating VPN" in caplog.text
 
 
 # ---------------------------------------------------------------------------
