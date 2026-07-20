@@ -69,34 +69,61 @@ class TroubleshootUtils:  # Marvis troubleshoot delegators.
 
     @staticmethod
     def _print_marvis_menu() -> None:
-        """Print the interactive Marvis troubleshooting menu header + numbered options."""
-        print(" Starting Marvis (VNA - Virtual Network Assistant) Troubleshooting")  # Header.
-        print("=" * 65)  # Divider.
-        print()  # Spacer.
+        """Emit the interactive Marvis troubleshooting header banner.
+
+        Why:
+            #886 slice 17/N migrates ``print()`` to ``logging.warning`` so that
+            ruff T20 can stay armed globally. Header + divider are consolidated
+            into a single warning record so the banner arrives atomically in
+            handlers that buffer per-record (e.g. remote log shippers).
+        """
+        logging.warning(
+            " Starting Marvis (VNA - Virtual Network Assistant) Troubleshooting\n%s\n",
+            "=" * 65,
+        )
 
     @staticmethod
     def _print_marvis_options() -> None:
-        """Print the 5 troubleshooting choices a user can pick."""
-        print(" Marvis AI Troubleshooting Options:")  # Menu header.
-        print("1. Troubleshoot client connectivity issues (guided client selection)")  # Option 1.
-        print("2. Diagnose device performance problems (guided device selection)")  # Option 2.
-        print("3. Analyze network connectivity issues (site-level analysis)")  # Option 3.
-        print("4. View organization Marvis insights and capabilities")  # Option 4.
-        print("5. Exit")  # Option 5.
-        print()  # Spacer.
+        """Emit the 5 numbered Marvis troubleshooting choices to the user.
+
+        Why:
+            #886 slice 17/N. Merged into a single ``logging.warning`` so the
+            menu prints atomically and cannot be interleaved with other log
+            records under concurrent producers.
+        """
+        logging.warning(
+            " Marvis AI Troubleshooting Options:\n"
+            "1. Troubleshoot client connectivity issues (guided client selection)\n"
+            "2. Diagnose device performance problems (guided device selection)\n"
+            "3. Analyze network connectivity issues (site-level analysis)\n"
+            "4. View organization Marvis insights and capabilities\n"
+            "5. Exit\n"
+        )
 
     @staticmethod
     def _handle_marvis_invalid_choice(choice: str) -> None:
-        """Handle an out-of-range Marvis menu selection (warn + log)."""
-        print(" Invalid option selected.")  # User-facing notice
+        """Handle an out-of-range Marvis menu selection (warn + log).
+
+        Why:
+            #886 slice 17/N replaces the user-facing ``print()`` with
+            ``logging.warning`` so all three log lines (visible notice + audit
+            trail + debug trace) travel through the same sink.
+        """
+        logging.warning(" Invalid option selected.")  # User-visible notice
         logging.warning("MARVIS DEBUG: Invalid troubleshooting option selected: %s", choice)  # Audit trail
         logging.debug("MARVIS DEBUG: Exiting launch_interactive() due to invalid choice")  # Trace exit reason
 
     @staticmethod
     def _handle_marvis_exit() -> None:
-        """Handle the Marvis exit menu pick."""
+        """Handle the Marvis exit menu pick.
+
+        Why:
+            #886 slice 17/N. The exit notice is promoted to ``logging.warning``
+            because the caller expects it to be captured at the default pytest
+            log level and displayed by every stream handler configuration.
+        """
         logging.debug("MARVIS DEBUG: User chose to exit")  # Trace the exit
-        print("Exiting Marvis troubleshooting.")  # Tell the user
+        logging.warning("Exiting Marvis troubleshooting.")  # Tell the user
 
     @staticmethod
     def _invoke_marvis_client_connectivity() -> None:
