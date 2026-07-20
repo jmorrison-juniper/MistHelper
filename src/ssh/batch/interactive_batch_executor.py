@@ -325,7 +325,8 @@ class InteractiveBatchExecutor:  # WHY: static-method container for the interact
 
         runner = EnhancedSSHRunner(timeout=request.timeout, logger=logger)  # WHY: owns client lifecycle.
         host_log_file = InteractiveBatchExecutor._build_log_path(request.hostname, logger)  # WHY: sanitised path.
-        print(f"** [{request.hostname}] Logging to: {host_log_file}")  # WHY: verbatim console status line.
+        # WHY: verbatim console status line.
+        logging.info("** [%s] Logging to: %s", request.hostname, host_log_file)
         raw_writer = InteractiveBatchExecutor._make_log_writer(host_log_file, logger)  # WHY: ANSI-cleaning writer.
         writer = InteractiveBatchExecutor._build_scrubbing_writer(raw_writer, request.password)  # WHY: scrub creds.
         writer(_build_header(request.hostname, len(request.commands)))  # WHY: persist header verbatim.
@@ -538,8 +539,10 @@ class InteractiveBatchExecutor:  # WHY: static-method container for the interact
         logger: logging.Logger,
     ) -> None:
         """Emit the verbatim Ctrl+C interrupt lines (console + logger + per-host log)."""
-        print(  # WHY: verbatim console interrupt line.
-            f"\n[INTERRUPT] [{step_ctx.hostname}] Ctrl+C detected! Stopping interactive session..."
+        # WHY: verbatim console interrupt line.
+        logging.info(
+            "\n[INTERRUPT] [%s] Ctrl+C detected! Stopping interactive session...",
+            step_ctx.hostname,
         )
         logger.warning(  # WHY: log parity for interrupt event.
             "Interactive session interrupted by user at step %d", step_ctx.step_num
@@ -597,7 +600,13 @@ class InteractiveBatchExecutor:  # WHY: static-method container for the interact
         writer(f"[STEP] Step {step_ctx.step_num}/{step_ctx.total}: {step_ctx.command}")  # WHY: verbatim.
         writer(_STEP_BAR)  # WHY: closing bar (verbatim).
         display_item = InteractiveBatchExecutor._redact_for_display(step_ctx.command)  # WHY: mask pwd.
-        print(f"* [{step_ctx.hostname}] Executing step {step_ctx.step_num}: {display_item}")  # WHY: parity.
+        # WHY: parity.
+        logging.info(
+            "* [%s] Executing step %d: %s",
+            step_ctx.hostname,
+            step_ctx.step_num,
+            display_item,
+        )
         logger.debug("[%s] Sending: %s", step_ctx.hostname, step_ctx.command)  # WHY: debug diag line.
 
     @staticmethod
