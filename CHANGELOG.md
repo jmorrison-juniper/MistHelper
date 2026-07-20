@@ -7,6 +7,25 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 64/N: retire `print()` in `src/export/site_webhook_deliveries_exporter.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced the 8 remaining `print()`
+  calls in `src/export/site_webhook_deliveries_exporter.py` with
+  `logging.info(...)` (module already uses root `logging.<level>(...)` for its
+  info/warning/error traces) using `%`-style deferred formatting. Migrations
+  cover: the no-webhooks-configured operator notice and the per-webhook
+  enumeration line in `_select_webhook_id`; the invalid-selection and
+  out-of-range validation notices in `_resolve_webhook_choice`; the no-data
+  and post-export count notices in `_persist_site_webhook_deliveries`; and
+  the workflow banner plus the SDK-error surface line in `deliveries`. Each
+  migrated call carries the standard `# WHY: preserve operator notice
+  verbatim; route through logger for capture/redirection.` annotation.
+- **Tests (Verified)**: no dedicated `test_site_webhook_deliveries_exporter.py`
+  suite exists, and no `capsys` assertion covered this module. The full
+  `tests/unit/test_arango_writer.py` suite (which references the
+  `searchSiteWebhooksDeliveries` operationId for entity-type mapping) passes
+  (249/249) locally, confirming no regression to shared persistence wiring.
+
 ### #886 Phase 2 slice 63/N: retire `print()` in `src/refactors/serial_cc/sle_metrics.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced the 7 remaining `print()`
