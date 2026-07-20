@@ -38,7 +38,8 @@ class CommandCsvLoader:
         if not os.path.exists(legacy_path):  # Legacy file also missing
             return None  # Give up
         # Preserve original user-facing string verbatim (informational note about legacy location)
-        print(f"X  Using legacy SSH commands file at {legacy_path}; move it to data/ for consistency.")
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("X  Using legacy SSH commands file at %s; move it to data/ for consistency.", legacy_path)
         return legacy_path  # Use the legacy file as a fallback
 
     def _read_validated_commands(self, csv_file_path: str) -> list[str]:
@@ -51,7 +52,8 @@ class CommandCsvLoader:
                 for row_num, row in enumerate(reader, 1):  # 1-based row index for warning messages
                     self._consume_csv_row(row, row_num, commands, invalid)  # Per-row dispatch
         except Exception as error:  # noqa: BLE001 - mirror original broad catch
-            print(f"[WARNING] Warning: Could not read {csv_file_path}: {error}")  # Preserve user-facing string verbatim
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.info("[WARNING] Warning: Could not read %s: %s", csv_file_path, error)
             return []  # Bail out cleanly on read failure
         self._warn_invalid_rows(invalid, csv_file_path)  # User-facing warning preserved from original
         return self._enforce_command_cap(commands, csv_file_path)  # Trim to per-run cap
@@ -89,21 +91,25 @@ class CommandCsvLoader:
         """Print warnings for any rejected CSV rows."""
         if not invalid:  # Clean file — nothing to warn about
             return  # No-op
-        print(
-            f"[WARNING] Skipping {len(invalid)} invalid commands from {csv_file_path}:"
-        )  # Preserve user-facing string
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("[WARNING] Skipping %s invalid commands from %s:", len(invalid), csv_file_path)
         for invalid_cmd in invalid[:3]:  # Original shows first 3 entries
-            print(f"    {invalid_cmd}")  # Preserve user-facing string
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.info("    %s", invalid_cmd)
         if len(invalid) > 3:  # Indicate further truncation
-            print(f"    ... and {len(invalid) - 3} more")  # Preserve user-facing string
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.info("    ... and %s more", len(invalid) - 3)
 
     @staticmethod
     def _enforce_command_cap(commands: list[str], csv_file_path: str) -> list[str]:
         """Trim to the per-run command cap and warn if truncation happens."""
         if len(commands) > _MAX_COMMANDS:  # Resource exhaustion guard
-            print(  # Preserve user-facing string verbatim, including E501-long message
-                f"[WARNING] Too many commands in {csv_file_path} ({len(commands)}), "
-                f"limiting to first {_MAX_COMMANDS}"
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.info(
+                "[WARNING] Too many commands in %s (%s), limiting to first %s",
+                csv_file_path,
+                len(commands),
+                _MAX_COMMANDS,
             )
             return commands[:_MAX_COMMANDS]  # Return truncated list
         return commands  # No truncation needed

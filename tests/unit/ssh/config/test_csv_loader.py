@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging  # WHY: caplog assertions verify migrated logger output
 import os  # WHY: filesystem probes for legacy-fallback branch coverage
 from pathlib import Path  # WHY: cross-platform tmp path helper
 
-import pytest  # WHY: fixtures (tmp_path, capsys, monkeypatch) drive the loader tests
+import pytest  # WHY: fixtures (tmp_path, caplog, monkeypatch) drive the loader tests
 
 from src.ssh.config.csv_loader import CommandCsvLoader  # WHY: SUT under test
+
+_LOGGER_NAME = "src.ssh.config.csv_loader"  # WHY: module-scoped logger used by the SUT
 
 
 def _write_csv(path: Path, rows: list[str]) -> str:  # WHY: helper packs CSV lines into a temp file
@@ -31,15 +34,17 @@ def test_load_returns_empty_when_data_prefix_and_no_legacy(monkeypatch: pytest.M
 
 
 def test_load_uses_legacy_fallback(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
     """When data/<name>.csv is missing but <name>.csv exists at root, loader uses fallback."""
     monkeypatch.chdir(tmp_path)  # WHY: root of the legacy search is CWD
     legacy = tmp_path / "SSH.CSV"  # WHY: legacy-style file at root
     _write_csv(legacy, ["show version"])  # WHY: one valid command
-    result = CommandCsvLoader().load("data/SSH.CSV")  # WHY: exercise the fallback branch
+    with caplog.at_level(logging.INFO, logger=_LOGGER_NAME):  # WHY: capture module-scoped logger output
+        result = CommandCsvLoader().load("data/SSH.CSV")  # WHY: exercise the fallback branch
     assert result == ["show version"]  # WHY: legacy content is returned
-    assert "legacy SSH commands file" in capsys.readouterr().out  # WHY: user-facing warning fired
+    out = "\n".join(r.getMessage() for r in caplog.records)  # WHY: aggregate captured log lines
+    assert "legacy SSH commands file" in out  # WHY: user-facing warning fired
 
 
 def test_load_valid_commands(tmp_path: Path) -> None:
@@ -57,7 +62,7 @@ def test_load_valid_commands(tmp_path: Path) -> None:
     assert result == ["show version", "show interfaces"]  # WHY: skips blank+comment, preserves order
 
 
-def test_load_flags_invalid_commands(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_load_flags_invalid_commands(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
     """Invalid commands (e.g. NUL char) emit a warning summary and are dropped."""
     csv_path = _write_csv(
         tmp_path / "mix.csv",
@@ -67,44 +72,48 @@ def test_load_flags_invalid_commands(tmp_path: Path, capsys: pytest.CaptureFixtu
             "show foo",  # WHY: valid
         ],
     )
-    result = CommandCsvLoader().load(csv_path)  # WHY: run through the parser
-    out = capsys.readouterr().out  # WHY: capture invalid summary
+    with caplog.at_level(logging.INFO, logger=_LOGGER_NAME):  # WHY: capture module-scoped logger output
+        result = CommandCsvLoader().load(csv_path)  # WHY: run through the parser
+    out = "\n".join(r.getMessage() for r in caplog.records)  # WHY: aggregate captured log lines
     assert "Skipping 1 invalid commands" in out  # WHY: warning header present
     assert result == ["show version", "show foo"]  # WHY: invalid row is dropped
 
 
-def test_load_warning_truncates_to_three(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_load_warning_truncates_to_three(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
     """When more than 3 invalid rows exist, only the first 3 are printed + 'and N more' summary."""
     rows = [f"bad\x00row{index}" for index in range(6)]  # WHY: 6 invalid rows exceed the 3-line cap
     csv_path = _write_csv(tmp_path / "many_bad.csv", rows)  # WHY: all rows are invalid
-    result = CommandCsvLoader().load(csv_path)  # WHY: run through the parser
-    out = capsys.readouterr().out  # WHY: capture the truncation summary
+    with caplog.at_level(logging.INFO, logger=_LOGGER_NAME):  # WHY: capture module-scoped logger output
+        result = CommandCsvLoader().load(csv_path)  # WHY: run through the parser
+    out = "\n".join(r.getMessage() for r in caplog.records)  # WHY: aggregate captured log lines
     assert result == []  # WHY: no valid commands present
     assert "Skipping 6 invalid commands" in out  # WHY: count in warning
     assert "and 3 more" in out  # WHY: truncation notice printed (6 - 3 = 3 more)
 
 
-def test_load_truncates_long_invalid_command_display(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_load_truncates_long_invalid_command_display(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
     """Invalid commands longer than 50 chars are truncated with an ellipsis in the warning."""
     long_bad = "\x00" + ("a" * 60)  # WHY: >50-char command with a leading NUL to fail validation
     csv_path = _write_csv(tmp_path / "long.csv", [long_bad])  # WHY: single overlong invalid row
-    CommandCsvLoader().load(csv_path)  # WHY: run to trigger truncation
-    out = capsys.readouterr().out  # WHY: capture warning line
+    with caplog.at_level(logging.INFO, logger=_LOGGER_NAME):  # WHY: capture module-scoped logger output
+        CommandCsvLoader().load(csv_path)  # WHY: run to trigger truncation
+    out = "\n".join(r.getMessage() for r in caplog.records)  # WHY: aggregate captured log lines
     assert "..." in out  # WHY: truncation ellipsis was applied
 
 
-def test_load_enforces_command_cap(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_load_enforces_command_cap(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
     """More than 50 commands triggers a truncation warning and returns the first 50."""
     rows = [f"show item {index}" for index in range(75)]  # WHY: 75 valid rows exceed the 50 cap
     csv_path = _write_csv(tmp_path / "big.csv", rows)  # WHY: over-capacity file
-    result = CommandCsvLoader().load(csv_path)  # WHY: run through the parser
-    out = capsys.readouterr().out  # WHY: capture the cap warning
+    with caplog.at_level(logging.INFO, logger=_LOGGER_NAME):  # WHY: capture module-scoped logger output
+        result = CommandCsvLoader().load(csv_path)  # WHY: run through the parser
+    out = "\n".join(r.getMessage() for r in caplog.records)  # WHY: aggregate captured log lines
     assert len(result) == 50  # WHY: capped at _MAX_COMMANDS
     assert "Too many commands" in out  # WHY: user-facing message preserved
 
 
 def test_load_handles_read_exception(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
     """A file-read failure returns [] and prints a warning."""
     import builtins  # WHY: patch the true builtin open() since csv_loader does not module-scope it
@@ -122,8 +131,9 @@ def test_load_handles_read_exception(
         return real_open(*args, **kwargs)  # WHY: delegate for unrelated opens
 
     monkeypatch.setattr(builtins, "open", cast(Any, _selective_open))  # WHY: cast satisfies mypy strict mode
-    result = CommandCsvLoader().load(str(csv_path))  # WHY: run through the failing read path
-    out = capsys.readouterr().out  # WHY: warning message should be printed
+    with caplog.at_level(logging.INFO, logger=_LOGGER_NAME):  # WHY: capture module-scoped logger output
+        result = CommandCsvLoader().load(str(csv_path))  # WHY: run through the failing read path
+    out = "\n".join(r.getMessage() for r in caplog.records)  # WHY: aggregate captured log lines
     assert result == []  # WHY: broad-except returns empty list
     assert "Could not read" in out  # WHY: warning surfaced to operator
 
