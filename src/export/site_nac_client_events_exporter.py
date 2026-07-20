@@ -53,7 +53,8 @@ class SiteNacClientEventsExporter:
         """
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataExporter helper.
         if not rawdata:  # No NAC client event rows for this site -- inform the operator and return.
-            print("! No NAC client event data found for this site")  # ASCII-only user notice.
+            # WHY: ASCII-only user notice.
+            logging.info("! No NAC client event data found for this site")
             return
         flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested dicts for CSV.
         sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)  # CSV-safe multiline escape.
@@ -64,7 +65,8 @@ class SiteNacClientEventsExporter:
         logging.debug(  # DEBUG-level count trace per Action Logging principle (post-call).
             "searchSiteNacClientEvents persisted %d rows to %s", len(rawdata), filename
         )
-        print(f"! {len(rawdata)} NAC client event records exported to {filename}")  # User notice with count.
+        # WHY: user notice with count.
+        logging.info("! %d NAC client event records exported to %s", len(rawdata), filename)
 
     @staticmethod
     def nac_client_events() -> None:
@@ -77,7 +79,8 @@ class SiteNacClientEventsExporter:
             to the user rather than crashing the menu loop.
         """
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of apisession + shared helpers.
-        print("Site NAC Client Events Search:")  # Menu header echoed to operator.
+        # WHY: menu header echoed to operator.
+        logging.info("Site NAC Client Events Search:")
         logging.info(  # INFO trace before the API call per Action Logging principle (pre-call).
             "Starting searchSiteNacClientEvents export..."
         )
@@ -100,4 +103,5 @@ class SiteNacClientEventsExporter:
             logging.error(  # ERROR trace with site context for post-mortem correlation.
                 "Error fetching NAC client events for site %s: %s", site_name, e
             )
-            print(f"! Error fetching NAC client event data: {e}")  # ASCII-only user notice.
+            # WHY: ASCII-only user notice.
+            logging.info("! Error fetching NAC client event data: %s", e)
