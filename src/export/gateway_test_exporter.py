@@ -303,13 +303,13 @@ class GatewayTestExporter:
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataProcessingUtils + DataExporter.
         if not all_stats:  # No results.
             logging.warning(" No synthetic test results found. CSV not created.")  # Warn.
-            print("! No synthetic test results found. CSV not created.")  # Tell the user.
+            logging.warning("! No synthetic test results found. CSV not created.")  # Tell the user.
             return  # Nothing to write.
         filename = "AllGatewaySyntheticTests.csv"  # Build the CSV name.
         flattened = DataProcessingUtils.flatten_nested_fields(all_stats)  # Flatten nested fields.
         sanitized = DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]
         mh.DataExporter.write_with_format_selection(sanitized, filename)  # type: ignore[no-untyped-call]
-        print(f"! {len(all_stats)} gateway synthetic test results exported to {filename}")  # Tell user.
+        logging.info("! %s gateway synthetic test results exported to %s", len(all_stats), filename)  # Tell user.
         logging.info("! Synthetic test results saved to %s (%s records).", filename, len(all_stats))
         logging.info(  # Log the optimization summary.
             "! API Optimization: Saved %s listSiteDevices calls by using cached inventory",

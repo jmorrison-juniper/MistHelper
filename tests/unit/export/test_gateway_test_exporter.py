@@ -10,6 +10,7 @@ Why:
 
 from __future__ import annotations
 
+import logging
 import sys
 from concurrent.futures import Future
 from types import ModuleType, SimpleNamespace
@@ -379,19 +380,20 @@ class TestRunSyntheticSequentialPath:
 
 
 class TestExportSyntheticResults:
-    def test_no_stats_warns_and_returns(self, fake_mh: ModuleType, capsys: pytest.CaptureFixture) -> None:
-        GatewayTestExporter._export_synthetic_results([], [])
-        out = capsys.readouterr().out
-        assert "No synthetic test results" in out
+    def test_no_stats_warns_and_returns(self, fake_mh: ModuleType, caplog: pytest.LogCaptureFixture) -> None:
+        with caplog.at_level(logging.WARNING):
+            GatewayTestExporter._export_synthetic_results([], [])
+        assert "No synthetic test results" in caplog.text
 
-    def test_writes_csv_via_dataexporter(self, fake_mh: ModuleType, capsys: pytest.CaptureFixture) -> None:
+    def test_writes_csv_via_dataexporter(self, fake_mh: ModuleType, caplog: pytest.LogCaptureFixture) -> None:
         rows = [{"a": 1}]
         with patch("src.export.gateway_test_exporter.DataProcessingUtils") as dp:
             dp.flatten_nested_fields.return_value = rows
             dp.escape_multiline.return_value = rows
-            GatewayTestExporter._export_synthetic_results(rows, [("s", "d", "dn", "sn")])
+            with caplog.at_level(logging.INFO):
+                GatewayTestExporter._export_synthetic_results(rows, [("s", "d", "dn", "sn")])
         fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(rows, "AllGatewaySyntheticTests.csv")  # type: ignore[attr-defined]
-        assert "exported to AllGatewaySyntheticTests.csv" in capsys.readouterr().out
+        assert "exported to AllGatewaySyntheticTests.csv" in caplog.text
 
 
 # ---------------------------------------------------------------------------
