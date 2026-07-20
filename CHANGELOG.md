@@ -7,6 +7,24 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 29/N: retire `print()` in `tools/_rebuild_backlog_tsv.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced the 1 remaining `print()`
+  call in `tools/_rebuild_backlog_tsv.py` with `logger.info(...)` using
+  `%`-style deferred formatting. The `main()` completion status line now
+  emits via `logger.info("wrote %s sub-A rows -> %s", len(rows), OUT)` so the
+  CLI utility's end-of-run summary flows through the standard logging
+  handler chain rather than raw stdout. `import logging` was added at
+  module scope and a module-level `logger = logging.getLogger(__name__)`
+  was introduced (the file previously had no logger wiring).
+- **Test posture**: no existing test references
+  `tools/_rebuild_backlog_tsv.py` (verified by ripgrep across `tests/`);
+  no test edits required.
+- **Verification**: `ruff check` reports 0 issues; `black --check` clean;
+  0 remaining T201 matches in `tools/_rebuild_backlog_tsv.py`; full
+  `pytest` suite green (8949 passed, 0 failed, 77 skipped, 5 xfailed,
+  1 xpassed).
+
 ### #886 Phase 2 slice 28/N: retire `print()` in `src/ssh/command/command_runner.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced the 1 remaining `print()`
