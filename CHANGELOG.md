@@ -7,6 +7,19 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 53/N: retire `print()` in `src/capture/site_capture_loop.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced the 6 remaining `print()`
+  calls in `src/capture/site_capture_loop.py` with `logging.info(...)` using
+  `%`-style deferred formatting. Three migrations in `_run_one_iteration`
+  cover the iteration header banner, iteration-complete banner, and
+  "Waiting … seconds before next check" nap notice. Three migrations in
+  `_handle_user_interrupt` cover the wide interrupt banner, the
+  "Completed N loop iteration(s)" summary, and the reassurance line about
+  downloaded PCAPs and graceful exit. Banner text and separator widths are
+  preserved verbatim; no behavior change beyond routing through the
+  configured logger.
+
 ### #886 Phase 2 slice 52/N: retire `print()` in `src/site/address_audit/comparison_display.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced the 5 remaining `print()`
