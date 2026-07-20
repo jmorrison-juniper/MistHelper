@@ -7,6 +7,31 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 16/N: retire `print()` in `src/org/org_ticket_manager.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced all 45 `print()` calls in
+  `src/org/org_ticket_manager.py` (Menus 188-193: list/create/comment/update/
+  view/export org support tickets) with `logging.warning(...)` for the
+  operator-visible ticket list table, ticket detail block, per-comment
+  rendering, cancellation/help banners, and `logging.error(...)` for API
+  failures (fetch errors, invalid selections, retrieval failures). Multi-line
+  UI blocks were consolidated into single `logging.warning` records with
+  embedded `\n` to preserve atomic log-record boundaries: 3-line list header +
+  separator (3 → 1), 6-row ticket metadata block with top/bottom bars (8 → 1),
+  and per-comment header + body (2 → 1). WHY-comments preserved on migrated
+  lines.
+- **Tests (Changed)**: migrated `tests/unit/test_org_ticket_manager.py` (63
+  `capsys` refs) and `tests/test_ticket_manager.py` (20 `capsys` refs) to
+  `caplog`, gated by a per-file autouse `caplog.set_level(logging.WARNING)`
+  fixture so the tests deterministically observe the new WARNING/ERROR
+  records across CI runners regardless of default logger propagation. No
+  production behavior change; the visible surface (subject text, cancellation
+  banner text, "no tickets" message text, ticket metadata) is identical to
+  the pre-migration output.
+- **Verification**: `ruff check --select T20 src/org/org_ticket_manager.py`
+  → 0 issues; `grep -c "print(" src/org/org_ticket_manager.py` → 0; full
+  worktree `ruff check .` clean; full pytest 8949 passed / 0 failed.
+
 ### #886 Phase 2 slice 15/N: retire `print()` in `src/org/org_config_migration_manager.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 44 `print()` calls in
