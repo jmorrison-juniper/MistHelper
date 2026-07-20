@@ -7,6 +7,34 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 37/N: retire `print()` in `src/refactors/serial_cc/test_results_by_site.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced the 3 remaining `print()`
+  calls in `src/refactors/serial_cc/test_results_by_site.py` with module-level
+  `logging.info(...)` using `%`-style deferred formatting. One call lives in
+  `GatewayTestResultsService._export_results` for the empty-result branch
+  ("No gateway test results found. CSV not created.") and one for the export
+  count summary ("<N> gateway test results exported to <file>"); the third is
+  the "Gateway Synthetic Test Results:" operation banner in
+  `GatewayTestResultsService.execute`. Each print's inline `# User-facing ...`
+  comment was moved one line above the migrated `logging.info(...)` call to
+  keep the source under the 120-char E501 gate. `import logging` was already
+  present at module scope.
+- **Test posture**: no `capsys.readouterr()` assertions in
+  `tests/unit/serial_cc/test_test_results_by_site.py` or
+  `tests/integration/serial_cc/test_test_results_by_site_integration.py`
+  targeted the removed prints, so no test migration was required for this
+  slice.
+- **Verification**:
+  - `ruff check --select T201,T203 src/refactors/serial_cc/test_results_by_site.py` — no issues.
+  - `ruff check src/refactors/serial_cc/test_results_by_site.py` — no issues.
+  - `black --check src/refactors/serial_cc/test_results_by_site.py` — clean.
+  - Targeted pytest for the file's unit + integration modules: 6 passed, 0 failed, 2 skipped.
+  - Full-suite pytest baseline held: 8949 passed, 0 failed, 77 skipped, 5 xfailed, 1 xpassed.
+- **Scope guardrail**: T20 stays scoped to migrated files; the global selector
+  flip in `pyproject.toml` is deferred to the final wrap-up PR after every
+  remaining offender has been migrated file-by-file.
+
 ### #886 Phase 2 slice 36/N: retire `print()` in `src/refactors/maps_manager_launcher.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced the 3 remaining `print()`
