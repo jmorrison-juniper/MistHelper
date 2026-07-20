@@ -36,7 +36,8 @@ class _Wan2VariableTemplate(_ClusterBase):
         except Exception as exc:  # pylint: disable=broad-exception-caught  # WHY: mistapi failures vary
             logging.error("Error analyzing template %s: %s", name, exc)  # WHY: audit trail
             logging.error(traceback.format_exc())  # WHY: preserve stack for post-mortem
-            print(f"\n  !? Error analyzing template '{name}': {exc}")  # WHY: user feedback
+            # WHY: preserve legacy user-facing analyzer failure notice verbatim.
+            logging.error("\n  !? Error analyzing template '%s': %s", name, exc)
             return None  # pylint: disable=useless-return  # WHY: explicit None for readability
 
     def _get_template_config_dict(self, mistapi_mod: Any, tid: str, name: str) -> dict[str, Any] | None:
@@ -103,13 +104,15 @@ class _Wan2VariableTemplate(_ClusterBase):
             return (key, new_key)  # WHY: rename with suffix retained
         if search in key:  # WHY: complex pattern needs manual review
             logging.warning("Found complex port pattern in template %s: %s", template_name, key)  # WHY: audit
-            print(f"\n  !? Template '{template_name}'" f" uses complex port pattern: '{key}'")  # WHY: user warn
-            print("     This requires manual review" " - cannot automatically replace")  # WHY: guidance
+            # WHY: preserve legacy operator warnings verbatim; operators rely on the "!?" prefix.
+            logging.warning("\n  !? Template '%s' uses complex port pattern: '%s'", template_name, key)
+            logging.warning("     This requires manual review - cannot automatically replace")
         return None  # WHY: unmatched or complex - no automatic edit
 
     def _analyze_templates_parallel(self, templates_to_modify: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Fetch and analyze templates in parallel."""
-        print(f"\n  Analyzing templates for {self._search_pattern}" " port configurations...")  # WHY: banner
+        # WHY: preserve legacy operator-facing analysis banner verbatim.
+        logging.info("\n  Analyzing templates for %s port configurations...", self._search_pattern)
         max_workers = min(10, len(templates_to_modify))  # WHY: cap concurrency to protect API
         logging.info(
             "Fetching %s template configurations in parallel (max %s workers)",
@@ -142,7 +145,8 @@ class _Wan2VariableTemplate(_ClusterBase):
         """Apply port_config changes to templates via API."""
         import mistapi  # pylint: disable=import-outside-toplevel  # WHY: lazy import breaks cycle
 
-        print("\n  Applying template modifications...")  # WHY: banner
+        # WHY: preserve legacy operator-facing apply banner verbatim.
+        logging.info("\n  Applying template modifications...")
         results: list[dict[str, Any]] = []  # WHY: accumulator for return
         for tmpl in tqdm(
             templates_with_changes,

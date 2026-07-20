@@ -7,6 +7,18 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 51/N: retire `print()` in `src/gateway/_wan2_variable_template.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced the 5 remaining `print()`
+  calls in `src/gateway/_wan2_variable_template.py` with `logging.info(...)` /
+  `logging.warning(...)` / `logging.error(...)` using `%`-style deferred
+  formatting. Migrated callsites in `_fetch_template_config` (analyzer failure
+  notice), `_classify_port_key` (two complex-port-pattern operator warnings),
+  `_analyze_templates_parallel` (analysis banner), and
+  `_apply_template_changes` (apply banner). No behavior change beyond routing
+  through the configured logger; user-facing message text preserved verbatim
+  (including the legacy "!?" prefix operators rely on).
+
 ### #886 Phase 2 slice 50/N: retire `print()` in `src/export/site_export_utils.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced the 5 remaining `print()`
