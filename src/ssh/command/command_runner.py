@@ -178,7 +178,9 @@ class SingleCommandRunner:
 
         runner = EnhancedSSHRunner(timeout=request.timeout, logger=logger)  # WHY: owns timeout + client.
         host_log_file, write_to_host_log = runner._create_secure_log_file(request.hostname)  # WHY: existing helper.
-        print(f"- [{request.hostname}] Logging to: {host_log_file}")  # WHY: verbatim user-facing status line.
+        logger.info(  # WHY: user-facing status via logger (replaces prior print()).
+            "- [%s] Logging to: %s", request.hostname, host_log_file
+        )
         header = SingleCommandRunner._build_header(request.hostname, request.command)  # WHY: verbatim header.
         write_to_host_log(header)  # WHY: persist the header to the per-host log file.
         return _LogContext(runner=runner, writer=write_to_host_log, log_file=host_log_file)  # WHY: bundle.
