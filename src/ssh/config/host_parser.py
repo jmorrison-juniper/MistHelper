@@ -31,7 +31,8 @@ class HostListParser:
     def _truncate_oversize(hosts_str: str) -> str:
         """Truncate the raw host string if it exceeds the safety cap."""
         if len(hosts_str) > _MAX_INPUT_LEN:  # Length check to prevent DoS
-            print("[WARNING] Host list too long, truncating to first 10000 characters")  # Preserve user-facing string
+            # WHY: Preserve user-facing string; emit through logger for structured output.
+            logger.warning("[WARNING] Host list too long, truncating to first 10000 characters")
             return hosts_str[:_MAX_INPUT_LEN]  # Return truncated copy
         return hosts_str  # No truncation needed
 
@@ -52,20 +53,25 @@ class HostListParser:
 
     @staticmethod
     def _warn_invalid_hosts(invalid: list[str]) -> None:
-        """Print the same user-facing warning as the legacy implementation."""
+        """Emit the same user-facing warning as the legacy implementation."""
         if not invalid:  # Nothing to warn about
             return  # No-op for clean inputs
         sample = ", ".join(invalid[:5])  # Show only the first 5 to keep output bounded
-        print(f"[WARNING] Skipping {len(invalid)} invalid hosts: {sample}")  # Preserve user-facing string verbatim
+        # WHY: Preserve user-facing string verbatim; emit via logger.
+        logger.warning("[WARNING] Skipping %d invalid hosts: %s", len(invalid), sample)
         if len(invalid) > 5:  # Indicate truncation only when extra entries exist
-            print(f"    ... and {len(invalid) - 5} more")  # Preserve user-facing string verbatim
+            # WHY: Preserve user-facing string verbatim.
+            logger.warning("    ... and %d more", len(invalid) - 5)
 
     @staticmethod
     def _enforce_host_cap(hosts: list[str]) -> list[str]:
         """Trim to the per-run host cap and warn if truncation happens."""
         if len(hosts) > _MAX_HOSTS:  # Enforce resource cap
-            print(
-                f"[WARNING] Too many hosts ({len(hosts)}), limiting to first {_MAX_HOSTS}"
-            )  # Preserve user-facing string
+            # WHY: Preserve user-facing string; emit via logger.
+            logger.warning(
+                "[WARNING] Too many hosts (%d), limiting to first %d",
+                len(hosts),
+                _MAX_HOSTS,
+            )
             return hosts[:_MAX_HOSTS]  # Return truncated list
         return hosts  # No truncation needed
