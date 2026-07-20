@@ -12,6 +12,7 @@ Why:
 
 from __future__ import annotations
 
+import logging
 import sys
 from types import ModuleType, SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -77,7 +78,7 @@ class TestDeviceStatsCacheHit:
         with patch("os.path.exists", return_value=False):
             assert OrgDeviceStatsExporter._device_stats_cache_hit("x.csv", True) is False
 
-    def test_fresh_cache_returns_true(self, fake_mh, capsys):
+    def test_fresh_cache_returns_true(self, fake_mh, caplog):
         """Fresh cache should return True and emit user-visible cache-hit notice."""
         from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
@@ -85,9 +86,10 @@ class TestDeviceStatsCacheHit:
             patch("os.path.exists", return_value=True),
             patch("os.path.getmtime", return_value=1000.0),
             patch("src.export.org_device_stats_exporter.time.time", return_value=1000.0),
+            caplog.at_level(logging.INFO, logger="root"),
         ):
             assert OrgDeviceStatsExporter._device_stats_cache_hit("x.csv", True) is True
-        assert "Fast mode" in capsys.readouterr().out
+        assert "Fast mode" in "\n".join(r.getMessage() for r in caplog.records)
 
     def test_stale_cache_returns_false(self, fake_mh):
         """Stale cache should return False without printing."""
@@ -127,7 +129,7 @@ class TestPortStatsCacheHit:
         with patch("os.path.exists", return_value=False):
             assert OrgDeviceStatsExporter._port_stats_cache_hit("x.csv", True) is False
 
-    def test_fresh(self, fake_mh, capsys):
+    def test_fresh(self, fake_mh, caplog):
         """Fresh cache returns True and prints operator-facing notice."""
         from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
@@ -135,9 +137,10 @@ class TestPortStatsCacheHit:
             patch("os.path.exists", return_value=True),
             patch("os.path.getmtime", return_value=100.0),
             patch("src.export.org_device_stats_exporter.time.time", return_value=100.0),
+            caplog.at_level(logging.INFO, logger="root"),
         ):
             assert OrgDeviceStatsExporter._port_stats_cache_hit("x.csv", True) is True
-        assert "cached" in capsys.readouterr().out
+        assert "cached" in "\n".join(r.getMessage() for r in caplog.records)
 
     def test_stale(self, fake_mh):
         """Stale cache returns False."""
@@ -177,7 +180,7 @@ class TestVpnPeerStatsCacheHit:
         with patch("os.path.exists", return_value=False):
             assert OrgDeviceStatsExporter._vpn_peer_stats_cache_hit("x.csv", True) is False
 
-    def test_fresh(self, fake_mh, capsys):
+    def test_fresh(self, fake_mh, caplog):
         """Fresh cache returns True."""
         from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
@@ -185,9 +188,10 @@ class TestVpnPeerStatsCacheHit:
             patch("os.path.exists", return_value=True),
             patch("os.path.getmtime", return_value=500.0),
             patch("src.export.org_device_stats_exporter.time.time", return_value=500.0),
+            caplog.at_level(logging.INFO, logger="root"),
         ):
             assert OrgDeviceStatsExporter._vpn_peer_stats_cache_hit("x.csv", True) is True
-        assert "cached" in capsys.readouterr().out
+        assert "cached" in "\n".join(r.getMessage() for r in caplog.records)
 
     def test_stale(self, fake_mh):
         """Stale cache returns False."""
@@ -656,15 +660,16 @@ class TestFlattenSitePortResults:
 class TestSaveDevicePortStatsOutput:
     """Empty rows, sort failure, and normal export."""
 
-    def test_empty_rows(self, fake_mh, capsys):
+    def test_empty_rows(self, fake_mh, caplog):
         """Empty rows should skip export and print a warning."""
         from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
-        OrgDeviceStatsExporter._save_device_port_stats_output([], "out.csv")
-        assert "No port statistics" in capsys.readouterr().out
+        with caplog.at_level(logging.WARNING, logger="root"):
+            OrgDeviceStatsExporter._save_device_port_stats_output([], "out.csv")
+        assert "No port statistics" in "\n".join(r.getMessage() for r in caplog.records)
         fake_mh.DataExporter.write_with_format_selection.assert_not_called()
 
-    def test_normal_export(self, fake_mh, capsys):
+    def test_normal_export(self, fake_mh, caplog):
         """Rows should be sorted, flattened, escaped, and written."""
         from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
@@ -678,10 +683,11 @@ class TestSaveDevicePortStatsOutput:
                 "src.export.org_device_stats_exporter.DataProcessingUtils.escape_multiline",
                 return_value=rows,
             ),
+            caplog.at_level(logging.INFO, logger="root"),
         ):
             OrgDeviceStatsExporter._save_device_port_stats_output(rows, "out.csv")
         fake_mh.DataExporter.write_with_format_selection.assert_called_once()
-        assert "port stat records exported" in capsys.readouterr().out
+        assert "port stat records exported" in "\n".join(r.getMessage() for r in caplog.records)
 
     def test_sort_failure_still_exports(self, fake_mh):
         """Sort failure should log and continue with unsorted rows."""
@@ -728,14 +734,15 @@ class TestValidateFastPortStatsStartTime:
 class TestLogFastPortStatsSummary:
     """Snapshot test for summary logger."""
 
-    def test_summary_runs(self, fake_mh, capsys):
+    def test_summary_runs(self, fake_mh, caplog):
         """Summary should print an operator-facing line."""
         from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
-        OrgDeviceStatsExporter._log_fast_port_stats_summary(
-            [("s1", "n1"), ("s2", "n2")], [("s2", "n2")], [{"x": 1}], 1.23
-        )
-        assert "Fast mode" in capsys.readouterr().out
+        with caplog.at_level(logging.INFO, logger="root"):
+            OrgDeviceStatsExporter._log_fast_port_stats_summary(
+                [("s1", "n1"), ("s2", "n2")], [("s2", "n2")], [{"x": 1}], 1.23
+            )
+        assert "Fast mode" in "\n".join(r.getMessage() for r in caplog.records)
 
 
 class TestRunFastDevicePortStats:
