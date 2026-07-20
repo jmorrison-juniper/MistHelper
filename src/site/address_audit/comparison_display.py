@@ -40,7 +40,8 @@ class ComparisonTableRenderer:
         for result in results:  # Add one terminal row per audited CSV row.
             table.add_row(self._build_row(result))  # Append the (truncated) row cells.
         rendered = table.get_string()  # Materialize the table as a string.
-        print(rendered)  # Show the table to the operator.
+        # WHY: preserve operator-facing table render; route through logger for capture/redirection.
+        logging.info("%s", rendered)
         logging.debug("Comparison table rendered (%d rows)", len(results))  # Action-log completion.
         return rendered  # Return for tests/callers.
 
@@ -75,9 +76,10 @@ class ComparisonTableRenderer:
     def prompt_post_table(self, results: list[AuditResult]) -> str:
         """Print a one-line summary, then loop until the operator picks save/quit."""
         logging.info("Prompting operator for post-table action")  # Action-log start.
-        print(self._summary_line(results))  # Show the per-state summary line.
-        print("\n[1] Save comparison as CSV to data/ for review")  # Save option.
-        print("[q] Quit without saving")  # Quit option.
+        # WHY: preserve operator-facing summary + menu; route through logger for capture/redirection.
+        logging.info("%s", self._summary_line(results))
+        logging.info("\n[1] Save comparison as CSV to data/ for review")
+        logging.info("[q] Quit without saving")
         while True:  # Re-prompt until a valid choice is entered.
             choice = InputUtils.safe_input("Choice: ", context="address_audit_post_table").strip().lower()
             if choice == "1":  # Operator chose to save.
@@ -86,7 +88,8 @@ class ComparisonTableRenderer:
             if choice == "q":  # Operator chose to quit.
                 logging.debug("Operator selected quit")  # Trace the choice.
                 return "quit"  # Engine exits without saving.
-            print("Invalid choice. Enter 1 to save or q to quit.")  # One-line error, then re-prompt.
+            # WHY: preserve invalid-choice feedback verbatim; route through logger for capture/redirection.
+            logging.warning("Invalid choice. Enter 1 to save or q to quit.")
 
     def _summary_line(self, results: list[AuditResult]) -> str:
         """Build the 'N sites processed: ...' per-state summary string."""
