@@ -7,6 +7,27 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 28/N: retire `print()` in `src/ssh/command/command_runner.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced the 1 remaining `print()`
+  call in `src/ssh/command/command_runner.py` with `logger.info(...)` using
+  `%`-style deferred formatting. `SingleCommandRunner._setup_host_log` now
+  emits the per-host log-file status line via
+  `logger.info("- [%s] Logging to: %s", request.hostname, host_log_file)`
+  through the injected `ssh_runner_v2` logger, so the user-facing message
+  flows through the same handler chain as the surrounding runner lifecycle
+  logs. `import logging` was already present at module scope.
+- **Test posture**: no existing test asserted on the `"- [<host>] Logging
+  to: <path>"` stdout substring (verified by ripgrep across
+  `tests/unit/ssh/`); no test edits required. Existing
+  `tests/unit/ssh/test_command_runner.py` suite remains green as-is (5
+  passed).
+- **Verification**: `ruff check` reports 0 issues; `black --check` clean;
+  0 remaining T201 matches in `src/ssh/command/command_runner.py`;
+  targeted `pytest tests/unit/ssh/test_command_runner.py` runs 5 passed;
+  full `pytest` suite green (8949 passed, 0 failed, 77 skipped, 5 xfailed,
+  1 xpassed).
+
 ### #886 Phase 2 slice 27/N: retire `print()` in `src/refactors/wan2_migration_launcher.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced the 1 remaining `print()`
