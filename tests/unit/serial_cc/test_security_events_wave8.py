@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import logging  # WHY: caplog captures logging.info emissions after print() → logger migration (#886)
 from types import SimpleNamespace  # WHY: lightweight bundle for dependency injection into the resolver
 from typing import Any  # WHY: heterogeneous API payload typing
 from unittest.mock import MagicMock, patch  # WHY: MagicMock(spec=...) + resolver patch per project standard
 
-import pytest  # WHY: capsys fixture for stdout assertions
+import pytest  # WHY: caplog + monkeypatch fixtures used in this suite
 
 from src.refactors.serial_cc import security_events as sut  # WHY: SUT module (helpers + service class)
 from src.refactors.serial_cc.security_events import (  # WHY: named imports for direct helper coverage
@@ -123,8 +124,8 @@ def test_build_flattened_specs_returns_two_specs() -> None:
     assert specs[1].output_file == "OrgSecIntelProfiles.csv"  # WHY: secintel target file
 
 
-def test_export_flattened_dataset_empty_writes_empty_file(capsys: pytest.CaptureFixture[str]) -> None:
-    """An empty dataset writes an empty CSV and prints the empty summary."""
+def test_export_flattened_dataset_empty_writes_empty_file(caplog: pytest.LogCaptureFixture) -> None:
+    """An empty dataset writes an empty CSV and logs the empty summary."""
     deps = _make_deps()  # WHY: default bundle
     deps.mistapi.get_all.return_value = []  # WHY: force empty dataset
     spec = _FlattenedExportSpec(  # WHY: minimal spec for the empty branch
@@ -135,14 +136,16 @@ def test_export_flattened_dataset_empty_writes_empty_file(capsys: pytest.Capture
         empty_message="No data",
         empty_suffix="(no policies found)",
     )
-    SecurityEventsService._export_flattened_dataset(deps, spec)  # WHY: exercise the empty guard
+    with caplog.at_level(logging.INFO, logger="root"):  # WHY: SUT uses logging.info at root logger
+        SecurityEventsService._export_flattened_dataset(deps, spec)  # WHY: exercise the empty guard
     deps.DataExporter.write_with_format_selection.assert_called_once_with(
         [], "OrgSecurityPolicies.csv"
     )  # WHY: empty write
-    assert "no policies found" in capsys.readouterr().out  # WHY: empty summary printed
+    out = "\n".join(record.getMessage() for record in caplog.records)  # WHY: aggregate captured log lines
+    assert "no policies found" in out  # WHY: empty summary logged
 
 
-def test_export_flattened_dataset_populates(capsys: pytest.CaptureFixture[str]) -> None:
+def test_export_flattened_dataset_populates(caplog: pytest.LogCaptureFixture) -> None:
     """A populated dataset is flattened, escaped, and exported with a count summary."""
     deps = _make_deps()  # WHY: default bundle
     deps.mistapi.get_all.return_value = [{"id": "one"}, {"id": "two"}]  # WHY: two rows
@@ -156,9 +159,11 @@ def test_export_flattened_dataset_populates(capsys: pytest.CaptureFixture[str]) 
         empty_message="No data",
         empty_suffix="(no policies found)",
     )
-    SecurityEventsService._export_flattened_dataset(deps, spec)  # WHY: exercise the populated branch
+    with caplog.at_level(logging.INFO, logger="root"):  # WHY: SUT uses logging.info at root logger
+        SecurityEventsService._export_flattened_dataset(deps, spec)  # WHY: exercise the populated branch
     assert deps.DataExporter.write_with_format_selection.call_count == 1  # WHY: one write for populated
-    assert "2 security policies exported" in capsys.readouterr().out  # WHY: count summary printed
+    out = "\n".join(record.getMessage() for record in caplog.records)  # WHY: aggregate captured log lines
+    assert "2 security policies exported" in out  # WHY: count summary logged
 
 
 def test_fetch_dataset_returns_empty_on_exception() -> None:
@@ -306,27 +311,31 @@ def test_iterate_site_rogue_yields_valid_site(monkeypatch: pytest.MonkeyPatch) -
     assert clients[0]["rogue_type"] == "Client"  # WHY: Client tag applied
 
 
-def test_export_rogue_combined_empty_writes_empty(capsys: pytest.CaptureFixture[str]) -> None:
-    """Empty rogue list writes an empty file and prints the zero-count summary."""
+def test_export_rogue_combined_empty_writes_empty(caplog: pytest.LogCaptureFixture) -> None:
+    """Empty rogue list writes an empty file and logs the zero-count summary."""
     deps = _make_deps()  # WHY: default bundle
-    SecurityEventsService._export_rogue_combined(deps, [])  # WHY: exercise empty guard
+    with caplog.at_level(logging.INFO, logger="root"):  # WHY: SUT uses logging.info at root logger
+        SecurityEventsService._export_rogue_combined(deps, [])  # WHY: exercise empty guard
     deps.DataExporter.write_with_format_selection.assert_called_once_with([], "OrgRogueData.csv")  # WHY: empty write
-    assert "0 rogue devices" in capsys.readouterr().out  # WHY: zero summary printed
+    out = "\n".join(record.getMessage() for record in caplog.records)  # WHY: aggregate captured log lines
+    assert "0 rogue devices" in out  # WHY: zero summary logged
 
 
-def test_export_rogue_combined_populated_flattens_and_exports(capsys: pytest.CaptureFixture[str]) -> None:
+def test_export_rogue_combined_populated_flattens_and_exports(caplog: pytest.LogCaptureFixture) -> None:
     """Populated rogue list is flattened, escaped, and exported with a count summary."""
     deps = _make_deps()  # WHY: default bundle
     deps.DataProcessingUtils.flatten_nested_fields.side_effect = lambda rows: rows  # WHY: identity pipeline
     deps.DataProcessingUtils.escape_multiline.side_effect = lambda rows: rows  # WHY: identity pipeline
     rogue = [{"mac": "aa", "rogue_type": "AP"}, {"mac": "bb", "rogue_type": "Client"}]  # WHY: two records
-    SecurityEventsService._export_rogue_combined(deps, rogue)  # WHY: exercise populated branch
+    with caplog.at_level(logging.INFO, logger="root"):  # WHY: SUT uses logging.info at root logger
+        SecurityEventsService._export_rogue_combined(deps, rogue)  # WHY: exercise populated branch
     deps.DataExporter.write_with_format_selection.assert_called_once_with(rogue, "OrgRogueData.csv")  # WHY: write
-    assert "2 rogue devices exported" in capsys.readouterr().out  # WHY: count summary printed
+    out = "\n".join(record.getMessage() for record in caplog.records)  # WHY: aggregate captured log lines
+    assert "2 rogue devices exported" in out  # WHY: count summary logged
 
 
 def test_export_rogue_data_iterate_exception_aborts(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """An exception during iteration aborts the rogue export leg silently."""
     deps = _make_deps()  # WHY: default bundle

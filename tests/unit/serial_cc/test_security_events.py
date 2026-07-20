@@ -1,6 +1,9 @@
 """Unit tests for offender #8 security export service."""
 
+import logging
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from src.refactors.serial_cc.security_events import SecurityEventsService
 
@@ -30,7 +33,9 @@ def _make_dependency_bundle():
 
 
 @patch("src.refactors.serial_cc.security_events._resolve_runtime_dependencies")
-def test_security_events_fast_mode_returns_on_fresh_cache(mock_resolve_runtime_dependencies, capsys):
+def test_security_events_fast_mode_returns_on_fresh_cache(
+    mock_resolve_runtime_dependencies, caplog: pytest.LogCaptureFixture
+):
     """Fast mode exits when all cache files are fresh."""
     deps = _make_dependency_bundle()
     mock_resolve_runtime_dependencies.return_value = deps
@@ -40,11 +45,12 @@ def test_security_events_fast_mode_returns_on_fresh_cache(mock_resolve_runtime_d
         patch("src.refactors.serial_cc.security_events.os.path.exists", return_value=True),
         patch("src.refactors.serial_cc.security_events.os.path.getmtime", return_value=0),
         patch("src.refactors.serial_cc.security_events.time.time", return_value=0),
+        caplog.at_level(logging.INFO, logger="root"),
     ):
         SecurityEventsService.execute(fast=True)
 
-    captured = capsys.readouterr()
-    assert "cached security data" in captured.out
+    out = "\n".join(record.getMessage() for record in caplog.records)
+    assert "cached security data" in out
 
 
 @patch("src.refactors.serial_cc.security_events._resolve_runtime_dependencies")
