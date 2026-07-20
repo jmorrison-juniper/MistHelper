@@ -21,7 +21,7 @@ import types  # WHY: build a minimal fake module for src.maps.maps_manager.
 from typing import Any  # WHY: dict-of-mocks return-type annotation.
 from unittest.mock import MagicMock  # WHY: FR-008 mandates MagicMock(spec=...) doubles.
 
-import pytest  # WHY: monkeypatch/capsys/caplog fixtures.
+import pytest  # WHY: monkeypatch/caplog fixtures.
 
 from src.refactors.maps_manager_launcher import (  # WHY: SUT + helper direct imports.
     MapsManagerLauncher,
@@ -128,10 +128,9 @@ class TestLaunchImportFailure:
     def test_import_failure_prints_and_aborts(
         self,
         monkeypatch: pytest.MonkeyPatch,
-        capsys: pytest.CaptureFixture[str],
         caplog: pytest.LogCaptureFixture,
     ) -> None:
-        """When `from src.maps.maps_manager import MapsManager` raises, launch prints guidance and returns."""
+        """When `from src.maps.maps_manager import MapsManager` raises, launch logs guidance and returns."""
         # WHY: install a module whose MapsManager attribute access raises ImportError.
         broken_module = types.ModuleType("src.maps.maps_manager")  # WHY: stand-in for the target module.
 
@@ -147,25 +146,22 @@ class TestLaunchImportFailure:
         monkeypatch.setitem(sys.modules, "src.maps.maps_manager", broken_module)  # WHY: intercept import.
 
         launcher = MapsManagerLauncher()  # WHY: build launcher post-install.
-        with caplog.at_level(logging.ERROR):  # WHY: import failure logs at ERROR.
+        with caplog.at_level(logging.INFO):  # WHY: import failure logs error + info banners.
             launcher.launch()  # WHY: exercise import-failure branch; should return cleanly.
-        captured = capsys.readouterr()  # WHY: read printed guidance.
 
-        assert "Could not load Maps Manager module" in captured.out  # WHY: user-visible failure banner.
-        assert "Ensure src/maps/maps_manager.py exists" in captured.out  # WHY: remediation shown.
+        assert "Could not load Maps Manager module" in caplog.text  # WHY: user-visible failure banner.
+        assert "Ensure src/maps/maps_manager.py exists" in caplog.text  # WHY: remediation shown.
         assert "Failed to import MapsManager" in caplog.text  # WHY: error log emitted.
 
     def test_import_failure_direct_call(
         self,
-        capsys: pytest.CaptureFixture[str],
         caplog: pytest.LogCaptureFixture,
     ) -> None:
-        """Direct call to `_handle_import_error` logs + prints without needing full launch."""
+        """Direct call to `_handle_import_error` logs the banner without needing full launch."""
         launcher = MapsManagerLauncher()  # WHY: build instance.
-        with caplog.at_level(logging.ERROR):  # WHY: assert on the ERROR log entry.
+        with caplog.at_level(logging.INFO):  # WHY: assert on both ERROR + INFO log entries.
             launcher._handle_import_error(ImportError("direct-boom"))  # WHY: exercise helper directly.
-        captured = capsys.readouterr()  # WHY: capture the print output.
-        assert "Could not load Maps Manager module" in captured.out  # WHY: banner present.
+        assert "Could not load Maps Manager module" in caplog.text  # WHY: banner present.
         assert "Failed to import MapsManager" in caplog.text  # WHY: log entry present.
 
 
@@ -175,7 +171,6 @@ class TestLaunchOrgIdFailure:
     def test_get_org_id_raises(
         self,
         wired_deps: dict[str, Any],
-        capsys: pytest.CaptureFixture[str],
         caplog: pytest.LogCaptureFixture,
     ) -> None:
         """When ConfigUtils.get_cached_or_prompted_org_id raises, launch surfaces the error and aborts."""
@@ -183,10 +178,9 @@ class TestLaunchOrgIdFailure:
             "config boom"
         )  # WHY: force fatal-error branch inside _get_org_id.
         launcher = MapsManagerLauncher()  # WHY: build launcher.
-        with caplog.at_level(logging.ERROR):  # WHY: fatal-error branch logs at ERROR.
+        with caplog.at_level(logging.INFO):  # WHY: capture ERROR log + INFO banner.
             launcher.launch()  # WHY: exercise the exception branch inside _get_org_id.
-        captured = capsys.readouterr()  # WHY: read printed banner.
-        assert "ERROR: config boom" in captured.out  # WHY: user-visible error emitted.
+        assert "ERROR: config boom" in caplog.text  # WHY: user-visible error emitted.
         assert "Error running Maps Manager" in caplog.text  # WHY: structured error log emitted.
         assert wired_deps["MapsManager_class"].call_count == 0  # WHY: interactive menu never entered.
 
@@ -204,22 +198,19 @@ class TestRunInteractiveMenuFailures:
     def test_external_class_unset_raises_and_handled(
         self,
         wired_deps: dict[str, Any],
-        capsys: pytest.CaptureFixture[str],
         caplog: pytest.LogCaptureFixture,
     ) -> None:
         """Direct call with `_external_class` unset triggers RuntimeError → _handle_fatal_error."""
         launcher = MapsManagerLauncher()  # WHY: fresh instance; _external_class defaults to None.
         assert launcher._external_class is None  # WHY: precondition sanity check.
-        with caplog.at_level(logging.ERROR):  # WHY: fatal-error branch logs at ERROR.
+        with caplog.at_level(logging.INFO):  # WHY: capture ERROR log + INFO banner.
             launcher._run_interactive_menu()  # WHY: exercise defensive branch directly.
-        captured = capsys.readouterr()  # WHY: read printed banner.
-        assert "ERROR: MapsManagerLauncher._external_class not initialized" in captured.out  # WHY: banner content.
+        assert "ERROR: MapsManagerLauncher._external_class not initialized" in caplog.text  # WHY: banner content.
         assert "Error running Maps Manager" in caplog.text  # WHY: structured log emitted.
 
     def test_run_interactive_menu_raises(
         self,
         wired_deps: dict[str, Any],
-        capsys: pytest.CaptureFixture[str],
         caplog: pytest.LogCaptureFixture,
     ) -> None:
         """When run_interactive_menu raises, error is funneled through _handle_fatal_error."""
@@ -227,22 +218,20 @@ class TestRunInteractiveMenuFailures:
             "menu boom"
         )  # WHY: simulate crash inside interactive loop.
         launcher = MapsManagerLauncher()  # WHY: build launcher.
-        with caplog.at_level(logging.ERROR):  # WHY: fatal-error branch logs at ERROR.
+        with caplog.at_level(logging.INFO):  # WHY: capture ERROR log + INFO banner.
             launcher.launch()  # WHY: full flow; failure occurs in interactive menu step.
-        captured = capsys.readouterr()  # WHY: read printed banner.
-        assert "ERROR: menu boom" in captured.out  # WHY: user-visible error emitted.
+        assert "ERROR: menu boom" in caplog.text  # WHY: user-visible error emitted.
         assert "Error running Maps Manager" in caplog.text  # WHY: structured error log emitted.
 
 
 class TestHandleFatalError:
-    """`_handle_fatal_error` prints and logs directly (unit level)."""
+    """`_handle_fatal_error` logs directly (unit level)."""
 
-    def test_prints_and_logs(self, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture) -> None:
-        """Direct call prints and logs the error message."""
+    def test_prints_and_logs(self, caplog: pytest.LogCaptureFixture) -> None:
+        """Direct call logs the error message at both ERROR and INFO levels."""
         launcher = MapsManagerLauncher()  # WHY: build instance to reach the method.
         error = ValueError("boom-direct")  # WHY: sentinel error we can grep for.
-        with caplog.at_level(logging.ERROR):  # WHY: assert on the ERROR log entry.
+        with caplog.at_level(logging.INFO):  # WHY: assert on both ERROR + INFO log entries.
             launcher._handle_fatal_error(error)  # WHY: direct-call exercises the branch.
-        captured = capsys.readouterr()  # WHY: capture print output.
-        assert "ERROR: boom-direct" in captured.out  # WHY: printed banner content.
+        assert "ERROR: boom-direct" in caplog.text  # WHY: banner content emitted at INFO.
         assert "Error running Maps Manager" in caplog.text  # WHY: log entry present.
