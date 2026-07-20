@@ -109,4 +109,5 @@ class ServicePingLauncher:
     def _handle_fatal_error(self, error: Exception) -> None:
         """Log and display fatal error message."""
         logging.error("Error running Service Ping: %s", error, exc_info=True)  # Log with traceback for postmortem
-        print(f"\nERROR: {error}")  # Surface error to user without stack details
+        # WHY: operator-visible error surface (replaces prior print()).
+        logging.warning("ERROR: %s", error)
