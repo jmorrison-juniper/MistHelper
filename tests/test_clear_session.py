@@ -9,6 +9,7 @@ These tests cover:
 - 400 API error handling
 """
 
+import logging
 from unittest.mock import MagicMock, patch
 
 from src.device.utility_commands import DeviceUtilityCommands, UtilityCommandsDeps
@@ -149,7 +150,7 @@ def test_clear_session_confirm_clear_all_proceeds(monkeypatch):
     assert captured.get("body") == {}
 
 
-def test_clear_session_handles_400(monkeypatch, capsys):
+def test_clear_session_handles_400(monkeypatch, capsys, caplog):
     _stub_selection(monkeypatch)
 
     def fake_safe_input(prompt, context=None, allow_empty=True, **kwargs):
@@ -179,7 +180,8 @@ def test_clear_session_handles_400(monkeypatch, capsys):
 
     with patch("src.device._utility_commands_clear.mistapi") as mock_api:
         mock_api.api.v1.sites.devices.clearSiteDeviceSession = fake_clear_raise
-        duc.clear_session()
+        with caplog.at_level(logging.ERROR, logger="root"):
+            duc.clear_session()
 
-    captured_out = capsys.readouterr().out
-    assert "API returned 400" in captured_out
+    log_out = "\n".join(r.getMessage() for r in caplog.records)
+    assert "API returned 400" in log_out
