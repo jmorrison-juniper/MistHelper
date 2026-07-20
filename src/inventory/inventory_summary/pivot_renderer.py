@@ -126,12 +126,14 @@ class PivotRenderer:  # Decomposed replacement for the original `_display_pivot_
     @staticmethod
     def _print_table(table: PrettyTable) -> None:  # Renders the legacy ASCII banner + table
         """Print the rendered table with the original banner verbatim."""
-        print(f"\n{'=' * 62}")  # Top banner preserved exactly from the legacy implementation
-        print(
-            "  Version Distribution per Model (All Device Types)"
-        )  # Header label preserved verbatim for NOC familiarity
-        print(f"{'=' * 62}")  # Bottom of top banner preserved exactly from the legacy implementation
-        print(table)  # PrettyTable renders to its built-in ASCII grid format
+        # WHY: Top banner preserved exactly from the legacy implementation.
+        logging.info("\n%s", "=" * 62)
+        # WHY: Header label preserved verbatim for NOC familiarity.
+        logging.info("  Version Distribution per Model (All Device Types)")
+        # WHY: Bottom of top banner preserved exactly from the legacy implementation.
+        logging.info("%s", "=" * 62)
+        # WHY: PrettyTable renders to its built-in ASCII grid format.
+        logging.info("%s", table)
 
     @staticmethod
     def _emit_export(  # Delegates persistence to DataExporter with stable column order

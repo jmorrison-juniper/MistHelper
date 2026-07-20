@@ -7,6 +7,21 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 45/N: retire `print()` in `src/inventory/inventory_summary/pivot_renderer.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced the 4 remaining `print()`
+  calls in `src/inventory/inventory_summary/pivot_renderer.py` with
+  `logging.info(...)` using `%`-style deferred formatting. Migrated callsites
+  all live in `_print_table`: the leading legacy banner rule, the
+  "Version Distribution per Model" header, the trailing rule, and the
+  PrettyTable body render itself. Companion test
+  `tests/unit/inventory/inventory_summary/test_pivot_renderer.py` was
+  updated: two stdout assertions (`_print_table` unit test and the
+  `render` end-to-end test) now read `caplog.text` instead of
+  `capsys.readouterr().out`, since the banner is emitted through the
+  logger. Full baseline holds: 8949 passed, 0 failed, 77 skipped,
+  5 xfailed, 1 xpassed.
+
 ### #886 Phase 2 slice 44/N: retire `print()` in `src/export/site_wan_usage_exporter.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced the 4 remaining `print()`

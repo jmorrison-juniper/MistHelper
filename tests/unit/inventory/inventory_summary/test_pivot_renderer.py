@@ -7,10 +7,10 @@ Covers every static method of ``PivotRenderer``:
 - ``_update_row_and_columns``: returns dense row counts + row total and mutates col_totals in place.
 - ``_build_table``: composes PrettyTable + export rows + grand total; footer TOTAL row appended.
 - ``_build_export_row``: emits CSV-shaped dict with dense zero-filled columns.
-- ``_print_table``: prints the legacy banner + PrettyTable.
+- ``_print_table``: logs the legacy banner + PrettyTable via logging.info.
 - ``_emit_export``: delegates to ``_parent.DataExporter.write_with_format_selection`` with stable field order.
 
-Uses monkeypatch to swap ``_parent.DataExporter`` for a mock and capsys for stdout assertions.
+Uses monkeypatch to swap ``_parent.DataExporter`` for a mock and caplog for log assertions.
 No live network, no disk I/O. MagicMock(spec=...) mandatory on injected doubles.
 """
 
@@ -19,7 +19,7 @@ from __future__ import annotations  # WHY: PEP 604 unions in test type hints.
 import logging  # WHY: caplog verification of pre/post-action log lines.
 from unittest.mock import MagicMock, patch  # WHY: spec= mocks + patch decorators.
 
-import pytest  # WHY: monkeypatch + capsys + caplog fixtures.
+import pytest  # WHY: monkeypatch + caplog fixtures.
 from prettytable import PrettyTable  # WHY: verify _build_table returns a real PrettyTable.
 
 from src.inventory import org_device_inventory_summary as _parent  # WHY: DI slot patched here.
@@ -160,14 +160,15 @@ class TestBuildExportRow:
 
 
 class TestPrintTable:
-    """``_print_table`` prints the legacy banner + PrettyTable to stdout."""
+    """``_print_table`` logs the legacy banner + PrettyTable via logging.info."""
 
-    def test_prints_banner_and_table(self, capsys: pytest.CaptureFixture[str]) -> None:
-        """Banner text and the model row content must both appear in stdout."""
+    def test_prints_banner_and_table(self, caplog: pytest.LogCaptureFixture) -> None:
+        """Banner text and the model row content must both appear in the log stream."""
         models, versions, model_type, pivot = PivotRenderer._compute_pivot(_sample_rows())
         table, _export_rows, _grand_total = PivotRenderer._build_table(models, versions, model_type, pivot)
-        PivotRenderer._print_table(table)
-        out = capsys.readouterr().out
+        with caplog.at_level(logging.INFO):
+            PivotRenderer._print_table(table)
+        out = caplog.text
         assert "Version Distribution per Model (All Device Types)" in out  # WHY: banner label.
         assert "AP32" in out  # WHY: model row rendered.
         assert "TOTAL" in out  # WHY: footer row rendered.
@@ -205,7 +206,6 @@ class TestRender:
     def test_full_orchestration(
         self,
         monkeypatch: pytest.MonkeyPatch,
-        capsys: pytest.CaptureFixture[str],
         caplog: pytest.LogCaptureFixture,
     ) -> None:
         """End-to-end render call exercises compute→build→print→export path with all log lines."""
@@ -216,7 +216,7 @@ class TestRender:
         with caplog.at_level(logging.DEBUG):
             PivotRenderer.render(_sample_rows(), "OrgVersionPerModel.csv")
 
-        out = capsys.readouterr().out
+        out = caplog.text  # WHY: banner + table now emitted through logging.info, not stdout.
         assert "Version Distribution per Model" in out  # WHY: banner reached.
         assert "AP32" in out and "SW1" in out  # WHY: both models printed.
         assert fake_exporter.write_with_format_selection.called  # WHY: export was invoked exactly once.
