@@ -60,7 +60,7 @@ def _configure_default_deps(tmp_path: Path) -> _PathResolver:
     return resolver  # Caller may use it to compose additional fixture paths
 
 
-def test_walk_early_exits_when_no_target_ports_configured(tmp_path: Path, capsys, caplog) -> None:
+def test_walk_early_exits_when_no_target_ports_configured(tmp_path: Path, caplog) -> None:
     """walk() must short-circuit with a warning when MIST_WAN_TARGET_PORTS is empty."""
     _configure_default_deps(tmp_path)  # Wire dependencies with a non-empty default
     override_deps.MIST_WAN_TARGET_PORTS = []  # Force the early-exit branch under test
@@ -68,8 +68,7 @@ def test_walk_early_exits_when_no_target_ports_configured(tmp_path: Path, capsys
     with caplog.at_level("WARNING"):  # Capture the operator-visible warning
         WanOverrideWalker.walk(fast=False)  # Should return without touching CSVs
 
-    stdout = capsys.readouterr().out  # Capture the legacy console message emitted before return
-    assert "MIST_WAN_TARGET_PORTS not configured" in stdout  # Legacy console line preserved
+    assert "MIST_WAN_TARGET_PORTS not configured" in caplog.text  # Legacy operator banner preserved as WARNING
     assert any(  # The warning is what operators grep for; verify it fires
         "MIST_WAN_TARGET_PORTS" in record.message for record in caplog.records
     )
