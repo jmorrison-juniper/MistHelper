@@ -7,6 +7,27 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 65/N: retire `print()` in `src/export/wifi_clients_exporter.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced the 8 remaining `print()`
+  calls in `src/export/wifi_clients_exporter.py` with `logging.info(...)` (module
+  already uses root `logging.<level>(...)` for its debug/info/warning/exception
+  traces) using `%`-style deferred formatting. Migrations cover the workflow
+  header in `_announce_start`, the pre-fetch operator line in `_announce_fetch`,
+  the failure surface line in `_log_export_failure`, the defensive empty-merge
+  banner in `_log_empty_merge`, the no-site cancel-path notice in
+  `_ensure_site_selected`, the no-data placeholder header in
+  `_write_no_data_placeholder`, and both operator lines in the success summary
+  emitter (`_print_success_summary`). Each migrated call carries the standard
+  `# WHY:` annotation preserving legacy operator-visible text via the logger.
+- **Tests (Migrated)**: `tests/unit/export/test_wifi_clients_exporter.py` had
+  two `capsys.readouterr().out` assertions covering the pipeline-failure and
+  empty-merge banners. Both were converted to `caplog.at_level(logging.INFO,
+  logger="root")` + record-based assertions (`out = "\n".join(rec.getMessage()
+  for rec in caplog.records)`); `import logging` was added to the test module.
+  Full local run: 30/30 pass across `tests/unit/export/test_wifi_clients_exporter.py`
+  and `tests/unit/test_wifi_clients_exporter.py`.
+
 ### #886 Phase 2 slice 64/N: retire `print()` in `src/export/site_webhook_deliveries_exporter.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced the 8 remaining `print()`

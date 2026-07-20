@@ -58,20 +58,23 @@ class WifiClientsExporter:  # WHY: orchestrator dataclass — attributes act as 
     @staticmethod
     def _announce_start() -> None:  # WHY: header + start-log emitter kept pure-static for testability.
         """Emit the legacy header line and start-of-workflow log entry."""
-        print("Export Site WiFi Clients:")  # WHY: preserve legacy header text so operator experience is identical.
+        # WHY: preserve legacy header text so operator experience is identical; route via logger for capture.
+        logging.info("Export Site WiFi Clients:")
         logging.info("Starting export of site WiFi clients...")  # WHY: log workflow start boundary for tracing.
 
     @staticmethod
     def _announce_fetch(site_id: str, site_name: str) -> None:  # WHY: pre-fetch messaging isolated for reuse.
         """Emit the pre-fetch log line and legacy operator-facing message."""
         logging.info("Fetching WiFi clients for site: %s (ID: %s)", site_name, site_id)  # WHY: log before API calls.
-        print(f"! Fetching WiFi clients for site: {site_name}")  # WHY: preserve legacy fetch-start operator text.
+        # WHY: preserve legacy fetch-start operator text; route via logger for capture/redirection.
+        logging.info("! Fetching WiFi clients for site: %s", site_name)
 
     @staticmethod
     def _log_export_failure(site_id: str, exception: BaseException) -> None:  # WHY: exception-path emitter.
         """Log the exception traceback and print the legacy operator-facing failure line."""
         logging.exception("! Failed to fetch WiFi data for site %s: %s", site_id, exception)  # WHY: traceback log.
-        print(f"! Failed to fetch WiFi data: {exception}")  # WHY: preserve legacy operator-facing error output.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logging.info("! Failed to fetch WiFi data: %s", exception)  # WHY: preserve legacy operator-facing error output.
 
     def _run_export_pipeline(self, stamp: _SiteStamp) -> None:  # WHY: try-guarded fetch/merge/finalize sequencer.
         """Execute the fetch, merge, and finalize stages that require exception-guard protection."""
@@ -89,7 +92,8 @@ class WifiClientsExporter:  # WHY: orchestrator dataclass — attributes act as 
     def _log_empty_merge() -> None:  # WHY: empty-post-merge emitter isolated to keep pipeline branch-shallow.
         """Log + print the defensive empty-post-merge operator messages."""
         logging.warning(_NO_POST_MERGE_TEXT)  # WHY: preserve defensive empty-post-merge log severity + text.
-        print(_NO_POST_MERGE_TEXT)  # WHY: preserve legacy operator-facing empty-result message text.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logging.info(_NO_POST_MERGE_TEXT)  # WHY: preserve legacy operator-facing empty-result message text.
 
     def _ensure_site_selected(self, site_id: str | None) -> str | None:  # WHY: cache-seed + prompt orchestrator.
         """Ensure SiteList cache exists and resolve site_id (prompt operator when missing)."""
@@ -103,7 +107,8 @@ class WifiClientsExporter:  # WHY: orchestrator dataclass — attributes act as 
         logging.debug("Site selection prompt completed with site_id=%s", chosen)  # WHY: result for traceability.
         if not chosen:
             logging.error(_NO_SITE_TEXT)  # WHY: cancel-path log preserved verbatim from the legacy exporter.
-            print(_NO_SITE_TEXT)  # WHY: preserve legacy operator-facing cancel-path message.
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logging.info(_NO_SITE_TEXT)  # WHY: preserve legacy operator-facing cancel-path message.
             return None  # WHY: signal abort to orchestrator so no artifacts are written.
         return chosen  # WHY: resolved site identifier to operate on for the remainder of the workflow.
 
@@ -157,7 +162,8 @@ class WifiClientsExporter:  # WHY: orchestrator dataclass — attributes act as 
     def _write_no_data_placeholder(self, stamp: _SiteStamp) -> None:
         """Write the legacy no-data sentinel CSV when neither clients nor sessions are found."""
         logging.warning(_NO_DATA_TEXT)  # WHY: preserve empty-result log severity + text from the legacy exporter.
-        print(_NO_DATA_TEXT)  # WHY: preserve legacy operator-facing empty-result message text.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logging.info(_NO_DATA_TEXT)  # WHY: preserve legacy operator-facing empty-result message text.
         logging.info("Writing no-data placeholder CSV for %s", _OUTPUT_CSV)  # WHY: log before placeholder write.
         wifi_clients_path = self.file_path_utils.get_csv_path(_OUTPUT_CSV)  # WHY: resolve canonical output path.
         with open(wifi_clients_path, "w", newline="", encoding="utf-8") as file_handle:
@@ -318,8 +324,13 @@ class WifiClientsExporter:  # WHY: orchestrator dataclass — attributes act as 
             session_count,
             total_records,
         )  # WHY: structured log mirrors the operator print block for tracing parity.
-        print(f"! WiFi data exported to {_OUTPUT_CSV}")  # WHY: preserve legacy success confirmation line.
-        print(
-            f"   {client_count} current clients, {session_count} sessions, "
-            f"{total_records} total records from {site_name}"
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logging.info("! WiFi data exported to %s", _OUTPUT_CSV)  # WHY: preserve legacy success confirmation line.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logging.info(
+            "   %d current clients, %d sessions, %d total records from %s",
+            client_count,
+            session_count,
+            total_records,
+            site_name,
         )  # WHY: preserve legacy detailed summary with counts and site context.
