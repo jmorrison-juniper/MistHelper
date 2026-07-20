@@ -142,7 +142,7 @@ class TestEvents:
 
 
 class TestDeviceEvents:
-    def test_with_events_logs_sample(self, fake_mh: ModuleType, capsys: pytest.CaptureFixture) -> None:
+    def test_with_events_logs_sample(self, fake_mh: ModuleType, caplog: pytest.LogCaptureFixture) -> None:
         events = [{"id": 1}, {"id": 2}, {"id": 3}]
         with (
             patch.object(oaee.TimeUtils, "get_dynamic_lookback_hours", return_value=24),
@@ -153,7 +153,7 @@ class TestDeviceEvents:
             mistapi_mock.get_all.return_value = events
             OrgAlarmEventExporter.device_events()
         fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(events, "OrgDeviceEvents.csv")  # type: ignore[attr-defined]
-        assert "3 device events exported" in capsys.readouterr().out
+        assert "3 device events exported" in caplog.text
 
     def test_without_events_skips_sample_block(self, fake_mh: ModuleType) -> None:
         with (
