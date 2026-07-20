@@ -7,6 +7,26 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 62/N: retire `print()` in `src/refactors/serial_cc/security_events.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced the 7 remaining `print()`
+  calls in `src/refactors/serial_cc/security_events.py` with `logging.info(...)`
+  (module already uses root `logging.<level>(...)` for its info/warning/error
+  traces) using `%`-style deferred formatting. Migrations cover the fast-mode
+  cache-hit notice in `execute`, the two banner lines in `_run_export_workflow`
+  (header + completion summary), the empty-dataset summary and populated-
+  dataset summary in `_export_flattened_dataset`, and the two rogue-export
+  summary lines in `_export_rogue_combined` (empty + populated). Each migrated
+  call carries the standard `# WHY: preserve operator notice verbatim; route
+  through logger for capture/redirection.` annotation.
+- **Test migration (Changed)**: converted 1 `capsys` assertion in
+  `tests/unit/serial_cc/test_security_events.py` and 4 `capsys` assertions in
+  `tests/unit/serial_cc/test_security_events_wave8.py` to `caplog` capture
+  (`with caplog.at_level(logging.INFO, logger="root"):`, aggregating
+  `record.getMessage()` values before substring assertions). Dropped the unused
+  `capsys` parameter from `test_export_rogue_data_iterate_exception_aborts`.
+  All 23 tests in the two suites pass locally.
+
 ### #886 Phase 2 slice 61/N: retire `print()` in `src/export/wan_client_events_exporter.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced the 7 remaining `print()`

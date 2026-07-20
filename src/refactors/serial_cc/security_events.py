@@ -88,14 +88,16 @@ class SecurityEventsService:
             logging.info(
                 "Fast mode cache hit: All security data CSVs are fresh; skipping fetch."
             )  # Trace short-circuit.
-            print("* Fast mode: Using cached security data (all files fresh)")  # User-facing fast-mode message.
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logging.info("* Fast mode: Using cached security data (all files fresh)")
             return  # No fetch needed; the cached CSVs are still valid.
         SecurityEventsService._run_export_workflow(deps)  # Delegate the actual export to keep this entrypoint short.
 
     @staticmethod
     def _run_export_workflow(deps: SimpleNamespace) -> None:
         """Execute the three security exports and emit progress bookends."""
-        print("Export Organization Security Data:")  # Section header for the console log.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logging.info("Export Organization Security Data:")
         logging.info("Starting export of organization security policies, intelligence profiles, and rogue data...")
         emitter = deps.PROGRESS_EMITTER  # Optional; None disables progress emission.
         if emitter:
@@ -107,7 +109,8 @@ class SecurityEventsService:
         for spec in SecurityEventsService._build_flattened_specs(deps, current_org_id):  # Loop over datasets.
             SecurityEventsService._export_flattened_dataset(deps, spec)  # Fetch + flatten + export one dataset.
         SecurityEventsService._export_rogue_data(deps)  # Third file: combined rogue export.
-        print("Security data export completed (3 files generated)")  # User-facing completion message.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logging.info("Security data export completed (3 files generated)")
         logging.info("Completed security policies, intelligence profiles, and rogue data export aggregate.")
         if emitter:
             emitter.emit_progress_complete(  # Bundle identity into a ProgressContext per issue #470.
@@ -163,14 +166,26 @@ class SecurityEventsService:
         """Fetch, flatten, and export a single org dataset described by ``spec``."""
         dataset = SecurityEventsService._fetch_dataset(deps, spec)  # Isolate the try/except paging in a helper.
         if not dataset:  # Guard clause: write an empty file and note the miss for observability.
-            print(f"! 0 {spec.data_label} exported to {spec.output_file} {spec.empty_suffix}")  # User summary.
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logging.info(
+                "! 0 %s exported to %s %s",
+                spec.data_label,
+                spec.output_file,
+                spec.empty_suffix,
+            )
             logging.warning(spec.empty_message)  # Trace an empty result for postmortems.
             deps.DataExporter.write_with_format_selection([], spec.output_file)  # Write empty for consistency.
             return
         processed = deps.DataProcessingUtils.flatten_nested_fields(dataset)  # Flatten nested API structures.
         processed = deps.DataProcessingUtils.escape_multiline(processed)  # Escape multiline fields for CSV safety.
         deps.DataExporter.write_with_format_selection(processed, spec.output_file)  # Emit the CSV/XLSX file.
-        print(f"! {len(processed)} {spec.data_label} exported to {spec.output_file}")  # User-facing summary.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logging.info(
+            "! %d %s exported to %s",
+            len(processed),
+            spec.data_label,
+            spec.output_file,
+        )
         logging.info("Exported %d %s to %s", len(processed), spec.data_label, spec.output_file)  # Trace volume.
 
     @staticmethod
@@ -250,14 +265,16 @@ class SecurityEventsService:
     def _export_rogue_combined(deps: SimpleNamespace, all_rogue_data: list[dict[str, Any]]) -> None:
         """Flatten + export combined rogue data, or write an empty file when nothing was found."""
         if not all_rogue_data:  # Guard: no rogue devices anywhere; still emit an empty file for consistency.
-            print("! 0 rogue devices exported to OrgRogueData.csv (no rogue devices found)")  # User summary.
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logging.info("! 0 rogue devices exported to OrgRogueData.csv (no rogue devices found)")
             logging.info("No rogue devices found across all sites (OrgRogueData.csv written empty).")  # Trace empty.
             deps.DataExporter.write_with_format_selection([], _ROGUE_OUTPUT)  # Consistent empty export.
             return
         processed = deps.DataProcessingUtils.flatten_nested_fields(all_rogue_data)  # Flatten nested rogue fields.
         processed = deps.DataProcessingUtils.escape_multiline(processed)  # Escape multiline fields for CSV.
         deps.DataExporter.write_with_format_selection(processed, _ROGUE_OUTPUT)  # Write the combined rogue export.
-        print(f"! {len(processed)} rogue devices exported to OrgRogueData.csv")  # User summary.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logging.info("! %d rogue devices exported to OrgRogueData.csv", len(processed))
         logging.info("Exported %d rogue devices to OrgRogueData.csv", len(processed))  # Trace export volume.
 
     @staticmethod
