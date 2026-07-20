@@ -148,7 +148,8 @@ class GatewayTestResultsService:
         """Flatten, sanitise, and persist results; emit user-facing summary."""
         if not all_results:  # No results found across all sites
             logging.warning("No test results found; CSV not created")  # Warn so operator can investigate
-            print("! No gateway test results found. CSV not created.")  # User-facing empty-result message
+            # User-facing empty-result message
+            logging.info("! No gateway test results found. CSV not created.")
             return  # Exit early — nothing to write
         filename = "AllGatewayTestResults.csv"  # Canonical output file name (contract with callers)
         logging.info("Exporting %d gateway test results to %s", len(all_results), filename)  # Log before export
@@ -156,7 +157,8 @@ class GatewayTestResultsService:
         sanitized = deps.DataProcessingUtils.escape_multiline(flattened)  # Sanitise multiline CSV fields
         deps.DataExporter.write_with_format_selection(sanitized, filename)  # Write to configured output backend
         logging.debug("Exported %d records to %s", len(sanitized), filename)  # Log after successful write
-        print(f"! {len(all_results)} gateway test results exported to {filename}")  # User-facing count
+        # User-facing count
+        logging.info("! %d gateway test results exported to %s", len(all_results), filename)
         logging.info("All test results saved to %s (%d records)", filename, len(all_results))  # Trace final count
         if fast:  # Only log the fast-mode optimisation note when relevant
             logging.info(
@@ -168,7 +170,8 @@ class GatewayTestResultsService:
         """Export all synthetic test results for sites with gateways."""
         logging.info("Starting GatewayTestResultsService export (fast=%s)", fast)  # Log before workflow
         deps = _resolve_runtime_dependencies()  # Resolve all collaborators from MistHelper at call time
-        print("Gateway Synthetic Test Results:")  # User-facing operation banner
+        # User-facing operation banner
+        logging.info("Gateway Synthetic Test Results:")
         logging.info(
             "Searching all test results (including speed tests) for sites with gateways"
         )  # Trace workflow intent
