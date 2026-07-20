@@ -53,7 +53,8 @@ class SiteWanUsageExporter:
         """
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataExporter helper.
         if not rawdata:  # No WAN usage rows for this site -- inform the operator and return.
-            print("! No WAN usage data found for this site")  # ASCII-only user notice.
+            # WHY: ASCII-only user notice.
+            logging.info("! No WAN usage data found for this site")
             return
         flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested dicts for CSV.
         sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)  # CSV-safe multiline escape.
@@ -64,7 +65,8 @@ class SiteWanUsageExporter:
         logging.debug(  # DEBUG-level count trace per Action Logging principle (post-call).
             "searchSiteWanUsage persisted %d rows to %s", len(rawdata), filename
         )
-        print(f"! {len(rawdata)} WAN usage records exported to {filename}")  # User notice with count.
+        # WHY: user notice with count.
+        logging.info("! %d WAN usage records exported to %s", len(rawdata), filename)
 
     @staticmethod
     def wan_usages() -> None:
@@ -77,7 +79,8 @@ class SiteWanUsageExporter:
             to the user rather than crashing the menu loop.
         """
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of apisession + shared helpers.
-        print("Site WAN Usage Search:")  # Menu header echoed to operator.
+        # WHY: menu header echoed to operator.
+        logging.info("Site WAN Usage Search:")
         logging.info(  # INFO trace before the API call per Action Logging principle (pre-call).
             "Starting searchSiteWanUsage export..."
         )
@@ -100,4 +103,5 @@ class SiteWanUsageExporter:
             logging.error(  # ERROR trace with site context for post-mortem correlation.
                 "Error fetching WAN usage for site %s: %s", site_name, e
             )
-            print(f"! Error fetching WAN usage data: {e}")  # ASCII-only user notice.
+            # WHY: ASCII-only user notice.
+            logging.info("! Error fetching WAN usage data: %s", e)
