@@ -1,5 +1,6 @@
 """Unit tests for offender #9 SLE metrics service."""
 
+import logging
 from unittest.mock import MagicMock, patch
 
 from src.refactors.serial_cc.sle_metrics import SLEMetricsService
@@ -42,7 +43,7 @@ def test_sle_metrics_normal_mode_fetches_all_categories(mock_resolve_runtime_dep
 
 
 @patch("src.refactors.serial_cc.sle_metrics._resolve_runtime_dependencies")
-def test_sle_metrics_fast_mode_reduces_scope(mock_resolve_runtime_dependencies, capsys):
+def test_sle_metrics_fast_mode_reduces_scope(mock_resolve_runtime_dependencies, caplog):
     """Fast mode only fetches wifi category and summary metric."""
     deps = _make_dependency_bundle()
     mock_resolve_runtime_dependencies.return_value = deps
@@ -54,10 +55,11 @@ def test_sle_metrics_fast_mode_reduces_scope(mock_resolve_runtime_dependencies, 
     deps.DataProcessingUtils.flatten_nested_fields.side_effect = lambda rows: rows
     deps.DataProcessingUtils.escape_multiline.side_effect = lambda rows: rows
 
-    SLEMetricsService.execute(fast=True)
+    with caplog.at_level(logging.INFO, logger="root"):
+        SLEMetricsService.execute(fast=True)
 
-    captured = capsys.readouterr()
-    assert "SLE data retrieval completed" in captured.out
+    out = "\n".join(record.getMessage() for record in caplog.records)
+    assert "SLE data retrieval completed" in out
 
 
 @patch("src.refactors.serial_cc.sle_metrics._resolve_runtime_dependencies")

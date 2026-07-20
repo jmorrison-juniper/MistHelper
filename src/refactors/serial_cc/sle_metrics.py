@@ -248,14 +248,20 @@ class SLEMetricsService:
             processed = deps.DataProcessingUtils.flatten_nested_fields(all_sle_data)  # Flatten nested SLE structures
             processed = deps.DataProcessingUtils.escape_multiline(processed)  # Escape multiline fields for CSV
             deps.DataExporter.write_with_format_selection(processed, "OrgSLEMetrics.csv")  # Write the export file
-            print(f"! {metrics_retrieved} organization SLE data sources exported to OrgSLEMetrics.csv")  # User summary
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logging.info(
+                "! %s organization SLE data sources exported to OrgSLEMetrics.csv", metrics_retrieved
+            )  # User summary
             logging.info(
                 "Exported %s org SLE data points from %s sources to OrgSLEMetrics.csv",
                 len(processed),
                 metrics_retrieved,
             )  # Trace export volume
         else:  # No data collected from any source
-            print("! 0 organization SLE metrics exported to OrgSLEMetrics.csv (no data available)")  # User summary
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logging.info(
+                "! 0 organization SLE metrics exported to OrgSLEMetrics.csv (no data available)"
+            )  # User summary
             logging.warning("No org SLE data available - all sources failed or returned empty")  # Warn on empty run
             deps.DataExporter.write_with_format_selection(
                 [], "OrgSLEMetrics.csv"
@@ -277,11 +283,15 @@ class SLEMetricsService:
             cat_ok, cat_fail = cls._run_category_loop(deps, org_id, config, all_sle_data, progress)  # Loop 2
             metrics_retrieved = spec_ok + cat_ok  # Total successful fetches
             metrics_failed = spec_fail + cat_fail  # Total failed fetches
-            print(f"! SLE data retrieval completed: {metrics_retrieved} successful, {metrics_failed} failed")  # Summary
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logging.info(
+                "! SLE data retrieval completed: %s successful, %s failed", metrics_retrieved, metrics_failed
+            )  # Summary
             logging.info("Org SLE data: %s retrieved successfully, %s failed", metrics_retrieved, metrics_failed)
             cls._export_results(deps, all_sle_data, metrics_retrieved)  # Flatten + export (or write empty)
         except Exception as exception:  # Any unexpected top-level failure still writes an empty export
-            print(f"! Error exporting organization SLE metrics: {exception}")  # User-facing error
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logging.info("! Error exporting organization SLE metrics: %s", exception)  # User-facing error
             logging.error("Failed to export org SLE metrics: %s", exception)  # Trace the failure
             deps.DataExporter.write_with_format_selection([], "OrgSLEMetrics.csv")  # Write empty export on failure
 
@@ -289,7 +299,8 @@ class SLEMetricsService:
     def execute(cls, fast: bool = False) -> None:
         """Run the organization SLE metrics export workflow."""
         deps = _resolve_runtime_dependencies()  # Resolve MistHelper collaborators at call time
-        print("Export Organization SLE Metrics:")  # User-facing banner
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logging.info("Export Organization SLE Metrics:")  # User-facing banner
         logging.info("Starting export of organization SLE metrics...")  # Trace workflow start
         org_id = deps.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve target org (cached or prompted)
         config = cls._build_run_config(deps, fast)  # Resolve categories/metrics/duration (honors fast mode)
@@ -297,7 +308,12 @@ class SLEMetricsService:
         progress = _SleProgressTracker(deps.PROGRESS_EMITTER, total_items)  # Encapsulate progress + items-done counter
         progress.start()  # Emit the progress-start event
         all_sle_data: list[Any] = []  # Accumulates every SLE record across both loops
-        print(f"! Retrieving organization SLE data using {len(config.sle_categories)} service categories...")  # Info
-        print(f"! Also attempting {len(config.specialized_metrics)} specialized SLE aggregation metrics...")  # Info
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logging.info(
+            "! Retrieving organization SLE data using %s service categories...", len(config.sle_categories)
+        )  # Info
+        logging.info(
+            "! Also attempting %s specialized SLE aggregation metrics...", len(config.specialized_metrics)
+        )  # Info
         cls._run_retrieval(deps, org_id, config, all_sle_data, progress)  # Run both loops + export (or empty)
         progress.complete()  # Always emit the progress-complete event
