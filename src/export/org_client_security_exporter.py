@@ -129,7 +129,8 @@ class OrgClientSecurityExporter:
             logging.info(
                 "Fast mode cache hit: %s is fresh (%.1fm); skipping fetch.", output_file, age_minutes
             )  # Log the cache hit
-            print(f"* Fast mode: Using cached {output_file} (age {age_minutes:.1f}m)")  # Inform user
+            # User-facing fast-mode cache hit banner.
+            logging.info("* Fast mode: Using cached %s (age %.1fm)", output_file, age_minutes)
             return True  # Cache hit short-circuits the orchestrator
         except Exception as cache_error:  # Inspecting the cache failed
             logging.debug("Fast mode freshness check failed for %s: %s", output_file, cache_error)  # Trace
@@ -201,7 +202,9 @@ class OrgClientSecurityExporter:
             sanitized = DataProcessingUtils.escape_multiline(flattened)
             mh.DataExporter.write_with_format_selection(sanitized, csv_basename)
             logging.info("! %s %s exported to %s", len(rogues), label, csv_basename)  # Log the export
-            print(f"! {len(rogues)} {label} exported to {csv_basename}")  # Report the count to the user
+            # User-facing export count banner.
+            logging.info("! %d %s exported to %s", len(rogues), label, csv_basename)
         else:  # No rogues found anywhere
             logging.info("No %s found across all sites", label)  # Log the empty result
-            print(f" No {label} detected across all sites")  # Inform the user
+            # User-facing empty-result banner.
+            logging.info(" No %s detected across all sites", label)
