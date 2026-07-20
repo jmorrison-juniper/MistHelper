@@ -7,6 +7,27 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 17/N: retire `print()` in `src/troubleshooting/troubleshoot_utils.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced all 12 `print()` calls in
+  `src/troubleshooting/troubleshoot_utils.py` (Marvis interactive
+  troubleshooting menu dispatcher) with `logging.warning(...)` for
+  operator-visible menu output. Consolidated the header/divider block (3 → 1
+  record) and the numbered-options block (6 → 1 record) so each banner arrives
+  atomically at every configured log handler and cannot interleave with
+  concurrent producers. Invalid-choice and exit handlers now route their
+  user-facing notice through `logging.warning` while retaining their existing
+  audit-trail (`logging.warning`) and trace (`logging.debug`) records.
+- **Test migration (Changed)**: `tests/unit/troubleshooting/test_troubleshoot_utils.py`
+  swapped 12 `capsys.readouterr().out` assertions for `caplog.text` and added
+  a module-level `autouse` fixture (`_capture_warnings`) that calls
+  `caplog.set_level(logging.WARNING)` so the migrated warnings are captured
+  deterministically across CI runners regardless of default logger
+  propagation.
+- **Verification**: `ruff check src/troubleshooting/troubleshoot_utils.py
+  --select T20` reports 0 issues; full `ruff check .` clean; full `pytest`
+  suite green (8949 passed, 0 failed, 77 skipped, 5 xfailed, 1 xpassed).
+
 ### #886 Phase 2 slice 16/N: retire `print()` in `src/org/org_ticket_manager.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 45 `print()` calls in

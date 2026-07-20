@@ -10,6 +10,20 @@ import pytest
 from src.troubleshooting.troubleshoot_utils import TroubleshootUtils
 
 
+@pytest.fixture(autouse=True)
+def _capture_warnings(caplog):
+    """Ensure caplog captures WARNING+ records for every test in this module.
+
+    Why:
+        After #886 slice 17/N, TroubleshootUtils emits user-visible menu and
+        exit messages via ``logging.warning`` rather than ``print()``. Tests
+        assert on those strings via ``caplog.text``; setting the level here
+        keeps behavior deterministic across CI runners regardless of the
+        default logger propagation state.
+    """
+    caplog.set_level(logging.WARNING)
+
+
 @pytest.fixture
 def mh_mocks(monkeypatch):
     """Patch every MistHelper attribute referenced by TroubleshootUtils lazy imports."""
@@ -74,30 +88,30 @@ class TestDelegations:
 
 
 class TestPrintHelpers:
-    def test_print_marvis_menu_writes_header(self, capsys):
+    def test_print_marvis_menu_writes_header(self, caplog):
         TroubleshootUtils._print_marvis_menu()
-        out = capsys.readouterr().out
+        out = caplog.text
         assert "Marvis" in out
         assert "=" * 65 in out
 
-    def test_print_marvis_options_lists_five(self, capsys):
+    def test_print_marvis_options_lists_five(self, caplog):
         TroubleshootUtils._print_marvis_options()
-        out = capsys.readouterr().out
+        out = caplog.text
         for token in ("1.", "2.", "3.", "4.", "5."):
             assert token in out
         assert "Exit" in out
 
 
 class TestHandlers:
-    def test_invalid_choice_logs_warning(self, caplog, capsys):
+    def test_invalid_choice_logs_warning(self, caplog):
         caplog.set_level(logging.WARNING)
         TroubleshootUtils._handle_marvis_invalid_choice("9")
-        assert "Invalid option selected." in capsys.readouterr().out
+        assert "Invalid option selected." in caplog.text
         assert "Invalid troubleshooting option selected" in caplog.text
 
-    def test_exit_prints_message(self, capsys):
+    def test_exit_prints_message(self, caplog):
         TroubleshootUtils._handle_marvis_exit()
-        assert "Exiting Marvis troubleshooting." in capsys.readouterr().out
+        assert "Exiting Marvis troubleshooting." in caplog.text
 
 
 class TestInvokers:
@@ -132,35 +146,35 @@ class TestDispatchMarvisChoice:
         TroubleshootUtils._dispatch_marvis_choice(choice)
         getattr(mh_mocks["ExtractedMarvisTroubleshootUtils"], attr).assert_called_once()
 
-    def test_choice_5_exits(self, capsys, mh_mocks):
+    def test_choice_5_exits(self, caplog, mh_mocks):
         TroubleshootUtils._dispatch_marvis_choice("5")
-        assert "Exiting Marvis troubleshooting." in capsys.readouterr().out
+        assert "Exiting Marvis troubleshooting." in caplog.text
 
-    def test_invalid_choice_routes_to_invalid_handler(self, caplog, capsys, mh_mocks):
+    def test_invalid_choice_routes_to_invalid_handler(self, caplog, mh_mocks):
         caplog.set_level(logging.WARNING)
         TroubleshootUtils._dispatch_marvis_choice("bogus")
-        assert "Invalid option selected." in capsys.readouterr().out
+        assert "Invalid option selected." in caplog.text
         mh_mocks["ExtractedMarvisTroubleshootUtils"].client_connectivity.assert_not_called()
 
 
 class TestLaunchInteractive:
-    def test_launch_dispatches_choice(self, mh_mocks, capsys):
+    def test_launch_dispatches_choice(self, mh_mocks, caplog):
         mh_mocks["InputUtils"].safe_input.return_value = "1"
         TroubleshootUtils.launch_interactive()
         mh_mocks["ConfigUtils"].get_cached_or_prompted_org_id.assert_called_once()
         mh_mocks["InputUtils"].safe_input.assert_called_once()
         mh_mocks["ExtractedMarvisTroubleshootUtils"].client_connectivity.assert_called_once()
-        assert "Marvis" in capsys.readouterr().out
+        assert "Marvis" in caplog.text
 
-    def test_launch_invalid_choice(self, mh_mocks, capsys):
+    def test_launch_invalid_choice(self, mh_mocks, caplog):
         mh_mocks["InputUtils"].safe_input.return_value = "99"
         TroubleshootUtils.launch_interactive()
-        assert "Invalid option selected." in capsys.readouterr().out
+        assert "Invalid option selected." in caplog.text
 
-    def test_launch_exit_choice(self, mh_mocks, capsys):
+    def test_launch_exit_choice(self, mh_mocks, caplog):
         mh_mocks["InputUtils"].safe_input.return_value = "5"
         TroubleshootUtils.launch_interactive()
-        assert "Exiting Marvis troubleshooting." in capsys.readouterr().out
+        assert "Exiting Marvis troubleshooting." in caplog.text
 
     def test_launch_strips_whitespace_from_input(self, mh_mocks):
         mh_mocks["InputUtils"].safe_input.return_value = "  2  "
