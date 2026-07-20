@@ -7,6 +7,28 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 33/N: retire `print()` in `src/gateway/wan2_variable.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced the 2 remaining `print()`
+  calls in `src/gateway/wan2_variable.py` (both inside
+  `GatewayWan2VariableMigrator._log_no_changes_needed`) with module-level
+  `logging.info(...)` using `%`-style deferred formatting, matching the file's
+  pre-existing `logging.info(...)` / `logging.warning(...)` convention (no
+  module `logger` binding is used elsewhere in this module). The f-string
+  `print(f"\n  No templates found with {self._search_pattern} port configurations.")`
+  becomes `logging.info("\n  No templates found with %s port configurations.", self._search_pattern)`,
+  and the closing `print("  No changes needed.")` becomes
+  `logging.info("  No changes needed.")`. The helper's docstring was updated
+  from "Print + log the 'no templates require modification' outcome." to
+  "Log the 'no templates require modification' outcome." to match the new
+  behavior. `import logging` was already present at module scope.
+- **Test posture**: no existing test asserts on the two migrated banners
+  (verified via ripgrep against `tests/`), so the test suite is unchanged.
+- **Verification**: `ruff check --select T201,T203 src/gateway/wan2_variable.py`
+  reports 0 issues; `ruff check` and `black --check` clean on the source
+  file; targeted `pytest tests/unit/gateway/` = 309 passed; full `pytest`
+  suite green (8949 passed, 0 failed, 77 skipped, 5 xfailed, 1 xpassed).
+
 ### #886 Phase 2 slice 32/N: retire `print()` in `src/gateway/overrides/wan_override_walker.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced the 2 remaining `print()`

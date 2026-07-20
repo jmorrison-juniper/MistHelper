@@ -165,9 +165,9 @@ class GatewayWan2VariableMigrator:  # pylint: disable=too-many-instance-attribut
         return selected, changes  # WHY: caller advances to preview/apply
 
     def _log_no_changes_needed(self) -> None:
-        """Print + log the 'no templates require modification' outcome."""
-        print(f"\n  No templates found with {self._search_pattern} port configurations.")  # WHY: user feedback
-        print("  No changes needed.")  # WHY: closing line
+        """Log the 'no templates require modification' outcome."""
+        logging.info("\n  No templates found with %s port configurations.", self._search_pattern)  # WHY: user feedback
+        logging.info("  No changes needed.")  # WHY: closing line
         logging.info("Menu #104: No templates require modification (searched for %s)", self._search_pattern)
 
     def _run_and_report(
