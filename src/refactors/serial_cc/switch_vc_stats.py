@@ -169,7 +169,7 @@ class SwitchVcStatsService:
     def execute(cls) -> None:
         """Run switch VC stats export workflow and write OrgSwitchVCStats.csv."""
         deps = _resolve_runtime_dependencies()  # Resolve all runtime collaborators from MistHelper
-        print("Switch Virtual Chassis Statistics:")  # User-facing operation banner
+        logging.info("Switch Virtual Chassis Statistics:")  # User-facing operation banner
         logging.info("Exporting all switch virtual chassis stats...")  # Log workflow start for operators
 
         switches = cls._load_switches(deps)  # Load VC-eligible switch rows from cached OrgInventory.csv
@@ -182,7 +182,8 @@ class SwitchVcStatsService:
         all_vc_stats = deps.DataProcessingUtils.flatten_nested_fields(all_vc_stats)  # Flatten nested fields for CSV
         all_vc_stats = deps.DataProcessingUtils.escape_multiline(all_vc_stats)  # Sanitize multiline fields
         deps.DataExporter.write_with_format_selection(all_vc_stats, "OrgSwitchVCStats.csv")  # Persist VC stats
-        print(f"! {len(all_vc_stats)} switch VC stats exported to OrgSwitchVCStats.csv")  # User-facing result count
+        # User-facing result count
+        logging.info("! %d switch VC stats exported to OrgSwitchVCStats.csv", len(all_vc_stats))
         logging.info(
             "! Switch VC stats exported to OrgSwitchVCStats.csv (%d records).", len(all_vc_stats)
         )  # Log success
