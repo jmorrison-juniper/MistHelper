@@ -7,6 +7,29 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 15/N: retire `print()` in `src/org/org_config_migration_manager.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced all 44 `print()` calls in
+  `src/org/org_config_migration_manager.py` (the org WAN/Gateway config
+  export/import bundle manager) with `logging.warning(...)` for operator-
+  visible output (export banners, per-type object counts, export summary
+  table with dashed rule totals, bundle-file selection prompts, bundle
+  preview metadata, IMPORT safety warning, per-object OK/SKIP status,
+  import report header, and per-status totals block) and
+  `logging.error(...)` for failure paths (per-type fetch errors,
+  invalid-selection guidance, bundle load errors, source/dest validation
+  errors, and per-object create failures). Multi-line print blocks were
+  consolidated into single `logging.warning` records with embedded `\n`
+  to keep atomic groups intact under logging's one-record-per-call model:
+  export summary header (5 → 3), no-bundles guidance (2 → 1), source-org
+  WARNING (2 → 1), bundle preview trio (4 → 2), IMPORT safety WARNING
+  (2 → 1), and IMPORT REPORT header (3 → 1). All f-string formatting was
+  converted to %-style deferred args per the print-avoidance rule (T20
+  selector target of #886). No companion test file exists for this
+  manager. Full unit suite still passes (8529/8529). No behavior change;
+  only the emission channel moves from `stdout` to the root logger's
+  WARNING/ERROR streams.
+
 ### #886 Phase 2 slice 14/N: retire `print()` in `src/wan_vpn_builder.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 40 `print()` calls in
