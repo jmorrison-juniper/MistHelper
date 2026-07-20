@@ -110,15 +110,16 @@ class TestCheckCsvCacheFresh:
         ):
             assert OrgClientSecurityExporter._check_csv_cache_fresh("Foo.csv", fast=True) is False
 
-    def test_returns_true_when_fresh(self, fake_mh: ModuleType, capsys: pytest.CaptureFixture) -> None:
+    def test_returns_true_when_fresh(self, fake_mh: ModuleType, caplog: pytest.LogCaptureFixture) -> None:
         fake_mh.FilePathUtils.get_csv_path.return_value = "/tmp/fresh.csv"  # type: ignore[attr-defined]
         with (
             patch.object(ocse.os.path, "exists", return_value=True),
             patch.object(ocse.os.path, "getmtime", return_value=1000),
             patch.object(ocse.time, "time", return_value=1000 + 30),
+            caplog.at_level("INFO"),
         ):
             assert OrgClientSecurityExporter._check_csv_cache_fresh("Foo.csv", fast=True) is True
-        assert "Fast mode" in capsys.readouterr().out
+        assert "Fast mode" in caplog.text
 
     def test_returns_false_on_exception(self, fake_mh: ModuleType) -> None:
         fake_mh.FilePathUtils.get_csv_path.side_effect = RuntimeError("boom")  # type: ignore[attr-defined]
@@ -227,22 +228,24 @@ class TestCollectRoguesAcrossSites:
 
 
 class TestExportRogues:
-    def test_writes_when_rogues_present(self, fake_mh: ModuleType, capsys: pytest.CaptureFixture) -> None:
+    def test_writes_when_rogues_present(self, fake_mh: ModuleType, caplog: pytest.LogCaptureFixture) -> None:
         rogues = [{"bssid": "aa"}, {"bssid": "bb"}]
         with (
             patch.object(ocse.DataProcessingUtils, "flatten_nested_fields", return_value=rogues) as flat,
             patch.object(ocse.DataProcessingUtils, "escape_multiline", return_value=rogues) as esc,
+            caplog.at_level("INFO"),
         ):
             OrgClientSecurityExporter._export_rogues(rogues, "OrgRogueAPs", "rogue APs")
         flat.assert_called_once_with(rogues)
         esc.assert_called_once_with(rogues)
         fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(rogues, "OrgRogueAPs")  # type: ignore[attr-defined]
-        assert "2 rogue APs exported" in capsys.readouterr().out
+        assert "2 rogue APs exported" in caplog.text
 
-    def test_empty_rogues_logs_only(self, fake_mh: ModuleType, capsys: pytest.CaptureFixture) -> None:
-        OrgClientSecurityExporter._export_rogues([], "OrgRogueAPs", "rogue APs")
+    def test_empty_rogues_logs_only(self, fake_mh: ModuleType, caplog: pytest.LogCaptureFixture) -> None:
+        with caplog.at_level("INFO"):
+            OrgClientSecurityExporter._export_rogues([], "OrgRogueAPs", "rogue APs")
         fake_mh.DataExporter.write_with_format_selection.assert_not_called()  # type: ignore[attr-defined]
-        assert "No rogue APs detected" in capsys.readouterr().out
+        assert "No rogue APs detected" in caplog.text
 
 
 # ---------------------------------------------------------------------------

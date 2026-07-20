@@ -7,6 +7,43 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 35/N: retire `print()` in `src/export/org_client_security_exporter.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced the 3 remaining `print()`
+  calls in `src/export/org_client_security_exporter.py` with module-level
+  `logging.info(...)` using `%`-style deferred formatting. Two of the calls
+  live in `OrgClientSecurityExporter._export_rogues` (the export-count banner
+  and the empty-result banner) and one in
+  `OrgClientSecurityExporter._check_csv_cache_fresh` (the fast-mode cache-hit
+  banner). Each print's inline `# User-facing ... banner.` comment was moved
+  one line above the migrated `logging.info(...)` call to keep the source
+  under the 120-char E501 gate. `import logging` was already present at module
+  scope.
+- **Test posture (Changed)**: three tests in
+  `tests/unit/export/test_org_client_security_exporter.py`
+  (`TestCheckCsvCacheFresh.test_returns_true_when_fresh`,
+  `TestExportRogues.test_writes_when_rogues_present`,
+  `TestExportRogues.test_empty_rogues_logs_only`) previously asserted on
+  `capsys.readouterr().out` for the removed `print()` output; they now use
+  `caplog.at_level("INFO")` and assert on `caplog.text`, with the fixture
+  signature switched from `capsys: pytest.CaptureFixture` to
+  `caplog: pytest.LogCaptureFixture`. No behavior asserted by the tests
+  changed — same substrings (`"Fast mode"`, `"2 rogue APs exported"`,
+  `"No rogue APs detected"`) are verified against the new log stream.
+- **Verification**: `ruff check --select T201,T203 src/export/org_client_security_exporter.py`
+  reports zero remaining print/pprint violations against the migrated file.
+  `ruff check` and `black --check` are clean on both changed files.
+  Targeted `pytest tests/unit/export/test_org_client_security_exporter.py
+  tests/integration/serial_cc/test_security_events_integration.py -q` →
+  26 passed, 0 failed, 1 skipped. Full-suite baseline holds:
+  **8949 passed, 0 failed, 77 skipped, 5 xfailed, 1 xpassed**.
+- **Follow-up**: 111-ish files still contain `print()` calls (per the
+  `.tmp_census.py` T20 aggregation of `ruff check --select T201,T203 src`).
+  Each subsequent slice continues to attack the smallest-remaining files
+  first. Once the last `src/**/*.py` `print()` is gone the final #886 PR
+  flips the T20 selector on in `pyproject.toml` (add `"T20"` to the `select`
+  list, drop the "Phase 2 goal" comment) and closes the issue.
+
 ### #886 Phase 2 slice 34/N: retire `print()` in `src/refactors/serial_cc/switch_vc_stats.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced the 2 remaining `print()`
