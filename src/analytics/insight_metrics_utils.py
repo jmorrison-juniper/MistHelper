@@ -35,9 +35,12 @@ class InsightMetricsUtils:  # Insight-metrics helpers.
         Refreshes data/ConstInsightMetrics.csv so scope-filtering helpers can read it.
         """
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ConstDefinitionsExporter + apisession.
-        print("Export Available Insight Metrics:")  # User-facing banner for the const insight metrics export
-        print("! Note: This function now uses the dynamic comprehensive const export system")  # Tell the user.
-        print("! For best results, consider using Menu 82: Export All Const Definitions")  # Tell the user.
+        # WHY: Preserve user-facing banner; emit via logging for structured output.
+        logging.info("Export Available Insight Metrics:")
+        # WHY: Preserve user-facing note verbatim.
+        logging.info("! Note: This function now uses the dynamic comprehensive const export system")
+        # WHY: Preserve user-facing note verbatim.
+        logging.info("! For best results, consider using Menu 82: Export All Const Definitions")
         logging.info("Legacy const insight metrics export called - using ConstDefinitionsExporter class")
 
         exporter = mh.ConstDefinitionsExporter(mh.apisession)  # type: ignore[no-untyped-call]
@@ -45,9 +48,11 @@ class InsightMetricsUtils:  # Insight-metrics helpers.
 
         insight_metrics_file = os.path.join("data", "ConstInsightMetrics.csv")  # Expected output file.
         if os.path.exists(insight_metrics_file):  # File present.
-            print("! ConstInsightMetrics.csv is available in the dynamic export results")  # Tell the user.
+            # WHY: Preserve user-facing success message verbatim.
+            logging.info("! ConstInsightMetrics.csv is available in the dynamic export results")
         else:
-            print("! Warning: ConstInsightMetrics.csv was not created during dynamic export")
+            # WHY: Preserve user-facing warning verbatim; semantic level is warning.
+            logging.warning("! Warning: ConstInsightMetrics.csv was not created during dynamic export")
 
     @staticmethod
     def _should_skip_row(metric_name: str, scopes: str) -> bool:

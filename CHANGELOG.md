@@ -7,6 +7,29 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 48/N: retire `print()` in `src/analytics/insight_metrics_utils.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced the 5 remaining `print()`
+  calls in `src/analytics/insight_metrics_utils.py` with `logging.info(...)` /
+  `logging.warning(...)`. All 5 calls live in
+  `InsightMetricsUtils.export_const_insight_metrics`: the "Export Available
+  Insight Metrics:" banner and two `! Note:` / `! For best results` guidance
+  lines, the "! ConstInsightMetrics.csv is available" success message, and
+  the "! Warning: ConstInsightMetrics.csv was not created..." missing-file
+  notice. The first four map to `logging.info` (banner/informational tone);
+  the last maps to `logging.warning` since the original string carried a
+  "Warning:" prefix. All user-facing strings preserved verbatim.
+- **Companion tests (Changed)**:
+  `tests/unit/analytics/test_insight_metrics_utils.py` updated so
+  `test_export_const_insight_metrics_delegates_and_reports_present` and
+  `test_export_const_insight_metrics_warns_when_csv_missing` capture
+  `caplog` records instead of `capsys` stdout. Root-logger `at_level("INFO")`
+  / `at_level("WARNING")` scoping added inside each test's context manager.
+- **Rationale**: incremental progress toward ruff `T20` (T201/T203) selector
+  enablement (issue #886). Behavior-preserving; the module already imported
+  `logging` and used `logging.info/warning/debug/error` directly (no module
+  `logger` object), so the migrated calls follow that existing convention.
+
 ### #886 Phase 2 slice 47/N: retire `print()` in `src/ssh/config/host_parser.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced the 4 remaining `print()`

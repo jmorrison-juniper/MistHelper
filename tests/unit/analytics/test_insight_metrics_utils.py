@@ -48,36 +48,38 @@ def _make_mh(**extra):
 
 
 def test_export_const_insight_metrics_delegates_and_reports_present(
-    capsys: pytest.CaptureFixture[str],
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """CSV present -> exporter.export_all is called and 'available' message printed."""
+    """CSV present -> exporter.export_all is called and 'available' message logged."""
     fake_mh = _make_mh()
     exporter_instance = MagicMock()
     fake_mh.ConstDefinitionsExporter.return_value = exporter_instance
     with (
+        caplog.at_level("INFO", logger="root"),
         patch("src.analytics.insight_metrics_utils.os.path.exists", return_value=True),
         patch("src.analytics.insight_metrics_utils.importlib.import_module", return_value=fake_mh),
     ):
         InsightMetricsUtils.export_const_insight_metrics()
     fake_mh.ConstDefinitionsExporter.assert_called_once_with(fake_mh.apisession)
     exporter_instance.export_all.assert_called_once_with()
-    out = capsys.readouterr().out
-    assert "Export Available Insight Metrics" in out
-    assert "ConstInsightMetrics.csv is available" in out
+    messages = " ".join(rec.getMessage() for rec in caplog.records)
+    assert "Export Available Insight Metrics" in messages
+    assert "ConstInsightMetrics.csv is available" in messages
 
 
 def test_export_const_insight_metrics_warns_when_csv_missing(
-    capsys: pytest.CaptureFixture[str],
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """CSV absent -> warning is emitted."""
+    """CSV absent -> warning is logged."""
     fake_mh = _make_mh()
     with (
+        caplog.at_level("WARNING", logger="root"),
         patch("src.analytics.insight_metrics_utils.os.path.exists", return_value=False),
         patch("src.analytics.insight_metrics_utils.importlib.import_module", return_value=fake_mh),
     ):
         InsightMetricsUtils.export_const_insight_metrics()
-    out = capsys.readouterr().out
-    assert "was not created" in out
+    messages = " ".join(rec.getMessage() for rec in caplog.records)
+    assert "was not created" in messages
 
 
 # ---------- _should_skip_row ----------
