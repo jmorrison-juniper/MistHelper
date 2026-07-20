@@ -74,7 +74,8 @@ class GatewayHaExporter:
         ha_gateways = [gw for gw in all_gateways if gw.get("is_ha") is True]  # Filter to HA-enabled gateways
         logging.info("Found %d HA gateways in site %s", len(ha_gateways), site_id)  # Trace HA gateway count
         if not ha_gateways:  # No HA gateways -> tell user and signal abort
-            print("No HA gateways found for the selected site.")
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logging.info("No HA gateways found for the selected site.")
             return None
         return ha_gateways  # Caller proceeds with cluster export
 
@@ -145,13 +146,16 @@ class GatewayHaExporter:
             rows: List of merged HA gateway rows to display.
         """
         logging.info("Printing HA gateway cluster summary table to terminal")  # Log before display
-        print("\n=== HA Gateway Cluster Summary ===\n")  # Section header for the terminal output
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logging.info("\n=== HA Gateway Cluster Summary ===\n")  # Section header for the terminal output
         # Build column header string for the HA cluster summary table
         header = (
             f"{'Name':<30} {'Node':<8} {'Status':<12}" f" {'Node0 MAC':<20} {'Node1 MAC':<20} {'Cluster MAC':<18}"
         )  # Column headers
-        print(header)  # Print headers to terminal
-        print("-" * len(header))  # Print separator line
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logging.info(header)  # Print headers to terminal
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logging.info("-" * len(header))  # Print separator line
         for row in rows:  # Iterate each HA gateway record
             name = str(row.get("name", ""))[:28]  # Truncate long names for display
             node_name = str(row.get("node_name", ""))  # Which node (node0 / node1)
@@ -159,5 +163,15 @@ class GatewayHaExporter:
             node0_mac = str(row.get("ha_cluster_node0_mac") or "")  # MAC of node0 in the pair
             node1_mac = str(row.get("ha_cluster_node1_mac") or "")  # MAC of node1 in the pair
             vc_mac = str(row.get("vc_mac") or "")  # Shared cluster MAC address
-            print(f"{name:<30} {node_name:<8} {status:<12} {node0_mac:<20} {node1_mac:<20} {vc_mac:<18}")  # Print row
-        print()  # Blank line after table for readability
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logging.info(
+                "%-30s %-8s %-12s %-20s %-20s %-18s",
+                name,
+                node_name,
+                status,
+                node0_mac,
+                node1_mac,
+                vc_mac,
+            )  # Print row
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logging.info("")  # Blank line after table for readability
