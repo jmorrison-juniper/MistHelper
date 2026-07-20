@@ -7,6 +7,30 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 67/N: retire `print()` in `src/refactors/tui_launcher.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced the 8 remaining `print()`
+  calls in `src/refactors/tui_launcher.py` with `logging.info(...)` (module
+  already uses root `logging.<level>(...)` for structured tracing) using
+  `%`-style deferred formatting. Migrations cover the two-line activation
+  banner in `_print_welcome` (Terminal-User-Interface-activated notice +
+  navigation-key hint), the three session-boot lines in `_ensure_api_session`
+  (initializing banner, failure banner on `initialize_mist_session -> False`,
+  and success banner on the truthy path), the Ctrl+C banner in
+  `_handle_keyboard_interrupt`, the crash banner in `_handle_fatal_error`
+  (f-string converted to `%`-style to satisfy G004), and the return-to-menu
+  banner in `_print_exit_message`. Each migrated call carries the standard
+  `# WHY:` annotation preserving legacy operator-visible text via the logger.
+- **Tests (Migrated)**: `tests/unit/refactors/test_tui_launcher.py` had eight
+  `capsys.readouterr().out` assertions across `TestPrintWelcome`,
+  `TestEnsureApiSession` (three sub-cases), `TestHandlerHelpers` (two
+  sub-cases), and `TestPrintExitMessage` (two sub-cases). All eight were
+  converted to `caplog.at_level(logging.INFO, logger="root")` + record-based
+  assertions (`stdout = "\n".join(rec.getMessage() for rec in caplog.records)`).
+  The unused `capsys` parameter in `test_launch_aborts_when_session_init_fails`
+  was dropped since that test only tracks mock invocation counts. Full local
+  run: 22/22 pass on `tests/unit/refactors/test_tui_launcher.py`.
+
 ### #886 Phase 2 slice 66/N: retire `print()` in `src/gateway/overrides/override_report_writer.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced the 8 remaining `print()`

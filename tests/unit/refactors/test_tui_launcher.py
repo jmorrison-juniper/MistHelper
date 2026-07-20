@@ -15,7 +15,7 @@ from types import SimpleNamespace  # WHY: build a stand-in for the MistHelper ar
 from typing import Any  # WHY: relaxed return type for factory helpers that stub launcher methods.
 from unittest.mock import MagicMock  # WHY: FR-008 mandates MagicMock(spec=...) for production-class mocks.
 
-import pytest  # WHY: capsys + monkeypatch fixtures.
+import pytest  # WHY: caplog + monkeypatch fixtures for post-#886 logger-based capture.
 
 
 class TestResolveRuntimeDependencies:
@@ -73,34 +73,36 @@ class TestApisessionAccessor:
 class TestPrintWelcome:
     """`_print_welcome` emits the two-line activation banner to stdout."""
 
-    def test_prints_activation_banner(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_prints_activation_banner(self, caplog: pytest.LogCaptureFixture) -> None:
         """Two lines are printed: activation notice + navigation hint."""
         from src.refactors.tui_launcher import TUILauncher  # WHY: fresh import per test.
 
-        TUILauncher()._print_welcome()  # WHY: exercise banner emission.
-        captured = capsys.readouterr()  # WHY: capture stdout.
-        assert "Terminal User Interface mode activated" in captured.out  # WHY: activation banner is present.
-        assert "arrow keys" in captured.out  # WHY: navigation hint substring is present.
+        with caplog.at_level(logging.INFO, logger="root"):  # WHY: SUT logs via bare logging.info -> root logger.
+            TUILauncher()._print_welcome()  # WHY: exercise banner emission.
+        stdout = "\n".join(record.getMessage() for record in caplog.records)  # WHY: aggregate for substring asserts.
+        assert "Terminal User Interface mode activated" in stdout  # WHY: activation banner is present.
+        assert "arrow keys" in stdout  # WHY: navigation hint substring is present.
 
 
 class TestEnsureApiSession:
     """`_ensure_api_session` reuses existing sessions, initializes missing ones, and reports failures."""
 
-    def test_reuses_existing_session(self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
-        """When apisession is already set, no initialize call happens and no user-visible print occurs."""
+    def test_reuses_existing_session(self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+        """When apisession is already set, no initialize call happens and no user-visible log is emitted."""
         from src.refactors.tui_launcher import TUILauncher  # WHY: fresh import per test.
 
         monkeypatch.setattr("MistHelper.apisession", MagicMock(name="existing_session"), raising=False)  # WHY: exist.
         init_mock = MagicMock(name="initialize_mist_session")  # WHY: sentinel to catch unintended invocation.
         monkeypatch.setattr("MistHelper.initialize_mist_session", init_mock, raising=False)  # WHY: sentinel path.
         launcher = TUILauncher()  # WHY: build launcher after apisession is published.
-        assert launcher._ensure_api_session() is True  # WHY: existing session -> True return.
+        with caplog.at_level(logging.INFO, logger="root"):  # WHY: SUT logs via root logger.
+            assert launcher._ensure_api_session() is True  # WHY: existing session -> True return.
         assert init_mock.call_count == 0  # WHY: reuse branch must not touch initialize_mist_session.
-        captured = capsys.readouterr()  # WHY: capture any accidental print output.
-        assert "Initializing" not in captured.out  # WHY: reuse branch prints nothing.
+        stdout = "\n".join(record.getMessage() for record in caplog.records)  # WHY: aggregate log lines for asserts.
+        assert ">> Initializing" not in stdout  # WHY: reuse branch does not emit the user-visible init banner.
 
     def test_initializes_missing_session_success(
-        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
     ) -> None:
         """When apisession is missing and initialize_mist_session returns truthy, session is treated as ready."""
         from src.refactors.tui_launcher import TUILauncher  # WHY: fresh import per test.
@@ -109,25 +111,27 @@ class TestEnsureApiSession:
         init_mock = MagicMock(return_value=True, name="initialize_mist_session")  # WHY: success sentinel.
         monkeypatch.setattr("MistHelper.initialize_mist_session", init_mock, raising=False)  # WHY: publish init.
         launcher = TUILauncher()  # WHY: build launcher after globals published.
-        assert launcher._ensure_api_session() is True  # WHY: successful init -> True return.
+        with caplog.at_level(logging.INFO, logger="root"):  # WHY: SUT logs via root logger.
+            assert launcher._ensure_api_session() is True  # WHY: successful init -> True return.
         assert init_mock.call_count == 1  # WHY: exactly one bootstrap invocation.
-        captured = capsys.readouterr()  # WHY: capture progress + success banners.
-        assert "Initializing" in captured.out  # WHY: progress banner is printed on the init path.
-        assert "successfully" in captured.out  # WHY: success banner is printed on the success sub-branch.
+        stdout = "\n".join(record.getMessage() for record in caplog.records)  # WHY: aggregate log lines for asserts.
+        assert "Initializing" in stdout  # WHY: progress banner is emitted on the init path.
+        assert "successfully" in stdout  # WHY: success banner is emitted on the success sub-branch.
 
     def test_initializes_missing_session_failure(
-        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
     ) -> None:
-        """When initialize_mist_session returns falsy, ERROR is printed and False is returned."""
+        """When initialize_mist_session returns falsy, ERROR is logged and False is returned."""
         from src.refactors.tui_launcher import TUILauncher  # WHY: fresh import per test.
 
         monkeypatch.delattr("MistHelper.apisession", raising=False)  # WHY: force the initialize branch.
         init_mock = MagicMock(return_value=False, name="initialize_mist_session")  # WHY: failure sentinel.
         monkeypatch.setattr("MistHelper.initialize_mist_session", init_mock, raising=False)  # WHY: publish init.
         launcher = TUILauncher()  # WHY: build launcher after globals published.
-        assert launcher._ensure_api_session() is False  # WHY: failed init -> False return.
-        captured = capsys.readouterr()  # WHY: capture error banner.
-        assert "Failed to initialize" in captured.out  # WHY: error banner is printed on the failure sub-branch.
+        with caplog.at_level(logging.INFO, logger="root"):  # WHY: SUT logs via root logger.
+            assert launcher._ensure_api_session() is False  # WHY: failed init -> False return.
+        stdout = "\n".join(record.getMessage() for record in caplog.records)  # WHY: aggregate log lines for asserts.
+        assert "Failed to initialize" in stdout  # WHY: error banner is emitted on the failure sub-branch.
 
 
 class TestSuppressAndRestoreConsoleLogging:
@@ -209,41 +213,49 @@ class TestRunTui:
 class TestHandlerHelpers:
     """`_handle_keyboard_interrupt` / `_handle_fatal_error` print user-visible banners."""
 
-    def test_keyboard_interrupt_prints_exit_banner(self, capsys: pytest.CaptureFixture[str]) -> None:
-        """Ctrl+C banner is printed to stdout."""
+    def test_keyboard_interrupt_prints_exit_banner(self, caplog: pytest.LogCaptureFixture) -> None:
+        """Ctrl+C banner is emitted via the logger."""
         from src.refactors.tui_launcher import TUILauncher  # WHY: fresh import per test.
 
-        TUILauncher()._handle_keyboard_interrupt()  # WHY: exercise banner emission.
-        assert "stopped by user" in capsys.readouterr().out  # WHY: banner substring is present.
+        with caplog.at_level(logging.INFO, logger="root"):  # WHY: SUT logs via root logger.
+            TUILauncher()._handle_keyboard_interrupt()  # WHY: exercise banner emission.
+        stdout = "\n".join(record.getMessage() for record in caplog.records)  # WHY: aggregate log lines for asserts.
+        assert "stopped by user" in stdout  # WHY: banner substring is present.
 
-    def test_fatal_error_prints_crash_banner(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_fatal_error_prints_crash_banner(self, caplog: pytest.LogCaptureFixture) -> None:
         """Fatal error message contains the exception string."""
         from src.refactors.tui_launcher import TUILauncher  # WHY: fresh import per test.
 
-        TUILauncher()._handle_fatal_error(RuntimeError("boom!"))  # WHY: exercise error branch.
-        assert "boom!" in capsys.readouterr().out  # WHY: exception str is echoed to stdout.
+        with caplog.at_level(logging.INFO, logger="root"):  # WHY: SUT logs via root logger.
+            TUILauncher()._handle_fatal_error(RuntimeError("boom!"))  # WHY: exercise error branch.
+        stdout = "\n".join(record.getMessage() for record in caplog.records)  # WHY: aggregate log lines for asserts.
+        assert "boom!" in stdout  # WHY: exception str is echoed via logger.
 
 
 class TestPrintExitMessage:
     """`_print_exit_message` prints the return banner and (optionally) a debug timestamp."""
 
-    def test_exit_message_no_debug(self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
-        """Without debug mode only the return banner is printed."""
+    def test_exit_message_no_debug(self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+        """Without debug mode only the return banner is emitted."""
         from src.refactors.tui_launcher import TUILauncher  # WHY: fresh import per test.
 
         monkeypatch.setattr(
             "MistHelper.args", SimpleNamespace(debug=False), raising=False
         )  # WHY: disable debug branch.
-        TUILauncher()._print_exit_message()  # WHY: exercise non-debug branch.
-        assert "Returned from TUI" in capsys.readouterr().out  # WHY: banner substring present on stdout.
+        with caplog.at_level(logging.INFO, logger="root"):  # WHY: SUT logs via root logger.
+            TUILauncher()._print_exit_message()  # WHY: exercise non-debug branch.
+        stdout = "\n".join(record.getMessage() for record in caplog.records)  # WHY: aggregate log lines for asserts.
+        assert "Returned from TUI" in stdout  # WHY: banner substring present on captured log stream.
 
-    def test_exit_message_with_debug(self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_exit_message_with_debug(self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
         """With debug mode, the additional debug trace + return banner are both emitted."""
         from src.refactors.tui_launcher import TUILauncher  # WHY: fresh import per test.
 
         monkeypatch.setattr("MistHelper.args", SimpleNamespace(debug=True), raising=False)  # WHY: enable debug branch.
-        TUILauncher()._print_exit_message()  # WHY: exercise debug branch.
-        assert "Returned from TUI" in capsys.readouterr().out  # WHY: banner substring present on stdout.
+        with caplog.at_level(logging.INFO, logger="root"):  # WHY: SUT logs via root logger.
+            TUILauncher()._print_exit_message()  # WHY: exercise debug branch.
+        stdout = "\n".join(record.getMessage() for record in caplog.records)  # WHY: aggregate log lines for asserts.
+        assert "Returned from TUI" in stdout  # WHY: banner substring present on captured log stream.
 
 
 class TestLaunchFullFlow:
@@ -257,9 +269,7 @@ class TestLaunchFullFlow:
         launcher = TUILauncher()  # WHY: build the SUT.
         return launcher  # WHY: hand back to the test for helper stubbing.
 
-    def test_launch_aborts_when_session_init_fails(
-        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-    ) -> None:
+    def test_launch_aborts_when_session_init_fails(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """When `_ensure_api_session` returns False, launch exits before running the TUI."""
         launcher = self._mock_launcher(monkeypatch)  # WHY: shared setup.
         monkeypatch.setattr(launcher, "_ensure_api_session", lambda: False)  # WHY: force early-return branch.
