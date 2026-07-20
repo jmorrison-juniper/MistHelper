@@ -7,6 +7,19 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 50/N: retire `print()` in `src/export/site_export_utils.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced the 5 remaining `print()`
+  calls in `src/export/site_export_utils.py` with `logging.info(...)` /
+  `logging.warning(...)` / `logging.error(...)` using `%`-style deferred
+  formatting. Migrated callsites in `_emit_debug_table` (PrettyTable render),
+  `_write_insight_rows` (the "! N records" success and "! 0 records ... (no
+  metrics available)" empty branches), `_export_data` (record-count summary),
+  and `insights` (operator-facing error branch). Companion tests in
+  `tests/unit/export/test_site_export_utils_extended.py` migrated from
+  `capsys` to `caplog` (`caplog.at_level(..., logger="root")` + record-list
+  join). No behavioral change; operator messages preserved verbatim.
+
 ### #886 Phase 2 slice 49/N: retire `print()` in `src/export/site_config_exporter.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced the 5 remaining `print()`

@@ -375,25 +375,27 @@ def test_fetch_site_sle_metrics_payload_returns_dict_when_data_attribute_present
 
 
 def test_write_insight_rows_writes_and_logs_when_rows_present(
-    caplog: pytest.LogCaptureFixture, capsys: pytest.CaptureFixture[str]
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """_write_insight_rows writes CSV and prints success line for non-empty rows."""
+    """_write_insight_rows writes CSV and logs success line for non-empty rows."""
     exporter, mocks = _build_exporter()
-    with caplog.at_level(logging.INFO):
+    with caplog.at_level(logging.INFO, logger="root"):
         exporter._write_insight_rows([{"metric_name": "m1"}], "f.csv", "site")
     mocks["exporter_mock"].assert_called_once_with([{"metric_name": "m1"}], "f.csv")
-    assert "1 records exported" in capsys.readouterr().out
+    messages = " ".join(rec.getMessage() for rec in caplog.records)
+    assert "1 records exported" in messages
 
 
 def test_write_insight_rows_writes_empty_file_when_rows_missing(
-    caplog: pytest.LogCaptureFixture, capsys: pytest.CaptureFixture[str]
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """_write_insight_rows writes empty file + prints empty message when no rows."""
+    """_write_insight_rows writes empty file + logs empty message when no rows."""
     exporter, mocks = _build_exporter()
-    with caplog.at_level(logging.WARNING):
+    with caplog.at_level(logging.WARNING, logger="root"):
         exporter._write_insight_rows([], "f.csv", "site")
     mocks["exporter_mock"].assert_called_once_with([], "f.csv")
-    assert "no metrics available" in capsys.readouterr().out
+    messages = " ".join(rec.getMessage() for rec in caplog.records)
+    assert "no metrics available" in messages
     assert "No site SLE metric insight data available" in caplog.text
 
 
@@ -463,7 +465,7 @@ def test_export_data_raises_and_logs_on_api_failure(caplog: pytest.LogCaptureFix
             exporter._export_data(api_call=api, data_type="test data")
 
 
-def test_insights_happy_path_writes_rows(caplog: pytest.LogCaptureFixture, capsys: pytest.CaptureFixture[str]) -> None:
+def test_insights_happy_path_writes_rows(caplog: pytest.LogCaptureFixture) -> None:
     """insights() resolves site, fetches SLE payload and writes rows."""
     exporter, mocks = _build_exporter()
     with caplog.at_level(logging.INFO):
@@ -483,16 +485,18 @@ def test_insights_returns_when_no_site_selected() -> None:
     mocks["exporter_mock"].assert_not_called()
 
 
-def test_insights_handles_api_error_by_writing_empty_file(capsys: pytest.CaptureFixture[str]) -> None:
-    """insights() error branch writes empty file and prints operator message."""
+def test_insights_handles_api_error_by_writing_empty_file(caplog: pytest.LogCaptureFixture) -> None:
+    """insights() error branch writes empty file and logs operator message."""
     exporter, mocks = _build_exporter()
     mocks["sle_ns"].listSiteSlesMetrics.side_effect = RuntimeError("boom")
-    exporter.insights()
+    with caplog.at_level(logging.ERROR, logger="root"):
+        exporter.insights()
     # writer should still be called once with empty rows.
     mocks["exporter_mock"].assert_called_once()
     args, _kwargs = mocks["exporter_mock"].call_args
     assert args[0] == []  # WHY: empty file for pipeline continuity.
-    assert "Error exporting site SLE metric insights" in capsys.readouterr().out
+    messages = " ".join(rec.getMessage() for rec in caplog.records)
+    assert "Error exporting site SLE metric insights" in messages
 
 
 # ---------------------------------------------------------------------------
