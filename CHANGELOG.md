@@ -7,6 +7,29 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 11/N: retire `print()` in root `MistHelper.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced all 98 `print()` calls in
+  the root `MistHelper.py` entry point with `logging.warning(...)` /
+  `logging.info(...)` / `logging.error(...)` so the print-avoidance rule (T20
+  selector target of #886) can eventually be enabled repo-wide. WARNING level
+  chosen for operator-visible container-mode banners, credential preflight
+  diagnostics, TUI activation/shutdown notices, non-interactive menu
+  dispatch confirmations, and post-menu success/interrupt echoes so they
+  surface on the default root-logger configuration (INFO is suppressed by
+  default). ERROR level used for preflight rejections, TUI crashes, session
+  initialisation failures, and post-menu exceptions. Three pre-logging
+  stderr prints at the top of the file (before `import logging`) remain
+  intentionally as `print(..., file=sys.stderr)` guarded by `# noqa: T201`
+  because they must execute before the logging module is imported.
+  Companion unit tests in
+  `tests/unit/test_credential_preflight.py` were migrated from
+  `capsys`/`captured.out` to `caplog`/`caplog.text` with a
+  `caplog.set_level(logging.ERROR)` prefix so the suite continues to assert
+  the operator-visible failure output through the logging path. No
+  behavioural change beyond the emit channel; all 8529 unit tests remain
+  green.
+
 ### #886 Phase 2 slice 10/N: retire `print()` in `src/reports/` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced the remaining `print()`
