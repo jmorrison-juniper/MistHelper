@@ -23,6 +23,7 @@ no-offline, happy path).
 
 from __future__ import annotations
 
+import logging
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -54,22 +55,25 @@ def test_parse_threshold_attempt_returns_int_when_in_range() -> None:
     assert R._parse_threshold_attempt("48") == 48
 
 
-def test_parse_threshold_attempt_returns_none_when_below_min(capsys: pytest.CaptureFixture[str]) -> None:
+def test_parse_threshold_attempt_returns_none_when_below_min(caplog: pytest.LogCaptureFixture) -> None:
     """Zero is below MIN_THRESHOLD_HOURS: returns None with range message."""
+    caplog.set_level(logging.WARNING)
     assert R._parse_threshold_attempt("0") is None
-    assert "must be between" in capsys.readouterr().out
+    assert "must be between" in caplog.text
 
 
-def test_parse_threshold_attempt_returns_none_when_above_max(capsys: pytest.CaptureFixture[str]) -> None:
+def test_parse_threshold_attempt_returns_none_when_above_max(caplog: pytest.LogCaptureFixture) -> None:
     """Above MAX_THRESHOLD_HOURS: returns None with range message."""
+    caplog.set_level(logging.WARNING)
     assert R._parse_threshold_attempt("99999") is None
-    assert "must be between" in capsys.readouterr().out
+    assert "must be between" in caplog.text
 
 
-def test_parse_threshold_attempt_returns_none_on_value_error(capsys: pytest.CaptureFixture[str]) -> None:
+def test_parse_threshold_attempt_returns_none_on_value_error(caplog: pytest.LogCaptureFixture) -> None:
     """Non-numeric input triggers ValueError branch and prints invalid message."""
+    caplog.set_level(logging.WARNING)
     assert R._parse_threshold_attempt("abc") is None
-    assert "Invalid input" in capsys.readouterr().out
+    assert "Invalid input" in caplog.text
 
 
 # ---------- _prompt_threshold ----------
@@ -96,8 +100,9 @@ def test_prompt_threshold_returns_first_valid_attempt() -> None:
         assert R._prompt_threshold() == 24
 
 
-def test_prompt_threshold_retries_then_succeeds(capsys: pytest.CaptureFixture[str]) -> None:
+def test_prompt_threshold_retries_then_succeeds(caplog: pytest.LogCaptureFixture) -> None:
     """Bad input on first attempt: retry counter decrements and second attempt wins."""
+    caplog.set_level(logging.WARNING)
     fake_mh = _make_mh()
     fake_mh.InputUtils.safe_input.side_effect = ["bad", "72"]
     with patch(
@@ -105,11 +110,12 @@ def test_prompt_threshold_retries_then_succeeds(capsys: pytest.CaptureFixture[st
         return_value=fake_mh,
     ):
         assert R._prompt_threshold() == 72
-    assert "attempt(s) remaining" in capsys.readouterr().out
+    assert "attempt(s) remaining" in caplog.text
 
 
-def test_prompt_threshold_falls_back_when_max_retries_exceeded(capsys: pytest.CaptureFixture[str]) -> None:
+def test_prompt_threshold_falls_back_when_max_retries_exceeded(caplog: pytest.LogCaptureFixture) -> None:
     """All MAX_INPUT_RETRIES attempts fail -> DEFAULT_THRESHOLD_HOURS."""
+    caplog.set_level(logging.WARNING)
     fake_mh = _make_mh()
     fake_mh.InputUtils.safe_input.side_effect = ["bad"] * R.MAX_INPUT_RETRIES
     with patch(
@@ -117,7 +123,7 @@ def test_prompt_threshold_falls_back_when_max_retries_exceeded(capsys: pytest.Ca
         return_value=fake_mh,
     ):
         assert R._prompt_threshold() == R.DEFAULT_THRESHOLD_HOURS
-    assert "Using default threshold" in capsys.readouterr().out
+    assert "Using default threshold" in caplog.text
 
 
 # ---------- _fetch_data ----------
@@ -275,13 +281,14 @@ def test_process_devices_sorts_offline_records_by_duration_desc() -> None:
 
 
 def test_render_offline_breakdowns_hides_zero_type_and_lists_top_sites(
-    capsys: pytest.CaptureFixture[str],
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Zero counts are suppressed; sites render sorted descending, capped at 5."""
+    caplog.set_level(logging.WARNING)
     type_counts = {"AP": 3, "Switch": 0, "Gateway": 1}
     site_counts = {f"site-{i}": i for i in range(1, 8)}
     R._render_offline_breakdowns(type_counts, site_counts)
-    output = capsys.readouterr().out
+    output = caplog.text
     assert "APs: 3" in output
     assert "Switches:" not in output  # zero-suppressed
     assert "Gateways: 1" in output
@@ -290,26 +297,28 @@ def test_render_offline_breakdowns_hides_zero_type_and_lists_top_sites(
 
 
 def test_render_offline_breakdowns_skips_top_sites_when_empty(
-    capsys: pytest.CaptureFixture[str],
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Empty site_counts hides the Top 5 leaderboard entirely."""
+    caplog.set_level(logging.WARNING)
     R._render_offline_breakdowns({"AP": 1}, {})
-    output = capsys.readouterr().out
+    output = caplog.text
     assert "Top 5 Sites" not in output
 
 
 # ---------- _display_summary ----------
 
 
-def test_display_summary_prints_counts_and_calls_breakdown(capsys: pytest.CaptureFixture[str]) -> None:
+def test_display_summary_prints_counts_and_calls_breakdown(caplog: pytest.LogCaptureFixture) -> None:
     """Header + totals print; per-type/per-site counts render via helper."""
+    caplog.set_level(logging.WARNING)
     offline_records = [
         {"Device Type": "AP", "Site Name": "HQ"},
         {"Device Type": "AP", "Site Name": "HQ"},
         {"Device Type": "Switch", "Site Name": "Branch"},
     ]
     R._display_summary(100, offline_records, 48)
-    output = capsys.readouterr().out
+    output = caplog.text
     assert "Total devices in org: 100" in output
     assert "Devices offline > 48 hours: 3" in output
     assert "APs: 2" in output
@@ -319,8 +328,9 @@ def test_display_summary_prints_counts_and_calls_breakdown(capsys: pytest.Captur
 # ---------- _save_offline_csv ----------
 
 
-def test_save_offline_csv_strips_helper_keys_and_writes(capsys: pytest.CaptureFixture[str]) -> None:
+def test_save_offline_csv_strips_helper_keys_and_writes(caplog: pytest.LogCaptureFixture) -> None:
     """Helper keys (_sort_key) are stripped; DataExporter is called with expected filename."""
+    caplog.set_level(logging.WARNING)
     fake_mh = _make_mh()
     records = [
         {
@@ -346,14 +356,15 @@ def test_save_offline_csv_strips_helper_keys_and_writes(capsys: pytest.CaptureFi
     assert "_sort_key" not in csv_records[0]
     filename = written.kwargs["filename_or_table"]
     assert filename.startswith("OfflineDeviceReport_") and filename.endswith(".csv")
-    assert "CSV saved" in capsys.readouterr().out
+    assert "CSV saved" in caplog.text
 
 
 # ---------- _present_results ----------
 
 
-def test_present_results_caps_display_rows_and_calls_save(capsys: pytest.CaptureFixture[str]) -> None:
+def test_present_results_caps_display_rows_and_calls_save(caplog: pytest.LogCaptureFixture) -> None:
     """Table display honors MAX_DISPLAY_ROWS; _save_offline_csv gets the full list."""
+    caplog.set_level(logging.WARNING)
     records = [
         {
             "Device Name": f"d{i}",
@@ -371,15 +382,16 @@ def test_present_results_caps_display_rows_and_calls_save(capsys: pytest.Capture
     with patch.object(R, "_save_offline_csv") as save:
         R._present_results(records)
     save.assert_called_once_with(records, R.MAX_DISPLAY_ROWS + 5)
-    output = capsys.readouterr().out
+    output = caplog.text
     assert f"showing {R.MAX_DISPLAY_ROWS} of {R.MAX_DISPLAY_ROWS + 5}" in output
 
 
 # ---------- _gather_offline_inputs ----------
 
 
-def test_gather_offline_inputs_aborts_when_no_org(capsys: pytest.CaptureFixture[str]) -> None:
+def test_gather_offline_inputs_aborts_when_no_org(caplog: pytest.LogCaptureFixture) -> None:
     """Missing org -> (None, 0)."""
+    caplog.set_level(logging.WARNING)
     fake_mh = _make_mh()
     fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = ""
     with patch(
@@ -387,11 +399,12 @@ def test_gather_offline_inputs_aborts_when_no_org(capsys: pytest.CaptureFixture[
         return_value=fake_mh,
     ):
         assert R._gather_offline_inputs() == (None, 0)
-    assert "No organization selected" in capsys.readouterr().out
+    assert "No organization selected" in caplog.text
 
 
-def test_gather_offline_inputs_returns_org_and_threshold(capsys: pytest.CaptureFixture[str]) -> None:
+def test_gather_offline_inputs_returns_org_and_threshold(caplog: pytest.LogCaptureFixture) -> None:
     """Happy path resolves org + prompts threshold + echoes."""
+    caplog.set_level(logging.WARNING)
     fake_mh = _make_mh()
     fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-x"
     with (
@@ -402,16 +415,17 @@ def test_gather_offline_inputs_returns_org_and_threshold(capsys: pytest.CaptureF
         ),
     ):
         assert R._gather_offline_inputs() == ("org-x", 24)
-    assert "Threshold: 24 hours" in capsys.readouterr().out
+    assert "Threshold: 24 hours" in caplog.text
 
 
 # ---------- _finalize_offline_report ----------
 
 
 def test_finalize_offline_report_runs_summary_present_and_elapsed(
-    capsys: pytest.CaptureFixture[str],
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Finalize walks summary -> present -> elapsed."""
+    caplog.set_level(logging.WARNING)
     with (
         patch.object(R, "_display_summary") as summary,
         patch.object(R, "_present_results") as present,
@@ -420,7 +434,7 @@ def test_finalize_offline_report_runs_summary_present_and_elapsed(
         R._finalize_offline_report(10, [{"x": 1}], 48, 990.0)
     summary.assert_called_once_with(10, [{"x": 1}], 48)
     present.assert_called_once_with([{"x": 1}])
-    assert "Report completed in 10.0 seconds" in capsys.readouterr().out
+    assert "Report completed in 10.0 seconds" in caplog.text
 
 
 # ---------- execute ----------
@@ -436,8 +450,9 @@ def test_execute_returns_early_when_no_org() -> None:
     fetch.assert_not_called()
 
 
-def test_execute_handles_fetch_exception(capsys: pytest.CaptureFixture[str]) -> None:
+def test_execute_handles_fetch_exception(caplog: pytest.LogCaptureFixture) -> None:
     """_fetch_data exception -> user-facing error + no processing."""
+    caplog.set_level(logging.WARNING)
     with (
         patch.object(R, "_gather_offline_inputs", return_value=("org", 48)),
         patch.object(R, "_fetch_data", side_effect=RuntimeError("boom")),
@@ -445,11 +460,12 @@ def test_execute_handles_fetch_exception(capsys: pytest.CaptureFixture[str]) -> 
     ):
         R.execute()
     proc.assert_not_called()
-    assert "Failed to fetch data" in capsys.readouterr().out
+    assert "Failed to fetch data" in caplog.text
 
 
-def test_execute_prints_notice_when_no_devices(capsys: pytest.CaptureFixture[str]) -> None:
+def test_execute_prints_notice_when_no_devices(caplog: pytest.LogCaptureFixture) -> None:
     """Empty device list -> "No devices found" notice + early return."""
+    caplog.set_level(logging.WARNING)
     with (
         patch.object(R, "_gather_offline_inputs", return_value=("org", 48)),
         patch.object(R, "_fetch_data", return_value=({}, [])),
@@ -457,11 +473,12 @@ def test_execute_prints_notice_when_no_devices(capsys: pytest.CaptureFixture[str
     ):
         R.execute()
     proc.assert_not_called()
-    assert "No devices found in this organization" in capsys.readouterr().out
+    assert "No devices found in this organization" in caplog.text
 
 
-def test_execute_prints_all_clear_when_none_offline(capsys: pytest.CaptureFixture[str]) -> None:
+def test_execute_prints_all_clear_when_none_offline(caplog: pytest.LogCaptureFixture) -> None:
     """Devices exist but none offline beyond threshold -> all-clear message."""
+    caplog.set_level(logging.WARNING)
     with (
         patch.object(R, "_gather_offline_inputs", return_value=("org", 48)),
         patch.object(R, "_fetch_data", return_value=({}, [{"mac": "aa"}])),
@@ -470,7 +487,7 @@ def test_execute_prints_all_clear_when_none_offline(capsys: pytest.CaptureFixtur
     ):
         R.execute()
     finalize.assert_not_called()
-    assert "All clear" in capsys.readouterr().out
+    assert "All clear" in caplog.text
 
 
 def test_execute_finalizes_when_offline_records_present() -> None:

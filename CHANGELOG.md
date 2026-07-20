@@ -7,6 +7,32 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 10/N: retire `print()` in `src/reports/` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced the remaining `print()`
+  calls in `src/reports/e911_bssid.py`,
+  `src/reports/global_wired_client_report_generator.py`,
+  `src/reports/offline_device_reporter.py`,
+  `src/reports/sfp_transceiver_data_processor.py`, and
+  `src/reports/wired_client_manufacturer_report_generator.py` with
+  `logging.warning(...)` / `logging.info(...)` / `logging.error(...)` so
+  the print-avoidance rule (T20 selector target of #886) can eventually be
+  enabled repo-wide. WARNING level chosen for operator-visible report
+  headers, threshold prompts, per-type/per-site breakdowns, CSV-write
+  confirmations, and all-clear/no-devices notices so they surface on the
+  default root-logger configuration (INFO is suppressed by default).
+  Companion unit tests in
+  `tests/unit/reports/test_global_wired_client_report_generator.py`,
+  `tests/unit/reports/test_offline_device_reporter.py`,
+  `tests/unit/reports/test_sfp_transceiver_data_processor.py`,
+  `tests/unit/reports/test_wired_client_manufacturer_report_generator.py`,
+  and `tests/unit/test_e911_bssid.py` were migrated from
+  `capsys`/`captured.out` to `caplog`/`caplog.text` with a
+  `caplog.set_level(logging.WARNING)` prefix so the suite continues to
+  assert operator-visible output through the logging path. No behavioural
+  change beyond the emit channel; all 203 tests under
+  `tests/unit/reports/` + `tests/unit/test_e911_bssid.py` remain green.
+
 ### #886 Phase 2 slice 9/N: retire `print()` in `src/auth/` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced the remaining `print()`

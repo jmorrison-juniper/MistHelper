@@ -44,7 +44,7 @@ class GlobalWiredClientReportGenerator:
         records, remote_used = GlobalWiredClientReportGenerator._fetch_clients(org_id, criteria)
         if not records:  # No records.
             logging.warning("No wired clients retrieved from API")  # Warn none retrieved.
-            print("\n  No wired clients found in the organization.")  # Tell the user.
+            logging.warning("\n  No wired clients found in the organization.")  # Legacy console echo routed via logger.
             return  # Abort.
         matched, metadata = GlobalWiredClientReportGenerator._apply_filters(records, criteria, remote_used)
         GlobalWiredClientReportGenerator._write_outputs(matched, metadata)  # Write the outputs.
@@ -52,8 +52,8 @@ class GlobalWiredClientReportGenerator:
     @staticmethod
     def _prompt_filter_criteria() -> dict[str, str] | Literal[False] | None:  # False = user cancelled, never True
         """Collect optional MAC and manufacturer filter criteria from user."""
-        print("\n--- Global Wired Client Report ---")  # Header.
-        print("Optional filters (press Enter to skip):\n")  # Explain skipping.
+        logging.warning("\n--- Global Wired Client Report ---")  # Legacy console echo routed via logger.
+        logging.warning("Optional filters (press Enter to skip):\n")  # Legacy console echo routed via logger.
         criteria: dict[str, str] = {}  # Collect criteria.
         mac_result = GlobalWiredClientReportGenerator._collect_single_filter("MAC address", "mac", criteria)
         if mac_result is False:  # User cancelled.
@@ -93,17 +93,19 @@ class GlobalWiredClientReportGenerator:
                 return selected  # type: ignore[no-any-return]
         except ValueError:  # Non-numeric input -> treat as invalid
             pass
-        print(f"  Invalid selection. No {field_name} filter will be applied.")  # Operator notice on invalid
+        logging.warning(
+            "  Invalid selection. No %s filter will be applied.", field_name
+        )  # Legacy console echo routed via logger.
         return None
 
     @staticmethod
     def _prompt_operator(field_name: str) -> str | None:  # Prompt an operator choice.
         """Display operator selection menu and return chosen operator or None."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of FilterOperatorEngine + InputUtils.
-        print(f"  {field_name} filter operator:")  # Label the field
-        print("    0. No filter (skip)")  # No-filter option
+        logging.warning("  %s filter operator:", field_name)  # Legacy console echo routed via logger.
+        logging.warning("    0. No filter (skip)")  # Legacy console echo routed via logger.
         for index, operator in enumerate(mh.FilterOperatorEngine.OPERATOR_CATALOG, 1):  # List operators
-            print(f"    {index}. {operator}")  # Print each option
+            logging.warning("    %s. %s", index, operator)  # Legacy console echo routed via logger.
         choice = mh.InputUtils.safe_input(  # Read the choice
             f"  Select {field_name} operator (0-12, default 0): ",
             default_value="0",
@@ -121,7 +123,9 @@ class GlobalWiredClientReportGenerator:
             remote_used = GlobalWiredClientReportGenerator._build_remote_params(criteria, remote_params)
         try:
             logging.info("Fetching organization wired clients...")  # Log the fetch.
-            print("\n  Retrieving wired clients from organization...")  # Tell the user.
+            logging.warning(
+                "\n  Retrieving wired clients from organization..."
+            )  # Legacy console echo routed via logger.
             response = mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients(  # Call the API.
                 mh.apisession,
                 org_id,
@@ -129,11 +133,15 @@ class GlobalWiredClientReportGenerator:
             )
             records = mistapi.get_all(response=response, mist_session=mh.apisession) or []  # Page all; default empty.
             logging.info("Retrieved %s wired client records", len(records))  # Log the count.
-            print(f"  Retrieved {len(records)} wired client records")  # Tell the user.
+            logging.warning(
+                "  Retrieved %s wired client records", len(records)
+            )  # Legacy console echo routed via logger.
             return records, remote_used  # Return records and flag.
         except Exception as exception:  # Fetch failed.
             logging.exception("Failed to fetch wired clients: %s", exception)  # Log the exception.
-            print(f"\n  Error retrieving wired clients: {exception}")  # Tell the user.
+            logging.warning(
+                "\n  Error retrieving wired clients: %s", exception
+            )  # Legacy console echo routed via logger.
             return [], False  # Return empty.
 
     @staticmethod
@@ -250,10 +258,12 @@ class GlobalWiredClientReportGenerator:
         """Write matched records to both local report artifact and standard export."""
         matched_count = metadata["records_matched"]  # Matched count.
         retrieved_count = metadata["records_retrieved"]  # Retrieved count.
-        print(f"\n  Matched {matched_count} of {retrieved_count} wired client records")  # Tell the user.
+        logging.warning(
+            "\n  Matched %s of %s wired client records", matched_count, retrieved_count
+        )  # Legacy console echo routed via logger.
         if matched_count == 0:  # Nothing matched.
             logging.info("Zero records matched filters -- producing empty outputs")  # Log empty result.
-            print("  No records matched the specified filters.")  # Tell the user.
+            logging.warning("  No records matched the specified filters.")  # Legacy console echo routed via logger.
         GlobalWiredClientReportGenerator._write_standard_export(matched)  # Write the CSV export.
         GlobalWiredClientReportGenerator._write_local_report(matched, metadata)  # Write the JSON summary.
 
@@ -285,7 +295,9 @@ class GlobalWiredClientReportGenerator:
             with open(report_path, "w", encoding="utf-8") as report_file:  # Open the report file.
                 json.dump(report_payload, report_file, indent=2, default=str)  # Dump JSON.
             logging.info("Local report artifact written to %s", report_path)  # Log the write.
-            print(f"  Report summary written to {report_path}")  # Tell the user.
+            logging.warning("  Report summary written to %s", report_path)  # Legacy console echo routed via logger.
         except OSError as error:  # Write failed.
             logging.error("Failed to write local report artifact: %s", error)  # Log the error.
-            print(f"  Warning: Could not write report summary to {report_path}")  # Warn the user.
+            logging.warning(
+                "  Warning: Could not write report summary to %s", report_path
+            )  # Legacy console echo routed via logger.
