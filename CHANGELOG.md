@@ -7,6 +7,33 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 31/N: retire `print()` in `src/export/gateway_test_exporter.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced the 2 remaining `print()`
+  calls in `src/export/gateway_test_exporter.py` with module-level
+  `logging.warning(...)` / `logging.info(...)` using `%`-style deferred
+  formatting. `_export_synthetic_results` now emits the empty-results banner
+  via `logging.warning("! No synthetic test results found. CSV not created.")`
+  and the export-success line via
+  `logging.info("! %s gateway synthetic test results exported to %s", len(all_stats), filename)`,
+  matching the file's pre-existing `logging.info(...)` / `logging.warning(...)`
+  convention (no module `logger` binding is used elsewhere in this module).
+  `import logging` was already present at module scope.
+- **Test posture**: two tests in
+  `tests/unit/export/test_gateway_test_exporter.py`
+  (`TestExportSyntheticResults.test_no_stats_warns_and_returns` and
+  `test_writes_csv_via_dataexporter`) were migrated from the `capsys`
+  fixture to `caplog`; both assert on `caplog.text` under
+  `caplog.at_level(logging.WARNING)` / `caplog.at_level(logging.INFO)`
+  respectively. `import logging` was added to the test module.
+- **Verification**: `ruff check` reports 0 issues on both source and test
+  files; `black --check` clean; 0 remaining T201 matches in
+  `src/export/gateway_test_exporter.py`; targeted pytest for the module
+  (`tests/unit/export/test_gateway_test_exporter.py` +
+  `tests/unit/export/test_gateway_test_exporter_runtime_wiring.py`) = 32
+  passed; full `pytest` suite green (8949 passed, 0 failed, 77 skipped,
+  5 xfailed, 1 xpassed).
+
 ### #886 Phase 2 slice 30/N: retire `print()` in `tools/plan_wave_builder.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced the 2 remaining `print()`
