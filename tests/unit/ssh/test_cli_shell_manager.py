@@ -13,14 +13,31 @@ branch. The manager reaches live-global state (``apisession``, ``mistapi``,
 
 from __future__ import annotations
 
+import logging
 import sys
 from types import ModuleType
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from src.ssh import cli_shell_manager as csm_module
 from src.ssh.cli_shell_manager import CLIShellManager
+
+
+@pytest.fixture(autouse=True)
+def _capture_all_log_levels(caplog: Any) -> None:
+    """Autouse fixture ensuring caplog captures both DEBUG and WARNING records.
+
+    Why:
+        User-visible banners and debug traces in ``cli_shell_manager`` were
+        migrated from ``print()`` to ``logging.warning`` / ``logging.debug``
+        under #886. pytest's caplog defaults to WARNING and does not capture
+        DEBUG records unless explicitly set. Applying DEBUG level via an
+        autouse fixture keeps every test capturing all migrated banners
+        without repeating ``caplog.set_level`` in each test body.
+    """
+    caplog.set_level(logging.DEBUG)
 
 
 @pytest.fixture
@@ -166,38 +183,37 @@ class TestCreateSession:
             fake_mh.apisession, "s-1", "d-1"
         )
 
-    def test_returns_none_and_prints_on_exception(self, fake_mh, capsys):
-        """Any exception is swallowed, printed, and yields None."""
+    def test_returns_none_and_prints_on_exception(self, fake_mh, caplog):
+        """Any exception is swallowed, logged as WARNING, and yields None."""
         with patch("src.ssh.cli_shell_manager.mistapi") as m_mistapi:
             m_mistapi.api.v1.sites.devices.createSiteDeviceShellSession.side_effect = RuntimeError("boom")
             result = CLIShellManager._create_session("s-1", "d-1")
 
         assert result is None
-        captured = capsys.readouterr()
-        assert "Failed to create shell session" in captured.out
-        assert "boom" in captured.out
+        assert "Failed to create shell session" in caplog.text
+        assert "boom" in caplog.text
 
 
 class TestShellResizeTerminal:
     """Cover ``CLIShellManager._shell_resize_terminal``."""
 
-    def test_sends_resize_without_debug(self, capsys):
+    def test_sends_resize_without_debug(self, caplog):
         """Sends a JSON resize control frame; no debug output when debug is off."""
         ws = MagicMock()
         with patch("src.ssh.cli_shell_manager.shutil.get_terminal_size", return_value=(100, 30)):
             CLIShellManager._shell_resize_terminal(ws, debug=False)
 
         ws.send.assert_called_once_with('{"resize": {"width": 100, "height": 30}}')
-        assert capsys.readouterr().out == ""
+        assert "Sending resize" not in caplog.text
 
-    def test_sends_resize_with_debug_trace(self, capsys):
-        """Debug prints the exact resize payload before sending."""
+    def test_sends_resize_with_debug_trace(self, caplog):
+        """Debug logs the exact resize payload before sending."""
         ws = MagicMock()
         with patch("src.ssh.cli_shell_manager.shutil.get_terminal_size", return_value=(80, 24)):
             CLIShellManager._shell_resize_terminal(ws, debug=True)
 
         ws.send.assert_called_once_with('{"resize": {"width": 80, "height": 24}}')
-        assert "[DEBUG] Sending resize" in capsys.readouterr().out
+        assert "[DEBUG] Sending resize" in caplog.text
 
 
 class TestShellRenderScreen:
@@ -262,11 +278,10 @@ class TestShellDecodeFrame:
         assert CLIShellManager._shell_decode_frame(None, debug=False) is None
         assert CLIShellManager._shell_decode_frame(123, debug=False) is None
 
-    def test_debug_prints_raw_payload(self, capsys):
-        """Debug mode prints the repr'd payload."""
+    def test_debug_prints_raw_payload(self, caplog):
+        """Debug mode logs the repr'd payload."""
         CLIShellManager._shell_decode_frame(b"abc", debug=True)
-        out = capsys.readouterr().out
-        assert "[DEBUG] Raw recv" in out
+        assert "[DEBUG] Raw recv" in caplog.text
 
 
 class TestShellReceiveLoop:
@@ -301,21 +316,21 @@ class TestShellReceiveLoop:
 
         m_render.assert_not_called()
 
-    def test_prints_and_returns_on_exception(self, capsys):
-        """Exception path prints 'Connection lost' and exits the loop."""
+    def test_prints_and_returns_on_exception(self, caplog):
+        """Exception path logs 'Connection lost' as WARNING and exits the loop."""
         ws = MagicMock()
         ws.connected = True
         ws.recv.side_effect = OSError("socket dead")
 
         CLIShellManager._shell_receive_loop(ws, MagicMock(), MagicMock(), debug=False)
 
-        assert "Connection lost" in capsys.readouterr().out
+        assert "Connection lost" in caplog.text
 
 
 class TestShellHandleExitKey:
     """Cover ``CLIShellManager._shell_handle_exit_key``."""
 
-    def test_shuts_down_and_closes_when_sock_present(self, capsys):
+    def test_shuts_down_and_closes_when_sock_present(self, caplog):
         """Present socket: shutdown(2) then close()."""
         ws = MagicMock()
         ws.sock = MagicMock()
@@ -324,16 +339,16 @@ class TestShellHandleExitKey:
 
         ws.sock.shutdown.assert_called_once_with(2)
         ws.sock.close.assert_called_once()
-        assert "Exit from shell" in capsys.readouterr().out
+        assert "Exit from shell" in caplog.text
 
-    def test_noop_when_sock_missing(self, capsys):
-        """None socket: no shutdown/close; still prints the exit banner."""
+    def test_noop_when_sock_missing(self, caplog):
+        """None socket: no shutdown/close; still logs the exit banner."""
         ws = MagicMock()
         ws.sock = None
 
         CLIShellManager._shell_handle_exit_key(ws)
 
-        assert "Exit from shell" in capsys.readouterr().out
+        assert "Exit from shell" in caplog.text
 
 
 class TestShellSendKey:
@@ -369,8 +384,8 @@ class TestShellSendKey:
         expected = bytes(map(ord, "\x00\n"))
         ws.send_binary.assert_called_once_with(expected)
 
-    def test_unmapped_key_passes_through(self, capsys):
-        """Unknown key names are sent verbatim (with framing prefix). Debug prints the payload."""
+    def test_unmapped_key_passes_through(self, caplog):
+        """Unknown key names are sent verbatim (with framing prefix). Debug logs the payload."""
         ws = MagicMock()
         ws.connected = True
 
@@ -378,17 +393,17 @@ class TestShellSendKey:
 
         expected = bytes(map(ord, "\x00a"))
         ws.send_binary.assert_called_once_with(expected)
-        assert "[DEBUG] Sending" in capsys.readouterr().out
+        assert "[DEBUG] Sending" in caplog.text
 
-    def test_prints_and_returns_when_send_raises(self, capsys):
-        """Send-side exception is caught, printed, and does not propagate."""
+    def test_prints_and_returns_when_send_raises(self, caplog):
+        """Send-side exception is caught, logged, and does not propagate."""
         ws = MagicMock()
         ws.connected = True
         ws.send_binary.side_effect = OSError("bad pipe")
 
         CLIShellManager._shell_send_key(ws, debug=False, key="a")
 
-        assert "Send failed" in capsys.readouterr().out
+        assert "Send failed" in caplog.text
 
 
 class TestShellStartReceiver:
@@ -412,8 +427,8 @@ class TestShellStartReceiver:
 class TestRunInteractive:
     """Cover ``CLIShellManager._run_interactive``."""
 
-    def test_prints_and_returns_when_pyte_missing(self, fake_mh, monkeypatch, capsys):
-        """No pyte -> print install hint and return without opening a WebSocket."""
+    def test_prints_and_returns_when_pyte_missing(self, fake_mh, monkeypatch, caplog):
+        """No pyte -> log install hint and return without opening a WebSocket."""
         monkeypatch.setattr(csm_module, "_has_pyte", False)
         monkeypatch.setattr(csm_module, "pyte", None)
 
@@ -421,9 +436,9 @@ class TestRunInteractive:
             CLIShellManager._run_interactive("wss://x", debug=False)
 
         m_ws.create_connection.assert_not_called()
-        assert "requires pyte" in capsys.readouterr().out
+        assert "requires pyte" in caplog.text
 
-    def test_prints_and_returns_when_pyte_module_none(self, fake_mh, monkeypatch, capsys):
+    def test_prints_and_returns_when_pyte_module_none(self, fake_mh, monkeypatch, caplog):
         """Even if _has_pyte were True, a None pyte module still triggers the early return."""
         monkeypatch.setattr(csm_module, "_has_pyte", True)
         monkeypatch.setattr(csm_module, "pyte", None)
@@ -432,7 +447,7 @@ class TestRunInteractive:
             CLIShellManager._run_interactive("wss://x", debug=False)
 
         m_ws.create_connection.assert_not_called()
-        assert "requires pyte" in capsys.readouterr().out
+        assert "requires pyte" in caplog.text
 
     def test_happy_path_no_debug(self, fake_mh, monkeypatch):
         """Full interactive path: connect, resize, receiver, sleep, wakeup, listen."""
@@ -464,8 +479,8 @@ class TestRunInteractive:
         fake_mh.KeyboardListener.assert_called_once_with()
         fake_mh.KeyboardListener.return_value.listen.assert_called_once()
 
-    def test_happy_path_with_debug_enables_trace(self, fake_mh, monkeypatch, capsys):
-        """Debug mode enables WebSocket tracing and prints the wakeup breadcrumb."""
+    def test_happy_path_with_debug_enables_trace(self, fake_mh, monkeypatch, caplog):
+        """Debug mode enables WebSocket tracing and logs the wakeup breadcrumb."""
         monkeypatch.setattr(csm_module, "_has_pyte", True)
         fake_pyte = MagicMock()
         monkeypatch.setattr(csm_module, "pyte", fake_pyte)
@@ -480,4 +495,4 @@ class TestRunInteractive:
             CLIShellManager._run_interactive("wss://x", debug=True)
 
         m_ws_mod.enableTrace.assert_called_once_with(True)
-        assert "wakeup" in capsys.readouterr().out.lower()
+        assert "wakeup" in caplog.text.lower()

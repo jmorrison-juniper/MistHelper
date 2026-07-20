@@ -14,6 +14,7 @@ from __future__ import annotations  # WHY: PEP 604 unions for return types.
 import functools  # WHY: partial() binds shared session state to thread target + keyboard callback.
 import importlib  # WHY: lazy MistHelper import avoids circular load at module init.
 import json  # WHY: encode terminal resize control message for the WebSocket.
+import logging  # WHY: #886 print()->logging migration for user-visible banners and debug traces.
 import shutil  # WHY: read local terminal size for PTY resize.
 import sys  # WHY: direct stdout writes with cursor-move escape sequences.
 import threading  # WHY: background WebSocket receive loop runs on its own thread.
@@ -87,7 +88,8 @@ class CLIShellManager:
             shell_data = response.data  # Read the URL data.
             return shell_data.get("url")  # type: ignore[no-any-return]
         except Exception as exception:  # Creation failed.
-            print(f"! Failed to create shell session: {exception}")  # Tell the user.
+            # WHY: user-visible error banner (was print()).
+            logging.warning("! Failed to create shell session: %s", exception)
             return None  # Return None.
 
     @staticmethod
@@ -96,7 +98,7 @@ class CLIShellManager:
         cols, rows = shutil.get_terminal_size()  # Read terminal size.
         resize_msg = json.dumps({"resize": {"width": cols, "height": rows}})  # Build the resize msg.
         if debug:  # Verbose troubleshooting output is enabled.
-            print(f"[DEBUG] Sending resize: {resize_msg}")  # Show the terminal-resize control message being sent.
+            logging.debug("[DEBUG] Sending resize: %s", resize_msg)  # WHY: trace terminal-resize control (was print()).
         ws.send(resize_msg)  # Tell the remote PTY about the new terminal dimensions.
 
     @staticmethod
@@ -115,7 +117,7 @@ class CLIShellManager:
         if isinstance(data, bytes):  # Binary frames need decoding to text.
             data = data.decode("utf-8", errors="ignore")  # Decode as UTF-8, dropping invalid bytes.
         if debug:  # Verbose troubleshooting output is enabled.
-            print(f"[DEBUG] Raw recv: {repr(data)}")  # Show the raw received payload.
+            logging.debug("[DEBUG] Raw recv: %r", data)  # WHY: trace raw received payload (was print()).
         if data and isinstance(data, str):  # We have a non-empty text frame to render.
             # WHY: cast narrows Any->str for mypy strict (no-any-return); runtime check above ensures str.
             return str(data)  # Renderable text.
@@ -131,13 +133,14 @@ class CLIShellManager:
                 if text is not None:  # We have a non-empty text frame to render.
                     CLIShellManager._shell_render_screen(stream, screen, text)  # Render it to the screen.
             except Exception as exception:  # The socket closed or a read error occurred.
-                print(f"\n## Connection lost: {exception} ##")  # Notify the user the session dropped.
+                # WHY: user-visible disconnect banner (was print()).
+                logging.warning("\n## Connection lost: %s ##", exception)
                 return  # Exit the receive loop.
 
     @staticmethod
     def _shell_handle_exit_key(ws: Any) -> None:
         """Handle the '~' exit key by closing the WebSocket socket."""
-        print("\n## Exit from shell ##")  # Tell the user.
+        logging.warning("\n## Exit from shell ##")  # WHY: user-visible exit banner (was print()).
         if ws.sock is not None:  # Socket present.
             ws.sock.shutdown(2)  # Shut down the socket.
             ws.sock.close()  # Close the socket.
@@ -154,11 +157,11 @@ class CLIShellManager:
         data = f"\00{mapped_key}"  # Frame the data.
         data_byte = bytes(map(ord, data))  # Immutable bytes: send_binary(payload: bytes) requires bytes.
         if debug:  # Debug mode.
-            print(f"[DEBUG] Sending: {repr(data)}")  # Trace the send.
+            logging.debug("[DEBUG] Sending: %r", data)  # WHY: trace outgoing keystroke payload (was print()).
         try:  # The socket may drop mid-send.
             ws.send_binary(data_byte)  # Send the bytes.
         except Exception as exception:  # Send failed.
-            print(f"\n## Send failed: {exception} ##")  # Tell the user.
+            logging.warning("\n## Send failed: %s ##", exception)  # WHY: user-visible send-error banner (was print()).
             return  # Stop after a failed send.
 
     @staticmethod
@@ -173,13 +176,14 @@ class CLIShellManager:
         """Run an interactive WebSocket shell session against shell_url (debug enables WebSocket tracing)."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of KeyboardListener facade.
         if not _has_pyte or pyte is None:  # pyte (terminal emulation) is required.
-            print("! Terminal emulation requires pyte. Install: pip install pyte")  # Tell the user to install.
+            # WHY: user-visible install hint (was print()).
+            logging.warning("! Terminal emulation requires pyte. Install: pip install pyte")
             return  # Abort.
         if debug:  # Debug mode.
             websocket.enableTrace(True)  # Trace the WebSocket.
-        print(" Connecting to WebSocket shell...")  # Tell the user.
+        logging.warning(" Connecting to WebSocket shell...")  # WHY: user-visible connect banner (was print()).
         ws = websocket.create_connection(shell_url)  # Open the WebSocket.
-        print(" Connected.")  # Tell the user.
+        logging.warning(" Connected.")  # WHY: user-visible connected banner (was print()).
         screen = pyte.Screen(80, 40)  # Virtual screen.
         stream = pyte.Stream(screen)  # Terminal stream.
         CLIShellManager._shell_resize_terminal(ws, debug)  # Send initial terminal dimensions to the remote PTY.
@@ -187,7 +191,7 @@ class CLIShellManager:
         time.sleep(1)  # Wait for connect before waking the prompt.
         ws.send_binary(bytes(map(ord, "\00\n\n")))  # Send a wakeup; bytes (not bytearray) matches send_binary.
         if debug:  # Debug mode.
-            print("[DEBUG] Sent wakeup sequence to Juniper SSRs")  # Trace the wakeup.
+            logging.debug("[DEBUG] Sent wakeup sequence to Juniper SSRs")  # WHY: trace wakeup handshake (was print()).
         mh.KeyboardListener().listen(  # Block on keyboard input, forwarding each key to the PTY.
             on_release=functools.partial(CLIShellManager._shell_send_key, ws, debug),
             delay_second_char=0,
