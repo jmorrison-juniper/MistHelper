@@ -123,7 +123,8 @@ class _MapsMatplotlib:  # Wrapper class holding the extracted matplotlib/launch 
     ) -> None:  # Fallback viewer entry.
         """Fallback matplotlib viewer (view-only)."""
         logging.info("_launch_matplotlib_viewer called - basic fallback mode")  # Trace entry.
-        print("\n! Using matplotlib viewer (view-only, no interactivity)")  # Warn CLI user.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.warning("\n! Using matplotlib viewer (view-only, no interactivity)")
         logging.debug("Creating matplotlib figure for basic visualization")  # Debug breadcrumb.
         bounds = _extract_bounds(map_data)  # Read canvas dims/title with safe defaults.
         _fig, ax = plt.subplots(figsize=_FIGURE_SIZE)  # Create the plotting surface.
@@ -131,7 +132,8 @@ class _MapsMatplotlib:  # Wrapper class holding the extracted matplotlib/launch 
         _plot_devices(ax, devices)  # Draw every valid device marker.
         ax.legend()  # Show legend keyed by device-type entries added during plotting.
         ax.grid(True, alpha=_GRID_ALPHA)  # Light grid for spatial orientation.
-        print("\n! Displaying map... Close window to return to menu")  # UX cue.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("\n! Displaying map... Close window to return to menu")
         logging.info("Displaying matplotlib figure (blocking until window closed)")  # Trace.
         plt.show()  # Blocking call until user closes the window.
         logging.info("Matplotlib map viewer closed by user")  # Trace after return.
@@ -214,13 +216,16 @@ class _MapsMatplotlib:  # Wrapper class holding the extracted matplotlib/launch 
     def _bootstrap_sites(self) -> list[dict[str, Any]] | None:
         """Fetch and sort all org sites; return None when the org has none."""
         logging.info("launch_viewer_standalone: Starting web-first viewer mode")  # Trace entry.
-        print("\n  Loading sites...")  # UX status line.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("\n  Loading sites...")
         all_sites = self._fetch_sites()  # Delegated to MapsManager via __getattr__.
         if not all_sites:
-            print("\n  [!] No sites found in organization")  # Surface the empty org to the user.
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.warning("\n  [!] No sites found in organization")
             return None  # Signal the caller to abort the launch.
         sites_sorted = sorted(all_sites, key=_site_sort_key)  # Alphabetic case-insensitive sort by name.
-        print(f"  Found {len(sites_sorted)} sites")  # Operator feedback with count.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("  Found %s sites", len(sites_sorted))
         return sites_sorted  # Ready-to-use, ordered site list.
 
     def _resolve_targets(
@@ -231,13 +236,15 @@ class _MapsMatplotlib:  # Wrapper class holding the extracted matplotlib/launch 
     ) -> _StandaloneTargets:
         """Resolve site + map targets that the Flask viewer will bootstrap with."""
         site_id, site_name = self._resolve_initial_site(sites_sorted, requested_site_id)  # Reuse core helper.
-        print(f"  Loading maps for site: {site_name}...")  # Operator status line.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("  Loading maps for site: %s...", site_name)
         all_maps = self._fetch_site_maps(site_id)  # May be empty on API/no-map failures.
         if not all_maps:
             _print_no_maps_notice(site_name)  # Tell the user we're deferring selection to the browser.
             return _StandaloneTargets(site_id, site_name, None, all_maps)  # Return with map_id=None sentinel.
         map_id, target_map = self._resolve_initial_map(all_maps, requested_map_id)  # Pick initial map handle.
-        print(f"  Loading map: {target_map.get('name', _DEFAULT_MAP_NAME)}...")  # Operator status.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("  Loading map: %s...", target_map.get("name", _DEFAULT_MAP_NAME))
         return _StandaloneTargets(site_id, site_name, map_id, all_maps)  # Return fully-resolved bundle.
 
     def _hydrate_initial_entities(self, targets: _StandaloneTargets) -> _MapEntities:
@@ -399,25 +406,35 @@ def _entries_for_map(data: Any, map_id: str) -> list[dict[str, Any]]:
 
 def _print_banner() -> None:
     """Print the standalone-viewer banner block."""
-    print("\n" + "=" * _BANNER_WIDTH)  # Top rule.
-    print("  MAPS MANAGER - Standalone Web Viewer")  # Title line.
-    print("  Select a site and map from the browser interface")  # Subtitle line.
-    print("=" * _BANNER_WIDTH)  # Bottom rule.
+    # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+    logger.info("\n%s", "=" * _BANNER_WIDTH)  # Top rule.
+    # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+    logger.info("  MAPS MANAGER - Standalone Web Viewer")  # Title line.
+    # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+    logger.info("  Select a site and map from the browser interface")  # Subtitle line.
+    # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+    logger.info("%s", "=" * _BANNER_WIDTH)  # Bottom rule.
 
 
 def _print_no_maps_notice(site_name: str) -> None:
     """Notify the user that the target site has no maps yet."""
-    print(f"\n  [!] No maps found for site {site_name}")  # Explicit empty-site notice.
-    print("  Launching viewer anyway - select a different site in browser")  # Guidance to switch.
+    # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+    logger.warning("\n  [!] No maps found for site %s", site_name)  # Explicit empty-site notice.
+    # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+    logger.info("  Launching viewer anyway - select a different site in browser")  # Guidance to switch.
 
 
 def _print_entity_counts(entities: _MapEntities, targets: _StandaloneTargets) -> None:
     """Print the hydrated entity counts unless the initial map is undecided."""
     if targets.map_id is None:
         return  # Nothing meaningful to report without a chosen map.
-    print(
-        f"  Found {len(entities.devices)} devices, " f"{len(entities.zones)} zones, " f"{len(entities.clients)} clients"
-    )  # Single status line summarizing hydration.
+    # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+    logger.info(
+        "  Found %s devices, %s zones, %s clients",
+        len(entities.devices),
+        len(entities.zones),
+        len(entities.clients),
+    )
 
 
 def launch_viewer_standalone(maps_manager: Any) -> None:

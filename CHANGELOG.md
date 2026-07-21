@@ -7,6 +7,28 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 48/N: retire `print()` in `src/maps/_maps_matplotlib.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced all 14 `print()` calls in
+  `src/maps/_maps_matplotlib.py` with `logger`-based emissions using
+  `%`-style deferred formatting to satisfy G004. The module already declared a
+  module-scoped `logger = logging.getLogger(__name__)`. Level heuristic:
+  operator status lines ("Loading sites...", "Loading maps for site:",
+  "Loading map:", "Found N sites", the matplotlib "Displaying map..." UX
+  cue, the standalone-viewer banner title/subtitle plus the `=` rules,
+  the "Launching viewer anyway" guidance, and the entity-count summary)
+  map to `logger.info`; the two `[!]` fallback notices ("No sites found
+  in organization" and "No maps found for site") map to `logger.warning`.
+  Each replaced call carries the standard `# WHY: preserve operator
+  notice verbatim; route through logger for capture/redirection.`
+  annotation. `_print_banner` was whole-block rewritten so the top and
+  bottom `=` rules pass the separator as a `%s` positional arg rather
+  than embedding `"=" * _BANNER_WIDTH` in the format string.
+  `_print_entity_counts` collapses its three concatenated f-strings into
+  a single `logger.info(..., devices, zones, clients)` invocation. No
+  test files import `_maps_matplotlib` and no capsys assertions target
+  its output, so no test migration was required.
+
 ### #886 Phase 2 slice 86/N: retire `print()` in `src/maps/_maps_backup.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 4 `print()` calls in
