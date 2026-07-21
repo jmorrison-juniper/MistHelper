@@ -7,6 +7,26 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 85/N: retire `print()` in `src/maps/_maps_utils.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced the sole `print()` call in
+  `src/maps/_maps_utils.py` (the CSV-save confirmation line
+  `   Data saved to: <filepath>` emitted by
+  `write_data_with_format_selection`) with a `logger.info` emission using
+  `%`-style deferred formatting to satisfy G004. The module already declared
+  `logger = logging.getLogger(__name__)` at line 17, so no logger import
+  changed. Converted the shared `_PRINT_SAVED_TMPL` module constant from a
+  `{filepath}` `str.format` template into the `%s` deferred-format
+  equivalent (`"   Data saved to: %s"`) so the logger call passes the
+  path as a positional arg (`logger.info(_PRINT_SAVED_TMPL, filepath)`),
+  keeping the exact user-visible text and leading indent verbatim. The
+  migrated call carries the standard `# WHY: preserve operator notice
+  verbatim; route through logger for capture/redirection.` annotation.
+- **No test migration needed**: `_maps_utils` has no `tests/` coverage that
+  imports the module or asserts on captured stdout from
+  `write_data_with_format_selection`. Ruff clean; black clean;
+  `pytest tests/unit/maps/ -q` passes existing suite unchanged.
+
 ### #886 Phase 2 slice 84/N: retire `print()` in `src/export/org_inventory_exporter.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 12 `print()` calls in
