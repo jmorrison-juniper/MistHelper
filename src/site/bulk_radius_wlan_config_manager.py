@@ -28,8 +28,7 @@ import mistapi  # WHY: direct SDK access for listOrgWlans + updateOrgWlan endpoi
 
 
 class BulkRadiusWLANConfigManager:
-    """
-    Bulk configuration of RADIUS authentication timer settings for org WLANs.
+    """Bulk configuration of RADIUS authentication timer settings for org WLANs.
 
     Scans all WLANs in the organization, identifies those using RADIUS/RadSec
     authentication, and allows bulk update of auth_servers_timeout,

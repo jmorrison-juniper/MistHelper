@@ -7,6 +7,20 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #887 slice 6/N: drop `site` from pydocstyle `match-dir` exclusion (issue #887)
+
+- **Quality gate (Changed)**: removed `site` from the `[tool.pydocstyle]
+  match-dir` negation regex in `pyproject.toml`, so `src/site/` is now
+  scanned by `pydocstyle --convention=google`. Audit surfaced 4 violations
+  across 2 files, all fixed:
+  - `src/site/bulk_radius_wlan_config_manager.py:31` — D212 (multi-line
+    summary must start on the first line); reflowed the class docstring
+    so the summary sits directly after the opening quote.
+  - `src/site/address_audit/audit_engine.py:678` — D205/D209/D415 in
+    `_classify`; split the summary from the parenthetical exclusion note
+    into a separate paragraph and moved the closing quote to its own line.
+  Next slice (7/N) targets `gateway` (21 files) per the #887 slicing plan.
+
 ### #887 slice 2/N: drop `analytics` from pydocstyle `match-dir` exclusion (issue #887)
 
 - **Pydocstyle scope narrowing (Changed)**: removed `analytics` from the
