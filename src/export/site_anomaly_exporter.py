@@ -29,8 +29,7 @@ from src.data.data_processing_utils import (
 
 
 class SiteAnomalyExporter:  # Site anomaly exporters.
-    """
-    Site Anomaly and Event Exporter
+    """Site Anomaly and Event Exporter.
 
     Handles site-level anomaly events and insight metrics exports.
     Extracted from SiteExportUtils.

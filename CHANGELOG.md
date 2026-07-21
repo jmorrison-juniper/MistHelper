@@ -7,6 +7,30 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #887 slice 8/N: drop `export` from pydocstyle `match-dir` exclusion (issue #887)
+
+- **Quality gate (Changed)**: removed `export` from the
+  `[tool.pydocstyle] match-dir` negation regex in `pyproject.toml`, so
+  `src/export/` (34 files) is now scanned by `pydocstyle
+  --convention=google`. Audit surfaced 13 D205/D212/D415 violations
+  across 3 files, all fixed:
+  - `src/export/const_definitions_exporter.py:25` — D212 on
+    `ConstDefinitionsExporter` class docstring; moved summary onto the
+    first line so the multi-line summary starts immediately after the
+    opening quote.
+  - `src/export/org_inventory_exporter.py` — 4 sites: D212+D415 on the
+    `OrgInventoryExporter` class docstring (line 48) and D205+D212 on
+    `inventory` (line 73), `devices` (line 97), and
+    `gateways_with_site_info` (line 673). Reflowed each so the summary
+    ends with a period on the first line, followed by a blank line and
+    the extended description.
+  - `src/export/site_anomaly_exporter.py:32` — D212+D415 on the
+    `SiteAnomalyExporter` class docstring; collapsed the header line
+    onto the first line and added the terminating period.
+  This is the final pydocstyle slice under #887; `match-dir` still
+  excludes `capture`, `inventory`, and `troubleshooting`, which are
+  tracked as separate follow-ups.
+
 ### #887 slice 5/N: drop `websocket` from pydocstyle `match-dir` exclusion (issue #887)
 
 - **Quality gate (Changed)**: removed `websocket` from the
