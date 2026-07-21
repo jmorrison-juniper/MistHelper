@@ -7,6 +7,39 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 78/N: retire `print()` in `src/device/arp_command_manager.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced all 11 `print()` calls in
+  `src/device/arp_command_manager.py` with `logger`-based emissions using
+  `%`-style deferred formatting to satisfy G004. Added a module-scoped
+  `logger = logging.getLogger(__name__)`. Level heuristic mirrors the
+  operational intent of each notice: `info` for the WebSocket-subscription
+  banner (` Subscribing to WebSocket stream...`), the trigger-success
+  notice (`! ARP command triggered. Session ID: <sid>`), the received-output
+  header (`\n  ARP Output Received:\n`), the debug-mode full-table dump,
+  the non-debug row-count summary (`! ARP output received with N rows.`),
+  and the CSV write-success line (`! Saved N rows to <path>`); `warning`
+  for the missing-credentials operator notice
+  (` Mist host or API token not found in session or environment.`) and the
+  empty-payload notice (` No ARP output received for this session.`);
+  `error` for the trigger-failure status/response body pair
+  (`! Failed to trigger ARP command: <status>` + response text) and the
+  CSV-export exception notice (`! Failed to export ARP output to CSV: <e>`).
+  Each migrated call carries the standard
+  `# WHY: preserve operator notice verbatim; route through logger for capture/redirection.`
+  annotation and preserves legacy `!`/`  `/`\n` prefixes verbatim in the
+  format string.
+- **Test migration (Changed)**: `tests/unit/device/test_arp_command_manager.py`
+  migrated seven `capsys`-based assertions to `caplog` using a shared
+  `_LOGGER_NAME = "src.device.arp_command_manager"` constant with
+  `caplog.set_level(<LEVEL>, logger=_LOGGER_NAME)` gating and
+  `any("<needle>" in r.getMessage() for r in caplog.records)` matching.
+  Removed the vacuous `or True` assertion from
+  `test_debug_prints_full_table` (the migration surfaces the debug table
+  through the logger, so the fallback tautology is no longer needed and the
+  `table.get_string.assert_called_once()` check now stands on its own).
+  Suite result: 54 passed, ruff clean, black clean.
+
 ### #886 Phase 2 slice 77/N: retire `print()` in `src/analytics/data_collection_manager.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 11 `print()` calls in
