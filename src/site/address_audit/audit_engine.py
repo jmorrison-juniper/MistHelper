@@ -675,8 +675,11 @@ class AddressAuditEngine:
         resolver_result: Any,
         authoritative_addr: dict[str, Any] | None = None,
     ) -> str:
-        """Return one of the resolved classification states for a row (excludes the
-        out-of-band UNMATCHED / CONFLICTING_HINTS / DUPLICATE_ADDRESS states)."""
+        """Return one of the resolved classification states for a row.
+
+        Excludes the out-of-band UNMATCHED / CONFLICTING_HINTS /
+        DUPLICATE_ADDRESS states, which are handled upstream.
+        """
         if not self._has_external_result(resolver_result):  # No external result -> use internal signals only.
             return self._classify_internal(mist_addr, csv_addr, snmp_loc, authoritative_addr or {})  # Internal path.
         return self._classify_external(mist_addr, resolver_result)  # External hit -> compare against Mist.
