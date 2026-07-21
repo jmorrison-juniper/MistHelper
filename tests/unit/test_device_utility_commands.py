@@ -2189,12 +2189,13 @@ class TestClearBgpRoutes:
         self,
         duc: DeviceUtilityCommands,
         mock_deps: dict[str, MagicMock],
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         mock_deps["safe_input_fn"].return_value = ""
         with patch.object(duc, "_select_site_and_device", return_value=("s1", "d1", "gateway")):
-            duc.clear_bgp_routes()
-            assert "required" in capsys.readouterr().out.lower()
+            with caplog.at_level(logging.WARNING):
+                duc.clear_bgp_routes()
+            assert "required" in caplog.text.lower()
 
     def test_cancelled(
         self,
@@ -2223,13 +2224,14 @@ class TestClearBgpRoutes:
         duc: DeviceUtilityCommands,
         mock_deps: dict[str, MagicMock],
         mock_api: MagicMock,
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         mock_deps["safe_input_fn"].side_effect = ["10.0.0.1", "", "", "", "CLEAR"]
         mock_api.api.v1.sites.devices.clearSiteSsrBgpRoutes.side_effect = RuntimeError("bgp fail")
         with patch.object(duc, "_select_site_and_device", return_value=("s1", "d1", "gateway")):
-            duc.clear_bgp_routes()
-            assert "bgp fail" in capsys.readouterr().out
+            with caplog.at_level(logging.ERROR):
+                duc.clear_bgp_routes()
+            assert "bgp fail" in caplog.text
 
 
 class TestClearSession:
@@ -2270,12 +2272,13 @@ class TestClearSession:
         self,
         duc: DeviceUtilityCommands,
         mock_deps: dict[str, MagicMock],
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         mock_deps["safe_input_fn"].side_effect = ["", "", "nope"]
         with patch.object(duc, "_select_site_and_device", return_value=("s1", "d1", "gateway")):
-            duc.clear_session()
-            assert "Cancelled" in capsys.readouterr().out
+            with caplog.at_level(logging.WARNING):
+                duc.clear_session()
+            assert "Cancelled" in caplog.text
 
     def test_no_ids_no_service_confirm_all(
         self,
@@ -2342,13 +2345,14 @@ class TestClearMacTable:
         duc: DeviceUtilityCommands,
         mock_deps: dict[str, MagicMock],
         mock_api: MagicMock,
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         mock_deps["safe_input_fn"].side_effect = ["", "CLEAR"]
         mock_api.api.v1.sites.devices.clearSiteDeviceMacTable.side_effect = RuntimeError("mac fail")
         with patch.object(duc, "_select_site_and_device", return_value=("s1", "d1", "switch")):
-            duc.clear_mac_table()
-            assert "mac fail" in capsys.readouterr().out
+            with caplog.at_level(logging.ERROR):
+                duc.clear_mac_table()
+            assert "mac fail" in caplog.text
 
 
 class TestClearBpduError:
@@ -2389,7 +2393,7 @@ class TestClearBpduError:
         self,
         duc: DeviceUtilityCommands,
         mock_api: MagicMock,
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         mock_api.api.v1.sites.devices.clearBpduErrorsFromPortsOnSwitch.side_effect = RuntimeError("bpdu fail")
         with (
@@ -2397,8 +2401,9 @@ class TestClearBpduError:
             patch.object(duc, "_select_port_optional", return_value=""),
             patch.object(duc, "_confirm_destructive", return_value=True),
         ):
-            duc.clear_bpdu_error()
-            assert "bpdu fail" in capsys.readouterr().out
+            with caplog.at_level(logging.ERROR):
+                duc.clear_bpdu_error()
+            assert "bpdu fail" in caplog.text
 
 
 class TestClearLearnedMacs:
@@ -2411,14 +2416,15 @@ class TestClearLearnedMacs:
     def test_no_port(
         self,
         duc: DeviceUtilityCommands,
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         with (
             patch.object(duc, "_select_site_and_device", return_value=("s1", "d1", "switch")),
             patch.object(duc, "_select_port_from_device", return_value=None),
         ):
-            duc.clear_learned_macs()
-            assert "required" in capsys.readouterr().out.lower()
+            with caplog.at_level(logging.WARNING):
+                duc.clear_learned_macs()
+            assert "required" in caplog.text.lower()
 
     def test_cancelled(
         self,
@@ -2467,7 +2473,7 @@ class TestClearLearnedMacs:
         self,
         duc: DeviceUtilityCommands,
         mock_api: MagicMock,
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         mock_api.api.v1.sites.devices.clearAllLearnedMacsFromPortOnSwitch.side_effect = RuntimeError("macs fail")
         with (
@@ -2475,8 +2481,9 @@ class TestClearLearnedMacs:
             patch.object(duc, "_select_port_from_device", return_value="ge-0/0/0"),
             patch.object(duc, "_confirm_destructive", return_value=True),
         ):
-            duc.clear_learned_macs()
-            assert "macs fail" in capsys.readouterr().out
+            with caplog.at_level(logging.ERROR):
+                duc.clear_learned_macs()
+            assert "macs fail" in caplog.text
 
 
 class TestClearPolicyHitCount:
@@ -2513,13 +2520,14 @@ class TestClearPolicyHitCount:
         duc: DeviceUtilityCommands,
         mock_deps: dict[str, MagicMock],
         mock_api: MagicMock,
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         mock_deps["safe_input_fn"].side_effect = ["", "CLEAR"]
         mock_api.api.v1.sites.devices.clearSiteDevicePolicyHitCount.side_effect = RuntimeError("policy fail")
         with patch.object(duc, "_select_site_and_device", return_value=("s1", "d1", "gateway")):
-            duc.clear_policy_hit_count()
-            assert "policy fail" in capsys.readouterr().out
+            with caplog.at_level(logging.ERROR):
+                duc.clear_policy_hit_count()
+            assert "policy fail" in caplog.text
 
 
 class TestReleaseDhcpLease:
@@ -2532,14 +2540,15 @@ class TestReleaseDhcpLease:
     def test_no_port(
         self,
         duc: DeviceUtilityCommands,
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         with (
             patch.object(duc, "_select_site_and_device", return_value=("s1", "d1", "switch")),
             patch.object(duc, "_select_port_from_device", return_value=None),
         ):
-            duc.release_dhcp_lease()
-            assert "required" in capsys.readouterr().out.lower()
+            with caplog.at_level(logging.WARNING):
+                duc.release_dhcp_lease()
+            assert "required" in caplog.text.lower()
 
     def test_cancelled(
         self,
@@ -2574,7 +2583,7 @@ class TestReleaseDhcpLease:
         duc: DeviceUtilityCommands,
         mock_deps: dict[str, MagicMock],
         mock_api: MagicMock,
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         mock_deps["safe_input_fn"].side_effect = ["", "y"]
         mock_api.api.v1.sites.devices.releaseSiteDeviceDhcpLease.side_effect = RuntimeError("dhcp fail")
@@ -2582,8 +2591,9 @@ class TestReleaseDhcpLease:
             patch.object(duc, "_select_site_and_device", return_value=("s1", "d1", "switch")),
             patch.object(duc, "_select_port_from_device", return_value="ge-0/0/0"),
         ):
-            duc.release_dhcp_lease()
-            assert "dhcp fail" in capsys.readouterr().out
+            with caplog.at_level(logging.ERROR):
+                duc.release_dhcp_lease()
+            assert "dhcp fail" in caplog.text
 
 
 class TestReleaseDhcpSsr:
@@ -2596,14 +2606,15 @@ class TestReleaseDhcpSsr:
     def test_no_interface(
         self,
         duc: DeviceUtilityCommands,
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         with (
             patch.object(duc, "_select_site_and_device", return_value=("s1", "d1", "gateway")),
             patch.object(duc, "_select_interface_from_device", return_value=None),
         ):
-            duc.release_dhcp_ssr()
-            assert "required" in capsys.readouterr().out.lower()
+            with caplog.at_level(logging.WARNING):
+                duc.release_dhcp_ssr()
+            assert "required" in caplog.text.lower()
 
     def test_cancelled(
         self,
@@ -2638,7 +2649,7 @@ class TestReleaseDhcpSsr:
         duc: DeviceUtilityCommands,
         mock_deps: dict[str, MagicMock],
         mock_api: MagicMock,
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         mock_deps["safe_input_fn"].side_effect = ["", "y"]
         mock_api.api.v1.sites.devices.releaseSiteSsrDhcpLease.side_effect = RuntimeError("ssr fail")
@@ -2646,8 +2657,9 @@ class TestReleaseDhcpSsr:
             patch.object(duc, "_select_site_and_device", return_value=("s1", "d1", "gateway")),
             patch.object(duc, "_select_interface_from_device", return_value="wan0"),
         ):
-            duc.release_dhcp_ssr()
-            assert "ssr fail" in capsys.readouterr().out
+            with caplog.at_level(logging.ERROR):
+                duc.release_dhcp_ssr()
+            assert "ssr fail" in caplog.text
 
 
 # ===================================================================

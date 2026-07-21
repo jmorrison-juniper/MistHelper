@@ -7,6 +7,24 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 79/N: retire `print()` in `src/device/_utility_commands_clear.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced all 15 `print()` calls
+  in `src/device/_utility_commands_clear.py` with module-scoped
+  `logger.*` emissions using `%`-style deferred formatting to satisfy
+  G004. Level heuristic: `>> …` progress lines and `[OK]` results map
+  to `logger.info`; `[!] … failed:` handlers map to `logger.error`;
+  "cancelled" / "… required" user-facing operator notices map to
+  `logger.warning`. Each converted call carries the standard
+  `# WHY: preserve operator notice verbatim; route through logger for
+  capture/redirection.` inline comment so future auditors can trace the
+  origin.
+- **Tests (Changed)**: migrated 12 tests in
+  `tests/unit/test_device_utility_commands.py` from `capsys` stdout
+  assertions to `caplog` log-record assertions
+  (`caplog.at_level(logging.LEVEL)` + `assert "…" in caplog.text`).
+  Full 194-test module passes locally under the new fixtures.
+
 ### #886 Phase 2 slice 51/N: retire `print()` in `src/ssh/connection/connector.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 14 `print()` calls in
