@@ -42,6 +42,20 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
   interactions (root `logging.error`, instance `self.logger.warning/error/info`).
   71/71 unit tests pass.
 
+### #886 Phase 2 slice 93/N: retire `print()` in `src/refactors/serial_cc/site_client_insights.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced all 18 `print()` calls in
+  `src/refactors/serial_cc/site_client_insights.py` with module-scoped
+  `logger.*` emissions using `%`-style deferred formatting to satisfy G004.
+  Converted 11 `_MSG_*_TMPL` constants from `str.format()` `{name}` placeholders
+  to positional `%s` / `%d` conversions so logger arguments defer formatting
+  until the record is emitted. Level heuristic: banners, preview rows, refresh
+  notices, per-metric progress, export-success counts, and confirmed selections
+  map to `logger.info`; empty-list / invalid-index / invalid-MAC / skip-empty /
+  no-metrics user warnings map to `logger.warning`; the top-level export
+  exception branch in `_run_collect_and_export` maps to `logger.error`.
+  Behavior otherwise unchanged.
+
 ### #886 Phase 2 slice 92/N: retire `print()` in `src/export/org_export_utils.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 18 `print()` calls in
