@@ -7,6 +7,25 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #887 slice 7/N: drop `gateway` from pydocstyle match-dir exclusion (issue #887)
+
+- **Docstring quality (Changed)**: dropped `gateway` from the
+  `[tool.pydocstyle] match-dir` negation regex so 21 `src/gateway/**.py`
+  files are now scanned under the Google convention. Fixed 4 pre-existing
+  violations across 2 files:
+  - `src/gateway/wan2_migration_manager.py:137` — D212 on
+    `WAN2MigrationManager` class docstring (reflowed summary onto the
+    opening `"""` line).
+  - `src/gateway/wan_probe_device_override_manager.py:76` — D212 on
+    `WANProbeDeviceOverrideManager` class docstring (same fix).
+  - `src/gateway/wan_probe_device_override_manager.py:110` — D212 + D415
+    on `configure` classmethod docstring (reflowed summary and added
+    terminal period after `"(DESTRUCTIVE)"`).
+  Post-audit `pydocstyle --convention=google src/gateway/` reports 0
+  violations. Next slice 8/N targets `export` (34 files); after that the
+  match-dir negation drops back to `tests|\\.` only, closing the
+  pydocstyle strand of #887.
+
 ### #886 Phase 2 slice 107/N: retire `print()` in `src/gateway/device_template_cloner.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 27 `print()` calls in

@@ -134,8 +134,7 @@ class OverrideAnalysisContext:  # WHY: immutable context bundle for override ana
 
 
 class WAN2MigrationManager:  # WHY: consolidated Menu 103/104 flow into a single manager.
-    """
-    Manages WAN2 interface variable migration for gateway templates and sites.
+    """Manages WAN2 interface variable migration for gateway templates and sites.
 
     Consolidates Menu Options 103 and 104:
     - set_site_variable(): Set wan2_interface site variable across sites (Menu 103)
