@@ -7,6 +7,30 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 105/N: retire `print()` in `src/maps/_plotly_viewer.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced all 26 `print()` calls in
+  `src/maps/_plotly_viewer.py` with the pre-existing module-scoped
+  `logger = logging.getLogger(__name__)` and level-appropriate `logger.*`
+  emissions using `%`-style deferred formatting to satisfy G004. Dash-import
+  failure notices (`Dash not available`, install hint) route through
+  `logger.warning`; interactive-viewer banner lines, Dash startup banner,
+  KeyboardInterrupt/stop notice, and static-HTML fallback path notices
+  (`! Map saved to:`, `! Opening in browser...`, `! Creating static HTML
+  map...`) route through `logger.info`; the Dash server `except Exception`
+  operator notice routes through `logger.error` (paired with the existing
+  `logger.exception` stack-trace log). Each converted call carries the
+  standard `# WHY: preserve operator notice verbatim; route through logger
+  for capture/redirection.` comment above the emission.
+- **Namespace rebind (Changed)**: 21 pre-existing `logging.info` /
+  `logging.debug` / `logging.warning` / `logging.exception` calls scattered
+  through the file (mesh links, virtual/BLE beacon counts, browser auto-open
+  trace, Dash import trace, background image validation, device orientation
+  debug, Dash startup / stop / error, static map save/browser-launch trace)
+  were rebound to the module-scoped `logger` so all lifecycle diagnostics
+  share the `src.maps._plotly_viewer` namespace and can be filtered as one
+  unit.
+
 ### #886 Phase 2 slice 104/N: retire `print()` in `src/device/_utility_commands_selection.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 26 `print()` calls in
