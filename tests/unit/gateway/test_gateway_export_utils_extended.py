@@ -539,16 +539,17 @@ class TestGatewayExportUtilsStaticMethods:
         assert renamed[1]["Gateway Name"] == "gwB"  # WHY: TplB entry sorts second.
 
     def test_emit_management_ip_summary_writes_completion_lines(
-        self, tmp_path: Path, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
     ) -> None:
-        """Summary emits legacy console lines and audit log entry."""
+        """Summary emits legacy operator lines and audit log entry."""
         configure_gateway_export_utils_dependencies(**_build_dependency_bundle(tmp_path))  # WHY: DI wiring.
-        caplog.set_level(logging.INFO)  # WHY: audit line emitted at INFO.
-        GatewayExportUtils._emit_management_ip_summary(gateways_processed=5, gateways_with_mgmt_ip=3)
-        captured = capsys.readouterr().out  # WHY: assert on console output.
-        assert "Gateway management IP export completed" in captured  # WHY: banner headline.
-        assert "Total gateways processed: 5" in captured  # WHY: total line.
-        assert "Gateways without management IPs: 2" in captured  # WHY: derived arithmetic.
+        # WHY: slice 89 migrated print()->logger.info; assertions now read caplog, not stdout.
+        with caplog.at_level(logging.INFO):
+            GatewayExportUtils._emit_management_ip_summary(gateways_processed=5, gateways_with_mgmt_ip=3)
+        messages = "\n".join(rec.getMessage() for rec in caplog.records)
+        assert "Gateway management IP export completed" in messages  # WHY: banner headline.
+        assert "Total gateways processed: 5" in messages  # WHY: total line.
+        assert "Gateways without management IPs: 2" in messages  # WHY: derived arithmetic.
         assert any("Gateway management IP export completed" in rec.getMessage() for rec in caplog.records)
 
     def test_management_ips_returns_early_when_load_fails(
@@ -660,9 +661,7 @@ class TestGatewayExportUtilsStaticMethods:
         assert first_args[1] == "AllSiteGatewayConfigs.csv"  # WHY: full write filename.
         assert second_args[1] == "FilteredGatewayPortConfigs.csv"  # WHY: filtered write filename.
 
-    def test_templates_returns_early_when_no_templates(
-        self, tmp_path: Path, caplog: pytest.LogCaptureFixture, capsys: pytest.CaptureFixture[str]
-    ) -> None:
+    def test_templates_returns_early_when_no_templates(self, tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
         """Empty template list yields legacy warning log + operator message and no write."""
         writer = MagicMock()
         list_templates = MagicMock(return_value=SimpleNamespace(data=[]))
@@ -678,11 +677,12 @@ class TestGatewayExportUtilsStaticMethods:
             data_exporter=SimpleNamespace(write_with_format_selection=writer),
         )
         configure_gateway_export_utils_dependencies(**bundle)
-        caplog.set_level(logging.WARNING)  # WHY: warn logged on empty template set.
-        GatewayExportUtils.templates()
+        # WHY: slice 89 migrated print()->logger.warning; assertion now reads caplog, not stdout.
+        with caplog.at_level(logging.WARNING):
+            GatewayExportUtils.templates()
         writer.assert_not_called()  # WHY: no export when there are no templates.
-        captured = capsys.readouterr().out
-        assert "No gateway templates found" in captured  # WHY: legacy operator message.
+        messages = "\n".join(rec.getMessage() for rec in caplog.records)
+        assert "No gateway templates found" in messages  # WHY: legacy operator message.
 
     def test_templates_writes_export_when_templates_present(self, tmp_path: Path) -> None:
         """Happy path forwards flattened+escaped templates to DataExporter."""
