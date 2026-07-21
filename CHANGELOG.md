@@ -7,6 +7,38 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 100/N: retire `print()` in `src/websocket/polling/completion_detector.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced all 20 `print()` calls in
+  `src/websocket/polling/completion_detector.py` with the injected
+  `self.logger` (a `logging.Logger` supplied via `__init__`, so no
+  module-scoped logger is added). All emissions are `%`-style deferred to
+  satisfy G004. Of the 20 prints, 15 were duplicates that sat directly
+  alongside pre-existing `self.logger.debug(...)` calls emitting the same
+  content — those prints were deleted and the surviving logger calls were
+  left in place. The remaining 5 standalone diagnostic prints in
+  `_trace_generic_scan`, `_trace_service_ping`, `_trace_mac_missing_header`,
+  `_trace_mac_idle_pending`, and `_trace_arp_patterns` were converted to
+  `self.logger.debug(...)` with the standard `# WHY: preserve operator
+  notice verbatim; route through logger for capture/redirection.` comment.
+  Level assignment is uniformly DEBUG because every call site is gated by
+  the detector's `debug_mode` flag and emits low-level scan tracing rather
+  than user-visible status.
+- **Test migration (Changed)**:
+  `tests/unit/websocket/polling/test_completion_detector.py` dropped the
+  `capsys` fixture from ~30 helper-level tests covering the generic-scan,
+  ping-statistics, service-ping, MAC-table, and ARP-table strategies, and
+  now asserts on `caplog.text` after
+  `caplog.at_level(logging.DEBUG, logger=_LOGGER_NAME)` where
+  `_LOGGER_NAME = "test.completion_detector"` matches the name passed into
+  the injected logger by the test's `_make_detector` factory. Each debug-OFF
+  test asserts `caplog.text == ""` (helper silent); each debug-ON test
+  asserts the expected substring is present. Non-debug tests (strategy
+  chain, count helpers, parse helpers, integration paths) are unchanged.
+- **Compliance**: ruff T201/T203 clean on the module; `black`, `ruff`, and
+  `pytest tests/unit/websocket/polling/test_completion_detector.py` (88
+  passed) all green locally.
+
 ### #886 Phase 2 slice 99/N: retire `print()` in `src/refactors/data_directory_checker.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 20 `print()` calls in
