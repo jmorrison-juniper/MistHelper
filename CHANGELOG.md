@@ -7,6 +7,22 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 71/N: retire `print()` in `src/gateway/gateway_stats_exporter.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced all 9 `print()` calls in
+  `src/gateway/gateway_stats_exporter.py` with `logging.info(...)` using
+  `%`-style deferred formatting to satisfy G004. Covers the load-error branch
+  in `_load_gateway_stats_for_conflicts`, the healthy-config short-circuit and
+  export-summary lines in `_export_conflict_results`, and the per-conflict
+  sample lines plus truncation trailer in `_display_conflict_samples`. Each
+  migrated call carries the standard `# WHY:` annotation preserving legacy
+  operator-visible text via the logger for capture/redirection.
+- **Test migration (Changed)**: migrated 5 tests in
+  `tests/unit/gateway/test_gateway_stats_exporter.py` from `capsys` to
+  `caplog` with `caplog.at_level(logging.INFO)` wrappers and
+  `record.getMessage()` substring assertions. 32/32 tests pass; ruff T20
+  clean; ruff full clean; black clean.
+
 ### #886 Phase 2 slice 70/N: retire `print()` in `src/export/sites_by_ap_model_exporter.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 9 `print()` calls in

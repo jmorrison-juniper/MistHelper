@@ -292,23 +292,24 @@ def test_export_stats_populated_writes_csv() -> None:
     module.DataExporter.write_with_format_selection.assert_called_once_with(stats, STATS_CSV_FILENAME)
 
 
-def test_export_conflict_results_empty_short_circuits(capsys: pytest.CaptureFixture[str]) -> None:
-    """Empty conflict list should print healthy banner and skip persistence."""
+def test_export_conflict_results_empty_short_circuits(caplog: pytest.LogCaptureFixture) -> None:
+    """Empty conflict list should log healthy banner and skip persistence."""
     _configure_dependencies()
 
     module.DataExporter.write_with_format_selection = MagicMock()
 
-    GatewayStatsExporter._export_conflict_results([])
+    with caplog.at_level(logging.INFO):
+        GatewayStatsExporter._export_conflict_results([])
 
     module.DataExporter.write_with_format_selection.assert_not_called()
-    captured = capsys.readouterr()
-    assert "healthy WAN port configurations" in captured.out
+    messages = [record.getMessage() for record in caplog.records]
+    assert any("healthy WAN port configurations" in message for message in messages)
 
 
 def test_export_conflict_results_populated_writes_and_prints(
-    capsys: pytest.CaptureFixture[str],
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """Populated conflicts should sort, write CSV, print summary + sample."""
+    """Populated conflicts should sort, write CSV, log summary + sample."""
     _configure_dependencies()
 
     module.DataExporter.write_with_format_selection = MagicMock()
@@ -330,21 +331,22 @@ def test_export_conflict_results_populated_writes_and_prints(
         },
     ]
 
-    GatewayStatsExporter._export_conflict_results(conflicts)
+    with caplog.at_level(logging.INFO):
+        GatewayStatsExporter._export_conflict_results(conflicts)
 
     module.DataExporter.write_with_format_selection.assert_called_once()
-    captured = capsys.readouterr()
-    assert "1 gateways with IP conflicts" in captured.out
-    assert "Sample WAN Port IP Conflicts" in captured.out
+    messages = [record.getMessage() for record in caplog.records]
+    assert any("1 gateways with IP conflicts" in message for message in messages)
+    assert any("Sample WAN Port IP Conflicts" in message for message in messages)
 
 
 # -------------------------- _display_conflict_samples truncation --------------------------
 
 
 def test_display_conflict_samples_short_list_no_trailer(
-    capsys: pytest.CaptureFixture[str],
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """Fewer than SAMPLE_CONFLICT_LIMIT items should not print trailing 'and N more'."""
+    """Fewer than SAMPLE_CONFLICT_LIMIT items should not log trailing 'and N more'."""
     _configure_dependencies()
 
     conflicts = [
@@ -352,14 +354,15 @@ def test_display_conflict_samples_short_list_no_trailer(
         for idx in range(3)
     ]
 
-    GatewayStatsExporter._display_conflict_samples(conflicts)
+    with caplog.at_level(logging.INFO):
+        GatewayStatsExporter._display_conflict_samples(conflicts)
 
-    captured = capsys.readouterr()
-    assert "more conflicted ports" not in captured.out
+    messages = [record.getMessage() for record in caplog.records]
+    assert not any("more conflicted ports" in message for message in messages)
 
 
 def test_display_conflict_samples_long_list_emits_trailer(
-    capsys: pytest.CaptureFixture[str],
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Lists exceeding SAMPLE_CONFLICT_LIMIT should emit trailer with remaining count."""
     _configure_dependencies()
@@ -370,10 +373,11 @@ def test_display_conflict_samples_long_list_emits_trailer(
         for idx in range(total)
     ]
 
-    GatewayStatsExporter._display_conflict_samples(conflicts)
+    with caplog.at_level(logging.INFO):
+        GatewayStatsExporter._display_conflict_samples(conflicts)
 
-    captured = capsys.readouterr()
-    assert f"and {total - SAMPLE_CONFLICT_LIMIT} more conflicted ports" in captured.out
+    messages = [record.getMessage() for record in caplog.records]
+    assert any(f"and {total - SAMPLE_CONFLICT_LIMIT} more conflicted ports" in message for message in messages)
 
 
 # -------------------------- _analyze_device_ip_conflicts + _analyze_all_gateway_conflicts --------------------------
@@ -456,19 +460,20 @@ def test_load_gateway_stats_reads_csv_rows(tmp_path: Path) -> None:
 
 
 def test_load_gateway_stats_returns_none_on_failure(
-    capsys: pytest.CaptureFixture[str],
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """Missing/unreadable file should return None and print an error banner."""
+    """Missing/unreadable file should return None and log an error banner."""
     _configure_dependencies()
 
     module.FilePathUtils = SimpleNamespace(get_csv_path=MagicMock(return_value="/no/such/path/nowhere.csv"))
     module.CacheUtils = SimpleNamespace(check_and_generate_csv=MagicMock(return_value=False))
 
-    result = GatewayStatsExporter._load_gateway_stats_for_conflicts()
+    with caplog.at_level(logging.INFO):
+        result = GatewayStatsExporter._load_gateway_stats_for_conflicts()
 
     assert result is None
-    captured = capsys.readouterr()
-    assert "Failed to load" in captured.out
+    messages = [record.getMessage() for record in caplog.records]
+    assert any("Failed to load" in message for message in messages)
 
 
 # -------------------------- _fetch_one_device_stats retry loop --------------------------
