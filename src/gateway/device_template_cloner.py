@@ -15,6 +15,8 @@ import mistapi.api.v1.orgs.gatewaytemplates  # Create/list org gateway templates
 import mistapi.api.v1.orgs.sites  # List org sites for site selection
 import mistapi.api.v1.sites.devices  # List and fetch device configs
 
+logger = logging.getLogger(__name__)  # WHY: module-scoped logger for #886 print-to-logger migration.
+
 # ---------------------------------------------------------------------------
 # Module-level constants
 # ---------------------------------------------------------------------------
@@ -131,24 +133,26 @@ class DeviceConfigTemplateClonerManager:  # Menu 194 clone-to-template manager
 
     def _list_sites(self) -> list:
         """Fetch all sites in the org and return as a list of dicts."""
-        logging.info("Fetching org sites for org_id %s", self.org_id)  # Log before API call
+        logger.info("Fetching org sites for org_id %s", self.org_id)  # Log before API call
         response = mistapi.api.v1.orgs.sites.listOrgSites(  # Call Mist API for org sites
             self.apisession,
             self.org_id,
         )
         sites = response.data if hasattr(response, "data") else []  # Extract data list from response
-        logging.debug("Received %d sites from API", len(sites))  # Log result count after call
+        logger.debug("Received %d sites from API", len(sites))  # Log result count after call
         return sites  # Return site list for caller to display
 
     def _select_site(self) -> dict | None:
         """Display a numbered site menu and return the site the user picks."""
         sites = self._list_sites()  # Fetch site list from API
         if not sites:  # Guard - nothing to select if org has no sites
-            logging.warning("No sites found for org_id %s", self.org_id)  # Warn on empty list
-            print("No sites found for this org.")  # Inform the NOC engineer
+            logger.warning("No sites found for org_id %s", self.org_id)  # Warn on empty list
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.warning("No sites found for this org.")
             return None  # Signal caller to abort the workflow
         for index, site in enumerate(sites, start=1):  # Build numbered list for display
-            print(f"  {index:3}. {site.get('name', 'Unknown')} ({site.get('id', '')})")  # Show name+ID
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.info("  %3d. %s (%s)", index, site.get("name", "Unknown"), site.get("id", ""))
         raw = self.input_fn("Select site number: ", context="site_selection")  # Prompt for choice
         return self._resolve_menu_choice(raw, sites)  # Delegate parse+validate to shared helper
 
@@ -158,7 +162,7 @@ class DeviceConfigTemplateClonerManager:  # Menu 194 clone-to-template manager
 
     def _list_gateways(self, site_id: str) -> list:
         """Fetch all devices at a site and filter to gateway type only."""
-        logging.info("Fetching devices at site_id %s", site_id)  # Log before API call
+        logger.info("Fetching devices at site_id %s", site_id)  # Log before API call
         response = mistapi.api.v1.sites.devices.listSiteDevices(  # Call Mist API for all device types
             self.apisession,
             site_id,
@@ -166,18 +170,20 @@ class DeviceConfigTemplateClonerManager:  # Menu 194 clone-to-template manager
         )
         devices = response.data if hasattr(response, "data") else []  # Extract data list from response
         gateways = [d for d in devices if d.get("type") == "gateway"]  # Keep only gateway-type devices
-        logging.debug("Found %d gateway device(s) at site %s", len(gateways), site_id)  # Log count
+        logger.debug("Found %d gateway device(s) at site %s", len(gateways), site_id)  # Log count
         return gateways  # Return filtered gateway list
 
     def _select_gateway(self, gateways: list) -> dict | None:
         """Display a numbered gateway menu and return the device the user picks."""
         if not gateways:  # Guard - nothing to select if site has no gateways
-            print("No gateway devices found at the selected site.")  # Inform engineer
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.warning("No gateway devices found at the selected site.")
             return None  # Signal caller to abort
         for index, device in enumerate(gateways, start=1):  # Build numbered display list
             model = device.get("model", "Unknown")  # Extract model for display
             name = device.get("name", device.get("mac", "Unknown"))  # Fall back to MAC if no name
-            print(f"  {index:3}. {name} - {model} ({device.get('id', '')})")  # Display selection row
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.info("  %3d. %s - %s (%s)", index, name, model, device.get("id", ""))
         raw = self.input_fn("Select gateway number: ", context="gateway_selection")  # Prompt for choice
         return self._resolve_menu_choice(raw, gateways)  # Delegate parse+validate to shared helper
 
@@ -186,10 +192,12 @@ class DeviceConfigTemplateClonerManager:  # Menu 194 clone-to-template manager
         try:
             choice = int(raw.strip())  # Parse response as integer index
         except ValueError:  # Non-numeric response - guide the engineer and abort
-            print("Invalid input - please enter a number.")  # Inform engineer of bad input
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.warning("Invalid input - please enter a number.")
             return None  # Signal caller to abort
         if not 1 <= choice <= len(items):  # Validate 1-based range before indexing
-            print("Invalid selection.")  # Inform engineer of out-of-range input
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.warning("Invalid selection.")
             return None  # Signal caller to abort
         return items[choice - 1]  # Convert to 0-based and return picked entry
 
@@ -199,7 +207,7 @@ class DeviceConfigTemplateClonerManager:  # Menu 194 clone-to-template manager
 
     def _fetch_device_config(self, site_id: str, device_id: str) -> dict | None:
         """Fetch full device config from getSiteDevice and return as a dict."""
-        logging.info(  # Log before API call with identifying context
+        logger.info(  # Log before API call with identifying context
             "Fetching device config for device_id %s at site_id %s", device_id, site_id
         )
         response = mistapi.api.v1.sites.devices.getSiteDevice(  # Call Mist API for full device record
@@ -208,7 +216,7 @@ class DeviceConfigTemplateClonerManager:  # Menu 194 clone-to-template manager
             device_id,
         )
         config = response.data if hasattr(response, "data") else {}  # Extract device dict from response
-        logging.debug(  # Log field count after fetch - safe summary without secret values
+        logger.debug(  # Log field count after fetch - safe summary without secret values
             "Received device config with %d top-level fields", len(config)
         )
         return config if config else None  # Return config dict or None on empty response
@@ -219,7 +227,7 @@ class DeviceConfigTemplateClonerManager:  # Menu 194 clone-to-template manager
 
     def _fetch_existing_template_names(self) -> set:
         """Return a set of existing gateway template names for uniqueness validation."""
-        logging.info(  # Log before API call with org context
+        logger.info(  # Log before API call with org context
             "Fetching existing gateway templates for org_id %s to check name uniqueness", self.org_id
         )
         response = mistapi.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates(  # List all templates
@@ -228,7 +236,7 @@ class DeviceConfigTemplateClonerManager:  # Menu 194 clone-to-template manager
         )
         templates = response.data if hasattr(response, "data") else []  # Extract template list
         names = {t.get("name", "") for t in templates if t.get("name")}  # Build name set for O(1) lookup
-        logging.debug("Found %d existing gateway template name(s)", len(names))  # Log count after fetch
+        logger.debug("Found %d existing gateway template name(s)", len(names))  # Log count after fetch
         return names  # Return name set for uniqueness validation
 
     # ------------------------------------------------------------------
@@ -244,9 +252,12 @@ class DeviceConfigTemplateClonerManager:  # Menu 194 clone-to-template manager
 
     def _prompt_template_type(self) -> str:
         """Prompt for gateway template type and return 'standalone' or 'spoke'."""
-        print("\nTemplate type:")  # Section header for readability
-        print("  1. standalone")  # Most common type for branch gateways
-        print("  2. spoke")  # Used for SD-WAN spoke deployments
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("\nTemplate type:")
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("  1. standalone")
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("  2. spoke")
         raw = self.input_fn("Select type [1]: ", context="template_type_selection")  # Prompt with default
         raw = raw.strip()  # Remove leading/trailing whitespace from input
         return "spoke" if raw == "2" else "standalone"  # Map selection to API type string
@@ -259,19 +270,24 @@ class DeviceConfigTemplateClonerManager:  # Menu 194 clone-to-template manager
             )
             name = raw.strip() or default_name  # Use default if engineer pressed Enter
             if name in existing_names:  # Reject names already in use
-                print(f"Name '{name}' already exists - please choose a different name.")  # Guide engineer
+                # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+                logger.warning("Name '%s' already exists - please choose a different name.", name)
                 continue  # Retry the name prompt
             if not name:  # Reject empty names after default resolution
-                print("Name cannot be empty.")  # Guide engineer
+                # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+                logger.warning("Name cannot be empty.")
                 continue  # Retry the name prompt
             return name  # Accept valid unique name
 
     def _prompt_hardware_platform(self, source_model: str) -> str:
         """Prompt engineer to keep source model or select a different target model."""
-        print(f"\nHardware platform (source device: {source_model}):")  # Show source for context
-        print("  0. Same as source device")  # Quick option to keep current model
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("\nHardware platform (source device: %s):", source_model)
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("  0. Same as source device")
         for index, model in enumerate(COMMON_GATEWAY_MODELS, start=1):  # List common models
-            print(f"  {index:2}. {model}")  # Display each model with its number
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.info("  %2d. %s", index, model)
         raw = self.input_fn("Select model [0 = same]: ", context="hardware_platform_selection")  # Prompt
         return self._resolve_hardware_choice(raw.strip(), source_model)  # Delegate parse to helper
 
@@ -282,11 +298,13 @@ class DeviceConfigTemplateClonerManager:  # Menu 194 clone-to-template manager
         try:
             index = int(raw)  # Parse selection as integer index into COMMON_GATEWAY_MODELS
         except ValueError:  # Non-numeric response - fall through to safe default
-            print("Invalid selection - using source model.")  # Inform engineer of fallback
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.warning("Invalid selection - using source model.")
             return source_model  # Safe default preserves source model
         if 1 <= index <= len(COMMON_GATEWAY_MODELS):  # Validate range before indexing constant list
             return COMMON_GATEWAY_MODELS[index - 1]  # Return chosen model (1-based to 0-based)
-        print("Invalid selection - using source model.")  # Range failure - inform engineer
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.warning("Invalid selection - using source model.")
         return source_model  # Safe default preserves source model on out-of-range input
 
     # ------------------------------------------------------------------
@@ -299,7 +317,7 @@ class DeviceConfigTemplateClonerManager:  # Menu 194 clone-to-template manager
         payload["name"] = name  # Inject template name provided by engineer
         payload["type"] = ttype  # Inject template type (standalone or spoke)
         payload["gateway_matching"] = self._build_gateway_matching(name, model)  # Inject match block
-        logging.debug(  # Log payload field count - safe summary without secret values
+        logger.debug(  # Log payload field count - safe summary without secret values
             "Built template payload with %d fields for template '%s' (type=%s, model=%s)",
             len(payload),
             name,
@@ -363,21 +381,27 @@ class DeviceConfigTemplateClonerManager:  # Menu 194 clone-to-template manager
 
     def _confirm_creation(self, name: str, ttype: str, model: str) -> bool:
         """Display a pending-operation summary and require typed 'CREATE' confirmation."""
-        print("\n" + "=" * 60)  # Visual separator for the confirmation block
-        print("  PENDING OPERATION: Create Org Gateway Template")  # Header for clarity
-        print(f"  Template Name : {name}")  # Show template name for engineer review
-        print(f"  Template Type : {ttype}")  # Show template type for engineer review
-        print(f"  Target Model  : {model}")  # Show hardware model for engineer review
-        print("=" * 60)  # Bottom separator
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("\n%s", "=" * 60)
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("  PENDING OPERATION: Create Org Gateway Template")
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("  Template Name : %s", name)
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("  Template Type : %s", ttype)
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("  Target Model  : %s", model)
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("%s", "=" * 60)
         raw = self.input_fn(  # Prompt for explicit typed confirmation
             "Type CREATE to confirm (or anything else to cancel): ",
             context="create_gateway_template_confirmation",
         )
         confirmed = raw.strip() == "CREATE"  # Exact case comparison - no shortcuts
         if confirmed:  # Log outcome for audit trail
-            logging.info("User confirmed template creation for '%s'", name)  # Log approval
+            logger.info("User confirmed template creation for '%s'", name)  # Log approval
         else:
-            logging.info("Operation cancelled - confirmation failed for template '%s'", name)  # Log cancel
+            logger.info("Operation cancelled - confirmation failed for template '%s'", name)  # Log cancel
         return confirmed  # Return bool for caller to branch on
 
     # ------------------------------------------------------------------
@@ -386,7 +410,7 @@ class DeviceConfigTemplateClonerManager:  # Menu 194 clone-to-template manager
 
     def _create_template(self, payload: dict) -> dict | None:
         """Call createOrgGatewayTemplate and return the newly created template dict."""
-        logging.info(  # Log before API write call with non-secret identifying fields
+        logger.info(  # Log before API write call with non-secret identifying fields
             "Creating org gateway template '%s' (type=%s) for org_id %s",
             payload.get("name"),
             payload.get("type"),
@@ -398,7 +422,7 @@ class DeviceConfigTemplateClonerManager:  # Menu 194 clone-to-template manager
             body=payload,  # Pass full payload dict as API request body
         )
         template = response.data if hasattr(response, "data") else {}  # Extract created template dict
-        logging.debug(  # Log new template ID after creation - safe identifying field
+        logger.debug(  # Log new template ID after creation - safe identifying field
             "Created gateway template with ID %s", template.get("id", "unknown")
         )
         return template if template else None  # Return template dict or None on empty response
@@ -419,14 +443,19 @@ class DeviceConfigTemplateClonerManager:  # Menu 194 clone-to-template manager
             "source_device_model": device_info.get("model", ""),  # Source hardware model
             "source_site_id": device_info.get("site_id", ""),  # Site where source device lives
         }
-        logging.info("Exporting new gateway template result to CSV")  # Log before export action
+        logger.info("Exporting new gateway template result to CSV")  # Log before export action
         self.write_csv_fn(  # PK-aware writer that selects CSV or SQLite per global format
             [row],  # Wrap single row in list as expected by the writer
             "CloneGatewayTemplate.csv",  # Output filename (or table name in SQLite mode)
             api_function_name="createOrgGatewayTemplate",  # PK strategy key for upsert
         )
-        logging.debug("CSV export complete for template_id %s", row["template_id"])  # Log after export
-        print(f"\nSuccess: Created gateway template '{row['template_name']}' (ID: {row['template_id']})")
+        logger.debug("CSV export complete for template_id %s", row["template_id"])  # Log after export
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info(
+            "\nSuccess: Created gateway template '%s' (ID: %s)",
+            row["template_name"],
+            row["template_id"],
+        )
 
     # ------------------------------------------------------------------
     # Main workflow (split into phase helpers to satisfy STRUCT-* limits)
@@ -443,7 +472,8 @@ class DeviceConfigTemplateClonerManager:  # Menu 194 clone-to-template manager
             return None  # Signal caller to abort the workflow
         device_config = self._fetch_device_config(site["id"], gateway["id"])  # Step 4: fetch config
         if device_config is None:  # Abort if config fetch returned empty
-            print("Failed to fetch device configuration.")  # Inform engineer
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.error("Failed to fetch device configuration.")
             return None  # Signal caller to abort the workflow
         return gateway, device_config  # Return combined tuple for downstream phases
 
@@ -453,7 +483,8 @@ class DeviceConfigTemplateClonerManager:  # Menu 194 clone-to-template manager
         device_model = gateway.get("model", "SRX300")  # Use source model as default suggestion
         name, ttype, model = self._prompt_template_meta(device_model, existing_names)  # Step 6
         if not self._confirm_creation(name, ttype, model):  # Step 7: require explicit confirmation
-            print("Operation cancelled.")  # Inform engineer of cancellation
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.info("Operation cancelled.")
             return None  # Signal caller to abort - user declined the CREATE prompt
         return name, ttype, model  # Return metadata tuple for payload construction
 
@@ -463,7 +494,8 @@ class DeviceConfigTemplateClonerManager:  # Menu 194 clone-to-template manager
         payload = self._build_template_payload(device_config, name, ttype, model)  # Step 8
         new_template = self._create_template(payload)  # Step 9: API write call
         if new_template is None:  # Abort if API returned no data
-            print("Template creation failed - no data returned from API.")  # Inform engineer
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.error("Template creation failed - no data returned from API.")
             return False  # Signal failure to caller
         self._export_result(gateway, new_template)  # Step 10: write CSV export row
         return True  # Signal successful completion to caller
@@ -480,6 +512,7 @@ class DeviceConfigTemplateClonerManager:  # Menu 194 clone-to-template manager
                 return False  # Signal cancellation to caller
             return self._create_and_export(gateway, device_config, meta)  # Phase 3: write + export
         except Exception as exc:  # Catch all unexpected errors for safe logging
-            logging.exception("DeviceConfigTemplateClonerManager.clone() failed: %s", exc)  # Log context
-            print(f"Error: {exc}")  # Print brief error message for interactive feedback
+            logger.exception("DeviceConfigTemplateClonerManager.clone() failed: %s", exc)  # Log context
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.error("Error: %s", exc)
             return False  # Signal failure to caller

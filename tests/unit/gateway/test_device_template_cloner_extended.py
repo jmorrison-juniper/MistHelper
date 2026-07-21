@@ -7,6 +7,7 @@ clone() exception path.
 
 from __future__ import annotations  # PEP 563 postponed evaluation for typing forward refs
 
+import logging  # Set caplog levels for logger-based assertions after #886 print->logger migration
 from types import SimpleNamespace  # Build fake mistapi response objects with .data attr
 from typing import Any  # Untyped kwargs need explicit Any for mypy --strict compatibility
 from unittest.mock import MagicMock, patch  # MagicMock for injection, patch for mistapi calls
@@ -18,6 +19,8 @@ from src.gateway.device_template_cloner import (  # SUT imports for direct manip
     DeviceConfigTemplateClonerManager,  # Class under test
     DeviceTemplateClonerDeps,  # Frozen deps bundle required by the constructor
 )
+
+_SUT_LOGGER = "src.gateway.device_template_cloner"  # Module logger name for caplog level scoping
 
 
 def _build_deps(**overrides: Any) -> DeviceTemplateClonerDeps:
@@ -68,13 +71,14 @@ def test_list_sites_returns_empty_when_response_missing_data_attr() -> None:
     assert sites == []  # Must fall back to empty list when .data missing
 
 
-def test_select_site_returns_none_when_no_sites(capsys: pytest.CaptureFixture) -> None:
+def test_select_site_returns_none_when_no_sites(caplog: pytest.LogCaptureFixture) -> None:
     """_select_site must return None and inform the engineer when no sites exist."""
+    caplog.set_level(logging.WARNING, logger=_SUT_LOGGER)  # Warning level after #886 migration
     manager = _build_manager()  # Build cloner with default mocks
     with patch.object(manager, "_list_sites", return_value=[]):  # Force empty site list
         result = manager._select_site()  # Invoke helper under test
     assert result is None  # Must signal abort with None
-    assert "No sites found" in capsys.readouterr().out  # Must inform engineer via stdout
+    assert "No sites found" in caplog.text  # Must inform engineer via logger
 
 
 def test_select_site_returns_chosen_site_on_valid_input() -> None:
@@ -122,12 +126,13 @@ def test_list_gateways_returns_empty_when_response_missing_data_attr() -> None:
     assert gateways == []  # Must fall back to empty list when .data missing
 
 
-def test_select_gateway_returns_none_when_empty(capsys: pytest.CaptureFixture) -> None:
+def test_select_gateway_returns_none_when_empty(caplog: pytest.LogCaptureFixture) -> None:
     """_select_gateway must return None and inform engineer when no gateways found."""
+    caplog.set_level(logging.WARNING, logger=_SUT_LOGGER)  # Warning level after #886 migration
     manager = _build_manager()  # Build cloner with default mocks
     result = manager._select_gateway([])  # Empty gateway list triggers early return
     assert result is None  # Must signal abort with None
-    assert "No gateway devices found" in capsys.readouterr().out  # Must inform engineer via stdout
+    assert "No gateway devices found" in caplog.text  # Must inform engineer via logger
 
 
 def test_select_gateway_returns_chosen_gateway_on_valid_input() -> None:
@@ -143,13 +148,14 @@ def test_select_gateway_returns_chosen_gateway_on_valid_input() -> None:
     assert result["id"] == "gw-1"  # Must return the first gateway (1-based to 0-based conversion)
 
 
-def test_select_gateway_uses_mac_fallback_when_name_missing(capsys: pytest.CaptureFixture) -> None:
+def test_select_gateway_uses_mac_fallback_when_name_missing(caplog: pytest.LogCaptureFixture) -> None:
     """_select_gateway must display MAC address as fallback when device has no name."""
+    caplog.set_level(logging.INFO, logger=_SUT_LOGGER)  # Info level for display rows after #886 migration
     input_fn = MagicMock(return_value="1")  # Any valid input to reach display line
     manager = _build_manager(input_fn=input_fn)  # Inject controlled input mock
     gateways = [{"id": "gw-1", "mac": "aabbccddeeff", "model": "SSR120"}]  # No name field
     manager._select_gateway(gateways)  # Invoke helper - triggers display line
-    output = capsys.readouterr().out  # Capture stdout for assertion
+    output = caplog.text  # Capture logger output for assertion
     assert "aabbccddeeff" in output  # MAC must appear in display as name fallback
 
 
@@ -290,24 +296,26 @@ def test_prompt_template_name_returns_default_when_input_empty() -> None:
     assert result == "suggested-name"  # Must return the default when input empty
 
 
-def test_prompt_template_name_retries_when_name_already_exists(capsys: pytest.CaptureFixture) -> None:
+def test_prompt_template_name_retries_when_name_already_exists(caplog: pytest.LogCaptureFixture) -> None:
     """_prompt_template_name must loop when engineer provides a name already in use."""
+    caplog.set_level(logging.WARNING, logger=_SUT_LOGGER)  # Warning level after #886 migration
     input_fn = MagicMock(side_effect=["taken-name", "new-name"])  # First attempt taken, second unique
     manager = _build_manager(input_fn=input_fn)  # Inject controlled input mock
     result = manager._prompt_template_name("default", {"taken-name"})  # Existing set
     assert result == "new-name"  # Must return the second (unique) name
-    assert "already exists" in capsys.readouterr().out  # Guidance message must appear
+    assert "already exists" in caplog.text  # Guidance message must appear
 
 
 def test_prompt_template_name_retries_when_empty_after_default_empty(
-    capsys: pytest.CaptureFixture,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """_prompt_template_name must loop when both input and default resolve to empty."""
+    caplog.set_level(logging.WARNING, logger=_SUT_LOGGER)  # Warning level after #886 migration
     input_fn = MagicMock(side_effect=["", "final-name"])  # Empty then valid on retry
     manager = _build_manager(input_fn=input_fn)  # Inject controlled input mock
     result = manager._prompt_template_name("", set())  # Empty default - forces retry loop
     assert result == "final-name"  # Second attempt must be accepted
-    assert "cannot be empty" in capsys.readouterr().out  # Empty guard message must appear
+    assert "cannot be empty" in caplog.text  # Empty guard message must appear
 
 
 # ---------------------------------------------------------------------------
@@ -351,21 +359,23 @@ def test_resolve_hardware_choice_all_branches(raw: str, expected_kind: str) -> N
 
 
 def test_resolve_hardware_choice_prints_message_on_invalid_input(
-    capsys: pytest.CaptureFixture,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """_resolve_hardware_choice must inform engineer when falling back on invalid input."""
+    caplog.set_level(logging.WARNING, logger=_SUT_LOGGER)  # Warning level after #886 migration
     manager = _build_manager()  # Build cloner with default mocks
     manager._resolve_hardware_choice("invalid", "SRX340")  # Non-numeric fallback path
-    assert "Invalid selection" in capsys.readouterr().out  # Fallback message must appear
+    assert "Invalid selection" in caplog.text  # Fallback message must appear
 
 
 def test_resolve_hardware_choice_prints_message_on_out_of_range(
-    capsys: pytest.CaptureFixture,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """_resolve_hardware_choice must inform engineer when falling back on out-of-range."""
+    caplog.set_level(logging.WARNING, logger=_SUT_LOGGER)  # Warning level after #886 migration
     manager = _build_manager()  # Build cloner with default mocks
     manager._resolve_hardware_choice("999", "SRX340")  # Out-of-range fallback path
-    assert "Invalid selection" in capsys.readouterr().out  # Fallback message must appear
+    assert "Invalid selection" in caplog.text  # Fallback message must appear
 
 
 # ---------------------------------------------------------------------------
@@ -414,21 +424,23 @@ def test_create_template_returns_none_when_response_missing_data_attr() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_clone_returns_false_on_unexpected_exception(capsys: pytest.CaptureFixture) -> None:
+def test_clone_returns_false_on_unexpected_exception(caplog: pytest.LogCaptureFixture) -> None:
     """clone() must catch unexpected errors, log them, and return False."""
+    caplog.set_level(logging.ERROR, logger=_SUT_LOGGER)  # Error level after #886 migration
     manager = _build_manager()  # Build cloner with default mocks
     with patch.object(  # Force _gather_source_device to raise unexpected error
         manager, "_gather_source_device", side_effect=RuntimeError("boom")
     ):
         result = manager.clone()  # Invoke workflow under test
     assert result is False  # Must return False on any exception
-    assert "Error" in capsys.readouterr().out  # Must print user-friendly error message
+    assert "Error" in caplog.text  # Must log user-friendly error message
 
 
 def test_clone_returns_false_when_create_template_returns_none(
-    capsys: pytest.CaptureFixture,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """clone() must return False and inform engineer when _create_template returns None."""
+    caplog.set_level(logging.ERROR, logger=_SUT_LOGGER)  # Error level after #886 migration
     manager = _build_manager()  # Build cloner with default mocks
     gateway = {"id": "gw-1", "model": "SRX340"}  # Selected source gateway
     export_mock = MagicMock()  # Captured out here so mypy sees a MagicMock rather than a bound method
@@ -446,12 +458,13 @@ def test_clone_returns_false_when_create_template_returns_none(
     ):
         result = manager.clone()  # Invoke workflow under test
         assert result is False  # Must return False when template creation fails
-        assert "Template creation failed" in capsys.readouterr().out  # Failure message must appear
+        assert "Template creation failed" in caplog.text  # Failure message must appear
         export_mock.assert_not_called()  # Export must not fire (assertion inside `with`)
 
 
-def test_clone_returns_false_when_device_config_missing(capsys: pytest.CaptureFixture) -> None:
+def test_clone_returns_false_when_device_config_missing(caplog: pytest.LogCaptureFixture) -> None:
     """clone() must return False and inform engineer when device config fetch returns None."""
+    caplog.set_level(logging.ERROR, logger=_SUT_LOGGER)  # Error level after #886 migration
     manager = _build_manager()  # Build cloner with default mocks
     with patch.multiple(  # Stub phases through device config fetch
         manager,
@@ -462,7 +475,7 @@ def test_clone_returns_false_when_device_config_missing(capsys: pytest.CaptureFi
     ):
         result = manager.clone()  # Invoke workflow under test
     assert result is False  # Must return False when config missing
-    assert "Failed to fetch device configuration" in capsys.readouterr().out  # Message must appear
+    assert "Failed to fetch device configuration" in caplog.text  # Message must appear
 
 
 def test_clone_returns_false_when_gateway_selection_aborted() -> None:
