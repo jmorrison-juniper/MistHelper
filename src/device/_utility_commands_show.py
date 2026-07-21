@@ -39,6 +39,8 @@ import mistapi  # WHY: device show / diagnostic SDK calls live under mistapi.api
 from ._utility_commands_cluster import _ClusterBase  # WHY: shared proxy base
 from ._utility_commands_websocket import ExportResultSpec  # WHY: single-arg spec for exporter
 
+logger = logging.getLogger(__name__)  # WHY: module-scoped logger for #886 print-to-logger migration.
+
 
 @dataclass(frozen=True)  # WHY: frozen so shared module constants cannot be mutated at runtime
 class ShowCommandSpec:  # WHY: preset bundle per show command
@@ -197,10 +199,12 @@ class _UtilityCommandsShow(_ClusterBase):  # WHY: cluster wrapper mirroring _Uti
             allow_empty=False,  # WHY: reject blank input at the prompt layer
         )
         if not host:  # WHY: defensive re-check even though allow_empty=False
-            print("! Destination host is required.")  # WHY: surface reason to operator
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.warning("! Destination host is required.")  # WHY: surface reason to operator
             return  # WHY: abort without firing SDK call
         body = self._build_traceroute_body(host)  # WHY: extract keeps public method under 25 lines
-        print(f"\n-> Running traceroute to {host}...")  # WHY: operator progress feedback
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("\n-> Running traceroute to %s...", host)  # WHY: operator progress feedback
         self._run_and_export(site_id, device_id, body, _TRACEROUTE_SPEC)  # WHY: dispatch + export
 
     def _build_traceroute_body(self, host: str) -> dict[str, Any]:
@@ -227,7 +231,8 @@ class _UtilityCommandsShow(_ClusterBase):  # WHY: cluster wrapper mirroring _Uti
             return  # WHY: nothing to do without a device target
         site_id, device_id, _ = selection  # WHY: destructure IDs, ignore display name
         body = self._build_ospf_neighbors_body()  # WHY: extract keeps public method under 25 lines
-        print("\n-> Fetching OSPF neighbors...")  # WHY: operator progress feedback
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("\n-> Fetching OSPF neighbors...")  # WHY: operator progress feedback
         self._run_and_export(site_id, device_id, body, _OSPF_NEIGHBORS_SPEC)  # WHY: dispatch + export
 
     def _build_ospf_neighbors_body(self) -> dict[str, Any]:
@@ -252,7 +257,8 @@ class _UtilityCommandsShow(_ClusterBase):  # WHY: cluster wrapper mirroring _Uti
             return  # WHY: nothing to do without a device target
         site_id, device_id, _ = selection  # WHY: destructure IDs, ignore display name
         body = self._build_ospf_interfaces_body(site_id, device_id)  # WHY: extract keeps <=25 lines
-        print("\n-> Fetching OSPF interfaces...")  # WHY: operator progress feedback
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("\n-> Fetching OSPF interfaces...")  # WHY: operator progress feedback
         self._run_and_export(site_id, device_id, body, _OSPF_INTERFACES_SPEC)  # WHY: dispatch + export
 
     def _build_ospf_interfaces_body(self, site_id: str, device_id: str) -> dict[str, Any]:
@@ -272,7 +278,8 @@ class _UtilityCommandsShow(_ClusterBase):  # WHY: cluster wrapper mirroring _Uti
             return  # WHY: nothing to do without a device target
         site_id, device_id, _ = selection  # WHY: destructure IDs, ignore display name
         body = self._build_ospf_database_body()  # WHY: extract keeps this method at C<=5
-        print("\n-> Fetching OSPF database...")  # WHY: operator progress feedback
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("\n-> Fetching OSPF database...")  # WHY: operator progress feedback
         self._run_and_export(site_id, device_id, body, _OSPF_DATABASE_SPEC)  # WHY: dispatch + export
 
     def _build_ospf_database_body(self) -> dict[str, Any]:
@@ -300,7 +307,8 @@ class _UtilityCommandsShow(_ClusterBase):  # WHY: cluster wrapper mirroring _Uti
             return  # WHY: nothing to do without a device target
         site_id, device_id, _ = selection  # WHY: destructure IDs, ignore display name
         body = self._build_vrf_node_body("ospf_vrf", "ospf_node")  # WHY: shared vrf+node prompt helper
-        print("\n-> Fetching OSPF summary...")  # WHY: operator progress feedback
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("\n-> Fetching OSPF summary...")  # WHY: operator progress feedback
         self._run_and_export(site_id, device_id, body, _OSPF_SUMMARY_SPEC)  # WHY: dispatch + export
 
     def _build_vrf_node_body(self, vrf_ctx: str, node_ctx: str) -> dict[str, Any]:
@@ -333,7 +341,8 @@ class _UtilityCommandsShow(_ClusterBase):  # WHY: cluster wrapper mirroring _Uti
         if not selection:  # WHY: user cancelled / no picks
             return  # WHY: nothing to do without a device target
         site_id, device_id, _ = selection  # WHY: destructure IDs, ignore display name
-        print("\n-> Testing DNS resolution on device...")  # WHY: operator progress feedback
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("\n-> Testing DNS resolution on device...")  # WHY: operator progress feedback
         self._run_and_export(site_id, device_id, None, _DNS_RESOLUTION_SPEC)  # WHY: no body for this SDK
 
     def monitor_traffic(self) -> None:
@@ -347,7 +356,8 @@ class _UtilityCommandsShow(_ClusterBase):  # WHY: cluster wrapper mirroring _Uti
         if not port_id:  # WHY: no port -> no traffic to sniff
             return  # WHY: abort without firing SDK call
         body, duration = self._build_monitor_traffic_body(port_id)  # WHY: extract keeps <=25 lines
-        print(f"\n-> Monitoring traffic on port {port_id}...")  # WHY: operator progress feedback
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("\n-> Monitoring traffic on port %s...", port_id)  # WHY: operator progress feedback
         self._run_streaming_command(  # WHY: __getattr__ -> websocket cluster
             site_id,
             device_id,
@@ -377,7 +387,8 @@ class _UtilityCommandsShow(_ClusterBase):  # WHY: cluster wrapper mirroring _Uti
         if not selection:  # WHY: user cancelled / no picks
             return  # WHY: nothing to do without a device target
         site_id, device_id, _ = selection  # WHY: destructure IDs, ignore display name
-        print("\n-> Running top command...")  # WHY: operator progress feedback
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("\n-> Running top command...")  # WHY: operator progress feedback
         self._run_streaming_command(  # WHY: __getattr__ -> websocket cluster
             site_id,
             device_id,
@@ -397,7 +408,8 @@ class _UtilityCommandsShow(_ClusterBase):  # WHY: cluster wrapper mirroring _Uti
             return  # WHY: nothing to do without a device target
         site_id, device_id, _ = selection  # WHY: destructure IDs, ignore display name
         body = self._build_session_body()  # WHY: extract keeps public method under 25 lines
-        print("\n-> Fetching device sessions...")  # WHY: operator progress feedback
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("\n-> Fetching device sessions...")  # WHY: operator progress feedback
         self._run_and_export(site_id, device_id, body, _SESSION_SPEC)  # WHY: dispatch + export
 
     def _build_session_body(self) -> dict[str, Any]:
@@ -431,7 +443,8 @@ class _UtilityCommandsShow(_ClusterBase):  # WHY: cluster wrapper mirroring _Uti
             return  # WHY: nothing to do without a device target
         site_id, device_id, _ = selection  # WHY: destructure IDs, ignore display name
         body = self._build_service_path_body()  # WHY: extract keeps public method under 25 lines
-        print("\n-> Fetching service path...")  # WHY: operator progress feedback
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("\n-> Fetching service path...")  # WHY: operator progress feedback
         self._run_and_export(site_id, device_id, body, _SERVICE_PATH_SPEC)  # WHY: dispatch + export
 
     def _build_service_path_body(self) -> dict[str, Any]:
@@ -459,7 +472,8 @@ class _UtilityCommandsShow(_ClusterBase):  # WHY: cluster wrapper mirroring _Uti
             return  # WHY: nothing to do without a device target
         site_id, device_id, _ = selection  # WHY: destructure IDs, ignore display name
         body = self._build_node_only_body("bgp_node")  # WHY: shared node-only prompt helper
-        print("\n-> Fetching BGP summary...")  # WHY: operator progress feedback
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("\n-> Fetching BGP summary...")  # WHY: operator progress feedback
         self._run_and_export(site_id, device_id, body, _BGP_SUMMARY_SPEC)  # WHY: dispatch + export
 
     def show_arp_table(self) -> None:
@@ -470,7 +484,8 @@ class _UtilityCommandsShow(_ClusterBase):  # WHY: cluster wrapper mirroring _Uti
             return  # WHY: nothing to do without a device target
         site_id, device_id, _ = selection  # WHY: destructure IDs, ignore display name
         body = self._build_node_only_body("arp_node")  # WHY: shared node-only prompt helper
-        print("\n-> Fetching ARP table...")  # WHY: operator progress feedback
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("\n-> Fetching ARP table...")  # WHY: operator progress feedback
         self._run_and_export(site_id, device_id, body, _ARP_TABLE_SPEC)  # WHY: dispatch + export
 
     def show_dhcp_leases(self) -> None:
@@ -481,7 +496,8 @@ class _UtilityCommandsShow(_ClusterBase):  # WHY: cluster wrapper mirroring _Uti
             return  # WHY: nothing to do without a device target
         site_id, device_id, _ = selection  # WHY: destructure IDs, ignore display name
         body = self._build_dhcp_leases_body(site_id, device_id)  # WHY: extract keeps <=25 lines
-        print("\n-> Fetching DHCP leases...")  # WHY: operator progress feedback
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("\n-> Fetching DHCP leases...")  # WHY: operator progress feedback
         self._run_and_export(site_id, device_id, body, _DHCP_LEASES_SPEC)  # WHY: dispatch + export
 
     def _build_dhcp_leases_body(self, site_id: str, device_id: str) -> dict[str, Any]:
@@ -503,7 +519,8 @@ class _UtilityCommandsShow(_ClusterBase):  # WHY: cluster wrapper mirroring _Uti
             return  # WHY: nothing to do without a device target
         site_id, device_id, _ = selection  # WHY: destructure IDs, ignore display name
         body = self._build_node_only_body("dot1x_node")  # WHY: shared node-only prompt helper
-        print("\n-> Fetching 802.1X table...")  # WHY: operator progress feedback
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("\n-> Fetching 802.1X table...")  # WHY: operator progress feedback
         self._run_and_export(site_id, device_id, body, _DOT1X_SPEC)  # WHY: dispatch + export
 
     def show_evpn_database(self) -> None:
@@ -514,7 +531,8 @@ class _UtilityCommandsShow(_ClusterBase):  # WHY: cluster wrapper mirroring _Uti
             return  # WHY: nothing to do without a device target
         site_id, device_id, _ = selection  # WHY: destructure IDs, ignore display name
         body = self._build_node_only_body("evpn_node")  # WHY: shared node-only prompt helper
-        print("\n-> Fetching EVPN database...")  # WHY: operator progress feedback
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("\n-> Fetching EVPN database...")  # WHY: operator progress feedback
         self._run_and_export(site_id, device_id, body, _EVPN_DATABASE_SPEC)  # WHY: dispatch + export
 
     # ------------------------------------------------------------------
@@ -532,5 +550,6 @@ class _UtilityCommandsShow(_ClusterBase):  # WHY: cluster wrapper mirroring _Uti
         if not port_id:  # WHY: cable test needs a physical port target
             return  # WHY: abort without firing SDK call
         body: dict[str, Any] = {"port": port_id}  # WHY: SDK expects 'port' key (not port_id)
-        print(f"\n-> Running cable test on port {port_id}...")  # WHY: operator progress feedback
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("\n-> Running cable test on port %s...", port_id)  # WHY: operator progress feedback
         self._run_and_export(site_id, device_id, body, _CABLE_TEST_SPEC)  # WHY: dispatch + export
