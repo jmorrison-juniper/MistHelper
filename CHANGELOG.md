@@ -105,6 +105,26 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
   capturable, redirectable, and consistent with the rest of the SSH
   runner v2 stack.
 
+### #886 Phase 2 slice 88/N: retire `print()` in `src/capture/_packet_capture_tcpdump.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced all 16 `print()` calls
+  in `src/capture/_packet_capture_tcpdump.py` with module-scoped
+  `logger`-based emissions. Added `import logging` and
+  `logger = logging.getLogger(__name__)` at module top. 15 calls became
+  `logger.info(...)` (menu banner, section headers, filter items,
+  filter-applied confirmations, custom-expression prompts, capture-format
+  selector); the one validation-fallback message
+  (`"\n! Invalid choice, using no filter"`) became `logger.warning(...)`.
+  All argument interpolation uses `%`-style deferred formatting to
+  satisfy G004. Each converted call carries the standard
+  `# WHY: preserve operator notice verbatim; route through logger for
+  capture/redirection.` annotation.
+- **No test migration needed**: existing
+  `tests/unit/test_packet_capture.py::TestTcpdumpExpressionSelection`
+  and `TestCaptureFormatSelection` assert only on return values via
+  mocked `_get_input_utils`, not on stdout — the 256-test file passes
+  unchanged.
+
 ### #886 Phase 2 slice 87/N: retire `print()` in `src/site/address_audit/audit_engine.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 5 `print()` calls
