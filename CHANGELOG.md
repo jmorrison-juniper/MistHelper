@@ -7,6 +7,29 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 101/N: retire `print()` in `src/refactors/serial_cc/start_site_client_capture_wireless.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced all 25 `print()` calls in
+  `src/refactors/serial_cc/start_site_client_capture_wireless.py` with a
+  module-scoped `logger = logging.getLogger(__name__)`. The service class
+  exposes only `@staticmethod` / `@classmethod` entry points and therefore
+  has no `self.logger` to inject, so a module logger was the appropriate
+  choice. All emissions are `%`-style deferred to satisfy G004, and each
+  converted call carries the standard `# WHY: preserve operator notice
+  verbatim; route through logger for capture/redirection.` comment.
+- **Level assignment (Changed)**: banner and prompt-header lines (intro
+  banner, client/AP option menus, loop-mode header, capture-summary block)
+  now emit at `logger.info`; validation misses ("no client MAC provided",
+  "invalid MAC", "invalid <int>", range violations) emit at
+  `logger.warning`. No error/debug channels are used in this module.
+- **Format-string constants (Changed)**: the four module-level `_INVALID_*_MSG`
+  constants were tightened from f-style `{value}` placeholders to `%s`
+  placeholders so the logger call sites can pass positional arguments and
+  keep formatting deferred.
+- **Tests (Unchanged)**: `tests/unit/serial_cc/test_start_site_client_capture_wireless.py`
+  exercises the flow via `MagicMock` on the manager and prompt helpers, so
+  no `capsys` → `caplog` migration was required. All 3 tests remain green.
+
 ### #886 Phase 2 slice 100/N: retire `print()` in `src/websocket/polling/completion_detector.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 20 `print()` calls in
