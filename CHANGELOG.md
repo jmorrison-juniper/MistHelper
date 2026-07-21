@@ -7,6 +7,31 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 103/N: retire `print()` in `src/analytics/site_inventory_health_analyzer.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced all 26 `print()` calls in
+  `src/analytics/site_inventory_health_analyzer.py` with a module-scoped
+  `logger = logging.getLogger(__name__)` and level-appropriate `logger.*`
+  emissions using `%`-style deferred formatting to satisfy G004. The module
+  is a collection of `@staticmethod` display helpers, so a module logger is
+  the correct fit (no `self.logger` available). All 26 sites route through
+  `logger.info` because they emit operator-facing report banners, section
+  headers, per-site totals, and sample listings for the site-inventory
+  health report — none are validation warnings or errors. Each converted
+  call carries the standard `# WHY: preserve operator notice verbatim; route
+  through logger for capture/redirection.` comment above the emission.
+  Pre-existing `logging.info(...)` audit-trail lines were left untouched.
+- **Test migration (Changed)**:
+  `tests/unit/analytics/test_site_inventory_health_analyzer.py` swapped
+  `capsys` for `caplog` in `test_analyze_exits_when_org_missing`, pinning
+  the capture to the SUT logger via
+  `_MODULE_LOGGER = "src.analytics.site_inventory_health_analyzer"` and
+  `caplog.at_level(logging.WARNING, logger=_MODULE_LOGGER)`. All 4 tests
+  remain green with no behavioural drift.
+- **Compliance**: ruff T201/T203 clean on the module; `black`, `ruff`, and
+  `pytest tests/unit/analytics/test_site_inventory_health_analyzer.py`
+  (4 passed) all green locally.
+
 ### #886 Phase 2 slice 102/N: retire `print()` in `src/capture/client_pcap_downloader.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 23 `print()` calls in
@@ -57,7 +82,6 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 - **Tests (Unchanged)**: `tests/unit/serial_cc/test_start_site_client_capture_wireless.py`
   exercises the flow via `MagicMock` on the manager and prompt helpers, so
   no `capsys` → `caplog` migration was required. All 3 tests remain green.
-
 ### #886 Phase 2 slice 100/N: retire `print()` in `src/websocket/polling/completion_detector.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 20 `print()` calls in
