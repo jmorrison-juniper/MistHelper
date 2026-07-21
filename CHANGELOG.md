@@ -7,6 +7,22 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 104/N: retire `print()` in `src/device/_utility_commands_selection.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced all 26 `print()` calls in
+  `src/device/_utility_commands_selection.py` with a module-scoped
+  `logger = logging.getLogger(__name__)` and level-appropriate `logger.*`
+  emissions using `%`-style deferred formatting to satisfy G004. Banner and
+  row output uses `logger.info`; validation notices (`!`, `[WARNING]`) use
+  `logger.warning`. Two pre-existing `logging.error`/`logging.debug` calls
+  were rebound to the module-scoped `logger` for namespace consistency.
+- **Test channel switch (Changed)**: converted `capsys`-based assertions
+  covering `_validate_device_type`, `_select_site_and_device`,
+  `_print_interface_list`, `_get_interface_selection`, and
+  `_select_network_from_device` to `caplog` scoped at
+  `src.device._utility_commands_selection`; other tests continue to use
+  `capsys` where they exercise helpers outside this module.
+
 ### #886 Phase 2 slice 103/N: retire `print()` in `src/analytics/site_inventory_health_analyzer.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 26 `print()` calls in

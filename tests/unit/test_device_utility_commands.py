@@ -25,6 +25,7 @@ from src.device._utility_commands_websocket import ExportResultSpec, StreamWsSpe
 from src.device.utility_commands import DeviceUtilityCommands, UtilityCommandsDeps
 
 _WS_LOGGER = "src.device._utility_commands_websocket"  # WHY: caplog target for #886 print-to-logger tests
+_SEL_LOGGER = "src.device._utility_commands_selection"  # WHY: caplog target for #886 print-to-logger tests
 
 
 def setup_module() -> None:
@@ -136,12 +137,10 @@ class TestValidateDeviceType:
     def test_allowed_type_returns_true(self, duc: DeviceUtilityCommands) -> None:
         assert duc._validate_device_type("switch", "cable_test") is True
 
-    def test_disallowed_type_returns_false(
-        self, duc: DeviceUtilityCommands, capsys: pytest.CaptureFixture[str]
-    ) -> None:
+    def test_disallowed_type_returns_false(self, duc: DeviceUtilityCommands, caplog: pytest.LogCaptureFixture) -> None:
+        caplog.set_level(logging.WARNING, logger=_SEL_LOGGER)
         assert duc._validate_device_type("ap", "cable_test") is False
-        out = capsys.readouterr().out
-        assert "only available on" in out
+        assert "only available on" in caplog.text
 
     def test_unknown_command_returns_false(self, duc: DeviceUtilityCommands) -> None:
         assert duc._validate_device_type("switch", "nonexistent_cmd") is False
@@ -187,8 +186,9 @@ class TestSelectSiteAndDevice:
     def test_warns_when_device_offline(
         self,
         duc: DeviceUtilityCommands,
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
+        caplog.set_level(logging.WARNING, logger=_SEL_LOGGER)
         with patch.object(
             duc,
             "_get_device_info",
@@ -196,8 +196,7 @@ class TestSelectSiteAndDevice:
         ):
             result = duc._select_site_and_device("traceroute")
             assert result is not None
-            out = capsys.readouterr().out
-            assert "WARNING" in out
+            assert "WARNING" in caplog.text
 
 
 # ===================================================================
@@ -1131,35 +1130,35 @@ class TestPrintInterfaceList:
     def test_prints_with_if_stat_ips(
         self,
         duc: DeviceUtilityCommands,
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
+        caplog.set_level(logging.INFO, logger=_SEL_LOGGER)
         interfaces = ["ge-0/0/0"]
         if_stat = {"ge-0/0/0": {"ips": ["10.0.0.1"]}}
         duc._print_interface_list(interfaces, if_stat, {})
-        out = capsys.readouterr().out
-        assert "ge-0/0/0" in out
-        assert "10.0.0.1" in out
+        assert "ge-0/0/0" in caplog.text
+        assert "10.0.0.1" in caplog.text
 
     def test_prints_with_ip_stat(
         self,
         duc: DeviceUtilityCommands,
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
+        caplog.set_level(logging.INFO, logger=_SEL_LOGGER)
         interfaces = ["wan0"]
         duc._print_interface_list(interfaces, {}, {"wan0": {"ip": "192.168.1.1"}})
-        out = capsys.readouterr().out
-        assert "wan0" in out
-        assert "192.168.1.1" in out
+        assert "wan0" in caplog.text
+        assert "192.168.1.1" in caplog.text
 
     def test_prints_plain(
         self,
         duc: DeviceUtilityCommands,
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
+        caplog.set_level(logging.INFO, logger=_SEL_LOGGER)
         interfaces = ["eth0"]
         duc._print_interface_list(interfaces, {}, {})
-        out = capsys.readouterr().out
-        assert "eth0" in out
+        assert "eth0" in caplog.text
 
 
 # ===================================================================
@@ -1183,12 +1182,13 @@ class TestGetInterfaceSelection:
         self,
         duc: DeviceUtilityCommands,
         mock_deps: dict[str, MagicMock],
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
+        caplog.set_level(logging.WARNING, logger=_SEL_LOGGER)
         mock_deps["safe_input_fn"].return_value = "99"
         result = duc._get_interface_selection(["ge-0/0/0"])
         assert result is None
-        assert "Invalid" in capsys.readouterr().out
+        assert "Invalid" in caplog.text
 
     def test_text_selection(
         self,
@@ -1246,14 +1246,15 @@ class TestSelectNetworkFromDevice:
         self,
         duc: DeviceUtilityCommands,
         mock_api: MagicMock,
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
+        caplog.set_level(logging.INFO, logger=_SEL_LOGGER)
         resp = MagicMock()
         resp.data = {"dhcpd_config": {"lan": {}}}
         mock_api.api.v1.sites.devices.getSiteDevice.return_value = resp
         result = duc._select_network_from_device("s1", "d1")
         assert result == "lan"
-        assert "Auto-selecting" in capsys.readouterr().out
+        assert "Auto-selecting" in caplog.text
 
     def test_numeric_selection(
         self,
