@@ -7,6 +7,33 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 108/N: retire `print()` in `src/export/site_anomaly_exporter.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced all 28 `print()` calls in
+  `src/export/site_anomaly_exporter.py` with a module-scoped
+  `logger = logging.getLogger(__name__)` and level-appropriate `logger.*`
+  emissions using `%`-style deferred formatting to satisfy G004. The
+  `Export Site Anomaly Events:` banner routes through `logger.info`;
+  operator-abort notices (`! No site selected. Exiting.`,
+  `! No device selected. Exiting.`, `! No client selected. Exiting.`,
+  `! No potential anomaly metrics found ...`, per-metric/per-client
+  `! 0 ... exported ... (no data available)` notices, and per-metric
+  `! Error retrieving ...` notices) route through `logger.warning`;
+  `! Error exporting site/device/client anomaly events` operator notices
+  route through `logger.error` (paired with the existing `logger.exception`
+  stack-trace logs); informational `! No <metric> ... available` notices
+  route through `logger.info`. Pre-existing `logging.info`/`logging.warning`/
+  `logging.error`/`logging.exception` calls across `site_anomaly_events`,
+  `device_anomaly_events`, `client_anomaly_events`,
+  `_discover_site_anomaly_metrics`, `_fetch_one_anomaly_metric`,
+  `_export_anomaly_data`, `_anomaly_collect_metrics`, and `_anomaly_export`
+  were rebound to the module-scoped `logger` for namespace consistency;
+  intentional `logging.getLogger(<mistapi_logger_name>)` reads used by
+  `_anomaly_suppress_mistapi_loggers`/`_anomaly_restore_loggers` were
+  preserved verbatim. Test suite migrated 16 assertions from
+  `capsys.readouterr().out` to `caplog.text` with explicit
+  `caplog.set_level(..., logger="src.export.site_anomaly_exporter")`.
+
 ### #887 slice 8/N: drop `export` from pydocstyle `match-dir` exclusion (issue #887)
 
 - **Quality gate (Changed)**: removed `export` from the
