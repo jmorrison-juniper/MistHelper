@@ -7,6 +7,30 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 75/N: retire `print()` in `src/site/address_audit/address_corrector.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced all 10 `print()` calls in
+  `src/site/address_audit/address_corrector.py` with `logger`-based emissions
+  using `%`-style deferred formatting to satisfy G004. Added a module-scoped
+  `logger = logging.getLogger(__name__)` (the module previously used only
+  bare `logging.debug/info/warning` calls; the new logger routes the former
+  print notices while pre-existing action logs remain on the root
+  `logging.*` API). Level heuristic: `info` for the `No correctable
+  addresses to push.` notice, the `--- Address write-back: N site(s) to
+  review ---` banner, the safety warning, the per-site `Site:` / `BEFORE:`
+  / `AFTER:` triple, the `  PUSHED.` confirmation, and the final
+  `Write-back complete: P pushed, S skipped, F failed.` tally; `warning`
+  for the two failure inline notices `  FAILED: <exc>` and
+  `  FAILED: Mist rejected the update (check token permissions).`. Each
+  migrated call carries the standard `# WHY: preserve operator notice
+  verbatim; route through logger for capture/redirection.` annotation and
+  preserves legacy prefixes and whitespace (`  FAILED:`, `  PUSHED.`,
+  leading `\n` on banner/tally) verbatim in the message string.
+- **No test migration needed**: `tests/unit/site/address_audit/test_address_corrector.py`
+  asserts on outcome objects (`CorrectionOutcome.action`, `.error`), never
+  on captured stdout — 10/10 tests pass unchanged. Ruff T20 clean on the
+  target file; black clean; ruff full clean.
+
 ### #886 Phase 2 slice 74/N: retire `print()` in `src/websocket/diagnostics/common.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 9 `print()` calls in
