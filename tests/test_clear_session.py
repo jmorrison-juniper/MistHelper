@@ -99,7 +99,7 @@ def test_clear_session_with_session_ids(monkeypatch):
     assert captured.get("body") == {"session_ids": ["s1", "s2", "s3"]}
 
 
-def test_clear_session_cancel_clear_all(monkeypatch, capsys):
+def test_clear_session_cancel_clear_all(monkeypatch, caplog):
     _stub_selection(monkeypatch)
 
     def fake_safe_input(prompt, context=None, allow_empty=True, **kwargs):
@@ -117,10 +117,11 @@ def test_clear_session_cancel_clear_all(monkeypatch, capsys):
 
     with patch("src.device._utility_commands_clear.mistapi") as mock_api:
         mock_api.api.v1.sites.devices.clearSiteDeviceSession = fake_clear
-        duc.clear_session()
+        with caplog.at_level("WARNING", logger="src.device._utility_commands_clear"):
+            duc.clear_session()
 
-    captured_out = capsys.readouterr().out
-    assert "Cancelled: No service name or session IDs provided." in captured_out
+    # WHY: slice 79 migrated print()->logger.warning; assertion now reads caplog, not stdout.
+    assert "Cancelled: No service name or session IDs provided." in caplog.text
     assert called["api"] is False
 
 
