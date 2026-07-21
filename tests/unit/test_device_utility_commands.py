@@ -24,6 +24,8 @@ sys.modules["mistapi"] = _our_mock
 from src.device._utility_commands_websocket import ExportResultSpec, StreamWsSpec
 from src.device.utility_commands import DeviceUtilityCommands, UtilityCommandsDeps
 
+_WS_LOGGER = "src.device._utility_commands_websocket"  # WHY: caplog target for #886 print-to-logger tests
+
 
 def setup_module() -> None:
     """Re-assert our mock in sys.modules before tests run."""
@@ -271,11 +273,12 @@ class TestConfirmDestructive:
         self,
         duc: DeviceUtilityCommands,
         mock_deps: dict[str, MagicMock],
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
+        caplog.set_level(logging.WARNING, logger=_WS_LOGGER)
         mock_deps["safe_input_fn"].return_value = "nope"
         assert duc._confirm_destructive("Type CLEAR: ", "CLEAR", "test") is False
-        assert "cancelled" in capsys.readouterr().out
+        assert "cancelled" in caplog.text
 
     def test_empty_input_returns_false(self, duc: DeviceUtilityCommands, mock_deps: dict[str, MagicMock]) -> None:
         mock_deps["safe_input_fn"].return_value = ""
@@ -293,8 +296,9 @@ class TestDisplayAndExportResult:
     def test_none_result_prints_error(
         self,
         duc: DeviceUtilityCommands,
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
+        caplog.set_level(logging.WARNING, logger=_WS_LOGGER)
         duc._display_and_export_result(
             ExportResultSpec(
                 result=None,
@@ -305,14 +309,15 @@ class TestDisplayAndExportResult:
                 filename="file.csv",
             )
         )
-        assert "No results" in capsys.readouterr().out
+        assert "No results" in caplog.text
 
     def test_prints_raw_output(
         self,
         duc: DeviceUtilityCommands,
         mock_deps: dict[str, MagicMock],
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
+        caplog.set_level(logging.INFO, logger=_WS_LOGGER)
         result = {"raw": "output line 1\nline 2"}
         duc._display_and_export_result(
             ExportResultSpec(
@@ -324,7 +329,7 @@ class TestDisplayAndExportResult:
                 filename="Trace.csv",
             )
         )
-        out = capsys.readouterr().out
+        out = caplog.text
         assert "output line 1" in out
         assert "TRACEROUTE RESULTS" in out
         mock_deps["write_export_fn"].assert_called_once()
@@ -517,13 +522,14 @@ class TestRunStreamingCommand:
         self,
         duc: DeviceUtilityCommands,
         mock_deps: dict[str, MagicMock],
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
+        caplog.set_level(logging.WARNING, logger=_WS_LOGGER)
         ws_mgr = MagicMock()
         ws_mgr.connect.return_value = False
         mock_deps["websocket_manager_factory"].return_value = ws_mgr
         duc._run_streaming_command("s1", "d1", MagicMock())
-        assert "Failed" in capsys.readouterr().out
+        assert "Failed" in caplog.text
 
 
 # ===================================================================
@@ -721,15 +727,16 @@ class TestClearArpCache:
         self,
         duc: DeviceUtilityCommands,
         mock_deps: dict[str, MagicMock],
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
+        caplog.set_level(logging.WARNING, logger=_WS_LOGGER)
         mock_deps["safe_input_fn"].return_value = "nope"
         with (
             patch.object(duc, "_select_site_and_device", return_value=("s1", "d1", "switch")),
             patch.object(duc, "_select_port_optional", return_value=""),
         ):
             duc.clear_arp_cache()
-            assert "cancelled" in capsys.readouterr().out.lower()
+            assert "cancelled" in caplog.text.lower()
 
     def test_success_calls_api(
         self,
@@ -1323,20 +1330,22 @@ class TestExecuteWsCommand:
     def test_no_response_data(
         self,
         duc: DeviceUtilityCommands,
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
+        caplog.set_level(logging.WARNING, logger=_WS_LOGGER)
         sdk_method = MagicMock()
         sdk_method.return_value = MagicMock(spec=[])
         ws_mgr = MagicMock()
         result = duc._execute_ws_command("s1", "d1", sdk_method, None, ws_mgr)
         assert result is None
-        assert "No response data" in capsys.readouterr().out
+        assert "No response data" in caplog.text
 
     def test_no_session_id(
         self,
         duc: DeviceUtilityCommands,
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
+        caplog.set_level(logging.WARNING, logger=_WS_LOGGER)
         sdk_method = MagicMock()
         resp = MagicMock()
         resp.data = {}
@@ -1344,7 +1353,7 @@ class TestExecuteWsCommand:
         ws_mgr = MagicMock()
         result = duc._execute_ws_command("s1", "d1", sdk_method, None, ws_mgr)
         assert result is None
-        assert "No session ID" in capsys.readouterr().out
+        assert "No session ID" in caplog.text
 
     def test_success_with_body(
         self,
@@ -1386,8 +1395,9 @@ class TestStreamWsOutput:
     def test_no_response_data(
         self,
         duc: DeviceUtilityCommands,
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
+        caplog.set_level(logging.WARNING, logger=_WS_LOGGER)
         sdk_method = MagicMock()
         sdk_method.return_value = MagicMock(spec=[])
         ws_mgr = MagicMock()
@@ -1401,13 +1411,14 @@ class TestStreamWsOutput:
                 timeout_seconds=60,
             )
         )
-        assert "No response data" in capsys.readouterr().out
+        assert "No response data" in caplog.text
 
     def test_no_session_id(
         self,
         duc: DeviceUtilityCommands,
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
+        caplog.set_level(logging.WARNING, logger=_WS_LOGGER)
         sdk_method = MagicMock()
         resp = MagicMock()
         resp.data = {}
@@ -1423,13 +1434,14 @@ class TestStreamWsOutput:
                 timeout_seconds=60,
             )
         )
-        assert "No session ID" in capsys.readouterr().out
+        assert "No session ID" in caplog.text
 
     def test_success_prints_raw(
         self,
         duc: DeviceUtilityCommands,
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
+        caplog.set_level(logging.INFO, logger=_WS_LOGGER)
         sdk_method = MagicMock()
         resp = MagicMock()
         resp.data = {"session": "abc12345-xyz"}
@@ -1446,14 +1458,14 @@ class TestStreamWsOutput:
                 timeout_seconds=60,
             )
         )
-        out = capsys.readouterr().out
-        assert "streaming output" in out
+        assert "streaming output" in caplog.text
 
     def test_success_no_raw(
         self,
         duc: DeviceUtilityCommands,
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
+        caplog.set_level(logging.INFO, logger=_WS_LOGGER)
         sdk_method = MagicMock()
         resp = MagicMock()
         resp.data = {"session": "abc12345-xyz"}
@@ -1470,8 +1482,7 @@ class TestStreamWsOutput:
                 timeout_seconds=60,
             )
         )
-        out = capsys.readouterr().out
-        assert "Streaming started" in out
+        assert "Streaming started" in caplog.text
 
 
 # ===================================================================
@@ -1488,14 +1499,15 @@ class TestRunStreamingCommandExtended:
         mock_sleep: MagicMock,
         duc: DeviceUtilityCommands,
         mock_deps: dict[str, MagicMock],
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
+        caplog.set_level(logging.WARNING, logger=_WS_LOGGER)
         ws_mgr = MagicMock()
         ws_mgr.connect.return_value = True
         ws_mgr.subscribe_to_channel.return_value = False
         mock_deps["websocket_manager_factory"].return_value = ws_mgr
         duc._run_streaming_command("s1", "d1", MagicMock())
-        assert "Failed to subscribe" in capsys.readouterr().out
+        assert "Failed to subscribe" in caplog.text
         ws_mgr.disconnect.assert_called_once()
 
     @patch("src.device._utility_commands_websocket.time.sleep")
@@ -1520,15 +1532,16 @@ class TestRunStreamingCommandExtended:
         mock_sleep: MagicMock,
         duc: DeviceUtilityCommands,
         mock_deps: dict[str, MagicMock],
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
+        caplog.set_level(logging.ERROR, logger=_WS_LOGGER)
         ws_mgr = MagicMock()
         ws_mgr.connect.return_value = True
         ws_mgr.subscribe_to_channel.return_value = True
         mock_deps["websocket_manager_factory"].return_value = ws_mgr
         with patch.object(duc, "_stream_ws_output", side_effect=RuntimeError("oops")):
             duc._run_streaming_command("s1", "d1", MagicMock())
-            assert "oops" in capsys.readouterr().out
+            assert "oops" in caplog.text
         ws_mgr.disconnect.assert_called_once()
 
     @patch("src.device._utility_commands_websocket.time.sleep")
@@ -1537,15 +1550,16 @@ class TestRunStreamingCommandExtended:
         mock_sleep: MagicMock,
         duc: DeviceUtilityCommands,
         mock_deps: dict[str, MagicMock],
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
+        caplog.set_level(logging.INFO, logger=_WS_LOGGER)
         ws_mgr = MagicMock()
         ws_mgr.connect.return_value = True
         ws_mgr.subscribe_to_channel.return_value = True
         mock_deps["websocket_manager_factory"].return_value = ws_mgr
         with patch.object(duc, "_stream_ws_output", side_effect=KeyboardInterrupt):
             duc._run_streaming_command("s1", "d1", MagicMock())
-            assert "stopped" in capsys.readouterr().out.lower()
+            assert "stopped" in caplog.text.lower()
         ws_mgr.disconnect.assert_called_once()
 
 
@@ -1563,8 +1577,9 @@ class TestRunWebsocketCommandExtended:
         mock_sleep: MagicMock,
         duc: DeviceUtilityCommands,
         mock_deps: dict[str, MagicMock],
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
+        caplog.set_level(logging.ERROR, logger=_WS_LOGGER)
         ws_mgr = MagicMock()
         ws_mgr.connect.return_value = True
         ws_mgr.subscribe_to_channel.return_value = True
@@ -1572,7 +1587,7 @@ class TestRunWebsocketCommandExtended:
         with patch.object(duc, "_execute_ws_command", side_effect=RuntimeError("ws error")):
             result = duc._run_websocket_command("s1", "d1", MagicMock())
             assert result is None
-            assert "ws error" in capsys.readouterr().out
+            assert "ws error" in caplog.text
         ws_mgr.disconnect.assert_called_once()
 
 
@@ -2696,8 +2711,9 @@ class TestDisplayAndExportResultExtended:
         self,
         duc: DeviceUtilityCommands,
         mock_deps: dict[str, MagicMock],
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
+        caplog.set_level(logging.INFO, logger=_WS_LOGGER)
         result = {"Output": "output text"}
         duc._display_and_export_result(
             ExportResultSpec(
@@ -2709,8 +2725,7 @@ class TestDisplayAndExportResultExtended:
                 filename="file.csv",
             )
         )
-        out = capsys.readouterr().out
-        assert "output text" in out
+        assert "output text" in caplog.text
 
 
 # ===================================================================

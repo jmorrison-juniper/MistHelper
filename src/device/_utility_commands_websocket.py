@@ -34,6 +34,8 @@ from typing import Any, cast  # WHY: cast narrows Any from __getattr__ proxy
 
 from ._utility_commands_cluster import _ClusterBase  # WHY: shared proxy base
 
+logger = logging.getLogger(__name__)  # WHY: module-scoped logger for #886 print-to-logger migration.
+
 
 @dataclass(frozen=True)  # WHY: frozen so callers cannot mutate mid-flow
 class StreamWsSpec:  # WHY: bundle for _stream_ws_output single-arg signature
@@ -111,7 +113,8 @@ class _UtilityCommandsWebsocket(_ClusterBase):  # WHY: cluster wrapper mirroring
             )
         except Exception as error:  # WHY: log-and-continue on any WS/SDK failure
             logging.exception("WebSocket command failed: %s", error)  # WHY: audit failure with stack
-            print(f"! Command failed: {error}")  # WHY: surface error to operator
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.error("! Command failed: %s", error)  # WHY: surface error to operator
             return None  # WHY: caller treats None as no-result
         finally:
             websocket_manager.disconnect()  # WHY: always clean up socket
@@ -151,8 +154,10 @@ class _UtilityCommandsWebsocket(_ClusterBase):  # WHY: cluster wrapper mirroring
         session_id = self._extract_session_id(response)  # WHY: parse session or fail fast
         if session_id is None:  # WHY: missing session -> nothing to await
             return None  # WHY: helper already emitted diagnostics
-        print(f"-> Command issued (session: {session_id[:8]}...)")  # WHY: operator feedback
-        print("-> Waiting for results...")  # WHY: hint on latency budget
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("-> Command issued (session: %s...)", session_id[:8])  # WHY: operator feedback
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("-> Waiting for results...")  # WHY: hint on latency budget
         result: dict[str, Any] | None = websocket_manager.wait_for_command_result(
             session_id, timeout_seconds=120  # WHY: 2-minute cap matches mistapi default
         )
@@ -190,10 +195,12 @@ class _UtilityCommandsWebsocket(_ClusterBase):  # WHY: cluster wrapper mirroring
             # WHY: route through parent so patch.object(duc, "_stream_ws_output", ...) intercepts
             self._call("_stream_ws_output", spec)
         except KeyboardInterrupt:  # WHY: operator Ctrl+C is a normal stop signal
-            print("\n-> Streaming stopped by user.")  # WHY: acknowledge intentional halt
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.info("\n-> Streaming stopped by user.")  # WHY: acknowledge intentional halt
         except Exception as error:  # WHY: log-and-continue on any WS/SDK failure
             logging.exception("Streaming command failed: %s", error)  # WHY: audit failure with stack
-            print(f"! Streaming failed: {error}")  # WHY: surface error to operator
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.error("! Streaming failed: %s", error)  # WHY: surface error to operator
         finally:
             websocket_manager.disconnect()  # WHY: always clean up
 
@@ -203,8 +210,10 @@ class _UtilityCommandsWebsocket(_ClusterBase):  # WHY: cluster wrapper mirroring
         session_id = self._extract_session_id(response, absent_msg="! No session ID returned.")  # WHY: parse
         if session_id is None:  # WHY: no session -> nothing to stream
             return  # WHY: helper already emitted diagnostics
-        print(f"-> Streaming started (session: {session_id[:8]}...)")  # WHY: operator feedback
-        print("-> Press Ctrl+C to stop.\n")  # WHY: hint on how to end streaming
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("-> Streaming started (session: %s...)", session_id[:8])  # WHY: operator feedback
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("-> Press Ctrl+C to stop.\n")  # WHY: hint on how to end streaming
         result = spec.websocket_manager.wait_for_command_result(
             session_id,
             timeout_seconds=spec.timeout_seconds,
@@ -219,7 +228,8 @@ class _UtilityCommandsWebsocket(_ClusterBase):  # WHY: cluster wrapper mirroring
     def _display_and_export_result(self, spec: ExportResultSpec) -> None:  # WHY: single-arg spec keeps STRUCT clean
         """Display WebSocket result and write to dual output using :class:`ExportResultSpec`."""
         if not spec.result:  # WHY: timeout / disconnect / API error
-            print("! No results received (timeout or error).")  # WHY: signal empty result
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.warning("! No results received (timeout or error).")  # WHY: signal empty result
             return
         raw_output, other_output = self._print_result_block(spec.command_name, spec.result)  # WHY: banner
         export_data = self._build_export_row(spec, raw_output, other_output)  # WHY: canonical payload
@@ -233,7 +243,8 @@ class _UtilityCommandsWebsocket(_ClusterBase):  # WHY: cluster wrapper mirroring
         """Require typed keyword confirmation for destructive ops."""
         confirmation = self._safe_input_fn(prompt, context=context)  # WHY: __getattr__ proxy
         if confirmation != keyword:  # WHY: exact-match gate; even leading/trailing space fails
-            print("! Operation cancelled - confirmation not matched.")  # WHY: signal cancel
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.warning("! Operation cancelled - confirmation not matched.")  # WHY: signal cancel
             return False
         return True
 
@@ -244,11 +255,13 @@ class _UtilityCommandsWebsocket(_ClusterBase):  # WHY: cluster wrapper mirroring
     def _prepare_ws_channel(self, websocket_manager: Any, site_id: str, device_id: str) -> bool:
         """Connect the WS manager and subscribe to the per-device command channel."""
         if not websocket_manager.connect():  # WHY: bail if WS handshake fails
-            print("! Failed to establish WebSocket connection.")  # WHY: expose handshake failure
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.warning("! Failed to establish WebSocket connection.")  # WHY: expose handshake failure
             return False
         channel = f"/sites/{site_id}/devices/{device_id}/cmd"  # WHY: per-device command channel
         if not websocket_manager.subscribe_to_channel(channel):  # WHY: subscribe before firing SDK call
-            print("! Failed to subscribe to device command channel.")  # WHY: expose subscribe failure
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.warning("! Failed to subscribe to device command channel.")  # WHY: expose subscribe failure
             websocket_manager.disconnect()  # WHY: release socket on subscribe failure
             return False
         time.sleep(1)  # WHY: let subscription settle before command
@@ -273,12 +286,14 @@ class _UtilityCommandsWebsocket(_ClusterBase):  # WHY: cluster wrapper mirroring
     ) -> str | None:
         """Extract the WebSocket session id from an SDK response or return None."""
         if not hasattr(response, "data"):  # WHY: mistapi returns response object with .data
-            print("! No response data from API.")  # WHY: signal empty payload
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.warning("! No response data from API.")  # WHY: signal empty payload
             return None
         response_data = response.data if isinstance(response.data, dict) else {}  # WHY: guard shape
         session_id = response_data.get("session")  # WHY: session_id is the WS correlation key
         if not session_id:  # WHY: no session -> nothing to wait for
-            print(absent_msg)  # WHY: differentiate command vs streaming context
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.warning("%s", absent_msg)  # WHY: differentiate command vs streaming context
             return None
         return cast("str", session_id)  # WHY: narrow Any from dict.get
 
@@ -289,20 +304,26 @@ class _UtilityCommandsWebsocket(_ClusterBase):  # WHY: cluster wrapper mirroring
             return
         raw = result.get("raw", "")  # WHY: streaming variant only reads 'raw'
         if raw:  # WHY: skip blank lines from empty payloads
-            print(raw)
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.info("%s", raw)
 
     @staticmethod
     def _print_result_block(command_name: str, result: dict[str, Any]) -> tuple[str, str]:
         """Print the display block for a command result and return (raw, other)."""
-        print("\n" + "=" * 60)  # WHY: banner separates command output block
-        print(f"{command_name.upper()} RESULTS:")  # WHY: identify command in operator log
-        print("=" * 60)
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("\n%s", "=" * 60)  # WHY: banner separates command output block
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("%s RESULTS:", command_name.upper())  # WHY: identify command in operator log
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("%s", "=" * 60)
         raw_output = str(result.get("raw", ""))  # WHY: preferred output key
         if raw_output:  # WHY: skip if absent
-            print(raw_output)
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.info("%s", raw_output)
         other_output = str(result.get("Output", ""))  # WHY: some SDK paths emit under 'Output'
         if other_output and other_output != raw_output:  # WHY: avoid double-printing same content
-            print(other_output)
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.info("%s", other_output)
         return raw_output, other_output
 
     @staticmethod
