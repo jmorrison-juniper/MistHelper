@@ -6,6 +6,8 @@ import logging  # Standard logger type used by callers
 from dataclasses import dataclass  # Frozen bundle for the 6 caller inputs
 from typing import Any  # Segment dicts have heterogeneous values
 
+logger = logging.getLogger(__name__)  # WHY: route former print() diagnostics for capture/redirection (issue #886).
+
 _RESERVED_KEYS = {"raw", "session"}  # Keys handled specially and excluded from generic merge
 _VERBOSE_SEGMENT_THRESHOLD = 5  # Per-segment trace fires only when segment count exceeds this
 _TRAILER_BAR = "=" * 60  # Fixed-width visual separator preserved from original output
@@ -58,9 +60,12 @@ def _emit_debug_header(request: CombineRequest) -> None:  # Verbose header emitt
     request.logger.debug("Combining %s result segments", count)  # Logger mirror line
     request.logger.debug("Total wait time: %.2f seconds", request.elapsed)  # Wall time
     request.logger.debug("Total checks performed: %s", request.check_count)  # Poll iterations
-    print(f"[DEBUG] Combining {count} result segments")  # Verbatim stdout line 1
-    print(f"[DEBUG] Total wait time: {request.elapsed:.2f} seconds")  # Verbatim stdout line 2
-    print(f"[DEBUG] Total checks performed: {request.check_count}")  # Verbatim stdout line 3
+    # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+    logger.debug("[DEBUG] Combining %s result segments", count)
+    # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+    logger.debug("[DEBUG] Total wait time: %.2f seconds", request.elapsed)
+    # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+    logger.debug("[DEBUG] Total checks performed: %s", request.check_count)
 
 
 def _emit_debug_trailer(  # Verbose trailer emitter
@@ -69,14 +74,21 @@ def _emit_debug_trailer(  # Verbose trailer emitter
     """Emit the trailing debug block including head/tail previews and completion banner."""
     if not request.debug_mode:  # Guard: skip entirely when quiet mode is active
         return  # Nothing to emit when debug is off
-    print(f"[DEBUG] Final combined result length: {len(combined_raw)} characters")  # Length summary
-    print(f"[DEBUG] Final result fields: {list(final_result.keys())}")  # Field roster
-    print(f"[DEBUG] First 150 chars of final result: {repr(combined_raw[:_PREVIEW_CHARS])}")  # Head preview
-    print(f"[DEBUG] Last 150 chars of final result: {repr(combined_raw[-_PREVIEW_CHARS:])}")  # Tail preview
+    # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+    logger.debug("[DEBUG] Final combined result length: %s characters", len(combined_raw))
+    # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+    logger.debug("[DEBUG] Final result fields: %s", list(final_result.keys()))
+    # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+    logger.debug("[DEBUG] First 150 chars of final result: %r", combined_raw[:_PREVIEW_CHARS])
+    # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+    logger.debug("[DEBUG] Last 150 chars of final result: %r", combined_raw[-_PREVIEW_CHARS:])
     if len(combined_raw) == 0:  # Empty payload sentinel
-        print("[DEBUG] WARNING: Final result is empty - this may indicate an issue")  # Verbatim warn
-    print(f"[DEBUG] Session {request.session_id} result collection complete")  # Completion line
-    print("[DEBUG] " + _TRAILER_BAR)  # Fixed-width separator
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.warning("[DEBUG] WARNING: Final result is empty - this may indicate an issue")
+    # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+    logger.debug("[DEBUG] Session %s result collection complete", request.session_id)
+    # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+    logger.debug("[DEBUG] %s", _TRAILER_BAR)
 
 
 def _merge_segments(final_results: list[dict[str, Any]], debug_mode: bool) -> MergedPayload:  # Merge driver
@@ -99,7 +111,8 @@ def _absorb_raw_chunk(  # Per-segment raw handler
         return  # Empty chunk contributes nothing to buffer or trace
     buffer.append(raw_content)  # Defer join to caller for single allocation
     if verbose:  # Emit per-segment trace when verbose mode is precomputed on
-        print(f"[DEBUG] Segment {index + 1}: {len(raw_content)} chars")  # Verbatim trace
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.debug("[DEBUG] Segment %s: %s chars", index + 1, len(raw_content))
 
 
 def _absorb_extras(result: dict[str, Any], accumulator: dict[str, Any]) -> None:  # Extras merger

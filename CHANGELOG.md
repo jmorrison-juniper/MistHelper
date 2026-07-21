@@ -7,26 +7,40 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
-### #886 Phase 2 slice 79/N: retire `print()` in `src/gateway/_wan2_variable_io.py` (issue #886)
+### #886 Phase 2 slice 80/N: retire `print()` in `src/websocket/polling/result_combiner.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 11 `print()` calls in
-  `src/gateway/_wan2_variable_io.py` with `logger`-based emissions using
-  `%`-style deferred formatting to satisfy G004. Added a module-scoped
-  `logger = logging.getLogger(__name__)` (module previously used bare
-  `logging.info/warning` for audit trail; that channel is preserved
-  unchanged while operator-facing notices route through the new module
-  logger). Level heuristic: `info` for the Menu #104 header banner, two
-  `"=" * 70` separators, the dry-run banner pair, and the CSV-loading
-  progress line; `warning` for the three live-mode cautions, the
-  empty-templates notice, and the SECURITY exclusion notice (refactored
-  from an f-string print with adjacent string-literal concatenation into
-  a single `%d`/`%s` deferred-format warning). Each migrated call carries
-  the standard `# WHY: preserve operator notice verbatim; route through
-  logger for capture/redirection.` annotation and preserves `!?`, `>>`,
-  and leading `\n` prefixes verbatim.
-- **No test migration needed**: only two `_print_header` smoke tests
-  accept `capsys` but never assert on captured output. Ruff clean;
-  black clean; `pytest tests/unit/test_wan2_variable.py` = 101 passed.
+  `src/websocket/polling/result_combiner.py` with `logger`-based emissions
+  using `%`-style deferred formatting to satisfy G004. Added a module-scoped
+  `logger = logging.getLogger(__name__)` that coexists with the pre-existing
+  per-request `request.logger` mirror calls (the caller-supplied structured
+  logger continues to receive the info/debug lines it always has; the new
+  module logger only carries the ten verbatim `[DEBUG] ...` diagnostic
+  lines and the single `[DEBUG] WARNING: Final result is empty` notice
+  that were previously written to stdout). Level heuristic: `debug` for
+  the header trio (segment count, wait time, checks performed), the
+  trailer preview block (length, fields, first/last 150 chars,
+  session-complete banner, `"=" * 60` separator), and the per-segment
+  trace line emitted only when `debug_mode and len(segments) > 5`;
+  `warning` for the empty-payload sentinel. Each migrated call carries the
+  standard `# WHY: preserve operator notice verbatim; route through
+  logger for capture/redirection.` annotation, preserves the `[DEBUG]`
+  prefix and `%r`/`%s`/`%d`/`%.2f` format specifiers, and continues to
+  respect the `_VERBOSE_SEGMENT_THRESHOLD = 5` guard.
+- **Test migration (Changed)**: `tests/unit/websocket/polling/test_result_combiner.py`
+  migrated 7 tests from `capsys` to `caplog` with
+  `_MODULE_LOGGER = "src.websocket.polling.result_combiner"` filter —
+  three in `TestMergeSegments` (verbose-off with debug off, verbose-off
+  at/below threshold, verbose-on above threshold) and four in
+  `TestAbsorbRawChunk` (missing raw key, empty raw string, verbose trace
+  index, verbose-off suppression). Each test asserts on
+  `caplog.records` filtered by `r.name == _MODULE_LOGGER` and keeps
+  `capsys.readouterr().out == ""` as a belt-and-suspenders guard that no
+  stray stdout writes crept back in. Pre-existing tests that assert on
+  the per-request logger via
+  `caplog.set_level(..., logger="test.result_combiner")` are unchanged.
+- Ruff clean; black clean;
+  `pytest tests/unit/websocket/polling/test_result_combiner.py` = 34 passed.
 
 ### #886 Phase 2 slice 78/N: retire `print()` in `src/device/arp_command_manager.py` (issue #886)
 

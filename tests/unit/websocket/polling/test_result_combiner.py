@@ -30,6 +30,8 @@ from src.websocket.polling.result_combiner import (
     combine_segments,
 )
 
+_MODULE_LOGGER = "src.websocket.polling.result_combiner"
+
 
 def _make_request(
     *,
@@ -150,10 +152,12 @@ class TestEmitDebugHeader:
     def test_silent_when_debug_off(self, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture) -> None:
         req = _make_request(debug=False)
         caplog.set_level(logging.DEBUG, logger="test.result_combiner")
+        caplog.set_level(logging.DEBUG, logger=_MODULE_LOGGER)
 
         _emit_debug_header(req)
 
         assert capsys.readouterr().out == ""
+        assert not any(r.name == _MODULE_LOGGER for r in caplog.records)
         assert caplog.records == []
 
     def test_emits_three_lines_when_debug_on(
@@ -161,46 +165,60 @@ class TestEmitDebugHeader:
     ) -> None:
         req = _make_request(segments=[{"raw": "x"}, {"raw": "y"}], debug=True, elapsed=2.5, check_count=42)
         caplog.set_level(logging.DEBUG, logger="test.result_combiner")
+        caplog.set_level(logging.DEBUG, logger=_MODULE_LOGGER)
 
         _emit_debug_header(req)
 
-        out = capsys.readouterr().out
-        assert "[DEBUG] Combining 2 result segments" in out
-        assert "[DEBUG] Total wait time: 2.50 seconds" in out
-        assert "[DEBUG] Total checks performed: 42" in out
-        debug_msgs = [r.message for r in caplog.records if r.levelno == logging.DEBUG]
+        module_msgs = [r.message for r in caplog.records if r.name == _MODULE_LOGGER]
+        assert any("[DEBUG] Combining 2 result segments" in m for m in module_msgs)
+        assert any("[DEBUG] Total wait time: 2.50 seconds" in m for m in module_msgs)
+        assert any("[DEBUG] Total checks performed: 42" in m for m in module_msgs)
+        debug_msgs = [
+            r.message for r in caplog.records if r.name == "test.result_combiner" and r.levelno == logging.DEBUG
+        ]
         assert any("Combining 2 result segments" in m for m in debug_msgs)
         assert any("Total wait time: 2.50 seconds" in m for m in debug_msgs)
         assert any("Total checks performed: 7" not in m for m in debug_msgs)  # sanity: uses request value
+        assert capsys.readouterr().out == ""
 
 
 class TestEmitDebugTrailer:
     """Trailer emitter branches (non-empty, empty warning)."""
 
-    def test_silent_when_debug_off(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_silent_when_debug_off(self, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture) -> None:
         req = _make_request(debug=False)
+        caplog.set_level(logging.DEBUG, logger=_MODULE_LOGGER)
         _emit_debug_trailer(req, "abc", {"raw": "abc", "session": "sess-1"})
         assert capsys.readouterr().out == ""
+        assert not any(r.name == _MODULE_LOGGER for r in caplog.records)
 
-    def test_emits_all_lines_for_non_empty_payload(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_emits_all_lines_for_non_empty_payload(
+        self, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture
+    ) -> None:
         req = _make_request(debug=True, session_id="SID")
+        caplog.set_level(logging.DEBUG, logger=_MODULE_LOGGER)
         payload = "x" * 300
         _emit_debug_trailer(req, payload, {"raw": payload, "session": "SID", "extra": "e"})
 
-        out = capsys.readouterr().out
-        assert f"[DEBUG] Final combined result length: {len(payload)} characters" in out
-        assert "[DEBUG] Final result fields: ['raw', 'session', 'extra']" in out
-        assert "[DEBUG] First 150 chars of final result:" in out
-        assert "[DEBUG] Last 150 chars of final result:" in out
-        assert "[DEBUG] Session SID result collection complete" in out
-        assert "[DEBUG] " + ("=" * 60) in out
-        assert "WARNING" not in out
+        msgs = [r.message for r in caplog.records if r.name == _MODULE_LOGGER]
+        assert any(f"[DEBUG] Final combined result length: {len(payload)} characters" in m for m in msgs)
+        assert any("[DEBUG] Final result fields: ['raw', 'session', 'extra']" in m for m in msgs)
+        assert any("[DEBUG] First 150 chars of final result:" in m for m in msgs)
+        assert any("[DEBUG] Last 150 chars of final result:" in m for m in msgs)
+        assert any("[DEBUG] Session SID result collection complete" in m for m in msgs)
+        assert any("[DEBUG] " + ("=" * 60) in m for m in msgs)
+        assert not any("WARNING" in m for m in msgs)
+        assert capsys.readouterr().out == ""
 
-    def test_emits_warning_when_payload_empty(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_emits_warning_when_payload_empty(
+        self, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture
+    ) -> None:
         req = _make_request(debug=True)
+        caplog.set_level(logging.DEBUG, logger=_MODULE_LOGGER)
         _emit_debug_trailer(req, "", {"raw": "", "session": "sess-1"})
-        out = capsys.readouterr().out
-        assert "[DEBUG] WARNING: Final result is empty" in out
+        warning_msgs = [r.message for r in caplog.records if r.name == _MODULE_LOGGER and r.levelno == logging.WARNING]
+        assert any("[DEBUG] WARNING: Final result is empty" in m for m in warning_msgs)
+        assert capsys.readouterr().out == ""
 
 
 class TestMergeSegments:
@@ -227,22 +245,34 @@ class TestMergeSegments:
         assert raw == "12"
         assert extras == {"note": "hello world", "count": "12"}
 
-    def test_verbose_off_when_debug_off(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_verbose_off_when_debug_off(
+        self, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture
+    ) -> None:
+        caplog.set_level(logging.DEBUG, logger=_MODULE_LOGGER)
         segments = [{"raw": "x"}] * 10  # would trip threshold if debug were on
         _merge_segments(segments, debug_mode=False)
         assert capsys.readouterr().out == ""
+        assert not any(r.name == _MODULE_LOGGER for r in caplog.records)
 
-    def test_verbose_off_when_at_or_below_threshold(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_verbose_off_when_at_or_below_threshold(
+        self, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture
+    ) -> None:
+        caplog.set_level(logging.DEBUG, logger=_MODULE_LOGGER)
         segments = [{"raw": "x"}] * 5  # threshold is `> 5`, so 5 is off
         _merge_segments(segments, debug_mode=True)
         assert capsys.readouterr().out == ""
+        assert not any(r.name == _MODULE_LOGGER for r in caplog.records)
 
-    def test_verbose_on_when_debug_on_and_above_threshold(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_verbose_on_when_debug_on_and_above_threshold(
+        self, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture
+    ) -> None:
+        caplog.set_level(logging.DEBUG, logger=_MODULE_LOGGER)
         segments = [{"raw": "ab"}] * 6  # trips the > 5 threshold
         _merge_segments(segments, debug_mode=True)
-        out = capsys.readouterr().out
-        assert "[DEBUG] Segment 1: 2 chars" in out
-        assert "[DEBUG] Segment 6: 2 chars" in out
+        assert capsys.readouterr().out == ""
+        msgs = [r.message for r in caplog.records if r.name == _MODULE_LOGGER]
+        assert any("[DEBUG] Segment 1: 2 chars" in m for m in msgs)
+        assert any("[DEBUG] Segment 6: 2 chars" in m for m in msgs)
 
 
 class TestAbsorbRawChunk:
@@ -253,30 +283,46 @@ class TestAbsorbRawChunk:
         _absorb_raw_chunk({"raw": "abc"}, buf, verbose=False, index=0)
         assert buf == ["abc"]
 
-    def test_missing_raw_key_treated_as_empty(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_missing_raw_key_treated_as_empty(
+        self, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture
+    ) -> None:
+        caplog.set_level(logging.DEBUG, logger=_MODULE_LOGGER)
         buf: list[str] = []
         _absorb_raw_chunk({"other": 1}, buf, verbose=True, index=0)
         assert buf == []
         assert capsys.readouterr().out == ""
+        assert not any(r.name == _MODULE_LOGGER for r in caplog.records)
 
-    def test_empty_raw_string_skipped(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_empty_raw_string_skipped(
+        self, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture
+    ) -> None:
+        caplog.set_level(logging.DEBUG, logger=_MODULE_LOGGER)
         buf: list[str] = []
         _absorb_raw_chunk({"raw": ""}, buf, verbose=True, index=3)
         assert buf == []
         assert capsys.readouterr().out == ""
+        assert not any(r.name == _MODULE_LOGGER for r in caplog.records)
 
-    def test_verbose_trace_uses_one_based_index(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_verbose_trace_uses_one_based_index(
+        self, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture
+    ) -> None:
+        caplog.set_level(logging.DEBUG, logger=_MODULE_LOGGER)
         buf: list[str] = []
         _absorb_raw_chunk({"raw": "abcd"}, buf, verbose=True, index=4)
         assert buf == ["abcd"]
-        out = capsys.readouterr().out
-        assert "[DEBUG] Segment 5: 4 chars" in out
+        assert capsys.readouterr().out == ""
+        msgs = [r.message for r in caplog.records if r.name == _MODULE_LOGGER]
+        assert any("[DEBUG] Segment 5: 4 chars" in m for m in msgs)
 
-    def test_verbose_off_suppresses_trace(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_verbose_off_suppresses_trace(
+        self, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture
+    ) -> None:
+        caplog.set_level(logging.DEBUG, logger=_MODULE_LOGGER)
         buf: list[str] = []
         _absorb_raw_chunk({"raw": "abcd"}, buf, verbose=False, index=0)
         assert buf == ["abcd"]
         assert capsys.readouterr().out == ""
+        assert not any(r.name == _MODULE_LOGGER for r in caplog.records)
 
 
 class TestAbsorbExtras:
