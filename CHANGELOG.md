@@ -7,6 +7,36 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 76/N: retire `print()` in `src/ssh/batch/multi_host_runner.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced all 10 `print()` calls in
+  `src/ssh/batch/multi_host_runner.py` with `logger.info(...)` emissions
+  using `%`-style deferred formatting to satisfy G004. The class already
+  passed a `logger: logging.Logger` parameter into every staticmethod, so
+  no module-scoped logger addition was required — the migration routed all
+  former print notices through the caller-supplied logger. All migrated
+  lines are `info`-level (startup banner `\n>> Starting SSH execution on
+  N hosts (T threads)`, the multi-host execution summary block with
+  `[STATUS] EXECUTION SUMMARY`, `Total hosts:`, `Successful: N [OK]`,
+  `Failed: N [ERROR]`, the `Per-host logs:` hint, the optional
+  `[OK] Successful hosts:` / `[ERROR] Failed hosts:` blocks, and the
+  final `Multi-host execution completed: S/T successful` tally). Each
+  migrated call carries the standard `# WHY: preserve operator notice
+  verbatim; route through logger for capture/redirection.` annotation and
+  preserves legacy prefixes, brackets, and leading `\n` newlines verbatim
+  in the format string.
+- **Dead-code cleanup**: removed the now-unused `_STARTUP_TEMPLATE`
+  module-level constant (it used Python `{count}`/`{threads}` format
+  tokens incompatible with `%`-style logger substitution, and after
+  inlining the format string it had no remaining callers).
+- **No test migration needed**: no dedicated `test_multi_host_runner.py`
+  exists; cross-referencing tests in `tests/unit/ssh/` and
+  `tests/unit/test_ssh_runner.py` do not assert on any of the migrated
+  strings (existing `capsys` fixtures target `HostListParser` /
+  `CommandListParser`, not `MultiHostRunner`). Ruff T20 clean on the
+  target file; black clean; ruff full clean;
+  `pytest tests/unit/ssh/ tests/unit/test_ssh_runner.py` = 359 passed.
+
 ### #886 Phase 2 slice 75/N: retire `print()` in `src/site/address_audit/address_corrector.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 10 `print()` calls in
