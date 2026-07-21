@@ -73,8 +73,7 @@ def configure_wan_probe_device_override_dependencies(  # WHY: wire module-level 
 
 
 class WANProbeDeviceOverrideManager:  # WHY: encapsulates Menu #167 destructive workflow.
-    """
-    Manages WAN probe configuration for device-level port overrides.
+    """Manages WAN probe configuration for device-level port overrides.
 
     Menu #167: Configure WAN probe override settings on gateway devices that
     have device-level port overrides. This complements Menu #166 (template-level)
@@ -107,8 +106,7 @@ class WANProbeDeviceOverrideManager:  # WHY: encapsulates Menu #167 destructive 
 
     @classmethod
     def configure(cls, dry_run: bool = False) -> None:  # WHY: single classmethod entry point for Menu #167.
-        """
-        Menu #167: Configure WAN Probe Override on Device Port Overrides (DESTRUCTIVE)
+        """Menu #167: Configure WAN Probe Override on Device Port Overrides (DESTRUCTIVE).
 
         Updates wan_probe_override settings for WAN ports that have device-level
         overrides from their gateway template.
