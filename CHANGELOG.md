@@ -7,6 +7,38 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 51/N: retire `print()` in `src/ssh/connection/connector.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced all 14 `print()` calls in
+  `src/ssh/connection/connector.py` with `self.logger.*` emissions (or the
+  new module-scoped `logger.*` for the `@staticmethod _paramiko_available`
+  call sites that cannot access `self`), using `%`-style deferred
+  formatting to satisfy G004. Added a module-scoped `logger =
+  logging.getLogger(_LOGGER_NAME)` alongside the existing `_LOGGER_NAME =
+  "ssh_runner_v2"` constant so the two static-method emissions land on the
+  same unified SSH logger the rest of the class uses. Level heuristic:
+  `>>` preflight banner and `[OK]` / `[INFO]` status lines map to
+  `logger.info`; `[ERROR]` prefixed failure notices (`_fail_input`,
+  paramiko-missing hint pair in `_paramiko_available`, host key enrollment
+  failure, DNS resolution error, connection timeout, bad host key, auth
+  failure, untrusted host key, generic SSH error, unexpected error) map to
+  `logger.error`. Preserved: the pre-existing `import logging`,
+  `logging.getLogger(_LOGGER_NAME)` fallback getter in `__init__`, the
+  `logging.Logger` type annotations, and the `_LOGGER_NAME` constant.
+  Each migrated call carries the standard `# WHY: preserve operator
+  notice verbatim; route through logger for capture/redirection.`
+  annotation and preserves the exact user-visible text operators grep on.
+- **Test migration (Changed)**: none. `tests/unit/ssh/test_connector.py`
+  and `tests/unit/test_ssh_host_key_tofu.py` were grepped for
+  `capsys|capfd|readouterr` — no matches, so no stdout-based assertions
+  needed conversion to `caplog`.
+- **Rationale**: brings `src/ssh/connection/connector.py` into compliance
+  with the module-by-module rollout of Ruff `T201` (`print()` retirement)
+  tracked in issue #886. Routing through `self.logger` on the unified
+  `"ssh_runner_v2"` logger keeps SSH connection lifecycle output
+  capturable, redirectable, and consistent with the rest of the SSH
+  runner v2 stack.
+
 ### #886 Phase 2 slice 87/N: retire `print()` in `src/site/address_audit/audit_engine.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 5 `print()` calls
