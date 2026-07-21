@@ -11,6 +11,7 @@ importing the monolith.
 
 from __future__ import annotations
 
+import logging
 import sys
 from types import ModuleType
 from unittest.mock import MagicMock
@@ -61,7 +62,7 @@ class TestGetApModels:
 class TestPrintModelOptions:
     """Cover SitesByAPModelExporter._print_model_options."""
 
-    def test_prints_numbered_list_with_counts(self, capsys):
+    def test_prints_numbered_list_with_counts(self, caplog):
         """Prints a numbered list with per-model AP counts."""
         from src.export.sites_by_ap_model_exporter import SitesByAPModelExporter
 
@@ -71,12 +72,13 @@ class TestPrintModelOptions:
             {"model": "AP45"},
             {"model": "AP45"},
         ]
-        SitesByAPModelExporter._print_model_options(models, aps)
+        with caplog.at_level(logging.INFO):
+            SitesByAPModelExporter._print_model_options(models, aps)
 
-        out = capsys.readouterr().out
-        assert "Available AP models" in out
-        assert "1. AP41 (1 APs)" in out
-        assert "2. AP45 (2 APs)" in out
+        messages = [r.getMessage() for r in caplog.records]
+        assert any("Available AP models" in m for m in messages)
+        assert any("1. AP41 (1 APs)" in m for m in messages)
+        assert any("2. AP45 (2 APs)" in m for m in messages)
 
 
 class TestResolveModelChoice:
@@ -89,28 +91,31 @@ class TestResolveModelChoice:
         models = ["AP41", "AP45"]
         assert SitesByAPModelExporter._resolve_model_choice("2", models) == "AP45"
 
-    def test_out_of_bounds_returns_none(self, capsys):
-        """Out-of-range selection returns None (bounds check branch, no print)."""
+    def test_out_of_bounds_returns_none(self, caplog):
+        """Out-of-range selection returns None (bounds check branch, no notice)."""
         from src.export.sites_by_ap_model_exporter import SitesByAPModelExporter
 
         models = ["AP41"]
-        assert SitesByAPModelExporter._resolve_model_choice("5", models) is None
-        assert "Invalid selection" not in capsys.readouterr().out
+        with caplog.at_level(logging.INFO):
+            assert SitesByAPModelExporter._resolve_model_choice("5", models) is None
+        assert not any("Invalid selection" in r.getMessage() for r in caplog.records)
 
-    def test_zero_selection_returns_none(self, capsys):
-        """Zero (1-based) becomes -1 index which is out of bounds -> None (no print)."""
+    def test_zero_selection_returns_none(self, caplog):
+        """Zero (1-based) becomes -1 index which is out of bounds -> None (no notice)."""
         from src.export.sites_by_ap_model_exporter import SitesByAPModelExporter
 
         models = ["AP41"]
-        assert SitesByAPModelExporter._resolve_model_choice("0", models) is None
-        assert "Invalid selection" not in capsys.readouterr().out
+        with caplog.at_level(logging.INFO):
+            assert SitesByAPModelExporter._resolve_model_choice("0", models) is None
+        assert not any("Invalid selection" in r.getMessage() for r in caplog.records)
 
-    def test_non_numeric_returns_none(self, capsys):
+    def test_non_numeric_returns_none(self, caplog):
         """Non-numeric input triggers ValueError branch -> None with error notice."""
         from src.export.sites_by_ap_model_exporter import SitesByAPModelExporter
 
-        assert SitesByAPModelExporter._resolve_model_choice("abc", ["AP41"]) is None
-        assert "Invalid selection" in capsys.readouterr().out
+        with caplog.at_level(logging.INFO):
+            assert SitesByAPModelExporter._resolve_model_choice("abc", ["AP41"]) is None
+        assert any("Invalid selection" in r.getMessage() for r in caplog.records)
 
 
 class TestPromptModelSelection:
@@ -254,12 +259,13 @@ class TestBuildSiteMap:
 class TestFinalizeApModelExport:
     """Cover SitesByAPModelExporter._finalize_ap_model_export."""
 
-    def test_slugifies_model_and_writes_csv(self, fake_mh, capsys):
-        """Model name is slugified for filename, DataExporter is called, summary is printed."""
+    def test_slugifies_model_and_writes_csv(self, fake_mh, caplog):
+        """Model name is slugified for filename, DataExporter is called, summary is logged."""
         from src.export.sites_by_ap_model_exporter import SitesByAPModelExporter
 
         rows = [{"site_id": "s1"}]
-        SitesByAPModelExporter._finalize_ap_model_export(rows, "AP-45 / Special!")
+        with caplog.at_level(logging.INFO):
+            SitesByAPModelExporter._finalize_ap_model_export(rows, "AP-45 / Special!")
 
         fake_mh.DataExporter.write_with_format_selection.assert_called_once()
         call = fake_mh.DataExporter.write_with_format_selection.call_args
@@ -268,14 +274,13 @@ class TestFinalizeApModelExport:
         assert call.args[1] == "SitesByAPModel_AP-45___Special_.csv"
         assert call.kwargs.get("api_function_name") == "getSitesByAPModel"
 
-        out = capsys.readouterr().out
-        assert "Exported 1 sites" in out
+        assert any("Exported 1 sites" in r.getMessage() for r in caplog.records)
 
 
 class TestExportSitesByApModel:
     """Cover SitesByAPModelExporter.export_sites_by_ap_model (public entry)."""
 
-    def test_no_models_returns_early(self, fake_mh, capsys, monkeypatch):
+    def test_no_models_returns_early(self, fake_mh, caplog, monkeypatch):
         """Empty AP inventory -> tells the user and returns before prompting."""
         from src.export.sites_by_ap_model_exporter import SitesByAPModelExporter
 
@@ -288,9 +293,10 @@ class TestExportSitesByApModel:
         prompt = MagicMock()
         monkeypatch.setattr(SitesByAPModelExporter, "_prompt_model_selection", staticmethod(prompt))
 
-        SitesByAPModelExporter.export_sites_by_ap_model()
+        with caplog.at_level(logging.INFO):
+            SitesByAPModelExporter.export_sites_by_ap_model()
 
-        assert "No APs found" in capsys.readouterr().out
+        assert any("No APs found" in r.getMessage() for r in caplog.records)
         prompt.assert_not_called()
 
     def test_operator_cancels_prompt(self, fake_mh, monkeypatch):
@@ -312,7 +318,7 @@ class TestExportSitesByApModel:
 
         fake_mh.APICoreFetchUtils.all_sites_with_limit.assert_not_called()
 
-    def test_no_matching_rows_returns_early(self, fake_mh, capsys, monkeypatch):
+    def test_no_matching_rows_returns_early(self, fake_mh, caplog, monkeypatch):
         """Prompt returns model but no sites match -> notice + no CSV write."""
         from src.export.sites_by_ap_model_exporter import SitesByAPModelExporter
 
@@ -337,9 +343,10 @@ class TestExportSitesByApModel:
         finalize = MagicMock()
         monkeypatch.setattr(SitesByAPModelExporter, "_finalize_ap_model_export", staticmethod(finalize))
 
-        SitesByAPModelExporter.export_sites_by_ap_model()
+        with caplog.at_level(logging.INFO):
+            SitesByAPModelExporter.export_sites_by_ap_model()
 
-        assert "No sites found with AP41" in capsys.readouterr().out
+        assert any("No sites found with AP41" in r.getMessage() for r in caplog.records)
         finalize.assert_not_called()
 
     def test_success_path_writes_csv(self, fake_mh, monkeypatch):

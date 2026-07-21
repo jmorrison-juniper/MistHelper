@@ -36,10 +36,12 @@ class SitesByAPModelExporter:
     @staticmethod
     def _print_model_options(models: list[str], aps: list[dict]) -> None:  # type: ignore[type-arg]
         """Print numbered list of AP models with per-model device count."""
-        print("\nAvailable AP models:")  # Header
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logging.info("\nAvailable AP models:")
         for idx, model in enumerate(models, 1):  # List each model
             count = sum(1 for d in aps if d.get("model") == model)  # APs of this model
-            print(f"  {idx:3d}. {model} ({count} APs)")
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logging.info("  %3d. %s (%s APs)", idx, model, count)
 
     @staticmethod
     def _resolve_model_choice(choice: str, models: list[str]) -> str | None:
@@ -48,7 +50,8 @@ class SitesByAPModelExporter:
             selected = int(choice.strip()) - 1  # Convert to 0-based index
             return models[selected] if 0 <= selected < len(models) else None  # Bounds check
         except (ValueError, IndexError):
-            print("! Invalid selection.")
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logging.info("! Invalid selection.")
             return None
 
     @staticmethod
@@ -133,7 +136,8 @@ class SitesByAPModelExporter:
         safe_model = re.sub(r"[^a-zA-Z0-9_-]", "_", model)  # Slugify the model.
         filename = f"SitesByAPModel_{safe_model}.csv"  # Build the CSV name.
         mh.DataExporter.write_with_format_selection(rows, filename, api_function_name="getSitesByAPModel")  # Persist.
-        print(f"\n[OK] Exported {len(rows)} sites with {model} APs to {filename}")  # Tell the user.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logging.info("\n[OK] Exported %s sites with %s APs to %s", len(rows), model, filename)
         logging.info("Exported %s sites with AP model %s", len(rows), model)  # Log the export.
 
     @staticmethod
@@ -145,22 +149,27 @@ class SitesByAPModelExporter:
     def export_sites_by_ap_model() -> None:  # Export sites by AP model.
         """Export CSV of sites containing APs of a selected model with site address info."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ConfigUtils + APICoreFetchUtils facades.
-        print("Export Sites by AP Model:")  # Header
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logging.info("Export Sites by AP Model:")
         logging.info("Starting export of sites by AP model...")  # Trace start
         org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org
-        print("! Fetching AP inventory from organization...")  # Tell the user
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logging.info("! Fetching AP inventory from organization...")
         aps, models = SitesByAPModelExporter._get_ap_models(org_id)  # Fetch APs and models
         if not models:  # No models in inventory
-            print("! No APs found in organization inventory.")
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logging.info("! No APs found in organization inventory.")
             return
         model = SitesByAPModelExporter._prompt_model_selection(models, aps)  # Prompt operator for a model
         if not model:  # Operator skipped
             return
-        print(f"! Fetching site details for sites with {model} APs...")  # Tell the user
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logging.info("! Fetching site details for sites with %s APs...", model)
         all_sites = mh.APICoreFetchUtils.all_sites_with_limit(org_id)  # List all sites
         site_map = SitesByAPModelExporter._build_site_map(all_sites)  # Index sites by id for row lookup
         rows = SitesByAPModelExporter._build_export_rows(aps, model, site_map)  # Build export rows
         if not rows:  # No rows match the chosen model
-            print(f"! No sites found with {model} APs.")
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logging.info("! No sites found with %s APs.", model)
             return
         SitesByAPModelExporter._finalize_ap_model_export(rows, model)  # Slug + filename + write + log

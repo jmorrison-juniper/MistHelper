@@ -7,6 +7,27 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 70/N: retire `print()` in `src/export/sites_by_ap_model_exporter.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced all 9 `print()` calls in
+  `src/export/sites_by_ap_model_exporter.py` with `logging.info(...)` using
+  `%`-style deferred formatting to satisfy G004. Covers the "Available AP
+  models" header and numbered per-model listing in `_print_model_options`, the
+  invalid-selection notice in `_resolve_model_choice`, the export-success
+  summary line in `_finalize_ap_model_export`, and the menu banner plus the
+  inventory-fetch / no-APs / site-detail-fetch / no-matching-sites operator
+  notices in `export_sites_by_ap_model`. Each migrated call carries the
+  standard `# WHY:` annotation preserving legacy operator-visible text via the
+  logger.
+- **Tests (Migrated)**: `tests/unit/export/test_sites_by_ap_model_exporter.py`
+  swapped `capsys` for `caplog` across the six impacted tests
+  (`test_prints_numbered_list_with_counts`, `test_out_of_bounds_returns_none`,
+  `test_zero_selection_returns_none`, `test_non_numeric_returns_none`,
+  `test_slugifies_model_and_writes_csv`, `test_no_models_returns_early`,
+  `test_no_matching_rows_returns_early`) wrapping each call under
+  `with caplog.at_level(logging.INFO):` and asserting substrings against
+  `record.getMessage()`. All 21 tests pass locally.
+
 ### #886 Phase 2 slice 69/N: retire `print()` in `src/export/site_insights/device_metric_operation.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 9 `print()` calls in
