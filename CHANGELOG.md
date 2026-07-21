@@ -7,6 +7,32 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 107/N: retire `print()` in `src/gateway/device_template_cloner.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced all 27 `print()` calls in
+  `src/gateway/device_template_cloner.py` with a module-scoped
+  `logger = logging.getLogger(__name__)` and level-appropriate `logger.*`
+  emissions using `%`-style deferred formatting to satisfy G004. Operator
+  banners, site/gateway selection prompts, template-selection listings, and
+  success notices route through `logger.info`; empty-list notices
+  (`No sites found`, `No gateway devices found`), retry prompts on empty or
+  duplicate template names, and invalid hardware-selection messages route
+  through `logger.warning`; clone failure notices (device-config fetch
+  failure, template-creation failure, unexpected-exception handler) route
+  through `logger.error`. Pre-existing `logging.info`/`logging.warning`/
+  `logging.error` audit-trail calls throughout the module were rebound to
+  the module-scoped `logger` for namespace consistency. Each converted call
+  carries the standard `# WHY: preserve operator notice verbatim; route
+  through logger for capture/redirection.` comment above the emission.
+- **Test migration (Changed)**:
+  `tests/unit/gateway/test_device_template_cloner_extended.py` swapped 10
+  `capsys`-based stdout assertions to `caplog` with
+  `caplog.set_level(<level>, logger="src.gateway.device_template_cloner")`
+  scoping so operator-facing notices are captured from the logger channel
+  the code now emits on. `tests/unit/gateway/test_device_template_cloner.py`
+  contained no `capsys` references and needed no changes. All 58 tests
+  across the two files remain green.
+
 ### #886 Phase 2 slice 106/N: retire `print()` in `src/refactors/serial_cc/start_site_scan_capture.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 26 `print()` calls in
