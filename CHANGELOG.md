@@ -7,6 +7,27 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 79/N: retire `print()` in `src/gateway/_wan2_variable_io.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced all 11 `print()` calls in
+  `src/gateway/_wan2_variable_io.py` with `logger`-based emissions using
+  `%`-style deferred formatting to satisfy G004. Added a module-scoped
+  `logger = logging.getLogger(__name__)` (module previously used bare
+  `logging.info/warning` for audit trail; that channel is preserved
+  unchanged while operator-facing notices route through the new module
+  logger). Level heuristic: `info` for the Menu #104 header banner, two
+  `"=" * 70` separators, the dry-run banner pair, and the CSV-loading
+  progress line; `warning` for the three live-mode cautions, the
+  empty-templates notice, and the SECURITY exclusion notice (refactored
+  from an f-string print with adjacent string-literal concatenation into
+  a single `%d`/`%s` deferred-format warning). Each migrated call carries
+  the standard `# WHY: preserve operator notice verbatim; route through
+  logger for capture/redirection.` annotation and preserves `!?`, `>>`,
+  and leading `\n` prefixes verbatim.
+- **No test migration needed**: only two `_print_header` smoke tests
+  accept `capsys` but never assert on captured output. Ruff clean;
+  black clean; `pytest tests/unit/test_wan2_variable.py` = 101 passed.
+
 ### #886 Phase 2 slice 78/N: retire `print()` in `src/device/arp_command_manager.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 11 `print()` calls in
