@@ -57,8 +57,9 @@ class TestLoadPathGuards:
         config = EnvSshConfigLoader().load("nope.env")  # WHY: file does not exist
         assert config == _empty_config()  # WHY: early return before any parse
 
-    def test_size_getsize_raises_oserror(self, tmp_path, monkeypatch, capsys) -> None:
+    def test_size_getsize_raises_oserror(self, tmp_path, monkeypatch, caplog: pytest.LogCaptureFixture) -> None:
         # WHY: OSError from getsize is caught by _is_within_size_limit and returns False
+        caplog.set_level(logging.WARNING, logger="src.ssh.config.env_loader")
         monkeypatch.chdir(tmp_path)  # WHY: isolate cwd
         env_path = tmp_path / "test.env"  # WHY: create file so exists() passes
         env_path.write_text("SSH_HOST=1.1.1.1\n", encoding="utf-8")  # WHY: real content is irrelevant here
@@ -72,16 +73,19 @@ class TestLoadPathGuards:
         monkeypatch.setattr(_os_mod.path, "getsize", _boom)  # WHY: force the OSError path
         config = EnvSshConfigLoader().load("test.env")  # WHY: exercise size guard exception branch
         assert config == _empty_config()  # WHY: unloadable file yields sentinel
-        assert "Cannot access .env file" in capsys.readouterr().out  # WHY: user-facing warning surfaced
+        assert any("Cannot access .env file" in r.getMessage() for r in caplog.records)  # WHY: warning surfaced
 
-    def test_oversized_file_rejected_prints_warning(self, tmp_path, monkeypatch, capsys) -> None:
+    def test_oversized_file_rejected_prints_warning(
+        self, tmp_path, monkeypatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
         # WHY: files above _MAX_ENV_BYTES trip the size cap branch
+        caplog.set_level(logging.WARNING, logger="src.ssh.config.env_loader")
         monkeypatch.chdir(tmp_path)  # WHY: isolate cwd
         env_path = tmp_path / "big.env"  # WHY: create an oversized file
         env_path.write_bytes(b"X" * (env_loader_module._MAX_ENV_BYTES + 1))  # WHY: > cap by 1 byte
         config = EnvSshConfigLoader().load("big.env")  # WHY: exercise size cap
         assert config == _empty_config()  # WHY: oversized files return sentinel
-        assert "too large" in capsys.readouterr().out  # WHY: user-facing warning surfaced
+        assert any("too large" in r.getMessage() for r in caplog.records)  # WHY: warning surfaced
 
 
 class TestManualParser:
@@ -155,17 +159,21 @@ class TestManualParser:
         config = EnvSshConfigLoader().load("test.env")  # WHY: exercise single-quote strip
         assert config["password"] == "secret"  # WHY: quotes removed
 
-    def test_invalid_username_rejected_with_warning(self, tmp_path, monkeypatch, capsys) -> None:
-        # WHY: invalid usernames hit the "print WARNING" branch of _set_username
+    def test_invalid_username_rejected_with_warning(
+        self, tmp_path, monkeypatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        # WHY: invalid usernames hit the "warning log" branch of _set_username
+        caplog.set_level(logging.WARNING, logger="src.ssh.config.env_loader")
         monkeypatch.chdir(tmp_path)  # WHY: isolate cwd
         env_path = tmp_path / "test.env"  # WHY: fixture file
         env_path.write_text("SSH_USER=; rm -rf /\n", encoding="utf-8")  # WHY: dangerous chars fail validation
         config = EnvSshConfigLoader().load("test.env")  # WHY: exercise invalid-username branch
         assert config["username"] is None  # WHY: invalid username left as sentinel
-        assert "Invalid username format" in capsys.readouterr().out  # WHY: warning surfaced to user
+        assert any("Invalid username format" in r.getMessage() for r in caplog.records)  # WHY: warning surfaced
 
-    def test_line_cap_stops_at_limit(self, tmp_path, monkeypatch, capsys) -> None:
+    def test_line_cap_stops_at_limit(self, tmp_path, monkeypatch, caplog: pytest.LogCaptureFixture) -> None:
         # WHY: > _MAX_MANUAL_LINES trips the runaway-file guard
+        caplog.set_level(logging.WARNING, logger="src.ssh.config.env_loader")
         monkeypatch.chdir(tmp_path)  # WHY: isolate cwd
         monkeypatch.setattr(env_loader_module, "_MAX_MANUAL_LINES", 3)  # WHY: lower cap so test stays fast
         env_path = tmp_path / "test.env"  # WHY: fixture file
@@ -173,12 +181,13 @@ class TestManualParser:
             "# c1\n# c2\n# c3\nSSH_HOST=1.1.1.1\nSSH_USER=admin\n", encoding="utf-8"
         )
         config = EnvSshConfigLoader().load("test.env")  # WHY: exercise line-cap branch
-        assert "too many lines" in capsys.readouterr().out  # WHY: user-facing warning surfaced
+        assert any("too many lines" in r.getMessage() for r in caplog.records)  # WHY: warning surfaced
         # WHY: SSH_USER is on line 5 (beyond the cap) so it must not be applied
         assert config["username"] is None
 
-    def test_read_raises_unicode_decode_error(self, tmp_path, monkeypatch, capsys) -> None:
+    def test_read_raises_unicode_decode_error(self, tmp_path, monkeypatch, caplog: pytest.LogCaptureFixture) -> None:
         # WHY: UnicodeDecodeError path in _populate_via_manual_parse is exercised via monkeypatched open
+        caplog.set_level(logging.WARNING, logger="src.ssh.config.env_loader")
         monkeypatch.chdir(tmp_path)  # WHY: isolate cwd
         env_path = tmp_path / "test.env"  # WHY: real file so size/exists checks pass
         env_path.write_text("SSH_USER=admin\n", encoding="utf-8")  # WHY: content irrelevant
@@ -190,10 +199,11 @@ class TestManualParser:
         monkeypatch.setattr(env_loader_module, "open", _bad_open, raising=False)  # WHY: shadow module open
         config = EnvSshConfigLoader().load("test.env")  # WHY: exercise decode-error branch
         assert config == _empty_config()  # WHY: parser gave up cleanly
-        assert "encoding error" in capsys.readouterr().out  # WHY: warning surfaced
+        assert any("encoding error" in r.getMessage() for r in caplog.records)  # WHY: warning surfaced
 
-    def test_read_raises_oserror(self, tmp_path, monkeypatch, capsys) -> None:
+    def test_read_raises_oserror(self, tmp_path, monkeypatch, caplog: pytest.LogCaptureFixture) -> None:
         # WHY: OSError path (permission denied, disk gone) in _populate_via_manual_parse
+        caplog.set_level(logging.WARNING, logger="src.ssh.config.env_loader")
         monkeypatch.chdir(tmp_path)  # WHY: isolate cwd
         env_path = tmp_path / "test.env"  # WHY: real file so guards pass
         env_path.write_text("SSH_USER=admin\n", encoding="utf-8")  # WHY: content irrelevant
@@ -205,10 +215,11 @@ class TestManualParser:
         monkeypatch.setattr(env_loader_module, "open", _bad_open, raising=False)  # WHY: shadow module open
         config = EnvSshConfigLoader().load("test.env")  # WHY: exercise OSError branch
         assert config == _empty_config()  # WHY: sentinel returned
-        assert "Error reading" in capsys.readouterr().out  # WHY: warning surfaced
+        assert any("Error reading" in r.getMessage() for r in caplog.records)  # WHY: warning surfaced
 
-    def test_read_raises_generic_exception(self, tmp_path, monkeypatch, capsys) -> None:
+    def test_read_raises_generic_exception(self, tmp_path, monkeypatch, caplog: pytest.LogCaptureFixture) -> None:
         # WHY: broad except Exception guard in _populate_via_manual_parse
+        caplog.set_level(logging.WARNING, logger="src.ssh.config.env_loader")
         monkeypatch.chdir(tmp_path)  # WHY: isolate cwd
         env_path = tmp_path / "test.env"  # WHY: real file so guards pass
         env_path.write_text("SSH_USER=admin\n", encoding="utf-8")  # WHY: content irrelevant
@@ -220,14 +231,15 @@ class TestManualParser:
         monkeypatch.setattr(env_loader_module, "open", _bad_open, raising=False)  # WHY: shadow module open
         config = EnvSshConfigLoader().load("test.env")  # WHY: exercise broad-except branch
         assert config == _empty_config()  # WHY: sentinel returned
-        assert "Unexpected error" in capsys.readouterr().out  # WHY: warning surfaced
+        assert any("Unexpected error" in r.getMessage() for r in caplog.records)  # WHY: warning surfaced
 
 
 class TestDotenvPath:
     """Cover the ``_populate_via_dotenv`` broad exception guard."""
 
-    def test_dotenv_exception_prints_warning(self, tmp_path, monkeypatch, capsys) -> None:
+    def test_dotenv_exception_prints_warning(self, tmp_path, monkeypatch, caplog: pytest.LogCaptureFixture) -> None:
         # WHY: force dotenv path AND make it raise to hit the except-Exception guard
+        caplog.set_level(logging.WARNING, logger="src.ssh.config.env_loader")
         monkeypatch.chdir(tmp_path)  # WHY: isolate cwd
         env_path = tmp_path / "test.env"  # WHY: real file so exists / size checks pass
         env_path.write_text("SSH_USER=admin\n", encoding="utf-8")  # WHY: content irrelevant
@@ -240,7 +252,7 @@ class TestDotenvPath:
         monkeypatch.setattr(env_loader_module, "load_dotenv", _boom)  # WHY: patch parser to raise
         config = EnvSshConfigLoader().load("test.env")  # WHY: exercise dotenv exception branch
         assert config == _empty_config()  # WHY: parser gave up before setting anything
-        assert "python-dotenv" in capsys.readouterr().out  # WHY: warning surfaced
+        assert any("python-dotenv" in r.getMessage() for r in caplog.records)  # WHY: warning surfaced
 
 
 class TestUnquoteValueDirect:

@@ -7,6 +7,24 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 72/N: retire `print()` in `src/ssh/config/env_loader.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced all 9 `print()` calls in
+  `src/ssh/config/env_loader.py` with `logger.warning(...)` using `%`-style
+  deferred formatting to satisfy G004. The module already exposes a
+  module-scoped `logger = logging.getLogger(__name__)`, so all operator
+  notices (invalid path, cannot access, too large, dotenv exception, encoding
+  error, generic read error, OS read error, too many lines, invalid username)
+  route through the existing logger. Each migrated call carries the standard
+  `# WHY: preserve operator notice verbatim; route through logger for
+  capture/redirection.` annotation and preserves the legacy `[WARNING]` prefix
+  verbatim in the message string.
+- **Test migration (Changed)**: migrated 8 tests in
+  `tests/unit/ssh/config/test_env_loader_wave9.py` from `capsys` to `caplog`
+  using `caplog.set_level(logging.WARNING, logger="src.ssh.config.env_loader")`
+  and `any(SUBSTR in r.getMessage() for r in caplog.records)` assertions.
+  30/30 tests pass; ruff T20 clean; ruff full clean; black clean.
+
 ### #886 Phase 2 slice 71/N: retire `print()` in `src/gateway/gateway_stats_exporter.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 9 `print()` calls in
