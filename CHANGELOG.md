@@ -7,6 +7,23 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 106/N: retire `print()` in `src/refactors/serial_cc/start_site_scan_capture.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced all 26 `print()` calls in
+  `src/refactors/serial_cc/start_site_scan_capture.py` with a module-scoped
+  `logger = logging.getLogger(__name__)` and level-appropriate `logger.*`
+  emissions using `%`-style deferred formatting to satisfy G004. Intro
+  banner, band/bandwidth menus, loop-mode menu, summary block, and
+  conflict-cancel notice use `logger.info`; validation notices
+  (`! Invalid channel`, `! Invalid bandwidth`, `! Invalid <label>`,
+  `! WARNING` conflict lines) use `logger.warning`. Pre-existing
+  `logging.debug`/`logging.info`/`logging.warning`/`logging.error` calls
+  across `_select_band`, `_prompt_channel`, `_select_bandwidth`,
+  `_prompt_bounded_int`, `_build_payload`, `_list_existing_captures`,
+  `_confirm_conflict_override`, `_select_ap`, `_finalize_and_run`, and
+  `execute` were rebound to the module-scoped `logger` for namespace
+  consistency.
+
 ### #886 Phase 2 slice 105/N: retire `print()` in `src/maps/_plotly_viewer.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 26 `print()` calls in
