@@ -14,12 +14,16 @@ Covers every static method on ``src.analytics.data_collection_manager``:
 
 from __future__ import annotations
 
+import logging
 from types import SimpleNamespace
 from unittest.mock import MagicMock, call, patch
 
 import pytest
 
 from src.analytics.data_collection_manager import DataCollectionManager
+
+# WHY: caplog must target the module logger so INFO/WARNING/ERROR records surface (issue #886).
+_LOGGER_NAME = "src.analytics.data_collection_manager"
 
 
 def _make_mh(**extra):
@@ -40,10 +44,11 @@ def _make_mh(**extra):
 # ---------- _print_continuous_loop_banner ----------
 
 
-def test_print_continuous_loop_banner_emits_three_lines(capsys: pytest.CaptureFixture[str]) -> None:
-    """Banner prints the three-line startup message."""
+def test_print_continuous_loop_banner_emits_three_lines(caplog: pytest.LogCaptureFixture) -> None:
+    """Banner logs the three-line startup message at INFO."""
+    caplog.set_level(logging.INFO, logger=_LOGGER_NAME)
     DataCollectionManager._print_continuous_loop_banner()
-    out = capsys.readouterr().out
+    out = "\n".join(r.getMessage() for r in caplog.records)
     assert "Starting continuous data collection loop" in out
     assert "every 5 seconds" in out
     assert "stop_loop.txt" in out
@@ -52,36 +57,39 @@ def test_print_continuous_loop_banner_emits_three_lines(capsys: pytest.CaptureFi
 # ---------- continuous_loop ----------
 
 
-def test_continuous_loop_exits_when_stop_signal_set(capsys: pytest.CaptureFixture[str]) -> None:
+def test_continuous_loop_exits_when_stop_signal_set(caplog: pytest.LogCaptureFixture) -> None:
     """First stop-signal check returning True breaks the loop before any cycle runs."""
+    caplog.set_level(logging.INFO, logger=_LOGGER_NAME)
     with (
         patch.object(DataCollectionManager, "_check_stop_signal", return_value=True),
         patch.object(DataCollectionManager, "_execute_collection_cycle") as cycle,
     ):
         DataCollectionManager.continuous_loop()
     cycle.assert_not_called()
-    assert "Continuous data collection loop ended" in capsys.readouterr().out
+    assert any("Continuous data collection loop ended" in r.getMessage() for r in caplog.records)
 
 
-def test_continuous_loop_handles_keyboard_interrupt(capsys: pytest.CaptureFixture[str]) -> None:
+def test_continuous_loop_handles_keyboard_interrupt(caplog: pytest.LogCaptureFixture) -> None:
     """KeyboardInterrupt is caught and reported to the user."""
+    caplog.set_level(logging.WARNING, logger=_LOGGER_NAME)
     with (
         patch.object(DataCollectionManager, "_check_stop_signal", return_value=False),
         patch.object(DataCollectionManager, "_execute_collection_cycle", side_effect=KeyboardInterrupt),
     ):
         DataCollectionManager.continuous_loop()
-    out = capsys.readouterr().out
+    out = "\n".join(r.getMessage() for r in caplog.records)
     assert "stopped by user" in out
 
 
-def test_continuous_loop_handles_unexpected_exception(capsys: pytest.CaptureFixture[str]) -> None:
+def test_continuous_loop_handles_unexpected_exception(caplog: pytest.LogCaptureFixture) -> None:
     """A non-KeyboardInterrupt exception is logged + reported and loop ends."""
+    caplog.set_level(logging.ERROR, logger=_LOGGER_NAME)
     with (
         patch.object(DataCollectionManager, "_check_stop_signal", return_value=False),
         patch.object(DataCollectionManager, "_execute_collection_cycle", side_effect=RuntimeError("boom")),
     ):
         DataCollectionManager.continuous_loop()
-    out = capsys.readouterr().out
+    out = "\n".join(r.getMessage() for r in caplog.records)
     assert "Fatal error in continuous loop" in out
     assert "boom" in out
 
@@ -136,8 +144,9 @@ def test_collection_cycle_steps_returns_five_labelled_callables() -> None:
 # ---------- _execute_collection_cycle ----------
 
 
-def test_execute_collection_cycle_runs_all_steps_and_paces(capsys: pytest.CaptureFixture[str]) -> None:
+def test_execute_collection_cycle_runs_all_steps_and_paces(caplog: pytest.LogCaptureFixture) -> None:
     """Happy path invokes every step and sleeps 0.75s between them."""
+    caplog.set_level(logging.INFO, logger=_LOGGER_NAME)
     step_a, step_b = MagicMock(name="a"), MagicMock(name="b")
     steps = [("  step A", step_a), ("  step B", step_b)]
     with (
@@ -148,7 +157,7 @@ def test_execute_collection_cycle_runs_all_steps_and_paces(capsys: pytest.Captur
     step_a.assert_called_once_with()
     step_b.assert_called_once_with()
     assert sleep.call_args_list == [call(0.75), call(0.75)]
-    assert "Loop 3 completed successfully" in capsys.readouterr().out
+    assert any("Loop 3 completed successfully" in r.getMessage() for r in caplog.records)
 
 
 def test_execute_collection_cycle_propagates_keyboard_interrupt() -> None:
@@ -163,8 +172,9 @@ def test_execute_collection_cycle_propagates_keyboard_interrupt() -> None:
             DataCollectionManager._execute_collection_cycle(loop_count=1)
 
 
-def test_execute_collection_cycle_logs_and_backs_off_on_exception(capsys: pytest.CaptureFixture[str]) -> None:
+def test_execute_collection_cycle_logs_and_backs_off_on_exception(caplog: pytest.LogCaptureFixture) -> None:
     """A step exception is logged, user notified, and a 5s back-off runs."""
+    caplog.set_level(logging.WARNING, logger=_LOGGER_NAME)
     step = MagicMock(side_effect=RuntimeError("nope"))
     steps = [("  step", step)]
     with (
@@ -172,7 +182,7 @@ def test_execute_collection_cycle_logs_and_backs_off_on_exception(capsys: pytest
         patch("src.analytics.data_collection_manager.time.sleep") as sleep,
     ):
         DataCollectionManager._execute_collection_cycle(loop_count=7)
-    out = capsys.readouterr().out
+    out = "\n".join(r.getMessage() for r in caplog.records)
     assert "Error in loop 7" in out
     assert "Continuing to next iteration" in out
     # The 5-second back-off must have fired.
