@@ -8,6 +8,8 @@ from dataclasses import dataclass  # WHY: Frozen slotted state bundles keep exec
 from types import SimpleNamespace  # WHY: SimpleNamespace preserves the deps shape tests already rely on
 from typing import Any  # WHY: MistHelper collaborators are dynamic attrs typed loosely
 
+logger = logging.getLogger(__name__)  # WHY: module-scoped logger for #886 print-to-logger migration.
+
 # Module-level constants: banners, log messages, prompts, tag keys, filename template.
 # Extracting them keeps every method free of repeated string literals so CC stays low.
 _MIST_MODULE = "MistHelper"  # WHY: Single source for the late-import target
@@ -17,30 +19,30 @@ _MSG_REFRESH = "! Refreshing available insight metrics from Mist API..."  # WHY:
 _MSG_NO_SITE = "No site selected. Exiting."  # WHY: Log message: abort when no site chosen
 _MSG_SKIP_EMPTY = "! No client input provided. Skipping client insights export."  # WHY: User skip message
 _MSG_NO_MAC = "! Could not determine client MAC address."  # WHY: User-facing empty-MAC message
-_MSG_INVALID_MAC_TMPL = "! Invalid client MAC address format: {mac}"  # WHY: User-facing invalid-MAC template
+_MSG_INVALID_MAC_TMPL = "! Invalid client MAC address format: %s"  # WHY: User-facing invalid-MAC template
 _MSG_INVALID_MAC_LOG = "Invalid client MAC address format provided for client insights: %s"  # WHY: Log template
 _MSG_NO_METRICS = "! No metrics found for client scope. Check ConstInsightMetrics.csv file."  # WHY: User misconfig msg
 _MSG_NO_METRICS_LOG = "No client-scope metrics found in const insight metrics"  # WHY: Log misconfig message
-_MSG_RETRIEVING_TMPL = "! Retrieving {count} different client insight metrics for selected client..."  # WHY: Progress
+_MSG_RETRIEVING_TMPL = "! Retrieving %d different client insight metrics for selected client..."  # WHY: Progress
 _MSG_PROMPT_HEADER = "\nEnter client MAC address or index number (or press Enter to skip):"  # WHY: Prompt header
 _PROMPT_CLIENT = "Client MAC/Index: "  # WHY: Client selection prompt text
 _CTX_CLIENT = "site_client_insights_selection"  # WHY: safe_input context tag
-_MSG_ERROR_TMPL = "! Error exporting client insights: {error}"  # WHY: User-facing top-level error template
+_MSG_ERROR_TMPL = "! Error exporting client insights: %s"  # WHY: User-facing top-level error template
 _MSG_ERROR_LOG = "Failed to export client insights at %s: %s"  # WHY: Log template for top-level failure
-_MSG_FOUND_TMPL = "\n! Found {count} clients at site {site}"  # WHY: Client-count summary template
+_MSG_FOUND_TMPL = "\n! Found %d clients at site %s"  # WHY: Client-count summary template
 _MSG_PREVIEW_HEADER = "Recent clients (showing first 5):"  # WHY: Preview header text
-_MSG_PREVIEW_ROW_TMPL = "  [{index}] MAC: {mac}, Hostname: {hostname}, Last seen: {last_seen}"  # WHY: Preview row
-_MSG_NO_CLIENTS_TMPL = "! No clients found at site {site}"  # WHY: Empty-list message template
+_MSG_PREVIEW_ROW_TMPL = "  [%d] MAC: %s, Hostname: %s, Last seen: %s"  # WHY: Preview row
+_MSG_NO_CLIENTS_TMPL = "! No clients found at site %s"  # WHY: Empty-list message template
 _MSG_CLIENT_FETCH_FAIL = "Could not retrieve client list: %s"  # WHY: Log template for client-list failure
-_MSG_INVALID_INDEX_TMPL = "! Invalid index: {value}"  # WHY: User invalid-index template
-_MSG_INDEX_RANGE_TMPL = "! Invalid index {index}. Must be between 0 and {max_index}"  # WHY: Range-error template
-_MSG_SELECTED_TMPL = "! Selected client by index: {mac}"  # WHY: Selection echo template
+_MSG_INVALID_INDEX_TMPL = "! Invalid index: %s"  # WHY: User invalid-index template
+_MSG_INDEX_RANGE_TMPL = "! Invalid index %d. Must be between 0 and %d"  # WHY: Range-error template
+_MSG_SELECTED_TMPL = "! Selected client by index: %s"  # WHY: Selection echo template
 _MSG_METRIC_OK = "Retrieved client insight data for metric: %s"  # WHY: Log template for successful metric
 _MSG_METRIC_EMPTY = "No data available for client metric: %s"  # WHY: Log template for empty metric result
 _MSG_METRIC_FAIL = "Failed to get client insight data for metric %s: %s"  # WHY: Log template for metric failure
-_MSG_EXPORT_OK_TMPL = "! {count} client insight metrics exported to {filename}"  # WHY: Export success user template
+_MSG_EXPORT_OK_TMPL = "! %d client insight metrics exported to %s"  # WHY: Export success user template
 _MSG_EXPORT_OK_LOG = "Exported %s client insight metrics at %s to %s"  # WHY: Log template for successful export
-_MSG_EXPORT_EMPTY_TMPL = "! 0 client insights exported to {filename} (no data available)"  # WHY: Empty export template
+_MSG_EXPORT_EMPTY_TMPL = "! 0 client insights exported to %s (no data available)"  # WHY: Empty export template
 _MSG_EXPORT_EMPTY_LOG = "No client insight data available at %s"  # WHY: Log template for empty export
 _FILENAME_TMPL = "SiteClientInsights_{site}_{mac}.csv"  # WHY: Output filename template
 _CLIENT_SCOPE = "client"  # WHY: InsightMetricsUtils scope name for client metrics
@@ -95,16 +97,18 @@ class _ExportContext:
 
 def _emit_preview_rows(clients: list[dict[str, Any]], site_name: str) -> None:
     """Print the client-count summary and the first _PREVIEW_LIMIT rows (kept CC low)."""
-    print(_MSG_FOUND_TMPL.format(count=len(clients), site=site_name))  # WHY: Summary count line
-    print(_MSG_PREVIEW_HEADER)  # WHY: Preview header
+    # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+    logger.info(_MSG_FOUND_TMPL, len(clients), site_name)  # WHY: Summary count line
+    # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+    logger.info(_MSG_PREVIEW_HEADER)  # WHY: Preview header
     for index, client in enumerate(clients[:_PREVIEW_LIMIT]):  # WHY: Show only the first few rows
-        print(
-            _MSG_PREVIEW_ROW_TMPL.format(
-                index=index,
-                mac=client.get(_KEY_MAC, _UNKNOWN),
-                hostname=client.get(_KEY_HOSTNAME, _UNKNOWN),
-                last_seen=client.get(_KEY_LAST_SEEN, _UNKNOWN),
-            )
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info(
+            _MSG_PREVIEW_ROW_TMPL,
+            index,
+            client.get(_KEY_MAC, _UNKNOWN),
+            client.get(_KEY_HOSTNAME, _UNKNOWN),
+            client.get(_KEY_LAST_SEEN, _UNKNOWN),
         )  # WHY: One preview row per iteration
 
 
@@ -148,7 +152,8 @@ class SiteClientInsightsService:
         if clients:  # WHY: Found at least one client - show a short preview
             _emit_preview_rows(clients, site_name)  # WHY: Delegate preview emission
         else:  # WHY: No clients returned for the site
-            print(_MSG_NO_CLIENTS_TMPL.format(site=site_name))  # WHY: Inform the user
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.warning(_MSG_NO_CLIENTS_TMPL, site_name)  # WHY: Inform the user
         return clients  # WHY: Hand back whatever clients were found (possibly empty)
 
     @staticmethod
@@ -159,13 +164,16 @@ class SiteClientInsightsService:
         try:  # WHY: Numeric input is an index into the displayed client list
             index = int(client_input)  # WHY: Parse the index
         except (ValueError, IndexError):  # WHY: Parsing failed despite isdigit (defensive)
-            print(_MSG_INVALID_INDEX_TMPL.format(value=client_input))  # WHY: Inform the user
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.warning(_MSG_INVALID_INDEX_TMPL, client_input)  # WHY: Inform the user
             return None  # WHY: Abort - message already printed
         if not (0 <= index < len(clients)):  # WHY: Index must reference an existing client
-            print(_MSG_INDEX_RANGE_TMPL.format(index=index, max_index=len(clients) - 1))  # WHY: Inform the user
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.warning(_MSG_INDEX_RANGE_TMPL, index, len(clients) - 1)  # WHY: Inform the user
             return None  # WHY: Abort - message already printed
         client_mac = str(clients[index].get(_KEY_MAC, ""))  # WHY: Resolve MAC (may be empty)
-        print(_MSG_SELECTED_TMPL.format(mac=client_mac))  # WHY: Echo the selection
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info(_MSG_SELECTED_TMPL, client_mac)  # WHY: Echo the selection
         return client_mac  # WHY: Return the resolved MAC (possibly empty string)
 
     @staticmethod
@@ -207,14 +215,16 @@ class SiteClientInsightsService:
     ) -> None:
         """Flatten and export collected client insight data, or write an empty file when none."""
         if not all_client_data:  # WHY: No data collected for any metric - write empty for consistency
-            print(_MSG_EXPORT_EMPTY_TMPL.format(filename=filename))  # WHY: User summary
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.warning(_MSG_EXPORT_EMPTY_TMPL, filename)  # WHY: User summary
             logging.warning(_MSG_EXPORT_EMPTY_LOG, site_name)  # WHY: Warn on empty run
             deps.DataExporter.write_with_format_selection([], filename)  # WHY: Write empty export file
             return  # WHY: Empty-case complete
         processed = deps.DataProcessingUtils.flatten_nested_fields(all_client_data)  # WHY: Flatten nested structures
         processed = deps.DataProcessingUtils.escape_multiline(processed)  # WHY: Escape multiline fields for CSV
         deps.DataExporter.write_with_format_selection(processed, filename)  # WHY: Write the export file
-        print(_MSG_EXPORT_OK_TMPL.format(count=metrics_retrieved, filename=filename))  # WHY: User summary
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info(_MSG_EXPORT_OK_TMPL, metrics_retrieved, filename)  # WHY: User summary
         logging.info(_MSG_EXPORT_OK_LOG, metrics_retrieved, site_name, filename)  # WHY: Trace successful export
 
     @classmethod
@@ -227,7 +237,8 @@ class SiteClientInsightsService:
     @staticmethod
     def _read_client_input(deps: SimpleNamespace) -> str:
         """Prompt for the client MAC/index and return the trimmed input string."""
-        print(_MSG_PROMPT_HEADER)  # WHY: Prompt header
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info(_MSG_PROMPT_HEADER)  # WHY: Prompt header
         raw = deps.InputUtils.safe_input(_PROMPT_CLIENT, context=_CTX_CLIENT)  # WHY: Read raw client selection
         return str(raw).strip()  # WHY: str-cast narrows Any for downstream str consumers
 
@@ -240,11 +251,13 @@ class SiteClientInsightsService:
         if client_mac is None:  # WHY: Invalid index/value - helper already printed the reason
             return None  # WHY: Abort silently
         if not client_mac:  # WHY: Resolved to an empty MAC (selected client had no MAC)
-            print(_MSG_NO_MAC)  # WHY: Inform the user
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.warning(_MSG_NO_MAC)  # WHY: Inform the user
             return None  # WHY: Abort
         normalized = deps.SiteClientExporter._normalize_client_mac_or_none(client_mac)  # WHY: Validate/normalize
         if not normalized:  # WHY: MAC failed format validation
-            print(_MSG_INVALID_MAC_TMPL.format(mac=client_mac))  # WHY: Inform the user
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.warning(_MSG_INVALID_MAC_TMPL, client_mac)  # WHY: Inform the user
             logging.error(_MSG_INVALID_MAC_LOG, client_mac)  # WHY: Trace the failure
             return None  # WHY: Abort
         return str(normalized)  # WHY: Normalized MAC (str-cast narrows Any for downstream str formatting)
@@ -255,7 +268,8 @@ class SiteClientInsightsService:
         client_metrics = deps.InsightMetricsUtils.get_by_scope(_CLIENT_SCOPE)  # WHY: Client-scope metric list
         if client_metrics:  # WHY: At least one metric configured
             return list(client_metrics)  # WHY: Freeze return type (list[str])
-        print(_MSG_NO_METRICS)  # WHY: Inform the user of misconfiguration
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.warning(_MSG_NO_METRICS)  # WHY: Inform the user of misconfiguration
         logging.error(_MSG_NO_METRICS_LOG)  # WHY: Trace the misconfiguration
         deps.DataExporter.write_with_format_selection([], filename)  # WHY: Write an empty export for consistency
         return None  # WHY: Signal abort (empty file already written)
@@ -271,16 +285,19 @@ class SiteClientInsightsService:
                 deps, all_client_data, metrics_retrieved, context.filename, context.site_name
             )  # WHY: Export results
         except Exception as exception:  # WHY: Unexpected top-level failure
-            print(_MSG_ERROR_TMPL.format(error=exception))  # WHY: User-facing error
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.error(_MSG_ERROR_TMPL, exception)  # WHY: User-facing error
             logging.error(_MSG_ERROR_LOG, context.site_name, exception)  # WHY: Trace the failure
             deps.DataExporter.write_with_format_selection([], context.filename)  # WHY: Write empty export on failure
 
     @staticmethod
     def _print_intro_and_refresh(deps: SimpleNamespace) -> None:
         """Emit the banner + refresh notice and run the canonical metric refresh."""
-        print(_BANNER)  # WHY: User-facing banner
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info(_BANNER)  # WHY: User-facing banner
         logging.info(_MSG_START)  # WHY: Trace workflow start
-        print(_MSG_REFRESH)  # WHY: Inform about the metric refresh
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info(_MSG_REFRESH)  # WHY: Inform about the metric refresh
         deps.ConstDefinitionsExporter(deps.apisession).export_all()  # WHY: Regenerate ConstInsightMetrics.csv
 
     @classmethod
@@ -292,7 +309,8 @@ class SiteClientInsightsService:
         )  # WHY: Fetch + preview
         client_input = cls._read_client_input(deps)  # WHY: Prompt for the client selection
         if not client_input:  # WHY: User pressed Enter to skip
-            print(_MSG_SKIP_EMPTY)  # WHY: Inform the user
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.warning(_MSG_SKIP_EMPTY)  # WHY: Inform the user
             return None  # WHY: Abort the workflow
         normalized_mac = cls._resolve_normalized_mac(deps, client_input, clients)  # WHY: Resolve normalized MAC
         if normalized_mac is None:  # WHY: Any of the MAC guards fired (message already printed)
@@ -322,5 +340,6 @@ class SiteClientInsightsService:
         client_metrics = cls._load_client_metrics_or_empty(deps, context.filename)  # WHY: Load metric list
         if client_metrics is None:  # WHY: No metrics configured (empty file already written)
             return  # WHY: Abort the workflow
-        print(_MSG_RETRIEVING_TMPL.format(count=len(client_metrics)))  # WHY: Progress info line
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info(_MSG_RETRIEVING_TMPL, len(client_metrics))  # WHY: Progress info line
         cls._run_collect_and_export(deps, context, client_metrics)  # WHY: Guarded fetch + export
