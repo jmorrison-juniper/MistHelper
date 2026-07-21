@@ -271,10 +271,13 @@ def _print_summary(  # WHY: user-visible backup summary output
     """Log and print a human-readable summary of the backup contents."""
     summary = _build_summary(backup, image_filename)  # WHY: single source of formatted counts
     logger.info("Map backup saved: %s (%s)", backup_filename, summary)  # WHY: structured audit log
-    print(f"\n   [*] Map backup saved: {backup_filename}")  # WHY: CLI feedback line
+    # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+    logger.info("\n   [*] Map backup saved: %s", backup_filename)
     if image_filename:  # WHY: only show image line when there is one
-        print(f"       Image: {image_filename}")
-    print(f"       {summary}")  # WHY: always show the summary counts line
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("       Image: %s", image_filename)
+    # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+    logger.info("       %s", summary)
 
 
 def _fetch_map(request: BackupRequest) -> dict[str, Any] | None:  # WHY: fetch base map data
@@ -350,5 +353,6 @@ def backup_map_geometry(request: BackupRequest) -> str | None:  # WHY: public en
         return _perform_backup(request)
     except Exception as err:  # WHY: any failure surfaces as warning, not crash
         logger.exception("Map geometry backup failed: %s", err)  # WHY: full traceback in log
-        print(f"\n   [!] Warning: Could not backup map geometry: {err}")  # WHY: CLI feedback
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.warning("\n   [!] Warning: Could not backup map geometry: %s", err)
         return None
