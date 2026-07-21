@@ -29,7 +29,6 @@ _DEFAULT_MAX_THREADS = 5  # WHY: historical default fan-out width preserved for 
 _THREAD_NAME_PREFIX = "SSH"  # WHY: named worker threads aid diagnostic traces.
 _REQUIRED_CREDS_MSG = "username and password are required"  # WHY: shared validation message.
 _SUMMARY_DIVIDER = "=" * 60  # WHY: verbatim console divider from the pre-refactor output.
-_STARTUP_TEMPLATE = "\n>> Starting SSH execution on {count} hosts ({threads} threads)"  # WHY: verbatim banner.
 
 
 # ---------------------------------------------------------------------------
@@ -134,7 +133,12 @@ class MultiHostRunner:
     @staticmethod
     def _log_startup(request: MultiHostRunRequest, logger: logging.Logger) -> None:
         """Emit the verbatim startup banner + info/debug context lines."""
-        print(_STARTUP_TEMPLATE.format(count=len(request.hosts), threads=request.max_threads))  # WHY: verbatim.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info(
+            "\n>> Starting SSH execution on %d hosts (%d threads)",
+            len(request.hosts),
+            request.max_threads,
+        )
         logger.info(  # WHY: high-level info line for operators watching the log stream.
             "Multi-host SSH execution: %d hosts, %d commands, %d threads",
             len(request.hosts),
@@ -314,17 +318,26 @@ class MultiHostRunner:
         logger: logging.Logger,
     ) -> None:
         """Print the multi-host execution summary block (verbatim)."""
-        print(f"\n{_SUMMARY_DIVIDER}")  # WHY: verbatim leading blank + divider.
-        print("[STATUS] EXECUTION SUMMARY")  # WHY: verbatim banner text.
-        print(_SUMMARY_DIVIDER)  # WHY: verbatim trailing divider.
-        print(f"Total hosts: {len(hosts)}")  # WHY: verbatim total-hosts line.
-        print(f"Successful: {len(state.successful_hosts)} [OK]")  # WHY: verbatim success line.
-        print(f"Failed: {len(state.failed_hosts)} [ERROR]")  # WHY: verbatim failure line.
-        print("Per-host logs: per-host-logs/ssh_output_<hostname>_<timestamp>.log")  # WHY: verbatim hint.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("\n%s", _SUMMARY_DIVIDER)
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("[STATUS] EXECUTION SUMMARY")
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("%s", _SUMMARY_DIVIDER)
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("Total hosts: %d", len(hosts))
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("Successful: %d [OK]", len(state.successful_hosts))
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("Failed: %d [ERROR]", len(state.failed_hosts))
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("Per-host logs: per-host-logs/ssh_output_<hostname>_<timestamp>.log")
         if state.successful_hosts:  # WHY: skip empty success block for cleaner output.
-            print(f"\n[OK] Successful hosts: {', '.join(state.successful_hosts)}")  # WHY: verbatim.
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.info("\n[OK] Successful hosts: %s", ", ".join(state.successful_hosts))
         if state.failed_hosts:  # WHY: skip empty failure block for cleaner output.
-            print(f"\n[ERROR] Failed hosts: {', '.join(state.failed_hosts)}")  # WHY: verbatim.
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.info("\n[ERROR] Failed hosts: %s", ", ".join(state.failed_hosts))
         logger.info(  # WHY: final info line summarizing the run outcome.
             "Multi-host execution completed: %d/%d successful", len(state.successful_hosts), len(hosts)
         )
