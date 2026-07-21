@@ -13,9 +13,12 @@ change the observable operator contract.
 
 from __future__ import annotations
 
+import logging
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from src.websocket.diagnostics import ping_executor as ping_mod
 from src.websocket.diagnostics.ping_executor import PingDeviceExecutor
@@ -258,15 +261,22 @@ def test_render_empty_result_prints_keys(capsys) -> None:
 # ---------- _render_ping_result ----------
 
 
-def test_render_ping_result_full(capsys) -> None:
-    """Renders banner + raw/other + extras + closer."""
+def test_render_ping_result_full(capsys, caplog: pytest.LogCaptureFixture) -> None:
+    """Renders banner + raw/other + extras + closer.
+
+    Extras are emitted via common.print_extra_result_fields which uses the
+    module-scoped logger (post slice #886/74), so 'extra1' is captured via
+    caplog rather than capsys.
+    """
+    caplog.set_level(logging.INFO, logger="src.websocket.diagnostics.common")
     payload = {"raw": "r", "Output": "o", "extra1": "v"}
     PingDeviceExecutor()._render_ping_result(payload, "1.1.1.1")
     out = capsys.readouterr().out
     assert "PING RESULTS:" in out
     assert "RAW OUTPUT:" in out
     assert "OTHER OUTPUT:" in out
-    assert "extra1" in out
+    log_out = "\n".join(r.getMessage() for r in caplog.records)
+    assert "extra1" in log_out
 
 
 def test_render_ping_result_empty_output_shows_diagnostic(capsys) -> None:
