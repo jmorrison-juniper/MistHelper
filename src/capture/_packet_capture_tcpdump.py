@@ -11,7 +11,10 @@ manager so shared state (``self._mm``) remains transparent.
 
 from __future__ import annotations  # WHY: postponed evaluation for consistency with parent module
 
+import logging  # WHY: module-scoped logger for #886 print-to-logger migration.
 from typing import Any  # WHY: manager is treated opaquely to avoid import cycles
+
+logger = logging.getLogger(__name__)  # WHY: module-scoped logger for #886 print-to-logger migration.
 
 
 def _pc() -> Any:  # WHY: lazy accessor exposing packet_capture module for name lookup
@@ -166,14 +169,20 @@ class PacketCaptureTcpdump:  # WHY: wraps tcpdump menu helpers extracted from Pa
     def print_tcpdump_menu() -> None:  # WHY: renders the picker header + all filter sections
         """Print the tcpdump filter selection menu using data-driven sections."""
         separator = "=" * 80  # WHY: consistent visual boundary matching original format
-        print(f"\n{separator}")  # WHY: leading newline improves terminal readability
-        print(" PACKET FILTER SELECTION (tcpdump expression)")  # WHY: menu title matches prior UX
-        print(separator)  # WHY: bottom border of the title band
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("\n%s", separator)  # WHY: leading newline improves terminal readability
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info(" PACKET FILTER SELECTION (tcpdump expression)")  # WHY: menu title matches prior UX
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("%s", separator)  # WHY: bottom border of the title band
         for header, items in _MENU_SECTIONS:  # WHY: iterate the module-level section table
-            print(f"\n--- {header} ---")  # WHY: preserves original section header format
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.info("\n--- %s ---", header)  # WHY: preserves original section header format
             for item in items:  # WHY: render each numbered filter line
-                print(f"  {item}")  # WHY: leading spaces match legacy indentation
-        print(separator)  # WHY: closes the menu block visually
+                # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+                logger.info("  %s", item)  # WHY: leading spaces match legacy indentation
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("%s", separator)  # WHY: closes the menu block visually
 
     @staticmethod
     def get_tcpdump_expressions() -> dict[str, str]:  # WHY: exposes copy of choice-to-expression map
@@ -198,32 +207,39 @@ class PacketCaptureTcpdump:  # WHY: wraps tcpdump menu helpers extracted from Pa
             return self._announce_expression(_EXPRESSIONS[choice])  # WHY: uniform user feedback
         if choice == "40":  # WHY: sentinel for custom-expression branch
             return self._prompt_custom_expression()  # WHY: isolate custom-entry logic
-        print("\n! Invalid choice, using no filter")  # WHY: explicit fallback message to user
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.warning("\n! Invalid choice, using no filter")  # WHY: explicit fallback message to user
         return ""  # WHY: safe default when user enters an unknown menu number
 
     @staticmethod
     def _announce_expression(expr: str) -> str:  # WHY: shared user-feedback branch for happy-path selection
         """Print user feedback for a chosen expression and return it."""
         if expr:  # WHY: distinguish "no filter" from a real expression for UX clarity
-            print(f"\n! Filter applied: {expr}")  # WHY: confirm to the user which filter is active
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.info("\n! Filter applied: %s", expr)  # WHY: confirm to the user which filter is active
         else:  # WHY: explicit branch for "no filter" case
-            print("\n! Filter: None (capturing all traffic)")  # WHY: reassure user that no filter is active
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.info("\n! Filter: None (capturing all traffic)")  # WHY: reassure user that no filter is active
         return expr  # WHY: hand the value back to the caller unchanged
 
     @staticmethod
     def _prompt_custom_expression() -> str:  # WHY: isolates free-form input branch from menu-driven path
         """Prompt for and validate a custom tcpdump expression."""
-        print("\nEnter custom tcpdump expression:")  # WHY: guide user into free-form input mode
-        print("  Examples: 'host 192.168.1.1', 'net 10.0.0.0/8', 'port 8080'")  # WHY: help user with syntax
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("\nEnter custom tcpdump expression:")  # WHY: guide user into free-form input mode
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("  Examples: 'host 192.168.1.1', 'net 10.0.0.0/8', 'port 8080'")  # WHY: help user with syntax
         custom_expr = _lazy_input_utils().safe_input(  # WHY: safe wrapper handles Ctrl-C / EOF
             "Expression: ",  # WHY: minimal prompt matches legacy behavior
             context="tcpdump_custom",  # WHY: distinct audit tag from menu selection
             allow_empty=True,  # WHY: allow user to cancel by submitting an empty line
         )
         if custom_expr:  # WHY: only echo confirmation when a real expression was supplied
-            print(f"\n! Filter applied: {custom_expr}")  # WHY: confirm active filter to the user
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.info("\n! Filter applied: %s", custom_expr)  # WHY: confirm active filter to the user
             return str(custom_expr)  # WHY: coerce to str so return type stays uniform
-        print("\n! No filter applied")  # WHY: explicit "no filter" feedback when input was empty
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("\n! No filter applied")  # WHY: explicit "no filter" feedback when input was empty
         return ""  # WHY: preserve legacy return type for downstream API calls
 
     @staticmethod
@@ -237,9 +253,12 @@ class PacketCaptureTcpdump:  # WHY: wraps tcpdump menu helpers extracted from Pa
         Returns:
             The selected format, either ``"pcap"`` or ``"stream"``.
         """
-        print("\nCapture format:")  # WHY: header for the two-option selector
-        print("  1. PCAP file - downloadable (default, recommended)")  # WHY: default choice for most users
-        print("  2. Stream to Mist Cloud (WebSocket real-time)")  # WHY: alternate for real-time monitoring
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("\nCapture format:")  # WHY: header for the two-option selector
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("  1. PCAP file - downloadable (default, recommended)")  # WHY: default choice for most users
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("  2. Stream to Mist Cloud (WebSocket real-time)")  # WHY: alternate for real-time monitoring
         format_choice = _lazy_input_utils().safe_input(  # WHY: reuse safe wrapper for consistency
             "Enter choice (default 1): ",  # WHY: prompt matches legacy UX
             default_value="1",  # WHY: bias toward the downloadable pcap format
