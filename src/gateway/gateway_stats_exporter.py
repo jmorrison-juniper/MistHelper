@@ -365,7 +365,8 @@ class GatewayStatsExporter:  # WHY: namespace class kept for legacy call-sites i
             return gateway_data
         except Exception as exception:  # pylint: disable=broad-exception-caught  # WHY: preserve legacy message.
             logging.error("! Failed to load %s: %s", stats_file, exception)
-            print(f"! Failed to load {stats_file}: {exception}")
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logging.info("! Failed to load %s: %s", stats_file, exception)
             return None
 
     @staticmethod
@@ -448,25 +449,44 @@ class GatewayStatsExporter:  # WHY: namespace class kept for legacy call-sites i
         """Persist and display WAN conflict analysis results."""
         if not conflicts_found:  # WHY: guard clause — nothing to export or display.
             logging.info(" No internal WAN port IP conflicts found")
-            print(" No internal WAN port IP conflicts found - healthy WAN port configurations")
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logging.info(" No internal WAN port IP conflicts found - healthy WAN port configurations")
             return
         conflicts_found.sort(key=lambda x: (x.get("device_name", ""), x.get("port_name", "")))  # WHY: stable.
         DataExporter.write_with_format_selection(conflicts_found, CONFLICTS_CSV_FILENAME)  # WHY: persist rows.
         unique_gateways = {row.get("device_name", UNKNOWN_LABEL) for row in conflicts_found}  # WHY: dedupe.
         logging.info("! Exported %s conflicts from %s gateways", len(conflicts_found), len(unique_gateways))
-        print(f"! WAN port IP conflicts exported to {CONFLICTS_CSV_FILENAME} ({len(conflicts_found)} records)")
-        print(f"! Summary: {len(unique_gateways)} gateways with IP conflicts")
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logging.info(
+            "! WAN port IP conflicts exported to %s (%s records)",
+            CONFLICTS_CSV_FILENAME,
+            len(conflicts_found),
+        )
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logging.info("! Summary: %s gateways with IP conflicts", len(unique_gateways))
         GatewayStatsExporter._display_conflict_samples(conflicts_found)  # WHY: emit operator-facing sample.
 
     @staticmethod
     def _display_conflict_samples(conflicts_found: list[dict]) -> None:
         """Print a short conflict sample section for quick operator review."""
-        print("\n  Sample WAN Port IP Conflicts Found:")  # WHY: legacy banner preserved verbatim.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logging.info("\n  Sample WAN Port IP Conflicts Found:")
         for idx, record in enumerate(conflicts_found[:SAMPLE_CONFLICT_LIMIT], 1):  # WHY: top-N sample only.
-            print(
-                f"{idx:2d}. {record.get('device_name', UNKNOWN_LABEL)} ({record.get('site_name', UNKNOWN_SITE_NAME)})"
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logging.info(
+                "%2d. %s (%s)",
+                idx,
+                record.get("device_name", UNKNOWN_LABEL),
+                record.get("site_name", UNKNOWN_SITE_NAME),
             )
-            print(f"    Port {record.get('port_name', UNKNOWN_LABEL)} has IP {record.get('port_ip', UNKNOWN_LABEL)}")
-            print(f"    Conflicts with: {record.get('conflict_with_ports', UNKNOWN_LABEL)}\n")
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logging.info(
+                "    Port %s has IP %s",
+                record.get("port_name", UNKNOWN_LABEL),
+                record.get("port_ip", UNKNOWN_LABEL),
+            )
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logging.info("    Conflicts with: %s\n", record.get("conflict_with_ports", UNKNOWN_LABEL))
         if len(conflicts_found) > SAMPLE_CONFLICT_LIMIT:  # WHY: only emit trailer when truncation happened.
-            print(f"... and {len(conflicts_found) - SAMPLE_CONFLICT_LIMIT} more conflicted ports")
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logging.info("... and %s more conflicted ports", len(conflicts_found) - SAMPLE_CONFLICT_LIMIT)
