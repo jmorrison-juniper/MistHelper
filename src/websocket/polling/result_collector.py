@@ -124,7 +124,26 @@ class ResultCollector:  # WHY: Public API preserved for WebSocketManager collabo
         results_lock: threading.Lock,
         logger: logging.Logger,
         debug_mode: bool,
-    ) -> None:  # WHY: Preserve original four-argument constructor for the manager.
+    ) -> None:
+        """Bind the collector to the manager-owned results map and its lock.
+
+        Why:
+            The four constructor arguments are the exact wiring
+            ``WebSocketManager`` supplies (results dict, its lock, a logger,
+            and a debug flag). They are packed into a single frozen
+            ``_CollectorDeps`` so downstream helpers receive one immutable
+            reference instead of four positional parameters, keeping method
+            signatures within the project's argument-count limits.
+
+        Args:
+            command_results: Shared results map owned by ``WebSocketManager``;
+                segments are appended under the session id.
+            results_lock: Threading lock that guards ``command_results`` from
+                concurrent mutation by the WebSocket callback thread.
+            logger: Logger used for start/timeout/completion traces.
+            debug_mode: When True, verbatim debug prints for the polling loop
+                are emitted alongside logger output.
+        """
         self._deps = _CollectorDeps(  # WHY: Pack manager state into one immutable holder.
             results=command_results,
             lock=results_lock,

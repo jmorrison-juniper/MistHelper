@@ -50,6 +50,26 @@ class MessageRouter:  # WHY: Public API preserved for WebSocketManager collabora
         logger: logging.Logger,
         debug_mode: bool,
     ) -> None:  # WHY: Preserve original five-argument constructor for the manager.
+        """Bundle manager-owned collaborators into an immutable ``_RouterCtx``.
+
+        Why:
+            The original ``WebSocketManager._on_message`` passed five loose
+            arguments each call; packing them into a frozen dataclass makes
+            attribute access cheaper (slots) and prevents accidental mutation
+            by dispatch handlers while preserving the constructor signature
+            expected by manager-side wiring.
+
+        Args:
+            command_results: Session → response-segments map owned by the
+                manager. Mutated by handlers under ``results_lock``.
+            results_lock: Threading lock that serializes writes to
+                ``command_results``.
+            confirmed_subscriptions: Set of channel names that have received
+                a confirmation frame; used to gate downstream dispatch.
+            logger: Logger used for parity trace lines (preserved verbatim
+                from the pre-extraction ``_on_message`` code path).
+            debug_mode: Verbose-trace toggle propagated from the manager.
+        """
         self._ctx = _RouterCtx(  # WHY: Pack manager state into one immutable holder.
             results=command_results,
             lock=results_lock,
