@@ -7,6 +7,22 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 97/N: retire `print()` in `src/gateway/_wan2_variable_device.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced all 19 `print()` calls in
+  `src/gateway/_wan2_variable_device.py` with a module-scoped
+  `logger = logging.getLogger(__name__)` and `logger.info(...)` emissions using
+  `%`-style deferred formatting to satisfy G004. All 19 sites are step banners
+  (Step 7 header, optimization/fetch progress notices, apply/revert-mode
+  headers, no-devices / found-devices / intro / summary / fast-mode /
+  sequential-mode banners), so every conversion maps to `logger.info`.
+  Preserved implicit-concatenation strings were merged into single format
+  arguments. Each converted call carries the standard `# WHY: preserve
+  operator notice verbatim; route through logger for capture/redirection.`
+  comment above the emission. Existing 101 tests in
+  `tests/unit/test_wan2_variable.py` remain green (no `capsys` assertions
+  targeted these prints).
+
 ### #886 Phase 2 slice 96/N: retire `print()` in `src/device/_utility_commands_websocket.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 19 `print()` calls in

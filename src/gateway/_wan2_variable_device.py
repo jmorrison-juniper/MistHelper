@@ -19,6 +19,8 @@ from tqdm import tqdm  # WHY: progress bars over site and device lists
 
 from ._wan2_variable_cluster import _ClusterBase  # WHY: parent-proxy pattern shared with peers
 
+logger = logging.getLogger(__name__)  # WHY: module-scoped logger for #886 print-to-logger migration.
+
 
 class _Wan2VariableDevice(_ClusterBase):
     """Device scan + per-device migration helpers."""
@@ -31,7 +33,11 @@ class _Wan2VariableDevice(_ClusterBase):
         """Find devices with port overrides matching the search pattern."""
         import mistapi  # pylint: disable=import-outside-toplevel  # WHY: lazy import breaks cycle
 
-        print("\n  Step 7: Migrating device-level port overrides" f" ({self._operation_mode.upper()} mode)...")
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info(
+            "\n  Step 7: Migrating device-level port overrides (%s mode)...",
+            self._operation_mode.upper(),
+        )
         self._print_device_migration_header()  # WHY: mode banner
         affected, site_to_template = self._build_affected_site_set(sites, migrated_template_ids)
         logging.info(
@@ -39,10 +45,19 @@ class _Wan2VariableDevice(_ClusterBase):
             len(affected),
             len(sites),
         )  # WHY: audit scope
-        print(f"  >> Optimization: Checking only {len(affected)}" f" affected sites (not all {len(sites)} sites)")
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info(
+            "  >> Optimization: Checking only %s affected sites (not all %s sites)",
+            len(affected),
+            len(sites),
+        )
         if not affected:  # WHY: nothing to scan when zero affected sites
             return []  # WHY: skip API calls entirely
-        print("  >> Fetching gateway device configurations" f" for {len(affected)} affected sites...")
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info(
+            "  >> Fetching gateway device configurations for %s affected sites...",
+            len(affected),
+        )
         return self._scan_site_devices(affected, site_to_template, mistapi)  # WHY: hand off to scanner
 
     def _print_device_migration_header(self) -> None:
@@ -50,11 +65,15 @@ class _Wan2VariableDevice(_ClusterBase):
         search = self._search_pattern  # WHY: alias for readability
         replace = self._replacement_value  # WHY: alias for readability
         if self._operation_mode == "apply":  # WHY: apply-mode copy
-            print("  !? CRITICAL: Preserving static IP" " configurations on devices")  # WHY: highlight preservation
-            print(f"  !? Renaming device overrides from" f" '{search}' to '{replace}'")  # WHY: describe edit
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.info("  !? CRITICAL: Preserving static IP configurations on devices")
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.info("  !? Renaming device overrides from '%s' to '%s'", search, replace)
             return  # WHY: skip revert branch
-        print("  !? REVERT: Updating device overrides" " to match template reversion")  # WHY: revert-mode copy
-        print(f"  !? Renaming device overrides from" f" '{search}' to '{replace}'")  # WHY: describe edit
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("  !? REVERT: Updating device overrides to match template reversion")
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("  !? Renaming device overrides from '%s' to '%s'", search, replace)
 
     def _build_affected_site_set(
         self,
@@ -299,7 +318,8 @@ class _Wan2VariableDevice(_ClusterBase):
     ) -> list[dict[str, Any]]:
         """Orchestrate device override migrations."""
         if not devices_needing_migration:  # WHY: empty list -> emit no-op message and return
-            print("\n  No devices with ge-0/0/1 overrides found" " - no device migrations needed")
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.info("\n  No devices with ge-0/0/1 overrides found - no device migrations needed")
             logging.info("No device-level override migrations required")  # WHY: audit no-op
             return []  # WHY: nothing to report
         self._print_device_migration_intro(len(devices_needing_migration))  # WHY: extracted for length
@@ -311,9 +331,12 @@ class _Wan2VariableDevice(_ClusterBase):
     @staticmethod
     def _print_device_migration_intro(count: int) -> None:
         """Print the migration-intro block for the found device count."""
-        print(f"\n  Found {count} devices with port overrides to migrate")  # WHY: summary
-        print("  These devices will have port_config keys renamed" " from 'ge-0/0/1' to '{{wan2_interface}}'")
-        print("  This preserves static IP configurations" " after template migration")  # WHY: explain intent
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("\n  Found %s devices with port overrides to migrate", count)
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("  These devices will have port_config keys renamed from 'ge-0/0/1' to '{{wan2_interface}}'")
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("  This preserves static IP configurations after template migration")
 
     def _dispatch_device_migration(
         self,
@@ -331,11 +354,16 @@ class _Wan2VariableDevice(_ClusterBase):
         """Print the post-migration counters block."""
         success = sum(1 for r in results if r["status"] == "SUCCESS")  # WHY: aggregate for banner
         failed = len(results) - success  # WHY: derive failure count
-        print("\n  Device Override Migration Complete!")  # WHY: banner
-        print(f"  Devices Processed: {len(results)}")  # WHY: total
-        print(f"  Successfully Migrated: {success}")  # WHY: success count
-        print(f"  Failed: {failed}")  # WHY: failure count
-        print("  Device migration report:" " GatewayDevice_WAN2_Override_Migration.csv")  # WHY: file hint
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("\n  Device Override Migration Complete!")
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("  Devices Processed: %s", len(results))
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("  Successfully Migrated: %s", success)
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("  Failed: %s", failed)
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("  Device migration report: GatewayDevice_WAN2_Override_Migration.csv")
         logging.info("Device override migration: %s successful, %s failed", success, failed)  # WHY: audit
 
     def _migrate_devices_fast(self, devices: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -343,7 +371,8 @@ class _Wan2VariableDevice(_ClusterBase):
         assert self._pool_fn is not None  # noqa: S101  # WHY: preserved from original module
 
         count = len(devices)  # WHY: banner count
-        print(f"\n  !? Fast mode enabled: Processing {count}" " devices with connection pooling")
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("\n  !? Fast mode enabled: Processing %s devices with connection pooling", count)
         logging.info("Fast mode: Using connection pool for %s device migrations", count)  # WHY: audit
         results, failed = self._pool_fn(
             work_items=devices,
@@ -376,9 +405,11 @@ class _Wan2VariableDevice(_ClusterBase):
     def _print_sequential_banner(count: int, fast: bool) -> None:
         """Print the sequential-mode intro banner."""
         if fast and count <= 5:  # WHY: fast requested but too few devices
-            print(f"\n  Sequential mode: Processing {count}" " devices (fast mode requires >5 devices)")
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.info("\n  Sequential mode: Processing %s devices (fast mode requires >5 devices)", count)
             return  # WHY: alternate copy branch handled
-        print(f"\n  Sequential mode: Processing {count} devices")  # WHY: default banner
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("\n  Sequential mode: Processing %s devices", count)
 
 
 def _match_port_rename(key: str, search: str, replacement: str) -> str | None:
