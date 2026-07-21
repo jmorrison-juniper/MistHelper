@@ -11,6 +11,7 @@ from typing import Any, cast  # WHY: Manager/prompt helpers are dynamic MistHelp
 # Module-level constants - dividers, banner text, prompts, and event log strings extracted so
 # every method has fixed CC and no repeated string literals appear inline.
 _MIST_MODULE = "MistHelper"  # WHY: Single source for the late-import target
+logger = logging.getLogger(__name__)  # WHY: module-scoped logger for #886 print-to-logger migration.
 _LOG_START = "Starting site scan capture"  # WHY: Event log message (single-source)
 _LOG_SITE_ABORT = "No site_id returned from selection - aborting capture"  # WHY: Abort trace on missing site
 _LOG_PROGRESS = "Proceeding with scan capture configuration for site: %s"  # WHY: Progress trace template
@@ -149,47 +150,49 @@ class SiteScanCaptureService:
     @staticmethod
     def _print_intro() -> None:
         """Print the scan radio capture configuration banner."""
-        print("\n" + _DIVIDER_DASH)  # WHY: Top divider
-        print(_INTRO_TITLE)  # WHY: Section title
-        print(_DIVIDER_DASH)  # WHY: Bottom divider
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("\n%s", _DIVIDER_DASH)  # WHY: Top divider
+        logger.info("%s", _INTRO_TITLE)  # WHY: Section title
+        logger.info("%s", _DIVIDER_DASH)  # WHY: Bottom divider
 
     @staticmethod
     def _select_ap(manager: Any, helpers: _Helpers, site_id: str) -> tuple[str | None, str]:
         """Select the target AP; return (ap_mac, mode) where mode is 'single', 'all', or 'abort'."""
-        logging.debug("Prompting for AP selection from site inventory")  # WHY: Trace the AP prompt
+        logger.debug("Prompting for AP selection from site inventory")  # WHY: Trace the AP prompt
         prompt_utils = helpers.prompt_network_device_utils(
             manager.mist_session, helpers.input_utils.safe_input, helpers.device_utils.expand_port_range_string
         )  # WHY: Build the device prompt helper
         ap_mac = prompt_utils.select_ap_mac(site_id)  # WHY: Interactive AP picker (may return the ALL_APS sentinel)
         if not ap_mac:  # WHY: Nothing selected or selection failed
-            logging.warning("No AP selected or AP selection failed - aborting capture")  # WHY: Trace the abort
+            logger.warning("No AP selected or AP selection failed - aborting capture")  # WHY: Trace the abort
             return None, _MODE_ABORT  # WHY: Signal abort
         if ap_mac == _ALL_APS_SENTINEL:  # WHY: User chose to capture from every AP
-            logging.info("User selected all APs - launching multi-AP captures")  # WHY: Trace the all-AP path
+            logger.info("User selected all APs - launching multi-AP captures")  # WHY: Trace the all-AP path
             return None, _MODE_ALL  # WHY: Signal the all-AP path (launched by caller)
         normalized_ap_mac = manager.normalize_mac_address(ap_mac)  # WHY: Normalize the single AP MAC
-        logging.debug("Selected and normalized AP MAC: %s", normalized_ap_mac)  # WHY: Trace the normalized MAC
+        logger.debug("Selected and normalized AP MAC: %s", normalized_ap_mac)  # WHY: Trace the normalized MAC
         return normalized_ap_mac, _MODE_SINGLE  # WHY: Single-AP capture path
 
     @staticmethod
     def _select_band(input_utils: Any) -> str:
         """Prompt for the radio band; return the resolved band code (defaults to 5 GHz)."""
-        logging.debug("Prompting for band selection")  # WHY: Trace the band prompt
-        print(_BAND_HEADER)  # WHY: Prompt header
-        print(_BAND_OPT_24)  # WHY: 2.4 GHz option
-        print(_BAND_OPT_5)  # WHY: 5 GHz option (default)
-        print(_BAND_OPT_6)  # WHY: 6 GHz option
+        logger.debug("Prompting for band selection")  # WHY: Trace the band prompt
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("%s", _BAND_HEADER)  # WHY: Prompt header
+        logger.info("%s", _BAND_OPT_24)  # WHY: 2.4 GHz option
+        logger.info("%s", _BAND_OPT_5)  # WHY: 5 GHz option (default)
+        logger.info("%s", _BAND_OPT_6)  # WHY: 6 GHz option
         band_choice = input_utils.safe_input(
             _PROMPT_BAND, default_value="2", context="band"
         )  # WHY: Read the band choice
         band = _BAND_MAP.get(band_choice, "5")  # WHY: Map to a band code, defaulting to 5 GHz
-        logging.debug("Band selected: %s (choice: %s)", band, band_choice)  # WHY: Trace the resolved band
+        logger.debug("Band selected: %s (choice: %s)", band, band_choice)  # WHY: Trace the resolved band
         return band  # WHY: Resolved band code
 
     @staticmethod
     def _prompt_channel(input_utils: Any, band: str) -> int | None:
         """Prompt for a band-appropriate channel; return None to abort (message printed)."""
-        logging.debug("Prompting for channel")  # WHY: Trace the channel prompt
+        logger.debug("Prompting for channel")  # WHY: Trace the channel prompt
         prompt_text, default_value = _CHANNEL_PROMPTS[band]  # WHY: Table-driven per-band prompt
         channel_str = input_utils.safe_input(
             prompt_text, default_value=default_value, context="channel"
@@ -197,34 +200,37 @@ class SiteScanCaptureService:
         try:  # WHY: Validate the channel parses as an integer
             channel = int(channel_str)  # WHY: Parse the channel
         except ValueError:  # WHY: Non-numeric channel
-            print(f"\n! Invalid channel: {channel_str}")  # WHY: Inform the user
-            logging.error("Invalid channel value: %s", channel_str)  # WHY: Trace the failure
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.warning("\n! Invalid channel: %s", channel_str)  # WHY: Inform the user
+            logger.error("Invalid channel value: %s", channel_str)  # WHY: Trace the failure
             return None  # WHY: Abort
-        logging.debug("Channel selected: %s", channel)  # WHY: Trace the channel
+        logger.debug("Channel selected: %s", channel)  # WHY: Trace the channel
         return channel  # WHY: Validated channel
 
     @staticmethod
     def _print_bandwidth_menu(band: str) -> None:
         """Emit the bandwidth menu rows (base + per-band extras) with fixed CC."""
-        print(_BW_HEADER)  # WHY: Prompt header
-        print(_BW_OPT_20)  # WHY: 20 MHz option
-        print(_BW_OPT_40)  # WHY: 40 MHz option
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("%s", _BW_HEADER)  # WHY: Prompt header
+        logger.info("%s", _BW_OPT_20)  # WHY: 20 MHz option
+        logger.info("%s", _BW_OPT_40)  # WHY: 40 MHz option
         for row in _BANDWIDTH_EXTRA_ROWS.get(band, ()):  # WHY: Table-driven extra rows per band
-            print(row)  # WHY: 80 MHz for 5/6 GHz, 160 MHz for 6 GHz
+            logger.info("%s", row)  # WHY: 80 MHz for 5/6 GHz, 160 MHz for 6 GHz
 
     @classmethod
     def _select_bandwidth(cls, input_utils: Any, band: str) -> str | None:
         """Prompt for a band-appropriate bandwidth; return None to abort (message printed)."""
-        logging.debug("Prompting for bandwidth")  # WHY: Trace the bandwidth prompt
+        logger.debug("Prompting for bandwidth")  # WHY: Trace the bandwidth prompt
         cls._print_bandwidth_menu(band)  # WHY: Emit the menu rows via a helper (keeps CC low)
         bw_choice = input_utils.safe_input(
             _PROMPT_BW, default_value="1", context="bandwidth"
         )  # WHY: Read the bandwidth choice
         bandwidth = _BANDWIDTH_MAP.get(bw_choice, "20")  # WHY: Map to MHz, defaulting to 20 MHz
-        logging.debug("Bandwidth selected: %s MHz (choice: %s)", bandwidth, bw_choice)  # WHY: Trace the value
+        logger.debug("Bandwidth selected: %s MHz (choice: %s)", bandwidth, bw_choice)  # WHY: Trace the value
         if band == "24" and bandwidth not in _BW_ALLOWED_24:  # WHY: 2.4 GHz only supports 20/40 MHz
-            print(_INVALID_BW_24_MSG.format(value=bandwidth))  # WHY: Inform the user
-            logging.error(_LOG_INVALID_BW_24, bandwidth)  # WHY: Trace the failure
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.warning("%s", _INVALID_BW_24_MSG.format(value=bandwidth))  # WHY: Inform the user
+            logger.error(_LOG_INVALID_BW_24, bandwidth)  # WHY: Trace the failure
             return None  # WHY: Abort
         return bandwidth  # WHY: Validated bandwidth
 
@@ -235,15 +241,17 @@ class SiteScanCaptureService:
         try:  # WHY: Validate that the input parses as an integer
             value = int(raw)  # WHY: Parse the integer
         except ValueError:  # WHY: Non-numeric input
-            print(f"\n! Invalid {spec.invalid_label}: {raw}")  # WHY: Inform the user
-            logging.error("Invalid %s value: %s", spec.invalid_label, raw)  # WHY: Trace the failure
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.warning("\n! Invalid %s: %s", spec.invalid_label, raw)  # WHY: Inform the user
+            logger.error("Invalid %s value: %s", spec.invalid_label, raw)  # WHY: Trace the failure
             return None  # WHY: Abort
         if value < spec.low or value > spec.high:  # WHY: Enforce the inclusive bounds
             for line in spec.range_lines:  # WHY: Print each range-error line
-                print(line)  # WHY: Inform the user
-            logging.error("%s out of range: %s", spec.invalid_label, value)  # WHY: Trace the range failure
+                # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+                logger.warning("%s", line)  # WHY: Inform the user
+            logger.error("%s out of range: %s", spec.invalid_label, value)  # WHY: Trace the range failure
             return None  # WHY: Abort
-        logging.debug("%s set: %s", spec.invalid_label, value)  # WHY: Trace the accepted value
+        logger.debug("%s set: %s", spec.invalid_label, value)  # WHY: Trace the accepted value
         return value  # WHY: Validated integer
 
     @classmethod
@@ -260,9 +268,10 @@ class SiteScanCaptureService:
     @staticmethod
     def _prompt_loop_mode(input_utils: Any) -> bool:
         """Prompt whether to enable continuous loop mode."""
-        print(_LOOP_HEADER)  # WHY: Section header
-        print(_LOOP_LINE1)  # WHY: Explanation line 1
-        print(_LOOP_LINE2)  # WHY: Explanation line 2
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("%s", _LOOP_HEADER)  # WHY: Section header
+        logger.info("%s", _LOOP_LINE1)  # WHY: Explanation line 1
+        logger.info("%s", _LOOP_LINE2)  # WHY: Explanation line 2
         loop_mode = input_utils.safe_input(
             _PROMPT_LOOP, default_value="n", context="loop_mode"
         )  # WHY: Read the loop choice
@@ -282,7 +291,7 @@ class SiteScanCaptureService:
             "format": settings.capture_format,
             "max_pkt_len": _MAX_PKT_LEN,
         }  # WHY: Scan-capture payload (max packet length fixed at 1300 bytes)
-        logging.debug("Payload constructed: %s", payload)  # WHY: Trace the constructed payload
+        logger.debug("Payload constructed: %s", payload)  # WHY: Trace the constructed payload
         return payload  # WHY: Completed payload
 
     @staticmethod
@@ -302,12 +311,13 @@ class SiteScanCaptureService:
     @classmethod
     def _print_summary(cls, settings: _Settings) -> None:
         """Print the scan capture configuration summary using table-driven rendering."""
-        print("\n" + _DIVIDER_EQUAL)  # WHY: Top divider
-        print(_SUMMARY_TITLE)  # WHY: Section title
-        print(_DIVIDER_EQUAL)  # WHY: Divider
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("\n%s", _DIVIDER_EQUAL)  # WHY: Top divider
+        logger.info("%s", _SUMMARY_TITLE)  # WHY: Section title
+        logger.info("%s", _DIVIDER_EQUAL)  # WHY: Divider
         for label, value in cls._summary_rows(settings):  # WHY: Uniform label-value rendering
-            print(f"  {label}: {value}")  # WHY: One row per iteration (no branching)
-        print(_DIVIDER_EQUAL)  # WHY: Bottom divider
+            logger.info("  %s: %s", label, value)  # WHY: One row per iteration (no branching)
+        logger.info("%s", _DIVIDER_EQUAL)  # WHY: Bottom divider
 
     @staticmethod
     def _canonical_mac(value: str) -> str:
@@ -322,7 +332,7 @@ class SiteScanCaptureService:
                 manager.mist_session, site_id
             )  # WHY: List pcaps at the target site
         except Exception as error:  # WHY: Pre-check API failure - warn and proceed
-            logging.warning(_LOG_PRECHECK_FAIL, error)  # WHY: Trace the failure
+            logger.warning(_LOG_PRECHECK_FAIL, error)  # WHY: Trace the failure
             return None  # WHY: Signal proceed-without-check
         if response.status_code != 200:  # WHY: Only inspect successful responses
             return []  # WHY: Non-200 -> treat as no known captures
@@ -340,7 +350,8 @@ class SiteScanCaptureService:
     def _print_conflict_warning() -> None:
         """Emit the multi-line existing-capture warning banner."""
         for line in _WARN_LINES:  # WHY: Table-driven emission keeps CC fixed
-            print(line)  # WHY: One warning line per iteration
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.warning("%s", line)  # WHY: One warning line per iteration
 
     @classmethod
     def _confirm_conflict_override(cls, input_utils: Any) -> bool:
@@ -350,15 +361,17 @@ class SiteScanCaptureService:
             _PROMPT_OVERRIDE, default_value="n", context="capture_conflict_confirmation"
         ).lower()  # WHY: Read the override choice
         if proceed != _YES:  # WHY: User declined to proceed
-            print(_CANCEL_MSG)  # WHY: Inform the user
-            logging.info(_LOG_USER_CANCEL)  # WHY: Trace the cancel
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.info("%s", _CANCEL_MSG)  # WHY: Inform the user
+            logger.info(_LOG_USER_CANCEL)  # WHY: Trace the cancel
             return False  # WHY: Signal cancel
         return True  # WHY: User confirmed override
 
     @classmethod
     def _check_existing_captures(cls, manager: Any, helpers: _Helpers, site_id: str, ap_mac: str) -> bool:
         """Warn on an existing capture for the AP; return False if the user cancels."""
-        print(_PRE_CHECK_MSG.format(ap_mac=ap_mac))  # WHY: Inform the user of the pre-check
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("%s", _PRE_CHECK_MSG.format(ap_mac=ap_mac))  # WHY: Inform the user of the pre-check
         existing_captures = cls._list_existing_captures(helpers, manager, site_id)  # WHY: Fetch existing captures
         if existing_captures is None:  # WHY: Pre-check API failure (already logged) - proceed
             return True  # WHY: Non-fatal, continue with capture
@@ -414,26 +427,26 @@ class SiteScanCaptureService:
         """Build payload, show summary, wait for confirmation, pre-check conflict, then dispatch."""
         payload = cls._build_payload(settings)  # WHY: Construct the API payload
         cls._print_summary(settings)  # WHY: Show the configuration summary
-        logging.debug(_LOG_CONFIRM_WAIT)  # WHY: Trace the confirmation wait
+        logger.debug(_LOG_CONFIRM_WAIT)  # WHY: Trace the confirmation wait
         helpers.input_utils.safe_input(
             _PROMPT_CONFIRM, context="confirmation", allow_empty=True
         )  # WHY: Final confirmation before starting
         if not cls._check_existing_captures(manager, helpers, site_id, settings.ap_mac):  # WHY: Conflict pre-check
             return  # WHY: User cancelled due to an existing capture
-        logging.info(_LOG_EXECUTING)  # WHY: Trace the execution
+        logger.info(_LOG_EXECUTING)  # WHY: Trace the execution
         cls._dispatch(manager, site_id, payload, settings.enable_loop)  # WHY: Loop vs single capture dispatch
 
     @classmethod
     def execute(cls, manager: Any) -> None:
         """Run scan radio packet capture workflow using manager dependencies."""
         helpers = _Helpers(*_resolve_prompt_helpers())  # WHY: Frozen helper bundle (one arg instead of five)
-        logging.info(_LOG_START)  # WHY: Trace workflow start
+        logger.info(_LOG_START)  # WHY: Trace workflow start
         site_id = helpers.prompt_utils.select_site_with_logging()  # WHY: Prompt for the target site
-        logging.debug("Site selection returned: %s", site_id)  # WHY: Trace the selection
+        logger.debug("Site selection returned: %s", site_id)  # WHY: Trace the selection
         if not site_id:  # WHY: No site chosen
-            logging.warning(_LOG_SITE_ABORT)  # WHY: Trace the abort
+            logger.warning(_LOG_SITE_ABORT)  # WHY: Trace the abort
             return  # WHY: Abort the workflow
-        logging.debug(_LOG_PROGRESS, site_id)  # WHY: Trace progress
+        logger.debug(_LOG_PROGRESS, site_id)  # WHY: Trace progress
         cls._print_intro()  # WHY: Show the configuration banner
         ap_mac = cls._select_ap_or_dispatch(manager, helpers, site_id)  # WHY: Select AP or dispatch all-AP path
         if ap_mac is None:  # WHY: Abort mode or all-APs path already handled
