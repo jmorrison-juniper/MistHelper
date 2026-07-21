@@ -7,6 +7,30 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 89/N: retire `print()` in `src/gateway/gateway_export_utils.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced all 16 `print()` calls in
+  `src/gateway/gateway_export_utils.py` with module-scoped `logger.*`
+  emissions using `%`-style deferred formatting. Added
+  `logger = logging.getLogger(__name__)` alongside the pre-existing
+  `import logging` and paired `logging.error/warning` calls that already
+  wrapped several of the migrated prints. Level heuristic: cache-status
+  hits/misses in `_prime_management_ip_caches`, the 5-line completion
+  banner in `_emit_management_ip_summary`, and the banner/step lines in
+  `management_ips` and `templates` map to `logger.info`; the
+  `"No gateway templates found for this organization."` operator notice
+  (paired with the existing `logging.warning`) maps to `logger.warning`;
+  the "Required CSV file not found" error notice (paired with the
+  existing `logging.error`) maps to `logger.error`. Each migrated call
+  carries the standard
+  `# WHY: preserve operator notice verbatim; route through logger for capture/redirection.`
+  annotation and preserves the exact user-visible text operators grep on.
+- **Test migration**: converted the two `capsys` assertions in
+  `tests/unit/gateway/test_gateway_export_utils_extended.py` (banner +
+  completion lines for `_emit_management_ip_summary`; empty-template
+  warning for `templates`) to `caplog.at_level(...)` reads against the
+  module logger. Full module suite: 62/62 green.
+
 ### #886 Phase 2 slice 79/N: retire `print()` in `src/device/_utility_commands_clear.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 15 `print()` calls
