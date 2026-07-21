@@ -30,6 +30,8 @@ from src.utils.input_utils import InputUtils  # EOF-safe operator prompts.
 _CORRECTABLE = frozenset({"MISSING_SUITE", "MISSING_NUMBER", "WRONG_STREET", "CSV_BETTER", "AMBIGUOUS"})
 _YES = ("y", "yes")  # Accepted affirmative responses (case-insensitive).
 
+logger = logging.getLogger(__name__)  # WHY: Module-scoped logger routes former print() operator notices.
+
 
 class AddressCorrector:
     """Review and push corrected site addresses back to Mist (per-site confirmed)."""
@@ -62,7 +64,8 @@ class AddressCorrector:
         """Per-site BEFORE/AFTER + ``[y/N]``; push the accepted ones; return all outcomes."""
         targets = self.correctable(results)  # Rows eligible for write-back.
         if not targets:  # Nothing to push.
-            print("No correctable addresses to push.")  # Inform the operator.
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.info("No correctable addresses to push.")
             return []  # Empty outcome list.
         logging.info("Reviewing %d correctable address(es) for write-back", len(targets))  # Action-log start.
         self._print_intro(len(targets))  # Warn that this writes to Mist.
@@ -89,12 +92,15 @@ class AddressCorrector:
             ok = self._update_site_address(site_id, after)  # Fetch-modify-PUT the site record.
         except Exception as exc:  # noqa: BLE001 -- one failed write must not abort the batch.
             logging.warning("Write-back failed for site %s: %s", site_id, exc)  # Surface the cause.
-            print(f"  FAILED: {exc}")  # Inform the operator inline.
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.warning("  FAILED: %s", exc)
             return CorrectionOutcome(name, site_id, before, after, "failed", str(exc))
         if ok:  # Mist accepted the update.
-            print("  PUSHED.")  # Confirm inline.
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.info("  PUSHED.")
             return CorrectionOutcome(name, site_id, before, after, "pushed")
-        print("  FAILED: Mist rejected the update (check token permissions).")  # Read-only / rejected.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.warning("  FAILED: Mist rejected the update (check token permissions).")
         return CorrectionOutcome(name, site_id, before, after, "failed", "update rejected")
 
     def _update_site_address(self, site_id: str, address: str) -> bool:
@@ -114,15 +120,20 @@ class AddressCorrector:
     @staticmethod
     def _print_intro(count: int) -> None:
         """Print a clear banner before any Mist write occurs."""
-        print(f"\n--- Address write-back: {count} site(s) to review ---")  # Section header.
-        print("This WRITES to your Mist sites. Confirm each site with y/N (default No).\n")  # Safety note.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("\n--- Address write-back: %d site(s) to review ---", count)
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("This WRITES to your Mist sites. Confirm each site with y/N (default No).\n")
 
     @staticmethod
     def _show(name: str, before: str, after: str) -> None:
         """Display one site's current vs corrected address side by side."""
-        print(f"Site: {name}")  # Which site.
-        print(f"  BEFORE: {before or '(empty)'}")  # Current Mist address.
-        print(f"  AFTER:  {after}")  # Proposed corrected address.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("Site: %s", name)
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("  BEFORE: %s", before or "(empty)")
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("  AFTER:  %s", after)
 
     @staticmethod
     def _print_summary(outcomes: list[CorrectionOutcome]) -> None:
@@ -130,4 +141,5 @@ class AddressCorrector:
         pushed = sum(1 for o in outcomes if o.action == "pushed")  # Successful writes.
         skipped = sum(1 for o in outcomes if o.action == "skipped")  # Operator declines.
         failed = sum(1 for o in outcomes if o.action == "failed")  # API failures.
-        print(f"\nWrite-back complete: {pushed} pushed, {skipped} skipped, {failed} failed.")  # Tally line.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("\nWrite-back complete: %d pushed, %d skipped, %d failed.", pushed, skipped, failed)
