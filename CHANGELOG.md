@@ -7,6 +7,40 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 84/N: retire `print()` in `src/export/org_inventory_exporter.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced all 12 `print()` calls in
+  `src/export/org_inventory_exporter.py` with `logger.info(...)` emissions
+  using `%`-style deferred formatting to satisfy G004. Added a module-scoped
+  `logger = logging.getLogger(__name__)` (module previously imported
+  `logging` for its `save_raw_json` helper but had no module logger).
+  Level heuristic: all twelve migrated sites are operator-visible status
+  lines (raw-JSON summary counts, VC-shell dashboard-parity note, menu 25
+  section headers, weekly/summary/master output paths and row counts,
+  device/gateway export confirmations, and the two "All Devices with Site
+  and Address Info" / "Gateways with Site and Address Info" banners), so
+  each maps to `logger.info`. Two helper docstrings updated from "Print" to
+  "Log" to match the new emission channel: `_emit_vc_shell_dashboard_diff`
+  and `_print_combined_inventory_summary` (function names left unchanged
+  to avoid churn in call sites). Each migrated call carries the standard
+  `# WHY: preserve operator notice verbatim; route through logger for
+  capture/redirection.` annotation.
+- **Test migration (Changed)**: `tests/unit/test_org_inventory_exporter_helpers.py`
+  migrated six `capsys.readouterr().out` assertions to `caplog.text` under
+  `caplog.at_level(logging.INFO, logger="src.export.org_inventory_exporter")`.
+  The affected tests cover `_emit_vc_shell_dashboard_diff` (three-line
+  dashboard-parity note), `_log_combined_inventory_vc_summary` (silent
+  path + emits-dashboard-note path), `_print_combined_inventory_summary`
+  (weekly / summary / master output naming), and the flatten/sort/export
+  device + gateway helpers. The "stays silent" assertion inverted from
+  `capsys.readouterr().out == ""` to `"provisioned VC shells" not in
+  caplog.text`, preserving the original behavioural contract now that the
+  module writes to the logger instead of stdout.
+- **Rationale**: brings `src/export/org_inventory_exporter.py` into
+  compliance with the module-by-module rollout of Ruff `T201` (`print()`
+  banned) and prepares the file for the eventual global flip in
+  `pyproject.toml`.
+
 ### #886 Phase 2 slice 83/N: retire `print()` in `src/maps/_flask_viewer.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 8 `print()` calls in
