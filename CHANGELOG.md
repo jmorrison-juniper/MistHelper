@@ -7,6 +7,25 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 95/N: retire `print()` in `src/websocket/manager.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced all 18 `print()` calls in
+  `src/websocket/manager.py` with module-scoped `logger.*` emissions using
+  `%`-style deferred formatting to satisfy G004. Level heuristic: credential
+  missing/timeout warnings map to `logger.warning`; connection/subscription
+  failures map to `logger.error`; `[DEBUG]` gated echoes map to `logger.debug`;
+  success/status banners map to `logger.info`. Every migrated line carries the
+  standard verbatim WHY comment. Also removed a redundant `self.logger.debug`
+  call in `_debug_log_sub` that duplicated the module-level `logger.debug`
+  (same logger object → double emission).
+- **Tests (Changed)**: migrated 24 tests in
+  `tests/unit/websocket/test_manager.py` from `capsys` to `caplog`, with a
+  module-level `_MANAGER_LOGGER = "src.websocket.manager"` constant driving
+  `caplog.set_level(logging.DEBUG, logger=_MANAGER_LOGGER)` calls. Preserved
+  targeted `patch.object(...)` sites that validate specific logger call
+  interactions (root `logging.error`, instance `self.logger.warning/error/info`).
+  71/71 unit tests pass.
+
 ### #886 Phase 2 slice 92/N: retire `print()` in `src/export/org_export_utils.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 18 `print()` calls in
