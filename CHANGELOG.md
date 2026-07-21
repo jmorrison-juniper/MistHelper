@@ -7,6 +7,23 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #887 slice 5/N: drop `websocket` from pydocstyle `match-dir` exclusion (issue #887)
+
+- **Quality gate (Changed)**: removed `websocket` from the
+  `[tool.pydocstyle] match-dir` negation regex in `pyproject.toml`, so
+  `src/websocket/` is now scanned by `pydocstyle --convention=google`.
+  Audit surfaced two D107 (missing `__init__` docstring) violations,
+  both fixed:
+  - `src/websocket/polling/message_router.py:45` — `MessageRouter.__init__`
+    now documents why the five constructor args are packed into the frozen
+    `_RouterCtx` holder (immutable snapshot, cheaper attribute access,
+    stays within the project's argument-count limits).
+  - `src/websocket/polling/result_collector.py:121` — `ResultCollector.__init__`
+    documents the four-arg `WebSocketManager` wiring (results dict, its
+    lock, logger, debug flag) and why they collapse into the frozen
+    `_CollectorDeps`.
+  Next slice (6/N) targets `site` (17 files) per the #887 slicing plan.
+
 ### #887 slice 6/N: drop `site` from pydocstyle `match-dir` exclusion (issue #887)
 
 - **Quality gate (Changed)**: removed `site` from the `[tool.pydocstyle]
