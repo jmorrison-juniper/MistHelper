@@ -12,11 +12,14 @@ Why:
 
 from __future__ import annotations
 
+import logging
 import sys
 from types import ModuleType, SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+LOGGER_NAME = "src.export.org_export_utils"  # WHY: caplog target for #886 slice 92 print->logger migration.
 
 
 @pytest.fixture
@@ -132,7 +135,7 @@ class TestCollectOneSleType:
 class TestPersistSitesSleSummary:
     """Cover both branches of ``_persist_sites_sle_summary``."""
 
-    def test_with_data(self, fake_mh, capsys):
+    def test_with_data(self, fake_mh, caplog):
         """Data path should flatten, escape, and write."""
         from src.export import org_export_utils as mod
         from src.export.org_export_utils import OrgExportUtils
@@ -141,18 +144,22 @@ class TestPersistSitesSleSummary:
         with (
             patch.object(mod.DataProcessingUtils, "flatten_nested_fields", return_value=rows),
             patch.object(mod.DataProcessingUtils, "escape_multiline", return_value=rows),
+            caplog.at_level(logging.INFO, logger=LOGGER_NAME),
         ):
             OrgExportUtils._persist_sites_sle_summary(rows)
         fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(rows, "OrgSitesSLESummary.csv")
-        assert "1 sites SLE summary exported" in capsys.readouterr().out
+        # WHY: slice 92 migrated print()->logger.info; assertion now reads caplog, not stdout.
+        assert "1 sites SLE summary exported" in caplog.text
 
-    def test_empty(self, fake_mh, capsys):
+    def test_empty(self, fake_mh, caplog):
         """Empty path should still write an empty CSV and warn the user."""
         from src.export.org_export_utils import OrgExportUtils
 
-        OrgExportUtils._persist_sites_sle_summary([])
+        with caplog.at_level(logging.WARNING, logger=LOGGER_NAME):
+            OrgExportUtils._persist_sites_sle_summary([])
         fake_mh.DataExporter.write_with_format_selection.assert_called_once_with([], "OrgSitesSLESummary.csv")
-        assert "0 sites SLE summary" in capsys.readouterr().out
+        # WHY: slice 92 migrated print()->logger.warning; assertion now reads caplog, not stdout.
+        assert "0 sites SLE summary" in caplog.text
 
 
 class TestGatherAllSitesSle:
@@ -687,11 +694,13 @@ class TestInsightSetupOrEmpty:
 class TestInsightReportTotals:
     """Trivial reporter."""
 
-    def test_prints_and_logs(self, fake_mh, capsys):
+    def test_prints_and_logs(self, fake_mh, caplog):
         from src.export.org_export_utils import OrgExportUtils
 
-        OrgExportUtils._insight_report_totals(3, 1)
-        assert "3 successful" in capsys.readouterr().out
+        with caplog.at_level(logging.INFO, logger=LOGGER_NAME):
+            OrgExportUtils._insight_report_totals(3, 1)
+        # WHY: slice 92 migrated print()->logger.info; assertion now reads caplog, not stdout.
+        assert "3 successful" in caplog.text
 
 
 class TestInsightMetrics:
@@ -881,7 +890,7 @@ class TestBuildAuditLogKwargs:
 class TestAuditLogs:
     """Cover audit_logs success, no-data, and exception re-raise."""
 
-    def test_success(self, fake_mh, capsys):
+    def test_success(self, fake_mh, caplog):
         from src.export import org_export_utils as mod
         from src.export.org_export_utils import OrgExportUtils
 
@@ -891,10 +900,12 @@ class TestAuditLogs:
             patch.object(mod.mistapi, "get_all", return_value=[{"a": 1}]),
             patch.object(mod.DataProcessingUtils, "flatten_nested_fields", side_effect=lambda x: x),
             patch.object(mod.DataProcessingUtils, "escape_multiline", side_effect=lambda x: x),
+            caplog.at_level(logging.INFO, logger=LOGGER_NAME),
         ):
             OrgExportUtils.audit_logs(full_history=False, duration="1h")
         fake_mh.DataExporter.write_with_format_selection.assert_called_once_with([{"a": 1}], "OrgAuditLogs.csv")
-        assert "1 audit logs exported" in capsys.readouterr().out
+        # WHY: slice 92 migrated print()->logger.info; assertion now reads caplog, not stdout.
+        assert "1 audit logs exported" in caplog.text
 
     def test_no_data_early_return(self, fake_mh):
         from src.export import org_export_utils as mod
@@ -957,13 +968,15 @@ class TestSsidTemplateConsolidation:
 class TestE911BssidComplianceReport:
     """Cover the no-org early return and happy path."""
 
-    def test_no_org_early_return(self, fake_mh, capsys):
+    def test_no_org_early_return(self, fake_mh, caplog):
         from src.export.org_export_utils import OrgExportUtils
 
         fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = None
-        OrgExportUtils.e911_bssid_compliance_report()
+        with caplog.at_level(logging.WARNING, logger=LOGGER_NAME):
+            OrgExportUtils.e911_bssid_compliance_report()
         fake_mh.E911BSSIDReportGenerator.execute.assert_not_called()
-        assert "No organization selected" in capsys.readouterr().out
+        # WHY: slice 92 migrated print()->logger.warning; assertion now reads caplog, not stdout.
+        assert "No organization selected" in caplog.text
 
     def test_happy_path(self, fake_mh):
         from src.export.org_export_utils import OrgExportUtils
