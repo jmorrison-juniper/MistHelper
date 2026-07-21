@@ -7,6 +7,26 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 73/N: retire `print()` in `src/ssh/shell_execution/shell_executor.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced all 9 `print()` calls in
+  `src/ssh/shell_execution/shell_executor.py` with `logger`-based emissions
+  using `%`-style deferred formatting to satisfy G004. Instance methods use
+  the existing `self.logger` (info for `[STATUS] completed`, `[TIMEOUT]`,
+  `[OK]` result summaries, and `!? channel closed`; warning for `[TIMEOUT]
+  killing`, `[TIMEOUT] force closing`, and `- Attempt N failed` retry notice).
+  The staticmethod `_maybe_print_drain_progress` cannot access `self`, so a
+  new module-scoped `logger = logging.getLogger(__name__)` was added to route
+  its `warning`-level drain-progress notice. Each migrated call carries the
+  standard `# WHY: preserve operator notice verbatim; route through logger
+  for capture/redirection.` annotation and preserves the legacy operator
+  prefixes verbatim in the message string (`[STATUS]`, `[TIMEOUT]`, `[OK]`,
+  `X `, `!? `, `- `).
+- **Verification (Changed)**: 12/12 tests in `tests/unit/ssh/test_shell_executor.py`
+  pass; ruff T20 clean; ruff full clean; black clean. No `capsys`/`readouterr`
+  assertions in the shell_executor test file required migration (the file
+  never asserted on `print()` output).
+
 ### #886 Phase 2 slice 72/N: retire `print()` in `src/ssh/config/env_loader.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 9 `print()` calls in

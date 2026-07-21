@@ -26,6 +26,8 @@ import time  # WHY: Timing for output loops, cleanup, total duration
 from dataclasses import dataclass  # WHY: Frozen slotted state bundle keeps _collect_output CC low
 from typing import Any  # WHY: paramiko Channel type is dynamic across paramiko versions
 
+logger = logging.getLogger(__name__)  # WHY: Module-scoped logger for the drain-progress staticmethod
+
 # Module-level constants - extracted so each method's CC stays low (no magic numbers in branches)
 _INITIAL_PROMPT_MAX_WAIT_S = 3.0  # WHY: Max seconds to wait for initial shell prompt
 _WAIT_INCREMENT_S = 0.2  # WHY: Polling interval while waiting for shell events
@@ -187,9 +189,8 @@ class ShellExecutor:
         self._log_output_summary(cleaned_output, start_time)  # WHY: Diagnostic logging only
         success = self._evaluate_success(cleaned_output)  # WHY: Phase 8: classify as success/failure
         command_time = time.time() - start_time  # WHY: Final wall-clock duration
-        print(
-            f"[STATUS] [{hostname}] Command completed in {command_time:.2f} seconds"
-        )  # WHY: Verbatim status line preserved from original
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        self.logger.info("[STATUS] [%s] Command completed in %.2f seconds", hostname, command_time)
         self.logger.debug(
             "ShellExecutor: command completed on %s in %.2fs", hostname, command_time
         )  # WHY: Duration breadcrumb
@@ -329,9 +330,8 @@ class ShellExecutor:
         self, state: _CollectState, context: _CollectContext
     ) -> None:  # WHY: Keep KeyboardInterrupt bookkeeping out of the loop
         """Record the interrupt marker on ``state`` and emit the operator-facing status line."""
-        print(
-            f"\nX  [{context.hostname}] Ctrl+C detected! Interrupting command: {context.command}"
-        )  # WHY: Verbatim operator prompt
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        self.logger.warning("X  [%s] Ctrl+C detected! Interrupting command: %s", context.hostname, context.command)
         self.logger.warning("Command interrupted by user: %s", context.command)  # WHY: Log for post-mortem
         # WHY: Marker preserved verbatim so downstream log parity is unaffected
         state.output += "\n\n[COMMAND INTERRUPTED BY USER - Ctrl+C pressed during data collection]\n"
@@ -343,9 +343,12 @@ class ShellExecutor:
         current_duration = time.time() - start_time  # WHY: Wall-clock elapsed
         if current_duration <= _HANG_DETECTION_S:  # WHY: Guard clause - not yet at threshold
             return False
-        print(
-            f"[TIMEOUT] [{hostname}] HANG DETECTED: Command running for {current_duration:.0f}s, " f"forcing completion"
-        )  # WHY: Verbatim hang-status line preserved from original
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        self.logger.warning(
+            "[TIMEOUT] [%s] HANG DETECTED: Command running for %.0fs, forcing completion",
+            hostname,
+            current_duration,
+        )
         self.logger.warning(
             "Command hang detected after %.0fs, forcing completion: %s", current_duration, command
         )  # WHY: Log for post-mortem
@@ -359,9 +362,12 @@ class ShellExecutor:
         if (
             current_duration > _LONG_RUNNING_THRESHOLD_S and chunk_count % _LONG_RUNNING_CADENCE_CHUNKS == 0
         ):  # WHY: Match original cadence verbatim
-            print(
-                f"- [{hostname}] Long-running command... {current_duration:.0f}s elapsed (Ctrl+C to interrupt)"
-            )  # WHY: Verbatim progress line
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            self.logger.info(
+                "- [%s] Long-running command... %.0fs elapsed (Ctrl+C to interrupt)",
+                hostname,
+                current_duration,
+            )
 
     def _read_one_chunk(
         self, shell: Any, state: _CollectState, hostname: str
@@ -389,9 +395,8 @@ class ShellExecutor:
         state.output += (
             f"\n\n[OUTPUT TRUNCATED - Size limit of {cap_mb}MB reached]\n"  # WHY: Verbatim truncation marker
         )
-        print(
-            f"!? [{hostname}] Output truncated at {cap_mb}MB, draining remaining data..."
-        )  # WHY: Verbatim operator print
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        self.logger.warning("!? [%s] Output truncated at %dMB, draining remaining data...", hostname, cap_mb)
         state.truncated = True  # WHY: Loop will drain the tail and exit
 
     def _log_chunk_progress(
@@ -403,9 +408,8 @@ class ShellExecutor:
             "Receiving data... %d chunks, %.1fMB", chunk_count, output_mb
         )  # WHY: Structured trace of progress
         if output_mb > _LARGE_OUTPUT_PRINT_MB:  # WHY: User-facing print only for large outputs
-            print(
-                f"- [{hostname}] Receiving large output... {output_mb:.1f}MB (Press Ctrl+C to interrupt)"
-            )  # WHY: Verbatim progress line
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            self.logger.info("- [%s] Receiving large output... %.1fMB (Press Ctrl+C to interrupt)", hostname, output_mb)
 
     # ------------------------------------------------------------------
     # Phase 5: drain excess data after output cap
@@ -429,9 +433,13 @@ class ShellExecutor:
                 break
             time.sleep(_POLL_SLEEP_S)  # WHY: Brief sleep before next poll
         drain_duration = time.time() - drain_start  # WHY: Final drain wall-clock
-        print(
-            f"[OK] [{hostname}] Data drain completed in {drain_duration:.1f}s ({drained_chunks} chunks discarded)"
-        )  # WHY: Verbatim completion status
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        self.logger.info(
+            "[OK] [%s] Data drain completed in %.1fs (%d chunks discarded)",
+            hostname,
+            drain_duration,
+            drained_chunks,
+        )
 
     @staticmethod
     def _maybe_print_drain_progress(
@@ -441,9 +449,13 @@ class ShellExecutor:
         if drained_chunks % _PROGRESS_INTERVAL_CHUNKS != 0:  # WHY: Guard clause - not yet at cadence
             return
         drain_duration = time.time() - drain_start  # WHY: Elapsed drain wall-clock for the print
-        print(
-            f"X  [{hostname}] Draining excess data... {drain_duration:.0f}s ({drained_chunks} chunks discarded)"
-        )  # WHY: Verbatim progress line
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.warning(
+            "X  [%s] Draining excess data... %.0fs (%d chunks discarded)",
+            hostname,
+            drain_duration,
+            drained_chunks,
+        )
 
     # ------------------------------------------------------------------
     # Phase 6: cleanup shell channel
@@ -458,7 +470,8 @@ class ShellExecutor:
             shell.send(b"\n")  # WHY: Extra newline to ensure command commits
             self._drain_cleanup_tail(shell)  # WHY: Drain any remaining bytes within the cleanup budget
         except KeyboardInterrupt:  # WHY: Ctrl+C during cleanup - force-close immediately
-            print(f"X  [{hostname}] Ctrl+C during cleanup - forcing shell close")  # WHY: Verbatim operator print
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            self.logger.warning("X  [%s] Ctrl+C during cleanup - forcing shell close", hostname)
             self.logger.warning("Command cleanup interrupted by user")  # WHY: Log operator-driven interrupt
         except (
             Exception
