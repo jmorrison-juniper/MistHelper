@@ -29,6 +29,8 @@ from prettytable import PrettyTable  # WHY: render parsed ARP rows as a table.
 import websocket  # WHY: websocket-client stream subscription.
 from src.dataclasses.websocket_stream_target import WebSocketStreamTarget  # Bundle for WS connection identity.
 
+logger = logging.getLogger(__name__)  # WHY: module-scoped logger routes former print notices for capture/redirection.
+
 
 class ARPCommandManager:  # ARP WebSocket command manager.
     """Manages ARP command execution via WebSocket for network devices.
@@ -64,9 +66,13 @@ class ARPCommandManager:  # ARP WebSocket command manager.
             return
         mist_host, mist_apitoken = ARPCommandManager._resolve_mist_ws_credentials()  # Resolve creds
         if not mist_host or not mist_apitoken:  # Missing creds — abort
-            print(" Mist host or API token not found in session or environment.")  # User-facing notice
+            logger.warning(
+                " Mist host or API token not found in session or environment."
+            )  # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
             return
-        print(" Subscribing to WebSocket stream...")  # User progress
+        logger.info(
+            " Subscribing to WebSocket stream..."
+        )  # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
         session_id = ARPCommandManager._trigger_command(mist_host, mist_apitoken, site_id, device_id)  # type: ignore[no-untyped-call]
         if not session_id:  # Trigger failed — nothing to listen for
             return
@@ -85,11 +91,17 @@ class ARPCommandManager:  # ARP WebSocket command manager.
 
         if response.status_code == 200:  # Success.
             session_id = response.json().get("session")  # Read the session id.
-            print(f"! ARP command triggered. Session ID: {session_id}")  # Tell the user.
+            logger.info(
+                "! ARP command triggered. Session ID: %s", session_id
+            )  # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
             return session_id  # Return the session.
         else:
-            print(f"! Failed to trigger ARP command: {response.status_code}")  # Tell the user fail.
-            print(response.text)  # Show the body.
+            logger.error(
+                "! Failed to trigger ARP command: %s", response.status_code
+            )  # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.error(
+                "%s", response.text
+            )  # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
             return None  # Return None.
 
     @staticmethod
@@ -217,13 +229,17 @@ class ARPCommandManager:  # ARP WebSocket command manager.
         """Handle WebSocket close and process output."""
         logging.info(" WebSocket closed.")  # Log the close.
         if not output_lines:  # No output captured during this session.
-            print(" No ARP output received for this session.")  # Tell the user none.
+            logger.warning(
+                " No ARP output received for this session."
+            )  # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
             logging.warning(" No ARP output received for this session.")  # Warn none.
             return  # Nothing further to process.
         compiled_output = "\n".join(output_lines)  # Join the captured lines into one block.
         ARPCommandManager._save_output(compiled_output)  # type: ignore[no-untyped-call]
         ARPCommandManager._export_to_csv("arp_output_raw.txt")  # type: ignore[no-untyped-call]
-        print("\n  ARP Output Received:\n")  # Tell the user output arrived.
+        logger.info(
+            "\n  ARP Output Received:\n"
+        )  # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
         ARPCommandManager._render_arp_table(compiled_output, debug)  # type: ignore[no-untyped-call]
 
     @staticmethod
@@ -261,10 +277,14 @@ class ARPCommandManager:  # ARP WebSocket command manager.
     def _emit_arp_table(table, row_count, debug):  # Print or log the rendered table.
         """Print the table in debug mode or report the row count otherwise."""
         if debug:  # Debug mode shows the full table.
-            print(table)  # Print the table for the user.
+            logger.info(
+                "%s", table
+            )  # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
             logging.debug("\n%s", table.get_string())  # Log the table contents.
         else:  # Non-debug mode reports only the row count.
-            print(f"! ARP output received with {row_count} rows.")  # Tell the user the row count.
+            logger.info(
+                "! ARP output received with %d rows.", row_count
+            )  # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
 
     @staticmethod
     def _save_output(compiled_output, filename="arp_output_raw.txt"):  # Save raw output.
@@ -305,7 +325,9 @@ class ARPCommandManager:  # ARP WebSocket command manager.
         with open(path, "w", newline="", encoding="utf-8") as fout:  # Open the CSV.
             writer = csv.writer(fout)  # CSV writer.
             writer.writerows(rows)  # Write the rows.
-        print(f"! Saved {len(rows)} rows to {path}")  # Tell the user.
+        logger.info(
+            "! Saved %d rows to %s", len(rows), path
+        )  # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
 
     @staticmethod
     def _export_to_csv(txt_filename="arp_output_raw.txt", csv1="arp_dataset1.csv", csv2="arp_dataset2.csv"):
@@ -321,4 +343,6 @@ class ARPCommandManager:  # ARP WebSocket command manager.
             ARPCommandManager._write_dataset_csv(csv1_path, dataset1)  # Write first CSV.
             ARPCommandManager._write_dataset_csv(csv2_path, dataset2)  # Write second CSV.
         except Exception as e:  # Export failed.
-            print(f"! Failed to export ARP output to CSV: {e}")  # Tell the user.
+            logger.error(
+                "! Failed to export ARP output to CSV: %s", e
+            )  # WHY: preserve operator notice verbatim; route through logger for capture/redirection.

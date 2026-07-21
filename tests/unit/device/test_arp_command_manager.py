@@ -26,6 +26,9 @@ from src.dataclasses.websocket_stream_target import WebSocketStreamTarget
 from src.device import arp_command_manager as arp_mod
 from src.device.arp_command_manager import ARPCommandManager
 
+# WHY: caplog must target the module logger so INFO/WARNING/ERROR records surface (issue #886).
+_LOGGER_NAME = "src.device.arp_command_manager"
+
 
 @pytest.fixture
 def fake_mh(monkeypatch):
@@ -123,14 +126,15 @@ class TestExecute:
             ARPCommandManager.execute()
         trigger.assert_not_called()
 
-    def test_aborts_when_credentials_missing(self, fake_mh, monkeypatch, capsys):
+    def test_aborts_when_credentials_missing(self, fake_mh, monkeypatch, caplog):
         """Abort with user-facing notice when credentials cannot be resolved."""
         monkeypatch.delenv("MIST_HOST", raising=False)
         monkeypatch.delenv("MIST_APITOKEN", raising=False)
+        caplog.set_level(logging.WARNING, logger=_LOGGER_NAME)
         with patch.object(ARPCommandManager, "_trigger_command") as trigger:
             ARPCommandManager.execute("s1", "d1")
         trigger.assert_not_called()
-        assert "Mist host or API token not found" in capsys.readouterr().out
+        assert any("Mist host or API token not found" in r.getMessage() for r in caplog.records)
 
     def test_aborts_when_trigger_returns_none(self, fake_mh, monkeypatch):
         """Skip listener when REST trigger fails to return a session id."""
@@ -162,25 +166,27 @@ class TestExecute:
 class TestTriggerCommand:
     """Cover REST trigger success and failure branches."""
 
-    def test_returns_session_id_on_200(self, capsys):
+    def test_returns_session_id_on_200(self, caplog):
         """Extract the ``session`` field when the POST succeeds."""
         response = MagicMock(status_code=200)
         response.json.return_value = {"session": "abc"}
+        caplog.set_level(logging.INFO, logger=_LOGGER_NAME)
         with patch.object(arp_mod.requests, "post", return_value=response) as post:
             result = ARPCommandManager._trigger_command("h", "t", "s", "d")
         assert result == "abc"
         post.assert_called_once()
-        assert "ARP command triggered" in capsys.readouterr().out
+        assert any("ARP command triggered" in r.getMessage() for r in caplog.records)
 
-    def test_returns_none_and_prints_body_on_failure(self, capsys):
+    def test_returns_none_and_prints_body_on_failure(self, caplog):
         """Non-200 responses log the body and return None."""
         response = MagicMock(status_code=500, text="boom")
+        caplog.set_level(logging.ERROR, logger=_LOGGER_NAME)
         with patch.object(arp_mod.requests, "post", return_value=response):
             result = ARPCommandManager._trigger_command("h", "t", "s", "d")
         assert result is None
-        out = capsys.readouterr().out
-        assert "Failed to trigger" in out
-        assert "boom" in out
+        messages = [r.getMessage() for r in caplog.records]
+        assert any("Failed to trigger" in m for m in messages)
+        assert any("boom" in m for m in messages)
 
 
 class TestBuildWsSubscribe:
@@ -444,17 +450,17 @@ class TestHandleMessage:
 class TestHandleClose:
     """Cover empty and populated close paths."""
 
-    def test_reports_no_output_when_empty(self, capsys, caplog):
-        """Empty output_lines prints and warns, without CSV export."""
+    def test_reports_no_output_when_empty(self, caplog):
+        """Empty output_lines logs at WARNING, without CSV export."""
+        caplog.set_level(logging.WARNING, logger=_LOGGER_NAME)
         with (
             patch.object(ARPCommandManager, "_save_output") as save,
             patch.object(ARPCommandManager, "_export_to_csv") as export,
-            caplog.at_level(logging.WARNING),
         ):
             ARPCommandManager._handle_close([])
         save.assert_not_called()
         export.assert_not_called()
-        assert "No ARP output received" in capsys.readouterr().out
+        assert any("No ARP output received" in r.getMessage() for r in caplog.records)
 
     def test_processes_populated_output(self, capsys):
         """Non-empty output triggers save + export + render."""
@@ -529,21 +535,21 @@ class TestPadRows:
 class TestEmitArpTable:
     """Cover debug vs non-debug reporting."""
 
-    def test_debug_prints_full_table(self, capsys, caplog):
-        """debug=True prints the table string and logs it."""
+    def test_debug_prints_full_table(self, caplog):
+        """debug=True logs the table string and its formatted contents."""
         table = MagicMock()
         table.get_string.return_value = "TABLE"
-        with caplog.at_level(logging.DEBUG):
-            ARPCommandManager._emit_arp_table(table, 3, True)
-        assert str(table) in capsys.readouterr().out or "TABLE" in capsys.readouterr().out or True
-        # Just verify the branch was taken.
+        caplog.set_level(logging.DEBUG, logger=_LOGGER_NAME)
+        ARPCommandManager._emit_arp_table(table, 3, True)
+        # Just verify the debug branch was taken.
         table.get_string.assert_called_once()
 
-    def test_non_debug_reports_row_count(self, capsys):
+    def test_non_debug_reports_row_count(self, caplog):
         """debug=False emits a summary line only."""
         table = MagicMock()
+        caplog.set_level(logging.INFO, logger=_LOGGER_NAME)
         ARPCommandManager._emit_arp_table(table, 5, False)
-        assert "5 rows" in capsys.readouterr().out
+        assert any("5 rows" in r.getMessage() for r in caplog.records)
         table.get_string.assert_not_called()
 
 
@@ -599,13 +605,14 @@ class TestSplitArpTextIntoDatasets:
 class TestWriteDatasetCsv:
     """Cover CSV write + user-facing count line."""
 
-    def test_writes_rows_and_reports_count(self, tmp_path, capsys):
-        """CSV file gets the expected rows and stdout announces the count."""
+    def test_writes_rows_and_reports_count(self, tmp_path, caplog):
+        """CSV file gets the expected rows and the logger announces the count."""
         path = tmp_path / "out.csv"
+        caplog.set_level(logging.INFO, logger=_LOGGER_NAME)
         ARPCommandManager._write_dataset_csv(str(path), [["a", "b"], ["c", "d"]])
         contents = path.read_text(encoding="utf-8").replace("\r", "")
         assert contents == "a,b\nc,d\n"
-        assert "Saved 2 rows" in capsys.readouterr().out
+        assert any("Saved 2 rows" in r.getMessage() for r in caplog.records)
 
 
 class TestExportToCsv:
@@ -631,8 +638,9 @@ class TestExportToCsv:
         assert csv1.read_text(encoding="utf-8").replace("\r", "") == "a,b\n"
         assert csv2.read_text(encoding="utf-8").replace("\r", "") == "c,d\n"
 
-    def test_prints_failure_on_exception(self, fake_mh, capsys):
-        """Any exception during export becomes a user-facing failure line."""
+    def test_prints_failure_on_exception(self, fake_mh, caplog):
+        """Any exception during export becomes a user-facing failure log line."""
         fake_mh.FilePathUtils.get_csv_path.side_effect = RuntimeError("boom")
+        caplog.set_level(logging.ERROR, logger=_LOGGER_NAME)
         ARPCommandManager._export_to_csv()
-        assert "Failed to export ARP output to CSV" in capsys.readouterr().out
+        assert any("Failed to export ARP output to CSV" in r.getMessage() for r in caplog.records)
