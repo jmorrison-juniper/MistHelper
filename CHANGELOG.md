@@ -42,6 +42,40 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
   interactions (root `logging.error`, instance `self.logger.warning/error/info`).
   71/71 unit tests pass.
 
+### #886 Phase 2 slice 94/N: retire `print()` in `src/ssh/runtime/app_runner.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced all 18 `print()` calls in
+  `src/ssh/runtime/app_runner.py` with module-scoped `logger.*` emissions
+  using `%`-style deferred formatting. Added
+  `logger = logging.getLogger(__name__)` alongside the pre-existing
+  `import logging`. Level heuristic: `.env`/CLI parameter hints in
+  `_print_param_hints` and the `_resolve_commands` CSV-loaded banner map
+  to `logger.info`; soft-fail notices in `_resolve_password`
+  (password missing), `_validate_hosts` (invalid hosts + proceeding
+  banner), `_validate_commands` (invalid commands + proceeding banner),
+  `_run_multi_host` (thread-count clamp), and the `KeyboardInterrupt`
+  branch of `run` map to `logger.warning`; hard-fail notices in
+  `_validate_hosts` (no valid hosts remaining), `_check_required_params`
+  (missing parameters), `_prompt_for_commands` (no commands specified),
+  `_validate_commands` (no valid commands remaining), `_finalize_preflight`
+  (invalid username), `_build_request` (no commands to execute), and the
+  fatal-error branch of `run` map to `logger.error`. Each migrated call
+  carries the standard
+  `# WHY: preserve operator notice verbatim; route through logger for capture/redirection.`
+  annotation and preserves the exact user-visible text operators grep on.
+  f-string interpolation was converted to positional `%s`/`%d` arguments
+  to keep the file G004-clean.
+- **Tests**: no `capsys` assertions target the migrated prints; the two
+  vestigial `capsys` parameters in `tests/unit/test_ssh_runner.py`
+  (`TestParseHostList.test_invalid_hosts_filtered`,
+  `TestParseHostList.test_max_100_hosts`,
+  `TestParseCommandList.test_max_50_commands`) belong to the
+  `HostListParser` / `CommandListParser` suites and are untouched.
+- **Gates**: `python -m black src/ssh/runtime/app_runner.py`,
+  `python -m ruff check src/ssh/runtime/app_runner.py`, and
+  `python -m pytest tests/unit/test_ssh_runner.py` (168 passed) all
+  green.
+
 ### #886 Phase 2 slice 93/N: retire `print()` in `src/refactors/serial_cc/site_client_insights.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 18 `print()` calls in
