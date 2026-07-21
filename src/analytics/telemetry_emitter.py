@@ -36,6 +36,18 @@ class TelemetryEmitter:
     RETENTION_LIMIT = 10
 
     def __init__(self, file_path: str):
+        """Open *file_path* for append-only NDJSON writes.
+
+        Why:
+            Parent directories are created eagerly so callers can pass a fresh
+            path (e.g. ``data/telemetry/2026-07-21.jsonl``) without a separate
+            ``os.makedirs`` step. Open failures downgrade to a warning and leave
+            ``self._handle = None`` so subsequent ``emit()`` calls become no-ops
+            (FR-008: telemetry must never interrupt the primary operation).
+
+        Args:
+            file_path: Filesystem path to the NDJSON target file.
+        """
         self._path = file_path
         self._handle = None
         try:
@@ -70,9 +82,31 @@ class TelemetryEmitter:
     # -- context manager -----------------------------------------------------
 
     def __enter__(self) -> TelemetryEmitter:
+        """Return self so the emitter can be used as a context manager.
+
+        Why:
+            The file handle is already opened in ``__init__``; ``__enter__``
+            exists purely to enable ``with TelemetryEmitter(...) as e:`` syntax
+            and pair with ``__exit__`` for guaranteed close-on-scope-exit.
+
+        Returns:
+            The same TelemetryEmitter instance.
+        """
         return self
 
     def __exit__(self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: object) -> None:
+        """Close the underlying file handle on scope exit.
+
+        Why:
+            Ensures the append handle is flushed and released even if the
+            ``with`` block raises. Exception details are intentionally
+            discarded — telemetry never suppresses exceptions from the caller.
+
+        Args:
+            exc_type: Exception type if the ``with`` block raised, else None.
+            exc_val: Exception instance if the ``with`` block raised, else None.
+            exc_tb: Traceback if the ``with`` block raised, else None.
+        """
         del exc_type, exc_val, exc_tb  # WHY: protocol params unused; silence vulture without renaming public signature.
         self.close()
 
