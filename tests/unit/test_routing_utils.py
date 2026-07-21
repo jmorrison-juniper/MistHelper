@@ -10,6 +10,7 @@ Uses identity-checked teardown to avoid cross-test sys.modules contamination.
 from __future__ import annotations
 
 import json
+import logging
 import sys
 from unittest.mock import MagicMock, patch
 
@@ -911,12 +912,15 @@ class TestExecuteSsrRouteCommand:
             result = ru._execute_ssr_route_command("site-1", "dev-1", {}, False)
         assert result is None
 
-    def test_api_exception(self, ru: RoutingUtils, capsys: pytest.CaptureFixture[str]) -> None:
-        with patch("src.network._routing_utils_payload.mistapi") as mock_api:
+    def test_api_exception(self, ru: RoutingUtils, caplog: pytest.LogCaptureFixture) -> None:
+        with (
+            caplog.at_level(logging.WARNING, logger="src.network._routing_utils_payload"),
+            patch("src.network._routing_utils_payload.mistapi") as mock_api,
+        ):
             mock_api.api.v1.sites.devices.showSiteSsrAndSrxRoutes.side_effect = RuntimeError("fail")
             result = ru._execute_ssr_route_command("site-1", "dev-1", {}, False)
         assert result is None
-        assert "Error calling SSR/SRX" in capsys.readouterr().out
+        assert "Error calling SSR/SRX" in caplog.text
 
     def test_no_data_attr(self, ru: RoutingUtils) -> None:
         resp = MagicMock(spec=[])
@@ -1565,19 +1569,24 @@ class TestDisplayRoutingSummaryDetailed:
 class TestExecuteForwardingTableCommandDebug:
     """Cover debug output paths."""
 
-    def test_debug_output(self, ru: RoutingUtils, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_debug_output(
+        self, ru: RoutingUtils, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture
+    ) -> None:
         ru.apisession.host = "api.mist.com"
         ru.apisession.apitoken = "token123"
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"session": "sess-abc-123"}
         mock_resp.text = '{"session": "sess-abc-123"}'
-        with patch("src.network._routing_utils_payload.requests") as mock_req:
+        with (
+            caplog.at_level(logging.DEBUG, logger="src.network._routing_utils_payload"),
+            patch("src.network._routing_utils_payload.requests") as mock_req,
+        ):
             mock_req.post.return_value = mock_resp
             result = ru._execute_forwarding_table_command("site-1", "dev-1", {"prefix": "0.0.0.0/0"}, True)
-        output = capsys.readouterr().out
-        assert "[DEBUG] POST URL" in output
-        assert "[DEBUG] HTTP Response Status" in output
+        capsys.readouterr()  # drain any stray parent-module stdout debug output
+        assert "[DEBUG] POST URL" in caplog.text
+        assert "[DEBUG] HTTP Response Status" in caplog.text
         assert result == "sess-abc-123"
 
 

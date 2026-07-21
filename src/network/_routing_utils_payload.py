@@ -26,6 +26,8 @@ from typing import TYPE_CHECKING, Any  # WHY: TYPE_CHECKING avoids runtime cycle
 import mistapi  # WHY: SSR/SRX routing table API lives under mistapi.api.v1.sites.devices
 import requests  # WHY: generic device command endpoint is invoked via requests.post
 
+logger = logging.getLogger(__name__)  # WHY: module-scoped logger for print-to-logger migration
+
 if TYPE_CHECKING:  # WHY: only needed for static type checkers; skipped at runtime
     from src.network.routing_utils import RoutingUtils, SsrRouteQuery  # WHY: types for annotation only
 
@@ -243,7 +245,8 @@ class _RoutingUtilsPayload:  # WHY: cluster wrapper matching the parsing/display
             return None, "Mist host or API token not found in session or environment"  # WHY: signal
         url = f"https://{host}/api/v1/sites/{site_id}/devices/{device_id}/{endpoint}"  # WHY: standard path
         if debug_mode:  # WHY: expose URL for troubleshooting when debug is on
-            print(f"[DEBUG] POST URL = {url}")  # WHY: match legacy debug output verbatim
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.debug("[DEBUG] POST URL = %s", url)  # WHY: match legacy debug output verbatim
         response = requests.post(  # WHY: synchronous POST with hard timeout
             url,
             headers=self._build_auth_headers(token),  # WHY: token-based auth per Mist API
@@ -272,8 +275,10 @@ class _RoutingUtilsPayload:  # WHY: cluster wrapper matching the parsing/display
         """Emit response status + body when debug mode is on."""
         if not debug_mode:  # WHY: guard clause avoids formatting the body when debug is off
             return  # WHY: keeps the hot path free of debug string formatting
-        print(f"[DEBUG] HTTP Response Status = {response.status_code}")  # WHY: legacy debug format
-        print(f"[DEBUG] HTTP Response Body = {response.text}")  # WHY: legacy debug format
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.debug("[DEBUG] HTTP Response Status = %s", response.status_code)  # WHY: legacy debug format
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.debug("[DEBUG] HTTP Response Body = %s", response.text)  # WHY: legacy debug format
 
     @staticmethod
     def _parse_command_response(
@@ -312,9 +317,11 @@ class _RoutingUtilsPayload:  # WHY: cluster wrapper matching the parsing/display
         debug_mode: bool,
     ) -> str | None:
         """Perform the SSR/SRX API call and hand the response to session-id extraction."""
-        print("-> Calling dedicated SSR/SRX routing table API...")  # WHY: legacy UX text preserved
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("-> Calling dedicated SSR/SRX routing table API...")  # WHY: legacy UX text preserved
         if debug_mode:  # WHY: mirror legacy verbose logging for debug traces
-            print("[DEBUG] Calling mistapi.api.v1.sites.devices.showSiteSsrAndSrxRoutes")  # WHY: URL
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.debug("[DEBUG] Calling mistapi.api.v1.sites.devices.showSiteSsrAndSrxRoutes")  # WHY: URL
         response = mistapi.api.v1.sites.devices.showSiteSsrAndSrxRoutes(  # WHY: dedicated endpoint
             self._ru.apisession,  # WHY: reuse the parent-injected authenticated session
             site_id,  # WHY: path parameter identifying the site
@@ -329,33 +336,42 @@ class _RoutingUtilsPayload:  # WHY: cluster wrapper matching the parsing/display
         """Emit SSR API response metadata when debug mode is on."""
         if not debug_mode:  # WHY: guard clause avoids attribute lookups when debug is off
             return  # WHY: keeps hot path free of formatting overhead
-        print(f"[DEBUG] API response type: {type(response)}")  # WHY: legacy debug output preserved
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.debug("[DEBUG] API response type: %s", type(response))  # WHY: legacy debug output preserved
         if hasattr(response, "data"):  # WHY: some responses don't carry a data attribute at all
-            print(f"[DEBUG] Response data: {response.data}")  # WHY: expose payload for triage
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.debug("[DEBUG] Response data: %s", response.data)  # WHY: expose payload for triage
 
     @staticmethod
     def _handle_ssr_api_error(api_error: Exception, debug_mode: bool) -> None:
         """Emit uniform failure output for an SSR API exception and return ``None``."""
-        print(f"! Error calling SSR/SRX routing table API: {api_error}")  # WHY: user-facing message
-        logging.error("SSR/SRX routing table API error: %s", api_error)  # WHY: capture for logs
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.warning("! Error calling SSR/SRX routing table API: %s", api_error)  # WHY: user-facing message
+        logger.error("SSR/SRX routing table API error: %s", api_error)  # WHY: capture for logs
         if debug_mode:  # WHY: only dump the traceback when debug mode is explicitly on
             import traceback  # WHY: local import matches legacy lazy behavior (rare failure path)
 
             traceback.print_exc()  # WHY: full stack aids on-site triage
-        print("\n-> Try the generic routing table command (Menu 7) as fallback")  # WHY: guidance
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("\n-> Try the generic routing table command (Menu 7) as fallback")  # WHY: guidance
         return None  # WHY: signal failure to caller so it can skip the results wait
 
     def _extract_ssr_session_id(self, response: Any, debug_mode: bool) -> str | None:
         """Extract session ID from SSR API response."""
         if not (hasattr(response, "data") and response.data):  # WHY: guard against empty responses
-            print("! Unexpected API response format")  # WHY: legacy message preserved for UX parity
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.warning("! Unexpected API response format")  # WHY: legacy message preserved for UX parity
             return None  # WHY: caller treats None as "no session started"
         session_id: str | None = response.data.get("session")  # WHY: 'session' key holds the id
         if not session_id:  # WHY: guard against present-but-empty session field
-            print("! No session ID returned from SSR/SRX routing API")  # WHY: legacy message
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.warning("! No session ID returned from SSR/SRX routing API")  # WHY: legacy message
             return None  # WHY: caller cancels the wait when no id is present
-        print(f"-> Command initiated (session: {session_id[:8]}...)")  # WHY: legacy UX preserved
-        print("-> Waiting for SSR/SRX routing table results...")  # WHY: user context between calls
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("-> Command initiated (session: %s...)", session_id[:8])  # WHY: legacy UX preserved
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("-> Waiting for SSR/SRX routing table results...")  # WHY: user context between calls
         if debug_mode:  # WHY: full-id debug output when debug is on
-            print(f"[DEBUG] Full session ID: {session_id}")  # WHY: match legacy debug format
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.debug("[DEBUG] Full session ID: %s", session_id)  # WHY: match legacy debug format
         return session_id  # WHY: caller uses this id to correlate WebSocket results
