@@ -45,8 +45,7 @@ logger = logging.getLogger(__name__)  # WHY: module-scoped logger routes operato
 
 
 class OrgInventoryExporter:  # Org inventory exporters.
-    """
-    Organization Inventory and Device Exporter
+    """Organization Inventory and Device Exporter.
 
     Handles inventory, device, and combined site-device exports.
     Extracted from OrgExportUtils.
@@ -70,8 +69,8 @@ class OrgInventoryExporter:  # Org inventory exporters.
 
     @staticmethod
     def inventory():  # Export org device inventory.
-        """
-        Fetches and exports the full inventory of devices in the organization to OrgInventory.csv.
+        """Fetch and export the full inventory of devices in the organization to OrgInventory.csv.
+
         Uses APIDataFetcher to handle API call, CSV writing, and table display.
         """
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of PROGRESS_EMITTER + APIDataFetcher.
@@ -94,8 +93,8 @@ class OrgInventoryExporter:  # Org inventory exporters.
 
     @staticmethod
     def devices():  # Export all org devices.
-        """
-        Fetches and exports a list of all devices in the organization to OrgDevices.csv.
+        """Fetch and export a list of all devices in the organization to OrgDevices.csv.
+
         Uses APIDataFetcher to handle API call, CSV writing, and table display.
         """
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of PROGRESS_EMITTER + APIDataFetcher.
@@ -670,9 +669,10 @@ class OrgInventoryExporter:  # Org inventory exporters.
 
     @staticmethod
     def gateways_with_site_info():  # Export gateways with site info.
-        """
-        Fetches all gateway devices in the organization, enriches them with site and address info,
-        and exports the result to GatewaysWithSiteInfo.csv. Also logs and displays a summary table.
+        """Export gateway devices enriched with site and address info to GatewaysWithSiteInfo.csv.
+
+        Fetches all gateway devices in the organization, enriches them with site and
+        address info, writes GatewaysWithSiteInfo.csv, and logs a summary table.
         """
         # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
         logger.info("Gateways with Site and Address Info:")  # Inform operator of export.

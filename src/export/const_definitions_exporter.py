@@ -22,8 +22,7 @@ from src.dataclasses.endpoint_config import EndpointConfig  # Const endpoint des
 
 
 class ConstDefinitionsExporter:  # Const definitions exporter.
-    """
-    Exports all available const definitions from the Mist API to individual CSV files.
+    """Exports all available const definitions from the Mist API to individual CSV files.
 
     Implements fully dynamic discovery and smart caching:
     - Automatically discovers all available const endpoints from mistapi library
