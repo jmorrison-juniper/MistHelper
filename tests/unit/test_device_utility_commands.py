@@ -545,12 +545,14 @@ class TestTraceroute:
         self,
         duc: DeviceUtilityCommands,
         mock_deps: dict[str, MagicMock],
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         with patch.object(duc, "_select_site_and_device", return_value=("s1", "d1", "ap")):
             mock_deps["safe_input_fn"].return_value = ""
-            duc.traceroute()
-            assert "required" in capsys.readouterr().out
+            # WHY: slice 90 migrated print()->logger.warning; assertion now reads caplog, not stdout.
+            with caplog.at_level("WARNING", logger="src.device._utility_commands_show"):
+                duc.traceroute()
+            assert "required" in caplog.text
 
     def test_success_calls_ws_and_export(
         self,

@@ -7,6 +7,30 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 90/N: retire `print()` in `src/device/_utility_commands_show.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced all 17 `print()` calls
+  in `src/device/_utility_commands_show.py` with module-scoped `logger.*`
+  emissions using `%`-style deferred formatting to satisfy G004. Level
+  heuristic: the "Destination host is required." validation-failure branch
+  in `traceroute` maps to `logger.warning`; the 16 remaining "-> Fetching …"
+  / "-> Running …" / "-> Monitoring …" / "-> Testing …" operator-progress
+  banners across `traceroute`, `show_ospf_neighbors`, `show_ospf_interfaces`,
+  `show_ospf_database`, `show_ospf_summary`, `resolve_dns`,
+  `monitor_traffic`, `run_top`, `show_session`, `show_service_path`,
+  `show_bgp_summary`, `show_arp_table`, `show_dhcp_leases`, `show_dot1x`,
+  `show_evpn_database`, and `cable_test` map to `logger.info`. Three
+  f-strings (traceroute host, monitor_traffic port, cable_test port) were
+  rewritten to `%s` deferred formatting. Each converted call carries the
+  standard `# WHY: preserve operator notice verbatim; route through logger
+  for capture/redirection.` inline comment so future auditors can trace the
+  origin.
+- **Tests (Changed)**: migrated the `TestTraceroute.test_early_return_no_host`
+  assertion in `tests/unit/test_device_utility_commands.py` from `capsys`
+  stdout to `caplog.at_level("WARNING", logger="src.device._utility_commands_show")`
+  + `assert "required" in caplog.text`. Full 194-test module passes locally
+  under the new fixture.
+
 ### #886 Phase 2 slice 89/N: retire `print()` in `src/gateway/gateway_export_utils.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 16 `print()` calls in
