@@ -645,9 +645,10 @@ class TestVerifySsrCompatibility:
 class TestSetupDebugMode:
     """Configure logging for debug mode."""
 
-    def test_debug_enabled(self, ru: RoutingUtils, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_debug_enabled(self, ru: RoutingUtils, caplog: pytest.LogCaptureFixture) -> None:
+        caplog.set_level(logging.DEBUG, logger="src.network.routing_utils")
         ru._setup_debug_mode(True)
-        assert "[DEBUG] DEBUG MODE ENABLED" in capsys.readouterr().out
+        assert "[DEBUG] DEBUG MODE ENABLED" in caplog.text
 
     def test_debug_disabled(self, ru: RoutingUtils, capsys: pytest.CaptureFixture[str]) -> None:
         ru._setup_debug_mode(False)
@@ -679,12 +680,13 @@ class TestGetDeviceInfo:
             result = ru._get_device_info("site-1", "dev-1", "all", False)
         assert result is None
 
-    def test_api_error(self, ru: RoutingUtils, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_api_error(self, ru: RoutingUtils, caplog: pytest.LogCaptureFixture) -> None:
+        caplog.set_level(logging.INFO, logger="src.network.routing_utils")
         with patch("src.network.routing_utils.mistapi") as mock_api:
             mock_api.api.v1.sites.devices.listSiteDevices.side_effect = RuntimeError("timeout")
             result = ru._get_device_info("site-1", "dev-1", "all", False)
         assert result is None
-        assert "Proceeding with standard command" in capsys.readouterr().out
+        assert "Proceeding with standard command" in caplog.text
 
 
 # ===================================================================
@@ -705,14 +707,15 @@ class TestConnectWebsocket:
         assert result is ws_mgr
 
     def test_connect_fails(
-        self, ru: RoutingUtils, mock_deps: dict[str, MagicMock], capsys: pytest.CaptureFixture[str]
+        self, ru: RoutingUtils, mock_deps: dict[str, MagicMock], caplog: pytest.LogCaptureFixture
     ) -> None:
+        caplog.set_level(logging.WARNING, logger="src.network.routing_utils")
         ws_mgr = MagicMock()
         ws_mgr.connect.return_value = False
         mock_deps["websocket_manager_factory"].return_value = ws_mgr
         result = ru._connect_websocket("site-1", "dev-1", False)
         assert result is None
-        assert "Failed to establish" in capsys.readouterr().out
+        assert "Failed to establish" in caplog.text
 
     def test_subscribe_fails(
         self, ru: RoutingUtils, mock_deps: dict[str, MagicMock], capsys: pytest.CaptureFixture[str]
@@ -938,15 +941,15 @@ class TestExecuteSsrRouteCommand:
 class TestErrorHandling:
     """Error handling and WebSocket cleanup."""
 
-    def test_handle_routing_error(self, ru: RoutingUtils, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_handle_routing_error(self, ru: RoutingUtils, caplog: pytest.LogCaptureFixture) -> None:
+        caplog.set_level(logging.ERROR, logger="src.network.routing_utils")
         ru._handle_routing_error("forwarding table", RuntimeError("test"), False)
-        output = capsys.readouterr().out
-        assert "forwarding table operation failed" in output
+        assert "forwarding table operation failed" in caplog.text
 
-    def test_handle_routing_error_debug(self, ru: RoutingUtils, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_handle_routing_error_debug(self, ru: RoutingUtils, caplog: pytest.LogCaptureFixture) -> None:
+        caplog.set_level(logging.DEBUG, logger="src.network.routing_utils")
         ru._handle_routing_error("routing", ValueError("bad"), True)
-        output = capsys.readouterr().out
-        assert "[DEBUG] Exception details" in output
+        assert "[DEBUG] Exception details" in caplog.text
 
     def test_cleanup_websocket_none(self, ru: RoutingUtils) -> None:
         ru._cleanup_websocket(None, False)  # should not raise
@@ -986,12 +989,12 @@ class TestExecuteShowForwardingTable:
         assert "No gateway device selected" in capsys.readouterr().out
 
     def test_exception_handled(
-        self, ru: RoutingUtils, mock_deps: dict[str, MagicMock], capsys: pytest.CaptureFixture[str]
+        self, ru: RoutingUtils, mock_deps: dict[str, MagicMock], caplog: pytest.LogCaptureFixture
     ) -> None:
+        caplog.set_level(logging.ERROR, logger="src.network.routing_utils")
         mock_deps["select_site_fn"].side_effect = RuntimeError("boom")
         ru.execute_show_forwarding_table()
-        output = capsys.readouterr().out
-        assert "operation failed" in output
+        assert "operation failed" in caplog.text
 
 
 class TestExecuteShowRoutingTable:
@@ -1046,11 +1049,12 @@ class TestExecuteShowSsrRoutes:
         assert "interrupted by user" in capsys.readouterr().out
 
     def test_exception_handled(
-        self, ru: RoutingUtils, mock_deps: dict[str, MagicMock], capsys: pytest.CaptureFixture[str]
+        self, ru: RoutingUtils, mock_deps: dict[str, MagicMock], caplog: pytest.LogCaptureFixture
     ) -> None:
+        caplog.set_level(logging.ERROR, logger="src.network.routing_utils")
         mock_deps["select_site_fn"].side_effect = RuntimeError("fail")
         ru.execute_show_ssr_routes()
-        assert "operation failed" in capsys.readouterr().out
+        assert "operation failed" in caplog.text
 
 
 # ===================================================================
@@ -1167,11 +1171,11 @@ class TestDisplayForwardingTableOutput:
         output = capsys.readouterr().out
         assert "10.0.0.0/8" in output
 
-    def test_no_data(self, ru: RoutingUtils, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_no_data(self, ru: RoutingUtils, caplog: pytest.LogCaptureFixture) -> None:
+        caplog.set_level(logging.WARNING, logger="src.network.routing_utils")
         result = {"session": "s"}
         ru._display_forwarding_table_output(result, "dev-1", None, False)
-        output = capsys.readouterr().out
-        assert "No forwarding table data" in output
+        assert "No forwarding table data" in caplog.text
 
     def test_with_output_field(self, ru: RoutingUtils, capsys: pytest.CaptureFixture[str]) -> None:
         result = {
@@ -1228,7 +1232,8 @@ class TestDisplayRoutingTableOutput:
         output = capsys.readouterr().out
         assert "ROUTING TABLE RESULTS" in output
 
-    def test_no_data(self, ru: RoutingUtils, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_no_data(self, ru: RoutingUtils, caplog: pytest.LogCaptureFixture) -> None:
+        caplog.set_level(logging.WARNING, logger="src.network.routing_utils")
         result = {"session": "s"}
         ctx = RoutingTableContext(
             websocket_manager=MagicMock(),
@@ -1239,8 +1244,7 @@ class TestDisplayRoutingTableOutput:
             debug_mode=False,
         )
         ru._display_routing_table_output(result, ctx)
-        output = capsys.readouterr().out
-        assert "No routing table data" in output
+        assert "No routing table data" in caplog.text
 
 
 class TestDisplaySsrRouteOutput:
@@ -1285,7 +1289,8 @@ class TestDisplaySsrRouteOutput:
         output = capsys.readouterr().out
         assert "SSR/SRX ROUTING TABLE RESULTS" in output
 
-    def test_no_data(self, ru: RoutingUtils, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_no_data(self, ru: RoutingUtils, caplog: pytest.LogCaptureFixture) -> None:
+        caplog.set_level(logging.WARNING, logger="src.network.routing_utils")
         result = {"session": "s"}
         ctx = SsrRouteContext(
             websocket_manager=MagicMock(),
@@ -1296,8 +1301,7 @@ class TestDisplaySsrRouteOutput:
             debug_mode=False,
         )
         ru._display_ssr_route_output(result, ctx)
-        output = capsys.readouterr().out
-        assert "No routing table data" in output
+        assert "No routing table data" in caplog.text
 
 
 # ===================================================================
@@ -1630,15 +1634,15 @@ class TestExecuteSsrRouteCommandDebug:
 class TestDisplayForwardingTableOutputDebug:
     """Cover debug mode and additional output fields."""
 
-    def test_debug_extra_fields(self, ru: RoutingUtils, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_debug_extra_fields(self, ru: RoutingUtils, caplog: pytest.LogCaptureFixture) -> None:
+        caplog.set_level(logging.DEBUG, logger="src.network.routing_utils")
         result = {
             "raw": json.dumps([{"prefix": "10.0.0.0/8", "nextHop": "gw1"}]),
             "session": "s",
             "extra_field": "extra_value",
         }
         ru._display_forwarding_table_output(result, "dev-1", None, True)
-        output = capsys.readouterr().out
-        assert "[DEBUG] OTHER AVAILABLE FIELDS" in output
+        assert "[DEBUG] OTHER AVAILABLE FIELDS" in caplog.text
 
     def test_device_info_in_log(self, ru: RoutingUtils, capsys: pytest.CaptureFixture[str]) -> None:
         result = {
@@ -1658,7 +1662,8 @@ class TestDisplayForwardingTableOutputDebug:
 class TestDisplayRoutingTableOutputDebug:
     """Cover debug mode and additional output fields."""
 
-    def test_debug_extra_fields(self, ru: RoutingUtils, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_debug_extra_fields(self, ru: RoutingUtils, caplog: pytest.LogCaptureFixture) -> None:
+        caplog.set_level(logging.DEBUG, logger="src.network.routing_utils")
         result = {
             "raw": json.dumps([{"prefix": "10.0.0.0/8", "nextHop": "gw1", "protocol": "BGP"}]),
             "session": "s",
@@ -1675,8 +1680,7 @@ class TestDisplayRoutingTableOutputDebug:
                 debug_mode=True,
             ),
         )
-        output = capsys.readouterr().out
-        assert "[DEBUG]" in output
+        assert "[DEBUG]" in caplog.text
 
     def test_with_output_field(self, ru: RoutingUtils, capsys: pytest.CaptureFixture[str]) -> None:
         result = {
@@ -1726,7 +1730,8 @@ class TestDisplayRoutingTableOutputDebug:
 class TestDisplaySsrRouteOutputDebug:
     """Cover debug and Output fields in SSR display."""
 
-    def test_debug_extra_fields(self, ru: RoutingUtils, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_debug_extra_fields(self, ru: RoutingUtils, caplog: pytest.LogCaptureFixture) -> None:
+        caplog.set_level(logging.DEBUG, logger="src.network.routing_utils")
         ssr_data = {
             "status": "SUCCESS",
             "columns": ["prefix"],
@@ -1748,8 +1753,7 @@ class TestDisplaySsrRouteOutputDebug:
                 debug_mode=True,
             ),
         )
-        output = capsys.readouterr().out
-        assert "[DEBUG]" in output
+        assert "[DEBUG]" in caplog.text
 
     def test_with_output_field(self, ru: RoutingUtils, capsys: pytest.CaptureFixture[str]) -> None:
         ssr_data = {
@@ -1986,15 +1990,15 @@ class TestExecuteRoutingTableCommandEnvFallback:
 class TestGetDeviceInfoDebug:
     """Cover debug mode paths in device info retrieval."""
 
-    def test_debug_output(self, ru: RoutingUtils, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_debug_output(self, ru: RoutingUtils, caplog: pytest.LogCaptureFixture) -> None:
+        caplog.set_level(logging.DEBUG, logger="src.network.routing_utils")
         resp = MagicMock()
         resp.data = [{"id": "dev-1", "type": "gateway", "model": "SSR"}]
         with patch("src.network.routing_utils.mistapi") as mock_api:
             mock_api.api.v1.sites.devices.listSiteDevices.return_value = resp
             result = ru._get_device_info("site-1", "dev-1", "all", True)
         assert result is not None
-        output = capsys.readouterr().out
-        assert "[DEBUG]" in output
+        assert "[DEBUG]" in caplog.text
 
 
 # ===================================================================
@@ -2006,8 +2010,9 @@ class TestConnectWebsocketDebug:
     """Cover debug paths in WebSocket connection."""
 
     def test_debug_output(
-        self, ru: RoutingUtils, mock_deps: dict[str, MagicMock], capsys: pytest.CaptureFixture[str]
+        self, ru: RoutingUtils, mock_deps: dict[str, MagicMock], caplog: pytest.LogCaptureFixture
     ) -> None:
+        caplog.set_level(logging.DEBUG, logger="src.network.routing_utils")
         ws_mgr = MagicMock()
         ws_mgr.connect.return_value = True
         ws_mgr.subscribe_to_channel.return_value = True
@@ -2015,5 +2020,4 @@ class TestConnectWebsocketDebug:
         with patch("src.network.routing_utils.time"):
             result = ru._connect_websocket("site-1", "dev-1", True)
         assert result is ws_mgr
-        output = capsys.readouterr().out
-        assert "[DEBUG]" in output
+        assert "[DEBUG]" in caplog.text

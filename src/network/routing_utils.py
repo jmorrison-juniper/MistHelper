@@ -26,6 +26,9 @@ from src.network._routing_utils_payload import _RoutingUtilsPayload  # WHY: HTTP
 from src.network._routing_utils_routing import _RoutingUtilsRouting  # WHY: routing table orchestrator
 from src.network._routing_utils_ssr import _RoutingUtilsSSR  # WHY: SSR orchestrator
 
+logger = logging.getLogger(__name__)  # WHY: module-scoped logger for #886 print-to-logger migration.
+
+
 # ---------------------------------------------------------------------------
 # Type aliases for dependency injection
 # ---------------------------------------------------------------------------
@@ -166,7 +169,8 @@ class RoutingUtils:
         """Configure logging for debug mode if enabled."""
         if debug_mode:  # WHY: only elevate logger when debug requested
             logging.getLogger().setLevel(logging.DEBUG)  # WHY: hoist root logger to DEBUG
-            print("[DEBUG] DEBUG MODE ENABLED")  # WHY: user-visible confirmation
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.debug("[DEBUG] DEBUG MODE ENABLED")  # WHY: user-visible confirmation
 
     def _get_device_info(
         self,
@@ -198,10 +202,12 @@ class RoutingUtils:
             None,
         )
         if device_info and debug_mode:  # WHY: emit metadata only when both present
-            print(
-                f"[DEBUG] Device type: {device_info.get('type')},"
-                f" model: {device_info.get('model')},"
-                f" name: {device_info.get('name')}"
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.debug(
+                "[DEBUG] Device type: %s, model: %s, name: %s",
+                device_info.get("type"),
+                device_info.get("model"),
+                device_info.get("name"),
             )
         return device_info  # WHY: caller uses metadata for guidance rendering
 
@@ -209,13 +215,17 @@ class RoutingUtils:
         """Emit user-facing warning and optional debug trace for device lookup failure."""
         logging.warning("Could not verify device compatibility: %s", error)  # WHY: audit trail
         if debug_mode:  # WHY: extra visibility when troubleshooting
-            print(f"[DEBUG] Device check failed: {error}")  # WHY: expose exception message
-        print("   -> Proceeding with standard command")  # WHY: reassure operator
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.debug("[DEBUG] Device check failed: %s", error)  # WHY: expose exception message
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("   -> Proceeding with standard command")  # WHY: reassure operator
 
     def _connect_websocket(self, site_id: str, device_id: str, debug_mode: bool) -> Any | None:
         """Establish WebSocket connection and subscribe to channel."""
-        print(f"\n-> Executing show forwarding table on device {device_id}...")  # WHY: user progress
-        print("-> Establishing WebSocket connection...")  # WHY: signal WS phase start
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("\n-> Executing show forwarding table on device %s...", device_id)  # WHY: user progress
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("-> Establishing WebSocket connection...")  # WHY: signal WS phase start
         websocket_manager = self._init_websocket_manager(debug_mode)  # WHY: build + connect
         if not websocket_manager:  # WHY: bail on connection failure
             return None
@@ -226,7 +236,8 @@ class RoutingUtils:
             debug_mode,
         ):
             return None
-        print("-> WebSocket connected and subscribed")  # WHY: confirm success
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("-> WebSocket connected and subscribed")  # WHY: confirm success
         time.sleep(1)  # WHY: give server a beat before command dispatch
         return websocket_manager  # WHY: hand back live handle
 
@@ -234,12 +245,15 @@ class RoutingUtils:
         """Create the WebSocket manager and establish the transport connection."""
         websocket_manager = self.websocket_manager_factory(self.apisession)  # WHY: instantiate via factory
         if debug_mode:  # WHY: trace lifecycle
-            print("[DEBUG] WebSocketManager initialized")  # WHY: confirm object built
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.debug("[DEBUG] WebSocketManager initialized")  # WHY: confirm object built
         if not websocket_manager.connect():  # WHY: attempt TCP/TLS handshake
-            print("! Failed to establish WebSocket connection")  # WHY: user-facing failure
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.warning("! Failed to establish WebSocket connection")  # WHY: user-facing failure
             return None  # WHY: signal caller to abort
         if debug_mode:  # WHY: trace lifecycle
-            print("[DEBUG] WebSocket connection established")  # WHY: confirm handshake success
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.debug("[DEBUG] WebSocket connection established")  # WHY: confirm handshake success
         return websocket_manager  # WHY: caller subscribes next
 
     def _subscribe_command_channel(
@@ -252,11 +266,13 @@ class RoutingUtils:
         """Subscribe to the device command channel; returns False on failure."""
         command_channel = f"/sites/{site_id}/devices/{device_id}/cmd"  # WHY: per-device command topic
         if not websocket_manager.subscribe_to_channel(command_channel):  # WHY: attempt subscription
-            print("! Failed to subscribe to device command channel")  # WHY: user-facing failure
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.warning("! Failed to subscribe to device command channel")  # WHY: user-facing failure
             websocket_manager.disconnect()  # WHY: clean up partial connection
             return False  # WHY: caller aborts flow
         if debug_mode:  # WHY: trace subscription success
-            print(f"[DEBUG] Subscribed to channel: {command_channel}")  # WHY: confirm channel name
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.debug("[DEBUG] Subscribed to channel: %s", command_channel)  # WHY: confirm channel name
         return True  # WHY: caller may proceed with dispatch
 
     def _display_debug_result_fields(self, result: dict[str, Any], debug_mode: bool) -> None:
@@ -266,7 +282,8 @@ class RoutingUtils:
         available = self._collect_debug_fields(result)  # WHY: filter to non-standard keys
         if not available:  # WHY: skip banner when nothing to show
             return
-        print(f"\n[DEBUG] OTHER AVAILABLE FIELDS: {available}")  # WHY: banner + key list
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.debug("\n[DEBUG] OTHER AVAILABLE FIELDS: %s", available)  # WHY: banner + key list
         self._dump_debug_field_values(result, available)  # WHY: emit per-field values
 
     @staticmethod
@@ -280,15 +297,18 @@ class RoutingUtils:
         """Print each non-empty extra field on its own debug line."""
         for field in available:  # WHY: iterate discovered extras
             if result.get(field):  # WHY: skip empty/None values
-                print(f"[DEBUG] {field}: {result.get(field)}")  # WHY: expose value for triage
+                # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+                logger.debug("[DEBUG] %s: %s", field, result.get(field))  # WHY: expose value for triage
 
     def _display_no_data_message(self, result: dict[str, Any], label: str) -> None:
         """Display message when no raw or Output data is present."""
         raw_output = result.get("raw", "")  # WHY: primary payload slot
         output_fields = result.get("Output", "")  # WHY: secondary payload slot
         if not raw_output and not output_fields:  # WHY: both empty means nothing came back
-            print(f"! No {label} data received")  # WHY: user-facing summary
-            print(f"Available result keys: {list(result.keys())}")  # WHY: aid triage
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.warning("! No %s data received", label)  # WHY: user-facing summary
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.warning("Available result keys: %s", list(result.keys()))  # WHY: aid triage
 
     def _log_command_completion(
         self,
@@ -310,10 +330,12 @@ class RoutingUtils:
     ) -> None:
         """Handle exceptions during routing operations."""
         error_message = f"WebSocket {operation_name} operation failed: {error}"  # WHY: formatted context
-        print(f"! {error_message}")  # WHY: user-facing failure
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.error("! %s", error_message)  # WHY: user-facing failure
         logging.error(error_message)  # WHY: persist in log
         if debug_mode:  # WHY: dump traceback only under debug
-            print("[DEBUG] Exception details:")  # WHY: banner
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.debug("[DEBUG] Exception details:")  # WHY: banner
             import traceback  # WHY: lazy import to avoid unused cost in hot paths
 
             traceback.print_exc()  # WHY: full traceback for triage
@@ -323,8 +345,10 @@ class RoutingUtils:
         try:  # WHY: never let cleanup escalate to caller
             if websocket_manager is not None:  # WHY: skip when never connected
                 websocket_manager.disconnect()  # WHY: release socket
-                print("-> WebSocket connection closed")  # WHY: user confirmation
+                # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+                logger.info("-> WebSocket connection closed")  # WHY: user confirmation
                 if debug_mode:  # WHY: trace lifecycle end
-                    print("[DEBUG] WebSocket cleanup completed")  # WHY: confirm cleanup step
+                    # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+                    logger.debug("[DEBUG] WebSocket cleanup completed")  # WHY: confirm cleanup step
         except Exception as cleanup_error:  # WHY: swallow to guarantee finally-safety
             logging.warning("WebSocket cleanup error: %s", cleanup_error)  # WHY: audit trail

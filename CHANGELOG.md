@@ -7,6 +7,26 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 98/N: retire `print()` in `src/network/routing_utils.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced all 20 `print()` calls in
+  `src/network/routing_utils.py` with a module-scoped
+  `logger = logging.getLogger(__name__)` and level-appropriate `logger.*`
+  emissions using `%`-style deferred formatting to satisfy G004. Banners /
+  progress notices (`-> Executing...`, `-> Establishing WebSocket...`,
+  `-> WebSocket connected...`, `-> WebSocket connection closed`,
+  `-> Proceeding with standard command`) route through `logger.info`;
+  connection/subscription/no-data warnings (`! Failed to establish...`,
+  `! Failed to subscribe...`, `! No <label> data received`, `Available result
+  keys: ...`) route through `logger.warning`; operator error banner
+  (`! WebSocket ... operation failed: ...`) routes through `logger.error`;
+  every `[DEBUG] ...` trace routes through `logger.debug`. Each converted
+  call carries the standard `# WHY: preserve operator notice verbatim; route
+  through logger for capture/redirection.` comment above the emission. The 7
+  existing tests in `tests/unit/test_routing_utils.py` were migrated from
+  `capsys` to `caplog` with `caplog.set_level(logging.<LEVEL>,
+  logger="src.network.routing_utils")`; all remain green.
+
 ### #886 Phase 2 slice 97/N: retire `print()` in `src/gateway/_wan2_variable_device.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 19 `print()` calls in
