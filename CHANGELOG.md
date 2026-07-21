@@ -7,6 +7,21 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 92/N: retire `print()` in `src/export/org_export_utils.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced all 18 `print()` calls in
+  `src/export/org_export_utils.py` with module-scoped `logger.*` emissions
+  using `%`-style deferred formatting to satisfy G004. Level heuristic:
+  banner/status/count/completion notices map to `logger.info`; empty-data
+  and no-org guards map to `logger.warning`; error-handler paths map to
+  `logger.error`. Each converted call carries the standard
+  `# WHY: preserve operator notice verbatim; route through logger for
+  capture/redirection.` comment above the emission.
+- **Test migration (Changed)**: migrated 5 `capsys` assertions in
+  `tests/unit/export/test_org_export_utils.py` to `caplog` against
+  `LOGGER_NAME = "src.export.org_export_utils"` so the assertions follow
+  the emissions across the print→logger boundary.
+
 ### #886 Phase 2 slice 91/N: retire `print()` in `src/export/site_device_exporter.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 18 `print()` calls in

@@ -21,6 +21,8 @@ from src.data.data_processing_utils import (
 )  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
 from src.time.time_utils import TimeUtils  # WHY: 1014 P6 direct import (FR-005).
 
+logger = logging.getLogger(__name__)  # WHY: module-scoped logger for #886 print-to-logger migration.
+
 
 class OrgExportUtils:
     """Centralized organization-level data export utilities.
@@ -84,10 +86,14 @@ class OrgExportUtils:
             processed = DataProcessingUtils.flatten_nested_fields(all_sites_sle_data)  # Flatten nested fields.
             processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]  # CSV-safe.
             mh.DataExporter.write_with_format_selection(processed, "OrgSitesSLESummary.csv")  # type: ignore[no-untyped-call]
-            print(f"! {len(processed)} sites SLE summary exported to OrgSitesSLESummary.csv")  # Tell the user.
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.info("! %d sites SLE summary exported to OrgSitesSLESummary.csv", len(processed))  # Tell the user.
             logging.info("Exported %s sites SLE summary to OrgSitesSLESummary.csv", len(processed))  # Log count.
             return  # Done.
-        print("! 0 sites SLE summary exported to OrgSitesSLESummary.csv (no data available)")  # Tell user zero.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.warning(
+            "! 0 sites SLE summary exported to OrgSitesSLESummary.csv (no data available)"
+        )  # Tell user zero.
         logging.warning("No sites SLE data available for organization")  # Warn no data.
         mh.DataExporter.write_with_format_selection([], "OrgSitesSLESummary.csv")  # type: ignore[no-untyped-call]
 
@@ -113,7 +119,8 @@ class OrgExportUtils:
     def sites_sle_summary():  # Export sites SLE summary.
         """Export SLE summary metrics for all sites in the organization to OrgSitesSLESummary.csv."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ConfigUtils, PROGRESS_EMITTER, ProgressContext.
-        print("Export Organization Sites SLE Summary:")  # Header.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("Export Organization Sites SLE Summary:")  # Header.
         logging.info("Starting export of sites SLE summary...")  # Log start.
         org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
         sle_types = ["wifi", "wired", "wan"]  # SLE types to fetch.
@@ -392,9 +399,11 @@ class OrgExportUtils:
     def _insight_export_normalized(all_insight_data: list[dict[str, Any]], org_id: str, metrics_retrieved: int) -> None:
         """Normalize the insight rows and export them to the four normalized CSVs plus the legacy combined file."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataProcessingUtils + DataExporter helpers.
-        print("! Parsing metrics into normalized data structures...")  # Tell the user normalization is starting.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("! Parsing metrics into normalized data structures...")  # Tell the user normalization is starting.
         buckets = OrgExportUtils._insight_normalize_records(all_insight_data, org_id)  # Build the 4 output buckets.
-        print("! Exporting to normalized CSV files...")  # Tell the user the writes are starting.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("! Exporting to normalized CSV files...")  # Tell the user the writes are starting.
         outputs = [  # Drive the four normalized writes from one table to avoid repeated blocks.
             (buckets["summary"], "OrgMetricsSummary.csv", "summary"),  # Summary file + its label.
             (buckets["time_series"], "OrgMetricsTimeSeries.csv", "time series"),  # Time-series file + label.
@@ -404,9 +413,12 @@ class OrgExportUtils:
         for rows, filename, label in outputs:  # Write each normalized bucket to its CSV.
             processed = DataProcessingUtils.escape_multiline(rows)  # type: ignore[no-untyped-call]  # Escape newlines.
             mh.DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]  # Write it.
-            print(f"  !? {len(processed)} {label} records -> {filename}")  # Report this file's row count.
-        print(
-            f"\n! Successfully exported {metrics_retrieved} organization insight metrics to 4 normalized CSV files"  # noqa: E501
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.info("  !? %d %s records -> %s", len(processed), label, filename)  # Report row count.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info(
+            "\n! Successfully exported %d organization insight metrics to 4 normalized CSV files",
+            metrics_retrieved,
         )  # Summarize the export for the user.
         logging.info(  # Log the export totals for traceability.
             "Exported %s org insight data points from %s metrics to normalized CSV files",
@@ -422,7 +434,8 @@ class OrgExportUtils:
         processed_combined = DataProcessingUtils.flatten_nested_fields(all_insight_data)  # Flatten for combined.
         processed_combined = DataProcessingUtils.escape_multiline(processed_combined)  # type: ignore[no-untyped-call]
         mh.DataExporter.write_with_format_selection(processed_combined, "OrgInsightMetrics_Legacy.csv")  # type: ignore[no-untyped-call]
-        print("  !? Legacy format maintained -> OrgInsightMetrics_Legacy.csv")  # Confirm the file write.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("  !? Legacy format maintained -> OrgInsightMetrics_Legacy.csv")  # Confirm the file write.
 
     @staticmethod
     def _insight_write_empty_outputs(include_legacy: bool = True) -> None:
@@ -443,13 +456,16 @@ class OrgExportUtils:
     def _insight_setup_or_empty() -> list[str] | None:
         """Refresh and load org-scope metrics; write empty outputs and return None when none exist."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of InsightMetricsUtils helper.
-        print("Export Organization Insight Metrics (Normalized):")  # Header for the operation.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("Export Organization Insight Metrics (Normalized):")  # Header for the operation.
         logging.info("Starting export of organization insight metrics with normalized structure...")  # Log start.
-        print("! Refreshing available insight metrics from Mist API...")  # Tell the user about the refresh.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("! Refreshing available insight metrics from Mist API...")  # Tell the user about the refresh.
         mh.InsightMetricsUtils.export_const_insight_metrics()  # Refresh ConstInsightMetrics.csv before scope filtering.
         org_metrics = mh.InsightMetricsUtils.get_by_scope("org")  # Load the metrics that support org scope.
         if not org_metrics:  # No org-scope metrics are available.
-            print("! No metrics found for org scope. Check ConstInsightMetrics.csv file.")  # Tell the user.
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.warning("! No metrics found for org scope. Check ConstInsightMetrics.csv file.")  # Tell the user.
             logging.error("No org-scope metrics found in const insight metrics")  # Log the error condition.
             OrgExportUtils._insight_write_empty_outputs(include_legacy=False)  # Write the 4 empty normalized files.
             return None  # Signal the orchestrator to abort.
@@ -458,7 +474,10 @@ class OrgExportUtils:
     @staticmethod
     def _insight_report_totals(metrics_retrieved: int, metrics_failed: int) -> None:
         """Print and log the retrieval totals for the insight-metrics run."""
-        print(f"! Metric retrieval completed: {metrics_retrieved} successful, {metrics_failed} failed")  # Tell user.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info(
+            "! Metric retrieval completed: %d successful, %d failed", metrics_retrieved, metrics_failed
+        )  # Tell user.
         logging.info(
             "Org insight metrics: %s retrieved successfully, %s failed", metrics_retrieved, metrics_failed
         )  # Log the retrieval totals for traceability.
@@ -471,8 +490,12 @@ class OrgExportUtils:
         if org_metrics is None:  # Setup wrote empty outputs and signaled there is nothing to export.
             return  # Abort the export.
         org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org to query.
-        print(f"! Retrieving {len(org_metrics)} different organization insight metrics...")  # Tell the user the count.
-        print("! Processing each metric individually with proper error handling...")  # Explain the per-metric handling.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info(
+            "! Retrieving %d different organization insight metrics...", len(org_metrics)
+        )  # Tell the user the count.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("! Processing each metric individually with proper error handling...")  # Explain per-metric.
         parameterized_metrics = OrgExportUtils._load_parameterized_metric_choices()  # Metrics needing a 'metric' param.
         try:  # Guard the whole fetch-and-export so a failure still leaves consistent empty outputs.
             all_insight_data, metrics_retrieved, metrics_failed = OrgExportUtils._insight_collect_all_metrics(  # Fetch.
@@ -482,11 +505,13 @@ class OrgExportUtils:
             if all_insight_data:  # At least one metric returned data.
                 OrgExportUtils._insight_export_normalized(all_insight_data, org_id, metrics_retrieved)  # Write CSVs.
             else:  # Every metric failed or returned empty.
-                print("! 0 organization insight metrics exported (no data available)")  # Tell the user zero.
+                # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+                logger.warning("! 0 organization insight metrics exported (no data available)")  # Tell the user zero.
                 logging.warning("No org insight data available - all metrics failed or returned empty")  # Warn no data.
                 OrgExportUtils._insight_write_empty_outputs(include_legacy=True)  # Write the 5 empty files.
         except Exception as exception:  # The export failed unexpectedly.
-            print(f"! Error exporting organization insight metrics: {exception}")  # Tell the user about the error.
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.error("! Error exporting organization insight metrics: %s", exception)  # Tell the user.
             logging.error("Failed to export org insight metrics: %s", exception)  # Log the failure with context.
             OrgExportUtils._insight_write_empty_outputs(include_legacy=True)  # Write the 5 empty files on error.
 
@@ -694,7 +719,8 @@ class OrgExportUtils:
             data = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested fields.
             data = DataProcessingUtils.escape_multiline(data)  # type: ignore[no-untyped-call]
             mh.DataExporter.write_with_format_selection(data, "OrgAuditLogs.csv")  # type: ignore[no-untyped-call]
-            print(f"! {len(data)} audit logs exported to OrgAuditLogs.csv")  # Tell the user.
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.info("! %d audit logs exported to OrgAuditLogs.csv", len(data))  # Tell the user.
             logging.info("Completed audit logs export and wrote results to OrgAuditLogs.csv.")  # Log completion.
             logging.info("Menu #22: Audit logs export completed - %s records", len(data))  # Log the count.
             logging.debug("EXIT: OrgExportUtils.audit_logs - success")  # Trace success.
@@ -732,7 +758,8 @@ class OrgExportUtils:
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ConfigUtils + apisession + helpers.
         current_org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
         if not current_org_id:  # No org.
-            print("! No organization selected. Exiting.")  # Tell the user.
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.warning("! No organization selected. Exiting.")  # Tell the user.
             return  # Abort.
         mh.E911BSSIDReportGenerator.execute(  # Run the report.
             apisession=mh.apisession,
