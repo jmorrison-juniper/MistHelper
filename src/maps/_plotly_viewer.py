@@ -158,7 +158,7 @@ class _PlotlyViewer:  # WHY: Class boundary for extracted Plotly/Dash viewer met
             )
             mesh_links_added += 1  # WHY: Increment drawn link count for legend gating.
         if mesh_links_added > 0:  # WHY: Only log if any links were drawn.
-            logging.info("Added %d mesh links between APs", mesh_links_added)  # WHY: Inform operator of topology.
+            logger.info("Added %d mesh links between APs", mesh_links_added)  # WHY: Inform operator of topology.
 
     @staticmethod
     def _add_orientation_horizontal_arm(
@@ -253,7 +253,7 @@ class _PlotlyViewer:  # WHY: Class boundary for extracted Plotly/Dash viewer met
         self, vbeacons: list
     ) -> tuple[list, list, list, list]:  # WHY: Return parallel arrays for vbeacon markers.
         """Return parallel arrays of (xs, ys, hovertexts, names) for placeable virtual beacons."""
-        logging.debug("Collecting marker data for %d virtual beacons", len(vbeacons))  # WHY: Trace collection start.
+        logger.debug("Collecting marker data for %d virtual beacons", len(vbeacons))  # WHY: Trace collection start.
         beacon_x: list = []  # WHY: Beacon x pixel coordinates.
         beacon_y: list = []  # WHY: Beacon y pixel coordinates.
         beacon_hover: list = []  # WHY: HTML hover tooltip strings.
@@ -267,14 +267,14 @@ class _PlotlyViewer:  # WHY: Class boundary for extracted Plotly/Dash viewer met
             name = beacon.get("name", "Unnamed Beacon")  # WHY: Beacon display name fallback.
             beacon_names.append(name)  # WHY: Store name for annotation.
             beacon_hover.append(self._build_vbeacon_hover(beacon, name, x, y))  # WHY: Append hover HTML.
-        logging.debug("Collected %d placeable virtual beacons", len(beacon_x))  # WHY: Log result count.
+        logger.debug("Collected %d placeable virtual beacons", len(beacon_x))  # WHY: Log result count.
         return beacon_x, beacon_y, beacon_hover, beacon_names  # WHY: Return parallel arrays.
 
     def _add_vbeacon_markers_trace(
         self, fig, beacon_x: list, beacon_y: list, beacon_hover: list
     ) -> None:  # WHY: Add vbeacon Scatter trace.
         """Add a single Scatter trace containing all virtual beacon marker points."""
-        logging.debug("Adding virtual beacon Scatter trace with %d points", len(beacon_x))  # Log trace add
+        logger.debug("Adding virtual beacon Scatter trace with %d points", len(beacon_x))  # Log trace add
         fig.add_trace(
             go.Scatter(
                 x=beacon_x,
@@ -299,7 +299,7 @@ class _PlotlyViewer:  # WHY: Class boundary for extracted Plotly/Dash viewer met
         self, fig, beacon_x: list, beacon_y: list, beacon_names: list
     ) -> None:  # WHY: Per-beacon text annotations.
         """Add per-beacon text annotations below each marker."""
-        logging.debug("Adding %d virtual beacon label annotations", len(beacon_x))  # Log annotation add
+        logger.debug("Adding %d virtual beacon label annotations", len(beacon_x))  # Log annotation add
         for _, (x, y, name) in enumerate(zip(beacon_x, beacon_y, beacon_names, strict=True)):  # Add per-beacon labels
             fig.add_annotation(
                 x=x,
@@ -343,7 +343,7 @@ class _PlotlyViewer:  # WHY: Class boundary for extracted Plotly/Dash viewer met
 
     def _add_vbeacon_coverage_circles(self, fig, vbeacons: list) -> None:  # WHY: Add coverage rings per vbeacon.
         """Add a translucent dashed coverage ring around each virtual beacon, sized by transmit power."""
-        logging.debug(
+        logger.debug(
             "Adding coverage circles for %d virtual beacons", len(vbeacons)
         )  # WHY: Log circle add for tracing.
         for beacon in vbeacons:  # WHY: Add power-based coverage circles for each beacon.
@@ -357,10 +357,10 @@ class _PlotlyViewer:  # WHY: Class boundary for extracted Plotly/Dash viewer met
     def _add_vbeacons_to_figure(self, fig, map_data: dict) -> None:  # WHY: Compose vbeacon markers + labels + rings.
         """Add virtual beacon markers, labels, and coverage circles to the Plotly figure."""
         if not map_data.get("vbeacons"):  # No virtual beacons on this map -- skip
-            logging.info("No virtual beacons found on this map")  # Informational for operator
+            logger.info("No virtual beacons found on this map")  # Informational for operator
             return  # Nothing to add
         vbeacons = map_data["vbeacons"]  # List of virtual beacon objects from Mist API
-        logging.info("Processing %d virtual beacons", len(vbeacons))  # Log beacon count
+        logger.info("Processing %d virtual beacons", len(vbeacons))  # Log beacon count
         # Build parallel arrays of valid beacon coordinates and hover text
         beacon_x, beacon_y, beacon_hover, beacon_names = self._collect_vbeacon_markers(
             vbeacons
@@ -370,7 +370,7 @@ class _PlotlyViewer:  # WHY: Class boundary for extracted Plotly/Dash viewer met
         self._add_vbeacon_markers_trace(fig, beacon_x, beacon_y, beacon_hover)  # Single Scatter trace for all markers
         self._add_vbeacon_label_annotations(fig, beacon_x, beacon_y, beacon_names)  # Per-beacon text labels
         self._add_vbeacon_coverage_circles(fig, vbeacons)  # Power-proportional coverage rings
-        logging.info("Added %d virtual beacons to map", len(beacon_x))  # Log final count
+        logger.info("Added %d virtual beacons to map", len(beacon_x))  # Log final count
 
     @staticmethod
     def _collect_ble_beacon_markers(
@@ -445,10 +445,10 @@ class _PlotlyViewer:  # WHY: Class boundary for extracted Plotly/Dash viewer met
     def _add_ble_beacons_to_figure(self, fig, map_data: dict) -> None:  # WHY: Compose BLE markers + labels.
         """Add BLE beacon markers and labels to the Plotly figure."""
         if not map_data.get("beacons"):  # WHY: No BLE beacons on this map -- skip.
-            logging.info("No BLE beacons found on this map")  # WHY: Informational for operator.
+            logger.info("No BLE beacons found on this map")  # WHY: Informational for operator.
             return  # WHY: Nothing to add.
         ble_beacons = map_data["beacons"]  # WHY: List of BLE beacon objects from Mist API.
-        logging.info("Processing %d BLE beacons", len(ble_beacons))  # WHY: Log beacon count.
+        logger.info("Processing %d BLE beacons", len(ble_beacons))  # WHY: Log beacon count.
         ble_x, ble_y, ble_hover, ble_names = self._collect_ble_beacon_markers(
             ble_beacons
         )  # WHY: Build parallel arrays.
@@ -456,7 +456,7 @@ class _PlotlyViewer:  # WHY: Class boundary for extracted Plotly/Dash viewer met
             return  # WHY: Nothing to render.
         self._add_ble_markers_trace(fig, ble_x, ble_y, ble_hover)  # WHY: Single Scatter trace for all markers.
         self._add_ble_label_annotations(fig, ble_x, ble_y, ble_names)  # WHY: Per-beacon text labels.
-        logging.info("Added %d BLE beacons to map", len(ble_x))  # WHY: Log final count.
+        logger.info("Added %d BLE beacons to map", len(ble_x))  # WHY: Log final count.
 
     def _launch_plotly_viewer(  # WHY: Public entry point; delegates to extracted ViewerLauncher.
         self,
@@ -472,10 +472,10 @@ class _PlotlyViewer:  # WHY: Class boundary for extracted Plotly/Dash viewer met
 
     def _open_browser_after_delay(dash_port: int) -> None:  # WHY: Delayed browser auto-open.
         """Wait for the Dash server to start, then open the system browser to the viewer URL."""
-        logging.info("Browser auto-open: scheduling open to http://127.0.0.1:%s", dash_port)  # Trace start
+        logger.info("Browser auto-open: scheduling open to http://127.0.0.1:%s", dash_port)  # Trace start
         time.sleep(1.5)  # Wait for Dash server to initialize (matches original delay)
         webbrowser.open(f"http://127.0.0.1:{dash_port}")  # Launch system browser
-        logging.debug("Browser opened to http://127.0.0.1:%s", dash_port)  # Mirror original log
+        logger.debug("Browser opened to http://127.0.0.1:%s", dash_port)  # Mirror original log
 
     # ------------------------------------------------------------------
     # Wave E2 helpers extracted from _launch_plotly_viewer to drive CC <= 10
@@ -500,46 +500,62 @@ class _PlotlyViewer:  # WHY: Class boundary for extracted Plotly/Dash viewer met
 
     def _try_import_dash_modules(self, map_data: dict, devices: list) -> tuple | None:  # WHY: Import Dash or fall back.
         """Import dash + companions; on ImportError run the static fallback and return ``None``."""
-        logging.info("_try_import_dash_modules: attempting to import dash")  # Trace start
+        logger.info("_try_import_dash_modules: attempting to import dash")  # Trace start
         try:
-            logging.debug("Importing Dash modules for interactive viewer")  # WHY: Mirror original log.
+            logger.debug("Importing Dash modules for interactive viewer")  # WHY: Mirror original log.
             import dash  # WHY: Heavy module; local import keeps top-of-file imports minimal.
             from dash import Dash, Input, Output, State, dcc, html, no_update  # WHY: Names used in layout/callbacks.
 
-            logging.info("Dash version: %s", dash.__version__)  # WHY: Record actual Dash version at launch.
+            logger.info("Dash version: %s", dash.__version__)  # WHY: Record actual Dash version at launch.
             return dash, Dash, Input, Output, State, dcc, html, no_update  # WHY: Return full Dash symbol tuple.
         except ImportError as e:  # WHY: Fallback path (mirrors original except block).
-            logging.exception("Failed to import Dash, falling back to static view: %s", e)  # WHY: Surface import fail.
-            print("\n! Dash not available - using static Plotly view only")  # WHY: Operator-visible fallback notice.
-            print("! Install with: pip install dash")  # WHY: Actionable install hint for operator.
+            logger.exception("Failed to import Dash, falling back to static view: %s", e)  # WHY: Surface import fail.
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.warning("! Dash not available - using static Plotly view only")
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.warning("! Install with: pip install dash")
             self._create_static_plotly_map(map_data, devices)  # WHY: Render static figure instead.
             return None  # WHY: Signal to caller that Dash is unavailable.
 
     @staticmethod
     def _print_viewer_intro_banner() -> None:  # WHY: Print operator-facing launch banner.
         """Print the user-facing 'LAUNCHING INTERACTIVE MAP VIEWER' banner (no decisions)."""
-        print("\n" + "-" * 80)  # WHY: Visual separator above banner.
-        print("LAUNCHING INTERACTIVE MAP VIEWER")  # WHY: Banner title line.
-        print("-" * 80)  # WHY: Visual separator below title.
-        print("! Opening web browser with interactive map...")  # WHY: Announce browser launch.
-        print("! Features:")  # WHY: Preface bullet list of viewer capabilities.
-        print("!   - Toggle layers (walls, zones, wayfinding, devices, clients)")  # WHY: Layer toggles bullet.
-        print("!   - Live data refresh (clients update every 30s, RF every 5min)")
-        print("!   - Ruler tool - Draw lines to measure distances")
-        print("!   - Connected client visualization (green dots)")
-        print("!   - Click devices/clients to see details")
-        print("!   - Drag devices to new positions (future: save to cloud)")
-        print("!   - Pan and zoom")
-        print("! Press Ctrl+C in terminal to stop server")
-        print("-" * 80)
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("-" * 80)
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("LAUNCHING INTERACTIVE MAP VIEWER")
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("-" * 80)
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("! Opening web browser with interactive map...")
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("! Features:")
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("!   - Toggle layers (walls, zones, wayfinding, devices, clients)")
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("!   - Live data refresh (clients update every 30s, RF every 5min)")
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("!   - Ruler tool - Draw lines to measure distances")
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("!   - Connected client visualization (green dots)")
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("!   - Click devices/clients to see details")
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("!   - Drag devices to new positions (future: save to cloud)")
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("!   - Pan and zoom")
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("! Press Ctrl+C in terminal to stop server")
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("-" * 80)
 
     @staticmethod
     def _add_background_image_to_figure(fig: object, map_data: dict, map_width: int, map_height: int) -> None:
         """Add the map background image to the figure (gates the URL check internally)."""
         if "url" not in map_data:  # Mirror original else-branch behavior
-            logging.warning("Map has no background image URL")
+            logger.warning("Map has no background image URL")
             return
-        logging.debug("Adding map background image: %s...", str(map_data.get("url"))[:100])  # Mirror log
+        logger.debug("Adding map background image: %s...", str(map_data.get("url"))[:100])  # Mirror log
         fig.add_layout_image(  # Plotly background-image API
             source=map_data["url"],
             x=0,
@@ -609,7 +625,7 @@ class _PlotlyViewer:  # WHY: Class boundary for extracted Plotly/Dash viewer met
         for device in type_devices:  # One log line per device
             device_name = device.get("name", "Unnamed")
             device_orientation = device.get("orientation", 0)
-            logging.debug("Device '%s': orientation=%s", device_name, device_orientation)
+            logger.debug("Device '%s': orientation=%s", device_name, device_orientation)
 
     @staticmethod
     def _build_device_marker_style(type_cfg: dict, colors: list[str]) -> dict:  # WHY: Isolate marker style dict.
@@ -846,14 +862,19 @@ class _PlotlyViewer:  # WHY: Class boundary for extracted Plotly/Dash viewer met
     @staticmethod
     def _print_dash_startup_banner(dash_host: str, dash_port: int) -> None:
         """Print the user-facing 'Starting Dash server...' banner."""
-        print("\nStarting Dash server...")
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("\nStarting Dash server...")
         if is_running_in_container():  # Container-specific lines
-            print(f"! Map viewer available at http://<container-ip>:{dash_port}")
-            print(f"! Access from host: http://localhost:{dash_port} (if port is mapped)")
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.info("! Map viewer available at http://<container-ip>:%s", dash_port)
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.info("! Access from host: http://localhost:%s (if port is mapped)", dash_port)
         else:
-            print("! Map viewer will open in your default browser")
-        print("! Press Ctrl+C to stop the server\n")
-        logging.info("Starting Dash server on http://%s:%s", dash_host, dash_port)  # Mirror original log
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.info("! Map viewer will open in your default browser")
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("! Press Ctrl+C to stop the server\n")
+        logger.info("Starting Dash server on http://%s:%s", dash_host, dash_port)  # Mirror original log
 
     def _schedule_browser_open(self, dash_port: int) -> None:
         """Start a daemon thread that opens the browser shortly after server boots (skip in container)."""
@@ -869,7 +890,7 @@ class _PlotlyViewer:  # WHY: Class boundary for extracted Plotly/Dash viewer met
         """Run the Dash server with the project's standard kwargs, handling Ctrl+C + errors."""
         try:
             debug_mode = getattr(globals().get("args"), "debug", False)  # CLI --debug flag if present
-            logging.info("Starting Dash server with debug_mode=%s", debug_mode)  # Mirror original log
+            logger.info("Starting Dash server with debug_mode=%s", debug_mode)  # Mirror original log
             app.run(  # Dash 3.x uses app.run() instead of app.run_server()
                 host=dash_host,
                 port=dash_port,
@@ -878,11 +899,13 @@ class _PlotlyViewer:  # WHY: Class boundary for extracted Plotly/Dash viewer met
                 threaded=True,
             )
         except KeyboardInterrupt:  # Mirror original user-cancel path
-            print("\n\nMap viewer stopped by user")
-            logging.info("Interactive map viewer stopped by user (Ctrl+C)")
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.info("\n\nMap viewer stopped by user")
+            logger.info("Interactive map viewer stopped by user (Ctrl+C)")
         except Exception as e:  # Mirror original catch-all
-            logging.exception("Error running Dash server: %s", e)
-            print(f"\n! Error running map viewer: {e}")
+            logger.exception("Error running Dash server: %s", e)
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.error("\n! Error running map viewer: %s", e)
 
     @staticmethod
     def _add_static_map_background(fig: object, map_data: dict, map_width: int, map_height: int) -> None:
@@ -955,19 +978,22 @@ class _PlotlyViewer:  # WHY: Class boundary for extracted Plotly/Dash viewer met
 
         map_id = str(map_data.get("id", "unknown"))[:8]  # WHY: Short id fragment for stable temp name.
         temp_html = os.path.join(tempfile.gettempdir(), f"mist_map_{map_id}.html")  # WHY: OS-appropriate temp path.
-        logging.debug("Saving static map to: %s", temp_html)  # WHY: Debug the resolved path.
+        logger.debug("Saving static map to: %s", temp_html)  # WHY: Debug the resolved path.
         fig.write_html(temp_html)  # WHY: Serialise the figure to a self-contained HTML file.
-        print(f"\n! Map saved to: {temp_html}")  # WHY: Surface the path to the operator.
-        print("! Opening in browser...")  # WHY: Announce browser launch.
-        logging.info("Static HTML map created: %s", temp_html)  # WHY: Record for audit.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("\n! Map saved to: %s", temp_html)
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("! Opening in browser...")
+        logger.info("Static HTML map created: %s", temp_html)  # WHY: Record for audit.
         webbrowser.open(f"file://{temp_html}")  # WHY: Trigger the OS browser handler.
-        logging.debug("Browser launched with static map")  # WHY: Post-launch trace.
+        logger.debug("Browser launched with static map")  # WHY: Post-launch trace.
 
     def _create_static_plotly_map(self, map_data, devices):
         """Create static Plotly HTML map when Dash is not available."""
         import plotly.graph_objects as go  # WHY: Only import when this path is taken.
 
-        print("\n! Creating static HTML map...")  # WHY: Notify operator we are falling back to static.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("\n! Creating static HTML map...")
         fig = go.Figure()  # WHY: Fresh figure receives all traces + layout.
         map_width = map_data.get("width", 1000)  # WHY: Fallback width in pixels.
         map_height = map_data.get("height", 1000)  # WHY: Fallback height in pixels.
@@ -988,7 +1014,7 @@ def launch_plotly_viewer(
     Kept as a thin factory so MapsManager (and tests) can invoke the
     plotly viewer without instantiating :class:`_PlotlyViewer` directly.
     """
-    logging.debug(
+    logger.debug(
         "launch_plotly_viewer invoked for scope=%s", getattr(scope, "site_name", "?")
     )  # WHY: Trace entry point.
     viewer = _PlotlyViewer(maps_manager)  # WHY: Wrap MapsManager so viewer helpers can call back safely.
