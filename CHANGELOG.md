@@ -31,6 +31,26 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
   warning for `templates`) to `caplog.at_level(...)` reads against the
   module logger. Full module suite: 62/62 green.
 
+### #886 Phase 2 slice 81/N: retire `print()` in `src/ssh/runtime/interactive_mode.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced all 15 `print()` calls
+  in `src/ssh/runtime/interactive_mode.py` with module-scoped `logger.*`
+  emissions using `%`-style deferred formatting to satisfy G004. Level
+  heuristic: interactive banner, separator, and status line ("Starting SSH
+  session ...") route to `logger.info`; validation errors ("X  Hostname is
+  required", "X  Port must be between 1 and 65535", "X  Timeout must be a
+  valid number", etc.) and the empty-password abort message route to
+  `logger.warning`. Each converted call carries the standard
+  `# WHY: preserve operator notice verbatim; route through logger for
+  capture/redirection.` inline comment so future auditors can trace the
+  origin. Module-scoped `logger = logging.getLogger(__name__)` was added
+  alongside the pre-existing `logging.info/debug` audit calls.
+- **Tests (Unchanged)**: existing `TestInteractiveMode` suite (5 tests) in
+  `tests/unit/test_ssh_runner.py` continues to pass unmodified; the suite
+  asserts on boolean return values and `SingleCommandRunner.run` mock
+  invocations rather than captured stdout, so no capsys→caplog migration
+  was required.
+
 ### #886 Phase 2 slice 79/N: retire `print()` in `src/device/_utility_commands_clear.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 15 `print()` calls
