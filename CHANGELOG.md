@@ -7,6 +7,50 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 49/N: retire `print()` in `src/network/_routing_utils_payload.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced all 14 `print()` calls in
+  `src/network/_routing_utils_payload.py` with `logger.debug` / `logger.info`
+  / `logger.warning` emissions using `%`-style deferred formatting to
+  satisfy G004. Added a module-scoped `logger = logging.getLogger(__name__)`
+  at import time (the module previously used `logging.error(...)` against
+  the root logger). Level heuristic: `[DEBUG]` prefixed diagnostics
+  (`_post_device_command` POST URL, `_log_response_debug` HTTP status/body,
+  `_invoke_ssr_route_api` mistapi request trace, `_log_ssr_response_debug`
+  response type/data trace, and the `_extract_ssr_session_id` `[DEBUG]
+  SSR Route Command Response` line) map to `logger.debug`; user-facing
+  status lines (SSR/SRX device notice in `_invoke_ssr_route_api`, generic
+  `Failed to execute SSR route command:` fallback in
+  `_handle_ssr_api_error`, and the two positive-path `SSR route command
+  executed successfully` / `Response received:` lines in
+  `_extract_ssr_session_id`) map to `logger.info`; failure-path notices
+  (`Error executing SSR route command:`, `SSR route command may have
+  failed:`, and `No response data from SSR route command` in
+  `_extract_ssr_session_id`) map to `logger.warning`. The pre-existing
+  `logging.error("SSR route response is not a dict: %s", ...)` call in
+  `_handle_ssr_api_error` was converted to `logger.error(...)` for module
+  consistency. `traceback.print_exc()` was intentionally left untouched
+  (not a `T201` target). Each migrated call carries the standard
+  `# WHY: preserve operator notice verbatim; route through logger for
+  capture/redirection.` annotation and preserves the exact user-visible
+  text and indentation operators grep on.
+- **Test migration (Changed)**: `tests/unit/test_routing_utils.py` added
+  `import logging` and migrated two `capsys.readouterr().out`-based
+  assertions to `caplog` under
+  `caplog.at_level(..., logger="src.network._routing_utils_payload")`:
+  `TestExecuteSsrRouteCommand.test_api_exception` now asserts
+  `"Error executing SSR route command"` in `caplog.text` at `WARNING`;
+  `TestExecuteForwardingTableCommandDebug.test_debug_output` now asserts
+  the `[DEBUG] POST URL` + `[DEBUG] HTTP Response Status` pair in
+  `caplog.text` at `DEBUG`, with a `capsys.readouterr()` drain retained
+  to consume stray parent-module stdout that is not part of this slice's
+  migrated output. Full unit suite green: `pytest tests/unit/ -q` reports
+  `8529 passed` (exit 0); black and ruff clean on both changed files.
+- **Rationale**: brings `src/network/_routing_utils_payload.py` into
+  compliance with the module-by-module rollout of Ruff `T201` (`print()`
+  banned) and prepares the file for the eventual global flip in
+  `pyproject.toml`.
+
 ### #886 Phase 2 slice 48/N: retire `print()` in `src/maps/_maps_matplotlib.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 14 `print()` calls in
