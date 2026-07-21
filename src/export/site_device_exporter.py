@@ -27,6 +27,8 @@ from src.data.data_processing_utils import (
 from src.export.site_export_utils import SiteExportUtils  # WHY: Pattern 1 inline construction for port_stats export.
 from src.utils.tqdm_wrapper import tqdm  # WHY: 1015 T-14 -- canonical wrapper import (eliminates mh.tqdm).
 
+logger = logging.getLogger(__name__)  # WHY: module-scoped logger for #886 print-to-logger migration.
+
 
 class SiteDeviceExporter:
     """Site Device Data Exporter.
@@ -49,7 +51,8 @@ class SiteDeviceExporter:
             mh.apisession, site_id, type="all"
         ).data  # All device types
         if not rawdata:  # No devices.
-            print("No devices found for the selected site.")  # Tell the user.
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.warning("No devices found for the selected site.")  # Tell the user.
             logging.warning("No devices found for site_id=%s", site_id)  # Warn none found.
             return  # Abort.
         if device_type != "all":  # Type filter requested.
@@ -72,7 +75,8 @@ class SiteDeviceExporter:
         requested_types = [dtype.strip() for dtype in device_type.split(",")]  # Parse requested types.
         filtered = [d for d in rawdata if d.get("type", "").lower() in requested_types]  # Keep matching devices.
         if not filtered:  # None after filter.
-            print(f"No devices of type '{device_type}' found at the selected site.")  # Tell the user.
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.warning("No devices of type '%s' found at the selected site.", device_type)  # Tell the user.
             logging.warning("No devices of type '%s' found for site_id: %s", device_type, site_id)  # Warn none.
             return None  # Signal the caller to abort.
         return filtered  # Devices matching the requested type(s).
@@ -96,13 +100,15 @@ class SiteDeviceExporter:
         """Flatten + write device-stats rows to a per-site CSV, or tell the user when empty."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataProcessingUtils + DataExporter.
         if not rawdata:  # No data -- tell the user and return.
-            print("! No device statistics found for this site")  # User notice.
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.warning("! No device statistics found for this site")  # User notice.
             return  # Done.
         flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested fields.
         sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)  # CSV-safe.
         filename = f"SiteDeviceStats_{site_name.replace(' ', '_')}.csv"  # Build per-site CSV name.
         mh.DataExporter.write_with_format_selection(sanitized_data, filename)  # Persist.
-        print(f"! {len(rawdata)} device stats exported to {filename}")  # User notice with count.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("! %d device stats exported to %s", len(rawdata), filename)  # User notice with count.
 
     @staticmethod
     def _resolve_site_for_stats(export_label: str = "data") -> tuple[str, str] | None:
@@ -127,7 +133,8 @@ class SiteDeviceExporter:
     def device_stats() -> None:  # Export site device stats.
         """Export device statistics for a site to SiteDeviceStats.csv."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of live apisession.
-        print("Site Device Statistics:")  # Header
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("Site Device Statistics:")  # Header
         logging.info("Starting export of site device statistics...")  # Trace start
         resolved = SiteDeviceExporter._resolve_site_for_stats("device statistics")  # Prompt + org/site resolution
         if resolved is None:  # Abort signaled by resolver
@@ -139,7 +146,8 @@ class SiteDeviceExporter:
             SiteDeviceExporter._persist_site_device_stats(rawdata, site_name)  # Persist or tell user empty
         except Exception as e:  # Fetch failed
             logging.error("Error fetching device stats for site %s: %s", site_name, e)  # Log the error
-            print(f"! Error fetching device statistics: {e}")  # Tell the user
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.error("! Error fetching device statistics: %s", e)  # Tell the user
 
     @staticmethod
     def port_stats() -> None:  # Export site port stats.
@@ -176,7 +184,8 @@ class SiteDeviceExporter:
     def device_virtual_chassis() -> None:  # Export device virtual chassis.
         """Export virtual chassis data for a site to SiteDeviceVirtualChassis.csv."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of PromptUtils.
-        print("Export Virtual Chassis Information:")  # Header.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("Export Virtual Chassis Information:")  # Header.
         logging.info("Starting export of site device virtual chassis information...")  # Log start.
         site_id = mh.PromptUtils.select_site()  # Select a site.
         if not site_id:  # No site.
@@ -213,7 +222,8 @@ class SiteDeviceExporter:
             )  # Fetch
             if not response.data:  # No VC payload.
                 logging.warning("! No virtual chassis data returned for device %s", device_name)  # Warn no VC data.
-                print(f"! No virtual chassis data found for device {device_name}")  # Tell the user.
+                # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+                logger.warning("! No virtual chassis data found for device %s", device_name)  # Tell the user.
                 return  # Nothing to export.
             vc_data = [response.data] if isinstance(response.data, dict) else response.data  # Normalize to a list.
             flattened = DataProcessingUtils.flatten_nested_fields(vc_data)  # Flatten nested fields.
@@ -224,39 +234,48 @@ class SiteDeviceExporter:
             SiteDeviceExporter._print_vc_summary(sanitized, device_name, filename)  # Print a short operator summary.
         except Exception as e:  # Export failed.
             logging.error("! Failed to export virtual chassis information: %s", e)  # Log the error.
-            print(f"! Failed to export virtual chassis information: {e}")  # Tell the user.
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.error("! Failed to export virtual chassis information: %s", e)  # Tell the user.
 
     @staticmethod
     def _print_vc_summary(sanitized: list[dict[str, Any]], device_name: str, filename: str) -> None:
         """Print a short VC summary (record count, optional members/preprovisioned fields, output path)."""
         if not sanitized:  # No records to summarize.
             return  # Nothing to print.
-        print(f"\n!! Virtual Chassis Summary for {device_name}:")  # Header.
-        print(f"   * Records exported: {len(sanitized)}")  # Show the count.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("\n!! Virtual Chassis Summary for %s:", device_name)  # Header.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("   * Records exported: %d", len(sanitized))  # Show the count.
         if "members" in sanitized[0]:  # Members present.
-            print(f"   * VC members: {sanitized[0].get('members', 'N/A')}")  # Show members.
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.info("   * VC members: %s", sanitized[0].get("members", "N/A"))  # Show members.
         if "preprovisioned" in sanitized[0]:  # Preprovisioned present.
-            print(f"   * Preprovisioned: {sanitized[0].get('preprovisioned', 'N/A')}")  # Show preprovisioned flag.
-        print(f"   * Data saved to: {filename}")  # Show the path.
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.info("   * Preprovisioned: %s", sanitized[0].get("preprovisioned", "N/A"))  # Show preprovisioned.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("   * Data saved to: %s", filename)  # Show the path.
 
     @staticmethod
     def _persist_site_devices(rawdata: list[dict[str, Any]], site_name: str) -> None:
         """Flatten + persist site-devices rows to a per-site CSV (or tell the user when empty)."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataProcessingUtils + DataExporter.
         if not rawdata:  # No devices -- tell the user and return.
-            print("! No devices found for this site")  # User notice.
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.warning("! No devices found for this site")  # User notice.
             return  # Done.
         flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested fields.
         sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)  # CSV-safe.
         filename = f"SiteDevices_{site_name.replace(' ', '_')}.csv"  # Per-site CSV name.
         mh.DataExporter.write_with_format_selection(sanitized_data, filename)  # Persist.
-        print(f"! {len(rawdata)} devices exported to {filename}")  # User notice with count.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("! %d devices exported to %s", len(rawdata), filename)  # User notice with count.
 
     @staticmethod
     def devices() -> None:  # Export site device list.
         """Export device data for a site to SiteDevices.csv."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of live apisession.
-        print("Site Device List:")  # Header
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("Site Device List:")  # Header
         logging.info("Starting export of site device list...")  # Trace start
         resolved = SiteDeviceExporter._resolve_site_for_stats("device list")  # Prompt + org/site resolution
         if resolved is None:  # Abort signaled by resolver
@@ -268,4 +287,5 @@ class SiteDeviceExporter:
             SiteDeviceExporter._persist_site_devices(rawdata, site_name)  # Persist or tell user empty
         except Exception as e:  # Fetch failed
             logging.error("Error fetching devices for site %s: %s", site_name, e)  # Log the error
-            print(f"! Error fetching device data: {e}")  # Tell the user
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.error("! Error fetching device data: %s", e)  # Tell the user

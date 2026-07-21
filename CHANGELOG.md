@@ -7,6 +7,20 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 91/N: retire `print()` in `src/export/site_device_exporter.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced all 18 `print()` calls in
+  `src/export/site_device_exporter.py` with module-scoped `logger.*` emissions
+  using `%`-style deferred formatting to satisfy G004. Level heuristic: empty-
+  data / filter-miss / no-VC-payload user notices map to `logger.warning`;
+  banners, per-site export counts, and VC summary lines map to `logger.info`;
+  fetch/export exception branches in `device_stats`, `devices`, and
+  `_export_vc_for_device` map to `logger.error`. Behavior otherwise unchanged.
+- **Test capture migration (Changed)**: converted the 13 `capsys`-based stdout
+  assertions in `tests/unit/export/test_site_device_exporter.py` to
+  `caplog`-based assertions targeting `LOGGER_NAME = "src.export.site_device_exporter"`
+  so the suite exercises the migrated logger pipeline; all 37 tests pass.
+
 ### #886 Phase 2 slice 90/N: retire `print()` in `src/device/_utility_commands_show.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 17 `print()` calls
