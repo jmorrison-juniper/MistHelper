@@ -5,10 +5,12 @@ data is writable by the current process, providing actionable guidance
 (local versus container remediation) when the check fails.
 
 This module runs *very* early during MistHelper module initialization —
-before the logging subsystem has been configured — so all user-facing
-output uses ``print()`` rather than ``logging``. Logging calls are still
-used at INFO/DEBUG level to record the check outcome for later reading
-from the log file once logging comes online.
+before the logging subsystem has been fully configured — so operator-visible
+output is emitted through the stdlib ``logging`` module (per issue #886).
+Emissions still reach the console via the root logger's default handler
+even before MistHelper installs its own handlers, and they are captured
+into the log file once logging comes online. Structured INFO/DEBUG traces
+record the check outcome for later triage.
 
 The class is otherwise self-contained: it depends only on the stdlib
 (``os``, ``sys``) and no MistHelper globals, so it does not need the
@@ -21,12 +23,15 @@ import logging  # Structured action logging required by coding standards
 import os  # File-system operations (path join, exists, remove) used by the writable check
 import sys  # sys.exit() to abort early when the directory is not writable
 
+logger = logging.getLogger(__name__)  # WHY: module-scoped logger for #886 print-to-logger migration.
+
 
 class DataDirectoryChecker:
     """Check data directory write permissions and provide actionable guidance.
 
-    This class runs very early during module initialization (before logging),
-    so it uses print() for user-facing output rather than logging.
+    This class runs very early during module initialization (before MistHelper's
+    logging handlers are installed), so operator-facing output is routed through
+    the stdlib ``logging`` root logger rather than raw ``print()`` calls (#886).
 
     Usage:
         DataDirectoryChecker(_early_log_dir).check()
@@ -91,38 +96,58 @@ class DataDirectoryChecker:
 
     def _print_error_header(self) -> None:  # Display error banner with path
         """Print the error header with path information."""
-        print("\n" + "=" * 70)  # Print separator to visually isolate error message
-        print("ERROR: Data directory is not writable!")  # Print main error message
-        print("=" * 70)  # Print closing separator
-        print(f"\nPath: {os.path.abspath(self.data_dir)}")  # Print absolute path to the inaccessible directory
-        print("\nMistHelper cannot write logs or data to the data/ directory.")  # Explain impact of the error
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.error("\n%s", "=" * 70)  # Print separator to visually isolate error message
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.error("ERROR: Data directory is not writable!")  # Print main error message
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.error("%s", "=" * 70)  # Print closing separator
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.error("\nPath: %s", os.path.abspath(self.data_dir))  # Print absolute path
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.error("\nMistHelper cannot write logs or data to the data/ directory.")  # Explain impact
 
     def _print_container_guidance(self) -> None:  # Display container-specific remediation
         """Print guidance specific to container deployments."""
-        print("\n[CONTAINER DETECTED]")  # Indicate container environment detected
-        print(
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("\n[CONTAINER DETECTED]")  # Indicate container environment detected
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info(
             "The container runs as non-root user 'misthelper' for security."
         )  # Explain why permissions are restricted
-        print("The mounted data/ directory must have write permissions.")  # State the requirement
-        print("\nTo fix this, run the following on your HOST machine:")  # Provide context for the fix
-        print("\n    chmod -R 777 data/")  # Show command to grant write permissions
-        print("\nThen restart the container:")  # Explain next step
-        print("    podman stop misthelper && podman rm misthelper")  # Show stop and remove command
-        print(
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("The mounted data/ directory must have write permissions.")  # State the requirement
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("\nTo fix this, run the following on your HOST machine:")  # Provide context for the fix
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("\n    chmod -R 777 data/")  # Show command to grant write permissions
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("\nThen restart the container:")  # Explain next step
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("    podman stop misthelper && podman rm misthelper")  # Show stop and remove command
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info(
             "    podman run -d --name misthelper -p 2200:2200 -p 8050:8050 \\"
         )  # Show container restart with port mapping
-        print(
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info(
             '        -v "${PWD}/data:/app/data:rw" -v "${PWD}/.env:/app/.env:ro" \\'
         )  # Show volume mount with correct permissions
-        print("        ghcr.io/jmorrison-juniper/misthelper:latest")  # Show container image URI
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("        ghcr.io/jmorrison-juniper/misthelper:latest")  # Show container image URI
 
     def _print_local_guidance(self) -> None:  # Display local environment remediation
         """Print guidance for local (non-container) environments."""
-        print("\nTo fix this, ensure the data/ directory is writable:")  # Provide context for local fix
-        print("\n    chmod -R 755 data/")  # Show command to set directory permissions
-        print("    # Or if you own the directory:")  # Provide alternative if ownership is an issue
-        print("    chown -R $(whoami) data/")  # Show command to change ownership to current user
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("\nTo fix this, ensure the data/ directory is writable:")  # Provide context for local fix
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("\n    chmod -R 755 data/")  # Show command to set directory permissions
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("    # Or if you own the directory:")  # Provide alternative if ownership is an issue
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("    chown -R $(whoami) data/")  # Show command to change ownership to current user
 
     def _print_error_footer(self) -> None:  # Display error footer separator
         """Print the closing separator line."""
-        print("\n" + "=" * 70)  # Print separator line to visually isolate error message
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.error("\n%s", "=" * 70)  # Print separator line to visually isolate error message

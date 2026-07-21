@@ -7,6 +7,29 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 99/N: retire `print()` in `src/refactors/data_directory_checker.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced all 20 `print()` calls in
+  `src/refactors/data_directory_checker.py` with a module-scoped
+  `logger = logging.getLogger(__name__)` and level-appropriate `logger.*`
+  emissions using `%`-style deferred formatting to satisfy G004. The four
+  `_print_*` helpers were reclassified per severity: `_print_error_header`
+  and `_print_error_footer` (banner + path + impact sentence + closing
+  separator, 6 sites) route to `logger.error`; `_print_container_guidance`
+  (10 sites) and `_print_local_guidance` (4 sites) route to `logger.info`
+  because they emit operator remediation steps rather than errors. Each
+  converted call carries the standard `# WHY: preserve operator notice
+  verbatim; route through logger for capture/redirection.` comment. Module
+  and class docstrings were updated to reflect that operator-facing output
+  now flows through the stdlib `logging` root logger (per #886) instead of
+  raw `print()`.
+- **Test migration (Changed)**: `tests/unit/refactors/test_data_directory_checker.py`
+  dropped the `capsys` fixture from the three `_handle_permission_error`
+  branches (local guidance, container guidance, podman-marker container
+  detection) and now asserts on `caplog.text` after
+  `caplog.at_level(logging.INFO, logger="src.refactors.data_directory_checker")`.
+  All 9 tests remain green with no behavioural drift.
+
 ### #886 Phase 2 slice 98/N: retire `print()` in `src/network/routing_utils.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 20 `print()` calls in
