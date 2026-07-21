@@ -7,6 +7,22 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 96/N: retire `print()` in `src/device/_utility_commands_websocket.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced all 19 `print()` calls in
+  `src/device/_utility_commands_websocket.py` with module-scoped `logger.*`
+  emissions using `%`-style deferred formatting to satisfy G004. Level
+  heuristic: banner/session/streaming/results notices map to `logger.info`;
+  no-response / no-session / connect-fail / subscribe-fail / no-results /
+  cancelled notices map to `logger.warning`; command-failed and streaming-
+  failed error paths map to `logger.error`. Each converted call carries the
+  standard `# WHY: preserve operator notice verbatim; route through logger for
+  capture/redirection.` comment above the emission.
+- **Test migration (Changed)**: migrated 12 `capsys` assertions in
+  `tests/unit/test_device_utility_commands.py` to `caplog` against
+  `_WS_LOGGER = "src.device._utility_commands_websocket"` so the assertions
+  follow the emissions across the print→logger boundary.
+
 ### #886 Phase 2 slice 95/N: retire `print()` in `src/websocket/manager.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 18 `print()` calls in
