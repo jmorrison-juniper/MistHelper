@@ -14,6 +14,8 @@ from src.websocket.manager import (  # Shared WebSocket helpers reused across ex
     get_mist_credentials,
 )
 
+logger = logging.getLogger(__name__)  # WHY: Module-scoped logger routes former print() operator notices
+
 
 def detect_debug_mode() -> bool:
     """Return True when the user passed --debug or -d on the CLI."""
@@ -32,9 +34,11 @@ def post_device_command(
 ) -> requests.Response | None:
     """POST a device-command to the Mist REST API and return the raw Response."""
     if debug_mode:  # Surface request metadata for the operator before sending
-        print(f"[DEBUG] POST URL = {url}")  # Print target URL exactly as the legacy code did
-        print(  # Print headers but never the real token value (security)
-            "[DEBUG] Headers = {'Authorization': 'Token [REDACTED]', " "'Content-Type': 'application/json'}"
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("[DEBUG] POST URL = %s", url)  # Print target URL exactly as the legacy code did
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info(  # Print headers but never the real token value (security)
+            "[DEBUG] Headers = {'Authorization': 'Token [REDACTED]', 'Content-Type': 'application/json'}"
         )
     logging.info("Issuing %s POST to %s", command_label, url)  # Action log before HTTP call
     response = requests.post(url, headers=headers, json=payload, timeout=30)  # Fire HTTP request
@@ -42,8 +46,10 @@ def post_device_command(
         "%s POST completed with status=%s", command_label, response.status_code
     )
     if debug_mode:  # Mirror legacy debug prints of full response
-        print(f"[DEBUG] HTTP Response Status = {response.status_code}")  # Show numeric status
-        print(f"[DEBUG] HTTP Response Body = {response.text}")  # Show raw body for diagnosis
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("[DEBUG] HTTP Response Status = %s", response.status_code)  # Show numeric status
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("[DEBUG] HTTP Response Body = %s", response.text)  # Show raw body for diagnosis
     return response  # Caller inspects status/body and decides next step
 
 
@@ -54,8 +60,10 @@ def extract_command_session(
 ) -> str | None:
     """Return the session id from a command response or disconnect+None on failure."""
     if response.status_code != 200:  # Any non-200 is a hard failure for the command
-        print(f"! Failed to issue {command_label} command: {response.status_code}")  # User-facing error
-        print(f"! Response: {response.text}")  # Show body for operator triage
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.warning("! Failed to issue %s command: %s", command_label, response.status_code)  # User-facing error
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.warning("! Response: %s", response.text)  # Show body for operator triage
         websocket_manager.disconnect()  # Free the WS since we will not consume results
         logging.warning(  # Action log after failure path
             "%s command failed; status=%s", command_label, response.status_code
@@ -64,7 +72,8 @@ def extract_command_session(
     response_payload = response.json()  # Parse JSON body returned by the API
     session_id = response_payload.get("session")  # Pull the session identifier used for demux
     if not session_id:  # API contract requires a session id for result correlation
-        print(f"! No session ID returned from {command_label} command")  # User-facing error
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.warning("! No session ID returned from %s command", command_label)  # User-facing error
         websocket_manager.disconnect()  # Free the WS since we cannot demux results
         logging.warning("%s command returned no session id", command_label)  # Action log
         return None  # Signal caller to abort
@@ -100,7 +109,8 @@ def print_extra_result_fields(
     extra_keys = [key for key in result_payload if key not in excluded_keys]  # Anything novel
     if not extra_keys:  # Nothing to show; keep output clean
         return  # Early return preserves prior visual layout
-    print(f"\nOTHER AVAILABLE FIELDS: {extra_keys}")  # Header matches legacy phrasing
+    # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+    logger.info("\nOTHER AVAILABLE FIELDS: %s", extra_keys)  # Header matches legacy phrasing
     _print_extra_field_values(result_payload, extra_keys)  # Extracted so CC stays <=5
 
 
@@ -113,4 +123,5 @@ def _print_extra_field_values(
     for field_name in extra_keys:  # Walk each unexpected key for visibility
         field_value = result_payload.get(field_name)  # Look up the actual value
         if field_value:  # Skip empty/falsey values per legacy behavior
-            print(f"{field_name}: {field_value}")  # Show the value verbatim
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.info("%s: %s", field_name, field_value)  # Show the value verbatim

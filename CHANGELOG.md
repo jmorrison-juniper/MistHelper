@@ -7,6 +7,29 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 74/N: retire `print()` in `src/websocket/diagnostics/common.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced all 9 `print()` calls in
+  `src/websocket/diagnostics/common.py` with `logger`-based emissions using
+  `%`-style deferred formatting to satisfy G004. Added a module-scoped
+  `logger = logging.getLogger(__name__)` (the module previously used only
+  bare `logging.debug/info/warning` calls; the new logger routes the former
+  print notices while pre-existing action logs remain on the root
+  `logging.*` API). Level heuristic: `info` for `[DEBUG] POST URL`,
+  `[DEBUG] Headers`, `[DEBUG] HTTP Response Status/Body` (still gated by
+  the CLI `debug_mode` flag), and for the `OTHER AVAILABLE FIELDS` header
+  and per-field value lines; `warning` for `! Failed to issue`,
+  `! Response:`, and `! No session ID returned` operator errors. Each
+  migrated call carries the standard `# WHY: preserve operator notice
+  verbatim; route through logger for capture/redirection.` annotation and
+  preserves legacy prefixes (`[DEBUG]`, `!`, `OTHER AVAILABLE FIELDS:`)
+  verbatim in the message string.
+- **Test migration (Changed)**: migrated 8 tests in
+  `tests/unit/websocket/diagnostics/test_common.py` from `capsys` to
+  `caplog` using `caplog.set_level(<LEVEL>, logger="src.websocket.diagnostics.common")`
+  and a `_messages()` helper that joins `caplog.records` for substring
+  matching. 14/14 tests pass; ruff T20 clean; ruff full clean; black clean.
+
 ### #886 Phase 2 slice 73/N: retire `print()` in `src/ssh/shell_execution/shell_executor.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 9 `print()` calls in
