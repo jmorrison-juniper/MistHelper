@@ -7,6 +7,20 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 86/N: retire `print()` in `src/maps/_maps_backup.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced all 4 `print()` calls in
+  `src/maps/_maps_backup.py` with `logger`-based emissions using `%`-style
+  deferred formatting to satisfy G004. The module already had a module-scoped
+  `logger = logging.getLogger(__name__)`. The three summary lines in
+  `_print_summary` (backup saved header, image line, summary counts) now go
+  through `logger.info`; the exception-path CLI warning in
+  `backup_map_geometry` now goes through `logger.warning`. Each replaced call
+  carries the standard "preserve operator notice verbatim; route through
+  logger for capture/redirection" WHY comment. No test files import
+  `_maps_backup` directly and no capsys assertions target its output, so no
+  test migration was required.
+
 ### #886 Phase 2 slice 85/N: retire `print()` in `src/maps/_maps_utils.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced the sole `print()` call in
