@@ -7,6 +7,25 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 87/N: retire `print()` in `src/site/address_audit/audit_engine.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced all 5 `print()` calls
+  in `src/site/address_audit/audit_engine.py` with `logger`-based emissions
+  using `%`-style deferred formatting to satisfy G004. Also converted the
+  14 module-level `logging.<level>(...)` calls to the new module-scoped
+  `logger = logging.getLogger(__name__)` handle added at the top of the
+  file. Preserved the six `logging.<Class>` type references
+  (`logging.Filter`, `logging.LogRecord`, `logging.Handler`,
+  `logging.StreamHandler`, `logging.FileHandler`) plus the
+  `logging.getLogger()` root-logger lookup inside
+  `_AddressAuditConsoleFilter`, since those are class references, not log
+  emission calls. Each replaced `print()` carries the standard
+  `# WHY: preserve operator notice verbatim; route through logger for
+  capture/redirection.` annotation.
+- **No test migration needed**: existing address-audit tests do not assert
+  on captured stdout for the migrated lines, so no capsys→caplog rewrite
+  was required.
+
 ### #886 Phase 2 slice 49/N: retire `print()` in `src/network/_routing_utils_payload.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 14 `print()` calls in
