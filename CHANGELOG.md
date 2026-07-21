@@ -7,6 +7,29 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 83/N: retire `print()` in `src/maps/_flask_viewer.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced all 8 `print()` calls in
+  `src/maps/_flask_viewer.py` with `logger`-based emissions using `%`-style
+  deferred formatting to satisfy G004. The module already had a module-scoped
+  `logger = logging.getLogger(__name__)` at line 23 (used by route handlers)
+  so no new imports were required. Six banner emissions in
+  `_print_flask_viewer_banner` (separator, title, separator, server URL
+  f-string, table-driven `_BANNER_LINES` loop, trailing separator) migrated
+  to `logger.info(...)`; the `KeyboardInterrupt` branch of `_run_flask_server`
+  migrated to `logger.info("\n\nFlask map viewer stopped by user")` and the
+  broad-exception fallback migrated to `logger.warning("\n! Error running
+  map viewer: %s", e)`. Each migrated call carries the standard
+  `# WHY: preserve operator notice verbatim; route through logger for
+  capture/redirection.` annotation and preserves the exact byte layout
+  operators grep on. The `_print_flask_viewer_banner` docstring updated
+  from "Print the pre-launch..." to "Emit the pre-launch..." to reflect
+  the migration; the function name is retained to avoid churning the one
+  call site in `launch_flask_viewer`.
+- **Test migration (Changed)**: none. No tests import or assert on
+  `_flask_viewer`, `_print_flask_viewer_banner`, `launch_flask_viewer`, or
+  `_run_flask_server` (grep across `tests/` returned zero matches).
+
 ### #886 Phase 2 slice 80/N: retire `print()` in `src/websocket/polling/result_combiner.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 11 `print()` calls in
