@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+import pytest
+
 from src.analytics.site_inventory_health_analyzer import SiteInventoryHealthAnalyzer, SiteInventoryHealthAnalyzerDeps
+
+_MODULE_LOGGER = "src.analytics.site_inventory_health_analyzer"  # WHY: pin caplog to SUT logger post-#886 migration.
 
 
 def _build_mistapi_stub() -> SimpleNamespace:
@@ -30,14 +35,15 @@ def _build_deps() -> SiteInventoryHealthAnalyzerDeps:
     )
 
 
-def test_analyze_exits_when_org_missing(capsys) -> None:
+def test_analyze_exits_when_org_missing(caplog: pytest.LogCaptureFixture) -> None:
     """Analyzer should stop early when org selection is unavailable."""
     deps = _build_deps()
     deps.get_org_id_fn.return_value = None
 
-    SiteInventoryHealthAnalyzer.analyze(deps)
+    with caplog.at_level(logging.WARNING, logger=_MODULE_LOGGER):
+        SiteInventoryHealthAnalyzer.analyze(deps)
 
-    assert "No organization selected" in capsys.readouterr().out
+    assert "No organization selected" in caplog.text
 
 
 def test_group_devices_by_site_sets_status_from_connected_field() -> None:
