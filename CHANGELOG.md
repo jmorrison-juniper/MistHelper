@@ -7,6 +7,40 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 77/N: retire `print()` in `src/analytics/data_collection_manager.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced all 11 `print()` calls in
+  `src/analytics/data_collection_manager.py` with `logger`-based emissions
+  using `%`-style deferred formatting to satisfy G004. Added a module-scoped
+  `logger = logging.getLogger(__name__)` (the module previously used only
+  bare `logging.info/error` calls; the new logger routes the former print
+  notices for capture/redirection while pre-existing action logs remain on
+  the root `logging.*` API). Level heuristic: `info` for the three-line
+  continuous-loop startup banner (` Starting continuous data collection
+  loop...`, `   This will collect core organizational data every 5
+  seconds`, `   Press CTRL+C to stop or create 'stop_loop.txt' file`), the
+  per-iteration header (`\n  Loop iteration N - TIMESTAMP`), each
+  exporter-step banner (`  Collecting site list...`, etc.), the
+  successful-loop tally (`  Loop N completed successfully`), and the
+  final `  Continuous data collection loop ended.` notice; `warning` for
+  the KeyboardInterrupt notice (`\n  Continuous data collection loop
+  stopped by user.`) and the per-iteration cycle-failure pair (`  Error
+  in loop N: ...`, `  Continuing to next iteration...`); `error` for the
+  fatal continuous-loop failure (`! Fatal error in continuous loop: ...`).
+  Each migrated call carries the standard `# WHY: preserve operator
+  notice verbatim; route through logger for capture/redirection.`
+  annotation and preserves the exact original string (leading `\n`,
+  double-space indentation, `! ` prefix) verbatim in the format string.
+- **Test migration (capsys → caplog)**: migrated six assertions in
+  `tests/unit/analytics/test_data_collection_manager.py` from
+  `capsys.readouterr().out` to `caplog.records` with
+  `caplog.set_level(logging.INFO|WARNING|ERROR,
+  logger="src.analytics.data_collection_manager")`, matching the level of
+  the migrated call under test. All 17 tests in the file pass.
+- **No dead-code cleanup this slice**: no unused helpers or constants were
+  produced by the migration; every migrated string is inlined at its call
+  site. Ruff T20 clean on the target file; black clean; ruff full clean.
+
 ### #886 Phase 2 slice 76/N: retire `print()` in `src/ssh/batch/multi_host_runner.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 10 `print()` calls in

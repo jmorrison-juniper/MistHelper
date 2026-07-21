@@ -19,6 +19,8 @@ from src.export.org_inventory_exporter import (
     OrgInventoryExporter,  # WHY: 1015 T-06 canonical import (eliminates mh.OrgInventoryExporter).
 )
 
+logger = logging.getLogger(__name__)  # WHY: module-scoped logger routes former print notices for capture/redirection.
+
 
 class DataCollectionManager:
     """Manages automated data collection and support package generation operations.
@@ -33,9 +35,12 @@ class DataCollectionManager:
     @staticmethod
     def _print_continuous_loop_banner() -> None:  # Print startup banner.
         """Print the startup banner for menu 76's continuous collection loop."""
-        print(" Starting continuous data collection loop...")  # Banner line 1.
-        print("   This will collect core organizational data every 5 seconds")  # Banner line 2.
-        print("   Press CTRL+C to stop or create 'stop_loop.txt' file")  # Banner line 3.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info(" Starting continuous data collection loop...")
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("   This will collect core organizational data every 5 seconds")
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("   Press CTRL+C to stop or create 'stop_loop.txt' file")
 
     @staticmethod
     def continuous_loop() -> None:  # Run the collection loop.
@@ -46,16 +51,20 @@ class DataCollectionManager:
         try:
             while True:  # Loop until stopped.
                 loop_count += 1  # Count the iteration.
-                print(f"\n  Loop iteration {loop_count} - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+                logger.info("\n  Loop iteration %d - %s", loop_count, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
                 if DataCollectionManager._check_stop_signal():  # Stop requested.
                     break  # Exit the loop.
                 DataCollectionManager._execute_collection_cycle(loop_count)  # Run one cycle.
         except KeyboardInterrupt:  # User pressed Ctrl+C.
-            print("\n  Continuous data collection loop stopped by user.")  # Tell the user.
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.warning("\n  Continuous data collection loop stopped by user.")
         except Exception as e:  # Unexpected failure.
             logging.error("Fatal error in continuous loop: %s", e)  # Log the error.
-            print(f"! Fatal error in continuous loop: {e}")  # Tell the user.
-        print(" Continuous data collection loop ended.")  # Tell the user ended.
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.error("! Fatal error in continuous loop: %s", e)
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info(" Continuous data collection loop ended.")
 
     @staticmethod
     def _check_stop_signal() -> bool:  # Check the stop signal.
@@ -80,16 +89,20 @@ class DataCollectionManager:
         """Execute one cycle of data collection with rate limiting."""
         try:
             for banner, step_callable in DataCollectionManager._collection_cycle_steps():
-                print(banner)  # Tell the user which exporter is running.
+                # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+                logger.info(banner)
                 step_callable()  # Invoke the per-step exporter.
                 time.sleep(0.75)  # Pace the API between exporters.
-            print(f"  Loop {loop_count} completed successfully")  # Tell the user.
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.info("  Loop %d completed successfully", loop_count)
         except KeyboardInterrupt:  # Propagate Ctrl+C.
             raise  # Re-raise to outer handler
         except Exception as e:  # Cycle failed.
             logging.error("Error in collection cycle %s: %s", loop_count, e)  # Log the error.
-            print(f"  Error in loop {loop_count}: {e}")  # Tell the user.
-            print("  Continuing to next iteration...")  # Tell the user.
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.warning("  Error in loop %d: %s", loop_count, e)
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.warning("  Continuing to next iteration...")
             time.sleep(5)  # Back off then retry.
 
     @staticmethod
