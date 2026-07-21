@@ -7,6 +7,34 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #886 Phase 2 slice 102/N: retire `print()` in `src/capture/client_pcap_downloader.py` (issue #886)
+
+- **Print-to-logger migration (Changed)**: replaced all 23 `print()` calls in
+  `src/capture/client_pcap_downloader.py` with a module-scoped
+  `logger = logging.getLogger(__name__)` and level-appropriate `logger.*`
+  emissions using `%`-style deferred formatting to satisfy G004. The class
+  `ClientPacketCaptureDownloader` does not hold `self.logger`, so a module
+  logger was introduced immediately after the `_OUTPUT_ROOT` constant. Step
+  banners, table headers, per-row summary lines, and per-file "Downloaded"
+  status route to `logger.info`; input-validation notices (invalid row
+  number, out-of-range row, bad MAC) route to `logger.warning`; API fetch
+  failures and HTTP/transport download errors route to `logger.error`.
+  Column-formatted table output was preserved by converting f-string
+  alignment specifiers (`{x:>4}`, `{x:<32}`) to `%`-format equivalents
+  (`%4d`, `%-32s`). Each converted call carries the standard
+  `# WHY: preserve operator notice verbatim; route through logger for
+  capture/redirection.` comment.
+- **Tests**: no test migration required — the existing suite
+  (`tests/unit/capture/test_client_pcap_downloader.py`, 28 tests) does not
+  use `capsys`; all assertions rely on `MagicMock` / `patch` and continue
+  to pass after the migration.
+- **Rationale**: Menu 197's client packet-capture downloader is an
+  interactive four-step wizard; operator-facing progress, validation, and
+  download-outcome text needs to flow through the logging pipeline so it
+  is captured to disk and can be redirected in headless/batch contexts.
+  This slice removes another 23 `T201` violations from `src/` without
+  changing user-visible output content.
+
 ### #886 Phase 2 slice 101/N: retire `print()` in `src/refactors/serial_cc/start_site_client_capture_wireless.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 25 `print()` calls in
