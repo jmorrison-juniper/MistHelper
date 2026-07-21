@@ -11,11 +11,14 @@ importing the monolith.
 
 from __future__ import annotations
 
+import logging
 import sys
 from types import ModuleType
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+LOGGER_NAME = "src.export.site_device_exporter"
 
 
 @pytest.fixture
@@ -50,18 +53,21 @@ def fake_mh(monkeypatch):
 class TestDeviceInventory:
     """Cover SiteDeviceExporter.device_inventory."""
 
-    def test_no_devices_returns_early(self, fake_mh, capsys):
-        """Empty rawdata → prints notice + warns, no write."""
+    def test_no_devices_returns_early(self, fake_mh, caplog):
+        """Empty rawdata → warns via logger, no write."""
         from src.export.site_device_exporter import SiteDeviceExporter
 
-        with patch(
-            "src.export.site_device_exporter.mistapi.api.v1.sites.devices.listSiteDevices",
-            return_value=MagicMock(data=[]),
+        with (
+            patch(
+                "src.export.site_device_exporter.mistapi.api.v1.sites.devices.listSiteDevices",
+                return_value=MagicMock(data=[]),
+            ),
+            caplog.at_level(logging.WARNING, logger=LOGGER_NAME),
         ):
             SiteDeviceExporter.device_inventory("s1")
 
         fake_mh.DataExporter.write_with_format_selection.assert_not_called()
-        assert "No devices found" in capsys.readouterr().out
+        assert "No devices found" in caplog.text
 
     def test_type_filter_no_match_returns_early(self, fake_mh):
         """device_type filter returns None → aborts before write."""
@@ -131,14 +137,15 @@ class TestFilterDevicesByType:
         result = SiteDeviceExporter._filter_devices_by_type(rows, "switch", "s1")
         assert result == [{"type": "switch"}]
 
-    def test_no_match_returns_none(self, fake_mh, capsys):
-        """No matches → prints notice, warns, returns None."""
+    def test_no_match_returns_none(self, fake_mh, caplog):
+        """No matches → warns via logger, returns None."""
         from src.export.site_device_exporter import SiteDeviceExporter
 
         rows = [{"type": "ap"}]
-        result = SiteDeviceExporter._filter_devices_by_type(rows, "switch", "s1")
+        with caplog.at_level(logging.WARNING, logger=LOGGER_NAME):
+            result = SiteDeviceExporter._filter_devices_by_type(rows, "switch", "s1")
         assert result is None
-        assert "No devices of type 'switch'" in capsys.readouterr().out
+        assert "No devices of type 'switch'" in caplog.text
 
 
 class TestDisplayInventoryTable:
@@ -189,26 +196,30 @@ class TestDisplayInventoryTable:
 class TestPersistSiteDeviceStats:
     """Cover SiteDeviceExporter._persist_site_device_stats."""
 
-    def test_empty_prints_and_returns(self, fake_mh, capsys):
-        """Empty rawdata → prints notice, no flatten/write."""
+    def test_empty_prints_and_returns(self, fake_mh, caplog):
+        """Empty rawdata → warns via logger, no flatten/write."""
         from src.export.site_device_exporter import SiteDeviceExporter
 
-        SiteDeviceExporter._persist_site_device_stats([], "HQ")
+        with caplog.at_level(logging.WARNING, logger=LOGGER_NAME):
+            SiteDeviceExporter._persist_site_device_stats([], "HQ")
         fake_mh.DataExporter.write_with_format_selection.assert_not_called()
-        assert "No device statistics" in capsys.readouterr().out
+        assert "No device statistics" in caplog.text
 
-    def test_non_empty_flattens_and_writes(self, fake_mh, capsys):
+    def test_non_empty_flattens_and_writes(self, fake_mh, caplog):
         """Non-empty → flatten/escape/write with per-site filename."""
         from src.export.site_device_exporter import SiteDeviceExporter
 
         rows = [{"id": "d1"}]
-        with patch("src.export.site_device_exporter.DataProcessingUtils") as dpu:
+        with (
+            patch("src.export.site_device_exporter.DataProcessingUtils") as dpu,
+            caplog.at_level(logging.INFO, logger=LOGGER_NAME),
+        ):
             dpu.flatten_nested_fields.return_value = rows
             dpu.escape_multiline.return_value = rows
             SiteDeviceExporter._persist_site_device_stats(rows, "HQ Site")
 
         fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(rows, "SiteDeviceStats_HQ_Site.csv")
-        assert "1 device stats exported" in capsys.readouterr().out
+        assert "1 device stats exported" in caplog.text
 
 
 class TestResolveSiteForStats:
@@ -276,8 +287,8 @@ class TestDeviceStats:
 
         persist.assert_called_once_with(rows, "HQ")
 
-    def test_fetch_exception_logged(self, fake_mh, capsys):
-        """Fetch raises → error printed, no crash."""
+    def test_fetch_exception_logged(self, fake_mh, caplog):
+        """Fetch raises → error logged via logger, no crash."""
         from src.export.site_device_exporter import SiteDeviceExporter
 
         with (
@@ -286,10 +297,11 @@ class TestDeviceStats:
                 "src.export.site_device_exporter.mistapi.api.v1.sites.stats.listSiteDevicesStats",
                 side_effect=RuntimeError("boom"),
             ),
+            caplog.at_level(logging.ERROR, logger=LOGGER_NAME),
         ):
             SiteDeviceExporter.device_stats()
 
-        assert "Error fetching device statistics" in capsys.readouterr().out
+        assert "Error fetching device statistics" in caplog.text
 
 
 class TestPortStats:
@@ -393,18 +405,21 @@ class TestResolveDeviceName:
 class TestExportVcForDevice:
     """Cover SiteDeviceExporter._export_vc_for_device."""
 
-    def test_no_response_data_warns(self, fake_mh, capsys):
-        """response.data empty → warns + returns without write."""
+    def test_no_response_data_warns(self, fake_mh, caplog):
+        """response.data empty → warns via logger + returns without write."""
         from src.export.site_device_exporter import SiteDeviceExporter
 
-        with patch(
-            "src.export.site_device_exporter.mistapi.api.v1.sites.devices.getSiteDeviceVirtualChassis",
-            return_value=MagicMock(data=None),
+        with (
+            patch(
+                "src.export.site_device_exporter.mistapi.api.v1.sites.devices.getSiteDeviceVirtualChassis",
+                return_value=MagicMock(data=None),
+            ),
+            caplog.at_level(logging.WARNING, logger=LOGGER_NAME),
         ):
             SiteDeviceExporter._export_vc_for_device("s1", "d1", "sw1")
 
         fake_mh.DataExporter.write_with_format_selection.assert_not_called()
-        assert "No virtual chassis data" in capsys.readouterr().out
+        assert "No virtual chassis data" in caplog.text
 
     def test_dict_response_normalized_to_list(self, fake_mh):
         """response.data as dict → wrapped into a list before flatten."""
@@ -444,44 +459,50 @@ class TestExportVcForDevice:
 
         dpu.flatten_nested_fields.assert_called_once_with(rows)
 
-    def test_exception_prints_error(self, fake_mh, capsys):
-        """Fetch raises → error logged, user notified."""
+    def test_exception_prints_error(self, fake_mh, caplog):
+        """Fetch raises → error logged via logger, user notified."""
         from src.export.site_device_exporter import SiteDeviceExporter
 
-        with patch(
-            "src.export.site_device_exporter.mistapi.api.v1.sites.devices.getSiteDeviceVirtualChassis",
-            side_effect=RuntimeError("boom"),
+        with (
+            patch(
+                "src.export.site_device_exporter.mistapi.api.v1.sites.devices.getSiteDeviceVirtualChassis",
+                side_effect=RuntimeError("boom"),
+            ),
+            caplog.at_level(logging.ERROR, logger=LOGGER_NAME),
         ):
             SiteDeviceExporter._export_vc_for_device("s1", "d1", "sw1")
 
-        assert "Failed to export virtual chassis" in capsys.readouterr().out
+        assert "Failed to export virtual chassis" in caplog.text
 
 
 class TestPrintVcSummary:
     """Cover SiteDeviceExporter._print_vc_summary."""
 
-    def test_empty_returns_early(self, fake_mh, capsys):
-        """Empty sanitized → no output."""
+    def test_empty_returns_early(self, fake_mh, caplog):
+        """Empty sanitized → no log output."""
         from src.export.site_device_exporter import SiteDeviceExporter
 
-        SiteDeviceExporter._print_vc_summary([], "sw1", "f.csv")
-        assert capsys.readouterr().out == ""
+        with caplog.at_level(logging.INFO, logger=LOGGER_NAME):
+            SiteDeviceExporter._print_vc_summary([], "sw1", "f.csv")
+        assert caplog.text == ""
 
-    def test_with_members_and_preprovisioned(self, fake_mh, capsys):
-        """Both keys present → both printed."""
+    def test_with_members_and_preprovisioned(self, fake_mh, caplog):
+        """Both keys present → both logged."""
         from src.export.site_device_exporter import SiteDeviceExporter
 
-        SiteDeviceExporter._print_vc_summary([{"members": ["m1"], "preprovisioned": True}], "sw1", "f.csv")
-        out = capsys.readouterr().out
+        with caplog.at_level(logging.INFO, logger=LOGGER_NAME):
+            SiteDeviceExporter._print_vc_summary([{"members": ["m1"], "preprovisioned": True}], "sw1", "f.csv")
+        out = caplog.text
         assert "VC members" in out
         assert "Preprovisioned" in out
 
-    def test_without_optional_keys(self, fake_mh, capsys):
-        """Neither key → still prints header/count/path."""
+    def test_without_optional_keys(self, fake_mh, caplog):
+        """Neither key → still logs header/count/path."""
         from src.export.site_device_exporter import SiteDeviceExporter
 
-        SiteDeviceExporter._print_vc_summary([{"id": "x"}], "sw1", "f.csv")
-        out = capsys.readouterr().out
+        with caplog.at_level(logging.INFO, logger=LOGGER_NAME):
+            SiteDeviceExporter._print_vc_summary([{"id": "x"}], "sw1", "f.csv")
+        out = caplog.text
         assert "Records exported: 1" in out
         assert "VC members" not in out
         assert "Preprovisioned" not in out
@@ -490,26 +511,30 @@ class TestPrintVcSummary:
 class TestPersistSiteDevices:
     """Cover SiteDeviceExporter._persist_site_devices."""
 
-    def test_empty_prints_notice(self, fake_mh, capsys):
+    def test_empty_prints_notice(self, fake_mh, caplog):
         """Empty rawdata → prints notice, no write."""
         from src.export.site_device_exporter import SiteDeviceExporter
 
-        SiteDeviceExporter._persist_site_devices([], "HQ")
+        with caplog.at_level(logging.WARNING, logger=LOGGER_NAME):
+            SiteDeviceExporter._persist_site_devices([], "HQ")
         fake_mh.DataExporter.write_with_format_selection.assert_not_called()
-        assert "No devices found" in capsys.readouterr().out
+        assert "No devices found" in caplog.text
 
-    def test_non_empty_flattens_and_writes(self, fake_mh, capsys):
+    def test_non_empty_flattens_and_writes(self, fake_mh, caplog):
         """Non-empty → flatten/escape/write per-site filename."""
         from src.export.site_device_exporter import SiteDeviceExporter
 
         rows = [{"id": "d1"}]
-        with patch("src.export.site_device_exporter.DataProcessingUtils") as dpu:
+        with (
+            patch("src.export.site_device_exporter.DataProcessingUtils") as dpu,
+            caplog.at_level(logging.INFO, logger=LOGGER_NAME),
+        ):
             dpu.flatten_nested_fields.return_value = rows
             dpu.escape_multiline.return_value = rows
             SiteDeviceExporter._persist_site_devices(rows, "HQ Site")
 
         fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(rows, "SiteDevices_HQ_Site.csv")
-        assert "1 devices exported" in capsys.readouterr().out
+        assert "1 devices exported" in caplog.text
 
 
 class TestDevices:
@@ -539,7 +564,7 @@ class TestDevices:
 
         persist.assert_called_once_with(rows, "HQ")
 
-    def test_fetch_exception_logged(self, fake_mh, capsys):
+    def test_fetch_exception_logged(self, fake_mh, caplog):
         """Fetch raises → user notified."""
         from src.export.site_device_exporter import SiteDeviceExporter
 
@@ -549,7 +574,8 @@ class TestDevices:
                 "src.export.site_device_exporter.mistapi.api.v1.sites.devices.listSiteDevices",
                 side_effect=RuntimeError("boom"),
             ),
+            caplog.at_level(logging.ERROR, logger=LOGGER_NAME),
         ):
             SiteDeviceExporter.devices()
 
-        assert "Error fetching device data" in capsys.readouterr().out
+        assert "Error fetching device data" in caplog.text
