@@ -1,6 +1,6 @@
 """Wave 4 P2 coverage for src/refactors/data_directory_checker.py (initiative #1018).
 
-Covers `DataDirectoryChecker.check` end-to-end plus all print/log branches of
+Covers `DataDirectoryChecker.check` end-to-end plus all log branches of
 `_handle_permission_error`. Uses tmp_path for real writable-directory validation
 and monkeypatch to force PermissionError / non-permission-error branches. Uses
 monkeypatch on `os.path.exists` and `sys.exit` to exercise container-detection
@@ -14,9 +14,11 @@ import logging  # WHY: verify structured error/info/debug log emission.
 import os  # WHY: monkeypatch os.path.exists to simulate container markers.
 from pathlib import Path  # WHY: tmp_path fixture returns pathlib.Path.
 
-import pytest  # WHY: monkeypatch, tmp_path, capsys, caplog fixtures.
+import pytest  # WHY: monkeypatch, tmp_path, caplog fixtures.
 
 from src.refactors.data_directory_checker import DataDirectoryChecker  # WHY: SUT direct import.
+
+_MODULE_LOGGER = "src.refactors.data_directory_checker"  # WHY: pin caplog to SUT logger post-#886 migration.
 
 
 class TestInit:
@@ -44,17 +46,16 @@ class TestCheckHappyPath:
 
 
 class TestCheckPermissionError:
-    """`check()` catches PermissionError, prints guidance, and exits(1)."""
+    """`check()` catches PermissionError, logs guidance, and exits(1)."""
 
     def test_permission_error_local_guidance_exits(
         self,
         monkeypatch: pytest.MonkeyPatch,
         tmp_path: Path,
-        capsys: pytest.CaptureFixture[str],
         caplog: pytest.LogCaptureFixture,
     ) -> None:
-        """Non-container PermissionError prints local guidance and calls sys.exit(1)."""
-        checker = DataDirectoryChecker(str(tmp_path))  # WHY: fresh instance with real path for abspath print.
+        """Non-container PermissionError logs local guidance and calls sys.exit(1)."""
+        checker = DataDirectoryChecker(str(tmp_path))  # WHY: fresh instance with real path for abspath log line.
 
         def _raise_permission_error(self: DataDirectoryChecker) -> bool:
             """Force PermissionError inside _test_write_permission."""
@@ -72,23 +73,22 @@ class TestCheckPermissionError:
             lambda code: exit_calls.append(code),
         )  # WHY: intercept exit for assertion.
 
-        with caplog.at_level(logging.ERROR):  # WHY: _handle_permission_error logs ERROR.
+        with caplog.at_level(logging.INFO, logger=_MODULE_LOGGER):  # WHY: INFO catches info + error records post-#886.
             result = checker.check()  # WHY: exercise perm-error → local-guidance → exit branch.
 
         assert result is False  # WHY: perm branch returns False after (mocked) sys.exit.
         assert exit_calls == [1]  # WHY: sys.exit(1) was invoked.
-        captured = capsys.readouterr()  # WHY: read printed guidance banner.
-        assert "ERROR: Data directory is not writable!" in captured.out  # WHY: header printed.
-        assert "chmod -R 755 data/" in captured.out  # WHY: local-guidance line present.
-        assert "chown -R $(whoami) data/" in captured.out  # WHY: local ownership guidance present.
-        assert "[CONTAINER DETECTED]" not in captured.out  # WHY: container guidance suppressed in local branch.
+        assert "ERROR: Data directory is not writable!" in caplog.text  # WHY: header logged.
+        assert "chmod -R 755 data/" in caplog.text  # WHY: local-guidance line present.
+        assert "chown -R $(whoami) data/" in caplog.text  # WHY: local ownership guidance present.
+        assert "[CONTAINER DETECTED]" not in caplog.text  # WHY: container guidance suppressed in local branch.
         assert "is not writable" in caplog.text  # WHY: error log emitted.
 
     def test_permission_error_container_guidance(
         self,
         monkeypatch: pytest.MonkeyPatch,
         tmp_path: Path,
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         """Container marker triggers container-specific guidance instead of local."""
         checker = DataDirectoryChecker(str(tmp_path))  # WHY: fresh instance for container branch.
@@ -107,18 +107,18 @@ class TestCheckPermissionError:
             "src.refactors.data_directory_checker.sys.exit", lambda code: None
         )  # WHY: neutralize sys.exit for the test.
 
-        checker.check()  # WHY: exercise container-guidance branch.
+        with caplog.at_level(logging.INFO, logger=_MODULE_LOGGER):  # WHY: capture container-guidance info records.
+            checker.check()  # WHY: exercise container-guidance branch.
 
-        captured = capsys.readouterr()  # WHY: capture container-specific print output.
-        assert "[CONTAINER DETECTED]" in captured.out  # WHY: container banner printed.
-        assert "podman stop misthelper" in captured.out  # WHY: container remediation shown.
-        assert "chmod -R 755 data/" not in captured.out  # WHY: local guidance suppressed in container branch.
+        assert "[CONTAINER DETECTED]" in caplog.text  # WHY: container banner logged.
+        assert "podman stop misthelper" in caplog.text  # WHY: container remediation shown.
+        assert "chmod -R 755 data/" not in caplog.text  # WHY: local guidance suppressed in container branch.
 
     def test_containerenv_marker_also_detects_container(
         self,
         monkeypatch: pytest.MonkeyPatch,
         tmp_path: Path,
-        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         """/run/.containerenv (podman) also flags container mode."""
         checker = DataDirectoryChecker(str(tmp_path))  # WHY: fresh instance.
@@ -135,10 +135,10 @@ class TestCheckPermissionError:
             "src.refactors.data_directory_checker.sys.exit", lambda code: None
         )  # WHY: neutralize sys.exit.
 
-        checker.check()  # WHY: exercise the alt container-marker branch.
+        with caplog.at_level(logging.INFO, logger=_MODULE_LOGGER):  # WHY: capture alt container-marker info log.
+            checker.check()  # WHY: exercise the alt container-marker branch.
 
-        captured = capsys.readouterr()  # WHY: assert on printed output.
-        assert "[CONTAINER DETECTED]" in captured.out  # WHY: container banner still triggered.
+        assert "[CONTAINER DETECTED]" in caplog.text  # WHY: container banner still triggered.
 
 
 class TestCheckNonPermissionError:
