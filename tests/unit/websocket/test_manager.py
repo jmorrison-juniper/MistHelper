@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import builtins
 import importlib
+import logging
 import sys
 import threading
 from typing import Any
@@ -31,6 +32,8 @@ import pytest
 
 from src.websocket import manager as manager_mod
 from src.websocket.manager import WebSocketManager
+
+_MANAGER_LOGGER = "src.websocket.manager"  # WHY: 886 capsys→caplog migration target logger name.
 
 # ---------- Module import guard: raise ImportError when websocket-client missing ----------
 
@@ -108,54 +111,56 @@ def test_is_debug_env_flag_set_false_when_absent_or_other() -> None:
 # ---------- Module-level helper: log_ws_error ----------
 
 
-def test_log_ws_error_prints_and_logs_without_traceback_when_not_debug(capsys) -> None:
-    """log_ws_error prints an error banner and calls logging.error; no traceback when debug=False."""
+def test_log_ws_error_prints_and_logs_without_traceback_when_not_debug(caplog: pytest.LogCaptureFixture) -> None:
+    """log_ws_error emits an error banner and calls logging.error; no traceback when debug=False."""
+    caplog.set_level(logging.DEBUG, logger=_MANAGER_LOGGER)
     with (
         patch.object(manager_mod.logging, "error") as mock_err,
         patch.object(manager_mod.traceback, "print_exc") as mock_tb,
     ):
         manager_mod.log_ws_error("boom", debug_mode=False)
-    out = capsys.readouterr().out
-    assert "! boom" in out
-    assert "[DEBUG] Exception details:" not in out
+    assert "! boom" in caplog.text
+    assert "[DEBUG] Exception details:" not in caplog.text
     mock_err.assert_called_once_with("boom")
     mock_tb.assert_not_called()
 
 
-def test_log_ws_error_prints_traceback_when_debug(capsys) -> None:
+def test_log_ws_error_prints_traceback_when_debug(caplog: pytest.LogCaptureFixture) -> None:
     """log_ws_error with debug_mode=True dumps traceback in addition to the banner."""
+    caplog.set_level(logging.DEBUG, logger=_MANAGER_LOGGER)
     with patch.object(manager_mod.logging, "error"), patch.object(manager_mod.traceback, "print_exc") as mock_tb:
         manager_mod.log_ws_error("boom", debug_mode=True)
-    out = capsys.readouterr().out
-    assert "! boom" in out
-    assert "[DEBUG] Exception details:" in out
+    assert "! boom" in caplog.text
+    assert "[DEBUG] Exception details:" in caplog.text
     mock_tb.assert_called_once()
 
 
 # ---------- Module-level helper: cleanup_ws_connection ----------
 
 
-def test_cleanup_ws_connection_disconnects_manager(capsys) -> None:
-    """cleanup_ws_connection calls disconnect() and prints confirmation on stdout."""
+def test_cleanup_ws_connection_disconnects_manager(caplog: pytest.LogCaptureFixture) -> None:
+    """cleanup_ws_connection calls disconnect() and emits confirmation on the module logger."""
+    caplog.set_level(logging.DEBUG, logger=_MANAGER_LOGGER)
     mgr = MagicMock()
     manager_mod.cleanup_ws_connection(mgr, debug_mode=False)
     mgr.disconnect.assert_called_once()
-    out = capsys.readouterr().out
-    assert "-> WebSocket connection closed" in out
-    assert "[DEBUG]" not in out
+    assert "-> WebSocket connection closed" in caplog.text
+    assert "[DEBUG]" not in caplog.text
 
 
-def test_cleanup_ws_connection_prints_debug_line_when_debug(capsys) -> None:
-    """cleanup_ws_connection prints an extra [DEBUG] confirmation when debug_mode=True."""
+def test_cleanup_ws_connection_prints_debug_line_when_debug(caplog: pytest.LogCaptureFixture) -> None:
+    """cleanup_ws_connection emits an extra [DEBUG] confirmation when debug_mode=True."""
+    caplog.set_level(logging.DEBUG, logger=_MANAGER_LOGGER)
     mgr = MagicMock()
     manager_mod.cleanup_ws_connection(mgr, debug_mode=True)
-    assert "[DEBUG] WebSocket cleanup completed" in capsys.readouterr().out
+    assert "[DEBUG] WebSocket cleanup completed" in caplog.text
 
 
-def test_cleanup_ws_connection_none_manager_is_noop(capsys) -> None:
+def test_cleanup_ws_connection_none_manager_is_noop(caplog: pytest.LogCaptureFixture) -> None:
     """Passing ws_manager=None is a no-op (safe when construction failed earlier)."""
+    caplog.set_level(logging.DEBUG, logger=_MANAGER_LOGGER)
     manager_mod.cleanup_ws_connection(None, debug_mode=True)
-    assert capsys.readouterr().out == ""
+    assert caplog.records == []
 
 
 def test_cleanup_ws_connection_swallows_disconnect_exception() -> None:
@@ -199,16 +204,18 @@ def test_get_mist_credentials_returns_none_when_neither_source_has_value() -> No
 # ---------- Module-level helper: dump_ws_debug_state ----------
 
 
-def test_dump_ws_debug_state_noop_when_debug_off(capsys) -> None:
-    """dump_ws_debug_state with debug_mode=False prints nothing and does not touch state."""
+def test_dump_ws_debug_state_noop_when_debug_off(caplog: pytest.LogCaptureFixture) -> None:
+    """dump_ws_debug_state with debug_mode=False emits nothing and does not touch state."""
+    caplog.set_level(logging.DEBUG, logger=_MANAGER_LOGGER)
     mgr = MagicMock()
     manager_mod.dump_ws_debug_state(mgr, debug_mode=False)
-    assert capsys.readouterr().out == ""
+    assert caplog.records == []
     mgr.results_lock.__enter__.assert_not_called()
 
 
-def test_dump_ws_debug_state_prints_state_when_debug_on(capsys) -> None:
-    """dump_ws_debug_state prints connected flag, subscribed_channels, and pending session ids."""
+def test_dump_ws_debug_state_prints_state_when_debug_on(caplog: pytest.LogCaptureFixture) -> None:
+    """dump_ws_debug_state emits connected flag, subscribed_channels, and pending session ids."""
+    caplog.set_level(logging.DEBUG, logger=_MANAGER_LOGGER)
     mgr = MagicMock()
     mgr.connected = True
     mgr.subscribed_channels = {"/a/b/cmd"}
@@ -217,51 +224,53 @@ def test_dump_ws_debug_state_prints_state_when_debug_on(capsys) -> None:
     mgr.results_lock.__enter__ = MagicMock(return_value=mgr.results_lock)
     mgr.results_lock.__exit__ = MagicMock(return_value=False)
     manager_mod.dump_ws_debug_state(mgr, debug_mode=True)
-    out = capsys.readouterr().out
-    assert "Checking WebSocket manager state" in out
-    assert "Connected = True" in out
-    assert "/a/b/cmd" in out
-    assert "sess-1" in out and "sess-2" in out
+    assert "Checking WebSocket manager state" in caplog.text
+    assert "Connected = True" in caplog.text
+    assert "/a/b/cmd" in caplog.text
+    assert "sess-1" in caplog.text and "sess-2" in caplog.text
 
 
 # ---------- Module-level helper: select_ws_site ----------
 
 
-def test_select_ws_site_returns_selection(capsys) -> None:
+def test_select_ws_site_returns_selection(caplog: pytest.LogCaptureFixture) -> None:
     """A truthy select_site_fn return value is returned unchanged; no cancellation text."""
+    caplog.set_level(logging.DEBUG, logger=_MANAGER_LOGGER)
     deps = MagicMock()
     deps.select_site_fn.return_value = "site-abc"
     got = manager_mod.select_ws_site(deps, debug_mode=False)
     assert got == "site-abc"
-    assert "cancelled" not in capsys.readouterr().out
+    assert "cancelled" not in caplog.text
 
 
-def test_select_ws_site_returns_none_on_empty_and_prints_cancel(capsys) -> None:
-    """Empty string return is normalised to None and a cancellation banner is printed."""
+def test_select_ws_site_returns_none_on_empty_and_prints_cancel(caplog: pytest.LogCaptureFixture) -> None:
+    """Empty string return is normalised to None and a cancellation banner is emitted."""
+    caplog.set_level(logging.DEBUG, logger=_MANAGER_LOGGER)
     deps = MagicMock()
     deps.select_site_fn.return_value = ""
     assert manager_mod.select_ws_site(deps, debug_mode=False) is None
-    assert "No site selected. Operation cancelled." in capsys.readouterr().out
+    assert "No site selected. Operation cancelled." in caplog.text
 
 
-def test_select_ws_site_prints_debug_line_when_debug(capsys) -> None:
+def test_select_ws_site_prints_debug_line_when_debug(caplog: pytest.LogCaptureFixture) -> None:
     """Selected site id is echoed as a [DEBUG] line only in debug mode."""
+    caplog.set_level(logging.DEBUG, logger=_MANAGER_LOGGER)
     deps = MagicMock()
     deps.select_site_fn.return_value = "site-xyz"
     manager_mod.select_ws_site(deps, debug_mode=True)
-    assert "[DEBUG] Selected site_id = site-xyz" in capsys.readouterr().out
+    assert "[DEBUG] Selected site_id = site-xyz" in caplog.text
 
 
 # ---------- Module-level helper: _log_credential_debug ----------
 
 
-def test_log_credential_debug_prints_host_and_token_length(capsys) -> None:
-    """Debug credential dump prints host verbatim but only the token length (never the token)."""
+def test_log_credential_debug_prints_host_and_token_length(caplog: pytest.LogCaptureFixture) -> None:
+    """Debug credential dump emits host verbatim but only the token length (never the token)."""
+    caplog.set_level(logging.DEBUG, logger=_MANAGER_LOGGER)
     manager_mod._log_credential_debug("host-name", "abcdef")
-    out = capsys.readouterr().out
-    assert "mist_host = host-name" in out
-    assert "API token length = 6" in out
-    assert "abcdef" not in out
+    assert "mist_host = host-name" in caplog.text
+    assert "API token length = 6" in caplog.text
+    assert "abcdef" not in caplog.text
 
 
 # ---------- Module-level helper: check_mist_credentials ----------
@@ -274,12 +283,13 @@ def test_check_mist_credentials_true_when_both_present() -> None:
     mgr.disconnect.assert_not_called()
 
 
-def test_check_mist_credentials_false_when_host_missing_and_disconnects(capsys) -> None:
-    """Missing host → prints error, calls disconnect(), returns False."""
+def test_check_mist_credentials_false_when_host_missing_and_disconnects(caplog) -> None:
+    """Missing host → emits error, calls disconnect(), returns False."""
+    caplog.set_level(logging.DEBUG, logger=_MANAGER_LOGGER)
     mgr = MagicMock()
     assert manager_mod.check_mist_credentials(mgr, None, "t", debug_mode=False) is False
     mgr.disconnect.assert_called_once()
-    assert "Mist host or API token not found" in capsys.readouterr().out
+    assert "Mist host or API token not found" in caplog.text
 
 
 def test_check_mist_credentials_false_when_token_missing() -> None:
@@ -289,17 +299,19 @@ def test_check_mist_credentials_false_when_token_missing() -> None:
     mgr.disconnect.assert_called_once()
 
 
-def test_check_mist_credentials_missing_with_none_manager_no_disconnect(capsys) -> None:
+def test_check_mist_credentials_missing_with_none_manager_no_disconnect(caplog) -> None:
     """When ws_mgr is None and creds are missing, no disconnect attempt; still returns False."""
+    caplog.set_level(logging.DEBUG, logger=_MANAGER_LOGGER)
     assert manager_mod.check_mist_credentials(None, None, None, debug_mode=False) is False
-    assert "Mist host or API token not found" in capsys.readouterr().out
+    assert "Mist host or API token not found" in caplog.text
 
 
-def test_check_mist_credentials_prints_debug_when_valid_and_debug_mode(capsys) -> None:
-    """Valid creds + debug_mode=True → helper prints host + token length."""
+def test_check_mist_credentials_prints_debug_when_valid_and_debug_mode(caplog) -> None:
+    """Valid creds + debug_mode=True → helper emits host + token length."""
+    caplog.set_level(logging.DEBUG, logger=_MANAGER_LOGGER)
     mgr = MagicMock()
     assert manager_mod.check_mist_credentials(mgr, "host", "tok", debug_mode=True) is True
-    assert "mist_host = host" in capsys.readouterr().out
+    assert "mist_host = host" in caplog.text
 
 
 # ---------- WebSocketManager.__init__ ----------
@@ -484,46 +496,49 @@ def test_connect_returns_false_on_exception() -> None:
 # ---------- WebSocketManager._debug_print ----------
 
 
-def test_debug_print_prints_only_when_debug(capsys) -> None:
+def test_debug_print_prints_only_when_debug(caplog) -> None:
     """_debug_print emits a [DEBUG] line only when debug_mode is True."""
+    caplog.set_level(logging.DEBUG, logger=_MANAGER_LOGGER)
     m = WebSocketManager(_make_session())
     m._debug_print("hello", debug_mode=False)
-    assert capsys.readouterr().out == ""
+    assert caplog.records == []
     m._debug_print("hello", debug_mode=True)
-    assert "[DEBUG] hello" in capsys.readouterr().out
+    assert "[DEBUG] hello" in caplog.text
 
 
 # ---------- WebSocketManager._subscribe_command_channel ----------
 
 
-def test_subscribe_command_channel_success_prints_debug(capsys) -> None:
-    """Successful subscribe returns True and, in debug mode, prints the channel."""
+def test_subscribe_command_channel_success_prints_debug(caplog) -> None:
+    """Successful subscribe returns True and, in debug mode, emits the channel."""
+    caplog.set_level(logging.DEBUG, logger=_MANAGER_LOGGER)
     m = WebSocketManager(_make_session())
     with patch.object(m, "subscribe_to_channel", return_value=True):
         assert m._subscribe_command_channel("s1", "d1", debug_mode=True) is True
-    out = capsys.readouterr().out
-    assert "/sites/s1/devices/d1/cmd" in out
-    assert "[DEBUG] Subscribed to channel" in out
+    assert "/sites/s1/devices/d1/cmd" in caplog.text
+    assert "[DEBUG] Subscribed to channel" in caplog.text
 
 
-def test_subscribe_command_channel_failure_disconnects(capsys) -> None:
-    """Failed subscribe returns False, disconnects the manager, prints error banner."""
+def test_subscribe_command_channel_failure_disconnects(caplog) -> None:
+    """Failed subscribe returns False, disconnects the manager, emits error banner."""
+    caplog.set_level(logging.DEBUG, logger=_MANAGER_LOGGER)
     m = WebSocketManager(_make_session())
     with patch.object(m, "subscribe_to_channel", return_value=False), patch.object(m, "disconnect") as mock_disc:
         assert m._subscribe_command_channel("s", "d", debug_mode=False) is False
     mock_disc.assert_called_once()
-    assert "Failed to subscribe to device command channel" in capsys.readouterr().out
+    assert "Failed to subscribe to device command channel" in caplog.text
 
 
 # ---------- WebSocketManager.connect_and_subscribe ----------
 
 
-def test_connect_and_subscribe_returns_false_on_connect_failure(capsys) -> None:
-    """When connect() returns False, connect_and_subscribe returns False + prints error."""
+def test_connect_and_subscribe_returns_false_on_connect_failure(caplog) -> None:
+    """When connect() returns False, connect_and_subscribe returns False + emits error."""
+    caplog.set_level(logging.DEBUG, logger=_MANAGER_LOGGER)
     m = WebSocketManager(_make_session())
     with patch.object(m, "connect", return_value=False):
         assert m.connect_and_subscribe("s", "d", debug_mode=False) is False
-    assert "Failed to establish WebSocket connection" in capsys.readouterr().out
+    assert "Failed to establish WebSocket connection" in caplog.text
 
 
 def test_connect_and_subscribe_returns_false_when_subscribe_fails() -> None:
@@ -537,8 +552,9 @@ def test_connect_and_subscribe_returns_false_when_subscribe_fails() -> None:
         assert m.connect_and_subscribe("s", "d", debug_mode=False) is False
 
 
-def test_connect_and_subscribe_success_sleeps_and_returns_true(capsys) -> None:
+def test_connect_and_subscribe_success_sleeps_and_returns_true(caplog) -> None:
     """Happy path: connect + subscribe both succeed → True; time.sleep stabiliser is called."""
+    caplog.set_level(logging.DEBUG, logger=_MANAGER_LOGGER)
     m = WebSocketManager(_make_session())
     with (
         patch.object(m, "connect", return_value=True),
@@ -547,7 +563,7 @@ def test_connect_and_subscribe_success_sleeps_and_returns_true(capsys) -> None:
     ):
         assert m.connect_and_subscribe("s", "d", debug_mode=True) is True
     mock_sleep.assert_called_once_with(manager_mod._WS_STABILIZE_SLEEP_SECONDS)
-    assert "WebSocket connected and subscribed" in capsys.readouterr().out
+    assert "WebSocket connected and subscribed" in caplog.text
 
 
 # ---------- WebSocketManager.subscribe_to_channel ----------
@@ -592,20 +608,20 @@ def test_subscribe_to_channel_returns_false_on_send_exception() -> None:
 # ---------- WebSocketManager._debug_log_sub ----------
 
 
-def test_debug_log_sub_noop_when_debug_off(capsys) -> None:
+def test_debug_log_sub_noop_when_debug_off(caplog) -> None:
     """_debug_log_sub emits nothing when debug_mode is False."""
+    caplog.set_level(logging.DEBUG, logger=_MANAGER_LOGGER)
     m = WebSocketManager(_make_session())
     m._debug_log_sub("Waiting", "/x", debug_mode=False)
-    assert capsys.readouterr().out == ""
+    assert caplog.records == []
 
 
-def test_debug_log_sub_prints_and_logs_when_debug_on(capsys) -> None:
-    """_debug_log_sub prints stdout line AND calls logger.debug when debug_mode is True."""
+def test_debug_log_sub_prints_and_logs_when_debug_on(caplog) -> None:
+    """_debug_log_sub emits a module-logger debug line when debug_mode is True."""
+    caplog.set_level(logging.DEBUG, logger=_MANAGER_LOGGER)
     m = WebSocketManager(_make_session())
-    with patch.object(m.logger, "debug") as mock_dbg:
-        m._debug_log_sub("Waiting", "/x", debug_mode=True)
-    mock_dbg.assert_called_once()
-    assert "[DEBUG] Waiting: /x" in capsys.readouterr().out
+    m._debug_log_sub("Waiting", "/x", debug_mode=True)
+    assert "[DEBUG] Waiting: /x" in caplog.text
 
 
 # ---------- WebSocketManager._poll_subscription_confirmed ----------
@@ -665,19 +681,21 @@ def test_wait_for_subscription_confirmation_timeout_logs_warning() -> None:
     mock_warn.assert_called_once()
 
 
-def test_wait_for_subscription_confirmation_debug_env_flag_triggers_debug_output(capsys) -> None:
+def test_wait_for_subscription_confirmation_debug_env_flag_triggers_debug_output(caplog) -> None:
     """DEBUG env flag enables the [DEBUG] trace lines even without --debug arg."""
+    caplog.set_level(logging.DEBUG, logger=_MANAGER_LOGGER)
     m = WebSocketManager(_make_session())
     with (
         patch.object(m, "_poll_subscription_confirmed", return_value=True),
         patch.object(manager_mod, "_is_debug_env_flag_set", return_value=True),
     ):
         m.wait_for_subscription_confirmation("/dbg")
-    assert "[DEBUG] Waiting for subscription confirmation for" in capsys.readouterr().out
+    assert "[DEBUG] Waiting for subscription confirmation for" in caplog.text
 
 
-def test_wait_for_subscription_confirmation_debug_mode_attr_triggers_debug(capsys) -> None:
-    """A manager with debug_mode attribute set True prints [DEBUG] lines too."""
+def test_wait_for_subscription_confirmation_debug_mode_attr_triggers_debug(caplog) -> None:
+    """A manager with debug_mode attribute set True emits [DEBUG] lines too."""
+    caplog.set_level(logging.DEBUG, logger=_MANAGER_LOGGER)
     m = WebSocketManager(_make_session())
     m.debug_mode = True  # type: ignore[attr-defined]
     with (
@@ -685,9 +703,8 @@ def test_wait_for_subscription_confirmation_debug_mode_attr_triggers_debug(capsy
         patch.object(manager_mod, "_is_debug_env_flag_set", return_value=False),
     ):
         m.wait_for_subscription_confirmation("/dbg2")
-    out = capsys.readouterr().out
-    assert "Waiting for subscription confirmation" in out
-    assert "Timeout waiting for subscription confirmation" in out
+    assert "Waiting for subscription confirmation" in caplog.text
+    assert "Timeout waiting for subscription confirmation" in caplog.text
 
 
 # ---------- WebSocketManager._build_result_collector ----------
@@ -833,7 +850,8 @@ def test_await_handshake_flag_flip_after_last_sleep_returns_true() -> None:
 # ---------- Extra branch coverage: check_mist_credentials both missing, ws None ----------
 
 
-def test_check_mist_credentials_debug_mode_off_no_credential_dump(capsys) -> None:
-    """Valid creds but debug_mode=False → no credential dump printed."""
+def test_check_mist_credentials_debug_mode_off_no_credential_dump(caplog) -> None:
+    """Valid creds but debug_mode=False → no credential dump emitted."""
+    caplog.set_level(logging.DEBUG, logger=_MANAGER_LOGGER)
     assert manager_mod.check_mist_credentials(MagicMock(), "h", "t", debug_mode=False) is True
-    assert "mist_host" not in capsys.readouterr().out
+    assert "mist_host" not in caplog.text
