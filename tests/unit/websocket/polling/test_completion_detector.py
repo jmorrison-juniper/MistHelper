@@ -17,13 +17,17 @@ import logging
 from typing import Any
 from unittest.mock import patch
 
+import pytest
+
 from src.websocket.polling import completion_detector as cd_mod
 from src.websocket.polling.completion_detector import CompletionDetector
+
+_LOGGER_NAME = "test.completion_detector"  # WHY: Pin caplog to the injected detector logger name.
 
 
 def _make_detector(debug: bool = False) -> CompletionDetector:
     """Return a CompletionDetector wired with a stdlib logger + debug flag."""
-    return CompletionDetector(logging.getLogger("test.completion_detector"), debug)
+    return CompletionDetector(logging.getLogger(_LOGGER_NAME), debug)
 
 
 def _seg(raw: str) -> dict[str, Any]:
@@ -45,10 +49,10 @@ def test_init_stores_logger_debug_and_default_cache() -> None:
     assert det._mac_expected_entries is None
 
 
-def test_detect_returns_first_matching_strategy(caplog) -> None:
+def test_detect_returns_first_matching_strategy(caplog: pytest.LogCaptureFixture) -> None:
     """detect() returns the first non-None strategy result (generic indicator wins first)."""
     det = _make_detector()
-    caplog.set_level(logging.DEBUG, logger="test.completion_detector")
+    caplog.set_level(logging.DEBUG, logger=_LOGGER_NAME)
     # "command completed" is a _GENERAL_INDICATOR → first strategy hits.
     result = det.detect([], "some text: command completed", last_activity=0.0, check_count=1)
     assert result == "command completed"
@@ -126,40 +130,44 @@ def test_check_generic_returns_none_when_nothing_matches() -> None:
     assert det._check_generic("plain buffer", check_count=1) is None
 
 
-def test_trace_generic_scan_silent_when_debug_off(capsys) -> None:
-    """Debug OFF → no stdout trace even when the modulo would fire."""
+def test_trace_generic_scan_silent_when_debug_off(caplog: pytest.LogCaptureFixture) -> None:
+    """Debug OFF → no log trace even when the modulo would fire."""
     det = _make_detector(debug=False)
-    det._trace_generic_scan("buf", check_count=1)
-    assert capsys.readouterr().out == ""
+    with caplog.at_level(logging.DEBUG, logger=_LOGGER_NAME):
+        det._trace_generic_scan("buf", check_count=1)
+    assert caplog.text == ""
 
 
-def test_trace_generic_scan_silent_when_modulo_off(capsys) -> None:
+def test_trace_generic_scan_silent_when_modulo_off(caplog: pytest.LogCaptureFixture) -> None:
     """Debug ON but check_count % 100 != 1 → no trace."""
     det = _make_detector(debug=True)
-    det._trace_generic_scan("buf", check_count=2)
-    assert capsys.readouterr().out == ""
+    with caplog.at_level(logging.DEBUG, logger=_LOGGER_NAME):
+        det._trace_generic_scan("buf", check_count=2)
+    assert caplog.text == ""
 
 
-def test_trace_generic_scan_prints_when_debug_and_modulo(capsys) -> None:
-    """Debug ON + check_count % 100 == 1 → indicator count + sample printed."""
+def test_trace_generic_scan_prints_when_debug_and_modulo(caplog: pytest.LogCaptureFixture) -> None:
+    """Debug ON + check_count % 100 == 1 → indicator count + sample logged."""
     det = _make_detector(debug=True)
-    det._trace_generic_scan("sample-buf-here", check_count=1)
-    out = capsys.readouterr().out
-    assert "Checking" in out and "completion indicators" in out
-    assert "Content sample" in out
-    assert "sample-buf-here" in out
+    with caplog.at_level(logging.DEBUG, logger=_LOGGER_NAME):
+        det._trace_generic_scan("sample-buf-here", check_count=1)
+    assert "Checking" in caplog.text and "completion indicators" in caplog.text
+    assert "Content sample" in caplog.text
+    assert "sample-buf-here" in caplog.text
 
 
-def test_log_generic_hit_silent_when_debug_off(capsys) -> None:
-    """Debug OFF → _log_generic_hit prints nothing."""
-    _make_detector(debug=False)._log_generic_hit("finished")
-    assert capsys.readouterr().out == ""
+def test_log_generic_hit_silent_when_debug_off(caplog: pytest.LogCaptureFixture) -> None:
+    """Debug OFF → _log_generic_hit emits no log."""
+    with caplog.at_level(logging.DEBUG, logger=_LOGGER_NAME):
+        _make_detector(debug=False)._log_generic_hit("finished")
+    assert caplog.text == ""
 
 
-def test_log_generic_hit_prints_when_debug_on(capsys) -> None:
-    """Debug ON → indicator name is echoed to stdout."""
-    _make_detector(debug=True)._log_generic_hit("finished")
-    assert "FOUND completion indicator: 'finished'" in capsys.readouterr().out
+def test_log_generic_hit_prints_when_debug_on(caplog: pytest.LogCaptureFixture) -> None:
+    """Debug ON → indicator name is echoed to the logger."""
+    with caplog.at_level(logging.DEBUG, logger=_LOGGER_NAME):
+        _make_detector(debug=True)._log_generic_hit("finished")
+    assert "FOUND completion indicator: 'finished'" in caplog.text
 
 
 # ---------------------------------------------------------------------------
@@ -189,7 +197,7 @@ def test_check_ping_statistics_hits_when_both_present_rtt() -> None:
     assert _make_detector()._check_ping_statistics(text) == "complete statistics block"
 
 
-def test_check_ping_statistics_returns_none_when_line_missing(monkeypatch) -> None:
+def test_check_ping_statistics_returns_none_when_line_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     """Defensive branch: _find_packet_loss_line returns None → returns None."""
     monkeypatch.setattr(CompletionDetector, "_find_packet_loss_line", staticmethod(lambda _: None))
     text = "packet loss round-trip"
@@ -207,18 +215,19 @@ def test_find_packet_loss_line_returns_none_when_absent() -> None:
     assert CompletionDetector._find_packet_loss_line("nothing\nrelevant") is None
 
 
-def test_log_ping_hit_silent_when_debug_off(capsys) -> None:
+def test_log_ping_hit_silent_when_debug_off(caplog: pytest.LogCaptureFixture) -> None:
     """Debug OFF → no ping-hit trace."""
-    _make_detector(debug=False)._log_ping_hit("some line")
-    assert capsys.readouterr().out == ""
+    with caplog.at_level(logging.DEBUG, logger=_LOGGER_NAME):
+        _make_detector(debug=False)._log_ping_hit("some line")
+    assert caplog.text == ""
 
 
-def test_log_ping_hit_prints_when_debug_on(capsys) -> None:
-    """Debug ON → pattern-hit + sample line printed."""
-    _make_detector(debug=True)._log_ping_hit("some line")
-    out = capsys.readouterr().out
-    assert "FOUND ping statistics completion pattern" in out
-    assert "Packet loss line" in out
+def test_log_ping_hit_prints_when_debug_on(caplog: pytest.LogCaptureFixture) -> None:
+    """Debug ON → pattern-hit + sample line logged."""
+    with caplog.at_level(logging.DEBUG, logger=_LOGGER_NAME):
+        _make_detector(debug=True)._log_ping_hit("some line")
+    assert "FOUND ping statistics completion pattern" in caplog.text
+    assert "Packet loss line" in caplog.text
 
 
 # ---------------------------------------------------------------------------
@@ -285,45 +294,48 @@ def test_count_service_ping_patterns_both_categories() -> None:
     assert CompletionDetector._count_service_ping_patterns("seq=1 ttl=64 bytes from host") == 2
 
 
-def test_trace_service_ping_silent_when_debug_off(capsys) -> None:
+def test_trace_service_ping_silent_when_debug_off(caplog: pytest.LogCaptureFixture) -> None:
     """Debug OFF → no service-ping trace."""
-    _make_detector(debug=False)._trace_service_ping(2, "seq=1", check_count=1)
-    assert capsys.readouterr().out == ""
+    with caplog.at_level(logging.DEBUG, logger=_LOGGER_NAME):
+        _make_detector(debug=False)._trace_service_ping(2, "seq=1", check_count=1)
+    assert caplog.text == ""
 
 
-def test_trace_service_ping_silent_when_modulo_off(capsys) -> None:
+def test_trace_service_ping_silent_when_modulo_off(caplog: pytest.LogCaptureFixture) -> None:
     """Debug ON but check_count % 200 != 1 → no trace."""
-    _make_detector(debug=True)._trace_service_ping(2, "seq=1", check_count=2)
-    assert capsys.readouterr().out == ""
+    with caplog.at_level(logging.DEBUG, logger=_LOGGER_NAME):
+        _make_detector(debug=True)._trace_service_ping(2, "seq=1", check_count=2)
+    assert caplog.text == ""
 
 
-def test_trace_service_ping_prints_when_debug_and_modulo_and_seq(capsys) -> None:
-    """Debug ON + modulo hit + seq= present → seq= trace printed."""
-    _make_detector(debug=True)._trace_service_ping(2, "seq=1 ttl=64", check_count=1)
-    out = capsys.readouterr().out
-    assert "Service ping pattern analysis" in out
-    assert "Found seq= pattern" in out
+def test_trace_service_ping_prints_when_debug_and_modulo_and_seq(caplog: pytest.LogCaptureFixture) -> None:
+    """Debug ON + modulo hit + seq= present → seq= trace logged."""
+    with caplog.at_level(logging.DEBUG, logger=_LOGGER_NAME):
+        _make_detector(debug=True)._trace_service_ping(2, "seq=1 ttl=64", check_count=1)
+    assert "Service ping pattern analysis" in caplog.text
+    assert "Found seq= pattern" in caplog.text
 
 
-def test_trace_service_ping_prints_bytes_from(capsys) -> None:
-    """Debug ON + modulo hit + bytes from present → bytes-from trace printed."""
-    _make_detector(debug=True)._trace_service_ping(1, "bytes from host", check_count=1)
-    out = capsys.readouterr().out
-    assert "Found 'bytes from' pattern" in out
+def test_trace_service_ping_prints_bytes_from(caplog: pytest.LogCaptureFixture) -> None:
+    """Debug ON + modulo hit + bytes from present → bytes-from trace logged."""
+    with caplog.at_level(logging.DEBUG, logger=_LOGGER_NAME):
+        _make_detector(debug=True)._trace_service_ping(1, "bytes from host", check_count=1)
+    assert "Found 'bytes from' pattern" in caplog.text
 
 
-def test_log_service_ping_hit_silent_when_debug_off(capsys) -> None:
+def test_log_service_ping_hit_silent_when_debug_off(caplog: pytest.LogCaptureFixture) -> None:
     """Debug OFF → no service-ping hit trace."""
-    _make_detector(debug=False)._log_service_ping_hit(2, 3.5)
-    assert capsys.readouterr().out == ""
+    with caplog.at_level(logging.DEBUG, logger=_LOGGER_NAME):
+        _make_detector(debug=False)._log_service_ping_hit(2, 3.5)
+    assert caplog.text == ""
 
 
-def test_log_service_ping_hit_prints_when_debug_on(capsys) -> None:
-    """Debug ON → pattern count + idle time printed."""
-    _make_detector(debug=True)._log_service_ping_hit(2, 3.5)
-    out = capsys.readouterr().out
-    assert "FOUND service ping completion" in out
-    assert "3.5s" in out
+def test_log_service_ping_hit_prints_when_debug_on(caplog: pytest.LogCaptureFixture) -> None:
+    """Debug ON → pattern count + idle time logged."""
+    with caplog.at_level(logging.DEBUG, logger=_LOGGER_NAME):
+        _make_detector(debug=True)._log_service_ping_hit(2, 3.5)
+    assert "FOUND service ping completion" in caplog.text
+    assert "3.5s" in caplog.text
 
 
 # ---------------------------------------------------------------------------
@@ -366,19 +378,20 @@ def test_check_count_based_hits_when_all_conditions_met() -> None:
     assert got == "count-based completion (5 responses)"
 
 
-def test_log_count_based_hit_silent_when_debug_off(capsys) -> None:
+def test_log_count_based_hit_silent_when_debug_off(caplog: pytest.LogCaptureFixture) -> None:
     """Debug OFF → no count-based-hit trace."""
-    _make_detector(debug=False)._log_count_based_hit(5, 2.5)
-    assert capsys.readouterr().out == ""
+    with caplog.at_level(logging.DEBUG, logger=_LOGGER_NAME):
+        _make_detector(debug=False)._log_count_based_hit(5, 2.5)
+    assert caplog.text == ""
 
 
-def test_log_count_based_hit_prints_when_debug_on(capsys) -> None:
-    """Debug ON → response count + idle time printed."""
-    _make_detector(debug=True)._log_count_based_hit(5, 2.5)
-    out = capsys.readouterr().out
-    assert "FOUND count-based service ping completion" in out
-    assert "5 responses" in out
-    assert "2.5s" in out
+def test_log_count_based_hit_prints_when_debug_on(caplog: pytest.LogCaptureFixture) -> None:
+    """Debug ON → response count + idle time logged."""
+    with caplog.at_level(logging.DEBUG, logger=_LOGGER_NAME):
+        _make_detector(debug=True)._log_count_based_hit(5, 2.5)
+    assert "FOUND count-based service ping completion" in caplog.text
+    assert "5 responses" in caplog.text
+    assert "2.5s" in caplog.text
 
 
 # ---------------------------------------------------------------------------
@@ -461,44 +474,48 @@ def test_try_mac_completion_strategies_returns_none_when_all_miss() -> None:
         assert det._try_mac_completion_strategies(outputs, 0.0, entry_count=5, check_count=1) is None
 
 
-def test_trace_mac_missing_header_silent_when_debug_off(capsys) -> None:
+def test_trace_mac_missing_header_silent_when_debug_off(caplog: pytest.LogCaptureFixture) -> None:
     """Debug OFF → no missing-header trace."""
-    _make_detector(debug=False)._trace_mac_missing_header("buf", check_count=1)
-    assert capsys.readouterr().out == ""
+    with caplog.at_level(logging.DEBUG, logger=_LOGGER_NAME):
+        _make_detector(debug=False)._trace_mac_missing_header("buf", check_count=1)
+    assert caplog.text == ""
 
 
-def test_trace_mac_missing_header_silent_when_modulo_off(capsys) -> None:
+def test_trace_mac_missing_header_silent_when_modulo_off(caplog: pytest.LogCaptureFixture) -> None:
     """Debug ON but check_count % 50 != 1 → no trace."""
-    _make_detector(debug=True)._trace_mac_missing_header("buf", check_count=2)
-    assert capsys.readouterr().out == ""
+    with caplog.at_level(logging.DEBUG, logger=_LOGGER_NAME):
+        _make_detector(debug=True)._trace_mac_missing_header("buf", check_count=2)
+    assert caplog.text == ""
 
 
-def test_trace_mac_missing_header_prints_when_debug_and_modulo(capsys) -> None:
-    """Debug ON + check_count % 50 == 1 → char-count trace printed."""
-    _make_detector(debug=True)._trace_mac_missing_header("some buffer text", check_count=1)
-    out = capsys.readouterr().out
-    assert "MAC table" in out and "chars" in out
+def test_trace_mac_missing_header_prints_when_debug_and_modulo(caplog: pytest.LogCaptureFixture) -> None:
+    """Debug ON + check_count % 50 == 1 → char-count trace logged."""
+    with caplog.at_level(logging.DEBUG, logger=_LOGGER_NAME):
+        _make_detector(debug=True)._trace_mac_missing_header("some buffer text", check_count=1)
+    assert "MAC table" in caplog.text and "chars" in caplog.text
 
 
-def test_trace_mac_idle_pending_silent_when_debug_off(capsys) -> None:
+def test_trace_mac_idle_pending_silent_when_debug_off(caplog: pytest.LogCaptureFixture) -> None:
     """Debug OFF → no idle-pending trace."""
-    _make_detector(debug=False)._trace_mac_idle_pending(0.0, 5, check_count=1)
-    assert capsys.readouterr().out == ""
+    with caplog.at_level(logging.DEBUG, logger=_LOGGER_NAME):
+        _make_detector(debug=False)._trace_mac_idle_pending(0.0, 5, check_count=1)
+    assert caplog.text == ""
 
 
-def test_trace_mac_idle_pending_silent_when_modulo_off(capsys) -> None:
+def test_trace_mac_idle_pending_silent_when_modulo_off(caplog: pytest.LogCaptureFixture) -> None:
     """Debug ON but check_count % 50 != 1 → no trace."""
-    _make_detector(debug=True)._trace_mac_idle_pending(0.0, 5, check_count=2)
-    assert capsys.readouterr().out == ""
+    with caplog.at_level(logging.DEBUG, logger=_LOGGER_NAME):
+        _make_detector(debug=True)._trace_mac_idle_pending(0.0, 5, check_count=2)
+    assert caplog.text == ""
 
 
-def test_trace_mac_idle_pending_prints_when_debug_and_modulo(capsys) -> None:
-    """Debug ON + check_count % 50 == 1 → entry count + idle trace printed."""
-    with patch.object(cd_mod.time, "time", return_value=200.0):
-        _make_detector(debug=True)._trace_mac_idle_pending(last_activity=100.0, entry_count=5, check_count=1)
-    out = capsys.readouterr().out
-    assert "MAC table: found 5 entries" in out
-    assert "100.0s" in out
+def test_trace_mac_idle_pending_prints_when_debug_and_modulo(caplog: pytest.LogCaptureFixture) -> None:
+    """Debug ON + check_count % 50 == 1 → entry count + idle trace logged."""
+    with caplog.at_level(logging.DEBUG, logger=_LOGGER_NAME):
+        with patch.object(cd_mod.time, "time", return_value=200.0):
+            _make_detector(debug=True)._trace_mac_idle_pending(last_activity=100.0, entry_count=5, check_count=1)
+    assert "MAC table: found 5 entries" in caplog.text
+    assert "100.0s" in caplog.text
 
 
 def test_mac_table_repeated_tail_hits_on_uniform_tail() -> None:
@@ -548,18 +565,19 @@ def test_collect_tail_messages_none_when_blank() -> None:
     assert CompletionDetector._collect_tail_messages([_seg("")] * 5) is None
 
 
-def test_log_mac_repeat_hit_silent_when_debug_off(capsys) -> None:
+def test_log_mac_repeat_hit_silent_when_debug_off(caplog: pytest.LogCaptureFixture) -> None:
     """Debug OFF → no repeat-hit trace."""
-    _make_detector(debug=False)._log_mac_repeat_hit(["row"] * 5)
-    assert capsys.readouterr().out == ""
+    with caplog.at_level(logging.DEBUG, logger=_LOGGER_NAME):
+        _make_detector(debug=False)._log_mac_repeat_hit(["row"] * 5)
+    assert caplog.text == ""
 
 
-def test_log_mac_repeat_hit_prints_when_debug_on(capsys) -> None:
-    """Debug ON → repeat count + sample message printed."""
-    _make_detector(debug=True)._log_mac_repeat_hit(["row-content"] * 5)
-    out = capsys.readouterr().out
-    assert "FOUND MAC table completion" in out
-    assert "Repeated message" in out
+def test_log_mac_repeat_hit_prints_when_debug_on(caplog: pytest.LogCaptureFixture) -> None:
+    """Debug ON → repeat count + sample message logged."""
+    with caplog.at_level(logging.DEBUG, logger=_LOGGER_NAME):
+        _make_detector(debug=True)._log_mac_repeat_hit(["row-content"] * 5)
+    assert "FOUND MAC table completion" in caplog.text
+    assert "Repeated message" in caplog.text
 
 
 def test_mac_table_idle_timeout_returns_none_when_few_messages() -> None:
@@ -589,18 +607,19 @@ def test_mac_table_idle_timeout_hits_when_all_conditions_met() -> None:
     assert "idle timeout: 15 entries" in got and "4.0s idle" in got
 
 
-def test_log_mac_idle_hit_silent_when_debug_off(capsys) -> None:
+def test_log_mac_idle_hit_silent_when_debug_off(caplog: pytest.LogCaptureFixture) -> None:
     """Debug OFF → no idle-hit trace."""
-    _make_detector(debug=False)._log_mac_idle_hit(15, 4.0)
-    assert capsys.readouterr().out == ""
+    with caplog.at_level(logging.DEBUG, logger=_LOGGER_NAME):
+        _make_detector(debug=False)._log_mac_idle_hit(15, 4.0)
+    assert caplog.text == ""
 
 
-def test_log_mac_idle_hit_prints_when_debug_on(capsys) -> None:
-    """Debug ON → entry count + idle trace printed."""
-    _make_detector(debug=True)._log_mac_idle_hit(15, 4.0)
-    out = capsys.readouterr().out
-    assert "FOUND MAC table completion via idle timeout" in out
-    assert "15 entries" in out and "4.0s" in out
+def test_log_mac_idle_hit_prints_when_debug_on(caplog: pytest.LogCaptureFixture) -> None:
+    """Debug ON → entry count + idle trace logged."""
+    with caplog.at_level(logging.DEBUG, logger=_LOGGER_NAME):
+        _make_detector(debug=True)._log_mac_idle_hit(15, 4.0)
+    assert "FOUND MAC table completion via idle timeout" in caplog.text
+    assert "15 entries" in caplog.text and "4.0s" in caplog.text
 
 
 # ---------------------------------------------------------------------------
@@ -651,33 +670,37 @@ def test_count_arp_patterns_counts_each_hit() -> None:
     assert CompletionDetector._count_arp_patterns(text) == 5
 
 
-def test_trace_arp_patterns_silent_when_debug_off(capsys) -> None:
+def test_trace_arp_patterns_silent_when_debug_off(caplog: pytest.LogCaptureFixture) -> None:
     """Debug OFF → no ARP pattern trace."""
-    _make_detector(debug=False)._trace_arp_patterns(2, "ip address", check_count=1)
-    assert capsys.readouterr().out == ""
+    with caplog.at_level(logging.DEBUG, logger=_LOGGER_NAME):
+        _make_detector(debug=False)._trace_arp_patterns(2, "ip address", check_count=1)
+    assert caplog.text == ""
 
 
-def test_trace_arp_patterns_silent_when_modulo_off(capsys) -> None:
+def test_trace_arp_patterns_silent_when_modulo_off(caplog: pytest.LogCaptureFixture) -> None:
     """Debug ON but check_count % 200 != 1 → no trace."""
-    _make_detector(debug=True)._trace_arp_patterns(2, "ip address", check_count=2)
-    assert capsys.readouterr().out == ""
+    with caplog.at_level(logging.DEBUG, logger=_LOGGER_NAME):
+        _make_detector(debug=True)._trace_arp_patterns(2, "ip address", check_count=2)
+    assert caplog.text == ""
 
 
-def test_trace_arp_patterns_prints_when_debug_and_modulo(capsys) -> None:
-    """Debug ON + modulo hit → pattern count + found patterns printed."""
-    _make_detector(debug=True)._trace_arp_patterns(2, "ip address hw address", check_count=1)
-    out = capsys.readouterr().out
-    assert "ARP pattern analysis" in out
-    assert "ip address" in out and "hw address" in out
+def test_trace_arp_patterns_prints_when_debug_and_modulo(caplog: pytest.LogCaptureFixture) -> None:
+    """Debug ON + modulo hit → pattern count + found patterns logged."""
+    with caplog.at_level(logging.DEBUG, logger=_LOGGER_NAME):
+        _make_detector(debug=True)._trace_arp_patterns(2, "ip address hw address", check_count=1)
+    assert "ARP pattern analysis" in caplog.text
+    assert "ip address" in caplog.text and "hw address" in caplog.text
 
 
-def test_log_arp_hit_silent_when_debug_off(capsys) -> None:
+def test_log_arp_hit_silent_when_debug_off(caplog: pytest.LogCaptureFixture) -> None:
     """Debug OFF → no ARP hit trace."""
-    _make_detector(debug=False)._log_arp_hit(2)
-    assert capsys.readouterr().out == ""
+    with caplog.at_level(logging.DEBUG, logger=_LOGGER_NAME):
+        _make_detector(debug=False)._log_arp_hit(2)
+    assert caplog.text == ""
 
 
-def test_log_arp_hit_prints_when_debug_on(capsys) -> None:
-    """Debug ON → pattern-count trace printed."""
-    _make_detector(debug=True)._log_arp_hit(2)
-    assert "FOUND ARP table completion" in capsys.readouterr().out
+def test_log_arp_hit_prints_when_debug_on(caplog: pytest.LogCaptureFixture) -> None:
+    """Debug ON → pattern-count trace logged."""
+    with caplog.at_level(logging.DEBUG, logger=_LOGGER_NAME):
+        _make_detector(debug=True)._log_arp_hit(2)
+    assert "FOUND ARP table completion" in caplog.text

@@ -172,17 +172,12 @@ class CompletionDetector:  # WHY: Bundles indicator matchers + shared logger/deb
             return  # WHY: Silent path when tracing gate is closed.
         self.logger.debug("Checking %s completion indicators", len(_ALL_INDICATORS))  # WHY: Log indicator count.
         self.logger.debug("Content sample for indicator check: %s", repr(lowered[:150]))  # WHY: Log sample buffer.
-        print(f"[DEBUG] Checking {len(_ALL_INDICATORS)} completion indicators")  # WHY: Legacy stdout trace preserved.
-        print(
-            f"[DEBUG] Content sample for indicator check: {repr(lowered[:150])}"
-        )  # WHY: Legacy stdout trace preserved.
 
     def _log_generic_hit(self, indicator: str) -> None:  # WHY: Preserve original debug messaging on hit.
         """Emit debug trace when a generic indicator matches (verbatim)."""
         if not self.debug_mode:  # WHY: Guard preserves original silent path.
             return  # WHY: Silent path when debug is off.
         self.logger.debug("FOUND completion indicator: '%s'", indicator)  # WHY: Log match through logger.
-        print(f"[DEBUG] FOUND completion indicator: '{indicator}'")  # WHY: Legacy stdout trace preserved.
 
     def _check_ping_statistics(self, lowered: str) -> str | None:  # WHY: Ping-statistics matcher.
         """Detect ping completion via the 'packet loss' + round-trip/rtt block."""
@@ -210,8 +205,6 @@ class CompletionDetector:  # WHY: Bundles indicator matchers + shared logger/deb
             return  # WHY: Silent path when debug is off.
         self.logger.debug("FOUND ping statistics completion pattern")  # WHY: Log detection through logger.
         self.logger.debug("Packet loss line: %s", repr(line[:100]))  # WHY: Include sample of matched line.
-        print("[DEBUG] FOUND ping statistics completion pattern")  # WHY: Legacy stdout trace preserved.
-        print(f"[DEBUG] Packet loss line: {repr(line[:100])}")  # WHY: Legacy stdout trace preserved.
 
     def _check_service_ping(  # WHY: SSR service-ping matcher composed of pattern + idle checks.
         self,
@@ -250,13 +243,10 @@ class CompletionDetector:  # WHY: Bundles indicator matchers + shared logger/deb
         if not self.debug_mode or check_count % _TRACE_PERIOD_SERVICE != 1:  # WHY: Throttle noisy output.
             return  # WHY: Silent path when tracing gate is closed.
         self.logger.debug("Service ping pattern analysis: found %s service ping indicators", pattern_count)
-        print(f"[DEBUG] Service ping pattern analysis: found {pattern_count} service ping indicators")
         if "seq=" in lowered:  # WHY: Diagnostic — surface which signal fired.
             self.logger.debug("Found seq= pattern in service ping output")
-            print("[DEBUG] Found seq= pattern in service ping output")
         if "bytes from" in lowered:  # WHY: Diagnostic — surface which signal fired.
             self.logger.debug("Found 'bytes from' pattern in service ping output")
-            print("[DEBUG] Found 'bytes from' pattern in service ping output")
 
     def _log_service_ping_hit(self, pattern_count: int, idle: float) -> None:  # WHY: Preserve original debug messaging.
         """Emit debug trace when service-ping completion matches (verbatim)."""
@@ -264,8 +254,6 @@ class CompletionDetector:  # WHY: Bundles indicator matchers + shared logger/deb
             return  # WHY: Silent path when debug is off.
         self.logger.debug("FOUND service ping completion: %s patterns detected", pattern_count)
         self.logger.debug("Service ping idle time: %.1fs", idle)
-        print(f"[DEBUG] FOUND service ping completion: {pattern_count} patterns detected")
-        print(f"[DEBUG] Service ping idle time: {idle:.1f}s")
 
     def _check_count_based(  # WHY: Count-based service-ping fallback matcher.
         self,
@@ -291,8 +279,6 @@ class CompletionDetector:  # WHY: Bundles indicator matchers + shared logger/deb
             return  # WHY: Silent path when debug is off.
         self.logger.debug("FOUND count-based service ping completion: %s responses", response_count)
         self.logger.debug("Idle time since last response: %.1fs", idle)
-        print(f"[DEBUG] FOUND count-based service ping completion: {response_count} responses")
-        print(f"[DEBUG] Idle time since last response: {idle:.1f}s")
 
     def _check_mac_table(  # WHY: MAC-learning-table matcher combines header parse + tail/idle strategies.
         self,
@@ -344,7 +330,8 @@ class CompletionDetector:  # WHY: Bundles indicator matchers + shared logger/deb
     def _trace_mac_missing_header(self, lowered: str, check_count: int) -> None:  # WHY: Diagnostic-only helper.
         """Emit periodic trace while waiting for MAC-table header (verbatim)."""
         if self.debug_mode and check_count % _TRACE_PERIOD_MAC == 1:  # WHY: Throttle noisy output.
-            print(f"[DEBUG] MAC table: checking for completion pattern in {len(lowered)} chars")
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            self.logger.debug("MAC table: checking for completion pattern in %s chars", len(lowered))
 
     def _trace_mac_idle_pending(  # WHY: Diagnostic-only helper.
         self, last_activity: float, entry_count: int, check_count: int
@@ -352,7 +339,8 @@ class CompletionDetector:  # WHY: Bundles indicator matchers + shared logger/deb
         """Emit periodic trace while waiting for MAC-table idle timeout (verbatim)."""
         if self.debug_mode and check_count % _TRACE_PERIOD_MAC == 1:  # WHY: Throttle noisy output.
             idle = time.time() - last_activity  # WHY: Diagnostic idle window.
-            print(f"[DEBUG] MAC table: found {entry_count} entries, idle for {idle:.1f}s")
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            self.logger.debug("MAC table: found %s entries, idle for %.1fs", entry_count, idle)
 
     def _mac_table_repeated_tail(self, collected_output: list[dict[str, Any]]) -> str | None:  # WHY: Tail-repetition.
         """Return completion reason when the last 5 messages are identical."""
@@ -383,8 +371,6 @@ class CompletionDetector:  # WHY: Bundles indicator matchers + shared logger/deb
             return  # WHY: Silent path when debug is off.
         self.logger.debug("FOUND MAC table completion: %s repeated identical messages detected", len(last_messages))
         self.logger.debug("Repeated message: %s", repr(last_messages[0][:100]))
-        print(f"[DEBUG] FOUND MAC table completion: {len(last_messages)} repeated identical messages detected")
-        print(f"[DEBUG] Repeated message: {repr(last_messages[0][:100])}")
 
     def _mac_table_idle_timeout(  # WHY: Idle-based fallback for large MAC dumps.
         self,
@@ -407,7 +393,6 @@ class CompletionDetector:  # WHY: Bundles indicator matchers + shared logger/deb
         if not self.debug_mode:  # WHY: Guard preserves original silent path.
             return  # WHY: Silent path when debug is off.
         self.logger.debug("FOUND MAC table completion via idle timeout: %s entries, %.1fs idle", entry_count, idle_time)
-        print(f"[DEBUG] FOUND MAC table completion via idle timeout: {entry_count} entries, {idle_time:.1f}s idle")
 
     def _check_arp_structure(  # WHY: ARP structural-column matcher with idle gate.
         self,
@@ -439,12 +424,15 @@ class CompletionDetector:  # WHY: Bundles indicator matchers + shared logger/deb
         """Emit the periodic ARP-pattern debug trace preserved verbatim."""
         if not self.debug_mode or check_count % _TRACE_PERIOD_SERVICE != 1:  # WHY: Throttle noisy output.
             return  # WHY: Silent path when tracing gate is closed.
-        print(f"[DEBUG] ARP pattern analysis: found {pattern_count}/{len(_ARP_COLUMN_PATTERNS)} patterns")
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        self.logger.debug("ARP pattern analysis: found %s/%s patterns", pattern_count, len(_ARP_COLUMN_PATTERNS))
         found_patterns = [p for p in _ARP_COLUMN_PATTERNS if p in lowered]  # WHY: Surface which columns matched.
-        print(f"[DEBUG] Found ARP patterns: {found_patterns}")
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        self.logger.debug("Found ARP patterns: %s", found_patterns)
 
     def _log_arp_hit(self, pattern_count: int) -> None:  # WHY: Preserve original debug messaging.
         """Emit debug trace when ARP-structure completion matches (verbatim)."""
         if not self.debug_mode:  # WHY: Guard preserves original silent path.
             return  # WHY: Silent path when debug is off.
-        print(f"[DEBUG] FOUND ARP table completion: {pattern_count} patterns detected")
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        self.logger.debug("FOUND ARP table completion: %s patterns detected", pattern_count)
