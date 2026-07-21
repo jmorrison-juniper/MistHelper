@@ -191,14 +191,20 @@ _BANNER_LINES = (  # WHY: table-driven banner replaces sequential print calls, e
 
 
 def _print_flask_viewer_banner(host: str, port: int) -> None:
-    """Print the pre-launch ASCII banner that lists URL + key features."""
-    print("\n" + _BANNER_SEPARATOR)  # WHY: leading blank line separates banner from prior console output.
-    print("LAUNCHING FLASK MAP VIEWER")  # WHY: identifies the launched mode to the operator.
-    print(_BANNER_SEPARATOR)  # WHY: divider between title and body of the banner.
-    print(f"! Server URL: http://{host}:{port}")  # WHY: URL comes first so operators can click straight through.
+    """Emit the pre-launch ASCII banner that lists URL + key features."""
+    # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+    logger.info("\n%s", _BANNER_SEPARATOR)  # WHY: leading blank line separates banner from prior console output.
+    # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+    logger.info("LAUNCHING FLASK MAP VIEWER")  # WHY: identifies the launched mode to the operator.
+    # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+    logger.info("%s", _BANNER_SEPARATOR)  # WHY: divider between title and body of the banner.
+    # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+    logger.info("! Server URL: http://%s:%s", host, port)  # WHY: URL comes first so operators can click through.
     for line in _BANNER_LINES:
-        print(line)  # WHY: table-driven emission keeps additions trivial.
-    print(_BANNER_SEPARATOR)  # WHY: trailing divider signals end of banner block.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("%s", line)  # WHY: table-driven emission keeps additions trivial.
+    # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+    logger.info("%s", _BANNER_SEPARATOR)  # WHY: trailing divider signals end of banner block.
 
 
 def _maybe_open_browser(port: int) -> None:
@@ -225,11 +231,13 @@ def _run_flask_server(flask_app, host: str, port: int) -> None:
         logging.info("Starting Flask server on http://%s:%s", host, port)  # WHY: audit trail before blocking call.
         flask_app.run(host=host, port=port, debug=False, threaded=True, use_reloader=False)  # WHY: prod-safe args.
     except KeyboardInterrupt:
-        print("\n\nFlask map viewer stopped by user")  # WHY: friendly console signal on Ctrl+C.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("\n\nFlask map viewer stopped by user")  # WHY: friendly console signal on Ctrl+C.
         logging.info("Flask map viewer stopped by user (Ctrl+C)")  # WHY: matching log entry for grep-based audits.
     except Exception as e:  # WHY: broad catch prevents a Flask crash from tearing down the CLI silently.
         logging.exception("Error running Flask server: %s", e)  # WHY: full stack for post-mortem log review.
-        print(f"\n! Error running map viewer: {e}")  # WHY: surface the failure to the operator on stdout as well.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.warning("\n! Error running map viewer: %s", e)  # WHY: surface failure to operator on stdout as well.
 
 
 _HTML_TEMPLATE = """
