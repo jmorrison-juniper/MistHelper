@@ -41,6 +41,8 @@ from src.dataclasses.progress_event import ProgressContext  # Progress emitter p
 from src.export.org_site_exporter import OrgSiteExporter  # SiteList.csv generator for cache path.
 from src.utils.file_path_utils import FilePathUtils  # get_csv_path canonical location.
 
+logger = logging.getLogger(__name__)  # WHY: module-scoped logger routes operator notices through capture/redirection.
+
 
 class OrgInventoryExporter:  # Org inventory exporters.
     """
@@ -175,10 +177,12 @@ class OrgInventoryExporter:  # Org inventory exporters.
                 )
                 for filename, kwargs in request_specs
             }
-            print(  # Show concise operator summary once all diagnostic files are written
-                f"  Raw JSON saved: vc=True ({counts_by_filename.get('raw_inventory_vc_true.json', 0)}), "
-                f"vc=False ({counts_by_filename.get('raw_inventory_vc_false.json', 0)}), "
-                f"no-vc ({counts_by_filename.get('raw_inventory_no_vc_param.json', 0)}) entries"
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.info(  # Show concise operator summary once all diagnostic files are written
+                "  Raw JSON saved: vc=True (%s), vc=False (%s), no-vc (%s) entries",
+                counts_by_filename.get("raw_inventory_vc_true.json", 0),
+                counts_by_filename.get("raw_inventory_vc_false.json", 0),
+                counts_by_filename.get("raw_inventory_no_vc_param.json", 0),
             )
         except Exception as json_save_error:  # Diagnostic failure is non-fatal by design
             logging.warning("Failed to save raw inventory JSON: %s", json_save_error)  # Preserve root cause
@@ -232,16 +236,22 @@ class OrgInventoryExporter:  # Org inventory exporters.
     def _emit_vc_shell_dashboard_diff(
         site_configs: list[dict[str, str]], empty_vc_shells: list[dict[str, str]]
     ) -> None:
-        """Print the dashboard-vs-report parity note when empty VC shells exist."""
-        print(
-            f"  NOTE: {len(empty_vc_shells)} provisioned VC shells exist with no physical members."
+        """Log the dashboard-vs-report parity note when empty VC shells exist."""
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info(
+            "  NOTE: %s provisioned VC shells exist with no physical members.",
+            len(empty_vc_shells),
         )  # Explain why dashboard counts may exceed report counts
-        print(  # Provide explicit comparison so operators trust the physical-only report totals
-            f"        Dashboard shows {len(site_configs) + len(empty_vc_shells)} 'Physical Devices' "
-            f"but {len(empty_vc_shells)} are empty VC placeholders (020003* MAC, no serial/SKU)."
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info(  # Provide explicit comparison so operators trust the physical-only report totals
+            "        Dashboard shows %s 'Physical Devices' but %s are empty VC placeholders (020003* MAC, no serial/SKU).",  # noqa: E501
+            len(site_configs) + len(empty_vc_shells),
+            len(empty_vc_shells),
         )
-        print(
-            f"        Report correctly includes only {len(site_configs)} devices with real hardware."
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info(
+            "        Report correctly includes only %s devices with real hardware.",
+            len(site_configs),
         )  # Confirm report logic remains intentional
 
     @staticmethod
@@ -442,7 +452,8 @@ class OrgInventoryExporter:  # Org inventory exporters.
     @staticmethod
     def combined_inventory_with_site_info():  # Export devices with site info.
         """Combine fresh AllDevicesWithSiteInfo data into weekly CSV files + summary + master CSV."""
-        print("Combined Inventory with Site Info by Calendar Week:")  # Announce menu 25 export scope
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("Combined Inventory with Site Info by Calendar Week:")  # Announce menu 25 export scope
         ctx = OrgInventoryExporter._prepare_combined_inventory_context()  # Resolve org + customer + paths
         current_org_id, end_customer_name, end_customer_account_id, safe_org_name, output_folder = ctx
         OrgInventoryExporter.devices_with_site_info()  # Regenerate enriched inventory CSV first
@@ -471,15 +482,22 @@ class OrgInventoryExporter:  # Org inventory exporters.
         master_csv_filename: str,
         master_row_count: int,
     ) -> None:
-        """Print the three CombinedInventory output locations (weekly CSVs, summary, master) for the operator."""
-        print(
-            f"! {len(weekly_data)} weekly CSV files created in data/CombinedInventory_ByWeek/ folder ({len(site_configs)} total devices processed)"  # noqa: E501
+        """Log the three CombinedInventory output locations (weekly CSVs, summary, master) for the operator."""
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info(
+            "! %s weekly CSV files created in data/CombinedInventory_ByWeek/ folder (%s total devices processed)",
+            len(weekly_data),
+            len(site_configs),
         )  # Summarize weekly export output counts for the operator.
-        print(
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info(
             "! Summary report exported to data/CombinedInventory_ByWeek/CombinedInventory_Summary.csv"
         )  # Confirm summary report location.
-        print(
-            f"! Master inventory exported to data/CombinedInventory_ByWeek/{master_csv_filename} ({master_row_count} devices)"  # noqa: E501
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info(
+            "! Master inventory exported to data/CombinedInventory_ByWeek/%s (%s devices)",
+            master_csv_filename,
+            master_row_count,
         )  # Confirm master report path and row count.
 
     @staticmethod
@@ -602,7 +620,8 @@ class OrgInventoryExporter:  # Org inventory exporters.
         devices = DataProcessingUtils.escape_multiline(devices)  # type: ignore[no-untyped-call]
         devices = sorted(devices, key=lambda x: x.get("site_name", ""))  # Sort by site name.
         mh.DataExporter.write_with_format_selection(devices, "AllDevicesWithSiteInfo.csv")  # type: ignore[no-untyped-call]
-        print(f"! {len(devices)} devices exported to AllDevicesWithSiteInfo.csv")  # Confirm export to operator.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("! %s devices exported to AllDevicesWithSiteInfo.csv", len(devices))  # Confirm export to operator.
         logging.info("All device data written to AllDevicesWithSiteInfo.csv (%s records).", len(devices))  # Log write.
         return devices  # Processed rows for the summary table.
 
@@ -635,7 +654,8 @@ class OrgInventoryExporter:  # Org inventory exporters.
         the data is fetched directly from the API. Physical VC members without a site_id inherit one from
         their VC parent. Also debug-logs a summary table.
         """
-        print("All Devices with Site and Address Info:")  # Inform operator of export.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("All Devices with Site and Address Info:")  # Inform operator of export.
         logging.info("Fetching All Devices with Site Info...")  # Log fetch start.
         if fast:  # Fast mode reuses cached CSVs.
             logging.info(" Fast mode enabled for devices with site info export")  # Log fast mode enabled.
@@ -654,7 +674,8 @@ class OrgInventoryExporter:  # Org inventory exporters.
         Fetches all gateway devices in the organization, enriches them with site and address info,
         and exports the result to GatewaysWithSiteInfo.csv. Also logs and displays a summary table.
         """
-        print("Gateways with Site and Address Info:")  # Inform operator of export.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("Gateways with Site and Address Info:")  # Inform operator of export.
         logging.info("Fetching Gateways with Site Info...")  # Log fetch start.
         org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org id.
 
@@ -678,7 +699,8 @@ class OrgInventoryExporter:  # Org inventory exporters.
         gateways = DataProcessingUtils.escape_multiline(gateways)  # type: ignore[no-untyped-call]
         gateways = sorted(gateways, key=lambda x: x.get("site_name", ""))  # Sort by site name.
         mh.DataExporter.write_with_format_selection(gateways, "GatewaysWithSiteInfo.csv")  # type: ignore[no-untyped-call]
-        print(f"! {len(gateways)} gateways exported to GatewaysWithSiteInfo.csv")  # Confirm export to operator.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("! %s gateways exported to GatewaysWithSiteInfo.csv", len(gateways))  # Confirm export to operator.
         logging.info("Gateway data written to GatewaysWithSiteInfo.csv")  # Log write success.
         return gateways  # Processed rows for the summary table
 

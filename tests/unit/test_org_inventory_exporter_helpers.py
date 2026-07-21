@@ -168,21 +168,20 @@ def test_partition_combined_inventory_rows_composes_split_and_classify() -> None
 # ---------------------------------------------------------------------------
 
 
-def test_emit_vc_shell_dashboard_diff_prints_three_lines(capsys: pytest.CaptureFixture[str]) -> None:
+def test_emit_vc_shell_dashboard_diff_prints_three_lines(caplog: pytest.LogCaptureFixture) -> None:
     physical = [{"mac": "aabbccddee01"}]
     shells = [{"mac": "020003ffffff"}]
-    OrgInventoryExporter._emit_vc_shell_dashboard_diff(physical, shells)
-    captured = capsys.readouterr().out
-    assert "1 provisioned VC shells" in captured
-    assert "Dashboard shows 2" in captured
-    assert "Report correctly includes only 1" in captured
+    with caplog.at_level(logging.INFO, logger="src.export.org_inventory_exporter"):
+        OrgInventoryExporter._emit_vc_shell_dashboard_diff(physical, shells)
+    assert "1 provisioned VC shells" in caplog.text
+    assert "Dashboard shows 2" in caplog.text
+    assert "Report correctly includes only 1" in caplog.text
 
 
 def test_log_combined_inventory_vc_summary_without_shells_stays_silent(
     caplog: pytest.LogCaptureFixture,
-    capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """No empty shells -> no dashboard-parity print."""
+    """No empty shells -> no dashboard-parity log line."""
     with caplog.at_level(logging.INFO):
         OrgInventoryExporter._log_combined_inventory_vc_summary(
             all_devices=[{"mac": "aabb"}],
@@ -191,12 +190,11 @@ def test_log_combined_inventory_vc_summary_without_shells_stays_silent(
             duplicate_vc_entries=0,
         )
     assert "Loaded 1 total devices" in caplog.text
-    assert capsys.readouterr().out == ""
+    assert "provisioned VC shells" not in caplog.text
 
 
 def test_log_combined_inventory_vc_summary_with_shells_emits_dashboard_note(
     caplog: pytest.LogCaptureFixture,
-    capsys: pytest.CaptureFixture[str],
 ) -> None:
     with caplog.at_level(logging.INFO):
         OrgInventoryExporter._log_combined_inventory_vc_summary(
@@ -206,7 +204,7 @@ def test_log_combined_inventory_vc_summary_with_shells_emits_dashboard_note(
             duplicate_vc_entries=0,
         )
     assert "Virtual VC breakdown" in caplog.text
-    assert "provisioned VC shells" in capsys.readouterr().out
+    assert "provisioned VC shells" in caplog.text
 
 
 # ---------------------------------------------------------------------------
@@ -342,13 +340,14 @@ def test_write_combined_inventory_master_csv_builds_filename_and_returns_row_cou
 # ---------------------------------------------------------------------------
 
 
-def test_print_combined_inventory_summary_names_three_outputs(capsys: pytest.CaptureFixture[str]) -> None:
+def test_print_combined_inventory_summary_names_three_outputs(caplog: pytest.LogCaptureFixture) -> None:
     weekly: defaultdict = defaultdict(list)
     weekly["2024_Week_01"] = [{}]
     weekly["2024_Week_02"] = [{}, {}]
     site_configs = [{}] * 3
-    OrgInventoryExporter._print_combined_inventory_summary(weekly, site_configs, "acme.csv", 3)
-    out = capsys.readouterr().out
+    with caplog.at_level(logging.INFO, logger="src.export.org_inventory_exporter"):
+        OrgInventoryExporter._print_combined_inventory_summary(weekly, site_configs, "acme.csv", 3)
+    out = caplog.text
     assert "2 weekly CSV files" in out
     assert "3 total devices processed" in out
     assert "CombinedInventory_Summary.csv" in out
@@ -458,7 +457,7 @@ class _RecordingDataExporter:
 
 
 def test_flatten_sort_export_devices_sorts_by_site_and_writes_csv(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     _RecordingDataExporter.calls = []
     monkeypatch.setattr(MistHelper, "DataExporter", _RecordingDataExporter)
@@ -466,14 +465,15 @@ def test_flatten_sort_export_devices_sorts_by_site_and_writes_csv(
         {"name": "d2", "site_name": "Zeta"},
         {"name": "d1", "site_name": "Alpha"},
     ]
-    result = OrgInventoryExporter._flatten_sort_export_devices(devices)
+    with caplog.at_level(logging.INFO, logger="src.export.org_inventory_exporter"):
+        result = OrgInventoryExporter._flatten_sort_export_devices(devices)
     assert [d["site_name"] for d in result] == ["Alpha", "Zeta"]
     assert _RecordingDataExporter.calls[-1][1] == "AllDevicesWithSiteInfo.csv"
-    assert "2 devices exported" in capsys.readouterr().out
+    assert "2 devices exported" in caplog.text
 
 
 def test_flatten_sort_export_gateways_sorts_by_site_and_writes_csv(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     _RecordingDataExporter.calls = []
     monkeypatch.setattr(MistHelper, "DataExporter", _RecordingDataExporter)
@@ -481,10 +481,11 @@ def test_flatten_sort_export_gateways_sorts_by_site_and_writes_csv(
         {"name": "g2", "site_name": "Zeta"},
         {"name": "g1", "site_name": "Alpha"},
     ]
-    result = OrgInventoryExporter._flatten_sort_export_gateways(gateways)
+    with caplog.at_level(logging.INFO, logger="src.export.org_inventory_exporter"):
+        result = OrgInventoryExporter._flatten_sort_export_gateways(gateways)
     assert [g["site_name"] for g in result] == ["Alpha", "Zeta"]
     assert _RecordingDataExporter.calls[-1][1] == "GatewaysWithSiteInfo.csv"
-    assert "2 gateways exported" in capsys.readouterr().out
+    assert "2 gateways exported" in caplog.text
 
 
 # ---------------------------------------------------------------------------
