@@ -404,11 +404,21 @@ fail-under = 9.5
 max-line-length = 120
 
 [tool.pylint."messages control"]
-# Docstring enforcement handled by pydocstyle/interrogate
-# W1203: logging-fstring-interpolation -- project uses f-strings throughout for readability
-# W0613: unused-argument -- WebSocket callback signatures are protocol-mandated
-# W0718: broad-exception-caught -- intentional in cleanup/error handlers
-disable = ["C0114", "C0115", "C0116", "W1203", "W0613", "W0718"]
+# Docstring enforcement handled by pydocstyle/interrogate.
+#
+# W1203 (logging-fstring-interpolation) was dropped from the disable list in
+# #887 (this commit) after `pylint --enable=W1203 --disable=all src/` reported
+# 0 violations -- the project's #429 logger sweep converted every `logger.info(f"...")`
+# site to `logger.info("... %s", val)` form, so the historical justification
+# ("project uses f-strings throughout for readability") is now obsolete.
+#
+# W0613 (unused-argument) and W0718 (broad-exception-caught) remain disabled
+# repo-wide; narrowing them is tracked as separate #887 follow-up slices --
+# W0613 has 20 sites (mostly WebSocket protocol-mandated callback signatures
+# in `src/websocket/manager.py` plus a scattering across capture/firmware/ssh
+# handlers), and W0718 has 493 sites where broad `except Exception:` blocks
+# are intentional in cleanup/error handlers. Each needs a per-site audit.
+disable = ["C0114", "C0115", "C0116", "W0613", "W0718"]
 
 [tool.pylint.basic]
 good-names = ["db", "ok"]
