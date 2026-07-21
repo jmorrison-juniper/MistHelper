@@ -7,6 +7,19 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #887 slice 2/N: drop `analytics` from pydocstyle `match-dir` exclusion (issue #887)
+
+- **Pydocstyle scope narrowing (Changed)**: removed `analytics` from the
+  `[tool.pydocstyle].match-dir` negation list in `pyproject.toml`. Added
+  Google-style docstrings to `TelemetryEmitter.__init__`,
+  `TelemetryEmitter.__enter__`, and `TelemetryEmitter.__exit__` in
+  `src/analytics/telemetry_emitter.py` (previously the only three D107/D105
+  violations in the subtree). Post-fix `pydocstyle --convention=google
+  src/analytics/` reports zero violations across all 7 files, so the subtree
+  is now enforced by CI going forward. Continues the #887 workstream of
+  shrinking the pydocstyle exclusion list one subtree at a time; next slice
+  targets `inventory` (8 files).
+
 ### #887 slice 7/N: drop `gateway` from pydocstyle match-dir exclusion (issue #887)
 
 - **Docstring quality (Changed)**: dropped `gateway` from the
@@ -51,7 +64,6 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
   the code now emits on. `tests/unit/gateway/test_device_template_cloner.py`
   contained no `capsys` references and needed no changes. All 58 tests
   across the two files remain green.
-
 ### #886 Phase 2 slice 106/N: retire `print()` in `src/refactors/serial_cc/start_site_scan_capture.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 26 `print()` calls in
