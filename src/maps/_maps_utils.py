@@ -34,7 +34,7 @@ _STRIP_CHARS: str = " ."  # WHY: Windows rejects trailing space/dot in file/dire
 _LOG_EMPTY_DATA: str = "write_data_with_format_selection: No data to write"  # WHY: no-op guard log message.
 _LOG_WRITE_ERROR: str = "Error writing CSV: %s"  # WHY: error template surfaces the underlying exception.
 _LOG_WRITE_OK: str = "Data written to %s (%s rows)"  # WHY: success template shows path + row count for audit.
-_PRINT_SAVED_TMPL: str = "   Data saved to: {filepath}"  # WHY: user-facing stdout confirmation with indent.
+_PRINT_SAVED_TMPL: str = "   Data saved to: %s"  # WHY: %s deferred-format template for logger.info (G004-clean).
 
 _CSV_MODE_WRITE: str = "w"  # WHY: overwrite existing file each run; callers version via distinct filenames.
 _CSV_NEWLINE: str = ""  # WHY: csv module handles newlines internally; empty avoids double-CR on Windows.
@@ -118,7 +118,8 @@ def write_data_with_format_selection(
         logger.error(_LOG_WRITE_ERROR, write_error)  # WHY: template log includes the underlying error text.
         return False  # WHY: False on write failure preserves batch-export resilience.
     logger.info(_LOG_WRITE_OK, filepath, len(data))  # WHY: audit log includes both path and row count.
-    print(_PRINT_SAVED_TMPL.format(filepath=filepath))  # WHY: user-facing confirmation echoed to stdout.
+    # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+    logger.info(_PRINT_SAVED_TMPL, filepath)
     return True  # WHY: True indicates the CSV was successfully committed to disk.
 
 
