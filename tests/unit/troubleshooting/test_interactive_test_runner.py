@@ -582,3 +582,94 @@ def test_execute_returns_false_on_unresolved_selector(monkeypatch: pytest.Monkey
     assert "start" not in event_types  # WHY: no option ran against a wrong site.
     assert "pass" not in event_types
     assert "fail" not in event_types
+
+
+def test_run_single_option_marks_site_scoped_when_handler_accepts_site_id() -> None:
+    """Handler accepting ``site_id`` must be recorded as ``interactive-site-scoped``.
+
+    Why:
+        Issue #1638 — reports must distinguish handlers invoked *with* a resolved
+        site context from those invoked without one. Without this distinction the
+        operator cannot tell whether a green pass actually exercised the test site
+        or whether the callable ignored it entirely. The classifier is the
+        ``test_mode`` positional passed to ``emit_test_pass``.
+    """
+
+    def _accepts_site(site_id: str | None = None) -> None:
+        del site_id  # WHY: signature acceptance is the only behaviour under test.
+
+    menu_actions = {"1": (_accepts_site, "Site-Scoped Op")}
+    runner = _make_runner(menu_actions=menu_actions)
+    emitter = _TelemetryStub("data/x.jsonl")
+
+    success, failure = runner._run_option_loop(["1"], "site-1", emitter)
+
+    assert success == 1
+    assert failure == 0
+    pass_events = [event for event in emitter.events if event[0] == "pass"]
+    assert len(pass_events) == 1
+    # WHY: emit_test_pass args tuple: (option, description, duration, test_mode)
+    assert pass_events[0][1][3] == "interactive-site-scoped"
+
+
+def test_run_single_option_marks_no_context_when_handler_lacks_site_id() -> None:
+    """Handler without ``site_id`` parameter must be recorded as ``interactive-no-context``.
+
+    Why:
+        Issue #1638 — a handler that does not accept ``site_id`` cannot have been
+        exercised against the resolved test site. Conflating it with a
+        site-scoped pass hides a real coverage gap. The runner must classify the
+        outcome via a distinct ``test_mode`` so downstream reports can separate
+        the two populations.
+    """
+
+    def _no_site() -> None:
+        return None
+
+    menu_actions = {"1": (_no_site, "No Context Op")}
+    runner = _make_runner(menu_actions=menu_actions)
+    emitter = _TelemetryStub("data/x.jsonl")
+
+    success, failure = runner._run_option_loop(["1"], "site-1", emitter)
+
+    assert success == 1
+    assert failure == 0
+    pass_events = [event for event in emitter.events if event[0] == "pass"]
+    assert len(pass_events) == 1
+    assert pass_events[0][1][3] == "interactive-no-context"
+
+
+def test_run_single_option_marks_prompt_cancelled_on_eof(caplog: pytest.LogCaptureFixture) -> None:
+    """Handler raising ``EOFError`` must be recorded as ``interactive-cancelled``.
+
+    Why:
+        Issue #1638 — under ``--testinteractive`` an operator who cancels a
+        handler's prompt with Ctrl-D produces an ``EOFError``. The current
+        implementation catches this via the generic ``except Exception`` branch
+        and reports the option identically to a genuine crash. Reports must
+        distinguish an operator-cancelled prompt from a raised-exception failure
+        so a benign cancellation cannot masquerade as a real regression. The
+        outcome still counts against the suite verdict (the operation did not
+        complete) but the ``test_mode`` on ``emit_test_fail`` must reflect the
+        cancellation.
+    """
+
+    def _cancelled(site_id: str | None = None) -> None:
+        del site_id  # WHY: cancellation is the only behaviour under test.
+        raise EOFError("simulated Ctrl+D at prompt")
+
+    menu_actions = {"1": (_cancelled, "Prompt Cancelled")}
+    runner = _make_runner(menu_actions=menu_actions)
+    emitter = _TelemetryStub("data/x.jsonl")
+
+    with caplog.at_level(logging.WARNING):
+        success, failure = runner._run_option_loop(["1"], "site-1", emitter)
+
+    assert success == 0
+    assert failure == 1  # WHY: cancellation still counts as a non-completion.
+    fail_events = [event for event in emitter.events if event[0] == "fail"]
+    pass_events = [event for event in emitter.events if event[0] == "pass"]
+    assert len(fail_events) == 1
+    assert not pass_events
+    # WHY: emit_test_fail args tuple: (option, description, duration, error, test_mode)
+    assert fail_events[0][1][4] == "interactive-cancelled"
