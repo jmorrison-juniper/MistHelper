@@ -27,6 +27,8 @@ from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
 
+logger = logging.getLogger(__name__)  # WHY: module-scoped logger for #886 print-to-logger migration.
+
 
 class SiteAnomalyExporter:  # Site anomaly exporters.
     """Site Anomaly and Event Exporter.
@@ -39,11 +41,13 @@ class SiteAnomalyExporter:  # Site anomaly exporters.
     def anomaly_events():
         """Export comprehensive anomaly events for a selected site to SiteAnomalyEvents_[SiteName].csv."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of PromptUtils + EnhancedSSHRunner.
-        print("Export Site Anomaly Events:")  # User-visible header.
-        logging.info("Starting export of site anomaly events...")  # Trace start of export.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("Export Site Anomaly Events:")  # User-visible header.
+        logger.info("Starting export of site anomaly events...")  # Trace start of export.
         site_id = mh.PromptUtils.select_site()  # Prompt the user for a site.
         if not site_id:  # No site chosen.
-            print("! No site selected. Exiting.")  # Tell the user.
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.warning("! No site selected. Exiting.")  # Tell the user.
             return  # Abort the export.
         site_name = SiteAnomalyExporter._anomaly_resolve_site_name(site_id)  # Resolve display name for filename.
         filename = f"SiteAnomalyEvents_{mh.EnhancedSSHRunner.sanitize_filename(site_name)}.csv"  # Build CSV name.
@@ -54,23 +58,27 @@ class SiteAnomalyExporter:  # Site anomaly exporters.
             data, count = SiteAnomalyExporter._aggregate_site_anomaly_data(site_id, site_name, metrics)  # Fetch.
             SiteAnomalyExporter._export_anomaly_data(data, filename, "site anomaly event", count, site_name)  # CSV
         except Exception as exception:  # Broader export failure (flatten/write).
-            print(f"! Error exporting site anomaly events: {exception}")  # Tell the user.
-            logging.error("Failed to export site anomaly events for %s: %s", site_name, exception)  # Log it.
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.error("! Error exporting site anomaly events: %s", exception)  # Tell the user.
+            logger.error("Failed to export site anomaly events for %s: %s", site_name, exception)  # Log it.
 
     @staticmethod
     def device_anomaly_events():
         """Export device anomaly events to SiteDeviceAnomalyEvents_[Site]_[Device].csv."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of PromptUtils.
-        print("Export Site Device Anomaly Events:")  # User-visible header.
-        logging.info("Starting export of site device anomaly events...")  # Trace start of export.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("Export Site Device Anomaly Events:")  # User-visible header.
+        logger.info("Starting export of site device anomaly events...")  # Trace start of export.
         site_id = mh.PromptUtils.select_site()  # Prompt the user for a site.
         if not site_id:  # No site chosen.
-            print("! No site selected. Exiting.")  # Tell the user.
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.warning("! No site selected. Exiting.")  # Tell the user.
             return  # Abort the export.
         site_name = SiteAnomalyExporter._anomaly_resolve_site_name(site_id)  # Resolve display name.
         selection = mh.PromptUtils.select_device_id_from_inventory(site_id)  # Prompt for a device.
         if not selection:  # No device chosen.
-            print("! No device selected. Exiting.")  # Tell the user.
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.warning("! No device selected. Exiting.")  # Tell the user.
             return  # Abort the export.
         device_mac, device_name = selection[0], selection[1]  # Unpack the MAC and display name.
         filename = SiteAnomalyExporter._build_device_filename(site_name, device_name)  # Build the CSV name.
@@ -81,8 +89,9 @@ class SiteAnomalyExporter:  # Site anomaly exporters.
             )  # Loop + fetch each metric.
             SiteAnomalyExporter._export_anomaly_data(data, filename, "device anomaly event", count, device_name)  # CSV
         except Exception as exception:  # Broader export failure (flatten/write).
-            print(f"! Error exporting device anomaly events: {exception}")  # Tell the user.
-            logging.error("Failed to export device anomaly events for %s: %s", device_name, exception)  # Log it.
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.error("! Error exporting device anomaly events: %s", exception)  # Tell the user.
+            logger.error("Failed to export device anomaly events for %s: %s", device_name, exception)  # Log it.
 
     @staticmethod
     def _build_device_filename(site_name: str, device_name: str) -> str:
@@ -96,14 +105,18 @@ class SiteAnomalyExporter:  # Site anomaly exporters.
     def _discover_site_anomaly_metrics() -> list[str]:
         """Discover potential site anomaly metric names, announce them, return [] when none found."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of AnomalyMetricsDiscovery.
-        print("! Discovering potential anomaly metrics from Mist API definitions...")  # Tell the user.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("! Discovering potential anomaly metrics from Mist API definitions...")  # Tell the user.
         potential = mh.AnomalyMetricsDiscovery.discover()  # Pull discovery list from CSV.
         names = [info["metric_name"] for info in potential]  # Extract just the metric names.
-        print(f"! Found {len(names)} potential anomaly metrics:")  # Tell the user the count.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("! Found %s potential anomaly metrics:", len(names))  # Tell the user the count.
         for info in potential:  # Show each metric to the user.
-            print(f"  - {info['metric_name']}: {info['description'][:60]}...")  # Trim long descriptions.
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.info("  - %s: %s...", info["metric_name"], info["description"][:60])  # Trim long descriptions.
         if not names:  # No metrics discovered at all.
-            print("! No potential anomaly metrics found. Please check ConstInsightMetrics.csv availability.")
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.warning("! No potential anomaly metrics found. Please check ConstInsightMetrics.csv availability.")
         return names  # Return the names (possibly empty).
 
     @staticmethod
@@ -120,15 +133,18 @@ class SiteAnomalyExporter:  # Site anomaly exporters.
                 data["data_type"] = data_type  # Tag the data type for downstream consumers.
                 for key, value in tags.items():  # Apply caller-supplied tags (site_id, site_name, ...).
                     data[key] = value  # Set each tag on the result row.
-                print(f"!? Retrieved {metric} {display_label}")  # Tell the user.
-                logging.debug("Successfully retrieved %s %s for %s", metric, display_label, tags)  # Trace success.
+                # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+                logger.info("!? Retrieved %s %s", metric, display_label)  # Tell the user.
+                logger.debug("Successfully retrieved %s %s for %s", metric, display_label, tags)  # Trace success.
                 return data  # Return the tagged row.
-            print(f"! No {metric} {display_label} available")  # Tell the user the metric had no data.
-            logging.info("No %s %s available for %s", metric, display_label, tags)  # Log the absence.
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.info("! No %s %s available", metric, display_label)  # Tell the user the metric had no data.
+            logger.info("No %s %s available for %s", metric, display_label, tags)  # Log the absence.
             return None  # Signal caller to skip.
         except Exception as metric_error:  # This metric's fetch failed.
-            print(f"! Error retrieving {metric} {display_label}: {metric_error}")  # Tell the user.
-            logging.warning("Error retrieving %s %s for %s: %s", metric, display_label, tags, metric_error)  # Warn.
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.warning("! Error retrieving %s %s: %s", metric, display_label, metric_error)  # Tell the user.
+            logger.warning("Error retrieving %s %s for %s: %s", metric, display_label, tags, metric_error)  # Warn.
             return None  # Signal caller to skip.
 
     @staticmethod
@@ -161,7 +177,8 @@ class SiteAnomalyExporter:  # Site anomaly exporters.
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of mistapi + apisession.
         tags = {"site_id": site_id, "site_name": site_name}  # Tags attached to every row.
         scope = ("anomaly events", "site_anomaly_events")  # Display label + data_type tag.
-        print(f"! Retrieving {len(metrics)} different site anomaly events...")  # Tell the user.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("! Retrieving %s different site anomaly events...", len(metrics))  # Tell the user.
         builder = lambda metric: functools.partial(  # noqa: E731 — bind site-anomaly fetch per metric.
             mh.mistapi.api.v1.sites.anomaly.listSiteAnomalyEvents, mh.apisession, site_id, metric
         )
@@ -180,7 +197,10 @@ class SiteAnomalyExporter:  # Site anomaly exporters.
             "device_name": device_name,
         }
         scope = ("device anomaly data", "device_anomaly_events")  # Display label + data_type tag.
-        print(f"! Retrieving {len(metrics)} different device anomaly events for {device_name}...")  # Tell the user.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info(
+            "! Retrieving %s different device anomaly events for %s...", len(metrics), device_name
+        )  # Tell the user.
         builder = lambda metric: functools.partial(  # noqa: E731 — bind device-anomaly fetch per metric.
             mh.mistapi.api.v1.sites.anomaly.getSiteAnomalyEventsForDevice,
             mh.apisession,
@@ -200,11 +220,13 @@ class SiteAnomalyExporter:  # Site anomaly exporters.
             processed = DataProcessingUtils.flatten_nested_fields(data_list)  # Flatten nested fields.
             processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
             mh.DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]
-            print(f"! {success_count} {label} types exported to {filename}")  # Tell the user the count.
-            logging.info("Exported %s %s types for %s to %s", success_count, label, scope_name, filename)  # Log.
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.info("! %s %s types exported to %s", success_count, label, filename)  # Tell the user the count.
+            logger.info("Exported %s %s types for %s to %s", success_count, label, scope_name, filename)  # Log.
         else:  # No data from any metric.
-            print(f"! 0 {label}s exported to {filename} (no data available)")  # Tell the user zero.
-            logging.warning("No %s available for %s", label, scope_name)  # Warn about the empty result.
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.warning("! 0 %ss exported to %s (no data available)", label, filename)  # Tell the user zero.
+            logger.warning("No %s available for %s", label, scope_name)  # Warn about the empty result.
             mh.DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
 
     _CLIENT_ANOMALY_METRICS = (  # Client-specific anomaly metrics (verified working) shared by the count + loop.
@@ -238,7 +260,7 @@ class SiteAnomalyExporter:  # Site anomaly exporters.
                     return client.get("hostname", client.get("name", "Unknown"))  # Read the hostname.
             return "Unknown"  # No matching client found in the stats.
         except Exception as exception:  # Lookup failed.
-            logging.warning("Could not retrieve client hostname for %s: %s", client_mac, exception)  # Warn the failure.
+            logger.warning("Could not retrieve client hostname for %s: %s", client_mac, exception)  # Warn the failure.
             return client_mac  # Fall back to the MAC address.
 
     @staticmethod
@@ -290,11 +312,13 @@ class SiteAnomalyExporter:  # Site anomaly exporters.
         """Record one fetched metric: append + announce on data, announce 'none' otherwise; return 1 if kept else 0."""
         if record is not None:  # The metric returned data.
             all_data.append(record)  # Collect the row.
-            print(f"!? Retrieved {metric} client anomaly data")  # Tell the user.
-            logging.debug("Successfully retrieved %s client anomaly data for %s", metric, client_mac)  # Trace.
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.info("!? Retrieved %s client anomaly data", metric)  # Tell the user.
+            logger.debug("Successfully retrieved %s client anomaly data for %s", metric, client_mac)  # Trace.
             return 1  # One successful metric.
-        print(f"! No {metric} client anomaly data available")  # Tell the user none.
-        logging.info("No %s client anomaly data available for %s", metric, client_mac)  # Log none.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("! No %s client anomaly data available", metric)  # Tell the user none.
+        logger.info("No %s client anomaly data available for %s", metric, client_mac)  # Log none.
         return 0  # No data for this metric.
 
     @staticmethod
@@ -302,8 +326,12 @@ class SiteAnomalyExporter:  # Site anomaly exporters.
         site_id: str, client_mac: str, site_name: str, client_hostname: str
     ) -> tuple[list, int]:  # type: ignore[type-arg]
         """Fetch all client anomaly metrics for one client; return (records, retrieved_count)."""
-        print(
-            f"! Retrieving {len(SiteAnomalyExporter._CLIENT_ANOMALY_METRICS)} different client anomaly events for {client_mac} ({client_hostname})..."  # noqa: E501
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info(
+            "! Retrieving %s different client anomaly events for %s (%s)...",
+            len(SiteAnomalyExporter._CLIENT_ANOMALY_METRICS),
+            client_mac,
+            client_hostname,
         )  # Tell the user how many metrics will be fetched.
         all_client_anomaly_data = []  # Accumulate anomaly rows.
         metrics_retrieved = 0  # Success count.
@@ -316,8 +344,9 @@ class SiteAnomalyExporter:  # Site anomaly exporters.
                     record, metric, client_mac, all_client_anomaly_data
                 )
             except Exception as metric_error:  # Metric fetch failed.
-                print(f"! Error retrieving {metric} client anomaly data: {metric_error}")  # Tell the user.
-                logging.warning(
+                # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+                logger.warning("! Error retrieving %s client anomaly data: %s", metric, metric_error)  # Tell the user.
+                logger.warning(
                     "Error retrieving %s client anomaly data for %s: %s", metric, client_mac, metric_error
                 )  # Warn the failure.
         return all_client_anomaly_data, metrics_retrieved  # Collected rows and the success count.
@@ -330,13 +359,17 @@ class SiteAnomalyExporter:  # Site anomaly exporters.
             processed = DataProcessingUtils.flatten_nested_fields(all_data)  # Flatten nested fields.
             processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
             mh.DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]
-            print(f"! {metrics_retrieved} client anomaly event types exported to {filename}")  # Tell the user.
-            logging.info(
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.info("! %s client anomaly event types exported to %s", metrics_retrieved, filename)  # Tell the user.
+            logger.info(
                 "Exported %s client anomaly event types for %s to %s", metrics_retrieved, client_mac, filename
             )  # Log the export.
         else:  # No metric returned data.
-            print(f"! 0 client anomaly events exported to {filename} (no data available)")  # Tell the user zero.
-            logging.warning("No client anomaly events available for %s", client_mac)  # Warn none.
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.warning(
+                "! 0 client anomaly events exported to %s (no data available)", filename
+            )  # Tell the user zero.
+            logger.warning("No client anomaly events available for %s", client_mac)  # Warn none.
             mh.DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]  # Empty file.
 
     @staticmethod
@@ -349,12 +382,14 @@ class SiteAnomalyExporter:  # Site anomaly exporters.
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of PromptUtils + PromptClientUtils + SSH.
         site_id = mh.PromptUtils.select_site()  # Select a site.
         if not site_id:  # No site selected.
-            print("! No site selected. Exiting.")  # Tell the user.
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.warning("! No site selected. Exiting.")  # Tell the user.
             return None  # Abort.
         site_name = SiteAnomalyExporter._anomaly_resolve_site_name(site_id)  # Resolve site name for the filename.
         client_mac, _, _ = mh.PromptClientUtils.select_client(site_id)  # Select a client (only MAC is used).
         if not client_mac:  # No client selected.
-            print("! No client selected. Exiting.")  # Tell the user.
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.warning("! No client selected. Exiting.")  # Tell the user.
             return None  # Abort.
         client_hostname = SiteAnomalyExporter._anomaly_lookup_client_hostname(site_id, client_mac)  # Hostname lookup.
         sanitized_site_name = mh.EnhancedSSHRunner.sanitize_filename(site_name)  # Sanitize the site name.
@@ -368,8 +403,9 @@ class SiteAnomalyExporter:  # Site anomaly exporters.
         Prompts for a site and client, fetches the successful_connect / roaming / throughput
         anomaly metrics, and writes SiteClientAnomalyEvents_[SiteName]_[ClientMAC].csv.
         """
-        print("Export Site Client Anomaly Events:")  # Header.
-        logging.info("Starting export of site client anomaly events...")  # Log start.
+        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        logger.info("Export Site Client Anomaly Events:")  # Header.
+        logger.info("Starting export of site client anomaly events...")  # Log start.
         prepared = SiteAnomalyExporter._anomaly_prepare()  # Prompt + resolve site/client/filename.
         if prepared is None:  # Operator cancelled at a selection prompt.
             return  # Abort.
@@ -381,7 +417,8 @@ class SiteAnomalyExporter:  # Site anomaly exporters.
             )
             SiteAnomalyExporter._anomaly_export(all_data, metrics_retrieved, client_mac, filename)  # Write the CSV.
         except Exception as exception:  # Export failed.
-            print(f"! Error exporting client anomaly events: {exception}")  # Tell the user.
-            logging.error("Failed to export client anomaly events for %s: %s", client_mac, exception)  # Log the error.
+            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            logger.error("! Error exporting client anomaly events: %s", exception)  # Tell the user.
+            logger.error("Failed to export client anomaly events for %s: %s", client_mac, exception)  # Log the error.
         finally:  # Always restore the mistapi logger levels.
             SiteAnomalyExporter._anomaly_restore_loggers(original_levels)  # Restore logger levels.
