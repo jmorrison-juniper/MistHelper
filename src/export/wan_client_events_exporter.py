@@ -2,8 +2,10 @@
 
 Why:
     Mist exposes ``searchSiteWanClientEvents`` (GET
-    ``/api/v1/sites/{site_id}/wan_clients/events/search``) but MistHelper had no
-    menu item wired to it. Spec 899 (issue #1407) requires a read-only menu that
+    ``/api/v1/sites/{site_id}/wan_clients/events/search``) — the underlying REST
+    path is nested, but the ``mistapi==0.63.3`` SDK exposes the Python callable
+    flat under ``mistapi.api.v1.sites.wan_clients`` (issue #1639). MistHelper had
+    no menu item wired to it. Spec 899 (issue #1407) requires a read-only menu that
     invokes the endpoint via the ``mistapi`` SDK, prompts the operator with
     ``safe_input`` for the site identifier when unspecified, paginates the
     response with ``mistapi.get_all``, and persists the flattened rows through
@@ -249,7 +251,8 @@ class WanClientEventsExporter:
             List of event-row dicts (possibly empty); never ``None``.
         """
         logging.info("Fetching WAN client events data...")  # WHY: log before first-page API call for tracing.
-        endpoint = self.mistapi_module.api.v1.sites.wan_clients.events.search.searchSiteWanClientEvents
+        # WHY: #1639 — mistapi 0.63.3 exposes the callable flat under wan_clients, not under .events.search.
+        endpoint = self.mistapi_module.api.v1.sites.wan_clients.searchSiteWanClientEvents
         response = endpoint(self.apisession, site_id, limit=_API_PAGE_LIMIT)  # WHY: first-page API call.
         results = self.mistapi_module.get_all(response=response, mist_session=self.apisession)  # WHY: paginate.
         count = len(results) if results else 0  # WHY: capture size once for both log line and return value.
