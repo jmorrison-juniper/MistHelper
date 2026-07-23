@@ -7,6 +7,16 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #887 slice 1/N: drop `troubleshooting` from pydocstyle `match-dir` exclusion (issue #887)
+
+- **Pydocstyle scope narrowing (Changed)**: removed `troubleshooting` from
+  the `[tool.pydocstyle].match-dir` negation list in `pyproject.toml`.
+  Audit confirmed `src/troubleshooting/` (4 files: `__init__.py`,
+  `interactive_test_runner.py`, `marvis_troubleshoot_utils.py`,
+  `troubleshoot_utils.py`) already reports zero Google-style violations
+  under `pydocstyle --convention=google`, so the exclusion was dead weight.
+  `pydocstyle src/` remains clean after the regex change.
+
 ### #886 Phase 2 slice 108/N: retire `print()` in `src/export/site_anomaly_exporter.py` (issue #886)
 
 - **Print-to-logger migration (Changed)**: replaced all 28 `print()` calls in

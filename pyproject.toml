@@ -426,7 +426,7 @@ good-names = ["db", "ok"]
 # --- pydocstyle ---
 [tool.pydocstyle]
 convention = "google"
-match-dir = "(?!tests|\\.|capture|inventory|troubleshooting).*"
+match-dir = "(?!tests|\\.|capture|inventory).*"
 
 # --- Interrogate (docstring coverage) ---
 [tool.interrogate]
