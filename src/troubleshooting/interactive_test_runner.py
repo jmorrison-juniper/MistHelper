@@ -369,26 +369,50 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
         )  # WHY: log invocation kwargs for diagnostics.
         function(**invoke_kwargs)  # WHY: execute target interactive-safe operation.
 
-    def _emit_option_pass(self, option: str, description: str, duration: float, emitter: Any) -> bool:
+    def _classify_site_context(self, option: str) -> str:
+        """Return the per-option test_mode label reflecting whether the handler accepts ``site_id``.
+
+        Why:
+            Issue #1638 — reports must distinguish handlers invoked with resolved
+            site context from those invoked without any, so telemetry consumers
+            can separate site-scoped exercise from stand-alone menu invocations
+            without inspecting the source signature themselves.
+
+        Args:
+            option: Menu option key resolved through ``self.menu_actions``.
+
+        Returns:
+            ``"interactive-site-scoped"`` when the handler declares a ``site_id``
+            parameter, else ``"interactive-no-context"``.
+        """
+        function, _description = self.menu_actions[option]  # WHY: resolve callable for signature inspection.
+        signature = inspect.signature(function)  # WHY: reuse inspect result to mirror _invoke_option gating.
+        if "site_id" in signature.parameters:
+            return "interactive-site-scoped"  # WHY: handler participates in site-scoped exercise.
+        return "interactive-no-context"  # WHY: handler runs without any site context injected.
+
+    def _emit_option_pass(self, option: str, description: str, duration: float, emitter: Any, test_mode: str) -> bool:
         """Emit telemetry pass event and preserve legacy success output for an option."""
         logging.warning("   [SUCCESS] Option %s completed successfully", option)  # WHY: #886 s18 success msg.
         logging.info("Emitting telemetry pass event for option %s", option)  # WHY: log before pass emission.
-        emitter.emit_test_pass(option, description, duration, "interactive")  # WHY: emit pass event.
+        emitter.emit_test_pass(option, description, duration, test_mode)  # WHY: #1638 — label site-context outcome.
         logging.debug("Telemetry pass event emitted for option %s", option)  # WHY: log pass completion.
         logging.info(
             "INTERACTIVE_TEST: Successfully completed menu option %s", option
         )  # WHY: log operator-facing success.
         return True  # WHY: signal success to caller.
 
-    def _emit_option_fail(self, option: str, description: str, duration: float, error: Exception, emitter: Any) -> bool:
+    def _emit_option_fail(
+        self, option: str, description: str, duration: float, error: Exception, emitter: Any, test_mode: str
+    ) -> bool:
         """Emit telemetry fail event and preserve legacy failure output for an option."""
         logging.warning(
             "   [FAILED]  Option %s failed: %s...", option, str(error)[:100]
         )  # WHY: #886 slice 18/N — failure message via logging.warning with legacy truncation.
         logging.info("Emitting telemetry fail event for option %s", option)  # WHY: log before fail emission.
         emitter.emit_test_fail(
-            option, description, duration, error, "interactive"
-        )  # WHY: emit fail event with exception context.
+            option, description, duration, error, test_mode
+        )  # WHY: #1638 — label site-context / prompt-cancellation outcome.
         logging.debug("Telemetry fail event emitted for option %s", option)  # WHY: log fail completion.
         logging.error("INTERACTIVE_TEST: Failed menu option %s: %s", option, error)  # WHY: log operator-facing failure.
         return False  # WHY: signal failure to caller.
@@ -406,6 +430,13 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
             while no exception was raised, the option is routed to the failure
             emitter with a synthesized ``RuntimeError`` describing the logged
             error condition.
+
+            Issue #1638 — the emitted test_mode label now differentiates three
+            distinct outcomes: ``interactive-site-scoped`` (handler accepts
+            ``site_id``), ``interactive-no-context`` (handler does not), and
+            ``interactive-cancelled`` (handler raised ``EOFError`` because the
+            user aborted a prompt), so reports no longer conflate a completed
+            no-context invocation with a prompt-cancelled site-scoped one.
         """
         _function, description = self.menu_actions[option]  # WHY: resolve description for progress output.
         logging.warning(
@@ -418,6 +449,7 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
         logging.info(
             "INTERACTIVE_TEST: Starting test of menu option %s description='%s'", option, description
         )  # WHY: log before invocation.
+        test_mode = self._classify_site_context(option)  # WHY: #1638 — resolve per-option mode label upfront.
         observer = _LoggedErrorObserver()  # WHY: #1636 — capture ERROR records emitted by the handler.
         root_logger = logging.getLogger()  # WHY: attach to root so any child logger's ERROR is observed.
         root_logger.addHandler(observer)
@@ -429,15 +461,22 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
             if observer.error_count > 0:
                 # WHY: #1636 — logged error without an exception is still a failure.
                 synthesized = RuntimeError(f"operation logged {observer.error_count} error record(s) without raising")
-                return self._emit_option_fail(option, description, time.time() - op_start, synthesized, emitter)
+                return self._emit_option_fail(
+                    option, description, time.time() - op_start, synthesized, emitter, test_mode
+                )
             return self._emit_option_pass(
-                option, description, time.time() - op_start, emitter
+                option, description, time.time() - op_start, emitter, test_mode
             )  # WHY: delegate success emission.
+        except EOFError as error:
+            root_logger.removeHandler(observer)  # WHY: idempotent guard on the cancellation path.
+            return self._emit_option_fail(
+                option, description, time.time() - op_start, error, emitter, "interactive-cancelled"
+            )  # WHY: #1638 — distinguish prompt cancellation from a completed run or generic error.
         except Exception as error:
             root_logger.removeHandler(observer)  # WHY: idempotent guard on the raise path.
             return self._emit_option_fail(
-                option, description, time.time() - op_start, error, emitter
-            )  # WHY: delegate failure emission.
+                option, description, time.time() - op_start, error, emitter, test_mode
+            )  # WHY: delegate failure emission with the resolved per-option mode label.
 
     def _run_option_loop(
         self, interactive_options: list[str], test_site_id: str | None, emitter: Any
