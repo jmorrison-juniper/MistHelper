@@ -13,6 +13,19 @@ from typing import Any  # WHY: emitter and registry protocols intentionally unco
 from src.dataclasses.progress_event import TestSummary  # WHY: reuse issue #470 aggregate telemetry container.
 
 
+class TestSiteSelectorUnresolved(RuntimeError):
+    """Raised when ``MIST_INTERACTIVE_TEST_SITE`` is set but resolves to no org site.
+
+    Why:
+        Issue #1637 — fail-closed selector contract. Silently falling back to
+        the first available site when an operator supplied an explicit
+        selector risks running the interactive suite against the wrong
+        environment (a different site than the operator intended). This
+        exception is the seam ``_resolve_site_or_close`` catches to abort the
+        suite cleanly instead of proceeding against an unintended site.
+    """
+
+
 class _LoggedErrorObserver(logging.Handler):
     """Root-logger handler that counts ERROR (or higher) records emitted during an option run.
 
@@ -102,29 +115,49 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
 
     @staticmethod
     def _log_selector_miss(site_selector: str) -> None:
-        """Log selector-miss warning banner via ``logging.warning``.
+        """Log selector-miss banner via ``logging.error`` (fail-closed contract).
 
         Why:
-            #886 slice 18/N migrates ``print()`` to ``logging.warning`` so
-            ruff T20 can stay armed globally. Legacy operator banner and
-            diagnostic log are consolidated into a single warning record so
-            the miss notification arrives atomically in handlers that buffer
-            per-record.
+            Issue #1637 promotes selector-miss from warning to error and
+            removes the "falling back" phrasing: when an operator explicitly
+            sets ``MIST_INTERACTIVE_TEST_SITE`` we must abort rather than run
+            against a different site. The miss is now a terminal condition
+            surfaced to the operator before ``TestSiteSelectorUnresolved`` is
+            raised.
         """
-        logging.warning(
-            "INTERACTIVE_TEST: MIST_INTERACTIVE_TEST_SITE '%s' not found; " "falling back to first available site.",
+        logging.error(
+            "INTERACTIVE_TEST: MIST_INTERACTIVE_TEST_SITE '%s' did not match any organization site; aborting.",
             site_selector,
-        )  # WHY: consolidated operator banner + diagnostic log.
+        )  # WHY: fail-closed banner (issue #1637).
 
-    def _lookup_selector_site(self, org_id: str, site_selector: str) -> tuple[str | None, str]:
-        """Return site matching the environment selector by UUID or case-insensitive name."""
+    def _lookup_selector_site(self, org_id: str, site_selector: str) -> tuple[str, str]:
+        """Return site matching the environment selector or raise ``TestSiteSelectorUnresolved``.
+
+        Why:
+            Issue #1637 — fail-closed contract. Previously returned
+            ``(None, "Unknown")`` on miss which let the caller silently fall
+            back to the first available site. Now the miss is a terminal
+            condition and callers must handle the exception.
+
+        Args:
+            org_id: Organization UUID whose sites are searched.
+            site_selector: Operator-supplied UUID or case-insensitive site name.
+
+        Returns:
+            Tuple of ``(site_id, site_name)`` for the resolved site.
+
+        Raises:
+            TestSiteSelectorUnresolved: When no site matches the selector.
+        """
         sites_data = self._fetch_selector_sites(org_id)  # WHY: delegate list fetch to helper.
         matching_site = self._find_selector_match(
             sites_data, site_selector
         )  # WHY: delegate selector matching to helper.
         if not matching_site:
-            self._log_selector_miss(site_selector)  # WHY: emit legacy miss warning.
-            return None, "Unknown"  # WHY: signal caller to attempt fallback lookup.
+            self._log_selector_miss(site_selector)  # WHY: emit terminal miss banner before raising.
+            raise TestSiteSelectorUnresolved(
+                f"MIST_INTERACTIVE_TEST_SITE '{site_selector}' did not match any organization site"
+            )  # WHY: fail-closed (issue #1637) — do not silently fall back.
         site_id = matching_site["id"]  # WHY: capture matched site id for downstream operations.
         site_name = matching_site.get("name", "Unknown")  # WHY: capture matched site name for context.
         logging.warning(
@@ -312,6 +345,10 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
                 "[ERROR] No sites found in organization - cannot run interactive tests"
             )  # WHY: #886 slice 18/N — legacy no-site error via logging.error.
             logging.error("INTERACTIVE_TEST: No sites available for testing")  # WHY: log no-site terminal condition.
+        except TestSiteSelectorUnresolved as error:
+            logging.error(
+                "[ERROR] Aborting interactive tests: %s", error
+            )  # WHY: issue #1637 — fail-closed operator banner when explicit selector missed.
         except Exception as error:
             logging.error("[ERROR] Failed to fetch test site: %s", error)  # WHY: #886 s18 fetch-failure msg.
             logging.error("INTERACTIVE_TEST: Failed to fetch test site: %s", error)  # WHY: log exception context.
