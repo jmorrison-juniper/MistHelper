@@ -22,6 +22,7 @@ from __future__ import annotations  # Enable postponed evaluation for forward-re
 
 import importlib  # Late-import MistHelper module to avoid circular src<->MistHelper dependency
 import logging  # Reproduce the original entry-point trace log
+import sys  # Provides raw argv for the pre-argparse unsupported-flag-variant guard (#1640)
 from typing import Any  # Loose typing for late-bound MistHelper attributes
 
 
@@ -47,6 +48,8 @@ class MainEntrypoint:  # CLI main entry-point seam
         _MH._initialize_deferred_imports()  # Initialize deferred module imports if not already completed.
         _MH.InputUtils.ensure_tqdm_available()  # Ensure tqdm is accessible via InputUtils wrapper before use.
         parser = _MH._build_argument_parser()  # Build argparse parser with all supported CLI flags.
+        # Reject known bad flag spellings (e.g. --test-interactive) before argparse misroutes them (#1640).
+        _MH._reject_unsupported_flag_variants(sys.argv[1:])
         args = parser.parse_args()  # Parse command line arguments into typed Namespace object.
         _MH._setup_runtime_flags(args)  # Apply --standalone env, register globals()["args"], set FAST_MODE_ENABLED.
         _MH._initialize_dependencies(args)  # Initialize deferred dependencies (respects --skip-deps flag).
