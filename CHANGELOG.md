@@ -7,6 +7,16 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### #887 slice 4/N: drop `capture` from pydocstyle `match-dir` exclusion (issue #887)
+
+- **Pydocstyle scope narrowing (Changed)**: removed `capture` from the
+  `[tool.pydocstyle].match-dir` negation list in `pyproject.toml`. Audit
+  confirmed `src/capture/` (13 files) already reports zero Google-style
+  violations, so the entry was dead weight; CI now enforces Google-style
+  docstrings on the subtree going forward. Continues the #887 workstream of
+  shrinking the pydocstyle exclusion list one subtree at a time; next slice
+  targets `websocket` (15 files).
+
 ### #887 slice 3/N: drop `inventory` from pydocstyle `match-dir` exclusion (issue #887)
 
 - **Pydocstyle scope narrowing (Changed)**: removed `inventory` from the
