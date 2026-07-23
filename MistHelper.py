@@ -965,8 +965,32 @@ def _early_dependency_check() -> None:  # Public entry point; delegates to the e
     orchestrator.run()  # Execute the dependency check + install/upgrade workflow
 
 
-# Run early dependency check (will be skipped if DISABLE_AUTO_INSTALL=true)
-_early_dependency_check()  # Run the bootstrap immediately at import time
+def _is_help_invocation(argv: list[str]) -> bool:
+    """Return True when *argv* requests help output (``--help`` or ``-h``).
+
+    Why:
+        ``--help`` must be side-effect-free (issue #1641): argparse renders
+        usage and exits immediately, so kicking off dependency installation
+        or eager import initialization before that point is wasted work
+        (and, on a fresh box, actively harmful). This helper is the single
+        source of truth used by both the dependency-check guard and the
+        deferred-imports conditional below.
+
+    Args:
+        argv: The full argument vector (typically ``sys.argv``). The program
+            name at position 0 is ignored; only the flag tail is inspected.
+
+    Returns:
+        True if ``--help`` or ``-h`` appears as a full token in the tail;
+        False otherwise. Substring matches (e.g. ``--helpme``) do not count.
+    """
+    return any(token in ("--help", "-h") for token in argv[1:])
+
+
+# Run early dependency check (will be skipped if DISABLE_AUTO_INSTALL=true
+# or if the user is asking for --help/-h, which must be side-effect-free per #1641).
+if not _is_help_invocation(sys.argv):
+    _early_dependency_check()  # Run the bootstrap immediately at import time
 
 # Additional standard library imports
 import concurrent.futures  # High-level parallelism primitives for batched API calls
@@ -2205,9 +2229,12 @@ import_manager = GlobalImportManager()  # Single shared manager for all dependen
 # Test mode and skip-deps both defer initialization to main() for better control
 _initialize_imports_now = True  # Default: resolve all imports eagerly at module load
 
-# Check for test mode or skip-deps from command line
+# Check for test mode, skip-deps, or help invocation from command line
 if (
-    "--test" in sys.argv or "--testinteractive" in sys.argv or "--skip-deps" in sys.argv
+    "--test" in sys.argv
+    or "--testinteractive" in sys.argv
+    or "--skip-deps" in sys.argv
+    or _is_help_invocation(sys.argv)
 ):  # Any flag that defers import setup
     _initialize_imports_now = False  # Defer initialization to main() for finer control
     if (
@@ -2218,6 +2245,8 @@ if (
         )  # Explain the deferral
     elif "--skip-deps" in sys.argv:  # The caller explicitly asked to skip dependency handling
         logging.info("Deferring import initialization due to --skip-deps flag")  # Explain the deferral
+    elif _is_help_invocation(sys.argv):  # Help invocation must be side-effect-free (#1641)
+        logging.info("Deferring import initialization for --help invocation")  # Explain the deferral
     else:  # Some other deferring flag combination
         logging.info("Deferring import initialization due to CLI flags")  # Generic deferral notice
 
