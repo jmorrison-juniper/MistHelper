@@ -13,6 +13,30 @@ from typing import Any  # WHY: emitter and registry protocols intentionally unco
 from src.dataclasses.progress_event import TestSummary  # WHY: reuse issue #470 aggregate telemetry container.
 
 
+class _LoggedErrorObserver(logging.Handler):
+    """Root-logger handler that counts ERROR (or higher) records emitted during an option run.
+
+    Why:
+        Issue #1636 — interactive handlers can call ``logging.error(...)`` and
+        then swallow the failure by returning None. Without observing those
+        records the runner treats the option as a clean pass, inflating the
+        pass rate and masking real defects. Attaching this handler scoped to
+        the ``_invoke_option`` call gives the runner a deterministic signal
+        that a logged-error occurred without an exception being raised, so it
+        can route to the failure emitter and keep the exit code accurate.
+    """
+
+    def __init__(self) -> None:
+        """Configure the handler at ERROR level with a zero-count captured tally."""
+        super().__init__(level=logging.ERROR)
+        self.error_count = 0  # WHY: cheap monotonic tally; callers only check >0.
+
+    def emit(self, record: logging.LogRecord) -> None:  # noqa: D401 -- logging.Handler API
+        """Increment the captured error tally for each ERROR (or higher) record."""
+        if record.levelno >= logging.ERROR:
+            self.error_count += 1
+
+
 @dataclass(frozen=True, slots=True)
 class SuiteTallies:  # WHY: bundle counts+timing so summary/finalize signatures stay within 5-param limit.
     """Tallies produced by the interactive-safe option execution loop."""
@@ -333,7 +357,19 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
         return False  # WHY: signal failure to caller.
 
     def _run_single_option(self, index: int, total: int, option: str, test_site_id: str | None, emitter: Any) -> bool:
-        """Run a single interactive option, emit telemetry, and return True on success."""
+        """Run a single interactive option, emit telemetry, and return True on success.
+
+        Why:
+            Issue #1636 — a handler that calls ``logging.error(...)`` and then
+            returns None must be classified as a failure, not a clean pass.
+            The ``_LoggedErrorObserver`` handler is attached to the root logger
+            only for the duration of ``_invoke_option`` and torn down before
+            emitting the pass/fail event so the runner's own success/failure
+            logging does not double-count. If any ERROR-level record is captured
+            while no exception was raised, the option is routed to the failure
+            emitter with a synthesized ``RuntimeError`` describing the logged
+            error condition.
+        """
         _function, description = self.menu_actions[option]  # WHY: resolve description for progress output.
         logging.warning(
             "   [%2d/%d] Testing option %3s: %s...", index, total, option, description[:60]
@@ -345,12 +381,23 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
         logging.info(
             "INTERACTIVE_TEST: Starting test of menu option %s description='%s'", option, description
         )  # WHY: log before invocation.
+        observer = _LoggedErrorObserver()  # WHY: #1636 — capture ERROR records emitted by the handler.
+        root_logger = logging.getLogger()  # WHY: attach to root so any child logger's ERROR is observed.
+        root_logger.addHandler(observer)
         try:
-            self._invoke_option(option, test_site_id)  # WHY: invoke the menu callable.
+            try:
+                self._invoke_option(option, test_site_id)  # WHY: invoke the menu callable.
+            finally:
+                root_logger.removeHandler(observer)  # WHY: detach before pass/fail emission to avoid self-count.
+            if observer.error_count > 0:
+                # WHY: #1636 — logged error without an exception is still a failure.
+                synthesized = RuntimeError(f"operation logged {observer.error_count} error record(s) without raising")
+                return self._emit_option_fail(option, description, time.time() - op_start, synthesized, emitter)
             return self._emit_option_pass(
                 option, description, time.time() - op_start, emitter
             )  # WHY: delegate success emission.
         except Exception as error:
+            root_logger.removeHandler(observer)  # WHY: idempotent guard on the raise path.
             return self._emit_option_fail(
                 option, description, time.time() - op_start, error, emitter
             )  # WHY: delegate failure emission.
