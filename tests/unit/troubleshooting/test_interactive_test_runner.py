@@ -17,6 +17,7 @@ from src.troubleshooting.interactive_test_runner import (
     InteractiveTestRunner,
     SuiteContext,
     SuiteTallies,
+    TestSiteSelectorUnresolved,  # WHY: #1637 fail-closed selector contract exception.
 )
 
 
@@ -175,11 +176,13 @@ def test_find_selector_match_returns_none_when_missing() -> None:
 
 
 def test_log_selector_miss_prints_and_logs(caplog: pytest.LogCaptureFixture) -> None:
-    """_log_selector_miss emits the consolidated selector-miss warning record."""
-    with caplog.at_level("WARNING"):
+    """_log_selector_miss emits the fail-closed selector-miss error record (issue #1637)."""
+    with caplog.at_level("ERROR"):
         InteractiveTestRunner._log_selector_miss("selector-xyz")
     assert "selector-xyz" in caplog.text  # WHY: operator-facing selector id preserved in the record
-    assert any("not found" in rec.message for rec in caplog.records)  # WHY: diagnostic wording preserved
+    assert any(
+        "did not match" in rec.message and rec.levelno == logging.ERROR for rec in caplog.records
+    )  # WHY: fail-closed wording + ERROR level (issue #1637)
 
 
 def test_lookup_selector_site_returns_match(caplog: pytest.LogCaptureFixture) -> None:
@@ -194,15 +197,24 @@ def test_lookup_selector_site_returns_match(caplog: pytest.LogCaptureFixture) ->
     assert "Alpha" in caplog.text  # WHY: legacy success message routed through the logger
 
 
-def test_lookup_selector_site_miss_returns_none() -> None:
-    """_lookup_selector_site returns (None, 'Unknown') and logs a miss on selector failure."""
+def test_lookup_selector_site_raises_on_miss(caplog: pytest.LogCaptureFixture) -> None:
+    """_lookup_selector_site raises TestSiteSelectorUnresolved and logs the miss on selector failure.
+
+    Why:
+        Issue #1637 — an unresolved MIST_INTERACTIVE_TEST_SITE selector must
+        fail closed rather than silently falling back to the first available
+        site. The lookup helper is the seam where the operator's explicit
+        intent is verified, so the miss must raise a domain-specific
+        exception that ``_resolve_site_or_close`` catches to abort the suite.
+    """
     mistapi_module = MagicMock()
     mistapi_module.api.v1.orgs.sites.listOrgSites.return_value = MagicMock()
     mistapi_module.get_all.return_value = [{"id": "site-a", "name": "Alpha"}]
     runner = _make_runner(mistapi_module=mistapi_module)
-    site_id, site_name = runner._lookup_selector_site("org-1", "nope")
-    assert site_id is None
-    assert site_name == "Unknown"
+    with caplog.at_level(logging.ERROR):
+        with pytest.raises(TestSiteSelectorUnresolved) as exc_info:
+            runner._lookup_selector_site("org-1", "nope")
+    assert "nope" in str(exc_info.value)  # WHY: message must surface the unresolved selector value.
 
 
 def test_lookup_first_available_site_returns_none_when_empty() -> None:
@@ -444,3 +456,129 @@ def test_print_summary_verdict_false_on_logged_error(caplog: pytest.LogCaptureFi
     with caplog.at_level(logging.WARNING):
         result = runner._print_summary_verdict(tallies, interactive_total=1)
     assert result is False  # WHY: any logged_error must fail the suite
+
+
+def test_resolve_test_site_propagates_unresolved_selector(monkeypatch: pytest.MonkeyPatch) -> None:
+    """_resolve_test_site must raise TestSiteSelectorUnresolved rather than falling back on selector miss.
+
+    Why:
+        Issue #1637 — the silent-fallback bug lives in ``_resolve_test_site``;
+        it currently reruns ``_lookup_first_available_site`` whenever the
+        selector lookup returns ``(None, "Unknown")``. Under fail-closed
+        semantics an unresolved explicit selector must propagate out of the
+        resolver so ``_resolve_site_or_close`` can abort the suite instead
+        of exercising a different site than the operator requested.
+    """
+    monkeypatch.setenv("MIST_INTERACTIVE_TEST_SITE", "does-not-exist")
+    mistapi_module = MagicMock()
+    mistapi_module.api.v1.orgs.sites.listOrgSites.return_value = MagicMock()
+    mistapi_module.get_all.return_value = [{"id": "site-a", "name": "Alpha"}]
+    runner = _make_runner(mistapi_module=mistapi_module)
+    with pytest.raises(TestSiteSelectorUnresolved):
+        runner._resolve_test_site("org-1")
+
+
+def test_resolve_test_site_exact_uuid_match_no_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Exact UUID selector match must resolve without consulting the fallback helper.
+
+    Why:
+        Issue #1637 — deterministic exact-match behaviour is the acceptance
+        criterion for a resolved selector. Only the selector fetch path
+        (``listOrgSites`` + ``get_all``) should run; the fallback branch
+        (``listOrgSites(..., limit=1)``) must not be invoked when the
+        operator's selector already matched.
+    """
+    monkeypatch.setenv("MIST_INTERACTIVE_TEST_SITE", "site-a")
+    mistapi_module = MagicMock()
+    mistapi_module.api.v1.orgs.sites.listOrgSites.return_value = MagicMock()
+    mistapi_module.get_all.return_value = [{"id": "site-a", "name": "Alpha"}]
+    runner = _make_runner(mistapi_module=mistapi_module)
+    site_id, site_name = runner._resolve_test_site("org-1")
+    assert (site_id, site_name) == ("site-a", "Alpha")
+    # WHY: exactly one selector fetch; fallback (limit=1) must not fire.
+    assert mistapi_module.api.v1.orgs.sites.listOrgSites.call_count == 1
+
+
+def test_resolve_test_site_exact_name_case_insensitive_match(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Case-insensitive exact-name selector must resolve deterministically.
+
+    Why:
+        Issue #1637 — operators commonly reference sites by human name
+        (e.g. ``Morrison House Site``). The selector match is documented as
+        case-insensitive; this test locks that contract alongside the
+        fail-closed behaviour so a future refactor cannot silently narrow it.
+    """
+    monkeypatch.setenv("MIST_INTERACTIVE_TEST_SITE", "ALPHA")
+    mistapi_module = MagicMock()
+    mistapi_module.api.v1.orgs.sites.listOrgSites.return_value = MagicMock()
+    mistapi_module.get_all.return_value = [{"id": "site-a", "name": "Alpha"}]
+    runner = _make_runner(mistapi_module=mistapi_module)
+    site_id, site_name = runner._resolve_test_site("org-1")
+    assert (site_id, site_name) == ("site-a", "Alpha")
+
+
+def test_resolve_site_or_close_fail_closed_on_unresolved_selector(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """_resolve_site_or_close aborts, closes the emitter, and logs a fail-closed banner.
+
+    Why:
+        Issue #1637 — the single seam that maps selector-resolution errors
+        onto the suite abort path. Behaviour must be identical to the
+        pre-existing no-site path (emitter closed, ``(None, "")`` returned)
+        but the operator-facing record must clearly attribute the abort to
+        the unresolved selector, not to a generic fetch failure.
+    """
+    monkeypatch.setenv("MIST_INTERACTIVE_TEST_SITE", "does-not-exist")
+    mistapi_module = MagicMock()
+    mistapi_module.api.v1.orgs.sites.listOrgSites.return_value = MagicMock()
+    mistapi_module.get_all.return_value = [{"id": "site-a", "name": "Alpha"}]
+    runner = _make_runner(mistapi_module=mistapi_module)
+    emitter = _TelemetryStub("data/x.jsonl")
+    with caplog.at_level(logging.ERROR):
+        site_id, site_name = runner._resolve_site_or_close("org-1", emitter)
+    assert site_id is None
+    assert site_name == ""
+    assert emitter.closed is True  # WHY: emitter flushed on fail-closed abort.
+    assert "does-not-exist" in caplog.text  # WHY: unresolved selector value surfaced to the operator.
+
+
+def test_execute_returns_false_on_unresolved_selector(monkeypatch: pytest.MonkeyPatch) -> None:
+    """execute() returns False and emits no test_start when the selector cannot be resolved.
+
+    Why:
+        Issue #1637 end-to-end — the top-level contract is that a run with
+        an unresolved explicit selector must abort before any interactive
+        option runs. Asserting the absence of any ``start``/``pass``/``fail``
+        event proves no option was actually exercised against a wrong site.
+    """
+    monkeypatch.setenv("MIST_INTERACTIVE_TEST_SITE", "does-not-exist")
+    telemetry_stubs: list[_TelemetryStub] = []
+
+    class _CapturingStub(_TelemetryStub):
+        """Capture the created emitter instance so the test can inspect events."""
+
+        def __init__(self, path: str) -> None:
+            super().__init__(path)
+            telemetry_stubs.append(self)
+
+    mistapi_module = MagicMock()
+    mistapi_module.api.v1.orgs.sites.listOrgSites.return_value = MagicMock()
+    mistapi_module.get_all.return_value = [{"id": "site-a", "name": "Alpha"}]
+    runner = InteractiveTestRunner(
+        menu_actions={"1": (lambda site_id=None: None, "Option One")},
+        operation_registry=_OperationRegistryStub,
+        telemetry_emitter_cls=_CapturingStub,
+        config_utils=MagicMock(),
+        mistapi_module=mistapi_module,
+        apisession=MagicMock(),
+        org_id_getter=lambda: "org-1",
+        org_id_setter=lambda _v: None,
+    )
+    result = runner.execute()
+    assert result is False  # WHY: unresolved selector -> suite verdict must be failure.
+    assert telemetry_stubs, "emitter was never constructed"  # WHY: guard against stub wiring drift.
+    event_types = [event[0] for event in telemetry_stubs[0].events]
+    assert "start" not in event_types  # WHY: no option ran against a wrong site.
+    assert "pass" not in event_types
+    assert "fail" not in event_types
