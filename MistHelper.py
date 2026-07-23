@@ -5219,6 +5219,52 @@ def _add_interface_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
 
+# Mapping of unsupported flag spellings -> the supported canonical spelling.
+# Why: users naturally type hyphenated variants (e.g. `--test-interactive`) but argparse
+# treats a hyphen as a token boundary, so it can't prefix-match to `--testinteractive`.
+# Left unchecked, the invocation is rejected by argparse with a generic "unrecognized
+# arguments" message and (worse) the interactive-test module-import sniff at the top of
+# this file — which literally checks `"--testinteractive" in sys.argv` — silently
+# proceeds as if no test flag were present, misrouting the user into normal interactive
+# mode. Issue #1640 requires an actionable rejection instead.
+_UNSUPPORTED_FLAG_VARIANTS: dict[str, str] = {
+    "--test-interactive": "--testinteractive",
+}
+
+
+def _reject_unsupported_flag_variants(argv: list[str]) -> None:
+    """Exit with actionable guidance when *argv* contains a known unsupported flag spelling.
+
+    Why:
+        argparse cannot prefix-match `--test-interactive` to `--testinteractive` (the hyphen
+        breaks matching), and the module-import-time argv sniff for `--testinteractive`
+        (see top of this file) would silently proceed as if the test flag were absent.
+        Issue #1640 requires that the unsupported spelling produce an actionable error
+        naming the correct canonical flag and NEVER silently reroute the user.
+
+    Args:
+        argv: The raw argument list (typically `sys.argv[1:]`) to scan. Tokens are also
+            split on `=` so `--flag=value` variants are caught.
+
+    Raises:
+        SystemExit: With exit code 2 (argparse convention) when a token matches a key
+            in `_UNSUPPORTED_FLAG_VARIANTS`. The stderr message names both the offending
+            spelling and the supported canonical spelling.
+    """
+    for token in argv:  # Scan every raw token in argv; order-independent match.
+        head = token.split("=", 1)[0]  # Strip any `=value` suffix so `--flag=1` is comparable.
+        if head in _UNSUPPORTED_FLAG_VARIANTS:  # Only gate the explicitly-listed bad spellings.
+            supported = _UNSUPPORTED_FLAG_VARIANTS[head]  # Look up the canonical replacement.
+            message = (
+                f"error: unsupported flag '{head}'. "
+                f"Did you mean '{supported}'? "
+                "This CLI uses collapsed flag names without internal hyphens."
+            )
+            logging.error("Rejecting unsupported flag variant %r; suggest %r", head, supported)
+            print(message, file=sys.stderr)  # Surface guidance directly to the user.
+            sys.exit(2)  # argparse convention for CLI usage errors.
+
+
 def _build_argument_parser() -> argparse.ArgumentParser:
     """Build and return the CLI argument parser for MistHelper with all supported flags."""
     logging.debug("_build_argument_parser: building argument parser")  # Log before parser creation
