@@ -399,3 +399,48 @@ def test_execute_returns_false_when_no_sites(monkeypatch: pytest.MonkeyPatch) ->
     mistapi_module.api.v1.orgs.sites.listOrgSites.return_value = site_response
     runner = _make_runner(mistapi_module=mistapi_module)
     assert runner.execute() is False  # WHY: no test site -> False verdict
+
+
+def test_run_option_loop_flags_logged_error_as_failure(caplog: pytest.LogCaptureFixture) -> None:
+    """Handler that logs ERROR then returns None must be classified as failure, not pass.
+
+    Why:
+        Issue #1636 — the current runner treats any non-exception return as a
+        pass. A handler that emits ``logging.error(...)`` and swallows the
+        error silently reports success, inflating the pass rate. The runner
+        must observe ERROR records emitted during the option and treat them
+        as a logged-error outcome (failure), not a clean pass.
+    """
+
+    def _logs_error(site_id: str | None = None) -> None:
+        logging.error("simulated operation failure")
+        return None
+
+    menu_actions = {"1": (_logs_error, "Logs Error")}
+    runner = _make_runner(menu_actions=menu_actions)
+    emitter = _TelemetryStub("data/x.jsonl")
+    with caplog.at_level(logging.ERROR):
+        success, failure = runner._run_option_loop(["1"], "site-1", emitter)
+    assert success == 0  # WHY: option logged ERROR -> not a clean pass
+    assert failure == 1  # WHY: logged_error counts against the run
+    event_types = [event[0] for event in emitter.events]
+    assert "fail" in event_types  # WHY: emitter records the failure, not a pass
+    assert "pass" not in event_types  # WHY: logged-error path must not emit pass
+
+
+def test_print_summary_verdict_false_on_logged_error(caplog: pytest.LogCaptureFixture) -> None:
+    """_print_summary_verdict must return False when any operation logged an ERROR.
+
+    Why:
+        Issue #1636 exit-code path — a run containing logged-error outcomes
+        must produce a non-zero exit even if no exception was raised. The
+        verdict helper is the single seam that decides the process exit code
+        for ``--testinteractive``.
+    """
+    runner = _make_runner()
+    # WHY: error_count is the aggregate of logged_error + raised_exception; a
+    # run with one logged-error operation and no exceptions still fails.
+    tallies = SuiteTallies(success_count=0, error_count=1, skip_count=0, total_time=0.5)
+    with caplog.at_level(logging.WARNING):
+        result = runner._print_summary_verdict(tallies, interactive_total=1)
+    assert result is False  # WHY: any logged_error must fail the suite
