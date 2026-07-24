@@ -112,7 +112,7 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
-      - run: pip install black==25.1.0
+      - run: pip install black==26.5.1
       - name: Black format check
         run: black --check --diff .
 
