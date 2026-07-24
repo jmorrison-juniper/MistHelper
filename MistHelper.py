@@ -1842,7 +1842,11 @@ class GlobalImportManager:
             self.failed_imports.append(module_name)  # Track it among hard failures.
             logging.error("Required dependency %s could not be imported or installed", module_name)  # Hard error.
         else:  # Optional dependency.
-            logging.warning("Optional dependency %s not available", module_name)  # Warn but allow continuation.
+            # WHY: Optional deps not being installed is the expected steady state
+            # for most operators (plotly/dash/kaleido only matter for the maps
+            # dashboards). Emit at INFO so startup noise doesn't look like something
+            # is broken; the [--] line below still surfaces it for anyone scanning.
+            logging.info("Optional dependency %s not available", module_name)
 
     def import_module_safely(
         self,
@@ -1858,7 +1862,11 @@ class GlobalImportManager:
             self._record_successful_import(module, module_name, package_spec, skip_deps, skip_upgrade)  # Cache+upgrade
             return module  # Hand the imported module back to the caller.
         except ImportError as e:  # The module is not installed or failed to load.
-            logging.warning("Failed to import %s: %s", module_name, e)  # Note the import failure.
+            # WHY: This branch fires on every optional-dep miss (plotly/dash/kaleido)
+            # before the install-and-retry pass. Logging at WARNING here made a
+            # completely healthy startup look like it had problems. The terminal
+            # outcome is still recorded via _record_import_failure below.
+            logging.debug("Failed to import %s: %s", module_name, e)
             module = self._install_and_retry(module_name, package_spec, required, skip_deps)  # Try install + retry.
             if module is not None:  # The install-and-retry recovered the import.
                 return module  # Return the recovered module.
@@ -1924,7 +1932,11 @@ class GlobalImportManager:
         elif required:  # Mandatory dependency missing
             logging.error("  [FAIL] %s: Failed to import", module_name)  # Log a hard failure
         else:  # Optional dependency missing
-            logging.warning("  [WARN] %s: Not available", module_name)  # Log a soft warning
+            # WHY: Downgraded from WARNING to INFO so a missing optional dep
+            # (plotly/dash/kaleido on non-dashboard workstations) doesn't
+            # masquerade as a fault at startup. Marker changed to [--] to
+            # keep scan lines but drop the warning connotation.
+            logging.info("  [--] %s: Not available", module_name)
 
     def _import_external_dependencies(
         self,
@@ -4818,7 +4830,7 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
         " (Requires typing 'CREATE' to confirm)",
     ),
     "206": (
-        lambda mist_session, org_id: manage_org_synthetic_probes(mist_session, org_id),
+        lambda: manage_org_synthetic_probes(apisession, ConfigUtils.get_cached_or_prompted_org_id()),
         " DESTRUCTIVE: Manage org Zscaler synthetic probes"
         " - Build/merge/swap synthetic_test.custom_probes from curated Zscaler catalogue",
     ),

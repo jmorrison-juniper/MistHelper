@@ -315,10 +315,15 @@ def test_confirm_no_aborts_without_put(
 
 
 def test_confirm_yes_triggers_put(data_dir: Path) -> None:
-    """'y' at the confirmation prompt fires exactly one PUT."""
+    """'y' at the confirmation prompt fires exactly one PUT.
+
+    Why:
+        The post-PUT site-override prompt asks a third question; we answer
+        'n' so the org-level PUT stays the only mutation this test asserts.
+    """
     session = MagicMock()
     get_response = MagicMock(data={"synthetic_test": {"custom_probes": {}}})
-    inputs = iter(["10", "y"])
+    inputs = iter(["10", "y", "n"])  # VLAN, confirm PUT, decline site overrides.
     put_response = MagicMock(status_code=200)
     with (
         patch.object(ospm, "_DEFAULT_DATA_DIR", data_dir),
@@ -378,3 +383,223 @@ def test_partition_splits_by_prefix() -> None:
 def test_fqdn_slug_lowercases_and_replaces_dots() -> None:
     """Slugs are lowercased with dots replaced by hyphens."""
     assert ospm._fqdn_slug("PAC.Zscaler.Net") == "pac-zscaler-net"
+
+
+# --------------------------------------------------------------------------- #
+# Critical aggressiveness selection (Mist 5-per-org cap)
+# --------------------------------------------------------------------------- #
+
+
+def test_build_marks_only_critical_flagged_roles_as_critical() -> None:
+    """A role with ``critical: true`` yields exactly one critical probe.
+
+    Why:
+        Mist caps ``aggressiveness=critical`` at 5 per org. The builder
+        must promote exactly one FQDN per critical role -- either the
+        ``critical_fqdn`` hint or, absent that, the first non-wildcard
+        FQDN -- and leave every other probe at the default level.
+    """
+    probes = {
+        "roles": [
+            {
+                "role": "pac",
+                "critical": True,
+                "critical_fqdn": "pac.zscaler.net",
+                "fqdns": ["pac.zscaler.net", "other.zscaler.net"],
+            },
+            {
+                "role": "support",
+                "fqdns": ["mobilesupport.zscaler.com"],
+            },
+        ],
+    }
+    result = ospm._build_probe_set((probes, {"proxy_hostnames": [], "vpn_hostnames": []}), [10])
+    critical = {n: p for n, p in result.items() if p["aggressiveness"] == ospm._CRITICAL_AGGRESSIVENESS}
+    assert len(critical) == 1
+    (only_name,) = critical
+    assert only_name == "zcc-pac-pac-zscaler-net"
+    non_critical = [p for p in result.values() if p["aggressiveness"] != ospm._CRITICAL_AGGRESSIVENESS]
+    assert non_critical, "Expected at least one non-critical probe"
+    assert all(p["aggressiveness"] == ospm._DEFAULT_AGGRESSIVENESS for p in non_critical)
+
+
+def test_demote_stale_critical_downgrades_foreign_probes() -> None:
+    """Foreign probes with ``aggressiveness=critical`` get demoted.
+
+    Why:
+        A previous org config or another tool may have burned the 5-critical
+        budget. Menu 206 relaxes the strict foreign-preservation rule so it
+        can force-demote those so the tool's own five stay under the cap.
+    """
+    foreign = {
+        "custom-a": {"name": "custom-a", "aggressiveness": "critical", "vlan_ids": [1]},
+        "custom-b": {"name": "custom-b", "aggressiveness": "high", "vlan_ids": [1]},
+    }
+    demoted = ospm._demote_stale_critical(foreign)
+    assert demoted["custom-a"]["aggressiveness"] == ospm._DEFAULT_AGGRESSIVENESS
+    assert demoted["custom-b"]["aggressiveness"] == "high"
+    # Original dict must not be mutated in-place.
+    assert foreign["custom-a"]["aggressiveness"] == "critical"
+
+
+def test_merge_syncs_aggressiveness_change_from_new_probes() -> None:
+    """Merge propagates aggressiveness updates onto existing tool probes.
+
+    Why:
+        Without sync, a probe that lost critical status in the new build
+        would stay critical after merge, silently overshooting the cap.
+    """
+    existing_tool = {
+        "zcc-pac-pac-zscaler-net": {
+            "name": "zcc-pac-pac-zscaler-net",
+            "target": "https://pac.zscaler.net",
+            "vlan_ids": [10],
+            "type": "reachability",
+            "aggressiveness": "critical",
+        }
+    }
+    new_probes = {
+        "zcc-pac-pac-zscaler-net": {
+            "name": "zcc-pac-pac-zscaler-net",
+            "target": "https://pac.zscaler.net",
+            "vlan_ids": [10],
+            "type": "reachability",
+            "aggressiveness": "high",
+        }
+    }
+    merged = ospm._merge_probes(existing_tool, new_probes, [10])
+    assert merged["zcc-pac-pac-zscaler-net"]["aggressiveness"] == "high"
+
+
+# --------------------------------------------------------------------------- #
+# Site-override flow
+# --------------------------------------------------------------------------- #
+
+
+def test_site_override_prompt_declined_makes_no_calls() -> None:
+    """Answering 'n' to the site-override prompt performs no API calls."""
+    session = MagicMock()
+    with (
+        patch("builtins.input", side_effect=["n"]),
+        patch.object(ospm._mist_orgs_sites, "listOrgSites") as list_mock,
+        patch.object(ospm._mist_site_setting, "getSiteSetting") as get_mock,
+        patch.object(ospm._mist_site_setting, "updateSiteSettings") as put_mock,
+    ):
+        ospm._prompt_and_apply_site_overrides(session, "org-uuid", {"zcc-x": {"name": "zcc-x"}})
+    list_mock.assert_not_called()
+    get_mock.assert_not_called()
+    put_mock.assert_not_called()
+
+
+def test_site_override_prompt_empty_resulting_tool_returns_immediately() -> None:
+    """No prompt is shown when there are no tool probes to push."""
+    session = MagicMock()
+    with (
+        patch("builtins.input") as input_mock,
+        patch.object(ospm._mist_orgs_sites, "listOrgSites") as list_mock,
+        patch.object(ospm._mist_site_setting, "updateSiteSettings") as put_mock,
+    ):
+        ospm._prompt_and_apply_site_overrides(session, "org-uuid", {})
+    input_mock.assert_not_called()
+    list_mock.assert_not_called()
+    put_mock.assert_not_called()
+
+
+def test_site_override_indexed_prompt_applies_to_selected_sites() -> None:
+    """Indexed selection resolves 1-based indexes to the correct site ids.
+
+    Why:
+        The new indexed prompt replaced raw UUID entry. This test locks in
+        the mapping: index 1 -> sites[0], index 3 -> sites[2], and skips
+        the middle site. It also confirms invalid/out-of-range tokens are
+        silently ignored rather than aborting.
+    """
+    session = MagicMock()
+    sites = [
+        {"id": "site-1", "name": "Alpha"},
+        {"id": "site-2", "name": "Bravo"},
+        {"id": "site-3", "name": "Charlie"},
+    ]
+    list_response = MagicMock()
+    get_response = MagicMock(data={})
+    put_response = MagicMock(status_code=200)
+    tool_probes = {"zcc-x": {"name": "zcc-x"}}
+    inputs = iter(["y", "1, 3, 99, notanumber"])
+    with (
+        patch.object(ospm._mist_orgs_sites, "listOrgSites", return_value=list_response) as list_mock,
+        patch.object(ospm.mistapi, "get_all", return_value=sites) as get_all_mock,
+        patch.object(ospm._mist_site_setting, "getSiteSetting", return_value=get_response) as get_mock,
+        patch.object(ospm._mist_site_setting, "updateSiteSettings", return_value=put_response) as put_mock,
+        patch("builtins.input", lambda _prompt: next(inputs)),
+    ):
+        ospm._prompt_and_apply_site_overrides(session, "org-uuid", tool_probes)
+    list_mock.assert_called_once()
+    get_all_mock.assert_called_once()
+    # Exactly the two in-range indexes trigger a per-site PUT round-trip.
+    assert get_mock.call_count == 2
+    assert put_mock.call_count == 2
+    put_site_ids = [call.args[1] for call in put_mock.call_args_list]
+    assert put_site_ids == ["site-1", "site-3"]
+
+
+def test_site_override_indexed_prompt_empty_input_skips() -> None:
+    """Blank index input skips the site flow without any per-site PUT."""
+    session = MagicMock()
+    sites = [{"id": "site-1", "name": "Alpha"}]
+    list_response = MagicMock()
+    inputs = iter(["y", ""])
+    with (
+        patch.object(ospm._mist_orgs_sites, "listOrgSites", return_value=list_response),
+        patch.object(ospm.mistapi, "get_all", return_value=sites),
+        patch.object(ospm._mist_site_setting, "getSiteSetting") as get_mock,
+        patch.object(ospm._mist_site_setting, "updateSiteSettings") as put_mock,
+        patch("builtins.input", lambda _prompt: next(inputs)),
+    ):
+        ospm._prompt_and_apply_site_overrides(session, "org-uuid", {"zcc-x": {"name": "zcc-x"}})
+    get_mock.assert_not_called()
+    put_mock.assert_not_called()
+
+
+def test_site_override_no_sites_short_circuits(capsys: pytest.CaptureFixture[str]) -> None:
+    """An org with zero sites surfaces a message and skips per-site PUTs."""
+    session = MagicMock()
+    list_response = MagicMock()
+    inputs = iter(["y"])
+    with (
+        patch.object(ospm._mist_orgs_sites, "listOrgSites", return_value=list_response),
+        patch.object(ospm.mistapi, "get_all", return_value=[]),
+        patch.object(ospm._mist_site_setting, "updateSiteSettings") as put_mock,
+        patch("builtins.input", lambda _prompt: next(inputs)),
+    ):
+        ospm._prompt_and_apply_site_overrides(session, "org-uuid", {"zcc-x": {"name": "zcc-x"}})
+    out = capsys.readouterr().out
+    assert "No sites found" in out
+    put_mock.assert_not_called()
+
+
+def test_apply_to_site_puts_combined_probes_and_preserves_siblings() -> None:
+    """Site PUT carries tool probes plus demoted foreign, siblings intact."""
+    session = MagicMock()
+    site_setting = {
+        "synthetic_test": {
+            "custom_probes": {
+                "old-foreign": {"name": "old-foreign", "aggressiveness": "critical"},
+            },
+            "other_sibling_field": {"keep": "me"},
+        },
+        "top_level_sibling": "keep",
+    }
+    tool_probes = {"zcc-new": {"name": "zcc-new", "aggressiveness": "critical"}}
+    get_response = MagicMock(data=site_setting)
+    put_response = MagicMock(status_code=200)
+    with (
+        patch.object(ospm._mist_site_setting, "getSiteSetting", return_value=get_response),
+        patch.object(ospm._mist_site_setting, "updateSiteSettings", return_value=put_response) as put_mock,
+    ):
+        ospm._apply_to_site(session, "site-uuid", tool_probes)
+    body = put_mock.call_args.args[2]
+    probes = body["synthetic_test"]["custom_probes"]
+    assert probes["zcc-new"] == {"name": "zcc-new", "aggressiveness": "critical"}
+    assert probes["old-foreign"]["aggressiveness"] == ospm._DEFAULT_AGGRESSIVENESS
+    assert body["synthetic_test"]["other_sibling_field"] == {"keep": "me"}
+    assert body["top_level_sibling"] == "keep"

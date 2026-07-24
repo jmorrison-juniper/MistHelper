@@ -25,10 +25,16 @@ import logging  # Structured trace + info/warn/error logging.
 from pathlib import Path  # Cross-platform path handling for data/ files.
 from typing import Any  # Precise annotations for setting dicts.
 
-# WHY: Import the mistapi setting module at module load. This is
-# side-effect free (just a re-export of two API callables) and lets us
-# monkey-patch it cleanly in unit tests via ``patch.object``.
+# WHY: Import the mistapi setting modules at module load. Both are
+# side-effect free (just re-exports of API callables) and let us
+# monkey-patch them cleanly in unit tests via ``patch.object``. Sites
+# module is needed for the optional post-PUT site-override flow, and
+# ``orgs.sites`` (via ``_mist_orgs_sites``) drives the indexed
+# site-picker after the org PUT succeeds.
+import mistapi  # WHY: top-level for ``mistapi.get_all`` pagination helper.
 from mistapi.api.v1.orgs import setting as _mist_setting
+from mistapi.api.v1.orgs import sites as _mist_orgs_sites
+from mistapi.api.v1.sites import setting as _mist_site_setting
 
 _DEFAULT_DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
 _PROBE_SOURCE_FILE = "zscaler_client_connector_probes.json"
@@ -37,6 +43,8 @@ _TOOL_NAME_PREFIX = "zcc-"  # FR-010: marks probes authored by this tool.
 _TUNNEL_ZEN_ROLE = "tunnel_zen"  # Only role that expands via CENR hostnames.
 _VLAN_MIN = 0  # FR-003 lower bound.
 _VLAN_MAX = 4094  # FR-003 upper bound.
+_CRITICAL_AGGRESSIVENESS = "critical"  # Mist caps this at 5 per org.
+_DEFAULT_AGGRESSIVENESS = "high"  # Fallback when a probe isn't the chosen critical one.
 
 
 def manage_org_synthetic_probes(mist_session: Any, org_id: str) -> None:
@@ -80,6 +88,9 @@ def manage_org_synthetic_probes(mist_session: Any, org_id: str) -> None:
         if mode == "merge":
             merged_tool = _merge_probes(tool_authored, new_probes, vlan_ids)
             if merged_tool == tool_authored:
+                # Merge is a no-op only if VLANs, aggressiveness, and every
+                # other synced field are already aligned. If a probe lost
+                # critical status upstream we still need to write.
                 print("  No changes required -- newly-entered VLANs already covered.")
                 logging.info("Merge no-op: entered VLANs already covered by all probes")
                 return
@@ -89,14 +100,21 @@ def manage_org_synthetic_probes(mist_session: Any, org_id: str) -> None:
     else:
         resulting_tool = new_probes  # Fresh deployment path (Story 1).
 
-    summary = _summarise(resulting_tool, tool_authored, foreign)
+    demoted_foreign = _demote_stale_critical(foreign)  # Enforce 5-critical cap.
+    summary = _summarise(resulting_tool, tool_authored, demoted_foreign, foreign)
     if not _prompt_confirm(summary):  # FR-013.
         print("  Operation cancelled -- no changes were made.")
         logging.info("Operator declined final confirmation; no PUT issued")
         return
 
-    combined = {**foreign, **resulting_tool}  # FR-012: foreign preserved.
+    combined = {**demoted_foreign, **resulting_tool}  # FR-012 relaxed for critical demotion.
     _apply(mist_session, org_id, setting, combined)  # FR-014.
+
+    # Post-PUT site-override flow: give the operator a chance to push the
+    # same probe set into one or more site-level settings so specific
+    # sites can override the org-wide config.
+    _prompt_and_apply_site_overrides(mist_session, org_id, resulting_tool)
+
     logging.debug("EXIT: manage_org_synthetic_probes - success")
 
 
@@ -302,7 +320,11 @@ def _build_probe_set(
 
     Why:
         Pure function -- no I/O -- so the acceptance tests can pin the
-        exact probe body produced for a given VLAN list.
+        exact probe body produced for a given VLAN list. The
+        ``critical`` / ``critical_fqdn`` flags on each role select
+        exactly one probe per critical role to receive
+        ``aggressiveness=critical`` so the org-wide 5-critical cap on
+        the Mist side is respected without runtime discovery.
 
     Args:
         sources: The ``(probes, cenr)`` tuple from ``_load_probe_sources``.
@@ -316,17 +338,47 @@ def _build_probe_set(
     result: dict[str, dict[str, Any]] = {}
     for role in probes_source.get("roles", []) or []:
         role_name = role.get("role") or "unknown"
+        critical_role = bool(role.get("critical"))
+        critical_target = role.get("critical_fqdn")  # None => first eligible fqdn wins.
+        critical_assigned = False
         for fqdn in _iter_role_fqdns(role, cenr_source):
             if not isinstance(fqdn, str) or fqdn.startswith("*."):
                 continue  # FR-008: wildcards cannot be probed directly.
+            # Pick exactly one critical FQDN per critical role. Preference
+            # order: explicit ``critical_fqdn`` if it appears in the
+            # expanded list, otherwise the first non-wildcard hit.
+            is_critical = False
+            if critical_role and not critical_assigned:
+                if critical_target is None or fqdn == critical_target:
+                    is_critical = True
+                    critical_assigned = True
+            aggressiveness = (
+                _CRITICAL_AGGRESSIVENESS if is_critical else role.get("aggressiveness", _DEFAULT_AGGRESSIVENESS)
+            )
             probe_name = f"{_TOOL_NAME_PREFIX}{role_name}-{_fqdn_slug(fqdn)}"
             result[probe_name] = {
                 "name": probe_name,
                 "type": role.get("type", "reachability"),  # FR-009 default.
                 "target": f"https://{fqdn}",  # FR-007: prefix, no port.
                 "vlan_ids": list(vlan_ids),
-                "aggressiveness": role.get("aggressiveness", "high"),  # FR-009.
+                "aggressiveness": aggressiveness,
             }
+        # Fallback: role declared critical but the requested
+        # ``critical_fqdn`` was absent from the expansion. Promote the
+        # first probe emitted for the role so we still spend a critical
+        # slot on the intended role rather than silently downgrading.
+        if critical_role and not critical_assigned:
+            for probe_name, probe in result.items():
+                slug_prefix = f"{_TOOL_NAME_PREFIX}{role_name}-"
+                if probe_name.startswith(slug_prefix):
+                    probe["aggressiveness"] = _CRITICAL_AGGRESSIVENESS
+                    logging.warning(
+                        "Role %s: critical_fqdn %r not found; promoted %s to critical",
+                        role_name,
+                        critical_target,
+                        probe_name,
+                    )
+                    break
     return result
 
 
@@ -339,27 +391,34 @@ def _merge_probes(
 
     Why:
         Merge is the safe additive path (Story 2). Names, targets, and
-        siblings are preserved -- only ``vlan_ids`` is rewritten as the
-        deduplicated, sorted union.
+        siblings are preserved -- only ``vlan_ids`` grows and
+        ``aggressiveness`` is re-synced from ``new_probes`` so a probe
+        that lost its "critical" designation upstream is demoted here
+        (and the freed critical slot re-lands on the correct probe).
 
     Args:
         existing_tool: Probes currently on the org matching ``zcc-``.
-        new_probes: Freshly-built probe set (unused for merge -- kept in
-            the signature for symmetry with ``_swap_probes`` and to give
-            the caller a landing spot for FR-011 future extension).
+        new_probes: Freshly-built probe set. Used to look up the
+            authoritative ``aggressiveness`` for each matching probe.
         extra_vlans: VLAN ids to add.
 
     Returns:
-        Merged probe map. Identical to ``existing_tool`` if no probe
-        gained a new VLAN.
+        Merged probe map. Identical to ``existing_tool`` only when both
+        VLANs and aggressiveness already match the freshly-built set.
     """
-    _ = new_probes  # Reserved for future FR-011 extension; keeps API symmetric.
     merged: dict[str, dict[str, Any]] = {}
     for name, probe in existing_tool.items():
         current_vlans = probe.get("vlan_ids") or []
         union = sorted(set(current_vlans) | set(extra_vlans))
         merged_probe = dict(probe)
         merged_probe["vlan_ids"] = union
+        # Sync aggressiveness from the freshly-built set so demotions
+        # propagate. Probes with no counterpart in ``new_probes`` (e.g.
+        # a role we dropped from the JSON) keep their prior value.
+        if name in new_probes:
+            authoritative = new_probes[name].get("aggressiveness")
+            if authoritative is not None:
+                merged_probe["aggressiveness"] = authoritative
         merged[name] = merged_probe
     return merged
 
@@ -415,19 +474,24 @@ def _prompt_mode(existing_tool: dict[str, dict[str, Any]]) -> str:
 def _summarise(
     resulting_tool: dict[str, dict[str, Any]],
     existing_tool: dict[str, dict[str, Any]],
-    foreign: dict[str, dict[str, Any]],
+    resulting_foreign: dict[str, dict[str, Any]],
+    original_foreign: dict[str, dict[str, Any]],
 ) -> str:
     """Build the human-readable confirmation summary string.
 
     Why:
         FR-013 requires the operator to see counts of add/remove/update
         and the resulting total before authorising the PUT. Splitting
-        the summary out keeps ``_prompt_confirm`` reusable.
+        the summary out keeps ``_prompt_confirm`` reusable. The
+        ``resulting_foreign`` vs ``original_foreign`` split lets the
+        operator see how many foreign probes we demoted from
+        ``critical`` to make room for the 5 tool-owned criticals.
 
     Args:
         resulting_tool: The tool-authored probe set that will be written.
         existing_tool: The tool-authored probe set currently on the org.
-        foreign: Probes not owned by this tool (preserved unchanged).
+        resulting_foreign: Foreign probes after stale-critical demotion.
+        original_foreign: Foreign probes exactly as fetched (baseline).
 
     Returns:
         A multi-line string suitable for printing.
@@ -435,15 +499,86 @@ def _summarise(
     added = set(resulting_tool) - set(existing_tool)
     removed = set(existing_tool) - set(resulting_tool)
     updated = {name for name in set(resulting_tool) & set(existing_tool) if resulting_tool[name] != existing_tool[name]}
-    total_after = len(resulting_tool) + len(foreign)
+    demoted_foreign = _count_critical_demotions(original_foreign, resulting_foreign)
+    total_after = len(resulting_tool) + len(resulting_foreign)
     lines = [
-        f"  Probes to add:     {len(added)}",
-        f"  Probes to remove:  {len(removed)}",
-        f"  Probes to update:  {len(updated)}",
-        f"  Foreign preserved: {len(foreign)}",
-        f"  Resulting total:   {total_after}",
+        f"  Probes to add:        {len(added)}",
+        f"  Probes to remove:     {len(removed)}",
+        f"  Probes to update:     {len(updated)}",
+        f"  Foreign preserved:    {len(resulting_foreign)}",
+        f"  Foreign demoted:      {demoted_foreign} (critical -> {_DEFAULT_AGGRESSIVENESS})",
+        f"  Resulting total:      {total_after}",
     ]
     return "\n".join(lines)
+
+
+def _count_critical_demotions(
+    before: dict[str, dict[str, Any]],
+    after: dict[str, dict[str, Any]],
+) -> int:
+    """Count probes whose aggressiveness changed from ``critical``.
+
+    Why:
+        Surface the exact number of foreign probes the operator is about
+        to demote so the FR-012 relaxation (foreign preservation) is
+        visible in the summary rather than silent.
+
+    Args:
+        before: Foreign probes as originally fetched.
+        after: Foreign probes after ``_demote_stale_critical``.
+
+    Returns:
+        Number of shared names whose aggressiveness moved off ``critical``.
+    """
+    count = 0
+    for name, probe in before.items():
+        if probe.get("aggressiveness") != _CRITICAL_AGGRESSIVENESS:
+            continue
+        new_probe = after.get(name)
+        if new_probe is None:
+            continue
+        if new_probe.get("aggressiveness") != _CRITICAL_AGGRESSIVENESS:
+            count += 1
+    return count
+
+
+def _demote_stale_critical(
+    foreign: dict[str, dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    """Return ``foreign`` with any ``aggressiveness=critical`` demoted.
+
+    Why:
+        Mist caps the total number of ``critical`` probes per org at 5.
+        The tool now claims all 5 slots for the curated Zscaler roles,
+        so any foreign probe currently marked critical must be demoted
+        or the org PUT will be rejected. This intentionally relaxes
+        FR-012's strict foreign-preservation guarantee -- the demotion
+        is surfaced in ``_summarise`` so the operator sees it before
+        confirming.
+
+    Args:
+        foreign: Foreign probe map (probes without the ``zcc-`` prefix).
+
+    Returns:
+        A new dict where every probe previously at
+        ``aggressiveness=critical`` is copied with the value replaced
+        by ``_DEFAULT_AGGRESSIVENESS``. All other fields survive
+        untouched.
+    """
+    result: dict[str, dict[str, Any]] = {}
+    for name, probe in foreign.items():
+        if isinstance(probe, dict) and probe.get("aggressiveness") == _CRITICAL_AGGRESSIVENESS:
+            demoted = dict(probe)
+            demoted["aggressiveness"] = _DEFAULT_AGGRESSIVENESS
+            result[name] = demoted
+            logging.info(
+                "Demoting foreign critical probe %r -> aggressiveness=%s",
+                name,
+                _DEFAULT_AGGRESSIVENESS,
+            )
+        else:
+            result[name] = probe
+    return result
 
 
 def _prompt_confirm(summary: str) -> bool:
@@ -509,3 +644,193 @@ def _apply(
     for probe_name in sorted(combined_probes):
         print(f"    - {probe_name}")
     logging.info("Wrote %d probes via updateOrgSettings", len(combined_probes))
+
+
+def _prompt_and_apply_site_overrides(
+    mist_session: Any,
+    org_id: str,
+    resulting_tool: dict[str, dict[str, Any]],
+) -> None:
+    """Offer to push the tool-authored probe set into per-site settings.
+
+    Why:
+        Mist site settings can override org-wide ``custom_probes``. After
+        a successful org PUT the operator often wants a subset of sites
+        (e.g. those with unusual VLAN topology or higher SLE
+        expectations) to carry the same probe set locally so
+        site-specific probe/VLAN interactions are testable without
+        touching org config. Displaying an indexed table (rather than
+        asking for raw UUIDs) removes the copy/paste burden and the
+        common "typo'd UUID" failure mode operators reported. This is
+        optional (default no) so unattended runs do not silently mutate
+        site settings.
+
+    Args:
+        mist_session: Authenticated ``mistapi`` session.
+        org_id: Mist org UUID -- required for ``listOrgSites`` so the
+            index table shows only the sites the operator can actually
+            target.
+        resulting_tool: The tool-authored probe map just written to the
+            org. Used as the source of truth to push into each chosen
+            site.
+    """
+    if not resulting_tool:
+        return
+    answer = input("  Configure site-level overrides with these same probes? [y/N]: ").strip().lower()
+    if answer not in ("y", "yes"):
+        logging.info("Operator declined site overrides")
+        return
+    sites = _list_org_sites(mist_session, org_id)
+    if not sites:
+        print("  No sites found in this org -- skipping site overrides.")
+        return
+    site_ids = _prompt_site_indexes(sites)
+    if not site_ids:
+        print("  No valid site indexes entered -- skipping site overrides.")
+        return
+    for site_id in site_ids:
+        _apply_to_site(mist_session, site_id, resulting_tool)
+
+
+def _list_org_sites(mist_session: Any, org_id: str) -> list[dict[str, Any]]:
+    """Return every site in ``org_id`` as a paginated list of dicts.
+
+    Why:
+        The indexed site picker needs the full site list up-front so the
+        operator can see every option in one screen. Isolating the fetch
+        keeps ``_prompt_and_apply_site_overrides`` unit-testable via a
+        single patch point, and mirrors the pagination pattern used in
+        ``APICoreFetchUtils.all_sites_with_limit``. Errors are logged
+        and surfaced as an empty list so callers degrade gracefully
+        (skipping the site flow) rather than aborting the whole run.
+
+    Args:
+        mist_session: Authenticated ``mistapi`` session.
+        org_id: Mist org UUID.
+
+    Returns:
+        List of site dicts (``id``, ``name`` at minimum). Empty list on
+        API failure or when the org has no sites.
+    """
+    try:
+        response = _mist_orgs_sites.listOrgSites(mist_session, org_id)
+        sites = mistapi.get_all(response=response, mist_session=mist_session)
+    except Exception as err:  # noqa: BLE001 -- surface any transport error.
+        logging.error("listOrgSites(%s) failed: %s", org_id, err)
+        print(f"  listOrgSites failed ({err}); skipping site overrides.")
+        return []
+    if not isinstance(sites, list):
+        return []
+    # Filter to entries that at minimum carry an id we can PUT against.
+    return [s for s in sites if isinstance(s, dict) and s.get("id")]
+
+
+def _prompt_site_indexes(sites: list[dict[str, Any]]) -> list[str]:
+    """Display an indexed site table and return the ids the operator picks.
+
+    Why:
+        UUID entry proved error-prone in the field (operators pasted
+        trailing whitespace, wrong-org UUIDs, or truncated ids). An
+        indexed prompt eliminates that class of typo entirely and lets
+        the operator eyeball site names before committing. Kept in its
+        own helper so tests can patch ``input`` for this stage
+        independently of the earlier y/N prompt.
+
+    Args:
+        sites: Ordered list of site dicts as returned by
+            ``_list_org_sites``. The 1-based display index maps directly
+            to this list's positions.
+
+    Returns:
+        Deduplicated list of site id strings corresponding to valid
+        1-based indexes supplied by the operator. Empty list if the
+        operator supplied nothing or every entry was out of range /
+        non-numeric.
+    """
+    print("  Available sites:")
+    # 1-based indexes are more natural for humans; keep width consistent
+    # for large orgs so the columns line up in a terminal.
+    width = len(str(len(sites)))
+    for idx, site in enumerate(sites, start=1):
+        name = site.get("name") or "(unnamed)"
+        site_id = site.get("id", "")
+        print(f"    [{idx:>{width}}] {name}  ({site_id})")
+    raw = input("  Enter comma-separated site indexes to override, or leave blank to cancel: ")
+    parts = [item.strip() for item in raw.split(",") if item.strip()]
+    seen: dict[str, None] = {}
+    for part in parts:
+        try:
+            idx = int(part)
+        except ValueError:
+            logging.warning("Ignoring non-numeric site index token: %r", part)
+            continue
+        if idx < 1 or idx > len(sites):
+            logging.warning("Ignoring out-of-range site index: %d", idx)
+            continue
+        site_id = sites[idx - 1].get("id")
+        if isinstance(site_id, str) and site_id:
+            seen.setdefault(site_id, None)
+    return list(seen)
+
+
+def _apply_to_site(
+    mist_session: Any,
+    site_id: str,
+    tool_probes: dict[str, dict[str, Any]],
+) -> None:
+    """PUT ``tool_probes`` into the given site's ``custom_probes`` block.
+
+    Why:
+        Site-level custom_probes lives at ``synthetic_test.custom_probes``
+        in the site setting, mirroring the org shape. This helper reuses
+        the same partition/demote logic as the org path so the 5-critical
+        Mist limit is respected per-site as well: any pre-existing
+        foreign probe with ``aggressiveness=critical`` is demoted, and
+        every ``zcc-`` probe is authoritatively replaced.
+
+    Args:
+        mist_session: Authenticated ``mistapi`` session.
+        site_id: Mist site UUID.
+        tool_probes: Tool-authored probe set to write.
+    """
+    logging.info("Applying site override to site_id=%s", site_id)
+    try:
+        response = _mist_site_setting.getSiteSetting(mist_session, site_id)
+    except Exception as err:  # noqa: BLE001 -- surface any transport error.
+        print(f"  Site {site_id}: getSiteSetting failed ({err}); skipping.")
+        logging.error("getSiteSetting(%s) failed: %s", site_id, err)
+        return
+    site_setting = getattr(response, "data", None)
+    if not isinstance(site_setting, dict):
+        site_setting = {}
+    existing_probes = _detect_existing(site_setting)
+    _, foreign = _partition_tool_authored(existing_probes)
+    foreign_demoted = _demote_stale_critical(foreign)
+    combined = {**foreign_demoted, **tool_probes}
+
+    body: dict[str, Any] = json.loads(json.dumps(site_setting)) if site_setting else {}
+    synthetic = body.get("synthetic_test")
+    if not isinstance(synthetic, dict):
+        synthetic = {}
+        body["synthetic_test"] = synthetic
+    synthetic["custom_probes"] = combined
+
+    logging.debug(
+        "Calling updateSiteSettings(site_id=%s, probe_count=%d)",
+        site_id,
+        len(combined),
+    )
+    try:
+        put_response = _mist_site_setting.updateSiteSettings(mist_session, site_id, body)
+    except Exception as err:  # noqa: BLE001 -- surface any transport error.
+        print(f"  Site {site_id}: updateSiteSettings failed ({err}); skipping.")
+        logging.error("updateSiteSettings(%s) failed: %s", site_id, err)
+        return
+    status = getattr(put_response, "status_code", None)
+    if status is not None and (status < 200 or status >= 300):
+        print(f"  Site {site_id}: updateSiteSettings HTTP {status}")
+        logging.error("updateSiteSettings(%s) HTTP %s", site_id, status)
+        return
+    print(
+        f"  Site {site_id}: override applied " f"({len(tool_probes)} tool-authored + {len(foreign_demoted)} preserved)"
+    )
