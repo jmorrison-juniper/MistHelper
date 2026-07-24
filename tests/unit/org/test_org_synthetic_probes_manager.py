@@ -149,21 +149,25 @@ def test_build_from_empty_includes_tunnel_zen_cenr_hostnames(probes_source: dict
 
 
 def test_build_applies_defaults(probes_source: dict, cenr_source: dict) -> None:
-    """Type defaults to reachability; aggressiveness set only for critical roles.
+    """Type defaults to reachability; every probe carries an explicit aggressiveness.
 
     Why:
-        Mist's 5-probe priority cap counts both ``critical`` and ``high``.
-        Non-critical probes must omit the ``aggressiveness`` key entirely so
-        Mist applies its implicit default (which doesn't consume a priority
-        slot). Only the curated critical roles carry the key with value
-        ``critical``.
+        Mist's 5-probe priority cap counts ``critical`` + ``high`` only;
+        ``auto`` does not consume a slot. Verified against a live org config
+        (2026-07-24), Mist itself writes ``"auto"`` explicitly on its own
+        ``mini-*`` probes -- so this tool mirrors the convention and emits
+        the literal value on every non-critical probe rather than leaving
+        the key unset.
     """
     result = ospm._build_probe_set((probes_source, cenr_source), [10])
     for probe in result.values():
         assert probe["type"] == "reachability"
         assert probe["vlan_ids"] == [10]
-        if "aggressiveness" in probe:
-            assert probe["aggressiveness"] == ospm._CRITICAL_AGGRESSIVENESS
+        # Every probe carries the key with one of the two accepted values.
+        assert probe["aggressiveness"] in {
+            ospm._CRITICAL_AGGRESSIVENESS,
+            ospm._AUTO_AGGRESSIVENESS,
+        }
 
 
 # --------------------------------------------------------------------------- #
@@ -283,7 +287,7 @@ def test_apply_preserves_synthetic_test_sibling_fields() -> None:
     session = MagicMock()
     fake_response = MagicMock(status_code=200)
     with patch.object(ospm._mist_setting, "updateOrgSettings", return_value=fake_response) as put_mock:
-        ospm._apply(session, "org-uuid", setting, new_probes)
+        ospm._apply(session, "org-uuid", setting, new_probes, [10])
     put_mock.assert_called_once()
     body = put_mock.call_args.args[2]
     assert body["synthetic_test"]["custom_probes"] == new_probes
@@ -296,9 +300,166 @@ def test_apply_reports_http_error(capsys: pytest.CaptureFixture[str]) -> None:
     session = MagicMock()
     fake_response = MagicMock(status_code=500)
     with patch.object(ospm._mist_setting, "updateOrgSettings", return_value=fake_response):
-        ospm._apply(session, "org-uuid", {}, {"zcc-x": {"name": "zcc-x"}})
+        ospm._apply(session, "org-uuid", {}, {"zcc-x": {"name": "zcc-x"}}, [10])
     out = capsys.readouterr().out
     assert "HTTP 500" in out
+
+
+def test_merge_injects_critical_names_into_first_foreign_row() -> None:
+    """Critical zcc names merge into the existing foreign row's ``probes[]``.
+
+    Why:
+        Verified against a live Mist org config 2026-07-24: Mist emits a
+        single ``tests[]`` row that co-schedules every probe under one
+        ``probes`` array. The tool must extend that same row rather than
+        appending a separate categorized row -- the operator's earlier
+        directive was that all probe names belong under one unified
+        ``probes`` section, not split by tool prefix. The target row's
+        ``vlan_ids``, ``lan_networks``, and other keys survive untouched.
+    """
+    existing = [
+        {
+            "probes": ["mini-cloudflare-1", "mini-google-1"],
+            "vlan_ids": [10],
+            "lan_networks": ["default"],
+        }
+    ]
+    combined = {
+        "zcc-crit-a": {"name": "zcc-crit-a", "aggressiveness": "critical"},
+        "zcc-plain": {"name": "zcc-plain", "aggressiveness": "auto"},
+        "zcc-crit-b": {"name": "zcc-crit-b", "aggressiveness": "critical"},
+    }
+    merged = ospm._merge_zcc_criticals_into_tests(existing, combined, [10])
+    assert len(merged) == 1
+    row = merged[0]
+    assert row["probes"] == [
+        "mini-cloudflare-1",
+        "mini-google-1",
+        "zcc-crit-a",
+        "zcc-crit-b",
+    ]
+    assert row["vlan_ids"] == [10]
+    assert row["lan_networks"] == ["default"]
+
+
+def test_merge_strips_stale_zcc_names_on_rerun() -> None:
+    """Stale ``zcc-*`` names in an existing row are stripped before injection.
+
+    Why:
+        Re-runs must be idempotent: if a prior run injected a critical
+        probe that is no longer part of the curated set, or the operator
+        removed one, the stale name must not linger in ``probes[]``. Only
+        the current critical set is re-injected.
+    """
+    existing = [
+        {
+            "probes": ["mini-a", "zcc-old-removed", "zcc-still-critical"],
+            "vlan_ids": [1],
+        }
+    ]
+    combined = {
+        "zcc-still-critical": {
+            "name": "zcc-still-critical",
+            "aggressiveness": "critical",
+        },
+    }
+    merged = ospm._merge_zcc_criticals_into_tests(existing, combined, [1])
+    assert merged[0]["probes"] == ["mini-a", "zcc-still-critical"]
+
+
+def test_merge_drops_legacy_aggregate_tool_row() -> None:
+    """Legacy tool-authored aggregate rows (name=zcc-*) are removed.
+
+    Why:
+        Earlier iterations of this module wrote a separate row named
+        ``zcc-critical-probes``. The user rejected that shape. Migration
+        must delete any such row on the next run so the config
+        converges to the merged-into-existing-row model.
+    """
+    existing = [
+        {"probes": ["mini-a"], "vlan_ids": [10]},
+        {
+            "name": "zcc-critical-probes",
+            "probes": ["zcc-x", "zcc-y"],
+            "vlan_ids": [10],
+        },
+    ]
+    combined = {"zcc-x": {"name": "zcc-x", "aggressiveness": "critical"}}
+    merged = ospm._merge_zcc_criticals_into_tests(existing, combined, [10])
+    assert len(merged) == 1
+    assert merged[0]["probes"] == ["mini-a", "zcc-x"]
+    assert "name" not in merged[0] or merged[0].get("name") != "zcc-critical-probes"
+
+
+def test_merge_fabricates_bare_row_when_no_foreign_row() -> None:
+    """When no foreign row exists, a bare row with the criticals is added."""
+    combined = {"zcc-x": {"name": "zcc-x", "aggressiveness": "critical"}}
+    merged = ospm._merge_zcc_criticals_into_tests([], combined, [42])
+    assert merged == [{"probes": ["zcc-x"], "vlan_ids": [42]}]
+
+
+def test_merge_no_criticals_leaves_foreign_row_alone() -> None:
+    """Non-critical-only probe maps leave existing rows unchanged."""
+    existing = [{"probes": ["mini-a"], "vlan_ids": [10]}]
+    combined = {"zcc-plain": {"name": "zcc-plain", "aggressiveness": "auto"}}
+    merged = ospm._merge_zcc_criticals_into_tests(existing, combined, [10])
+    assert merged == [{"probes": ["mini-a"], "vlan_ids": [10]}]
+
+
+def test_apply_merges_critical_names_into_existing_row() -> None:
+    """Org PUT body extends the existing ``tests[]`` row's probes list.
+
+    Why:
+        Regression guard for the merge-into-existing-row fix: the
+        operator's live config shows one nameless system row; the tool
+        must inject its critical zcc names into that row rather than
+        appending a separate categorized row.
+    """
+    session = MagicMock()
+    combined = {
+        "zcc-crit": {"name": "zcc-crit", "aggressiveness": "critical"},
+        "zcc-plain": {"name": "zcc-plain", "aggressiveness": "auto"},
+    }
+    existing_setting = {
+        "synthetic_test": {
+            "tests": [{"probes": ["mini-cloudflare-1"], "vlan_ids": [10]}],
+        }
+    }
+    fake_response = MagicMock(status_code=200)
+    with patch.object(ospm._mist_setting, "updateOrgSettings", return_value=fake_response) as put_mock:
+        ospm._apply(session, "org-uuid", existing_setting, combined, [10, 20])
+    body = put_mock.call_args.args[2]
+    tests = body["synthetic_test"]["tests"]
+    assert tests == [{"probes": ["mini-cloudflare-1", "zcc-crit"], "vlan_ids": [10]}]
+
+
+def test_apply_to_site_merges_critical_names_into_existing_row() -> None:
+    """Site PUT body extends the existing ``tests[]`` row's probes list."""
+    session = MagicMock()
+    tool_probes = {
+        "zcc-crit": {"name": "zcc-crit", "aggressiveness": "critical"},
+        "zcc-plain": {"name": "zcc-plain", "aggressiveness": "auto"},
+    }
+    get_response = MagicMock(
+        data={
+            "synthetic_test": {
+                "tests": [{"probes": ["mini-google-1"], "vlan_ids": [42]}],
+            }
+        }
+    )
+    put_response = MagicMock(status_code=200)
+    with (
+        patch.object(ospm._mist_site_setting, "getSiteSetting", return_value=get_response),
+        patch.object(
+            ospm._mist_site_setting,
+            "updateSiteSettings",
+            return_value=put_response,
+        ) as put_mock,
+    ):
+        ospm._apply_to_site(session, "site-uuid", tool_probes, [42])
+    body = put_mock.call_args.args[2]
+    tests = body["synthetic_test"]["tests"]
+    assert tests == [{"probes": ["mini-google-1", "zcc-crit"], "vlan_ids": [42]}]
 
 
 # --------------------------------------------------------------------------- #
@@ -406,9 +567,9 @@ def test_build_marks_only_critical_flagged_roles_as_critical() -> None:
         Mist caps priority probes (``critical`` + ``high``) at 5 per org.
         The builder must promote exactly one FQDN per critical role -- either
         the ``critical_fqdn`` hint or, absent that, the first non-wildcard
-        FQDN -- and leave every other probe with the ``aggressiveness`` key
-        omitted entirely (Mist's implicit default, which doesn't consume a
-        priority slot).
+        FQDN -- and mark every other probe with ``aggressiveness=auto``
+        (Mist's explicit default, which doesn't consume a priority slot;
+        verified against a live org config 2026-07-24).
     """
     probes = {
         "roles": [
@@ -429,42 +590,43 @@ def test_build_marks_only_critical_flagged_roles_as_critical() -> None:
     assert len(critical) == 1
     (only_name,) = critical
     assert only_name == "zcc-pac-pac-zscaler-net"
-    non_critical = [p for p in result.values() if "aggressiveness" not in p]
+    non_critical = [p for p in result.values() if p.get("aggressiveness") == ospm._AUTO_AGGRESSIVENESS]
     assert non_critical, "Expected at least one non-critical probe"
-    assert all("aggressiveness" not in p for p in non_critical)
+    for probe in non_critical:
+        assert probe["aggressiveness"] == ospm._AUTO_AGGRESSIVENESS
 
 
 def test_demote_stale_critical_downgrades_foreign_probes() -> None:
-    """Foreign probes with ``aggressiveness=critical`` get the key removed.
+    """Foreign probes with ``aggressiveness=critical`` get demoted to ``auto``.
 
     Why:
         A previous org config or another tool may have burned the 5-slot
         priority budget. Menu 206 relaxes strict foreign-preservation so it
-        can force-remove the ``aggressiveness`` key on foreign criticals,
-        dropping them to Mist's implicit default so the tool's own five
-        critical probes stay under the priority cap.
+        can force-write ``aggressiveness=auto`` on foreign criticals,
+        matching Mist's own explicit-default convention so the tool's own
+        five critical probes stay under the priority cap.
     """
     foreign = {
         "custom-a": {"name": "custom-a", "aggressiveness": "critical", "vlan_ids": [1]},
         "custom-b": {"name": "custom-b", "aggressiveness": "high", "vlan_ids": [1]},
     }
     demoted = ospm._demote_stale_critical(foreign)
-    assert "aggressiveness" not in demoted["custom-a"]
+    assert demoted["custom-a"]["aggressiveness"] == ospm._AUTO_AGGRESSIVENESS
     assert demoted["custom-b"]["aggressiveness"] == "high"
     # Original dict must not be mutated in-place.
     assert foreign["custom-a"]["aggressiveness"] == "critical"
 
 
 def test_merge_syncs_aggressiveness_change_from_new_probes() -> None:
-    """Merge removes the aggressiveness key when the new build omits it.
+    """Merge downgrades a probe to ``auto`` when the new build omits critical.
 
     Why:
         Without this sync, a probe that lost critical status in the new
         build (i.e., is no longer one of the 5 curated critical roles) would
         stay ``critical`` after merge and silently keep consuming a priority
-        slot. When the authoritative rebuild omits the key entirely, the
-        merged probe must also drop the key to fall back to Mist's implicit
-        default.
+        slot. When the authoritative rebuild does not mark the probe as
+        critical, the merged probe must fall back to ``aggressiveness=auto``
+        so the tool converges to Mist's explicit-default convention.
     """
     existing_tool = {
         "zcc-pac-pac-zscaler-net": {
@@ -485,7 +647,7 @@ def test_merge_syncs_aggressiveness_change_from_new_probes() -> None:
         }
     }
     merged = ospm._merge_probes(existing_tool, new_probes, [10])
-    assert "aggressiveness" not in merged["zcc-pac-pac-zscaler-net"]
+    assert merged["zcc-pac-pac-zscaler-net"]["aggressiveness"] == ospm._AUTO_AGGRESSIVENESS
 
 
 # --------------------------------------------------------------------------- #
@@ -529,7 +691,10 @@ def test_site_override_indexed_prompt_applies_to_selected_sites() -> None:
         The new indexed prompt replaced raw UUID entry. This test locks in
         the mapping: index 1 -> sites[0], index 3 -> sites[2], and skips
         the middle site. It also confirms invalid/out-of-range tokens are
-        silently ignored rather than aborting.
+        silently ignored rather than aborting, and that the freshly
+        prompted VLAN list is substituted onto every probe pushed to the
+        selected sites (not the org-scope vlan_ids left in the source
+        map).
     """
     session = MagicMock()
     sites = [
@@ -540,8 +705,9 @@ def test_site_override_indexed_prompt_applies_to_selected_sites() -> None:
     list_response = MagicMock()
     get_response = MagicMock(data={})
     put_response = MagicMock(status_code=200)
-    tool_probes = {"zcc-x": {"name": "zcc-x"}}
-    inputs = iter(["y", "1, 3, 99, notanumber"])
+    tool_probes = {"zcc-x": {"name": "zcc-x", "vlan_ids": [10]}}
+    # Third prompt is the VLAN list for site overrides; substitute [42].
+    inputs = iter(["y", "1, 3, 99, notanumber", "42"])
     with (
         patch.object(ospm._mist_orgs_sites, "listOrgSites", return_value=list_response) as list_mock,
         patch.object(ospm.mistapi, "get_all", return_value=sites) as get_all_mock,
@@ -557,6 +723,14 @@ def test_site_override_indexed_prompt_applies_to_selected_sites() -> None:
     assert put_mock.call_count == 2
     put_site_ids = [call.args[1] for call in put_mock.call_args_list]
     assert put_site_ids == ["site-1", "site-3"]
+    # Every PUT body carries probes rebuilt with the prompted VLAN list --
+    # the org-scope [10] must have been replaced by [42].
+    for call in put_mock.call_args_list:
+        body = call.args[2]
+        probes = body["synthetic_test"]["custom_probes"]
+        assert probes["zcc-x"]["vlan_ids"] == [42]
+    # Source dict must not have been mutated in-place.
+    assert tool_probes["zcc-x"]["vlan_ids"] == [10]
 
 
 def test_site_override_indexed_prompt_empty_input_skips() -> None:
@@ -613,10 +787,125 @@ def test_apply_to_site_puts_combined_probes_and_preserves_siblings() -> None:
         patch.object(ospm._mist_site_setting, "getSiteSetting", return_value=get_response),
         patch.object(ospm._mist_site_setting, "updateSiteSettings", return_value=put_response) as put_mock,
     ):
-        ospm._apply_to_site(session, "site-uuid", tool_probes)
+        ospm._apply_to_site(session, "site-uuid", tool_probes, [10])
     body = put_mock.call_args.args[2]
     probes = body["synthetic_test"]["custom_probes"]
     assert probes["zcc-new"] == {"name": "zcc-new", "aggressiveness": "critical"}
-    assert "aggressiveness" not in probes["old-foreign"]
+    assert probes["old-foreign"]["aggressiveness"] == ospm._AUTO_AGGRESSIVENESS
     assert body["synthetic_test"]["other_sibling_field"] == {"keep": "me"}
     assert body["top_level_sibling"] == "keep"
+
+
+# --------------------------------------------------------------------------- #
+# Sort ordering + VLAN-rebuild helpers
+# --------------------------------------------------------------------------- #
+
+
+def test_site_override_indexed_prompt_sorts_by_name() -> None:
+    """Picker is sorted by human-readable site name (case-insensitive).
+
+    Why:
+        Operators pick by the name they see on the Mist dashboard, not
+        the API return order. This test hands in an out-of-order site
+        list and asserts index 1 maps to the alphabetically-first name,
+        proving the sort is applied before the index map is built.
+    """
+    session = MagicMock()
+    # Intentionally scrambled + mixed case to exercise casefold ordering.
+    sites = [
+        {"id": "id-charlie", "name": "charlie"},
+        {"id": "id-alpha", "name": "Alpha"},
+        {"id": "id-bravo", "name": "BRAVO"},
+    ]
+    list_response = MagicMock()
+    get_response = MagicMock(data={})
+    put_response = MagicMock(status_code=200)
+    inputs = iter(["y", "1", "5"])  # index 1 -> Alpha; VLAN [5].
+    with (
+        patch.object(ospm._mist_orgs_sites, "listOrgSites", return_value=list_response),
+        patch.object(ospm.mistapi, "get_all", return_value=sites),
+        patch.object(ospm._mist_site_setting, "getSiteSetting", return_value=get_response),
+        patch.object(ospm._mist_site_setting, "updateSiteSettings", return_value=put_response) as put_mock,
+        patch("builtins.input", lambda _prompt: next(inputs)),
+    ):
+        ospm._prompt_and_apply_site_overrides(session, "org-uuid", {"zcc-x": {"name": "zcc-x"}})
+    assert put_mock.call_count == 1
+    assert put_mock.call_args.args[1] == "id-alpha"
+
+
+def test_site_override_unnamed_sites_sink_to_end() -> None:
+    """Sites with no ``name`` sort after every named site regardless of id.
+
+    Why:
+        Unnamed sites are rare in production but happen (fresh onboards,
+        API-provisioned sites without labels). Sinking them keeps the
+        alphabetical section clean; picking index 1 must still land on a
+        named site even when the API-return order puts the unnamed one
+        first.
+    """
+    session = MagicMock()
+    sites = [
+        {"id": "id-unnamed", "name": None},
+        {"id": "id-blankname", "name": "   "},
+        {"id": "id-zulu", "name": "Zulu"},
+        {"id": "id-alpha", "name": "Alpha"},
+    ]
+    list_response = MagicMock()
+    get_response = MagicMock(data={})
+    put_response = MagicMock(status_code=200)
+    # Pick the last two indexes to prove the unnamed sites are 3 and 4.
+    inputs = iter(["y", "3, 4", "7"])
+    with (
+        patch.object(ospm._mist_orgs_sites, "listOrgSites", return_value=list_response),
+        patch.object(ospm.mistapi, "get_all", return_value=sites),
+        patch.object(ospm._mist_site_setting, "getSiteSetting", return_value=get_response),
+        patch.object(ospm._mist_site_setting, "updateSiteSettings", return_value=put_response) as put_mock,
+        patch("builtins.input", lambda _prompt: next(inputs)),
+    ):
+        ospm._prompt_and_apply_site_overrides(session, "org-uuid", {"zcc-x": {"name": "zcc-x"}})
+    put_site_ids = [call.args[1] for call in put_mock.call_args_list]
+    # Both blank-name entries land at the end. Ordering between them
+    # tie-breaks on the casefolded name string first (empty "" sorts
+    # before whitespace "   "), then on id.
+    assert put_site_ids == ["id-unnamed", "id-blankname"]
+
+
+def test_rebuild_probes_with_vlans_replaces_vlan_ids_and_shallow_copies() -> None:
+    """Helper returns fresh probe dicts with substituted ``vlan_ids``.
+
+    Why:
+        This helper is the seam that isolates VLAN substitution from the
+        per-site PUT loop. The contract is: (a) every probe body is a
+        fresh dict (so mutating the return value does not alias the
+        source), (b) ``vlan_ids`` is set to a new list of the prompted
+        ids, and (c) all other keys are preserved verbatim.
+    """
+    source = {
+        "zcc-a": {
+            "name": "zcc-a",
+            "target": "https://a.example",
+            "type": "reachability",
+            "aggressiveness": "critical",
+            "vlan_ids": [10, 20],
+        },
+        "zcc-b": {"name": "zcc-b", "vlan_ids": [10]},
+    }
+    result = ospm._rebuild_probes_with_vlans(source, [42, 99])
+    # (a) Fresh dicts -- identity does not match the source dicts.
+    assert result["zcc-a"] is not source["zcc-a"]
+    assert result["zcc-b"] is not source["zcc-b"]
+    # (b) VLAN substitution took effect on every probe.
+    assert result["zcc-a"]["vlan_ids"] == [42, 99]
+    assert result["zcc-b"]["vlan_ids"] == [42, 99]
+    # (c) Other keys survive intact.
+    assert result["zcc-a"]["target"] == "https://a.example"
+    assert result["zcc-a"]["aggressiveness"] == "critical"
+    assert result["zcc-a"]["type"] == "reachability"
+    # Mutating the return must not leak into the source (shallow copy contract).
+    result["zcc-a"]["vlan_ids"].append(1000)
+    assert source["zcc-a"]["vlan_ids"] == [10, 20]
+
+
+def test_rebuild_probes_with_vlans_empty_input_returns_empty_map() -> None:
+    """Empty probe map short-circuits to an empty dict."""
+    assert ospm._rebuild_probes_with_vlans({}, [1, 2, 3]) == {}

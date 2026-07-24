@@ -44,12 +44,14 @@ _TUNNEL_ZEN_ROLE = "tunnel_zen"  # Only role that expands via CENR hostnames.
 _VLAN_MIN = 0  # FR-003 lower bound.
 _VLAN_MAX = 4094  # FR-003 upper bound.
 _CRITICAL_AGGRESSIVENESS = "critical"  # Mist caps priority probes at 5 per org.
-# Non-critical probes intentionally omit the aggressiveness key entirely.
-# Why: Mist's 5-probe "priority" cap counts both "critical" and "high"; setting
-# non-critical probes to "high" tripped the cap on effective (org + site) config
-# with error "more than 5 marked as priority". Omitting the key leaves the
-# probe at Mist's implicit default and keeps only the 5 curated critical roles
-# consuming priority slots.
+_AUTO_AGGRESSIVENESS = "auto"  # Mist's own default for non-priority probes.
+# Non-critical probes emit ``aggressiveness=auto`` explicitly.
+# Why: Mist itself writes ``"auto"`` on its own auto-generated ``mini-*`` probes
+# (verified against a live org config 2026-07-24). Emitting the literal value
+# mirrors Mist's convention and avoids ambiguity between "unset" and
+# "explicitly default". The 5-priority cap counts ``critical``+``high`` only;
+# ``auto`` does not consume a slot, so the curated 5 critical roles remain
+# safely under the cap.
 
 
 def manage_org_synthetic_probes(mist_session: Any, org_id: str) -> None:
@@ -113,7 +115,7 @@ def manage_org_synthetic_probes(mist_session: Any, org_id: str) -> None:
         return
 
     combined = {**demoted_foreign, **resulting_tool}  # FR-012 relaxed for critical demotion.
-    _apply(mist_session, org_id, setting, combined)  # FR-014.
+    _apply(mist_session, org_id, setting, combined, vlan_ids)  # FR-014.
 
     # Post-PUT site-override flow: give the operator a chance to push the
     # same probe set into one or more site-level settings so specific
@@ -364,10 +366,11 @@ def _build_probe_set(
                 "target": f"https://{fqdn}",  # FR-007: prefix, no port.
                 "vlan_ids": list(vlan_ids),
             }
-            # Only critical probes carry the aggressiveness key; all other
-            # probes must omit it so Mist's 5-priority cap isn't tripped.
-            if is_critical:
-                probe_body["aggressiveness"] = _CRITICAL_AGGRESSIVENESS
+            # Emit an explicit aggressiveness on every probe: ``critical`` for
+            # the curated priority roles, ``auto`` for the rest. Mist itself
+            # writes ``"auto"`` on its default probes, so mirroring the value
+            # keeps our output consistent with the platform's own convention.
+            probe_body["aggressiveness"] = _CRITICAL_AGGRESSIVENESS if is_critical else _AUTO_AGGRESSIVENESS
             result[probe_name] = probe_body
         # Fallback: role declared critical but the requested
         # ``critical_fqdn`` was absent from the expansion. Promote the
@@ -419,15 +422,16 @@ def _merge_probes(
         merged_probe = dict(probe)
         merged_probe["vlan_ids"] = union
         # Sync aggressiveness from the freshly-built set so demotions
-        # propagate. If the freshly-built probe omits the key entirely
-        # (non-critical), the merged probe must also drop it so Mist's
-        # priority cap isn't tripped by a leftover "critical"/"high".
+        # propagate (a probe that lost ``critical`` upstream should reflect
+        # that here). ``_build_probe_set`` always emits an explicit value
+        # (``critical`` or ``auto``), so the None branch is defensive only
+        # -- it protects the merge if a future refactor drops the key.
         # Probes with no counterpart in ``new_probes`` (e.g. a role we
         # dropped from the JSON) keep their prior value.
         if name in new_probes:
             authoritative = new_probes[name].get("aggressiveness")
             if authoritative is None:
-                merged_probe.pop("aggressiveness", None)
+                merged_probe["aggressiveness"] = _AUTO_AGGRESSIVENESS
             else:
                 merged_probe["aggressiveness"] = authoritative
         merged[name] = merged_probe
@@ -556,34 +560,37 @@ def _count_critical_demotions(
 def _demote_stale_critical(
     foreign: dict[str, dict[str, Any]],
 ) -> dict[str, dict[str, Any]]:
-    """Return ``foreign`` with any ``aggressiveness=critical`` key removed.
+    """Return ``foreign`` with any ``aggressiveness=critical`` demoted to ``auto``.
 
     Why:
         Mist caps priority probes (both ``critical`` and ``high``) at 5
         per effective config. The tool now claims all 5 slots for the
         curated Zscaler roles at ``critical``, so any foreign probe
-        currently marked critical must have its aggressiveness key
-        removed (dropping it to Mist's implicit default) or the PUT is
-        rejected. This intentionally relaxes FR-012's strict foreign-
-        preservation guarantee -- the change is surfaced in
-        ``_summarise`` so the operator sees it before confirming.
+        currently marked critical must be demoted or the PUT is
+        rejected. We write the literal ``"auto"`` (Mist's own default
+        for non-priority probes) rather than dropping the key: it is
+        idempotent across re-runs and mirrors the value Mist itself
+        emits on system-generated probes. This intentionally relaxes
+        FR-012's strict foreign-preservation guarantee -- the change is
+        surfaced in ``_summarise`` so the operator sees it before
+        confirming.
 
     Args:
         foreign: Foreign probe map (probes without the ``zcc-`` prefix).
 
     Returns:
         A new dict where every probe previously at
-        ``aggressiveness=critical`` is copied with the aggressiveness
-        key stripped. All other fields survive untouched.
+        ``aggressiveness=critical`` is copied with aggressiveness set to
+        ``"auto"``. All other fields survive untouched.
     """
     result: dict[str, dict[str, Any]] = {}
     for name, probe in foreign.items():
         if isinstance(probe, dict) and probe.get("aggressiveness") == _CRITICAL_AGGRESSIVENESS:
             demoted = dict(probe)
-            demoted.pop("aggressiveness", None)
+            demoted["aggressiveness"] = _AUTO_AGGRESSIVENESS
             result[name] = demoted
             logging.info(
-                "Demoting foreign critical probe %r (aggressiveness key removed)",
+                "Demoting foreign critical probe %r (aggressiveness -> auto)",
                 name,
             )
         else:
@@ -611,18 +618,116 @@ def _prompt_confirm(summary: str) -> bool:
     return answer in ("y", "yes")
 
 
+def _merge_zcc_criticals_into_tests(
+    existing_tests: list[dict[str, Any]],
+    combined_probes: dict[str, dict[str, Any]],
+    vlan_ids: list[int],
+) -> list[dict[str, Any]]:
+    """Merge tool-authored critical probe names into an existing ``tests[]`` row.
+
+    Why:
+        Mist's ``synthetic_test.tests[]`` is a list of scheduled probe
+        groupings, each with its own ``probes[]``, ``vlan_ids[]``, and
+        optional ``lan_networks[]`` / ``name``. Verified against a live
+        org config 2026-07-24: Mist itself emits a single nameless row
+        that co-schedules its system ``mini-*`` probes under one
+        ``probes`` list. Appending a *separate* tool-authored row (as an
+        earlier iteration of this module did) leaves the tool's critical
+        probes in a sibling row that operators perceive as "wrong shape"
+        and that duplicates VLAN context. Instead we merge the
+        tool-authored critical probe *names* INTO the first foreign row's
+        ``probes`` list -- preserving that row's ``vlan_ids``,
+        ``lan_networks``, ``name``, and any other keys -- so the
+        resulting config has one unified row that lists every scheduled
+        probe together. On re-run we strip any stale ``zcc-*`` name from
+        every row (in case a prior injection targeted a different row or
+        a since-removed critical probe left a stale reference) before
+        re-injecting the current curated set, keeping the operation
+        idempotent. If no foreign row exists, a bare row is fabricated so
+        the criticals still get scheduled.
+
+    Args:
+        existing_tests: The ``tests[]`` list read from the fetched
+            setting (may be empty).
+        combined_probes: Union of foreign + tool-authored probes about
+            to be written to ``synthetic_test.custom_probes``. Only
+            probes with ``aggressiveness=critical`` are scheduled.
+        vlan_ids: VLAN ids to attach to a fabricated row when no foreign
+            row exists. Ignored when merging into an existing row -- the
+            existing row's ``vlan_ids`` are preserved so operator intent
+            is not silently overwritten.
+
+    Returns:
+        A new list. Every foreign row is preserved (with stale ``zcc-*``
+        names removed from its ``probes`` list), and the first row's
+        ``probes`` list is extended with the sorted, deduplicated set of
+        critical ``zcc-`` probe names. Legacy tool-authored rows (whose
+        ``name`` starts with ``zcc-``) are dropped entirely to complete
+        the migration from the earlier aggregate-row model.
+    """
+    critical_names = sorted(
+        name
+        for name, probe in combined_probes.items()
+        if isinstance(probe, dict) and probe.get("aggressiveness") == _CRITICAL_AGGRESSIVENESS
+    )
+
+    surviving: list[dict[str, Any]] = []
+    for row in existing_tests:
+        if not isinstance(row, dict):
+            continue
+        row_name = row.get("name")
+        # Legacy cleanup: drop tool-authored aggregate rows written by
+        # earlier versions of this module (name="zcc-critical-probes").
+        if isinstance(row_name, str) and row_name.startswith(_TOOL_NAME_PREFIX):
+            logging.info(
+                "Dropping legacy tool-authored tests[] row %r (aggregate-row migration)",
+                row_name,
+            )
+            continue
+        cleaned = dict(row)
+        probes_field = cleaned.get("probes")
+        if isinstance(probes_field, list):
+            # Strip any stale zcc-* name so re-injection is authoritative;
+            # foreign entries (mini-*, operator-named) survive untouched.
+            cleaned["probes"] = [
+                p for p in probes_field if not (isinstance(p, str) and p.startswith(_TOOL_NAME_PREFIX))
+            ]
+        surviving.append(cleaned)
+
+    if not critical_names:
+        return surviving
+
+    if surviving:
+        target = surviving[0]
+        target_probes = target.get("probes")
+        if not isinstance(target_probes, list):
+            target_probes = []
+        merged = sorted(set(target_probes) | set(critical_names))
+        target["probes"] = merged
+    else:
+        # No foreign row to piggy-back on: fabricate a bare row so the
+        # criticals are still scheduled. No name is set (matches Mist's
+        # own convention for system-generated rows verified 2026-07-24).
+        surviving.append({"probes": list(critical_names), "vlan_ids": list(vlan_ids)})
+
+    return surviving
+
+
 def _apply(
     mist_session: Any,
     org_id: str,
     setting: dict[str, Any],
     combined_probes: dict[str, dict[str, Any]],
+    vlan_ids: list[int],
 ) -> None:
     """PUT the updated setting block via ``updateOrgSettings``.
 
     Why:
         Wrapper enforces FR-014 (exactly one PUT) and FR-015 (sibling
         preservation): we deep-copy the fetched ``setting`` block and
-        only overwrite ``synthetic_test.custom_probes``.
+        only overwrite ``synthetic_test.custom_probes`` plus regenerate
+        ``synthetic_test.tests[]`` for critical probes so the emitted
+        probes are actually scheduled to run.
 
     Args:
         mist_session: Authenticated ``mistapi`` session.
@@ -632,6 +737,7 @@ def _apply(
             sibling fields under ``synthetic_test`` survive round-trip).
         combined_probes: Union of foreign and (merged/swapped)
             tool-authored probes.
+        vlan_ids: VLAN ids to attach to each generated test row.
     """
     body: dict[str, Any] = json.loads(json.dumps(setting)) if setting else {}
     synthetic = body.get("synthetic_test")
@@ -639,6 +745,10 @@ def _apply(
         synthetic = {}
         body["synthetic_test"] = synthetic
     synthetic["custom_probes"] = combined_probes
+    existing_tests = synthetic.get("tests")
+    if not isinstance(existing_tests, list):
+        existing_tests = []
+    synthetic["tests"] = _merge_zcc_criticals_into_tests(existing_tests, combined_probes, vlan_ids)
     logging.debug(
         "Calling updateOrgSettings(org_id=%s, probe_count=%d)",
         org_id,
@@ -671,9 +781,12 @@ def _prompt_and_apply_site_overrides(
         site-specific probe/VLAN interactions are testable without
         touching org config. Displaying an indexed table (rather than
         asking for raw UUIDs) removes the copy/paste burden and the
-        common "typo'd UUID" failure mode operators reported. This is
-        optional (default no) so unattended runs do not silently mutate
-        site settings.
+        common "typo'd UUID" failure mode operators reported. A separate
+        VLAN prompt is issued after site selection because sites picked
+        for an override typically have a *different* VLAN topology than
+        the org default -- reusing the org list would defeat the point
+        of the override. This whole flow is optional (default no) so
+        unattended runs do not silently mutate site settings.
 
     Args:
         mist_session: Authenticated ``mistapi`` session.
@@ -681,8 +794,9 @@ def _prompt_and_apply_site_overrides(
             index table shows only the sites the operator can actually
             target.
         resulting_tool: The tool-authored probe map just written to the
-            org. Used as the source of truth to push into each chosen
-            site.
+            org. Used as the source of truth (name/target/type/
+            aggressiveness) to push into each chosen site; each probe's
+            ``vlan_ids`` is replaced with the freshly-prompted list.
     """
     if not resulting_tool:
         return
@@ -698,8 +812,43 @@ def _prompt_and_apply_site_overrides(
     if not site_ids:
         print("  No valid site indexes entered -- skipping site overrides.")
         return
+    # Site overrides commonly target sites with distinct VLAN topology
+    # (that's the reason to override an org-wide default in the first
+    # place), so re-prompt for the VLAN list rather than silently reusing
+    # the org-scope list. The rebuilt map is what gets written per site.
+    print("  Enter the VLAN ids to apply to the selected sites' probes.")
+    site_vlan_ids = _prompt_vlan_list()
+    site_probes = _rebuild_probes_with_vlans(resulting_tool, site_vlan_ids)
     for site_id in site_ids:
-        _apply_to_site(mist_session, site_id, resulting_tool)
+        _apply_to_site(mist_session, site_id, site_probes, site_vlan_ids)
+
+
+def _rebuild_probes_with_vlans(
+    tool_probes: dict[str, dict[str, Any]],
+    vlan_ids: list[int],
+) -> dict[str, dict[str, Any]]:
+    """Return a copy of ``tool_probes`` with each ``vlan_ids`` replaced.
+
+    Why:
+        Site overrides need a fresh VLAN list per site-selection round
+        without mutating the org-scope probe map the caller keeps for
+        logging. Isolated as a pure helper so the substitution is
+        unit-testable and cannot accidentally alias the caller's dict.
+
+    Args:
+        tool_probes: The org-scope probe map (name -> probe body).
+        vlan_ids: VLAN ids to write onto every probe's ``vlan_ids``.
+
+    Returns:
+        A new ``{probe_name: probe_body}`` map. Each probe body is a
+        shallow copy of the input with ``vlan_ids`` set to a fresh list.
+    """
+    rebuilt: dict[str, dict[str, Any]] = {}
+    for name, probe in tool_probes.items():
+        new_probe = dict(probe)
+        new_probe["vlan_ids"] = list(vlan_ids)
+        rebuilt[name] = new_probe
+    return rebuilt
 
 
 def _list_org_sites(mist_session: Any, org_id: str) -> list[dict[str, Any]]:
@@ -742,26 +891,41 @@ def _prompt_site_indexes(sites: list[dict[str, Any]]) -> list[str]:
         UUID entry proved error-prone in the field (operators pasted
         trailing whitespace, wrong-org UUIDs, or truncated ids). An
         indexed prompt eliminates that class of typo entirely and lets
-        the operator eyeball site names before committing. Kept in its
-        own helper so tests can patch ``input`` for this stage
-        independently of the earlier y/N prompt.
+        the operator eyeball site names before committing. The list is
+        sorted by human-readable site name (case-insensitive) so the
+        picker matches how operators think about their fleet; unnamed
+        sites sink to the bottom. Kept in its own helper so tests can
+        patch ``input`` for this stage independently of the earlier y/N
+        prompt.
 
     Args:
-        sites: Ordered list of site dicts as returned by
-            ``_list_org_sites``. The 1-based display index maps directly
-            to this list's positions.
+        sites: List of site dicts as returned by ``_list_org_sites``. The
+            function sorts a local copy by name before display, so the
+            caller's ordering is irrelevant.
 
     Returns:
         Deduplicated list of site id strings corresponding to valid
-        1-based indexes supplied by the operator. Empty list if the
-        operator supplied nothing or every entry was out of range /
-        non-numeric.
+        1-based indexes (into the *sorted* view) supplied by the
+        operator. Empty list if the operator supplied nothing or every
+        entry was out of range / non-numeric.
     """
     print("  Available sites:")
+    # Sort by human-readable name (case-insensitive) so the picker matches
+    # how operators think about their fleet. Unnamed sites sort to the end
+    # to keep the deterministic ordering stable regardless of API return
+    # order. The sorted list becomes the 1-based index map for the prompt.
+    sorted_sites = sorted(
+        sites,
+        key=lambda s: (
+            0 if (s.get("name") or "").strip() else 1,
+            (s.get("name") or "").casefold(),
+            s.get("id") or "",
+        ),
+    )
     # 1-based indexes are more natural for humans; keep width consistent
     # for large orgs so the columns line up in a terminal.
-    width = len(str(len(sites)))
-    for idx, site in enumerate(sites, start=1):
+    width = len(str(len(sorted_sites)))
+    for idx, site in enumerate(sorted_sites, start=1):
         name = site.get("name") or "(unnamed)"
         site_id = site.get("id", "")
         print(f"    [{idx:>{width}}] {name}  ({site_id})")
@@ -774,10 +938,10 @@ def _prompt_site_indexes(sites: list[dict[str, Any]]) -> list[str]:
         except ValueError:
             logging.warning("Ignoring non-numeric site index token: %r", part)
             continue
-        if idx < 1 or idx > len(sites):
+        if idx < 1 or idx > len(sorted_sites):
             logging.warning("Ignoring out-of-range site index: %d", idx)
             continue
-        site_id = sites[idx - 1].get("id")
+        site_id = sorted_sites[idx - 1].get("id")
         if isinstance(site_id, str) and site_id:
             seen.setdefault(site_id, None)
     return list(seen)
@@ -787,6 +951,7 @@ def _apply_to_site(
     mist_session: Any,
     site_id: str,
     tool_probes: dict[str, dict[str, Any]],
+    vlan_ids: list[int],
 ) -> None:
     """PUT ``tool_probes`` into the given site's ``custom_probes`` block.
 
@@ -797,13 +962,16 @@ def _apply_to_site(
         5-probe priority cap (which counts both ``critical`` and
         ``high``) is respected on the effective (org + site) config:
         any pre-existing foreign probe with
-        ``aggressiveness=critical`` has that key stripped, and every
-        ``zcc-`` probe is authoritatively replaced.
+        ``aggressiveness=critical`` has that key stripped, every
+        ``zcc-`` probe is authoritatively replaced, and
+        ``synthetic_test.tests[]`` gets regenerated for critical
+        probes so the site's schedule actually runs them.
 
     Args:
         mist_session: Authenticated ``mistapi`` session.
         site_id: Mist site UUID.
         tool_probes: Tool-authored probe set to write.
+        vlan_ids: VLAN ids to attach to each generated test row.
     """
     logging.info("Applying site override to site_id=%s", site_id)
     try:
@@ -826,6 +994,10 @@ def _apply_to_site(
         synthetic = {}
         body["synthetic_test"] = synthetic
     synthetic["custom_probes"] = combined
+    existing_tests = synthetic.get("tests")
+    if not isinstance(existing_tests, list):
+        existing_tests = []
+    synthetic["tests"] = _merge_zcc_criticals_into_tests(existing_tests, combined, vlan_ids)
 
     logging.debug(
         "Calling updateSiteSettings(site_id=%s, probe_count=%d)",
