@@ -335,7 +335,11 @@ def _build_probe_set(
 
     Args:
         sources: The ``(probes, cenr)`` tuple from ``_load_probe_sources``.
-        vlan_ids: VLAN id list to apply to every emitted probe.
+        vlan_ids: Kept for signature/back-compat with the caller; ignored
+            when building probe bodies because VLAN scoping belongs on
+            the ``tests[]`` row that references the probe, not on the
+            ``custom_probes`` definition itself (matches Mist's own
+            ``mini-*`` shape observed 2026-07-24).
 
     Returns:
         A ``{probe_name: probe_body}`` map ready to be merged into the
@@ -360,11 +364,14 @@ def _build_probe_set(
                     is_critical = True
                     critical_assigned = True
             probe_name = f"{_TOOL_NAME_PREFIX}{role_name}-{_fqdn_slug(fqdn)}"
+            # Body shape mirrors Mist's own ``mini-*`` custom_probes
+            # (live config 2026-07-24): no ``name`` inside the body (the
+            # dict key IS the name) and no ``vlan_ids`` (VLAN scoping
+            # belongs on the tests[] row that references the probe, not
+            # on the probe definition itself).
             probe_body: dict[str, Any] = {
-                "name": probe_name,
-                "type": role.get("type", "reachability"),  # FR-009 default.
+                "type": role.get("type", "application"),  # Match mini-* default.
                 "target": f"https://{fqdn}",  # FR-007: prefix, no port.
-                "vlan_ids": list(vlan_ids),
             }
             # Emit an explicit aggressiveness on every probe: ``critical`` for
             # the curated priority roles, ``auto`` for the rest. Mist itself
@@ -396,31 +403,44 @@ def _merge_probes(
     new_probes: dict[str, dict[str, Any]],
     extra_vlans: list[int],
 ) -> dict[str, dict[str, Any]]:
-    """Union ``extra_vlans`` into each existing tool-authored probe.
+    """Re-sync tool-authored probes to the mini-* body shape.
 
     Why:
-        Merge is the safe additive path (Story 2). Names, targets, and
-        siblings are preserved -- only ``vlan_ids`` grows and
-        ``aggressiveness`` is re-synced from ``new_probes`` so a probe
-        that lost its "critical" designation upstream is demoted here
-        (and the freed critical slot re-lands on the correct probe).
+        Merge is the safe additive path (Story 2). Prior versions of the
+        tool wrote ``name`` and ``vlan_ids`` INTO the probe body; the
+        live Mist config (observed 2026-07-24) shows the correct shape
+        is ``{type, target, aggressiveness}`` only, so this pass strips
+        the legacy fields off any existing probe as a migration. The
+        ``extra_vlans`` argument is retained purely for signature/back-
+        compat with the caller -- VLAN scoping now lives exclusively on
+        the ``tests[]`` row (handled by
+        ``_merge_zcc_criticals_into_tests``). ``aggressiveness`` is
+        re-synced from ``new_probes`` so a probe that lost its
+        "critical" designation upstream is demoted here (and the freed
+        critical slot re-lands on the correct probe).
 
     Args:
         existing_tool: Probes currently on the org matching ``zcc-``.
         new_probes: Freshly-built probe set. Used to look up the
-            authoritative ``aggressiveness`` for each matching probe.
-        extra_vlans: VLAN ids to add.
+            authoritative ``aggressiveness`` (and ``type``/``target``
+            when normalising legacy bodies) for each matching probe.
+        extra_vlans: Ignored; retained for caller signature back-compat.
 
     Returns:
-        Merged probe map. Identical to ``existing_tool`` only when both
-        VLANs and aggressiveness already match the freshly-built set.
+        Merged probe map. Bodies conform to the mini-* shape:
+        ``{type, target, aggressiveness}`` -- no ``name``, no
+        ``vlan_ids``.
     """
+    del extra_vlans  # Legacy parameter -- VLANs no longer live on probes.
     merged: dict[str, dict[str, Any]] = {}
     for name, probe in existing_tool.items():
-        current_vlans = probe.get("vlan_ids") or []
-        union = sorted(set(current_vlans) | set(extra_vlans))
-        merged_probe = dict(probe)
-        merged_probe["vlan_ids"] = union
+        # Preserve the freshly-built type/target when we know them (the
+        # new source of truth); otherwise fall back to the on-org values.
+        template = new_probes.get(name, probe)
+        merged_probe: dict[str, Any] = {
+            "type": template.get("type") or probe.get("type") or "application",
+            "target": template.get("target") or probe.get("target"),
+        }
         # Sync aggressiveness from the freshly-built set so demotions
         # propagate (a probe that lost ``critical`` upstream should reflect
         # that here). ``_build_probe_set`` always emits an explicit value
@@ -430,10 +450,9 @@ def _merge_probes(
         # dropped from the JSON) keep their prior value.
         if name in new_probes:
             authoritative = new_probes[name].get("aggressiveness")
-            if authoritative is None:
-                merged_probe["aggressiveness"] = _AUTO_AGGRESSIVENESS
-            else:
-                merged_probe["aggressiveness"] = authoritative
+            merged_probe["aggressiveness"] = authoritative if authoritative is not None else _AUTO_AGGRESSIVENESS
+        elif "aggressiveness" in probe:
+            merged_probe["aggressiveness"] = probe["aggressiveness"]
         merged[name] = merged_probe
     return merged
 
@@ -815,40 +834,12 @@ def _prompt_and_apply_site_overrides(
     # Site overrides commonly target sites with distinct VLAN topology
     # (that's the reason to override an org-wide default in the first
     # place), so re-prompt for the VLAN list rather than silently reusing
-    # the org-scope list. The rebuilt map is what gets written per site.
-    print("  Enter the VLAN ids to apply to the selected sites' probes.")
+    # the org-scope list. VLANs live on the generated tests[] rows only;
+    # probe bodies carry {type, target, aggressiveness} to match mini-*.
+    print("  Enter the VLAN ids to apply to the selected sites' tests[] rows.")
     site_vlan_ids = _prompt_vlan_list()
-    site_probes = _rebuild_probes_with_vlans(resulting_tool, site_vlan_ids)
     for site_id in site_ids:
-        _apply_to_site(mist_session, site_id, site_probes, site_vlan_ids)
-
-
-def _rebuild_probes_with_vlans(
-    tool_probes: dict[str, dict[str, Any]],
-    vlan_ids: list[int],
-) -> dict[str, dict[str, Any]]:
-    """Return a copy of ``tool_probes`` with each ``vlan_ids`` replaced.
-
-    Why:
-        Site overrides need a fresh VLAN list per site-selection round
-        without mutating the org-scope probe map the caller keeps for
-        logging. Isolated as a pure helper so the substitution is
-        unit-testable and cannot accidentally alias the caller's dict.
-
-    Args:
-        tool_probes: The org-scope probe map (name -> probe body).
-        vlan_ids: VLAN ids to write onto every probe's ``vlan_ids``.
-
-    Returns:
-        A new ``{probe_name: probe_body}`` map. Each probe body is a
-        shallow copy of the input with ``vlan_ids`` set to a fresh list.
-    """
-    rebuilt: dict[str, dict[str, Any]] = {}
-    for name, probe in tool_probes.items():
-        new_probe = dict(probe)
-        new_probe["vlan_ids"] = list(vlan_ids)
-        rebuilt[name] = new_probe
-    return rebuilt
+        _apply_to_site(mist_session, site_id, resulting_tool, site_vlan_ids)
 
 
 def _list_org_sites(mist_session: Any, org_id: str) -> list[dict[str, Any]]:

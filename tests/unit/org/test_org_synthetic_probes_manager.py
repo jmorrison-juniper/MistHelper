@@ -149,20 +149,23 @@ def test_build_from_empty_includes_tunnel_zen_cenr_hostnames(probes_source: dict
 
 
 def test_build_applies_defaults(probes_source: dict, cenr_source: dict) -> None:
-    """Type defaults to reachability; every probe carries an explicit aggressiveness.
+    """Body shape mirrors Mist's mini-* probes: type/target/aggressiveness only.
 
     Why:
-        Mist's 5-probe priority cap counts ``critical`` + ``high`` only;
-        ``auto`` does not consume a slot. Verified against a live org config
-        (2026-07-24), Mist itself writes ``"auto"`` explicitly on its own
-        ``mini-*`` probes -- so this tool mirrors the convention and emits
-        the literal value on every non-critical probe rather than leaving
-        the key unset.
+        Live Mist config (2026-07-24) shows the correct ``custom_probes``
+        body shape is ``{type, target, aggressiveness}`` -- no ``name``
+        (the dict key IS the name) and no ``vlan_ids`` (VLAN scoping
+        belongs on the ``tests[]`` row). ``type`` defaults to
+        ``"application"`` to match the mini-* convention. Mist's 5-probe
+        priority cap counts ``critical`` + ``high`` only; ``auto`` does
+        not consume a slot, so every non-critical probe carries an
+        explicit ``"auto"`` value rather than leaving the key unset.
     """
     result = ospm._build_probe_set((probes_source, cenr_source), [10])
     for probe in result.values():
-        assert probe["type"] == "reachability"
-        assert probe["vlan_ids"] == [10]
+        assert probe["type"] == "application"
+        assert "name" not in probe
+        assert "vlan_ids" not in probe
         # Every probe carries the key with one of the two accepted values.
         assert probe["aggressiveness"] in {
             ospm._CRITICAL_AGGRESSIVENESS,
@@ -175,38 +178,65 @@ def test_build_applies_defaults(probes_source: dict, cenr_source: dict) -> None:
 # --------------------------------------------------------------------------- #
 
 
-def test_merge_dedupes_vlan_union() -> None:
-    """Merge produces sorted, deduplicated VLAN union per probe (SC-002)."""
+def test_merge_strips_legacy_name_and_vlan_ids() -> None:
+    """Merge strips legacy ``name``/``vlan_ids`` off existing probe bodies.
+
+    Why:
+        Prior versions of the tool wrote ``name`` and ``vlan_ids`` INTO
+        the probe body. The live Mist config (2026-07-24) shows the
+        correct shape is ``{type, target, aggressiveness}`` only, so the
+        merge pass acts as a migration: any on-org probe still carrying
+        the legacy fields is normalised on the next re-sync.
+    """
     existing_tool = {
         "zcc-pac-pac-zscaler-net": {
             "name": "zcc-pac-pac-zscaler-net",
             "target": "https://pac.zscaler.net",
             "vlan_ids": [10, 20],
             "type": "reachability",
-            "aggressiveness": "high",
+            "aggressiveness": "auto",
         }
     }
-    merged = ospm._merge_probes(existing_tool, {}, [20, 30])
-    assert merged["zcc-pac-pac-zscaler-net"]["vlan_ids"] == [10, 20, 30]
+    new_probes = {
+        "zcc-pac-pac-zscaler-net": {
+            "type": "application",
+            "target": "https://pac.zscaler.net",
+            "aggressiveness": "critical",
+        }
+    }
+    merged = ospm._merge_probes(existing_tool, new_probes, [20, 30])
+    body = merged["zcc-pac-pac-zscaler-net"]
+    assert "name" not in body
+    assert "vlan_ids" not in body
+    assert body["type"] == "application"
+    assert body["target"] == "https://pac.zscaler.net"
+    # aggressiveness re-syncs to freshly-built authoritative value.
+    assert body["aggressiveness"] == "critical"
 
 
-def test_merge_reports_no_changes_when_subset() -> None:
-    """Merge is a no-op when new VLANs are already present on every probe.
+def test_merge_preserves_bodies_when_already_clean() -> None:
+    """Merge is a body-shape no-op when existing probes are already mini-shaped.
 
     Why:
-        Story 2 acceptance #3 says the tool should short-circuit and skip
-        the PUT when nothing would actually change.
+        Once the migration has run once, subsequent merges should not
+        rewrite bodies unnecessarily -- the only field that may change
+        is ``aggressiveness`` (re-synced from ``new_probes``).
     """
     existing_tool = {
         "zcc-pac-pac-zscaler-net": {
-            "name": "zcc-pac-pac-zscaler-net",
+            "type": "application",
             "target": "https://pac.zscaler.net",
-            "vlan_ids": [10, 20, 30],
-            "type": "reachability",
-            "aggressiveness": "high",
+            "aggressiveness": "auto",
         }
     }
-    merged = ospm._merge_probes(existing_tool, {}, [10, 20])
+    new_probes = {
+        "zcc-pac-pac-zscaler-net": {
+            "type": "application",
+            "target": "https://pac.zscaler.net",
+            "aggressiveness": "auto",
+        }
+    }
+    merged = ospm._merge_probes(existing_tool, new_probes, [10, 20])
     assert merged == existing_tool
 
 
@@ -218,32 +248,34 @@ def test_merge_reports_no_changes_when_subset() -> None:
 def test_swap_preserves_foreign_probes() -> None:
     """Foreign probes survive swap unchanged (SC-003 / FR-012)."""
     existing = {
-        "zcc-pac-pac-zscaler-net": {"vlan_ids": [10]},
-        "custom-user-probe": {"vlan_ids": [99], "target": "https://acme.example"},
+        "zcc-pac-pac-zscaler-net": {"target": "https://pac.zscaler.net"},
+        "custom-user-probe": {"target": "https://acme.example"},
     }
     tool_authored, foreign = ospm._partition_tool_authored(existing)
     assert "custom-user-probe" in foreign
     assert "zcc-pac-pac-zscaler-net" in tool_authored
 
 
-def test_swap_replaces_vlan_ids_completely() -> None:
-    """Swap replaces existing tool-authored VLAN lists with new list.
+def test_swap_returns_new_probes_unchanged() -> None:
+    """Swap replaces tool-authored bodies wholesale with the freshly-built set.
 
     Why:
-        Story 3 acceptance #2: swap must not preserve legacy VLAN ids on
-        tool-authored probes.
+        Story 3 acceptance #2: swap must not preserve legacy body fields
+        (``name``/``vlan_ids``) on tool-authored probes -- the new set
+        is authoritative and must land verbatim.
     """
     new_probes = {
         "zcc-pac-pac-zscaler-net": {
-            "name": "zcc-pac-pac-zscaler-net",
+            "type": "application",
             "target": "https://pac.zscaler.net",
-            "vlan_ids": [42],
-            "type": "reachability",
-            "aggressiveness": "high",
+            "aggressiveness": "critical",
         }
     }
     result = ospm._swap_probes(new_probes)
-    assert result["zcc-pac-pac-zscaler-net"]["vlan_ids"] == [42]
+    assert result == new_probes
+    body = result["zcc-pac-pac-zscaler-net"]
+    assert "name" not in body
+    assert "vlan_ids" not in body
 
 
 # --------------------------------------------------------------------------- #
@@ -630,19 +662,15 @@ def test_merge_syncs_aggressiveness_change_from_new_probes() -> None:
     """
     existing_tool = {
         "zcc-pac-pac-zscaler-net": {
-            "name": "zcc-pac-pac-zscaler-net",
+            "type": "application",
             "target": "https://pac.zscaler.net",
-            "vlan_ids": [10],
-            "type": "reachability",
             "aggressiveness": "critical",
         }
     }
     new_probes = {
         "zcc-pac-pac-zscaler-net": {
-            "name": "zcc-pac-pac-zscaler-net",
+            "type": "application",
             "target": "https://pac.zscaler.net",
-            "vlan_ids": [10],
-            "type": "reachability",
             # No aggressiveness key -- role is no longer critical.
         }
     }
@@ -692,9 +720,8 @@ def test_site_override_indexed_prompt_applies_to_selected_sites() -> None:
         the mapping: index 1 -> sites[0], index 3 -> sites[2], and skips
         the middle site. It also confirms invalid/out-of-range tokens are
         silently ignored rather than aborting, and that the freshly
-        prompted VLAN list is substituted onto every probe pushed to the
-        selected sites (not the org-scope vlan_ids left in the source
-        map).
+        prompted VLAN list flows onto the generated ``tests[]`` rows
+        (not into probe bodies, which no longer carry ``vlan_ids``).
     """
     session = MagicMock()
     sites = [
@@ -705,7 +732,14 @@ def test_site_override_indexed_prompt_applies_to_selected_sites() -> None:
     list_response = MagicMock()
     get_response = MagicMock(data={})
     put_response = MagicMock(status_code=200)
-    tool_probes = {"zcc-x": {"name": "zcc-x", "vlan_ids": [10]}}
+    # Critical probe so _merge_zcc_criticals_into_tests emits a tests[] row.
+    tool_probes = {
+        "zcc-x": {
+            "type": "application",
+            "target": "https://x.example",
+            "aggressiveness": "critical",
+        }
+    }
     # Third prompt is the VLAN list for site overrides; substitute [42].
     inputs = iter(["y", "1, 3, 99, notanumber", "42"])
     with (
@@ -723,14 +757,14 @@ def test_site_override_indexed_prompt_applies_to_selected_sites() -> None:
     assert put_mock.call_count == 2
     put_site_ids = [call.args[1] for call in put_mock.call_args_list]
     assert put_site_ids == ["site-1", "site-3"]
-    # Every PUT body carries probes rebuilt with the prompted VLAN list --
-    # the org-scope [10] must have been replaced by [42].
+    # Every PUT carries the prompted VLAN list on tests[] rows, and probe
+    # bodies stay VLAN-free (mini-* shape).
     for call in put_mock.call_args_list:
         body = call.args[2]
         probes = body["synthetic_test"]["custom_probes"]
-        assert probes["zcc-x"]["vlan_ids"] == [42]
-    # Source dict must not have been mutated in-place.
-    assert tool_probes["zcc-x"]["vlan_ids"] == [10]
+        assert "vlan_ids" not in probes["zcc-x"]
+        tests = body["synthetic_test"]["tests"]
+        assert any("zcc-x" in row.get("probes", []) and row.get("vlan_ids") == [42] for row in tests)
 
 
 def test_site_override_indexed_prompt_empty_input_skips() -> None:
@@ -797,7 +831,7 @@ def test_apply_to_site_puts_combined_probes_and_preserves_siblings() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Sort ordering + VLAN-rebuild helpers
+# Sort ordering
 # --------------------------------------------------------------------------- #
 
 
@@ -868,44 +902,3 @@ def test_site_override_unnamed_sites_sink_to_end() -> None:
     # tie-breaks on the casefolded name string first (empty "" sorts
     # before whitespace "   "), then on id.
     assert put_site_ids == ["id-unnamed", "id-blankname"]
-
-
-def test_rebuild_probes_with_vlans_replaces_vlan_ids_and_shallow_copies() -> None:
-    """Helper returns fresh probe dicts with substituted ``vlan_ids``.
-
-    Why:
-        This helper is the seam that isolates VLAN substitution from the
-        per-site PUT loop. The contract is: (a) every probe body is a
-        fresh dict (so mutating the return value does not alias the
-        source), (b) ``vlan_ids`` is set to a new list of the prompted
-        ids, and (c) all other keys are preserved verbatim.
-    """
-    source = {
-        "zcc-a": {
-            "name": "zcc-a",
-            "target": "https://a.example",
-            "type": "reachability",
-            "aggressiveness": "critical",
-            "vlan_ids": [10, 20],
-        },
-        "zcc-b": {"name": "zcc-b", "vlan_ids": [10]},
-    }
-    result = ospm._rebuild_probes_with_vlans(source, [42, 99])
-    # (a) Fresh dicts -- identity does not match the source dicts.
-    assert result["zcc-a"] is not source["zcc-a"]
-    assert result["zcc-b"] is not source["zcc-b"]
-    # (b) VLAN substitution took effect on every probe.
-    assert result["zcc-a"]["vlan_ids"] == [42, 99]
-    assert result["zcc-b"]["vlan_ids"] == [42, 99]
-    # (c) Other keys survive intact.
-    assert result["zcc-a"]["target"] == "https://a.example"
-    assert result["zcc-a"]["aggressiveness"] == "critical"
-    assert result["zcc-a"]["type"] == "reachability"
-    # Mutating the return must not leak into the source (shallow copy contract).
-    result["zcc-a"]["vlan_ids"].append(1000)
-    assert source["zcc-a"]["vlan_ids"] == [10, 20]
-
-
-def test_rebuild_probes_with_vlans_empty_input_returns_empty_map() -> None:
-    """Empty probe map short-circuits to an empty dict."""
-    assert ospm._rebuild_probes_with_vlans({}, [1, 2, 3]) == {}
