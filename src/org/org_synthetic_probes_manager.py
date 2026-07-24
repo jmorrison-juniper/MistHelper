@@ -135,6 +135,25 @@ def _load_probe_sources(data_dir: Path) -> tuple[dict[str, Any], dict[str, Any]]
     return probes, cenr
 
 
+def _validate_vlan_input(raw: str) -> tuple[bool, str, list[int]]:
+    """Parse and validate VLAN input string.
+
+    Returns:
+        (is_valid, error_message, vlan_ids). If is_valid is True, vlan_ids
+        is non-empty and deduplicated; error_message is empty.
+    """
+    if not raw.strip():
+        return False, "VLAN list cannot be empty. Please try again.", []
+    parts = [item.strip() for item in raw.split(",") if item.strip()]
+    try:
+        ids = [int(part) for part in parts]
+    except ValueError:
+        return False, "Non-integer VLAN id detected. Please try again.", []
+    if any(vid < _VLAN_MIN or vid > _VLAN_MAX for vid in ids):
+        return False, f"VLAN ids must be in [{_VLAN_MIN}, {_VLAN_MAX}]. Please try again.", []
+    return True, "", sorted(set(ids))
+
+
 def _prompt_vlan_list() -> list[int]:
     """Prompt the operator for a comma-separated VLAN id list.
 
@@ -149,23 +168,11 @@ def _prompt_vlan_list() -> list[int]:
         valid id is entered.
     """
     while True:
-        raw = input("  Enter VLAN ids (comma-separated, each in [0, 4094]): ").strip()
-        if not raw:
-            print("  VLAN list cannot be empty. Please try again.")
-            continue
-        parts = [item.strip() for item in raw.split(",") if item.strip()]
-        try:
-            ids = [int(part) for part in parts]
-        except ValueError:
-            print("  Non-integer VLAN id detected. Please try again.")
-            continue
-        if any(vid < _VLAN_MIN or vid > _VLAN_MAX for vid in ids):
-            print(f"  VLAN ids must be in [{_VLAN_MIN}, {_VLAN_MAX}]. Please try again.")
-            continue
-        if not ids:
-            print("  VLAN list cannot be empty. Please try again.")
-            continue
-        return sorted(set(ids))
+        raw = input("  Enter VLAN ids (comma-separated, each in [0, 4094]): ")
+        is_valid, error, ids = _validate_vlan_input(raw)
+        if is_valid:
+            return ids
+        print(f"  {error}")
 
 
 def _fetch_setting(mist_session: Any, org_id: str) -> dict[str, Any]:
