@@ -493,6 +493,9 @@ from src.network.routing_utils import (  # Cat A canonical (1014 P4)
     RoutingUtils,
 )
 from src.org.org_config_migration_manager import OrgConfigMigrationManager  # Cat B (1013 SC-001 position 5)
+from src.org.org_synthetic_probes_manager import (
+    manage_org_synthetic_probes,  # 1022: menu 206 Zscaler probe manager (side-effect-free, #1641)
+)
 from src.org.org_ticket_manager import (
     OrgTicketManager,  # Cat B (1013 SC-001 position 46) -- re-export for MistHelper.OrgTicketManager callers
 )
@@ -4752,6 +4755,11 @@ menu_actions: "dict[str, tuple[Callable[..., Any], str]]" = {
         " DESTRUCTIVE: Clone Device Config to Gateway Template"
         " - Select a gateway, extract its local config, and create a new org gateway template"
         " (Requires typing 'CREATE' to confirm)",
+    ),
+    "206": (
+        lambda mist_session, org_id: manage_org_synthetic_probes(mist_session, org_id),
+        " DESTRUCTIVE: Manage org Zscaler synthetic probes"
+        " - Build/merge/swap synthetic_test.custom_probes from curated Zscaler catalogue",
     ),
 }
 

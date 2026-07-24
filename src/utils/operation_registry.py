@@ -364,6 +364,10 @@ class OperationRegistry:
         "190": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Adds a comment to a live support ticket"},
         "191": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Updates fields on an existing support ticket"},
         "194": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Clone Device Config to Gateway Template"},
+        "206": {
+            "category": "destructive",
+            "skip_reason": "DESTRUCTIVE: Modifies org synthetic_test.custom_probes",
+        },
         # --- ticket viewer (interactive selection) --------------------------
         "192": {"category": "interactive", "skip_reason": "View support ticket - requires interactive selection"},
     }
