@@ -13,7 +13,6 @@ import pytest
 
 from src.shared.mist.types import ENTITY_ENDPOINT_MAP, MistEntityRegistry
 
-
 ALL_TYPES = MistEntityRegistry.entity_types()
 
 

@@ -91,8 +91,7 @@ class MistIdeasScraper:
 
     def extract_data(self, page, url):
         """Extract all idea data from the current page."""
-        return page.evaluate(
-            """() => {
+        return page.evaluate("""() => {
             const titleEl = document.querySelector('h1.uvIdeaTitle');
             const title = titleEl ? titleEl.textContent.trim() : '';
 
@@ -131,8 +130,7 @@ class MistIdeasScraper:
                 submitter, submitterUrl, submitDate, tags, comments,
                 currentUrl: window.location.href,
             };
-        }"""
-        )
+        }""")
 
     def validate_page(self, page, expected_id):
         """Check that the loaded page matches the expected idea ID."""

@@ -148,9 +148,7 @@ def upgrade() -> None:
     op.create_index("ix_devices_device_type", "devices", ["device_type"])
 
     # -- E-04 ConfigRevisions (HASH partitioned) --------------------------
-    op.execute(
-        sa.text(
-            """
+    op.execute(sa.text("""
             CREATE TABLE config_revisions (
                 id          UUID NOT NULL,
                 org_id      UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -165,16 +163,12 @@ def upgrade() -> None:
                 PRIMARY KEY (id, org_id),
                 UNIQUE (entity_id, content_hash, org_id)
             ) PARTITION BY HASH (org_id)
-            """
-        )
-    )
+            """))
     _create_hash_partitions("config_revisions")
     op.execute(sa.text("CREATE INDEX ix_config_revisions_entity " "ON config_revisions (entity_type, entity_id)"))
 
     # -- E-05 DeviceStatusSnapshots (HASH partitioned) --------------------
-    op.execute(
-        sa.text(
-            """
+    op.execute(sa.text("""
             CREATE TABLE device_status_snapshots (
                 id          UUID NOT NULL,
                 device_id   UUID NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
@@ -188,16 +182,12 @@ def upgrade() -> None:
                 created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
                 PRIMARY KEY (id, org_id)
             ) PARTITION BY HASH (org_id)
-            """
-        )
-    )
+            """))
     _create_hash_partitions("device_status_snapshots")
     op.execute(sa.text("CREATE INDEX ix_dss_device ON device_status_snapshots (device_id)"))
 
     # -- E-06 AuditRecords (HASH partitioned) -----------------------------
-    op.execute(
-        sa.text(
-            """
+    op.execute(sa.text("""
             CREATE TABLE audit_records (
                 id          UUID NOT NULL,
                 org_id      UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -211,9 +201,7 @@ def upgrade() -> None:
                 created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
                 PRIMARY KEY (id, org_id)
             ) PARTITION BY HASH (org_id)
-            """
-        )
-    )
+            """))
     _create_hash_partitions("audit_records")
     op.execute(sa.text("CREATE INDEX ix_audit_entity " "ON audit_records (entity_type, entity_id)"))
 

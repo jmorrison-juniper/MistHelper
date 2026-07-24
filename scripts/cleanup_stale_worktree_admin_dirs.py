@@ -19,9 +19,7 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 
-REPO_ROOT = Path(
-    r"c:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper"
-)
+REPO_ROOT = Path(r"c:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper")
 
 
 def _on_rm_error(func: Callable[[str], object], path: str, exc: BaseException) -> None:

@@ -19,9 +19,7 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 
-REPO_ROOT = Path(
-    r"c:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper"
-)
+REPO_ROOT = Path(r"c:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper")
 
 # (worktree_path_relative_to_repo_or_absolute, branch_name)
 # Empty branch_name skips the `git branch -D` step (use when the remote branch
@@ -79,9 +77,7 @@ def force_rmtree(target: Path, retries: int = 3, sleep_s: float = 0.5) -> bool:
 
 def run(cmd: list[str], cwd: Path) -> tuple[int, str, str]:
     """Run a shell command and capture output."""
-    proc = subprocess.run(
-        cmd, cwd=cwd, capture_output=True, text=True, check=False
-    )
+    proc = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=False)
     return proc.returncode, proc.stdout.strip(), proc.stderr.strip()
 
 
