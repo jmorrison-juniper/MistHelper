@@ -43,8 +43,13 @@ _TOOL_NAME_PREFIX = "zcc-"  # FR-010: marks probes authored by this tool.
 _TUNNEL_ZEN_ROLE = "tunnel_zen"  # Only role that expands via CENR hostnames.
 _VLAN_MIN = 0  # FR-003 lower bound.
 _VLAN_MAX = 4094  # FR-003 upper bound.
-_CRITICAL_AGGRESSIVENESS = "critical"  # Mist caps this at 5 per org.
-_DEFAULT_AGGRESSIVENESS = "high"  # Fallback when a probe isn't the chosen critical one.
+_CRITICAL_AGGRESSIVENESS = "critical"  # Mist caps priority probes at 5 per org.
+# Non-critical probes intentionally omit the aggressiveness key entirely.
+# Why: Mist's 5-probe "priority" cap counts both "critical" and "high"; setting
+# non-critical probes to "high" tripped the cap on effective (org + site) config
+# with error "more than 5 marked as priority". Omitting the key leaves the
+# probe at Mist's implicit default and keeps only the 5 curated critical roles
+# consuming priority slots.
 
 
 def manage_org_synthetic_probes(mist_session: Any, org_id: str) -> None:
@@ -352,17 +357,18 @@ def _build_probe_set(
                 if critical_target is None or fqdn == critical_target:
                     is_critical = True
                     critical_assigned = True
-            aggressiveness = (
-                _CRITICAL_AGGRESSIVENESS if is_critical else role.get("aggressiveness", _DEFAULT_AGGRESSIVENESS)
-            )
             probe_name = f"{_TOOL_NAME_PREFIX}{role_name}-{_fqdn_slug(fqdn)}"
-            result[probe_name] = {
+            probe_body: dict[str, Any] = {
                 "name": probe_name,
                 "type": role.get("type", "reachability"),  # FR-009 default.
                 "target": f"https://{fqdn}",  # FR-007: prefix, no port.
                 "vlan_ids": list(vlan_ids),
-                "aggressiveness": aggressiveness,
             }
+            # Only critical probes carry the aggressiveness key; all other
+            # probes must omit it so Mist's 5-priority cap isn't tripped.
+            if is_critical:
+                probe_body["aggressiveness"] = _CRITICAL_AGGRESSIVENESS
+            result[probe_name] = probe_body
         # Fallback: role declared critical but the requested
         # ``critical_fqdn`` was absent from the expansion. Promote the
         # first probe emitted for the role so we still spend a critical
@@ -413,11 +419,16 @@ def _merge_probes(
         merged_probe = dict(probe)
         merged_probe["vlan_ids"] = union
         # Sync aggressiveness from the freshly-built set so demotions
-        # propagate. Probes with no counterpart in ``new_probes`` (e.g.
-        # a role we dropped from the JSON) keep their prior value.
+        # propagate. If the freshly-built probe omits the key entirely
+        # (non-critical), the merged probe must also drop it so Mist's
+        # priority cap isn't tripped by a leftover "critical"/"high".
+        # Probes with no counterpart in ``new_probes`` (e.g. a role we
+        # dropped from the JSON) keep their prior value.
         if name in new_probes:
             authoritative = new_probes[name].get("aggressiveness")
-            if authoritative is not None:
+            if authoritative is None:
+                merged_probe.pop("aggressiveness", None)
+            else:
                 merged_probe["aggressiveness"] = authoritative
         merged[name] = merged_probe
     return merged
@@ -506,7 +517,7 @@ def _summarise(
         f"  Probes to remove:     {len(removed)}",
         f"  Probes to update:     {len(updated)}",
         f"  Foreign preserved:    {len(resulting_foreign)}",
-        f"  Foreign demoted:      {demoted_foreign} (critical -> {_DEFAULT_AGGRESSIVENESS})",
+        f"  Foreign demoted:      {demoted_foreign} (critical key removed)",
         f"  Resulting total:      {total_after}",
     ]
     return "\n".join(lines)
@@ -545,36 +556,35 @@ def _count_critical_demotions(
 def _demote_stale_critical(
     foreign: dict[str, dict[str, Any]],
 ) -> dict[str, dict[str, Any]]:
-    """Return ``foreign`` with any ``aggressiveness=critical`` demoted.
+    """Return ``foreign`` with any ``aggressiveness=critical`` key removed.
 
     Why:
-        Mist caps the total number of ``critical`` probes per org at 5.
-        The tool now claims all 5 slots for the curated Zscaler roles,
-        so any foreign probe currently marked critical must be demoted
-        or the org PUT will be rejected. This intentionally relaxes
-        FR-012's strict foreign-preservation guarantee -- the demotion
-        is surfaced in ``_summarise`` so the operator sees it before
-        confirming.
+        Mist caps priority probes (both ``critical`` and ``high``) at 5
+        per effective config. The tool now claims all 5 slots for the
+        curated Zscaler roles at ``critical``, so any foreign probe
+        currently marked critical must have its aggressiveness key
+        removed (dropping it to Mist's implicit default) or the PUT is
+        rejected. This intentionally relaxes FR-012's strict foreign-
+        preservation guarantee -- the change is surfaced in
+        ``_summarise`` so the operator sees it before confirming.
 
     Args:
         foreign: Foreign probe map (probes without the ``zcc-`` prefix).
 
     Returns:
         A new dict where every probe previously at
-        ``aggressiveness=critical`` is copied with the value replaced
-        by ``_DEFAULT_AGGRESSIVENESS``. All other fields survive
-        untouched.
+        ``aggressiveness=critical`` is copied with the aggressiveness
+        key stripped. All other fields survive untouched.
     """
     result: dict[str, dict[str, Any]] = {}
     for name, probe in foreign.items():
         if isinstance(probe, dict) and probe.get("aggressiveness") == _CRITICAL_AGGRESSIVENESS:
             demoted = dict(probe)
-            demoted["aggressiveness"] = _DEFAULT_AGGRESSIVENESS
+            demoted.pop("aggressiveness", None)
             result[name] = demoted
             logging.info(
-                "Demoting foreign critical probe %r -> aggressiveness=%s",
+                "Demoting foreign critical probe %r (aggressiveness key removed)",
                 name,
-                _DEFAULT_AGGRESSIVENESS,
             )
         else:
             result[name] = probe
@@ -783,10 +793,12 @@ def _apply_to_site(
     Why:
         Site-level custom_probes lives at ``synthetic_test.custom_probes``
         in the site setting, mirroring the org shape. This helper reuses
-        the same partition/demote logic as the org path so the 5-critical
-        Mist limit is respected per-site as well: any pre-existing
-        foreign probe with ``aggressiveness=critical`` is demoted, and
-        every ``zcc-`` probe is authoritatively replaced.
+        the same partition/demote logic as the org path so Mist's
+        5-probe priority cap (which counts both ``critical`` and
+        ``high``) is respected on the effective (org + site) config:
+        any pre-existing foreign probe with
+        ``aggressiveness=critical`` has that key stripped, and every
+        ``zcc-`` probe is authoritatively replaced.
 
     Args:
         mist_session: Authenticated ``mistapi`` session.

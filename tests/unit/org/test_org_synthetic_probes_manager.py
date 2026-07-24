@@ -149,12 +149,21 @@ def test_build_from_empty_includes_tunnel_zen_cenr_hostnames(probes_source: dict
 
 
 def test_build_applies_defaults(probes_source: dict, cenr_source: dict) -> None:
-    """Type defaults to reachability and aggressiveness to high (FR-009)."""
+    """Type defaults to reachability; aggressiveness set only for critical roles.
+
+    Why:
+        Mist's 5-probe priority cap counts both ``critical`` and ``high``.
+        Non-critical probes must omit the ``aggressiveness`` key entirely so
+        Mist applies its implicit default (which doesn't consume a priority
+        slot). Only the curated critical roles carry the key with value
+        ``critical``.
+    """
     result = ospm._build_probe_set((probes_source, cenr_source), [10])
     for probe in result.values():
         assert probe["type"] == "reachability"
-        assert probe["aggressiveness"] == "high"
         assert probe["vlan_ids"] == [10]
+        if "aggressiveness" in probe:
+            assert probe["aggressiveness"] == ospm._CRITICAL_AGGRESSIVENESS
 
 
 # --------------------------------------------------------------------------- #
@@ -394,10 +403,12 @@ def test_build_marks_only_critical_flagged_roles_as_critical() -> None:
     """A role with ``critical: true`` yields exactly one critical probe.
 
     Why:
-        Mist caps ``aggressiveness=critical`` at 5 per org. The builder
-        must promote exactly one FQDN per critical role -- either the
-        ``critical_fqdn`` hint or, absent that, the first non-wildcard
-        FQDN -- and leave every other probe at the default level.
+        Mist caps priority probes (``critical`` + ``high``) at 5 per org.
+        The builder must promote exactly one FQDN per critical role -- either
+        the ``critical_fqdn`` hint or, absent that, the first non-wildcard
+        FQDN -- and leave every other probe with the ``aggressiveness`` key
+        omitted entirely (Mist's implicit default, which doesn't consume a
+        priority slot).
     """
     probes = {
         "roles": [
@@ -414,40 +425,46 @@ def test_build_marks_only_critical_flagged_roles_as_critical() -> None:
         ],
     }
     result = ospm._build_probe_set((probes, {"proxy_hostnames": [], "vpn_hostnames": []}), [10])
-    critical = {n: p for n, p in result.items() if p["aggressiveness"] == ospm._CRITICAL_AGGRESSIVENESS}
+    critical = {n: p for n, p in result.items() if p.get("aggressiveness") == ospm._CRITICAL_AGGRESSIVENESS}
     assert len(critical) == 1
     (only_name,) = critical
     assert only_name == "zcc-pac-pac-zscaler-net"
-    non_critical = [p for p in result.values() if p["aggressiveness"] != ospm._CRITICAL_AGGRESSIVENESS]
+    non_critical = [p for p in result.values() if "aggressiveness" not in p]
     assert non_critical, "Expected at least one non-critical probe"
-    assert all(p["aggressiveness"] == ospm._DEFAULT_AGGRESSIVENESS for p in non_critical)
+    assert all("aggressiveness" not in p for p in non_critical)
 
 
 def test_demote_stale_critical_downgrades_foreign_probes() -> None:
-    """Foreign probes with ``aggressiveness=critical`` get demoted.
+    """Foreign probes with ``aggressiveness=critical`` get the key removed.
 
     Why:
-        A previous org config or another tool may have burned the 5-critical
-        budget. Menu 206 relaxes the strict foreign-preservation rule so it
-        can force-demote those so the tool's own five stay under the cap.
+        A previous org config or another tool may have burned the 5-slot
+        priority budget. Menu 206 relaxes strict foreign-preservation so it
+        can force-remove the ``aggressiveness`` key on foreign criticals,
+        dropping them to Mist's implicit default so the tool's own five
+        critical probes stay under the priority cap.
     """
     foreign = {
         "custom-a": {"name": "custom-a", "aggressiveness": "critical", "vlan_ids": [1]},
         "custom-b": {"name": "custom-b", "aggressiveness": "high", "vlan_ids": [1]},
     }
     demoted = ospm._demote_stale_critical(foreign)
-    assert demoted["custom-a"]["aggressiveness"] == ospm._DEFAULT_AGGRESSIVENESS
+    assert "aggressiveness" not in demoted["custom-a"]
     assert demoted["custom-b"]["aggressiveness"] == "high"
     # Original dict must not be mutated in-place.
     assert foreign["custom-a"]["aggressiveness"] == "critical"
 
 
 def test_merge_syncs_aggressiveness_change_from_new_probes() -> None:
-    """Merge propagates aggressiveness updates onto existing tool probes.
+    """Merge removes the aggressiveness key when the new build omits it.
 
     Why:
-        Without sync, a probe that lost critical status in the new build
-        would stay critical after merge, silently overshooting the cap.
+        Without this sync, a probe that lost critical status in the new
+        build (i.e., is no longer one of the 5 curated critical roles) would
+        stay ``critical`` after merge and silently keep consuming a priority
+        slot. When the authoritative rebuild omits the key entirely, the
+        merged probe must also drop the key to fall back to Mist's implicit
+        default.
     """
     existing_tool = {
         "zcc-pac-pac-zscaler-net": {
@@ -464,11 +481,11 @@ def test_merge_syncs_aggressiveness_change_from_new_probes() -> None:
             "target": "https://pac.zscaler.net",
             "vlan_ids": [10],
             "type": "reachability",
-            "aggressiveness": "high",
+            # No aggressiveness key -- role is no longer critical.
         }
     }
     merged = ospm._merge_probes(existing_tool, new_probes, [10])
-    assert merged["zcc-pac-pac-zscaler-net"]["aggressiveness"] == "high"
+    assert "aggressiveness" not in merged["zcc-pac-pac-zscaler-net"]
 
 
 # --------------------------------------------------------------------------- #
@@ -600,6 +617,6 @@ def test_apply_to_site_puts_combined_probes_and_preserves_siblings() -> None:
     body = put_mock.call_args.args[2]
     probes = body["synthetic_test"]["custom_probes"]
     assert probes["zcc-new"] == {"name": "zcc-new", "aggressiveness": "critical"}
-    assert probes["old-foreign"]["aggressiveness"] == ospm._DEFAULT_AGGRESSIVENESS
+    assert "aggressiveness" not in probes["old-foreign"]
     assert body["synthetic_test"]["other_sibling_field"] == {"keep": "me"}
     assert body["top_level_sibling"] == "keep"
