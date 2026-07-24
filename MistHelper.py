@@ -4,6 +4,8 @@ MistHelper - Comprehensive Juniper Mist API Data Export Tool
 A powerful utility for extracting and analyzing data from Juniper Mist cloud environments.
 """
 
+from __future__ import annotations
+
 # ============================================================================
 # PYTHON VERSION CHECK - MUST BE FIRST (before any other imports)
 # ============================================================================
@@ -45,8 +47,11 @@ import re  # Import re for regex pattern matching in data parsing (SSIDs, descri
 import subprocess  # nosec B404  # Injected into src/bootstrap/PackageInstaller DI seam only; all runtime calls in this module use SubprocessRunner (initiative 1016).
 import time  # Import time for rate limiting, delays, and performance monitoring
 import traceback  # Import traceback for detailed exception context in error logs
+import types  # Import types for type annotations (TracebackType)
 from datetime import datetime  # Import datetime for timestamping logs and events
-from typing import TYPE_CHECKING, Any  # Import type hints for static analysis without runtime overhead
+from typing import TYPE_CHECKING, Any, Iterable, NoReturn, TextIO, cast  # Import type hints for static analysis without runtime overhead
+
+from collections.abc import Callable  # Callable protocol for typed function references
 
 from src.utils.subprocess_runner import (  # Centralized subprocess dispatch + exception re-exports (initiative 1016).
     SubprocessError,  # Base class for subprocess errors (parent of TimeoutExpired/CalledProcessError).
@@ -58,13 +63,13 @@ from src.utils.subprocess_runner import (  # Centralized subprocess dispatch + e
 # These allow type checking while the actual imports happen at runtime via GlobalImportManager
 # Pylance uses these unconditionally; runtime try/except blocks below handle actual loading.
 if TYPE_CHECKING:  # These imports only used by static type checkers (Pylance, mypy), not at runtime
-    from collections.abc import Callable  # Callable protocol for typed optional-import fallbacks
     from types import ModuleType  # ModuleType annotation for optional-module fallback typing
 
     import requests  # Type stub for requests (HTTP library used by mistapi)
     from prettytable import PrettyTable  # Type stub for prettytable (ASCII table formatting)
 
     import websocket  # Type stub for websocket (WebSocket client for device diagnostics)
+    from src.device.utility_commands import DeviceUtilityCommands  # Type stub for DeviceUtilityCommands
 
 # ============================================================================
 # POLYGLOT DATABASE LAYER (OPTIONAL)
@@ -349,6 +354,7 @@ from src.dataclasses.endpoint_config import (
 )
 from src.dataclasses.progress_event import (
     ProgressContext,  # test access + mh.ProgressContext usage from extracted modules
+    TestSummary,  # Test summary counters for telemetry emission
 )
 from src.dataclasses.systematic_test_option import (
     SystematicTestOption,
@@ -915,7 +921,7 @@ def _parse_requirement_line(line: str) -> tuple[str, str] | None:  # Parse one r
     return (package_name, stripped)  # (name, full spec including any version constraint)
 
 
-def _parse_requirements_file(filepath="requirements.txt"):  # Read dependency specs from requirements.txt
+def _parse_requirements_file(filepath: str = "requirements.txt") -> list[tuple[str, str]]:  # Read dependency specs from requirements.txt
     """Parse requirements.txt into a list of (package_name, package_spec) tuples.
 
     SECURITY: only reads requirements.txt (no arbitrary file access); skips comments/blanks/dev deps.
@@ -1032,7 +1038,7 @@ except ImportError as _ws_err:  # Required dependency is missing
 try:  # SequenceMatcher is optional (used for fuzzy string comparisons)
     from difflib import SequenceMatcher as _SequenceMatcherImpl  # Stdlib similarity-ratio helper
 
-    SequenceMatcher: type[_SequenceMatcherImpl] | None = _SequenceMatcherImpl  # Class handle for guarded use
+    SequenceMatcher: type[_SequenceMatcherImpl[Any]] | None = _SequenceMatcherImpl  # Class handle for guarded use
 except ImportError:  # Extremely unlikely for a stdlib module, but guard anyway
     SequenceMatcher = None  # None lets callers detect absence
 
@@ -1070,8 +1076,8 @@ except ImportError:  # pyte not installed
     _has_pyte = False  # Flag that terminal-emulation features are unavailable
 
 try:  # paramiko is optional (used for direct SSH operations)
-    import paramiko as _paramiko_impl  # SSH client library
-    from paramiko import RejectPolicy as _RejectPolicyImpl  # Strict host-key policy
+    import paramiko as _paramiko_impl  # SSH client library  # type: ignore[import-untyped]
+    from paramiko import RejectPolicy as _RejectPolicyImpl  # Strict host-key policy  # type: ignore[import-untyped]
     from paramiko import SSHClient as _SSHClientImpl  # SSH client class
 
     paramiko: "ModuleType | None" = _paramiko_impl  # Union type lets guards detect absence
@@ -1236,7 +1242,7 @@ class GlobalImportManager:
         self._detect_virtual_environment()  # Log whether we're in a venv (affects installs)
         self._define_package_requirements()  # Populate the required/optional package dicts
 
-    def _load_upgrade_configuration(self):  # Read upgrade/UV/CSV settings from the environment
+    def _load_upgrade_configuration(self) -> None:  # Read upgrade/UV/CSV settings from the environment
         """Load upgrade, UV-check, and CSV-freshness settings from environment variables."""
         logging.debug("Loading import-manager upgrade configuration from environment")  # Trace config load
         self.auto_upgrade_uv = os.getenv("AUTO_UPGRADE_UV", "true").lower() == "true"  # Auto-upgrade UV manager itself
@@ -1253,14 +1259,14 @@ class GlobalImportManager:
         )  # Skip all UV checks (container)
         self.disable_auto_install = os.getenv("DISABLE_AUTO_INSTALL", "false").lower() == "true"  # Skip auto-install
 
-    def _initialize_dependency_tracking(self):  # Prepare package-tracking and import/UV caches
+    def _initialize_dependency_tracking(self) -> None:  # Prepare package-tracking and import/UV caches
         """Initialize dependency-tracking containers and UV/deferred-init state flags."""
         logging.debug("Initializing dependency tracking containers and caches")  # Trace tracking setup
-        self.required_packages = {}  # Will hold name -> spec for required packages
-        self.optional_packages = {}  # Will hold name -> spec for optional packages
-        self.failed_imports = []  # Names of packages that failed to import
-        self.installed_packages = []  # Names of packages installed during this run
-        self.imports = {}  # Cache of imported modules keyed by name for global reuse
+        self.required_packages: dict[str, str | None] = {}  # Will hold name -> spec for required packages
+        self.optional_packages: dict[str, str | None] = {}  # Will hold name -> spec for optional packages
+        self.failed_imports: list[str] = []  # Names of packages that failed to import
+        self.installed_packages: list[str] = []  # Names of packages installed during this run
+        self.imports: dict[str, Any] = {}  # Cache of imported modules keyed by name for global reuse
         self._uv_available: bool = False  # Cached answer to 'is UV usable?'
         self._uv_checked: bool = False  # Whether the UV availability check has run yet
         self._last_uv_update_check: float | None = None  # Track when we last checked for UV updates
@@ -1269,7 +1275,7 @@ class GlobalImportManager:
         self._initialization_success: bool = False  # Whether initialization succeeded
         self._cached_global_assignments: dict[str, Any] = {}  # Module globals to publish once imports complete
 
-    def _initialize_import_mappings(self):  # Build name maps and special import handlers
+    def _initialize_import_mappings(self) -> None:  # Build name maps and special import handlers
         """Build package->import name mappings and the special-case import handler table."""
         logging.debug("Initializing import name mappings and special handlers")  # Trace mapping setup
         self.import_name_mappings = {  # Map pip package names to import names where they differ
@@ -1315,7 +1321,7 @@ class GlobalImportManager:
             force=True,  # Replace the earlier module-import basicConfig
         )
 
-    def _build_console_log_handler(self, level: int) -> logging.StreamHandler:  # Console handler factory
+    def _build_console_log_handler(self, level: int) -> logging.StreamHandler[TextIO]:  # Console handler factory
         """Build a stdout/stderr console log handler at the requested level."""
         logging.debug("_build_console_log_handler: creating console handler at level %s", level)  # Log before build
         console_handler = logging.StreamHandler()  # Handler that writes to stdout/stderr
@@ -1643,7 +1649,7 @@ class GlobalImportManager:
             self.timezone = timezone  # Provide timezone for tz-aware construction
             self.timedelta = timedelta  # Provide timedelta for date arithmetic
 
-        def __call__(self, *args, **kwargs):
+        def __call__(self, *args: Any, **kwargs: Any) -> datetime:
             return self._datetime_cls(*args, **kwargs)  # Forward calls to the datetime constructor
 
     def _import_datetime(self) -> Any:
@@ -1662,12 +1668,14 @@ class GlobalImportManager:
             logging.warning("tqdm package not available, using fallback")  # Warn and degrade gracefully
 
             # Return the fallback function if tqdm is not available
-            def tqdm_fallback(iterable, *args, **kwargs):
+            def tqdm_fallback(iterable: Iterable[Any], *args: Any, **kwargs: Any) -> Iterable[Any]:
                 """Fallback when tqdm package is not available."""
+                from collections.abc import Sized  # Type for objects supporting len()
+
                 desc = kwargs.get("desc", "Processing")  # Description label for the log line
                 unit = kwargs.get("unit", "item")  # Unit noun for the progress message
-                if hasattr(iterable, "__len__"):  # The iterable has a known length
-                    total = len(iterable)  # Compute total item count for the message
+                if isinstance(iterable, Sized):  # The iterable has a known length
+                    total = len(cast(Sized, iterable))  # Compute total item count for the message
                     logging.info("%s: %s %ss to process", desc, total, unit)  # Log a one-shot progress summary
                 else:  # Length is unknown (e.g. a generator)
                     logging.info("%s: processing %ss...", desc, unit)  # Log an indefinite progress message
@@ -1878,14 +1886,14 @@ class GlobalImportManager:
             return  # Refuse upgrade without an explicit package constraint.
         self._check_and_upgrade_package(module_name, package_spec)  # Upgrade the explicitly requested package.
 
-    def _partition_dependencies(self, packages_dict):
+    def _partition_dependencies(self, packages_dict: dict[str, str | None]) -> tuple[dict[str, None], dict[str, str]]:
         """Split a package map into (builtin, external) dicts by whether a spec is present."""
         logging.debug("_partition_dependencies: splitting %d packages", len(packages_dict))  # Log before split
         builtin_packages = {k: v for k, v in packages_dict.items() if v is None}  # No spec -> stdlib/built-in module
         external_packages = {k: v for k, v in packages_dict.items() if v is not None}  # Has spec -> needs install
         return builtin_packages, external_packages  # Return the two cohesive groups for separate processing
 
-    def _import_single_dependency(self, package_info, required, skip_deps, log_lock):
+    def _import_single_dependency(self, package_info: tuple[str, str | None], required: bool, skip_deps: bool, log_lock: Any) -> tuple[str, bool]:
         """Import one package and log its check and outcome under the shared thread lock."""
         module_name, package_spec = package_info  # Unpack the (name, spec) tuple for this worker
         package_type = "required" if required else "optional"  # Label used in user-facing log lines
@@ -1893,14 +1901,15 @@ class GlobalImportManager:
             logging.info(
                 "  Checking %s dependency: %s (%s)", package_type, module_name, package_spec or "built-in"
             )  # Announce the check
-        result = self.import_module_safely(  # Perform the actual import/install for this package
+        import_result = self.import_module_safely(  # Perform the actual import/install for this package
             module_name, package_spec, required=required, skip_deps=skip_deps, skip_upgrade=True
         )  # Skip upgrade for speed here
+        result: bool = import_result is not None  # Convert Any | None to bool (success if not None)
         with log_lock:  # Serialize the result log line against other worker threads
             self._log_dependency_result(module_name, result, required)  # Emit OK/FAIL/WARN for this package
         return module_name, result  # Return the outcome for aggregation by the caller
 
-    def _log_dependency_result(self, module_name, result, required):
+    def _log_dependency_result(self, module_name: str, result: bool, required: bool) -> None:
         """Log a single dependency outcome as OK, hard FAIL (required), or soft WARN (optional)."""
         if result:  # Import succeeded
             logging.info("  [OK] %s: Available", module_name)  # Report availability
@@ -1909,27 +1918,33 @@ class GlobalImportManager:
         else:  # Optional dependency missing
             logging.warning("  [WARN] %s: Not available", module_name)  # Log a soft warning
 
-    def _import_external_dependencies(self, external_packages, required, skip_deps, log_lock, max_workers):
+    def _import_external_dependencies(self, external_packages: dict[str, str], required: bool, skip_deps: bool, log_lock: Any, max_workers: int) -> list[tuple[str, bool]]:
         """Import external packages concurrently with a bounded thread pool."""
         logging.debug("_import_external_dependencies: importing %d external packages", len(external_packages))  # Log
+        results: list[tuple[str, bool]] = []  # Accumulate successful import results
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:  # Bounded import worker pool
-            future_to_package = {  # Map each submitted future back to its source package
+            future_to_package: dict[concurrent.futures.Future[tuple[str, bool]], tuple[str, str | None]] = {  # Map each submitted future back to its source package
                 executor.submit(self._import_single_dependency, item, required, skip_deps, log_lock): item
                 for item in external_packages.items()  # Schedule every external import
             }
             for future in concurrent.futures.as_completed(future_to_package):  # Process results as imports finish
-                self._collect_import_result(future, future_to_package, log_lock)  # Handle this future's outcome
+                result = self._collect_import_result(future, future_to_package, log_lock)  # Handle this future's outcome
+                if result:  # Result collection succeeded
+                    results.append(result)  # Add to accumulated results
+        return results  # Return all successfully collected results
 
-    def _collect_import_result(self, future, future_to_package, log_lock):
-        """Retrieve one import future's result, logging any worker exception under the lock."""
+    def _collect_import_result(self, future: concurrent.futures.Future[tuple[str, bool]], future_to_package: dict[concurrent.futures.Future[tuple[str, bool]], tuple[str, str | None]], log_lock: Any) -> tuple[str, bool] | None:
+        """Retrieve one import future's result, logging any worker exception under the lock. Returns the result if successful."""
         package_info = future_to_package[future]  # Recover which package this future handled
         try:
-            future.result()  # Retrieve the worker's return value (re-raises worker errors)
+            result: tuple[str, bool] = future.result()  # Retrieve the worker's return value (re-raises worker errors)
+            return result  # Return the successful result
         except Exception as exc:  # A worker raised an unexpected exception
             with log_lock:  # Serialize the error log line against other worker threads
                 logging.error("Package %s import generated an exception: %s", package_info[0], exc)  # Log the failure
+            return None  # Signal failure to caller
 
-    def _import_packages_concurrently(self, packages_dict, required=True, skip_deps=False, max_workers=4):
+    def _import_packages_concurrently(self, packages_dict: dict[str, str | None], required: bool = True, skip_deps: bool = False, max_workers: int = 4) -> None:
         """
         Import packages concurrently for faster dependency resolution.
 
@@ -1963,7 +1978,7 @@ class GlobalImportManager:
 
         return ImportInitializationService.execute(self, skip_deps=skip_deps)
 
-    def _get_global_assignments(self):
+    def _get_global_assignments(self) -> dict[str, Any]:
         """Get dictionary of global variable assignments for imported modules."""
         from src.refactors.serial_cc.global_assignments_builder import GlobalAssignmentsBuilderService
 
@@ -1971,7 +1986,7 @@ class GlobalImportManager:
 
     # Simple module -> [(global_name, attr_name_or_None)] hoists. attr None binds the module object itself.
     # Used by _hoist_module_globals so _make_modules_global stays a flat loop instead of a long if/elif chain.
-    _SIMPLE_GLOBAL_HOISTS = {
+    _SIMPLE_GLOBAL_HOISTS: dict[str, list[tuple[str, str | None]]] = {
         "datetime": [("timezone", "timezone"), ("timedelta", "timedelta")],  # Hoist datetime's tz/delta helpers
         "concurrent.futures": [  # Hoist the thread-pool primitives plus the package itself
             ("ThreadPoolExecutor", "ThreadPoolExecutor"),
@@ -1985,14 +2000,14 @@ class GlobalImportManager:
         "difflib": [("SequenceMatcher", "SequenceMatcher")],  # Bind SequenceMatcher directly
     }
 
-    def _make_modules_global(self):
+    def _make_modules_global(self) -> None:
         """Make all successfully imported modules available in the global namespace."""
         for module_name, module_obj in self.imports.items():  # Walk every imported module
             globals()[module_name] = module_obj  # Bind the module into the real module globals
             self._hoist_module_globals(module_name, module_obj)  # Hoist any commonly-used attributes for it
         logging.debug("Successfully made imported modules available globally")  # Confirm the global wiring completed
 
-    def _hoist_module_globals(self, module_name, module_obj):  # Hoist known helper attributes into globals
+    def _hoist_module_globals(self, module_name: str, module_obj: Any) -> None:  # Hoist known helper attributes into globals
         """Hoist commonly-used attributes of a known module into globals (data-driven, with optional-pkg cases)."""
         simple_hoists = self._SIMPLE_GLOBAL_HOISTS.get(module_name)  # Lookup the simple hoist list for this module
         if simple_hoists:  # This module has a fixed set of attributes to hoist
@@ -2003,14 +2018,14 @@ class GlobalImportManager:
             self._hoist_rapidfuzz_global(module_obj)  # Bind its fuzz submodule (with direct-import fallback)
 
     @staticmethod
-    def _apply_simple_hoists(module_obj, hoists):  # Bind a module's fixed (global_name, attr) pairs into globals
+    def _apply_simple_hoists(module_obj: Any, hoists: list[tuple[str, str | None]]) -> None:  # Bind a module's fixed (global_name, attr) pairs into globals
         """Bind each (global_name, attr_name) pair: attr None binds the module object, else getattr(module, attr)."""
         for global_name, attr_name in hoists:  # Apply each configured binding for this module
             value = module_obj if attr_name is None else getattr(module_obj, attr_name, None)  # Module or its attribute
             globals()[global_name] = value  # Bind the resolved value into the real module globals
 
     @staticmethod
-    def _hoist_scourgify_global(module_obj):  # Bind scourgify's normalize_address_record into globals
+    def _hoist_scourgify_global(module_obj: Any) -> None:  # Bind scourgify's normalize_address_record into globals
         """Hoist scourgify.normalize_address_record into globals, importing it directly when not an attribute."""
         if not module_obj:  # Package did not load
             return  # Nothing to hoist
@@ -2025,7 +2040,7 @@ class GlobalImportManager:
             logging.debug("Could not import normalize_address_record from scourgify, using fallback")  # Note fallback
 
     @staticmethod
-    def _hoist_rapidfuzz_global(module_obj):  # Bind rapidfuzz's fuzz submodule into globals
+    def _hoist_rapidfuzz_global(module_obj: Any) -> None:  # Bind rapidfuzz's fuzz submodule into globals
         """Hoist rapidfuzz.fuzz into globals, importing it directly when not an attribute."""
         if not module_obj:  # Package did not load
             return  # Nothing to hoist
@@ -2037,19 +2052,19 @@ class GlobalImportManager:
         except (ImportError, AttributeError):  # Package present but submodule unavailable
             logging.debug("Could not import fuzz from rapidfuzz, using fallback")  # Note the fallback
 
-    def _add_fallbacks_to_globals(self, global_vars):
+    def _add_fallbacks_to_globals(self, global_vars: dict[str, Any]) -> None:
         """Add fallbacks for optional modules that failed to import."""
         self._install_scourgify_fallback(global_vars)  # Address-normalization shim when scourgify is missing
         self._install_fuzz_fallback(global_vars)  # Fuzzy-match shim (difflib-backed) when rapidfuzz is missing
         self._install_ssh_fallbacks(global_vars)  # paramiko/redexpect shims that fail loudly with install guidance
 
     @staticmethod
-    def _install_scourgify_fallback(global_vars):  # Install the scourgify normalize fallback when absent
+    def _install_scourgify_fallback(global_vars: dict[str, Any]) -> None:  # Install the scourgify normalize fallback when absent
         """When normalize_address_record is missing, install a shim returning the raw string with empty fields."""
         if global_vars.get("normalize_address_record") is not None:  # A real normalizer is already present
             return  # No fallback needed
 
-        def normalize_address_record_fallback(address_string):
+        def normalize_address_record_fallback(address_string: str) -> dict[str, str]:
             """Fallback function when scourgify is not available."""
             logging.debug("Using fallback address normalization (scourgify not available)")  # Note the degraded path
             return {
@@ -2063,7 +2078,7 @@ class GlobalImportManager:
         global_vars["normalize_address_record"] = normalize_address_record_fallback  # Install the shim by name
 
     @staticmethod
-    def _install_fuzz_fallback(global_vars):  # Install the rapidfuzz fallback when absent
+    def _install_fuzz_fallback(global_vars: dict[str, Any]) -> None:  # Install the rapidfuzz fallback when absent
         """When fuzz is missing, install a difflib-backed shim exposing token_sort_ratio (0-100 score)."""
         if global_vars.get("fuzz") is not None:  # A real fuzzy matcher is already present
             return  # No fallback needed
@@ -2072,7 +2087,7 @@ class GlobalImportManager:
             """Fallback class when rapidfuzz is not available."""
 
             @staticmethod
-            def token_sort_ratio(str1, str2):
+            def token_sort_ratio(str1: str, str2: str) -> int:
                 """Fallback using difflib SequenceMatcher."""
                 if global_vars.get("difflib"):  # Use difflib if it is available as a substitute
                     return int(
@@ -2083,13 +2098,13 @@ class GlobalImportManager:
         global_vars["fuzz"] = FuzzFallback()  # Install the fuzzy-match shim under the expected name
 
     @classmethod
-    def _install_ssh_fallbacks(cls, global_vars):  # Install paramiko/redexpect shims that fail loudly when used
+    def _install_ssh_fallbacks(cls, global_vars: dict[str, Any]) -> None:  # Install paramiko/redexpect shims that fail loudly when used
         """Install paramiko and redexpect shims that raise ImportError with install guidance when accessed."""
         cls._install_paramiko_fallback(global_vars)  # SSH client shim when paramiko is absent
         cls._install_redexpect_fallback(global_vars)  # SSH automation shim when redexpect is absent
 
     @staticmethod
-    def _install_paramiko_fallback(global_vars):  # Install a paramiko shim that errors on use
+    def _install_paramiko_fallback(global_vars: dict[str, Any]) -> None:  # Install a paramiko shim that errors on use
         """When paramiko is missing, install a shim whose SSHClient() raises ImportError with install guidance."""
         if global_vars.get("paramiko") is not None:  # paramiko (or an existing shim) is already present
             return  # No fallback needed
@@ -2098,7 +2113,7 @@ class GlobalImportManager:
             """Fallback class when paramiko is not available."""
 
             @staticmethod
-            def SSHClient():
+            def SSHClient() -> NoReturn:
                 raise ImportError(  # Fail loudly with install guidance when SSH is attempted without paramiko
                     "SSH functionality requires 'paramiko' package. Install with: pip install paramiko"
                 )
@@ -2106,7 +2121,7 @@ class GlobalImportManager:
         global_vars["paramiko"] = SSHFallback()  # Install the SSH shim with a clear error path
 
     @staticmethod
-    def _install_redexpect_fallback(global_vars):  # Install a redexpect shim that errors on use
+    def _install_redexpect_fallback(global_vars: dict[str, Any]) -> None:  # Install a redexpect shim that errors on use
         """When redexpect is missing, install a shim whose spawn() raises ImportError with install guidance."""
         if global_vars.get("redexpect") is not None:  # redexpect (or an existing shim) is already present
             return  # No fallback needed
@@ -2115,20 +2130,20 @@ class GlobalImportManager:
             """Fallback class when redexpect is not available."""
 
             @staticmethod
-            def spawn(*args, **kwargs):
+            def spawn(*args: Any, **kwargs: Any) -> NoReturn:
                 raise ImportError(  # Fail loudly with install guidance when redexpect is used but absent
                     "Cross-platform SSH automation requires 'redexpect' package. Install with: pip install redexpect"
                 )
 
         global_vars["redexpect"] = RedexpectFallback()  # Install the redexpect shim with a clear error path
 
-    def _import_special_modules(self):
+    def _import_special_modules(self) -> None:
         """Import special modules with custom handling."""
         logging.debug("_import_special_modules: wiring mistapi + websocket-client")  # Log before wiring
         self._wire_mistapi_module()  # Bind mistapi to module globals if it loaded
         self._log_websocket_availability()  # Log whether the websocket client is usable
 
-    def _wire_mistapi_module(self):
+    def _wire_mistapi_module(self) -> None:
         """Wire mistapi to module globals and confirm its API structure."""
         if "mistapi" not in self.imports:  # The base SDK never imported
             logging.debug("mistapi not imported, skipping sub-module imports")  # Nothing to wire up
@@ -2147,7 +2162,7 @@ class GlobalImportManager:
         except Exception as e:  # Failed to even access the cached mistapi object
             logging.warning("Error accessing mistapi: %s", e)  # Warn -- API features may be unavailable
 
-    def _verify_mistapi_api_structure(self, mistapi):
+    def _verify_mistapi_api_structure(self, mistapi: Any) -> None:
         """Verify mistapi.api.v1 module structure is present and log the result."""
         if hasattr(mistapi, "api") and hasattr(mistapi.api, "v1"):  # Confirm expected nested API surface
             logging.debug("mistapi.api.v1 module structure confirmed")  # Structure looks correct
@@ -2156,7 +2171,7 @@ class GlobalImportManager:
                 "mistapi.api.v1 structure not found - this may cause API call failures"
             )  # Warn about likely failures
 
-    def _log_websocket_availability(self):
+    def _log_websocket_availability(self) -> None:
         """Log whether websocket-client successfully loaded."""
         if "websocket-client" in self.imports:  # The websocket client library loaded
             logging.debug("websocket-client available for WebSocket operations")  # WebSocket features enabled
@@ -2406,7 +2421,7 @@ selected_msp: dict[str, Any] | None = None  # Currently selected MSP (from menu 
 # specs/1015-misthelper-refactor-final-15/spec.md.
 
 
-def _snapshot_session_globals_to_state() -> dict:
+def _snapshot_session_globals_to_state() -> dict[str, Any]:
     """Snapshot the live module-level session globals into a mutable state bag."""
     logging.debug("_snapshot_session_globals_to_state: capturing 5 module globals")  # Log before snapshot
     return {  # Map of global name -> current value for the LoginOrchestrator to mutate
@@ -2418,7 +2433,7 @@ def _snapshot_session_globals_to_state() -> dict:
     }
 
 
-def _restore_session_globals_from_state(state: dict) -> None:
+def _restore_session_globals_from_state(state: dict[str, Any]) -> None:
     """Restore module-level session globals from a state bag mutated by the orchestrator."""
     global apisession, mistapi, msp_privileges, selected_msp, org_id  # Globals we may rebind
     logging.debug("_restore_session_globals_from_state: restoring 5 module globals")  # Log before restore
@@ -2436,7 +2451,7 @@ def _restore_session_globals_from_state(state: dict) -> None:
 # per initiative 1011 SC-023 (FR-003: no wrapper shim; FR-005: fn->method).
 
 
-def _print_switch_login_header():
+def _print_switch_login_header() -> None:
     """Display switch to interactive login header and benefits."""
     logging.debug("Entering _print_switch_login_header()")  # Trace entry for debugging
     logging.warning("")  # Legacy console echo routed via logger.
@@ -2464,7 +2479,7 @@ def _print_switch_login_header():
         logging.warning("")  # Legacy console echo routed via logger.
 
 
-def _attempt_interactive_login_with_rollback(old_session, old_org_id) -> bool:
+def _attempt_interactive_login_with_rollback(old_session: Any, old_org_id: str | None) -> bool:
     """Clear session and attempt interactive login with rollback on failure.
 
     Returns:
@@ -2496,7 +2511,7 @@ def _attempt_interactive_login_with_rollback(old_session, old_org_id) -> bool:
     return True  # Signal success to the caller
 
 
-def _handle_interactive_login_success():
+def _handle_interactive_login_success() -> None:
     """Handle successful interactive login - display status and select MSP/org."""
     logging.debug("Entering _handle_interactive_login_success()")  # Trace entry for debugging
     logging.warning("")  # Legacy console echo routed via logger.
@@ -2860,14 +2875,14 @@ def _try_single_session_kwargs(
 def _execute_session_attempts(
     apisession_cls: Any,
     attempts: list[dict[str, str]],
-) -> tuple[Any, Any, bool, list[dict]]:
+) -> tuple[Any, Any, bool, list[str]]:
     """Try each kwargs dict until one constructs a valid APISession; track rate-limit signal."""
-    tried_variants: list[dict] = []  # Track all attempted kwargs for error reporting on total failure
+    tried_variants: list[str] = []  # Track all attempted kwargs for error reporting on total failure
     successful_method: Any = None  # Will hold the kwargs dict that succeeded
     rate_limit_detected = False  # Set True if NoneType rate-limit error signature is seen
     session: Any = None  # Will hold the created APISession object on success
     for i, kwargs in enumerate(attempts, start=1):  # Try each kwargs dict in priority order
-        tried_variants.append(kwargs)  # Record attempt before trying (in case of exception)
+        tried_variants.append(str(list(kwargs.keys())))  # Record attempt as string of keys before trying
         session, attempt_rate_limit = _try_single_session_kwargs(
             apisession_cls, kwargs, i, len(attempts)
         )  # Try one kwargs dict; capture rate-limit signal
@@ -3010,7 +3025,7 @@ def _ensure_mist_get_method(session: Any) -> bool:
         return True  # Session is compatible as-is
     if hasattr(session, "get") and callable(session.get):  # Alternate method found -- bind a compat callable
 
-        def _mist_get_impl(*args, **kwargs):  # Closure binds `session` and implements mist_get on top of get().
+        def _mist_get_impl(*args: Any, **kwargs: Any) -> Any:  # Closure binds `session` and implements mist_get on top of get().
             return session.get(*args, **kwargs)  # Forward to the session's native get() with identical signature.
 
         session.mist_get = _mist_get_impl  # Attach the closure so callers can use mist_get uniformly.
@@ -3090,7 +3105,7 @@ def _validate_initialized_session(session: Any, successful_method: Any) -> bool:
     return True  # Session passed all checks -- ready for API calls
 
 
-def _attempt_all_session_strategies(apisession_cls, sig_params, tokens, host, mistapi_mod):
+def _attempt_all_session_strategies(apisession_cls: type[Any], sig_params: list[str], tokens: list[str], host: str, mistapi_mod: Any) -> tuple[Any, dict[str, Any] | None, list[str]]:
     """Try APISession kwargs, then filtered-token retry, then legacy Session(). Returns (session, method, tried)."""
     attempts = _build_session_attempts(apisession_cls, sig_params, tokens, host)  # Ordered kwargs candidates
     session_obj, method, rate_limited, tried = _execute_session_attempts(apisession_cls, attempts)  # First wave
@@ -3101,7 +3116,7 @@ def _attempt_all_session_strategies(apisession_cls, sig_params, tokens, host, mi
     return session_obj, method, tried  # Caller validates / logs / patches
 
 
-def _log_failed_session_variants(tried_variants) -> None:
+def _log_failed_session_variants(tried_variants: list[str]) -> None:
     """Log every kwargs variant that failed (operator debugging on total init failure)."""
     logging.error("All Mist API session initialization attempts failed. Variants tried:")
     for variant in tried_variants:  # One log line per variant for clarity
@@ -3120,11 +3135,11 @@ def _install_default_request_timeout(inner_session: Any) -> None:
     class TimeoutAdapter(HTTPAdapter):  # Nested so we don't expose a public adapter class
         """HTTPAdapter that injects a default timeout."""
 
-        def __init__(self, default_timeout: int, **kwargs):  # Capture the project-wide timeout default
+        def __init__(self, default_timeout: int, **kwargs: Any) -> None:  # Capture the project-wide timeout default
             self.default_timeout = default_timeout  # Reused when send() gets timeout=None
             super().__init__(**kwargs)  # Real adapter setup (connection pool, retries)
 
-        def send(self, request, stream=False, timeout=None, verify=True, cert=None, proxies=None):
+        def send(self, request: Any, stream: Any = False, timeout: Any = None, verify: Any = True, cert: Any = None, proxies: Any = None) -> Any:
             if timeout is None:  # Caller did not supply a per-call timeout -- substitute our default
                 timeout = self.default_timeout
             # Issue #431: forward args verbatim; signature must match parent for adapter contract.
@@ -3371,7 +3386,7 @@ from src.ui.prompt_utils import PromptUtils  # noqa: E402,F401  # T-07 re-export
 # ============================================================================
 
 
-def _get_duc_instance():  # Build DeviceUtilityCommands.
+def _get_duc_instance() -> "DeviceUtilityCommands":  # Build DeviceUtilityCommands.
     """Create DeviceUtilityCommands instance with MistHelper globals."""
     from src.device.utility_commands import (  # Import the extracted class + deps.
         DeviceUtilityCommands as _DUC,
@@ -3439,7 +3454,7 @@ def _get_duc_instance():  # Build DeviceUtilityCommands.
 # override subsystem) before the canonical class methods execute.
 
 
-def _build_gateway_export_kwargs() -> dict:
+def _build_gateway_export_kwargs() -> dict[str, Any]:
     """Build the kwargs dict passed to configure_gateway_export_utils_dependencies()."""
     return dict(  # Single dependency-wiring payload assembled in one place.
         apisession_dependency=apisession,  # Live mistapi session.
@@ -4588,13 +4603,13 @@ menu_actions: "dict[str, tuple[Callable[..., Any], str]]" = {
     "25": (AuditAnalysisOps.audit_log_analysis, "Audit Log Analysis - Mermaid timeline + interactive HTML report"),
     "186": (CacheUtils.clear_cache, "Clear CSV Cache Files (delete all generated cache CSVs)"),
     "58": (
-        lambda: OrgConfigMigrationManager(
+        lambda: cast(Any, OrgConfigMigrationManager)(
             apisession, ConfigUtils.get_cached_or_prompted_org_id, InputUtils.safe_input
         ).export_config(),
         "Export Org WAN/Gateway Config (JSON bundle for cross-org migration)",
     ),
     "187": (
-        lambda: OrgConfigMigrationManager(
+        lambda: cast(Any, OrgConfigMigrationManager)(
             apisession, ConfigUtils.get_cached_or_prompted_org_id, InputUtils.safe_input
         ).import_config(),
         "Import Org WAN/Gateway Config (cross-org migration with conflict detection)",
@@ -4827,7 +4842,7 @@ def _resolve_systematic_test_invoke_kwargs(func: Any, fast_enabled: bool) -> dic
 
 
 def _invoke_one_systematic_test(
-    emitter: Any, case: SystematicTestOption, invoke_kwargs: dict, op_start: float
+    emitter: Any, case: SystematicTestOption, invoke_kwargs: dict[str, Any], op_start: float
 ) -> tuple[bool, float]:
     """Call one menu func with the resolved kwargs; record pass/fail in telemetry and return (success, duration)."""
     option, func, description = case.option, case.func, case.description  # Unpack identity (issue #470)
@@ -4901,7 +4916,7 @@ def _systematic_test_resolve_fast_mode() -> bool:
     return False  # Neither source enabled fast mode.
 
 
-def _print_systematic_banner():
+def _print_systematic_banner() -> None:
     """Print the test-start banner + timestamp + separator to the operator console."""
     logging.warning(" Starting systematic test of MistHelper menu options...")  # Legacy console echo routed via logger.
     logging.warning(
@@ -4929,7 +4944,7 @@ _SYSTEMATIC_TEST_OPTIMIZED_ORDER = [  # Shortest-running operations first to sur
 ]
 
 
-def _build_systematic_test_options():
+def _build_systematic_test_options() -> tuple[list[str], list[str], list[str]]:
     """Compute the safe/unsafe option lists in optimized execution order.
 
     Returns:
@@ -4944,7 +4959,7 @@ def _build_systematic_test_options():
     return safe_options, unsafe_list, all_options
 
 
-def _print_systematic_pre_run_counts(all_options, safe_options, unsafe_list):
+def _print_systematic_pre_run_counts(all_options: list[str], safe_options: list[str], unsafe_list: list[str]) -> None:
     """Print the total / safe / unsafe option counts before the test loop runs."""
     logging.warning("! Found %d total menu options", len(all_options))  # Legacy console echo routed via logger.
     logging.warning("! %d safe options will be tested", len(safe_options))  # Legacy console echo routed via logger.
@@ -4952,7 +4967,7 @@ def _print_systematic_pre_run_counts(all_options, safe_options, unsafe_list):
     logging.warning("")  # Legacy console echo routed via logger.
 
 
-def _initialize_systematic_telemetry(unsafe_list):
+def _initialize_systematic_telemetry(unsafe_list: list[str]) -> tuple["TelemetryEmitter", str, int]:
     """Open the timestamped telemetry emitter and emit skip events. Return (emitter, path, skip_count)."""
     telemetry_path = TelemetryEmitter.timestamped_path(
         "data"
@@ -4964,7 +4979,7 @@ def _initialize_systematic_telemetry(unsafe_list):
     return emitter, telemetry_path, skip_count
 
 
-def _resolve_systematic_test_context():
+def _resolve_systematic_test_context() -> bool:
     """Resolve module-level org_id and the fast-mode flag once before the test loop."""
     global org_id  # Access module-level org_id so tests inherit the resolved org context.
     if not org_id:  # Resolve org_id once before the test loop so every option shares the same org.
@@ -4972,7 +4987,7 @@ def _resolve_systematic_test_context():
     return _systematic_test_resolve_fast_mode()  # Resolve fast-mode flag once for the loop.
 
 
-def _execute_systematic_test_loop(emitter, safe_options, fast_enabled):
+def _execute_systematic_test_loop(emitter: "TelemetryEmitter", safe_options: list[str], fast_enabled: bool) -> tuple[int, int]:
     """Iterate safe options through the runner, counting successes/failures."""
     logging.warning(" Testing safe operations:")  # Legacy console echo routed via logger.
     success_count = 0  # Track how many options completed without raising.
@@ -4991,14 +5006,14 @@ def _execute_systematic_test_loop(emitter, safe_options, fast_enabled):
     return success_count, error_count
 
 
-def _finalize_systematic_telemetry(emitter, summary):
+def _finalize_systematic_telemetry(emitter: "TelemetryEmitter", summary: TestSummary) -> None:
     """Emit the final summary event, close the telemetry file, and enforce retention."""
     emitter.emit_test_summary(summary)  # Emit aggregate telemetry summary.
     emitter.close()  # Flush and close telemetry file before printing summary.
     emitter.enforce_retention()  # Clean up old telemetry files per configured retention policy.
 
 
-def _print_systematic_summary(summary, telemetry_path):
+def _print_systematic_summary(summary: TestSummary, telemetry_path: str) -> None:
     """Print the human-readable summary block (totals, coverage %, paths)."""
     logging.warning("")  # Legacy console echo routed via logger.
     logging.warning("=" * 80)  # Legacy console echo routed via logger.
@@ -5015,7 +5030,7 @@ def _print_systematic_summary(summary, telemetry_path):
     logging.warning("   Detailed logs in: script.log")  # Legacy console echo routed via logger.
 
 
-def _report_systematic_outcome(success_count, error_count, safe_count, total_time):
+def _report_systematic_outcome(success_count: int, error_count: int, safe_count: int, total_time: float) -> bool:
     """Emit the final all-pass / partial-failure message and return the boolean result."""
     if error_count == 0:  # All-pass outcome deserves an explicit success message.
         logging.warning("   All tested operations completed successfully!")  # Legacy console echo routed via logger.
@@ -5687,7 +5702,7 @@ def _dispatch_cli_menu_action(args: argparse.Namespace, site_id: str | None, dev
     sys.exit(0)  # Clean exit after successful CLI execution.
 
 
-def _build_cli_func_kwargs(args: argparse.Namespace, site_id: str | None, device_id: str | None) -> dict:
+def _build_cli_func_kwargs(args: argparse.Namespace, site_id: str | None, device_id: str | None) -> dict[str, Any]:
     """Build the candidate kwargs dict used to call a menu function in CLI mode."""
     return {
         "site_id": site_id,  # Pass resolved site ID (or None if not provided).
@@ -5793,7 +5808,7 @@ def _handle_interactive_invalid_selection(iwant: str, container_mode: bool) -> N
     logging.debug("Container mode: invalid selection '%s', redisplaying menu", iwant)  # Log container invalid.
 
 
-def _execute_interactive_menu_action(iwant: str, func, container_mode: bool) -> None:
+def _execute_interactive_menu_action(iwant: str, func: Callable[[], None], container_mode: bool) -> None:
     """Run the selected menu function with full error handling (success, Ctrl+C, exception)."""
     try:
         if iwant == "0":  # Option 0 is the explicit exit shortcut.
@@ -5943,7 +5958,7 @@ if __name__ == "__main__":
             pass
 
         # Install a global exception hook early so we capture full tracebacks for unexpected issues
-        def _global_excepthook(exc_type, exc_value, exc_traceback):
+        def _global_excepthook(exc_type: type[BaseException], exc_value: BaseException, exc_traceback: types.TracebackType | None) -> None:
             try:
                 import traceback as _tb
 
