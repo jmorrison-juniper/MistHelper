@@ -33,9 +33,13 @@ dependencies = [
     "sshkeyboard>=2.3.0",
     
     # Data processing
-    "numpy>=1.24.0",
+    "numpy",
+    "matplotlib",
     "python-dotenv>=1.0.0",
     
+    # SSH client
+    "paramiko",
+
     # Terminal emulation for SSH operations
     "pyte>=0.8.0",
     

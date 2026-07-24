@@ -167,8 +167,7 @@ class AuthenticatedScraper:
 
     def extract_data(self, page):
         """Extract all idea data from the current page via JS."""
-        return page.evaluate(
-            """() => {
+        return page.evaluate("""() => {
             const title_element = document.querySelector('h1.uvIdeaTitle');
             const title = title_element ? title_element.textContent.trim() : '';
 
@@ -209,8 +208,7 @@ class AuthenticatedScraper:
                 submitter, submitter_url, submit_date, tags, comments,
                 current_url: window.location.href,
             };
-        }"""
-        )
+        }""")
 
     def save_to_csv(self, row):
         """Append a row to CSV."""

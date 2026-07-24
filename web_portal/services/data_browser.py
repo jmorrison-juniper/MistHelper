@@ -9,7 +9,6 @@ import math
 import os
 import sqlite3
 
-
 ALLOWED_EXTENSIONS = {".csv", ".db", ".sqlite", ".log", ".json"}
 
 

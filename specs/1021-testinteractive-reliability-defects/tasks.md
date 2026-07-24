@@ -147,7 +147,7 @@ All automated regressions are mock-first and must make no Mist write or mutating
 
 **Purpose**: Confirm the six merged issue regressions collectively satisfy Story 7. This phase creates no implementation branch, no new PR, and no new standalone test work; every defect's test authoring remains in its own issue phase above.
 
-- [ ] T054 Re-run the cumulative mock-first regression suite in `tests/unit/troubleshooting/test_interactive_test_runner.py`, `tests/unit/analytics/test_telemetry_emitter.py`, `tests/unit/export/test_wan_client_events_exporter.py`, and `tests/unit/refactors/test_main_entrypoint.py`; run `python -m py_compile MistHelper.py`; verify `data/` contains no escaped, credential-bearing, or commit-bound artifacts.
+- [x] T054 Re-run the cumulative mock-first regression suite in `tests/unit/troubleshooting/test_interactive_test_runner.py`, `tests/unit/analytics/test_telemetry_emitter.py`, `tests/unit/export/test_wan_client_events_exporter.py`, and `tests/unit/refactors/test_main_entrypoint.py`; run `python -m py_compile MistHelper.py`; verify `data/` contains no escaped, credential-bearing, or commit-bound artifacts.
 
 ---
 

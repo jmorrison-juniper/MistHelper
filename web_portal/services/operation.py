@@ -13,7 +13,6 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Optional
 
-
 CATEGORY_RANGES = [
     (1, 4, "Core Organization"),
     (5, 8, "WebSocket Device Commands"),
