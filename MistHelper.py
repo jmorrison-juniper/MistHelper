@@ -48,10 +48,12 @@ import subprocess  # nosec B404  # Injected into src/bootstrap/PackageInstaller 
 import time  # Import time for rate limiting, delays, and performance monitoring
 import traceback  # Import traceback for detailed exception context in error logs
 import types  # Import types for type annotations (TracebackType)
+from collections.abc import (
+    Callable,  # Callable protocol for typed function references
+    Iterable,  # Type hints for static analysis
+)
 from datetime import datetime  # Import datetime for timestamping logs and events
-from typing import TYPE_CHECKING, Any, Iterable, NoReturn, TextIO, cast  # Type hints for static analysis
-
-from collections.abc import Callable  # Callable protocol for typed function references
+from typing import TYPE_CHECKING, Any, NoReturn, TextIO, cast
 
 from src.utils.subprocess_runner import (  # Centralized subprocess dispatch + exception re-exports (initiative 1016).
     SubprocessError,  # Base class for subprocess errors (parent of TimeoutExpired/CalledProcessError).
@@ -82,7 +84,7 @@ try:  # Attempt to import polyglot database layer for ArangoDB/Redis export back
     from src.db.router import DatabaseRouter as _DatabaseRouterImpl
 
     DatabaseConfig: type[_DatabaseConfigImpl] | None = _DatabaseConfigImpl  # Class reference for DB config construction
-    configure_db_logging: "Callable[[], None] | None" = _configure_db_logging_impl  # Logging setup callable
+    configure_db_logging: Callable[[], None] | None = _configure_db_logging_impl  # Logging setup callable
     DatabaseRouter: type[_DatabaseRouterImpl] | None = _DatabaseRouterImpl  # Class reference for DB router construction
     DB_LAYER_AVAILABLE = True  # Set flag indicating database backends are available for export operations
 except ImportError:  # If database dependencies (python-arango, redis) not installed, gracefully disable
@@ -846,7 +848,7 @@ def _pad_version_tuples(
 
 
 # Operator symbol -> comparison predicate; dict dispatch keeps _version_satisfies flat (no if/elif chain).
-_VERSION_COMPARATORS: "dict[str, Callable[[tuple[int, ...], tuple[int, ...]], bool]]" = {
+_VERSION_COMPARATORS: dict[str, Callable[[tuple[int, ...], tuple[int, ...]], bool]] = {
     ">=": lambda installed, required: installed >= required,  # 'at least' constraint
     ">": lambda installed, required: installed > required,  # 'strictly newer' constraint
     "<=": lambda installed, required: installed <= required,  # 'at most' constraint
@@ -921,7 +923,7 @@ def _parse_requirement_line(line: str) -> tuple[str, str] | None:  # Parse one r
     return (package_name, stripped)  # (name, full spec including any version constraint)
 
 
-def _parse_requirements_file(filepath: str = "requirements.txt") -> list[tuple[str, str]]:  # Read dependency specs from requirements.txt
+def _parse_requirements_file(filepath: str = "requirements.txt") -> list[tuple[str, str]]:
     """Parse requirements.txt into a list of (package_name, package_spec) tuples.
 
     SECURITY: only reads requirements.txt (no arbitrary file access); skips comments/blanks/dev deps.
@@ -1024,7 +1026,7 @@ except ImportError as _pt_err:  # Required dependency is missing
 try:  # numpy is optional (only some analytics need it)
     import numpy as _np_impl  # Numerical arrays for analytics calculations
 
-    np: "ModuleType | None" = _np_impl  # Union type lets guards detect absence
+    np: ModuleType | None = _np_impl  # Union type lets guards detect absence
 except ImportError:  # numpy not installed
     np = None  # None lets runtime guards detect absence
 
@@ -1062,14 +1064,14 @@ except ImportError as _req_err:  # Required dependency is missing
 try:  # urllib3 is optional (used to suppress noisy SSL warnings)
     import urllib3 as _urllib3_impl  # Low-level HTTP library underlying requests
 
-    urllib3: "ModuleType | None" = _urllib3_impl  # Union type lets guards detect absence
+    urllib3: ModuleType | None = _urllib3_impl  # Union type lets guards detect absence
 except ImportError:  # urllib3 not installed
     urllib3 = None  # None lets guards detect absence
 
 try:  # pyte is optional (terminal emulation for parsing WebSocket output)
     import pyte as _pyte_impl  # In-memory terminal emulator to render device CLI screens
 
-    pyte: "ModuleType | None" = _pyte_impl  # Union type lets guards detect absence
+    pyte: ModuleType | None = _pyte_impl  # Union type lets guards detect absence
     _has_pyte = True  # Flag that terminal-emulation features are available
 except ImportError:  # pyte not installed
     pyte = None  # None lets guards detect absence
@@ -1080,7 +1082,7 @@ try:  # paramiko is optional (used for direct SSH operations)
     from paramiko import RejectPolicy as _RejectPolicyImpl  # Strict host-key policy  # type: ignore[import-untyped]
     from paramiko import SSHClient as _SSHClientImpl  # SSH client class
 
-    paramiko: "ModuleType | None" = _paramiko_impl  # Union type lets guards detect absence
+    paramiko: ModuleType | None = _paramiko_impl  # Union type lets guards detect absence
     SSHClient: type[_SSHClientImpl] | None = _SSHClientImpl  # Class handle for guarded use
     RejectPolicy: type[_RejectPolicyImpl] | None = _RejectPolicyImpl  # Class handle for guarded use
 except ImportError:  # paramiko not installed
@@ -1097,7 +1099,7 @@ except ImportError:  # scourgify not installed
 try:  # rapidfuzz is optional (fast fuzzy string matching)
     from rapidfuzz import fuzz as _fuzz_impl  # High-performance fuzzy match scoring
 
-    fuzz: "ModuleType | None" = _fuzz_impl  # Union type lets guards detect absence
+    fuzz: ModuleType | None = _fuzz_impl  # Union type lets guards detect absence
 except ImportError:  # rapidfuzz not installed
     fuzz = None  # None lets callers skip fuzzy matching
 
@@ -1164,7 +1166,7 @@ def _fallback_load_dotenv() -> None:  # Minimal .env parser used when python-dot
 try:  # Prefer the full-featured python-dotenv loader when available
     from dotenv import load_dotenv as _load_dotenv_impl  # Robust .env parser from python-dotenv
 
-    load_dotenv: "Callable[..., object]" = _load_dotenv_impl  # Common signature: no-arg call, ignored return
+    load_dotenv: Callable[..., object] = _load_dotenv_impl  # Common signature: no-arg call, ignored return
     DOTENV_AVAILABLE = True  # Flag that the real loader is in use
     load_dotenv()  # Load .env now so config is available to the import manager
 except ImportError:  # python-dotenv not installed
@@ -1893,7 +1895,13 @@ class GlobalImportManager:
         external_packages = {k: v for k, v in packages_dict.items() if v is not None}  # Has spec -> needs install
         return builtin_packages, external_packages  # Return the two cohesive groups for separate processing
 
-    def _import_single_dependency(self, package_info: tuple[str, str | None], required: bool, skip_deps: bool, log_lock: Any) -> tuple[str, bool]:
+    def _import_single_dependency(
+        self,
+        package_info: tuple[str, str | None],
+        required: bool,
+        skip_deps: bool,
+        log_lock: Any,
+    ) -> tuple[str, bool]:
         """Import one package and log its check and outcome under the shared thread lock."""
         module_name, package_spec = package_info  # Unpack the (name, spec) tuple for this worker
         package_type = "required" if required else "optional"  # Label used in user-facing log lines
@@ -1918,23 +1926,41 @@ class GlobalImportManager:
         else:  # Optional dependency missing
             logging.warning("  [WARN] %s: Not available", module_name)  # Log a soft warning
 
-    def _import_external_dependencies(self, external_packages: dict[str, str], required: bool, skip_deps: bool, log_lock: Any, max_workers: int) -> list[tuple[str, bool]]:
+    def _import_external_dependencies(
+        self,
+        external_packages: dict[str, str],
+        required: bool,
+        skip_deps: bool,
+        log_lock: Any,
+        max_workers: int,
+    ) -> list[tuple[str, bool]]:
         """Import external packages concurrently with a bounded thread pool."""
-        logging.debug("_import_external_dependencies: importing %d external packages", len(external_packages))  # Log
-        results: list[tuple[str, bool]] = []  # Accumulate successful import results
-        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:  # Bounded import worker pool
-            future_to_package: dict[concurrent.futures.Future[tuple[str, bool]], tuple[str, str | None]] = {  # Map each submitted future back to its source package
+        logging.debug(
+            "_import_external_dependencies: importing %d external packages",
+            len(external_packages),
+        )
+        results: list[tuple[str, bool]] = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_package: dict[concurrent.futures.Future[tuple[str, bool]], tuple[str, str | None]] = {
                 executor.submit(self._import_single_dependency, item, required, skip_deps, log_lock): item
-                for item in external_packages.items()  # Schedule every external import
+                for item in external_packages.items()
             }
-            for future in concurrent.futures.as_completed(future_to_package):  # Process results as imports finish
-                result = self._collect_import_result(future, future_to_package, log_lock)  # Handle this future's outcome
+            for future in concurrent.futures.as_completed(future_to_package):
+                result = self._collect_import_result(future, future_to_package, log_lock)
                 if result:  # Result collection succeeded
                     results.append(result)  # Add to accumulated results
         return results  # Return all successfully collected results
 
-    def _collect_import_result(self, future: concurrent.futures.Future[tuple[str, bool]], future_to_package: dict[concurrent.futures.Future[tuple[str, bool]], tuple[str, str | None]], log_lock: Any) -> tuple[str, bool] | None:
-        """Retrieve one import future's result, logging any worker exception under the lock. Returns the result if successful."""
+    def _collect_import_result(
+        self,
+        future: concurrent.futures.Future[tuple[str, bool]],
+        future_to_package: dict[concurrent.futures.Future[tuple[str, bool]], tuple[str, str | None]],
+        log_lock: Any,
+    ) -> tuple[str, bool] | None:
+        """Retrieve one import future's result, logging any exception under the lock.
+
+        Returns the result if successful, None on exception.
+        """
         package_info = future_to_package[future]  # Recover which package this future handled
         try:
             result: tuple[str, bool] = future.result()  # Retrieve the worker's return value (re-raises worker errors)
@@ -1944,7 +1970,13 @@ class GlobalImportManager:
                 logging.error("Package %s import generated an exception: %s", package_info[0], exc)  # Log the failure
             return None  # Signal failure to caller
 
-    def _import_packages_concurrently(self, packages_dict: dict[str, str | None], required: bool = True, skip_deps: bool = False, max_workers: int = 4) -> None:
+    def _import_packages_concurrently(
+        self,
+        packages_dict: dict[str, str | None],
+        required: bool = True,
+        skip_deps: bool = False,
+        max_workers: int = 4,
+    ) -> None:
         """
         Import packages concurrently for faster dependency resolution.
 
@@ -2007,7 +2039,7 @@ class GlobalImportManager:
             self._hoist_module_globals(module_name, module_obj)  # Hoist any commonly-used attributes for it
         logging.debug("Successfully made imported modules available globally")  # Confirm the global wiring completed
 
-    def _hoist_module_globals(self, module_name: str, module_obj: Any) -> None:  # Hoist known helper attributes into globals
+    def _hoist_module_globals(self, module_name: str, module_obj: Any) -> None:
         """Hoist commonly-used attributes of a known module into globals (data-driven, with optional-pkg cases)."""
         simple_hoists = self._SIMPLE_GLOBAL_HOISTS.get(module_name)  # Lookup the simple hoist list for this module
         if simple_hoists:  # This module has a fixed set of attributes to hoist
@@ -2018,14 +2050,14 @@ class GlobalImportManager:
             self._hoist_rapidfuzz_global(module_obj)  # Bind its fuzz submodule (with direct-import fallback)
 
     @staticmethod
-    def _apply_simple_hoists(module_obj: Any, hoists: list[tuple[str, str | None]]) -> None:  # Bind a module's fixed (global_name, attr) pairs into globals
+    def _apply_simple_hoists(module_obj: Any, hoists: list[tuple[str, str | None]]) -> None:
         """Bind each (global_name, attr_name) pair: attr None binds the module object, else getattr(module, attr)."""
         for global_name, attr_name in hoists:  # Apply each configured binding for this module
             value = module_obj if attr_name is None else getattr(module_obj, attr_name, None)  # Module or its attribute
             globals()[global_name] = value  # Bind the resolved value into the real module globals
 
     @staticmethod
-    def _hoist_scourgify_global(module_obj: Any) -> None:  # Bind scourgify's normalize_address_record into globals
+    def _hoist_scourgify_global(module_obj: Any) -> None:
         """Hoist scourgify.normalize_address_record into globals, importing it directly when not an attribute."""
         if not module_obj:  # Package did not load
             return  # Nothing to hoist
@@ -2040,7 +2072,7 @@ class GlobalImportManager:
             logging.debug("Could not import normalize_address_record from scourgify, using fallback")  # Note fallback
 
     @staticmethod
-    def _hoist_rapidfuzz_global(module_obj: Any) -> None:  # Bind rapidfuzz's fuzz submodule into globals
+    def _hoist_rapidfuzz_global(module_obj: Any) -> None:
         """Hoist rapidfuzz.fuzz into globals, importing it directly when not an attribute."""
         if not module_obj:  # Package did not load
             return  # Nothing to hoist
@@ -2059,7 +2091,7 @@ class GlobalImportManager:
         self._install_ssh_fallbacks(global_vars)  # paramiko/redexpect shims that fail loudly with install guidance
 
     @staticmethod
-    def _install_scourgify_fallback(global_vars: dict[str, Any]) -> None:  # Install the scourgify normalize fallback when absent
+    def _install_scourgify_fallback(global_vars: dict[str, Any]) -> None:
         """When normalize_address_record is missing, install a shim returning the raw string with empty fields."""
         if global_vars.get("normalize_address_record") is not None:  # A real normalizer is already present
             return  # No fallback needed
@@ -2098,7 +2130,7 @@ class GlobalImportManager:
         global_vars["fuzz"] = FuzzFallback()  # Install the fuzzy-match shim under the expected name
 
     @classmethod
-    def _install_ssh_fallbacks(cls, global_vars: dict[str, Any]) -> None:  # Install paramiko/redexpect shims that fail loudly when used
+    def _install_ssh_fallbacks(cls, global_vars: dict[str, Any]) -> None:
         """Install paramiko and redexpect shims that raise ImportError with install guidance when accessed."""
         cls._install_paramiko_fallback(global_vars)  # SSH client shim when paramiko is absent
         cls._install_redexpect_fallback(global_vars)  # SSH automation shim when redexpect is absent
@@ -3025,7 +3057,7 @@ def _ensure_mist_get_method(session: Any) -> bool:
         return True  # Session is compatible as-is
     if hasattr(session, "get") and callable(session.get):  # Alternate method found -- bind a compat callable
 
-        def _mist_get_impl(*args: Any, **kwargs: Any) -> Any:  # Closure binds `session` and implements mist_get on top of get().
+        def _mist_get_impl(*args: Any, **kwargs: Any) -> Any:
             return session.get(*args, **kwargs)  # Forward to the session's native get() with identical signature.
 
         session.mist_get = _mist_get_impl  # Attach the closure so callers can use mist_get uniformly.
@@ -3105,7 +3137,13 @@ def _validate_initialized_session(session: Any, successful_method: Any) -> bool:
     return True  # Session passed all checks -- ready for API calls
 
 
-def _attempt_all_session_strategies(apisession_cls: type[Any], sig_params: list[str], tokens: list[str], host: str, mistapi_mod: Any) -> tuple[Any, dict[str, Any] | None, list[str]]:
+def _attempt_all_session_strategies(
+    apisession_cls: type[Any],
+    sig_params: list[str],
+    tokens: list[str],
+    host: str,
+    mistapi_mod: Any,
+) -> tuple[Any, dict[str, Any] | None, list[str]]:
     """Try APISession kwargs, then filtered-token retry, then legacy Session(). Returns (session, method, tried)."""
     attempts = _build_session_attempts(apisession_cls, sig_params, tokens, host)  # Ordered kwargs candidates
     session_obj, method, rate_limited, tried = _execute_session_attempts(apisession_cls, attempts)  # First wave
@@ -3139,7 +3177,15 @@ def _install_default_request_timeout(inner_session: Any) -> None:
             self.default_timeout = default_timeout  # Reused when send() gets timeout=None
             super().__init__(**kwargs)  # Real adapter setup (connection pool, retries)
 
-        def send(self, request: Any, stream: Any = False, timeout: Any = None, verify: Any = True, cert: Any = None, proxies: Any = None) -> Any:
+        def send(
+            self,
+            request: Any,
+            stream: Any = False,
+            timeout: Any = None,
+            verify: Any = True,
+            cert: Any = None,
+            proxies: Any = None,
+        ) -> Any:
             if timeout is None:  # Caller did not supply a per-call timeout -- substitute our default
                 timeout = self.default_timeout
             # Issue #431: forward args verbatim; signature must match parent for adapter contract.
@@ -3386,7 +3432,7 @@ from src.ui.prompt_utils import PromptUtils  # noqa: E402,F401  # T-07 re-export
 # ============================================================================
 
 
-def _get_duc_instance() -> "DeviceUtilityCommands":  # Build DeviceUtilityCommands.
+def _get_duc_instance() -> DeviceUtilityCommands:  # Build DeviceUtilityCommands.
     """Create DeviceUtilityCommands instance with MistHelper globals."""
     from src.device.utility_commands import (  # Import the extracted class + deps.
         DeviceUtilityCommands as _DUC,
@@ -3770,7 +3816,7 @@ def _ws_cmd_deps() -> WebSocketCmdDeps:
 # src/audit/audit_analysis_ops.py (issue #1013 SC-001 position 12)
 
 
-menu_actions: "dict[str, tuple[Callable[..., Any], str]]" = {
+menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     # ==============================
     # SYSTEM OPERATIONS
     # ==============================
@@ -4967,7 +5013,7 @@ def _print_systematic_pre_run_counts(all_options: list[str], safe_options: list[
     logging.warning("")  # Legacy console echo routed via logger.
 
 
-def _initialize_systematic_telemetry(unsafe_list: list[str]) -> tuple["TelemetryEmitter", str, int]:
+def _initialize_systematic_telemetry(unsafe_list: list[str]) -> tuple[TelemetryEmitter, str, int]:
     """Open the timestamped telemetry emitter and emit skip events. Return (emitter, path, skip_count)."""
     telemetry_path = TelemetryEmitter.timestamped_path(
         "data"
@@ -4987,7 +5033,9 @@ def _resolve_systematic_test_context() -> bool:
     return _systematic_test_resolve_fast_mode()  # Resolve fast-mode flag once for the loop.
 
 
-def _execute_systematic_test_loop(emitter: "TelemetryEmitter", safe_options: list[str], fast_enabled: bool) -> tuple[int, int]:
+def _execute_systematic_test_loop(
+    emitter: TelemetryEmitter, safe_options: list[str], fast_enabled: bool
+) -> tuple[int, int]:
     """Iterate safe options through the runner, counting successes/failures."""
     logging.warning(" Testing safe operations:")  # Legacy console echo routed via logger.
     success_count = 0  # Track how many options completed without raising.
@@ -5006,7 +5054,7 @@ def _execute_systematic_test_loop(emitter: "TelemetryEmitter", safe_options: lis
     return success_count, error_count
 
 
-def _finalize_systematic_telemetry(emitter: "TelemetryEmitter", summary: TestSummary) -> None:
+def _finalize_systematic_telemetry(emitter: TelemetryEmitter, summary: TestSummary) -> None:
     """Emit the final summary event, close the telemetry file, and enforce retention."""
     emitter.emit_test_summary(summary)  # Emit aggregate telemetry summary.
     emitter.close()  # Flush and close telemetry file before printing summary.
@@ -5958,7 +6006,11 @@ if __name__ == "__main__":
             pass
 
         # Install a global exception hook early so we capture full tracebacks for unexpected issues
-        def _global_excepthook(exc_type: type[BaseException], exc_value: BaseException, exc_traceback: types.TracebackType | None) -> None:
+        def _global_excepthook(
+            exc_type: type[BaseException],
+            exc_value: BaseException,
+            exc_traceback: types.TracebackType | None,
+        ) -> None:
             try:
                 import traceback as _tb
 
