@@ -642,28 +642,25 @@ def _merge_zcc_criticals_into_tests(
     combined_probes: dict[str, dict[str, Any]],
     vlan_ids: list[int],
 ) -> list[dict[str, Any]]:
-    """Merge tool-authored critical probe names into an existing ``tests[]`` row.
+    """Emit one ``tests[]`` row per critical tool-authored probe.
 
     Why:
-        Mist's ``synthetic_test.tests[]`` is a list of scheduled probe
-        groupings, each with its own ``probes[]``, ``vlan_ids[]``, and
-        optional ``lan_networks[]`` / ``name``. Verified against a live
-        org config 2026-07-24: Mist itself emits a single nameless row
-        that co-schedules its system ``mini-*`` probes under one
-        ``probes`` list. Appending a *separate* tool-authored row (as an
-        earlier iteration of this module did) leaves the tool's critical
-        probes in a sibling row that operators perceive as "wrong shape"
-        and that duplicates VLAN context. Instead we merge the
-        tool-authored critical probe *names* INTO the first foreign row's
-        ``probes`` list -- preserving that row's ``vlan_ids``,
-        ``lan_networks``, ``name``, and any other keys -- so the
-        resulting config has one unified row that lists every scheduled
-        probe together. On re-run we strip any stale ``zcc-*`` name from
-        every row (in case a prior injection targeted a different row or
-        a since-removed critical probe left a stale reference) before
-        re-injecting the current curated set, keeping the operation
-        idempotent. If no foreign row exists, a bare row is fabricated so
-        the criticals still get scheduled.
+        Verified against a live Mist ``GET /orgs/{id}/setting`` response
+        2026-07-24: Mist itself emits one ``tests[]`` row per probe --
+        each row's ``probes`` list contains exactly one probe name and
+        the row carries its own ``vlan_ids`` / ``lan_networks`` copy.
+        Both the system ``mini-*`` rows and any operator-scheduled probes
+        follow this per-probe-per-row convention. Prior iterations of
+        this module (a) appended a single tool-authored aggregate row
+        named ``zcc-critical-probes`` and (b) merged all tool criticals
+        into a single foreign row's ``probes`` list -- both diverge from
+        the observed Mist convention and produce shapes operators flag
+        as wrong. This function now migrates both legacy shapes and
+        emits one nameless row per critical ``zcc-*`` probe, mirroring
+        ``vlan_ids`` / ``lan_networks`` from the first surviving foreign
+        row when one exists (so the injected rows inherit operator
+        scoping) and falling back to the supplied ``vlan_ids`` arg when
+        no foreign row is available as a template.
 
     Args:
         existing_tests: The ``tests[]`` list read from the fetched
@@ -671,18 +668,18 @@ def _merge_zcc_criticals_into_tests(
         combined_probes: Union of foreign + tool-authored probes about
             to be written to ``synthetic_test.custom_probes``. Only
             probes with ``aggressiveness=critical`` are scheduled.
-        vlan_ids: VLAN ids to attach to a fabricated row when no foreign
-            row exists. Ignored when merging into an existing row -- the
-            existing row's ``vlan_ids`` are preserved so operator intent
-            is not silently overwritten.
+        vlan_ids: VLAN ids to attach to injected rows when no foreign
+            row is available as a template. Ignored when a template row
+            with its own ``vlan_ids`` exists.
 
     Returns:
-        A new list. Every foreign row is preserved (with stale ``zcc-*``
-        names removed from its ``probes`` list), and the first row's
-        ``probes`` list is extended with the sorted, deduplicated set of
-        critical ``zcc-`` probe names. Legacy tool-authored rows (whose
-        ``name`` starts with ``zcc-``) are dropped entirely to complete
-        the migration from the earlier aggregate-row model.
+        A new list. Foreign rows are preserved (with stale ``zcc-*``
+        names stripped from their ``probes`` list). Rows that only ever
+        contained ``zcc-*`` probes are dropped so re-injection is
+        authoritative. Legacy aggregate rows whose ``name`` starts with
+        ``zcc-`` are also dropped. One nameless row is appended per
+        critical ``zcc-*`` probe, each carrying only that probe's name
+        plus inherited ``vlan_ids`` / ``lan_networks``.
     """
     critical_names = sorted(
         name
@@ -706,28 +703,39 @@ def _merge_zcc_criticals_into_tests(
         cleaned = dict(row)
         probes_field = cleaned.get("probes")
         if isinstance(probes_field, list):
-            # Strip any stale zcc-* name so re-injection is authoritative;
-            # foreign entries (mini-*, operator-named) survive untouched.
-            cleaned["probes"] = [
-                p for p in probes_field if not (isinstance(p, str) and p.startswith(_TOOL_NAME_PREFIX))
-            ]
+            filtered = [p for p in probes_field if not (isinstance(p, str) and p.startswith(_TOOL_NAME_PREFIX))]
+            # A row that only ever held zcc-* names is a prior-run
+            # injection; drop it so re-injection below is authoritative.
+            if probes_field and not filtered:
+                continue
+            cleaned["probes"] = filtered
         surviving.append(cleaned)
 
     if not critical_names:
         return surviving
 
-    if surviving:
-        target = surviving[0]
-        target_probes = target.get("probes")
-        if not isinstance(target_probes, list):
-            target_probes = []
-        merged = sorted(set(target_probes) | set(critical_names))
-        target["probes"] = merged
-    else:
-        # No foreign row to piggy-back on: fabricate a bare row so the
-        # criticals are still scheduled. No name is set (matches Mist's
-        # own convention for system-generated rows verified 2026-07-24).
-        surviving.append({"probes": list(critical_names), "vlan_ids": list(vlan_ids)})
+    # Inherit vlan/lan scoping from the first surviving foreign row so
+    # injected zcc-* rows match operator intent. Fall back to the
+    # supplied vlan_ids arg when no template is available.
+    template_vlan_ids: list[int] | None = None
+    template_lan_networks: list[str] | None = None
+    for row in surviving:
+        row_vlans = row.get("vlan_ids")
+        row_lans = row.get("lan_networks")
+        if isinstance(row_vlans, list) and template_vlan_ids is None:
+            template_vlan_ids = [v for v in row_vlans if isinstance(v, int)]
+        if isinstance(row_lans, list) and template_lan_networks is None:
+            template_lan_networks = [ln for ln in row_lans if isinstance(ln, str)]
+        if template_vlan_ids is not None and template_lan_networks is not None:
+            break
+
+    effective_vlans = template_vlan_ids if template_vlan_ids is not None else list(vlan_ids)
+
+    for name in critical_names:
+        new_row: dict[str, Any] = {"probes": [name], "vlan_ids": list(effective_vlans)}
+        if template_lan_networks:
+            new_row["lan_networks"] = list(template_lan_networks)
+        surviving.append(new_row)
 
     return surviving
 

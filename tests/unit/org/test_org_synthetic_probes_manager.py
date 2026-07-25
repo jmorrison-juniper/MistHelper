@@ -337,23 +337,24 @@ def test_apply_reports_http_error(capsys: pytest.CaptureFixture[str]) -> None:
     assert "HTTP 500" in out
 
 
-def test_merge_injects_critical_names_into_first_foreign_row() -> None:
-    """Critical zcc names merge into the existing foreign row's ``probes[]``.
+def test_merge_emits_one_row_per_critical_probe() -> None:
+    """Each critical zcc name gets its own ``tests[]`` row.
 
     Why:
-        Verified against a live Mist org config 2026-07-24: Mist emits a
-        single ``tests[]`` row that co-schedules every probe under one
-        ``probes`` array. The tool must extend that same row rather than
-        appending a separate categorized row -- the operator's earlier
-        directive was that all probe names belong under one unified
-        ``probes`` section, not split by tool prefix. The target row's
-        ``vlan_ids``, ``lan_networks``, and other keys survive untouched.
+        Verified against a live Mist ``GET /orgs/{id}/setting`` response
+        2026-07-24: Mist emits one ``tests[]`` row per probe (each
+        row's ``probes`` array contains exactly one name), and the row
+        carries its own ``vlan_ids`` / ``lan_networks`` copy. Foreign
+        rows are preserved untouched and one nameless row is appended
+        per critical ``zcc-*`` probe, inheriting the first foreign
+        row's ``vlan_ids`` and ``lan_networks`` so operator scoping
+        flows to the injected rows.
     """
     existing = [
         {
-            "probes": ["mini-cloudflare-1", "mini-google-1"],
-            "vlan_ids": [10],
-            "lan_networks": ["default"],
+            "probes": ["mini-cloudflare-1"],
+            "vlan_ids": [3, 10],
+            "lan_networks": ["Guest-WiFi", "servers"],
         }
     ]
     combined = {
@@ -362,26 +363,34 @@ def test_merge_injects_critical_names_into_first_foreign_row() -> None:
         "zcc-crit-b": {"name": "zcc-crit-b", "aggressiveness": "critical"},
     }
     merged = ospm._merge_zcc_criticals_into_tests(existing, combined, [10])
-    assert len(merged) == 1
-    row = merged[0]
-    assert row["probes"] == [
-        "mini-cloudflare-1",
-        "mini-google-1",
-        "zcc-crit-a",
-        "zcc-crit-b",
+    assert merged == [
+        {
+            "probes": ["mini-cloudflare-1"],
+            "vlan_ids": [3, 10],
+            "lan_networks": ["Guest-WiFi", "servers"],
+        },
+        {
+            "probes": ["zcc-crit-a"],
+            "vlan_ids": [3, 10],
+            "lan_networks": ["Guest-WiFi", "servers"],
+        },
+        {
+            "probes": ["zcc-crit-b"],
+            "vlan_ids": [3, 10],
+            "lan_networks": ["Guest-WiFi", "servers"],
+        },
     ]
-    assert row["vlan_ids"] == [10]
-    assert row["lan_networks"] == ["default"]
 
 
 def test_merge_strips_stale_zcc_names_on_rerun() -> None:
-    """Stale ``zcc-*`` names in an existing row are stripped before injection.
+    """Stale ``zcc-*`` names in a foreign row are stripped; a new row is added.
 
     Why:
-        Re-runs must be idempotent: if a prior run injected a critical
-        probe that is no longer part of the curated set, or the operator
-        removed one, the stale name must not linger in ``probes[]``. Only
-        the current critical set is re-injected.
+        Re-runs must be idempotent. If a prior version of this module
+        merged criticals into a foreign row's ``probes[]``, migration
+        must strip those stale ``zcc-*`` names so the foreign row
+        returns to its single-probe shape. The currently-critical
+        probe is then appended as its own per-probe row.
     """
     existing = [
         {
@@ -396,17 +405,21 @@ def test_merge_strips_stale_zcc_names_on_rerun() -> None:
         },
     }
     merged = ospm._merge_zcc_criticals_into_tests(existing, combined, [1])
-    assert merged[0]["probes"] == ["mini-a", "zcc-still-critical"]
+    assert merged == [
+        {"probes": ["mini-a"], "vlan_ids": [1]},
+        {"probes": ["zcc-still-critical"], "vlan_ids": [1]},
+    ]
 
 
 def test_merge_drops_legacy_aggregate_tool_row() -> None:
-    """Legacy tool-authored aggregate rows (name=zcc-*) are removed.
+    """Legacy aggregate rows (name=zcc-*) are removed, replaced by per-probe rows.
 
     Why:
-        Earlier iterations of this module wrote a separate row named
-        ``zcc-critical-probes``. The user rejected that shape. Migration
-        must delete any such row on the next run so the config
-        converges to the merged-into-existing-row model.
+        Earlier iterations wrote a single row named
+        ``zcc-critical-probes`` with every critical name bundled under
+        it. Migration must drop such rows and re-emit one nameless
+        row per critical probe to match Mist's own per-probe-row
+        convention.
     """
     existing = [
         {"probes": ["mini-a"], "vlan_ids": [10]},
@@ -418,13 +431,35 @@ def test_merge_drops_legacy_aggregate_tool_row() -> None:
     ]
     combined = {"zcc-x": {"name": "zcc-x", "aggressiveness": "critical"}}
     merged = ospm._merge_zcc_criticals_into_tests(existing, combined, [10])
-    assert len(merged) == 1
-    assert merged[0]["probes"] == ["mini-a", "zcc-x"]
-    assert "name" not in merged[0] or merged[0].get("name") != "zcc-critical-probes"
+    assert merged == [
+        {"probes": ["mini-a"], "vlan_ids": [10]},
+        {"probes": ["zcc-x"], "vlan_ids": [10]},
+    ]
+
+
+def test_merge_drops_pure_zcc_rows_from_prior_per_probe_injection() -> None:
+    """Prior per-probe zcc rows are dropped so re-injection is authoritative.
+
+    Why:
+        A row whose ``probes`` list contains only ``zcc-*`` names is a
+        prior-run injection. When the curated critical set changes,
+        those stale rows must go so the new critical set is emitted
+        cleanly without leftover names.
+    """
+    existing = [
+        {"probes": ["mini-a"], "vlan_ids": [10], "lan_networks": ["default"]},
+        {"probes": ["zcc-old"], "vlan_ids": [10], "lan_networks": ["default"]},
+    ]
+    combined = {"zcc-new": {"name": "zcc-new", "aggressiveness": "critical"}}
+    merged = ospm._merge_zcc_criticals_into_tests(existing, combined, [10])
+    assert merged == [
+        {"probes": ["mini-a"], "vlan_ids": [10], "lan_networks": ["default"]},
+        {"probes": ["zcc-new"], "vlan_ids": [10], "lan_networks": ["default"]},
+    ]
 
 
 def test_merge_fabricates_bare_row_when_no_foreign_row() -> None:
-    """When no foreign row exists, a bare row with the criticals is added."""
+    """With no foreign template, injected rows use the supplied vlan_ids arg."""
     combined = {"zcc-x": {"name": "zcc-x", "aggressiveness": "critical"}}
     merged = ospm._merge_zcc_criticals_into_tests([], combined, [42])
     assert merged == [{"probes": ["zcc-x"], "vlan_ids": [42]}]
@@ -438,14 +473,14 @@ def test_merge_no_criticals_leaves_foreign_row_alone() -> None:
     assert merged == [{"probes": ["mini-a"], "vlan_ids": [10]}]
 
 
-def test_apply_merges_critical_names_into_existing_row() -> None:
-    """Org PUT body extends the existing ``tests[]`` row's probes list.
+def test_apply_appends_per_probe_rows_for_criticals() -> None:
+    """Org PUT body appends one ``tests[]`` row per critical zcc probe.
 
     Why:
-        Regression guard for the merge-into-existing-row fix: the
-        operator's live config shows one nameless system row; the tool
-        must inject its critical zcc names into that row rather than
-        appending a separate categorized row.
+        Regression guard for the per-probe-row fix: the live Mist
+        config shows one nameless row per probe. The tool must append
+        a new row for each critical zcc name rather than bundling them
+        into an existing foreign row's ``probes`` list.
     """
     session = MagicMock()
     combined = {
@@ -462,11 +497,14 @@ def test_apply_merges_critical_names_into_existing_row() -> None:
         ospm._apply(session, "org-uuid", existing_setting, combined, [10, 20])
     body = put_mock.call_args.args[2]
     tests = body["synthetic_test"]["tests"]
-    assert tests == [{"probes": ["mini-cloudflare-1", "zcc-crit"], "vlan_ids": [10]}]
+    assert tests == [
+        {"probes": ["mini-cloudflare-1"], "vlan_ids": [10]},
+        {"probes": ["zcc-crit"], "vlan_ids": [10]},
+    ]
 
 
-def test_apply_to_site_merges_critical_names_into_existing_row() -> None:
-    """Site PUT body extends the existing ``tests[]`` row's probes list."""
+def test_apply_to_site_appends_per_probe_rows_for_criticals() -> None:
+    """Site PUT body appends one ``tests[]`` row per critical zcc probe."""
     session = MagicMock()
     tool_probes = {
         "zcc-crit": {"name": "zcc-crit", "aggressiveness": "critical"},
@@ -491,7 +529,10 @@ def test_apply_to_site_merges_critical_names_into_existing_row() -> None:
         ospm._apply_to_site(session, "site-uuid", tool_probes, [42])
     body = put_mock.call_args.args[2]
     tests = body["synthetic_test"]["tests"]
-    assert tests == [{"probes": ["mini-google-1", "zcc-crit"], "vlan_ids": [42]}]
+    assert tests == [
+        {"probes": ["mini-google-1"], "vlan_ids": [42]},
+        {"probes": ["zcc-crit"], "vlan_ids": [42]},
+    ]
 
 
 # --------------------------------------------------------------------------- #
