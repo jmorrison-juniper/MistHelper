@@ -11,47 +11,140 @@ Why:
     error-prone; this module treats the JSON in ``data/`` as the source of
     truth, and marks every probe it writes with the ``zcc-`` name prefix
     so a follow-up run can safely merge or swap without disturbing
-    probes authored elsewhere (see FR-010 through FR-015 in the spec).
+    probes authored elsewhere.
 
 Module-import must remain side-effect free (issue #1641 --help guard):
     Only ``import`` statements at module scope; all I/O, prompts, and API
     calls live inside functions invoked from the menu dispatch table.
 """
 
-from __future__ import annotations  # PEP 604 unions for future annotations.
+from __future__ import annotations
 
-import json  # Read curated Zscaler JSON catalogues.
-import logging  # Structured trace + info/warn/error logging.
-from pathlib import Path  # Cross-platform path handling for data/ files.
-from typing import Any  # Precise annotations for setting dicts.
+import json
+import logging
+import math
+from pathlib import Path
+from typing import Any
 
-# WHY: Import the mistapi setting modules at module load. Both are
-# side-effect free (just re-exports of API callables) and let us
-# monkey-patch them cleanly in unit tests via ``patch.object``. Sites
-# module is needed for the optional post-PUT site-override flow, and
-# ``orgs.sites`` (via ``_mist_orgs_sites``) drives the indexed
-# site-picker after the org PUT succeeds.
-import mistapi  # WHY: top-level for ``mistapi.get_all`` pagination helper.
+# Import mistapi setting/sites modules at module load so tests can monkey-patch
+# them via ``patch.object``. All four are side-effect free re-exports.
+import mistapi
 from mistapi.api.v1.orgs import setting as _mist_setting
 from mistapi.api.v1.orgs import sites as _mist_orgs_sites
 from mistapi.api.v1.sites import setting as _mist_site_setting
 
+from src.utils.zscaler_catalogue import ensure_fresh
+
 _DEFAULT_DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
 _PROBE_SOURCE_FILE = "zscaler_client_connector_probes.json"
 _CENR_SOURCE_FILE = "zscaler_cenr_hostnames.json"
-_TOOL_NAME_PREFIX = "zcc-"  # FR-010: marks probes authored by this tool.
+_TOOL_NAME_PREFIX = "zcc-"
 _TUNNEL_ZEN_ROLE = "tunnel_zen"  # Only role that expands via CENR hostnames.
-_VLAN_MIN = 0  # FR-003 lower bound.
-_VLAN_MAX = 4094  # FR-003 upper bound.
-_CRITICAL_AGGRESSIVENESS = "critical"  # Mist caps priority probes at 5 per org.
-_AUTO_AGGRESSIVENESS = "auto"  # Mist's own default for non-priority probes.
-# Non-critical probes emit ``aggressiveness=auto`` explicitly.
-# Why: Mist itself writes ``"auto"`` on its own auto-generated ``mini-*`` probes
-# (verified against a live org config 2026-07-24). Emitting the literal value
-# mirrors Mist's convention and avoids ambiguity between "unset" and
-# "explicitly default". The 5-priority cap counts ``critical``+``high`` only;
-# ``auto`` does not consume a slot, so the curated 5 critical roles remain
-# safely under the cap.
+_VLAN_MIN = 0
+_VLAN_MAX = 4094
+_CRITICAL_AGGRESSIVENESS = "high"
+_AUTO_AGGRESSIVENESS = "auto"
+# Priority tiers recognised on READ (schedule/demote decisions). The Mist UI's
+# per-probe "Critical" checkbox writes ``"high"`` (verified 2026-07-25 by
+# toggling a probe in the UI and dumping the org setting). Older versions of
+# this tool wrote ``"critical"`` -- also a real, valid priority tier accepted
+# by the API. Both must be treated as priority for read-side decisions so orgs
+# carrying the legacy value keep behaving correctly during the transition.
+# Writes emit only ``"high"`` (via ``_CRITICAL_AGGRESSIVENESS``) to stay
+# byte-identical with UI-authored probes in exported configs and audit dumps.
+_PRIORITY_AGGRESSIVENESS: frozenset[str] = frozenset({"critical", "high"})
+
+# Region-scoped Samsung ELM activation roles live in the probe source file with
+# names like ``samsung_elm_activation_americas``. They are country-specific
+# reachability targets, so pushing them at org scope would spray every region's
+# endpoints everywhere -- pointless for sites in the wrong region and noisy for
+# operators. Instead the org PUT skips them entirely (see ``_build_probe_set``)
+# and the site-override flow injects the one matching region based on each
+# picked site's ``country_code``.
+_SAMSUNG_ELM_ROLE_PREFIX = "samsung_elm_activation_"
+_COUNTRY_CODE_TO_REGION: dict[str, str] = {
+    "US": "americas",
+    "CA": "americas",
+    "MX": "americas",
+    "AR": "americas",
+    "BR": "americas",
+    "CL": "americas",
+    "CO": "americas",
+    "PE": "americas",
+    "VE": "americas",
+    # China + SARs + Taiwan hit ``.com.cn`` endpoints; EMEA fallback uses
+    # ``.com`` so they must be routed to the china role explicitly.
+    "CN": "china",
+    "HK": "china",
+    "MO": "china",
+    "TW": "china",
+}
+# Anything not listed above falls through to EMEA. EMEA endpoints are the
+# broadest surface (Africa, Middle East, Europe, plus every APAC/Oceania code
+# we haven't explicitly routed to China), so this is the safest default. A
+# warning is logged when the fallback fires so operators can spot unmapped
+# country codes and extend ``_COUNTRY_CODE_TO_REGION`` if needed.
+_DEFAULT_REGION = "emea"
+
+# Default URL scheme / port pairs. Mist's ``target`` field is a URL, so a
+# per-role ``probe.protocol`` chosen from the curated JSON maps directly to a
+# URL scheme -- with two caveats encoded in ``_probe_target``:
+#   1. ``tcp`` is not a valid URL scheme for Mist synthetic tests. Roles that
+#      the reachability probing showed only respond to raw TCP/443 (e.g.
+#      ``service_discovery_enrollment_login``) still exercise the same TCP
+#      handshake path when probed as HTTPS, so we transparently upgrade to
+#      ``https`` for URL construction.
+#   2. Ports matching the scheme default (80 for http, 443 for https) are
+#      elided from the URL to match Mist's own ``mini-*`` shape (which never
+#      writes an explicit ``:443`` on HTTPS targets).
+_SCHEME_DEFAULT_PORT: dict[str, int] = {"http": 80, "https": 443}
+
+
+def _probe_target(fqdn: str, role: dict[str, Any], cenr_source: dict[str, Any]) -> str:
+    """Compose the Mist ``target`` URL for one FQDN of ``role``.
+
+    Why:
+        Mist stores the probe protocol as the URL scheme on ``target`` rather
+        than as an independent field. The curated JSON now encodes each
+        role's chosen protocol under ``probe.protocol`` (see
+        ``zscaler_client_connector_probes.json`` schema v2), and CENR hosts
+        (the ``tunnel_zen`` role's expansion set) inherit protocol from the
+        CENR file's ``probe_default``. Centralising the URL construction
+        keeps org-scope and site-scope builders in lockstep and lets the
+        ``tcp``-to-``https`` upgrade (see module-level comment on
+        ``_SCHEME_DEFAULT_PORT``) live in exactly one place.
+
+    Args:
+        fqdn: The host portion of the URL (never a wildcard -- callers strip
+            those upstream).
+        role: The role dict from the probe source file. Its ``probe`` block
+            (if present) supplies ``protocol`` and ``port``.
+        cenr_source: Parsed CENR source dict; consulted when ``role`` is the
+            ``tunnel_zen`` role, since that role delegates its probe
+            configuration to the CENR file's ``probe_default``.
+
+    Returns:
+        A URL string like ``"https://example.com"`` (default port elided) or
+        ``"https://example.com:8443"`` (non-default port explicit).
+    """
+    probe = role.get("probe") or {}
+    if not probe and role.get("role") == _TUNNEL_ZEN_ROLE:
+        probe = cenr_source.get("probe_default") or {}
+    protocol = str(probe.get("protocol") or "https").lower()
+    # Mist targets are URLs; raw TCP has no URL scheme. HTTPS exercises the
+    # same TCP/443 handshake path used by the underlying reachability check.
+    if protocol == "tcp":
+        protocol = "https"
+    if protocol not in _SCHEME_DEFAULT_PORT:
+        protocol = "https"
+    port_raw = probe.get("port")
+    try:
+        port = int(port_raw) if port_raw is not None else _SCHEME_DEFAULT_PORT[protocol]
+    except (TypeError, ValueError):
+        port = _SCHEME_DEFAULT_PORT[protocol]
+    if port == _SCHEME_DEFAULT_PORT[protocol]:
+        return f"{protocol}://{fqdn}"
+    return f"{protocol}://{fqdn}:{port}"
 
 
 def manage_org_synthetic_probes(mist_session: Any, org_id: str) -> None:
@@ -82,16 +175,16 @@ def manage_org_synthetic_probes(mist_session: Any, org_id: str) -> None:
     logging.info("Menu 206: starting org Zscaler synthetic-probe manager")
     logging.debug("ENTRY: manage_org_synthetic_probes(org_id=%s)", org_id)
 
-    sources = _load_probe_sources(_DEFAULT_DATA_DIR)  # Fail-fast on missing data.
-    vlan_ids = _prompt_vlan_list()  # FR-003.
-    setting = _fetch_setting(mist_session, org_id)  # FR-004.
-    existing_probes = _detect_existing(setting)  # FR-005 precondition.
+    sources = _load_probe_sources(_DEFAULT_DATA_DIR)
+    vlan_ids = _prompt_vlan_list()
+    setting = _fetch_setting(mist_session, org_id)
+    existing_probes = _detect_existing(setting)
     tool_authored, foreign = _partition_tool_authored(existing_probes)
 
-    new_probes = _build_probe_set(sources, vlan_ids)  # FR-006..FR-010.
+    new_probes = _build_probe_set(sources, vlan_ids)
 
     if tool_authored:
-        mode = _prompt_mode(tool_authored)  # FR-005.
+        mode = _prompt_mode(tool_authored)
         if mode == "merge":
             merged_tool = _merge_probes(tool_authored, new_probes, vlan_ids)
             if merged_tool == tool_authored:
@@ -105,22 +198,25 @@ def manage_org_synthetic_probes(mist_session: Any, org_id: str) -> None:
         else:
             resulting_tool = _swap_probes(new_probes)
     else:
-        resulting_tool = new_probes  # Fresh deployment path (Story 1).
+        resulting_tool = new_probes
 
-    demoted_foreign = _demote_stale_critical(foreign)  # Enforce 5-critical cap.
+    demoted_foreign = _demote_stale_critical(foreign)
     summary = _summarise(resulting_tool, tool_authored, demoted_foreign, foreign)
-    if not _prompt_confirm(summary):  # FR-013.
+    if not _prompt_confirm(summary):
         print("  Operation cancelled -- no changes were made.")
         logging.info("Operator declined final confirmation; no PUT issued")
         return
 
-    combined = {**demoted_foreign, **resulting_tool}  # FR-012 relaxed for critical demotion.
-    _apply(mist_session, org_id, setting, combined, vlan_ids)  # FR-014.
+    # Foreign demotions are merged with the tool-authored set so demoted
+    # entries survive the PUT (strict preservation would keep them at their
+    # prior priority tier and re-blow the 5-critical cap).
+    combined = {**demoted_foreign, **resulting_tool}
+    _apply(mist_session, org_id, setting, combined, vlan_ids)
 
     # Post-PUT site-override flow: give the operator a chance to push the
     # same probe set into one or more site-level settings so specific
     # sites can override the org-wide config.
-    _prompt_and_apply_site_overrides(mist_session, org_id, resulting_tool)
+    _prompt_and_apply_site_overrides(mist_session, org_id, resulting_tool, sources)
 
     logging.debug("EXIT: manage_org_synthetic_probes - success")
 
@@ -157,6 +253,7 @@ def _load_probe_sources(data_dir: Path) -> tuple[dict[str, Any], dict[str, Any]]
         cenr = json.loads(cenr_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as err:
         raise ValueError(f"Malformed JSON in {cenr_path}: {err}") from err
+    cenr = ensure_fresh(cenr_path, cenr)
     return probes, cenr
 
 
@@ -184,8 +281,8 @@ def _prompt_vlan_list() -> list[int]:
 
     Why:
         The VLAN list is the only per-invocation parameter; validating
-        the range at prompt time (FR-003) avoids surfacing an opaque
-        API-side rejection later.
+        the range at prompt time avoids surfacing an opaque API-side
+        rejection later.
 
     Returns:
         Sorted, deduplicated list of VLAN ids in ``[0, 4094]``. Never
@@ -205,8 +302,7 @@ def _fetch_setting(mist_session: Any, org_id: str) -> dict[str, Any]:
 
     Why:
         Isolating the read call makes it trivial to mock in tests and
-        clarifies the FR-004 boundary (get) from the FR-014 boundary
-        (put).
+        clarifies the get boundary from the put boundary.
 
     Args:
         mist_session: Authenticated ``mistapi`` session.
@@ -255,9 +351,10 @@ def _partition_tool_authored(
     """Split existing probes into tool-authored and foreign sets.
 
     Why:
-        FR-012 mandates that foreign probes (any probe whose name lacks
-        the ``zcc-`` prefix) are preserved verbatim through merge and
-        swap. Partitioning up-front keeps the downstream helpers pure.
+        Foreign probes (any probe whose name lacks the ``zcc-`` prefix)
+        must be preserved verbatim through merge and swap so operator-
+        authored config survives the tool run. Partitioning up-front
+        keeps the downstream helpers pure.
 
     Args:
         existing: Full ``custom_probes`` map from the org setting.
@@ -280,10 +377,10 @@ def _fqdn_slug(fqdn: str) -> str:
     """Convert an FQDN to the slug segment used in probe names.
 
     Why:
-        The naming rule (FR-010) requires a stable, filesystem-safe
-        derivation from the FQDN so tool-authored probes are recognisable
-        across re-runs. Lowercase + ``.`` -> ``-`` is sufficient because
-        Zscaler FQDNs are ASCII-only.
+        Probe names need a stable, filesystem-safe derivation from the
+        FQDN so tool-authored probes are recognisable across re-runs.
+        Lowercase + ``.`` -> ``-`` is sufficient because Zscaler FQDNs
+        are ASCII-only.
 
     Args:
         fqdn: The concrete hostname (never a wildcard by the time this
@@ -293,6 +390,38 @@ def _fqdn_slug(fqdn: str) -> str:
         Lowercased slug with dots replaced by hyphens.
     """
     return fqdn.lower().replace(".", "-")
+
+
+def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Great-circle distance in kilometres between two lat/lon pairs.
+
+    Why:
+        ZEN city ranking uses geodesic distance from a site's Mist-reported
+        ``latlng`` to each candidate ZEN city centre. Haversine is the
+        standard closed-form solution: no external dep, no earth-model
+        approximation error large enough to affect ranking at the
+        continental scale we care about (Zscaler cities are hundreds of
+        kilometres apart; sub-percent radius error is invisible).
+
+    Args:
+        lat1: First point latitude in decimal degrees.
+        lon1: First point longitude in decimal degrees.
+        lat2: Second point latitude in decimal degrees.
+        lon2: Second point longitude in decimal degrees.
+
+    Returns:
+        Distance in kilometres. Always non-negative.
+    """
+    # Mean earth radius in km. Using the volumetric mean (IUGG) rather than
+    # equatorial keeps error symmetric across hemispheres for our use.
+    earth_radius_km = 6371.0088
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    delta_phi = math.radians(lat2 - lat1)
+    delta_lambda = math.radians(lon2 - lon1)
+    a = math.sin(delta_phi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2) ** 2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    return earth_radius_km * c
 
 
 def _iter_role_fqdns(role: dict[str, Any], cenr: dict[str, Any]) -> list[str]:
@@ -339,22 +468,27 @@ def _build_probe_set(
             when building probe bodies because VLAN scoping belongs on
             the ``tests[]`` row that references the probe, not on the
             ``custom_probes`` definition itself (matches Mist's own
-            ``mini-*`` shape observed 2026-07-24).
+            ``mini-*`` shape).
 
     Returns:
         A ``{probe_name: probe_body}`` map ready to be merged into the
-        setting block. Wildcard FQDNs are skipped per FR-008.
+        setting block. Wildcard FQDNs are skipped.
     """
     probes_source, cenr_source = sources
     result: dict[str, dict[str, Any]] = {}
     for role in probes_source.get("roles", []) or []:
         role_name = role.get("role") or "unknown"
+        # Region-scoped Samsung ELM roles are injected at site scope only (see
+        # ``_build_region_probes``) so pushing them at org scope would spray
+        # every region's endpoints everywhere. Skip them here.
+        if isinstance(role_name, str) and role_name.startswith(_SAMSUNG_ELM_ROLE_PREFIX):
+            continue
         critical_role = bool(role.get("critical"))
-        critical_target = role.get("critical_fqdn")  # None => first eligible fqdn wins.
+        critical_target = role.get("critical_fqdn")
         critical_assigned = False
         for fqdn in _iter_role_fqdns(role, cenr_source):
             if not isinstance(fqdn, str) or fqdn.startswith("*."):
-                continue  # FR-008: wildcards cannot be probed directly.
+                continue
             # Pick exactly one critical FQDN per critical role. Preference
             # order: explicit ``critical_fqdn`` if it appears in the
             # expanded list, otherwise the first non-wildcard hit.
@@ -364,19 +498,17 @@ def _build_probe_set(
                     is_critical = True
                     critical_assigned = True
             probe_name = f"{_TOOL_NAME_PREFIX}{role_name}-{_fqdn_slug(fqdn)}"
-            # Body shape mirrors Mist's own ``mini-*`` custom_probes
-            # (live config 2026-07-24): no ``name`` inside the body (the
-            # dict key IS the name) and no ``vlan_ids`` (VLAN scoping
-            # belongs on the tests[] row that references the probe, not
-            # on the probe definition itself).
+            # Body shape mirrors Mist's own ``mini-*`` custom_probes: no
+            # ``name`` inside the body (the dict key IS the name) and no
+            # ``vlan_ids`` (VLAN scoping belongs on the tests[] row that
+            # references the probe, not on the probe definition itself).
             probe_body: dict[str, Any] = {
-                "type": role.get("type", "application"),  # Match mini-* default.
-                "target": f"https://{fqdn}",  # FR-007: prefix, no port.
+                "type": role.get("type", "application"),
+                # Scheme/port derived from the role's curated ``probe`` block
+                # (or CENR's ``probe_default`` for ``tunnel_zen``) so operators
+                # can tune protocol per role without touching this file.
+                "target": _probe_target(fqdn, role, cenr_source),
             }
-            # Emit an explicit aggressiveness on every probe: ``critical`` for
-            # the curated priority roles, ``auto`` for the rest. Mist itself
-            # writes ``"auto"`` on its default probes, so mirroring the value
-            # keeps our output consistent with the platform's own convention.
             probe_body["aggressiveness"] = _CRITICAL_AGGRESSIVENESS if is_critical else _AUTO_AGGRESSIVENESS
             result[probe_name] = probe_body
         # Fallback: role declared critical but the requested
@@ -398,6 +530,329 @@ def _build_probe_set(
     return result
 
 
+def _build_region_probes(
+    sources: tuple[dict[str, Any], dict[str, Any]],
+    country_code: str | None,
+) -> dict[str, dict[str, Any]]:
+    """Build the Samsung ELM probe set for the region matching ``country_code``.
+
+    Why:
+        Region-scoped Samsung ELM roles (``samsung_elm_activation_americas``,
+        ``..._emea``, ``..._china``) are skipped by ``_build_probe_set`` at
+        org scope because pushing every region's endpoints to every site is
+        wasteful noise. The site-override flow calls this helper instead so
+        each picked site only receives the ELM role matching its own
+        ``country_code``. Unmapped or missing country codes fall back to
+        EMEA (the broadest surface) and log a warning so operators can
+        extend ``_COUNTRY_CODE_TO_REGION`` when they see the fallback fire.
+
+    Args:
+        sources: The ``(probes, cenr)`` tuple from ``_load_probe_sources``.
+        country_code: ISO 3166-1 alpha-2 code from the site dict (case-
+            insensitive; may be ``None`` or an unmapped code -- both fall
+            through to EMEA with a warning).
+
+    Returns:
+        A ``{probe_name: probe_body}`` map for the one matching role.
+        Empty dict if the probe source file doesn't ship a role for the
+        resolved region (defensive; the shipped catalogue has all three).
+    """
+    probes_source, _ = sources
+    normalised = (country_code or "").strip().upper()
+    region = _COUNTRY_CODE_TO_REGION.get(normalised)
+    if region is None:
+        logging.warning(
+            "country_code %r not mapped; defaulting to region %r",
+            country_code,
+            _DEFAULT_REGION,
+        )
+        region = _DEFAULT_REGION
+    target_role_name = f"{_SAMSUNG_ELM_ROLE_PREFIX}{region}"
+    result: dict[str, dict[str, Any]] = {}
+    for role in probes_source.get("roles", []) or []:
+        if role.get("role") != target_role_name:
+            continue
+        for fqdn in role.get("fqdns") or []:
+            if not isinstance(fqdn, str) or fqdn.startswith("*."):
+                continue
+            probe_name = f"{_TOOL_NAME_PREFIX}{target_role_name}-{_fqdn_slug(fqdn)}"
+            # Regional ELM probes are never critical (source catalogue omits
+            # the flag), so aggressiveness is ``auto``.
+            result[probe_name] = {
+                "type": role.get("type", "application"),
+                "target": _probe_target(fqdn, role, sources[1]),
+                "aggressiveness": _AUTO_AGGRESSIVENESS,
+            }
+        break
+    return result
+
+
+# Compression rule: countries with at most this many distinct ZEN locations
+# get ALL of their locations scheduled at every site in-country. Above this
+# threshold, we fall back to nearest-N-by-haversine. Two is chosen because
+# Zscaler almost always deploys a same-city pair (e.g. Frankfurt IV + VI at
+# identical coords), so a country with only a "two location" footprint really
+# has one geographic point + a redundant peer -- probing both is cheap and
+# gives operators failover signal.
+_ZEN_COMPRESSION_THRESHOLD = 2
+# When a site's country has more ZEN locations than the compression threshold,
+# we pick this many nearest ZENs by geodesic distance. Two matches the
+# threshold so a site in a ZEN-dense country (US, DE, IN...) still gets a
+# primary+secondary probe pair rather than just one.
+_ZEN_NEAREST_COUNT = 2
+
+
+def _site_latlng(site: dict[str, Any]) -> tuple[float, float] | None:
+    """Extract ``(lat, lon)`` from a Mist site dict, or ``None`` if absent.
+
+    Why:
+        Mist sites report position under ``latlng: {lat, lng}``. Some sites
+        (never-configured stubs, imported inventory) lack the field or ship
+        it as null. Callers must handle the None branch, so returning None
+        (rather than raising) keeps the resolver flow linear.
+
+    Args:
+        site: The site dict as returned by ``_list_org_sites``.
+
+    Returns:
+        ``(lat, lon)`` tuple when both floats are present and finite;
+        ``None`` otherwise.
+    """
+    latlng = site.get("latlng")
+    if not isinstance(latlng, dict):
+        return None
+    lat = latlng.get("lat")
+    lon = latlng.get("lng")
+    if not isinstance(lat, (int, float)) or not isinstance(lon, (int, float)):
+        return None
+    if not math.isfinite(float(lat)) or not math.isfinite(float(lon)):
+        return None
+    return (float(lat), float(lon))
+
+
+def _distinct_zen_locations(city_metadata: dict[str, dict[str, Any]]) -> dict[str, list[str]]:
+    """Group city_metadata entries by unique ``(country_code, lat, lon)``.
+
+    Why:
+        Zscaler frequently ships multiple named ZENs at identical coords
+        (e.g. ``Frankfurt IV`` and ``Frankfurt VI`` at the same lat/lon).
+        For compression-rule counting ("does this country have <= N ZEN
+        locations?") we must dedupe on physical location, not on name --
+        otherwise a country with two co-located same-city peers gets
+        double-counted and misses the "probe them all" fast path. Names
+        within a group are alphabetically ordered so the caller's picks
+        are deterministic.
+
+    Args:
+        city_metadata: The ``city_metadata`` map from the CENR JSON file.
+
+    Returns:
+        ``{"CC:lat:lon" -> [city_name, ...]}`` where each entry lists the
+        Zscaler city display names sharing that location, sorted.
+    """
+    groups: dict[str, list[str]] = {}
+    for city, meta in city_metadata.items():
+        country = meta.get("country_code")
+        lat = meta.get("lat")
+        lon = meta.get("lon")
+        if not isinstance(country, str) or not isinstance(lat, (int, float)) or not isinstance(lon, (int, float)):
+            continue
+        # Round to 4 decimal places (~11 m precision) so trivial floating
+        # noise doesn't split a genuine same-coord pair into two groups.
+        key = f"{country.upper()}:{round(float(lat), 4)}:{round(float(lon), 4)}"
+        groups.setdefault(key, []).append(city)
+    for names in groups.values():
+        names.sort()
+    return groups
+
+
+def _resolve_zen_cities_for_site(
+    site: dict[str, Any],
+    cenr: dict[str, Any],
+) -> list[str]:
+    """Pick the ZEN cities that a site should probe.
+
+    Why:
+        Every Mist site probing every one of the ~95 ZEN cities would burn
+        bandwidth and generate noisy dashboards. We want the small set that
+        matches the site's geography: if the site's country hosts only a
+        handful of ZEN locations, probe them all (they're already nearby);
+        otherwise pick the geodesically-nearest few. This mirrors what a
+        network engineer would do by hand looking at the ZEN map.
+
+    Compression rules (evaluated in order):
+        1. Country has <= ``_ZEN_COMPRESSION_THRESHOLD`` distinct ZEN
+           locations -> return every ZEN name in-country.
+        2. Country has more, and the site has a valid ``latlng`` -> return
+           the ``_ZEN_NEAREST_COUNT`` nearest ZENs by great-circle distance,
+           deduped by location (so same-city pairs count once).
+        3. Country has more but site lacks ``latlng`` -> return the
+           country's ZENs anyway (better to over-probe within-country than
+           to skip; operators can trim later).
+        4. Site has no country match AND has ``latlng`` -> nearest globally.
+        5. No country match AND no latlng -> empty list + warn.
+
+    Args:
+        site: The Mist site dict. Reads ``country_code`` and ``latlng``.
+        cenr: Parsed CENR JSON. Reads ``city_metadata``.
+
+    Returns:
+        A sorted, deduped list of ZEN city display names. May be empty.
+    """
+    city_metadata = cenr.get("city_metadata") or {}
+    if not isinstance(city_metadata, dict) or not city_metadata:
+        # No metadata available -- fail closed (skip ZEN scheduling)
+        # rather than emit undefined probes.
+        logging.warning("ZEN scheduling skipped: city_metadata missing from CENR file")
+        return []
+    country_code = site.get("country_code")
+    normalised_cc = country_code.strip().upper() if isinstance(country_code, str) else ""
+    site_coords = _site_latlng(site)
+
+    in_country: dict[str, dict[str, Any]] = {}
+    if normalised_cc:
+        for city, meta in city_metadata.items():
+            meta_cc = meta.get("country_code")
+            if isinstance(meta_cc, str) and meta_cc.upper() == normalised_cc:
+                in_country[city] = meta
+
+    if in_country:
+        location_groups = _distinct_zen_locations(in_country)
+        if len(location_groups) <= _ZEN_COMPRESSION_THRESHOLD:
+            # Rule 1: probe every ZEN in-country.
+            return sorted(in_country.keys())
+        if site_coords is not None:
+            # Rule 2: nearest N locations, then expand back to all names at each.
+            return _nearest_zens_from_pool(in_country, site_coords, _ZEN_NEAREST_COUNT)
+        # Rule 3: fall back to probing the whole in-country set. Not ideal
+        # but better than dropping the site entirely.
+        logging.info(
+            "Site missing latlng but has country %s with %d ZEN locations; " "scheduling all in-country ZENs",
+            normalised_cc,
+            len(location_groups),
+        )
+        return sorted(in_country.keys())
+
+    if site_coords is not None:
+        # Rule 4: no country match but we know where the site is.
+        logging.info(
+            "Site country %r has no ZEN presence; falling back to nearest " "%d global ZENs by geodesic distance",
+            country_code,
+            _ZEN_NEAREST_COUNT,
+        )
+        return _nearest_zens_from_pool(city_metadata, site_coords, _ZEN_NEAREST_COUNT)
+
+    # Rule 5: nothing to work with.
+    logging.warning(
+        "ZEN scheduling skipped for site id=%r: no country_code match and " "no latlng",
+        site.get("id"),
+    )
+    return []
+
+
+def _nearest_zens_from_pool(
+    pool: dict[str, dict[str, Any]],
+    site_coords: tuple[float, float],
+    count: int,
+) -> list[str]:
+    """Return the ``count`` nearest ZEN city names from a pool.
+
+    Why:
+        Same-coord peers (e.g. Frankfurt IV + Frankfurt VI) should count as
+        one location when ranking distance -- otherwise "nearest 2" collapses
+        to two names at the same spot. We rank by distinct (lat, lon) groups
+        and then re-expand the winning groups back to the full name list so
+        operators still get the redundant-peer coverage they expect.
+
+    Args:
+        pool: Subset of ``city_metadata`` to consider.
+        site_coords: ``(lat, lon)`` for the site.
+        count: How many distinct locations to return names for.
+
+    Returns:
+        Sorted list of ZEN city names covering the nearest ``count``
+        distinct locations. Fewer than ``count`` when the pool has fewer
+        distinct locations.
+    """
+    site_lat, site_lon = site_coords
+    # Distance per distinct location key -> representative names.
+    per_location: dict[str, tuple[float, list[str]]] = {}
+    for city, meta in pool.items():
+        lat = meta.get("lat")
+        lon = meta.get("lon")
+        cc = meta.get("country_code")
+        if not isinstance(lat, (int, float)) or not isinstance(lon, (int, float)):
+            continue
+        if not isinstance(cc, str):
+            continue
+        key = f"{cc.upper()}:{round(float(lat), 4)}:{round(float(lon), 4)}"
+        distance = _haversine_km(site_lat, site_lon, float(lat), float(lon))
+        existing = per_location.get(key)
+        if existing is None:
+            per_location[key] = (distance, [city])
+        else:
+            existing[1].append(city)
+    # Sort by (distance, key) so ties are deterministic.
+    ranked = sorted(per_location.items(), key=lambda item: (item[1][0], item[0]))
+    picked_names: list[str] = []
+    for _key, (_distance, names) in ranked[:count]:
+        picked_names.extend(names)
+    return sorted(picked_names)
+
+
+def _zen_probe_names_for_cities(
+    cities: list[str],
+    cenr: dict[str, Any],
+) -> list[str]:
+    """Map ZEN city names -> the ``zcc-tunnel_zen-<slug>`` probe names.
+
+    Why:
+        Org-scope ``_build_probe_set`` already emitted a probe definition
+        for every proxy/vpn hostname in the CENR file, named
+        ``zcc-tunnel_zen-<fqdn_slug>``. Site-scope scheduling reuses those
+        definitions by name -- this helper picks the representative probe
+        hostnames for each ZEN city (recorded in ``city_metadata`` by the
+        build script) and formats the matching probe names. Proxy
+        (``*.sme.zscaler.net``) and VPN (``*-vpn.zscaler.net``) endpoints
+        share the same PoP but are distinct service planes, so we emit
+        one probe name per hostname listed for the city -- both get
+        pinned as site-scope critical by the caller.
+
+    Args:
+        cities: ZEN city display names picked by
+            ``_resolve_zen_cities_for_site``.
+        cenr: Parsed CENR JSON. Reads ``city_metadata`` for each city's
+            ``probe_hostnames`` list (falling back to the legacy
+            ``probe_hostname`` scalar if the list form isn't present, so
+            an unrefreshed CENR file keeps working).
+
+    Returns:
+        List of probe names (``zcc-tunnel_zen-<slug>`` shape). Cities
+        with neither ``probe_hostnames`` nor a legacy ``probe_hostname``
+        are silently skipped -- they'd have no defined probe on the org
+        anyway.
+    """
+    city_metadata = cenr.get("city_metadata") or {}
+    if not isinstance(city_metadata, dict):
+        return []
+    result: list[str] = []
+    for city in cities:
+        meta = city_metadata.get(city)
+        if not isinstance(meta, dict):
+            continue
+        hostnames_raw = meta.get("probe_hostnames")
+        hostnames: list[str] = []
+        if isinstance(hostnames_raw, list):
+            hostnames = [h for h in hostnames_raw if isinstance(h, str) and h]
+        if not hostnames:
+            legacy = meta.get("probe_hostname")
+            if isinstance(legacy, str) and legacy:
+                hostnames = [legacy]
+        for hostname in hostnames:
+            result.append(f"{_TOOL_NAME_PREFIX}{_TUNNEL_ZEN_ROLE}-{_fqdn_slug(hostname)}")
+    return result
+
+
 def _merge_probes(
     existing_tool: dict[str, dict[str, Any]],
     new_probes: dict[str, dict[str, Any]],
@@ -406,18 +861,12 @@ def _merge_probes(
     """Re-sync tool-authored probes to the mini-* body shape.
 
     Why:
-        Merge is the safe additive path (Story 2). Prior versions of the
-        tool wrote ``name`` and ``vlan_ids`` INTO the probe body; the
-        live Mist config (observed 2026-07-24) shows the correct shape
-        is ``{type, target, aggressiveness}`` only, so this pass strips
-        the legacy fields off any existing probe as a migration. The
-        ``extra_vlans`` argument is retained purely for signature/back-
-        compat with the caller -- VLAN scoping now lives exclusively on
-        the ``tests[]`` row (handled by
-        ``_merge_zcc_criticals_into_tests``). ``aggressiveness`` is
-        re-synced from ``new_probes`` so a probe that lost its
-        "critical" designation upstream is demoted here (and the freed
-        critical slot re-lands on the correct probe).
+        Merge is the safe additive path. The correct body shape is
+        ``{type, target, aggressiveness}`` only, so this pass strips any
+        legacy ``name`` / ``vlan_ids`` fields off existing probes as a
+        migration. ``aggressiveness`` is re-synced from ``new_probes`` so
+        a probe that lost its "critical" designation upstream is demoted
+        here (and the freed critical slot re-lands on the correct probe).
 
     Args:
         existing_tool: Probes currently on the org matching ``zcc-``.
@@ -431,23 +880,21 @@ def _merge_probes(
         ``{type, target, aggressiveness}`` -- no ``name``, no
         ``vlan_ids``.
     """
-    del extra_vlans  # Legacy parameter -- VLANs no longer live on probes.
+    del extra_vlans
     merged: dict[str, dict[str, Any]] = {}
     for name, probe in existing_tool.items():
-        # Preserve the freshly-built type/target when we know them (the
-        # new source of truth); otherwise fall back to the on-org values.
+        # Prefer freshly-built type/target (new source of truth); fall back
+        # to on-org values when the probe isn't in ``new_probes``.
         template = new_probes.get(name, probe)
         merged_probe: dict[str, Any] = {
             "type": template.get("type") or probe.get("type") or "application",
             "target": template.get("target") or probe.get("target"),
         }
         # Sync aggressiveness from the freshly-built set so demotions
-        # propagate (a probe that lost ``critical`` upstream should reflect
-        # that here). ``_build_probe_set`` always emits an explicit value
-        # (``critical`` or ``auto``), so the None branch is defensive only
-        # -- it protects the merge if a future refactor drops the key.
-        # Probes with no counterpart in ``new_probes`` (e.g. a role we
-        # dropped from the JSON) keep their prior value.
+        # propagate. ``_build_probe_set`` always emits an explicit value;
+        # the None branch is defensive against a future refactor dropping
+        # the key. Probes with no counterpart in ``new_probes`` (e.g. a
+        # role dropped from the JSON) keep their prior value.
         if name in new_probes:
             authoritative = new_probes[name].get("aggressiveness")
             merged_probe["aggressiveness"] = authoritative if authoritative is not None else _AUTO_AGGRESSIVENESS
@@ -463,9 +910,9 @@ def _swap_probes(
     """Return the freshly-built probe set unchanged.
 
     Why:
-        Swap is the destructive path (Story 3). The helper exists purely
-        so the dispatch table in ``manage_org_synthetic_probes`` reads
-        as a symmetric pair with ``_merge_probes``.
+        Swap is the destructive path. The helper exists purely so the
+        dispatch table in ``manage_org_synthetic_probes`` reads as a
+        symmetric pair with ``_merge_probes``.
 
     Args:
         new_probes: Freshly-built probe set from ``_build_probe_set``.
@@ -480,10 +927,9 @@ def _prompt_mode(existing_tool: dict[str, dict[str, Any]]) -> str:
     """Prompt the operator for merge vs. swap.
 
     Why:
-        Explicit two-choice prompt (FR-005). Displaying the existing
-        probe count and VLAN union up-front gives the operator the
-        context needed to make the call without needing to walk the
-        setting themselves.
+        Displaying the existing probe count and VLAN union up-front gives
+        the operator the context needed to make the call without needing
+        to walk the setting themselves.
 
     Args:
         existing_tool: Tool-authored probes currently on the org.
@@ -514,9 +960,9 @@ def _summarise(
     """Build the human-readable confirmation summary string.
 
     Why:
-        FR-013 requires the operator to see counts of add/remove/update
-        and the resulting total before authorising the PUT. Splitting
-        the summary out keeps ``_prompt_confirm`` reusable. The
+        The operator must see counts of add/remove/update and the
+        resulting total before authorising the PUT. Splitting the
+        summary out keeps ``_prompt_confirm`` reusable. The
         ``resulting_foreign`` vs ``original_foreign`` split lets the
         operator see how many foreign probes we demoted from
         ``critical`` to make room for the 5 tool-owned criticals.
@@ -553,8 +999,8 @@ def _count_critical_demotions(
     """Count probes whose aggressiveness changed from ``critical``.
 
     Why:
-        Surface the exact number of foreign probes the operator is about
-        to demote so the FR-012 relaxation (foreign preservation) is
+        Surface the exact number of foreign probes the operator is
+        about to demote so the foreign-preservation relaxation is
         visible in the summary rather than silent.
 
     Args:
@@ -566,12 +1012,12 @@ def _count_critical_demotions(
     """
     count = 0
     for name, probe in before.items():
-        if probe.get("aggressiveness") != _CRITICAL_AGGRESSIVENESS:
+        if probe.get("aggressiveness") not in _PRIORITY_AGGRESSIVENESS:
             continue
         new_probe = after.get(name)
         if new_probe is None:
             continue
-        if new_probe.get("aggressiveness") != _CRITICAL_AGGRESSIVENESS:
+        if new_probe.get("aggressiveness") not in _PRIORITY_AGGRESSIVENESS:
             count += 1
     return count
 
@@ -584,15 +1030,14 @@ def _demote_stale_critical(
     Why:
         Mist caps priority probes (both ``critical`` and ``high``) at 5
         per effective config. The tool now claims all 5 slots for the
-        curated Zscaler roles at ``critical``, so any foreign probe
-        currently marked critical must be demoted or the PUT is
-        rejected. We write the literal ``"auto"`` (Mist's own default
-        for non-priority probes) rather than dropping the key: it is
-        idempotent across re-runs and mirrors the value Mist itself
-        emits on system-generated probes. This intentionally relaxes
-        FR-012's strict foreign-preservation guarantee -- the change is
-        surfaced in ``_summarise`` so the operator sees it before
-        confirming.
+        curated Zscaler roles, so any foreign probe currently marked
+        critical must be demoted or the PUT is rejected. We write the
+        literal ``"auto"`` (Mist's own default for non-priority probes)
+        rather than dropping the key: it is idempotent across re-runs
+        and mirrors the value Mist itself emits on system-generated
+        probes. This intentionally relaxes strict foreign preservation
+        -- the change is surfaced in ``_summarise`` so the operator
+        sees it before confirming.
 
     Args:
         foreign: Foreign probe map (probes without the ``zcc-`` prefix).
@@ -604,7 +1049,7 @@ def _demote_stale_critical(
     """
     result: dict[str, dict[str, Any]] = {}
     for name, probe in foreign.items():
-        if isinstance(probe, dict) and probe.get("aggressiveness") == _CRITICAL_AGGRESSIVENESS:
+        if isinstance(probe, dict) and probe.get("aggressiveness") in _PRIORITY_AGGRESSIVENESS:
             demoted = dict(probe)
             demoted["aggressiveness"] = _AUTO_AGGRESSIVENESS
             result[name] = demoted
@@ -623,7 +1068,7 @@ def _prompt_confirm(summary: str) -> bool:
     Why:
         Isolated so tests can patch ``input`` without touching the rest
         of the flow. Only exact ``y`` / ``yes`` (case-insensitive)
-        answers proceed; anything else aborts (FR-013 safe-default).
+        answers proceed; anything else aborts as safe-default.
 
     Args:
         summary: Multi-line pre-PUT summary from ``_summarise``.
@@ -641,36 +1086,39 @@ def _merge_zcc_criticals_into_tests(
     existing_tests: list[dict[str, Any]],
     combined_probes: dict[str, dict[str, Any]],
     vlan_ids: list[int],
+    extra_regular_names: list[str] | None = None,
 ) -> list[dict[str, Any]]:
-    """Emit one ``tests[]`` row per critical tool-authored probe.
+    """Emit one ``tests[]`` row per critical (and opt-in regular) zcc probe.
 
     Why:
-        Verified against a live Mist ``GET /orgs/{id}/setting`` response
-        2026-07-24: Mist itself emits one ``tests[]`` row per probe --
-        each row's ``probes`` list contains exactly one probe name and
-        the row carries its own ``vlan_ids`` / ``lan_networks`` copy.
-        Both the system ``mini-*`` rows and any operator-scheduled probes
-        follow this per-probe-per-row convention. Prior iterations of
-        this module (a) appended a single tool-authored aggregate row
-        named ``zcc-critical-probes`` and (b) merged all tool criticals
-        into a single foreign row's ``probes`` list -- both diverge from
-        the observed Mist convention and produce shapes operators flag
-        as wrong. This function now migrates both legacy shapes and
-        emits one nameless row per critical ``zcc-*`` probe, mirroring
-        ``vlan_ids`` / ``lan_networks`` from the first surviving foreign
-        row when one exists (so the injected rows inherit operator
-        scoping) and falling back to the supplied ``vlan_ids`` arg when
-        no foreign row is available as a template.
+        Mist itself emits one ``tests[]`` row per probe -- each row's
+        ``probes`` list holds exactly one name and the row carries its
+        own ``vlan_ids`` / ``lan_networks`` copy. Both the system
+        ``mini-*`` rows and operator-scheduled probes follow this
+        convention, so injected rows must match to look native. Rows
+        inherit ``vlan_ids`` / ``lan_networks`` from the first surviving
+        foreign row (so operator scoping applies) and fall back to the
+        supplied ``vlan_ids`` arg when no template exists. The
+        ``extra_regular_names`` opt-in schedules region-specific Samsung
+        ELM probes -- these carry ``auto`` aggressiveness so they would
+        otherwise never receive a scheduled row and would exist in
+        ``custom_probes`` but never run.
 
     Args:
         existing_tests: The ``tests[]`` list read from the fetched
             setting (may be empty).
         combined_probes: Union of foreign + tool-authored probes about
             to be written to ``synthetic_test.custom_probes``. Only
-            probes with ``aggressiveness=critical`` are scheduled.
+            probes with ``aggressiveness=critical`` are auto-scheduled.
         vlan_ids: VLAN ids to attach to injected rows when no foreign
             row is available as a template. Ignored when a template row
             with its own ``vlan_ids`` exists.
+        extra_regular_names: Optional additional ``zcc-*`` probe names
+            to schedule at regular (non-critical) priority. Deduplicated
+            against the critical set; ordering-stable via sort. Rows are
+            emitted with the same shape/template as critical rows -- the
+            tests[] row itself carries no aggressiveness (that lives on
+            the probe body in ``custom_probes``).
 
     Returns:
         A new list. Foreign rows are preserved (with stale ``zcc-*``
@@ -678,13 +1126,17 @@ def _merge_zcc_criticals_into_tests(
         contained ``zcc-*`` probes are dropped so re-injection is
         authoritative. Legacy aggregate rows whose ``name`` starts with
         ``zcc-`` are also dropped. One nameless row is appended per
-        critical ``zcc-*`` probe, each carrying only that probe's name
+        scheduled ``zcc-*`` probe, each carrying only that probe's name
         plus inherited ``vlan_ids`` / ``lan_networks``.
     """
     critical_names = sorted(
         name
         for name, probe in combined_probes.items()
-        if isinstance(probe, dict) and probe.get("aggressiveness") == _CRITICAL_AGGRESSIVENESS
+        if isinstance(probe, dict) and probe.get("aggressiveness") in _PRIORITY_AGGRESSIVENESS
+    )
+    critical_set = set(critical_names)
+    regular_names = sorted(
+        {name for name in (extra_regular_names or []) if isinstance(name, str) and name not in critical_set}
     )
 
     surviving: list[dict[str, Any]] = []
@@ -692,8 +1144,9 @@ def _merge_zcc_criticals_into_tests(
         if not isinstance(row, dict):
             continue
         row_name = row.get("name")
-        # Legacy cleanup: drop tool-authored aggregate rows written by
-        # earlier versions of this module (name="zcc-critical-probes").
+        # Drop legacy tool-authored aggregate rows (name="zcc-critical-probes")
+        # written by earlier versions -- they diverge from Mist's one-row-per-probe
+        # convention and re-injection below is authoritative.
         if isinstance(row_name, str) and row_name.startswith(_TOOL_NAME_PREFIX):
             logging.info(
                 "Dropping legacy tool-authored tests[] row %r (aggregate-row migration)",
@@ -704,19 +1157,18 @@ def _merge_zcc_criticals_into_tests(
         probes_field = cleaned.get("probes")
         if isinstance(probes_field, list):
             filtered = [p for p in probes_field if not (isinstance(p, str) and p.startswith(_TOOL_NAME_PREFIX))]
-            # A row that only ever held zcc-* names is a prior-run
-            # injection; drop it so re-injection below is authoritative.
+            # Row that only held zcc-* names is a prior injection; drop so
+            # re-injection is authoritative.
             if probes_field and not filtered:
                 continue
             cleaned["probes"] = filtered
         surviving.append(cleaned)
 
-    if not critical_names:
+    if not critical_names and not regular_names:
         return surviving
 
-    # Inherit vlan/lan scoping from the first surviving foreign row so
-    # injected zcc-* rows match operator intent. Fall back to the
-    # supplied vlan_ids arg when no template is available.
+    # Inherit vlan/lan scoping from the first surviving foreign row so injected
+    # rows match operator intent; fall back to the supplied vlan_ids arg.
     template_vlan_ids: list[int] | None = None
     template_lan_networks: list[str] | None = None
     for row in surviving:
@@ -731,7 +1183,7 @@ def _merge_zcc_criticals_into_tests(
 
     effective_vlans = template_vlan_ids if template_vlan_ids is not None else list(vlan_ids)
 
-    for name in critical_names:
+    for name in critical_names + regular_names:
         new_row: dict[str, Any] = {"probes": [name], "vlan_ids": list(effective_vlans)}
         if template_lan_networks:
             new_row["lan_networks"] = list(template_lan_networks)
@@ -750,9 +1202,9 @@ def _apply(
     """PUT the updated setting block via ``updateOrgSettings``.
 
     Why:
-        Wrapper enforces FR-014 (exactly one PUT) and FR-015 (sibling
-        preservation): we deep-copy the fetched ``setting`` block and
-        only overwrite ``synthetic_test.custom_probes`` plus regenerate
+        Wrapper enforces exactly-one-PUT and sibling preservation: we
+        deep-copy the fetched ``setting`` block and only overwrite
+        ``synthetic_test.custom_probes`` plus regenerate
         ``synthetic_test.tests[]`` for critical probes so the emitted
         probes are actually scheduled to run.
 
@@ -797,6 +1249,7 @@ def _prompt_and_apply_site_overrides(
     mist_session: Any,
     org_id: str,
     resulting_tool: dict[str, dict[str, Any]],
+    sources: tuple[dict[str, Any], dict[str, Any]],
 ) -> None:
     """Offer to push the tool-authored probe set into per-site settings.
 
@@ -812,8 +1265,11 @@ def _prompt_and_apply_site_overrides(
         VLAN prompt is issued after site selection because sites picked
         for an override typically have a *different* VLAN topology than
         the org default -- reusing the org list would defeat the point
-        of the override. This whole flow is optional (default no) so
-        unattended runs do not silently mutate site settings.
+        of the override. Regional Samsung ELM probes are injected per-
+        site based on each site's ``country_code`` so a site in Germany
+        gets EMEA endpoints while a site in the US gets the Americas
+        set. This whole flow is optional (default no) so unattended runs
+        do not silently mutate site settings.
 
     Args:
         mist_session: Authenticated ``mistapi`` session.
@@ -824,6 +1280,10 @@ def _prompt_and_apply_site_overrides(
             org. Used as the source of truth (name/target/type/
             aggressiveness) to push into each chosen site; each probe's
             ``vlan_ids`` is replaced with the freshly-prompted list.
+        sources: The ``(probes, cenr)`` tuple from ``_load_probe_sources``.
+            Passed through to ``_apply_to_site`` so per-region Samsung
+            ELM probes can be built from the same source-of-truth
+            catalogue.
     """
     if not resulting_tool:
         return
@@ -835,19 +1295,16 @@ def _prompt_and_apply_site_overrides(
     if not sites:
         print("  No sites found in this org -- skipping site overrides.")
         return
-    site_ids = _prompt_site_indexes(sites)
-    if not site_ids:
+    picked_sites = _prompt_site_indexes(sites)
+    if not picked_sites:
         print("  No valid site indexes entered -- skipping site overrides.")
         return
-    # Site overrides commonly target sites with distinct VLAN topology
-    # (that's the reason to override an org-wide default in the first
-    # place), so re-prompt for the VLAN list rather than silently reusing
-    # the org-scope list. VLANs live on the generated tests[] rows only;
-    # probe bodies carry {type, target, aggressiveness} to match mini-*.
+    # Site overrides commonly target sites with distinct VLAN topology, so
+    # re-prompt rather than silently reusing the org-scope list.
     print("  Enter the VLAN ids to apply to the selected sites' tests[] rows.")
     site_vlan_ids = _prompt_vlan_list()
-    for site_id in site_ids:
-        _apply_to_site(mist_session, site_id, resulting_tool, site_vlan_ids)
+    for site in picked_sites:
+        _apply_to_site(mist_session, site, resulting_tool, site_vlan_ids, sources)
 
 
 def _list_org_sites(mist_session: Any, org_id: str) -> list[dict[str, Any]]:
@@ -879,12 +1336,11 @@ def _list_org_sites(mist_session: Any, org_id: str) -> list[dict[str, Any]]:
         return []
     if not isinstance(sites, list):
         return []
-    # Filter to entries that at minimum carry an id we can PUT against.
     return [s for s in sites if isinstance(s, dict) and s.get("id")]
 
 
-def _prompt_site_indexes(sites: list[dict[str, Any]]) -> list[str]:
-    """Display an indexed site table and return the ids the operator picks.
+def _prompt_site_indexes(sites: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Display an indexed site table and return the site dicts the operator picks.
 
     Why:
         UUID entry proved error-prone in the field (operators pasted
@@ -893,9 +1349,11 @@ def _prompt_site_indexes(sites: list[dict[str, Any]]) -> list[str]:
         the operator eyeball site names before committing. The list is
         sorted by human-readable site name (case-insensitive) so the
         picker matches how operators think about their fleet; unnamed
-        sites sink to the bottom. Kept in its own helper so tests can
-        patch ``input`` for this stage independently of the earlier y/N
-        prompt.
+        sites sink to the bottom. Full site dicts are returned (not just
+        ids) so downstream code can read per-site fields like
+        ``country_code`` without a second API round-trip. Kept in its
+        own helper so tests can patch ``input`` for this stage
+        independently of the earlier y/N prompt.
 
     Args:
         sites: List of site dicts as returned by ``_list_org_sites``. The
@@ -903,16 +1361,15 @@ def _prompt_site_indexes(sites: list[dict[str, Any]]) -> list[str]:
             caller's ordering is irrelevant.
 
     Returns:
-        Deduplicated list of site id strings corresponding to valid
+        Deduplicated list of the full site dicts corresponding to valid
         1-based indexes (into the *sorted* view) supplied by the
-        operator. Empty list if the operator supplied nothing or every
-        entry was out of range / non-numeric.
+        operator, preserving operator input order. Empty list if the
+        operator supplied nothing or every entry was out of range /
+        non-numeric.
     """
     print("  Available sites:")
-    # Sort by human-readable name (case-insensitive) so the picker matches
-    # how operators think about their fleet. Unnamed sites sort to the end
-    # to keep the deterministic ordering stable regardless of API return
-    # order. The sorted list becomes the 1-based index map for the prompt.
+    # Sort by name (case-insensitive) so the picker matches how operators think
+    # about their fleet. Unnamed sites sink to the end for stable ordering.
     sorted_sites = sorted(
         sites,
         key=lambda s: (
@@ -921,8 +1378,6 @@ def _prompt_site_indexes(sites: list[dict[str, Any]]) -> list[str]:
             s.get("id") or "",
         ),
     )
-    # 1-based indexes are more natural for humans; keep width consistent
-    # for large orgs so the columns line up in a terminal.
     width = len(str(len(sorted_sites)))
     for idx, site in enumerate(sorted_sites, start=1):
         name = site.get("name") or "(unnamed)"
@@ -930,7 +1385,7 @@ def _prompt_site_indexes(sites: list[dict[str, Any]]) -> list[str]:
         print(f"    [{idx:>{width}}] {name}  ({site_id})")
     raw = input("  Enter comma-separated site indexes to override, or leave blank to cancel: ")
     parts = [item.strip() for item in raw.split(",") if item.strip()]
-    seen: dict[str, None] = {}
+    picked_by_id: dict[str, dict[str, Any]] = {}
     for part in parts:
         try:
             idx = int(part)
@@ -940,19 +1395,21 @@ def _prompt_site_indexes(sites: list[dict[str, Any]]) -> list[str]:
         if idx < 1 or idx > len(sorted_sites):
             logging.warning("Ignoring out-of-range site index: %d", idx)
             continue
-        site_id = sorted_sites[idx - 1].get("id")
+        candidate = sorted_sites[idx - 1]
+        site_id = candidate.get("id")
         if isinstance(site_id, str) and site_id:
-            seen.setdefault(site_id, None)
-    return list(seen)
+            picked_by_id.setdefault(site_id, candidate)
+    return list(picked_by_id.values())
 
 
 def _apply_to_site(
     mist_session: Any,
-    site_id: str,
+    site: dict[str, Any],
     tool_probes: dict[str, dict[str, Any]],
     vlan_ids: list[int],
+    sources: tuple[dict[str, Any], dict[str, Any]],
 ) -> None:
-    """PUT ``tool_probes`` into the given site's ``custom_probes`` block.
+    """PUT ``tool_probes`` plus regional Samsung ELM probes into the site.
 
     Why:
         Site-level custom_probes lives at ``synthetic_test.custom_probes``
@@ -964,15 +1421,49 @@ def _apply_to_site(
         ``aggressiveness=critical`` has that key stripped, every
         ``zcc-`` probe is authoritatively replaced, and
         ``synthetic_test.tests[]`` gets regenerated for critical
-        probes so the site's schedule actually runs them.
+        probes so the site's schedule actually runs them. On top of the
+        org-scope tool set, the region-scoped Samsung ELM probes for the
+        site's ``country_code`` are injected here (only) so a site in
+        Germany gets EMEA ELM endpoints while a site in the US gets the
+        Americas set -- these regional roles never appear at org scope
+        because pushing every region's endpoints everywhere is wasteful.
+        Additionally, the ``tunnel_zen`` role's ~190 probe definitions
+        (already emitted at org scope) are selectively SCHEDULED here per
+        site: the geodesically-nearest 1-2 ZEN locations for the site's
+        country/latlng get explicit ``tests[]`` rows so operators see
+        reachability signal only for ZENs their users would actually route
+        to, not the entire global ZEN mesh.
 
     Args:
         mist_session: Authenticated ``mistapi`` session.
-        site_id: Mist site UUID.
+        site: The full site dict from ``_list_org_sites`` -- ``id`` is
+            required for the PUT, ``country_code`` (may be absent) drives
+            regional ELM probe selection.
         tool_probes: Tool-authored probe set to write.
         vlan_ids: VLAN ids to attach to each generated test row.
+        sources: The ``(probes, cenr)`` tuple from ``_load_probe_sources``,
+            passed to ``_build_region_probes`` so region roles are read
+            from the same source-of-truth catalogue.
     """
-    logging.info("Applying site override to site_id=%s", site_id)
+    site_id = site.get("id")
+    if not isinstance(site_id, str) or not site_id:
+        logging.error("Site override skipped: site dict missing id (%r)", site)
+        return
+    country_code = site.get("country_code")
+    logging.info(
+        "Applying site override to site_id=%s country_code=%r",
+        site_id,
+        country_code,
+    )
+    region_probes = _build_region_probes(sources, country_code)
+    # ZEN scheduling: org PUT defined every tunnel_zen probe but only critical
+    # probes get scheduled tests[] rows by default. Pick the geodesically
+    # nearest ZEN cities for this site and pass their names through
+    # extra_regular_names so each gets its own scheduled row.
+    zen_probe_names = _zen_probe_names_for_cities(
+        _resolve_zen_cities_for_site(site, sources[1]),
+        sources[1],
+    )
     try:
         response = _mist_site_setting.getSiteSetting(mist_session, site_id)
     except Exception as err:  # noqa: BLE001 -- surface any transport error.
@@ -985,7 +1476,11 @@ def _apply_to_site(
     existing_probes = _detect_existing(site_setting)
     _, foreign = _partition_tool_authored(existing_probes)
     foreign_demoted = _demote_stale_critical(foreign)
-    combined = {**foreign_demoted, **tool_probes}
+    # Region probes appended after tool_probes so any hypothetical name
+    # collision favors the regional entry at site scope; the
+    # ``zcc-samsung_elm_activation_*`` prefix makes collisions structurally
+    # impossible in practice.
+    combined = {**foreign_demoted, **tool_probes, **region_probes}
 
     body: dict[str, Any] = json.loads(json.dumps(site_setting)) if site_setting else {}
     synthetic = body.get("synthetic_test")
@@ -996,7 +1491,15 @@ def _apply_to_site(
     existing_tests = synthetic.get("tests")
     if not isinstance(existing_tests, list):
         existing_tests = []
-    synthetic["tests"] = _merge_zcc_criticals_into_tests(existing_tests, combined, vlan_ids)
+    # Region and ZEN probes are auto-priority, so the default critical-only
+    # filter would not schedule them; pass their names explicitly so each
+    # gets a tests[] row and actually runs.
+    synthetic["tests"] = _merge_zcc_criticals_into_tests(
+        existing_tests,
+        combined,
+        vlan_ids,
+        extra_regular_names=[*region_probes.keys(), *zen_probe_names],
+    )
 
     logging.debug(
         "Calling updateSiteSettings(site_id=%s, probe_count=%d)",
@@ -1015,5 +1518,8 @@ def _apply_to_site(
         logging.error("updateSiteSettings(%s) HTTP %s", site_id, status)
         return
     print(
-        f"  Site {site_id}: override applied " f"({len(tool_probes)} tool-authored + {len(foreign_demoted)} preserved)"
+        f"  Site {site_id}: override applied "
+        f"({len(tool_probes)} tool-authored + {len(region_probes)} regional "
+        f"+ {len(zen_probe_names)} ZEN scheduled "
+        f"+ {len(foreign_demoted)} preserved)"
     )
