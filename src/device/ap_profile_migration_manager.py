@@ -393,17 +393,63 @@ class APProfileMigrationManager:
         # updateSiteDevice) from the compact aps_reassigned id list.
         plan_by_id: dict[str, dict[str, Any]] = {str(rec["device_id"]): rec for rec in payload.get("aps_planned", [])}
 
-        reverted_ids: list[str] = []
-        missing_ids: list[str] = []
-        failed_ids: list[str] = []
-
         aps_to_revert = [str(x) for x in payload.get("aps_reassigned", [])]
-        total = len(aps_to_revert)
-        # WHY: per-invocation pacing state per plan-rate-limiting.md Q3.
-        # Mirrors the migrate loop; keeps menus 207 and 208 consistent for
-        # the operator (data-model-rate-limiting.md section 2, Q1 lock).
-        smoothed: float | None = None
-        pacing_stats: dict[str, float | int] = {
+        reverted_ids, missing_ids, failed_ids, pacing_stats = APProfileMigrationManager._run_revert_loop(
+            mist_session,
+            aps_to_revert,
+            plan_by_id,
+            source_id,
+        )
+
+        outcome = APProfileMigrationManager._compute_revert_outcome(reverted_ids, missing_ids, failed_ids)
+
+        APProfileMigrationManager._print_revert_summary(
+            backup_path=str(backup_path),
+            source_name=source_name,
+            source_id=source_id,
+            planned_count=planned_count,
+            reverted_ids=reverted_ids,
+            missing_ids=missing_ids,
+            failed_ids=failed_ids,
+            outcome=outcome,
+            pacing_stats=pacing_stats,
+        )
+
+        # WHY: FR-025 -- one JSONL audit row per revert invocation. Best-effort
+        # write; TelemetryEmitter swallows OSError and logs a warning.
+        APProfileMigrationManager._emit_revert_audit(
+            APProfileMigrationManager._build_revert_audit_payload(
+                org_id=org_id,
+                backup_path=str(backup_path),
+                source_id=source_id,
+                planned_count=planned_count,
+                reverted_ids=reverted_ids,
+                missing_ids=missing_ids,
+                failed_ids=failed_ids,
+                outcome=outcome,
+                pacing_stats=pacing_stats,
+            )
+        )
+
+    # ------------------------------------------------------------------
+    # Private helpers -- revert loop and reporting (extracted for Radon CC)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _new_pacing_stats() -> dict[str, float | int]:
+        """Return the initial pacing-stats dict for a menu-207/208 loop.
+
+        Why:
+            Both the migrate and the revert loops keep the same counters
+            (puts_issued, http_429_seen, non_429_failures, delay_sum, delay_max,
+            delay_count) so that the JSONL audit and the operator-facing
+            summary share one shape. Centralising the initialiser removes a
+            small source of copy-paste drift.
+
+        Returns:
+            A fresh dict with every counter zeroed.
+        """
+        return {
             "puts_issued": 0,
             "http_429_seen": 0,
             "non_429_failures": 0,
@@ -411,6 +457,43 @@ class APProfileMigrationManager:
             "delay_max": 0.0,
             "delay_count": 0,
         }
+
+    @staticmethod
+    def _run_revert_loop(
+        mist_session: Any,
+        aps_to_revert: list[str],
+        plan_by_id: dict[str, dict[str, Any]],
+        source_id: str,
+    ) -> tuple[list[str], list[str], list[str], dict[str, float | int]]:
+        """Iterate every AP in the backup and revert each to the source profile.
+
+        Why:
+            Extracted from ``revert_ap_profile_migration`` so the entry point
+            stays under the Radon CC gate. The loop owns per-invocation pacing
+            state, 429-tolerant per-AP error handling, and the missing/reverted
+            /failed partitioning; keeping it in one focused helper is easier to
+            reason about than an inline block inside the 200-line entry point.
+
+        Args:
+            mist_session: The mistapi API session used for the PUT calls.
+            aps_to_revert: Device IDs (in reassignment order) from the backup.
+            plan_by_id: Lookup of the full APRecord dicts keyed by ``device_id``.
+            source_id: The original source profile ID to reassign each AP back
+                to.
+
+        Returns:
+            A ``(reverted_ids, missing_ids, failed_ids, pacing_stats)`` tuple
+            with disjoint device-id lists and the final pacing counters.
+        """
+        reverted_ids: list[str] = []
+        missing_ids: list[str] = []
+        failed_ids: list[str] = []
+        # WHY: per-invocation pacing state per plan-rate-limiting.md Q3.
+        # Mirrors the migrate loop; keeps menus 207 and 208 consistent for
+        # the operator (data-model-rate-limiting.md section 2, Q1 lock).
+        smoothed: float | None = None
+        pacing_stats = APProfileMigrationManager._new_pacing_stats()
+        total = len(aps_to_revert)
         for idx, device_id in enumerate(aps_to_revert, start=1):
             rec = plan_by_id.get(device_id)
             if rec is None:
@@ -432,50 +515,146 @@ class APProfileMigrationManager:
             # 10K-AP revert stays under Mist's 5000-requests-per-hour ceiling.
             smoothed = APProfileMigrationManager._apply_pacing(smoothed, pacing_stats)
             pacing_stats["puts_issued"] += 1
-            try:
-                result = APProfileMigrationManager._revert_one_ap(
-                    mist_session,
-                    device_id,
-                    str(rec["site_id"]),
-                    source_id,
-                )
-            except Exception as exc:  # noqa: BLE001  # WHY: tolerant per FR-023.
-                # WHY: FR-A04 -- 429 is a throttle signal. Feed the limiter
-                # via cache invalidation and continue; do NOT count the AP
-                # as failed on 429 alone.
-                if APProfileMigrationManager._is_429(exc):
-                    APProfileMigrationManager._signal_rate_limit_hit()
-                    pacing_stats["http_429_seen"] += 1
-                    continue
-                pacing_stats["non_429_failures"] += 1
-                failed_ids.append(device_id)
-                _LOGGER.warning(
-                    "Revert failed for AP %s after retry exhaustion: %s",
-                    device_id,
-                    exc,
-                )
-                continue
+            APProfileMigrationManager._classify_revert_outcome_for_ap(
+                mist_session=mist_session,
+                device_id=device_id,
+                site_id=str(rec["site_id"]),
+                source_id=source_id,
+                pacing_stats=pacing_stats,
+                reverted_ids=reverted_ids,
+                missing_ids=missing_ids,
+                failed_ids=failed_ids,
+            )
+        return reverted_ids, missing_ids, failed_ids, pacing_stats
 
-            if result == _REVERT_MISSING:
-                # WHY: FR-023 -- the AP no longer exists in Mist; count and
-                # continue instead of aborting the run.
-                missing_ids.append(device_id)
-                _LOGGER.warning("AP %s no longer exists in Mist; counted as missing", device_id)
-                continue
+    @staticmethod
+    def _classify_revert_outcome_for_ap(
+        *,
+        mist_session: Any,
+        device_id: str,
+        site_id: str,
+        source_id: str,
+        pacing_stats: dict[str, float | int],
+        reverted_ids: list[str],
+        missing_ids: list[str],
+        failed_ids: list[str],
+    ) -> None:
+        """Attempt one PUT and route the outcome into the correct id list.
 
-            reverted_ids.append(device_id)
+        Why:
+            Isolates the single-AP branching (429 vs. other exception vs.
+            missing AP vs. success) from the enclosing loop so the loop stays
+            under the Radon CC gate. All partitioning of the resulting id
+            lists happens through explicit ``list.append`` calls so the caller
+            can inspect state after the loop finishes.
 
-        # WHY: outcome logic per data-model 2.2 -- "partial" covers the
-        # missing-AP-with-warning case as well as mid-run failures.
+        Args:
+            mist_session: The mistapi API session used for the PUT call.
+            device_id: The AP the caller is attempting to revert.
+            site_id: The site the AP is bound to (needed by
+                ``updateSiteDevice``).
+            source_id: The original source profile ID we are reverting to.
+            pacing_stats: Mutable pacing counters that this helper increments
+                on 429 or on non-429 failure.
+            reverted_ids: Mutable list that receives ``device_id`` on success.
+            missing_ids: Mutable list that receives ``device_id`` when Mist
+                returns the sentinel "AP no longer exists" result.
+            failed_ids: Mutable list that receives ``device_id`` on non-429
+                exceptions.
+        """
+        try:
+            result = APProfileMigrationManager._revert_one_ap(
+                mist_session,
+                device_id,
+                site_id,
+                source_id,
+            )
+        except Exception as exc:  # noqa: BLE001  # WHY: tolerant per FR-023.
+            # WHY: FR-A04 -- 429 is a throttle signal. Feed the limiter via
+            # cache invalidation and continue; do NOT count the AP as failed
+            # on 429 alone.
+            if APProfileMigrationManager._is_429(exc):
+                APProfileMigrationManager._signal_rate_limit_hit()
+                pacing_stats["http_429_seen"] += 1
+                return
+            pacing_stats["non_429_failures"] += 1
+            failed_ids.append(device_id)
+            _LOGGER.warning(
+                "Revert failed for AP %s after retry exhaustion: %s",
+                device_id,
+                exc,
+            )
+            return
+
+        if result == _REVERT_MISSING:
+            # WHY: FR-023 -- the AP no longer exists in Mist; count and
+            # continue instead of aborting the run.
+            missing_ids.append(device_id)
+            _LOGGER.warning("AP %s no longer exists in Mist; counted as missing", device_id)
+            return
+
+        reverted_ids.append(device_id)
+
+    @staticmethod
+    def _compute_revert_outcome(
+        reverted_ids: list[str],
+        missing_ids: list[str],
+        failed_ids: list[str],
+    ) -> str:
+        """Classify the overall revert run as ``success``, ``partial``, or ``failure``.
+
+        Why:
+            Data-model 2.2 defines the three outcomes. Isolating the tri-state
+            logic keeps the entry point under the Radon CC gate and gives unit
+            tests a single seam to pin every branch of the truth table.
+
+        Args:
+            reverted_ids: APs that were reassigned back to the source profile.
+            missing_ids: APs that no longer exist in Mist.
+            failed_ids: APs that failed for non-429 reasons after retries.
+
+        Returns:
+            One of ``"success"``, ``"partial"``, or ``"failure"``.
+        """
         if not missing_ids and not failed_ids:
-            outcome = "success"
-        elif reverted_ids or missing_ids:
-            outcome = "partial"
-        else:
-            outcome = "failure"
+            return "success"
+        if reverted_ids or missing_ids:
+            return "partial"
+        return "failure"
 
-        # WHY: operator-visible summary -- prints the backup path so the
-        # operator can copy-paste it into a bug report or a rollback ticket.
+    @staticmethod
+    def _print_revert_summary(
+        *,
+        backup_path: str,
+        source_name: str,
+        source_id: str,
+        planned_count: int,
+        reverted_ids: list[str],
+        missing_ids: list[str],
+        failed_ids: list[str],
+        outcome: str,
+        pacing_stats: dict[str, float | int],
+    ) -> None:
+        """Print the operator-facing end-of-run summary for menu 208.
+
+        Why:
+            The summary block is deterministic text with two conditional
+            "missing" / "failed" lines and one adaptive-limiter telemetry
+            block. Extracting it drops several branches out of the entry point
+            and gives a single call site to freeze in golden-output tests.
+
+        Args:
+            backup_path: Absolute path of the backup file the operator picked.
+            source_name: Human-readable original source profile name.
+            source_id: Original source profile ID.
+            planned_count: Total AP count from the backup's ``aps_planned``.
+            reverted_ids: Successfully reverted device IDs.
+            missing_ids: Device IDs Mist reported as no-longer-existing.
+            failed_ids: Device IDs that failed for non-429 reasons.
+            outcome: The final ``success``/``partial``/``failure`` label from
+                ``_compute_revert_outcome``.
+            pacing_stats: Final pacing counters from the revert loop.
+        """
         print("\nRevert summary:")  # noqa: T201
         print(f"  Backup file: {backup_path}")  # noqa: T201
         print(f"  Source profile: {source_name} (id={source_id})")  # noqa: T201
@@ -493,39 +672,72 @@ class APProfileMigrationManager:
         # WHY: FR-A09 -- adaptive-rate-limiter telemetry lines. Same text,
         # same order as the migrate-side summary so operators reading both
         # menus see one consistent block.
-        _delay_count = int(pacing_stats["delay_count"])
-        _delay_mean = (pacing_stats["delay_sum"] / _delay_count) if _delay_count > 0 else 0.0
-        _delay_max = float(pacing_stats["delay_max"])
+        delay_count = int(pacing_stats["delay_count"])
+        delay_mean = (pacing_stats["delay_sum"] / delay_count) if delay_count > 0 else 0.0
+        delay_max = float(pacing_stats["delay_max"])
         print(f"  Total PUTs issued        : {int(pacing_stats['puts_issued'])}")  # noqa: T201
         print(f"  HTTP 429 responses seen  : {int(pacing_stats['http_429_seen'])}")  # noqa: T201
         print(f"  Non-429 failures         : {int(pacing_stats['non_429_failures'])}")  # noqa: T201
-        print(f"  Rate limiter delay (s)   : mean={_delay_mean:.3f}  max={_delay_max:.3f}")  # noqa: T201
+        print(f"  Rate limiter delay (s)   : mean={delay_mean:.3f}  max={delay_max:.3f}")  # noqa: T201
 
-        # WHY: FR-025 -- one JSONL audit row per revert invocation. Best-effort
-        # write; TelemetryEmitter swallows OSError and logs a warning.
-        APProfileMigrationManager._emit_revert_audit(
-            {
-                "event_type": "ap_profile_migration_revert",
-                "timestamp_utc": _utc_iso_timestamp(),
-                "org_id": org_id,
-                "backup_file_path": str(backup_path),
-                "source_profile_id": source_id,
-                "planned_count": planned_count,
-                "reverted_count": len(reverted_ids),
-                "missing_count": len(missing_ids),
-                "failed_count": len(failed_ids),
-                "outcome": outcome,
-                # WHY: FR-A09 -- pacing telemetry sub-dict per
-                # data-model-rate-limiting.md section 3.
-                "pacing": {
-                    "puts_issued": int(pacing_stats["puts_issued"]),
-                    "http_429_seen": int(pacing_stats["http_429_seen"]),
-                    "non_429_failures": int(pacing_stats["non_429_failures"]),
-                    "delay_seconds_mean": round(_delay_mean, 3),
-                    "delay_seconds_max": round(_delay_max, 3),
-                },
-            }
-        )
+    @staticmethod
+    def _build_revert_audit_payload(
+        *,
+        org_id: str,
+        backup_path: str,
+        source_id: str,
+        planned_count: int,
+        reverted_ids: list[str],
+        missing_ids: list[str],
+        failed_ids: list[str],
+        outcome: str,
+        pacing_stats: dict[str, float | int],
+    ) -> dict[str, Any]:
+        """Build the JSONL audit payload for a completed revert run.
+
+        Why:
+            Split from the entry point so the payload shape can be exercised
+            in unit tests without invoking the whole menu. The shape matches
+            data-model-rate-limiting.md section 3 for the pacing sub-dict.
+
+        Args:
+            org_id: The operator's current org.
+            backup_path: Absolute path of the backup file that was replayed.
+            source_id: Original source profile ID reverted to.
+            planned_count: Total AP count from the backup's ``aps_planned``.
+            reverted_ids: Successfully reverted device IDs.
+            missing_ids: Device IDs Mist reported as no-longer-existing.
+            failed_ids: Device IDs that failed for non-429 reasons.
+            outcome: ``success`` / ``partial`` / ``failure`` label.
+            pacing_stats: Final pacing counters from the revert loop.
+
+        Returns:
+            The dict that ``_emit_revert_audit`` will write as one JSONL row.
+        """
+        delay_count = int(pacing_stats["delay_count"])
+        delay_mean = (pacing_stats["delay_sum"] / delay_count) if delay_count > 0 else 0.0
+        delay_max = float(pacing_stats["delay_max"])
+        return {
+            "event_type": "ap_profile_migration_revert",
+            "timestamp_utc": _utc_iso_timestamp(),
+            "org_id": org_id,
+            "backup_file_path": backup_path,
+            "source_profile_id": source_id,
+            "planned_count": planned_count,
+            "reverted_count": len(reverted_ids),
+            "missing_count": len(missing_ids),
+            "failed_count": len(failed_ids),
+            "outcome": outcome,
+            # WHY: FR-A09 -- pacing telemetry sub-dict per
+            # data-model-rate-limiting.md section 3.
+            "pacing": {
+                "puts_issued": int(pacing_stats["puts_issued"]),
+                "http_429_seen": int(pacing_stats["http_429_seen"]),
+                "non_429_failures": int(pacing_stats["non_429_failures"]),
+                "delay_seconds_mean": round(delay_mean, 3),
+                "delay_seconds_max": round(delay_max, 3),
+            },
+        }
 
     # ------------------------------------------------------------------
     # Private helpers -- adaptive rate limiting (addendum FR-A01..FR-A09)
@@ -652,6 +864,43 @@ class APProfileMigrationManager:
     # ------------------------------------------------------------------
 
     @staticmethod
+    def _fetch_and_sort_ap_profiles(session: Any, org_id: str) -> list[dict[str, Any]]:
+        """Fetch all AP device profiles for the org, filtered and alphabetised.
+
+        Why:
+            Extracted from ``_pick_ap_device_profile`` to keep the picker's
+            cyclomatic complexity under the Radon gate. The fetch + pagination
+            + filter + sort has no interactive state, so it lives on its own
+            and is easy for unit tests to patch.
+
+        Args:
+            session: The mistapi API session.
+            org_id: The org whose device profiles to list.
+
+        Returns:
+            A list of profile dicts with ``type == "ap"``, sorted by lower-case
+            name.
+
+        Raises:
+            RuntimeError: When the org has zero AP device profiles.
+        """
+        response = _mist_deviceprofiles.listOrgDeviceProfiles(session, org_id)
+        # WHY: get_all walks pagination in production; tests can return a
+        # ready-made list on .data and get_all handles both shapes.
+        try:
+            profiles = mistapi.get_all(response=response, mist_session=session)
+        except Exception:  # noqa: BLE001  # WHY: fallback for mocked responses.
+            profiles = getattr(response, "data", []) or []
+
+        ap_profiles = [p for p in profiles if p.get("type") == "ap"]
+        if not ap_profiles:
+            raise RuntimeError("No AP device profiles found in the selected organization.")
+
+        # WHY: alphabetise by name for a stable operator UX.
+        ap_profiles.sort(key=lambda p: str(p.get("name", "")).lower())
+        return ap_profiles
+
+    @staticmethod
     def _pick_ap_device_profile(session: Any, org_id: str, prompt_text: str) -> tuple[str, str, dict[str, Any]]:
         """Prompt the operator to pick one AP device profile from the org.
 
@@ -676,22 +925,7 @@ class APProfileMigrationManager:
         # WHY: lazy import for InputUtils so this module stays circular-safe.
         import MistHelper as _mh  # noqa: PLC0415
 
-        # WHY: fetch every profile, filter to type=="ap" locally so a test that
-        # returns a mixed list still gets the correct filter behaviour.
-        response = _mist_deviceprofiles.listOrgDeviceProfiles(session, org_id)
-        # WHY: get_all walks pagination in production; tests can return a
-        # ready-made list on .data and get_all handles both shapes.
-        try:
-            profiles = mistapi.get_all(response=response, mist_session=session)
-        except Exception:  # noqa: BLE001  # WHY: fallback for mocked responses.
-            profiles = getattr(response, "data", []) or []
-
-        ap_profiles = [p for p in profiles if p.get("type") == "ap"]
-        if not ap_profiles:
-            raise RuntimeError("No AP device profiles found in the selected organization.")
-
-        # WHY: alphabetise by name for a stable operator UX.
-        ap_profiles.sort(key=lambda p: str(p.get("name", "")).lower())
+        ap_profiles = APProfileMigrationManager._fetch_and_sort_ap_profiles(session, org_id)
 
         print(f"\n{prompt_text}")  # noqa: T201
         for idx, prof in enumerate(ap_profiles, start=1):
@@ -1262,8 +1496,36 @@ class APProfileMigrationManager:
             ValueError: When any rule fails; message names the offending
                 field or rule so the operator can locate the fix.
         """
-        # WHY: file-load errors surface as ValueError so the caller has one
-        # exception type to catch on the refusal path.
+        payload = APProfileMigrationManager._parse_backup_file(path)
+        APProfileMigrationManager._validate_backup_top_level(payload)
+        planned = payload["aps_planned"]
+        APProfileMigrationManager._validate_planned_records(planned)
+        APProfileMigrationManager._validate_reassigned_list(
+            payload.get("aps_reassigned", []),
+            planned,
+        )
+        APProfileMigrationManager._validate_snapshot_ids(payload)
+        return payload
+
+    @staticmethod
+    def _parse_backup_file(path: str) -> dict[str, Any]:
+        """Read ``path`` and return the parsed JSON dict.
+
+        Why:
+            Isolates file I/O + JSON parse from the semantic rule checks so
+            each layer has a small, targeted cyclomatic complexity footprint
+            and stays under the Radon CC>10 quality gate.
+
+        Args:
+            path: Absolute filesystem path to the backup JSON file.
+
+        Returns:
+            The parsed backup dict.
+
+        Raises:
+            ValueError: When the file cannot be read, is not valid JSON, or
+                the top-level value is not a JSON object.
+        """
         try:
             raw = Path(path).read_text(encoding="utf-8")
         except OSError as exc:
@@ -1274,33 +1536,59 @@ class APProfileMigrationManager:
             raise ValueError(f"backup file not valid JSON: {exc}") from exc
         if not isinstance(payload, dict):
             raise ValueError("backup file top-level must be a JSON object")
+        return payload
 
-        # WHY: rule 1 -- schema_version pinned to the current constant. A
-        # future format change bumps this integer and refuses older tools.
+    @staticmethod
+    def _validate_backup_top_level(payload: dict[str, Any]) -> None:
+        """Enforce data-model 1.6 rules 1 through 3 on the backup top level.
+
+        Why:
+            Isolates the schema-version + required-string-field + planned-list
+            checks so ``_load_and_validate_backup`` stays under the Radon
+            complexity gate.
+
+        Args:
+            payload: The parsed backup dict.
+
+        Returns:
+            None.
+
+        Raises:
+            ValueError: When schema_version is wrong, a required string
+                field is missing or empty, or ``aps_planned`` is missing or
+                not a JSON array.
+        """
         version = payload.get("schema_version")
         if version != _BACKUP_SCHEMA_VERSION:
             raise ValueError(f"schema_version must be {_BACKUP_SCHEMA_VERSION}; got {version!r}")
-
-        # WHY: rules 2-3 -- every required top-level string field must be a
-        # non-empty string. Named individually so the refusal message points
-        # at the exact field the operator has to fix.
         for field in ("org_id", "source_profile_id", "target_profile_id", "migration_timestamp_utc"):
             value = payload.get(field)
             if not isinstance(value, str) or not value.strip():
                 raise ValueError(f"required field {field!r} must be a non-empty string")
-
-        # WHY: rule 3 -- aps_planned must be a list. An absent key is a
-        # missing field per rule 2/3; report it under the same name so the
-        # refusal message names the field the operator has to add.
         planned = payload.get("aps_planned")
         if planned is None:
             raise ValueError("required field 'aps_planned' is missing")
         if not isinstance(planned, list):
             raise ValueError("required field 'aps_planned' must be a JSON array")
 
-        # WHY: rule 4 -- every APRecord must have non-empty device_id,
-        # site_id, and mac. Loop index appears in the error so the operator
-        # can locate the bad entry without opening the JSON.
+    @staticmethod
+    def _validate_planned_records(planned: list[Any]) -> None:
+        """Enforce data-model 1.6 rule 4 on every ``aps_planned`` entry.
+
+        Why:
+            Each APRecord must have non-empty ``device_id``, ``site_id``,
+            and ``mac``. Extracting the loop keeps the caller's CC low.
+
+        Args:
+            planned: The list of AP records from the backup file.
+
+        Returns:
+            None.
+
+        Raises:
+            ValueError: When any entry is not a dict or any required
+                sub-field is missing or empty.
+        """
         for idx, rec in enumerate(planned):
             if not isinstance(rec, dict):
                 raise ValueError(f"aps_planned[{idx}] must be a JSON object")
@@ -1309,9 +1597,26 @@ class APProfileMigrationManager:
                 if not isinstance(v, str) or not v.strip():
                     raise ValueError(f"aps_planned[{idx}].{sub} must be a non-empty string")
 
-        # WHY: rule 5 -- every entry of aps_reassigned must appear as a
-        # device_id in aps_planned. Guards against hand-edited backups.
-        reassigned = payload.get("aps_reassigned", [])
+    @staticmethod
+    def _validate_reassigned_list(reassigned: Any, planned: list[Any]) -> None:
+        """Enforce data-model 1.6 rule 5 on ``aps_reassigned``.
+
+        Why:
+            Every entry of ``aps_reassigned`` must be a string and must
+            appear as a ``device_id`` in ``aps_planned``. Guards against
+            hand-edited backups that reference APs not in the plan.
+
+        Args:
+            reassigned: The value of the ``aps_reassigned`` field.
+            planned: The list of AP records (already validated).
+
+        Returns:
+            None.
+
+        Raises:
+            ValueError: When the field is not a list, an entry is not a
+                string, or an entry is not present in ``aps_planned``.
+        """
         if not isinstance(reassigned, list):
             raise ValueError("field 'aps_reassigned' must be a JSON array of strings")
         planned_ids = {str(rec.get("device_id", "")) for rec in planned}
@@ -1321,17 +1626,31 @@ class APProfileMigrationManager:
             if entry not in planned_ids:
                 raise ValueError(f"aps_reassigned contains id {entry!r} not present in aps_planned")
 
-        # WHY: rule 6 -- snapshot IDs must match the top-level IDs so a
-        # hand-edited pair (snapshot copied from a wrong profile) is caught
-        # before any PUT lands.
+    @staticmethod
+    def _validate_snapshot_ids(payload: dict[str, Any]) -> None:
+        """Enforce data-model 1.6 rule 6 on the snapshot ID fields.
+
+        Why:
+            Snapshot IDs must match the top-level IDs so a hand-edited pair
+            (snapshot copied from a wrong profile) is caught before any PUT
+            lands.
+
+        Args:
+            payload: The parsed backup dict (top-level already validated).
+
+        Returns:
+            None.
+
+        Raises:
+            ValueError: When either snapshot ID does not match its
+                top-level counterpart.
+        """
         src_snap = payload.get("source_profile_snapshot")
         tgt_snap = payload.get("target_profile_snapshot")
         if isinstance(src_snap, dict) and src_snap.get("id") != payload["source_profile_id"]:
             raise ValueError("source_profile_snapshot.id does not match source_profile_id")
         if isinstance(tgt_snap, dict) and tgt_snap.get("id") != payload["target_profile_id"]:
             raise ValueError("target_profile_snapshot.id does not match target_profile_id")
-
-        return payload
 
     @staticmethod
     def _verify_source_profile_exists(session: Any, org_id: str, source_profile_id: str) -> bool:
