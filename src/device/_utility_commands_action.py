@@ -76,7 +76,7 @@ class _UtilityCommandsAction(_ClusterBase):  # WHY: cluster wrapper mirroring ea
                 site_id,
                 device_id,
                 {"duration": duration},
-            )  # WHY: kick off LED blink for `duration` minutes
+            )  # WHY: start LED blink for `duration` minutes
             if self._print_api_result(
                 response,
                 f"Device LED blinking for {duration} minutes.",
@@ -149,7 +149,7 @@ class _UtilityCommandsAction(_ClusterBase):  # WHY: cluster wrapper mirroring ea
         return True
 
     def _invoke_port_bounce(self, site_id: str, device_id: str, port_id: str) -> None:
-        """Kick off the WebSocket-backed port-bounce and report result."""
+        """Start the WebSocket-backed port-bounce and report result."""
         print(f"\n-> Bouncing port {port_id}...")  # WHY: operator feedback
         result = self._run_websocket_command(
             site_id,

@@ -35,7 +35,7 @@ class MSPInventoryExporter:
     - MSP context: msp_id, msp_name
     - Org context: org_id, org_name
     - Site context: site_id, site_name
-    - Device fields: type, model, mac, serial, name, version, status, etc.
+    - Device fields: type, model, mac, serial, name, version, status, and so on
 
     Output File: data/MSP_Inventory_Export.csv
     """

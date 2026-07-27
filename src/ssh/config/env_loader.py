@@ -97,7 +97,7 @@ class EnvSshConfigLoader:
         """Return True iff the .env file is below the size cap."""
         try:
             file_size = os.path.getsize(env_file)  # Single stat call
-        except OSError as error:  # Permission denied / vanished etc.
+        except OSError as error:  # Permission denied / vanished and so on
             # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
             logger.warning("[WARNING] Cannot access .env file: %s", error)
             return False  # Treat as unloadable
@@ -149,7 +149,7 @@ class EnvSshConfigLoader:
             self._apply_env_line(raw_line, config)  # Delegated single-line handler
 
     def _apply_env_line(self, raw_line: str, config: dict[str, Any]) -> None:
-        """Parse one raw .env line and apply it to ``config`` if it's a known key."""
+        """Parse one raw .env line and apply it to ``config`` if it is a known key."""
         line = raw_line.strip()  # Drop incidental whitespace
         if not line or line.startswith("#"):  # Skip blanks and comment lines
             return  # Nothing to apply

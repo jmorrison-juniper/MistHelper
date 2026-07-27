@@ -156,7 +156,7 @@ class DeviceUtilityCommands:  # WHY: parent class hosting 35 device-command oper
         Python only invokes ``__getattr__`` when normal lookup fails, so
         this method resolves cluster method calls (``self._validate_device_type``,
         ``self._select_site_and_device``, ``self._select_port_from_device``,
-        etc.) without explicit delegator wrappers. The class-level
+        and so on) without explicit delegator wrappers. The class-level
         ``hasattr`` check on ``type(cluster)`` avoids invoking the
         cluster's own ``__getattr__`` (which would proxy back to this
         class and cause infinite recursion for unknown attrs).

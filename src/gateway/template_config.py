@@ -762,7 +762,7 @@ def _validate_template_index(user_input: str, size: int) -> int | None:
     if not user_input.isdigit():  # WHY: reject non-numeric input up front
         print("  Invalid input. Please enter a numeric index.")  # WHY: user-facing
         return None  # WHY: caller treats None as invalid
-    index = int(user_input)  # WHY: safe now that we know it's digits
+    index = int(user_input)  # WHY: safe now that we know it is digits
     if index < 0 or index >= size:  # WHY: bounds check
         print(f"  Invalid index. Please select between 0 " f"and {size - 1}.")  # WHY: user-facing
         return None  # WHY: caller treats None as out-of-range
@@ -1164,7 +1164,7 @@ def parse_state_from_address(address: str, country: str) -> str:
     """
     if not address or not country:  # WHY: both inputs required for meaningful parse
         return ""  # WHY: caller treats "" as unknown
-    if country in _SMALL_ISLAND_COUNTRIES:  # WHY: these formats don't carry usable states
+    if country in _SMALL_ISLAND_COUNTRIES:  # WHY: these formats do not carry usable states
         return ""  # WHY: skip these countries entirely
     if "," in address:  # WHY: comma format has structured parts
         return _parse_state_comma_separated(address)  # WHY: dedicated parser
@@ -1220,7 +1220,7 @@ def _is_ca_province_at(parts: list[str], i: int, part: str) -> bool:
     if len(part) != 2 or not part.isupper():  # WHY: province tokens are 2 uppercase letters
         return False  # WHY: not a province candidate
     if i + 1 >= len(parts):  # WHY: need a following token for the postal test
-        return False  # WHY: no follower means we can't confirm
+        return False  # WHY: no follower means we cannot confirm
     return bool(re.match(r"^[A-Z]\d[A-Z]$", parts[i + 1]))  # WHY: postal-prefix pattern
 
 
@@ -1257,7 +1257,7 @@ def _find_postal_index(parts: list[str]) -> int:
 
 def _infer_state_without_postal(parts: list[str], country: str) -> str:
     """Infer state when no postal code is present."""
-    if country not in _LATAM_COUNTRIES and len(parts) == 2:  # WHY: non-LATAM short address can't be inferred
+    if country not in _LATAM_COUNTRIES and len(parts) == 2:  # WHY: non-LATAM short address cannot be inferred
         return ""  # WHY: not enough info
     if country in _LATAM_COUNTRIES or len(parts) > 2:  # WHY: LATAM or longer addresses trust last token
         return parts[-1]  # WHY: convention places state at the end

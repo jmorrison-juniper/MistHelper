@@ -264,7 +264,7 @@ class AddressResolver:
         A business-name prefix (``T-Mobile <addr>``) helps Google return the exact
         store unit, but when no store sits at that number Google returns unrelated
         stores and the stale-guard rejects them all. Retrying the plain address
-        then resolves the street itself (e.g. ``2315 S Federal Hwy``).
+        then resolves the street itself (for example ``2315 S Federal Hwy``).
         """
         self.external_calls += 1  # Count the primary UI lookup.
         result = self._ui_geocoder.geocode_via_ui(query)  # Business-prefixed query first.
@@ -315,8 +315,8 @@ class AddressResolver:
 
     @staticmethod
     def _suite_unit(street: str) -> str:
-        """Extract the bare unit identifier from a street's suite token (e.g. 'h200', '204', '')."""
-        token = AddressResolver._extract_suite(street)  # e.g. 'Suite H200', '#204', 'Space P239'.
+        """Extract the bare unit identifier from a street's suite token (for example 'h200', '204', '')."""
+        token = AddressResolver._extract_suite(street)  # for example 'Suite H200', '#204', 'Space P239'.
         if not token:  # No suite token present.
             return ""  # No unit.
         parts = token.split()  # Split the keyword from the identifier.
@@ -405,7 +405,7 @@ class AddressResolver:
         """Return the leading 1-6 digit run (the house number), or '' when none leads.
 
         Anchored at the start so a trailing ZIP is never mistaken for a house
-        number (e.g. ``S Federal Hwy ... 34982`` has no house number).
+        number (for example ``S Federal Hwy ... 34982`` has no house number).
         """
         match = re.match(r"\s*(\d{1,6})\b", text)  # House numbers lead the street line.
         return match.group(1) if match else ""  # Leading digits or empty.

@@ -21,7 +21,7 @@ from src.data.data_processing_utils import (
 class DisplayUtils:
     """Centralized display and output utilities.
 
-    Handles table formatting, pretty printing, etc.
+    Handles table formatting, pretty printing, and so on
     """
 
     @staticmethod

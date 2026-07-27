@@ -73,7 +73,7 @@ class _UtilityCommandsSelection(_ClusterBase):  # WHY: cluster wrapper matching 
             "dict[str, Any] | None",
             self._call("_get_device_info", site_id, device_id),
         )
-        if not device_info:  # WHY: no info means we can't verify compatibility
+        if not device_info:  # WHY: no info means we cannot verify compatibility
             # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
             logger.warning("! Could not retrieve device info from stats API.")
             return None  # WHY: abort when stats unavailable
@@ -136,7 +136,7 @@ class _UtilityCommandsSelection(_ClusterBase):  # WHY: cluster wrapper matching 
             # WHY: route via parent for test patches
             return cast("str | None", self._call("_display_and_select_port", ports))  # WHY: structured path
         if_stat = stats.get("if_stat", {})  # WHY: fallback to legacy if_stat dict
-        if isinstance(if_stat, dict) and if_stat:  # WHY: only use if it's a populated mapping
+        if isinstance(if_stat, dict) and if_stat:  # WHY: only use if it is a populated mapping
             # WHY: route via parent for test patches
             return cast("str | None", self._call("_display_and_select_ifstat", if_stat))  # WHY: legacy path
         # WHY: no structured data, ask user directly; route via parent for patches

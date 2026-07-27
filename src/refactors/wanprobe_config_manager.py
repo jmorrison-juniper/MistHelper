@@ -9,7 +9,7 @@ classes ConfigUtils / InputUtils / CacheUtils / GatewayExportUtils /
 OrgSiteExporter / FilePathUtils / DataExporter) are still owned by
 MistHelper.py. They are resolved lazily via the module-level _MH proxy
 so the extracted module keeps its import graph flat, live re-bindings
-of apisession (e.g. after interactive login) are always honoured, and
+of apisession (for example after interactive login) are always honoured, and
 monkeypatched attributes in tests continue to work.
 
 The ``MIST_SITE_EXCLUDE_PREFIX`` constant is imported directly from
@@ -60,8 +60,8 @@ class WANProbeConfigManager:  # WAN probe config manager (Menu 166 destructive e
     """
 
     # Default probe configuration - loaded from environment variables
-    # MIST_WAN_PROBE_IPS: Comma-separated list of probe IPs (e.g., "192.151.29.254,18.154.184.32")
-    # MIST_WAN_PROBE_PROFILE: Probe profile name (e.g., "lte")
+    # MIST_WAN_PROBE_IPS: Comma-separated list of probe IPs (for example, "192.151.29.254,18.154.184.32")
+    # MIST_WAN_PROBE_PROFILE: Probe profile name (for example, "lte")
     DEFAULT_PROBE_IPS = [  # Default probe IPs.
         ip.strip() for ip in os.getenv("MIST_WAN_PROBE_IPS", "192.151.29.254,18.154.184.32").split(",") if ip.strip()
     ]

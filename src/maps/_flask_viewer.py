@@ -1334,7 +1334,7 @@ def launch_flask_viewer(ctx: FlaskViewerContext):
         ctx.initial_map_id,
     )
     flask_app = _build_flask_app(ctx)  # WHY: helper handles imports + Flask config + route registration.
-    flask_host, flask_port = _resolve_flask_bind_address()  # WHY: pick loopback vs. all-interfaces based on env.
+    flask_host, flask_port = _resolve_flask_bind_address()  # WHY: pick loopback versus all-interfaces based on env.
     _print_flask_viewer_banner(flask_host, flask_port)  # WHY: operator-facing status before the blocking run call.
     _maybe_open_browser(flask_port)  # WHY: fires only on desktop -- container path exits early inside the helper.
     _run_flask_server(flask_app, flask_host, flask_port)  # WHY: blocking call -- returns on Ctrl+C or fatal error.

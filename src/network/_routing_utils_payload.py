@@ -338,7 +338,7 @@ class _RoutingUtilsPayload:  # WHY: cluster wrapper matching the parsing/display
             return  # WHY: keeps hot path free of formatting overhead
         # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
         logger.debug("[DEBUG] API response type: %s", type(response))  # WHY: legacy debug output preserved
-        if hasattr(response, "data"):  # WHY: some responses don't carry a data attribute at all
+        if hasattr(response, "data"):  # WHY: some responses do not carry a data attribute at all
             # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
             logger.debug("[DEBUG] Response data: %s", response.data)  # WHY: expose payload for triage
 

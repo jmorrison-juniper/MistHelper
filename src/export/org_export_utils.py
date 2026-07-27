@@ -1,7 +1,7 @@
 """OrgExportUtils -- generic org-level data export helpers.
 
 Extracted from MistHelper.py during initiative 1013 (Cat B, position 47).
-Groups org-level export helpers (SLE, insight metrics, NAC, audit logs, etc.)
+Groups org-level export helpers (SLE, insight metrics, NAC, audit logs, and so on)
 under a single static-method facade. All methods are static -- no state is kept
 on the class. Callers continue to reach it through the
 ``MistHelper.OrgExportUtils`` re-export alias.
@@ -176,7 +176,7 @@ class OrgExportUtils:
     def _load_parameterized_metric_choices() -> dict[str, list[str]]:  # Discover parameterized metrics.
         """Return {metric_name: [choices]} for org insight metrics requiring a 'metric' sub-parameter.
 
-        Some org insight metrics (e.g. switch-metrics, gateway-metrics) declare a 'metric'
+        Some org insight metrics (for example switch-metrics, gateway-metrics) declare a 'metric'
         query parameter in their constants definition. getOrgSle cannot supply it, so a bare
         call returns HTTP 400 "Bad Syntax". Reading the live constants lets callers expand each
         such metric into one request per valid choice instead of failing.
@@ -234,7 +234,7 @@ class OrgExportUtils:
         records: list[dict[str, Any]] = []  # Collected per-choice time-series records
         retrieved = 0  # Successful choice fetches
         failed = 0  # Failed or empty choice fetches
-        for choice in choices:  # Each valid sub-metric value (e.g. bytes, rx_bytes, total_port_count)
+        for choice in choices:  # Each valid sub-metric value (for example bytes, rx_bytes, total_port_count)
             record = OrgExportUtils._fetch_single_metric_choice(org_id, metric, choice, duration)  # One GET
             if record:  # Choice returned a usable payload
                 records.append(record)  # Keep the tagged record
@@ -271,7 +271,7 @@ class OrgExportUtils:
     def _insight_fetch_one_sle_category(org_id: str, metric: str, sle_category: str) -> dict[str, Any] | None:
         """Fetch one SLE category's site data; return aggregated result row, or None when empty/failed."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of apisession global.
-        try:  # Isolate this category so one failure doesn't abort the others.
+        try:  # Isolate this category so one failure does not abort the others.
             response = mistapi.api.v1.orgs.insights.getOrgSitesSle(  # Call the sites-SLE API for this category.
                 mh.apisession, org_id, sle=sle_category, duration="7d", limit=1000
             )
@@ -339,7 +339,7 @@ class OrgExportUtils:
     def _insight_fetch_sites_sle_summary(org_id: str) -> tuple[list[dict[str, Any]], int, int]:
         """Fetch the org-wide sites SLE summary; return (records, retrieved, failed)."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of apisession global.
-        try:  # Isolate the summary fetch so its failure doesn't abort the export.
+        try:  # Isolate the summary fetch so its failure does not abort the export.
             logging.debug("Attempting to retrieve org sites SLE summary")  # Trace the attempt.
             response = mistapi.api.v1.orgs.insights.getOrgSitesSle(
                 mh.apisession, org_id, duration="7d", limit=100
@@ -503,7 +503,7 @@ class OrgExportUtils:
             )
             OrgExportUtils._insight_report_totals(metrics_retrieved, metrics_failed)  # Report + log the totals.
             if all_insight_data:  # At least one metric returned data.
-                OrgExportUtils._insight_export_normalized(all_insight_data, org_id, metrics_retrieved)  # Write CSVs.
+                OrgExportUtils._insight_export_normalized(all_insight_data, org_id, metrics_retrieved)  # Export to CSV.
             else:  # Every metric failed or returned empty.
                 # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
                 logger.warning("! 0 organization insight metrics exported (no data available)")  # Tell the user zero.

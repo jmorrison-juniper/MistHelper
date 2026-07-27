@@ -48,7 +48,7 @@ class MainEntrypoint:  # CLI main entry-point seam
         _MH._initialize_deferred_imports()  # Initialize deferred module imports if not already completed.
         _MH.InputUtils.ensure_tqdm_available()  # Ensure tqdm is accessible via InputUtils wrapper before use.
         parser = _MH._build_argument_parser()  # Build argparse parser with all supported CLI flags.
-        # Reject known bad flag spellings (e.g. --test-interactive) before argparse misroutes them (#1640).
+        # Reject known bad flag spellings (for example --test-interactive) before argparse misroutes them (#1640).
         _MH._reject_unsupported_flag_variants(sys.argv[1:])
         args = parser.parse_args()  # Parse command line arguments into typed Namespace object.
         _MH._setup_runtime_flags(args)  # Apply --standalone env, register globals()["args"], set FAST_MODE_ENABLED.

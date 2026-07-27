@@ -159,7 +159,7 @@ class GatewayHaExporter:
         for row in rows:  # Iterate each HA gateway record
             name = str(row.get("name", ""))[:28]  # Truncate long names for display
             node_name = str(row.get("node_name", ""))  # Which node (node0 / node1)
-            status = str(row.get("status", ""))  # Connected / Disconnected / etc.
+            status = str(row.get("status", ""))  # Connected / Disconnected / and so on
             node0_mac = str(row.get("ha_cluster_node0_mac") or "")  # MAC of node0 in the pair
             node1_mac = str(row.get("ha_cluster_node1_mac") or "")  # MAC of node1 in the pair
             vc_mac = str(row.get("vc_mac") or "")  # Shared cluster MAC address

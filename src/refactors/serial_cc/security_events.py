@@ -73,7 +73,7 @@ class _FlattenedExportSpec:
     data_label: str  # Human-readable label used in stdout/logs.
     start_label: str  # Compact label logged when the fetch begins.
     fetcher: Callable[[], Any]  # Zero-arg lambda that invokes the mistapi list endpoint.
-    empty_message: str  # Warning logged when the fetch returns zero rows.
+    empty_message: str  # Logged at warning level when the fetch returns zero rows.
     empty_suffix: str  # Suffix appended to the stdout summary when the dataset is empty.
 
 

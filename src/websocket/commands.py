@@ -74,7 +74,7 @@ class MacTableCommand:  # WHY: Namespace grouping the show_mac_table workflow he
         if websocket_manager is None:  # WHY: Guard clause — no WS means RPC/response phases must be skipped.
             return None  # WHY: Connect failure already logged inside helper; nothing to display.
 
-        session_id = MacTableCommand._trigger_rpc(  # WHY: Kick off REST RPC that produces the WS session id.
+        session_id = MacTableCommand._trigger_rpc(  # WHY: Start REST RPC that produces the WS session id.
             deps, websocket_manager, site_id, device_id, debug_mode
         )
         if session_id is None:  # WHY: Guard clause — RPC helper already disconnected WS on failure.
@@ -193,7 +193,7 @@ class MacTableCommand:  # WHY: Namespace grouping the show_mac_table workflow he
         if response.status_code != 200:
             print(f"! Failed to issue show MAC table command: {response.status_code}")  # WHY: Legacy error.
             print(f"! Response: {response.text}")  # WHY: Legacy error body echo for operator diagnosis.
-            websocket_manager.disconnect()  # WHY: Free WS socket since we won't await a result.
+            websocket_manager.disconnect()  # WHY: Free WS socket since we will not await a result.
             return None  # WHY: Signal failure to orchestrator.
         response_data = response.json()  # WHY: Parse JSON envelope returning the session correlation id.
         session_id = response_data.get("session")  # WHY: Extract Mist-assigned session id used to demux WS messages.
@@ -245,7 +245,7 @@ class MacTableCommand:  # WHY: Namespace grouping the show_mac_table workflow he
         print("=" * 60)  # WHY: Legacy separator line.
 
         raw_output = mac_table_result.get("raw", "")  # WHY: Primary documented output channel for show_mac_table.
-        output_fields = mac_table_result.get("Output", "")  # WHY: Secondary capitalized field for some firmware revs.
+        output_fields = mac_table_result.get("Output", "")  # WHY: Secondary capitalized field for firmware revisions.
 
         MacTableCommand._render_primary_output(raw_output, output_fields)  # WHY: Print well-known output channels.
         MacTableCommand._render_extra_fields(mac_table_result)  # WHY: Print any unexpected extra fields.

@@ -43,7 +43,7 @@ class TuiRunner:  # WHY: extracted from MistHelperTUI.run (was CC=33)
     def _setup_terminal(self) -> None:  # WHY: enter cbreak so keys read w/o Enter
         """Put the Unix terminal into raw (cbreak) mode for keypress capture."""
         tui = self._tui  # Local alias
-        if tui.IS_WINDOWS:  # Windows uses msvcrt; nothing to set up
+        if tui.IS_WINDOWS:  # Windows uses msvcrt; nothing to prepare
             return  # WHY: no-op on Windows
         tui.old_terminal_settings = tui.termios.tcgetattr(sys.stdin)  # Save current termios for restore
         tui.tty.setcbreak(sys.stdin.fileno())  # Enter cbreak mode

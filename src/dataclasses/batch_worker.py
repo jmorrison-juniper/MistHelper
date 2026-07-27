@@ -25,4 +25,4 @@ class BatchWorkerConfig:
     worker_function: Callable[..., Any]  # Callable that processes a single batch item; takes (item, semaphore).
     connection_semaphore: threading.Semaphore  # Bound on concurrent network connections across all batches.
     max_threads: int  # Upper bound on threads the pool may spawn; passed to ThreadPoolExecutor.
-    batch_description: str  # Human-readable label (e.g. "devices") used in tqdm + log messages.
+    batch_description: str  # Human-readable label (for example "devices") used in tqdm + log messages.

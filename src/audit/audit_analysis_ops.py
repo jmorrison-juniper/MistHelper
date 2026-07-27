@@ -16,7 +16,7 @@ import mistapi  # WHY: audit-logs API + get_all pagination helper.
 from src.audit.analyzer import AuditAnalysisResult, AuditLogAnalyzer  # Audit analysis result + engine.
 from src.audit.filter import AuditLogFilter  # Audit log filtering to remove noise and system events.
 from src.audit.renderer import AuditReportRenderer  # Mermaid timeline + HTML report rendering.
-from src.audit.time_parser import ParsedTimeRange, TimeRangeParser  # Audit log time range parsing (7d, 4w, etc.).
+from src.audit.time_parser import ParsedTimeRange, TimeRangeParser  # Audit log time range parsing (7d, 4w, and so on).
 
 
 class AuditAnalysisOps:
@@ -28,7 +28,7 @@ class AuditAnalysisOps:
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of IS_TEST_MODE + InputUtils.
         if mh.IS_TEST_MODE:  # Use a fixed time range so --test runs without interactive input.
             return "7d"  # Default to 7 days in test mode; skips the safe_input prompt.
-        logging.warning(  # WARNING so hint surfaces on default root-logger config (#886 Phase 2 print->logger).
+        logging.warning(  # Uses warning level so the hint shows by default (#886).
             "Time range examples: 7d, 4w, 3m, 1y, 6w-2w (6 weeks ago to 2 weeks ago)"
         )
         raw = mh.InputUtils.safe_input("Enter time range [7d]: ", context="audit_analysis")
@@ -59,10 +59,10 @@ class AuditAnalysisOps:
         renderer = AuditReportRenderer()  # Initialize report generator.
         md_path = os.path.join("data", "OrgAuditAnalysis.md")  # Mermaid timeline output path.
         renderer.render_mermaid(analysis, md_path)
-        logging.warning("Mermaid report: %s", md_path)  # WARNING so operator sees path (#886 Phase 2 print->logger).
+        logging.warning("Mermaid report: %s", md_path)  # Uses warning level so the operator sees the path (#886).
         html_path = os.path.join("data", "OrgAuditAnalysis.html")  # Interactive HTML output path.
         renderer.render_html(analysis, html_path)
-        logging.warning("HTML report: %s", html_path)  # WARNING so operator sees path (#886 Phase 2 print->logger).
+        logging.warning("HTML report: %s", html_path)  # Uses warning level so the operator sees the path (#886).
 
     @staticmethod
     def audit_log_analysis() -> None:
@@ -80,16 +80,16 @@ class AuditAnalysisOps:
         except ValueError as exc:
             logging.error("Invalid time range: %s", exc)
             return
-        logging.warning(  # WARNING so operator sees range on default root-logger config (#886 Phase 2 print->logger).
+        logging.warning(  # Uses warning level so the range shows by default (#886).
             "Fetching audit logs for: %s", time_range.description
         )
         entries = AuditAnalysisOps._fetch_filtered_audit_entries(org_id, time_range)  # API call + paginate.
         if entries is None:  # API failed (already logged inside helper).
             return
-        logging.warning("Retrieved %d raw entries", len(entries))  # WARNING per #886 Phase 2 print->logger migration.
+        logging.warning("Retrieved %d raw entries", len(entries))  # Uses warning level so it shows by default (#886).
         log_filter = AuditLogFilter()  # Noise filter.
         filtered, stats = log_filter.filter_with_stats(entries)  # Remove noise entries with stats.
-        logging.warning(  # WARNING so operator sees filter stats (#886 Phase 2 print->logger migration).
+        logging.warning(  # Uses warning level so the operator sees the stats (#886).
             "Filtered: %d kept, %d noise removed", stats["kept_count"], stats["removed_count"]
         )
         analyzer = AuditLogAnalyzer()  # Pattern analyzer.

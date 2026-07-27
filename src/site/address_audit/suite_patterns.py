@@ -29,7 +29,7 @@ SUITE_PATTERN = rf"\b(?:{SUITE_KEYWORDS})\b\.?\s*#?\s*[\w-]+|#\s*\d[\w-]*"  # WH
 # engine to extract the bare unit identifier for suite comparison/adjudication.
 SUITE_PATTERN_CAPTURE = rf"\b(?:{SUITE_KEYWORDS})\b\.?\s*#?\s*([\w-]+)|#\s*(\d[\w-]*)"  # WHY: extraction - kw/hash ids
 
-# Phrase form (case-insensitive): the FULL matched keyword token (e.g. ``Unit 200``,
+# Phrase form (case-insensitive): the FULL matched keyword token (for example ``Unit 200``,
 # ``Ste A2``). The id must start alphanumeric and may carry an internal hyphen. Used
 # by the UI geocoder to lift the exact phrase the operator typed so it can be
 # re-appended verbatim to a Google suggestion that dropped it.

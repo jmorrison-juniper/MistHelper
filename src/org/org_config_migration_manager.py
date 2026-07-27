@@ -379,7 +379,7 @@ class OrgConfigMigrationManager:  # Org config migration manager.
     def _check_name_conflict(self, new_obj: dict, existing_list: list) -> dict | None:  # type: ignore[type-arg]
         """Check if an object with the same name already exists (case-insensitive)."""
         new_name = self._normalized_name(new_obj)  # Lowercase name for case-insensitive comparison
-        if not new_name:  # Skip unnamed objects (shouldn't happen but be defensive)
+        if not new_name:  # Skip unnamed objects (should not happen but be defensive)
             return None  # No conflict.
         for existing in existing_list:  # Check every existing object in destination
             if new_name == self._normalized_name(existing):  # Case-insensitive match found
@@ -403,7 +403,7 @@ class OrgConfigMigrationManager:  # Org config migration manager.
             return self._check_network_subnet_overlap(new_obj, existing_list)  # Check subnet overlap.
         if type_key == "services":  # Services use addresses[] array
             return self._check_service_address_overlap(new_obj, existing_list)  # Check address overlap.
-        return None  # Other types don't have IP fields
+        return None  # Other types do not have IP fields
 
     @staticmethod
     def _build_subnet_overlap_conflict(new_subnet: str, existing: dict, existing_subnet: str) -> dict:
@@ -549,7 +549,7 @@ class OrgConfigMigrationManager:  # Org config migration manager.
 
     def _strip_source_fields(self, obj: dict) -> dict:  # type: ignore[type-arg]
         """Return a copy of obj with source-org-specific fields removed."""
-        return {key: value for key, value in obj.items() if key not in self.STRIP_FIELDS}  # Filter out id, org_id, etc.
+        return {key: value for key, value in obj.items() if key not in self.STRIP_FIELDS}  # Filter out source fields
 
     def _execute_import(self, bundle: dict, dry_run: bool) -> list:  # type: ignore[type-arg]
         """Import objects in dependency order, skipping conflicts."""
@@ -600,7 +600,7 @@ class OrgConfigMigrationManager:  # Org config migration manager.
             self._record_conflict(type_key, obj_name, source_id, conflict, results)  # Record the conflict.
             return  # Skip it.
         cleaned = self._clean_and_remap(obj, type_key)  # Strip + remap.
-        if dry_run:  # Preview mode -- don't make API calls
+        if dry_run:  # Preview mode -- do not make API calls
             logging.warning("      %sWould import: %s", label, obj_name)  # Show what would happen
             results.append({"type": type_key, "name": obj_name, "status": "would_import"})  # Record for report
             return  # Abort.

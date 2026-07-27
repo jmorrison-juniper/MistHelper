@@ -75,7 +75,7 @@ class LevelDiscoverer:
             self._append_function_record(item, name)
 
     def _append_module_record(self, item: Any, name: str) -> None:
-        """Append a module record to current_items when it's a mistapi module."""
+        """Append a module record to current_items when it is a mistapi module."""
         if not hasattr(item, "__package__"):  # No package info -> skip
             return
         if "mistapi" not in str(item.__package__):  # Only mistapi modules are listed

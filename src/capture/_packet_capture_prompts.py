@@ -11,7 +11,7 @@ Callers instantiate :class:`PacketCapturePrompts` directly (no factory
 indirection) so ``PacketCaptureManager`` binds an instance on itself as
 ``self._prompts``. ``__getattr__`` delegates lookups back to the manager
 so shared state (``mist_session``, ``validate_mac_address``,
-``normalize_mac_address``, etc.) works transparently without duplicating
+``normalize_mac_address``, and so on) works transparently without duplicating
 class-level attributes.
 """
 
@@ -396,7 +396,7 @@ class PacketCapturePrompts:
     @staticmethod
     def extract_port_names(payload: dict[str, Any], capture_type: str) -> list[str]:
         """Extract port names from a device capture payload."""
-        config_key = f"{capture_type.lower()}s"  # WHY: e.g. 'Gateway' -> 'gateways' payload key
+        config_key = f"{capture_type.lower()}s"  # WHY: for example 'Gateway' -> 'gateways' payload key
         device_config = payload.get(config_key, {})  # WHY: default empty dict when key missing
         for mac_config in device_config.values():  # WHY: single-device payloads carry one mac entry
             ports = mac_config.get("ports", {})  # WHY: ports dict keyed by port name

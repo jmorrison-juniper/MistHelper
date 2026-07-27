@@ -282,7 +282,7 @@ class MistUIGeocoder:
         with self._perf.phase("ui.type_query"):  # Time the human-like typing (usually the biggest cost).
             self._enter_query(page, field, query)  # Focus, clear the stale dropdown, type the new query.
         expected = self._house_number(query)  # House number anchors the fresh-result wait.
-        expected_suite = self._suite_id(query)  # Unit id we typed (e.g. "200"); "" when none -> suite wait is a no-op.
+        expected_suite = self._suite_id(query)  # Unit id we typed (for example "200"). "" skips the suite wait.
         with self._perf.phase("ui.read_suggestions"):  # Time the fresh-result poll incl. the suite grace.
             texts = self._read_fresh_suggestions(page, expected, timeout_ms, expected_suite)  # Wait for THIS query.
         logging.debug("UI autocomplete returned %d fresh suggestion(s)", len(texts))  # Action-log count.
@@ -422,7 +422,7 @@ class MistUIGeocoder:
 
     @staticmethod
     def _suite_phrase(text: str) -> str:
-        """Return the full suite/unit phrase from an address/query (e.g. 'Unit 200', '#3'), or ''.
+        """Return the full suite/unit phrase from an address/query (for example 'Unit 200', '#3'), or ''.
 
         Matches an explicit keyword form (``Suite/Ste/Unit/Space/Bldg/Rm/Apt <id>``)
         first, then a bare ``#<id>`` hash form. The id may be alphanumeric with an
@@ -431,15 +431,15 @@ class MistUIGeocoder:
         """
         keyword = re.search(
             SUITE_PHRASE_PATTERN, text
-        )  # Shared keyword+id form (e.g. 'Suite 100', 'Ste A2', 'Sute A-103').
+        )  # Shared keyword+id form (for example 'Suite 100', 'Ste A2', 'Sute A-103').
         if keyword:  # Prefer the explicit keyword form.
             return re.sub(r"\s+", " ", keyword.group(0)).strip()  # Collapse internal whitespace.
-        hashed = re.search(HASH_UNIT_PATTERN, text)  # Bare hash form (e.g. '#3', '#1515b').
+        hashed = re.search(HASH_UNIT_PATTERN, text)  # Bare hash form (for example '#3', '#1515b').
         return hashed.group(0).replace(" ", "") if hashed else ""  # '#<id>' with no gap, or empty.
 
     @staticmethod
     def _suite_id(text: str) -> str:
-        """Return just the bare unit identifier from a suite phrase (e.g. '200', 'A2', '3'), or ''."""
+        """Return just the bare unit identifier from a suite phrase (for example '200', 'A2', '3'), or ''."""
         phrase = MistUIGeocoder._suite_phrase(text)  # Full phrase such as 'Unit 200' or '#3'.
         if not phrase:  # No suite present.
             return ""  # Nothing to compare/preserve.
@@ -510,7 +510,7 @@ class MistUIGeocoder:
         (a DIFFERENT unit means Google is the authority -- leave it), and the house
         numbers agree (never graft a unit onto a different building).
         """
-        suite_id = self._suite_id(query)  # WHY: the unit id we typed (e.g. "200"); "" when none.
+        suite_id = self._suite_id(query)  # WHY: the unit id we typed (for example "200"); "" when none.
         if self._skip_suite_preservation(query, suggestion, suite_id):  # WHY: guard-clause bundles all no-op cases.
             return suggestion  # Nothing to preserve, already complete, Google authoritative, or different building.
         phrase = self._suite_phrase(query)  # The full 'Unit 200' / '#3' token to restore.
@@ -555,7 +555,7 @@ class MistUIGeocoder:
         """Strip a glued leading place/business name and a trailing country from a suggestion.
 
         Google's ``.pac-item`` rows glue the establishment name to the address with
-        no separator (e.g. ``T-Mobile931 US Highway 331 Ste A2, ..., USA``), glue a
+        no separator (for example ``T-Mobile931 US Highway 331 Ste A2, ..., USA``), glue a
         trailing directional to the city (``...Ave NLive Oak``), and sometimes glue
         the street or a suite number straight to the city (``...HwyFort Pierce``,
         ``...suite 330Brandon``). We drop the trailing country, repair those glued

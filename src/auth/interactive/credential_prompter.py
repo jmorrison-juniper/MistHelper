@@ -37,7 +37,7 @@ class CredentialPrompter:
         except EOFError:  # SSH disconnects surface here when no TTY is attached
             logging.info("EOF during password entry - session disconnected")  # Legacy log preserved
             return None  # Signal caller to cancel the login flow
-        except Exception as password_error:  # Any other terminal failure (e.g., closed stdin)
+        except Exception as password_error:  # Any other terminal failure (for example, closed stdin)
             logging.error("Failed to read password: %s", password_error)  # Legacy error log preserved
             logging.warning("X Failed to read password: %s", password_error)  # Legacy console message routed via logger
             return None  # Caller will short-circuit the login

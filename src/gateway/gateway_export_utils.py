@@ -512,7 +512,7 @@ class GatewayExportUtils:  # WHY: centralised gateway export utility class extra
 
     @staticmethod
     def _get_devices_from_cache() -> list[tuple[str, str, str, str]]:
-        """Get gateway devices from cached inventory and site list CSVs."""
+        """Get gateway devices from cached inventory and site list CSV files."""
         try:
             CacheUtils.check_and_generate_csv("OrgInventory.csv", OrgInventoryExporter.inventory)  # WHY: refresh.
             CacheUtils.check_and_generate_csv("SiteList.csv", OrgSiteExporter.sites)  # WHY: refresh site cache.

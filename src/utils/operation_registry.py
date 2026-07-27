@@ -287,7 +287,7 @@ class OperationRegistry:
         # ------------------------------------------------------------------
         # Feature 1020 (safe --test clean run): explicit classification of the
         # 60 previously-unregistered menu_actions keys. Each category was
-        # decided from the handler's real read-only vs. state-changing
+        # decided from the handler's real read-only versus state-changing
         # behavior (see research.md R1). Read-only exporters are "safe";
         # heavy sweeps are "resource_intensive"; write/create operations are
         # "destructive"; ticket viewing prompts for a selection so it is

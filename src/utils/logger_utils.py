@@ -28,7 +28,7 @@ def redact_secret(value: str) -> str:
     never reaches the log handler.
 
     Args:
-        value: The sensitive string to redact (e.g. a password or API token).
+        value: The sensitive string to redact (for example a password or API token).
 
     Returns:
         The canonical redaction placeholder string.
@@ -38,7 +38,7 @@ def redact_secret(value: str) -> str:
         logging.debug("Using credential: %s", redact_secret(password))
         # → "Using credential: ***REDACTED***"
     """
-    _ = value  # Accept the value so callers don't need to gate on None; discard it
+    _ = value  # Accept the value so callers do not need to gate on None; discard it
     return REDACTED_PLACEHOLDER  # Return placeholder instead of the real value
 
 
@@ -49,7 +49,7 @@ def redact_if_sensitive(key: str, value: str) -> str:
     are not, without having to enumerate every sensitive field name.
 
     Args:
-        key:   The config/dict key name (e.g. "password", "username", "host").
+        key:   The config/dict key name (for example "password", "username", "host").
         value: The value associated with that key.
 
     Returns:
@@ -71,7 +71,7 @@ class SensitiveFilter(logging.Filter):
 
     Install on a handler to provide a defence-in-depth layer: even if a
     caller accidentally logs a raw password, this filter replaces it before
-    the message reaches the handler's output (file, console, syslog, etc.).
+    the message reaches the handler's output (file, console, syslog, and so on).
 
     Usage::
 

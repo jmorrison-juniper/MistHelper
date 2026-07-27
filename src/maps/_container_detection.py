@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)  # Module-scoped logger for detection traci
 _TRUE_VALUES = frozenset({"1", "true", "yes", "on"})  # WHY: shared truthy set for env overrides
 
 # Explicit override vars: these let operators force container-mode
-# behavior when the auto-detection heuristics fail (e.g. exotic
+# behavior when the auto-detection heuristics fail (for example exotic
 # runtimes, chroots, or when we want to test container UX locally).
 _OVERRIDE_ENV_VARS = ("MISTHELPER_FORCE_CONTAINER_LOOP", "MISTHELPER_CONTAINER")  # WHY: operator escape hatch
 

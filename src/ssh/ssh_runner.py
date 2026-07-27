@@ -25,7 +25,7 @@ _MAX_TIMEOUT_SEC: int = 3600  # WHY: upper bound (1 hour) for accepted timeout v
 _DEFAULT_PORT: int = 22  # WHY: standard SSH port used everywhere in this module
 _DEFAULT_MAX_THREADS: int = 5  # WHY: default multi-host thread cap used by SSHExecutionConfig
 _MAX_FILENAME_LEN: int = 100  # WHY: cap sanitized filenames to a filesystem-safe length
-_MAX_THREADS_HARD_CAP: int = 50  # WHY: don't let callers request more than 50 SSH worker threads
+_MAX_THREADS_HARD_CAP: int = 50  # WHY: do not let callers request more than 50 SSH worker threads
 _THREADS_PER_HOST_MULTIPLIER: int = 2  # WHY: cap threads at 2x the host count for a sensible default
 _MAX_STDOUT_SAMPLE_CHARS: int = 200  # WHY: only sample the first 200 chars of stdout/stderr into logs
 _DEFAULT_LOGGER_NAME: str = "ssh_runner_v2"  # WHY: named logger asserted by tests and callers
@@ -226,7 +226,7 @@ class EnhancedSSHRunner:
         sanitized = _SANITIZE_PATTERN.sub("_", filename)  # WHY: whitelist alnum/dot/dash/underscore; replace rest
         sanitized = sanitized.strip(".-") or _FALLBACK_SANITIZED  # WHY: drop leading/trailing dots and dashes safely
         sanitized = _apply_length_limit(sanitized)  # WHY: cap filename length to keep filesystem happy
-        if _is_windows_reserved(sanitized):  # WHY: rewrite reserved device names so Windows won't reject them
+        if _is_windows_reserved(sanitized):  # WHY: rewrite reserved device names so Windows will not reject them
             sanitized = f"host_{sanitized}"  # WHY: preserved legacy prefix pattern used by callers/tests
         return sanitized  # WHY: return the finalized filesystem-safe string
 
@@ -320,7 +320,7 @@ class EnhancedSSHRunner:
         """
         if not self.client:  # WHY: bail out with a helpful error if no SSH session is active
             error_msg = "No active SSH connection"  # WHY: exact string checked by tests
-            self.logger.error(error_msg)  # WHY: surface at ERROR since it's a caller misuse
+            self.logger.error(error_msg)  # WHY: surface at ERROR since it is a caller misuse
             return False, "", error_msg  # WHY: legacy tuple shape (success, stdout, stderr)
         try:
             return self._dispatch_execution(command, use_shell, hostname)  # WHY: pure dispatch keeps CC low

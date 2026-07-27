@@ -111,7 +111,7 @@ class GatewayWan2VariableMigrator:  # pylint: disable=too-many-instance-attribut
 
         Python only invokes ``__getattr__`` when normal lookup fails, so
         this method resolves cluster method calls (``self._load_csv_data``,
-        ``self._apply_template_changes`` etc.) without explicit delegator
+        ``self._apply_template_changes`` and so on) without explicit delegator
         wrappers. The class-level ``hasattr`` check on ``type(cluster)``
         avoids invoking the cluster's own ``__getattr__`` (which would
         proxy back to this class and cause infinite recursion for unknown

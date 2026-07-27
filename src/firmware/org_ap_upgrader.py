@@ -1501,7 +1501,7 @@ class OrgLevelAPFirmwareUpgrader:
 
         return model_selections  # WHY: return computed result
 
-    def _process_single_model(self, model: str, devices: list[Any]) -> dict[str, Any] | None:  # WHY: declare private he
+    def _process_single_model(self, model: str, devices: list[Any]) -> dict[str, Any] | None:  # WHY: private helper
         """Process version selection for a single model."""
         model_versions = self._get_versions_for_model(model)  # WHY: compute model_versions
         if not model_versions:  # WHY: guard against missing precondition
@@ -1935,7 +1935,7 @@ class OrgLevelAPFirmwareUpgrader:
         logging.debug("_try_parse_after result=%r", result)  # WHY: post-op observability
         return result  # WHY: return offset stamp or '' fallthrough
 
-    def _reboot_relative_disallowed(self, is_for_reboot: bool, use_site_local: bool) -> bool:  # WHY: declare private he
+    def _reboot_relative_disallowed(self, is_for_reboot: bool, use_site_local: bool) -> bool:  # WHY: private helper
         """Predicate: reboot + site-local means relative offsets are disallowed."""
         if use_site_local and is_for_reboot:  # WHY: combined-mode restriction from prior behavior
             print("    ! Relative times not supported for reboot in site-local mode. Use HH:MM format.")  # WHY: user-vi

@@ -8,7 +8,7 @@ matching/validation signal. It never raises on absence -- a site with neither
 field simply yields ``None``.
 
 The customer prefixes these values with their own SAP internal store code
-(e.g. ``"S2SJB - 5550 N Military Trl ..."`` or ``"08806 - 2525 Howell Branch
+(for example ``"S2SJB - 5550 N Military Trl ..."`` or ``"08806 - 2525 Howell Branch
 Rd ..."``). That code is not part of the postal address, so it is stripped
 before the value is returned -- the audit must never treat the store number as
 part of the street.
@@ -48,7 +48,7 @@ class SNMPLocationEnricher:  # WHY: single-purpose class extracting SNMP locatio
 
     @staticmethod
     def _strip_store_prefix(value: str | None) -> str | None:  # WHY: drop SAP store code prefix
-        """Remove the customer's leading SAP store-code prefix (e.g. ``08806 - ``)."""
+        """Remove the customer's leading SAP store-code prefix (for example ``08806 - ``)."""
         if not value:  # Nothing to strip.
             return None  # Preserve the absent sentinel.
         stripped = _SAP_PREFIX.sub("", value).strip()  # Drop the anchored store-code prefix.

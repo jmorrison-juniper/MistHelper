@@ -555,7 +555,7 @@ class E911BSSIDReportGenerator:  # WHY: static-method namespace for the Menu 160
 
         WHY: extracted from `_add_single_wlan` to keep complexity ≤5.
         """
-        for band_key in wlan_bands:  # WHY: one WLAN can span multiple bands (e.g. dual-band)
+        for band_key in wlan_bands:  # WHY: one WLAN can span multiple bands (for example dual-band)
             lookup_key = f"{site_id}::{band_key}"  # WHY: composite key groups SSIDs per site+band
             bucket = wlan_band_lookup.setdefault(lookup_key, [])  # WHY: create then reuse bucket
             if ssid_name not in bucket:  # WHY: prevent duplicate SSID names
@@ -633,7 +633,7 @@ class E911BSSIDReportGenerator:  # WHY: static-method namespace for the Menu 160
         lookups: dict[str, Any],
     ) -> str:
         """Detect compliance gap reason for an AP."""
-        if not ap_info:  # WHY: no AP stats -> can't verify compliance
+        if not ap_info:  # WHY: no AP stats -> cannot verify compliance
             return "Not in device stats"  # WHY: matches summary wording
         missing = E911BSSIDReportGenerator._first_missing_field(ap_info)  # WHY: table lookup replaces if-chain
         if missing:  # WHY: first missing field wins
@@ -913,7 +913,7 @@ class E911BSSIDReportGenerator:  # WHY: static-method namespace for the Menu 160
             raise  # WHY: any other RuntimeError should surface for debugging
         except Exception as error:  # WHY: single-site failure should not abort the whole batch
             logging.warning("Error processing site %s: %s", site_id[:8], error)  # WHY: audit failure
-            batch.completed_sites.add(site_id)  # WHY: mark done so we don't retry a broken site
+            batch.completed_sites.add(site_id)  # WHY: mark done so we do not retry a broken site
             return None  # WHY: signal "continue"
 
     @staticmethod

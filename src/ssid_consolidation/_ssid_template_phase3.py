@@ -10,7 +10,7 @@ the pure helpers remain re-exported via
 The ``_create_site_group`` and ``_assign_group_sites`` helpers are
 intentionally *not* moved here: they resolve ``mistapi`` at call time
 and the historical unit tests patch ``mistapi`` through the parent
-module's namespace (e.g. ``patch.object(ssid_template_consolidation,
+module's namespace (for example ``patch.object(ssid_template_consolidation,
 "mistapi", ...)``), which only intercepts calls whose ``__globals__``
 binding *is* the parent module. Keeping those two helpers in the parent
 preserves those tests without teaching them about internal module

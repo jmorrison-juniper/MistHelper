@@ -106,7 +106,7 @@ def _build_failure_record(  # WHY: legacy record shape keeps failure attempts in
 
 def _compute_backoff(attempt: int, retry_delay: float, fast: bool) -> float:  # WHY: retry timing helper.
     """Return retry delay for this attempt (exponential unless fast mode disables backoff)."""
-    if fast:  # WHY: fast mode uses flat delay so retries don't stretch the run.
+    if fast:  # WHY: fast mode uses flat delay so retries do not stretch the run.
         return retry_delay  # WHY: skip exponential growth for the fast path.
     return retry_delay * (2**attempt)  # WHY: exponential backoff for the standard path.
 

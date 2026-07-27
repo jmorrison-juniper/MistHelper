@@ -161,7 +161,7 @@ class SiteAutoUpgradeConfigurator:
     def execute(**cfg: Any) -> None:
         """Entry point for menu system - checks MSP privileges."""
         logging.info("Starting Site Auto-Upgrade Configuration workflow")  # WHY: action-log workflow start.
-        if cfg.get("dry_run"):  # WHY: advertise dry-run so operator isn't surprised.
+        if cfg.get("dry_run"):  # WHY: advertise dry-run so operator is not surprised.
             logging.info("DRY-RUN MODE enabled - no API calls will be made")  # WHY: dry-run advert log.
         core_deps = SiteAutoUpgradeCoreDeps(  # WHY: bundle 5 always-needed DI params.
             apisession=cfg["apisession"],
@@ -1046,7 +1046,7 @@ def _parse_single_part(part: str, indices: set[int]) -> None:
 def _group_models_by_family(  # WHY: group AP models into families.
     model_version_map: dict[str, list[Any]],
 ) -> dict[str, list[str]]:
-    """Group models by family prefix (AP41, AP43, etc.)."""
+    """Group models by family prefix (AP41, AP43, and so on)."""
     model_families: dict[str, list[str]] = {}  # WHY: family -> member-models map.
     for model in sorted(model_version_map.keys()):  # WHY: sorted order for stable output.
         family = model.rstrip("EP")  # WHY: strip E/P suffixes to get the family.
@@ -1245,7 +1245,7 @@ def _is_valid_hhmm(hour: int, minute: int) -> bool:
 def parse_time_input(time_input: str) -> str:  # WHY: parse a free-form time string.
     """Parse various time formats to HH:MM for the API.
 
-    Accepts: 02:00, 2:00, 14:00, 2AM, 2PM, 02:00AM, etc.
+    Accepts: 02:00, 2:00, 14:00, 2AM, 2PM, 02:00AM, and so on
     Returns: HH:MM format string, or 'any' for any time.
     """
     if not time_input:  # WHY: empty input maps to 'any'.

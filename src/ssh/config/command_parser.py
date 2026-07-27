@@ -51,7 +51,7 @@ class CommandListParser:
         invalid: list[str] = []  # Rejected commands accumulator (for warnings)
         for raw in commands_str.split(","):  # Comma is the supported delimiter
             clean_cmd = raw.strip().strip("'\"").strip()  # Drop whitespace and per-token quoting
-            if not clean_cmd:  # Skip empty tokens (e.g. trailing comma)
+            if not clean_cmd:  # Skip empty tokens (for example trailing comma)
                 continue  # Move to next token
             if validate_command(clean_cmd):  # Shared validation (length + NUL check)
                 commands.append(clean_cmd)  # Keep validated command

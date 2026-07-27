@@ -150,7 +150,7 @@ def compute_delta_list(  # WHY: exported list-diff entry point with identity fal
         return None, None  # WHY: None sentinel signals 'no delta' to caller
     all_dicts = _all_dicts(before) and _all_dicts(after)  # WHY: identity match only makes sense for dicts
     if not all_dicts:  # WHY: fall back to raw before/after for mixed types
-        return before, after  # WHY: mixed types can't share identity keys, so emit raw lists
+        return before, after  # WHY: mixed types cannot share identity keys, so emit raw lists
     return delta_by_identity(before, after)  # WHY: dict-of-dicts path handles reorder/added/removed
 
 
@@ -164,7 +164,7 @@ def element_identity(element: dict[str, Any]) -> str | None:  # WHY: exported fo
     for key in _IDENTITY_KEYS:  # WHY: priority order controls collision resolution
         val = element.get(key)  # WHY: first non-None wins
         if val is not None:  # WHY: skip missing/explicit-null identity slots
-            return f"{key}={val}"  # WHY: prefix key so 'name=foo' and 'id=foo' don't collide
+            return f"{key}={val}"  # WHY: prefix key so 'name=foo' and 'id=foo' do not collide
     return None  # WHY: caller treats missing identity as anonymous element
 
 

@@ -99,7 +99,7 @@ class InputUtils:
             on a raw ``print()``, which #886 Phase 2 (T20) is retiring in
             favour of logger calls across ``src/``.
         """
-        logging.warning(  # WARNING surfaces on the operator terminal under the default root-logger level.
+        logging.warning(  # Uses warning level so it surfaces on the operator terminal.
             "[EOF] Input stream closed during %s. Using default value: '%s'",
             context,
             default_value,

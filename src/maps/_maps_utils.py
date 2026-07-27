@@ -90,7 +90,7 @@ def sanitize_filename(filename: str) -> str:
     for char in _INVALID_FILENAME_CHARS:  # WHY: replace each hostile char in a single left-to-right pass.
         filename = filename.replace(char, _REPLACEMENT_CHAR)  # WHY: underscore preserves length + readability.
     filename = filename.strip(_STRIP_CHARS)  # WHY: trims trailing dot/space which break Windows resolves.
-    if not filename:  # WHY: strip may fully consume the string (e.g. all-dots input).
+    if not filename:  # WHY: strip may fully consume the string (for example all-dots input).
         return _FALLBACK_NAME  # WHY: second sentinel check after stripping mirrors the initial guard.
     return filename[:_MAX_FILENAME_LEN]  # WHY: enforce ceiling so appended extensions stay under FS limits.
 
@@ -131,7 +131,7 @@ def _resolve_csv_filepath(filename: str) -> str:
     worrying about filesystem safety.
     """
     data_dir = os.path.join(os.getcwd(), _DATA_DIRNAME)  # WHY: rebuild each call so cwd changes are respected.
-    os.makedirs(data_dir, exist_ok=True)  # WHY: exist_ok=True idempotently handles first-run vs. repeat runs.
+    os.makedirs(data_dir, exist_ok=True)  # WHY: exist_ok=True idempotently handles first-run versus repeat runs.
     safe_filename = sanitize_filename(filename)  # WHY: run through the shared sanitizer before path assembly.
     return os.path.join(data_dir, f"{safe_filename}{_CSV_EXT}")  # WHY: extension appended post-sanitize by design.
 

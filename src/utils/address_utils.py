@@ -308,7 +308,7 @@ class AddressUtils:
         normalized = normalized.casefold().strip()  # WHY: casefold beats lower() for i18n text
         normalized = re.sub(r"\s+", " ", normalized)  # WHY: collapse repeated whitespace
         for full_form, abbrev in _ADDRESS_ABBREVIATIONS.items():  # WHY: canonicalize suffix words
-            normalized = re.sub(full_form, abbrev, normalized)  # WHY: turn "street" -> "st" etc.
+            normalized = re.sub(full_form, abbrev, normalized)  # WHY: turn "street" -> "st" and so on
         normalized = re.sub(r"[^\w\s]", " ", normalized)  # WHY: drop punctuation before token compare
         normalized = " ".join(normalized.split())  # WHY: re-collapse whitespace introduced by punct strip
         return normalized  # WHY: fully-normalized address string ready for similarity
@@ -528,7 +528,7 @@ def _extract_address_components(
     parts: list[str],
 ) -> dict[str, str | None]:
     """Extract country, zip, state, city, address from comma-split parts."""
-    remaining = list(parts)  # WHY: shallow copy so peeling doesn't mutate caller data
+    remaining = list(parts)  # WHY: shallow copy so peeling does not mutate caller data
     country = _detect_country(remaining)  # WHY: right-to-left peel starts with country
     remaining = _peel_last(remaining, country)  # WHY: drop country token when detected
     zip_code, country = _detect_zip(remaining, country)  # WHY: ZIP may imply country when absent
@@ -617,7 +617,7 @@ def _state_literal(last: str) -> str | None:
 def _normalize_multipart_state(last: str, parts: list[str]) -> str | None:
     """Normalize a full-name state token only when there are multiple parts."""
     if len(parts) <= 1:  # WHY: single-part input is more likely a city than a state
-        return None  # WHY: avoid mislabeling "California" as state when it's the only token
+        return None  # WHY: avoid mislabeling "California" as state when it is the only token
     normalized = AddressUtils._normalize_state(last)  # WHY: map full name to abbreviation
     return normalized.upper() if normalized else None  # WHY: canonical uppercase abbr
 
@@ -677,7 +677,7 @@ def _check_partial_skip(
         if debug:  # WHY: trace partial-match skips when debugging
             logging.debug("ADDRESS_SKIP: Partial match - %s", comp.address)
         return True, skip.reason  # WHY: sufficient match -> skip with the entry's reason
-    return False, ""  # WHY: match count didn't clear the sufficiency bar
+    return False, ""  # WHY: match count did not clear the sufficiency bar
 
 
 def _check_parse_status(
@@ -935,7 +935,7 @@ class NominatimValidator:
                 timeout=timeout,
                 verify=verify_ssl,
             )
-        except Exception:  # WHY: catch-all so a bad response doesn't kill validation
+        except Exception:  # WHY: catch-all so a bad response does not kill validation
             if attempt < self.MAX_RETRIES:  # WHY: sleep only when another attempt remains
                 time.sleep(self.RETRY_DELAY)  # WHY: fixed back-off between attempts
             return None  # WHY: signal caller to retry or terminate
@@ -1012,7 +1012,7 @@ class NominatimValidator:
     ) -> float:
         """Calculate overall confidence score for geocode result."""
         importance = float(result.get("importance", 0.0))  # WHY: Nominatim's own importance score
-        if importance > 0.01:  # WHY: trust importance when it's non-trivial
+        if importance > 0.01:  # WHY: trust importance when it is non-trivial
             return min(1.0, importance * 2.0)  # WHY: scale + cap at 1.0
         display_name = result.get("display_name", "")  # WHY: cache to shorten next call
         component = self._calculate_component_match(address_parts, display_name, source)  # WHY: fallback match
@@ -1096,7 +1096,7 @@ class NominatimValidator:
         ref_dup: bool,
     ) -> tuple[str | None, str | None]:
         """Apply duplicate disqualification rules."""
-        if mist_dup and ref_dup:  # WHY: both duplicated -> can't pick a winner
+        if mist_dup and ref_dup:  # WHY: both duplicated -> cannot pick a winner
             return "uncertain", "Both addresses are duplicates"
         if mist_dup:  # WHY: mist alone duplicated -> ref wins by default
             return "comparison", "Mist address is duplicate"

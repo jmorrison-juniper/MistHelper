@@ -256,7 +256,7 @@ class WANProbeDeviceOverrideManager:  # WHY: encapsulates Menu #167 destructive 
             "\n  Selection: ",
             context="wan_probe_device_template_selection",
         )
-        return raw.strip().lower()  # WHY: normalise so 'CANCEL', ' 1 ' etc. work.
+        return raw.strip().lower()  # WHY: normalise so 'CANCEL', ' 1 ' and so on work.
 
     def _resolve_template_selection(  # WHY: parse numeric input and commit to selected_template.
         self,
@@ -397,7 +397,7 @@ class WANProbeDeviceOverrideManager:  # WHY: encapsulates Menu #167 destructive 
                 current_probe = {}
             overridden_wan_ports.append(
                 {
-                    "port_name": port_name,  # WHY: port identifier (e.g. ge-0/0/0).
+                    "port_name": port_name,  # WHY: port identifier (for example ge-0/0/0).
                     "current_ips": current_probe.get("ips", []),  # WHY: existing probe IPs.
                     "current_profile": current_probe.get("probe_profile", ""),  # WHY: existing probe profile.
                     "port_settings": port_settings,  # WHY: full port settings retained for context.

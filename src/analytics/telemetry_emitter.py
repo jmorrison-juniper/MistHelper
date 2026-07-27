@@ -40,7 +40,7 @@ class TelemetryEmitter:
 
         Why:
             Parent directories are created eagerly so callers can pass a fresh
-            path (e.g. ``data/telemetry/2026-07-21.jsonl``) without a separate
+            path (for example ``data/telemetry/2026-07-21.jsonl``) without a separate
             ``os.makedirs`` step. Open failures downgrade to a warning and leave
             ``self._handle = None`` so subsequent ``emit()`` calls become no-ops
             (FR-008: telemetry must never interrupt the primary operation).

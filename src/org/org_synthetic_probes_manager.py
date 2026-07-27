@@ -132,7 +132,7 @@ _COUNTRY_CODE_TO_REGION: dict[str, str] = {
 }
 # Anything not listed above falls through to EMEA. EMEA endpoints are the
 # broadest surface (Africa, Middle East, Europe, plus every APAC/Oceania code
-# we haven't explicitly routed to China), so this is the safest default. A
+# we have not explicitly routed to China), so this is the safest default. A
 # warning is logged when the fallback fires so operators can spot unmapped
 # country codes and extend ``_COUNTRY_CODE_TO_REGION`` if needed.
 _DEFAULT_REGION = "emea"
@@ -360,7 +360,7 @@ _COUNTRY_CODE_INTENTIONAL_GAPS: frozenset[str] = frozenset(
 # per-role ``probe.protocol`` chosen from the curated JSON maps directly to a
 # URL scheme -- with two caveats encoded in ``_probe_target``:
 #   1. ``tcp`` is not a valid URL scheme for Mist synthetic tests. Roles that
-#      the reachability probing showed only respond to raw TCP/443 (e.g.
+#      the reachability probing showed only respond to raw TCP/443 (for example
 #      ``service_discovery_enrollment_login``) still exercise the same TCP
 #      handshake path when probed as HTTPS, so we transparently upgrade to
 #      ``https`` for URL construction.
@@ -850,8 +850,8 @@ def manage_org_synthetic_probes(mist_session: Any, org_id: str) -> None:
         "load-time CENR check complete; warned_cenr_hosts=%s",
         len(warned_cenr_hosts),
     )
-    # NOTE(1025-US2): companion dedup state for the load-time country_code
-    # WARNING lives here so its lifetime is bounded by the invocation
+    # NOTE(1025-US2): companion dedup state for the load-time
+    # country_code warning lives here so its lifetime is bounded by the invocation
     # (data-model.md §3 INV-D1; FR-012 requires re-emission across
     # back-to-back operator runs). Emission itself is delegated to
     # ``_prompt_and_apply_site_overrides`` because that is where the site
@@ -1307,7 +1307,7 @@ def _validate_vlan_input(raw: str) -> tuple[bool, str, list[int]]:
         everything.
 
     Args:
-        raw: Comma-separated VLAN ids and/or ranges (e.g. ``"3-6, 10"``).
+        raw: Comma-separated VLAN ids and/or ranges (for example ``"3-6, 10"``).
 
     Returns:
         ``(is_valid, error_message, vlan_ids)``. ``is_valid`` is True
@@ -1381,7 +1381,7 @@ def _detect_existing(setting: dict[str, Any]) -> dict[str, dict[str, Any]]:
     """Extract ``synthetic_test.custom_probes`` from ``setting``.
 
     Why:
-        Guarded accessor so callers don't have to worry about the
+        Guarded accessor so callers do not have to worry about the
         edge case where either ``synthetic_test`` or ``custom_probes``
         is absent.
 
@@ -1687,7 +1687,7 @@ def _build_region_probes(
 
     Returns:
         A ``{probe_name: probe_body}`` map for the one matching role.
-        Empty dict if the probe source file doesn't ship a role for the
+        Empty dict if the probe source file does not ship a role for the
         resolved region (defensive; the shipped catalogue has all three).
     """
     probes_source, _ = sources
@@ -1778,7 +1778,7 @@ def _is_concrete_probe_fqdn(fqdn: Any) -> bool:
 # Compression rule: countries with at most this many distinct ZEN locations
 # get ALL of their locations scheduled at every site in-country. Above this
 # threshold, we fall back to nearest-N-by-haversine. Two is chosen because
-# Zscaler almost always deploys a same-city pair (e.g. Frankfurt IV + VI at
+# Zscaler almost always deploys a same-city pair (for example Frankfurt IV + VI at
 # identical coords), so a country with only a "two location" footprint really
 # has one geographic point + a redundant peer -- probing both is cheap and
 # gives operators failover signal.
@@ -1823,7 +1823,7 @@ def _distinct_zen_locations(city_metadata: dict[str, dict[str, Any]]) -> dict[st
 
     Why:
         Zscaler frequently ships multiple named ZENs at identical coords
-        (e.g. ``Frankfurt IV`` and ``Frankfurt VI`` at the same lat/lon).
+        (for example ``Frankfurt IV`` and ``Frankfurt VI`` at the same lat/lon).
         For compression-rule counting ("does this country have <= N ZEN
         locations?") we must dedupe on physical location, not on name --
         otherwise a country with two co-located same-city peers gets
@@ -1846,7 +1846,7 @@ def _distinct_zen_locations(city_metadata: dict[str, dict[str, Any]]) -> dict[st
         if not isinstance(country, str) or not isinstance(lat, (int, float)) or not isinstance(lon, (int, float)):
             continue
         # Round to 4 decimal places (~11 m precision) so trivial floating
-        # noise doesn't split a genuine same-coord pair into two groups.
+        # noise does not split a genuine same-coord pair into two groups.
         key = f"{country.upper()}:{round(float(lat), 4)}:{round(float(lon), 4)}"
         groups.setdefault(key, []).append(city)
     for names in groups.values():
@@ -1929,21 +1929,21 @@ def _resolve_zen_cities_for_site(
         Every Mist site probing every one of the ~95 ZEN cities would burn
         bandwidth and generate noisy dashboards. We want the small set that
         matches the site's geography: if the site's country hosts only a
-        handful of ZEN locations, probe them all (they're already nearby);
+        handful of ZEN locations, probe them all (they are already nearby);
         otherwise pick the geodesically-nearest few. This mirrors what a
         network engineer would do by hand looking at the ZEN map.
 
     Compression rules (evaluated in order):
-        1. Country has <= ``_ZEN_COMPRESSION_THRESHOLD`` distinct ZEN
-           locations -> return every ZEN name in-country.
-        2. Country has more, and the site has a valid ``latlng`` -> return
-           the ``_ZEN_NEAREST_COUNT`` nearest ZENs by great-circle distance,
-           deduped by location (so same-city pairs count once).
-        3. Country has more but site lacks ``latlng`` -> return the
-           country's ZENs anyway (better to over-probe within-country than
-           to skip; operators can trim later).
-        4. Site has no country match AND has ``latlng`` -> nearest globally.
-        5. No country match AND no latlng -> empty list + warn.
+        - Country has <= ``_ZEN_COMPRESSION_THRESHOLD`` distinct ZEN
+          locations -> return every ZEN name in-country.
+        - Country has more, and the site has a valid ``latlng`` -> return
+          the ``_ZEN_NEAREST_COUNT`` nearest ZENs by great-circle distance,
+          deduped by location (so same-city pairs count once).
+        - Country has more but site lacks ``latlng`` -> return the
+          country's ZENs anyway (better to over-probe within-country than
+          to skip; operators can trim later).
+        - Site has no country match AND has ``latlng`` -> nearest globally.
+        - No country match AND no latlng -> empty list + warn.
 
     Args:
         site: The Mist site dict. Reads ``country_code`` and ``latlng``.
@@ -1991,7 +1991,7 @@ def _nearest_zens_from_pool(
     """Return the ``count`` nearest ZEN city names from a pool.
 
     Why:
-        Same-coord peers (e.g. Frankfurt IV + Frankfurt VI) should count as
+        Same-coord peers (for example Frankfurt IV + Frankfurt VI) should count as
         one location when ranking distance -- otherwise "nearest 2" collapses
         to two names at the same spot. We rank by distinct (lat, lon) groups
         and then re-expand the winning groups back to the full name list so
@@ -2083,7 +2083,7 @@ def _zen_probe_names_for_cities(
             ``_resolve_zen_cities_for_site``.
         cenr: Parsed CENR JSON. Reads ``city_metadata`` for each city's
             ``probe_hostnames`` list (falling back to the legacy
-            ``probe_hostname`` scalar if the list form isn't present, so
+            ``probe_hostname`` scalar if the list form is not present, so
             an unrefreshed CENR file keeps working).
 
     Returns:
@@ -2136,7 +2136,7 @@ def _merge_probes(
     merged: dict[str, dict[str, Any]] = {}
     for name, probe in existing_tool.items():
         # Prefer freshly-built type/target (new source of truth); fall back
-        # to on-org values when the probe isn't in ``new_probes``.
+        # to on-org values when the probe is not in ``new_probes``.
         template = new_probes.get(name, probe)
         # Resolve target first because the ``type`` classification depends
         # on whether the target string carries an HTTP scheme.
@@ -2157,7 +2157,7 @@ def _merge_probes(
         # Sync aggressiveness from the freshly-built set so demotions
         # propagate. ``_build_probe_set`` always emits an explicit value;
         # the None branch is defensive against a future refactor dropping
-        # the key. Probes with no counterpart in ``new_probes`` (e.g. a
+        # the key. Probes with no counterpart in ``new_probes`` (for example a
         # role dropped from the JSON) keep their prior value.
         if name in new_probes:
             authoritative = new_probes[name].get("aggressiveness")
@@ -2188,7 +2188,7 @@ def _swap_probes(
 
 
 def _prompt_mode(existing_tool: dict[str, dict[str, Any]]) -> str:
-    """Prompt the operator for merge vs. swap.
+    """Prompt the operator for merge versus swap.
 
     Why:
         Displaying the existing probe count and VLAN union up-front gives
@@ -2461,7 +2461,7 @@ def _first_vlan_template(surviving: list[dict[str, Any]]) -> list[int] | None:
         Split out of ``_derive_test_row_template`` so each field's
         scanner stays under the CC gate. Non-int entries in ``vlan_ids``
         are dropped defensively -- Mist's schema is ints-only, but
-        malformed operator-authored rows shouldn't crash injection.
+        malformed operator-authored rows should not crash injection.
 
     Args:
         surviving: Cleaned rows from ``_filter_surviving_test_rows``.
@@ -2483,7 +2483,7 @@ def _first_lan_template(surviving: list[dict[str, Any]]) -> list[str] | None:
     Why:
         Peer of ``_first_vlan_template``. Non-str entries are dropped
         defensively -- Mist stores network refs as strings but again
-        we don't want a malformed row to crash injection.
+        we do not want a malformed row to crash injection.
 
     Args:
         surviving: Cleaned rows from ``_filter_surviving_test_rows``.
@@ -2506,7 +2506,7 @@ def _derive_test_row_template(
 
     Why:
         Injected rows must inherit operator scoping from foreign rows
-        so a targeted deployment (e.g. VLAN 42 only) does not silently
+        so a targeted deployment (for example VLAN 42 only) does not silently
         widen when the tool adds new probes. The two fields are looked
         up independently so a mixed-shape ``tests[]`` list still yields
         a complete template.
@@ -2651,7 +2651,7 @@ def _prompt_and_apply_site_overrides(
     Why:
         Mist site settings can override org-wide ``custom_probes``. After
         a successful org PUT the operator often wants a subset of sites
-        (e.g. those with unusual VLAN topology or higher SLE
+        (for example those with unusual VLAN topology or higher SLE
         expectations) to carry the same probe set locally so
         site-specific probe/VLAN interactions are testable without
         touching org config. Displaying an indexed table (rather than
@@ -2716,7 +2716,7 @@ def _prompt_and_apply_site_overrides(
         _compute_unmapped_country_codes(  # inner: set difference over frozen universes
             sites,  # the just-loaded site list
             _COUNTRY_CODE_TO_REGION,  # T020-extended region map
-            _COUNTRY_CODE_INTENTIONAL_GAPS,  # T021 gap set (Antarctica etc.)
+            _COUNTRY_CODE_INTENTIONAL_GAPS,  # T021 gap set (Antarctica and so on)
         ),
         warned_unmapped_codes,  # dedup state -- mutated in place
     )

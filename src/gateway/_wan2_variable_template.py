@@ -83,7 +83,7 @@ class _Wan2VariableTemplate(_ClusterBase):
         replacements: list[tuple[str, str]] = []  # WHY: accumulator for return
         for key in port_config:  # WHY: scan every configured port key
             match = self._classify_port_key(key, search, replace, template_name)  # WHY: extracted for CC budget
-            if match is not None:  # WHY: skip keys that need manual review or don't match
+            if match is not None:  # WHY: skip keys that need manual review or do not match
                 replacements.append(match)  # WHY: record planned edit
         return replacements  # WHY: caller applies edits later
 

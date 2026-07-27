@@ -4142,7 +4142,7 @@ class ArangoDBWriter:  # WHY: primary writer class for the ArangoDB polyglot bac
             "_misthelper_updated_at": int(time.time()),  # WHY: staleness stamp
         }
 
-    def _resolve_field(self, record: dict, field: str) -> Any:  # WHY: dispatcher for nested vs. flat field access
+    def _resolve_field(self, record: dict, field: str) -> Any:  # WHY: dispatcher for nested versus flat field access
         """Return the record value for a field, supporting dot-separated nested paths."""
         if "." in field:  # WHY: guard clause routes nested paths through the recursive helper
             return self._resolve_nested_field(record, field)
@@ -4254,7 +4254,7 @@ class ArangoDBWriter:  # WHY: primary writer class for the ArangoDB polyglot bac
 
     @staticmethod
     def _resolve_nested_field(record: dict, field_path: str) -> Any:  # WHY: dot-path resolver
-        """Resolve dot-separated field paths (e.g., 'matching.site_ids')."""
+        """Resolve dot-separated field paths (for example, 'matching.site_ids')."""
         parts = field_path.split(".")  # WHY: split path into successive keys
         value: Any = record  # WHY: walk starts at the record root
         for part in parts:  # WHY: descend through each dot-separated key

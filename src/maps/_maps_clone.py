@@ -106,7 +106,7 @@ class _MapsClone:
         """Print a formatted block describing the source map's key attributes."""
         print(f"\n{'-' * 80}")  # Divider above the details block.
         print(f"Source Map: {source_map.get('name', 'Unnamed')}")  # Human-readable identifier.
-        print(f"Type: {source_map.get('type', 'N/A')}")  # image / geojson / etc.
+        print(f"Type: {source_map.get('type', 'N/A')}")  # image / geojson / and so on
         print(f"Dimensions: {source_map.get('width', 'N/A')}x{source_map.get('height', 'N/A')}")  # WxH in pixels.
         print(f"PPM: {source_map.get('ppm', 'N/A')}")  # Pixels-per-meter scale.
         print(f"Has Image: {'Yes' if 'url' in source_map else 'No'}")  # Image asset presence flag.
@@ -337,7 +337,7 @@ class _MapsClone:
         print("\n" + "-" * 80)  # Top divider.
         print("CLONE/DUPLICATE MAP")  # Banner title.
         print("-" * 80)  # Bottom divider.
-        print("! This will clone ALL map data: image, walls, paths, zones, wayfinding, etc.")  # Warning banner.
+        print("! This will clone ALL map data: image, walls, paths, zones, wayfinding, etc.")  # Confirmation banner.
 
     def _prepare_clone(self, site_id: str, source_map_id: str) -> _ClonePrep | None:
         """Fetch source, prompt for name, build payload, count zones, and confirm."""

@@ -40,7 +40,7 @@ _SSR_COLUMNS: tuple[str, ...] = (
     "Next Hop",  # WHY: gateway IP for the route
     "Protocol",  # WHY: BGP/OSPF/... source protocol
     "Route Name",  # WHY: SSR-configured route name (may be empty)
-    "Status",  # WHY: e.g. active/inactive per SSR row
+    "Status",  # WHY: for example active/inactive per SSR row
     "Selection Reason",  # WHY: BGP selection reason string
     "Weight",  # WHY: route weight when supplied
     "Metric",  # WHY: metric column stringified upstream
@@ -120,7 +120,7 @@ class _RoutingUtilsDisplay:  # WHY: cluster wrapper matches the Phase 1 parsing-
 
     def _display_forwarding_summary(self, entries: list[dict[str, Any]]) -> None:  # WHY: cluster entry
         """Display formatted summary of forwarding table entries."""
-        if not entries:  # WHY: guard so empty results don't spam the table renderer
+        if not entries:  # WHY: guard so empty results do not spam the table renderer
             print("-> No forwarding table entries found")  # WHY: user-facing empty-state notice
             return  # WHY: nothing else to render when entries list is empty
         print(f"-> Total forwarding entries: {len(entries)}")  # WHY: headline count first
@@ -153,7 +153,7 @@ class _RoutingUtilsDisplay:  # WHY: cluster wrapper matches the Phase 1 parsing-
     ) -> None:
         """Add ``value`` to ``target_set`` if it is truthy and not the sentinel."""
         if value and value != sentinel:  # WHY: two-guard filter keeps "-" placeholders out
-            target_set.add(value)  # WHY: sets deduplicate; caller doesn't need to check membership
+            target_set.add(value)  # WHY: sets deduplicate; caller does not need to check membership
 
     def _collect_forwarding_stats(self, entries: list[dict[str, Any]]) -> dict[str, Any]:  # WHY: aggregator
         """Collect summary statistics from forwarding table entries."""
@@ -330,7 +330,7 @@ class _RoutingUtilsDisplay:  # WHY: cluster wrapper matches the Phase 1 parsing-
         """Add ``entry[key]`` to ``bucket`` when it is truthy and not a sentinel."""
         value = entry.get(key)  # WHY: single lookup for both guards
         if value and value not in (_MISSING, ""):  # WHY: legacy filter set — keep behavior identical
-            bucket.add(value)  # WHY: sets deduplicate so we don't need to pre-check membership
+            bucket.add(value)  # WHY: sets deduplicate so we do not need to pre-check membership
 
     def _display_routing_details(self, route_entries: list[dict[str, Any]]) -> None:
         """Display detailed routing table in a formatted table."""

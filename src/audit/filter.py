@@ -43,7 +43,7 @@ class AuditLogFilter:  # Encapsulates noise-filtering rules for audit entries
             True if the entry should be filtered out.
         """
         msg = entry.get("message", "")  # Missing message defaults to empty string
-        if self._matches_noise_phrase(msg):  # Phrase-match noise (login/logout, packet capture, etc.)
+        if self._matches_noise_phrase(msg):  # Phrase-match noise (login/logout, packet capture, and so on)
             return True  # Phrase match short-circuits to noise
         if _is_vpn_cascade(msg, entry):  # VPN update without before/after detail
             return True  # VPN cascade short-circuits to noise

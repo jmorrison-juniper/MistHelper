@@ -6,7 +6,7 @@ lines, log file headers/footers, [STEP], [OK], [ERROR], [INTERRUPT] markers)
 and magic wait-window values are preserved verbatim from the original.
 
 The interactive flow drives a persistent paramiko shell channel to support
-sequences that require interactive input (e.g. ``su`` -> ``Password:`` ->
+sequences that require interactive input (for example ``su`` -> ``Password:`` ->
 response -> ``show ...``).
 """
 
@@ -472,7 +472,7 @@ class InteractiveBatchExecutor:  # WHY: static-method container for the interact
         command_index = 0  # WHY: manual index because blank entries are skipped by helper.
         while command_index < total:  # WHY: hand-rolled loop keeps parity with original behaviour.
             step_ctx = InteractiveBatchExecutor._build_step_context(hostname, commands, command_index, total)
-            command_index += 1  # WHY: always advance so blank entries don't loop forever.
+            command_index += 1  # WHY: always advance so blank entries do not loop forever.
             if step_ctx is None:  # WHY: helper returned None to signal a blank-line skip (no pause).
                 continue
             result = InteractiveBatchExecutor._maybe_run_step(shell, step_ctx, writer, logger)  # WHY: run step.

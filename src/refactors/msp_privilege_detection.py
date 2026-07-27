@@ -41,7 +41,7 @@ def _extract_msp_name(response: Any) -> str | None:
         logging.debug("_extract_msp_name: response.data is not a dict, returning None")  # AFTER: no-data trace
         return None  # Malformed or empty response
     name = data.get("name")  # Extract the MSP's name field
-    result = name if isinstance(name, str) else None  # Return the name only if it's a valid string
+    result = name if isinstance(name, str) else None  # Return the name only if it is a valid string
     logging.debug("_extract_msp_name: exit -- name=%s", "<set>" if result else "None")  # AFTER: success trace
     return result  # Yield the resolved name (or None when absent)
 
@@ -51,7 +51,7 @@ def _fetch_msp_name(msp_id: str, session: Any) -> str | None:
     logging.info("_fetch_msp_name: entry (msp_id=%s...)", msp_id[:8])  # BEFORE: trace fetch entry
     if session is None:  # No active session to query with
         logging.debug("_fetch_msp_name: no session, returning None")  # AFTER: no-session trace
-        return None  # Can't look anything up
+        return None  # Cannot look anything up
     try:  # API call and payload parsing may fail; degrade to None on any error
         import mistapi.api.v1.msps.msps as msps_api  # noqa: PLC0415  # Lazy import of MSP details endpoint
 
@@ -59,9 +59,9 @@ def _fetch_msp_name(msp_id: str, session: Any) -> str | None:
         result = _extract_msp_name(response)  # Pull the name from the payload (None when absent/malformed)
         logging.debug("_fetch_msp_name: exit -- result=%s", "<set>" if result else "None")  # AFTER: success trace
         return result  # Hand back the resolved name (or None)
-    except Exception as e:  # Lookup failed (network, permissions, etc.)
+    except Exception as e:  # Lookup failed (network, permissions, and so on)
         logging.debug("Could not fetch MSP name for %s...: %s", msp_id[:8], e)  # Note the failure at debug level
-        return None  # Default to None when the name can't be resolved
+        return None  # Default to None when the name cannot be resolved
 
 
 def _msp_resolve_name(msp_id: str, priv: dict[str, Any], session: Any) -> str:
@@ -128,7 +128,7 @@ def _msp_fetch_user_data(session: Any) -> dict[str, Any] | None:
 
     response = self_api.getSelf(session)  # Ask the API who the authenticated user is (via injected session).
     if not response or not hasattr(response, "data"):  # No usable payload came back.
-        logging.warning("getSelf returned no data - cannot detect MSP privileges")  # Warn we can't determine access.
+        logging.warning("getSelf returned no data - cannot detect MSP privileges")  # Warn we cannot determine access.
         return None  # No privileges could be detected.
     user_data = response.data  # Extract the decoded JSON body.
     if not isinstance(user_data, dict):  # The body should be a JSON object.
@@ -171,5 +171,5 @@ def detect_msp_privileges(session: Any) -> list[dict[str, Any]]:
         )  # AFTER: trace success path with count
         return detected_msps  # Hand the parsed MSP list back to the caller.
     except Exception as e:  # Any API or parsing failure.
-        logging.warning("Failed to detect MSP privileges: %s", e)  # Warn but don't crash the session.
+        logging.warning("Failed to detect MSP privileges: %s", e)  # Warn but do not crash the session.
         return []  # Treat as no MSP access on error.

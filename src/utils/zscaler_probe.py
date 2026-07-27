@@ -103,7 +103,7 @@ class ProbeResult:
         tls_error (str | None): Formatted TLS error text; only populated on
             handshake failure.
         responding_protocols (list[str]): Compact list of protocols we
-            confirmed live (e.g. ``["ICMP", "TCP/443", "HTTPS"]``); used by
+            confirmed live (for example ``["ICMP", "TCP/443", "HTTPS"]``); used by
             the log summary.
         server_class (str): Category inferred from FQDN + headers + cert
             issuer.
@@ -305,7 +305,7 @@ def _udp_check(host: str, port: int, timeout: float) -> str:
     except TimeoutError:
         state = "no_reply"  # silent-drop firewall / route missing / peer offline
     except OSError as exc:
-        state = f"error:{type(exc).__name__}"  # e.g. PermissionError, NetworkUnreachable
+        state = f"error:{type(exc).__name__}"  # for example PermissionError, NetworkUnreachable
     logger.debug("zscaler_probe: udp_check result host=%s port=%d state=%s", host, port, state)
     return state
 

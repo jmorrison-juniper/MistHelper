@@ -227,7 +227,7 @@ class ConnectionPoolExecutor:  # Class-body seam for the connection-pool-managed
         successful_results: list[Any] = []  # Accumulate all successful worker results across all batches
         failed_items: list[Any] = []  # Accumulate all failed items across all batches for optional retry
         for batch_index in range(0, len(work_items), batch_size):  # Split work into equal-sized, bounded-memory batches
-            try:  # Isolate each batch so a single failure doesn't silently skip remaining batches
+            try:  # Isolate each batch so a single failure does not silently skip remaining batches
                 batch = work_items[batch_index : batch_index + batch_size]  # Slice the current batch from full list
                 batch_number = (batch_index // batch_size) + 1  # 1-based batch number for readable progress logs
                 batch_successful, batch_failed = ConnectionPoolExecutor._pool_process_batch_wait_loop(  # Batch run

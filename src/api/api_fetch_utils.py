@@ -153,7 +153,7 @@ class APIFetchUtils:  # Higher-level org/site fetchers.
         """Fetch one gateway device's config (site-tagged); return the config dict, or None on empty/failure."""
         work_site_id, work_device_id, work_site_name = work_item  # Unpack the work item.
         with connection_semaphore:  # Limit concurrent connections via the pool semaphore.
-            try:  # Isolate per-device failures so one bad device doesn't abort the batch.
+            try:  # Isolate per-device failures so one bad device does not abort the batch.
                 logging.debug("Fetching config for %s (%s)", work_device_id, work_site_name)  # Trace the fetch.
                 config_response = mistapi.api.v1.sites.devices.getSiteDevice(  # Call the device API.
                     apisession, work_site_id, work_device_id

@@ -109,7 +109,7 @@ class Operation:  # WHY: Immutable slotted bundle replaces per-entry dict[str, A
     category: str  # WHY: Grouping banner printed once per contiguous run of same-category ops
     sort_key: str | None = None  # WHY: Result sort field; None falls back to _DEFAULT_SORT_KEY
     paginated: bool = True  # WHY: Paginated endpoints receive limit=_DEFAULT_LIMIT; others pass None
-    api_kwargs: dict[str, Any] = field(default_factory=dict)  # WHY: Extra kwargs (e.g. distinct=mac)
+    api_kwargs: dict[str, Any] = field(default_factory=dict)  # WHY: Extra kwargs (for example distinct=mac)
 
 
 # ---------------------------------------------------------------------------
@@ -581,7 +581,7 @@ def _build_export_kwargs(operation: Operation) -> dict[str, Any]:
         "sort_key": sort_key,
         "limit": limit_value,
     }
-    kwargs.update(operation.api_kwargs)  # WHY: Merge per-operation extras (e.g. distinct=mac) last
+    kwargs.update(operation.api_kwargs)  # WHY: Merge per-operation extras (for example distinct=mac) last
     return kwargs
 
 

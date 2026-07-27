@@ -96,7 +96,7 @@ class _ExecutionRequest:  # WHY: private request bundle passed between _execute_
     user: str  # WHY: validated SSH username (already syntactically checked).
     password: str  # WHY: resolved SSH password (env/prompt/none paths converge here).
     commands: list[str]  # WHY: validated command list (already syntactically checked).
-    args: Any  # WHY: argparse Namespace passthrough for port/timeout/max_threads etc.
+    args: Any  # WHY: argparse Namespace passthrough for port/timeout/max_threads and so on
     use_shell: bool  # WHY: resolved shell-mode flag (default-on unless --no-shell).
 
 

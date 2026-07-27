@@ -261,7 +261,7 @@ class BatchExecutor:
             if step_result.stop:  # WHY: interrupt short-circuits remaining commands.
                 overall_success = False  # WHY: interrupts always mark the batch failed.
                 break
-            if not step_result.ok:  # WHY: failed command doesn't stop remaining commands.
+            if not step_result.ok:  # WHY: failed command does not stop remaining commands.
                 overall_success = False  # WHY: track failure but keep executing (verbatim behavior).
             if index < total:  # WHY: inter-command delay only applies between commands.
                 time.sleep(_INTER_COMMAND_PAUSE)  # WHY: preserve original pacing between commands.

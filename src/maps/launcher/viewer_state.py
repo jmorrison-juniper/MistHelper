@@ -66,7 +66,7 @@ class MapViewerState:
         fallback when the config store is missing.
     api_session_ref:
         Live ``mistapi.APISession`` instance used by callbacks that
-        invoke Mist API mutations (delete map, delete zone, etc.).
+        invoke Mist API mutations (delete map, delete zone, and so on).
     ppm:
         Pixels-per-meter scale value; used by ``update_shape_labels``
         as the fallback when the figure metadata lacks an override.

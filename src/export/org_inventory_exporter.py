@@ -340,7 +340,7 @@ class OrgInventoryExporter:  # Org inventory exporters.
         return weekly_data, summary_data  # Return both detailed buckets and summary counts
 
     @staticmethod
-    def _write_combined_inventory_weekly_csvs(  # Write weekly inventory CSVs.
+    def _write_combined_inventory_weekly_csvs(  # Write weekly inventory CSV files.
         output_folder: str,
         fieldnames: list[str],
         weekly_data: defaultdict[str, list[dict[str, str | None]]],
@@ -656,7 +656,7 @@ class OrgInventoryExporter:  # Org inventory exporters.
         # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
         logger.info("All Devices with Site and Address Info:")  # Inform operator of export.
         logging.info("Fetching All Devices with Site Info...")  # Log fetch start.
-        if fast:  # Fast mode reuses cached CSVs.
+        if fast:  # Fast mode reuses cached CSV files.
             logging.info(" Fast mode enabled for devices with site info export")  # Log fast mode enabled.
         org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org id.
         site_lookup, inventory = OrgInventoryExporter._devices_load_data(org_id, fast)  # Load sites + inventory.

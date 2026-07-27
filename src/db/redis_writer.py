@@ -34,7 +34,7 @@ JSON_PIPELINE_BATCH = 500  # WHY: batch JSON.SET+EXPIRE to bound pipeline memory
 HOURLY_BUCKET_MS = 3_600_000  # WHY: 1h aggregation bucket for hourly compaction rule.
 DAILY_BUCKET_MS = 86_400_000  # WHY: 1d aggregation bucket for daily compaction rule.
 KEY_CREATION_BATCH = 500  # WHY: pipeline TS.CREATE in modest batches to avoid slow-log spikes.
-ADD_PIPELINE_BATCH = 10_000  # WHY: TS.ADD batch size tuned for throughput vs. Redis latency.
+ADD_PIPELINE_BATCH = 10_000  # WHY: TS.ADD batch size tuned for throughput versus Redis latency.
 PARALLEL_EXTRACT_THRESHOLD = 1000  # WHY: below this, sequential extract avoids pool startup overhead.
 MAX_EXTRACT_WORKERS = 8  # WHY: cap parallelism to prevent GIL thrash on typical hosts.
 DEFAULT_LABEL_FIELDS = (
@@ -148,7 +148,7 @@ class RedisTimeSeriesWriter:
             ts_value_fields=strategy.get("ts_value_fields"),
         )
 
-    def _extract_all_adds(  # WHY: dispatch sequential vs. parallel extraction based on input size.
+    def _extract_all_adds(  # WHY: dispatch sequential versus parallel extraction based on input size.
         self,
         data: list[dict[str, Any]],
         ctx: _ExtractContext,
@@ -197,7 +197,7 @@ class RedisTimeSeriesWriter:
 
     @staticmethod
     def _select_numeric(record: dict[str, Any], ctx: _ExtractContext) -> dict[str, float]:  # WHY: mode dispatch.
-        """Choose listed-fields vs. auto numeric extraction based on ctx."""
+        """Choose listed-fields versus auto numeric extraction based on ctx."""
         if ctx.ts_value_fields:  # WHY: explicit allow-list wins over generic numeric scan.
             return RedisTimeSeriesWriter._extract_listed_fields(record, ctx.ts_value_fields)
         return RedisTimeSeriesWriter._extract_numeric(record, ctx.primary_keys)  # WHY: fallback auto-detect path.
@@ -327,7 +327,7 @@ class RedisTimeSeriesWriter:
         batch: list[tuple[str, float]],
         results: list[Any],
     ) -> tuple[int, int]:
-        """Count successes vs. failures, logging each failure with its key."""
+        """Count successes versus failures, logging each failure with its key."""
         written = 0  # WHY: local counter avoids mutating caller state directly.
         failed = 0  # WHY: local counter for failed adds.
         for idx, result in enumerate(results):  # WHY: index-align back to batch entries for error context.
@@ -414,7 +414,7 @@ class RedisTimeSeriesWriter:
             entity_id = self._pick_webhook_entity(event)  # WHY: keeps the loop body linear.
             numeric = self._extract_numeric(event, list(WEBHOOK_ENTITY_KEYS))  # WHY: exclude PK-like fields.
             for field_name, value in numeric.items():  # WHY: each numeric field maps to its own TS key.
-                ts_key = f"{key_prefix}:{entity_id}:{field_name}"  # WHY: consistent naming vs. batch path.
+                ts_key = f"{key_prefix}:{entity_id}:{field_name}"  # WHY: consistent naming versus batch path.
                 self._ensure_key_single(ts_key, event, key_prefix)  # WHY: guarantees key exists before ADD.
                 pipe.execute_command(  # WHY: enqueue explicit-timestamp TS.ADD command.
                     "TS.ADD",
