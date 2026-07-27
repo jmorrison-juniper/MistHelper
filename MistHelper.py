@@ -797,7 +797,7 @@ def _get_installed_version(package_name: str) -> str:  # Look up the installed v
         from importlib.metadata import version as get_version  # Import the stdlib version lookup (Python 3.8+)
 
         return get_version(package_name)  # Return the installed version string (for example '0.59.3')
-    except Exception:  # Package not installed or its metadata is missing
+    except Exception:  # Package not installed or its metadata is absent
         return ""  # Return empty string to signal 'not installed' to callers
 
 
@@ -929,7 +929,7 @@ def _parse_requirements_file(filepath: str = "requirements.txt") -> list[tuple[s
     SECURITY: only reads requirements.txt (no arbitrary file access). Skips comments/blanks/dev deps.
     """
     packages = []  # Accumulate (name, spec) tuples to return to the dependency checker
-    try:  # The file may be missing or unreadable. Handle that gracefully below
+    try:  # The file may be absent or unreadable. Handle that gracefully below
         with open(filepath, encoding="utf-8") as requirements_file:  # Open requirements.txt as UTF-8 text
             for line in requirements_file:  # Process one dependency line at a time
                 parsed = _parse_requirement_line(line)  # Parse this line into (name, spec) or None to skip
@@ -999,7 +999,7 @@ def _is_help_invocation(argv: list[str]) -> bool:
 
 
 # Run early dependency check (will be skipped if DISABLE_AUTO_INSTALL=true
-# or if the user is asking for --help/-h, which must be side-effect-free per #1641).
+# or if the user asks for --help/-h, which must be side-effect-free per #1641).
 if not _is_help_invocation(sys.argv):
     _early_dependency_check()  # Run the bootstrap immediately at import time
 
@@ -1018,7 +1018,7 @@ from datetime import UTC, timezone  # UTC marker plus timezone helper for tz-awa
 # Pylance uses the TYPE_CHECKING imports above for type analysis.
 try:  # PrettyTable is required for formatted console tables
     from prettytable import PrettyTable  # ASCII table renderer used across menus and reports
-except ImportError as _pt_err:  # Required dependency is missing
+except ImportError as _pt_err:  # Required dependency is not installed
     raise ImportError(
         "PrettyTable is required but not installed. Run: pip install prettytable"
     ) from _pt_err  # Fail fast with install guidance
@@ -1032,7 +1032,7 @@ except ImportError:  # numpy not installed
 
 try:  # websocket-client is required for live device diagnostics
     import websocket  # WebSocket client fail-fast install guard (used by src.device.arp_command_manager)
-except ImportError as _ws_err:  # Required dependency is missing
+except ImportError as _ws_err:  # Required dependency is not installed
     raise ImportError(
         "websocket-client is required but not installed. Run: pip install websocket-client"
     ) from _ws_err  # Fail fast with install guidance
@@ -1056,7 +1056,7 @@ from src.utils.tqdm_wrapper import tqdm  # noqa: E402, I001  # Cat E canonical (
 
 try:  # requests is required for all HTTP calls
     import requests  # HTTP library fail-fast install guard (also used via function-local imports)
-except ImportError as _req_err:  # Required dependency is missing
+except ImportError as _req_err:  # Required dependency is not installed
     raise ImportError(
         "requests is required but not installed. Run: pip install requests"
     ) from _req_err  # Fail fast with install guidance
@@ -1131,7 +1131,7 @@ except Exception:  # Missing or non-numeric value
     _parsed_limit = 1000  # Fall back to a sensible default page size
 
 DEFAULT_API_PAGE_LIMIT = max(1, min(_parsed_limit, 1000))  # Clamp to the 1..1000 range the Mist API accepts
-if _parsed_limit != DEFAULT_API_PAGE_LIMIT:  # The configured value was out of range and had to be clamped
+if _parsed_limit != DEFAULT_API_PAGE_LIMIT:  # The code clamped a value that was out of range
     logging.warning(
         "MIST_PAGE_LIMIT value %s adjusted to %s (valid range 1..1000)", _parsed_limit, DEFAULT_API_PAGE_LIMIT
     )  # Warn about the adjustment
@@ -1170,7 +1170,7 @@ try:  # Prefer the full-featured python-dotenv loader when available
     DOTENV_AVAILABLE = True  # Flag that the real loader is in use
     load_dotenv()  # Load .env now so config is available to the import manager
 except ImportError:  # python-dotenv not installed
-    DOTENV_AVAILABLE = False  # Flag that we are using the minimal fallback
+    DOTENV_AVAILABLE = False  # Flag that we use the minimal fallback
     # Use fallback loader and create an alias for later calls
     load_dotenv = _fallback_load_dotenv  # Alias so later load_dotenv() calls still work
     _fallback_load_dotenv()  # Load .env now using the fallback parser
@@ -1270,9 +1270,9 @@ class GlobalImportManager:
         self.installed_packages: list[str] = []  # Names of packages installed during this run
         self.imports: dict[str, Any] = {}  # Cache of imported modules keyed by name for global reuse
         self._uv_available: bool = False  # Cached answer to 'is UV usable?'
-        self._uv_checked: bool = False  # Whether the UV availability check has run yet
+        self._uv_checked: bool = False  # Whether the UV availability check ran
         self._last_uv_update_check: float | None = None  # Track when we last checked for UV updates
-        self._deferred_init_done: bool = False  # Whether the deferred (lazy) init has run
+        self._deferred_init_done: bool = False  # Whether the deferred (lazy) init ran
         self._initialization_complete: bool = False  # Whether full initialization finished
         self._initialization_success: bool = False  # Whether initialization succeeded
         self._cached_global_assignments: dict[str, Any] = {}  # Module globals to publish once imports complete
@@ -1297,7 +1297,7 @@ class GlobalImportManager:
         }
 
     def _detect_virtual_environment(self) -> None:  # Determine and log whether a venv is active
-        """Detect if we are running in a virtual environment and log info."""
+        """Detect if this runs in a virtual environment and log info."""
         self.in_venv = hasattr(sys, "real_prefix") or (
             hasattr(sys, "base_prefix") and sys.base_prefix != sys.prefix
         )  # venv when prefixes differ
@@ -1369,7 +1369,7 @@ class GlobalImportManager:
         if self._uv_checked:  # We already probed UV earlier this run
             return self._uv_available  # Reuse the cached answer (avoids repeated subprocess calls)
         self._uv_available = self._probe_uv_binary()  # Probe via subprocess and cache the answer
-        self._uv_checked = True  # Mark that we have probed UV so we do not repeat it
+        self._uv_checked = True  # Mark that we probed UV so we do not repeat it
         return self._uv_available  # Return the (now cached) availability
 
     def _probe_uv_binary(self) -> bool:  # Run 'uv --version' to detect UV availability
@@ -1388,7 +1388,7 @@ class GlobalImportManager:
             logging.warning("UV package manager check failed: %s", e)  # Log why the probe failed
             return False  # UV is not usable
 
-    def _install_uv(self) -> bool:  # Try to install UV by pip when it is missing
+    def _install_uv(self) -> bool:  # Try to install UV by pip when it is absent
         """Install UV package manager if not present."""
         if not self.auto_upgrade_uv:  # UV auto-management disabled by config
             logging.info("Auto-upgrade of UV is disabled in configuration")  # Note that we will not install UV
@@ -1477,7 +1477,7 @@ class GlobalImportManager:
     def _install_package_with_uv(self, package_spec: str) -> bool:
         """Install a package using UV package manager with fast resolution and virtual environment awareness."""
         try:
-            logging.debug("Installing package with UV: %s", package_spec)  # Log which package is being installed
+            logging.debug("Installing package with UV: %s", package_spec)  # Log which package the tool installs
             uv_cmd = self._resolve_uv_binary()  # Pick venv-local UV when available, else PATH 'uv'
             first_cmd = self._build_uv_install_cmd(uv_cmd, package_spec, no_build_isolation=True)  # First attempt
             if self._attempt_uv_install(first_cmd, package_spec, fallback=False):  # First UV attempt succeeded
@@ -1551,7 +1551,7 @@ class GlobalImportManager:
         if not self.auto_upgrade_uv:  # UV auto-upgrade is disabled by configuration
             return False  # Never check when the feature is off
 
-        if self._last_uv_update_check is None:  # No prior check has ever run this session
+        if self._last_uv_update_check is None:  # No prior check ran this session
             return True  # Force an initial check
 
         time_since_check = time.time() - self._last_uv_update_check  # Seconds elapsed since the last check
@@ -1565,7 +1565,7 @@ class GlobalImportManager:
             result = SubprocessRunner.run(  # Audited dispatch (initiative 1016) -- 'uv' basename allow-listed.
                 ["uv", "--version"], timeout=5, check=False
             )  # Query installed UV version via SubprocessRunner (validates argv, no shell).
-            if result.returncode != 0:  # UV is missing or failed to report its version
+            if result.returncode != 0:  # UV is absent or gave no version
                 return False  # Cannot determine an update is needed
 
             # For now, we'll assume UV is up to date since checking remote version is complex
@@ -1676,7 +1676,7 @@ class GlobalImportManager:
 
                 desc = kwargs.get("desc", "Processing")  # Description label for the log line
                 unit = kwargs.get("unit", "item")  # Unit noun for the progress message
-                if isinstance(iterable, Sized):  # The iterable has a known length
+                if isinstance(iterable, Sized):  # The iterable length is known
                     total = len(cast(Sized, iterable))  # Compute total item count for the message
                     logging.info("%s: %s %ss to process", desc, total, unit)  # Log a one-shot progress summary
                 else:  # Length is unknown (for example a generator)
@@ -1699,7 +1699,7 @@ class GlobalImportManager:
             if not current_version:  # Could not determine the installed version
                 return True  # Treat as non-fatal -- nothing reliable to upgrade against
             logging.debug("Current version of %s: %s", package_name, current_version)  # Record the current version
-            logging.info("  Checking for updates to %s...", package_name)  # Inform the user an upgrade check is running
+            logging.info("  Checking for updates to %s...", package_name)  # Inform the user an upgrade check runs
             return self._upgrade_and_verify(package_name, package_spec, current_version)  # Upgrade + report
         except Exception as e:  # Any unexpected error during the check/upgrade
             logging.debug("Error checking/upgrading %s: %s", module_name, e)  # Log for diagnostics
@@ -2042,7 +2042,7 @@ class GlobalImportManager:
     def _hoist_module_globals(self, module_name: str, module_obj: Any) -> None:
         """Hoist commonly-used attributes of a known module into globals (data-driven, with optional-pkg cases)."""
         simple_hoists = self._SIMPLE_GLOBAL_HOISTS.get(module_name)  # Lookup the simple hoist list for this module
-        if simple_hoists:  # This module has a fixed set of attributes to hoist
+        if simple_hoists:  # This module lists a fixed set of attributes to hoist
             self._apply_simple_hoists(module_obj, simple_hoists)  # Bind each (global_name, attr) pair
         elif module_name == "usaddress-scourgify":  # Optional address-normalization package needs custom handling
             self._hoist_scourgify_global(module_obj)  # Bind its normalize function (with direct-import fallback)
@@ -2086,13 +2086,13 @@ class GlobalImportManager:
 
     def _add_fallbacks_to_globals(self, global_vars: dict[str, Any]) -> None:
         """Add fallbacks for optional modules that failed to import."""
-        self._install_scourgify_fallback(global_vars)  # Address-normalization shim when scourgify is missing
-        self._install_fuzz_fallback(global_vars)  # Fuzzy-match shim (difflib-backed) when rapidfuzz is missing
+        self._install_scourgify_fallback(global_vars)  # Address-normalization shim when scourgify is absent
+        self._install_fuzz_fallback(global_vars)  # Fuzzy-match shim (difflib-backed) when rapidfuzz is absent
         self._install_ssh_fallbacks(global_vars)  # paramiko/redexpect shims that fail loudly with install guidance
 
     @staticmethod
     def _install_scourgify_fallback(global_vars: dict[str, Any]) -> None:
-        """When normalize_address_record is missing, install a shim returning the raw string with empty fields."""
+        """When normalize_address_record is absent, install a shim returning the raw string with empty fields."""
         if global_vars.get("normalize_address_record") is not None:  # A real normalizer is already present
             return  # No fallback needed
 
@@ -2111,7 +2111,7 @@ class GlobalImportManager:
 
     @staticmethod
     def _install_fuzz_fallback(global_vars: dict[str, Any]) -> None:  # Install the rapidfuzz fallback when absent
-        """When fuzz is missing, install a difflib-backed shim exposing token_sort_ratio (0-100 score)."""
+        """When fuzz is absent, install a difflib-backed shim exposing token_sort_ratio (0-100 score)."""
         if global_vars.get("fuzz") is not None:  # A real fuzzy matcher is already present
             return  # No fallback needed
 
@@ -2137,7 +2137,7 @@ class GlobalImportManager:
 
     @staticmethod
     def _install_paramiko_fallback(global_vars: dict[str, Any]) -> None:  # Install a paramiko shim that errors on use
-        """When paramiko is missing, install a shim whose SSHClient() raises ImportError with install guidance."""
+        """When paramiko is absent, install a shim whose SSHClient() raises ImportError with install guidance."""
         if global_vars.get("paramiko") is not None:  # paramiko (or an existing shim) is already present
             return  # No fallback needed
 
@@ -2154,7 +2154,7 @@ class GlobalImportManager:
 
     @staticmethod
     def _install_redexpect_fallback(global_vars: dict[str, Any]) -> None:  # Install a redexpect shim that errors on use
-        """When redexpect is missing, install a shim whose spawn() raises ImportError with install guidance."""
+        """When redexpect is absent, install a shim whose spawn() raises ImportError with install guidance."""
         if global_vars.get("redexpect") is not None:  # redexpect (or an existing shim) is already present
             return  # No fallback needed
 
@@ -2198,7 +2198,7 @@ class GlobalImportManager:
         """Verify mistapi.api.v1 module structure is present and log the result."""
         if hasattr(mistapi, "api") and hasattr(mistapi.api, "v1"):  # Confirm expected nested API surface
             logging.debug("mistapi.api.v1 module structure confirmed")  # Structure looks correct
-        else:  # The expected nested structure is missing
+        else:  # The expected nested structure is absent
             logging.warning(
                 "mistapi.api.v1 structure not found - this may cause API call failures"
             )  # Warn about likely failures
@@ -2207,7 +2207,7 @@ class GlobalImportManager:
         """Log whether websocket-client successfully loaded."""
         if "websocket-client" in self.imports:  # The websocket client library loaded
             logging.debug("websocket-client available for WebSocket operations")  # WebSocket features enabled
-        else:  # The websocket client library is missing
+        else:  # The websocket client library is absent
             logging.debug(
                 "websocket-client not available - WebSocket operations will be disabled"
             )  # WebSocket features disabled
@@ -2265,7 +2265,7 @@ _api_usage_cache = {  # Module-level cache for Mist API rate-limit accounting
     "limit": 5000,  # Default per-window request quota until the real limit is learned
     "last_updated": 0,  # Epoch seconds of the most recent local update
     "perceived_requests": 0,  # Locally counted requests since the last server sync
-    "initialized": False,  # Whether the cache has been seeded from a real API response yet
+    "initialized": False,  # Whether the cache was seeded from a real API response yet
 }
 
 # ============================================================================
@@ -2324,7 +2324,7 @@ if _initialize_imports_now:  # Eager path: prepare all imports now
             logging.info(
                 "tqdm is available in global namespace: %s", type(globals().get("tqdm"))
             )  # Confirm availability and type
-        else:  # tqdm binding is missing
+        else:  # tqdm binding is absent
             logging.warning(
                 "tqdm was not found in global assignments - progress bars will not be functional"
             )  # Warn progress bars are off
@@ -2520,7 +2520,7 @@ def _attempt_interactive_login_with_rollback(old_session: Any, old_org_id: str |
     global apisession, msp_privileges, org_id  # We may overwrite or restore these globals
 
     logging.debug("Entering _attempt_interactive_login_with_rollback()")  # Trace entry for debugging
-    logging.debug("Clearing existing session state for re-authentication")  # Note we are resetting before re-login
+    logging.debug("Clearing existing session state for re-authentication")  # Note we reset before re-login
 
     apisession = None  # Drop the current session so the interactive flow starts clean
     msp_privileges = []  # Clear cached MSP grants from the old session
@@ -2710,7 +2710,7 @@ def _looks_like_placeholder(value: str) -> bool:
 
 
 def _preflight_verify_credentials(require_token: bool = True) -> None:
-    """Fail closed before any mistapi/requests call when host/token config is missing or a placeholder.
+    """Fail closed before any mistapi/requests call when host/token config is absent or a placeholder.
 
     Feature 1020 (US3): invoked at the top of ``_establish_mist_session()`` for every dispatch mode. It
     performs only local string validation. It never imports ``requests`` or ``mistapi`` and never issues
@@ -3022,7 +3022,7 @@ def _try_session_fallback(mistapi_module: Any) -> tuple[Any, Any]:
     """Attempt legacy session creation via mistapi.Session() as last resort.
 
     mistapi.Session reads credentials from environment directly without explicit
-    parameter passing. Used when all APISession constructor variants have failed.
+    parameter passing. Used when all APISession constructor variants failed.
 
     Args:
         mistapi_module: The imported mistapi module.
@@ -3118,7 +3118,7 @@ def _log_session_auth_status(session: Any, successful_method: Any) -> None:
 
 
 def _validate_initialized_session(session: Any, successful_method: Any) -> bool:
-    """Validate that an initialized session has required methods and detectable authentication.
+    """Validate that an initialized session provides the required methods and detectable authentication.
 
     Calls _ensure_mist_get_method to verify/add mist_get compatibility, then
     calls _log_session_auth_status to warn if authentication cannot be confirmed.
@@ -3212,7 +3212,7 @@ def _configure_session_timeout(session_obj: Any) -> None:
 # ============================================================================
 # ENDPOINT PRIMARY KEY STRATEGY CONFIGURATION
 # ============================================================================
-# NOTE: ENDPOINT_PRIMARY_KEY_STRATEGIES has been extracted to
+# NOTE: ENDPOINT_PRIMARY_KEY_STRATEGIES moved to
 # src/refactors/endpoint_primary_key_strategies.py (initiative 1015 T-04, Cat E).
 # External consumers (src/db/database_schema_utils.py, tests/test_ticket_manager.py)
 # import the symbol directly from that module. MistHelper.py imports it at the
@@ -3224,7 +3224,7 @@ def _configure_session_timeout(session_obj: Any) -> None:
 # ============================================================================
 # CACHE UTILITIES CLASS
 # ============================================================================
-# NOTE: CacheUtils has been extracted to
+# NOTE: CacheUtils moved to
 # src/cache/cache_utils.py (initiative 1014 P14, Cat E position 14)
 # The top-level from src.cache.cache_utils import CacheUtils re-export
 # alias keeps historical MistHelper.CacheUtils callers working unchanged.
@@ -3233,7 +3233,7 @@ def _configure_session_timeout(session_obj: Any) -> None:
 # ============================================================================
 # DISPLAY UTILITIES CLASS
 # ============================================================================
-# NOTE: DisplayUtils has been extracted to
+# NOTE: DisplayUtils moved to
 # src/ui/display_utils.py (issue #1013 SC-001 position 11)
 
 
@@ -3319,10 +3319,10 @@ from src.export.data_exporter import DataExporter  # noqa: E402,F401  # T-08 re-
 # Class is imported at module top via: from src.ui.prompt_utils import PromptUtils
 from src.ui.prompt_utils import PromptUtils  # noqa: E402,F401  # T-07 re-export
 
-# NOTE: show_site_device_inventory() has been refactored into SiteDeviceExporter.device_inventory()
+# NOTE: show_site_device_inventory() moved into SiteDeviceExporter.device_inventory()
 
 
-# NOTE: DeviceUtils has been extracted to src/device/device_utils.py (issue #1013 SC-001 position 6)
+# NOTE: DeviceUtils moved to src/device/device_utils.py (issue #1013 SC-001 position 6)
 
 
 # OrgTicketManager moved to src/org/org_ticket_manager.py (1013 SC-001 Cat B position 46)
@@ -3334,7 +3334,7 @@ from src.ui.prompt_utils import PromptUtils  # noqa: E402,F401  # T-07 re-export
 # ============================================================================
 # ORGANIZATION DATA EXPORT UTILITIES CLASS
 # ============================================================================
-# NOTE: OrgSiteExporter has been extracted to
+# NOTE: OrgSiteExporter moved to
 # src/export/org_site_exporter.py (issue #1014 P9)
 
 
@@ -3377,7 +3377,7 @@ from src.ui.prompt_utils import PromptUtils  # noqa: E402,F401  # T-07 re-export
 # LicenseExportUtils moved to src/export/license_export_utils.py (1013 SC-001 position 24)
 
 
-# NOTE: SelfExportUtils has been extracted to src/export/self_export_utils.py (issue #1013 SC-001 position 7)
+# NOTE: SelfExportUtils moved to src/export/self_export_utils.py (issue #1013 SC-001 position 7)
 
 
 # OrgConfigExporter moved to src/export/org_config_exporter.py (issue #1013 SC-001 position 31)
@@ -3486,7 +3486,7 @@ def _get_duc_instance() -> DeviceUtilityCommands:  # Build DeviceUtilityCommands
 # ============================================================================
 # INTERACTIVE DISPLAY UTILITIES CLASS
 # ============================================================================
-# NOTE: InteractiveDisplayUtils has been extracted to
+# NOTE: InteractiveDisplayUtils moved to
 # src/ui/interactive_display_utils.py (issue #1013 SC-001 position 10)
 
 
@@ -3694,8 +3694,8 @@ def _configure_site_config_manager() -> type[SiteConfigManager]:
 # DeviceRebootManager moved to src/device/device_reboot_manager.py (1013 SC-001 position 41)
 
 
-# The standalone function reboot_devices_by_gateway_template_list() has been
-# refactored into DeviceRebootManager class methods.
+# The standalone function reboot_devices_by_gateway_template_list() moved
+# into DeviceRebootManager class methods.
 
 
 # NOTE: FirmwareManager facade removed per 1013 SC-002 (Cat A, position 2).
@@ -3731,7 +3731,7 @@ def _build_firmware_manager(session: Any, target_org_id: str) -> FirmwareManager
 # NOTE: get_auto_upgrade_time_settings removed - dead code (never called)
 
 # NOTE: The standalone functions bulk_upgrade_ap_firmware_by_site() and
-# bulk_upgrade_switch_firmware_by_site() have been refactored. Menu entries
+# bulk_upgrade_switch_firmware_by_site() moved to class methods. Menu entries
 # now call FirmwareManager class methods directly.
 
 
@@ -3743,7 +3743,7 @@ def _build_firmware_manager(session: Any, target_org_id: str) -> FirmwareManager
 # NOTE: bulk_upgrade_ap_firmware_by_site_impl removed - use BulkAPFirmwareUpgrader class directly
 
 
-# NOTE: MSPInventoryExporter has been extracted to src/export/msp_inventory_exporter.py (issue #1013 SC-001 position 8)
+# NOTE: MSPInventoryExporter moved to src/export/msp_inventory_exporter.py (issue #1013 SC-001 position 8)
 
 
 # NOTE: SiteAutoUpgradeConfigurator facade removed (1014 P2, Cat A) - canonical body at
@@ -3812,7 +3812,7 @@ def _ws_cmd_deps() -> WebSocketCmdDeps:
 # ============================================================================
 # AUDIT ANALYSIS OPS CLASS
 # ============================================================================
-# NOTE: AuditAnalysisOps has been extracted to
+# NOTE: AuditAnalysisOps moved to
 # src/audit/audit_analysis_ops.py (issue #1013 SC-001 position 12)
 
 
@@ -4825,7 +4825,7 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
 }
 
 
-# NOTE: TelemetryEmitter has been extracted to src/analytics/telemetry_emitter.py (issue #1013 SC-001 position 9)
+# NOTE: TelemetryEmitter moved to src/analytics/telemetry_emitter.py (issue #1013 SC-001 position 9)
 
 
 # OperationRegistry moved to src/utils/operation_registry.py (1013 SC-001 position 13)
@@ -5794,7 +5794,7 @@ def _run_interactive_mode(args: argparse.Namespace) -> None:
 
 
 def _setup_interactive_container_mode() -> bool:
-    """Detect whether MistHelper is running inside a container. Print banner if yes."""
+    """Detect whether MistHelper runs inside a container. Print banner if yes."""
     container_mode = EnvironmentUtils.is_running_in_container()  # Check Podman/Docker container marker files.
     if container_mode:  # Container mode: show banner and loop after each operation.
         logging.info("Container mode detected - enabling continuous menu loop")  # Log container detection.
