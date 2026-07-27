@@ -78,7 +78,7 @@ if TYPE_CHECKING:  # These imports only used by static type checkers (Pylance, m
 # ============================================================================
 # Conditional import for ArangoDB + Redis TimeSeries backends.
 # Falls back gracefully in standalone mode (no python-arango/redis installed).
-try:  # Attempt to import polyglot database layer for ArangoDB/Redis export backends
+try:  # Try to import polyglot database layer for ArangoDB/Redis export backends
     from src.db import DatabaseConfig as _DatabaseConfigImpl
     from src.db import configure_db_logging as _configure_db_logging_impl
     from src.db.router import DatabaseRouter as _DatabaseRouterImpl
@@ -711,7 +711,7 @@ logging.basicConfig(  # Configure root logger with handlers and format
 )
 
 # Attach LogSanitizer to redact sensitive fields (API tokens, passwords, MACs) from logs
-try:  # Attempt to import LogSanitizer from mistapi library
+try:  # Try to import LogSanitizer from mistapi library
     from mistapi.__logger import LogSanitizer  # Import mistapi log sanitizer (redacts secrets from output)
 
     logging.getLogger().addFilter(LogSanitizer())  # Register sanitizer filter on root logger to redact all log records
@@ -764,7 +764,7 @@ if sys.version_info < MINIMUM_PYTHON_VERSION:  # Check if Python is below minimu
 
 # Load .env BEFORE dependency check so DISABLE_AUTO_INSTALL and
 # AUTO_UPGRADE_TO_LATEST are honoured when set in .env.
-try:  # Attempt to load environment variables from a .env file before any dependency checks
+try:  # Try to load environment variables from a .env file before any dependency checks
     from dotenv import (
         load_dotenv as _early_load_dotenv,
     )  # Import python-dotenv's loader (aliased to mark it as early-stage)
@@ -772,7 +772,7 @@ try:  # Attempt to load environment variables from a .env file before any depend
     _early_load_dotenv()  # Read .env and populate os.environ so config flags are available during startup
 except Exception:  # If python-dotenv is not installed yet, fall back to a manual parser
     # Inline fallback: read .env manually so env vars are available
-    try:  # Attempt a best-effort manual parse of the .env file
+    try:  # Try a best-effort manual parse of the .env file
         with open(".env") as _ef:  # Open .env in the current working directory
             for _line in _ef:  # Process the file one line at a time
                 _line = _line.strip()  # Remove surrounding whitespace and the trailing newline
@@ -793,7 +793,7 @@ except Exception:  # If python-dotenv is not installed yet, fall back to a manua
 
 def _get_installed_version(package_name: str) -> str:  # Look up the installed version string for a package
     """Get installed version of a package using importlib.metadata."""
-    try:  # Attempt to read version metadata from the installed distribution
+    try:  # Try to read version metadata from the installed distribution
         from importlib.metadata import version as get_version  # Import the stdlib version lookup (Python 3.8+)
 
         return get_version(package_name)  # Return the installed version string (for example '0.59.3')
@@ -1388,7 +1388,7 @@ class GlobalImportManager:
             logging.warning("UV package manager check failed: %s", e)  # Log why the probe failed
             return False  # UV is not usable
 
-    def _install_uv(self) -> bool:  # Attempt to install UV via pip when it is missing
+    def _install_uv(self) -> bool:  # Try to install UV by pip when it is missing
         """Install UV package manager if not present."""
         if not self.auto_upgrade_uv:  # UV auto-management disabled by config
             logging.info("Auto-upgrade of UV is disabled in configuration")  # Note that we will not install UV
