@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import logging
 import sys
+import time
 import types
 from pathlib import Path
 from typing import Any
@@ -383,6 +384,9 @@ def test_migrate_retries_transient_put_failure_then_succeeds(
         patch.object(APProfileMigrationManager, "_pick_ap_device_profile", side_effect=[src, tgt]),
         patch.object(APProfileMigrationManager, "_discover_aps_on_source_profile", return_value=aps),
         patch("mistapi.api.v1.sites.devices.updateSiteDevice", side_effect=put_side),
+        # WHY: stub pacing so this test only observes retry-backoff sleeps.
+        # The pacing behaviour is validated separately by TR006-TR018.
+        patch.object(APProfileMigrationManager, "_apply_pacing", return_value=None),
         patch("time.sleep", side_effect=_sleep_spy),
     ):
         APProfileMigrationManager.migrate_aps_between_device_profiles(session=MagicMock())
@@ -1269,3 +1273,797 @@ def test_us3_end_to_end_dry_run_with_mocked_mistapi_session(
 
     out = capsys.readouterr().out
     assert "Dry run: no changes made" in out
+
+
+# ---------------------------------------------------------------------------
+# Rate-limiting addendum (specs/1029-ap-profile-migration/spec-addendum-rate-limiting.md)
+# TR006-TR018: pacing behavior for menus 207 and 208
+# ---------------------------------------------------------------------------
+
+
+class _CacheTracker(dict):
+    """A dict that counts assignments of ``initialized`` to ``False``.
+
+    Why:
+        The rate-limiting addendum feeds 429 responses to the PID limiter
+        by setting ``_api_usage_cache["initialized"] = False``. Tests need
+        to count how often that assignment fires without instrumenting
+        the production module; a dict subclass captures it at the point
+        of mutation.
+    """
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize an empty tracker and set toggle_count to zero.
+
+        Why:
+            The parent ``dict`` __init__ handles keyword population; the
+            override only adds the counter attribute.
+
+        Args:
+            *args: Forwarded to ``dict.__init__``.
+            **kwargs: Forwarded to ``dict.__init__``.
+        """
+        super().__init__(*args, **kwargs)
+        self.toggle_count = 0
+
+    def __setitem__(self, key: Any, value: Any) -> None:
+        """Set ``key`` to ``value`` and count 429 signals.
+
+        Why:
+            The production 429 feedback path sets ``initialized`` to
+            ``False`` exactly once per observed 429. Tests count those
+            assignments to verify the throttle signal fired.
+
+        Args:
+            key: Dict key being assigned.
+            value: New value for the key.
+        """
+        # WHY: only the False assignment on the "initialized" key counts as a
+        # throttle signal; other writes to the cache are ignored.
+        if key == "initialized" and value is False:
+            self.toggle_count += 1
+        super().__setitem__(key, value)
+
+
+def _make_http_exception(status_code: int) -> Exception:
+    """Build a mistapi-style exception carrying an HTTP status code.
+
+    Why:
+        The addendum's ``_is_429`` reads ``err.response.status_code``
+        verbatim from ``api_data_fetcher._is_rate_limit_error``. Every
+        pacing test that injects a 4xx/5xx PUT response uses this factory
+        so the exception shape matches the detector exactly.
+
+    Args:
+        status_code: HTTP status code to attach to ``.response``.
+
+    Returns:
+        A plain ``Exception`` with a ``response`` attribute whose
+        ``status_code`` matches the requested code.
+    """
+    exc = Exception(f"HTTP {status_code}")
+    # WHY: SimpleNamespace mirrors the ``requests.Response`` shape that
+    # mistapi exposes; the detector reads only ``.status_code``.
+    exc.response = types.SimpleNamespace(status_code=status_code)  # type: ignore[attr-defined]
+    return exc
+
+
+def _seed_rate_limiter(fake_mh: types.ModuleType, delay: float = 0.0) -> MagicMock:
+    """Install ``RateLimitingUtils`` and ``_api_usage_cache`` on ``fake_mh``.
+
+    Why:
+        Every pacing test extends the base ``fake_mh`` with two attributes
+        that the manager's ``_apply_pacing`` and ``_signal_rate_limit_hit``
+        helpers reach through the lazy ``import MistHelper as _mh`` idiom.
+        Centralizing the extension keeps each test compact and consistent
+        with the seams recorded in the addendum plan.
+
+    Args:
+        fake_mh: The synthetic MistHelper module produced by the fixture.
+        delay: Fixed delay value the mocked limiter returns for every call.
+
+    Returns:
+        The mocked ``get_rate_limited_delay`` callable so a caller can
+        override ``side_effect`` for exception injection (TR010).
+    """
+    fake_mh.RateLimitingUtils = MagicMock()
+    fake_mh.RateLimitingUtils.get_rate_limited_delay.return_value = (None, delay)
+    # WHY: use the tracker dict so the test can count 429 signals fed to the
+    # limiter (assignment of "initialized" to False is the documented signal).
+    fake_mh._api_usage_cache = _CacheTracker(
+        initialized=True,
+        used=0,
+        limit=5000,
+        last_updated=time.time(),
+    )
+    return fake_mh.RateLimitingUtils.get_rate_limited_delay
+
+
+# ---------------------------------------------------------------------------
+# TR006 -- pacing invoked exactly once per AP, before every PUT (US1)
+# ---------------------------------------------------------------------------
+
+
+def test_migrate_calls_get_rate_limited_delay_once_per_ap(
+    fake_mh: types.ModuleType,
+    data_dir: Path,
+) -> None:
+    """Pacing MUST be invoked exactly once per planned AP, before every PUT.
+
+    Why:
+        FR-A01 -- the migrate loop consults the rate limiter before every
+        PUT so a 10K-AP run self-throttles. This test locks the call
+        count and the pacing-before-PUT order against the loop shape.
+    """
+    src_id = "aaaa1111-2222-3333-4444-555566667777"
+    tgt_id = "bbbb1111-2222-3333-4444-555566667777"
+    src = (src_id, "Data-Transfer-Profile", _profile(src_id, "Data-Transfer-Profile"))
+    tgt = (tgt_id, "Main-Profile", _profile(tgt_id, "Main-Profile"))
+    aps = [_ap_record(f"d{i}", "site-1", f"5c5b350e{i:04x}") for i in range(20)]
+
+    get_delay_mock = _seed_rate_limiter(fake_mh)
+    fake_mh.InputUtils.safe_input.return_value = "MIGRATE"
+
+    call_order: list[str] = []
+
+    def _track_delay(*args: Any, **kwargs: Any) -> Any:
+        """Record a pacing entry and return zero delay."""
+        del args, kwargs  # WHY: signature-only.
+        call_order.append("pacing")
+        return (None, 0.0)
+
+    def _track_reassign(*args: Any, **kwargs: Any) -> None:
+        """Record a PUT entry keyed by device id."""
+        # WHY: signature-tolerant -- caller may pass positional or keyword.
+        rec = args[1] if len(args) >= 2 else kwargs.get("rec")
+        call_order.append("put:{}".format(rec["device_id"]))
+
+    get_delay_mock.side_effect = _track_delay
+
+    with (
+        patch.object(APProfileMigrationManager, "_pick_ap_device_profile", side_effect=[src, tgt]),
+        patch.object(APProfileMigrationManager, "_discover_aps_on_source_profile", return_value=aps),
+        patch.object(APProfileMigrationManager, "_reassign_one_ap", side_effect=_track_reassign),
+        patch("src.device.ap_profile_migration_manager.time.sleep"),
+    ):
+        APProfileMigrationManager.migrate_aps_between_device_profiles(session=MagicMock())
+
+    # WHY: FR-A01 -- exactly one pacing consult per planned AP.
+    assert get_delay_mock.call_count == 20, f"expected 20 pacing calls, got {get_delay_mock.call_count}"
+    # WHY: pacing precedes each PUT, so the recorded sequence alternates
+    # pacing, put, pacing, put, ... for 20 iterations.
+    assert len(call_order) == 40, f"expected 40 alternating entries, got {len(call_order)}: {call_order[:6]!r}"
+    for i in range(20):
+        assert call_order[i * 2] == "pacing", f"position {i * 2} expected pacing, got {call_order[i * 2]!r}"
+        assert call_order[i * 2 + 1].startswith("put:"), (
+            f"position {i * 2 + 1} expected put, got {call_order[i * 2 + 1]!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# TR007 -- 429 invalidates the api_usage_cache and never trips stop-on-failure (US1)
+# ---------------------------------------------------------------------------
+
+
+def test_migrate_429_invalidates_api_usage_cache(
+    fake_mh: types.ModuleType,
+    data_dir: Path,
+) -> None:
+    """A 429 response MUST invalidate the cache; the loop MUST NOT halt.
+
+    Why:
+        FR-A03 and FR-A04 -- 429 is a throttle signal, not stop-on-failure.
+        The manager feeds the signal to the PID limiter by invalidating
+        the shared cache; the next iteration re-reads live usage from
+        Mist and grows the delay.
+    """
+    src_id = "aaaa1111-2222-3333-4444-555566667777"
+    tgt_id = "bbbb1111-2222-3333-4444-555566667777"
+    src = (src_id, "src-name", _profile(src_id, "src-name"))
+    tgt = (tgt_id, "tgt-name", _profile(tgt_id, "tgt-name"))
+    aps = [_ap_record(f"d{i}", "site-1", f"5c5b350e{i:04x}") for i in range(10)]
+
+    _seed_rate_limiter(fake_mh)
+    fake_mh.InputUtils.safe_input.return_value = "MIGRATE"
+
+    call_counter = {"n": 0}
+
+    def _reassign_maybe_429(*args: Any, **kwargs: Any) -> None:
+        """Raise 429 on the 3rd and 7th outer iteration; else succeed."""
+        del args, kwargs  # WHY: signature-only.
+        call_counter["n"] += 1
+        if call_counter["n"] in (3, 7):
+            raise _make_http_exception(429)
+
+    with (
+        patch.object(APProfileMigrationManager, "_pick_ap_device_profile", side_effect=[src, tgt]),
+        patch.object(APProfileMigrationManager, "_discover_aps_on_source_profile", return_value=aps),
+        patch.object(APProfileMigrationManager, "_reassign_one_ap", side_effect=_reassign_maybe_429),
+        patch("src.device.ap_profile_migration_manager.time.sleep"),
+    ):
+        APProfileMigrationManager.migrate_aps_between_device_profiles(session=MagicMock())
+
+    cache = fake_mh._api_usage_cache
+    # WHY: FR-A03 -- 429 signals fire the cache-invalidation path.
+    assert cache.toggle_count >= 2, f"expected >=2 cache invalidations for 2 429s, got {cache.toggle_count}"
+    # WHY: FR-A04 -- 429 MUST NOT trigger stop-on-failure. The loop reached
+    # the final AP; verify by checking all 10 outer iterations happened.
+    assert call_counter["n"] == 10, f"expected loop to reach AP 10, got {call_counter['n']}"
+
+
+# ---------------------------------------------------------------------------
+# TR008 -- hermetic 100-AP run finishes in well under half a second (US1)
+# ---------------------------------------------------------------------------
+
+
+def test_migrate_hermetic_no_wall_clock_sleep(
+    fake_mh: types.ModuleType,
+    data_dir: Path,
+) -> None:
+    """A 100-AP run MUST NOT sleep on wall clock; total pacing sum > 0.
+
+    Why:
+        FR-A07 -- pacing calls ``time.sleep`` by module-level reference so
+        tests can patch it and complete in milliseconds. Regressions that
+        switch to a non-patchable idiom would slow CI by seconds per file.
+    """
+    src_id = "aaaa1111-2222-3333-4444-555566667777"
+    tgt_id = "bbbb1111-2222-3333-4444-555566667777"
+    src = (src_id, "src-name", _profile(src_id, "src-name"))
+    tgt = (tgt_id, "tgt-name", _profile(tgt_id, "tgt-name"))
+    aps = [_ap_record(f"d{i}", "site-1", f"5c5b350e{i:04x}") for i in range(100)]
+
+    _seed_rate_limiter(fake_mh, delay=0.25)
+    fake_mh.InputUtils.safe_input.return_value = "MIGRATE"
+
+    sleep_args: list[float] = []
+
+    def _record_sleep(secs: float) -> None:
+        """Record every pacing sleep argument so the test can sum them."""
+        sleep_args.append(secs)
+
+    start = time.perf_counter()
+    with (
+        patch.object(APProfileMigrationManager, "_pick_ap_device_profile", side_effect=[src, tgt]),
+        patch.object(APProfileMigrationManager, "_discover_aps_on_source_profile", return_value=aps),
+        patch.object(APProfileMigrationManager, "_reassign_one_ap", return_value=None),
+        patch("src.device.ap_profile_migration_manager.time.sleep", side_effect=_record_sleep),
+    ):
+        APProfileMigrationManager.migrate_aps_between_device_profiles(session=MagicMock())
+    elapsed = time.perf_counter() - start
+
+    # WHY: FR-A07 hermetic gate -- 100 APs run in well under half a second.
+    assert elapsed < 0.5, f"hermetic run exceeded 0.5 s wall clock: {elapsed:.3f} s"
+    # WHY: pacing was actually invoked (not silently skipped).
+    assert sum(sleep_args) > 0.0, "sleep sum is zero; pacing did not fire"
+    assert len(sleep_args) >= 100, f"expected >=100 sleep calls, got {len(sleep_args)}"
+
+
+# ---------------------------------------------------------------------------
+# TR009 -- HTTP 500 still halts stop-on-failure and never toggles cache (US1)
+# ---------------------------------------------------------------------------
+
+
+def test_migrate_non_429_still_halts_stop_on_failure(
+    fake_mh: types.ModuleType,
+    data_dir: Path,
+) -> None:
+    """A 500 response MUST halt the loop and MUST NOT toggle the cache.
+
+    Why:
+        FR-A04 preserves the parent's stop-on-failure semantics for
+        non-429 failures. This test locks the boundary: 500 halts,
+        the cache is unchanged (500 is not routed through throttle feedback).
+    """
+    src_id = "aaaa1111-2222-3333-4444-555566667777"
+    tgt_id = "bbbb1111-2222-3333-4444-555566667777"
+    src = (src_id, "src-name", _profile(src_id, "src-name"))
+    tgt = (tgt_id, "tgt-name", _profile(tgt_id, "tgt-name"))
+    aps = [_ap_record(f"d{i}", "site-1", f"5c5b350e{i:04x}") for i in range(50)]
+
+    _seed_rate_limiter(fake_mh)
+    fake_mh.InputUtils.safe_input.return_value = "MIGRATE"
+
+    call_counter = {"n": 0}
+
+    def _reassign_500_on_42(*args: Any, **kwargs: Any) -> None:
+        """Raise 500 on the 42nd outer iteration; else succeed."""
+        del args, kwargs
+        call_counter["n"] += 1
+        if call_counter["n"] == 42:
+            raise _make_http_exception(500)
+
+    with (
+        patch.object(APProfileMigrationManager, "_pick_ap_device_profile", side_effect=[src, tgt]),
+        patch.object(APProfileMigrationManager, "_discover_aps_on_source_profile", return_value=aps),
+        patch.object(APProfileMigrationManager, "_reassign_one_ap", side_effect=_reassign_500_on_42),
+        patch("src.device.ap_profile_migration_manager.time.sleep"),
+    ):
+        APProfileMigrationManager.migrate_aps_between_device_profiles(session=MagicMock())
+
+    # WHY: FR-A04 -- loop halted at AP 42; the 43rd was never called.
+    assert call_counter["n"] == 42, f"expected halt at 42, got {call_counter['n']} calls"
+    # WHY: 500 MUST NOT invalidate the cache; that path is 429-only.
+    cache = fake_mh._api_usage_cache
+    assert cache.toggle_count == 0, "cache was invalidated on a non-429 failure"
+    # WHY: the backup file records outcome partial per parent FR-017.
+    files = list(data_dir.glob("ap-profile-migration_*.json"))
+    assert len(files) == 1, f"expected exactly one backup file, got {len(files)}"
+    payload = json.loads(files[0].read_text(encoding="utf-8"))
+    assert payload["outcome"] == "partial"
+
+
+# ---------------------------------------------------------------------------
+# TR010 -- limiter exception falls back to 0.75 s and the loop continues (US1)
+# ---------------------------------------------------------------------------
+
+
+def test_migrate_limiter_exception_falls_back_and_continues(
+    fake_mh: types.ModuleType,
+    data_dir: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A limiter fault MUST NOT halt the loop; the pacing MUST fall back to 0.75 s.
+
+    Why:
+        FR-A06 -- the limiter is a diagnostic path, not a critical path.
+        A ``RuntimeError`` from the PID math must be logged as a warning
+        and swallowed with a fixed 0.75 s fallback so a 10K-AP run does
+        not halt on a limiter regression.
+    """
+    src_id = "aaaa1111-2222-3333-4444-555566667777"
+    tgt_id = "bbbb1111-2222-3333-4444-555566667777"
+    src = (src_id, "src-name", _profile(src_id, "src-name"))
+    tgt = (tgt_id, "tgt-name", _profile(tgt_id, "tgt-name"))
+    aps = [_ap_record(f"d{i}", "site-1", f"5c5b350e{i:04x}") for i in range(10)]
+
+    get_delay_mock = _seed_rate_limiter(fake_mh)
+    fake_mh.InputUtils.safe_input.return_value = "MIGRATE"
+
+    call_counter = {"n": 0}
+
+    def _delay_or_raise(*args: Any, **kwargs: Any) -> Any:
+        """Raise on the 5th consult; return a small delay otherwise."""
+        del args, kwargs
+        call_counter["n"] += 1
+        if call_counter["n"] == 5:
+            raise RuntimeError("PID corrupt")
+        return (None, 0.1)
+
+    get_delay_mock.side_effect = _delay_or_raise
+
+    sleep_args: list[float] = []
+
+    def _record_sleep(secs: float) -> None:
+        """Record every pacing sleep argument so the test can inspect them."""
+        sleep_args.append(secs)
+
+    caplog.set_level(logging.WARNING, logger=_LOGGER_NAME)
+    with (
+        patch.object(APProfileMigrationManager, "_pick_ap_device_profile", side_effect=[src, tgt]),
+        patch.object(APProfileMigrationManager, "_discover_aps_on_source_profile", return_value=aps),
+        patch.object(APProfileMigrationManager, "_reassign_one_ap", return_value=None),
+        patch("src.device.ap_profile_migration_manager.time.sleep", side_effect=_record_sleep),
+    ):
+        APProfileMigrationManager.migrate_aps_between_device_profiles(session=MagicMock())
+
+    # WHY: FR-A06 -- at least one WARNING names the 0.75 s fallback delay.
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING and "0.75" in r.getMessage()]
+    assert len(warnings) >= 1, "expected a WARNING naming the 0.75 s fallback; got %r" % [
+        r.getMessage() for r in caplog.records
+    ]
+    # WHY: the 5th pacing sleep argument equals the fallback constant.
+    assert sleep_args[4] == pytest.approx(0.75), f"5th sleep arg expected 0.75, got {sleep_args[4]!r}"
+    # WHY: the run completed all 10 APs (limiter fault MUST NOT halt).
+    assert get_delay_mock.call_count == 10, f"expected 10 limiter consults, got {get_delay_mock.call_count}"
+
+
+# ---------------------------------------------------------------------------
+# TR011 -- revert pacing invoked exactly once per AP (US2)
+# ---------------------------------------------------------------------------
+
+
+def test_revert_calls_get_rate_limited_delay_once_per_ap(
+    fake_mh: types.ModuleType,
+    data_dir: Path,
+) -> None:
+    """The revert loop MUST consult the limiter exactly once per AP.
+
+    Why:
+        FR-A02 -- parity with US1. The revert loop is equally exposed
+        to a 10K-AP run and needs the same pacing discipline.
+    """
+    aps_planned = [_ap_record(f"d{i}", "site-1", f"5c5b350e{i:04x}") for i in range(20)]
+    aps_reassigned = [rec["device_id"] for rec in aps_planned]
+    payload = _backup_fixture(aps_planned=aps_planned, aps_reassigned=aps_reassigned)
+    backup_path = _write_backup(data_dir, payload)
+
+    get_delay_mock = _seed_rate_limiter(fake_mh)
+    fake_mh.InputUtils.safe_input.return_value = "REVERT"
+
+    with (
+        patch.object(APProfileMigrationManager, "_pick_backup_file", return_value=backup_path, create=True),
+        patch.object(APProfileMigrationManager, "_verify_source_profile_exists", return_value=True, create=True),
+        patch.object(APProfileMigrationManager, "_confirm_revert", return_value="live", create=True),
+        patch.object(APProfileMigrationManager, "_revert_one_ap", return_value=None),
+        patch("src.device.ap_profile_migration_manager.time.sleep"),
+        patch("src.analytics.telemetry_emitter.TelemetryEmitter.emit"),
+    ):
+        APProfileMigrationManager.revert_ap_profile_migration(session=MagicMock())
+
+    # WHY: FR-A02 -- one pacing call per revert AP.
+    assert get_delay_mock.call_count == 20, f"expected 20 pacing calls, got {get_delay_mock.call_count}"
+
+
+# ---------------------------------------------------------------------------
+# TR012 -- revert 429 invalidates cache and audit line carries pacing (US2)
+# ---------------------------------------------------------------------------
+
+
+def test_revert_429_invalidates_api_usage_cache(
+    fake_mh: types.ModuleType,
+    data_dir: Path,
+) -> None:
+    """A revert 429 MUST invalidate the cache and MUST NOT halt the loop.
+
+    Why:
+        FR-A02 and FR-A03 -- the revert loop feeds 429s to the PID limiter
+        the same way US1 does, without escalating to stop-on-failure. The
+        JSONL audit line records the count.
+    """
+    aps_planned = [_ap_record(f"d{i}", "site-1", f"5c5b350e{i:04x}") for i in range(10)]
+    aps_reassigned = [rec["device_id"] for rec in aps_planned]
+    payload = _backup_fixture(aps_planned=aps_planned, aps_reassigned=aps_reassigned)
+    backup_path = _write_backup(data_dir, payload)
+
+    _seed_rate_limiter(fake_mh)
+    fake_mh.InputUtils.safe_input.return_value = "REVERT"
+
+    call_counter = {"n": 0}
+
+    def _revert_maybe_429(*args: Any, **kwargs: Any) -> None:
+        """Raise 429 on the 3rd and 7th revert; else succeed."""
+        del args, kwargs
+        call_counter["n"] += 1
+        if call_counter["n"] in (3, 7):
+            raise _make_http_exception(429)
+
+    with (
+        patch.object(APProfileMigrationManager, "_pick_backup_file", return_value=backup_path, create=True),
+        patch.object(APProfileMigrationManager, "_verify_source_profile_exists", return_value=True, create=True),
+        patch.object(APProfileMigrationManager, "_confirm_revert", return_value="live", create=True),
+        patch.object(APProfileMigrationManager, "_revert_one_ap", side_effect=_revert_maybe_429),
+        patch("src.device.ap_profile_migration_manager.time.sleep"),
+        patch("src.analytics.telemetry_emitter.TelemetryEmitter.emit") as mock_emit,
+    ):
+        APProfileMigrationManager.revert_ap_profile_migration(session=MagicMock())
+
+    cache = fake_mh._api_usage_cache
+    # WHY: two 429s -> at least two cache invalidations.
+    assert cache.toggle_count >= 2, f"expected >=2 cache invalidations, got {cache.toggle_count}"
+    # WHY: loop reached all 10 APs (no halt).
+    assert call_counter["n"] == 10, f"expected 10 revert calls, got {call_counter['n']}"
+    # WHY: JSONL audit line carries pacing.http_429_seen == 2 per data-model 3.
+    mock_emit.assert_called_once()
+    event = mock_emit.call_args.args[0]
+    assert "pacing" in event, f"audit event missing 'pacing' sub-dict; keys={sorted(event.keys())!r}"
+    assert event["pacing"]["http_429_seen"] == 2, "expected pacing.http_429_seen==2, got {!r}".format(event["pacing"])
+
+
+# ---------------------------------------------------------------------------
+# TR013 -- revert hermetic 100-AP run under half a second (US2)
+# ---------------------------------------------------------------------------
+
+
+def test_revert_hermetic_no_wall_clock_sleep(
+    fake_mh: types.ModuleType,
+    data_dir: Path,
+) -> None:
+    """A 100-AP revert MUST run in under 0.5 s wall clock.
+
+    Why:
+        FR-A07 parity for menu 208.
+    """
+    aps_planned = [_ap_record(f"d{i}", "site-1", f"5c5b350e{i:04x}") for i in range(100)]
+    aps_reassigned = [rec["device_id"] for rec in aps_planned]
+    payload = _backup_fixture(aps_planned=aps_planned, aps_reassigned=aps_reassigned)
+    backup_path = _write_backup(data_dir, payload)
+
+    _seed_rate_limiter(fake_mh, delay=0.25)
+    fake_mh.InputUtils.safe_input.return_value = "REVERT"
+
+    sleep_args: list[float] = []
+
+    def _record_sleep(secs: float) -> None:
+        """Record every pacing sleep argument so the test can sum them."""
+        sleep_args.append(secs)
+
+    start = time.perf_counter()
+    with (
+        patch.object(APProfileMigrationManager, "_pick_backup_file", return_value=backup_path, create=True),
+        patch.object(APProfileMigrationManager, "_verify_source_profile_exists", return_value=True, create=True),
+        patch.object(APProfileMigrationManager, "_confirm_revert", return_value="live", create=True),
+        patch.object(APProfileMigrationManager, "_revert_one_ap", return_value=None),
+        patch("src.device.ap_profile_migration_manager.time.sleep", side_effect=_record_sleep),
+        patch("src.analytics.telemetry_emitter.TelemetryEmitter.emit"),
+    ):
+        APProfileMigrationManager.revert_ap_profile_migration(session=MagicMock())
+    elapsed = time.perf_counter() - start
+
+    assert elapsed < 0.5, f"hermetic revert exceeded 0.5 s wall clock: {elapsed:.3f} s"
+    assert sum(sleep_args) > 0.0, "sleep sum is zero; pacing did not fire"
+    assert len(sleep_args) >= 100, f"expected >=100 sleep calls, got {len(sleep_args)}"
+
+
+# ---------------------------------------------------------------------------
+# TR014 -- revert non-429 failure does NOT invalidate cache (US2)
+# ---------------------------------------------------------------------------
+
+
+def test_revert_non_429_error_does_not_toggle_cache(
+    fake_mh: types.ModuleType,
+    data_dir: Path,
+) -> None:
+    """A 500 in the revert loop MUST NOT toggle the cache; the loop continues.
+
+    Why:
+        FR-A04 -- non-429 failures on the revert path are tolerated per
+        parent FR-023 and MUST NOT be routed through throttle feedback.
+    """
+    aps_planned = [_ap_record(f"d{i}", "site-1", f"5c5b350e{i:04x}") for i in range(10)]
+    aps_reassigned = [rec["device_id"] for rec in aps_planned]
+    payload = _backup_fixture(aps_planned=aps_planned, aps_reassigned=aps_reassigned)
+    backup_path = _write_backup(data_dir, payload)
+
+    _seed_rate_limiter(fake_mh)
+    fake_mh.InputUtils.safe_input.return_value = "REVERT"
+
+    call_counter = {"n": 0}
+
+    def _revert_500_on_5(*args: Any, **kwargs: Any) -> None:
+        """Raise 500 on the 5th revert; else succeed."""
+        del args, kwargs
+        call_counter["n"] += 1
+        if call_counter["n"] == 5:
+            raise _make_http_exception(500)
+
+    with (
+        patch.object(APProfileMigrationManager, "_pick_backup_file", return_value=backup_path, create=True),
+        patch.object(APProfileMigrationManager, "_verify_source_profile_exists", return_value=True, create=True),
+        patch.object(APProfileMigrationManager, "_confirm_revert", return_value="live", create=True),
+        patch.object(APProfileMigrationManager, "_revert_one_ap", side_effect=_revert_500_on_5),
+        patch("src.device.ap_profile_migration_manager.time.sleep"),
+        patch("src.analytics.telemetry_emitter.TelemetryEmitter.emit"),
+    ):
+        APProfileMigrationManager.revert_ap_profile_migration(session=MagicMock())
+
+    cache = fake_mh._api_usage_cache
+    # WHY: 500 MUST NOT invalidate the cache; parent revert is tolerant but not throttled by 500.
+    assert cache.toggle_count == 0, "cache was invalidated on a non-429 failure"
+    # WHY: loop reached the end (parent FR-023 tolerance).
+    assert call_counter["n"] == 10, f"expected 10 revert calls, got {call_counter['n']}"
+
+
+# ---------------------------------------------------------------------------
+# TR015 -- dry-run does not consult the rate limiter at all
+# ---------------------------------------------------------------------------
+
+
+def test_dry_run_does_not_consult_rate_limiter(
+    fake_mh: types.ModuleType,
+    data_dir: Path,
+) -> None:
+    """Dry-run mode MUST NOT invoke the rate limiter at all.
+
+    Why:
+        FR-A08 -- dry-run issues zero PUTs; consulting the limiter would
+        change the limiter's smoothed state and skew production runs.
+    """
+    src_id = "aaaa1111-2222-3333-4444-555566667777"
+    tgt_id = "bbbb1111-2222-3333-4444-555566667777"
+    src = (src_id, "src-name", _profile(src_id, "src-name"))
+    tgt = (tgt_id, "tgt-name", _profile(tgt_id, "tgt-name"))
+    aps = [_ap_record(f"d{i}", "site-1", f"5c5b350e{i:04x}") for i in range(10)]
+
+    get_delay_mock = _seed_rate_limiter(fake_mh)
+    fake_mh.InputUtils.safe_input.return_value = "DRY-RUN"
+
+    with (
+        patch.object(APProfileMigrationManager, "_pick_ap_device_profile", side_effect=[src, tgt]),
+        patch.object(APProfileMigrationManager, "_discover_aps_on_source_profile", return_value=aps),
+        patch("src.device.ap_profile_migration_manager.time.sleep"),
+    ):
+        APProfileMigrationManager.migrate_aps_between_device_profiles(session=MagicMock())
+
+    # WHY: FR-A08 -- dry-run MUST NOT touch the limiter.
+    assert get_delay_mock.call_count == 0, f"dry-run invoked the limiter {get_delay_mock.call_count} times"
+
+
+# ---------------------------------------------------------------------------
+# TR016 -- migrate summary carries the four pacing lines in the documented order
+# ---------------------------------------------------------------------------
+
+
+def test_summary_contains_pacing_lines(
+    fake_mh: types.ModuleType,
+    data_dir: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The migrate summary MUST print the four pacing lines in order.
+
+    Why:
+        FR-A09 and data-model-rate-limiting.md section 2 lock the
+        operator-visible summary text so downstream tooling and human
+        reviewers see a consistent block.
+    """
+    src_id = "aaaa1111-2222-3333-4444-555566667777"
+    tgt_id = "bbbb1111-2222-3333-4444-555566667777"
+    src = (src_id, "src-name", _profile(src_id, "src-name"))
+    tgt = (tgt_id, "tgt-name", _profile(tgt_id, "tgt-name"))
+    aps = [_ap_record(f"d{i}", "site-1", f"5c5b350e{i:04x}") for i in range(5)]
+
+    _seed_rate_limiter(fake_mh, delay=0.1)
+    fake_mh.InputUtils.safe_input.return_value = "MIGRATE"
+
+    call_counter = {"n": 0}
+
+    def _reassign_2_of_5_are_429(*args: Any, **kwargs: Any) -> None:
+        """Raise 429 on the 2nd and 4th outer iteration; else succeed."""
+        del args, kwargs
+        call_counter["n"] += 1
+        if call_counter["n"] in (2, 4):
+            raise _make_http_exception(429)
+
+    with (
+        patch.object(APProfileMigrationManager, "_pick_ap_device_profile", side_effect=[src, tgt]),
+        patch.object(APProfileMigrationManager, "_discover_aps_on_source_profile", return_value=aps),
+        patch.object(APProfileMigrationManager, "_reassign_one_ap", side_effect=_reassign_2_of_5_are_429),
+        patch("src.device.ap_profile_migration_manager.time.sleep"),
+    ):
+        APProfileMigrationManager.migrate_aps_between_device_profiles(session=MagicMock())
+
+    out = capsys.readouterr().out
+    # WHY: line prefix + integer -- puts_issued is per-iteration by TR024, so
+    # the exact count depends on loop shape; format-only match is robust.
+    assert "Total PUTs issued" in out, f"missing 'Total PUTs issued' line in:\n{out}"
+    # WHY: exact substring for the 429 count (2 429s injected).
+    assert "HTTP 429 responses seen  : 2" in out, f"missing 'HTTP 429 responses seen  : 2' in:\n{out}"
+    # WHY: exact substring for the non-429 count (zero on this fixture).
+    assert "Non-429 failures         : 0" in out, f"missing 'Non-429 failures         : 0' in:\n{out}"
+    # WHY: mean and max floats to 3 dp per data-model section 2.
+    assert "Rate limiter delay (s)   : mean=" in out, f"missing 'Rate limiter delay (s)' line in:\n{out}"
+    assert "  max=" in out, f"missing 'max=' in delay line of:\n{out}"
+    # WHY: order is Puts -> 429 -> Non429 -> Delay, per data-model section 2.
+    idx_puts = out.index("Total PUTs issued")
+    idx_429 = out.index("HTTP 429 responses seen")
+    idx_non429 = out.index("Non-429 failures")
+    idx_delay = out.index("Rate limiter delay (s)")
+    assert idx_puts < idx_429 < idx_non429 < idx_delay, (
+        f"summary lines out of order: puts={idx_puts}, 429={idx_429}, non429={idx_non429}, delay={idx_delay}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# TR017 -- JSONL audit line carries the pacing sub-dict per data-model section 3
+# ---------------------------------------------------------------------------
+
+
+def test_jsonl_audit_line_carries_pacing_subdict(
+    fake_mh: types.ModuleType,
+    data_dir: Path,
+) -> None:
+    """The revert JSONL audit line MUST include the pacing sub-dict.
+
+    Why:
+        FR-A09 and data-model-rate-limiting.md section 3 lock the audit
+        envelope. Downstream analytics consume the pacing sub-dict without
+        a schema version bump because JSONL is additive.
+    """
+    aps_planned = [_ap_record(f"d{i}", "site-1", f"5c5b350e{i:04x}") for i in range(5)]
+    aps_reassigned = [rec["device_id"] for rec in aps_planned]
+    payload = _backup_fixture(aps_planned=aps_planned, aps_reassigned=aps_reassigned)
+    backup_path = _write_backup(data_dir, payload)
+
+    _seed_rate_limiter(fake_mh, delay=0.1)
+    fake_mh.InputUtils.safe_input.return_value = "REVERT"
+
+    call_counter = {"n": 0}
+
+    def _revert_2_of_5_are_429(*args: Any, **kwargs: Any) -> None:
+        """Raise 429 on the 2nd and 4th revert; else succeed."""
+        del args, kwargs
+        call_counter["n"] += 1
+        if call_counter["n"] in (2, 4):
+            raise _make_http_exception(429)
+
+    with (
+        patch.object(APProfileMigrationManager, "_pick_backup_file", return_value=backup_path, create=True),
+        patch.object(APProfileMigrationManager, "_verify_source_profile_exists", return_value=True, create=True),
+        patch.object(APProfileMigrationManager, "_confirm_revert", return_value="live", create=True),
+        patch.object(APProfileMigrationManager, "_revert_one_ap", side_effect=_revert_2_of_5_are_429),
+        patch("src.device.ap_profile_migration_manager.time.sleep"),
+        patch("src.analytics.telemetry_emitter.TelemetryEmitter.emit") as mock_emit,
+    ):
+        APProfileMigrationManager.revert_ap_profile_migration(session=MagicMock())
+
+    mock_emit.assert_called_once()
+    event = mock_emit.call_args.args[0]
+    assert "pacing" in event, f"audit event missing pacing sub-dict; got keys: {sorted(event.keys())!r}"
+    pacing = event["pacing"]
+    # WHY: exactly five keys per data-model-rate-limiting.md section 3.
+    expected_keys = {
+        "puts_issued",
+        "http_429_seen",
+        "non_429_failures",
+        "delay_seconds_mean",
+        "delay_seconds_max",
+    }
+    assert set(pacing.keys()) == expected_keys, f"pacing key set mismatch: got {sorted(pacing.keys())!r}"
+    assert pacing["http_429_seen"] == 2, f"expected pacing.http_429_seen==2, got {pacing['http_429_seen']!r}"
+    assert pacing["non_429_failures"] == 0, (
+        f"expected pacing.non_429_failures==0, got {pacing['non_429_failures']!r}"
+    )
+    # WHY: puts_issued is per-iteration (TR024); with 5 APs it is at least 5.
+    assert isinstance(pacing["puts_issued"], int) and pacing["puts_issued"] >= 5
+    assert isinstance(pacing["delay_seconds_mean"], float)
+    assert isinstance(pacing["delay_seconds_max"], float)
+
+
+# ---------------------------------------------------------------------------
+# TR018 -- integration: real limiter engaged with a pre-seeded cache (US1)
+# ---------------------------------------------------------------------------
+
+
+def test_migrate_integration_real_limiter_seeded_cache(
+    fake_mh: types.ModuleType,
+    data_dir: Path,
+) -> None:
+    """Integration -- leave the real limiter engaged with a pre-seeded cache.
+
+    Why:
+        Research Q4 -- one integration-style test exercises the real
+        ``RateLimitingUtils.get_rate_limited_delay`` math against a seeded
+        cache so the addendum does not silently break the PID limiter's
+        contract.
+    """
+    from src.utils.rate_limiting import RateLimitingUtils as _RealLimiter  # noqa: PLC0415
+
+    # WHY: install the real limiter class (not a MagicMock) so the manager
+    # exercises the PID math per research Q4.
+    fake_mh.RateLimitingUtils = _RealLimiter
+    # WHY: fresh last_updated so _needs_refresh returns False and the PID
+    # math runs off the seeded values (no live API round-trip needed).
+    fake_mh._api_usage_cache = _CacheTracker(
+        initialized=True,
+        used=4000,
+        limit=5000,
+        last_updated=time.time(),
+    )
+
+    src_id = "aaaa1111-2222-3333-4444-555566667777"
+    tgt_id = "bbbb1111-2222-3333-4444-555566667777"
+    src = (src_id, "src-name", _profile(src_id, "src-name"))
+    tgt = (tgt_id, "tgt-name", _profile(tgt_id, "tgt-name"))
+    aps = [_ap_record(f"d{i}", "site-1", f"5c5b350e{i:04x}") for i in range(50)]
+
+    fake_mh.InputUtils.safe_input.return_value = "MIGRATE"
+
+    sleep_args: list[float] = []
+
+    def _record_sleep(secs: float) -> None:
+        """Record every pacing sleep argument so the test can inspect them."""
+        sleep_args.append(secs)
+
+    with (
+        patch.object(APProfileMigrationManager, "_pick_ap_device_profile", side_effect=[src, tgt]),
+        patch.object(APProfileMigrationManager, "_discover_aps_on_source_profile", return_value=aps),
+        patch.object(APProfileMigrationManager, "_reassign_one_ap", return_value=None),
+        patch("src.device.ap_profile_migration_manager.time.sleep", side_effect=_record_sleep),
+    ):
+        APProfileMigrationManager.migrate_aps_between_device_profiles(session=MagicMock())
+
+    # WHY: pacing was called 50 times (once per AP).
+    assert len(sleep_args) == 50, f"expected 50 pacing sleeps, got {len(sleep_args)}"
+    # WHY: real PID math produced a non-zero delay for at least one call
+    # since the seeded cache reports 4000/5000 used (limiter should throttle).
+    assert any(s > 0 for s in sleep_args), f"expected real limiter to produce a non-zero delay; got {sleep_args[:10]!r}"

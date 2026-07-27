@@ -367,6 +367,9 @@ from src.dataclasses.websocket_stream_target import (
 from src.db.database_schema_utils import (
     DatabaseSchemaUtils,  # Cat B (1013 SC-001 position 38) -- re-export for MistHelper.DatabaseSchemaUtils callers
 )
+from src.device.ap_profile_migration_manager import (
+    APProfileMigrationManager,  # Menus 207 and 208 -- migrate APs between device profiles and revert
+)
 from src.device.arp_command_manager import (
     ARPCommandManager,  # Cat B (1013 SC-001 position 42) -- re-export for MistHelper.ARPCommandManager callers
 )
@@ -499,9 +502,6 @@ from src.inventory.org_device_inventory_summary_facade import (
 from src.network.routing_utils import (  # Cat A canonical (1014 P4)
     RoutingDeps,
     RoutingUtils,
-)
-from src.device.ap_profile_migration_manager import (
-    APProfileMigrationManager,  # Menus 207 and 208 -- migrate APs between device profiles and revert
 )
 from src.org.org_config_migration_manager import OrgConfigMigrationManager  # Cat B (1013 SC-001 position 5)
 from src.org.org_synthetic_probes_manager import (

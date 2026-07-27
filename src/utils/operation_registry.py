@@ -371,14 +371,14 @@ class OperationRegistry:
         "207": {
             "category": "destructive",
             "skip_reason": (
-                "Menu 207 mutates AP-to-device-profile bindings across every "
+                "DESTRUCTIVE: Menu 207 mutates AP-to-device-profile bindings across every "
                 "site in the selected organization; requires a live Mist test tenant."
             ),
         },
         "208": {
             "category": "destructive",
             "skip_reason": (
-                "Menu 208 reverts a prior AP-to-device-profile migration by "
+                "DESTRUCTIVE: Menu 208 reverts a prior AP-to-device-profile migration by "
                 "reassigning each listed AP back to its original device profile; "
                 "requires the backup file written by menu 207."
             ),

@@ -50,6 +50,15 @@ _LOGGER = logging.getLogger(__name__)
 # attempts; a change here MUST be reflected in the T013 test assertion.
 _RETRY_BACKOFF_SECONDS: tuple[float, ...] = (0.5, 1.0)
 
+# WHY: adaptive rate limiter fallback per plan-rate-limiting.md Q1.
+# Mist enforces 5000 requests per clock hour on the /api path; the theoretical
+# minimum steady-state gap is 3600/5000 = 0.72 s per PUT. When the shared
+# ``RateLimitingUtils.get_rate_limited_delay`` helper raises (FR-A06) the
+# migrate and revert loops MUST fall back to a fixed conservative sleep so a
+# limiter regression does not stall or halt a 10K-AP run. Value locked at the
+# addendum-plan level; do not re-derive here.
+_LIMITER_FALLBACK_DELAY: float = 0.75  # seconds
+
 # WHY: fixed backup-file schema version per data-model §1.3. A future format
 # change bumps this integer and the revert refuses unknown values (FR-020).
 _BACKUP_SCHEMA_VERSION = 1
@@ -71,6 +80,10 @@ _KEYWORD_REVERT = "REVERT"
 # WHY: telemetry file name for the JSONL audit stream (data-model 2.1). Kept as
 # a module constant so tests and production point at the same relative path.
 _REVERT_TELEMETRY_FILENAME = "ap_profile_migration_revert.jsonl"
+
+# WHY: migrate-side JSONL audit stream (addendum FR-A09, TR032). Distinct
+# filename so operators can grep menu-207 runs separately from menu-208 runs.
+_MIGRATE_TELEMETRY_FILENAME = "ap_profile_migration_migrate.jsonl"
 
 # WHY: sentinel return value from ``_revert_one_ap`` when the AP has been
 # deleted from Mist since the migration (data-model 2.2 -- ``missing_count``).
@@ -225,6 +238,35 @@ class APProfileMigrationManager:
             source_name, source_id, target_name, target_id, backup_path, final_payload
         )
 
+        # WHY: FR-A09 -- one JSONL audit row per migrate invocation. Mirrors
+        # the revert-side envelope so downstream reporting sees a single
+        # shape across both menus. Best-effort write.
+        _pacing = final_payload.get("_pacing") or {}
+        _delay_count = int(_pacing.get("delay_count", 0))
+        _delay_sum = float(_pacing.get("delay_sum", 0.0))
+        _delay_mean = (_delay_sum / _delay_count) if _delay_count > 0 else 0.0
+        _delay_max = float(_pacing.get("delay_max", 0.0))
+        APProfileMigrationManager._emit_migrate_audit(
+            {
+                "event_type": "ap_profile_migration_migrate",
+                "timestamp_utc": _utc_iso_timestamp(),
+                "org_id": org_id,
+                "backup_file_path": str(backup_path),
+                "source_profile_id": source_id,
+                "target_profile_id": target_id,
+                "planned_count": len(ap_records),
+                "reassigned_count": len(final_payload.get("aps_reassigned", [])),
+                "outcome": final_payload.get("outcome", "unknown"),
+                "pacing": {
+                    "puts_issued": int(_pacing.get("puts_issued", 0)),
+                    "http_429_seen": int(_pacing.get("http_429_seen", 0)),
+                    "non_429_failures": int(_pacing.get("non_429_failures", 0)),
+                    "delay_seconds_mean": round(_delay_mean, 3),
+                    "delay_seconds_max": round(_delay_max, 3),
+                },
+            }
+        )
+
     @staticmethod
     def revert_ap_profile_migration(session: Any | None = None) -> None:
         """Menu 208 entry point -- revert a prior migration from its backup file.
@@ -357,6 +399,18 @@ class APProfileMigrationManager:
 
         aps_to_revert = [str(x) for x in payload.get("aps_reassigned", [])]
         total = len(aps_to_revert)
+        # WHY: per-invocation pacing state per plan-rate-limiting.md Q3.
+        # Mirrors the migrate loop; keeps menus 207 and 208 consistent for
+        # the operator (data-model-rate-limiting.md section 2, Q1 lock).
+        smoothed: float | None = None
+        pacing_stats: dict[str, float | int] = {
+            "puts_issued": 0,
+            "http_429_seen": 0,
+            "non_429_failures": 0,
+            "delay_sum": 0.0,
+            "delay_max": 0.0,
+            "delay_count": 0,
+        }
         for idx, device_id in enumerate(aps_to_revert, start=1):
             rec = plan_by_id.get(device_id)
             if rec is None:
@@ -374,6 +428,10 @@ class APProfileMigrationManager:
                     total,
                     device_id,
                 )
+            # WHY: FR-A01 -- consult the adaptive limiter once per PUT so a
+            # 10K-AP revert stays under Mist's 5000-requests-per-hour ceiling.
+            smoothed = APProfileMigrationManager._apply_pacing(smoothed, pacing_stats)
+            pacing_stats["puts_issued"] += 1
             try:
                 result = APProfileMigrationManager._revert_one_ap(
                     mist_session,
@@ -382,6 +440,14 @@ class APProfileMigrationManager:
                     source_id,
                 )
             except Exception as exc:  # noqa: BLE001  # WHY: tolerant per FR-023.
+                # WHY: FR-A04 -- 429 is a throttle signal. Feed the limiter
+                # via cache invalidation and continue; do NOT count the AP
+                # as failed on 429 alone.
+                if APProfileMigrationManager._is_429(exc):
+                    APProfileMigrationManager._signal_rate_limit_hit()
+                    pacing_stats["http_429_seen"] += 1
+                    continue
+                pacing_stats["non_429_failures"] += 1
                 failed_ids.append(device_id)
                 _LOGGER.warning(
                     "Revert failed for AP %s after retry exhaustion: %s",
@@ -424,6 +490,17 @@ class APProfileMigrationManager:
         if failed_ids:
             print(f"  Failed device_ids: {', '.join(failed_ids)}")  # noqa: T201
 
+        # WHY: FR-A09 -- adaptive-rate-limiter telemetry lines. Same text,
+        # same order as the migrate-side summary so operators reading both
+        # menus see one consistent block.
+        _delay_count = int(pacing_stats["delay_count"])
+        _delay_mean = (pacing_stats["delay_sum"] / _delay_count) if _delay_count > 0 else 0.0
+        _delay_max = float(pacing_stats["delay_max"])
+        print(f"  Total PUTs issued        : {int(pacing_stats['puts_issued'])}")  # noqa: T201
+        print(f"  HTTP 429 responses seen  : {int(pacing_stats['http_429_seen'])}")  # noqa: T201
+        print(f"  Non-429 failures         : {int(pacing_stats['non_429_failures'])}")  # noqa: T201
+        print(f"  Rate limiter delay (s)   : mean={_delay_mean:.3f}  max={_delay_max:.3f}")  # noqa: T201
+
         # WHY: FR-025 -- one JSONL audit row per revert invocation. Best-effort
         # write; TelemetryEmitter swallows OSError and logs a warning.
         APProfileMigrationManager._emit_revert_audit(
@@ -438,8 +515,137 @@ class APProfileMigrationManager:
                 "missing_count": len(missing_ids),
                 "failed_count": len(failed_ids),
                 "outcome": outcome,
+                # WHY: FR-A09 -- pacing telemetry sub-dict per
+                # data-model-rate-limiting.md section 3.
+                "pacing": {
+                    "puts_issued": int(pacing_stats["puts_issued"]),
+                    "http_429_seen": int(pacing_stats["http_429_seen"]),
+                    "non_429_failures": int(pacing_stats["non_429_failures"]),
+                    "delay_seconds_mean": round(_delay_mean, 3),
+                    "delay_seconds_max": round(_delay_max, 3),
+                },
             }
         )
+
+    # ------------------------------------------------------------------
+    # Private helpers -- adaptive rate limiting (addendum FR-A01..FR-A09)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _is_429(err: BaseException) -> bool:
+        """Return True when ``err`` carries an HTTP 429 status code.
+
+        Why:
+            Copies the two-line status_code pattern from
+            ``src/api/api_data_fetcher.py._is_rate_limit_error`` verbatim into
+            the manager per research-rate-limiting.md Q5. The addendum does
+            NOT cross-import that private helper because a public rename in
+            the fetcher would silently break the migration. Local copy keeps
+            the two consumers independent.
+
+        Args:
+            err: The exception raised by the per-AP PUT retry loop.
+
+        Returns:
+            True when ``err.response.status_code == 429``; False otherwise
+            (including any missing ``response`` or ``status_code`` attribute).
+        """
+        # WHY: two-line pattern lifted from api_data_fetcher._is_rate_limit_error.
+        status_code = getattr(getattr(err, "response", None), "status_code", None)
+        return status_code == 429
+
+    @staticmethod
+    def _apply_pacing(
+        smoothed: float | None,
+        pacing_stats: dict[str, float | int],
+    ) -> float | None:
+        """Consult the shared rate limiter, sleep, and update in-place stats.
+
+        Why:
+            Central seam that both loops call once per outer iteration. Takes
+            ``pacing_stats`` by reference (single-writer, O(1) memory per
+            data-model-rate-limiting.md section 4) so the caller can print the
+            summary and emit the JSONL audit line without threading extra
+            values through the loop body. Uses the shared
+            ``RateLimitingUtils.get_rate_limited_delay`` PID helper (FR-A03,
+            no new limiter API). Sleeps via ``time.sleep(...)`` reached
+            through the module attribute so hermetic tests can patch
+            ``src.device.ap_profile_migration_manager.time.sleep`` (FR-A07).
+
+        Args:
+            smoothed: The prior iteration's smoothed delay estimate; ``None``
+                on the first call. The PID helper returns the next value.
+            pacing_stats: In-place counter dict (six keys per data-model
+                section 4). Mutated with the observed delay before return.
+
+        Returns:
+            The updated smoothed-delay value to pass into the next call.
+        """
+        # WHY: lazy import matches lines 147/265/471; keeps top-of-module
+        # circular-safe against the MistHelper entry point.
+        import MistHelper as _mh  # noqa: PLC0415
+
+        try:
+            smoothed, delay = _mh.RateLimitingUtils.get_rate_limited_delay(
+                smoothed,
+                _mh.apisession,
+                _mh._api_usage_cache,
+            )
+        except Exception as exc:  # noqa: BLE001  # WHY: FR-A06 -- limiter is diagnostic, not critical.
+            # WHY: FR-A06 -- a limiter fault MUST NOT halt the migration.
+            # Fall back to a fixed conservative sleep and log the fault so
+            # the operator can investigate later.
+            _LOGGER.warning(
+                "Rate limiter failed (%s). Using fallback delay of %.2f s",
+                exc,
+                _LIMITER_FALLBACK_DELAY,
+            )
+            delay = _LIMITER_FALLBACK_DELAY
+
+        # WHY: delay is None only if the PID helper misreports; coerce to 0.0
+        # so downstream arithmetic stays a float.
+        if delay is None:
+            delay = 0.0
+
+        pacing_stats["delay_sum"] = float(pacing_stats["delay_sum"]) + float(delay)
+        pacing_stats["delay_max"] = max(float(pacing_stats["delay_max"]), float(delay))
+        pacing_stats["delay_count"] = int(pacing_stats["delay_count"]) + 1
+
+        # WHY: sleep via module attribute so tests can patch it with
+        # ``patch("src.device.ap_profile_migration_manager.time.sleep", ...)``.
+        time.sleep(delay)
+        return smoothed
+
+    @staticmethod
+    def _signal_rate_limit_hit() -> None:
+        """Invalidate the shared API-usage cache so the limiter refreshes.
+
+        Why:
+            The addendum feeds observed 429 responses back to the limiter
+            without adding a new ``RateLimitingUtils`` method (FR-A03).
+            Setting ``_api_usage_cache["initialized"] = False`` makes the
+            existing ``_needs_refresh`` predicate return True on the next
+            consult; that triggers a live ``_refresh_api_usage`` round-trip
+            and drives the PID error term up. Wrapped in ``try/except`` on
+            KeyError and TypeError so a missing or unexpected cache shape
+            (edge case: apisession or cache absent at menu-dispatch time)
+            never crashes the loop.
+        """
+        # WHY: lazy import for the same reason as _apply_pacing above.
+        import MistHelper as _mh  # noqa: PLC0415
+
+        _LOGGER.warning(
+            "The API returned HTTP 429. Invalidating the API usage cache to trigger a limiter refresh",
+        )
+        try:
+            # WHY: cache-invalidation is the addendum's 429 feedback surface;
+            # _needs_refresh consumes this flag on the next consult.
+            _mh._api_usage_cache["initialized"] = False
+        except (KeyError, TypeError, AttributeError) as exc:
+            _LOGGER.warning(
+                "API usage cache unavailable (%s); 429 feedback suppressed this iteration",
+                exc,
+            )
 
     # ------------------------------------------------------------------
     # Private helpers -- migration (T017-T024)
@@ -805,12 +1011,29 @@ class APProfileMigrationManager:
 
         Returns:
             The mutated ``payload`` dict for the caller to use in the
-            end-of-run summary (avoids a second disk read).
+            end-of-run summary (avoids a second disk read). The dict also
+            carries an ephemeral ``_pacing`` sub-dict (leading underscore
+            marks it as summary-only telemetry, not part of the persisted
+            backup schema) with the six adaptive-rate-limiter counters
+            required by addendum FR-A09.
         """
         # WHY: work on the caller-supplied in-memory dict so tests that patch
         # ``_write_backup_file`` (T011) still exercise the loop end-to-end.
         backup = payload
         total = len(ap_records)
+        # WHY: per-invocation pacing state per plan-rate-limiting.md Q3.
+        # ``smoothed`` is the PID limiter's internal EMA of the returned delay;
+        # the limiter mutates it across calls. ``pacing_stats`` tracks the
+        # counters that feed FR-A09 summary lines and the JSONL audit line.
+        smoothed: float | None = None
+        pacing_stats: dict[str, float | int] = {
+            "puts_issued": 0,
+            "http_429_seen": 0,
+            "non_429_failures": 0,
+            "delay_sum": 0.0,
+            "delay_max": 0.0,
+            "delay_count": 0,
+        }
         for idx, rec in enumerate(ap_records, start=1):
             # WHY: emit progress at N=1, at every stride boundary, and at N=total.
             if idx == 1 or idx % progress_stride == 0 or idx == total:
@@ -820,11 +1043,24 @@ class APProfileMigrationManager:
                     total,
                     rec["device_id"],
                 )
+            # WHY: FR-A01 -- consult the adaptive limiter once per PUT so a
+            # 10K-AP run stays under Mist's 5000-requests-per-hour ceiling.
+            smoothed = APProfileMigrationManager._apply_pacing(smoothed, pacing_stats)
+            pacing_stats["puts_issued"] += 1
             try:
                 APProfileMigrationManager._reassign_one_ap(session, rec, target_id)
             except Exception as exc:  # noqa: BLE001  # WHY: partial-success record path.
-                # WHY: FR-017 -- stop on first failure so the on-disk file
-                # exactly matches the state Mist is in.
+                # WHY: FR-A04 -- 429 is a throttle signal, not a hard failure.
+                # Feed the cache-invalidation signal to the limiter and keep
+                # going; the retry policy in ``_reassign_one_ap`` already
+                # burnt its three attempts on this AP, so record it and skip.
+                if APProfileMigrationManager._is_429(exc):
+                    APProfileMigrationManager._signal_rate_limit_hit()
+                    pacing_stats["http_429_seen"] += 1
+                    continue
+                # WHY: FR-017 -- stop on first non-429 failure so the on-disk
+                # file exactly matches the state Mist is in.
+                pacing_stats["non_429_failures"] += 1
                 backup["outcome"] = "partial"
                 backup["failure_detail"] = {
                     "failed_device_id": rec["device_id"],
@@ -841,6 +1077,10 @@ class APProfileMigrationManager:
                     "Reassignment failed for AP %s after retry exhaustion; run stopped",
                     rec["device_id"],
                 )
+                # WHY: attach ephemeral pacing telemetry for the summary and
+                # JSONL emitters. Leading underscore keeps it out of the
+                # persisted backup schema (FR-A09).
+                backup["_pacing"] = pacing_stats
                 return backup
 
             # WHY: append + rewrite after every success so an interrupted
@@ -858,6 +1098,8 @@ class APProfileMigrationManager:
             json.dumps(backup, indent=2, sort_keys=False),
             encoding="utf-8",
         )
+        # WHY: attach ephemeral pacing telemetry per FR-A09.
+        backup["_pacing"] = pacing_stats
         return backup
 
     @staticmethod
@@ -898,6 +1140,25 @@ class APProfileMigrationManager:
             fd = payload.get("failure_detail")
             if fd is not None:
                 print(f"  Failed AP: {fd.get('failed_device_id')}  " f"reason: {fd.get('error_message')}")  # noqa: T201
+        # WHY: FR-A09 -- adaptive-rate-limiter telemetry lines. Text and
+        # order pinned by data-model-rate-limiting.md section 2 so menus
+        # 207 and 208 present one consistent block to the operator.
+        pacing_stats = payload.get("_pacing") or {
+            "puts_issued": 0,
+            "http_429_seen": 0,
+            "non_429_failures": 0,
+            "delay_sum": 0.0,
+            "delay_max": 0.0,
+            "delay_count": 0,
+        }
+        _delay_count = int(pacing_stats.get("delay_count", 0))
+        _delay_sum = float(pacing_stats.get("delay_sum", 0.0))
+        _delay_mean = (_delay_sum / _delay_count) if _delay_count > 0 else 0.0
+        _delay_max = float(pacing_stats.get("delay_max", 0.0))
+        print(f"  Total PUTs issued        : {int(pacing_stats.get('puts_issued', 0))}")  # noqa: T201
+        print(f"  HTTP 429 responses seen  : {int(pacing_stats.get('http_429_seen', 0))}")  # noqa: T201
+        print(f"  Non-429 failures         : {int(pacing_stats.get('non_429_failures', 0))}")  # noqa: T201
+        print(f"  Rate limiter delay (s)   : mean={_delay_mean:.3f}  max={_delay_max:.3f}")  # noqa: T201
 
     # ------------------------------------------------------------------
     # Private helpers -- revert (T036-T042)
@@ -1238,5 +1499,33 @@ class APProfileMigrationManager:
         target = Path(_DATA_DIR) / _REVERT_TELEMETRY_FILENAME
         # WHY: context manager guarantees flush + close even on an emit that
         # raises inside the writer.
+        with TelemetryEmitter(str(target)) as emitter:
+            emitter.emit(event)
+
+    @staticmethod
+    def _emit_migrate_audit(event: dict[str, Any]) -> None:
+        """Append a single JSONL row to the shared migrate telemetry stream.
+
+        Why:
+            Addendum FR-A09 requires the same JSONL envelope on the migrate
+            side (menu 207) as the revert side (menu 208) so operators and
+            downstream reporting see one shape across both operations. Uses
+            ``TelemetryEmitter`` for the same best-effort write semantics as
+            ``_emit_revert_audit`` -- a disk-full or permission error is
+            logged, not raised, so a telemetry failure never blocks the
+            primary migration.
+
+        Args:
+            event: The audit event dict; shape mirrors the revert-side
+                envelope plus the pacing sub-dict described in
+                data-model-rate-limiting.md section 3.
+        """
+        # WHY: lazy import so the top-level module load stays circular-safe
+        # even if TelemetryEmitter grows a heavy dependency later.
+        from src.analytics.telemetry_emitter import TelemetryEmitter  # noqa: PLC0415
+
+        # WHY: colocate with backup files and the revert audit stream so the
+        # operator finds every artefact under one directory.
+        target = Path(_DATA_DIR) / _MIGRATE_TELEMETRY_FILENAME
         with TelemetryEmitter(str(target)) as emitter:
             emitter.emit(event)
