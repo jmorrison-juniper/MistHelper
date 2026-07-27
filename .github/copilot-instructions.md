@@ -13,6 +13,14 @@ MistHelper is a production-grade Python tool (~28K lines) for Juniper Mist Cloud
 
 ---
 
+## Writing & Communication Style (Simplified Technical English)
+
+All documentation, code comments, pull request text, error messages, user-facing communication and printed output, and agent output MUST follow the Simplified Technical English (STE) writing guide: `documentation/ASD-STE100_writing-guide.md` (distilled from ASD-STE100 Issue 9).
+
+Core defaults: one word = one meaning; one term per concept, reused consistently (no synonym swapping); active voice; simple tenses; short sentences (<=20 words for instructions, <=25 for descriptions); imperative for instructions with one action per step and the condition first ("If X, do Y"); no semicolons, slang, jargon, phrasal verbs, or Latin abbreviations (e.g./i.e./etc.); American spelling; never alter quoted strings or identifiers. Warnings lead with a signal word (Warning = harm/irreversible; Caution = recoverable) and state the specific consequence. These rules reinforce the existing NON-NEGOTIABLE inline-comment and action-logging conventions.
+
+---
+
 ## Core Architecture
 
 ### Python Project Hierarchy (5-Item Rule)
