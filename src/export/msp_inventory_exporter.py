@@ -35,7 +35,7 @@ class MSPInventoryExporter:
     - MSP context: msp_id, msp_name
     - Org context: org_id, org_name
     - Site context: site_id, site_name
-    - Device fields: type, model, mac, serial, name, version, status, etc.
+    - Device fields: type, model, mac, serial, name, version, status, and so on
 
     Output File: data/MSP_Inventory_Export.csv
     """
@@ -184,7 +184,7 @@ class MSPInventoryExporter:
     def _normalize_msp_orgs_response(orgs_data) -> list:  # type: ignore[no-untyped-def, type-arg]
         """Coerce listMspOrgs payload into a list (handles single-dict and None)."""
         if not isinstance(orgs_data, list):  # Not a list -- wrap or default
-            return [orgs_data] if orgs_data else []  # Single dict -> 1-element list; None -> empty
+            return [orgs_data] if orgs_data else []  # Single dict -> 1-element list. None -> empty
         return orgs_data  # Already a list
 
     def _fetch_msp_orgs(self, msp_id: str, msp_name: str) -> list:  # type: ignore[type-arg]
@@ -291,7 +291,7 @@ class MSPInventoryExporter:
         print(f"      {org_name}: {len(devices_data)} devices ({type_summary})")
 
     def _validate_org(self, org: dict) -> tuple[str, str] | None:  # type: ignore[type-arg]
-        """Pull (org_id, org_name) from an org dict; return None when org_id is missing/invalid."""
+        """Pull (org_id, org_name) from an org dict. Return None when org_id is missing/invalid."""
         org_id = org.get("id")  # Required identifier
         org_name = org.get("name", "Unknown Org")  # Default name for diagnostics
         if not org_id or not isinstance(org_id, str):  # Bad org row.

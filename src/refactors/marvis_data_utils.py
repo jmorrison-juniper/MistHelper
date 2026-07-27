@@ -6,7 +6,7 @@ defined at module scope in MistHelper.py, and re-lands it on a
 MistHelper callsite (the ClientTroubleshootingManager dependency-
 injection kwarg `marvis_data_utils=marvis_data_utils` at line 15656) is
 rewritten in the same PR to invoke the factory's `instance` class
-method; no wrapper shim remains in MistHelper.py after this extraction.
+method. No wrapper shim remains in MistHelper.py after this extraction.
 
 The concrete `MarvisDataUtils` class continues to live at
 `src.marvis.marvis_utils` -- this seam owns only the wired-up singleton.

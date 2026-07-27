@@ -20,7 +20,7 @@ from __future__ import annotations  # WHY: PEP 604 unions for future annotations
 import importlib  # WHY: lazy MistHelper import avoids circular load at module init.
 import logging  # WHY: structured trace + info/warn/error logging.
 import time  # WHY: wall-time epoch + elapsed timing.
-from datetime import datetime  # WHY: format epoch to human timestamp; timestamp CSV filename.
+from datetime import datetime  # WHY: format epoch to human timestamp. Timestamp CSV filename.
 from typing import Any  # WHY: device dicts carry heterogeneous values.
 
 from prettytable import PrettyTable  # WHY: render offline device rows as a table.
@@ -45,7 +45,7 @@ class OfflineDeviceReporter:  # Offline device inventory report.
 
     @staticmethod
     def _parse_threshold_attempt(raw: str) -> int | None:
-        """Parse one user attempt; return validated hours or None to retry."""
+        """Parse one user attempt. Return validated hours or None to retry."""
         try:
             hours = int(raw)  # Coerce to int.
             min_h = OfflineDeviceReporter.MIN_THRESHOLD_HOURS  # Local alias for line length.
@@ -156,7 +156,7 @@ class OfflineDeviceReporter:  # Offline device inventory report.
     def _maybe_build_offline_record(
         device: dict, site_lookup: dict[str, str], now: float, threshold_seconds: int
     ) -> dict | None:
-        """Return offline record for device if it qualifies as offline; None to skip."""
+        """Return offline record for device if it qualifies as offline. None to skip."""
         if device.get("status") == "connected":  # Skip currently-connected devices
             return None
         last_seen_epoch = OfflineDeviceReporter._parse_last_seen_epoch(device)  # Float epoch (0.0 = never seen)
@@ -236,7 +236,7 @@ class OfflineDeviceReporter:  # Offline device inventory report.
 
     @staticmethod
     def _save_offline_csv(offline_records: list[dict[str, str]], total_count: int) -> None:
-        """Build CSV rows and persist via shared exporter; log + print result."""
+        """Build CSV rows and persist via shared exporter. Log + print result."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataExporter.
         fields = OfflineDeviceReporter._OFFLINE_DISPLAY_FIELDS  # Column order.
         csv_records = [{f: record.get(f, "") for f in fields} for record in offline_records]  # Strip helper keys.

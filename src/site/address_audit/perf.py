@@ -2,8 +2,8 @@
 
 The Tier-3 resolve loop can spend 12-20 seconds per site, and it was not obvious
 where that time went. :class:`PhaseTimer` accumulates wall-clock time under named
-phases so the audit can log a breakdown at the end of a run (e.g. human-like
-typing vs. Nominatim rate-limit vs. politeness delay vs. suite-grace waits),
+phases so the audit can log a breakdown at the end of a run (for example human-like
+typing versus Nominatim rate-limit versus politeness delay versus suite-grace waits),
 turning "it feels slow" into an actionable measurement.
 
 This is deliberately tiny and dependency-free: a dict of ``label -> [count,
@@ -36,7 +36,7 @@ class PhaseTimer:  # WHY: single-purpose timing container for audit phases
 
     def add(self, label: str, seconds: float) -> None:  # WHY: manual timing entry
         """Add a single ``seconds`` occurrence to ``label`` (safe for manual timing)."""
-        slot = self._phases.setdefault(label, [0.0, 0.0])  # [count, total]; created on first use.
+        slot = self._phases.setdefault(label, [0.0, 0.0])  # [count, total]. Created on first use.
         slot[0] += 1.0  # One more occurrence of this phase.
         slot[1] += max(0.0, seconds)  # Accumulate a non-negative duration (guards clock skew).
 

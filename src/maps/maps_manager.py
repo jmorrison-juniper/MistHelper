@@ -54,7 +54,7 @@ from src.dataclasses.map_wizard_deps import (  # Issue #433 Phase C T3: replacem
 from src.maps._container_detection import (
     is_running_in_container,
 )  # Detects Docker/container runtimes to gate GUI viewer launches.
-from src.maps._flask_viewer import launch_flask_viewer  # Flask-based fallback viewer for containerized/headless envs.
+from src.maps._flask_viewer import launch_flask_viewer  # Flask fallback viewer for headless environments.
 from src.maps._plotly_viewer import launch_plotly_viewer  # Dash/Plotly interactive viewer for desktop use.
 from src.maps._maps_utils import (  # Shared helpers: dict flattening, filename sanitization, CSV/JSON exports.
     flatten_dict_recursively,
@@ -79,13 +79,13 @@ PIL_AVAILABLE = importlib.util.find_spec("PIL") is not None  # Cached truthy fla
 if PLOTLY_AVAILABLE:  # Only import heavy plotly module when available at runtime.
     import plotly.graph_objects as go  # Bound at module level so downstream figure builders can reference it.
 else:
-    go = None  # Fallback sentinel so attribute checks don't NameError.
+    go = None  # Fallback sentinel so attribute checks do not NameError.
 
-# Dash symbols (Input, Output, State, etc.) are imported locally
+# Dash symbols (Input, Output, State, and so on) are imported locally
 # in methods that need them, since they require dash to be installed.
-Dash = None  # Placeholder; real Dash class imported lazily inside launcher methods.
-html = None  # Placeholder for dash.html; imported lazily where needed.
-dcc = None  # Placeholder for dash.dcc; imported lazily where needed.
+Dash = None  # Placeholder. Real Dash class imported lazily inside launcher methods.
+html = None  # Placeholder for dash.html. Imported lazily where needed.
+dcc = None  # Placeholder for dash.dcc. Imported lazily where needed.
 
 try:
     import requests  # Used to download map images from Mist-signed URLs.
@@ -103,7 +103,7 @@ except ImportError:  # WHY: handle expected error
 
 # Mist API import
 try:
-    import mistapi  # type: ignore[import-untyped]  # Optional dependency; required for real API calls.
+    import mistapi  # type: ignore[import-untyped]  # Optional dependency. Required for real API calls.
 except ImportError:  # WHY: handle expected error
     mistapi = None  # type: ignore[assignment]  # Sentinel so tests can run without the SDK.
 
@@ -117,7 +117,7 @@ logger = logging.getLogger(__name__)  # Module-scoped logger for MapsManager ope
 # Page limit configuration
 try:
     _raw_page_limit_env = os.environ.get("MIST_PAGE_LIMIT", "1000").strip()  # Read override from env, default "1000".
-    _parsed_limit = int(_raw_page_limit_env)  # Parse to int; may raise ValueError caught below.
+    _parsed_limit = int(_raw_page_limit_env)  # Parse to int. May raise ValueError caught below.
 except Exception:  # WHY: handle expected error
     _parsed_limit = 1000  # Fall back to safe default on any parse failure.
 
@@ -181,7 +181,7 @@ class MapsManager:  # WHY: declare MapsManager class
     def _match_site_by_name(
         sites_sorted: list, selection: str
     ) -> "dict | None":  # WHY: declare private helper _match_site_by_name
-        """Substring-match against site names; None if no unique hit."""
+        """Substring-match against site names. None if no unique hit."""
         matches = [s for s in sites_sorted if selection.lower() in s.get("name", "").lower()]  # WHY: compute matches
         if len(matches) == 1:  # WHY: branch on condition
             return matches[0]  # WHY: return computed result
@@ -253,7 +253,7 @@ class MapsManager:  # WHY: declare MapsManager class
         print(f"{'-' * 80}")  # Separator rule
         for idx, map_item in enumerate(maps, 1):  # Enumerate with 1-based index for humans
             map_name = map_item.get("name", "Unnamed")  # Map display name
-            map_type = map_item.get("type", "N/A")  # Map type (image, geojson, etc.)
+            map_type = map_item.get("type", "N/A")  # Map type (image, geojson, and so on)
             has_image = "with image" if "url" in map_item else "no image"  # Image availability tag
             print(f"  {idx}. {map_name} ({map_type}) - {has_image}")  # Numbered row
         print(f"{'-' * 80}")  # Closing rule
@@ -456,7 +456,7 @@ class MapsManager:  # WHY: declare MapsManager class
         self._print_menu_bulk_and_analytics_section()  # WHY: advance computation
 
     def _read_menu_choice(self) -> "str | None":  # WHY: declare private helper _read_menu_choice
-        """Prompt for a menu selection; return None on EOF."""
+        """Prompt for a menu selection. Return None on EOF."""
         try:
             return (  # WHY: return computed result
                 InputUtils.safe_input("\nEnter your selection number now: ", context="run_interactive_menu")
@@ -478,7 +478,7 @@ class MapsManager:  # WHY: declare MapsManager class
     def _dispatch_menu_choice(
         self, choice: "str | None", dispatch: dict
     ) -> bool:  # WHY: declare private helper _dispatch_menu_choice
-        """Handle one menu choice; return True to keep looping, False to exit."""
+        """Handle one menu choice. Return True to keep looping, False to exit."""
         if choice is None or choice == "0":  # Sentinel or explicit quit
             if choice == "0":  # Only log the deliberate exit
                 logging.info("Exiting Maps Manager")  # Note the exit reason
@@ -504,7 +504,7 @@ class MapsManager:  # WHY: declare MapsManager class
                 return  # Exit sentinel returned
 
     def _fetch_maps_for_site(self, site_id: str):  # WHY: declare private helper _fetch_maps_for_site
-        """Fetch maps for a site; return list or None on non-200 / error."""
+        """Fetch maps for a site. Return list or None on non-200 / error."""
         try:
             resp = mistapi.api.v1.sites.maps.listSiteMaps(self.apisession, site_id=site_id)  # WHY: compute resp
         except Exception as e:  # WHY: handle expected error
@@ -574,7 +574,7 @@ class MapsManager:  # WHY: declare MapsManager class
         }
 
     def _collect_all_org_map_rows(self, sites: list) -> list:  # WHY: declare private helper _collect_all_org_map_rows
-        """Iterate sites; return the flattened summary rows for every map."""
+        """Iterate sites. Return the flattened summary rows for every map."""
         all_maps: list = []  # WHY: assign computed value
         for site in tqdm(sites, desc="Scanning sites", unit="site"):  # WHY: iterate collection
             try:
@@ -584,7 +584,7 @@ class MapsManager:  # WHY: declare MapsManager class
                 for map_item in resp.data:  # WHY: iterate collection
                     all_maps.append(self._build_org_map_row(site, map_item))  # WHY: advance computation
             except Exception as e:  # WHY: handle expected error
-                # Skip sites whose listSiteMaps failed; keep scanning the rest.
+                # Skip sites whose listSiteMaps failed. Keep scanning the rest.
                 logging.debug("Error fetching maps for site %s: %s", site["id"], e)  # WHY: action-log after operation
                 continue  # WHY: skip to next iteration
         return all_maps  # WHY: return computed result
@@ -682,7 +682,7 @@ class MapsManager:  # WHY: declare MapsManager class
     def _fetch_site_maps_safe(
         self, site_id: str, err_context: str
     ) -> list:  # WHY: declare private helper _fetch_site_maps_safe
-        """Fetch maps for a site; swallow + log per-site failures so the outer loop continues."""
+        """Fetch maps for a site. Swallow + log per-site failures so the outer loop continues."""
         try:
             resp = mistapi.api.v1.sites.maps.listSiteMaps(self.apisession, site_id=site_id)  # WHY: compute resp
             if resp.status_code == 200:  # WHY: branch on condition
@@ -694,7 +694,7 @@ class MapsManager:  # WHY: declare MapsManager class
     def _collect_flat_map_rows(
         self, sites: list, desc: str
     ) -> list:  # WHY: declare private helper _collect_flat_map_rows
-        """Fetch + flatten every map across sites; progress-bar labelled `desc`."""
+        """Fetch + flatten every map across sites. Progress-bar labelled `desc`."""
         rows: list = []  # WHY: assign computed value
         for site in tqdm(sites, desc=desc, unit="site"):  # WHY: iterate collection
             for map_item in self._fetch_site_maps_safe(site["id"], "exporting maps for"):  # WHY: iterate collection
@@ -939,7 +939,7 @@ class MapsManager:  # WHY: declare MapsManager class
     def _fetch_map_detail(
         self, site_id: str, map_id: str
     ) -> dict | None:  # WHY: declare private helper _fetch_map_detail
-        """Fetch a single map detail record; return None and print on failure."""
+        """Fetch a single map detail record. Return None and print on failure."""
         detail_response = mistapi.api.v1.sites.maps.getSiteMap(
             self.apisession, site_id=site_id, map_id=map_id
         )  # API call for map details.
@@ -989,7 +989,7 @@ class MapsManager:  # WHY: declare MapsManager class
             print(f"\n! Error viewing map details: {e}")  # Surface error to the operator.
 
     def _prompt_map_name(self) -> str | None:  # WHY: declare private helper _prompt_map_name
-        """Prompt user for a map name; return None if empty or EOF."""
+        """Prompt user for a map name. Return None if empty or EOF."""
         try:
             map_name = InputUtils.safe_input(
                 "Enter map name: ", context="_prompt_map_name"
@@ -1017,7 +1017,7 @@ class MapsManager:  # WHY: declare MapsManager class
     def _prompt_image_dimensions(
         self,
     ) -> tuple[int, int, float]:  # WHY: declare private helper _prompt_image_dimensions
-        """Prompt for image map dimensions; return (width, height, ppm) with defaults."""
+        """Prompt for image map dimensions. Return (width, height, ppm) with defaults."""
         width_input = InputUtils.safe_input(  # WHY: compute width_input
             "Enter width in pixels (default=1024): ", context="_prompt_image_dimensions"
         ).strip()
@@ -1146,7 +1146,7 @@ class MapsManager:  # WHY: declare MapsManager class
     def _collect_maps_missing_images(
         self, sites: list
     ) -> tuple[list, int]:  # WHY: declare private helper _collect_maps_missing_images
-        """Scan every site's maps; return (rows without url, total scanned)."""
+        """Scan every site's maps. Return (rows without url, total scanned)."""
         rows: list = []  # Accumulated rows across all sites
         total = 0  # Running total of maps scanned
         for site in tqdm(sites, desc="Scanning sites", unit="site"):  # Progress-visible iteration
@@ -1181,7 +1181,7 @@ class MapsManager:  # WHY: declare MapsManager class
         print("-" * 80)  # WHY: surface user-facing message
 
     def maps_without_images_report(self):  # WHY: declare public method maps_without_images_report
-        """Generate report of maps that don't have uploaded images."""
+        """Generate report of maps that do not have uploaded images."""
         print("\n" + "-" * 80)  # WHY: surface user-facing message
         print("MAPS WITHOUT IMAGES REPORT")  # WHY: surface user-facing message
         print("-" * 80)  # WHY: surface user-facing message
@@ -1301,7 +1301,7 @@ class MapsManager:  # WHY: declare MapsManager class
     def _load_map_for_update(
         self, site_id: str, site_name: str
     ) -> "tuple[str, dict] | None":  # WHY: declare private helper _load_map_for_update
-        """Pick a map and fetch its current state; None if user cancels or fetch fails."""
+        """Pick a map and fetch its current state. None if user cancels or fetch fails."""
         map_id = self._select_map_from_site(site_id, site_name)  # WHY: compute map_id
         if not map_id:  # WHY: guard against missing precondition
             return None  # WHY: return computed result
@@ -1338,7 +1338,7 @@ class MapsManager:  # WHY: declare MapsManager class
         self._confirm_and_apply_map_update(site_id, map_id, update_payload)  # Confirm + PUT
 
     def update_map_properties(self):  # WHY: declare public method update_map_properties
-        """Update existing map properties (name, dimensions, orientation, etc.)."""
+        """Update existing map properties (name, dimensions, orientation, and so on)."""
         self._print_update_map_properties_header()  # Banner
         site_id, site_name = self.get_current_site()  # Require a selected site
         if not site_id:  # Site prompt cancelled
@@ -1378,7 +1378,7 @@ class MapsManager:  # WHY: declare MapsManager class
 
     @staticmethod
     def _confirm_map_delete(map_id: str) -> bool:  # WHY: declare private helper _confirm_map_delete
-        """Require user to type DELETE in uppercase; True iff they confirmed."""
+        """Require user to type DELETE in uppercase. True iff they confirmed."""
         print("\nType 'DELETE' in uppercase to confirm deletion:")  # WHY: surface user-facing message
         confirmation = InputUtils.safe_input(
             "Confirmation: ", context="delete_site_map"
@@ -1458,7 +1458,7 @@ class MapsManager:  # WHY: declare MapsManager class
     def _validate_image_file_path(
         file_path: str,
     ) -> str | None:  # WHY: declare private helper _validate_image_file_path
-        """Validate a filesystem path points at a supported image; return path or None."""
+        """Validate a filesystem path points at a supported image. Return path or None."""
         if not file_path:  # Empty input -> nothing to validate.
             print("\n! No file path provided")  # Report empty input.
             return None  # WHY: return computed result
@@ -1479,7 +1479,7 @@ class MapsManager:  # WHY: declare MapsManager class
     def _prompt_and_validate_image_path(
         self,
     ) -> str | None:  # WHY: declare private helper _prompt_and_validate_image_path
-        """Prompt user for image file path and validate it; return path or None if invalid."""
+        """Prompt user for image file path and validate it. Return path or None if invalid."""
         return self._validate_image_file_path(self._read_image_path_input())  # Compose read + validate.
 
     @staticmethod
@@ -1493,7 +1493,7 @@ class MapsManager:  # WHY: declare MapsManager class
     def _check_upload_size(
         self, file_path: str
     ) -> tuple[float, bool]:  # WHY: declare private helper _check_upload_size
-        """Compute file size MB and confirm large uploads; return (size_mb, proceed)."""
+        """Compute file size MB and confirm large uploads. Return (size_mb, proceed)."""
         file_size_mb = os.path.getsize(file_path) / (1024 * 1024)  # Bytes to megabytes.
         if file_size_mb <= 10:  # Small file -> no extra confirm needed.
             return file_size_mb, True  # WHY: return computed result
@@ -1508,7 +1508,7 @@ class MapsManager:  # WHY: declare MapsManager class
     ) -> None:  # WHY: declare private helper _perform_image_upload
         """Call the addSiteMapImageFile endpoint and print the outcome."""
         print("\nUploading image...")  # Progress note before HTTP call.
-        with open(file_path, "rb"):  # Ensure file is readable; API takes path itself.
+        with open(file_path, "rb"):  # Ensure file is readable. API takes path itself.
             upload_response = mistapi.api.v1.sites.maps.addSiteMapImageFile(
                 self.apisession, site_id=site_id, map_id=map_id, file=file_path
             )  # Multipart upload of the image asset.
@@ -1577,7 +1577,7 @@ class MapsManager:  # WHY: declare MapsManager class
     def _get_devices_on_map(
         self, site_id: str, map_id: str
     ) -> list | None:  # WHY: declare private helper _get_devices_on_map
-        """Fetch all site devices and return those placed on the specified map; None on failure."""
+        """Fetch all site devices and return those placed on the specified map. None on failure."""
         print("\nFetching devices for site...")  # WHY: surface user-facing message
         devices_response = mistapi.api.v1.sites.devices.listSiteDevices(
             self.apisession, site_id=site_id, type="all"
@@ -1702,7 +1702,7 @@ class MapsManager:  # WHY: declare MapsManager class
     def _download_all_site_map_images(
         self, site: dict, base_dir: str
     ) -> tuple[int, int]:  # WHY: declare private helper _download_all_site_map_images
-        """Download all map images for a single site; return (downloaded, total_with_images)."""
+        """Download all map images for a single site. Return (downloaded, total_with_images)."""
         site_id = site["id"]  # Site identifier
         site_name = site.get("name", "Unknown")  # Human-friendly folder name
         try:
@@ -1833,7 +1833,7 @@ class MapsManager:  # WHY: declare MapsManager class
 
     @staticmethod
     def _prompt_matplotlib_fallback() -> bool:  # WHY: declare private helper _prompt_matplotlib_fallback
-        """Prompt user to fall back to matplotlib mode; return True if user consented."""
+        """Prompt user to fall back to matplotlib mode. Return True if user consented."""
         confirm = (
             InputUtils.safe_input(
                 "\nWould you like to continue without interactive features? (yes/no): ",
@@ -1934,7 +1934,7 @@ class MapsManager:  # WHY: declare MapsManager class
     def _fetch_map_details(
         self, site_id: str, map_id: str
     ) -> "dict | None":  # WHY: declare private helper _fetch_map_details
-        """Fetch map metadata from the API; warn if PPM is unset.
+        """Fetch map metadata from the API. Warn if PPM is unset.
 
         Returns the map data dict on success, or None on API failure.
         """
@@ -2142,7 +2142,7 @@ class MapsManager:  # WHY: declare MapsManager class
     def _load_map_viewer_bundle(
         self, site_id: str, map_id: str
     ) -> tuple[dict, list, list, list, object, list] | None:  # WHY: declare private helper _load_map_viewer_bundle
-        """Fetch all viewer inputs; return (map_data, devices, zones, clients, coverage, all_sites) or None on missing map."""
+        """Fetch all viewer inputs. Return (map_data, devices, zones, clients, coverage, all_sites) or None on missing map."""
         map_data = self._fetch_map_details(site_id, map_id)  # WHY: compute map_data
         if map_data is None:  # WHY: branch on condition
             return None  # WHY: return computed result
@@ -2624,7 +2624,7 @@ class MapsManager:  # WHY: declare MapsManager class
 
 
 def _check_dependencies() -> None:  # WHY: declare private helper _check_dependencies
-    """Verify required dependencies are available; exit with error if not."""
+    """Verify required dependencies are available. Exit with error if not."""
     if not DASH_AVAILABLE or not PLOTLY_AVAILABLE:  # WHY: guard against missing precondition
         print("ERROR: This module requires dash and plotly packages.")  # WHY: surface user-facing message
         print("Install with: pip install dash plotly")  # WHY: surface user-facing message
@@ -2649,7 +2649,7 @@ def _configure_logging(debug: bool) -> None:  # WHY: declare private helper _con
 
 
 def _setup_api_session(env_file: str):  # WHY: declare private helper _setup_api_session
-    """Initialize and return a Mist API session; exit on failure."""
+    """Initialize and return a Mist API session. Exit on failure."""
     try:
         if os.path.exists(env_file):  # WHY: branch on condition
             apisession = mistapi.APISession(env_file=env_file)  # WHY: compute apisession
@@ -2669,7 +2669,7 @@ def _setup_api_session(env_file: str):  # WHY: declare private helper _setup_api
 
 
 def _prompt_org_selection(orgs: list) -> str:  # WHY: declare private helper _prompt_org_selection
-    """Display org choices and return the selected org_id; exit on invalid input."""
+    """Display org choices and return the selected org_id. Exit on invalid input."""
     print("\nAvailable Organizations:")  # WHY: surface user-facing message
     for idx, oid in enumerate(orgs, 1):  # WHY: iterate collection
         print(f"  {idx}. {oid}")  # WHY: surface user-facing message
@@ -2705,7 +2705,7 @@ def _pick_org_from_privileges(
 def _detect_org_from_session(
     apisession, test_mode: bool
 ) -> str | None:  # WHY: declare private helper _detect_org_from_session
-    """Detect org_id from the API session privileges; return None if not found."""
+    """Detect org_id from the API session privileges. Return None if not found."""
     try:
         self_info = mistapi.api.v1.self.self.getSelf(apisession)  # Fetch the authenticated user info.
         if not (hasattr(self_info, "data") and self_info.data):  # Guard against empty API responses.

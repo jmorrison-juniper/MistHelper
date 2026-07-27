@@ -9,7 +9,7 @@ budgets while the pure helpers remain re-exported via
 
 The ``_write_single_site_vars`` helper is intentionally *not* moved
 here: it resolves ``mistapi`` at call time and the historical unit
-tests patch ``mistapi`` through the parent module's namespace (e.g.
+tests patch ``mistapi`` through the parent module's namespace (for example
 ``patch.object(ssid_template_consolidation, "mistapi", ...)``), which
 only intercepts calls whose ``__globals__`` binding *is* the parent
 module. Keeping that single helper in the parent preserves those
@@ -63,7 +63,7 @@ def _plan_entries_for_row(
     variable_params: list[str],
     cache: dict[str, Any],
 ) -> list[dict[str, Any]]:  # WHY: extracted to keep _compute_variable_plan CC <= 5
-    """Build every plan entry for a single matrix row (skip vs. proposal)."""
+    """Build every plan entry for a single matrix row (skip versus proposal)."""
     if row.get("psk_detected") or row.get("anomaly"):  # WHY: PSK/anomaly rows always skipped
         return [_build_skip_entry(row, param) for param in variable_params]  # WHY: one skip per param
     site_vars = _get_cached_site_vars(cache, row.get("site_id", ""))  # WHY: current per-site vars
@@ -130,7 +130,7 @@ def _build_variable_entry(
         "variable_name": var_name,  # WHY: fully-qualified var name for API payload
         "proposed_value": proposed,  # WHY: value to write on the site
         "current_value": current,  # WHY: preserved for audit / conflict display
-        "status": status,  # WHY: drives write vs. skip vs. conflict paths
+        "status": status,  # WHY: drives write versus skip versus conflict paths
         "reason": reason,  # WHY: user-visible explanation of the status
         "timestamp": "",  # WHY: populated at write time only
     }
@@ -213,7 +213,7 @@ class _SsidTemplatePhase2Cluster(_ClusterBase):
     def phase2_site_variables(self) -> None:  # WHY: user-facing Phase 2 entry point
         """Phase 2 orchestrator - compute variable plan, write to sites."""
         logging.warning("=== Phase 2: Write Site Variables ===")  # WHY: banner marks phase boundary
-        # WHY (#886 Phase 2): module already imports `logging` at module top; local re-import removed.
+        # WHY (#886 Phase 2): module already imports `logging` at module top. Local re-import removed.
 
         logging.info("Phase 2: Starting site variable configuration")  # WHY: audit trail
         if not self._load_cache_or_bail():  # WHY: cache preamble aborts on missing Phase 1

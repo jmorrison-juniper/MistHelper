@@ -46,7 +46,7 @@ class SiteConfigExporter:
 
     @staticmethod
     def _fetch_wlans_with_fallback(site_id: str) -> list[Any]:
-        """Prefer derived WLANs (includes inherited/template); fall back to site-local on failure."""
+        """Prefer derived WLANs (includes inherited/template). Fall back to site-local on failure."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of apisession module global.
         try:
             derived_response = mistapi.api.v1.sites.wlans.listSiteWlansDerived(  # List derived WLANs.
@@ -71,7 +71,7 @@ class SiteConfigExporter:
         if not rawdata:  # No rows.
             logging.warning("No data provided for output to %s", filename)  # Warn none.
             mh.DataExporter.write_with_format_selection([], filename)  # Empty CSV.
-            # WHY: Preserve user-facing zero-record notice verbatim; INFO-level structured emit.
+            # WHY: Preserve user-facing zero-record notice verbatim. INFO-level structured emit.
             logging.info("! 0 records exported to data\\%s", filename)
             return  # Done.
         processed = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested fields.

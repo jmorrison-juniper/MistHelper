@@ -23,7 +23,7 @@ import mistapi  # WHY: direct SDK access for searchSiteGuestAuthorization + get_
 
 from src.data.data_processing_utils import (
     DataProcessingUtils,
-)  # WHY: canonical flatten/escape helpers; keeps CSV output consistent with peers.
+)  # WHY: canonical flatten/escape helpers. Keeps CSV output consistent with peers.
 
 
 class SiteGuestAuthorizationExporter:
@@ -42,7 +42,7 @@ class SiteGuestAuthorizationExporter:
 
         Why:
             Empty responses are legitimate (a site with no authorized guests
-            in the query window); we surface a friendly message rather than
+            in the query window). We surface a friendly message rather than
             failing so scheduled runs stay quiet in that case.
 
         Args:

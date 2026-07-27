@@ -106,7 +106,7 @@ class PromptUtils:  # General prompt helpers.
 
     @staticmethod
     def _resolve_device_selection(user_input: str, index_to_device: dict, name_to_device: dict) -> str | None:
-        """Resolve ``user_input`` to a device id by index or name; return None on miss."""
+        """Resolve ``user_input`` to a device id by index or name. Return None on miss."""
         normalized = user_input[1:] if user_input.startswith(".") else user_input  # Strip leading dot.
         if normalized.isdigit():  # Numeric index path.
             idx = int(normalized)  # Parse index.
@@ -125,7 +125,7 @@ class PromptUtils:  # General prompt helpers.
 
     @staticmethod
     def select_site_id_from_csv(csv_file: str = "SiteList.csv") -> str | None:  # Prompt site id from CSV.
-        """Prompt user to select a site by index or name from csv_file; returns the site ID or None."""
+        """Prompt user to select a site by index or name from csv_file. Returns the site ID or None."""
         mh = importlib.import_module("MistHelper")
         CacheUtils.check_and_generate_csv(csv_file, OrgSiteExporter.sites)  # Ensure site CSV exists/fresh.
         index_to_site, name_to_site = PromptUtils._load_site_csv_maps(csv_file)  # Read CSV into index/name maps.
@@ -162,7 +162,7 @@ class PromptUtils:  # General prompt helpers.
 
     @staticmethod
     def _pick_site_by_index(idx: int, index_to_site: dict[int, dict]) -> str | None:  # type: ignore[type-arg]
-        """Resolve a numeric site index to a site_id; print/log selection or invalid-index message."""
+        """Resolve a numeric site index to a site_id. Print/log selection or invalid-index message."""
         if idx not in index_to_site:  # Validate index exists.
             # WHY (#886 Phase 2): collapse paired print+logger into a single logging.warning so
             # the invalid-index banner reaches the operator via the same handler chain.
@@ -177,7 +177,7 @@ class PromptUtils:  # General prompt helpers.
 
     @staticmethod
     def _pick_site_by_name(name: str, name_to_site: dict[str, dict]) -> str | None:  # type: ignore[type-arg]
-        """Resolve a site name to a site_id; print/log the selection."""
+        """Resolve a site name to a site_id. Print/log the selection."""
         site_id = name_to_site[name].get("id")  # Read site id by name.
         # WHY (#886 Phase 2): retire print() in favor of logging.warning so operator sees the
         # confirmation banner on the default root-logger config (INFO is suppressed by default).
@@ -355,7 +355,7 @@ class PromptUtils:  # General prompt helpers.
 
     @staticmethod
     def _display_client_table(all_clients: list[dict], sites_cache: dict[str, str]) -> dict[int, dict]:  # type: ignore[type-arg]
-        """Render the client selection table and a summary line; return an index-to-client map for selection."""
+        """Render the client selection table and a summary line. Return an index-to-client map for selection."""
         table = PromptUtils._build_client_table_skeleton()  # Build empty table with columns + alignment
         for idx, client in enumerate(all_clients):  # Enumerate clients for rows
             row = PromptUtils._format_client_row(idx, client, sites_cache)  # Format a client row

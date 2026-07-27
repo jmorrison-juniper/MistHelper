@@ -69,7 +69,7 @@ class MarvisDataUtils:  # WHY: Class groups Marvis-to-CSV helpers with injected 
     ) -> list[dict[str, Any]]:
         """Convert a raw Marvis API response into a flat list of dicts for CSV export.
 
-        Handles the sites SLE expansion and generic per-item flattening; any
+        Handles the sites SLE expansion and generic per-item flattening. Any
         internal error routes to the legacy flatten+escape fallback so callers
         always receive a list rather than an exception.
         """
@@ -211,7 +211,7 @@ class MarvisDataUtils:  # WHY: Class groups Marvis-to-CSV helpers with injected 
 
         The Marvis API wraps troubleshoot results in a nested "results" array.
         This method un-nests that array and emits columns like result_0_category,
-        result_0_reason, etc.  Other nested dicts are flattened with underscored
+        result_0_reason, and so on  Other nested dicts are flattened with underscored
         composite keys.  Lists are joined as comma-separated strings.
 
         Args:
@@ -260,7 +260,7 @@ class MarvisDataUtils:  # WHY: Class groups Marvis-to-CSV helpers with injected 
     ) -> dict[str, Any]:
         """Expand each entry in a Marvis 'results' array into prefixed columns.
 
-        E.g. results[0] = {"category": "WiFi", "reason": "low RSSI"} becomes
+        For example results[0] = {"category": "WiFi", "reason": "low RSSI"} becomes
         result_0_category and result_0_reason columns in the CSV row.
 
         Args:

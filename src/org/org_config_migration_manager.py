@@ -379,7 +379,7 @@ class OrgConfigMigrationManager:  # Org config migration manager.
     def _check_name_conflict(self, new_obj: dict, existing_list: list) -> dict | None:  # type: ignore[type-arg]
         """Check if an object with the same name already exists (case-insensitive)."""
         new_name = self._normalized_name(new_obj)  # Lowercase name for case-insensitive comparison
-        if not new_name:  # Skip unnamed objects (shouldn't happen but be defensive)
+        if not new_name:  # Skip unnamed objects (should not happen but be defensive)
             return None  # No conflict.
         for existing in existing_list:  # Check every existing object in destination
             if new_name == self._normalized_name(existing):  # Case-insensitive match found
@@ -403,7 +403,7 @@ class OrgConfigMigrationManager:  # Org config migration manager.
             return self._check_network_subnet_overlap(new_obj, existing_list)  # Check subnet overlap.
         if type_key == "services":  # Services use addresses[] array
             return self._check_service_address_overlap(new_obj, existing_list)  # Check address overlap.
-        return None  # Other types don't have IP fields
+        return None  # Other types do not have IP fields
 
     @staticmethod
     def _build_subnet_overlap_conflict(new_subnet: str, existing: dict, existing_subnet: str) -> dict:
@@ -415,7 +415,7 @@ class OrgConfigMigrationManager:  # Org config migration manager.
 
     @staticmethod
     def _existing_overlaps_new(new_net, existing: dict, new_subnet: str) -> dict | None:  # type: ignore[no-untyped-def]
-        """Return a conflict dict if ``existing``'s subnet overlaps ``new_net``; else None (also on parse error)."""
+        """Return a conflict dict if ``existing``'s subnet overlaps ``new_net``. Else None (also on parse error)."""
         existing_subnet = existing.get("subnet")  # Existing CIDR
         if not existing_subnet:  # Skip un-subnetted existing entries
             return None
@@ -522,7 +522,7 @@ class OrgConfigMigrationManager:  # Org config migration manager.
         """Remap network and VPN IDs in gateway template config."""
         networks = obj.get("networks", {})  # Gateway template networks section
         if isinstance(networks, dict):  # Verify expected dict structure
-            for net_config in networks.values():  # Iterate each network reference; keys unused here
+            for net_config in networks.values():  # Iterate each network reference. Keys unused here
                 if isinstance(net_config, dict) and "id" in net_config:  # Has remappable ID
                     old_id = net_config["id"]  # Capture source org's ID
                     net_config["id"] = self._remap_table.get(old_id, old_id)  # Swap to dest ID
@@ -549,7 +549,7 @@ class OrgConfigMigrationManager:  # Org config migration manager.
 
     def _strip_source_fields(self, obj: dict) -> dict:  # type: ignore[type-arg]
         """Return a copy of obj with source-org-specific fields removed."""
-        return {key: value for key, value in obj.items() if key not in self.STRIP_FIELDS}  # Filter out id, org_id, etc.
+        return {key: value for key, value in obj.items() if key not in self.STRIP_FIELDS}  # Filter out source fields
 
     def _execute_import(self, bundle: dict, dry_run: bool) -> list:  # type: ignore[type-arg]
         """Import objects in dependency order, skipping conflicts."""
@@ -600,7 +600,7 @@ class OrgConfigMigrationManager:  # Org config migration manager.
             self._record_conflict(type_key, obj_name, source_id, conflict, results)  # Record the conflict.
             return  # Skip it.
         cleaned = self._clean_and_remap(obj, type_key)  # Strip + remap.
-        if dry_run:  # Preview mode -- don't make API calls
+        if dry_run:  # Preview mode -- do not make API calls
             logging.warning("      %sWould import: %s", label, obj_name)  # Show what would happen
             results.append({"type": type_key, "name": obj_name, "status": "would_import"})  # Record for report
             return  # Abort.

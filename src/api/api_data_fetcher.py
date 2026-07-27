@@ -249,7 +249,7 @@ class APIDataFetcher:
 
     def _handle_api_exception(self, error: Exception) -> None:  # Handle a fetch exception.
         """Handle exceptions during API data retrieval."""
-        # WHY (#886 Phase 2): retired duplicate print(); the logging.error calls below already
+        # WHY (#886 Phase 2): retired duplicate print(). The logging.error calls below already
         # surface the failure via the ERROR-level default handler.
         logging.error("Exception occurred during API data retrieval: %s", error)  # log exception.
         logging.error("Exception type: %s", type(error).__name__)  # log type.

@@ -85,7 +85,7 @@ class _CommitBundle:  # WHY: 5-Item Rule bundle for the apply-tail helper signat
 
 
 class _MapsWizard:  # WHY: wrapper class hosting extracted wizard flow methods.
-    """Wrapper class holding the extracted wizard methods; delegates to MapsManager."""
+    """Wrapper class holding the extracted wizard methods. Delegates to MapsManager."""
 
     def __init__(self, maps_manager: Any) -> None:  # WHY: keep a reference to MapsManager for delegation.
         """Store the wrapped MapsManager for attribute delegation."""
@@ -290,7 +290,7 @@ class _MapsWizard:  # WHY: wrapper class hosting extracted wizard flow methods.
         print("  4. No Scaling - Replace image only, keep all coordinates unchanged")
 
     def _prompt_scale_choice(self) -> str | None:
-        """Prompt for the scaling menu selection; return the trimmed string or None on EOF."""
+        """Prompt for the scaling menu selection. Return the trimmed string or None on EOF."""
         try:
             raw = InputUtils.safe_input(  # WHY: uniform EOF/CTRL-C handling.
                 "\nSelect scaling mode [1]: ", context="_wizard_determine_scaling"
@@ -328,7 +328,7 @@ class _MapsWizard:  # WHY: wrapper class hosting extracted wizard flow methods.
         return "preserve_physical", DEFAULT_SCALE_FACTOR, DEFAULT_SCALE_FACTOR, new_ppm  # WHY: identity xy.
 
     def _resolve_manual_ppm(self, ctx: ScaleChoiceContext) -> tuple[str, float, float, float]:
-        """Prompt for a manual PPM value; fall back to original PPM on invalid/EOF input."""
+        """Prompt for a manual PPM value. Fall back to original PPM on invalid/EOF input."""
         try:
             raw = InputUtils.safe_input(  # WHY: EOF-safe prompt.
                 f"Enter new PPM (current: {ctx.original_ppm:.2f}): ", context="_apply_scale_choice"
@@ -404,12 +404,12 @@ class _MapsWizard:  # WHY: wrapper class hosting extracted wizard flow methods.
         )
 
     def _update_single_device(self, record: dict[str, Any], params: _AssetScaleParams) -> bool:
-        """Update one device's x/y via the API; return True on success."""
+        """Update one device's x/y via the API. Return True on success."""
         resp = mistapi.api.v1.sites.devices.updateSiteDevice(  # WHY: PATCH-style position update.
             self.apisession,
             site_id=params.site_id,
             device_id=record.get("id"),
-            body={  # WHY: only x/y change; other device fields left untouched.
+            body={  # WHY: only x/y change. Other device fields left untouched.
                 "x": record.get("x", 0) * params.scale_x,
                 "y": record.get("y", 0) * params.scale_y,
             },
@@ -429,10 +429,10 @@ class _MapsWizard:  # WHY: wrapper class hosting extracted wizard flow methods.
         )
 
     def _update_single_zone(self, record: dict[str, Any], params: _AssetScaleParams) -> bool:
-        """Update one zone's vertices via the API; return True on success."""
+        """Update one zone's vertices via the API. Return True on success."""
         vertices = record.get("vertices", [])  # WHY: zone shape is a vertex list.
         if not vertices:  # WHY: empty polygon has nothing to scale.
-            return True  # WHY: count as success; nothing changed but nothing failed either.
+            return True  # WHY: count as success. Nothing changed but nothing failed either.
         scaled_vertices = [  # WHY: element-wise multiply on x/y.
             {"x": v.get("x", 0) * params.scale_x, "y": v.get("y", 0) * params.scale_y} for v in vertices
         ]
@@ -454,7 +454,7 @@ class _MapsWizard:  # WHY: wrapper class hosting extracted wizard flow methods.
         )
 
     def _update_single_beacon(self, record: dict[str, Any], params: _AssetScaleParams) -> bool:
-        """Update one physical beacon's x/y via the API; return True on success."""
+        """Update one physical beacon's x/y via the API. Return True on success."""
         resp = mistapi.api.v1.sites.beacons.updateSiteBeacon(  # WHY: PATCH beacon position.
             self.apisession,
             site_id=params.site_id,
@@ -473,7 +473,7 @@ class _MapsWizard:  # WHY: wrapper class hosting extracted wizard flow methods.
         )
 
     def _update_single_vbeacon(self, record: dict[str, Any], params: _AssetScaleParams) -> bool:
-        """Update one virtual beacon's x/y via the API; return True on success."""
+        """Update one virtual beacon's x/y via the API. Return True on success."""
         resp = mistapi.api.v1.sites.vbeacons.updateSiteVBeacon(  # WHY: PATCH vbeacon position.
             self.apisession,
             site_id=params.site_id,
@@ -682,7 +682,7 @@ class _MapsWizard:  # WHY: wrapper class hosting extracted wizard flow methods.
         return self._prompt_continue_without_backup()  # WHY: handles yes/no + EOF in one place.
 
     def _prompt_continue_without_backup(self) -> str | None:
-        """Ask the user to continue without a verified backup; return empty on yes else None."""
+        """Ask the user to continue without a verified backup. Return empty on yes else None."""
         try:
             proceed = (
                 InputUtils.safe_input(  # WHY: EOF/CTRL-C safe prompt.
@@ -810,7 +810,7 @@ class _MapsWizard:  # WHY: wrapper class hosting extracted wizard flow methods.
         print(f"    ! Failed to update map: HTTP {resp.status_code}")  # WHY: user-visible failure.
 
     def _apply_image_upload(self, target: _ImageUploadTarget, errors: list[Any]) -> None:
-        """Upload the new floor-plan image; record any failure in ``errors``."""
+        """Upload the new floor-plan image. Record any failure in ``errors``."""
         print("  Uploading new image...")  # WHY: sub-step label.
         try:
             resp = mistapi.api.v1.sites.maps.addSiteMapImageFile(  # WHY: multipart image upload.

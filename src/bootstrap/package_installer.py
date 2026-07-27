@@ -39,7 +39,7 @@ class PackageInstaller:  # WHY: collaborator injecting stdlib modules for testab
             probed = self._probe_uv_command(candidate)  # WHY: try each candidate in priority order
             if probed is not None:  # WHY: return the first working command with its version string
                 return probed  # WHY: short-circuit on the first successful uv candidate
-        return None, None  # WHY: no candidate responded successfully; signal absence to caller
+        return None, None  # WHY: no candidate responded successfully. Signal absence to caller
 
     def install_uv_with_pip(self) -> bool:  # WHY: bootstrap uv when no candidate command was found
         """Install UV using pip in the active Python environment."""
@@ -78,7 +78,7 @@ class PackageInstaller:  # WHY: collaborator injecting stdlib modules for testab
         suffix = _WINDOWS_EXECUTABLE_SUFFIX if self.os_module.name == _WINDOWS_OS_NAME else ""
         candidates: list[list[str]] = [[_UV_EXECUTABLE_NAME]]  # WHY: PATH lookup is fastest and most common
         scripts_dir = sysconfig.get_path("scripts")  # WHY: interpreter's Scripts/bin dir may hold bundled uv
-        if scripts_dir:  # WHY: sysconfig can return None for unusual installs; guard before joining
+        if scripts_dir:  # WHY: sysconfig can return None for unusual installs. Guard before joining
             # WHY: absolute-path probe against interpreter's Scripts directory.
             candidates.append([self.os_module.path.join(scripts_dir, _UV_EXECUTABLE_NAME + suffix)])
         # WHY: virtualenvs place uv beside the python executable, so probe that directory too.
@@ -90,8 +90,8 @@ class PackageInstaller:  # WHY: collaborator injecting stdlib modules for testab
 
     def _probe_uv_command(self, cmd: list[str]) -> tuple[list[str], str] | None:  # WHY: single-candidate runner
         """Return (cmd, version) if the candidate runs successfully, else None."""
-        if not self._candidate_is_runnable(cmd):  # WHY: skip absolute paths that don't exist on disk
-            return None  # WHY: unreachable binary cannot be probed; skip to next candidate
+        if not self._candidate_is_runnable(cmd):  # WHY: skip absolute paths that do not exist on disk
+            return None  # WHY: unreachable binary cannot be probed. Skip to next candidate
         try:  # WHY: subprocess.run may raise FileNotFoundError/OSError/SubprocessError
             result = self.subprocess_module.run(  # WHY: --version is the cheapest way to confirm uv works
                 cmd + [_UV_VERSION_ARG],
@@ -106,11 +106,11 @@ class PackageInstaller:  # WHY: collaborator injecting stdlib modules for testab
         return cmd, result.stdout.strip()  # WHY: strip trailing newline from `uv --version` output
 
     def _candidate_is_runnable(self, cmd: list[str]) -> bool:  # WHY: cheap on-disk check before spawn
-        """Reject absolute-path candidates that don't exist on disk."""
+        """Reject absolute-path candidates that do not exist on disk."""
         if len(cmd) != 1:  # WHY: only single-arg absolute paths need existence checks
-            return True  # WHY: multi-arg commands (e.g. python -m uv) always attempt to run
+            return True  # WHY: multi-arg commands (for example python -m uv) always attempt to run
         if self.os_module.path.sep not in cmd[0]:  # WHY: bare names rely on PATH resolution, not disk check
-            return True  # WHY: bare executable names are always eligible; PATH resolves them at spawn
+            return True  # WHY: bare executable names are always eligible. PATH resolves them at spawn
         return bool(self.os_module.path.isfile(cmd[0]))  # WHY: skip missing binaries before invoking subprocess
 
     def _build_uv_install_command(  # WHY: uv argv builder shared by install/upgrade paths

@@ -94,10 +94,10 @@ def diff_key(
     """Diff one key's values, dispatching on type."""
     if isinstance(ctx.val_b, dict) and isinstance(ctx.val_a, dict):  # WHY: recurse into nested dicts
         diff_key_dict(ctx.key, ctx.val_b, ctx.val_a, delta_b, delta_a)  # WHY: dict branch delegates to nested walker
-        return  # WHY: consumed by nested walker; skip remaining dispatch
+        return  # WHY: consumed by nested walker. Skip remaining dispatch
     if isinstance(ctx.val_b, list) and isinstance(ctx.val_a, list):  # WHY: recurse into nested lists
         diff_key_list(ctx.key, ctx.val_b, ctx.val_a, delta_b, delta_a)  # WHY: identity-aware list walker
-        return  # WHY: consumed by list walker; skip remaining dispatch
+        return  # WHY: consumed by list walker. Skip remaining dispatch
     _emit_scalar_delta(ctx, delta_b, delta_a)  # WHY: mixed/scalar path emits raw values
 
 
@@ -105,7 +105,7 @@ def _emit_scalar_delta(
     ctx: DiffKeyContext,
     delta_b: dict[str, Any],
     delta_a: dict[str, Any],
-) -> None:  # WHY: side effects only; writes into caller-owned dicts
+) -> None:  # WHY: side effects only. Writes into caller-owned dicts
     """Emit scalar or mixed-type value into the delta dicts."""
     if ctx.in_before:  # WHY: preserve explicit None distinct from absent
         delta_b[ctx.key] = ctx.val_b  # WHY: record before-side value even if None
@@ -150,7 +150,7 @@ def compute_delta_list(  # WHY: exported list-diff entry point with identity fal
         return None, None  # WHY: None sentinel signals 'no delta' to caller
     all_dicts = _all_dicts(before) and _all_dicts(after)  # WHY: identity match only makes sense for dicts
     if not all_dicts:  # WHY: fall back to raw before/after for mixed types
-        return before, after  # WHY: mixed types can't share identity keys, so emit raw lists
+        return before, after  # WHY: mixed types cannot share identity keys, so emit raw lists
     return delta_by_identity(before, after)  # WHY: dict-of-dicts path handles reorder/added/removed
 
 
@@ -164,11 +164,11 @@ def element_identity(element: dict[str, Any]) -> str | None:  # WHY: exported fo
     for key in _IDENTITY_KEYS:  # WHY: priority order controls collision resolution
         val = element.get(key)  # WHY: first non-None wins
         if val is not None:  # WHY: skip missing/explicit-null identity slots
-            return f"{key}={val}"  # WHY: prefix key so 'name=foo' and 'id=foo' don't collide
+            return f"{key}={val}"  # WHY: prefix key so 'name=foo' and 'id=foo' do not collide
     return None  # WHY: caller treats missing identity as anonymous element
 
 
-def build_identity_map(  # WHY: exported for tests; splits list into id-keyed + positional groups
+def build_identity_map(  # WHY: exported for tests. Splits list into id-keyed + positional groups
     elements: list[dict[str, Any]],
 ) -> tuple[dict[str, dict[str, Any]], list[dict[str, Any]]]:
     """Split ``elements`` into identified and anonymous groups."""
@@ -176,14 +176,14 @@ def build_identity_map(  # WHY: exported for tests; splits list into id-keyed + 
     anon: list[dict[str, Any]] = []  # WHY: collect unidentifiable elements for positional diff
     for elem in elements:  # WHY: single-pass classification keeps CC low
         eid = element_identity(elem)  # WHY: try each identity candidate in priority order
-        if eid and eid not in id_map:  # WHY: first occurrence wins; duplicates fall through to anon
+        if eid and eid not in id_map:  # WHY: first occurrence wins. Duplicates fall through to anon
             id_map[eid] = elem  # WHY: record identity-keyed element for O(1) later lookup
         else:
             anon.append(elem)  # WHY: unidentifiable/duplicate falls to positional diff bucket
     return id_map, anon  # WHY: caller uses tuple to drive identified + anon diff passes
 
 
-def diff_identified(  # WHY: exported for tests; runs identity-matched pair diff loop
+def diff_identified(  # WHY: exported for tests. Runs identity-matched pair diff loop
     before_map: dict[str, dict[str, Any]],
     after_map: dict[str, dict[str, Any]],
     delta_b: list[dict[str, Any]],
@@ -208,7 +208,7 @@ def _apply_identity_pair(  # WHY: single-pair delta dispatcher keeps diff_identi
         return  # WHY: skip unchanged pairs to keep delta minimal
     if item_b is not None and item_a is not None:  # WHY: both present -> recurse to find sub-delta
         _append_pair_delta(item_b, item_a, delta_b, delta_a)  # WHY: matched pair delegated to nested walker
-        return  # WHY: pair path consumed; skip single-side branch
+        return  # WHY: pair path consumed. Skip single-side branch
     _apply_single_side(item_b, item_a, delta_b, delta_a)  # WHY: exactly one side present branch
 
 

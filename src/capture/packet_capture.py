@@ -417,7 +417,7 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
         max_pkt_len = self._prompt_max_packet_length(default=1300)  # WHY: wireless default MTU-friendly length
         if max_pkt_len is None:  # WHY: user cancelled max-length prompt
             return None  # WHY: bail out cleanly
-        return {  # WHY: bundle required params only; extras added by caller
+        return {  # WHY: bundle required params only. Extras added by caller
             "client_mac": client_mac,
             "ap_mac": ap_mac,
             "duration": duration,
@@ -448,7 +448,7 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
         logging.info("Starting site wireless client capture")  # WHY: entry-point audit log
         site_id = _get_prompt_utils().select_site_with_logging()  # WHY: interactive site chooser
         if not site_id:  # WHY: user cancelled site selection
-            return  # WHY: helper logged reason; bail silently
+            return  # WHY: helper logged reason. Bail silently
         self._print_wireless_client_banner()  # WHY: helper owns banner + educate-user prints
         params = self._wireless_client_gather_params(site_id)  # WHY: consolidate all prompts
         if params is None:  # WHY: user cancelled somewhere in the prompts
@@ -555,7 +555,7 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
         validated = self._validate_port_selection(port_selection_result)  # WHY: reuse shared validation
         if validated is None:  # WHY: validation logs its own reason
             return None  # WHY: propagate cancel
-        port_list, _available_ports = validated  # WHY: unpack ports; ignore available list here
+        port_list, _available_ports = validated  # WHY: unpack ports. Ignore available list here
         return gateway_mac, port_list  # WHY: hand consolidated selection back to orchestrator
 
     def _gateway_build_payload(self, gateway_mac: str, port_list: list[str], params: dict[str, Any]) -> dict[str, Any]:
@@ -621,7 +621,7 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
         validated = self._validate_port_selection(port_selection_result)  # WHY: reuse shared validation helper
         if validated is None:  # WHY: validation logs its own reason
             return None  # WHY: propagate cancel to caller
-        port_list, _available_ports = validated  # WHY: unpack ports; ignore available list here
+        port_list, _available_ports = validated  # WHY: unpack ports. Ignore available list here
         return switch_mac, port_list  # WHY: hand consolidated selection back to orchestrator
 
     def _switch_pick_and_normalize(self, site_id: str) -> str | None:
@@ -682,7 +682,7 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
         logging.info("Starting site switch capture")  # WHY: entry-point audit log
         site_id = _get_prompt_utils().select_site_with_logging()  # WHY: interactive site chooser
         if not site_id:  # WHY: user cancelled site selection
-            return  # WHY: bail out silently; helper logs its own reason
+            return  # WHY: bail out silently. Helper logs its own reason
         self._print_switch_banner()  # WHY: banner rendering owned by helper
         selection = self._switch_select_device_and_ports(site_id)  # WHY: gather switch + ports interactively
         if selection is None:  # WHY: helper logged the cancel reason
@@ -741,7 +741,7 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
 
     def _new_assoc_gather_params(self) -> dict[str, Any] | None:
         """Prompt user for new-association capture parameters."""
-        ssid = _get_input_utils().safe_input(  # WHY: SSID is optional; user may press Enter
+        ssid = _get_input_utils().safe_input(  # WHY: SSID is optional. User may press Enter
             "\nEnter SSID to monitor (optional, press Enter for all): ",
             context="ssid",
             allow_empty=True,
@@ -792,7 +792,7 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
         """Gather scan radio capture parameters interactively.
 
         Args:
-            band: Radio band string (e.g. '24', '5', '6').
+            band: Radio band string (for example '24', '5', '6').
 
         Returns:
             Dict with channel, bandwidth, duration, num_packets, format
@@ -808,7 +808,7 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
         return {**radio, **counts, "format": capture_format}  # WHY: merge sub-dicts + format into full result
 
     def _gather_scan_radio_core(self, band: str) -> dict[str, Any] | None:
-        """Prompt for channel and bandwidth; return None if cancelled."""
+        """Prompt for channel and bandwidth. Return None if cancelled."""
         channel = self._prompt_scan_channel(band)  # WHY: channel choices depend on band
         if channel is None:  # WHY: user cancelled channel prompt
             return None  # WHY: propagate cancel
@@ -818,7 +818,7 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
         return {"channel": channel, "bandwidth": bandwidth}  # WHY: sub-dict merged upstream
 
     def _gather_scan_counts(self) -> dict[str, Any] | None:
-        """Prompt for duration and packet count; return None if cancelled."""
+        """Prompt for duration and packet count. Return None if cancelled."""
         duration = self._prompt_capture_duration()  # WHY: enforce API minimums via helper
         if duration is None:  # WHY: user cancelled duration prompt
             return None  # WHY: propagate cancel
@@ -876,7 +876,7 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
         """Gather remaining params and launch a single-AP scan capture."""
         band = self._prompt_scan_band()  # WHY: user picks 2.4/5/6 GHz
         logging.debug("Band selected: %s", band)  # WHY: audit chosen band
-        scan_params = self._gather_scan_radio_params(band)  # WHY: channel/bandwidth/duration/etc.
+        scan_params = self._gather_scan_radio_params(band)  # WHY: channel/bandwidth/duration, and so on.
         if scan_params is None:  # WHY: user cancelled a scan-param prompt
             return  # WHY: propagate cancel
         enable_loop = self._prompt_loop_mode()  # WHY: continuous mode toggle

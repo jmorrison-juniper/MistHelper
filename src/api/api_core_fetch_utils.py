@@ -38,7 +38,7 @@ class APICoreFetchUtils:  # Low-level Mist API fetch helpers.
         Returns:
             List of site dictionaries
 
-        SECURITY: Read-only; no sensitive data logged.
+        SECURITY: Read-only. No sensitive data logged.
         """
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of apisession + DEFAULT_API_PAGE_LIMIT.
         response = mistapi.api.v1.orgs.sites.listOrgSites(mh.apisession, org_id, limit=mh.DEFAULT_API_PAGE_LIMIT)
@@ -54,7 +54,7 @@ class APICoreFetchUtils:  # Low-level Mist API fetch helpers.
         Returns:
             List of inventory dictionaries (includes all VC physical members)
 
-        SECURITY: Read-only; no secrets in inventory object fields.
+        SECURITY: Read-only. No secrets in inventory object fields.
         """
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of apisession + DEFAULT_API_PAGE_LIMIT.
         response = mistapi.api.v1.orgs.inventory.getOrgInventory(
@@ -66,4 +66,4 @@ class APICoreFetchUtils:  # Low-level Mist API fetch helpers.
     def get_api_response_data(response: Any) -> Any:
         """Return a mistapi response's .data payload, or the response itself when .data is absent."""
         logging.debug("Unwrapping API response payload (type=%s)", type(response).__name__)  # Trace unwrap calls
-        return getattr(response, "data", response)  # mistapi carries parsed JSON on .data; fall back to the raw object
+        return getattr(response, "data", response)  # mistapi carries parsed JSON on .data. Fall back to the raw object

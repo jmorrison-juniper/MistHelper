@@ -70,7 +70,7 @@ class GatewayTemplateConfigManager:  # pylint: disable=too-many-instance-attribu
         if not templates:  # WHY: nothing to extract when no templates or fetch failed
             return  # WHY: _fetch_templates already surfaced the reason
         selected = self._select_template(templates, "extract")  # WHY: user picks source template
-        if not selected:  # WHY: selection cancelled/invalid; nothing further to do
+        if not selected:  # WHY: selection cancelled/invalid. Nothing further to do
             return  # WHY: _select_template printed the cancel reason
         template_config = self._fetch_template_config(selected)  # WHY: need full body to mine configs
         if not template_config:  # WHY: fetch error or unexpected shape
@@ -762,7 +762,7 @@ def _validate_template_index(user_input: str, size: int) -> int | None:
     if not user_input.isdigit():  # WHY: reject non-numeric input up front
         print("  Invalid input. Please enter a numeric index.")  # WHY: user-facing
         return None  # WHY: caller treats None as invalid
-    index = int(user_input)  # WHY: safe now that we know it's digits
+    index = int(user_input)  # WHY: safe now that we know it is digits
     if index < 0 or index >= size:  # WHY: bounds check
         print(f"  Invalid index. Please select between 0 " f"and {size - 1}.")  # WHY: user-facing
         return None  # WHY: caller treats None as out-of-range
@@ -994,7 +994,7 @@ def _assignment_skip_reason(target_id: str, assignment: dict[str, str]) -> str |
     """Return a skip reason string or None if the assignment should proceed."""
     if not target_id:  # WHY: template not created / not found
         return "Target template not found"  # WHY: audit-friendly reason
-    if assignment["current_template_id"] == target_id:  # WHY: idempotency; already correct
+    if assignment["current_template_id"] == target_id:  # WHY: idempotency. Already correct
         return "Already assigned"  # WHY: audit-friendly reason
     return None  # WHY: caller performs the API PUT
 
@@ -1060,7 +1060,7 @@ def _scan_service_policies(service_policies: Any, template_name: str) -> dict[st
     """Return the first Picocell entry from service_policies, or None."""
     if not isinstance(service_policies, list):  # WHY: guard against malformed configs
         return None  # WHY: nothing to scan
-    for policy in service_policies:  # WHY: linear scan; count is small
+    for policy in service_policies:  # WHY: linear scan. Count is small
         if isinstance(policy, dict) and policy.get("name") == "Picocell":  # WHY: name match anchors identity
             print("  -> Found 'Picocell' in Application Policies")  # WHY: positive result
             logging.info("GatewayTemplateConfigManager: Found Picocell in %s", template_name)  # WHY: audit
@@ -1128,7 +1128,7 @@ def _find_existing_picocell_index(
     policies: list[dict[str, Any]],
 ) -> int | None:
     """Find the index of existing Picocell policy in service_policies."""
-    for idx, policy in enumerate(policies):  # WHY: linear scan; count is small
+    for idx, policy in enumerate(policies):  # WHY: linear scan. Count is small
         if isinstance(policy, dict) and policy.get("name") == "Picocell":  # WHY: name match anchors identity
             return idx  # WHY: caller uses index to overwrite
     return None  # WHY: caller inserts instead
@@ -1145,7 +1145,7 @@ def _insert_picocell_policy(
         policies.insert(_PICOCELL_INSERT_ANCHOR, picocell)  # WHY: land at position 14 (0-indexed 13)
         result["changes_made"].append("Inserted Picocell at position 14")  # WHY: audit change
         return  # WHY: skip the append path
-    policies.append(picocell)  # WHY: too few policies; append at end
+    policies.append(picocell)  # WHY: too few policies. Append at end
     result["changes_made"].append(f"Added Picocell at position {policy_count + 1}")  # WHY: audit change
 
 
@@ -1164,7 +1164,7 @@ def parse_state_from_address(address: str, country: str) -> str:
     """
     if not address or not country:  # WHY: both inputs required for meaningful parse
         return ""  # WHY: caller treats "" as unknown
-    if country in _SMALL_ISLAND_COUNTRIES:  # WHY: these formats don't carry usable states
+    if country in _SMALL_ISLAND_COUNTRIES:  # WHY: these formats do not carry usable states
         return ""  # WHY: skip these countries entirely
     if "," in address:  # WHY: comma format has structured parts
         return _parse_state_comma_separated(address)  # WHY: dedicated parser
@@ -1220,7 +1220,7 @@ def _is_ca_province_at(parts: list[str], i: int, part: str) -> bool:
     if len(part) != 2 or not part.isupper():  # WHY: province tokens are 2 uppercase letters
         return False  # WHY: not a province candidate
     if i + 1 >= len(parts):  # WHY: need a following token for the postal test
-        return False  # WHY: no follower means we can't confirm
+        return False  # WHY: no follower means we cannot confirm
     return bool(re.match(r"^[A-Z]\d[A-Z]$", parts[i + 1]))  # WHY: postal-prefix pattern
 
 
@@ -1232,9 +1232,9 @@ def _parse_general_state(address: str, parts: list[str], country: str) -> str:
     postal_index = _find_postal_index(parts)  # WHY: postal token anchors state position
     if postal_index > 1:  # WHY: state usually sits directly before postal
         return parts[postal_index - 1]  # WHY: token immediately before postal
-    if postal_index == -1:  # WHY: no postal found; fall back to country-based heuristic
+    if postal_index == -1:  # WHY: no postal found. Fall back to country-based heuristic
         return _infer_state_without_postal(parts, country)  # WHY: dedicated inference
-    return ""  # WHY: postal is at index 0 or 1; nothing reliable to return
+    return ""  # WHY: postal is at index 0 or 1. Nothing reliable to return
 
 
 def _match_special_regions(address: str) -> str:
@@ -1249,7 +1249,7 @@ def _match_special_regions(address: str) -> str:
 
 def _find_postal_index(parts: list[str]) -> int:
     """Find the index of the first part starting with a digit."""
-    for i, part in enumerate(parts):  # WHY: linear scan; count is small
+    for i, part in enumerate(parts):  # WHY: linear scan. Count is small
         if re.match(r"^\d", part):  # WHY: leading digit denotes postal-like token
             return i  # WHY: caller consumes index
     return -1  # WHY: sentinel means no postal found
@@ -1257,7 +1257,7 @@ def _find_postal_index(parts: list[str]) -> int:
 
 def _infer_state_without_postal(parts: list[str], country: str) -> str:
     """Infer state when no postal code is present."""
-    if country not in _LATAM_COUNTRIES and len(parts) == 2:  # WHY: non-LATAM short address can't be inferred
+    if country not in _LATAM_COUNTRIES and len(parts) == 2:  # WHY: non-LATAM short address cannot be inferred
         return ""  # WHY: not enough info
     if country in _LATAM_COUNTRIES or len(parts) > 2:  # WHY: LATAM or longer addresses trust last token
         return parts[-1]  # WHY: convention places state at the end

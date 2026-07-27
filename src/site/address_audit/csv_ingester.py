@@ -6,7 +6,7 @@ six positional columns are: serial, model, address, city, state, zip.
 Real customer exports vary: a file saved as ``.csv`` from Excel is comma-
 delimited, while a ``.tsv`` (or a tab-pasted file) is tab-delimited. The
 delimiter is therefore **auto-detected** per file rather than assumed. Addresses
-themselves may contain the delimiter (e.g. a comma in "Mall, Suite 330"), so the
+themselves may contain the delimiter (for example a comma in "Mall, Suite 330"), so the
 row is parsed by its fixed structure -- the first two fields are serial/model,
 the last three are city/state/zip, and everything in between is rejoined as the
 address. Rows whose serial is empty or non-numeric after stripping are skipped
@@ -38,7 +38,7 @@ class CSVAddressIngester:
         with open(path, encoding="utf-8-sig", newline="") as handle:  # utf-8-sig strips an Excel BOM.
             sample = self._read_sample_line(handle)  # First non-blank line, for delimiter detection.
             handle.seek(0)  # Rewind so the csv.reader sees the whole file (quoted newlines intact).
-            delimiter = self._detect_delimiter(sample)  # Pick tab/comma/etc. from the data itself.
+            delimiter = self._detect_delimiter(sample)  # Pick tab/comma/and so on from the data itself.
             logging.debug("Detected delimiter %r for %s", delimiter, path)  # Trace the chosen delimiter.
             reader = csv.reader(handle, delimiter=delimiter)  # Reader honors quoted multi-line fields.
             rows, failures = self._parse_reader(reader)  # Parse every record.
@@ -75,13 +75,13 @@ class CSVAddressIngester:
 
     def _choose_delimiter(self, sample: str) -> str:
         """Probe each candidate delimiter and return the one giving the most fields."""
-        # WHY: split from _detect_delimiter so the empty-sample guard doesn't inflate CC past 5.
+        # WHY: split from _detect_delimiter so the empty-sample guard does not inflate CC past 5.
         best_delimiter = ","  # Fallback when nothing yields enough columns.
         best_count = -1  # Highest field count seen so far.
         for candidate in _CANDIDATE_DELIMITERS:  # Probe each candidate delimiter.
             count = len(sample.split(candidate))  # Field count this delimiter would produce.
             if count >= _MIN_COLUMNS and candidate == "\t":  # A tab that yields >=6 wins outright.
-                return candidate  # Tab is the documented format; prefer it when it fits.
+                return candidate  # Tab is the documented format. Prefer it when it fits.
             if count > best_count:  # Otherwise track the delimiter giving the most fields.
                 best_count = count  # Remember the new best field count.
                 best_delimiter = candidate  # Remember the delimiter that produced it.

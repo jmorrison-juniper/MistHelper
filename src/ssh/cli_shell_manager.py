@@ -119,7 +119,7 @@ class CLIShellManager:
         if debug:  # Verbose troubleshooting output is enabled.
             logging.debug("[DEBUG] Raw recv: %r", data)  # WHY: trace raw received payload (was print()).
         if data and isinstance(data, str):  # We have a non-empty text frame to render.
-            # WHY: cast narrows Any->str for mypy strict (no-any-return); runtime check above ensures str.
+            # WHY: cast narrows Any->str for mypy strict (no-any-return). Runtime check above ensures str.
             return str(data)  # Renderable text.
         return None  # Nothing to render for this frame.
 
@@ -142,13 +142,13 @@ class CLIShellManager:
         """Handle the '~' exit key by closing the WebSocket socket."""
         logging.warning("\n## Exit from shell ##")  # WHY: user-visible exit banner (was print()).
         if ws.sock is not None:  # Socket present.
-            ws.sock.shutdown(2)  # Shut down the socket.
+            ws.sock.shutdown(2)  # Stop the socket.
             ws.sock.close()  # Close the socket.
 
     @staticmethod
     def _shell_send_key(ws: Any, debug: bool, key: str) -> None:
         """Map and send one keystroke to the remote PTY; '~' closes the session."""
-        if not ws.connected:  # Socket already closed; nothing to send.
+        if not ws.connected:  # Socket already closed. Nothing to send.
             return  # Drop the keystroke.
         if key == "~":  # Exit key.
             CLIShellManager._shell_handle_exit_key(ws)  # Close the socket (issue #431: no obsolete stop_listening).
@@ -189,7 +189,7 @@ class CLIShellManager:
         CLIShellManager._shell_resize_terminal(ws, debug)  # Send initial terminal dimensions to the remote PTY.
         CLIShellManager._shell_start_receiver(ws, stream, screen, debug)  # Start the background receiver thread.
         time.sleep(1)  # Wait for connect before waking the prompt.
-        ws.send_binary(bytes(map(ord, "\00\n\n")))  # Send a wakeup; bytes (not bytearray) matches send_binary.
+        ws.send_binary(bytes(map(ord, "\00\n\n")))  # Send a wakeup. Bytes (not bytearray) matches send_binary.
         if debug:  # Debug mode.
             logging.debug("[DEBUG] Sent wakeup sequence to Juniper SSRs")  # WHY: trace wakeup handshake (was print()).
         mh.KeyboardListener().listen(  # Block on keyboard input, forwarding each key to the PTY.

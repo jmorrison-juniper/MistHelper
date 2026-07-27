@@ -58,7 +58,7 @@ class _UtilityCommandsClear(_ClusterBase):  # WHY: cluster wrapper mirroring ear
 
     def _build_arp_body(self, site_id: str, device_id: str) -> dict[str, Any]:  # WHY: collect optional ARP filters
         """Gather ARP-clear filter inputs (node, port, ip) from the operator."""
-        body: dict[str, Any] = {}  # WHY: seed empty; add only supplied filters
+        body: dict[str, Any] = {}  # WHY: seed empty. Add only supplied filters
         self._add_node_port_filters(body, site_id, device_id, "clear_arp_node")  # WHY: shared helper (dedupes vs show)
         ip_addr = self._safe_input_fn(
             "IP address to clear (Enter for all): ",
@@ -84,7 +84,7 @@ class _UtilityCommandsClear(_ClusterBase):  # WHY: cluster wrapper mirroring ear
             )  # WHY: emit success/error line
         except Exception as error:  # WHY: log-and-continue on SDK/transport failure
             logger.exception("Clear ARP cache failed: %s", error)  # WHY: audit failure with stack
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.error("! Clear ARP cache failed: %s", error)
 
     # ------------------------------------------------------------------
@@ -118,7 +118,7 @@ class _UtilityCommandsClear(_ClusterBase):  # WHY: cluster wrapper mirroring ear
             allow_empty=False,
         )  # WHY: neighbor is mandatory
         if not neighbor:  # WHY: guard against empty submission
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("! Neighbor IP is required.")
             return None  # WHY: propagate missing-required signal to caller
         body: dict[str, Any] = {"neighbor": neighbor}  # WHY: seed with required field
@@ -171,7 +171,7 @@ class _UtilityCommandsClear(_ClusterBase):  # WHY: cluster wrapper mirroring ear
             )  # WHY: emit success/error line
         except Exception as error:  # WHY: log-and-continue on SDK/transport failure
             logger.exception("Clear BGP routes failed: %s", error)  # WHY: audit failure with stack
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.error("! Clear BGP routes failed: %s", error)
 
     # ------------------------------------------------------------------
@@ -222,7 +222,7 @@ class _UtilityCommandsClear(_ClusterBase):  # WHY: cluster wrapper mirroring ear
 
     def _build_clear_session_body(self) -> dict[str, Any] | None:  # WHY: gather + validate session filters
         """Gather clear-session parameters from user input, or return None on cancel."""
-        body: dict[str, Any] = {}  # WHY: seed empty; add only supplied filters
+        body: dict[str, Any] = {}  # WHY: seed empty. Add only supplied filters
         service_name = self._safe_input_fn(
             "Service name to clear (Enter to skip): ",
             context="clear_session_service_name",
@@ -267,7 +267,7 @@ class _UtilityCommandsClear(_ClusterBase):  # WHY: cluster wrapper mirroring ear
             context="clear_session_confirm_all",
         )  # WHY: extra guard against unintended full clears
         if confirm_all != "CLEAR ALL":  # WHY: exact keyword required
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("Cancelled: No service name or session IDs provided.")
             return False  # WHY: operator declined CLEAR-ALL
         return True  # WHY: operator explicitly opted into CLEAR-ALL
@@ -283,7 +283,7 @@ class _UtilityCommandsClear(_ClusterBase):  # WHY: cluster wrapper mirroring ear
         if not selection:  # WHY: cancelled -> abort
             return  # WHY: no work when operator cancels selection
         site_id, device_id, _ = selection  # WHY: unpack (site, device, name)
-        body: dict[str, Any] = {}  # WHY: seed empty; only add optional node
+        body: dict[str, Any] = {}  # WHY: seed empty. Only add optional node
         self._maybe_add_input(  # WHY: attach optional VC-node target to MAC-clear body
             body,
             "node",
@@ -314,7 +314,7 @@ class _UtilityCommandsClear(_ClusterBase):  # WHY: cluster wrapper mirroring ear
             )  # WHY: emit success/error line
         except Exception as error:  # WHY: log-and-continue on SDK/transport failure
             logger.exception("Clear MAC table failed: %s", error)  # WHY: audit failure with stack
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.error("! Clear MAC table failed: %s", error)
 
     def clear_bpdu_error(self) -> None:  # WHY: menu 151 destructive BPDU-error clear entry
@@ -350,7 +350,7 @@ class _UtilityCommandsClear(_ClusterBase):  # WHY: cluster wrapper mirroring ear
             )  # WHY: emit success/error line
         except Exception as error:  # WHY: log-and-continue on SDK/transport failure
             logger.exception("Clear BPDU errors failed: %s", error)  # WHY: audit failure with stack
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.error("! Clear BPDU errors failed: %s", error)
 
     def clear_learned_macs(self) -> None:
@@ -375,7 +375,7 @@ class _UtilityCommandsClear(_ClusterBase):  # WHY: cluster wrapper mirroring ear
         """Pick a required port and normalize ``xe-0/0/0`` -> ``xe-0/0/0.0``."""
         port_id = self._select_port_from_device(site_id, device_id)  # WHY: required port picker
         if not port_id:  # WHY: cancelled or empty selection
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("! Port selection is required for clearing learned MACs.")
             return None
         return port_id if "." in port_id else f"{port_id}.0"  # WHY: SDK requires .unit suffix
@@ -397,7 +397,7 @@ class _UtilityCommandsClear(_ClusterBase):  # WHY: cluster wrapper mirroring ear
             )  # WHY: emit success/error line
         except Exception as error:  # WHY: log-and-continue on SDK/transport failure
             logger.exception("Clear learned MACs failed: %s", error)  # WHY: audit failure with stack
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.error("! Clear learned MACs failed: %s", error)
 
     # ------------------------------------------------------------------
@@ -413,7 +413,7 @@ class _UtilityCommandsClear(_ClusterBase):  # WHY: cluster wrapper mirroring ear
         if not selection:  # WHY: cancelled -> abort
             return
         site_id, device_id, _ = selection  # WHY: unpack (site, device, name)
-        body: dict[str, Any] = {}  # WHY: seed empty; only add optional node
+        body: dict[str, Any] = {}  # WHY: seed empty. Only add optional node
         self._maybe_add_input(body, "node", "Node (node0/node1, Enter to skip): ", "clear_policy_node")
         if not self._confirm_destructive(
             "Type 'CLEAR' to clear policy hit count: ",
@@ -439,7 +439,7 @@ class _UtilityCommandsClear(_ClusterBase):  # WHY: cluster wrapper mirroring ear
             )  # WHY: emit success/error line
         except Exception as error:  # WHY: log-and-continue on SDK/transport failure
             logger.exception("Clear policy hit count failed: %s", error)  # WHY: audit failure with stack
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.error("! Clear policy hit count failed: %s", error)
 
     # ------------------------------------------------------------------
@@ -469,7 +469,7 @@ class _UtilityCommandsClear(_ClusterBase):  # WHY: cluster wrapper mirroring ear
         """Build DHCP-release body from a required port pick + optional node."""
         port_id = self._select_port_from_device(site_id, device_id)  # WHY: required port picker
         if not port_id:  # WHY: cancelled or empty selection
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("! Port selection is required.")
             return None
         body: dict[str, Any] = {"port_id": port_id}  # WHY: required field first
@@ -483,7 +483,7 @@ class _UtilityCommandsClear(_ClusterBase):  # WHY: cluster wrapper mirroring ear
             context=context,
         )  # WHY: destructive-op confirmation
         if confirm.lower() != "y":  # WHY: anything other than 'y' aborts
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("! Operation cancelled.")
             return False
         return True
@@ -504,7 +504,7 @@ class _UtilityCommandsClear(_ClusterBase):  # WHY: cluster wrapper mirroring ear
             )  # WHY: emit success/error line
         except Exception as error:  # WHY: log-and-continue on SDK/transport failure
             logger.exception("Release DHCP lease failed: %s", error)  # WHY: audit failure with stack
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.error("! Release DHCP lease failed: %s", error)
 
     def release_dhcp_ssr(self) -> None:
@@ -529,7 +529,7 @@ class _UtilityCommandsClear(_ClusterBase):  # WHY: cluster wrapper mirroring ear
         """Build SSR DHCP-release body from a required interface pick + optional node."""
         port_id = self._select_interface_from_device(site_id, device_id)  # WHY: SSR uses named ifaces
         if not port_id:  # WHY: cancelled or empty selection
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("! Network interface is required.")
             return None
         body: dict[str, Any] = {"port_id": port_id}  # WHY: required field first
@@ -543,7 +543,7 @@ class _UtilityCommandsClear(_ClusterBase):  # WHY: cluster wrapper mirroring ear
             context="release_dhcp_ssr",
         )  # WHY: destructive-op confirmation
         if confirm.lower() != "y":  # WHY: anything other than 'y' aborts
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("! Operation cancelled.")
             return False
         return True
@@ -564,7 +564,7 @@ class _UtilityCommandsClear(_ClusterBase):  # WHY: cluster wrapper mirroring ear
             )  # WHY: emit success/error line
         except Exception as error:  # WHY: log-and-continue on SDK/transport failure
             logger.exception("Release SSR DHCP lease failed: %s", error)  # WHY: audit failure with stack
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.error("! Release SSR DHCP lease failed: %s", error)
 
 

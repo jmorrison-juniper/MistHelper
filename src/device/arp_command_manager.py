@@ -68,11 +68,11 @@ class ARPCommandManager:  # ARP WebSocket command manager.
         if not mist_host or not mist_apitoken:  # Missing creds — abort
             logger.warning(
                 " Mist host or API token not found in session or environment."
-            )  # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            )  # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             return
         logger.info(
             " Subscribing to WebSocket stream..."
-        )  # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        )  # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         session_id = ARPCommandManager._trigger_command(mist_host, mist_apitoken, site_id, device_id)  # type: ignore[no-untyped-call]
         if not session_id:  # Trigger failed — nothing to listen for
             return
@@ -93,15 +93,15 @@ class ARPCommandManager:  # ARP WebSocket command manager.
             session_id = response.json().get("session")  # Read the session id.
             logger.info(
                 "! ARP command triggered. Session ID: %s", session_id
-            )  # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            )  # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             return session_id  # Return the session.
         else:
             logger.error(
                 "! Failed to trigger ARP command: %s", response.status_code
-            )  # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            )  # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.error(
                 "%s", response.text
-            )  # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            )  # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             return None  # Return None.
 
     @staticmethod
@@ -125,17 +125,17 @@ class ARPCommandManager:  # ARP WebSocket command manager.
         """Return on_message/on_close/on_error/on_open callbacks closed over a mutable state dict."""
 
         def on_message(ws, message):  # WebSocket message handler.
-            del ws  # The websocket client passes itself; unused here but required by the callback signature.
+            del ws  # The websocket client passes itself. Unused here but required by the callback signature.
             state["last_message_time"], state["buffer"] = ARPCommandManager._handle_message(  # type: ignore[no-untyped-call]
                 message, target.session_id, state["buffer"], output_lines, debug
             )
 
         def on_close(ws, *args):  # WebSocket close handler.
-            del ws, args  # Signature required by websocket-client; parameters unused here.
+            del ws, args  # Signature required by websocket-client. Parameters unused here.
             ARPCommandManager._handle_close(output_lines, debug)  # type: ignore[no-untyped-call]
 
         def on_error(ws, error):  # WebSocket error handler.
-            del ws  # Signature required by websocket-client; ws unused here.
+            del ws  # Signature required by websocket-client. Ws unused here.
             logging.error("! WebSocket error: %s", error)  # Log the error.
 
         def on_open(ws):  # WebSocket open handler.
@@ -183,7 +183,7 @@ class ARPCommandManager:  # ARP WebSocket command manager.
     @staticmethod
     @staticmethod
     def _parse_ws_arp_payload(message: str):
-        """Parse a WebSocket frame into the inner ARP data dict (returns None when frame can't be unwrapped)."""
+        """Parse a WebSocket frame into the inner ARP data dict (returns None when frame cannot be unwrapped)."""
         msg = json.loads(message)  # Outer envelope
         data_str = msg.get("data", "{}")  # Outer data string
         data_obj = json.loads(data_str) if isinstance(data_str, str) else data_str  # Inner JSON or already-parsed
@@ -194,7 +194,7 @@ class ARPCommandManager:  # ARP WebSocket command manager.
 
     @staticmethod
     def _safe_parse_ws_arp_payload(message):  # type: ignore[no-untyped-def]
-        """Parse the nested ARP payload and log+swallow JSON/key errors; return inner dict or ``None`` on failure."""
+        """Parse the nested ARP payload and log+swallow JSON/key errors. Return inner dict or ``None`` on failure."""
         try:
             return ARPCommandManager._parse_ws_arp_payload(message)  # Nested JSON unwrap
         except json.JSONDecodeError as exception:  # Malformed JSON anywhere in the chain
@@ -231,7 +231,7 @@ class ARPCommandManager:  # ARP WebSocket command manager.
         if not output_lines:  # No output captured during this session.
             logger.warning(
                 " No ARP output received for this session."
-            )  # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            )  # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logging.warning(" No ARP output received for this session.")  # Warn none.
             return  # Nothing further to process.
         compiled_output = "\n".join(output_lines)  # Join the captured lines into one block.
@@ -239,7 +239,7 @@ class ARPCommandManager:  # ARP WebSocket command manager.
         ARPCommandManager._export_to_csv("arp_output_raw.txt")  # type: ignore[no-untyped-call]
         logger.info(
             "\n  ARP Output Received:\n"
-        )  # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        )  # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         ARPCommandManager._render_arp_table(compiled_output, debug)  # type: ignore[no-untyped-call]
 
     @staticmethod
@@ -279,12 +279,12 @@ class ARPCommandManager:  # ARP WebSocket command manager.
         if debug:  # Debug mode shows the full table.
             logger.info(
                 "%s", table
-            )  # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            )  # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logging.debug("\n%s", table.get_string())  # Log the table contents.
         else:  # Non-debug mode reports only the row count.
             logger.info(
                 "! ARP output received with %d rows.", row_count
-            )  # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            )  # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
 
     @staticmethod
     def _save_output(compiled_output, filename="arp_output_raw.txt"):  # Save raw output.
@@ -313,7 +313,7 @@ class ARPCommandManager:  # ARP WebSocket command manager.
         for line in lines:  # Walk lines.
             if "Total" in line:  # Total marker.
                 current_dataset = dataset2  # Switch datasets.
-                continue  # Marker isn't a row.
+                continue  # Marker is not a row.
             columns = ARPCommandManager._extract_arp_columns(line)  # Delegate tab-split + strip
             if columns:  # Have columns.
                 current_dataset.append(columns)  # Collect the row.
@@ -327,7 +327,7 @@ class ARPCommandManager:  # ARP WebSocket command manager.
             writer.writerows(rows)  # Write the rows.
         logger.info(
             "! Saved %d rows to %s", len(rows), path
-        )  # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        )  # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
 
     @staticmethod
     def _export_to_csv(txt_filename="arp_output_raw.txt", csv1="arp_dataset1.csv", csv2="arp_dataset2.csv"):
@@ -345,4 +345,4 @@ class ARPCommandManager:  # ARP WebSocket command manager.
         except Exception as e:  # Export failed.
             logger.error(
                 "! Failed to export ARP output to CSV: %s", e
-            )  # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            )  # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.

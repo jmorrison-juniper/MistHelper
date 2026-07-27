@@ -43,11 +43,11 @@ class SiteAutoUpgradeConfig:
     """
 
     org_id: str  # WHY: Mist organization UUID used for every API call.
-    apisession: Any  # WHY: authenticated mistapi session (may be None; helpers degrade).
+    apisession: Any  # WHY: authenticated mistapi session (may be None. Helpers degrade).
     safe_input_fn: SafeInputFn  # WHY: EOF-safe interactive input helper.
     fetch_sites_fn: FetchSitesFn  # WHY: returns the org's sites.
     check_stop_fn: CheckStopFn  # WHY: cooperative stop-signal predicate.
-    dry_run: bool = False  # WHY: when True, suppress API mutations; print-only mode.
+    dry_run: bool = False  # WHY: when True, suppress API mutations. Print-only mode.
 
     def __post_init__(self) -> None:
         """Permissive validation - only reject clearly-wrong types."""
@@ -137,7 +137,7 @@ class SiteAutoUpgradeConfigurator:
         self.safe_input_fn = cfg.safe_input_fn  # WHY: prompt helper with EOF safety.
         self.fetch_sites_fn = cfg.fetch_sites_fn  # WHY: callable returning all sites for an org.
         self.check_stop_fn = cfg.check_stop_fn  # WHY: predicate that signals operator stop.
-        self.dry_run = cfg.dry_run  # WHY: True suppresses API mutations; print-only.
+        self.dry_run = cfg.dry_run  # WHY: True suppresses API mutations. Print-only.
 
     def _reset_workflow_state(self) -> None:
         """Seed the 11 workflow-scoped attributes to empty defaults."""
@@ -161,7 +161,7 @@ class SiteAutoUpgradeConfigurator:
     def execute(**cfg: Any) -> None:
         """Entry point for menu system - checks MSP privileges."""
         logging.info("Starting Site Auto-Upgrade Configuration workflow")  # WHY: action-log workflow start.
-        if cfg.get("dry_run"):  # WHY: advertise dry-run so operator isn't surprised.
+        if cfg.get("dry_run"):  # WHY: advertise dry-run so operator is not surprised.
             logging.info("DRY-RUN MODE enabled - no API calls will be made")  # WHY: dry-run advert log.
         core_deps = SiteAutoUpgradeCoreDeps(  # WHY: bundle 5 always-needed DI params.
             apisession=cfg["apisession"],
@@ -265,7 +265,7 @@ class SiteAutoUpgradeConfigurator:
 
     def _build_auto_upgrade_settings(self) -> dict[str, Any]:
         """Assemble the auto_upgrade payload for the site settings API."""
-        return {  # WHY: return a fresh dict; Mist API expects these keys verbatim.
+        return {  # WHY: return a fresh dict. Mist API expects these keys verbatim.
             "enabled": True,  # WHY: enable auto-upgrade at the site.
             "version": "custom",  # WHY: 'custom' selects per-model version overrides.
             "day_of_week": self.schedule.get("day_of_week", "any"),  # WHY: default 'any' means daily.
@@ -379,14 +379,14 @@ class SiteAutoUpgradeConfigurator:
             return None  # WHY: abort selection.
 
     def _prompt_single_site_index(self) -> int | None:
-        """Prompt operator for a single-site index; return 0-based idx or None."""
+        """Prompt operator for a single-site index. Return 0-based idx or None."""
         selection = self._read_single_site_input()  # WHY: fetch raw input via EOF-safe helper.
         if selection is None or selection == "q":  # WHY: EOF or explicit quit.
             return None  # WHY: abort selection silently.
         if not selection.isdigit():  # WHY: non-digits are invalid.
             print("  Invalid input")  # WHY: tell operator.
             return None  # WHY: abort selection.
-        idx = int(selection) - 1  # WHY: display is 1-based; convert to 0-based index.
+        idx = int(selection) - 1  # WHY: display is 1-based. Convert to 0-based index.
         if not 0 <= idx < len(self.all_sites):  # WHY: guard against out-of-range indices.
             print("  Invalid selection")  # WHY: tell operator.
             return None  # WHY: abort selection.
@@ -428,7 +428,7 @@ class SiteAutoUpgradeConfigurator:
             return self._extract_auto_upgrade_from_response(response)  # WHY: extract block via helper.
         except Exception as exc:  # WHY: settings read may raise mistapi errors - non-fatal.
             logging.debug("Could not fetch current site settings: %s", exc)  # WHY: trace and continue.
-            return {}  # WHY: pre-fill best-effort; empty on failure.
+            return {}  # WHY: pre-fill best-effort. Empty on failure.
 
     def _ingest_auto_upgrade_block(self, auto_upgrade: dict[str, Any]) -> None:
         """Hydrate current_site_versions and schedule from an auto_upgrade block."""
@@ -569,7 +569,7 @@ class SiteAutoUpgradeConfigurator:
         return True  # WHY: loop completed without operator abort.
 
     def _read_family_choice(self, num_versions: int) -> str | None:
-        """Prompt for a numeric family choice; None on EOF."""
+        """Prompt for a numeric family choice. None on EOF."""
         try:
             raw = self.safe_input_fn(  # WHY: read the operator's numeric choice.
                 f"  Select version (1-{num_versions}): ", "auto_upgrade_config"
@@ -582,7 +582,7 @@ class SiteAutoUpgradeConfigurator:
         """Prompt the operator for one family and apply the selection."""
         sorted_versions = _get_family_versions(self.model_version_map, models)  # WHY: family versions.
         if not sorted_versions:  # WHY: skip families with no versions.
-            return True  # WHY: nothing to prompt; treat as success.
+            return True  # WHY: nothing to prompt. Treat as success.
         current_version = _get_current_family_version(  # WHY: resolve family's current version.
             self.is_single_site, self.current_site_versions, models
         )
@@ -655,7 +655,7 @@ class SiteAutoUpgradeConfigurator:
             )
         except SystemExit:  # WHY: safe_input raises SystemExit on EOF.
             return False  # WHY: abort apply.
-        if confirm not in ("y", "yes"):  # WHY: default N; only explicit yes proceeds.
+        if confirm not in ("y", "yes"):  # WHY: default N. Only explicit yes proceeds.
             print("  Cancelled.")  # WHY: tell operator we bailed.
             return False  # WHY: abort apply.
         return True  # WHY: operator confirmed.
@@ -759,7 +759,7 @@ def _msp_select_entities(  # WHY: select MSPs then their orgs.
 
 
 def _select_msps_or_bail(select_msps_fn: SelectMspsFn) -> list[Any] | None:
-    """Run the MSP selection prompt; return None on empty selection."""
+    """Run the MSP selection prompt. Return None on empty selection."""
     print("\n" + "-" * 70)  # WHY: visual section divider.
     print("  STEP 1: MSP Selection")  # WHY: step header.
     print("-" * 70 + "\n")  # WHY: visual section divider.
@@ -772,7 +772,7 @@ def _select_msps_or_bail(select_msps_fn: SelectMspsFn) -> list[Any] | None:
 
 
 def _select_orgs_or_bail(select_orgs_fn: SelectOrgsFromMspFn, selected_msps: list[Any]) -> list[dict[str, Any]] | None:
-    """Run the org selection prompt within the chosen MSPs; None on empty."""
+    """Run the org selection prompt within the chosen MSPs. None on empty."""
     print("\n" + "-" * 70)  # WHY: visual section divider.
     print("  STEP 2: Organization Selection")  # WHY: step header.
     print("-" * 70 + "\n")  # WHY: visual section divider.
@@ -836,7 +836,7 @@ def _msp_confirm_and_apply(  # WHY: confirm then apply across MSP orgs.
 
 
 def _prompt_msp_final_confirm(safe_input_fn: SafeInputFn) -> bool:
-    """Read Y/n confirmation for MSP apply; default Y on bare Enter."""
+    """Read Y/n confirmation for MSP apply. Default Y on bare Enter."""
     try:
         final_confirm = (
             safe_input_fn(  # WHY: read the Y/n via EOF-safe prompt.
@@ -1046,7 +1046,7 @@ def _parse_single_part(part: str, indices: set[int]) -> None:
 def _group_models_by_family(  # WHY: group AP models into families.
     model_version_map: dict[str, list[Any]],
 ) -> dict[str, list[str]]:
-    """Group models by family prefix (AP41, AP43, etc.)."""
+    """Group models by family prefix (AP41, AP43, and so on)."""
     model_families: dict[str, list[str]] = {}  # WHY: family -> member-models map.
     for model in sorted(model_version_map.keys()):  # WHY: sorted order for stable output.
         family = model.rstrip("EP")  # WHY: strip E/P suffixes to get the family.
@@ -1245,7 +1245,7 @@ def _is_valid_hhmm(hour: int, minute: int) -> bool:
 def parse_time_input(time_input: str) -> str:  # WHY: parse a free-form time string.
     """Parse various time formats to HH:MM for the API.
 
-    Accepts: 02:00, 2:00, 14:00, 2AM, 2PM, 02:00AM, etc.
+    Accepts: 02:00, 2:00, 14:00, 2AM, 2PM, 02:00AM, and so on
     Returns: HH:MM format string, or 'any' for any time.
     """
     if not time_input:  # WHY: empty input maps to 'any'.

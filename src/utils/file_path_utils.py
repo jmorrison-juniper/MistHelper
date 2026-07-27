@@ -38,7 +38,7 @@ class FilePathUtils:
         """
         # Ensure data directory exists
         data_dir = "data"  # All exports are confined to the data/ directory.
-        os.makedirs(data_dir, exist_ok=True)  # Create data/ on first use; no error if it exists.
+        os.makedirs(data_dir, exist_ok=True)  # Create data/ on first use. No error if it exists.
 
         # If filename already includes a path, use it as-is
         if os.path.dirname(filename):  # Caller supplied an explicit directory.
@@ -52,7 +52,7 @@ class FilePathUtils:
         filename: str, headers: list[str] | None = None, sample_data: list[list[str]] | None = None
     ) -> str:  # Create an empty CSV placeholder with optional headers.
         """Create an empty CSV under data/ with optional header row; sample_data is intentionally ignored."""
-        del sample_data  # Kept in signature for API compatibility; explicitly discard so linters do not flag it.
+        del sample_data  # Kept in signature for API compatibility. Explicitly discard so linters do not flag it.
         file_path = FilePathUtils.get_csv_path(filename)  # Normalize the destination under data/.
         try:
             with open(file_path, "w", newline="", encoding="utf-8") as f:  # Truncate/create the file.

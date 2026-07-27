@@ -37,7 +37,7 @@ class APIFetchUtils:  # Higher-level org/site fetchers.
 
     @staticmethod
     def organization_services() -> list[dict[str, Any]]:  # Fetch and flatten org services.
-        """Fetch all org-level services via the Mist API; return list of service dicts (empty on error).
+        """Fetch all org-level services via the Mist API. Return list of service dicts (empty on error).
 
         SECURITY: Read-only operation fetching configuration data only.
         """
@@ -80,7 +80,7 @@ class APIFetchUtils:  # Higher-level org/site fetchers.
 
     @staticmethod
     def _fetch_single_site_setting(apisession, site):
-        """Fetch one site's settings; tag with id/name; return dict or None on failure."""
+        """Fetch one site's settings. Tag with id/name. Return dict or None on failure."""
         site_id = site.get("id")  # Target site id
         site_name = site.get("name", "Unnamed Site")  # Friendly site label
         try:
@@ -95,8 +95,8 @@ class APIFetchUtils:  # Higher-level org/site fetchers.
 
     @staticmethod
     def all_site_settings(apisession, org_id, limit=1000):  # Fetch settings for every site.
-        """Fetch per-site settings for every site in the org; limit param is unused (kept for back-compat)."""
-        del limit  # Kept in signature for back-compat; explicitly discard so linters do not flag it.
+        """Fetch per-site settings for every site in the org. Limit param is unused (kept for back-compat)."""
+        del limit  # Kept in signature for back-compat. Explicitly discard so linters do not flag it.
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of APICoreFetchUtils + ConfigUtils.
         logging.info("Fetching all site settings...")  # Log before fetching sites
         sites = mh.APICoreFetchUtils.all_sites_with_limit(org_id)  # List all sites first
@@ -112,9 +112,9 @@ class APIFetchUtils:  # Higher-level org/site fetchers.
 
     @staticmethod
     def _gw_load_inventory(apisession, org_id):
-        """Fetch the org inventory; return the device list, or None when the fetch fails."""
+        """Fetch the org inventory. Return the device list, or None when the fetch fails."""
         logging.info("Fetching org inventory to find gateway devices...")  # Log before the inventory fetch.
-        try:  # The inventory fetch is the one hard dependency; isolate its failure.
+        try:  # The inventory fetch is the one hard dependency. Isolate its failure.
             response = mistapi.api.v1.orgs.inventory.getOrgInventory(apisession, org_id, limit=1000)  # Fetch inventory.
             return mistapi.get_all(response=response, mist_session=apisession)  # Page through all devices.
         except Exception as error:  # Inventory fetch failed.
@@ -123,8 +123,8 @@ class APIFetchUtils:  # Higher-level org/site fetchers.
 
     @staticmethod
     def _gw_load_site_names():
-        """Load the site id -> name map from SiteList.csv; return an empty map when the file is unavailable."""
-        try:  # The site-name CSV is optional enrichment; missing file is non-fatal.
+        """Load the site id -> name map from SiteList.csv. Return an empty map when the file is unavailable."""
+        try:  # The site-name CSV is optional enrichment. Missing file is non-fatal.
             mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of FilePathUtils.
             site_list_path = mh.FilePathUtils.get_csv_path("SiteList.csv")  # Locate the site list CSV.
             with open(site_list_path, encoding="utf-8") as file_handle:  # Read site names from CSV.
@@ -139,7 +139,7 @@ class APIFetchUtils:  # Higher-level org/site fetchers.
         """Build (site_id, device_id, site_name) work items for each gateway device in the inventory."""
         work_items = []  # Accumulate one tuple per gateway needing a config fetch.
         for device in inventory:  # Scan every inventory device.
-            if device.get("type") != "gateway":  # Only gateways need configs; skip everything else.
+            if device.get("type") != "gateway":  # Only gateways need configs. Skip everything else.
                 continue  # Move to the next device.
             site_id = device.get("site_id")  # Owning site id.
             device_id = device.get("id")  # Device id.
@@ -150,10 +150,10 @@ class APIFetchUtils:  # Higher-level org/site fetchers.
 
     @staticmethod
     def _gw_fetch_one_config(apisession, work_item, connection_semaphore):
-        """Fetch one gateway device's config (site-tagged); return the config dict, or None on empty/failure."""
+        """Fetch one gateway device's config (site-tagged). Return the config dict, or None on empty/failure."""
         work_site_id, work_device_id, work_site_name = work_item  # Unpack the work item.
         with connection_semaphore:  # Limit concurrent connections via the pool semaphore.
-            try:  # Isolate per-device failures so one bad device doesn't abort the batch.
+            try:  # Isolate per-device failures so one bad device does not abort the batch.
                 logging.debug("Fetching config for %s (%s)", work_device_id, work_site_name)  # Trace the fetch.
                 config_response = mistapi.api.v1.sites.devices.getSiteDevice(  # Call the device API.
                     apisession, work_site_id, work_device_id
@@ -172,7 +172,7 @@ class APIFetchUtils:  # Higher-level org/site fetchers.
 
     @staticmethod
     def _gw_retry_one_item(apisession, failed_work_item, connection_semaphore, max_retries):
-        """Retry one failed gateway config fetch up to max_retries with backoff; return the config or None."""
+        """Retry one failed gateway config fetch up to max_retries with backoff. Return the config or None."""
         _, failed_device_id, _ = failed_work_item  # Only the device id is needed here (for logging).
         for attempt in range(max_retries + 1):  # Bounded retry loop (initial try plus retries).
             result = APIFetchUtils._gw_fetch_one_config(apisession, failed_work_item, connection_semaphore)  # Try.
@@ -195,7 +195,7 @@ class APIFetchUtils:  # Higher-level org/site fetchers.
 
     @staticmethod
     def _gw_retry_configs(apisession, failed_items, connection_semaphore):
-        """Retry failed gateway config fetches with bounded exponential backoff; return the recovered configs."""
+        """Retry failed gateway config fetches with bounded exponential backoff. Return the recovered configs."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of FastModeSequentialMaxRetries.
         max_retries = mh.FastModeSequentialMaxRetries.VALUE  # Configurable retry count from extracted class attribute.
         retry_results = []  # Collect configs recovered on retry.
@@ -209,19 +209,19 @@ class APIFetchUtils:  # Higher-level org/site fetchers.
 
     @staticmethod
     def _gw_collect_fast(apisession, work_items):
-        """Fetch gateway configs concurrently through the connection pool with retry; return the successes."""
+        """Fetch gateway configs concurrently through the connection pool with retry. Return the successes."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ConnectionPoolExecutor.
-        successful_results, _ = mh.ConnectionPoolExecutor.execute(  # Pooled concurrent fetch; discard failures.
+        successful_results, _ = mh.ConnectionPoolExecutor.execute(  # Pooled concurrent fetch. Discard failures.
             work_items=work_items,
             worker_function=functools.partial(APIFetchUtils._gw_fetch_one_config, apisession),  # Bind apisession.
             batch_description="gateway device configs",
             retry_function=functools.partial(APIFetchUtils._gw_retry_configs, apisession),  # Bind apisession.
         )
-        return successful_results  # The pool already retried failures; return the successes.
+        return successful_results  # The pool already retried failures. Return the successes.
 
     @staticmethod
     def _gw_collect_sequential(apisession, work_items):
-        """Fetch each gateway config sequentially using a serializing semaphore; return the collected configs."""
+        """Fetch each gateway config sequentially using a serializing semaphore. Return the collected configs."""
         all_device_configs = []  # Accumulate sequential results.
         dummy_semaphore = threading.Semaphore(1)  # Serialize sequential fetches with a single permit.
         for work_item in tqdm(work_items, desc="Fetching Configs", unit="device"):  # type: ignore[no-untyped-call]
@@ -235,11 +235,11 @@ class APIFetchUtils:  # Higher-level org/site fetchers.
         """Fetch configuration details for all gateway devices in the org inventory.
 
         When ``fast`` is True the per-device fetches run concurrently through the
-        connection pool (with retry); otherwise they run sequentially. Returns a list
+        connection pool (with retry). Otherwise they run sequentially. Returns a list
         of site-tagged device configuration dicts (empty when the inventory fetch fails).
         ``max_workers`` is accepted for call-site compatibility.
         """
-        del max_workers  # Kept in signature for call-site compatibility; explicitly discard so linters do not flag it.
+        del max_workers  # Kept in signature for call-site compatibility. Explicitly discard so linters do not flag it.
         inventory = APIFetchUtils._gw_load_inventory(apisession, org_id)  # Fetch the org inventory (None on failure).
         if inventory is None:  # The inventory fetch failed outright.
             return []  # Degrade to an empty list.

@@ -5,7 +5,7 @@ as the top-level `initialize_mist_session` function in MistHelper.py, and
 re-lands it as a class-body method per FR-005. The two MistHelper
 callsites (entrypoint `_establish_mist_session` token path and TUI
 guard `_ensure_tui_api_session`) are rewritten in the same PR to invoke
-the class method; no wrapper shim remains in MistHelper.py after this
+the class method. No wrapper shim remains in MistHelper.py after this
 extraction.
 
 MistHelper module-globals (`apisession`, `mistapi`) and helper functions

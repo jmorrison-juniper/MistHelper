@@ -8,7 +8,7 @@ Runtime dependencies (apisession module-global, and the utility
 classes InputUtils / PromptUtils / ConfigUtils) are still
 owned by MistHelper.py. They are resolved lazily via the module-level
 _MH proxy so the extracted module keeps its import graph flat, live
-re-bindings of apisession (e.g. after interactive login) are always
+re-bindings of apisession (for example after interactive login) are always
 honoured, and monkeypatched attributes in tests continue to work.
 """
 
@@ -16,7 +16,7 @@ from __future__ import annotations  # Enable postponed evaluation for forward-re
 
 import importlib  # Late-import MistHelper module to avoid circular src<->MistHelper dependency
 import logging  # Structured action logging required by coding standards
-from typing import Any, cast  # Loose typing for late-bound MistHelper attributes; cast for Any-narrowing returns
+from typing import Any, cast  # Loose typing for late-bound MistHelper attributes. Cast for Any-narrowing returns
 
 import mistapi  # Direct dependency: Mist API SDK used throughout the class body
 
@@ -78,31 +78,31 @@ class WLANRadiusTimerManager:  # Menu 148 entrypoint for WLAN RADIUS timer edits
         return self.selected_wlan  # Return the confirmed-non-None WLAN dict
 
     def _discover_radius_wlans(self) -> bool:  # Aggregates site/org/template lookups + filtering
-        """Set up org/site context, fetch all WLANs, filter to RADIUS-only. Return False to abort the workflow."""
-        if not self._select_site():  # Prompt for a site; abort if none chosen
+        """Prepare org/site context, fetch all WLANs, filter to RADIUS-only. Return False to abort the workflow."""
+        if not self._select_site():  # Prompt for a site. Abort if none chosen
             return False  # No site selected -- nothing to manage
-        if not self._get_org_id():  # Resolve the org ID; abort if it can't be determined
+        if not self._get_org_id():  # Resolve the org ID. Abort if it cannot be determined
             return False  # Without an org ID we cannot fetch templates
-        if not self._fetch_site_info():  # Load site details; abort on failure
+        if not self._fetch_site_info():  # Load site details. Abort on failure
             return False  # Site info is required for template resolution
         self._fetch_all_wlans()  # Gather WLANs from site, template, and org sources
         self._filter_radius_wlans()  # Reduce to only RADIUS/RadSec WLANs
         if not self.all_radius_wlans:  # No RADIUS WLANs were found
             self._print_no_wlans_message()  # Tell the user there is nothing to modify
             return False  # Exit -- no candidates to change
-        return True  # Discovery complete; ready for interactive edit
+        return True  # Discovery complete. Ready for interactive edit
 
     def manage(self) -> None:  # Public menu entrypoint invoked by MistHelper menu action 148
         """Main entry point - orchestrates the WLAN timer management workflow."""
         logging.info("Starting WLAN RADIUS authentication timer management")  # Announce the workflow start
-        self._enable_debug_if_requested()  # Turn on verbose logging if the user asked for it
-        if not self._discover_radius_wlans():  # Site + org + WLAN discovery; bail on abort.
+        self._enable_debug_if_requested()  # Start verbose logging if the user asked for it
+        if not self._discover_radius_wlans():  # Site + org + WLAN discovery. Bail on abort.
             return  # Discovery aborted -- nothing further to do
         self._display_wlans()  # Show the user the candidate WLANs and their timers
-        if not self._prompt_wlan_selection():  # Ask which WLAN to modify; abort if cancelled
+        if not self._prompt_wlan_selection():  # Ask which WLAN to modify. Abort if cancelled
             return  # User declined to pick a WLAN
         self._display_current_config()  # Show the selected WLAN's current timer config
-        if not self._prompt_new_values():  # Collect new timer values; abort if cancelled
+        if not self._prompt_new_values():  # Collect new timer values. Abort if cancelled
             return  # User declined to enter new values
         self._display_behavior_impact()  # Explain how the new values change behavior
         self._display_proposed_changes()  # Show a before/after diff of the settings

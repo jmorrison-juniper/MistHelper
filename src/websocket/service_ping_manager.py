@@ -388,7 +388,7 @@ class ServicePingManager(ServicePingDiscoveryMixin):  # WHY: define ServicePingM
 
     def _display_timeout_results(self, payload: dict[str, Any]) -> None:  # WHY: timeout hint flow.
         """Display timeout guidance when websocket results are not received."""
-        del payload  # WHY: payload unused after refactor; kept in signature for back-compat.
+        del payload  # WHY: payload unused after refactor. Kept in signature for back-compat.
         print("\nNo Service Ping results received within timeout period.")  # WHY: primary message.
         if not self.device_info:  # WHY: bail out with a minimal log when we lack device metadata.
             logging.warning("Service ping timeout - no results received for device %s", self.device_id)

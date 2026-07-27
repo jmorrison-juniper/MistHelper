@@ -37,7 +37,7 @@ class OrgPcapWaitDownloadWorkflow:
 
         def save_callback(
             pcap_url: str, capture_identifier: str, capture_prefix: str
-        ) -> None:  # Callback returns None; return value of save_pcap_file is intentionally discarded.
+        ) -> None:  # Callback returns None. Return value of save_pcap_file is intentionally discarded.
             return download_manager.save_pcap_file(  # Delegate save operation to shared manager.
                 pcap_url,  # Pass resolved download URL from polling results.
                 capture_identifier,  # Pass capture identifier for deterministic output filename.

@@ -6,7 +6,7 @@ rather than scattered across every call site. Every MistHelper.py subprocess
 invocation routes through :class:`SubprocessRunner.run`, which enforces:
 
 * An explicit allow-list of executables (``uv``/``uv.exe`` or the current
-  interpreter, i.e. ``sys.executable``).
+  interpreter, that is ``sys.executable``).
 * A conservative allow-list for each argv element (alphanumeric plus
   ``-_./:=``), rejecting shell metacharacters up-front.
 * A positive, finite timeout on every invocation.
@@ -75,7 +75,7 @@ class SubprocessRunner:
             timeout: Positive finite float seconds; ``None`` and non-positive
                 values raise :class:`ValueError` before any process spawn.
             check: When ``True`` (default) a non-zero exit raises
-                :class:`subprocess.CalledProcessError`; the caller may set
+                :class:`subprocess.CalledProcessError`. The caller may set
                 ``False`` to inspect ``returncode`` manually.
 
         Returns:
@@ -98,11 +98,11 @@ class SubprocessRunner:
             # Explicit keyword arguments make Bandit's B603 review trivial: shell is not set,
             # capture_output/text are pinned, and the timeout is validated above.
             result = subprocess.run(  # nosec B603  # Audited: argv validated, no shell, capture pinned.
-                list(argv),  # Copy to a plain list so callers can't mutate the sequence mid-flight.
+                list(argv),  # Copy to a plain list so callers cannot mutate the sequence mid-flight.
                 capture_output=True,  # Always capture stdout/stderr for callers that inspect them.
-                text=True,  # Always decode as text; every existing call site expected str output.
+                text=True,  # Always decode as text. Every existing call site expected str output.
                 timeout=timeout,  # Bound the child so a hung process cannot stall MistHelper startup.
-                check=check,  # Honour caller's check policy; default True matches most call sites.
+                check=check,  # Honour caller's check policy. Default True matches most call sites.
             )
         except subprocess.TimeoutExpired:  # Timeouts propagate; exc.__str__ contains argv, so log timeout only.
             logger.error("SubprocessRunner timed out %s after %ss", executable, timeout)  # Principle VII: error log.
@@ -115,7 +115,7 @@ class SubprocessRunner:
 
     @classmethod
     def _validate_argv(cls, argv: Sequence[str]) -> None:
-        """Validate argv shape and every element; raises :class:`ValueError` on failure."""
+        """Validate argv shape and every element. Raises :class:`ValueError` on failure."""
         if not argv:  # Empty sequence is never a legitimate command.
             raise ValueError("argv must be a non-empty sequence")  # Fail closed before any spawn.
         executable = argv[0]  # First element is the program to run.
@@ -144,12 +144,12 @@ class SubprocessRunner:
             raise ValueError("timeout must be a positive finite number")  # bool would satisfy int otherwise.
         if not math.isfinite(float(timeout)):  # NaN and +/-inf are never valid deadlines.
             raise ValueError("timeout must be a positive finite number")  # Fail closed rather than pass to subprocess.
-        if timeout <= 0:  # Zero and negative timeouts trip subprocess.run behaviour we don't want.
+        if timeout <= 0:  # Zero and negative timeouts trip subprocess.run behaviour we do not want.
             raise ValueError("timeout must be a positive finite number")  # Callers must specify a real deadline.
 
 
 __all__ = [
-    "CalledProcessError",  # Re-exported so callers don't import subprocess directly.
+    "CalledProcessError",  # Re-exported so callers do not import subprocess directly.
     "SubprocessError",  # Base class re-export.
     "SubprocessRunner",  # Primary dispatch helper.
     "TimeoutExpired",  # Timeout exception re-export.

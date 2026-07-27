@@ -27,7 +27,7 @@ from typing import TYPE_CHECKING, Any  # WHY: TYPE_CHECKING avoids runtime cycle
 
 from prettytable import PrettyTable  # WHY: every table renderer builds a PrettyTable instance
 
-if TYPE_CHECKING:  # WHY: only needed for static type checkers; skipped at runtime
+if TYPE_CHECKING:  # WHY: only needed for static type checkers. Skipped at runtime
     from src.network.routing_utils import RoutingUtils  # WHY: parent type for cross-reference only
 
 
@@ -40,7 +40,7 @@ _SSR_COLUMNS: tuple[str, ...] = (
     "Next Hop",  # WHY: gateway IP for the route
     "Protocol",  # WHY: BGP/OSPF/... source protocol
     "Route Name",  # WHY: SSR-configured route name (may be empty)
-    "Status",  # WHY: e.g. active/inactive per SSR row
+    "Status",  # WHY: for example active/inactive per SSR row
     "Selection Reason",  # WHY: BGP selection reason string
     "Weight",  # WHY: route weight when supplied
     "Metric",  # WHY: metric column stringified upstream
@@ -75,7 +75,7 @@ class RoutingStatsAcc:  # WHY: bundles the 5 routing stat buckets into one param
     """Mutable buckets used while accumulating routing-table statistics.
 
     ``frozen=True`` prevents the *reference* to each container from
-    being swapped mid-loop; the containers themselves stay mutable so
+    being swapped mid-loop. The containers themselves stay mutable so
     per-entry helpers add without re-wiring the accumulator. Bundling
     the five stat buckets into one dataclass drops
     ``_accumulate_route_stats`` from six parameters to two, resolving
@@ -110,7 +110,7 @@ class _RoutingUtilsDisplay:  # WHY: cluster wrapper matches the Phase 1 parsing-
     def __getattr__(self, name: str) -> Any:  # WHY: transparent proxy so callers see combined API
         """Delegate unknown attributes to the wrapped parent object."""
         parent = self.__dict__.get("_ru")  # WHY: guard against half-initialized instances
-        if parent is None:  # WHY: only trips during broken init; avoid infinite recursion
+        if parent is None:  # WHY: only trips during broken init. Avoid infinite recursion
             raise AttributeError(name)  # WHY: signal missing attribute cleanly to callers
         return getattr(parent, name)  # WHY: transparent proxy to the parent RoutingUtils
 
@@ -120,7 +120,7 @@ class _RoutingUtilsDisplay:  # WHY: cluster wrapper matches the Phase 1 parsing-
 
     def _display_forwarding_summary(self, entries: list[dict[str, Any]]) -> None:  # WHY: cluster entry
         """Display formatted summary of forwarding table entries."""
-        if not entries:  # WHY: guard so empty results don't spam the table renderer
+        if not entries:  # WHY: guard so empty results do not spam the table renderer
             print("-> No forwarding table entries found")  # WHY: user-facing empty-state notice
             return  # WHY: nothing else to render when entries list is empty
         print(f"-> Total forwarding entries: {len(entries)}")  # WHY: headline count first
@@ -153,7 +153,7 @@ class _RoutingUtilsDisplay:  # WHY: cluster wrapper matches the Phase 1 parsing-
     ) -> None:
         """Add ``value`` to ``target_set`` if it is truthy and not the sentinel."""
         if value and value != sentinel:  # WHY: two-guard filter keeps "-" placeholders out
-            target_set.add(value)  # WHY: sets deduplicate; caller doesn't need to check membership
+            target_set.add(value)  # WHY: sets deduplicate. Caller does not need to check membership
 
     def _collect_forwarding_stats(self, entries: list[dict[str, Any]]) -> dict[str, Any]:  # WHY: aggregator
         """Collect summary statistics from forwarding table entries."""
@@ -297,7 +297,7 @@ class _RoutingUtilsDisplay:  # WHY: cluster wrapper matches the Phase 1 parsing-
         acc = RoutingStatsAcc.empty()  # WHY: single dataclass replaces 5 local buckets
         active_routes = 0  # WHY: separate int counter — dataclass fields are containers only
         for entry in route_entries:  # WHY: single pass keeps overall cost O(n)
-            self._accumulate_route_stats(entry, acc)  # WHY: mutates acc in place; two params only
+            self._accumulate_route_stats(entry, acc)  # WHY: mutates acc in place. Two params only
             if entry.get("active"):  # WHY: count active routes outside the acc for clarity
                 active_routes += 1  # WHY: increment only on truthy 'active' field
         return {  # WHY: dict projection preserves the legacy return shape
@@ -330,7 +330,7 @@ class _RoutingUtilsDisplay:  # WHY: cluster wrapper matches the Phase 1 parsing-
         """Add ``entry[key]`` to ``bucket`` when it is truthy and not a sentinel."""
         value = entry.get(key)  # WHY: single lookup for both guards
         if value and value not in (_MISSING, ""):  # WHY: legacy filter set — keep behavior identical
-            bucket.add(value)  # WHY: sets deduplicate so we don't need to pre-check membership
+            bucket.add(value)  # WHY: sets deduplicate so we do not need to pre-check membership
 
     def _display_routing_details(self, route_entries: list[dict[str, Any]]) -> None:
         """Display detailed routing table in a formatted table."""

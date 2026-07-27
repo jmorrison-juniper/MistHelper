@@ -48,16 +48,16 @@ class SiteMetricOperation:
 
     def execute(self) -> None:  # WHY: Menu 74 dispatcher entry point invoked by MistHelper top-level menu
         """Top-level entry point invoked by the menu dispatcher for menu 74."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info(_BANNER)
         logging.info(_START_LOG)  # WHY: Trace operation start for ops visibility
         context = self._prompt_and_build_context()  # WHY: Resolve site id + name, or bail on cancel
         if context is None:
-            return  # WHY: Helper already logged the cancel reason; exit cleanly
+            return  # WHY: Helper already logged the cancel reason. Exit cleanly
         self._run_export(context)  # WHY: Orchestrate refresh + collect + finalize using bundled context
 
     def _prompt_and_build_context(self) -> SiteRunContext | None:  # WHY: Consolidate prompt + name lookup for execute()
-        """Prompt for site selection and resolve name; return None on cancel."""
+        """Prompt for site selection and resolve name. Return None on cancel."""
         site_id = self._prompt_site_id()  # WHY: Bail out early if user cancels selection
         if not site_id:
             return None  # WHY: Prompt helper already logged the cancel reason for ops visibility
@@ -77,29 +77,29 @@ class SiteMetricOperation:
 
     def _refresh_const_metrics(self) -> None:  # WHY: Isolated call keeps execute() short and testable
         """Refresh ConstInsightMetrics.csv so metric lists reflect the latest API surface."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info(_REFRESH_PROMPT)
         self.InsightMetricsUtils.export_const_insight_metrics()  # WHY: Refresh cache before scope-filtering metrics
 
     def _emit_empty_metric_list(self, filename: str) -> None:  # WHY: Defensive branch used when const file is empty
         """Emit the empty-file + error trio when scope filter yields zero metrics."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info(_EMPTY_METRICS_PROMPT)
         logging.error(_EMPTY_METRICS_LOG)  # WHY: Persist failure cause in the log
         self.DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]  # WHY: Emit empty file for downstream consistency
 
     def _prompt_site_id(self) -> str | None:  # WHY: Wrap prompt in cancel-aware helper for execute()
-        """Prompt the user for a site selection; return None when the user cancels."""
+        """Prompt the user for a site selection. Return None when the user cancels."""
         site_id = self.PromptUtils.select_site()  # WHY: Existing prompt utility handles cancel / invalid input
         if not site_id:
             logging.error(_NO_SITE_LOG)  # WHY: Match legacy error log message verbatim
             return None
-        return site_id  # WHY: Selection succeeded; downstream will resolve name and run export
+        return site_id  # WHY: Selection succeeded. Downstream will resolve name and run export
 
     def _resolve_site_name(
         self, site_id: str
     ) -> str:  # WHY: Best-effort name lookup keeps execute path narrative clean
-        """Best-effort site-name lookup; fall back to site_id when API call fails."""
+        """Best-effort site-name lookup. Fall back to site_id when API call fails."""
         try:
             response = self.mistapi.api.v1.sites.listSites(  # WHY: API call may raise on auth / network
                 self.apisession, site_id
@@ -107,7 +107,7 @@ class SiteMetricOperation:
             sites = self.mistapi.get_all(  # WHY: Materialize paged result list
                 response=response, mist_session=self.apisession
             )
-            return next(  # WHY: Match by id; fall back to id on miss
+            return next(  # WHY: Match by id. Fall back to id on miss
                 (site["name"] for site in sites if site["id"] == site_id), site_id
             )
         except Exception:
@@ -128,9 +128,9 @@ class SiteMetricOperation:
         """Iterate the metric list and collect any insight data the API returns."""
         all_insight_data: list[dict] = []  # WHY: Accumulator for every non-empty metric response
         retrieved = 0  # WHY: User-facing counter shown in the final summary line
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info("! Retrieving %s different site insight metrics...", len(site_metrics))
-        for metric in site_metrics:  # WHY: One API call per metric; individual failures must not abort the batch
+        for metric in site_metrics:  # WHY: One API call per metric. Individual failures must not abort the batch
             data = self._fetch_one_metric(context, metric)  # WHY: Enriched dict or None
             if data is not None:
                 all_insight_data.append(data)  # WHY: Append the enriched per-metric record for export
@@ -172,7 +172,7 @@ class SiteMetricOperation:
         filename: str,
         context: SiteRunContext,
     ) -> None:
-        """Flatten, escape, and save collected data; emit summary user output."""
+        """Flatten, escape, and save collected data. Emit summary user output."""
         try:
             if all_insight_data:
                 self._export_with_data(  # WHY: Non-empty path writes flattened rows and summary
@@ -190,11 +190,11 @@ class SiteMetricOperation:
         filename: str,
         context: SiteRunContext,
     ) -> None:
-        """Flatten, escape, and write the non-empty result set; log the success summary."""
+        """Flatten, escape, and write the non-empty result set. Log the success summary."""
         processed = self.DataProcessingUtils.flatten_nested_fields(all_insight_data)  # WHY: Flatten nested API objs
         processed = self.DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]  # WHY: CSV-safe text
         self.DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]  # WHY: Write to disk / DB
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info("! %s site insight metrics exported to %s", retrieved, filename)
         logging.info(  # WHY: Persist success summary at info level for ops visibility
             "Exported %d site insight metrics for %s to %s",
@@ -205,7 +205,7 @@ class SiteMetricOperation:
 
     def _export_empty(self, filename: str, context: SiteRunContext) -> None:  # WHY: Zero-data emit path
         """Emit user-visible zero-data summary and write an empty file for consistency."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info("! 0 insight metrics exported to %s (no data available)", filename)
         logging.warning("No insight data available for site %s", context.site_name)  # WHY: Distinguish empty from error
         self.DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]  # WHY: Emit empty file for consistency
@@ -217,7 +217,7 @@ class SiteMetricOperation:
         context: SiteRunContext,
     ) -> None:
         """Log the failure with full context and emit an empty file so downstream consumers still see output."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info("! Error exporting site insight metrics: %s", exception)
         logging.error(  # WHY: Persist failure cause with site context for triage
             "Failed to export site insight metrics for %s: %s", context.site_name, exception

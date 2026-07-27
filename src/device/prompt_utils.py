@@ -436,7 +436,7 @@ class PromptNetworkDeviceUtils:  # WHY: interactive Mist device and port selecti
         port_stat = cast("dict[str, Any]", stats_data.get("port_stat", {}))  # WHY: narrow Any for mypy strict
         if port_stat:  # WHY: log presence so operators can confirm live data
             logging.info("Found port_stat (AP-style) with %d ports", len(port_stat))
-        else:  # WHY: warn when the AP hasn't reported any port stats yet
+        else:  # WHY: warn when the AP has not reported any port stats yet
             logging.warning("No port_stat found in AP stats for device %s", device_id)
         return port_stat  # WHY: empty dict when device is silent -- caller handles fallback
 
@@ -635,7 +635,7 @@ class PromptNetworkDeviceUtils:  # WHY: interactive Mist device and port selecti
         """Build a PrettyTable of available ports with status, speed, and config info."""
         table = PrettyTable()  # WHY: fresh table per call so state is not shared
         table.field_names = _PORT_TABLE_FIELDS  # WHY: use shared column set for visual consistency
-        table.max_width = 120  # WHY: cap width so long descriptions don't overflow a 120-col terminal
+        table.max_width = 120  # WHY: cap width so long descriptions do not overflow a 120-col terminal
         table.align["Description"] = "l"  # WHY: left-align description so text wraps predictably
         table.align["Profile"] = "l"  # WHY: left-align profile name for readability
         for idx, (port_name, port_info) in enumerate(available_ports):  # WHY: one row per available port
@@ -681,7 +681,7 @@ class PromptNetworkDeviceUtils:  # WHY: interactive Mist device and port selecti
             try:
                 return f"{int(speed_upper[:-1]) * 1000} Mbps"  # WHY: strip G and convert to Mbps
             except ValueError:
-                return speed  # WHY: non-integer prefix (e.g. '1.5G') falls back to raw value
+                return speed  # WHY: non-integer prefix (for example '1.5G') falls back to raw value
         return None  # WHY: unrecognised string form -- caller falls through to numeric/N-A logic
 
     @staticmethod

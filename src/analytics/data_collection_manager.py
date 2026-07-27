@@ -35,11 +35,11 @@ class DataCollectionManager:
     @staticmethod
     def _print_continuous_loop_banner() -> None:  # Print startup banner.
         """Print the startup banner for menu 76's continuous collection loop."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info(" Starting continuous data collection loop...")
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("   This will collect core organizational data every 5 seconds")
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("   Press CTRL+C to stop or create 'stop_loop.txt' file")
 
     @staticmethod
@@ -51,19 +51,19 @@ class DataCollectionManager:
         try:
             while True:  # Loop until stopped.
                 loop_count += 1  # Count the iteration.
-                # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+                # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
                 logger.info("\n  Loop iteration %d - %s", loop_count, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
                 if DataCollectionManager._check_stop_signal():  # Stop requested.
                     break  # Exit the loop.
                 DataCollectionManager._execute_collection_cycle(loop_count)  # Run one cycle.
         except KeyboardInterrupt:  # User pressed Ctrl+C.
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("\n  Continuous data collection loop stopped by user.")
         except Exception as e:  # Unexpected failure.
             logging.error("Fatal error in continuous loop: %s", e)  # Log the error.
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.error("! Fatal error in continuous loop: %s", e)
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info(" Continuous data collection loop ended.")
 
     @staticmethod
@@ -89,19 +89,19 @@ class DataCollectionManager:
         """Execute one cycle of data collection with rate limiting."""
         try:
             for banner, step_callable in DataCollectionManager._collection_cycle_steps():
-                # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+                # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
                 logger.info(banner)
                 step_callable()  # Invoke the per-step exporter.
                 time.sleep(0.75)  # Pace the API between exporters.
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info("  Loop %d completed successfully", loop_count)
         except KeyboardInterrupt:  # Propagate Ctrl+C.
             raise  # Re-raise to outer handler
         except Exception as e:  # Cycle failed.
             logging.error("Error in collection cycle %s: %s", loop_count, e)  # Log the error.
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("  Error in loop %d: %s", loop_count, e)
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("  Continuing to next iteration...")
             time.sleep(5)  # Back off then retry.
 
@@ -128,7 +128,7 @@ class DataCollectionManager:
         logging.info("Support packages generated for applicable sites.")  # Log completion.
 
     @staticmethod
-    def _refresh_support_data() -> None:  # Refresh required CSVs.
+    def _refresh_support_data() -> None:  # Refresh required CSV files.
         """Refresh all required CSV files for support package generation."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of exporter facades + CacheUtils.
         required_files = [  # Required files and fetchers.
@@ -171,7 +171,7 @@ class DataCollectionManager:
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of CacheUtils.
         site_data = data_sources["site_data"]  # Read the site data.
 
-        for site_id in site_data:  # Walk sites; values are looked up per-site as needed.
+        for site_id in site_data:  # Walk sites. Values are looked up per-site as needed.
             # Skip sites without alarms or events
             has_alarms = bool(data_sources["alarms_data"].get(site_id))  # Has alarms?
             has_events = bool(data_sources["events_data"].get(site_id))  # Has events?

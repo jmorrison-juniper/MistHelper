@@ -16,7 +16,7 @@ class APIResponseParser:
     """Extract the ``data`` attribute from mistapi ``APIResponse`` objects."""
 
     def parse(self, result: Any) -> Any:
-        """Return ``result.data`` when present; otherwise ``result`` unchanged."""
+        """Return ``result.data`` when present. Otherwise ``result`` unchanged."""
         if hasattr(result, "data"):  # mistapi APIResponse shape
             logging.debug("TUI_DEBUG: Detected APIResponse object, extracting data attribute")
             return result.data
@@ -67,7 +67,7 @@ class HierarchicalFormatter:
             self._render_dict_entry(child_key, child_value, output, indent)
 
     def _render_dict_entry(self, key: str, child_value: Any, output: list[str], indent: int) -> None:
-        """Emit a single key from a dict; recurse into nested structures."""
+        """Emit a single key from a dict. Recurse into nested structures."""
         if isinstance(child_value, (dict, list)):  # Recurse for nested structures
             self._render(child_value, output, indent + 1, key_name=key)
             return
@@ -96,7 +96,7 @@ class HierarchicalFormatter:
             output.append(f"{indent_str}  ... {item_count - display_count} more items")
 
     def _render_sequence_item(self, item: Any, output: list[str], indent: int, idx: int) -> None:
-        """Emit one item of a sequence; recurse for nested types."""
+        """Emit one item of a sequence. Recurse for nested types."""
         indent_str = "  " * indent  # Indent for the item line
         if isinstance(item, dict):  # Dict item -> show key sample
             output.append(f"{indent_str}  [{idx}]: dict ({len(item)} keys)")

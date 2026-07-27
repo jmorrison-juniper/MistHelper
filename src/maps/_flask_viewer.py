@@ -6,7 +6,7 @@ takes explicit callables for the map-payload/response builders so the
 module stays independent of MapsManager and easy to test.
 
 SECURITY: :func:`_resolve_flask_bind_address` binds 0.0.0.0 only when
-the container heuristics fire; direct execution stays on localhost.
+the container heuristics fire. Direct execution stays on localhost.
 """
 
 from __future__ import annotations  # WHY: enable postponed annotations for slotted dataclasses referencing Callable.
@@ -87,7 +87,7 @@ class FlaskViewerContext:  # WHY: single-param bundle for launch_flask_viewer's 
 
 
 def _summarise_named_records(records: list[dict]) -> list[dict]:  # WHY: dropdown payload shared across handlers.
-    """Return only ``id``/``name`` pairs from each record; used for both site + map dropdowns."""
+    """Return only ``id``/``name`` pairs from each record. Used for both site + map dropdowns."""
     return [{"id": r.get("id"), "name": r.get("name", _UNNAMED)} for r in records]  # WHY: minimal dropdown payload.
 
 
@@ -110,7 +110,7 @@ def _handle_map_data_request(request: MapDataRequest):  # WHY: single orchestrat
 
 
 def _render_viewer_page(html_template: str, ctx: ViewerPageContext):  # WHY: pure Jinja render of the root page.
-    """Render the Flask root page; injects sorted-sites + maps JSON into the HTML template."""
+    """Render the Flask root page. Injects sorted-sites + maps JSON into the HTML template."""
     sites_sorted = sorted(ctx.all_sites, key=lambda x: x.get("name", "").lower())  # WHY: alphabetise dropdown.
     sites_json = ctx.json_module.dumps(_summarise_named_records(sites_sorted))  # WHY: encode dropdown payload.
     maps_json = ctx.json_module.dumps(_summarise_named_records(ctx.all_maps))  # WHY: encode map dropdown payload.
@@ -192,18 +192,18 @@ _BANNER_LINES = (  # WHY: table-driven banner replaces sequential print calls, e
 
 def _print_flask_viewer_banner(host: str, port: int) -> None:
     """Emit the pre-launch ASCII banner that lists URL + key features."""
-    # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+    # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
     logger.info("\n%s", _BANNER_SEPARATOR)  # WHY: leading blank line separates banner from prior console output.
-    # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+    # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
     logger.info("LAUNCHING FLASK MAP VIEWER")  # WHY: identifies the launched mode to the operator.
-    # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+    # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
     logger.info("%s", _BANNER_SEPARATOR)  # WHY: divider between title and body of the banner.
-    # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+    # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
     logger.info("! Server URL: http://%s:%s", host, port)  # WHY: URL comes first so operators can click through.
     for line in _BANNER_LINES:
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("%s", line)  # WHY: table-driven emission keeps additions trivial.
-    # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+    # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
     logger.info("%s", _BANNER_SEPARATOR)  # WHY: trailing divider signals end of banner block.
 
 
@@ -213,7 +213,7 @@ def _maybe_open_browser(port: int) -> None:
     import webbrowser  # WHY: local import mirrors threading -- optional path when running headless.
 
     if is_running_in_container():
-        return  # WHY: containers expose ports externally; caller handles browser launch on the host side.
+        return  # WHY: containers expose ports externally. Caller handles browser launch on the host side.
 
     def open_browser() -> None:
         """Wait briefly then point the default browser at the local Flask server."""
@@ -226,17 +226,17 @@ def _maybe_open_browser(port: int) -> None:
 
 
 def _run_flask_server(flask_app, host: str, port: int) -> None:
-    """Run the Flask server until interrupted; mirror the original KeyboardInterrupt path."""
+    """Run the Flask server until interrupted. Mirror the original KeyboardInterrupt path."""
     try:
         logging.info("Starting Flask server on http://%s:%s", host, port)  # WHY: audit trail before blocking call.
         flask_app.run(host=host, port=port, debug=False, threaded=True, use_reloader=False)  # WHY: prod-safe args.
     except KeyboardInterrupt:
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("\n\nFlask map viewer stopped by user")  # WHY: friendly console signal on Ctrl+C.
         logging.info("Flask map viewer stopped by user (Ctrl+C)")  # WHY: matching log entry for grep-based audits.
     except Exception as e:  # WHY: broad catch prevents a Flask crash from tearing down the CLI silently.
         logging.exception("Error running Flask server: %s", e)  # WHY: full stack for post-mortem log review.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.warning("\n! Error running map viewer: %s", e)  # WHY: surface failure to operator on stdout as well.
 
 
@@ -1306,7 +1306,7 @@ def _register_flask_routes(
 
 
 def _build_flask_app(ctx: FlaskViewerContext):
-    """Construct and wire the Flask app; returns the ready-to-run instance."""
+    """Construct and wire the Flask app. Returns the ready-to-run instance."""
     import json as json_module  # WHY: local import keeps JSON module out of import graph unless viewer runs.
 
     from flask import Flask, jsonify, render_template_string  # WHY: local so import cost is deferred to launch time.
@@ -1334,7 +1334,7 @@ def launch_flask_viewer(ctx: FlaskViewerContext):
         ctx.initial_map_id,
     )
     flask_app = _build_flask_app(ctx)  # WHY: helper handles imports + Flask config + route registration.
-    flask_host, flask_port = _resolve_flask_bind_address()  # WHY: pick loopback vs. all-interfaces based on env.
+    flask_host, flask_port = _resolve_flask_bind_address()  # WHY: pick loopback versus all-interfaces based on env.
     _print_flask_viewer_banner(flask_host, flask_port)  # WHY: operator-facing status before the blocking run call.
     _maybe_open_browser(flask_port)  # WHY: fires only on desktop -- container path exits early inside the helper.
     _run_flask_server(flask_app, flask_host, flask_port)  # WHY: blocking call -- returns on Ctrl+C or fatal error.

@@ -120,7 +120,7 @@ class WANProbeDeviceOverrideManager:  # WHY: encapsulates Menu #167 destructive 
     def _execute(self, dry_run: bool) -> None:  # WHY: high-level pipeline orchestrator.
         """Main execution flow for device-level WAN probe configuration."""
         self._display_header(dry_run)  # WHY: banner + operator warning first.
-        if not self._prepare_run():  # WHY: init + load + template + sites phase; bail on failure.
+        if not self._prepare_run():  # WHY: init + load + template + sites phase. Bail on failure.
             return
         devices = self._find_devices_with_overrides()  # WHY: identify targets for probe config.
         if not devices:  # WHY: nothing to do if no overrides exist.
@@ -256,7 +256,7 @@ class WANProbeDeviceOverrideManager:  # WHY: encapsulates Menu #167 destructive 
             "\n  Selection: ",
             context="wan_probe_device_template_selection",
         )
-        return raw.strip().lower()  # WHY: normalise so 'CANCEL', ' 1 ' etc. work.
+        return raw.strip().lower()  # WHY: normalise so 'CANCEL', ' 1 ' and so on work.
 
     def _resolve_template_selection(  # WHY: parse numeric input and commit to selected_template.
         self,
@@ -265,7 +265,7 @@ class WANProbeDeviceOverrideManager:  # WHY: encapsulates Menu #167 destructive 
     ) -> bool:
         """Parse a numeric selection string and record the chosen template."""
         try:
-            idx = int(selection) - 1  # WHY: operator indexes from 1; internal index is 0-based.
+            idx = int(selection) - 1  # WHY: operator indexes from 1. Internal index is 0-based.
         except ValueError:
             print(f" Invalid selection: {selection}")  # WHY: user-facing diagnostic.
             logging.error("Menu #167: Invalid template selection: %s", selection)  # WHY: audit log.
@@ -397,7 +397,7 @@ class WANProbeDeviceOverrideManager:  # WHY: encapsulates Menu #167 destructive 
                 current_probe = {}
             overridden_wan_ports.append(
                 {
-                    "port_name": port_name,  # WHY: port identifier (e.g. ge-0/0/0).
+                    "port_name": port_name,  # WHY: port identifier (for example ge-0/0/0).
                     "current_ips": current_probe.get("ips", []),  # WHY: existing probe IPs.
                     "current_profile": current_probe.get("probe_profile", ""),  # WHY: existing probe profile.
                     "port_settings": port_settings,  # WHY: full port settings retained for context.
@@ -545,7 +545,7 @@ class WANProbeDeviceOverrideManager:  # WHY: encapsulates Menu #167 destructive 
         overridden_wan_ports: list[dict[str, Any]],
         device_name: str,
     ) -> list[str]:
-        """Patch wan_probe_override on each matching port; return modified port names."""
+        """Patch wan_probe_override on each matching port. Return modified port names."""
         ports_modified: list[str] = []  # WHY: names of ports that were actually patched.
         for wan_port in overridden_wan_ports:  # WHY: iterate planned overrides.
             port_name = wan_port["port_name"]  # WHY: cached port identifier.

@@ -99,7 +99,7 @@ class RetentionManager:  # WHY: single owner of ArangoDB+Redis retention
         """Query ArangoDB storage usage in GB."""
         database = getattr(self._arango, "_database", None)  # WHY: MagicMock safe
         if database is None:  # WHY: writer without _database -> zero usage
-            return 0.0  # WHY: zero means "no data yet"; sweep continues
+            return 0.0  # WHY: zero means "no data yet". Sweep continues
         try:
             stats = database.statistics()  # WHY: server-level stats dict
             data_size = stats.get("dataSize", 0)  # WHY: bytes, may be missing

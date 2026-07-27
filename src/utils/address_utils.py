@@ -16,7 +16,7 @@ import re  # WHY: regex normalization of addresses, zip codes, and business suff
 import time  # WHY: rate-limit + retry backoff around Nominatim API calls
 import traceback  # WHY: capture exception context in geocode debug logs
 import unicodedata  # WHY: NFKD normalization strips diacritics before comparison
-from collections.abc import Callable  # WHY: Any for opaque JSON payloads; Callable for dispatch map
+from collections.abc import Callable  # WHY: Any for opaque JSON payloads. Callable for dispatch map
 from dataclasses import dataclass, field  # WHY: config + address/skip bundling for STRUCT-PARAMS compliance
 from difflib import SequenceMatcher  # WHY: string-ratio helper used by org-name similarity
 from typing import Any
@@ -34,12 +34,12 @@ except ImportError:  # pragma: no cover  # WHY: absence is non-fatal
     urllib3 = None  # type: ignore[assignment]  # WHY: sentinel checked before disabling warnings
     _has_urllib3 = False  # WHY: skip suppression path when the module is missing
 
-try:  # WHY: rapidfuzz is optional; degrade to difflib on absence
+try:  # WHY: rapidfuzz is optional. Degrade to difflib on absence
     from rapidfuzz import fuzz  # WHY: faster token-sort ratio when available
 except ImportError:  # pragma: no cover  # WHY: keep import graph optional
     fuzz = None  # type: ignore[assignment]  # WHY: sentinel checked before use
 
-try:  # WHY: scourgify is optional; heuristic parser handles the rest
+try:  # WHY: scourgify is optional. Heuristic parser handles the rest
     from scourgify import normalize_address_record  # WHY: high-quality USPS-style parse
 except ImportError:  # pragma: no cover  # WHY: fall back to heuristic parser
     normalize_address_record = None  # WHY: sentinel checked before use
@@ -49,7 +49,7 @@ except ImportError:  # pragma: no cover  # WHY: fall back to heuristic parser
 class AddressValidationConfig:
     """Configuration for address validation with Nominatim."""
 
-    timeout: int = 5  # WHY: seconds per HTTP attempt; retries add linear back-off
+    timeout: int = 5  # WHY: seconds per HTTP attempt. Retries add linear back-off
     debug: bool = False  # WHY: enables verbose parse + geocode logging
     skip_ssl_verify: bool = False  # WHY: internal MITM proxies sometimes need this
     org_name: str | None = None  # WHY: powers the org-name similarity tiebreaker
@@ -308,7 +308,7 @@ class AddressUtils:
         normalized = normalized.casefold().strip()  # WHY: casefold beats lower() for i18n text
         normalized = re.sub(r"\s+", " ", normalized)  # WHY: collapse repeated whitespace
         for full_form, abbrev in _ADDRESS_ABBREVIATIONS.items():  # WHY: canonicalize suffix words
-            normalized = re.sub(full_form, abbrev, normalized)  # WHY: turn "street" -> "st" etc.
+            normalized = re.sub(full_form, abbrev, normalized)  # WHY: turn "street" -> "st" and so on
         normalized = re.sub(r"[^\w\s]", " ", normalized)  # WHY: drop punctuation before token compare
         normalized = " ".join(normalized.split())  # WHY: re-collapse whitespace introduced by punct strip
         return normalized  # WHY: fully-normalized address string ready for similarity
@@ -338,7 +338,7 @@ class AddressUtils:
     @staticmethod
     def _empty_parse_result(address_string: str | None) -> dict[str, Any]:
         """Return the base (all-unset) parsed-address result skeleton."""
-        return {  # WHY: every field starts unset; parser fills them on success
+        return {  # WHY: every field starts unset. Parser fills them on success
             "address": None,  # WHY: street line, None until parsed
             "city": None,  # WHY: city component, None until parsed
             "state": None,  # WHY: state/region, None until parsed
@@ -528,7 +528,7 @@ def _extract_address_components(
     parts: list[str],
 ) -> dict[str, str | None]:
     """Extract country, zip, state, city, address from comma-split parts."""
-    remaining = list(parts)  # WHY: shallow copy so peeling doesn't mutate caller data
+    remaining = list(parts)  # WHY: shallow copy so peeling does not mutate caller data
     country = _detect_country(remaining)  # WHY: right-to-left peel starts with country
     remaining = _peel_last(remaining, country)  # WHY: drop country token when detected
     zip_code, country = _detect_zip(remaining, country)  # WHY: ZIP may imply country when absent
@@ -617,7 +617,7 @@ def _state_literal(last: str) -> str | None:
 def _normalize_multipart_state(last: str, parts: list[str]) -> str | None:
     """Normalize a full-name state token only when there are multiple parts."""
     if len(parts) <= 1:  # WHY: single-part input is more likely a city than a state
-        return None  # WHY: avoid mislabeling "California" as state when it's the only token
+        return None  # WHY: avoid mislabeling "California" as state when it is the only token
     normalized = AddressUtils._normalize_state(last)  # WHY: map full name to abbreviation
     return normalized.upper() if normalized else None  # WHY: canonical uppercase abbr
 
@@ -640,7 +640,7 @@ def _count_field_matches(
     skip_fields: list[str],
 ) -> int:
     """Count how many non-empty skip fields match comparison fields."""
-    return sum(  # WHY: sum booleans; only non-empty skip fields with equal comp count
+    return sum(  # WHY: sum booleans. Only non-empty skip fields with equal comp count
         bool(skip_val and comp_val == skip_val)  # WHY: skip field must be populated to count
         for comp_val, skip_val in zip(comp_fields, skip_fields, strict=True)  # WHY: strict=True catches shape drift
     )
@@ -677,7 +677,7 @@ def _check_partial_skip(
         if debug:  # WHY: trace partial-match skips when debugging
             logging.debug("ADDRESS_SKIP: Partial match - %s", comp.address)
         return True, skip.reason  # WHY: sufficient match -> skip with the entry's reason
-    return False, ""  # WHY: match count didn't clear the sufficiency bar
+    return False, ""  # WHY: match count did not clear the sufficiency bar
 
 
 def _check_parse_status(
@@ -686,7 +686,7 @@ def _check_parse_status(
     field_weights: dict[str, float],
 ) -> dict[str, Any]:
     """Check if addresses are parseable."""
-    status: dict[str, Any] = {  # WHY: default both sides parseable; downgrade on placeholder tokens
+    status: dict[str, Any] = {  # WHY: default both sides parseable. Downgrade on placeholder tokens
         "mist_parseable": True,  # WHY: assume valid until proven otherwise
         "comparison_parseable": True,  # WHY: assume valid until proven otherwise
         "mist_reason": "valid",  # WHY: default status label
@@ -935,7 +935,7 @@ class NominatimValidator:
                 timeout=timeout,
                 verify=verify_ssl,
             )
-        except Exception:  # WHY: catch-all so a bad response doesn't kill validation
+        except Exception:  # WHY: catch-all so a bad response does not kill validation
             if attempt < self.MAX_RETRIES:  # WHY: sleep only when another attempt remains
                 time.sleep(self.RETRY_DELAY)  # WHY: fixed back-off between attempts
             return None  # WHY: signal caller to retry or terminate
@@ -1012,7 +1012,7 @@ class NominatimValidator:
     ) -> float:
         """Calculate overall confidence score for geocode result."""
         importance = float(result.get("importance", 0.0))  # WHY: Nominatim's own importance score
-        if importance > 0.01:  # WHY: trust importance when it's non-trivial
+        if importance > 0.01:  # WHY: trust importance when it is non-trivial
             return min(1.0, importance * 2.0)  # WHY: scale + cap at 1.0
         display_name = result.get("display_name", "")  # WHY: cache to shorten next call
         component = self._calculate_component_match(address_parts, display_name, source)  # WHY: fallback match
@@ -1096,7 +1096,7 @@ class NominatimValidator:
         ref_dup: bool,
     ) -> tuple[str | None, str | None]:
         """Apply duplicate disqualification rules."""
-        if mist_dup and ref_dup:  # WHY: both duplicated -> can't pick a winner
+        if mist_dup and ref_dup:  # WHY: both duplicated -> cannot pick a winner
             return "uncertain", "Both addresses are duplicates"
         if mist_dup:  # WHY: mist alone duplicated -> ref wins by default
             return "comparison", "Mist address is duplicate"

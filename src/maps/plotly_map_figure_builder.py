@@ -190,7 +190,7 @@ class PlotlyMapFigureBuilder:  # WHY: attaches walls/wayfinding/zones traces ont
         for node in nodes:  # WHY: single top-level loop keeps CC at 3.
             self._add_node_edges(fig, node, node_lookup, style)  # WHY: per-node fan-out extracted below.
 
-    def _add_node_edges(  # WHY: draw all outbound edges for one node; keeps _add_edge_segments flat.
+    def _add_node_edges(  # WHY: draw all outbound edges for one node. Keeps _add_edge_segments flat.
         self,
         fig: go.Figure,
         node: dict[str, Any],
@@ -217,7 +217,7 @@ class PlotlyMapFigureBuilder:  # WHY: attaches walls/wayfinding/zones traces ont
         index: int,
         zone: dict[str, Any],
     ) -> None:
-        """Render one polygon+label for a zone dict; skip if too few vertices."""
+        """Render one polygon+label for a zone dict. Skip if too few vertices."""
         zone_name = zone.get("name", f"Zone {index + 1}")  # WHY: fallback name preserves legacy labels.
         vertices = zone.get("vertices", [])  # WHY: polygon geometry source.
         self.logger.debug("Zone '%s': %s vertices - %s", zone_name, len(vertices), vertices)  # WHY: trace.

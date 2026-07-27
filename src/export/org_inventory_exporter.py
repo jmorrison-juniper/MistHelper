@@ -146,7 +146,7 @@ class OrgInventoryExporter:  # Org inventory exporters.
     def _fetch_and_persist_raw_inventory_variant(
         filename: str, request_kwargs: dict, current_org_id: str, output_folder: str
     ) -> int:
-        """Fetch one inventory variant and persist as raw JSON; return row count."""
+        """Fetch one inventory variant and persist as raw JSON. Return row count."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of live apisession.
         logging.info("Fetching raw inventory variant for %s...", filename)  # Log before API call
         response = mistapi.api.v1.orgs.inventory.getOrgInventory(mh.apisession, current_org_id, **request_kwargs)
@@ -176,7 +176,7 @@ class OrgInventoryExporter:  # Org inventory exporters.
                 )
                 for filename, kwargs in request_specs
             }
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info(  # Show concise operator summary once all diagnostic files are written
                 "  Raw JSON saved: vc=True (%s), vc=False (%s), no-vc (%s) entries",
                 counts_by_filename.get("raw_inventory_vc_true.json", 0),
@@ -236,18 +236,18 @@ class OrgInventoryExporter:  # Org inventory exporters.
         site_configs: list[dict[str, str]], empty_vc_shells: list[dict[str, str]]
     ) -> None:
         """Log the dashboard-vs-report parity note when empty VC shells exist."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info(
             "  NOTE: %s provisioned VC shells exist with no physical members.",
             len(empty_vc_shells),
         )  # Explain why dashboard counts may exceed report counts
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info(  # Provide explicit comparison so operators trust the physical-only report totals
             "        Dashboard shows %s 'Physical Devices' but %s are empty VC placeholders (020003* MAC, no serial/SKU).",  # noqa: E501
             len(site_configs) + len(empty_vc_shells),
             len(empty_vc_shells),
         )
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info(
             "        Report correctly includes only %s devices with real hardware.",
             len(site_configs),
@@ -340,7 +340,7 @@ class OrgInventoryExporter:  # Org inventory exporters.
         return weekly_data, summary_data  # Return both detailed buckets and summary counts
 
     @staticmethod
-    def _write_combined_inventory_weekly_csvs(  # Write weekly inventory CSVs.
+    def _write_combined_inventory_weekly_csvs(  # Write weekly inventory CSV files.
         output_folder: str,
         fieldnames: list[str],
         weekly_data: defaultdict[str, list[dict[str, str | None]]],
@@ -440,7 +440,7 @@ class OrgInventoryExporter:  # Org inventory exporters.
         weekly_data: defaultdict,
         summary_data: defaultdict,
     ) -> tuple[str, int]:
-        """Emit weekly CSVs + summary + master CSV; return master filename + row count."""
+        """Emit weekly CSVs + summary + master CSV. Return master filename + row count."""
         fieldnames = OrgInventoryExporter._COMBINED_INVENTORY_FIELDNAMES  # Stable weekly-export column order
         OrgInventoryExporter._write_combined_inventory_weekly_csvs(output_folder, fieldnames, weekly_data)
         OrgInventoryExporter._write_combined_inventory_summary(output_folder, summary_data)  # Year/week summary
@@ -451,7 +451,7 @@ class OrgInventoryExporter:  # Org inventory exporters.
     @staticmethod
     def combined_inventory_with_site_info():  # Export devices with site info.
         """Combine fresh AllDevicesWithSiteInfo data into weekly CSV files + summary + master CSV."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("Combined Inventory with Site Info by Calendar Week:")  # Announce menu 25 export scope
         ctx = OrgInventoryExporter._prepare_combined_inventory_context()  # Resolve org + customer + paths
         current_org_id, end_customer_name, end_customer_account_id, safe_org_name, output_folder = ctx
@@ -482,17 +482,17 @@ class OrgInventoryExporter:  # Org inventory exporters.
         master_row_count: int,
     ) -> None:
         """Log the three CombinedInventory output locations (weekly CSVs, summary, master) for the operator."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info(
             "! %s weekly CSV files created in data/CombinedInventory_ByWeek/ folder (%s total devices processed)",
             len(weekly_data),
             len(site_configs),
         )  # Summarize weekly export output counts for the operator.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info(
             "! Summary report exported to data/CombinedInventory_ByWeek/CombinedInventory_Summary.csv"
         )  # Confirm summary report location.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info(
             "! Master inventory exported to data/CombinedInventory_ByWeek/%s (%s devices)",
             master_csv_filename,
@@ -512,7 +512,7 @@ class OrgInventoryExporter:  # Org inventory exporters.
     @staticmethod
     def _load_site_lookup_from_cache(org_id: str) -> dict:  # type: ignore[type-arg]
         """Load the site lookup from cached SiteList.csv, falling back to the API on any read failure."""
-        try:  # Cached CSV is preferred; fall back to the API if it is missing or unreadable.
+        try:  # Cached CSV is preferred. Fall back to the API if it is missing or unreadable.
             site_list_path = FilePathUtils.get_csv_path("SiteList.csv")  # Resolve site CSV path.
             with open(site_list_path, encoding="utf-8") as file:  # Open cached site CSV.
                 reader = csv.DictReader(file)  # Read site CSV rows.
@@ -528,7 +528,7 @@ class OrgInventoryExporter:  # Org inventory exporters.
     @staticmethod
     def _load_inventory_from_cache(org_id: str) -> list:  # type: ignore[type-arg]
         """Load the org inventory from cached OrgInventory.csv, falling back to the API on any read failure."""
-        try:  # Cached CSV is preferred; fall back to the API if it is missing or unreadable.
+        try:  # Cached CSV is preferred. Fall back to the API if it is missing or unreadable.
             inventory_path = FilePathUtils.get_csv_path("OrgInventory.csv")  # Resolve inventory CSV path.
             with open(inventory_path, encoding="utf-8") as file:  # Open cached inventory CSV.
                 reader = csv.DictReader(file)  # Read inventory CSV rows.
@@ -559,7 +559,7 @@ class OrgInventoryExporter:  # Org inventory exporters.
     def _build_mac_to_site_id(inventory: list) -> dict:  # type: ignore[type-arg]
         """Index every device's mac -> site_id so VC members without a site_id can inherit one from their parent.
 
-        Physical VC members carry vc_mac but no site_id; that vc_mac may point at the virtual VC entry (020003* MAC)
+        Physical VC members carry vc_mac but no site_id. That vc_mac may point at the virtual VC entry (020003* MAC)
         or the primary physical chassis MAC. Indexing ALL devices with a site_id covers both cases.
         """
         mac_to_site_id: dict[str, str] = {}  # Universal mac -> site_id lookup for inheritance.
@@ -574,7 +574,7 @@ class OrgInventoryExporter:  # Org inventory exporters.
 
     @staticmethod
     def _enrich_one_device(device: dict, site_lookup: dict, mac_to_site_id: dict) -> bool:  # type: ignore[type-arg]
-        """Attach site name/address + split-address fields to one device; return True if its site was VC-inherited."""
+        """Attach site name/address + split-address fields to one device. Return True if its site was VC-inherited."""
         site_id = device.get("site_id")  # Check if device has its own site_id.
         inherited = False  # Track whether this device inherited its site from a VC parent.
         if not site_id and device.get("vc_mac"):  # Device missing a site assignment but part of a VC.
@@ -613,13 +613,13 @@ class OrgInventoryExporter:  # Org inventory exporters.
 
     @staticmethod
     def _flatten_sort_export_devices(devices: list) -> list:  # type: ignore[type-arg]
-        """Flatten, escape, sort by site name, and write the all-devices CSV; return the processed rows for display."""
+        """Flatten, escape, sort by site name, and write the all-devices CSV. Return the processed rows for display."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataExporter (T-08 pending).
         devices = DataProcessingUtils.flatten_nested_fields(devices)  # Flatten enriched fields.
         devices = DataProcessingUtils.escape_multiline(devices)  # type: ignore[no-untyped-call]
         devices = sorted(devices, key=lambda x: x.get("site_name", ""))  # Sort by site name.
         mh.DataExporter.write_with_format_selection(devices, "AllDevicesWithSiteInfo.csv")  # type: ignore[no-untyped-call]
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("! %s devices exported to AllDevicesWithSiteInfo.csv", len(devices))  # Confirm export to operator.
         logging.info("All device data written to AllDevicesWithSiteInfo.csv (%s records).", len(devices))  # Log write.
         return devices  # Processed rows for the summary table.
@@ -649,14 +649,14 @@ class OrgInventoryExporter:  # Org inventory exporters.
     def devices_with_site_info(fast: bool = False):
         """Fetch all org devices, enrich them with site/address info, and export AllDevicesWithSiteInfo.csv.
 
-        When ``fast`` is True, cached SiteList.csv / OrgInventory.csv are used (with API fallback); otherwise
+        When ``fast`` is True, cached SiteList.csv / OrgInventory.csv are used (with API fallback). Otherwise
         the data is fetched directly from the API. Physical VC members without a site_id inherit one from
         their VC parent. Also debug-logs a summary table.
         """
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("All Devices with Site and Address Info:")  # Inform operator of export.
         logging.info("Fetching All Devices with Site Info...")  # Log fetch start.
-        if fast:  # Fast mode reuses cached CSVs.
+        if fast:  # Fast mode reuses cached CSV files.
             logging.info(" Fast mode enabled for devices with site info export")  # Log fast mode enabled.
         org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org id.
         site_lookup, inventory = OrgInventoryExporter._devices_load_data(org_id, fast)  # Load sites + inventory.
@@ -674,7 +674,7 @@ class OrgInventoryExporter:  # Org inventory exporters.
         Fetches all gateway devices in the organization, enriches them with site and
         address info, writes GatewaysWithSiteInfo.csv, and logs a summary table.
         """
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("Gateways with Site and Address Info:")  # Inform operator of export.
         logging.info("Fetching Gateways with Site Info...")  # Log fetch start.
         org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org id.
@@ -688,25 +688,25 @@ class OrgInventoryExporter:  # Org inventory exporters.
 
         gateways = OrgInventoryExporter._enrich_gateways_with_site_info(inventory, site_lookup)  # Filter + enrich
         logging.info("Enriched %s gateway devices with site info.", len(gateways))  # Log enriched gateway count.
-        gateways = OrgInventoryExporter._flatten_sort_export_gateways(gateways)  # Flatten/sort/write CSV; returns rows
+        gateways = OrgInventoryExporter._flatten_sort_export_gateways(gateways)  # Flatten/sort/write CSV. Returns rows
         OrgInventoryExporter._display_gateways_summary_table(gateways)  # Debug-log a PrettyTable of the gateways.
 
     @staticmethod
     def _flatten_sort_export_gateways(gateways: list) -> list:  # type: ignore[type-arg]  # Flatten/sort/write the CSV
-        """Flatten, escape, sort by site name, and write the gateways CSV; return the processed rows for display."""
+        """Flatten, escape, sort by site name, and write the gateways CSV. Return the processed rows for display."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataExporter (T-08 pending).
         gateways = DataProcessingUtils.flatten_nested_fields(gateways)  # Flatten gateway fields.
         gateways = DataProcessingUtils.escape_multiline(gateways)  # type: ignore[no-untyped-call]
         gateways = sorted(gateways, key=lambda x: x.get("site_name", ""))  # Sort by site name.
         mh.DataExporter.write_with_format_selection(gateways, "GatewaysWithSiteInfo.csv")  # type: ignore[no-untyped-call]
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("! %s gateways exported to GatewaysWithSiteInfo.csv", len(gateways))  # Confirm export to operator.
         logging.info("Gateway data written to GatewaysWithSiteInfo.csv")  # Log write success.
         return gateways  # Processed rows for the summary table
 
     @staticmethod
     def _split_full_address(address: str) -> tuple[str, str, str, str, str]:  # Parse address into parts.
-        """Split a full address into (street, city, state, zip, country); raw street + blanks on parse failure."""
+        """Split a full address into (street, city, state, zip, country). Raw street + blanks on parse failure."""
         try:
             parts = address.split(", ")  # Split on comma separators.
             state_zip = parts[2].split()  # Split state and zip.

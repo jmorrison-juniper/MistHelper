@@ -162,7 +162,7 @@ class MultiApScanCaptureWorkflow:
         return self._parse_bounded_int(packets_str, spec)  # WHY: Delegate parsing + range validation.
 
     def _parse_bounded_int(self, raw: str, spec: BoundedIntSpec) -> int | None:  # WHY: Shared parse + range check.
-        """Convert raw string to bounded int; emit legacy messages on failure."""
+        """Convert raw string to bounded int. Emit legacy messages on failure."""
         try:
             value = int(raw)  # WHY: Convert textual input to integer for numeric validation.
         except ValueError:
@@ -244,7 +244,7 @@ class MultiApScanCaptureWorkflow:
                 logging.debug("%d capture(s) already in progress or recently completed", len(existing))  # WHY: Log.
 
     def _gather_capture_config(self) -> CaptureConfig | None:  # WHY: Sequence operator prompts and validate output.
-        """Prompt operator for capture parameters; return CaptureConfig or None on abort."""
+        """Prompt operator for capture parameters. Return CaptureConfig or None on abort."""
         band = self._prompt_band()  # WHY: Prompt for band first per legacy flow.
         channel = self._prompt_channel(band)  # WHY: Prompt for channel constrained by band.
         if channel is None:  # WHY: Abort early when channel input is invalid.

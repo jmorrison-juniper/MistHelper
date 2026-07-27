@@ -19,7 +19,7 @@ naturally or by delegating to private ``_handle_*`` helpers.
 
 To add a callback in a later wave:
 
-1. Implement the method on this class (keep CC <= 10; extract
+1. Implement the method on this class (keep CC <= 10. Extract
    ``_handle_*`` helpers when complexity demands it).
 2. Add any new closure dependencies as fields on
    :class:`src.maps.launcher.viewer_state.MapViewerState`.
@@ -61,7 +61,7 @@ class MapViewerCallbacks:  # WHY: thin coordinator over 6 extracted callback clu
     def __init__(self, state: MapViewerState) -> None:  # WHY: bind shared state + wire cluster instances
         """Store the shared MapViewerState for use by every callback method."""
         # Store the shared state container so each callback method can
-        # access closure-equivalent values (e.g. callback_manager) via
+        # access closure-equivalent values (for example callback_manager) via
         # self._state without needing per-callback parameters.
         self._state = state  # MapViewerState instance carrying viewer context
         self._ui = _ViewerUI(self)  # WHY: bind extracted UI-toggle cluster so delegate stubs resolve

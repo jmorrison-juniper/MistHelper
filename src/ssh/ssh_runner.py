@@ -25,7 +25,7 @@ _MAX_TIMEOUT_SEC: int = 3600  # WHY: upper bound (1 hour) for accepted timeout v
 _DEFAULT_PORT: int = 22  # WHY: standard SSH port used everywhere in this module
 _DEFAULT_MAX_THREADS: int = 5  # WHY: default multi-host thread cap used by SSHExecutionConfig
 _MAX_FILENAME_LEN: int = 100  # WHY: cap sanitized filenames to a filesystem-safe length
-_MAX_THREADS_HARD_CAP: int = 50  # WHY: don't let callers request more than 50 SSH worker threads
+_MAX_THREADS_HARD_CAP: int = 50  # WHY: do not let callers request more than 50 SSH worker threads
 _THREADS_PER_HOST_MULTIPLIER: int = 2  # WHY: cap threads at 2x the host count for a sensible default
 _MAX_STDOUT_SAMPLE_CHARS: int = 200  # WHY: only sample the first 200 chars of stdout/stderr into logs
 _DEFAULT_LOGGER_NAME: str = "ssh_runner_v2"  # WHY: named logger asserted by tests and callers
@@ -126,7 +126,7 @@ def _sample_suffix(output: str) -> str:
 
 def _validate_port_arg(value: str) -> int:
     """Validate the --port argparse value ensuring it is in 1..65535."""
-    parsed = int(value)  # WHY: argparse hands strings; convert to int for range validation
+    parsed = int(value)  # WHY: argparse hands strings. Convert to int for range validation
     if not SshConnector._validate_port(parsed):  # WHY: delegate to canonical port validator in connector
         msg = f"Port must be between 1 and 65535, got {parsed}"  # WHY: shorten for line length
         raise argparse.ArgumentTypeError(msg)  # WHY: same message as before
@@ -135,7 +135,7 @@ def _validate_port_arg(value: str) -> int:
 
 def _validate_timeout_arg(value: str) -> int:
     """Validate the --timeout argparse value ensuring it is in 1..3600."""
-    parsed = int(value)  # WHY: argparse gives strings; convert to int for validation
+    parsed = int(value)  # WHY: argparse gives strings. Convert to int for validation
     if not EnhancedSSHRunner._validate_timeout(parsed):  # WHY: reuse the same runner-level timeout validator
         raise argparse.ArgumentTypeError(  # WHY: preserve legacy error text so users' scripts still parse it
             f"Timeout must be between 1 and 3600 seconds, got {parsed}"
@@ -145,7 +145,7 @@ def _validate_timeout_arg(value: str) -> int:
 
 def _validate_threads_arg(value: str) -> int:
     """Validate the --max-threads argparse value ensuring 1..100 inclusive."""
-    parsed = int(value)  # WHY: argparse hands strings; convert to int for range validation
+    parsed = int(value)  # WHY: argparse hands strings. Convert to int for range validation
     if parsed <= 0 or parsed > 100:  # WHY: explicit bounds keep the CLI safe and predictable
         raise argparse.ArgumentTypeError(f"Thread count must be between 1 and 100, got {parsed}")  # WHY: keep msg
     return parsed  # WHY: return validated thread cap
@@ -183,7 +183,7 @@ class EnhancedSSHRunner:
             logger: Logger instance
         """
         self.timeout = timeout  # WHY: store timeout for both connect and command exec paths
-        self.client = None  # WHY: paramiko client is attached by the connector; None means not connected
+        self.client = None  # WHY: paramiko client is attached by the connector. None means not connected
         self.logger = logger or logging.getLogger(_DEFAULT_LOGGER_NAME)  # WHY: fall back to the module logger name
         self.managed_known_hosts_path: str | None = None  # WHY: connector writes the managed known-hosts path here
         self.logger.debug("EnhancedSSHRunner initialized with timeout=%s", timeout)  # WHY: trace-level init evidence
@@ -223,10 +223,10 @@ class EnhancedSSHRunner:
         """
         if not filename:  # WHY: empty inputs get a stable placeholder rather than an empty path segment
             return _UNKNOWN_SANITIZED  # WHY: preserves legacy "unknown" return value for empty inputs
-        sanitized = _SANITIZE_PATTERN.sub("_", filename)  # WHY: whitelist alnum/dot/dash/underscore; replace rest
+        sanitized = _SANITIZE_PATTERN.sub("_", filename)  # WHY: whitelist alnum/dot/dash/underscore. Replace rest
         sanitized = sanitized.strip(".-") or _FALLBACK_SANITIZED  # WHY: drop leading/trailing dots and dashes safely
         sanitized = _apply_length_limit(sanitized)  # WHY: cap filename length to keep filesystem happy
-        if _is_windows_reserved(sanitized):  # WHY: rewrite reserved device names so Windows won't reject them
+        if _is_windows_reserved(sanitized):  # WHY: rewrite reserved device names so Windows will not reject them
             sanitized = f"host_{sanitized}"  # WHY: preserved legacy prefix pattern used by callers/tests
         return sanitized  # WHY: return the finalized filesystem-safe string
 
@@ -269,7 +269,7 @@ class EnhancedSSHRunner:
         try:
             os.makedirs(log_dir, exist_ok=True)  # WHY: create the subdir on demand for the very first host
             self._maybe_lock_log_dir(log_dir)  # WHY: chmod only when the platform supports it (POSIX-only)
-        except OSError as exc:  # WHY: creation can fail on read-only or exotic mounts; fall back gracefully
+        except OSError as exc:  # WHY: creation can fail on read-only or exotic mounts. Fall back gracefully
             self.logger.error("Failed to create log directory %s: %s", log_dir, exc)  # WHY: surface the failure
             return data_dir, f"fallback_{safe_hostname}"  # WHY: legacy fallback path when subdir cannot be made
         return log_dir, safe_hostname  # WHY: happy-path return of the newly-ensured directory + safe hostname
@@ -277,7 +277,7 @@ class EnhancedSSHRunner:
     @staticmethod
     def _maybe_lock_log_dir(log_dir: str) -> None:
         """Restrict the log directory to owner rwx on platforms that support chmod."""
-        if hasattr(os, "chmod"):  # WHY: os.chmod exists on Windows but is a no-op; still safe to call
+        if hasattr(os, "chmod"):  # WHY: os.chmod exists on Windows but is a no-op. Still safe to call
             os.chmod(log_dir, _LOG_DIR_MODE)  # WHY: lock down access to per-host logs
 
     def _write_to_host_log(self, log_path: str, message: str) -> None:
@@ -320,7 +320,7 @@ class EnhancedSSHRunner:
         """
         if not self.client:  # WHY: bail out with a helpful error if no SSH session is active
             error_msg = "No active SSH connection"  # WHY: exact string checked by tests
-            self.logger.error(error_msg)  # WHY: surface at ERROR since it's a caller misuse
+            self.logger.error(error_msg)  # WHY: surface at ERROR since it is a caller misuse
             return False, "", error_msg  # WHY: legacy tuple shape (success, stdout, stderr)
         try:
             return self._dispatch_execution(command, use_shell, hostname)  # WHY: pure dispatch keeps CC low
@@ -443,7 +443,7 @@ class EnhancedSSHRunner:
 
     def _disconnect(self) -> None:
         """Close SSH connection."""
-        if self.client:  # WHY: only close when a client is attached; no-op otherwise
+        if self.client:  # WHY: only close when a client is attached. No-op otherwise
             self.logger.debug("Closing SSH connection")  # WHY: trace so users can confirm clean teardown
             self.client.close()  # WHY: releases paramiko file descriptors and server-side session
             self.client = None  # WHY: reset so subsequent _execute_command calls fail fast with a clear message

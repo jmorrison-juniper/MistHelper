@@ -104,7 +104,7 @@ class BatchExecutor:
     # ------------------------------------------------------------------
     @staticmethod
     def run(request: BatchRunRequest) -> bool:  # WHY: single-request public entrypoint.
-        """Execute the batch session described by *request*; return success bool."""
+        """Execute the batch session described by *request*. Return success bool."""
         logger = logging.getLogger(_SSH_LOGGER_NAME)  # WHY: unified SSH logger for all executors.
         BatchExecutor._log_session_start(request, logger)  # WHY: emit start banner + debug details.
         log_ctx = BatchExecutor._setup_host_log(request, logger)  # WHY: build runner + log writer.
@@ -137,7 +137,7 @@ class BatchExecutor:
         logger: logging.Logger,
     ) -> bool:
         """Guarded session flow: catch fatal errors and always write the footer."""
-        overall_success = True  # WHY: default optimistic; flipped on any failure or exception.
+        overall_success = True  # WHY: default optimistic. Flipped on any failure or exception.
         try:
             overall_success = BatchExecutor._execute_with_connection(request, log_ctx, logger)  # WHY: real run.
             return overall_success  # WHY: propagate session outcome to the caller.
@@ -146,7 +146,7 @@ class BatchExecutor:
             overall_success = False  # WHY: guarantee failure state before finally-writes footer.
             return False  # WHY: signal caller that the batch failed.
         finally:
-            log_ctx.runner._disconnect()  # WHY: teardown; safe when client may be None.
+            log_ctx.runner._disconnect()  # WHY: teardown. Safe when client may be None.
             logger.debug("[%s] SSH multi-command session completed", request.hostname)  # WHY: parity log.
             BatchExecutor._write_footer(log_ctx.writer, overall_success, log_ctx.log_file, logger)  # WHY: footer.
 
@@ -171,7 +171,7 @@ class BatchExecutor:
     # ------------------------------------------------------------------
     @staticmethod
     def _setup_host_log(request: BatchRunRequest, logger: logging.Logger) -> _LogContext:
-        """Build the runner, create the per-host log file, write the header; return helpers."""
+        """Build the runner, create the per-host log file, write the header. Return helpers."""
         from src.ssh.ssh_runner import EnhancedSSHRunner  # WHY: local import avoids circular module load.
 
         runner = EnhancedSSHRunner(timeout=request.timeout, logger=logger)  # WHY: owns timeout + client.
@@ -202,9 +202,9 @@ class BatchExecutor:
         log_ctx: _LogContext,
         logger: logging.Logger,
     ) -> bool:
-        """Open SSH connection, iterate commands; return overall success bool."""
+        """Open SSH connection, iterate commands. Return overall success bool."""
         client = BatchExecutor._connect_client(request, log_ctx, logger)  # WHY: real connect step.
-        if client is None:  # WHY: connection failed; connector logged the reason already.
+        if client is None:  # WHY: connection failed. Connector logged the reason already.
             return False  # WHY: propagate failure sentinel to _run_guarded.
         logger.debug("SSH connected to %s, executing %d commands", request.hostname, len(request.commands))
         log_ctx.writer(f"\n>> Executing {len(request.commands)} commands sequentially...")  # WHY: verbatim status.
@@ -220,7 +220,7 @@ class BatchExecutor:
         log_ctx: _LogContext,
         logger: logging.Logger,
     ) -> Any:
-        """Perform the real SSH connect + wire the client into the runner; return client or None."""
+        """Perform the real SSH connect + wire the client into the runner. Return client or None."""
         logger.info(  # WHY: pre-connect log line for post-mortem correlation.
             "Connecting via SshConnector for multi-command session to %s:%s",
             request.hostname,
@@ -231,7 +231,7 @@ class BatchExecutor:
             request.hostname, request.username, request.password, request.port
         )
         logger.debug("Multi-command connect returned client=%s", bool(client))  # WHY: post-connect log.
-        if client is None:  # WHY: connection failed; write the verbatim error line.
+        if client is None:  # WHY: connection failed. Write the verbatim error line.
             error_msg = f"Failed to connect to {request.hostname}"  # WHY: verbatim error text.
             logger.error("SSH connection failed: %s:%s", request.hostname, request.port)  # WHY: log level.
             log_ctx.writer(f"X  {error_msg}")  # WHY: verbatim error line on the per-host log.
@@ -261,7 +261,7 @@ class BatchExecutor:
             if step_result.stop:  # WHY: interrupt short-circuits remaining commands.
                 overall_success = False  # WHY: interrupts always mark the batch failed.
                 break
-            if not step_result.ok:  # WHY: failed command doesn't stop remaining commands.
+            if not step_result.ok:  # WHY: failed command does not stop remaining commands.
                 overall_success = False  # WHY: track failure but keep executing (verbatim behavior).
             if index < total:  # WHY: inter-command delay only applies between commands.
                 time.sleep(_INTER_COMMAND_PAUSE)  # WHY: preserve original pacing between commands.
@@ -273,7 +273,7 @@ class BatchExecutor:
         ctx: _CommandContext,
         logger: logging.Logger,
     ) -> _StepResult:
-        """Run one command; convert KeyboardInterrupt into a stop flag."""
+        """Run one command. Convert KeyboardInterrupt into a stop flag."""
         try:
             step_ok = BatchExecutor._run_one_command(log_ctx.runner, ctx, log_ctx.writer, logger)  # WHY: run.
             return _StepResult(stop=False, ok=step_ok)  # WHY: normal path returns the command's success.
@@ -288,7 +288,7 @@ class BatchExecutor:
         writer: Callable[[str], None],
         logger: logging.Logger,
     ) -> bool:
-        """Execute one command, write the per-command log block; return success bool."""
+        """Execute one command, write the per-command log block. Return success bool."""
         BatchExecutor._write_command_header(ctx, writer)  # WHY: verbatim header block for the command.
         success, stdout, stderr = runner._execute_command(  # WHY: real per-command execution call.
             ctx.command, use_shell=ctx.use_shell, hostname=ctx.hostname
@@ -385,7 +385,7 @@ class BatchExecutor:
         host_log_file: str,
         logger: logging.Logger,
     ) -> None:
-        """Write the session footer; fall back to a minimal footer on any error."""
+        """Write the session footer. Fall back to a minimal footer on any error."""
         try:
             final_success = overall_success if isinstance(overall_success, bool) else False  # WHY: type guard.
             writer(BatchExecutor._build_footer(final_success, host_log_file))  # WHY: verbatim footer.

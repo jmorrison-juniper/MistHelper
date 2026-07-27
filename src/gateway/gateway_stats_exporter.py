@@ -9,9 +9,9 @@ import threading  # WHY: Semaphore bounds concurrent Mist API connections.
 import time  # WHY: sleep between bounded retries when fetching device stats.
 from typing import Any  # WHY: opaque types for injected utility modules.
 
-# WHY: ConnectionPoolExecutor is DI-injected via the execute_fn slot (1012 SC-003); no direct import needed.
+# WHY: ConnectionPoolExecutor is DI-injected via the execute_fn slot (1012 SC-003). No direct import needed.
 
-STATS_CSV_FILENAME: str = "AllGatewayDeviceStats.csv"  # WHY: canonical output CSV; consumed by conflict analysis.
+STATS_CSV_FILENAME: str = "AllGatewayDeviceStats.csv"  # WHY: canonical output CSV. Consumed by conflict analysis.
 CONFLICTS_CSV_FILENAME: str = "GatewayWANPortConflicts.csv"  # WHY: canonical WAN conflict output filename.
 WAN_PORT_IDS: tuple[str, ...] = ("0/0/0", "0/0/1", "0/0/2")  # WHY: gateway WAN ports monitored for IP conflicts.
 EMPTY_IP_TOKENS: frozenset[str] = frozenset({"", "nan", "None", "null"})  # WHY: cells treated as missing IPs.
@@ -33,7 +33,7 @@ CacheUtils: Any = None  # WHY: CSV cache generator facade.
 FilePathUtils: Any = None  # WHY: resolves CSV cache file locations.
 # NOTE: execute_with_connection_pool_management extracted to ConnectionPoolExecutor.execute.
 # See specs/1012-misthelper-refactor-hot-functions/spec.md.
-# WHY: renamed from execute_with_connection_pool_management per 1012 SC-003; DI-injected pool runner.
+# WHY: renamed from execute_with_connection_pool_management per 1012 SC-003. DI-injected pool runner.
 execute_fn: Any = None
 FAST_MODE_MAX_RETRIES: int = 2  # WHY: retry cap for fast-mode API calls.
 FAST_MODE_RETRY_DELAY: float = 0.5  # WHY: base delay (seconds) between retries.
@@ -106,7 +106,7 @@ def _build_failure_record(  # WHY: legacy record shape keeps failure attempts in
 
 def _compute_backoff(attempt: int, retry_delay: float, fast: bool) -> float:  # WHY: retry timing helper.
     """Return retry delay for this attempt (exponential unless fast mode disables backoff)."""
-    if fast:  # WHY: fast mode uses flat delay so retries don't stretch the run.
+    if fast:  # WHY: fast mode uses flat delay so retries do not stretch the run.
         return retry_delay  # WHY: skip exponential growth for the fast path.
     return retry_delay * (2**attempt)  # WHY: exponential backoff for the standard path.
 
@@ -173,7 +173,7 @@ class GatewayStatsExporter:  # WHY: namespace class kept for legacy call-sites i
         fast: bool,
         connection_semaphore: threading.Semaphore | None = None,
     ) -> dict:
-        """Fetch single-device stats with bounded retry; return enriched dict or failure record."""
+        """Fetch single-device stats with bounded retry. Return enriched dict or failure record."""
         max_retries = FAST_MODE_MAX_RETRIES  # WHY: use configured retry ceiling.
         retry_delay = FAST_MODE_RETRY_DELAY  # WHY: use configured base retry delay.
         for attempt in range(max_retries + 1):  # WHY: N retries means N+1 total attempts.
@@ -239,7 +239,7 @@ class GatewayStatsExporter:  # WHY: namespace class kept for legacy call-sites i
     def _process_devices_concurrent(  # WHY: fan-out concurrent path used by fast mode.
         gateway_devices: list[tuple[str, str, str, str]],
     ) -> list[dict]:
-        """Fetch device stats concurrently with a bounded thread pool; return aggregated results."""
+        """Fetch device stats concurrently with a bounded thread pool. Return aggregated results."""
         logging.info("! Fast mode: Processing %s gateway devices concurrently...", len(gateway_devices))  # WHY: banner.
         max_workers = min(CONCURRENT_WORKER_CAP, len(gateway_devices))  # WHY: cap workers to avoid conn overuse.
         connection_semaphore = threading.Semaphore(max_workers)  # WHY: bound concurrent API connections.
@@ -253,7 +253,7 @@ class GatewayStatsExporter:  # WHY: namespace class kept for legacy call-sites i
     def _process_devices_sequential(  # WHY: sequential fallback path for non-fast mode.
         gateway_devices: list[tuple[str, str, str, str]], fast: bool
     ) -> list[dict]:
-        """Fetch device stats sequentially; return aggregated results."""
+        """Fetch device stats sequentially. Return aggregated results."""
         logging.info("! Processing %s gateway devices sequentially...", len(gateway_devices))  # WHY: legacy banner.
         all_stats: list[dict] = []  # WHY: accumulate per-device stats records.
         for index, device_info in enumerate(  # WHY: enumerate to keep legacy "index/total" progress log.
@@ -335,7 +335,7 @@ class GatewayStatsExporter:  # WHY: namespace class kept for legacy call-sites i
         output_file = STATS_CSV_FILENAME  # WHY: canonical output CSV name.
         if CacheUtils.check_and_generate_csv(
             output_file, lambda: GatewayStatsExporter.device_stats(fast=fast)
-        ):  # WHY: cache hit returns True; miss regenerates via the lambda.
+        ):  # WHY: cache hit returns True. Miss regenerates via the lambda.
             logging.info("! %s already exists and is fresh - using cached data", output_file)
             return
         logging.info("! %s was generated or refreshed", output_file)
@@ -365,7 +365,7 @@ class GatewayStatsExporter:  # WHY: namespace class kept for legacy call-sites i
             return gateway_data
         except Exception as exception:  # pylint: disable=broad-exception-caught  # WHY: preserve legacy message.
             logging.error("! Failed to load %s: %s", stats_file, exception)
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logging.info("! Failed to load %s: %s", stats_file, exception)
             return None
 
@@ -449,44 +449,44 @@ class GatewayStatsExporter:  # WHY: namespace class kept for legacy call-sites i
         """Persist and display WAN conflict analysis results."""
         if not conflicts_found:  # WHY: guard clause — nothing to export or display.
             logging.info(" No internal WAN port IP conflicts found")
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logging.info(" No internal WAN port IP conflicts found - healthy WAN port configurations")
             return
         conflicts_found.sort(key=lambda x: (x.get("device_name", ""), x.get("port_name", "")))  # WHY: stable.
         DataExporter.write_with_format_selection(conflicts_found, CONFLICTS_CSV_FILENAME)  # WHY: persist rows.
         unique_gateways = {row.get("device_name", UNKNOWN_LABEL) for row in conflicts_found}  # WHY: dedupe.
         logging.info("! Exported %s conflicts from %s gateways", len(conflicts_found), len(unique_gateways))
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info(
             "! WAN port IP conflicts exported to %s (%s records)",
             CONFLICTS_CSV_FILENAME,
             len(conflicts_found),
         )
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info("! Summary: %s gateways with IP conflicts", len(unique_gateways))
         GatewayStatsExporter._display_conflict_samples(conflicts_found)  # WHY: emit operator-facing sample.
 
     @staticmethod
     def _display_conflict_samples(conflicts_found: list[dict]) -> None:
         """Print a short conflict sample section for quick operator review."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info("\n  Sample WAN Port IP Conflicts Found:")
         for idx, record in enumerate(conflicts_found[:SAMPLE_CONFLICT_LIMIT], 1):  # WHY: top-N sample only.
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logging.info(
                 "%2d. %s (%s)",
                 idx,
                 record.get("device_name", UNKNOWN_LABEL),
                 record.get("site_name", UNKNOWN_SITE_NAME),
             )
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logging.info(
                 "    Port %s has IP %s",
                 record.get("port_name", UNKNOWN_LABEL),
                 record.get("port_ip", UNKNOWN_LABEL),
             )
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logging.info("    Conflicts with: %s\n", record.get("conflict_with_ports", UNKNOWN_LABEL))
         if len(conflicts_found) > SAMPLE_CONFLICT_LIMIT:  # WHY: only emit trailer when truncation happened.
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logging.info("... and %s more conflicted ports", len(conflicts_found) - SAMPLE_CONFLICT_LIMIT)

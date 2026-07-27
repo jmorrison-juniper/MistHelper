@@ -121,7 +121,7 @@ class SiteConfigManager:  # WHY: umbrella namespace for the four menu entrypoint
             logging.info("Loaded %s sites from CSV file", len(sites_data))  # WHY: audit successful load.
             print(f"\n Loaded {len(sites_data)} sites from CSV file")  # WHY: operator feedback on scope.
             return sites_data  # WHY: hand parsed rows back to caller.
-        except OSError as read_error:  # WHY: narrow to filesystem errors; do not swallow programmer errors.
+        except OSError as read_error:  # WHY: narrow to filesystem errors. Do not swallow programmer errors.
             logging.error("Failed to read CSV file: %s", read_error)  # WHY: audit read failure with detail.
             print(f" ERROR: Failed to read CSV file: {read_error}")  # WHY: surface reason to operator.
             return None  # WHY: signal read-failure to caller.
@@ -130,7 +130,7 @@ class SiteConfigManager:  # WHY: umbrella namespace for the four menu entrypoint
     def _copy_optional_fields(site_data: dict[str, Any], payload: dict[str, Any]) -> None:  # WHY: mutate helper.
         """Copy present, non-empty optional fields from CSV row into payload."""
         for key in ("address", "country_code", "timezone", "notes"):  # WHY: single source of truth for keys.
-            value = site_data.get(key)  # WHY: fetch once; None + "" both mean absent.
+            value = site_data.get(key)  # WHY: fetch once. None + "" both mean absent.
             if value:  # WHY: only copy truthy values so we do not send blanks to API.
                 payload[key] = value.strip()  # WHY: strip whitespace per API hygiene.
 
@@ -148,7 +148,7 @@ class SiteConfigManager:  # WHY: umbrella namespace for the four menu entrypoint
 
     @staticmethod
     def _build_site_payload(site_data: dict[str, Any]) -> dict[str, Any] | None:  # WHY: payload builder.
-        """Build API payload from a single site CSV row; None when name is missing."""
+        """Build API payload from a single site CSV row. None when name is missing."""
         site_name = site_data.get("name", "").strip()  # WHY: name is the only mandatory field.
         if not site_name:  # WHY: reject nameless rows so caller can record row-level failure.
             return None  # WHY: signal invalid row so caller can log failure.
@@ -339,7 +339,7 @@ class SiteConfigManager:  # WHY: umbrella namespace for the four menu entrypoint
     def _group_sites_by_country(  # WHY: bucket helper isolates single-pass grouping logic.
         sites: list[dict[str, Any]],
     ) -> tuple[dict[str, list[dict[str, Any]]], list[dict[str, Any]]]:
-        """Bucket sites by uppercase country code; collect empty-country sites separately."""
+        """Bucket sites by uppercase country code. Collect empty-country sites separately."""
         logging.info("Grouping %d sites by country code", len(sites))  # WHY: audit grouping start.
         sites_by_country: dict[str, list[dict[str, Any]]] = {}  # WHY: country -> site descriptors.
         sites_without_country: list[dict[str, Any]] = []  # WHY: sites missing country info.
@@ -371,7 +371,7 @@ class SiteConfigManager:  # WHY: umbrella namespace for the four menu entrypoint
 
     @staticmethod
     def _fetch_existing_rf_templates(org_id: str) -> dict[str, str] | None:  # WHY: fetch existing templates.
-        """Fetch existing RF templates as a {name: id} map; return None on API error."""
+        """Fetch existing RF templates as a {name: id} map. Return None on API error."""
         print("\n  Step 2: Checking for existing RF templates...")  # WHY: legacy step header preserved.
         logging.info("Fetching existing RF templates for org_id=%s", org_id)  # WHY: audit start.
         try:
@@ -613,7 +613,7 @@ class SiteConfigManager:  # WHY: umbrella namespace for the four menu entrypoint
 
     @staticmethod
     def _report_rf_template_results(report: RfTemplateReport) -> None:
-        """Report RF template operation results and export CSVs."""
+        """Report RF template operation results and export CSV files."""
         print("\n" + "=" * 70)  # WHY: open completion banner.
         print(" OPERATION COMPLETE")  # WHY: banner title.
         print("=" * 70)  # WHY: banner divider.
@@ -665,7 +665,7 @@ class SiteConfigManager:  # WHY: umbrella namespace for the four menu entrypoint
 
     @staticmethod
     def _fetch_org_ap_inventory(org_id: str) -> list[dict[str, Any]] | None:
-        """Fetch org AP inventory list; return None on error or empty."""
+        """Fetch org AP inventory list. Return None on error or empty."""
         try:
             deps = _deps()  # WHY: local ref simplifies call.
             inventory_response = deps.mistapi.api.v1.orgs.inventory.getOrgInventory(  # WHY: SDK inventory call.
@@ -757,7 +757,7 @@ class SiteConfigManager:  # WHY: umbrella namespace for the four menu entrypoint
     @staticmethod
     def _confirm_profile_creation(to_create: list[dict[str, Any]], to_skip: list[dict[str, Any]]) -> bool:
         """Confirm device profile creation with user."""
-        _ = to_skip  # WHY: preserve legacy signature; count is already reported by planner.
+        _ = to_skip  # WHY: preserve legacy signature. Count is already reported by planner.
         print("\n  " + "!" * 66)  # WHY: destructive banner open.
         print("  WARNING: DESTRUCTIVE OPERATION")  # WHY: warning line.
         print("  " + "!" * 66)  # WHY: banner divider.
@@ -824,7 +824,7 @@ class SiteConfigManager:  # WHY: umbrella namespace for the four menu entrypoint
         failed: list[dict[str, Any]],
         skipped: list[dict[str, Any]],
     ) -> None:
-        """Report device profile creation results and export CSVs."""
+        """Report device profile creation results and export CSV files."""
         print("\n" + "=" * 70)  # WHY: open completion banner.
         print(" OPERATION COMPLETE")  # WHY: banner title.
         print("=" * 70)  # WHY: banner divider.
@@ -912,7 +912,7 @@ class SiteConfigManager:  # WHY: umbrella namespace for the four menu entrypoint
 
     @staticmethod
     def _fetch_profile_map(org_id: str) -> dict[str, str] | None:
-        """Fetch device profiles and return name->id mapping; None on error/empty."""
+        """Fetch device profiles and return name->id mapping. None on error/empty."""
         print("\n  Step 2: Fetching existing Device Profiles...")  # WHY: legacy header preserved.
         try:
             deps = _deps()  # WHY: local ref.
@@ -1053,7 +1053,7 @@ class SiteConfigManager:  # WHY: umbrella namespace for the four menu entrypoint
         without_profile: list[dict[str, Any]],
         without_model: list[dict[str, Any]],
     ) -> None:
-        """Report profile assignment results and export CSVs."""
+        """Report profile assignment results and export CSV files."""
         print("\n" + "=" * 70)  # WHY: open completion banner.
         print(" OPERATION COMPLETE")  # WHY: banner title.
         print("=" * 70)  # WHY: banner divider.

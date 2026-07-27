@@ -76,7 +76,7 @@ class SshConnector:
     """
 
     def __init__(self, timeout: int = _DEFAULT_TIMEOUT_SEC, logger: logging.Logger | None = None) -> None:
-        """Capture timeout and logger; defer all SSH work until :meth:`connect`."""
+        """Capture timeout and logger. Defer all SSH work until :meth:`connect`."""
         self.timeout = timeout  # WHY: connection + handshake timeout in seconds.
         self.logger = logger or logging.getLogger(_LOGGER_NAME)  # WHY: reuse the unified SSH logger.
         self.managed_known_hosts_path: str | None = None  # WHY: populated once the KH file is ensured.
@@ -116,7 +116,7 @@ class SshConnector:
         if not self._paramiko_available():  # WHY: hard requirement — paramiko import must have succeeded.
             return False  # WHY: paramiko-missing message already printed.
         self.logger.info("Attempting SSH connection to %s:%s as %s", hostname, port, username)  # WHY: audit.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         self.logger.info(">> Connecting to %s:%s as %s...", hostname, port, username)
         return True  # WHY: preflight passed, connect flow may proceed.
 
@@ -142,7 +142,7 @@ class SshConnector:
     def _fail_input(self, error_msg: str) -> None:
         """Standard "log error + print bracketed ERROR" used for every input failure."""
         self.logger.error(error_msg)  # WHY: persistent record in script.log.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         self.logger.error("[ERROR] %s", error_msg)
 
     @staticmethod
@@ -156,9 +156,9 @@ class SshConnector:
         if SSHClient is not None and paramiko is not None:  # WHY: paramiko import succeeded at load.
             return True  # WHY: normal production path — nothing to warn about.
         logging.getLogger(_LOGGER_NAME).error(_PARAMIKO_MISSING_MSG)  # WHY: audit-log the missing import.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.error("[ERROR] %s", _PARAMIKO_MISSING_MSG)
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.error(_PARAMIKO_INSTALL_HINT)
         return False  # WHY: paramiko unavailable, connect cannot continue.
 
@@ -176,7 +176,7 @@ class SshConnector:
             self._trust_host_on_first_use(client, hostname, port)  # WHY: enroll first-seen key into managed store.
         except Exception as enroll_error:  # noqa: BLE001 - broad catch: log then translate to connection failure.
             self.logger.exception("TOFU enrollment failed for %s:%s: %s", hostname, port, enroll_error)  # WHY: audit.
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             self.logger.error("[ERROR] Host key enrollment failed: %s", enroll_error)
             return None  # WHY: caller treats None as a hard connection failure.
         return client  # WHY: client is ready to attempt authentication.
@@ -276,7 +276,7 @@ class SshConnector:
         self._save_host_keys(client)  # WHY: persist the new entry to the managed file.
         fingerprint = self._format_host_key_fingerprint(remote_host_key)  # WHY: compute display fingerprint.
         self.logger.warning("TOFU enrolled new SSH host key for %s (%s)", entry_name, fingerprint)  # WHY: audit.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         self.logger.info("[INFO] Trusted first-seen SSH host key for %s (%s)", entry_name, fingerprint)
 
     # ------------------------------------------------------------------
@@ -323,7 +323,7 @@ class SshConnector:
         """Log verbatim success traces and print the [OK] user-facing line."""
         self.logger.debug("SSH connection established in %.2f seconds", connection_time)  # WHY: verbatim.
         self.logger.info("Successfully connected to %s in %.2f seconds", hostname, connection_time)  # WHY: audit.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         self.logger.info("[OK] Successfully connected to %s", hostname)
 
     def _handle_connect_exception(
@@ -347,7 +347,7 @@ class SshConnector:
     def _log_dns_error(self, error: BaseException, hostname: str, _port: int, _username: str) -> None:
         """Handler row: DNS resolution failure (socket.gaierror)."""
         self.logger.error("DNS Resolution Error for %s: %s", hostname, error)  # WHY: audit DNS miss.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         self.logger.error("[ERROR] DNS Resolution Error: %s", error)
 
     def _log_timeout_error(self, _error: BaseException, hostname: str, port: int, _username: str) -> None:
@@ -355,29 +355,29 @@ class SshConnector:
         self.logger.error(  # WHY: audit timeout with host/port/timeout context.
             "Connection timeout to %s:%s after %s seconds", hostname, port, self.timeout
         )
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         self.logger.error("[ERROR] Connection timeout after %s seconds", self.timeout)
 
     def _log_bad_host_key(self, error: BaseException, hostname: str, _port: int, _username: str) -> None:
         """Handler row: mismatched known host key (paramiko.BadHostKeyException)."""
         self.logger.error("Host key verification failed for %s: %s", hostname, error)  # WHY: audit.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         self.logger.error(_BAD_HOST_KEY_MSG)
 
     def _log_auth_failure(self, error: BaseException, hostname: str, _port: int, username: str) -> None:
         """Handler row: authentication failure (paramiko.AuthenticationException)."""
         self.logger.error("Authentication failed for %s@%s: %s", username, hostname, error)  # WHY: audit.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         self.logger.error(_AUTH_FAILURE_MSG)
 
     def _log_ssh_error(self, error: BaseException, hostname: str, _port: int, _username: str) -> None:
         """Handler row: generic paramiko.SSHException with known-hosts specialisation."""
         self.logger.error("SSH Error connecting to %s: %s", hostname, error)  # WHY: audit generic SSH failure.
         if _KNOWN_HOSTS_MARKER in str(error):  # WHY: specialized message when the SSH error names known_hosts.
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             self.logger.error(_UNTRUSTED_HOST_KEY_MSG)
             return  # WHY: specialised message already printed.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         self.logger.error("[ERROR] SSH Error: %s", error)
 
     def _log_unknown_error(self, error: BaseException, hostname: str) -> None:
@@ -389,7 +389,7 @@ class SshConnector:
             error,
             exc_info=True,
         )
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         self.logger.error("[ERROR] Unexpected error: %s", error)
 
 

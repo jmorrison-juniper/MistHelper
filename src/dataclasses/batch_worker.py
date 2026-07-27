@@ -3,7 +3,7 @@
 The original ``_pool_process_batch_wait_loop`` function in ``MistHelper.py`` took 7
 positional parameters which exceeded the 5-Item Rule's max-5 limit. The 4 fields
 here are the configuration values that stay constant across batch iterations
-(worker function, connection semaphore, thread count, batch description); the
+(worker function, connection semaphore, thread count, batch description). The
 remaining per-batch values (batch payload, batch number, total batches) stay as
 direct parameters because they change every loop iteration.
 
@@ -22,7 +22,7 @@ from typing import Any  # Type alias for the worker callable's payload items.
 class BatchWorkerConfig:
     """Configuration values that stay constant across batches in a thread-pool batch loop."""
 
-    worker_function: Callable[..., Any]  # Callable that processes a single batch item; takes (item, semaphore).
+    worker_function: Callable[..., Any]  # Callable that processes a single batch item. Takes (item, semaphore).
     connection_semaphore: threading.Semaphore  # Bound on concurrent network connections across all batches.
-    max_threads: int  # Upper bound on threads the pool may spawn; passed to ThreadPoolExecutor.
-    batch_description: str  # Human-readable label (e.g. "devices") used in tqdm + log messages.
+    max_threads: int  # Upper bound on threads the pool may spawn. Passed to ThreadPoolExecutor.
+    batch_description: str  # Human-readable label (for example "devices") used in tqdm + log messages.

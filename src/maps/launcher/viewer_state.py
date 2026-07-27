@@ -28,13 +28,13 @@ Conventions for adding state fields:
    can trace ``self._state.foo`` back to the original ``foo`` local.
 2. Prefer immutable types (str, int, tuple) for read-only context and
    mutable list/dict only when a callback needs to update shared data.
-3. Type-annotate every field; use ``TYPE_CHECKING`` imports for heavy
+3. Type-annotate every field. Use ``TYPE_CHECKING`` imports for heavy
    modules (``mistapi``, ``Dash``) to keep import cost low.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field  # Container types; field used for mutable defaults
+from dataclasses import dataclass, field  # Container types. Field used for mutable defaults
 from typing import TYPE_CHECKING, Any  # Type guards + Any for mistapi/manager references
 
 if TYPE_CHECKING:  # pragma: no cover - imports for static analysis only
@@ -57,18 +57,18 @@ class MapViewerState:
         Site zone records (from ``listSiteZones``) used by zone toggle
         and zone-action callbacks to resolve zone names to IDs.
     map_id:
-        Current map UUID; used for logging context in panel-toggle and
+        Current map UUID. Used for logging context in panel-toggle and
         utility callbacks and as a fallback when the config store is
         missing.
     site_id:
-        Current site UUID; used by delete and zone-action callbacks as
+        Current site UUID. Used by delete and zone-action callbacks as
         the ``site_id`` parameter to Mist API delete calls and as a
         fallback when the config store is missing.
     api_session_ref:
         Live ``mistapi.APISession`` instance used by callbacks that
-        invoke Mist API mutations (delete map, delete zone, etc.).
+        invoke Mist API mutations (delete map, delete zone, and so on).
     ppm:
-        Pixels-per-meter scale value; used by ``update_shape_labels``
+        Pixels-per-meter scale value. Used by ``update_shape_labels``
         as the fallback when the figure metadata lacks an override.
     mistapi_ref:
         Reference to the ``mistapi`` module itself so callbacks can

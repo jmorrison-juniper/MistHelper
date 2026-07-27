@@ -76,7 +76,7 @@ class _UtilityCommandsAction(_ClusterBase):  # WHY: cluster wrapper mirroring ea
                 site_id,
                 device_id,
                 {"duration": duration},
-            )  # WHY: kick off LED blink for `duration` minutes
+            )  # WHY: start LED blink for `duration` minutes
             if self._print_api_result(
                 response,
                 f"Device LED blinking for {duration} minutes.",
@@ -135,7 +135,7 @@ class _UtilityCommandsAction(_ClusterBase):  # WHY: cluster wrapper mirroring ea
         if port_id.startswith(("vme", "ae", "irb")):  # WHY: block prefixes unsafe to bounce
             print(f"! Port '{port_id}' cannot be bounced (management/aggregate/IRB port).")  # WHY: signal reject
             return None
-        return str(port_id)  # WHY: proxied picker returns Any; coerce to satisfy mypy strict
+        return str(port_id)  # WHY: proxied picker returns Any. Coerce to satisfy mypy strict
 
     def _confirm_bounce(self, port_id: str) -> bool:
         """Confirm the port-bounce with a y/N prompt."""
@@ -149,7 +149,7 @@ class _UtilityCommandsAction(_ClusterBase):  # WHY: cluster wrapper mirroring ea
         return True
 
     def _invoke_port_bounce(self, site_id: str, device_id: str, port_id: str) -> None:
-        """Kick off the WebSocket-backed port-bounce and report result."""
+        """Start the WebSocket-backed port-bounce and report result."""
         print(f"\n-> Bouncing port {port_id}...")  # WHY: operator feedback
         result = self._run_websocket_command(
             site_id,
@@ -226,7 +226,7 @@ class _UtilityCommandsAction(_ClusterBase):  # WHY: cluster wrapper mirroring ea
             if not vc_data.get("is_virtual_chassis", False):  # WHY: readopt requires VC
                 print("! Device is not a Virtual Chassis member. 'readopt' applies only to VC devices. Skipping.")
                 return False
-        except Exception as error:  # WHY: warn-and-continue; readopt may still work
+        except Exception as error:  # WHY: warn-and-continue. Readopt may still work
             logging.warning("VC preflight check failed: %s", error, exc_info=True)  # WHY: audit warning
         return True  # WHY: preflight passed or was inconclusive
 

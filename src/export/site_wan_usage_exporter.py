@@ -23,7 +23,7 @@ import mistapi  # WHY: direct SDK access for searchSiteWanUsage + get_all pagina
 
 from src.data.data_processing_utils import (
     DataProcessingUtils,
-)  # WHY: canonical flatten/escape helpers; keeps CSV output consistent with peers.
+)  # WHY: canonical flatten/escape helpers. Keeps CSV output consistent with peers.
 
 
 class SiteWanUsageExporter:
@@ -42,7 +42,7 @@ class SiteWanUsageExporter:
 
         Why:
             Empty responses are legitimate (a site with no WAN telemetry in
-            the query window); we surface a friendly message rather than
+            the query window). We surface a friendly message rather than
             failing so scheduled runs stay quiet in that case.
 
         Args:

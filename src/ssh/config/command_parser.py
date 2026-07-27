@@ -39,7 +39,7 @@ class CommandListParser:
     def _truncate_oversize(commands_str: str) -> str:
         """Truncate the raw command string if it exceeds the safety cap."""
         if len(commands_str) > _MAX_INPUT_LEN:  # Length check to prevent DoS
-            # WHY: Preserve user-facing string; emit through logger for structured output.
+            # WHY: Preserve user-facing string. Emit through logger for structured output.
             logger.warning("[WARNING] Command list too long, truncating to first 50000 characters")
             return commands_str[:_MAX_INPUT_LEN]  # Return truncated copy
         return commands_str  # No truncation needed
@@ -51,7 +51,7 @@ class CommandListParser:
         invalid: list[str] = []  # Rejected commands accumulator (for warnings)
         for raw in commands_str.split(","):  # Comma is the supported delimiter
             clean_cmd = raw.strip().strip("'\"").strip()  # Drop whitespace and per-token quoting
-            if not clean_cmd:  # Skip empty tokens (e.g. trailing comma)
+            if not clean_cmd:  # Skip empty tokens (for example trailing comma)
                 continue  # Move to next token
             if validate_command(clean_cmd):  # Shared validation (length + NUL check)
                 commands.append(clean_cmd)  # Keep validated command
@@ -66,7 +66,7 @@ class CommandListParser:
         if not invalid:  # Clean input — nothing to warn about
             return  # No-op
         sample = ", ".join(invalid[:3])  # Original showed first 3 entries in the warning
-        # WHY: Preserve user-facing string verbatim; emit via logger.
+        # WHY: Preserve user-facing string verbatim. Emit via logger.
         logger.warning("[WARNING] Skipping %d invalid commands: %s", len(invalid), sample)
         if len(invalid) > 3:  # Indicate further truncation
             # WHY: Preserve user-facing string verbatim.
@@ -76,7 +76,7 @@ class CommandListParser:
     def _enforce_command_cap(commands: list[str]) -> list[str]:
         """Trim to the per-run command cap and warn if truncation happens."""
         if len(commands) > _MAX_COMMANDS:  # Resource exhaustion guard
-            # WHY: Preserve user-facing string verbatim; emit via logger.
+            # WHY: Preserve user-facing string verbatim. Emit via logger.
             logger.warning(
                 "[WARNING] Too many commands (%d), limiting to first %d",
                 len(commands),

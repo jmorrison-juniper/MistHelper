@@ -25,7 +25,7 @@ import mistapi  # WHY: direct SDK access for listSiteWebhooks + searchSiteWebhoo
 
 from src.data.data_processing_utils import (
     DataProcessingUtils,
-)  # WHY: canonical flatten/escape helpers; keeps CSV output consistent with peers.
+)  # WHY: canonical flatten/escape helpers. Keeps CSV output consistent with peers.
 from src.utils.input_utils import InputUtils  # WHY: safe_input honors EOF/Ctrl-C per Constitution.
 
 
@@ -63,12 +63,12 @@ class SiteWebhookDeliveriesExporter:
         )
         webhooks = mistapi.get_all(response=response, mist_session=mh.apisession)  # Page all rows.
         if not webhooks:  # Site has no configured webhooks -- nothing to search deliveries for.
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logging.info("! No webhooks configured for this site")  # ASCII-only user notice.
             logging.warning("No webhooks configured for site_id=%s", site_id)  # Warn for logs.
             return None
         for idx, wh in enumerate(webhooks, start=1):  # Enumerate with 1-based index for humans.
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logging.info("  %s. %s  [%s]", idx, wh.get("name", "(unnamed)"), wh.get("id", "?"))  # Show each webhook.
         raw = InputUtils.safe_input(  # WHY: safe_input handles EOF/Ctrl-C gracefully in SSH/CI.
             "Select webhook number: ", context="site_webhook_deliveries_selection"
@@ -81,7 +81,7 @@ class SiteWebhookDeliveriesExporter:
 
         Why:
             Extracted from ``_select_webhook_id`` to keep the caller under
-            the 25-line 5-Item Rule ceiling; also makes the validation logic
+            the 25-line 5-Item Rule ceiling. Also makes the validation logic
             unit-testable in isolation.
 
         Args:
@@ -93,12 +93,12 @@ class SiteWebhookDeliveriesExporter:
             1-based index, else ``None``.
         """
         if not raw.isdigit():  # Non-numeric input -- reject.
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logging.info("! Invalid selection (not a number)")  # ASCII-only user notice.
             return None
         idx = int(raw)  # Parse the operator's 1-based choice.
         if not 1 <= idx <= len(webhooks):  # Out-of-range index.
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logging.info("! Selection out of range (1..%s)", len(webhooks))  # ASCII-only user notice.
             return None
         chosen = webhooks[idx - 1]  # Convert to 0-based access.
@@ -110,7 +110,7 @@ class SiteWebhookDeliveriesExporter:
 
         Why:
             Empty responses are legitimate (a webhook that has never fired in
-            the search window); we surface a friendly message rather than
+            the search window). We surface a friendly message rather than
             failing so scheduled runs stay quiet in that case.
 
         Args:
@@ -121,7 +121,7 @@ class SiteWebhookDeliveriesExporter:
         """
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataExporter helper.
         if not rawdata:  # No delivery rows in the query window -- inform the operator.
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logging.info("! No webhook delivery data found")  # ASCII-only user notice.
             return
         flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested dicts for CSV.
@@ -135,7 +135,7 @@ class SiteWebhookDeliveriesExporter:
         logging.debug(  # DEBUG-level count trace per Action Logging principle (post-call).
             "searchSiteWebhooksDeliveries persisted %d rows to %s", len(rawdata), filename
         )
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info("! %s webhook delivery records exported to %s", len(rawdata), filename)  # User notice.
 
     @staticmethod
@@ -150,7 +150,7 @@ class SiteWebhookDeliveriesExporter:
             surfaced to the user rather than crashing the menu loop.
         """
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of apisession + shared helpers.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info("Site Webhook Deliveries Search:")  # Menu header echoed to operator.
         logging.info(  # INFO trace before the API call per Action Logging principle (pre-call).
             "Starting searchSiteWebhooksDeliveries export..."
@@ -186,5 +186,5 @@ class SiteWebhookDeliveriesExporter:
                 webhook_name,
                 e,
             )
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logging.info("! Error fetching webhook delivery data: %s", e)  # ASCII-only user notice.

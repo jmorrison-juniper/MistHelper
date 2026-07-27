@@ -28,7 +28,7 @@ class VersionPerModelFetcher:  # WHY: namespace for the decomposed version-per-m
                 switch_records,
                 gateway_records,
             )  # Delegate per-row expansion to a small helper
-            all_rows.extend(rows)  # Append helper output verbatim; helper returns [] on skip
+            all_rows.extend(rows)  # Append helper output verbatim. Helper returns [] on skip
         return all_rows  # WHY: caller merges these into the final row set
 
     @staticmethod
@@ -199,7 +199,7 @@ class VersionPerModelFetcher:  # WHY: namespace for the decomposed version-per-m
             return VersionPerModelFetcher._switch_rows(model_name, switch_records)
         if device_type == "gateway":  # Aggregate HA-aware gateway counts from prefetched inventory
             return VersionPerModelFetcher._gateway_rows(model_name, gateway_records)
-        return []  # APs are handled in bulk by _ap_rows; any other type has no per-model expansion here
+        return []  # APs are handled in bulk by _ap_rows. Any other type has no per-model expansion here
 
     @staticmethod
     def _accumulate_switch_versions(  # Folds switch inventory records into version->count map (VC-aware)
@@ -213,7 +213,7 @@ class VersionPerModelFetcher:  # WHY: namespace for the decomposed version-per-m
             version = record.get("version") or "unknown"  # Treat missing firmware version as "unknown"
             num_members = int(
                 record.get("num_members") or 1
-            )  # Count each VC member individually; default to 1 for standalone
+            )  # Count each VC member individually. Default to 1 for standalone
             version_counts[version] = (
                 version_counts.get(version, 0) + num_members
             )  # Add this record's VC members to the bucket
@@ -232,7 +232,7 @@ class VersionPerModelFetcher:  # WHY: namespace for the decomposed version-per-m
 
     @staticmethod
     def _gateway_rows(model_name: str, gateway_records: list[dict]) -> list[dict]:
-        """Aggregate gateway version counts; one row per inventory record (HA pairs already split)."""
+        """Aggregate gateway version counts. One row per inventory record (HA pairs already split)."""
         version_counts: dict[str, int] = {}  # Per-version running total for this specific model
         for record in gateway_records:  # Iterate the prefetched inventory once per call
             if record.get("model") != model_name:  # Skip records belonging to a different gateway model

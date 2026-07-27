@@ -56,13 +56,13 @@ class DeviceMetricOperation:
 
     def execute(self) -> None:  # WHY: Menu 76 dispatcher entry point invoked by MistHelper top-level menu
         """Top-level entry point invoked by the menu dispatcher for menu 76."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info("Export Site Device Insights:")
         logging.info("Starting export of site device insights...")  # WHY: Trace operation start for ops visibility
         self._refresh_const_metrics()  # WHY: Refresh ConstInsightMetrics.csv before reading it
         prompts = self._prompt_site_and_device()  # WHY: Run both selection prompts up front
         if prompts is None:
-            return  # WHY: Helper already logged the cancel reason; exit cleanly
+            return  # WHY: Helper already logged the cancel reason. Exit cleanly
         context = self._build_context(*prompts)  # WHY: Resolve names, MAC, and validate MAC once
         if context is None:
             return  # WHY: Helper already surfaced the specific validation failure
@@ -70,12 +70,12 @@ class DeviceMetricOperation:
 
     def _refresh_const_metrics(self) -> None:  # WHY: Isolated call keeps execute() short and testable
         """Refresh ConstInsightMetrics.csv so metric lists reflect the latest API surface."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info("! Refreshing available insight metrics from Mist API...")
         self.InsightMetricsUtils.export_const_insight_metrics()  # WHY: Refresh cache before scope-filtering metrics
 
     def _prompt_site_and_device(self) -> tuple[str, str] | None:  # WHY: Two prompts share cancel semantics
-        """Prompt for site then device; return None on either cancel."""
+        """Prompt for site then device. Return None on either cancel."""
         site_id = self.PromptUtils.select_site()  # WHY: Existing prompt utility handles cancel / invalid input
         if not site_id:
             logging.error("No site selected. Exiting.")  # WHY: Match legacy error log message verbatim
@@ -84,7 +84,7 @@ class DeviceMetricOperation:
         if not device_id:
             logging.error("No device selected. Exiting.")  # WHY: Match legacy error log message verbatim
             return None
-        return site_id, device_id  # WHY: Both selections succeeded; pass to downstream context builder
+        return site_id, device_id  # WHY: Both selections succeeded. Pass to downstream context builder
 
     def _build_context(
         self, site_id: str, device_id: str
@@ -118,13 +118,13 @@ class DeviceMetricOperation:
 
     def _emit_empty_metric_list(self, filename: str) -> None:  # WHY: Defensive branch used when const file is empty
         """Emit the empty-file + error trio when scope filter yields zero metrics."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info(_EMPTY_METRICS_PROMPT)
         logging.error(_EMPTY_METRICS_LOG)  # WHY: Persist failure cause in the log
         self.DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
 
     def _resolve_site_name(self, site_id: str) -> str:  # WHY: Named lookup keeps execute path narrative
-        """Best-effort site-name lookup; fall back to site_id when API call fails."""
+        """Best-effort site-name lookup. Fall back to site_id when API call fails."""
         try:
             response = self.mistapi.api.v1.sites.listSites(  # WHY: API call may raise on auth / network
                 self.apisession, site_id
@@ -132,7 +132,7 @@ class DeviceMetricOperation:
             sites = self.mistapi.get_all(  # WHY: Materialize paged result list
                 response=response, mist_session=self.apisession
             )
-            return next(  # WHY: Match by id; fall back to id on miss
+            return next(  # WHY: Match by id. Fall back to id on miss
                 (site["name"] for site in sites if site["id"] == site_id), site_id
             )
         except Exception:
@@ -141,7 +141,7 @@ class DeviceMetricOperation:
     def _resolve_device_info(
         self, site_id: str, device_id: str
     ) -> dict:  # WHY: Return dict decouples caller from API shape
-        """Best-effort device-name / MAC / model lookup; return shaped dict with defaults on failure."""
+        """Best-effort device-name / MAC / model lookup. Return shaped dict with defaults on failure."""
         try:
             response = self.mistapi.api.v1.sites.devices.listSiteDevices(  # WHY: type=all covers switches/gateways
                 self.apisession,
@@ -167,15 +167,15 @@ class DeviceMetricOperation:
     def _validate_mac(
         self, device_id: str, device_name: str, device_mac: str | None
     ) -> str | None:  # WHY: Guard MAC use
-        """Confirm MAC is present and well-formed; print + log error and return None on failure."""
+        """Confirm MAC is present and well-formed. Print + log error and return None on failure."""
         if not device_mac:
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logging.info(_MISSING_MAC_PROMPT.format(name=device_name))
             logging.error("Could not find MAC address for device %s", device_id)  # WHY: Persist failure cause
             return None
         normalized = self._insights_exporter._normalize_device_mac_or_none(device_mac)  # WHY: Reuse normalizer
         if not normalized:
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logging.info(_INVALID_MAC_PROMPT.format(name=device_name, mac=device_mac))
             logging.error(  # WHY: Persist failure cause with device id + raw MAC for triage
                 "Invalid device MAC address format for device %s: %s", device_id, device_mac
@@ -209,13 +209,13 @@ class DeviceMetricOperation:
         """Iterate the device-scope metric list and collect any insight data the API returns."""
         all_device_data: list[dict] = []  # WHY: Accumulator for every non-empty metric response
         retrieved = 0  # WHY: User-facing counter shown in final summary line
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info(
             "! Retrieving %s different device insight metrics for %s...",
             len(device_metrics),
             context.device_name,
         )
-        for metric in device_metrics:  # WHY: One API call per metric; individual failures must not abort the batch
+        for metric in device_metrics:  # WHY: One API call per metric. Individual failures must not abort the batch
             data = self._fetch_one_metric(context, metric)  # WHY: Enriched dict or None
             if data is not None:
                 all_device_data.append(data)  # WHY: Append enriched record for export
@@ -263,7 +263,7 @@ class DeviceMetricOperation:
         filename: str,
         context: DeviceRunContext,
     ) -> None:
-        """Flatten, escape, and save collected data; emit summary user output."""
+        """Flatten, escape, and save collected data. Emit summary user output."""
         try:
             if all_device_data:
                 self._export_with_data(  # WHY: Non-empty path writes flattened rows and summary
@@ -281,11 +281,11 @@ class DeviceMetricOperation:
         filename: str,
         context: DeviceRunContext,
     ) -> None:
-        """Flatten, escape, and write the non-empty result set; log the success summary."""
+        """Flatten, escape, and write the non-empty result set. Log the success summary."""
         processed = self.DataProcessingUtils.flatten_nested_fields(all_device_data)  # WHY: Flatten nested API objs
         processed = self.DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
         self.DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info("! %s device insight metrics exported to %s", retrieved, filename)
         logging.info(  # WHY: Persist success summary at info level for ops visibility
             "Exported %s device insight metrics for %s at %s to %s",
@@ -297,7 +297,7 @@ class DeviceMetricOperation:
 
     def _export_empty(self, filename: str, context: DeviceRunContext) -> None:  # WHY: Zero-data emit path
         """Emit user-visible zero-data summary and write an empty file for consistency."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info("! 0 device insights exported to %s (no data available)", filename)
         logging.warning(  # WHY: Distinguish empty result from error for ops triage
             "No device insight data available for %s at %s",
@@ -313,7 +313,7 @@ class DeviceMetricOperation:
         context: DeviceRunContext,
     ) -> None:
         """Log the failure with full context and emit an empty file so downstream consumers still see output."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info("! Error exporting device insights: %s", exception)
         logging.error(  # WHY: Persist failure cause with both site and device context for triage
             "Failed to export device insights for %s at %s: %s",

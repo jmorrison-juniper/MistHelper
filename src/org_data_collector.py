@@ -107,9 +107,9 @@ class Operation:  # WHY: Immutable slotted bundle replaces per-entry dict[str, A
     api_call: Callable[..., Any]  # WHY: mistapi function reference invoked by _run_single
     data_type: str  # WHY: Human-readable label for filenames, logging, and progress lines
     category: str  # WHY: Grouping banner printed once per contiguous run of same-category ops
-    sort_key: str | None = None  # WHY: Result sort field; None falls back to _DEFAULT_SORT_KEY
-    paginated: bool = True  # WHY: Paginated endpoints receive limit=_DEFAULT_LIMIT; others pass None
-    api_kwargs: dict[str, Any] = field(default_factory=dict)  # WHY: Extra kwargs (e.g. distinct=mac)
+    sort_key: str | None = None  # WHY: Result sort field. None falls back to _DEFAULT_SORT_KEY
+    paginated: bool = True  # WHY: Paginated endpoints receive limit=_DEFAULT_LIMIT. Others pass None
+    api_kwargs: dict[str, Any] = field(default_factory=dict)  # WHY: Extra kwargs (for example distinct=mac)
 
 
 # ---------------------------------------------------------------------------
@@ -581,7 +581,7 @@ def _build_export_kwargs(operation: Operation) -> dict[str, Any]:
         "sort_key": sort_key,
         "limit": limit_value,
     }
-    kwargs.update(operation.api_kwargs)  # WHY: Merge per-operation extras (e.g. distinct=mac) last
+    kwargs.update(operation.api_kwargs)  # WHY: Merge per-operation extras (for example distinct=mac) last
     return kwargs
 
 
@@ -616,7 +616,7 @@ def _split_elapsed(elapsed: float) -> tuple[int, int]:
 
 def _print_summary_banner(total: int, totals: _RunTotals, minutes: int, seconds: int) -> None:
     """Emit the operator-facing summary banner for the completed run."""  # WHY: Pure console output helper
-    logging.warning(  # WHY: Summary banner via logger; single call preserves block cohesion.
+    logging.warning(  # WHY: Summary banner via logger. Single call preserves block cohesion.
         "\n%s\n  Org Data Collection Complete\n%s\n"
         "  Total:     %s\n"
         "  Succeeded: %s\n"

@@ -30,7 +30,7 @@ class OrgCaptureWorkflow:  # WHY: frozen slotted bundle groups manager binding f
         self._finalize_org_capture(selection, capture_config)  # WHY: build payload + confirm + dispatch
 
     def _collect_org_selection(self) -> tuple[Any, Any, str] | None:  # WHY: unify selection-prompt sequence
-        """Prompt for mxedge, port and tcpdump expression; return None if the user aborts."""
+        """Prompt for mxedge, port and tcpdump expression. Return None if the user aborts."""
         fetched = self.manager._fetch_org_mxedges()  # WHY: retrieve org-scope mxedge inventory + stats
         if fetched is None:  # WHY: fetch failed or org has zero edges available
             return None  # WHY: no edges available or inventory fetch failed -> cancel workflow

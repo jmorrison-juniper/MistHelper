@@ -4,7 +4,7 @@ Extracted from MistHelper.py during initiative 1013 (Cat B, position 15).
 Scans org WLANs, filters those using RADIUS/RadSec auth, and offers bulk
 update of auth_servers_timeout, auth_servers_retries, and fast_dot1x_timers.
 All non-static methods keep instance state (org_id, WLAN buckets, change
-records); callers continue to reach the class through the
+records). Callers continue to reach the class through the
 ``MistHelper.BulkRadiusWLANConfigManager`` re-export alias.
 
 FR-008 remediation applied during extraction:
@@ -226,7 +226,7 @@ class BulkRadiusWLANConfigManager:
             wlan["_inheritance_source"] = "Org-Level WLAN"
 
     def _build_combined_wlan_rows(self) -> list[tuple[dict[str, Any], int | None]]:
-        """Pair WLANs with display indices: selectable WLANs get 1-based numbers; compliant ones get None."""
+        """Pair WLANs with display indices: selectable WLANs get 1-based numbers. Compliant ones get None."""
         display_index = 1  # Running 1-based number for selectable WLANs
         combined: list[tuple[dict[str, Any], int | None]] = []  # Output pairs
         for wlan in self.radius_wlans:  # Selectable WLANs that need configuration
@@ -270,15 +270,15 @@ class BulkRadiusWLANConfigManager:
     @staticmethod
     def _is_range_part(part: str) -> bool:
         """Return True when a selection piece is a range like '3-7' (not a leading-minus negative)."""
-        return "-" in part and not part.startswith("-")  # A dash that isn't a leading minus marks a range.
+        return "-" in part and not part.startswith("-")  # A dash that is not a leading minus marks a range.
 
     @staticmethod
     def _parse_range_part(part: str) -> tuple[int, int] | None:
-        """Parse a 'start-end' range piece into 0-based (start, end), swapping reversed bounds; None if invalid."""
+        """Parse a 'start-end' range piece into 0-based (start, end), swapping reversed bounds. None if invalid."""
         try:  # Non-numeric range pieces are skipped.
             range_parts = part.split("-")  # Split into start and end.
             if len(range_parts) != 2:  # Only a well-formed two-ended range is valid.
-                return None  # Malformed range; skip it.
+                return None  # Malformed range. Skip it.
             start = int(range_parts[0].strip()) - 1  # Convert start to 0-based.
             end = int(range_parts[1].strip()) - 1  # Convert end to 0-based.
             if start > end:  # Tolerate reversed ranges like '7-3'.
@@ -299,7 +299,7 @@ class BulkRadiusWLANConfigManager:
 
     @staticmethod
     def _add_index(idx: int, max_count: int, selected_indices: list[int]) -> None:
-        """Append idx to selected_indices when valid and not already chosen; warn when it is out of range."""
+        """Append idx to selected_indices when valid and not already chosen. Warn when it is out of range."""
         if 0 <= idx < max_count and idx not in selected_indices:  # Valid and not already chosen.
             selected_indices.append(idx)  # Add this index.
         elif idx >= max_count:  # Index beyond the list.
@@ -492,15 +492,15 @@ class BulkRadiusWLANConfigManager:
             "compliance_status": wlan.get("_compliance_status", ""),  # COMPLIANT/NEEDS_UPDATE from the filter step
             "inheritance_level": wlan.get("_inheritance_level", ""),  # template vs org (from _add_inheritance_metadata)
             "inheritance_source": wlan.get("_inheritance_source", ""),  # Where the WLAN is defined
-            "auth_type": auth.get("type", "") if isinstance(auth, dict) else "",  # eap/eap192/psk/etc.
+            "auth_type": auth.get("type", "") if isinstance(auth, dict) else "",  # eap/eap192/psk/and so on
             "num_auth_servers": len(wlan.get("auth_servers", []) or []),  # How many RADIUS servers are configured
             "radsec_enabled": radsec.get("enabled", False) if isinstance(radsec, dict) else False,  # RadSec on/off
             "auth_servers_timeout": wlan.get("auth_servers_timeout", 5),  # Actual value (5 = the check's own default)
-            "auth_servers_timeout_present": "auth_servers_timeout" in wlan,  # True => real value; False => defaulted
+            "auth_servers_timeout_present": "auth_servers_timeout" in wlan,  # True => real value. False => defaulted
             "auth_servers_retries": wlan.get("auth_servers_retries", 2),  # Actual value (2 = the check's own default)
-            "auth_servers_retries_present": "auth_servers_retries" in wlan,  # True => real value; False => defaulted
+            "auth_servers_retries_present": "auth_servers_retries" in wlan,  # True => real value. False => defaulted
             "fast_dot1x_timers": wlan.get("fast_dot1x_timers", False),  # Actual value (False = the check's own default)
-            "fast_dot1x_timers_present": "fast_dot1x_timers" in wlan,  # True => real value; False => defaulted
+            "fast_dot1x_timers_present": "fast_dot1x_timers" in wlan,  # True => real value. False => defaulted
             "target_timeout": self.target_timeout,  # Target timeout this run compared against
             "target_retries": self.target_retries,  # Target retries this run compared against
             "target_fast_dot1x": self.target_fast_dot1x,  # Target fast-timer flag this run compared against
@@ -524,7 +524,7 @@ class BulkRadiusWLANConfigManager:
     ]
 
     def _write_audit_csv(self, filepath: str) -> None:
-        """Write self.change_records to a CSV at filepath; log success or surface failure to the user."""
+        """Write self.change_records to a CSV at filepath. Log success or surface failure to the user."""
         try:
             with open(filepath, "w", newline="", encoding="utf-8") as csvfile:
                 writer = csv.DictWriter(csvfile, fieldnames=self._AUDIT_TRAIL_FIELDNAMES)
@@ -532,7 +532,7 @@ class BulkRadiusWLANConfigManager:
                 writer.writerows(self.change_records)  # Write every recorded change
             print(f"\n[+] Audit trail exported to: {filepath}")
             logging.info("Audit trail exported to %s with %s records", filepath, len(self.change_records))
-        except Exception as e:  # Writing the CSV failed (permissions, disk, etc.)
+        except Exception as e:  # Writing the CSV failed (permissions, disk, and so on)
             print(f"\n[!] Failed to export audit trail: {e}")
             logging.error("Failed to export audit trail: %s", e)
 
@@ -566,9 +566,9 @@ class BulkRadiusWLANConfigManager:
     def _scan_and_prepare(self) -> bool:
         """Display config, fetch + filter WLANs, persist snapshot. Return False on failure."""
         self._display_config()  # Show the target settings the user configured.
-        if not self._get_org_id():  # Resolve the org ID; abort if unavailable.
+        if not self._get_org_id():  # Resolve the org ID. Abort if unavailable.
             return False  # Cannot proceed without an org.
-        if not self._scan_org_wlans():  # Fetch all org WLANs; abort on failure.
+        if not self._scan_org_wlans():  # Fetch all org WLANs. Abort on failure.
             return False  # Cannot proceed without WLAN data.
         self._filter_radius_wlans()  # Split WLANs into selectable vs already-compliant buckets.
         self._export_scan_snapshot()  # Persist the pulled settings for post-run examination.
@@ -598,7 +598,7 @@ class BulkRadiusWLANConfigManager:
             print("\n[*] No selection made. Exiting.")  # Inform the user.
             return None  # Abort.
         selected_indices = self._parse_selection(selection)  # Parse into 0-based indices.
-        if selected_indices is None:  # User explicitly cancelled (e.g., 'q').
+        if selected_indices is None:  # User explicitly cancelled (for example, 'q').
             print("\n[*] Operation cancelled by user.")  # Acknowledge.
             logging.info("Menu 122 cancelled by user at selection prompt")  # Log cancellation.
             return None  # Abort.

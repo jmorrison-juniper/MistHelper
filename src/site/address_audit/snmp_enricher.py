@@ -8,7 +8,7 @@ matching/validation signal. It never raises on absence -- a site with neither
 field simply yields ``None``.
 
 The customer prefixes these values with their own SAP internal store code
-(e.g. ``"S2SJB - 5550 N Military Trl ..."`` or ``"08806 - 2525 Howell Branch
+(for example ``"S2SJB - 5550 N Military Trl ..."`` or ``"08806 - 2525 Howell Branch
 Rd ..."``). That code is not part of the postal address, so it is stripped
 before the value is returned -- the audit must never treat the store number as
 part of the street.
@@ -21,7 +21,7 @@ import re  # Strip the leading SAP store-code prefix.
 from typing import Any  # Loose typing for the Mist site record dict.
 
 # Leading SAP store code: 3-7 alphanumerics followed by a hyphen separator, anchored at start.
-# Matches "S2SJB - ", "08806 - ", "0542E - ", "T000I - "; never strips a real street number
+# Matches "S2SJB - ", "08806 - ", "0542E - ", "T000I - ". Never strips a real street number
 # because a bare house number is not followed by " - " in these records.
 _SAP_PREFIX = re.compile(r"^\s*[A-Za-z0-9]{3,7}\s*-\s*")  # WHY: precompiled once at import time
 
@@ -48,7 +48,7 @@ class SNMPLocationEnricher:  # WHY: single-purpose class extracting SNMP locatio
 
     @staticmethod
     def _strip_store_prefix(value: str | None) -> str | None:  # WHY: drop SAP store code prefix
-        """Remove the customer's leading SAP store-code prefix (e.g. ``08806 - ``)."""
+        """Remove the customer's leading SAP store-code prefix (for example ``08806 - ``)."""
         if not value:  # Nothing to strip.
             return None  # Preserve the absent sentinel.
         stripped = _SAP_PREFIX.sub("", value).strip()  # Drop the anchored store-code prefix.
@@ -56,14 +56,14 @@ class SNMPLocationEnricher:  # WHY: single-purpose class extracting SNMP locatio
 
     @staticmethod
     def _read_var_location(site_record: dict[str, Any]) -> str | None:  # WHY: read snmp_location site variable
-        """Read and trim ``vars["snmp_location"]``; return ``None`` if absent/blank."""
+        """Read and trim ``vars["snmp_location"]``. Return ``None`` if absent/blank."""
         site_vars = site_record.get("vars") or {}  # Site variables dict (may be missing/None).
         value = (site_vars.get("snmp_location") or "").strip()  # Trim the variable's value.
         return value or None  # Normalize empty string to None.
 
     @staticmethod
     def _read_config_location(site_record: dict[str, Any]) -> str | None:  # WHY: read snmp_config.location
-        """Read and trim ``snmp_config.location``; return ``None`` if absent/blank."""
+        """Read and trim ``snmp_config.location``. Return ``None`` if absent/blank."""
         snmp_config = site_record.get("snmp_config") or {}  # SNMP config block (may be missing/None).
         value = (snmp_config.get("location") or "").strip()  # Trim the standard SNMP location.
         return value or None  # Normalize empty string to None.

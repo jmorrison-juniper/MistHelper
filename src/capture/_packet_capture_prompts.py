@@ -11,7 +11,7 @@ Callers instantiate :class:`PacketCapturePrompts` directly (no factory
 indirection) so ``PacketCaptureManager`` binds an instance on itself as
 ``self._prompts``. ``__getattr__`` delegates lookups back to the manager
 so shared state (``mist_session``, ``validate_mac_address``,
-``normalize_mac_address``, etc.) works transparently without duplicating
+``normalize_mac_address``, and so on) works transparently without duplicating
 class-level attributes.
 """
 
@@ -76,7 +76,7 @@ class PacketCapturePrompts:
     def __getattr__(self, name: str) -> Any:
         """Delegate unknown attributes to the wrapped manager."""
         mm = self.__dict__.get("_mm")  # WHY: guard against half-initialized instances
-        if mm is None:  # WHY: only trips during broken init; avoid infinite recursion
+        if mm is None:  # WHY: only trips during broken init. Avoid infinite recursion
             raise AttributeError(name)  # WHY: signal missing attribute cleanly to callers
         return getattr(mm, name)  # WHY: transparent proxy back to the parent manager
 
@@ -137,7 +137,7 @@ class PacketCapturePrompts:
         )
 
     def _handle_ap_manual_entry(self) -> str | None:
-        """Prompt for manual AP MAC entry and validate; return normalized MAC or None."""
+        """Prompt for manual AP MAC entry and validate. Return normalized MAC or None."""
         ap_mac = _lazy_input_utils().safe_input("Enter AP MAC address: ", context="ap_mac")  # WHY: prompt
         if not self._mm.validate_mac_address(ap_mac):  # WHY: reject malformed MAC before API use
             print(f"\n! Invalid AP MAC address format: {ap_mac}")  # WHY: user-facing error message
@@ -254,7 +254,7 @@ class PacketCapturePrompts:
         return True  # WHY: signal user chose to proceed despite the conflict
 
     def check_existing_ap_capture(self, site_id: str, ap_mac: str) -> bool:
-        """Return True if safe to proceed; False if a conflict caused user cancel."""
+        """Return True if safe to proceed. False if a conflict caused user cancel."""
         print(f"\n> Checking for existing captures on AP {ap_mac}...")  # WHY: user status message
         captures = self._fetch_site_pcaps(site_id)  # WHY: fetch current pcap list
         if captures is None:  # WHY: fetch failed - fail-open to allow capture attempt
@@ -297,7 +297,7 @@ class PacketCapturePrompts:
 
     @staticmethod
     def _handle_multi_ap_conflict(response: Any, error_details: Any) -> bool:
-        """Print conflict message when API rejects due to existing capture; return True if handled."""
+        """Print conflict message when API rejects due to existing capture. Return True if handled."""
         if response.status_code != 400 or not isinstance(error_details, dict):  # WHY: only 400+dict here
             return False  # WHY: caller should print generic failure instead
         detail = error_details.get("detail", "")  # WHY: extract API-provided reason string
@@ -314,7 +314,7 @@ class PacketCapturePrompts:
             capture_id = self._multi_ap_success_summary(response.data, capture_format, duration)  # WHY: log
             self._mm._export_capture_info_to_csv(response.data, "site", site_id)  # WHY: audit CSV export
             self._dispatch_multi_ap_output(site_id, capture_id, capture_format)  # WHY: route by format
-            return  # WHY: success handled; caller does not need further branching
+            return  # WHY: success handled. Caller does not need further branching
         error_details = response.data if hasattr(response, "data") else "Unknown"  # WHY: safe access
         if self._handle_multi_ap_conflict(response, error_details):  # WHY: dedicated conflict path
             return  # WHY: conflict path already logged and messaged
@@ -396,7 +396,7 @@ class PacketCapturePrompts:
     @staticmethod
     def extract_port_names(payload: dict[str, Any], capture_type: str) -> list[str]:
         """Extract port names from a device capture payload."""
-        config_key = f"{capture_type.lower()}s"  # WHY: e.g. 'Gateway' -> 'gateways' payload key
+        config_key = f"{capture_type.lower()}s"  # WHY: for example 'Gateway' -> 'gateways' payload key
         device_config = payload.get(config_key, {})  # WHY: default empty dict when key missing
         for mac_config in device_config.values():  # WHY: single-device payloads carry one mac entry
             ports = mac_config.get("ports", {})  # WHY: ports dict keyed by port name

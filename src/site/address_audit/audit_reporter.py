@@ -38,7 +38,7 @@ class AddressAuditReporter:
     """Write the audit results to a timestamped CSV file in ``data/``."""
 
     def save(self, results: list[AuditResult], output_dir: str = "data") -> str:
-        """Write ``results`` to ``data/address_audit_<UTC timestamp>.csv``; return the path."""
+        """Write ``results`` to ``data/address_audit_<UTC timestamp>.csv``. Return the path."""
         logging.info("Saving address-audit report (%d rows)", len(results))  # Action-log start.
         os.makedirs(output_dir, exist_ok=True)  # Ensure the output directory exists.
         stamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")  # UTC timestamp for the filename.
@@ -65,7 +65,7 @@ class AddressAuditReporter:
         ]
 
     def save_corrections(self, outcomes: list[CorrectionOutcome], output_dir: str = "data") -> str:
-        """Write the before/after write-back outcomes to a timestamped CSV; return the path."""
+        """Write the before/after write-back outcomes to a timestamped CSV. Return the path."""
         logging.info("Saving address-correction report (%d outcome rows)", len(outcomes))  # Action-log start.
         os.makedirs(output_dir, exist_ok=True)  # Ensure the output directory exists.
         stamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")  # UTC timestamp for the filename.
@@ -89,10 +89,10 @@ class AddressAuditReporter:
             address.get("state", ""),  # State code.
             str(address.get("zip", "")),  # ZIP.
         ]
-        return " ".join(part for part in parts if part).strip()  # Skip blanks; trim.
+        return " ".join(part for part in parts if part).strip()  # Skip blanks. Trim.
 
     @staticmethod
     def _format_csv_address(row) -> str:
         """Join a CSV ``AddressRow`` into a single line."""
         parts = [row.address, row.city, row.state, row.zip_code]  # CSV address components.
-        return " ".join(part for part in parts if part).strip()  # Skip blanks; trim.
+        return " ".join(part for part in parts if part).strip()  # Skip blanks. Trim.

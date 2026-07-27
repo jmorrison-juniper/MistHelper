@@ -38,7 +38,7 @@ class CommandCsvLoader:
         if not os.path.exists(legacy_path):  # Legacy file also missing
             return None  # Give up
         # Preserve original user-facing string verbatim (informational note about legacy location)
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("X  Using legacy SSH commands file at %s; move it to data/ for consistency.", legacy_path)
         return legacy_path  # Use the legacy file as a fallback
 
@@ -52,7 +52,7 @@ class CommandCsvLoader:
                 for row_num, row in enumerate(reader, 1):  # 1-based row index for warning messages
                     self._consume_csv_row(row, row_num, commands, invalid)  # Per-row dispatch
         except Exception as error:  # noqa: BLE001 - mirror original broad catch
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info("[WARNING] Warning: Could not read %s: %s", csv_file_path, error)
             return []  # Bail out cleanly on read failure
         self._warn_invalid_rows(invalid, csv_file_path)  # User-facing warning preserved from original
@@ -91,20 +91,20 @@ class CommandCsvLoader:
         """Print warnings for any rejected CSV rows."""
         if not invalid:  # Clean file — nothing to warn about
             return  # No-op
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("[WARNING] Skipping %s invalid commands from %s:", len(invalid), csv_file_path)
         for invalid_cmd in invalid[:3]:  # Original shows first 3 entries
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info("    %s", invalid_cmd)
         if len(invalid) > 3:  # Indicate further truncation
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info("    ... and %s more", len(invalid) - 3)
 
     @staticmethod
     def _enforce_command_cap(commands: list[str], csv_file_path: str) -> list[str]:
         """Trim to the per-run command cap and warn if truncation happens."""
         if len(commands) > _MAX_COMMANDS:  # Resource exhaustion guard
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info(
                 "[WARNING] Too many commands in %s (%s), limiting to first %s",
                 csv_file_path,

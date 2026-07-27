@@ -25,14 +25,14 @@ from typing import Any  # Broad typing for arbitrary field values.
 class DataProcessingUtils:
     """Centralized data-transformation utilities (canonical home in ``src/data/``).
 
-    All methods are static; the class is a namespace for JSON flattening,
+    All methods are static. The class is a namespace for JSON flattening,
     key normalization, and CSV-safety helpers. ``MistHelper.py`` re-exports
     this class so historical callers keep working without a delegator.
     """
 
     @staticmethod
     def _flatten_list_value(new_key: str, sep: str, v: list[Any]) -> list[tuple[str, Any]]:
-        """Flatten a list value: list-of-dicts gets index keys; scalar lists join as CSV."""
+        """Flatten a list value: list-of-dicts gets index keys. Scalar lists join as CSV."""
         out: list[tuple[str, Any]] = []  # Accumulator for produced pairs.
         if all(isinstance(i, dict) for i in v):  # List of dicts: index each entry.
             for idx, item in enumerate(v):  # Walk list items.
@@ -43,7 +43,7 @@ class DataProcessingUtils:
 
     @staticmethod
     def flatten_dict(d: dict[str, Any], parent_key: str = "", sep: str = "_") -> dict[str, Any]:
-        """Recursively flatten nested dict for CSV/JSON; lists-of-dicts get index keys."""
+        """Recursively flatten nested dict for CSV/JSON. Lists-of-dicts get index keys."""
         items: list[tuple[str, Any]] = []  # Accumulate flattened (key, value) pairs.
         for k, v in d.items():  # Walk every key/value in the input dict.
             k_str = str(k)  # Stringify the key for safe concatenation.
@@ -61,8 +61,8 @@ class DataProcessingUtils:
     def flatten_nested_fields(data: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Flatten nested fields in a list of dictionaries.
 
-        Attempts to parse stringified dicts/lists; recursively flattens
-        nested dicts and lists of dicts; joins non-dict lists as CSV.
+        Attempts to parse stringified dicts/lists. Recursively flattens
+        nested dicts and lists of dicts. Joins non-dict lists as CSV.
         """
         flattened = []  # Collect flattened rows.
         for entry in data:  # Process each record.
@@ -86,14 +86,14 @@ class DataProcessingUtils:
         """Try to parse a string starting with ``{`` or ``[`` as Python literal or JSON."""
         if not isinstance(value, str):  # Non-string values pass through unchanged.
             return value  # Nothing to parse.
-        if not value.startswith(("{", "[")):  # Not embedded JSON-ish; skip parsing.
+        if not value.startswith(("{", "[")):  # Not embedded JSON-ish. Skip parsing.
             return value  # Return as-is.
         try:
             return ast.literal_eval(value)  # Try Python-literal parse first.
-        except Exception:  # ast.literal_eval failed; try JSON.
+        except Exception:  # ast.literal_eval failed. Try JSON.
             try:
                 return json.loads(value)  # Fall back to JSON parse.
-            except Exception:  # nosec B110 - both parses failed; leave value as string.
+            except Exception:  # nosec B110 - both parses failed. Leave value as string.
                 return value  # Final fallback: original string.
 
     @staticmethod
@@ -138,7 +138,7 @@ class DataProcessingUtils:
     def escape_multiline(data: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Escape multiline strings for CSV compatibility.
 
-        Joins list values as CSV-separated strings; replaces newline
+        Joins list values as CSV-separated strings. Replaces newline
         characters with escaped versions on string fields.
         """
         for entry in data:  # Process each record.

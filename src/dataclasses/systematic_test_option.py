@@ -23,6 +23,6 @@ from typing import Any  # The menu callable returns Any and takes arbitrary kwar
 class SystematicTestOption:
     """Identity of a single menu option exercised by the systematic test harness."""
 
-    option: str  # Menu option number being tested (e.g. "11").
+    option: str  # Menu option number being tested (for example "11").
     func: Callable[..., Any]  # The menu action callable invoked for this option.
     description: str  # Human-readable option description shown in progress output.

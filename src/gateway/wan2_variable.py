@@ -13,7 +13,7 @@ STRUCT-LENGTH budget while each cluster keeps CC/length budgets:
 * :mod:`._wan2_variable_device` - per-device override migration.
 * :mod:`._wan2_variable_reporting` - audit CSV + final summary block.
 
-The parent orchestrates the flow via :meth:`execute`; every private
+The parent orchestrates the flow via :meth:`execute`. Every private
 helper referenced there is provided by one of the clusters and reached
 through the class-level ``__getattr__`` proxy defined below.
 """
@@ -65,7 +65,7 @@ class GatewayWan2VariableMigrator:  # pylint: disable=too-many-instance-attribut
 
     Both modes preserve device-level static IP overrides by migrating
     port_config keys on individual devices. Implementation lives in the
-    ``_wan2_variable_*`` cluster modules; this class holds the orchestration
+    ``_wan2_variable_*`` cluster modules. This class holds the orchestration
     entry point and shared state.
     """
 
@@ -104,14 +104,14 @@ class GatewayWan2VariableMigrator:  # pylint: disable=too-many-instance-attribut
         self._input_fn = deps.input_fn or input  # WHY: default to builtin input()
         self._pool_fn = (
             deps.execute_fn
-        )  # WHY: fast-mode parallel executor (may be None); renamed from connection_pool_fn per 1012 SC-003
+        )  # WHY: fast-mode parallel executor (may be None). Renamed from connection_pool_fn per 1012 SC-003
 
     def __getattr__(self, name: str) -> Any:
         """Proxy cluster-attribute access to helper clusters.
 
         Python only invokes ``__getattr__`` when normal lookup fails, so
         this method resolves cluster method calls (``self._load_csv_data``,
-        ``self._apply_template_changes`` etc.) without explicit delegator
+        ``self._apply_template_changes`` and so on) without explicit delegator
         wrappers. The class-level ``hasattr`` check on ``type(cluster)``
         avoids invoking the cluster's own ``__getattr__`` (which would
         proxy back to this class and cause infinite recursion for unknown

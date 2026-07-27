@@ -26,7 +26,7 @@ from typing import Any  # WHY: dynamic row payload annotations.
 class CacheUtils:
     """Centralized cache management utilities.
 
-    Handles CSV caching, freshness checks, regeneration, etc.
+    Handles CSV caching, freshness checks, regeneration, and so on
     """
 
     _ADDRESS_PARSE_FAILURE_FIELDNAMES: list[str] = [  # Stable column order for AddressParseFailures CSV
@@ -47,7 +47,7 @@ class CacheUtils:
         generate_function: Callable,  # type: ignore[type-arg]
         freshness_minutes: int | None = None,
     ) -> bool:
-        """Return True if file_name's CSV exists and is fresh; otherwise run generate_function.
+        """Return True if file_name's CSV exists and is fresh. Otherwise run generate_function.
 
         freshness_minutes defaults to CSV_FRESHNESS_MINUTES (.env). Returns True when the file is
         fresh or was regenerated successfully, False if regeneration failed.
@@ -89,9 +89,9 @@ class CacheUtils:
 
     @staticmethod
     def _run_csv_generator(generate_function: Callable, file_name: str) -> bool:  # type: ignore[type-arg]  # Run generator
-        """Invoke the generate_function to produce the CSV; return True on success, False on failure."""
+        """Invoke the generate_function to produce the CSV. Return True on success, False on failure."""
         logging.info("* Running %s to generate %s...", generate_function.__name__, file_name)  # Log before generating
-        try:  # The generator may raise; never let that crash the caller
+        try:  # The generator may raise. Never let that crash the caller
             generate_function()  # Produce or refresh the CSV file
             logging.info("! %s generated or refreshed.", file_name)  # Confirm success to operator
             return True  # Generation succeeded
@@ -101,7 +101,7 @@ class CacheUtils:
 
     @staticmethod
     def load_csv_grouped_by_key(filename: str, key: str) -> dict[str, list[dict[str, Any]]]:
-        """Load a CSV into a dict keyed by the named column; value is the list of rows sharing it."""
+        """Load a CSV into a dict keyed by the named column. Value is the list of rows sharing it."""
         logging.info(
             "Loading CSV file '%s' into dictionary keyed by '%s'...", filename, key
         )  # Log before reading the file
@@ -115,7 +115,7 @@ class CacheUtils:
                 data_key = row.get(key)  # Extract the grouping key value from this row
                 if data_key is None:  # The key column is missing on this row
                     logging.warning("Row missing key '%s': %s", key, row)  # Warn about the malformed row
-                    continue  # Skip rows that can't be grouped
+                    continue  # Skip rows that cannot be grouped
                 if data_key not in data_dict:  # First time we've seen this key value
                     data_dict[data_key] = []  # Start a new bucket for it
                 data_dict[data_key].append(row)  # Add this row to its key's bucket
@@ -137,9 +137,9 @@ class CacheUtils:
 
     @staticmethod
     def _write_data_rows_to_csv(writer: csv.DictWriter, data: dict[str, list[dict[str, Any]]]) -> int:  # type: ignore[type-arg]
-        """Write every row from every section through writer; return total row count."""
+        """Write every row from every section through writer. Return total row count."""
         row_count = 0  # Tally rows actually written so the caller can log the total
-        for section in data.values():  # Iterate sections in insertion order; keys are unused here
+        for section in data.values():  # Iterate sections in insertion order. Keys are unused here
             for row in section:  # Write each row through the DictWriter
                 writer.writerow(row)  # csv handles encoding/escaping for us
                 row_count += 1  # Increment after a successful write
@@ -206,7 +206,7 @@ class CacheUtils:
         logging.info("Scanning data directory for generated cache CSVs: %s", data_dir)  # Log scan target
         candidates = CacheUtils._scan_cache_candidates(data_dir)  # List safe-to-delete files (None on scan error)
         if candidates is None:  # Directory could not be listed (already reported by the scanner)
-            return  # Abort -- nothing to delete if we can't list the directory
+            return  # Abort -- nothing to delete if we cannot list the directory
         if not candidates:  # Nothing to delete -- inform operator and return early
             # WHY (#886 Phase 2): consolidate print+info into single WARNING so operator sees notice
             # on the default root-logger config (INFO is suppressed by default).
@@ -223,7 +223,7 @@ class CacheUtils:
 
     @staticmethod
     def _scan_cache_candidates(data_dir: str) -> list[str] | None:  # List generated cache files, or None on error
-        """Return the list of generated cache filenames in data_dir, or None if the directory can't be listed."""
+        """Return the list of generated cache filenames in data_dir, or None if the directory cannot be listed."""
         logging.debug("Listing generated cache candidates in %s", data_dir)  # Trace the scan before listing
         try:  # Listing can fail on permissions or a missing directory
             return [
@@ -237,7 +237,7 @@ class CacheUtils:
 
     @staticmethod
     def _delete_cache_files(data_dir: str, candidates: list[str]) -> tuple[int, int]:  # Delete files, count outcomes
-        """Delete each candidate cache file; return (deleted_count, error_count)."""
+        """Delete each candidate cache file. Return (deleted_count, error_count)."""
         deleted = 0  # Track successful deletions for summary
         errors = 0  # Track failures for summary
         for name in candidates:  # Delete each identified cache file
@@ -258,7 +258,7 @@ class CacheUtils:
     def create_address_parse_failures_csv(
         parse_failures: list[dict[str, Any]], filename: str = "AddressParseFailures.csv"
     ) -> None:
-        """Write address-parse failures to a CSV in data/; safe no-op when list is empty."""
+        """Write address-parse failures to a CSV in data/. Safe no-op when list is empty."""
         if not parse_failures:
             logging.info("No address parsing failures to document.")
             return

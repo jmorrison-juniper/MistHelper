@@ -79,7 +79,7 @@ class ProbeResult:
             customer-impact-critical.
         ip (str | None): First A-record returned by ``getaddrinfo``; ``None``
             if DNS failed.
-        dns_error (str | None): Formatted DNS failure text; only populated on
+        dns_error (str | None): Formatted DNS failure text. Only populated on
             lookup error.
         icmp_ok (bool): Whether a single OS ``ping`` succeeded within the
             timeout.
@@ -100,10 +100,10 @@ class ProbeResult:
             the TLS handshake.
         tls_issuer (str | None): Peer certificate issuer CN/O captured on the
             TLS handshake.
-        tls_error (str | None): Formatted TLS error text; only populated on
+        tls_error (str | None): Formatted TLS error text. Only populated on
             handshake failure.
         responding_protocols (list[str]): Compact list of protocols we
-            confirmed live (e.g. ``["ICMP", "TCP/443", "HTTPS"]``); used by
+            confirmed live (for example ``["ICMP", "TCP/443", "HTTPS"]``). Used by
             the log summary.
         server_class (str): Category inferred from FQDN + headers + cert
             issuer.
@@ -242,11 +242,11 @@ def _build_ike_sa_init() -> bytes:
     next_payload = 0  # 0 = "no next payload" per RFC 7296 (probe-only)
     version = 0x20  # major=2 minor=0 (IKEv2)
     exchange_type = 34  # IKE_SA_INIT per IANA IKEv2 exchange types
-    flags = 0x08  # Initiator flag set; Response/Version cleared
+    flags = 0x08  # Initiator flag set. Response/Version cleared
     message_id = 0  # first message in the exchange
-    length = 28  # header-only; no payloads included in the probe
+    length = 28  # header-only. No payloads included in the probe
     # ``!`` selects network (big-endian) byte order as required by RFC 7296.
-    # B/B/B/B/I = 1+1+1+1+4 bytes = 8 bytes; combined with the two 8-byte SPIs
+    # B/B/B/B/I = 1+1+1+1+4 bytes = 8 bytes. Combined with the two 8-byte SPIs
     # this yields the 28-byte header the responder expects.
     return (
         initiator_spi
@@ -268,7 +268,7 @@ def _udp_check(host: str, port: int, timeout: float) -> str:
 
     Why:
         Zscaler VPN gateways answer IKE on UDP/500 and NAT-T-encapsulated
-        UDP/4500 rather than any TCP port; TCP-only probing silently
+        UDP/4500 rather than any TCP port. TCP-only probing silently
         mislabels them dead. The three-value return vocabulary matches
         :func:`_tcp_check` so downstream reporting can share code paths.
         Port 4500 requires a four-byte non-ESP marker (0x00000000) prefix
@@ -279,7 +279,7 @@ def _udp_check(host: str, port: int, timeout: float) -> str:
         host: Target hostname or IP address.
         port: Either ``500`` or ``4500`` (any other value is accepted but
             will not carry the non-ESP marker).
-        timeout: Wall-clock recvfrom timeout in seconds; also bounds how
+        timeout: Wall-clock recvfrom timeout in seconds. Also bounds how
             long a silent-drop firewall can stall the probe thread.
 
     Returns:
@@ -305,7 +305,7 @@ def _udp_check(host: str, port: int, timeout: float) -> str:
     except TimeoutError:
         state = "no_reply"  # silent-drop firewall / route missing / peer offline
     except OSError as exc:
-        state = f"error:{type(exc).__name__}"  # e.g. PermissionError, NetworkUnreachable
+        state = f"error:{type(exc).__name__}"  # for example PermissionError, NetworkUnreachable
     logger.debug("zscaler_probe: udp_check result host=%s port=%d state=%s", host, port, state)
     return state
 
@@ -424,7 +424,7 @@ def _pick_cn(rdns: Any) -> str | None:
 
     Why:
         ``ssl.SSLSocket.getpeercert`` returns RDNs as a nested tuple of
-        ``((key, value), ...)`` pairs; we prefer ``commonName`` and fall back
+        ``((key, value), ...)`` pairs. We prefer ``commonName`` and fall back
         to ``organizationName`` because a handful of Zscaler CAs omit CN.
 
     Args:
@@ -453,7 +453,7 @@ def _classify_zscaler_subrule(fqdn: str) -> str:
         fqdn: Lower-cased hostname of the endpoint under classification.
 
     Returns:
-        A short human-readable Zscaler sub-class label; falls back to
+        A short human-readable Zscaler sub-class label. Falls back to
         ``"Zscaler service"`` when no more specific rule matches.
     """
     if "pac" in fqdn:
@@ -567,7 +567,7 @@ def _probe_http_stack(
         timeout: Per-probe timeout in seconds.
         declared_ports: Ports the catalogue declared for this role. Only 8080
             probes emit when 8080 is both open and declared.
-        result: Mutated in place; HTTP/HTTPS fields and
+        result: Mutated in place. HTTP/HTTPS fields and
             ``responding_protocols`` are populated on success, ``notes`` on
             failure.
     """
@@ -596,7 +596,7 @@ def _probe_http_stack(
             result.notes.append(f"HTTPS :443 error: {err}")
 
     if result.tcp.get(8080) == "open" and 8080 in declared_ports:
-        # ZEN nodes listen on 8080 for explicit-proxy CONNECT; a raw HTTP GET
+        # ZEN nodes listen on 8080 for explicit-proxy CONNECT. A raw HTTP GET
         # is usually refused (400/407), but the TCP handshake alone confirms
         # the port is live.
         result.responding_protocols.append("TCP/8080 (proxy)")
@@ -616,7 +616,7 @@ def _probe_udp_ike_if_needed(
         function under the CC threshold.
 
     Args:
-        fqdn: Hostname; the ``"-vpn."`` substring is the catalogue-agnostic
+        fqdn: Hostname. The ``"-vpn."`` substring is the catalogue-agnostic
             hint that this is a VPN endpoint.
         timeout: Per-probe timeout in seconds.
         result: Mutated in place; ``udp`` and ``responding_protocols`` are
@@ -649,13 +649,13 @@ def _probe_fqdn(
 
     Args:
         fqdn: Hostname to probe.
-        role: Catalogue role dict; only ``role``, ``description``, ``ports``,
+        role: Catalogue role dict. Only ``role``, ``description``, ``ports``,
             and ``critical`` are consumed.
         timeout: Per-probe timeout in seconds.
 
     Returns:
         A fully populated :class:`ProbeResult`. On DNS failure the result is
-        returned early with ``ip=None`` and ``dns_error`` set; no downstream
+        returned early with ``ip=None`` and ``dns_error`` set. No downstream
         probes run.
     """
     declared_ports = list(role.get("ports") or [])
@@ -761,8 +761,8 @@ def _collect_zcc_probe_entries(
 
     Args:
         probes: Parsed ``zscaler_client_connector_probes.json`` document.
-        seen: Deduplication set for FQDNs already queued; mutated in place.
-        entries: Probe queue tuples ``(fqdn, role)``; mutated in place.
+        seen: Deduplication set for FQDNs already queued. Mutated in place.
+        entries: Probe queue tuples ``(fqdn, role)``. Mutated in place.
     """
     for role in probes.get("roles", []) or []:
         if not isinstance(role, dict):
@@ -811,7 +811,7 @@ def _log_probe_failures(results: list[ProbeResult]) -> None:
 
     Why:
         Kept at DEBUG (not INFO) so a batch of transient timeouts during
-        an 8-hour refresh window does not spam operator logs; the caller
+        an 8-hour refresh window does not spam operator logs. The caller
         still emits one INFO summary. Extracted so the parent's CC drops
         under the gate.
 
@@ -845,7 +845,7 @@ def run_full_validation(
         :mod:`src.utils.zscaler_catalogue`). Full-fleet coverage was chosen
         over sampling because the run only fires every 8 hours, amortising
         the cost. Per-endpoint failures are logged at DEBUG so a batch of
-        transient timeouts does not spam INFO; a single INFO summary line is
+        transient timeouts does not spam INFO. A single INFO summary line is
         always emitted.
 
     Args:

@@ -75,7 +75,7 @@ class _ViewerDrawing:  # WHY: wrapper class hosting the drawing-tools callback c
     def __getattr__(self, name: str) -> Any:  # WHY: transparent proxy for shared state access
         """Delegate unknown attributes to the wrapped parent manager."""
         mm = self.__dict__.get("_mm")  # WHY: guard against half-initialized instances
-        if mm is None:  # WHY: only trips during broken init; avoid infinite recursion
+        if mm is None:  # WHY: only trips during broken init. Avoid infinite recursion
             raise AttributeError(name)  # WHY: signal missing attribute cleanly
         return getattr(mm, name)  # WHY: forward all other attributes to parent
 
@@ -552,7 +552,7 @@ class _ViewerDrawing:  # WHY: wrapper class hosting the drawing-tools callback c
         )
 
     def _delete_zones_one_by_one(self, site_id: str | None, map_zones: list[dict[str, Any]]) -> tuple[int, int]:
-        """Delete each zone individually; return (deleted, failed) counts."""
+        """Delete each zone individually. Return (deleted, failed) counts."""
         deleted_count = 0  # WHY: successful deletes
         failed_count = 0  # WHY: failed deletes (logged but tolerated)
         for zone in map_zones:  # WHY: one DELETE per zone (Mist has no bulk endpoint)

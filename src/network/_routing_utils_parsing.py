@@ -19,7 +19,7 @@ import logging  # WHY: emit warning when SSR JSON is malformed (production visib
 import re  # WHY: multiple parsers use regex to pluck fields out of legacy text formats
 from typing import TYPE_CHECKING, Any  # WHY: TYPE_CHECKING avoids runtime import cycle with parent
 
-if TYPE_CHECKING:  # WHY: only needed for static type checkers; skipped at runtime
+if TYPE_CHECKING:  # WHY: only needed for static type checkers. Skipped at runtime
     from src.network.routing_utils import RoutingUtils  # WHY: parent type for cross-reference only
 
 
@@ -50,9 +50,9 @@ _VIA_RE: re.Pattern[str] = re.compile(r"via\s+(\S+)")
 def _empty_route_entry() -> dict[str, Any]:  # WHY: canonical shape reused by tabular/juniper builders
     """Return a fresh route-entry dict with every field zero-initialized."""
     return {  # WHY: dict literal is cheaper and clearer than dict(...) constructor
-        "destination": "",  # WHY: prefix/CIDR string; empty until a parser fills it
-        "next_hop": "",  # WHY: gateway address; empty for connected/local routes
-        "interface": "",  # WHY: egress interface name; empty when not known
+        "destination": "",  # WHY: prefix/CIDR string. Empty until a parser fills it
+        "next_hop": "",  # WHY: gateway address. Empty for connected/local routes
+        "interface": "",  # WHY: egress interface name. Empty when not known
         "protocol": "",  # WHY: BGP/OSPF/STATIC/... routing protocol tag
         "admin_distance": "",  # WHY: administrative distance kept as string for uniform display
         "metric": "",  # WHY: route metric kept as string for uniform display
@@ -71,7 +71,7 @@ class _RoutingUtilsParsing:  # WHY: cluster wrapper matching the ``_packet_captu
     def __getattr__(self, name: str) -> Any:  # WHY: transparent proxy so callers see combined API
         """Delegate unknown attributes to the wrapped parent object."""
         parent = self.__dict__.get("_ru")  # WHY: guard against half-initialized instances
-        if parent is None:  # WHY: only trips during broken init; avoid infinite recursion
+        if parent is None:  # WHY: only trips during broken init. Avoid infinite recursion
             raise AttributeError(name)  # WHY: signal missing attribute cleanly to callers
         return getattr(parent, name)  # WHY: transparent proxy to the parent RoutingUtils
 
@@ -85,7 +85,7 @@ class _RoutingUtilsParsing:  # WHY: cluster wrapper matching the ``_packet_captu
         Uses a dispatch chain of early-return handlers so cyclomatic
         complexity and nesting stay well under the compliance limits.
         """
-        # WHY: each handler returns True when it consumes ``part``; short-circuit stops the chain
+        # WHY: each handler returns True when it consumes ``part``. Short-circuit stops the chain
         if self._set_protocol_token(entry, part):  # WHY: BGP/OSPF/STATIC/... keyword match
             return  # WHY: keep nesting flat by exiting as soon as one handler succeeds
         if self._set_cidr_destination(entry, part):  # WHY: CIDR (``a.b.c.d/N``) → destination
@@ -98,7 +98,7 @@ class _RoutingUtilsParsing:  # WHY: cluster wrapper matching the ``_packet_captu
     def _set_protocol_token(entry: dict[str, Any], part: str) -> bool:
         """Set ``entry['protocol']`` if ``part`` is a known protocol keyword."""
         upper = part.upper()  # WHY: normalize to match uppercase _PROTOCOL_TOKENS
-        if upper not in _PROTOCOL_TOKENS:  # WHY: guard clause; leaves entry untouched on miss
+        if upper not in _PROTOCOL_TOKENS:  # WHY: guard clause. Leaves entry untouched on miss
             return False  # WHY: signal caller to try the next handler
         entry["protocol"] = upper  # WHY: store normalized uppercase form for uniform display
         return True  # WHY: caller stops the classification chain
@@ -221,7 +221,7 @@ class _RoutingUtilsParsing:  # WHY: cluster wrapper matching the ``_packet_captu
         if current_route:  # WHY: flush previous entry before starting a fresh one
             routes.append(current_route)  # WHY: keep append order matching input line order
         new_route = self._build_juniper_route(dest_match, line_stripped, current_table)  # WHY: build
-        return new_route, current_table  # WHY: table stays; only the current route advances
+        return new_route, current_table  # WHY: table stays. Only the current route advances
 
     @staticmethod
     def _build_juniper_route(
@@ -267,7 +267,7 @@ class _RoutingUtilsParsing:  # WHY: cluster wrapper matching the ``_packet_captu
             current_route["next_hop"] = via_parts  # WHY: store normalized (comma-stripped) form
             return  # WHY: early-return keeps subsequent checks from firing on same token
         if "." in via_parts and "/" not in via_parts:  # WHY: interface names have dot but no slash
-            current_route["interface"] = via_parts.strip()  # WHY: e.g. ``ge-0/0/0.0``
+            current_route["interface"] = via_parts.strip()  # WHY: for example ``ge-0/0/0.0``
             return  # WHY: guard prevents fallthrough from also setting next_hop
         current_route["next_hop"] = via_parts.strip()  # WHY: fallback (hostname/non-numeric next-hop)
 
@@ -288,7 +288,7 @@ class _RoutingUtilsParsing:  # WHY: cluster wrapper matching the ``_packet_captu
 
     @staticmethod
     def _decode_ssr_payload(json_data: str) -> dict[str, Any] | None:
-        """Decode SSR JSON and validate status; return ``None`` on any failure."""
+        """Decode SSR JSON and validate status. Return ``None`` on any failure."""
         try:  # WHY: SSR JSON can be truncated or malformed in real traffic
             data = json.loads(json_data)  # WHY: only place json.loads runs for SSR parsing
         except (json.JSONDecodeError, KeyError, TypeError) as error:  # WHY: match legacy exception set
@@ -316,7 +316,7 @@ class _RoutingUtilsParsing:  # WHY: cluster wrapper matching the ``_packet_captu
             "protocol": protocol,  # WHY: caller-supplied so all rows share the same label
             "admin_distance": "",  # WHY: SSR does not expose admin distance in this response
             "metric": str(row.get("metric", "")),  # WHY: coerce int→str for uniform display formatting
-            "status": row.get("status", ""),  # WHY: e.g. active/inactive per row
+            "status": row.get("status", ""),  # WHY: for example active/inactive per row
             "vrf": row.get("vrfName", "default"),  # WHY: SSR uses ``vrfName`` (camelCase)
             "name": row.get("name", ""),  # WHY: optional route name assigned in SSR config
             "weight": str(row.get("weight", "")),  # WHY: coerce int→str for uniform display formatting
@@ -361,7 +361,7 @@ class _RoutingUtilsParsing:  # WHY: cluster wrapper matching the ``_packet_captu
 
     def _normalize_json_route_list(self, data: list[Any]) -> list[dict[str, Any]]:
         """Normalize a top-level JSON list of route dicts."""
-        # WHY: skip non-dict entries so malformed items don't crash the projection
+        # WHY: skip non-dict entries so malformed items do not crash the projection
         return [self._normalize_json_route_entry(item) for item in data if isinstance(item, dict)]
 
     def _extract_routes_from_json_dict(self, data: dict[str, Any]) -> list[dict[str, Any]]:

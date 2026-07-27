@@ -43,7 +43,7 @@ _EMPTY_RESPONSE: Any = None  # WHY: named sentinel improves grep-ability over ba
 
 def _safe_call(label: str, api_call: Callable[[], Any]) -> Any:  # WHY: shared safe API-call wrapper.
     """Invoke ``api_call`` and return the response or ``None`` on failure/empty."""
-    try:  # WHY: Mist SDK raises broadly (HTTP, JSON, connection); we log and continue.
+    try:  # WHY: Mist SDK raises broadly (HTTP, JSON, connection). We log and continue.
         response = api_call()  # WHY: run the caller-provided Mist API call.
     except Exception as exc:  # WHY: never crash a map-render because one layer failed.
         logging.warning("Error fetching %s: %s", label, exc)  # WHY: preserve prior log format for grep.
@@ -263,7 +263,7 @@ class _MapsCoverage:
     @staticmethod
     def _resolve_coverage_indices(result_def: list[str]) -> tuple[int, int, int]:
         """Return (x_idx, y_idx, rssi_idx) into a coverage row, with a -1 RSSI sentinel."""
-        try:  # WHY: result_def may omit expected columns; fall back on legacy layout.
+        try:  # WHY: result_def may omit expected columns. Fall back on legacy layout.
             x_idx = result_def.index("x")  # WHY: locate the x column.
             y_idx = result_def.index("y")  # WHY: locate the y column.
             rssi_idx = _pick_rssi_index(result_def)  # WHY: max_rssi preferred over avg_rssi, -1 when absent.
@@ -299,7 +299,7 @@ class _MapsCoverage:
         logging.info("[Flask API] Fetching %s coverage for map %s", coverage_type, map_id)  # WHY: audit trail.
         try:  # WHY: `api_session.mist_get` may raise on network errors.
             response = api_session.mist_get(coverage_url, query=params)  # WHY: fetch coverage payload from Mist.
-        except Exception as exc:  # WHY: swallow errors so one bad layer doesn't kill the viewer.
+        except Exception as exc:  # WHY: swallow errors so one bad layer does not kill the viewer.
             logging.warning("Error fetching %s coverage: %s", coverage_type, exc)  # WHY: preserve log format.
             return None  # WHY: signal missing layer to the caller.
         if response.status_code != 200:  # WHY: coverage responses may be 400 while other layers succeed.

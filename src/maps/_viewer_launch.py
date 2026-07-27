@@ -10,7 +10,7 @@ pieces of the Dash ``html.Div`` layout tree.
 The launcher receives the wrapped :class:`_PlotlyViewer` instance and
 forwards attribute lookups back through it so figure-population helpers
 (``_add_walls``, ``_add_clients_to_figure``, ``_categorize_devices``,
-etc.) still reach the shared implementation without duplication.
+and so on) still reach the shared implementation without duplication.
 """
 
 from __future__ import annotations  # WHY: Defer annotation resolution -- allows PEP 604 unions on 3.10.
@@ -522,7 +522,7 @@ def _figure_layout_kwargs(  # WHY: Kwargs bundle extracted from _apply_figure_la
         plot_bgcolor="#1a1a1a",  # WHY: Dark plot surface.
         paper_bgcolor="#1a1a1a",  # WHY: Dark paper surface.
         margin=dict(l=50, r=50, t=80, b=50),  # WHY: Even padding around plot.
-        dragmode="zoom",  # WHY: Default to pan/zoom; drawing tools toggle this.
+        dragmode="zoom",  # WHY: Default to pan/zoom. Drawing tools toggle this.
         newshape=_figure_layout_newshape(),  # WHY: Extracted drawing outline defaults.
         meta=_figure_layout_meta(data, ppm),  # WHY: Extracted meta dict.
     )
@@ -587,7 +587,7 @@ def _build_site_dropdown(html_mod: Any, dcc_mod: Any, site_id: str, options: lis
                 options=options,  # WHY: Populated list of {label, value} entries.
                 value=site_id,  # WHY: Pre-select current site.
                 clearable=False,
-                searchable=True,  # WHY: Force a value; allow keyboard filter.
+                searchable=True,  # WHY: Force a value. Allow keyboard filter.
                 style={"width": "250px", "display": "inline-block", "verticalAlign": "middle"},  # WHY: Row layout.
                 className="dark-dropdown",  # WHY: Custom CSS for dark theme.
             ),
@@ -606,7 +606,7 @@ def _build_map_dropdown(html_mod: Any, dcc_mod: Any, map_id: str, options: list[
                 options=options,  # WHY: Populated list of {label, value} entries.
                 value=map_id,  # WHY: Pre-select current map.
                 clearable=False,
-                searchable=False,  # WHY: Force a value; small list so no search needed.
+                searchable=False,  # WHY: Force a value. Small list so no search needed.
                 style={"width": "200px", "display": "inline-block", "verticalAlign": "middle"},  # WHY: Row layout.
                 className="dark-dropdown",  # WHY: Custom CSS for dark theme.
             ),
@@ -756,7 +756,7 @@ def _build_clone_panel(html_mod: Any, dcc_mod: Any, map_data: dict[str, Any]) ->
         ],
         style={
             "display": "none",
-            "padding": "12px 20px",  # WHY: Hidden by default; padded when shown.
+            "padding": "12px 20px",  # WHY: Hidden by default. Padded when shown.
             "backgroundColor": "#1a1a1a",
             "borderBottom": "1px solid #00ff88",
         },
@@ -1128,7 +1128,7 @@ def _build_drawing_mode_dropdown(html_mod: Any, dcc_mod: Any) -> Any:  # WHY: Mo
                     {"label": "Wall Segment (orange)", "value": "wall"},
                     {"label": "Measurement Only", "value": "measure"},
                 ],
-                value="measure",  # WHY: Default so drawing doesn't save anything unintentionally.
+                value="measure",  # WHY: Default so drawing does not save anything unintentionally.
                 clearable=False,
                 style={"marginBottom": "10px", "color": "#e0e0e0"},
                 className="dark-dropdown",

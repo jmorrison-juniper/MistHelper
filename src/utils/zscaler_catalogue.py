@@ -15,7 +15,7 @@ Why:
     cache and logs a warning rather than blocking the menu.
 
     The 8h TTL, single-file flat-merged layout, and full-fleet validation
-    scope are locked design decisions from the approved plan; do not tighten
+    scope are locked design decisions from the approved plan. Do not tighten
     the TTL or shard the file without re-opening that discussion.
 """
 
@@ -32,7 +32,7 @@ from pathlib import Path
 from typing import Any
 
 # Local repo imports. ``attach_city_metadata`` lives in scripts/ so the
-# CLI variant can keep its strict SystemExit; the library form here always
+# CLI variant can keep its strict SystemExit. The library form here always
 # returns warnings instead of raising, which is what the auto-refresh path
 # needs to stay non-fatal.
 from scripts.build_zen_city_metadata import attach_city_metadata
@@ -82,7 +82,7 @@ def _promote_host_entry(entry: str | dict[str, Any]) -> dict[str, Any]:
         "observed_port": int|None, "last_probed": str|None}]`` so downstream
         consumers (``_probe_target`` in menu 206) can dispatch on the last
         observed reachability protocol. Existing on-disk caches were written
-        as flat strings; a load-time promotion keeps them usable without
+        as flat strings. A load-time promotion keeps them usable without
         forcing a refresh. FR-006 forbids reading a v2 cache from crashing.
 
     Args:
@@ -97,14 +97,14 @@ def _promote_host_entry(entry: str | dict[str, Any]) -> dict[str, Any]:
     """
     if isinstance(entry, str):
         # Legacy v2 shape: single hostname string with no observation state.
-        # Wrap into the minimal v3 object; observation fields intentionally
+        # Wrap into the minimal v3 object. Observation fields intentionally
         # omitted so downstream callers see them as absent/None per contract.
         return {"host": entry}
     if isinstance(entry, dict):
         # Already v3 (or newer): pass through untouched so re-promotion is a
         # no-op (idempotency required for round-trip write-then-load tests).
         return entry
-    # Defensive: unexpected shape (e.g. int, None). Wrap into a stringified
+    # Defensive: unexpected shape (for example int, None). Wrap into a stringified
     # host so downstream code never blows up on malformed cache entries.
     return {"host": str(entry)}
 
@@ -128,7 +128,7 @@ def _promote_cenr_document(doc: dict[str, Any]) -> dict[str, Any]:
     for bag_key in ("proxy_hostnames", "vpn_hostnames"):
         bag = doc.get(bag_key)
         if isinstance(bag, list):
-            # Rebuild the bag so every element is a v3 host dict; preserves
+            # Rebuild the bag so every element is a v3 host dict. Preserves
             # element order (matters for deterministic diff-friendly writes).
             doc[bag_key] = [_promote_host_entry(entry) for entry in bag]
     by_city = doc.get("by_city")
@@ -140,7 +140,7 @@ def _promote_cenr_document(doc: dict[str, Any]) -> dict[str, Any]:
                 bag = city_slot.get(bag_key)
                 if isinstance(bag, list):
                     # Per-city bags follow the same v2 -> v3 shape rule as
-                    # the top-level bags; keep the two paths in lockstep.
+                    # the top-level bags. Keep the two paths in lockstep.
                     city_slot[bag_key] = [_promote_host_entry(entry) for entry in bag]
     return doc
 
@@ -164,7 +164,7 @@ def _promote_zcc_document(doc: dict[str, Any]) -> dict[str, Any]:
     roles = doc.get("roles")
     # The on-disk ZCC schema stores ``roles`` as a list of role objects (each
     # with its own ``fqdns`` bag). Older/hand-authored variants may store it as
-    # a dict keyed by role name; support both so promotion is shape-agnostic.
+    # a dict keyed by role name. Support both so promotion is shape-agnostic.
     role_bodies: list[Any] = []
     if isinstance(roles, list):
         role_bodies = list(roles)
@@ -175,7 +175,7 @@ def _promote_zcc_document(doc: dict[str, Any]) -> dict[str, Any]:
             continue
         fqdns = role_body.get("fqdns")
         if isinstance(fqdns, list):
-            # Same promotion rule as CENR bags; keeps the FQDN element
+            # Same promotion rule as CENR bags. Keeps the FQDN element
             # shape uniform across both cache files so downstream code
             # can treat any host entry as ``{"host": <fqdn>, ...}``.
             role_body["fqdns"] = [_promote_host_entry(entry) for entry in fqdns]
@@ -336,7 +336,7 @@ def promote_cache_document(doc: dict[str, Any], *, kind: str) -> dict[str, Any]:
 
     Args:
         doc: Parsed JSON document from disk. Mutated in place when promotion
-            fires; unmodified when already v3.
+            fires. Unmodified when already v3.
         kind: Either ``"cenr"`` (top-level proxy/vpn bags plus by_city) or
             ``"zcc"`` (roles[*].fqdns). Any other value is a caller bug and
             is treated as a no-op so a typo cannot silently drop data.
@@ -352,12 +352,12 @@ def promote_cache_document(doc: dict[str, Any], *, kind: str) -> dict[str, Any]:
     # prior writer bug produced ``schema_version=3`` documents with flat-
     # string bags, and a stamp-only short-circuit stranded every downstream
     # v3-dict walker. If the stamp says v3 AND the bags actually look v3,
-    # we skip; otherwise fall through and (re)promote silently.
+    # we skip. Otherwise fall through and (re)promote silently.
     needs_promotion = (
         _cenr_needs_promotion(doc) if kind == "cenr" else _zcc_needs_promotion(doc) if kind == "zcc" else False
     )
     if isinstance(detected, int) and detected >= _SCHEMA_VERSION and not needs_promotion:
-        # Already v3 in both stamp and shape -> skip promotion entirely; do
+        # Already v3 in both stamp and shape -> skip promotion entirely. Do
         # NOT log so steady-state loads stay quiet at INFO.
         return doc
     if kind == "cenr":
@@ -422,7 +422,7 @@ def _pick_observation_from_probe_result(
         signal that the endpoint is fully alive from the customer's edge.
         UDP/500 (IKE main) is picked before UDP/4500 (NAT-T) because the two
         are always probed together and 500 is the semantically primary IKE
-        port; picking 500 first also keeps observation output stable across
+        port. Picking 500 first also keeps observation output stable across
         NAT-fronted and non-NAT-fronted sites. Any remaining open TCP port
         wins over a null observation so probing effort never gets discarded.
 
@@ -499,7 +499,7 @@ def _merge_observations_into_cenr(
                 continue
             protocol, port, ts = obs
             # Always write all three observation keys together so a stale
-            # value never survives next to a fresh one; matches contract
+            # value never survives next to a fresh one. Matches contract
             # cenr_cache_schema_v3.md §"Observation triplet". When the host
             # was silent (no responding protocol), the whole triplet is None
             # so the "no observation" branch stays distinguishable on disk.
@@ -529,7 +529,7 @@ def _merge_observations_into_zcc(
     Why:
         Mirror of :func:`_merge_observations_into_cenr` but for the client-
         connector probes file. Kept separate from the CENR walker because
-        the outer shape differs (roles list/dict vs top-level bags); merging
+        the outer shape differs (roles list/dict vs top-level bags). Merging
         the two into one recursive walker would obscure both paths.
 
     Args:
@@ -596,7 +596,7 @@ def _stamp_zcc_entry(
 
     Args:
         entry: Candidate ``fqdns[]`` item. Only dict entries with a
-            string ``host`` are eligible; every other shape is skipped.
+            string ``host`` are eligible. Every other shape is skipped.
         observations: The ``fqdn -> (protocol, port, iso8601_utc)`` map
             passed through from :func:`_merge_observations_into_zcc`.
 
@@ -667,7 +667,7 @@ def fetch_cloud(cloud: str, *, timeout: float = _FETCH_TIMEOUT) -> dict[str, Any
         without special-casing per-cloud errors.
 
     Args:
-        cloud: One of the canonical Zscaler cloud slugs (e.g. ``zscaler.net``).
+        cloud: One of the canonical Zscaler cloud slugs (for example ``zscaler.net``).
         timeout: Wall-clock timeout for the HTTPS GET in seconds.
 
     Returns:
@@ -717,7 +717,7 @@ def _strip_prefix(key: str, prefix: str) -> str:
 
     Args:
         key: Raw key from the CENR JSON (may or may not have the prefix).
-        prefix: The label prefix to strip (e.g. ``"continent"`` or ``"city"``);
+        prefix: The label prefix to strip (for example ``"continent"`` or ``"city"``);
             the tool appends ``" : "`` internally.
 
     Returns:
@@ -737,13 +737,13 @@ def _cloud_root_trees(cloud: str, doc: dict[str, Any]) -> list[dict[str, Any]]:
         Extracted from ``merge_clouds`` so the parent stays under the
         CI cyclomatic-complexity gate. The interesting tree normally
         hangs off a top-level key equal to the cloud slug (Zscaler's
-        canonical shape); on unexpected shapes we walk every dict-valued
+        canonical shape). On unexpected shapes we walk every dict-valued
         top-level key so a partially-broken feed still contributes what
         it can. ``svpnIPs`` is excluded because it is a metadata list,
         not a continent tree.
 
     Args:
-        cloud: Cloud slug (e.g. ``"zscloud"``).
+        cloud: Cloud slug (for example ``"zscloud"``).
         doc: Parsed CENR JSON dict for this cloud.
 
     Returns:
@@ -795,7 +795,7 @@ def _seed_slot_host_sets(slot: dict[str, Any]) -> tuple[set[str], set[str]]:
         first.
 
     Args:
-        slot: The per-city slot dict; may hold legacy strings or v3 dicts.
+        slot: The per-city slot dict. May hold legacy strings or v3 dicts.
 
     Returns:
         A ``(proxy_hosts, vpn_hosts)`` tuple of hostname sets, ready to
@@ -822,11 +822,11 @@ def _ingest_record(
         records`` loop.
 
     Args:
-        record: Raw CENR record; skipped when not a dict.
-        proxies: Global proxy-hostname dedup set; mutated in place.
-        vpns: Global vpn-hostname dedup set; mutated in place.
-        slot_proxies: Per-city proxy-hostname set; mutated in place.
-        slot_vpns: Per-city vpn-hostname set; mutated in place.
+        record: Raw CENR record. Skipped when not a dict.
+        proxies: Global proxy-hostname dedup set. Mutated in place.
+        vpns: Global vpn-hostname dedup set. Mutated in place.
+        slot_proxies: Per-city proxy-hostname set. Mutated in place.
+        slot_vpns: Per-city vpn-hostname set. Mutated in place.
     """
     if not isinstance(record, dict):
         return
@@ -850,7 +850,7 @@ def _finalize_slot(
 
     Why:
         Emit v3 dicts (not flat strings) so the on-disk shape stays
-        consistent with ``schema_version=3``; writing flat strings under
+        consistent with ``schema_version=3``. Writing flat strings under
         a v3 stamp previously broke the loader's idempotency
         short-circuit. ``seen_in_clouds`` lets operators auditing the
         merged file trace an entry back to a specific feed.
@@ -885,13 +885,13 @@ def _absorb_city_records(
         this function itself under the gate as well.
 
     Args:
-        city: Prefix-stripped city name (e.g. ``"Amsterdam"``).
+        city: Prefix-stripped city name (for example ``"Amsterdam"``).
         records: Raw record list from the city bucket.
         cloud: Cloud slug that supplied these records (recorded under
             ``seen_in_clouds`` on the slot).
-        proxies: Global proxy-hostname dedup set; mutated in place.
-        vpns: Global vpn-hostname dedup set; mutated in place.
-        by_city: Merged-by-city map; the target slot is mutated in place.
+        proxies: Global proxy-hostname dedup set. Mutated in place.
+        vpns: Global vpn-hostname dedup set. Mutated in place.
+        by_city: Merged-by-city map. The target slot is mutated in place.
     """
     slot = by_city.setdefault(city, {"proxy_hostnames": [], "vpn_hostnames": []})
     slot_proxies, slot_vpns = _seed_slot_host_sets(slot)
@@ -918,9 +918,9 @@ def _walk_city_map(
     Args:
         city_map: One continent's dict of city buckets.
         cloud: Cloud slug supplying these buckets.
-        proxies: Global proxy-hostname dedup set; mutated in place.
-        vpns: Global vpn-hostname dedup set; mutated in place.
-        by_city: Merged-by-city map; mutated in place.
+        proxies: Global proxy-hostname dedup set. Mutated in place.
+        vpns: Global vpn-hostname dedup set. Mutated in place.
+        by_city: Merged-by-city map. Mutated in place.
     """
     for city_key, records in city_map.items():
         if not isinstance(records, list):
@@ -950,7 +950,7 @@ def merge_clouds(per_cloud: dict[str, dict[str, Any]]) -> dict[str, Any]:
     Args:
         per_cloud: Mapping of cloud slug -> parsed CENR JSON dict. The dict's
             top-level normally contains one key equal to the cloud slug
-            (holding the continent tree) plus a ``svpnIPs`` list; both are
+            (holding the continent tree) plus a ``svpnIPs`` list. Both are
             optional. Clouds that fetched successfully but returned no
             hostnames still contribute their URL to ``source_urls``.
 
@@ -1006,7 +1006,7 @@ def _atomic_write_json(path: Path, doc: dict[str, Any]) -> None:
 
     Why:
         The CENR file is read concurrently by menu 206 and the background
-        refresh; a partial write during a crash would poison the next menu
+        refresh. A partial write during a crash would poison the next menu
         invocation. ``os.replace`` on the same filesystem is atomic on both
         POSIX and Windows, so a same-directory temp file guarantees readers
         either see the old or the new document, never a half-written one.
@@ -1029,7 +1029,7 @@ def _atomic_write_json(path: Path, doc: dict[str, Any]) -> None:
             handle.write("\n")
         os.replace(tmp_name, path)
     except Exception:
-        # Best-effort cleanup on failure so we don't leak temp files.
+        # Best-effort cleanup on failure so we do not leak temp files.
         try:
             os.unlink(tmp_name)
         except OSError:
@@ -1048,7 +1048,7 @@ def _load_stale_cenr_cache(cenr_path: Path, warnings: list[str]) -> dict[str, An
 
     Args:
         cenr_path: Path to ``data/zscaler_cenr_hostnames.json``. May not
-            exist; a missing file is a packaging error, not a crash.
+            exist. A missing file is a packaging error, not a crash.
         warnings: Mutable warning list from the caller. Appended in place
             with any read or decode failure so the caller can log them.
 
@@ -1080,14 +1080,14 @@ def refresh_cenr(cenr_path: Path) -> tuple[dict[str, Any], list[str]]:
 
     Args:
         cenr_path: Path to ``data/zscaler_cenr_hostnames.json``. Must exist
-            already for the fail-open fallback to work; a missing file is a
+            already for the fail-open fallback to work. A missing file is a
             packaging error and surfaces as a warning with an empty dict.
 
     Returns:
         Tuple of ``(new_cenr, warnings)``. ``new_cenr`` is the freshly
         merged and rewritten dict on success, or the untouched stale dict on
         total-failure. ``warnings`` collects non-fatal issues (per-cloud
-        fetch failures, unmapped cities from the metadata attach step, etc.)
+        fetch failures, unmapped cities from the metadata attach step, and so on)
         for the caller to log.
     """
     warnings: list[str] = []
@@ -1128,7 +1128,7 @@ def _run_probe_validation(
     cenr_path: Path,
     fresh: dict[str, Any],
 ) -> tuple[dict[str, Any], list[ProbeResult]]:
-    """Best-effort probe run; returns ``(probes_v3_dict, results)``.
+    """Best-effort probe run. Returns ``(probes_v3_dict, results)``.
 
     Why:
         Extracted from ``ensure_fresh`` so the caller stays under Radon
@@ -1139,7 +1139,7 @@ def _run_probe_validation(
         can subsequently stamp observations into it.
 
     Args:
-        cenr_path: Path to the CENR cache; probes cache is resolved as a
+        cenr_path: Path to the CENR cache. Probes cache is resolved as a
             sibling ``zscaler_client_connector_probes.json``.
         fresh: Freshly-refreshed CENR document.
 
@@ -1285,7 +1285,7 @@ def ensure_fresh(cenr_path: Path, cenr: dict[str, Any]) -> dict[str, Any]:
 
     Returns:
         The fresh dict (either the passthrough when in-TTL, or the refreshed
-        merged dict when stale). Never raises; always returns *some* dict so
+        merged dict when stale). Never raises. Always returns *some* dict so
         the caller can proceed.
     """
     # Promote legacy v2 CENR flat-string bags into v3 dict entries so every
@@ -1305,12 +1305,12 @@ def ensure_fresh(cenr_path: Path, cenr: dict[str, Any]) -> dict[str, Any]:
         logger.warning("zscaler_catalogue: %s", warning)
 
     if not fresh:
-        # Total-failure path returned empty dict; fall back to whatever the
+        # Total-failure path returned empty dict. Fall back to whatever the
         # caller already loaded so downstream code keeps a usable shape.
         logger.warning("zscaler_catalogue: refresh returned empty document; using in-memory copy")
         return cenr
 
-    # Best-effort probe run; validation failures do not block the return.
+    # Best-effort probe run. Validation failures do not block the return.
     probes, results = _run_probe_validation(cenr_path, fresh)
 
     # T028/T029: write persisted observations back onto both cache files so a

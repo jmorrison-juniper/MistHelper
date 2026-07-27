@@ -6,7 +6,7 @@ lines, log file headers/footers, [STEP], [OK], [ERROR], [INTERRUPT] markers)
 and magic wait-window values are preserved verbatim from the original.
 
 The interactive flow drives a persistent paramiko shell channel to support
-sequences that require interactive input (e.g. ``su`` -> ``Password:`` ->
+sequences that require interactive input (for example ``su`` -> ``Password:`` ->
 response -> ``show ...``).
 """
 
@@ -165,7 +165,7 @@ def _persist_log_line(host_log_file: str, safe_message: str) -> None:  # WHY: ow
     """Append one already-sanitized line to the per-host log with owner-only perms."""
     with open(host_log_file, "a", encoding="utf-8") as log_file:  # WHY: append preserves history.
         # lgtm[py/clear-text-storage-sensitive-data] - messages are pre-scrubbed by
-        # _build_scrubbing_writer; CodeQL cannot model str.replace as a sanitizer.
+        # _build_scrubbing_writer. CodeQL cannot model str.replace as a sanitizer.
         log_file.write(f"{safe_message}\n")  # WHY: newline-terminated log record.
         log_file.flush()  # WHY: guarantee flush before chmod tightens perms.
     if hasattr(os, "chmod"):  # WHY: best-effort owner-only permission on POSIX.
@@ -252,7 +252,7 @@ class InteractiveBatchExecutor:  # WHY: static-method container for the interact
     # ------------------------------------------------------------------
     @staticmethod
     def run(request: InteractiveSessionRequest) -> bool:  # WHY: single-request public entrypoint.
-        """Execute the interactive session described by *request*; return success bool."""
+        """Execute the interactive session described by *request*. Return success bool."""
         logger = logging.getLogger("ssh_runner_v2")  # WHY: unified SSH logger for all executors.
         logger.info(  # WHY: session start line for post-mortem log review.
             "InteractiveBatchExecutor.run starting for %s@%s:%s (%d steps)",
@@ -280,7 +280,7 @@ class InteractiveBatchExecutor:  # WHY: static-method container for the interact
         logger: logging.Logger,
     ) -> bool:
         """Guarded session flow: catch fatal errors and always write the footer."""
-        overall_success = True  # WHY: default to success; flipped on any failed step or error.
+        overall_success = True  # WHY: default to success. Flipped on any failed step or error.
         try:
             overall_success = InteractiveBatchExecutor._execute_session(request, log_ctx, logger)  # WHY: run session.
             return overall_success  # WHY: propagate session outcome to caller.
@@ -291,7 +291,7 @@ class InteractiveBatchExecutor:  # WHY: static-method container for the interact
             overall_success = False  # WHY: guarantee failure state before finally-writes footer.
             return False  # WHY: signal caller that the session failed.
         finally:
-            log_ctx.runner._disconnect()  # WHY: teardown; safe when client may be None.
+            log_ctx.runner._disconnect()  # WHY: teardown. Safe when client may be None.
             logger.debug("[%s] SSH interactive session completed", request.hostname)  # WHY: parity log line.
             InteractiveBatchExecutor._write_footer(
                 log_ctx.writer, overall_success, log_ctx.log_file, logger
@@ -334,7 +334,7 @@ class InteractiveBatchExecutor:  # WHY: static-method container for the interact
 
     @staticmethod
     def _build_log_path(hostname: str, logger: logging.Logger) -> str:  # WHY: sanitised per-host log path.
-        """Construct the sanitised per-host log file path; fall back on chmod errors."""
+        """Construct the sanitised per-host log file path. Fall back on chmod errors."""
         from src.ssh.ssh_runner import EnhancedSSHRunner  # WHY: local import avoids circular load.
 
         timestamp = datetime.now().strftime(_TS_FMT_FILE)  # WHY: verbatim filename timestamp format.
@@ -353,7 +353,7 @@ class InteractiveBatchExecutor:  # WHY: static-method container for the interact
         """Wrap *inner_writer* so each message has *password* replaced with ``***REDACTED***``.
 
         Returning a new callable keeps the password reference confined to this
-        helper's closure; the inner writer never receives the credential value
+        helper's closure. The inner writer never receives the credential value
         as a parameter, satisfying the minimum-scope rule for sensitive data.
         """
         if not password:  # WHY: no credential to scrub - callers get the raw writer.
@@ -388,7 +388,7 @@ class InteractiveBatchExecutor:  # WHY: static-method container for the interact
         log_ctx: _LogContext,
         logger: logging.Logger,
     ) -> bool:
-        """Open connection + shell, run all steps, write final status; return success bool."""
+        """Open connection + shell, run all steps, write final status. Return success bool."""
         shell = InteractiveBatchExecutor._connect_and_open_shell(request, log_ctx, logger)  # WHY: real connect.
         if shell is None:  # WHY: connection or shell setup failed (already logged by helper).
             return False
@@ -428,12 +428,12 @@ class InteractiveBatchExecutor:  # WHY: static-method container for the interact
         log_ctx: _LogContext,
         logger: logging.Logger,
     ) -> Any | None:
-        """Run SshConnector.connect and wire the client into the runner; return client or None."""
+        """Run SshConnector.connect and wire the client into the runner. Return client or None."""
         logger.info(  # WHY: session-connect line preserved for log parity.
             "Connecting via SshConnector for interactive session to %s:%s", request.hostname, request.port
         )
         connector = SshConnector(timeout=log_ctx.runner.timeout, logger=logger)  # WHY: real connector (no facade).
-        client, kh_path = connector.connect(  # WHY: real connect; failures return (None, None).
+        client, kh_path = connector.connect(  # WHY: real connect. Failures return (None, None).
             request.hostname, request.username, request.password, request.port
         )
         logger.debug("Interactive connect returned client=%s", bool(client))  # WHY: debug diag.
@@ -466,13 +466,13 @@ class InteractiveBatchExecutor:  # WHY: static-method container for the interact
         writer: Callable[[str], None],
         logger: logging.Logger,
     ) -> bool:
-        """Walk the step list; return overall success bool. Each step is one helper call."""
+        """Walk the step list. Return overall success bool. Each step is one helper call."""
         overall_success = True  # WHY: flipped to False on any failed step or interrupt.
         total = len(commands)  # WHY: total step count cached for the loop guard + pause helper.
         command_index = 0  # WHY: manual index because blank entries are skipped by helper.
         while command_index < total:  # WHY: hand-rolled loop keeps parity with original behaviour.
             step_ctx = InteractiveBatchExecutor._build_step_context(hostname, commands, command_index, total)
-            command_index += 1  # WHY: always advance so blank entries don't loop forever.
+            command_index += 1  # WHY: always advance so blank entries do not loop forever.
             if step_ctx is None:  # WHY: helper returned None to signal a blank-line skip (no pause).
                 continue
             result = InteractiveBatchExecutor._maybe_run_step(shell, step_ctx, writer, logger)  # WHY: run step.
@@ -489,7 +489,7 @@ class InteractiveBatchExecutor:  # WHY: static-method container for the interact
         command_index: int,
         total: int,
     ) -> _StepContext | None:
-        """Return a per-step context for non-blank entries; None signals a blank-line skip."""
+        """Return a per-step context for non-blank entries. None signals a blank-line skip."""
         current_item = commands[command_index].strip()  # WHY: strip once so downstream code is simple.
         if not current_item:  # WHY: skip blank entries (verbatim behaviour) - no pause needed.
             return None
@@ -521,7 +521,7 @@ class InteractiveBatchExecutor:  # WHY: static-method container for the interact
         writer: Callable[[str], None],
         logger: logging.Logger,
     ) -> tuple[bool, bool]:
-        """Run one step; return (stop_flag, step_success). Handles Ctrl+C + step exceptions."""
+        """Run one step. Return (stop_flag, step_success). Handles Ctrl+C + step exceptions."""
         try:
             step_ok = InteractiveBatchExecutor._run_one_step(shell, step_ctx, writer, logger)  # WHY: run step.
             return False, step_ok
@@ -573,7 +573,7 @@ class InteractiveBatchExecutor:  # WHY: static-method container for the interact
         writer: Callable[[str], None],
         logger: logging.Logger,
     ) -> bool:
-        """Send one command/response, capture reply, log block; return step success bool."""
+        """Send one command/response, capture reply, log block. Return step success bool."""
         InteractiveBatchExecutor._write_step_header(step_ctx, writer, logger)  # WHY: verbatim header block.
         shell.send((step_ctx.command + "\n").encode("utf-8"))  # WHY: send the command/response line.
         time.sleep(_STEP_SEND_PAUSE)  # WHY: brief pause so device registers input (verbatim).
@@ -741,7 +741,7 @@ class InteractiveBatchExecutor:  # WHY: static-method container for the interact
         host_log_file: str,
         logger: logging.Logger,
     ) -> None:
-        """Write the session footer; fall back to a minimal footer on any error."""
+        """Write the session footer. Fall back to a minimal footer on any error."""
         try:
             writer(_build_footer_text(overall_success, host_log_file))  # WHY: verbatim footer block.
         except Exception as footer_error:  # noqa: BLE001 - footer is best-effort (verbatim)

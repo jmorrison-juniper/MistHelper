@@ -155,14 +155,18 @@ _MISMATCH_TYPE_TABLE: tuple[tuple[str, str], ...] = (
 class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
     """Compare Mist inventory data with external CSV files for address verification.
 
-    Performs multi-step comparison workflow:
-    1. Load and parse Mist device data with site information
-    2. Select and load comparison CSV with automatic field detection
-    3. Parse and normalize addresses using enhanced parsing
-    4. Detect duplicate addresses between sites
-    5. Filter conflicts through skip list and deduplication
-    6. Optional external validation via Nominatim API
-    7. Generate comprehensive mismatch reports
+    Performs a multi-step comparison workflow.
+
+    The first phase prepares the data:
+    - Load and parse Mist device data with site information.
+    - Select and load the comparison CSV with automatic field detection.
+    - Parse and normalize addresses with enhanced parsing.
+
+    The second phase compares and reports:
+    - Detect duplicate addresses between sites.
+    - Filter conflicts through the skip list and deduplication.
+    - Run optional external validation through the Nominatim API.
+    - Generate comprehensive mismatch reports.
 
     Uses configurable ADDRESS_MATCH_THRESHOLD from .env file for fuzzy matching.
     """
@@ -392,7 +396,7 @@ class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
     def _get_available_csv_files(self) -> list[str]:
         """Get list of CSV files available for comparison."""
         data_dir = "data"  # WHY: canonical relative data folder.
-        csv_files = glob.glob(os.path.join(data_dir, "*.csv"))  # WHY: enumerate CSVs.
+        csv_files = glob.glob(os.path.join(data_dir, "*.csv"))  # WHY: enumerate CSV files.
         exclude_file = "AllDevicesWithSiteInfo.csv"  # WHY: never self-compare source data.
         return [os.path.basename(f) for f in csv_files if os.path.basename(f) != exclude_file]  # WHY: filter+basename.
 

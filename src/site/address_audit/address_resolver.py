@@ -4,7 +4,7 @@ Resolves the best canonical address for one site WITHOUT any paid or non-existen
 API. Order of resolution:
 
   * Tier 1 (internal, no network): compare the Mist address against the CSV
-    address and the SNMP location; when an internal candidate clearly carries a
+    address and the SNMP location. When an internal candidate clearly carries a
     suite/unit the Mist address lacks, that candidate is the suggestion.
   * Tier 2 (Nominatim, free, <=1 req/sec): reuse the existing
     ``NominatimValidator`` to validate the base street and produce a canonical
@@ -51,7 +51,7 @@ class AddressResolver:
         """Store cache path, build the reused Nominatim config, and init counters."""
         self._db_path = db_path or _DB_RELATIVE_PATH  # Cache DB path (injectable for tests).
         self._nominatim_config = AddressValidationConfig(skip_ssl_verify=skip_ssl_verify)  # Reused validator cfg.
-        self._ui_geocoder = ui_geocoder  # Optional MistUIGeocoder (Tier 3); None disables it.
+        self._ui_geocoder = ui_geocoder  # Optional MistUIGeocoder (Tier 3). None disables it.
         self._perf = perf or PhaseTimer()  # Timing sink (own no-op timer when the caller passes none).
         self.cache_hits = 0  # Count of cache hits this run (feeds AuditCounters).
         self.external_calls = 0  # Count of Nominatim/UI calls actually made.
@@ -79,7 +79,7 @@ class AddressResolver:
             with self._perf.phase("tier2_nominatim"):  # Time OSM validation incl. its rate-limit sleep.
                 osm = self._validate_nominatim(candidates, query)  # Tier 2: OpenStreetMap street validation.
             with self._perf.phase("tier3_ui"):  # Time the browser tier incl. typing/read/politeness.
-                ui = self._maybe_ui(candidates, query)  # Tier 3: Google-via-Mist authority (gated; fail-soft).
+                ui = self._maybe_ui(candidates, query)  # Tier 3: Google-via-Mist authority (gated. Fail-soft).
             return self._combine(internal, osm, ui, candidates, query)  # Merge the tiers into one result.
         except Exception as exc:  # noqa: BLE001 -- one row must never abort the audit.
             logging.warning("Resolve failed for key derived from '%s': %s", query, exc)  # Log and continue.
@@ -96,8 +96,8 @@ class AddressResolver:
         """Merge results with the web (Tier 3) as the authority for the true suite.
 
         Priority: a confident Tier-3 (Google-via-Mist) suggestion WINS because it is
-        the only source that knows the real suite; otherwise the internal suite
-        candidate (street cross-checked by OSM); otherwise OSM's validated street;
+        the only source that knows the real suite. Otherwise the internal suite
+        candidate (street cross-checked by OSM). Otherwise OSM's validated street;
         otherwise NO_RESULT. Tier 3 only overrides when it actually returned an
         address, so a missing/failed browser never makes results worse.
         """
@@ -129,7 +129,7 @@ class AddressResolver:
     ) -> bool:  # WHY: tier identity dictates how the street-validated flag is derived.
         """Return the street_validated flag for the winning tier, respecting OSM cross-check."""
         osm_present = osm is not None  # WHY: cache the presence check so both branches read cleanly.
-        if winner is ui:  # WHY: Tier 3 may already carry its own validated flag; OR with OSM cross-check.
+        if winner is ui:  # WHY: Tier 3 may already carry its own validated flag. OR with OSM cross-check.
             return winner.street_validated or osm_present  # WHY: never demote an already-validated UI answer.
         if winner is osm:  # WHY: OSM itself is the external validator when it wins.
             return True  # WHY: OSM's presence *is* the confirmation.
@@ -145,16 +145,16 @@ class AddressResolver:
         """
         mist_street = candidates.mist_address.get("address", "")  # Mist street line (the clean base).
         if re.search(_SUITE_PATTERN, mist_street, flags=re.IGNORECASE):  # Mist already carries a suite.
-            return None  # No discrepancy to surface; defer to Tier 2.
+            return None  # No discrepancy to surface. Defer to Tier 2.
         suite = self._pick_internal_suite(candidates)  # WHY: fold the authority/CSV/SNMP fallback chain into a helper.
         if not suite:  # Neither internal source supplies a suite Mist lacks.
-            return None  # Nothing to add; defer to Tier 2.
+            return None  # Nothing to add. Defer to Tier 2.
         clean = self._build_clean_suggestion(candidates.mist_address, suite)  # Mist base + suite, no pollution.
         logging.debug("Tier 1 internal suggestion (suite=%s): %s", suite, clean)  # Trace the internal hit.
         return ResolverResult(query="", canonical_address=clean, source="internal", confidence=0.7)
 
     def _pick_internal_suite(self, candidates: ResolveCandidates) -> str:  # WHY: keep suite fallback out of Tier 1.
-        """Return the first available suite token: authority > CSV > SNMP; empty string when none."""
+        """Return the first available suite token: authority > CSV > SNMP. Empty string when none."""
         for source in (candidates.authoritative_address, candidates.csv_address):  # WHY: authority-first preference.
             suite = self._extract_suite(source.get("address", ""))  # WHY: normalized suite token or empty.
             if suite:  # WHY: first non-empty match wins.
@@ -180,7 +180,7 @@ class AddressResolver:
 
     @staticmethod
     def _build_locality(mist_address: dict[str, Any]) -> str:  # WHY: isolate the state/zip join so CC stays under 5.
-        """Return a "STATE ZIP" pair built from Mist fields; empty string when both are absent."""
+        """Return a "STATE ZIP" pair built from Mist fields. Empty string when both are absent."""
         zip_value = mist_address.get("zip") or mist_address.get("zipcode", "")  # WHY: either zip key may be populated.
         tokens = (mist_address.get("state", ""), str(zip_value))  # WHY: state first, ZIP second per US postal order.
         return " ".join(token for token in tokens if token).strip()  # WHY: filter empties so lone components stand.
@@ -225,7 +225,7 @@ class AddressResolver:
     def _nominatim_canonical(self, candidates: ResolveCandidates, comparison: dict[str, Any]) -> str:
         """Return a clean suggestion for an OSM-validated row from Mist's own address.
 
-        OpenStreetMap validates only the *street*; its ``display_name`` is verbose
+        OpenStreetMap validates only the *street*. Its ``display_name`` is verbose
         and noisy (``Business, 1200, Northwest 87th Avenue, Doral, Miami-Dade
         County, Florida, 33172, United States``). Since OSM merely confirms the
         street is real, the cleanest, most useful suggestion is Mist's own
@@ -259,12 +259,12 @@ class AddressResolver:
         return result  # May be None / empty (fail-soft) -> caller falls back to Tier 1/2.
 
     def _ui_lookup_with_fallback(self, candidates: ResolveCandidates, query: str) -> ResolverResult | None:
-        """Geocode the business-prefixed query; if it yields nothing, retry the plain address.
+        """Geocode the business-prefixed query. If it yields nothing, retry the plain address.
 
         A business-name prefix (``T-Mobile <addr>``) helps Google return the exact
         store unit, but when no store sits at that number Google returns unrelated
         stores and the stale-guard rejects them all. Retrying the plain address
-        then resolves the street itself (e.g. ``2315 S Federal Hwy``).
+        then resolves the street itself (for example ``2315 S Federal Hwy``).
         """
         self.external_calls += 1  # Count the primary UI lookup.
         result = self._ui_geocoder.geocode_via_ui(query)  # Business-prefixed query first.
@@ -315,8 +315,8 @@ class AddressResolver:
 
     @staticmethod
     def _suite_unit(street: str) -> str:
-        """Extract the bare unit identifier from a street's suite token (e.g. 'h200', '204', '')."""
-        token = AddressResolver._extract_suite(street)  # e.g. 'Suite H200', '#204', 'Space P239'.
+        """Extract the bare unit identifier from a street's suite token (for example 'h200', '204', '')."""
+        token = AddressResolver._extract_suite(street)  # for example 'Suite H200', '#204', 'Space P239'.
         if not token:  # No suite token present.
             return ""  # No unit.
         parts = token.split()  # Split the keyword from the identifier.
@@ -341,7 +341,7 @@ class AddressResolver:
 
         The Mist address, SNMP location, customer CSV, and optional business
         authority CSV are all hints, and any single one can be wrong. Voting on
-        house number means one bad hint cannot hijack the geocoding query; the
+        house number means one bad hint cannot hijack the geocoding query. The
         agreed-upon, cleanest, suite-bearing source wins.
         """
         hints = self._gather_hints(candidates)  # [(label, text, house_no, has_suite), ...].
@@ -378,7 +378,7 @@ class AddressResolver:
         return leaders > 1  # WHY: two or more leaders => tied => no majority.
 
     def _gather_hints(self, candidates: ResolveCandidates) -> list[tuple[str, str, str, bool]]:
-        """Normalize each hint into (label, text, house_number, has_suite); drop empties."""
+        """Normalize each hint into (label, text, house_number, has_suite). Drop empties."""
         raw = [  # Source label -> raw text (authority/CSV first so ties prefer customer-provided business data).
             ("authority", self._format_address(candidates.authoritative_address)),
             ("csv", self._format_address(candidates.csv_address)),
@@ -405,7 +405,7 @@ class AddressResolver:
         """Return the leading 1-6 digit run (the house number), or '' when none leads.
 
         Anchored at the start so a trailing ZIP is never mistaken for a house
-        number (e.g. ``S Federal Hwy ... 34982`` has no house number).
+        number (for example ``S Federal Hwy ... 34982`` has no house number).
         """
         match = re.match(r"\s*(\d{1,6})\b", text)  # House numbers lead the street line.
         return match.group(1) if match else ""  # Leading digits or empty.
@@ -441,7 +441,7 @@ class AddressResolver:
             address.get("state", ""),  # State code.
             str(address.get("zip", address.get("zipcode", ""))),  # ZIP (either key).
         ]
-        return " ".join(part for part in parts if part).strip()  # Skip blanks; trim.
+        return " ".join(part for part in parts if part).strip()  # Skip blanks. Trim.
 
     @staticmethod
     def _strip_suite_from_dict(address: dict[str, Any]) -> dict[str, Any]:

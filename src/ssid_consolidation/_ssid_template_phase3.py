@@ -10,7 +10,7 @@ the pure helpers remain re-exported via
 The ``_create_site_group`` and ``_assign_group_sites`` helpers are
 intentionally *not* moved here: they resolve ``mistapi`` at call time
 and the historical unit tests patch ``mistapi`` through the parent
-module's namespace (e.g. ``patch.object(ssid_template_consolidation,
+module's namespace (for example ``patch.object(ssid_template_consolidation,
 "mistapi", ...)``), which only intercepts calls whose ``__globals__``
 binding *is* the parent module. Keeping those two helpers in the parent
 preserves those tests without teaching them about internal module
@@ -349,7 +349,7 @@ def _ensure_single_group(
     parent: Any,
     create_fn: Any,
 ) -> None:  # WHY: extracted from _ensure_groups_exist loop
-    """Create the group when missing; otherwise log the reuse."""
+    """Create the group when missing. Otherwise log the reuse."""
     if group["exists"]:  # WHY: reuse existing groups without hitting mistapi
         logging.info(_GROUP_EXISTS_LOG, group["group_name"], group["group_id"])  # WHY: audit trail
         return  # WHY: skip create call when already present

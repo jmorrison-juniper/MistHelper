@@ -287,7 +287,7 @@ class PacketCaptureDownloadManager:
         prefix: str,
         save_pcap_file_fn: Callable[[str, str, str], None] | None,
     ) -> None:
-        """Invoke the save callback once a URL is ready; short-circuit otherwise."""
+        """Invoke the save callback once a URL is ready. Short-circuit otherwise."""
         if not pcap_url:  # WHY: Preserve the early exit when the URL never appears.
             logging.debug(
                 "Polling finished for %s without a downloadable URL", capture_id
@@ -346,7 +346,7 @@ class PacketCaptureDownloadManager:
         return self._report_poll_timeout(capture_id, ctx.start_time)  # WHY: Emit timeout banner and preserve contract.
 
     def _poll_once(self, ctx: _PollContext, poll_attempt: int) -> str | None:
-        """Execute one poll iteration; return the URL or None to keep waiting."""
+        """Execute one poll iteration. Return the URL or None to keep waiting."""
         try:  # WHY: Catch transient poll failures and continue retrying within same wait budget.
             elapsed = int(time.time() - ctx.start_time)  # WHY: Calculate elapsed time for progress and ready messages.
             response = ctx.list_captures_fn()  # WHY: Invoke caller-provided list callback for current attempt.

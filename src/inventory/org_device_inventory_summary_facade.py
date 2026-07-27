@@ -14,7 +14,7 @@ re-export alias.
 from __future__ import annotations  # WHY: PEP 604 unions for return types.
 
 import importlib  # WHY: lazy MistHelper import avoids circular load at module init.
-from typing import Any, cast  # WHY: raw impl classes are duck-typed; cast org_id str for the checker.
+from typing import Any, cast  # WHY: raw impl classes are duck-typed. Cast org_id str for the checker.
 
 
 class OrgDeviceInventorySummary:
@@ -35,7 +35,7 @@ class OrgDeviceInventorySummary:
             apisession_dependency=mh.apisession,
             mistapi_dependency=mh.mistapi,
             data_exporter=mh.DataExporter,
-            org_id_value=cast(str, mh.org_id),  # Global org_id is set before this runs; assert str for the checker.
+            org_id_value=cast(str, mh.org_id),  # Global org_id is set before this runs. Assert str for the checker.
         )
         return OrgDeviceInventorySummaryCore  # Return the core class.
 

@@ -2,7 +2,7 @@
 
 Discovers site-scoped anomaly metrics from ConstInsightMetrics.csv for
 AI/ML analysis. Originally defined as ``AnomalyMetricsDiscovery`` inside
-MistHelper.py; extracted here per initiative 1011 to shrink the monolith.
+MistHelper.py. Extracted here per initiative 1011 to shrink the monolith.
 
 Runtime dependency ``FilePathUtils`` still lives inside MistHelper.py and
 is resolved lazily via the ``_MH`` module-level proxy so this module keeps

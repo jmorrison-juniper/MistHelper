@@ -5,7 +5,7 @@ import importlib  # Late-import MistHelper to avoid circular src<->MistHelper de
 import logging  # Emit action-level tracing required by coding standards
 import time  # Measure elapsed duration for fast-mode summary and rate-limit delay
 from types import SimpleNamespace  # Bundle runtime dependencies without a formal dataclass
-from typing import Any  # MistHelper surface is dynamic; typed as Any at the boundary
+from typing import Any  # MistHelper surface is dynamic. Typed as Any at the boundary
 
 from src.refactors.connection_pool_executor import ConnectionPoolExecutor  # Pool executor extracted per 1012 SC-003
 
@@ -75,7 +75,7 @@ class GatewayTestResultsService:
             return []  # Return empty list so caller accumulates cleanly
         results: list[dict[str, Any]] = (
             response.data.get("results", []) if isinstance(response.data, dict) else []
-        )  # Extract result list from dict payload; empty list for unexpected shapes
+        )  # Extract result list from dict payload. Empty list for unexpected shapes
         for result in results:  # Tag every row with its source site_id for downstream joins
             result["site_id"] = site_id  # Tag every row with its source site_id
         return results  # Hand back the tagged rows to the caller
@@ -108,7 +108,7 @@ class GatewayTestResultsService:
             work_items=site_ids,
             worker_function=lambda site_id, sem: cls._fetch_site_tests(deps, site_id, sem),
             batch_description="sites",
-        )  # Distribute site fetches across the connection pool; lambda avoids ARCH-DELEGATE inner function
+        )  # Distribute site fetches across the connection pool. Lambda avoids ARCH-DELEGATE inner function
         flattened: list[dict[str, Any]] = []  # Accumulates flattened results from all site lists
         for site_list in successful_results:  # successful_results is a list-of-lists
             if isinstance(site_list, list):  # Defensive guard for unexpected pool result shapes
@@ -129,7 +129,7 @@ class GatewayTestResultsService:
         """Collect results sequentially with adaptive rate limiting (standard path)."""
         logging.info("Starting sequential fetch for %d sites with gateways", len(site_ids))  # Log before loop
         all_results: list[dict[str, Any]] = []  # Accumulates results across all sites
-        smoothed = None  # Adaptive rate-limit smoothing state; reset at the start of each run
+        smoothed = None  # Adaptive rate-limit smoothing state. Reset at the start of each run
         for site_id in deps.tqdm(site_ids, desc="Sites", unit="site"):  # Iterate with progress bar
             results = cls._fetch_site_tests(deps, site_id, connection_semaphore=None)  # Fetch site results
             if results:  # Only extend when the site returned data
@@ -145,7 +145,7 @@ class GatewayTestResultsService:
 
     @staticmethod
     def _export_results(deps: SimpleNamespace, all_results: list[dict[str, Any]], fast: bool) -> None:
-        """Flatten, sanitise, and persist results; emit user-facing summary."""
+        """Flatten, sanitise, and persist results. Emit user-facing summary."""
         if not all_results:  # No results found across all sites
             logging.warning("No test results found; CSV not created")  # Warn so operator can investigate
             # User-facing empty-result message
@@ -197,10 +197,10 @@ class GatewayTestResultsService:
                 if site_ids:  # Cache hit
                     return site_ids  # Return cache-derived site IDs
                 logging.warning("Fast-mode cache empty; falling back to API discovery")  # Warn about fallback
-            except Exception as exception:  # Cache failure is non-fatal; fall back to API
+            except Exception as exception:  # Cache failure is non-fatal. Fall back to API
                 logging.warning("Fast-mode site derivation failed (%s); falling back to API", exception)  # Trace
         logging.info("Discovering site IDs via API for org %s", org_id)  # Log before API call
-        raw = deps.GatewayExportUtils._get_site_ids_with_devices(org_id)  # Full API discovery; returns Any
+        raw = deps.GatewayExportUtils._get_site_ids_with_devices(org_id)  # Full API discovery. Returns Any
         site_ids = list(raw) if raw else []  # Cast Any->list[str] for mypy (GatewayExportUtils returns list)
         logging.debug("API discovery returned %d site IDs", len(site_ids))  # Log after API call
         return site_ids  # Return API-discovered site IDs

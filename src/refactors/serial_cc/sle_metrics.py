@@ -120,7 +120,7 @@ class SLEMetricsService:
     def _fetch_sites_aggregated(
         deps: SimpleNamespace, org_id: str, metric: str, config: SimpleNamespace, all_sle_data: list[Any]
     ) -> int:
-        """Fetch per-category sites SLE data for a worst-sites/sites-sle metric; return retrieved count."""
+        """Fetch per-category sites SLE data for a worst-sites/sites-sle metric. Return retrieved count."""
         retrieved = 0  # Successful per-category fetches for this metric
         for sle_category in config.sle_categories:  # Iterate each service category for this aggregated metric
             try:  # Per-category failures are non-fatal and skip to the next category
@@ -138,7 +138,7 @@ class SLEMetricsService:
     def _fetch_single_sle(
         deps: SimpleNamespace, org_id: str, metric: str, config: SimpleNamespace, all_sle_data: list[Any]
     ) -> tuple[int, int]:
-        """Fetch a single org-level specialized SLE metric; return (retrieved, failed) deltas."""
+        """Fetch a single org-level specialized SLE metric. Return (retrieved, failed) deltas."""
         response = deps.mistapi.api.v1.orgs.insights.getOrgSle(
             deps.apisession, org_id, metric, duration=config.duration_value
         )  # Query the single specialized org SLE metric
@@ -172,7 +172,7 @@ class SLEMetricsService:
         all_sle_data: list[Any],
         progress: "_SleProgressTracker",
     ) -> tuple[int, int]:
-        """Run the specialized-metrics loop; return cumulative (retrieved, failed)."""
+        """Run the specialized-metrics loop. Return cumulative (retrieved, failed)."""
         retrieved = 0  # Cumulative successful specialized fetches
         failed = 0  # Cumulative failed specialized fetches
         for metric in config.specialized_metrics:  # First loop: specialized org metrics
@@ -193,7 +193,7 @@ class SLEMetricsService:
     def _fetch_aggregated_category(
         deps: SimpleNamespace, org_id: str, sle_category: str, config: SimpleNamespace, all_sle_data: list[Any]
     ) -> tuple[int, int]:
-        """Fetch org-aggregated SLE data for one category; return (retrieved, failed) deltas."""
+        """Fetch org-aggregated SLE data for one category. Return (retrieved, failed) deltas."""
         response = deps.mistapi.api.v1.orgs.insights.getOrgSitesSle(
             deps.apisession, org_id, sle=sle_category, duration=config.duration_value, limit=1000
         )  # Query org sites SLE for this category
@@ -224,7 +224,7 @@ class SLEMetricsService:
         all_sle_data: list[Any],
         progress: "_SleProgressTracker",
     ) -> tuple[int, int]:
-        """Run the per-category aggregation loop; return cumulative (retrieved, failed)."""
+        """Run the per-category aggregation loop. Return cumulative (retrieved, failed)."""
         retrieved = 0  # Cumulative successful category fetches
         failed = 0  # Cumulative failed category fetches
         for sle_category in config.sle_categories:  # Second loop: aggregated SLE by category
@@ -248,7 +248,7 @@ class SLEMetricsService:
             processed = deps.DataProcessingUtils.flatten_nested_fields(all_sle_data)  # Flatten nested SLE structures
             processed = deps.DataProcessingUtils.escape_multiline(processed)  # Escape multiline fields for CSV
             deps.DataExporter.write_with_format_selection(processed, "OrgSLEMetrics.csv")  # Write the export file
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logging.info(
                 "! %s organization SLE data sources exported to OrgSLEMetrics.csv", metrics_retrieved
             )  # User summary
@@ -258,7 +258,7 @@ class SLEMetricsService:
                 metrics_retrieved,
             )  # Trace export volume
         else:  # No data collected from any source
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logging.info(
                 "! 0 organization SLE metrics exported to OrgSLEMetrics.csv (no data available)"
             )  # User summary
@@ -276,21 +276,21 @@ class SLEMetricsService:
         all_sle_data: list[Any],
         progress: "_SleProgressTracker",
     ) -> None:
-        """Run both retrieval loops and export; write empty CSV on any top-level failure."""
+        """Run both retrieval loops and export. Write empty CSV on any top-level failure."""
         # WHY: extracted from execute so execute stays under the 25-line STRUCT-LENGTH limit.
         try:  # Guard the whole retrieval+export so progress always completes
             spec_ok, spec_fail = cls._run_specialized_loop(deps, org_id, config, all_sle_data, progress)  # Loop 1
             cat_ok, cat_fail = cls._run_category_loop(deps, org_id, config, all_sle_data, progress)  # Loop 2
             metrics_retrieved = spec_ok + cat_ok  # Total successful fetches
             metrics_failed = spec_fail + cat_fail  # Total failed fetches
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logging.info(
                 "! SLE data retrieval completed: %s successful, %s failed", metrics_retrieved, metrics_failed
             )  # Summary
             logging.info("Org SLE data: %s retrieved successfully, %s failed", metrics_retrieved, metrics_failed)
             cls._export_results(deps, all_sle_data, metrics_retrieved)  # Flatten + export (or write empty)
         except Exception as exception:  # Any unexpected top-level failure still writes an empty export
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logging.info("! Error exporting organization SLE metrics: %s", exception)  # User-facing error
             logging.error("Failed to export org SLE metrics: %s", exception)  # Trace the failure
             deps.DataExporter.write_with_format_selection([], "OrgSLEMetrics.csv")  # Write empty export on failure
@@ -299,7 +299,7 @@ class SLEMetricsService:
     def execute(cls, fast: bool = False) -> None:
         """Run the organization SLE metrics export workflow."""
         deps = _resolve_runtime_dependencies()  # Resolve MistHelper collaborators at call time
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info("Export Organization SLE Metrics:")  # User-facing banner
         logging.info("Starting export of organization SLE metrics...")  # Trace workflow start
         org_id = deps.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve target org (cached or prompted)
@@ -308,7 +308,7 @@ class SLEMetricsService:
         progress = _SleProgressTracker(deps.PROGRESS_EMITTER, total_items)  # Encapsulate progress + items-done counter
         progress.start()  # Emit the progress-start event
         all_sle_data: list[Any] = []  # Accumulates every SLE record across both loops
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info(
             "! Retrieving organization SLE data using %s service categories...", len(config.sle_categories)
         )  # Info

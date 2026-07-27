@@ -304,7 +304,7 @@ class GatewayExportUtils:  # WHY: centralised gateway export utility class extra
             loaded = tuple(_read_csv_rows(name) for name in MANAGEMENT_IP_INPUT_CSVS)  # WHY: table-driven reads.
         except FileNotFoundError as exception:
             logging.error("Required CSV file not found: %s", exception)  # WHY: preserve legacy error log.
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.error("! Error: Required CSV file not found: %s", exception)
             return None
         sites, templates, gateway_devices, gateway_configs = loaded  # WHY: unpack into named locals.
@@ -324,7 +324,7 @@ class GatewayExportUtils:  # WHY: centralised gateway export utility class extra
         template_lookup: dict,
         mgmt_ip_lookup: dict,
     ) -> tuple[list[dict], int, int]:
-        """Build per-device management-IP rows; return (rows, processed_count, with_mgmt_ip_count)."""
+        """Build per-device management-IP rows. Return (rows, processed_count, with_mgmt_ip_count)."""
         lookups = {"site": site_lookup, "template": template_lookup, "mgmt_ip": mgmt_ip_lookup}  # WHY: bundle.
         results: list[dict] = []  # WHY: per-device records for export.
         with_mgmt_ip = 0  # WHY: track devices with a usable management IP.
@@ -338,16 +338,16 @@ class GatewayExportUtils:  # WHY: centralised gateway export utility class extra
     @staticmethod
     def _prime_management_ip_caches(fast: bool) -> None:  # WHY: isolate the 4 cache generation calls.
         """Ensure the 4 CSV caches consumed by management_ips are up to date."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("  1. Ensuring site list with template mappings is current...")
         CacheUtils.check_and_generate_csv("SiteList.csv", OrgSiteExporter.sites)  # WHY: refresh site cache.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("  2. Ensuring gateway templates are current...")
         CacheUtils.check_and_generate_csv("OrgGatewayTemplates.csv", GatewayExportUtils.templates)
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("  3. Ensuring gateway device data with connection status is current...")
         CacheUtils.check_and_generate_csv("GatewaysWithSiteInfo.csv", OrgInventoryExporter.gateways_with_site_info)
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("  4. Ensuring gateway configurations with management IPs are current...")
         CacheUtils.check_and_generate_csv(
             "AllSiteGatewayConfigs.csv",
@@ -389,15 +389,15 @@ class GatewayExportUtils:  # WHY: centralised gateway export utility class extra
     @staticmethod
     def _emit_management_ip_summary(gateways_processed: int, gateways_with_mgmt_ip: int) -> None:
         """Emit the completion banner + audit log preserving legacy phrasing."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("! Gateway management IP export completed:")
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("  - Total gateways processed: %d", gateways_processed)
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("  - Gateways with management IPs: %d", gateways_with_mgmt_ip)
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("  - Gateways without management IPs: %d", gateways_processed - gateways_with_mgmt_ip)
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("  - Output CSV: GatewayManagementIPs.csv")
         logging.info(
             "Gateway management IP export completed. %d gateways processed, %d with management IPs.",
@@ -409,13 +409,13 @@ class GatewayExportUtils:  # WHY: centralised gateway export utility class extra
     def management_ips(fast: bool = False) -> None:
         """Export gateway management overlay IPs correlated with templates and site status."""
         logging.info("Menu #31: Starting gateway management IPs export")  # WHY: audit log for menu entry.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("Gateway Management IP Export:")
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("Collecting data from inventory, templates, and configurations...")
         ConfigUtils.get_cached_or_prompted_org_id()  # WHY: resolve org id via standard pathway.
         GatewayExportUtils._prime_management_ip_caches(fast)  # WHY: ensure all 4 CSV inputs are current.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("  5. Processing and correlating data...")
         loaded = GatewayExportUtils._load_management_ip_csv_inputs()  # WHY: read the four CSV inputs.
         if loaded is None:  # WHY: required CSV missing — error already printed/logged.
@@ -477,7 +477,7 @@ class GatewayExportUtils:  # WHY: centralised gateway export utility class extra
     @staticmethod
     def templates() -> None:
         """Export gateway templates for the selected organization."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("Gateway Templates:")
         logging.info("Exporting gateway templates for the organization...")  # WHY: audit log for entry.
         current_org_id = ConfigUtils.get_cached_or_prompted_org_id()  # WHY: resolve org_id via standard path.
@@ -485,13 +485,13 @@ class GatewayExportUtils:  # WHY: centralised gateway export utility class extra
         templates = getattr(response, "data", [])  # WHY: defensive — response may lack .data attribute.
         if not templates:  # WHY: nothing to export — emit diagnostics and return.
             logging.warning("No gateway templates found for this organization.")
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("No gateway templates found for this organization.")
             return
         templates = DataProcessingUtils.flatten_nested_fields(templates)  # WHY: flatten nested JSON to cells.
         templates = DataProcessingUtils.escape_multiline(templates)  # WHY: escape multiline cells for CSV.
         DataExporter.write_with_format_selection(templates, "OrgGatewayTemplates.csv")  # WHY: persist output.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("! %d gateway templates exported to OrgGatewayTemplates.csv", len(templates))
         logging.info(" Gateway templates exported to OrgGatewayTemplates.csv")  # WHY: audit log for exit.
 
@@ -512,7 +512,7 @@ class GatewayExportUtils:  # WHY: centralised gateway export utility class extra
 
     @staticmethod
     def _get_devices_from_cache() -> list[tuple[str, str, str, str]]:
-        """Get gateway devices from cached inventory and site list CSVs."""
+        """Get gateway devices from cached inventory and site list CSV files."""
         try:
             CacheUtils.check_and_generate_csv("OrgInventory.csv", OrgInventoryExporter.inventory)  # WHY: refresh.
             CacheUtils.check_and_generate_csv("SiteList.csv", OrgSiteExporter.sites)  # WHY: refresh site cache.

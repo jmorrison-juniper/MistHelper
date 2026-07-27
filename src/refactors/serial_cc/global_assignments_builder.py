@@ -94,7 +94,7 @@ class GlobalAssignmentsBuilderService:  # WHY: single-purpose helper class extra
 
         for module_name, module_obj in imports.items():  # Walk each successfully imported module
             global_vars[module_name] = module_obj  # Always expose the module under its own name first
-            cls._apply_attribute_exports(global_vars, module_name, module_obj)  # Submember re-exports (timezone, etc.)
+            cls._apply_attribute_exports(global_vars, module_name, module_obj)  # Submember re-exports like timezone
             cls._expose_module_alternate_name(global_vars, module_name, module_obj)  # Alt module names (np)
             cls._apply_optional_imports(global_vars, module_name, module_obj)  # Conditional optional-dep imports
             cls._apply_logged_module(global_vars, module_name, module_obj)  # Present-only logged modules

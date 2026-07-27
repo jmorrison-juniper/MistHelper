@@ -18,7 +18,7 @@ class LevelDiscoverer:
         self._tui = tui  # Back-reference for TUI state
 
     def discover(self) -> None:
-        """Discover modules + functions at the current path; update TUI state."""
+        """Discover modules + functions at the current path. Update TUI state."""
         tui = self._tui  # Local alias
         tui.current_items = []  # Reset items list
         module_path = self._compose_module_path()  # Build "mistapi.api.v1[...]" path
@@ -46,7 +46,7 @@ class LevelDiscoverer:
         return "mistapi.api.v1." + ".".join(path)  # Deeper level joined with dots
 
     def _import_module(self, module_path: str) -> Any:
-        """Import ``module_path``; set error item on failure and return None."""
+        """Import ``module_path``. Set error item on failure and return None."""
         try:
             module = importlib.import_module(module_path)  # Try the import
         except ImportError as error:  # Module not found -> show error
@@ -75,7 +75,7 @@ class LevelDiscoverer:
             self._append_function_record(item, name)
 
     def _append_module_record(self, item: Any, name: str) -> None:
-        """Append a module record to current_items when it's a mistapi module."""
+        """Append a module record to current_items when it is a mistapi module."""
         if not hasattr(item, "__package__"):  # No package info -> skip
             return
         if "mistapi" not in str(item.__package__):  # Only mistapi modules are listed

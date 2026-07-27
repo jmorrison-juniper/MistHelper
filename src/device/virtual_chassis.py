@@ -180,7 +180,7 @@ class VirtualChassisManager:
         """Interactively convert a single VC switch to virtual MAC (Menu 92)."""
         VirtualChassisManager._print_intro(dry_run)  # WHY: banner + optional dry-run notice.
         site = VirtualChassisManager._resolve_site(apisession, select_site_fn)  # WHY: gate on selection.
-        if site is None:  # WHY: user cancelled or no site returned; nothing to convert.
+        if site is None:  # WHY: user cancelled or no site returned. Nothing to convert.
             return  # WHY: exit silently without touching API state.
         site_id, site_name = site  # WHY: unpack for readable downstream calls.
         selected = VirtualChassisManager._pick_switch(site_id, site_name, io_deps, safe_input_fn)  # WHY.
@@ -188,7 +188,7 @@ class VirtualChassisManager:
             return  # WHY: nothing to convert, exit cleanly.
         device_id = VirtualChassisManager._validate_switch(selected, safe_input_fn)  # WHY: preflight.
         if device_id is None:  # WHY: preflight or id check failed.
-            return  # WHY: already logged; nothing to do.
+            return  # WHY: already logged. Nothing to do.
         target = _ConvertTarget(  # WHY: bundle to keep _convert_or_dry_run under param limit.
             selected=selected, site_id=site_id, site_name=site_name, device_id=device_id
         )
@@ -207,7 +207,7 @@ class VirtualChassisManager:
             io_deps, safe_input_fn
         )
         if not target_ids:  # WHY: nothing to convert if there are no resolvable sites.
-            return  # WHY: early exit; user-facing messaging already emitted.
+            return  # WHY: early exit. User-facing messaging already emitted.
         switches = VirtualChassisManager._load_switches_for_sites(  # WHY: load VC switches for the sites.
             target_ids, site_name_to_id, io_deps.get_csv_path_fn
         )
@@ -217,7 +217,7 @@ class VirtualChassisManager:
             return  # WHY: exit cleanly.
         VirtualChassisManager._display_switches_for_conversion(switches)  # WHY: show what will convert.
         if not VirtualChassisManager._confirm_bulk(safe_input_fn):  # WHY: destructive-op double-check.
-            return  # WHY: cancelled; already printed.
+            return  # WHY: cancelled. Already printed.
         VirtualChassisManager._execute_bulk_conversion(apisession, switches)  # WHY: perform conversion.
 
     @staticmethod
@@ -327,7 +327,7 @@ class VirtualChassisManager:
             return None  # WHY: caller aborts on None.
         if not VirtualChassisManager._preflight_check(selected, safe_input_fn):  # WHY: eligibility.
             return None  # WHY: preflight failed or operator declined.
-        return str(device_id)  # WHY: valid target device id; coerce dict[Any] value to str.
+        return str(device_id)  # WHY: valid target device id. Coerce dict[Any] value to str.
 
     # ------------------------------------------------------------------
     # convert_by_site_list helpers
@@ -447,7 +447,7 @@ class VirtualChassisManager:
         site_name: str,
     ) -> None:
         """Execute API call to convert one switch to virtual MAC."""
-        import mistapi  # WHY: lazy import; module is import-free without a session.
+        import mistapi  # WHY: lazy import. Module is import-free without a session.
 
         print(  # WHY: pre-call progress message.
             f"! Converting switch '{switch_name}' (device_id: {device_id}) at site '{site_name}' to virtual MAC..."
@@ -480,7 +480,7 @@ class VirtualChassisManager:
 
     @staticmethod
     def _log_http_error(response: Any, switch_name: str, site_name: str) -> bool:
-        """Print + log an HTTP >= 400 error; return True when handled."""
+        """Print + log an HTTP >= 400 error. Return True when handled."""
         if hasattr(response, "status_code") and response.status_code >= 400:  # WHY: HTTP error path.
             data = getattr(response, "data", "")  # WHY: include payload for context.
             print(f"! Conversion failed (HTTP {response.status_code}): {data}")  # WHY: operator.
@@ -491,11 +491,11 @@ class VirtualChassisManager:
                 response.status_code,
             )
             return True  # WHY: caller should stop processing.
-        return False  # WHY: no HTTP error; caller continues checking body.
+        return False  # WHY: no HTTP error. Caller continues checking body.
 
     @staticmethod
     def _log_detail_error(response: Any, switch_name: str, site_name: str) -> bool:
-        """Print + log a body-level detail error; return True when handled."""
+        """Print + log a body-level detail error. Return True when handled."""
         resp_data = getattr(response, "data", None)  # WHY: normalize access to payload.
         if isinstance(resp_data, dict) and "detail" in resp_data:  # WHY: mistapi body error shape.
             print(f"! Conversion failed: {resp_data['detail']}")  # WHY: operator feedback.
@@ -544,7 +544,7 @@ class VirtualChassisManager:
         idx: int,
         total: int,
     ) -> bool:
-        """Convert one switch inside the bulk loop; return True on success."""
+        """Convert one switch inside the bulk loop. Return True on success."""
         switch_name = switch.get("name", "")  # WHY: user-visible identifier for progress banner.
         site_name = switch.get("site_name", "")  # WHY: user-visible identifier for progress banner.
         print(f"\n[{idx + 1}/{total}] Converting '{switch_name}' at site '{site_name}'...")  # WHY: progress.
@@ -552,7 +552,7 @@ class VirtualChassisManager:
 
     @staticmethod
     def _call_convert_api(apisession: Any, switch: dict[str, Any]) -> bool:
-        """Call mistapi convert endpoint; return True on success, False on error."""
+        """Call mistapi convert endpoint. Return True on success, False on error."""
         import mistapi  # WHY: lazy import keeps module light for unit tests.
 
         site_id = switch.get("site_id", "")  # WHY: mistapi endpoint requires site_id.
@@ -642,7 +642,7 @@ class VirtualChassisManager:
 
     @staticmethod
     def _prompt_yes_no(safe_input_fn: SafeInputFn) -> str:
-        """Prompt the operator to create an empty VCConvert template; return normalized answer."""
+        """Prompt the operator to create an empty VCConvert template. Return normalized answer."""
         return (  # WHY: normalize input to lower-case stripped string for comparison.
             safe_input_fn(
                 "   Would you like to create an empty file to get started? (y/n): ",

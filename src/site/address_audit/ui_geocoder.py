@@ -10,13 +10,13 @@ Three connection modes (all proven to work behind Zscaler SSL inspection, where
 Playwright CANNOT download its own Chromium):
 
   * ``auto`` (default) -- take over an already-running debuggable browser if one
-    is present; otherwise spawn a debuggable Edge for the operator, wait for them
+    is present. Otherwise spawn a debuggable Edge for the operator, wait for them
     to log into Mist and open a site's settings page, then take it over. This is
     the zero-setup path: the operator never has to start Edge with debug flags.
 
   * ``attach`` -- take over an already-running, already logged-in browser via the
     Chrome DevTools Protocol. The operator starts a debuggable browser (see
-    ``spawn_debuggable_browser``) and logs into Mist once; we reuse that live SSO
+    ``spawn_debuggable_browser``) and logs into Mist once. We reuse that live SSO
     session. No bundled browser download, no stored credentials.
 
   * ``launch`` -- Playwright launches the system Edge channel
@@ -60,7 +60,7 @@ try:  # Optional dependency: Playwright may not be installed in every environmen
 except ImportError:  # pragma: no cover -- exercised only on hosts without Playwright.
     sync_playwright = None  # type: ignore[assignment]  # Sentinel; is_available() keys off this.
 
-_KEY_JITTER = secrets.SystemRandom()  # Per-keystroke delay source; unpredictable cadence dodges bot heuristics.
+_KEY_JITTER = secrets.SystemRandom()  # Per-keystroke delay source. Unpredictable cadence dodges bot heuristics.
 _THINKING_PAUSE_EVERY = 7  # Add an occasional longer "thinking" pause every N characters while typing.
 _SUITE_GRACE_S = 2.0  # Extra seconds (after the house number matches) to let a typed suite/unit land in the dropdown.
 _POLL_INTERVAL_MS = 200  # WHY: cooperative pause between suggestion-list re-reads while waiting for a fresh row.
@@ -77,7 +77,7 @@ _EDGE_INSTALL_TAIL = (
 )  # WHY: path tail under each ProgramFiles root.
 _PROFILE_PREFIX = "misthelper-edge-"  # WHY: throwaway profile dir prefix so we never touch the operator's real profile.
 
-# --- Selector constants (captured 2026-06-29; re-verify if the Mist dashboard UI changes) ---
+# --- Selector constants (captured 2026-06-29. Re-verify if the Mist dashboard UI changes) ---
 # Google Places Autocomplete attaches ``pac-target-input`` to the bound input and
 # renders suggestions in a ``.pac-container`` of ``.pac-item`` rows. These Google
 # classes are stable across sites, so we anchor on them rather than Mist's markup.
@@ -116,7 +116,7 @@ class MistUIGeocoder:
         return available  # Callers gate Tier-3 on this before connect().
 
     def connect(self) -> bool:
-        """Establish the browser per ``connect_mode``; return success (never raises)."""
+        """Establish the browser per ``connect_mode``. Return success (never raises)."""
         if not self.is_available():  # Playwright missing -> Tier-3 is simply unavailable.
             logging.warning("Playwright not installed; Tier-3 UI geocoding unavailable")  # Inform operator.
             return False  # Audit continues on Tier-1/Tier-2 results.
@@ -142,7 +142,7 @@ class MistUIGeocoder:
         return self._connect_auto()  # Default: take over if possible, else spawn one for the operator.
 
     def _connect_auto(self) -> bool:
-        """Take over a debuggable browser if present; otherwise spawn one and take it over."""
+        """Take over a debuggable browser if present. Otherwise spawn one and take it over."""
         if self._try_attach():  # A debuggable browser is already running -> reuse it.
             return True  # Attached to the operator's existing session.
         logging.info("No debuggable browser found; spawning one for login")  # Action-log the spawn path.
@@ -211,7 +211,7 @@ class MistUIGeocoder:
         logging.info("Operator confirmed dashboard login; proceeding with UI geocoding")  # Action-log gate pass.
 
     def ensure_location_field_ready(self, max_prompts: int = 3) -> bool:
-        """Probe for the Location Search field; guide the operator until it appears (fail-soft).
+        """Probe for the Location Search field. Guide the operator until it appears (fail-soft).
 
         Tier-3 can only read Google's suggestions when the active tab is on a page
         that renders the Location Search input. We probe, and if it is missing we
@@ -230,7 +230,7 @@ class MistUIGeocoder:
                 context="ui_geocoder_navigate",
             )
         logging.info("Location Search field not found after %d prompts; Tier-3 will fail-soft", max_prompts)
-        return False  # Lookups will return None; the audit still completes on Tier 1/2.
+        return False  # Lookups will return None. The audit still completes on Tier 1/2.
 
     def _field_present(self, page: Any) -> bool:
         """Return True when any Location Search input selector matches on ``page``."""
@@ -243,7 +243,7 @@ class MistUIGeocoder:
         return False  # No candidate matched on the current page.
 
     def geocode_via_ui(self, query: str) -> ResolverResult | None:
-        """Resolve one address via the dashboard autocomplete; fail-soft to ``None``."""
+        """Resolve one address via the dashboard autocomplete. Fail-soft to ``None``."""
         if not self._connected:  # Guard: connect() must succeed first.
             logging.warning("geocode_via_ui called before a successful connect(); returning None")  # Misuse.
             return None  # Nothing to drive.
@@ -282,7 +282,7 @@ class MistUIGeocoder:
         with self._perf.phase("ui.type_query"):  # Time the human-like typing (usually the biggest cost).
             self._enter_query(page, field, query)  # Focus, clear the stale dropdown, type the new query.
         expected = self._house_number(query)  # House number anchors the fresh-result wait.
-        expected_suite = self._suite_id(query)  # Unit id we typed (e.g. "200"); "" when none -> suite wait is a no-op.
+        expected_suite = self._suite_id(query)  # Unit id we typed (for example "200"). "" skips the suite wait.
         with self._perf.phase("ui.read_suggestions"):  # Time the fresh-result poll incl. the suite grace.
             texts = self._read_fresh_suggestions(page, expected, timeout_ms, expected_suite)  # Wait for THIS query.
         logging.debug("UI autocomplete returned %d fresh suggestion(s)", len(texts))  # Action-log count.
@@ -374,7 +374,7 @@ class MistUIGeocoder:
         """Decide whether the fresh top row is final, starts/extends the suite grace, or is skipped.
 
         Returns ``(resolved, house_ok_at)``. When ``resolved`` is not ``None`` the
-        caller must return it immediately; when it is ``None`` the caller keeps
+        caller must return it immediately. When it is ``None`` the caller keeps
         polling with the (possibly updated) ``house_ok_at`` timestamp.
         """
         if not expected_suite or self._reflects_suite(
@@ -382,7 +382,7 @@ class MistUIGeocoder:
         ):  # WHY: suite satisfied or none required.
             return texts, house_ok_at  # Finalize on the top row.
         if house_ok_at is None:  # WHY: first fresh house-number sighting -- start the grace clock.
-            return None, time.monotonic()  # Keep polling; anchor the suite grace at now.
+            return None, time.monotonic()  # Keep polling. Anchor the suite grace at now.
         if time.monotonic() - house_ok_at >= grace:  # WHY: grace expired -- accept the base street.
             logging.info("Suite '%s' not shown within grace; using base street", expected_suite)  # Action-log fallback.
             return texts, house_ok_at  # _build_result re-appends the unit we typed.
@@ -411,7 +411,7 @@ class MistUIGeocoder:
 
     @staticmethod
     def _house_number(text: str) -> str:
-        """Return the first digit-run (the house number); names like 'T-Mobile' have none."""
+        """Return the first digit-run (the house number). Names like 'T-Mobile' have none."""
         match = re.search(r"\d+", text)  # First run of digits in the query.
         return match.group(0) if match else ""  # House number or empty when none present.
 
@@ -422,7 +422,7 @@ class MistUIGeocoder:
 
     @staticmethod
     def _suite_phrase(text: str) -> str:
-        """Return the full suite/unit phrase from an address/query (e.g. 'Unit 200', '#3'), or ''.
+        """Return the full suite/unit phrase from an address/query (for example 'Unit 200', '#3'), or ''.
 
         Matches an explicit keyword form (``Suite/Ste/Unit/Space/Bldg/Rm/Apt <id>``)
         first, then a bare ``#<id>`` hash form. The id may be alphanumeric with an
@@ -431,15 +431,15 @@ class MistUIGeocoder:
         """
         keyword = re.search(
             SUITE_PHRASE_PATTERN, text
-        )  # Shared keyword+id form (e.g. 'Suite 100', 'Ste A2', 'Sute A-103').
+        )  # Shared keyword+id form (for example 'Suite 100', 'Ste A2', 'Sute A-103').
         if keyword:  # Prefer the explicit keyword form.
             return re.sub(r"\s+", " ", keyword.group(0)).strip()  # Collapse internal whitespace.
-        hashed = re.search(HASH_UNIT_PATTERN, text)  # Bare hash form (e.g. '#3', '#1515b').
+        hashed = re.search(HASH_UNIT_PATTERN, text)  # Bare hash form (for example '#3', '#1515b').
         return hashed.group(0).replace(" ", "") if hashed else ""  # '#<id>' with no gap, or empty.
 
     @staticmethod
     def _suite_id(text: str) -> str:
-        """Return just the bare unit identifier from a suite phrase (e.g. '200', 'A2', '3'), or ''."""
+        """Return just the bare unit identifier from a suite phrase (for example '200', 'A2', '3'), or ''."""
         phrase = MistUIGeocoder._suite_phrase(text)  # Full phrase such as 'Unit 200' or '#3'.
         if not phrase:  # No suite present.
             return ""  # Nothing to compare/preserve.
@@ -510,7 +510,7 @@ class MistUIGeocoder:
         (a DIFFERENT unit means Google is the authority -- leave it), and the house
         numbers agree (never graft a unit onto a different building).
         """
-        suite_id = self._suite_id(query)  # WHY: the unit id we typed (e.g. "200"); "" when none.
+        suite_id = self._suite_id(query)  # WHY: the unit id we typed (for example "200"); "" when none.
         if self._skip_suite_preservation(query, suggestion, suite_id):  # WHY: guard-clause bundles all no-op cases.
             return suggestion  # Nothing to preserve, already complete, Google authoritative, or different building.
         phrase = self._suite_phrase(query)  # The full 'Unit 200' / '#3' token to restore.
@@ -534,7 +534,7 @@ class MistUIGeocoder:
         query_house = MistUIGeocoder._house_number(query)  # House number we asked about.
         sugg_house = MistUIGeocoder._house_number(suggestion)  # House number Google returned.
         if not query_house or not sugg_house:  # WHY: unknown on either side -- do not treat as different.
-            return False  # Cannot rule out same-building; defer to other guards.
+            return False  # Cannot rule out same-building. Defer to other guards.
         return query_house != sugg_house  # WHY: both known -- disagreement means a different building.
 
     @staticmethod
@@ -555,7 +555,7 @@ class MistUIGeocoder:
         """Strip a glued leading place/business name and a trailing country from a suggestion.
 
         Google's ``.pac-item`` rows glue the establishment name to the address with
-        no separator (e.g. ``T-Mobile931 US Highway 331 Ste A2, ..., USA``), glue a
+        no separator (for example ``T-Mobile931 US Highway 331 Ste A2, ..., USA``), glue a
         trailing directional to the city (``...Ave NLive Oak``), and sometimes glue
         the street or a suite number straight to the city (``...HwyFort Pierce``,
         ``...suite 330Brandon``). We drop the trailing country, repair those glued
@@ -565,7 +565,7 @@ class MistUIGeocoder:
         and digits trigger a split, never a generic lowercase->uppercase boundary.
         The leading house number may be hyphenated (Hawaii's ``74-5450`` grid
         addresses), so the anchor accepts an optional ``-<digits>`` run before the
-        street; without this the glued business name survives (``T-Mobile74-5450``).
+        street. Without this the glued business name survives (``T-Mobile74-5450``).
         """
         s = text.strip()  # Normalize surrounding whitespace.
         s = re.sub(r",?\s*(?:USA|United States)\s*$", "", s, flags=re.IGNORECASE).strip()  # Drop trailing country.
@@ -577,7 +577,7 @@ class MistUIGeocoder:
         return cleaned.strip().strip(",").strip() or text.strip()  # Never return empty.
 
     def close(self) -> None:
-        """Tear down browser and driver handles; never raises."""
+        """Tear down browser and driver handles. Never raises."""
         logging.debug("Closing MistUIGeocoder browser resources")  # Action-log teardown.
         try:
             if self._browser is not None:  # Disconnect/close the browser if open.
@@ -612,7 +612,7 @@ class MistUIGeocoder:
 
         Returns the ``Popen`` handle (caller owns its lifecycle) or ``None`` when
         Edge cannot be located. Uses a throwaway profile so the operator's normal
-        Edge profile is never touched; the operator logs into Mist in this window
+        Edge profile is never touched. The operator logs into Mist in this window
         once, then ``connect_mode="attach"`` reuses that session.
         """
         edge = MistUIGeocoder._edge_executable()  # Locate the system Edge binary.
@@ -622,7 +622,7 @@ class MistUIGeocoder:
         profile = tempfile.mkdtemp(prefix=_PROFILE_PREFIX)  # WHY: dedicated dir so the operator's profile is untouched.
         args = MistUIGeocoder._debuggable_edge_args(edge, cdp_port, profile, dashboard_url)  # Build the CLI flags.
         logging.info("Spawning debuggable Edge on port %d (profile=%s)", cdp_port, profile)  # Action-log spawn.
-        proc = subprocess.Popen(args)  # Launch Edge; the operator logs in, then we attach.
+        proc = subprocess.Popen(args)  # Launch Edge. The operator logs in, then we attach.
         logging.debug("Debuggable Edge started (pid=%s)", proc.pid)  # Trace the PID.
         return proc  # Caller terminates it when the audit finishes.
 

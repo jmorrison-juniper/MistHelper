@@ -283,7 +283,7 @@ class OrgTicketManager:  # Support ticket operations.
             )
             logging.debug("Comment with file submitted to ticket %s", ticket_id)  # Log after API call
             logging.warning("\n  Comment with attachment added to ticket %s", ticket_id)  # Confirm to user
-        elif file_path:  # User specified a path but file doesn't exist
+        elif file_path:  # User specified a path but file does not exist
             logging.warning(  # Warn about missing file path
                 "File not found: %s -- adding comment without attachment", file_path
             )
@@ -383,7 +383,7 @@ class OrgTicketManager:  # Support ticket operations.
 
     @staticmethod
     def _fetch_tickets_for_selection(org_id: str) -> list:
-        """Fetch ticket summaries for selection; print + return [] on error/empty."""
+        """Fetch ticket summaries for selection. Print + return [] on error/empty."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of mistapi + apisession.
         logging.info("Fetching ticket list for selection (org %s)", org_id)  # Log before API call
         try:
@@ -420,10 +420,10 @@ class OrgTicketManager:  # Support ticket operations.
 
     @staticmethod
     def _resolve_ticket_choice(choice: str, tickets: list) -> str:
-        """Parse numeric choice into ticket ID; print error + return '' on bad input."""
+        """Parse numeric choice into ticket ID. Print error + return '' on bad input."""
         try:
             idx = int(choice) - 1  # Convert 1-based to 0-based index
-        except ValueError:  # Non-numeric input that wasn't 'm'
+        except ValueError:  # Non-numeric input that was not 'm'
             logging.error("  Invalid selection: %s", choice)  # Inform user of bad input
             return ""  # Signal cancellation
         if not 0 <= idx < len(tickets):  # Index out of range

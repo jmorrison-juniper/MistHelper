@@ -96,7 +96,7 @@ from ._ssid_template_phase45 import (  # WHY: re-export phase 4/5 helpers refere
 # WHY: declare the module-level re-export surface so ruff F401 does not flag the
 # intentional pass-throughs above (tests reach these helpers by patching them at
 # ``ssid_template_consolidation.<name>``, which requires the symbol to bind here).
-__all__ = [  # WHY: explicit re-export list; keeps ruff F401 quiet on intentional pass-throughs
+__all__ = [  # WHY: explicit re-export list. Keeps ruff F401 quiet on intentional pass-throughs
     "SSIDTemplateConsolidationManager",
     "SsidTemplateDeps",
     "TemplateOpParams",
@@ -283,7 +283,7 @@ class SSIDTemplateConsolidationManager:  # pylint: disable=too-many-instance-att
 
         Python only invokes ``__getattr__`` when normal lookup fails, so
         this method resolves cluster method calls (``self._load_cache``,
-        ``self._save_phase_results``, ``self._offer_resume`` etc.) without
+        ``self._save_phase_results``, ``self._offer_resume`` and so on) without
         explicit delegator wrappers. The class-level ``hasattr`` check on
         ``type(cluster)`` avoids invoking the cluster's own ``__getattr__``
         (which would proxy back to this class and cause infinite recursion
@@ -320,7 +320,7 @@ class SSIDTemplateConsolidationManager:  # pylint: disable=too-many-instance-att
         current_org_id, target_ssid = context  # WHY: destructure validated org + ssid pair
         logging.info("Target SSID: %s, Org: %s", target_ssid, current_org_id)  # WHY: audit-log operator inputs
         # fmt: off
-        deps = SsidTemplateDeps(  # WHY: bundle 6 deps into frozen struct; STRUCT-LENGTH block
+        deps = SsidTemplateDeps(  # WHY: bundle 6 deps into frozen struct. STRUCT-LENGTH block
             org_id=current_org_id, target_ssid=target_ssid, apisession=apisession,
             page_limit=page_limit, safe_input_fn=safe_input_fn, write_data_fn=write_data_fn,
         )
@@ -383,7 +383,7 @@ class SSIDTemplateConsolidationManager:  # pylint: disable=too-many-instance-att
                 return  # WHY: unwind the loop when the choice was terminal (quit / phase 6)
 
     def _handle_menu_choice(self, choice: str, dispatch: dict[str, Any]) -> bool:  # WHY: extracted so complexity <= 5
-        """Route one menu selection; return True when the menu should exit."""
+        """Route one menu selection. Return True when the menu should exit."""
         if choice.lower() in ("q", "quit", ""):  # WHY: quit tokens include blank enter
             logging.warning("Returning to main menu.")  # WHY: operator feedback before unwinding
             return True  # WHY: signal caller to exit the menu loop
@@ -460,26 +460,26 @@ class SSIDTemplateConsolidationManager:  # pylint: disable=too-many-instance-att
     # Phase 2: Site Variables
     # ------------------------------------------------------------------
     # WHY: phase2_site_variables + _write_site_variables live on the
-    # phase-2 cluster; access is transparent via __getattr__ delegation.
+    # phase-2 cluster. Access is transparent via __getattr__ delegation.
 
     # ------------------------------------------------------------------
     # Phase 3: Site Groups
     # ------------------------------------------------------------------
     # WHY: phase3_site_groups + _ensure_groups_exist +
-    # _assign_sites_to_groups live on the phase-3 cluster; access is
+    # _assign_sites_to_groups live on the phase-3 cluster. Access is
     # transparent via __getattr__ delegation.
 
     # ------------------------------------------------------------------
     # Phase 4: Templates
     # ------------------------------------------------------------------
     # WHY: phase4_templates + _create_or_update_templates live on the
-    # phase-4/5 cluster; access is transparent via __getattr__ delegation.
+    # phase-4/5 cluster. Access is transparent via __getattr__ delegation.
 
     # ------------------------------------------------------------------
     # Phase 5: Disable Old SSIDs
     # ------------------------------------------------------------------
     # WHY: phase5_disable_old + _disable_ssids live on the phase-4/5
-    # cluster; access is transparent via __getattr__ delegation.
+    # cluster. Access is transparent via __getattr__ delegation.
 
 
 # ------------------------------------------------------------------
@@ -523,7 +523,7 @@ def _build_success_write_results(entries: list[dict[str, Any]]) -> list[dict[str
     timestamp = datetime.now().isoformat()  # WHY: single ISO timestamp for the batch
     results: list[dict[str, Any]] = []  # WHY: accumulator for the per-entry success rows
     for entry in entries:  # WHY: fan out per-variable success rows
-        entry_copy = dict(entry)  # WHY: don't mutate caller's plan entries
+        entry_copy = dict(entry)  # WHY: do not mutate caller's plan entries
         entry_copy["status"] = "written"  # WHY: sentinel consumed by resume logic
         entry_copy["timestamp"] = timestamp  # WHY: record when the write happened
         results.append(entry_copy)  # WHY: collect the success row
@@ -537,7 +537,7 @@ def _build_failed_write_results(  # WHY: failure rows builder mirrors the succes
     """Build ``status=failed`` result records carrying the error text."""
     results: list[dict[str, Any]] = []  # WHY: accumulator for the per-entry failure rows
     for entry in entries:  # WHY: fan out per-variable failure rows
-        entry_copy = dict(entry)  # WHY: don't mutate caller's plan entries
+        entry_copy = dict(entry)  # WHY: do not mutate caller's plan entries
         entry_copy["status"] = "failed"  # WHY: sentinel consumed by resume + summary logic
         entry_copy["reason"] = str(error)  # WHY: surface stringified error for the report
         results.append(entry_copy)  # WHY: collect the failure row
@@ -590,7 +590,7 @@ def _assign_group_sites(  # WHY: mistapi-touching site-group assigner (parent-ow
     apisession: Any,
 ) -> list[dict[str, Any]]:
     """Assign all sites for a single group."""
-    group_id = group["group_id"]  # WHY: id of the sitegroup we're mutating
+    group_id = group["group_id"]  # WHY: id of the sitegroup we are mutating
     sites_to_assign = _filter_pending_sites(group, group_id, completed_ids)  # WHY: strip pairs already done
     if not sites_to_assign:  # WHY: nothing pending -> skip API call entirely
         return []  # WHY: no rows to append to results
@@ -622,7 +622,7 @@ def _do_assign_group_sites(  # WHY: happy-path branch extracted for complexity r
     """Push merged site_ids and build success result rows (may raise)."""
     group_id = group["group_id"]  # WHY: single source of truth for the sitegroup id
     existing_ids = _get_existing_group_site_ids(cache, group_id)  # WHY: preserve unrelated members
-    new_ids = [  # WHY: subset that isn't already in the group -> triggers the API call
+    new_ids = [  # WHY: subset that is not already in the group -> triggers the API call
         site["site_id"] for site in sites_to_assign if site["site_id"] not in existing_ids
     ]
     _push_group_site_ids(group, existing_ids, new_ids, org_id, apisession)  # WHY: PUT merged set
@@ -824,7 +824,7 @@ def _disable_single_ssid(entry: dict[str, Any], org_id: str, apisession: Any) ->
     """Disable a single SSID in its old template."""
     template_id = entry.get("old_template_id", "")  # WHY: identify template holding the SSID
     ssid_id = entry.get("ssid_id", "")  # WHY: identify the WLAN row to disable
-    result = dict(entry)  # WHY: copy so we don't mutate the input plan entry
+    result = dict(entry)  # WHY: copy so we do not mutate the input plan entry
     try:
         _apply_ssid_disable(result, template_id, ssid_id, org_id, apisession)  # WHY: mutates result in place
     except Exception as error:  # WHY: convert API/network failure into structured record
@@ -845,18 +845,18 @@ def _apply_ssid_disable(
     response = mistapi.api.v1.orgs.templates.getOrgTemplate(apisession, org_id, template_id)  # WHY: fetch current
     template_data = response.data if hasattr(response, "data") else {}  # WHY: mistapi returns .data
     wlans: list[dict[str, Any]] = template_data.get("wlans", []) or []  # WHY: empty template edge case
-    updated = _set_ssid_disabled(wlans, ssid_id)  # WHY: in-place flip; returns True if found
+    updated = _set_ssid_disabled(wlans, ssid_id)  # WHY: in-place flip. Returns True if found
     if updated:  # WHY: only PUT + report success when the WLAN row was located
         template_data["wlans"] = wlans  # WHY: PUT payload carries the mutated wlan list
         # fmt: off
-        mistapi.api.v1.orgs.templates.updateOrgTemplate(  # WHY: PUT mutated wlans; STRUCT-LENGTH block
+        mistapi.api.v1.orgs.templates.updateOrgTemplate(  # WHY: PUT mutated wlans. STRUCT-LENGTH block
             apisession, org_id, template_id, body=template_data,
         )
         # fmt: on
         result["status"] = "disabled"  # WHY: sentinel consumed by resume + summary logic
         result["timestamp"] = datetime.now().isoformat()  # WHY: record when the flip happened
         logging.info("Disabled SSID %s in template %s", ssid_id, template_id)  # WHY: audit-log success
-    else:  # WHY: SSID row not in template -> record skip, don't PUT
+    else:  # WHY: SSID row not in template -> record skip, do not PUT
         result["status"] = "skipped"  # WHY: sentinel consumed by resume + summary logic
         result["reason"] = "SSID not found in template"  # WHY: surface skip reason in the report
 

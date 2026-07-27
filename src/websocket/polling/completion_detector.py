@@ -119,7 +119,7 @@ class CompletionDetector:  # WHY: Bundles indicator matchers + shared logger/deb
         last_activity: float,
         check_count: int,
     ) -> str | None:
-        """Run every indicator strategy in priority order; return first match."""
+        """Run every indicator strategy in priority order. Return first match."""
         self.logger.info("Running completion-indicator scan (check #%s)", check_count)  # WHY: Pre-action observability.
         lowered = all_raw_content.lower()  # WHY: Case-insensitive matching across all strategies.
         strategies = self._build_strategies(collected_output, last_activity, check_count)  # WHY: Ordered strategy list.
@@ -330,7 +330,7 @@ class CompletionDetector:  # WHY: Bundles indicator matchers + shared logger/deb
     def _trace_mac_missing_header(self, lowered: str, check_count: int) -> None:  # WHY: Diagnostic-only helper.
         """Emit periodic trace while waiting for MAC-table header (verbatim)."""
         if self.debug_mode and check_count % _TRACE_PERIOD_MAC == 1:  # WHY: Throttle noisy output.
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             self.logger.debug("MAC table: checking for completion pattern in %s chars", len(lowered))
 
     def _trace_mac_idle_pending(  # WHY: Diagnostic-only helper.
@@ -339,7 +339,7 @@ class CompletionDetector:  # WHY: Bundles indicator matchers + shared logger/deb
         """Emit periodic trace while waiting for MAC-table idle timeout (verbatim)."""
         if self.debug_mode and check_count % _TRACE_PERIOD_MAC == 1:  # WHY: Throttle noisy output.
             idle = time.time() - last_activity  # WHY: Diagnostic idle window.
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             self.logger.debug("MAC table: found %s entries, idle for %.1fs", entry_count, idle)
 
     def _mac_table_repeated_tail(self, collected_output: list[dict[str, Any]]) -> str | None:  # WHY: Tail-repetition.
@@ -424,15 +424,15 @@ class CompletionDetector:  # WHY: Bundles indicator matchers + shared logger/deb
         """Emit the periodic ARP-pattern debug trace preserved verbatim."""
         if not self.debug_mode or check_count % _TRACE_PERIOD_SERVICE != 1:  # WHY: Throttle noisy output.
             return  # WHY: Silent path when tracing gate is closed.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         self.logger.debug("ARP pattern analysis: found %s/%s patterns", pattern_count, len(_ARP_COLUMN_PATTERNS))
         found_patterns = [p for p in _ARP_COLUMN_PATTERNS if p in lowered]  # WHY: Surface which columns matched.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         self.logger.debug("Found ARP patterns: %s", found_patterns)
 
     def _log_arp_hit(self, pattern_count: int) -> None:  # WHY: Preserve original debug messaging.
         """Emit debug trace when ARP-structure completion matches (verbatim)."""
         if not self.debug_mode:  # WHY: Guard preserves original silent path.
             return  # WHY: Silent path when debug is off.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         self.logger.debug("FOUND ARP table completion: %s patterns detected", pattern_count)

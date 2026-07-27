@@ -73,7 +73,7 @@ def _fetch_and_log(  # WHY: mirror parent's fetch helper so mistapi patching lan
     """
     logging.warning("Fetching %s...", label)  # WHY: operator telemetry during multi-call fetch
     response = api_fn(session, org_id, **kwargs)  # WHY: mistapi list endpoint call
-    data: list[dict[str, Any]] = (  # WHY: paginate response; None -> [] keeps callers dict-safe
+    data: list[dict[str, Any]] = (  # WHY: paginate response. None -> [] keeps callers dict-safe
         mistapi.get_all(response=response, mist_session=session) or []
     )
     logging.info("%s fetched: %d", label.capitalize(), len(data))  # WHY: audit trail per collection
@@ -124,7 +124,7 @@ def _resolve_template(  # WHY: match a site to its owning template via first-hit
     for template_id, template in template_lookup.items():  # WHY: iterate all until first match
         if _template_applies_to_site(template, site):  # WHY: delegated scope check keeps CC low
             return template, template_id  # WHY: first-hit wins — templates are single-scope in Mist
-    return None, ""  # WHY: unassigned site is common; caller flags it
+    return None, ""  # WHY: unassigned site is common. Caller flags it
 
 
 def _get_template_wlans(  # WHY: normalize None -> [] so downstream can rely on iterable shape
@@ -135,7 +135,7 @@ def _get_template_wlans(  # WHY: normalize None -> [] so downstream can rely on 
     return wlans  # WHY: caller iterates without needing another None check
 
 
-def _find_target_wlan(  # WHY: linear scan for target SSID; WLAN lists are typically 1..8 entries
+def _find_target_wlan(  # WHY: linear scan for target SSID. WLAN lists are typically 1..8 entries
     wlans: list[dict[str, Any]], target_ssid: str
 ) -> dict[str, Any] | None:
     """Find the WLAN matching the target SSID name."""
@@ -155,7 +155,7 @@ def _classify_ssid_count(
     if ssid_count < _MIN_ELIGIBLE_SSIDS:  # WHY: only-target-SSID is not consolidation-ready
         return True, "1 SSID"  # WHY: reason string surfaces in dashboard summaries
     if ssid_count > _MAX_ELIGIBLE_SSIDS:  # WHY: 3+ SSIDs require manual review
-        return True, "3+ SSIDs"  # WHY: string covers 3,4,5+ so downstream doesn't overspecify
+        return True, "3+ SSIDs"  # WHY: string covers 3,4,5+ so downstream does not overspecify
     return False, ""  # WHY: exactly 2 SSIDs — eligible count
 
 
@@ -638,7 +638,7 @@ class _SsidTemplatePhase1Cluster(_ClusterBase):
         return fresh
 
     def _try_load_cached(self) -> dict[str, Any] | None:
-        """Return cached org data when operator accepts reuse; None otherwise."""
+        """Return cached org data when operator accepts reuse. None otherwise."""
         parent = self._mm  # WHY: proxy alias for readability + W0212 avoidance
         from ._ssid_template_cache import _cache_age_minutes  # noqa: PLC0415 — local avoids cycle
 

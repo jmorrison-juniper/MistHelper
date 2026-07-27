@@ -20,7 +20,7 @@ mirrors the wrapper + ``__getattr__`` pattern used by
 from __future__ import annotations  # WHY: postponed evaluation for forward-ref type hints
 
 import logging  # WHY: debug-level logging when stat lookups fail silently
-from typing import Any, cast  # WHY: Any parameterizes SDK payload dicts; cast narrows API responses
+from typing import Any, cast  # WHY: Any parameterizes SDK payload dicts. Cast narrows API responses
 
 import mistapi  # WHY: stats + device APIs live under mistapi.api.v1.sites.*
 
@@ -53,37 +53,37 @@ class _UtilityCommandsSelection(_ClusterBase):  # WHY: cluster wrapper matching 
         allowed = self._uc.DEVICE_TYPE_COMPATIBILITY_MAP.get(command_name, [])  # WHY: closed enum per cmd
         if device_type not in allowed:  # WHY: reject incompatible device types up front
             allowed_str = ", ".join(allowed)  # WHY: comma-list for user-facing hint
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("! This command is only available on: %s", allowed_str)
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("! The selected device is a %s.", device_type)
             return False  # WHY: caller aborts command flow
         return True  # WHY: caller proceeds with matching device
 
     def _select_site_and_device(
         self, command_name: str, device_type_filter: str = "all"
-    ) -> tuple[str, str, str] | None:  # WHY: three-tuple result; None on cancel
+    ) -> tuple[str, str, str] | None:  # WHY: three-tuple result. None on cancel
         """Select site and device, validate type, warn if offline."""
         ids = self._resolve_site_device_ids(device_type_filter)  # WHY: gather user picks first
         if ids is None:  # WHY: user cancelled selection at some stage
             return None  # WHY: propagate cancellation to caller
         site_id, device_id = ids  # WHY: unpack for downstream stats lookup
         # WHY: route through parent so patch.object(duc, "_get_device_info", ...) intercepts
-        device_info = cast(  # WHY: parent proxy returns Any; narrow to concrete type
+        device_info = cast(  # WHY: parent proxy returns Any. Narrow to concrete type
             "dict[str, Any] | None",
             self._call("_get_device_info", site_id, device_id),
         )
-        if not device_info:  # WHY: no info means we can't verify compatibility
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        if not device_info:  # WHY: no info means we cannot verify compatibility
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("! Could not retrieve device info from stats API.")
             return None  # WHY: abort when stats unavailable
         device_type = device_info.get("type")  # WHY: needed for compatibility check
         if not device_type:  # WHY: guard against malformed stats payload
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("! Could not determine device type.")
             return None  # WHY: abort without a device type
         if not self._validate_device_type(device_type, command_name):  # WHY: enforce per-command allowlist
-            return None  # WHY: incompatible device; caller must not proceed
+            return None  # WHY: incompatible device. Caller must not proceed
         self._warn_if_offline(device_info)  # WHY: soft warning, does not abort
         return (site_id, device_id, device_type)  # WHY: caller uses this tuple to route commands
 
@@ -91,22 +91,22 @@ class _UtilityCommandsSelection(_ClusterBase):  # WHY: cluster wrapper matching 
         """Prompt the user for a site and device, returning both IDs."""
         site_id = self._select_site_fn()  # WHY: interactive site picker (via __getattr__ proxy)
         if not site_id:  # WHY: user cancelled or no site available
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("! No site selected. Operation cancelled.")
             return None  # WHY: abort without a site
         device_id = self._select_device_fn(site_id, device_type_filter)  # WHY: device picker (proxy)
         if not device_id:  # WHY: user cancelled or no device available
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("! No device selected. Operation cancelled.")
             return None  # WHY: abort without a device
-        return (site_id, device_id)  # WHY: both IDs known; caller continues to stats lookup
+        return (site_id, device_id)  # WHY: both IDs known. Caller continues to stats lookup
 
     @staticmethod
     def _warn_if_offline(device_info: dict[str, Any]) -> None:  # WHY: soft-warn helper
         """Emit a soft warning when the target device is not connected."""
         status = device_info.get("status", "unknown")  # WHY: default keeps message informative
         if status != "connected":  # WHY: only warn on non-connected states
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("[WARNING] Device status is '%s' - command may not succeed.", status)
 
     def _get_device_info(self, site_id: str, device_id: str) -> dict[str, Any] | None:  # WHY: type+status
@@ -136,10 +136,10 @@ class _UtilityCommandsSelection(_ClusterBase):  # WHY: cluster wrapper matching 
             # WHY: route via parent for test patches
             return cast("str | None", self._call("_display_and_select_port", ports))  # WHY: structured path
         if_stat = stats.get("if_stat", {})  # WHY: fallback to legacy if_stat dict
-        if isinstance(if_stat, dict) and if_stat:  # WHY: only use if it's a populated mapping
+        if isinstance(if_stat, dict) and if_stat:  # WHY: only use if it is a populated mapping
             # WHY: route via parent for test patches
             return cast("str | None", self._call("_display_and_select_ifstat", if_stat))  # WHY: legacy path
-        # WHY: no structured data, ask user directly; route via parent for patches
+        # WHY: no structured data, ask user directly. Route via parent for patches
         return cast("str | None", self._call("_manual_port_entry"))  # WHY: last-resort manual entry
 
     def _fetch_stats_data(self, site_id: str, device_id: str) -> dict[str, Any] | None:  # WHY: raw stats
@@ -163,7 +163,7 @@ class _UtilityCommandsSelection(_ClusterBase):  # WHY: cluster wrapper matching 
             context="port_selection",
         )
         if not selection:  # WHY: empty input cancels selection
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("! No port selected.")
             return None  # WHY: caller treats None as user cancel
         return self._resolve_port_choice(selection, ports)  # WHY: numeric or literal path
@@ -171,14 +171,14 @@ class _UtilityCommandsSelection(_ClusterBase):  # WHY: cluster wrapper matching 
     @staticmethod
     def _render_port_rows(ports: list[dict[str, Any]]) -> None:  # WHY: numbered-list printer
         """Print the numbered port list for interactive selection."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("\nAvailable ports:")
         for index, port in enumerate(ports, 1):  # WHY: 1-based numbering matches operator input
             port_name = port.get("port_id", port.get("name", f"port_{index}"))  # WHY: fallback name
             port_status = port.get("up", "unknown")  # WHY: default informs "unknown" rendering
             status_str = "UP" if port_status else "DOWN"  # WHY: boolean → human label
             speed = port.get("speed", "")  # WHY: optional speed hint for operator
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info("  %d. %s [%s] %s", index, port_name, status_str, speed)
 
     @staticmethod
@@ -189,7 +189,7 @@ class _UtilityCommandsSelection(_ClusterBase):  # WHY: cluster wrapper matching 
             if 0 <= idx < len(ports):  # WHY: bounds check
                 result: str = str(ports[idx].get("port_id", ports[idx].get("name", "")))  # WHY: fallback
                 return result  # WHY: matched port name from index lookup
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("! Invalid port number.")
             return None  # WHY: out-of-range index yields no selection
         return selection  # WHY: literal port name typed by user
@@ -203,7 +203,7 @@ class _UtilityCommandsSelection(_ClusterBase):  # WHY: cluster wrapper matching 
             context="ifstat_selection",
         )
         if not selection:  # WHY: empty input cancels selection
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("! No port selected.")
             return None  # WHY: caller treats None as user cancel
         return self._resolve_ifstat_choice(selection, physical)  # WHY: numeric or literal path
@@ -220,12 +220,12 @@ class _UtilityCommandsSelection(_ClusterBase):  # WHY: cluster wrapper matching 
     @staticmethod
     def _render_ifstat_rows(if_stat: dict[str, Any], physical: list[str]) -> None:  # WHY: printer
         """Print numbered rows of if_stat entries with UP/DOWN status."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("\nAvailable ports/interfaces:")
         for idx, name in enumerate(physical, 1):  # WHY: 1-based numbering
             info = if_stat.get(name, {})  # WHY: per-interface dict may be missing
             up = "UP" if info.get("up") else "DOWN"  # WHY: boolean → human label
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info("  %d. %s [%s]", idx, name, up)
 
     @staticmethod
@@ -236,7 +236,7 @@ class _UtilityCommandsSelection(_ClusterBase):  # WHY: cluster wrapper matching 
             if 0 <= sel_idx < len(physical):  # WHY: bounds check
                 base = physical[sel_idx]  # WHY: pick the matched interface
                 return base.split(".")[0] if "." in base else base  # WHY: drop unit suffix
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("! Invalid port number.")
             return None  # WHY: out-of-range index yields no selection
         return selection  # WHY: literal port name typed by user
@@ -274,12 +274,12 @@ class _UtilityCommandsSelection(_ClusterBase):  # WHY: cluster wrapper matching 
     def _display_ports_from_list(ports: list[dict[str, Any]]) -> list[str]:
         """Display ports from the ports array in stats response."""
         port_names: list[str] = []  # WHY: accumulate names returned to caller
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("\nAvailable ports:")
         for idx, port in enumerate(ports, 1):  # WHY: 1-based numbering
             name = port.get("port_id", port.get("name", f"port_{idx}"))  # WHY: fallback name
             up = "UP" if port.get("up") else "DOWN"  # WHY: boolean → human label
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info("  %d. %s [%s]", idx, name, up)
             port_names.append(name)  # WHY: caller resolves numeric input via this list
         return port_names
@@ -303,12 +303,12 @@ class _UtilityCommandsSelection(_ClusterBase):  # WHY: cluster wrapper matching 
     def _emit_if_stat_rows(if_stat: dict[str, Any], physical: list[str]) -> list[str]:
         """Print numbered if_stat rows and return the port-name list."""
         port_names: list[str] = []  # WHY: caller resolves numeric input via this list
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("\nAvailable ports:")
         for idx, name in enumerate(physical, 1):  # WHY: 1-based numbering
             info = if_stat.get(name, {})  # WHY: per-interface dict may be missing
             up = "UP" if info.get("up") else "DOWN"  # WHY: boolean → human label
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info("  %d. %s [%s]", idx, name, up)
             port_names.append(name)  # WHY: build parallel array for resolve step
         return port_names
@@ -380,11 +380,11 @@ class _UtilityCommandsSelection(_ClusterBase):  # WHY: cluster wrapper matching 
         ip_stat: dict[str, Any] | Any,
     ) -> None:
         """Print a numbered list of available interfaces."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("\nAvailable interfaces:")
         for idx, iface in enumerate(interfaces, 1):  # WHY: 1-based numbering
             extra = self._format_iface_extra(iface, if_stat, ip_stat)  # WHY: append IP metadata
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info("  %d. %s%s", idx, iface, extra)
 
     @staticmethod
@@ -425,14 +425,14 @@ class _UtilityCommandsSelection(_ClusterBase):  # WHY: cluster wrapper matching 
             ),
         )
         if not selection:  # WHY: empty input cancels selection
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("! No interface selected.")
             return None
         if selection.isdigit():  # WHY: numeric selection references list index
             sel_idx = int(selection) - 1  # WHY: 0-based indexing
             if 0 <= sel_idx < len(interfaces):  # WHY: bounds check
                 return interfaces[sel_idx]
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("! Invalid interface number.")
             return None
         return selection  # WHY: literal interface name typed by user
@@ -456,7 +456,7 @@ class _UtilityCommandsSelection(_ClusterBase):  # WHY: cluster wrapper matching 
         if network_names:  # WHY: only render menu when discovery yielded entries
             self._display_network_list(network_names, network_labels)  # WHY: render numbered menu
             if len(network_names) == 1:  # WHY: single option: auto-pick for operator convenience
-                # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+                # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
                 logger.info("\n-> Auto-selecting: %s", network_names[0])
                 return network_names[0]
         selection = self._safe_input_fn(  # WHY: EOF-safe prompt (via __getattr__ proxy)
@@ -531,11 +531,11 @@ class _UtilityCommandsSelection(_ClusterBase):  # WHY: cluster wrapper matching 
     @staticmethod
     def _display_network_list(network_names: list[str], network_labels: list[str]) -> None:
         """Print a numbered list of available networks."""
-        del network_names  # WHY: names unused for rendering; kept for API symmetry with resolver
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        del network_names  # WHY: names unused for rendering. Kept for API symmetry with resolver
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("\nAvailable networks:")
         for idx, label in enumerate(network_labels, 1):  # WHY: 1-based numbering
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info("  %d. %s", idx, label)
 
     @staticmethod

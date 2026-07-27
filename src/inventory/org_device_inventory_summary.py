@@ -11,9 +11,9 @@ from typing import Any  # WHY: apisession / mistapi / DataExporter typed as Any 
 from prettytable import PrettyTable  # WHY: console rendering for the operator-facing summary tables
 
 apisession: Any = None  # WHY: mistapi session injected by configure_* to keep the module import-safe
-mistapi: Any = None  # WHY: mistapi module injected lazily; direct import would create cycles at load
+mistapi: Any = None  # WHY: mistapi module injected lazily. Direct import would create cycles at load
 DataExporter: Any = None  # WHY: exporter injected so tests can substitute a mock without touching disk
-org_id: str = ""  # WHY: selected org for execute(); empty string means "no org chosen yet"
+org_id: str = ""  # WHY: selected org for execute(). Empty string means "no org chosen yet"
 
 _SEPARATOR_WIDTH: int = 62  # WHY: fixed banner width keeps CLI output aligned across reports
 _INVENTORY_PAGE_SIZE: int = 1000  # WHY: large page size minimizes round-trips for big inventories
@@ -48,7 +48,7 @@ class OrgDeviceInventorySummaryCore:  # WHY: single-org inventory summarization 
     @staticmethod
     def _search_switch_page(target_org_id: str, next_url: str | None) -> dict | None:  # WHY: single-page fetch helper
         """Return one page of switch inventory results or ``None`` when the API errors."""
-        try:  # WHY: mistapi raises on transport errors; caller treats None as stop-signal
+        try:  # WHY: mistapi raises on transport errors. Caller treats None as stop-signal
             response = (  # WHY: continuation URL preserves cursor across pages when present
                 apisession.mist_get(next_url)  # WHY: mist_get follows the next-page URL verbatim
                 if next_url  # WHY: first page has no continuation, so fall through to primary search
@@ -67,7 +67,7 @@ class OrgDeviceInventorySummaryCore:  # WHY: single-org inventory summarization 
         """Fetch switch inventory records with full pagination."""
         logging.info("Fetching switch physical inventory via searchOrgDevices, org=%s", target_org_id)  # WHY: op trace
         all_records: list[dict] = []  # WHY: accumulator across pages
-        next_url: str | None = None  # WHY: cursor for the next page; None means "first request"
+        next_url: str | None = None  # WHY: cursor for the next page. None means "first request"
         page_num: int = 0  # WHY: counter for log context
         while True:  # WHY: exit conditions live inside via guard clauses to keep complexity flat
             page_num += 1  # WHY: increment before fetch so logs show the page being requested
@@ -80,7 +80,7 @@ class OrgDeviceInventorySummaryCore:  # WHY: single-org inventory summarization 
             all_records.extend(results)  # WHY: fold this page into the accumulator
             next_url = page_data.get("next")  # WHY: continuation URL for the next iteration
             if not next_url:  # WHY: API omits "next" once the final page is served
-                break  # WHY: final page reached; stop looping
+                break  # WHY: final page reached. Stop looping
         logging.info(  # WHY: summarize outcome once at the end so logs stay quiet during success
             "Switch physical inventory complete: %d logical devices org=%s", len(all_records), target_org_id
         )
@@ -94,7 +94,7 @@ class OrgDeviceInventorySummaryCore:  # WHY: single-org inventory summarization 
         )
         counts: dict[str, int] = {}  # WHY: bucket -> running total
         for record in switch_records:  # WHY: walk every switch exactly once
-            value = record.get(distinct) or _UNKNOWN  # WHY: fall back so missing labels don't crash the row build
+            value = record.get(distinct) or _UNKNOWN  # WHY: fall back so missing labels do not crash the row build
             num_members = int(record.get("num_members") or 1)  # WHY: VC stacks count as members, not one chassis
             counts[value] = counts.get(value, 0) + num_members  # WHY: sum VC-accurate physical count
         rows = [  # WHY: materialize the accumulator into row dicts for downstream merge
@@ -129,7 +129,7 @@ class OrgDeviceInventorySummaryCore:  # WHY: single-org inventory summarization 
         )
         counts: dict[str, int] = {}  # WHY: bucket -> physical gateway count
         for record in gateway_records:  # WHY: walk each HA member exactly once
-            value = record.get(distinct) or _UNKNOWN  # WHY: fall back so missing labels don't crash the row build
+            value = record.get(distinct) or _UNKNOWN  # WHY: fall back so missing labels do not crash the row build
             counts[value] = counts.get(value, 0) + 1  # WHY: one record == one physical gateway
         rows = [  # WHY: materialize the accumulator into row dicts for downstream merge
             {"device_type": "gateway", distinct: value, "count": count} for value, count in counts.items()
@@ -204,7 +204,7 @@ class OrgDeviceInventorySummaryCore:  # WHY: single-org inventory summarization 
 
     @staticmethod
     def _aggregate_unassigned_counts(unassigned_records: list[dict], distinct: str) -> list[dict]:  # WHY: stock rollup
-        """Aggregate unassigned device counts; firmware rows bucket under an 'unassigned' label."""
+        """Aggregate unassigned device counts. Firmware rows bucket under an 'unassigned' label."""
         logging.info("Aggregating %d unassigned records by %s", len(unassigned_records), distinct)  # WHY: op trace
         counts: dict[tuple[str, str], int] = {}  # WHY: key on (device_type, bucket) to keep types separate
         for record in unassigned_records:  # WHY: walk each unassigned inventory record once
@@ -265,7 +265,7 @@ class OrgDeviceInventorySummaryCore:  # WHY: single-org inventory summarization 
     def _fetch_ap_type_rows(target_org_id: str, distinct: str, ap_records: list[dict] | None) -> list[dict]:
         """Return AP rows using full inventory so claimed-but-never-connected APs are counted."""  # WHY: AP handler
         try:  # WHY: AP counting must never abort the combined report
-            resolved = (  # WHY: direct/test callers may omit the shared fetch; pull it ourselves
+            resolved = (  # WHY: direct/test callers may omit the shared fetch. Pull it ourselves
                 ap_records
                 if ap_records is not None
                 else OrgDeviceInventorySummaryCore._fetch_ap_inventory(target_org_id)
@@ -302,7 +302,7 @@ class OrgDeviceInventorySummaryCore:  # WHY: single-org inventory summarization 
         all_rows: list[dict], target_org_id: str, distinct: str, unassigned_records: list[dict] | None
     ) -> list[dict]:
         """Merge unassigned AP/switch stock into assigned counts so totals are not understated."""
-        resolved = (  # WHY: direct/test callers may omit the shared fetch; pull it ourselves
+        resolved = (  # WHY: direct/test callers may omit the shared fetch. Pull it ourselves
             unassigned_records
             if unassigned_records is not None
             else OrgDeviceInventorySummaryCore._fetch_unassigned_inventory(target_org_id)
@@ -318,13 +318,13 @@ class OrgDeviceInventorySummaryCore:  # WHY: single-org inventory summarization 
     def _print_summary_banner(distinct: str, table: PrettyTable) -> None:  # WHY: keep display method concise
         """Print the labelled banner and table for one summary."""
         separator = "=" * _SEPARATOR_WIDTH  # WHY: reuse the constant width for both borders
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info("\n%s", separator)  # WHY: leading blank line separates from preceding output
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info("  %s Distribution Summary", distinct.capitalize())  # WHY: operator label matches column
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info(separator)  # WHY: trailing border closes the banner block
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info("%s", table)  # WHY: rendered PrettyTable follows the banner
 
     @staticmethod
@@ -349,7 +349,7 @@ class OrgDeviceInventorySummaryCore:  # WHY: single-org inventory summarization 
         try:  # WHY: API failures fall back to env / org id at higher level
             org_response = mistapi.api.v1.orgs.orgs.getOrg(apisession, target_org_id)  # WHY: authoritative name source
         except Exception as error:  # WHY: never break the summary run on a naming lookup
-            logging.warning("Could not resolve org name from API: %s", error)  # WHY: warn-only; recovery follows
+            logging.warning("Could not resolve org name from API: %s", error)  # WHY: warn-only. Recovery follows
             return None  # WHY: signal caller to try env / id fallbacks
         return getattr(org_response, "data", {}).get("name")  # WHY: response may be dict-like or missing name key
 
@@ -374,7 +374,7 @@ class OrgDeviceInventorySummaryCore:  # WHY: single-org inventory summarization 
     def _run_model_report(
         target_org_id: str, safe_org: str, unassigned_records: list[dict], ap_records: list[dict]
     ) -> list[dict]:  # WHY: keep run_for_org within length budget
-        """Compute, render and export the per-model report; return the rows for reuse."""
+        """Compute, render and export the per-model report. Return the rows for reuse."""
         model_rows = OrgDeviceInventorySummaryCore._fetch_all_counts(  # WHY: shared fetches reuse across reports
             target_org_id, "model", unassigned_records, ap_records
         )
@@ -387,7 +387,7 @@ class OrgDeviceInventorySummaryCore:  # WHY: single-org inventory summarization 
     def _run_version_report(
         target_org_id: str, safe_org: str, unassigned_records: list[dict], ap_records: list[dict]
     ) -> list[dict]:  # WHY: mirror of _run_model_report
-        """Compute, render and export the per-version report; return the rows."""
+        """Compute, render and export the per-version report. Return the rows."""
         version_rows = OrgDeviceInventorySummaryCore._fetch_all_counts(  # WHY: shared fetches reuse across reports
             target_org_id, "version", unassigned_records, ap_records
         )
@@ -404,7 +404,7 @@ class OrgDeviceInventorySummaryCore:  # WHY: single-org inventory summarization 
         unassigned_records: list[dict],
         ap_records: list[dict],
     ) -> list[dict]:  # WHY: collaborator
-        """Compute the per-model version pivot; delegate render to PivotRenderer."""
+        """Compute the per-model version pivot. Delegate render to PivotRenderer."""
         from src.inventory.inventory_summary.pivot_renderer import PivotRenderer  # WHY: lazy import breaks cycle
         from src.inventory.inventory_summary.version_per_model_fetcher import (
             VersionPerModelFetcher,  # WHY: collaborator owns per-type version expansion
@@ -437,7 +437,7 @@ class OrgDeviceInventorySummaryCore:  # WHY: single-org inventory summarization 
         logging.info(  # WHY: log outcome so ops can tune inventory volume
             "Org device inventory summary for %s completed in %.1f seconds", target_org_id, elapsed
         )
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info("\nSummary for %s completed in %.1f seconds", safe_org, elapsed)  # operator feedback
         return model_rows, version_rows, ver_per_model, safe_org  # WHY: public tuple preserved for callers
 
@@ -445,7 +445,7 @@ class OrgDeviceInventorySummaryCore:  # WHY: single-org inventory summarization 
     def execute() -> None:  # WHY: menu-level entry point requires configured org
         """Run inventory summaries for the currently selected org."""
         if not org_id:  # WHY: guard clause reports the misconfiguration instead of crashing
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logging.info("X No organization selected")  # WHY: user-visible error mirrors the rest of the CLI
             logging.error("OrgDeviceInventorySummaryCore.execute called with empty org_id")  # WHY: audit trail
             return  # WHY: early return keeps the happy path un-indented

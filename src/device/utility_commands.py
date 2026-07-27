@@ -77,7 +77,7 @@ def _print_api_error(response: Any, fail_msg: str, status_code: int) -> None:  #
     error_text = f"! {fail_msg} (HTTP {status_code})"  # WHY: base line always includes status
     if detail:  # WHY: append server-side context when available
         error_text += f": {detail}"  # WHY: keep detail on same line for grep-ability
-    # WHY: preserve error line verbatim; route through logger for capture/redirection.
+    # WHY: preserve error line verbatim. Route through logger for capture/redirection.
     logging.error("%s", error_text)  # WHY: single write to keep operator output atomic
 
 
@@ -156,7 +156,7 @@ class DeviceUtilityCommands:  # WHY: parent class hosting 35 device-command oper
         Python only invokes ``__getattr__`` when normal lookup fails, so
         this method resolves cluster method calls (``self._validate_device_type``,
         ``self._select_site_and_device``, ``self._select_port_from_device``,
-        etc.) without explicit delegator wrappers. The class-level
+        and so on) without explicit delegator wrappers. The class-level
         ``hasattr`` check on ``type(cluster)`` avoids invoking the
         cluster's own ``__getattr__`` (which would proxy back to this
         class and cause infinite recursion for unknown attrs).
@@ -181,7 +181,7 @@ class DeviceUtilityCommands:  # WHY: parent class hosting 35 device-command oper
         if isinstance(status, int) and status >= _HTTP_ERROR_THRESHOLD:  # WHY: only ints compare
             _print_api_error(response, fail_msg, status)  # WHY: delegate detail extraction
             return False  # WHY: caller treats False as failure
-        # WHY: preserve success arrow verbatim; route through logger for capture/redirection.
+        # WHY: preserve success arrow verbatim. Route through logger for capture/redirection.
         logging.info("-> %s", success_msg)  # WHY: emit success line
         return True  # WHY: caller treats True as success
 
@@ -195,7 +195,7 @@ class DeviceUtilityCommands:  # WHY: parent class hosting 35 device-command oper
                 None,
             )  # WHY: try both mistapi error shapes
             if code == 400:  # WHY: 400 == missing service_name/session_ids body key
-                # WHY: preserve error guidance verbatim; route through logger for capture/redirection.
+                # WHY: preserve error guidance verbatim. Route through logger for capture/redirection.
                 logging.error(
                     "! API returned 400. The API expects either"
                     " 'service_name' or 'session_ids' in the"

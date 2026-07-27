@@ -4,13 +4,13 @@ Owns the `PACKAGE_IMPORT_MAP` constant originally defined at module
 scope in MistHelper.py, and re-lands it on a lightweight
 `PackageImportMapManager` seam per FR-005 / FR-015. The sole MistHelper
 callsite (`_early_dependency_check` bootstrap wiring) is rewritten in
-the same PR to import the extracted constant; no wrapper shim remains
+the same PR to import the extracted constant. No wrapper shim remains
 in MistHelper.py after this extraction.
 
 The mapping keys are pip distribution names and values are the
 corresponding importable module names -- the pair diverges whenever a
-project publishes under one name (e.g. `pillow`) but exposes its API
-under another (e.g. `PIL`). The manager class exposes the mapping as a
+project publishes under one name (for example `pillow`) but exposes its API
+under another (for example `PIL`). The manager class exposes the mapping as a
 class-level attribute so consumers can grab it via
 `PackageImportMapManager.MAPPING` while keeping the moved surface a
 single import symbol.

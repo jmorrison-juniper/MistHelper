@@ -3940,7 +3940,7 @@ class ArangoDBWriter:  # WHY: primary writer class for the ArangoDB polyglot bac
         else:
             self._db.create_graph(GRAPH_NAME, edge_definitions=GRAPH_EDGE_DEFINITIONS)  # WHY: create fresh graph
             logger.info("graph_created", name=GRAPH_NAME)  # WHY: audit trail for graph creation
-        self._backfill_snapshot_edges()  # WHY: legacy snapshots may lack edges; fill them in on boot
+        self._backfill_snapshot_edges()  # WHY: legacy snapshots may lack edges. Fill them in on boot
 
     def _refresh_graph_if_stale(self) -> None:  # WHY: extracted helper trims _ensure_graph blocks
         """Recreate the named graph when live edge definitions drift from the expected set."""
@@ -4125,7 +4125,7 @@ class ArangoDBWriter:  # WHY: primary writer class for the ArangoDB polyglot bac
 
     @staticmethod
     def _as_nonempty_list(raw: Any) -> list[Any]:  # WHY: shared normalizer used by edges and stubs
-        """Return raw as a list with falsy entries dropped; empty list when raw is falsy."""
+        """Return raw as a list with falsy entries dropped. Empty list when raw is falsy."""
         if not raw:  # WHY: guard clause propagates a missing/empty value as an empty list
             return []
         values = raw if isinstance(raw, list) else [raw]  # WHY: normalize scalar to list
@@ -4142,7 +4142,7 @@ class ArangoDBWriter:  # WHY: primary writer class for the ArangoDB polyglot bac
             "_misthelper_updated_at": int(time.time()),  # WHY: staleness stamp
         }
 
-    def _resolve_field(self, record: dict, field: str) -> Any:  # WHY: dispatcher for nested vs. flat field access
+    def _resolve_field(self, record: dict, field: str) -> Any:  # WHY: dispatcher for nested versus flat field access
         """Return the record value for a field, supporting dot-separated nested paths."""
         if "." in field:  # WHY: guard clause routes nested paths through the recursive helper
             return self._resolve_nested_field(record, field)
@@ -4254,7 +4254,7 @@ class ArangoDBWriter:  # WHY: primary writer class for the ArangoDB polyglot bac
 
     @staticmethod
     def _resolve_nested_field(record: dict, field_path: str) -> Any:  # WHY: dot-path resolver
-        """Resolve dot-separated field paths (e.g., 'matching.site_ids')."""
+        """Resolve dot-separated field paths (for example, 'matching.site_ids')."""
         parts = field_path.split(".")  # WHY: split path into successive keys
         value: Any = record  # WHY: walk starts at the record root
         for part in parts:  # WHY: descend through each dot-separated key

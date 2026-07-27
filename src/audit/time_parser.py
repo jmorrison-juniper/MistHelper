@@ -25,7 +25,7 @@ UNIT_LABELS: dict[str, str] = {  # WHY: unit letter -> plural label for descript
     "y": "years",  # year label used in "last N years" strings
 }
 
-SIMPLE_PATTERN = re.compile(r"^(\d+)([hdwmy])$", re.IGNORECASE)  # WHY: matches "3d", "4w", etc.
+SIMPLE_PATTERN = re.compile(r"^(\d+)([hdwmy])$", re.IGNORECASE)  # WHY: matches "3d", "4w", and so on
 RANGE_PATTERN = re.compile(  # WHY: matches "6w-2w" or "3m-1w" (start-ago to end-ago)
     r"^(\d+)([hdwmy])\s*[-\u2013]\s*(\d+)([hdwmy])$", re.IGNORECASE
 )
@@ -37,7 +37,7 @@ MAX_LOOKBACK_SECONDS = 31536000 * 2  # WHY: 2-year cap keeps audit queries bound
 MIN_DURATION_SECONDS = 60  # WHY: reject sub-minute windows as accidental input
 FUTURE_SKEW_ALLOWANCE = 60  # WHY: tolerate ~1 min of clock skew on end epochs
 
-LEGEND_TEXT = (  # WHY: cached user-facing help block; identical across every call
+LEGEND_TEXT = (  # WHY: cached user-facing help block. Identical across every call
     "\n  Time Range Shortcuts:\n"
     "    2h = 2 hours    3d = 3 days     4w = 4 weeks\n"
     "    6m = 6 months   1y = 1 year\n"
@@ -64,7 +64,7 @@ def _describe_simple(count: int, unit: str) -> str:  # WHY: format shorthand as 
     """Return a human label like 'last 3 days' or 'last 1 day'."""
     label = UNIT_LABELS.get(unit, unit)  # WHY: fall back to raw unit if unknown
     if count == 1 and label.endswith("s"):  # WHY: singularize plural label for 1-unit ranges
-        label = label[:-1]  # strip trailing 's' to produce "day"/"week"/etc.
+        label = label[:-1]  # strip trailing 's' to produce "day"/"week"/and so on
     return f"last {count} {label}"  # canonical description phrasing
 
 

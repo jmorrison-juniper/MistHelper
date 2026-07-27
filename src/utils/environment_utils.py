@@ -17,7 +17,7 @@ import os  # WHY: environment variable + filesystem probes for container detecti
 class EnvironmentUtils:
     """Centralized environment detection utilities.
 
-    Handles container detection, runtime environment identification, etc.
+    Handles container detection, runtime environment identification, and so on
     """
 
     # Constants for container detection
@@ -40,7 +40,7 @@ class EnvironmentUtils:
             if value in EnvironmentUtils.TRUE_VALUES:  # Operator forced container mode on.
                 logging.debug("Container detection: override via %s=%s", explicit_var, value)  # Trace the override.
                 return True  # Short-circuit: treat as a container.
-        return None  # No override set; defer to other detectors.
+        return None  # No override set. Defer to other detectors.
 
     @staticmethod
     def _check_dockerenv_file() -> bool:  # Detect Docker's /.dockerenv sentinel file.
@@ -57,7 +57,7 @@ class EnvironmentUtils:
             if os.environ.get(env_var):  # Any non-empty value signals a container.
                 logging.debug("Container detection: environment variable %s present", env_var)  # Trace which one.
                 return True  # Treat as containerized.
-        return False  # None present; inconclusive here.
+        return False  # None present. Inconclusive here.
 
     @staticmethod
     def _check_cgroup_markers() -> bool:
@@ -126,7 +126,7 @@ class EnvironmentUtils:
 
     @staticmethod
     def _run_container_detectors() -> bool:
-        """Run the ordered fallback container detectors; return True if any positive."""
+        """Run the ordered fallback container detectors. Return True if any positive."""
         checks = [  # Ordered fallback detectors in reliability order
             EnvironmentUtils._check_dockerenv_file,
             EnvironmentUtils._check_container_env_vars,

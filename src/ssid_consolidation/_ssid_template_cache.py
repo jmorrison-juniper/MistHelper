@@ -9,7 +9,7 @@ remains re-exported for the existing test suite.
 
 # WHY: cluster class delegates almost every attribute back to the parent manager
 # via _ClusterBase.__getattr__, so pylint's "too-few-public-methods" and
-# "protected-access" alarms don't fit this proxy pattern. Import-outside-toplevel
+# "protected-access" alarms do not fit this proxy pattern. Import-outside-toplevel
 # is also intentional in sibling clusters to break cycles.
 # pylint: disable=protected-access,import-outside-toplevel,too-few-public-methods
 

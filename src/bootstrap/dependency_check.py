@@ -11,9 +11,9 @@ from src.bootstrap.package_installer import PackageInstaller  # WHY: UV/pip inst
 _ENV_DISABLE_AUTO_INSTALL = "DISABLE_AUTO_INSTALL"  # WHY: Env var toggling auto-install off
 _ENV_AUTO_UPGRADE_LATEST = "AUTO_UPGRADE_TO_LATEST"  # WHY: Preferred env for latest-version upgrades
 _ENV_AUTO_UPGRADE_DEPS = "AUTO_UPGRADE_DEPENDENCIES"  # WHY: Legacy env fallback for upgrade toggle
-# Feature 1020: explicit opt-in to install into a non-isolated (system) Python; default is fail-closed.
+# Feature 1020: explicit opt-in to install into a non-isolated (system) Python. Default is fail-closed.
 _ENV_ALLOW_SYSTEM_PYTHON_INSTALL = "MISTHELPER_ALLOW_SYSTEM_PYTHON_INSTALL"  # WHY: override for system-Python installs
-_ENV_VIRTUAL_ENV = "VIRTUAL_ENV"  # WHY: set by venv activation; used only to pick the diagnostic message text
+_ENV_VIRTUAL_ENV = "VIRTUAL_ENV"  # WHY: set by venv activation. Used only to pick the diagnostic message text
 
 _FLAG_TRUE = "true"  # WHY: Case-normalized truthy sentinel for env flags
 _FLAG_FALSE = "false"  # WHY: Case-normalized falsy sentinel for env-flag defaults
@@ -81,7 +81,7 @@ class DependencyCheckOrchestrator:  # WHY: Public entry-point object called from
             self.logging_module.debug(_MSG_DISABLED)  # WHY: Debug log so operators can audit skips
             return  # WHY: Nothing more to do when disabled
         if not self._install_permitted_for_interpreter():  # WHY: Feature 1020 - block install into system Python
-            return  # WHY: Diagnostic already logged; never mutate the base interpreter by default
+            return  # WHY: Diagnostic already logged. Never mutate the base interpreter by default
         all_packages = self.parse_requirements_file_fn()  # WHY: Load the required-package list
         if not all_packages:  # WHY: Empty requirements is not an error - just nothing to do
             self.logging_module.warning(_MSG_NO_REQS)  # WHY: Warn so misconfig is visible in logs

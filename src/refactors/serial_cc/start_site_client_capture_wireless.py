@@ -112,7 +112,7 @@ class _Helpers:
 
 @dataclass(frozen=True, slots=True)
 class _Settings:
-    """Frozen bundle of all user-gathered capture settings; hands off to payload/summary/dispatch."""
+    """Frozen bundle of all user-gathered capture settings. Hands off to payload/summary/dispatch."""
 
     client_mac: str  # WHY: Target wireless client MAC (normalized)
     ap_mac: str | None  # WHY: Optional AP MAC filter (None disables filter)
@@ -131,15 +131,15 @@ class SiteWirelessClientCaptureService:
     @staticmethod
     def _print_intro() -> None:
         """Print the wireless client capture configuration banner."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("\n%s", _DIVIDER_DASH)  # WHY: Top divider
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("%s", _INTRO_TITLE)  # WHY: Section title
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("%s", _DIVIDER_DASH)  # WHY: Bottom divider
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("%s", _INTRO_PURPOSE)  # WHY: Purpose line
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("%s", _INTRO_GUIDANCE)  # WHY: Guidance toward the alternate capture type
 
     @staticmethod
@@ -148,7 +148,7 @@ class SiteWirelessClientCaptureService:
         if choice == _CLIENT_MODE_LIST:  # WHY: Pick from the connected-clients list
             client_mac = helpers.prompt_client_utils.select_client_mac(site_id)  # WHY: Interactive picker
             if not client_mac:  # WHY: Nothing selected
-                # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+                # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
                 logger.warning("%s", _NO_CLIENT_MSG)  # WHY: Inform the user
                 return None  # WHY: Abort
             return str(client_mac)  # WHY: Return picker result
@@ -156,12 +156,12 @@ class SiteWirelessClientCaptureService:
 
     @classmethod
     def _select_client_mac(cls, manager: Any, helpers: _Helpers, site_id: str) -> str | None:
-        """Select and validate the target client MAC; return None to abort (message printed)."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        """Select and validate the target client MAC. Return None to abort (message printed)."""
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("%s", _CLIENT_HEADER)  # WHY: Prompt header
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("%s", _CLIENT_OPT_LIST)  # WHY: Option 1 (list picker)
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("%s", _CLIENT_OPT_MANUAL)  # WHY: Option 2 (manual entry)
         choice = helpers.input_utils.safe_input(
             _PROMPT_CLIENT_CHOICE, default_value=_CLIENT_MODE_LIST, context="client_select"
@@ -170,14 +170,14 @@ class SiteWirelessClientCaptureService:
         if client_mac is None:  # WHY: Selection aborted (message printed)
             return None  # WHY: Propagate abort
         if not manager.validate_mac_address(client_mac):  # WHY: Reject malformed MACs
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning(_INVALID_CLIENT_MAC_MSG, client_mac)  # WHY: Inform the user
             return None  # WHY: Abort
         return str(manager.normalize_mac_address(client_mac))  # WHY: Return normalized MAC
 
     @staticmethod
     def _select_ap_from_list(manager: Any, helpers: _Helpers, site_id: str) -> str | None:
-        """Interactive AP picker path; returns normalized AP MAC or None when nothing chosen."""
+        """Interactive AP picker path. Returns normalized AP MAC or None when nothing chosen."""
         expand_port_range_fn = getattr(manager, "expand_port_range_string", lambda value: [value])  # WHY: Range fn
         prompt_utils = helpers.prompt_network_device_utils(
             manager.mist_session, helpers.input_utils.safe_input, expand_port_range_fn
@@ -189,24 +189,24 @@ class SiteWirelessClientCaptureService:
 
     @staticmethod
     def _select_ap_manual(manager: Any, helpers: _Helpers) -> tuple[str | None, bool]:
-        """Manual AP MAC entry path; returns (mac, ok) where ok=False signals abort."""
+        """Manual AP MAC entry path. Returns (mac, ok) where ok=False signals abort."""
         ap_mac = helpers.input_utils.safe_input(_PROMPT_AP_MAC, context="ap_mac")  # WHY: Read AP MAC
         if not manager.validate_mac_address(ap_mac):  # WHY: Reject malformed AP MACs
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning(_INVALID_AP_MAC_MSG, ap_mac)  # WHY: Inform the user
             return None, False  # WHY: Abort
         return str(manager.normalize_mac_address(ap_mac)), True  # WHY: Normalized MAC + continue
 
     @classmethod
     def _select_ap_filter(cls, manager: Any, helpers: _Helpers, site_id: str) -> tuple[str | None, bool]:
-        """Optionally select an AP filter; return (ap_mac, ok) where ok=False signals abort."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        """Optionally select an AP filter. Return (ap_mac, ok) where ok=False signals abort."""
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("%s", _AP_HEADER)  # WHY: Prompt header
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("%s", _AP_OPT_LIST)  # WHY: Option 1 (list)
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("%s", _AP_OPT_MANUAL)  # WHY: Option 2 (manual)
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("%s", _AP_OPT_SKIP)  # WHY: Option 3 (skip)
         ap_choice = helpers.input_utils.safe_input(
             _PROMPT_AP_CHOICE, default_value="3", context="ap_filter"
@@ -219,17 +219,17 @@ class SiteWirelessClientCaptureService:
 
     @staticmethod
     def _prompt_bounded_int(input_utils: Any, spec: SimpleNamespace) -> int | None:
-        """Prompt for an integer within spec bounds; return None to abort (message printed)."""
+        """Prompt for an integer within spec bounds. Return None to abort (message printed)."""
         raw = input_utils.safe_input(spec.prompt, default_value=spec.default, context=spec.context)  # WHY: Read raw
         try:  # WHY: Validate that the input parses as an integer
             value = int(raw)  # WHY: Parse the integer
         except ValueError:  # WHY: Non-numeric input
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("\n! Invalid %s: %s", spec.invalid_label, raw)  # WHY: Inform the user
             return None  # WHY: Abort
         if value < spec.low or value > spec.high:  # WHY: Enforce the inclusive bounds
             for line in spec.range_lines:  # WHY: Print each range-error line
-                # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+                # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
                 logger.warning("%s", line)  # WHY: Inform the user
             return None  # WHY: Abort
         return value  # WHY: Validated integer
@@ -237,11 +237,11 @@ class SiteWirelessClientCaptureService:
     @staticmethod
     def _prompt_loop_mode(input_utils: Any) -> bool:
         """Prompt whether to enable continuous loop mode."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("%s", _LOOP_HEADER)  # WHY: Section header
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("%s", _LOOP_LINE1)  # WHY: Explanation line 1
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("%s", _LOOP_LINE2)  # WHY: Explanation line 2
         loop_mode = input_utils.safe_input(
             _PROMPT_LOOP, default_value="n", context="loop_mode"
@@ -250,7 +250,7 @@ class SiteWirelessClientCaptureService:
 
     @classmethod
     def _collect_bounded_ints(cls, input_utils: Any) -> tuple[int, ...] | None:
-        """Run the three bounded-int prompts (duration, packets, max_pkt_len); None aborts."""
+        """Run the three bounded-int prompts (duration, packets, max_pkt_len). None aborts."""
         values: list[int] = []  # WHY: Accumulator for validated integers
         for spec in _BOUNDED_INT_SPECS:  # WHY: Table-driven sequential prompting
             value = cls._prompt_bounded_int(input_utils, spec)  # WHY: Prompt one bounded int
@@ -261,7 +261,7 @@ class SiteWirelessClientCaptureService:
 
     @classmethod
     def _gather_settings(cls, manager: Any, helpers: _Helpers, site_id: str) -> _Settings | None:
-        """Collect all user-provided settings for the capture; return None to abort workflow."""
+        """Collect all user-provided settings for the capture. Return None to abort workflow."""
         client_mac = cls._select_client_mac(manager, helpers, site_id)  # WHY: Resolve client MAC
         if not client_mac:  # WHY: Client selection aborted
             return None  # WHY: Abort workflow
@@ -275,7 +275,7 @@ class SiteWirelessClientCaptureService:
 
     @classmethod
     def _read_trailing_toggles(cls, manager: Any, helpers: _Helpers) -> tuple[bool, str, str, bool]:
-        """Read (includes_mcast, tcpdump_expr, capture_format, enable_loop); trims _finalize_settings."""
+        """Read (includes_mcast, tcpdump_expr, capture_format, enable_loop). Trims _finalize_settings."""
         mcast_raw = helpers.input_utils.safe_input(
             _PROMPT_MCAST, default_value="n", context="includes_mcast"
         )  # WHY: Read the multicast choice
@@ -334,7 +334,7 @@ class SiteWirelessClientCaptureService:
 
     @classmethod
     def _summary_rows(cls, settings: _Settings) -> list[tuple[str, str]]:
-        """Return ordered (label, value) rows for the summary table; keeps _print_summary CC low."""
+        """Return ordered (label, value) rows for the summary table. Keeps _print_summary CC low."""
         filter_display = settings.tcpdump_expr if settings.tcpdump_expr else _FILTER_NONE_LABEL  # WHY: None label
         packets_hint = _PACKETS_HINT_MAP[settings.num_packets == 0]  # WHY: Table-driven hint (no ternary branch)
         rows: list[tuple[str, str]] = [
@@ -358,16 +358,16 @@ class SiteWirelessClientCaptureService:
     @classmethod
     def _print_summary(cls, settings: _Settings) -> None:
         """Print the capture configuration summary using table-driven rendering."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("\n%s", _DIVIDER_EQUAL)  # WHY: Top divider
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("%s", _SUMMARY_TITLE)  # WHY: Section title
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("%s", _DIVIDER_EQUAL)  # WHY: Divider
         for label, value in cls._summary_rows(settings):  # WHY: Uniform label-value rendering
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info("  %s: %s", label, value)  # WHY: One row per iteration (no branching)
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("%s", _DIVIDER_EQUAL)  # WHY: Bottom divider
 
     @staticmethod

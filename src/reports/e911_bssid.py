@@ -10,7 +10,7 @@ import time  # WHY: measure wall-clock elapsed for report telemetry
 from collections.abc import Callable  # WHY: type-annotate injected input/write callbacks
 from dataclasses import dataclass, field  # WHY: bundle 7+ related params into ≤5-param call signatures
 from datetime import datetime, timedelta  # WHY: timestamp checkpoints and predict rate-limit reset window
-from typing import Any, ClassVar  # WHY: mistapi returns untyped JSON dicts; ClassVar for typed static tables
+from typing import Any, ClassVar  # WHY: mistapi returns untyped JSON dicts. ClassVar for typed static tables
 
 
 @dataclass  # WHY: promote plain class into an auto-init dataclass
@@ -287,7 +287,7 @@ class E911BSSIDReportGenerator:  # WHY: static-method namespace for the Menu 160
         for ap_entry in radio_macs_data:  # WHY: each entry is one AP with its radio MACs
             all_radios = ap_entry.get("radio_mac", [])  # WHY: default empty list guards missing key
             if len(all_radios) < 2:  # WHY: 1-radio APs (BLE-only?) have no broadcast radios to map
-                continue  # WHY: skip; no bands to infer
+                continue  # WHY: skip. No bands to infer
             broadcast_radios = all_radios[:-1]  # WHY: last MAC is always the scanning radio (Mist convention)
             bands = band_orders.get(len(broadcast_radios), [])  # WHY: pick canonical order for this count
             for index, radio_mac in enumerate(broadcast_radios):  # WHY: pair each broadcast MAC to a band
@@ -318,7 +318,7 @@ class E911BSSIDReportGenerator:  # WHY: static-method namespace for the Menu 160
 
     @staticmethod
     def _write_checkpoint_file(checkpoint: dict[str, Any], completed_count: int) -> None:
-        """Write checkpoint JSON to disk; log OS errors without raising.
+        """Write checkpoint JSON to disk. Log OS errors without raising.
 
         WHY: extracted so `_save_checkpoint` stays under the 25-line ceiling
         and error-handling is isolated from checkpoint-shape construction.
@@ -537,7 +537,7 @@ class E911BSSIDReportGenerator:  # WHY: static-method namespace for the Menu 160
         """
         if not wlan.get("enabled", False):  # WHY: disabled WLANs never broadcast
             return  # WHY: skip disabled record
-        ssid_name = wlan.get("ssid", "")  # WHY: required field; skip if missing
+        ssid_name = wlan.get("ssid", "")  # WHY: required field. Skip if missing
         if not ssid_name:  # WHY: empty SSID cannot appear on air
             return  # WHY: skip malformed record
         band_field = wlan.get("band") or ""  # WHY: normalise None to empty string for resolver
@@ -555,7 +555,7 @@ class E911BSSIDReportGenerator:  # WHY: static-method namespace for the Menu 160
 
         WHY: extracted from `_add_single_wlan` to keep complexity ≤5.
         """
-        for band_key in wlan_bands:  # WHY: one WLAN can span multiple bands (e.g. dual-band)
+        for band_key in wlan_bands:  # WHY: one WLAN can span multiple bands (for example dual-band)
             lookup_key = f"{site_id}::{band_key}"  # WHY: composite key groups SSIDs per site+band
             bucket = wlan_band_lookup.setdefault(lookup_key, [])  # WHY: create then reuse bucket
             if ssid_name not in bucket:  # WHY: prevent duplicate SSID names
@@ -633,12 +633,12 @@ class E911BSSIDReportGenerator:  # WHY: static-method namespace for the Menu 160
         lookups: dict[str, Any],
     ) -> str:
         """Detect compliance gap reason for an AP."""
-        if not ap_info:  # WHY: no AP stats -> can't verify compliance
+        if not ap_info:  # WHY: no AP stats -> cannot verify compliance
             return "Not in device stats"  # WHY: matches summary wording
         missing = E911BSSIDReportGenerator._first_missing_field(ap_info)  # WHY: table lookup replaces if-chain
         if missing:  # WHY: first missing field wins
             return missing  # WHY: propagate to caller
-        map_id = ap_info.get("map_id") or ""  # WHY: already known present; re-fetch for lookup check
+        map_id = ap_info.get("map_id") or ""  # WHY: already known present. Re-fetch for lookup check
         if map_id not in lookups["maps"]:  # WHY: map id present but stale/deleted
             return "Map ID not found"  # WHY: distinct label for operator triage
         return ""  # WHY: empty string means "no gap"
@@ -691,7 +691,7 @@ class E911BSSIDReportGenerator:  # WHY: static-method namespace for the Menu 160
         """
         band_info = lookups["radio_bands"].get(radio_mac)  # WHY: skip scanning/BLE radios (no band info)
         if not band_info:  # WHY: no band -> not a broadcast radio -> no rows
-            return  # WHY: silently skip; noise is handled at build-lookup time
+            return  # WHY: silently skip. Noise is handled at build-lookup time
         ssids = E911BSSIDReportGenerator._resolve_ssid_label(ap_ctx["site_id"], band_info, lookups)  # WHY: cell text
         band_label = band_info.get("band", "Unknown")  # WHY: default label preserves row shape
         E911BSSIDReportGenerator._emit_bssid_rows(radio_mac, band_label, ssids, ap_ctx, rows)  # WHY: fan-out 16 rows
@@ -725,7 +725,7 @@ class E911BSSIDReportGenerator:  # WHY: static-method namespace for the Menu 160
         WHY: extracted so `_append_radio_rows` stays ≤25 lines.
         """
         for bssid in E911BSSIDReportGenerator._format_bssid(radio_mac):  # WHY: 16 BSSIDs per radio
-            rows.append(  # WHY: append to shared mutable list; single flat row schema
+            rows.append(  # WHY: append to shared mutable list. Single flat row schema
                 {
                     "Site Name": ap_ctx["site_name"],
                     "Site Address": ap_ctx["site_address"],
@@ -750,7 +750,7 @@ class E911BSSIDReportGenerator:  # WHY: static-method namespace for the Menu 160
             return "Unassigned", "", "Unassigned"  # WHY: consistent labels for compliance report
         site_info = lookups["sites"].get(site_id, {})  # WHY: empty dict when site_id is stale
         site_name = site_info.get("name") or "Unassigned"  # WHY: default label when name is blank
-        site_address = site_info.get("address", "")  # WHY: address optional; empty allowed
+        site_address = site_info.get("address", "")  # WHY: address optional. Empty allowed
         if not map_id:  # WHY: valid site but no floor plan
             return site_name, site_address, "Unassigned"  # WHY: separate map-level label
         if map_id not in lookups["maps"]:  # WHY: map id stale/deleted
@@ -897,7 +897,7 @@ class E911BSSIDReportGenerator:  # WHY: static-method namespace for the Menu 160
         batch: SiteBatchContext,
         index: int,
     ) -> bool | None:
-        """Process a single site; return False on rate-limit, None otherwise.
+        """Process a single site. Return False on rate-limit, None otherwise.
 
         WHY: extracted from `_process_site_batch` to keep parent ≤25 lines and complexity ≤5.
         """
@@ -913,7 +913,7 @@ class E911BSSIDReportGenerator:  # WHY: static-method namespace for the Menu 160
             raise  # WHY: any other RuntimeError should surface for debugging
         except Exception as error:  # WHY: single-site failure should not abort the whole batch
             logging.warning("Error processing site %s: %s", site_id[:8], error)  # WHY: audit failure
-            batch.completed_sites.add(site_id)  # WHY: mark done so we don't retry a broken site
+            batch.completed_sites.add(site_id)  # WHY: mark done so we do not retry a broken site
             return None  # WHY: signal "continue"
 
     @staticmethod

@@ -96,7 +96,7 @@ class _ExecutionRequest:  # WHY: private request bundle passed between _execute_
     user: str  # WHY: validated SSH username (already syntactically checked).
     password: str  # WHY: resolved SSH password (env/prompt/none paths converge here).
     commands: list[str]  # WHY: validated command list (already syntactically checked).
-    args: Any  # WHY: argparse Namespace passthrough for port/timeout/max_threads etc.
+    args: Any  # WHY: argparse Namespace passthrough for port/timeout/max_threads and so on
     use_shell: bool  # WHY: resolved shell-mode flag (default-on unless --no-shell).
 
 
@@ -119,7 +119,7 @@ class AppRunner:  # WHY: decomposed orchestrator preserving legacy CLI entrypoin
 
     @staticmethod
     def _install_line_tracer(logger: logging.Logger) -> tuple[bool, Any]:  # WHY: optional debug-only line trace.
-        """Install a debug-only line tracer; return (installed_flag, prior_tracer)."""
+        """Install a debug-only line tracer. Return (installed_flag, prior_tracer)."""
         if not logger.isEnabledFor(logging.DEBUG):  # Tracer only useful under DEBUG verbosity
             return False, None  # Skip install entirely
         try:  # Tracer installation is best-effort and never fatal
@@ -148,7 +148,7 @@ class AppRunner:  # WHY: decomposed orchestrator preserving legacy CLI entrypoin
         """Load credentials/commands from .env when use_env is True."""
         env_config: dict[str, Any] = {}  # Default empty when --no-env supplied
         if not use_env:  # Caller opted out via --no-env
-            return env_config  # Return empty dict; downstream treats missing keys as unset
+            return env_config  # Return empty dict. Downstream treats missing keys as unset
         logger.info("Loading SSH credentials from .env file (default behavior)")  # Before-action log
         env_config = EnvSshConfigLoader().load()  # Real call to extracted loader
         if any([env_config.get("hosts"), env_config.get("username"), env_config.get("password")]):  # Summarize
@@ -175,7 +175,7 @@ class AppRunner:  # WHY: decomposed orchestrator preserving legacy CLI entrypoin
 
     @staticmethod
     def _prompt_password(user: str, hosts: list[str]) -> str | None:  # WHY: interactive fallback prompt.
-        """Prompt for a password securely; an empty response becomes None (hard failure)."""
+        """Prompt for a password securely. An empty response becomes None (hard failure)."""
         label = _host_display_label(hosts)  # Friendly single-vs-many host label
         return getpass.getpass(f"!? Enter password for {user}@{label}: ") or None  # Hidden secure prompt
 
@@ -183,31 +183,31 @@ class AppRunner:  # WHY: decomposed orchestrator preserving legacy CLI entrypoin
     def _resolve_password(  # WHY: 3-tier resolution (env / --secure prompt / hard-fail).
         args: Any, env_config: dict[str, Any], hosts: list[str], user: str | None
     ) -> str | None:
-        """Resolve password, prompting securely when needed; return None on hard failure."""
+        """Resolve password, prompting securely when needed. Return None on hard failure."""
         password = env_config.get("password")  # Passwords are NEVER taken from CLI args
         if password and not args.secure:  # .env already supplied a password and user did not force prompt
             return str(password)  # Coerce to str in case env loader returned a non-str truthy value
         if not user or not hosts:  # Cannot prompt meaningfully without a user/host context
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("X  Password required but not provided")  # User-facing diagnostic preserved verbatim
             return None  # Hard failure: caller aborts pipeline
         return AppRunner._prompt_password(user, hosts)  # Delegate to secure prompt helper
 
     @staticmethod
     def _validate_hosts(final_hosts: list[str]) -> list[str] | None:  # WHY: reject syntactically invalid hostnames.
-        """Filter to valid hosts; return None on hard failure (no valid hosts)."""
+        """Filter to valid hosts. Return None on hard failure (no valid hosts)."""
         validated: list[str] = []  # Accepted hostnames
         invalid: list[str] = []  # Rejected hostnames (reported back to user)
         for host in final_hosts:  # Apply per-host syntactic validation
             (validated if validate_hostname(host) else invalid).append(host)  # Route by validator verdict
         if invalid:  # User-facing diagnostics preserved verbatim
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("X  Invalid hosts detected: %s", ", ".join(invalid))
             if not validated:  # No usable hosts left
-                # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+                # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
                 logger.error("X  No valid hosts remaining")
                 return None
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("[WARNING] Proceeding with %d valid hosts", len(validated))  # Soft failure path
         return validated
 
@@ -215,16 +215,16 @@ class AppRunner:  # WHY: decomposed orchestrator preserving legacy CLI entrypoin
     def _print_param_hints(use_env: bool) -> None:  # WHY: user-facing remediation hints after preflight failure.
         """Print the .env-vs-CLI remediation hint after a missing-parameter error."""
         if use_env:  # .env loading is on: point at the .env file
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info("!? Add these to your .env file or provide as command line arguments")
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info("!? Use --no-env flag to disable .env file loading")
         else:  # .env loading disabled: point at CLI args
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info("!? Provide as command line arguments or remove --no-env flag to use .env file")
 
     @staticmethod
-    def _check_required_params(  # WHY: preflight gate; table-driven missing-field enumeration.
+    def _check_required_params(  # WHY: preflight gate. Table-driven missing-field enumeration.
         hosts: list[str], user: str | None, password: str | None, use_env: bool
     ) -> bool:
         """Return True when all of (hosts, user, password) are present."""
@@ -236,7 +236,7 @@ class AppRunner:  # WHY: decomposed orchestrator preserving legacy CLI entrypoin
             (password, "password/SSH_PASSWORD"),
         )
         missing = [label for value, label in specs if not value]  # Filter to unset fields
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.error("X  Error: Missing required parameters: %s", ", ".join(missing))  # Preserved verbatim
         AppRunner._print_param_hints(use_env)  # Delegate hint printing
         return False
@@ -256,7 +256,7 @@ class AppRunner:  # WHY: decomposed orchestrator preserving legacy CLI entrypoin
         csv_cmds = CommandCsvLoader().load()  # Priority 3: SSH_COMMANDS.CSV
         if csv_cmds:  # CSV supplied a command list
             logger.info("Using %s commands from data/SSH_COMMANDS.CSV: %s", len(csv_cmds), csv_cmds)
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info("!? Loaded %d commands from data/SSH_COMMANDS.CSV", len(csv_cmds))
             return csv_cmds
         return AppRunner._prompt_for_commands(env_cmds, csv_cmds)  # Priority 4: interactive
@@ -267,7 +267,7 @@ class AppRunner:  # WHY: decomposed orchestrator preserving legacy CLI entrypoin
         logging.info("Prompting user for SSH command(s) at runtime")  # Before-action log
         command = InputUtils.safe_input("!? Enter command to execute: ", context="ssh_app_runner_command")  # EOF-safe
         if not command:  # Hard failure: user provided nothing
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.error("X  No commands specified")
             logging.debug("User declined to enter any command at the interactive prompt")
             return []
@@ -287,17 +287,17 @@ class AppRunner:  # WHY: decomposed orchestrator preserving legacy CLI entrypoin
 
     @staticmethod
     def _validate_commands(commands_to_run: list[str]) -> list[str]:  # WHY: reject unsafe commands + user warnings.
-        """Filter commands to those passing the shared validator; print rejections."""
+        """Filter commands to those passing the shared validator. Print rejections."""
         validated, invalid = AppRunner._partition_commands(commands_to_run)  # Pure split first
         if not invalid:  # Happy path -- no rejects to report
             return validated
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.warning("X  Invalid commands detected: %s", ", ".join(invalid))  # Preserved verbatim
         if not validated:  # Nothing left to run
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.error("X  No valid commands remaining")
             return []
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.warning("!? Proceeding with %d valid commands", len(validated))  # Soft failure path
         return validated
 
@@ -337,7 +337,7 @@ class AppRunner:  # WHY: decomposed orchestrator preserving legacy CLI entrypoin
         requested = request.args.max_threads or multiprocessing.cpu_count()  # CLI override or CPU count
         max_threads = _validate_thread_count(requested, len(request.hosts))  # Apply safety caps
         if max_threads != requested:  # Tell the user if we clamped their request
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("!? Adjusted thread count from %d to %d", requested, max_threads)
         logging.info(
             "Dispatching to MultiHostRunner.run (%d hosts / %d cmds)", len(request.hosts), len(request.commands)
@@ -369,7 +369,7 @@ class AppRunner:  # WHY: decomposed orchestrator preserving legacy CLI entrypoin
     def _resolve_execution_context(  # WHY: split preflight resolution to keep _execute_pipeline under CC 5.
         args: Any, logger: logging.Logger
     ) -> tuple[list[str], str | None, str, dict[str, Any], bool] | None:
-        """Resolve hosts/user/password and validate hosts; return context tuple or None on hard failure."""
+        """Resolve hosts/user/password and validate hosts. Return context tuple or None on hard failure."""
         use_env = not args.no_env  # .env loading is opt-out
         env_config = AppRunner._load_env_config(use_env, logger)  # Phase: load .env
         hosts, user = AppRunner._resolve_hosts_and_user(args, env_config)  # Phase: hosts + user
@@ -387,7 +387,7 @@ class AppRunner:  # WHY: decomposed orchestrator preserving legacy CLI entrypoin
     ) -> bool:
         """Validate username plus required params before dispatch."""
         if user and not validate_username(user):  # Validate username separately
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.error("[ERROR] Invalid username format: %s", user)
             return False
         return AppRunner._check_required_params(hosts, user, password, use_env)  # Final preflight
@@ -407,7 +407,7 @@ class AppRunner:  # WHY: decomposed orchestrator preserving legacy CLI entrypoin
             AppRunner._resolve_commands(args, env_config, use_env, logger)
         )
         if not commands:  # Nothing safe left to run
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.error("X  No commands to execute")  # User-facing diagnostic preserved verbatim
             return None  # Hard failure: caller aborts pipeline
         return _ExecutionRequest(  # Immutable bundle handed to dispatchers
@@ -452,13 +452,13 @@ class AppRunner:  # WHY: decomposed orchestrator preserving legacy CLI entrypoin
         try:  # Single try wraps the pipeline so we always restore the tracer
             return AppRunner._execute_pipeline(args, logger)
         except KeyboardInterrupt:  # Preserve legacy interrupt UX
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("\n[INTERRUPT] Operation cancelled by user")
             return False
         except Exception as exec_err:  # Preserve legacy fatal-error diagnostics
             logger.exception("Fatal error during SSH runner execution")
             logger.debug("[DIAG] Type of exception object: %s", type(exec_err))
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.error("X  Fatal error: %s", exec_err)
             return False
         finally:  # Always clean up the tracer to avoid leaking it into the caller

@@ -189,7 +189,7 @@ class ShellExecutor:
         self._log_output_summary(cleaned_output, start_time)  # WHY: Diagnostic logging only
         success = self._evaluate_success(cleaned_output)  # WHY: Phase 8: classify as success/failure
         command_time = time.time() - start_time  # WHY: Final wall-clock duration
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         self.logger.info("[STATUS] [%s] Command completed in %.2f seconds", hostname, command_time)
         self.logger.debug(
             "ShellExecutor: command completed on %s in %.2fs", hostname, command_time
@@ -229,7 +229,7 @@ class ShellExecutor:
     def _send_command(
         self, shell: Any, command: str
     ) -> tuple[bool, str, str] | None:  # WHY: Write command + return error tuple on failure
-        r"""Send ``command\n`` to the shell; return an error tuple on failure, ``None`` on success."""
+        r"""Send ``command\n`` to the shell. Return an error tuple on failure, ``None`` on success."""
         try:
             command_with_newline = command + "\n"  # WHY: Newline triggers command execution
             shell.send(command_with_newline.encode("utf-8"))  # WHY: Byte-level write to channel
@@ -282,7 +282,7 @@ class ShellExecutor:
     def _loop_step(
         self, shell: Any, context: _CollectContext, state: _CollectState
     ) -> bool:  # WHY: One loop iteration - returns True when the loop should exit
-        """Perform one iteration of the collect loop; return True when the loop should terminate."""
+        """Perform one iteration of the collect loop. Return True when the loop should terminate."""
         if self._detect_hang(state, context):  # WHY: 90s "hang" forced-completion appends marker and exits
             return True
         self._maybe_print_long_running_progress(
@@ -299,7 +299,7 @@ class ShellExecutor:
     def _await_bytes_or_finish(
         self, state: _CollectState
     ) -> bool:  # WHY: Idle branch - return True when silence deadline reached
-        """Return True when silence has exceeded ``_NO_DATA_TIMEOUT_S``; else sleep briefly and return False."""
+        """Return True when silence has exceeded ``_NO_DATA_TIMEOUT_S``. Else sleep briefly and return False."""
         if self._silence_exceeded(state.last_data_time):  # WHY: Silence threshold reached - command considered finished
             return True
         time.sleep(_POLL_SLEEP_S)  # WHY: Brief sleep before next poll
@@ -330,7 +330,7 @@ class ShellExecutor:
         self, state: _CollectState, context: _CollectContext
     ) -> None:  # WHY: Keep KeyboardInterrupt bookkeeping out of the loop
         """Record the interrupt marker on ``state`` and emit the operator-facing status line."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         self.logger.warning("X  [%s] Ctrl+C detected! Interrupting command: %s", context.hostname, context.command)
         self.logger.warning("Command interrupted by user: %s", context.command)  # WHY: Log for post-mortem
         # WHY: Marker preserved verbatim so downstream log parity is unaffected
@@ -343,7 +343,7 @@ class ShellExecutor:
         current_duration = time.time() - start_time  # WHY: Wall-clock elapsed
         if current_duration <= _HANG_DETECTION_S:  # WHY: Guard clause - not yet at threshold
             return False
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         self.logger.warning(
             "[TIMEOUT] [%s] HANG DETECTED: Command running for %.0fs, forcing completion",
             hostname,
@@ -362,7 +362,7 @@ class ShellExecutor:
         if (
             current_duration > _LONG_RUNNING_THRESHOLD_S and chunk_count % _LONG_RUNNING_CADENCE_CHUNKS == 0
         ):  # WHY: Match original cadence verbatim
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             self.logger.info(
                 "- [%s] Long-running command... %.0fs elapsed (Ctrl+C to interrupt)",
                 hostname,
@@ -395,7 +395,7 @@ class ShellExecutor:
         state.output += (
             f"\n\n[OUTPUT TRUNCATED - Size limit of {cap_mb}MB reached]\n"  # WHY: Verbatim truncation marker
         )
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         self.logger.warning("!? [%s] Output truncated at %dMB, draining remaining data...", hostname, cap_mb)
         state.truncated = True  # WHY: Loop will drain the tail and exit
 
@@ -408,7 +408,7 @@ class ShellExecutor:
             "Receiving data... %d chunks, %.1fMB", chunk_count, output_mb
         )  # WHY: Structured trace of progress
         if output_mb > _LARGE_OUTPUT_PRINT_MB:  # WHY: User-facing print only for large outputs
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             self.logger.info("- [%s] Receiving large output... %.1fMB (Press Ctrl+C to interrupt)", hostname, output_mb)
 
     # ------------------------------------------------------------------
@@ -433,7 +433,7 @@ class ShellExecutor:
                 break
             time.sleep(_POLL_SLEEP_S)  # WHY: Brief sleep before next poll
         drain_duration = time.time() - drain_start  # WHY: Final drain wall-clock
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         self.logger.info(
             "[OK] [%s] Data drain completed in %.1fs (%d chunks discarded)",
             hostname,
@@ -449,7 +449,7 @@ class ShellExecutor:
         if drained_chunks % _PROGRESS_INTERVAL_CHUNKS != 0:  # WHY: Guard clause - not yet at cadence
             return
         drain_duration = time.time() - drain_start  # WHY: Elapsed drain wall-clock for the print
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.warning(
             "X  [%s] Draining excess data... %.0fs (%d chunks discarded)",
             hostname,
@@ -470,7 +470,7 @@ class ShellExecutor:
             shell.send(b"\n")  # WHY: Extra newline to ensure command commits
             self._drain_cleanup_tail(shell)  # WHY: Drain any remaining bytes within the cleanup budget
         except KeyboardInterrupt:  # WHY: Ctrl+C during cleanup - force-close immediately
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             self.logger.warning("X  [%s] Ctrl+C during cleanup - forcing shell close", hostname)
             self.logger.warning("Command cleanup interrupted by user")  # WHY: Log operator-driven interrupt
         except (
@@ -492,7 +492,7 @@ class ShellExecutor:
             self.logger.debug("Warning during shell close: %s", close_error)  # WHY: Trace non-fatal close issue
 
     def _drain_cleanup_tail(self, shell: Any) -> None:  # WHY: Drain within cleanup budget - exit early on silence
-        """Drain any remaining bytes within the ``_CLEANUP_MAX_S`` budget; exit early on silence."""
+        """Drain any remaining bytes within the ``_CLEANUP_MAX_S`` budget. Exit early on silence."""
         cleanup_timeout = time.time() + _CLEANUP_MAX_S  # WHY: Absolute deadline
         while time.time() < cleanup_timeout:  # WHY: Bounded loop
             if not shell.recv_ready():  # WHY: No data ready - brief pause then exit

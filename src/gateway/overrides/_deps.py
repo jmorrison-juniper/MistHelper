@@ -8,17 +8,17 @@ from typing import Any, Final  # Typing helpers for module-level dependency hold
 
 _LOG_CONFIGURED: Final[str] = "Gateway override dependencies configured"  # WHY: single-source log template.
 
-apisession: Any = None  # Mist API session; set by configure_gateway_override_dependencies
-mistapi: Any = None  # mistapi SDK module; set by configure_gateway_override_dependencies
-CacheUtils: Any = None  # CSV cache helper; set by configure_gateway_override_dependencies
-FilePathUtils: Any = None  # Output path helper; set by configure_gateway_override_dependencies
-DataExporter: Any = None  # Multi-backend writer; set by configure_gateway_override_dependencies
-OrgSiteExporter: Any = None  # Site list exporter; set by configure_gateway_override_dependencies
+apisession: Any = None  # Mist API session. Set by configure_gateway_override_dependencies
+mistapi: Any = None  # mistapi SDK module. Set by configure_gateway_override_dependencies
+CacheUtils: Any = None  # CSV cache helper. Set by configure_gateway_override_dependencies
+FilePathUtils: Any = None  # Output path helper. Set by configure_gateway_override_dependencies
+DataExporter: Any = None  # Multi-backend writer. Set by configure_gateway_override_dependencies
+OrgSiteExporter: Any = None  # Site list exporter. Set by configure_gateway_override_dependencies
 MIST_WAN_TARGET_PORTS: list[str] = []  # Operator-configured WAN ports list from .env
 # NOTE: execute_with_connection_pool_management extracted to ConnectionPoolExecutor.execute.
 # See specs/1012-misthelper-refactor-hot-functions/spec.md.
 execute_fn: Any = (
-    None  # Pool-managed parallel runner (1012 SC-003; renamed from execute_with_connection_pool_management)
+    None  # Pool-managed parallel runner (1012 SC-003. Renamed from execute_with_connection_pool_management)
 )
 GatewayExportUtilsRef: Any = None  # Gateway export helpers ref (device_configs/templates funcs)
 
@@ -34,7 +34,7 @@ class GatewayOverrideDependencies:
     data_exporter: Any  # DataExporter class exposing write_with_format_selection
     org_site_exporter: Any  # OrgSiteExporter class exposing sites_list_api
     mist_wan_target_ports: list[str]  # Operator-configured WAN target ports list from .env
-    execute_fn: Any  # ConnectionPoolExecutor.execute callable (1012 SC-003; renamed from connection_pool_fn)
+    execute_fn: Any  # ConnectionPoolExecutor.execute callable (1012 SC-003. Renamed from connection_pool_fn)
     gateway_export_utils_ref: Any  # GatewayExportUtils reference (device_configs / templates)
 
 

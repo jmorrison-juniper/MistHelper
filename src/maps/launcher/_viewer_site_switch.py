@@ -56,7 +56,7 @@ class _ViewerSiteSwitch:  # WHY: wrapper class hosting the site-switch callback 
     def __getattr__(self, name: str) -> Any:  # WHY: transparent proxy for shared state access
         """Delegate unknown attributes to the wrapped parent manager."""
         mm = self.__dict__.get("_mm")  # WHY: guard against half-initialized instances
-        if mm is None:  # WHY: only trips during broken init; avoid infinite recursion
+        if mm is None:  # WHY: only trips during broken init. Avoid infinite recursion
             raise AttributeError(name)  # WHY: signal missing attribute cleanly
         return getattr(mm, name)  # WHY: forward all other attributes to parent
 
@@ -202,7 +202,7 @@ class _ViewerSiteSwitch:  # WHY: wrapper class hosting the site-switch callback 
         import dash  # WHY: local import - dash.callback_context only exists at request time
 
         ctx = dash.callback_context  # WHY: per-request trigger context
-        if not ctx.triggered:  # WHY: empty means we're in the initial page load
+        if not ctx.triggered:  # WHY: empty means we are in the initial page load
             return "initial_load"  # WHY: mirror original label
         prop_id: str = ctx.triggered[0]["prop_id"]  # WHY: annotate for strict-typed str return
         return prop_id.split(".")[0]  # WHY: strip prop suffix to get component id
@@ -373,7 +373,7 @@ class _ViewerSiteSwitch:  # WHY: wrapper class hosting the site-switch callback 
     def _preflight_site_switch(  # WHY: extracted guard chain so callback has CC ≤5
         self, selected_site_id: str | None, config: dict[str, Any] | None
     ) -> bool:
-        """Return True if a site switch should proceed; log + return False otherwise."""
+        """Return True if a site switch should proceed. Log + return False otherwise."""
         if not selected_site_id:  # WHY: guard missing input
             logging.warning("[SITE-SWITCH] No selected_site_id provided")  # WHY: mirror original log
             return False  # WHY: caller should skip
@@ -408,7 +408,7 @@ class _ViewerSiteSwitch:  # WHY: wrapper class hosting the site-switch callback 
         return self._build_first_map_payload(selected_site_id, site_name, new_maps, config)  # WHY: pick first map
 
     def _fetch_site_maps(self, site_id: str) -> list[dict[str, Any]] | None:  # WHY: HTTP guard + normalize empty
-        """Fetch site map list; return ``None`` on API failure, ``[]`` on empty."""
+        """Fetch site map list. Return ``None`` on API failure, ``[]`` on empty."""
         maps_response = self._state.mistapi_ref.api.v1.sites.maps.listSiteMaps(  # WHY: Mist API call
             self._state.api_session_ref, site_id=site_id
         )
@@ -531,7 +531,7 @@ class _ViewerSiteSwitch:  # WHY: wrapper class hosting the site-switch callback 
             xref="x",
             yref="y",
             x=0,
-            y=map_height if anchor_top else 0,  # WHY: site-switch used map_height; URL-switch used 0
+            y=map_height if anchor_top else 0,  # WHY: site-switch used map_height. URL-switch used 0
             sizex=map_width,
             sizey=map_height,
             sizing="stretch",

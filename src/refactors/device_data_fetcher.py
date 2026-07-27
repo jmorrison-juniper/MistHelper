@@ -1,7 +1,7 @@
 """DeviceDataFetcher extracted from MistHelper.
 
 Interactive device data fetcher for single-device operations. Originally
-defined as ``DeviceDataFetcher`` inside MistHelper.py; extracted here per
+defined as ``DeviceDataFetcher`` inside MistHelper.py. Extracted here per
 initiative 1011 to shrink the monolith.
 
 Runtime dependencies (``PromptUtils``, ``DataProcessingUtils``,
@@ -34,8 +34,8 @@ class DeviceFetchConfig:
     filename: str  # Output filename for the exported data
     description: str  # Human-readable description shown to the user during the fetch
     device_type: str = "all"  # Device type filter (all/ap/switch/gateway); 'all' avoids the AP-only API default
-    site_id: str | None = None  # Optional site scope; None means an org-wide fetch
-    device_id: str | None = None  # Optional single-device scope; None means all matching devices
+    site_id: str | None = None  # Optional site scope. None means an org-wide fetch
+    device_id: str | None = None  # Optional single-device scope. None means all matching devices
 
 
 class _MistHelperProxy:  # Attribute forwarder to MistHelper module attributes
@@ -89,14 +89,14 @@ class DeviceDataFetcher:
 
     def _resolve_site_id(self) -> bool:
         """Resolve site ID from parameter or user prompt."""
-        if self.site_id:  # Caller may have pre-supplied the site; reuse it verbatim
+        if self.site_id:  # Caller may have pre-supplied the site. Reuse it verbatim
             return True  # Already resolved
         self.site_id = _MH.PromptUtils.select_site_id_from_csv()  # Interactive site selection from CSV inventory
         return bool(self.site_id)  # False when the user cancelled or no sites exist
 
     def _resolve_device_id(self) -> bool:
         """Resolve device ID from parameter or user prompt."""
-        if self.device_id:  # Caller may have pre-supplied the device; reuse it verbatim
+        if self.device_id:  # Caller may have pre-supplied the device. Reuse it verbatim
             return True  # Already resolved
         assert self.site_id is not None, "Site ID must be resolved before device ID"  # nosec B101
         self.device_id = _MH.PromptUtils.select_device_id_from_inventory(  # Interactive device selection

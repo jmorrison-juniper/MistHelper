@@ -54,7 +54,7 @@ class MessageRouter:  # WHY: Public API preserved for WebSocketManager collabora
 
         Why:
             The original ``WebSocketManager._on_message`` passed five loose
-            arguments each call; packing them into a frozen dataclass makes
+            arguments each call. Packing them into a frozen dataclass makes
             attribute access cheaper (slots) and prevents accidental mutation
             by dispatch handlers while preserving the constructor signature
             expected by manager-side wiring.
@@ -65,7 +65,7 @@ class MessageRouter:  # WHY: Public API preserved for WebSocketManager collabora
             results_lock: Threading lock that serializes writes to
                 ``command_results``.
             confirmed_subscriptions: Set of channel names that have received
-                a confirmation frame; used to gate downstream dispatch.
+                a confirmation frame. Used to gate downstream dispatch.
             logger: Logger used for parity trace lines (preserved verbatim
                 from the pre-extraction ``_on_message`` code path).
             debug_mode: Verbose-trace toggle propagated from the manager.
@@ -124,7 +124,7 @@ def _trace_raw(ctx: _RouterCtx, message: Any) -> None:  # WHY: Emit verbatim [DE
 
 
 def _parse(ctx: _RouterCtx, message: Any) -> dict[str, Any] | None:  # WHY: Dispatch by message type.
-    """Parse a string or dict message into a dict; return None to skip."""
+    """Parse a string or dict message into a dict. Return None to skip."""
     if isinstance(message, str):  # WHY: JSON-string path handled separately.
         return _parse_string(ctx, message)  # WHY: Delegate JSON-decode path.
     if isinstance(message, dict):  # WHY: Pre-parsed dict path handled separately.
@@ -149,7 +149,7 @@ def _log_unexpected_type(ctx: _RouterCtx, message: Any) -> None:  # WHY: Warn ab
 
 
 def _parse_string(ctx: _RouterCtx, message: str) -> dict[str, Any] | None:  # WHY: JSON string path.
-    """Decode JSON string; return None on decode failure or non-dict result."""
+    """Decode JSON string. Return None on decode failure or non-dict result."""
     data = _json_load(ctx, message)  # WHY: Isolate try/except in a helper.
     if data is _SKIP:  # WHY: Decode failed and was already logged.
         return None  # WHY: Decode already logged inside _json_load.
@@ -276,7 +276,7 @@ def _unwrap_payload(ctx: _RouterCtx, data_payload: Any) -> Any:  # WHY: Normaliz
 
 
 def _unwrap_string(ctx: _RouterCtx, data_payload: str) -> Any:  # WHY: Decode nested JSON strings.
-    """Parse a JSON-string data field; return _SKIP if not JSON."""
+    """Parse a JSON-string data field. Return _SKIP if not JSON."""
     try:  # WHY: Isolate nested JSON decode.
         parsed = json.loads(data_payload)  # WHY: Standard library JSON decode.
     except json.JSONDecodeError:  # WHY: Non-JSON string is only logged, not raised.

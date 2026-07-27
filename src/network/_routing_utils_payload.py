@@ -28,7 +28,7 @@ import requests  # WHY: generic device command endpoint is invoked via requests.
 
 logger = logging.getLogger(__name__)  # WHY: module-scoped logger for print-to-logger migration
 
-if TYPE_CHECKING:  # WHY: only needed for static type checkers; skipped at runtime
+if TYPE_CHECKING:  # WHY: only needed for static type checkers. Skipped at runtime
     from src.network.routing_utils import RoutingUtils, SsrRouteQuery  # WHY: types for annotation only
 
 
@@ -73,12 +73,12 @@ class RoutingPayloadQuery:
     :class:`SsrRouteQuery` on the parent module.
     """
 
-    prefix_input: str  # WHY: CIDR string filter; empty means match every prefix
-    protocol_input: str  # WHY: protocol keyword (bgp/ospf/static/direct/evpn/any); coerced to 'any'
-    vrf_input: str  # WHY: VRF/routing-instance name; empty means default VRF
-    neighbor_input: str  # WHY: BGP neighbor IP filter; empty disables neighbor scoping
-    route_direction: str  # WHY: received/advertised when neighbor is set; empty means both
-    node_input: str  # WHY: HA node identifier (node0/node1); empty means unspecified
+    prefix_input: str  # WHY: CIDR string filter. Empty means match every prefix
+    protocol_input: str  # WHY: protocol keyword (bgp/ospf/static/direct/evpn/any). Coerced to 'any'
+    vrf_input: str  # WHY: VRF/routing-instance name. Empty means default VRF
+    neighbor_input: str  # WHY: BGP neighbor IP filter. Empty disables neighbor scoping
+    route_direction: str  # WHY: received/advertised when neighbor is set. Empty means both
+    node_input: str  # WHY: HA node identifier (node0/node1). Empty means unspecified
 
 
 class _RoutingUtilsPayload:  # WHY: cluster wrapper matching the parsing/display split
@@ -91,7 +91,7 @@ class _RoutingUtilsPayload:  # WHY: cluster wrapper matching the parsing/display
     def __getattr__(self, name: str) -> Any:  # WHY: transparent proxy so callers see combined API
         """Delegate unknown attributes to the wrapped parent object."""
         parent = self.__dict__.get("_ru")  # WHY: guard against half-initialized instances
-        if parent is None:  # WHY: only trips during broken init; avoid infinite recursion
+        if parent is None:  # WHY: only trips during broken init. Avoid infinite recursion
             raise AttributeError(name)  # WHY: signal missing attribute cleanly to callers
         return getattr(parent, name)  # WHY: transparent proxy to the parent RoutingUtils
 
@@ -112,7 +112,7 @@ class _RoutingUtilsPayload:  # WHY: cluster wrapper matching the parsing/display
     @staticmethod
     def _apply_prefix(payload: dict[str, Any], prefix_input: str) -> None:
         """Attach a route prefix to ``payload`` when the user supplied one."""
-        if prefix_input:  # WHY: empty string means "match all prefixes"; omit key entirely
+        if prefix_input:  # WHY: empty string means "match all prefixes". Omit key entirely
             payload["prefix"] = prefix_input  # WHY: preserve original casing/format for the API
 
     @staticmethod
@@ -127,7 +127,7 @@ class _RoutingUtilsPayload:  # WHY: cluster wrapper matching the parsing/display
     @staticmethod
     def _apply_vrf(payload: dict[str, Any], vrf_input: str) -> None:
         """Attach a VRF name to ``payload`` when the user supplied one."""
-        if vrf_input:  # WHY: empty means default VRF; API omission = default
+        if vrf_input:  # WHY: empty means default VRF. API omission = default
             payload["vrf"] = vrf_input  # WHY: preserve original casing for name-matching
 
     def _apply_neighbor(
@@ -137,7 +137,7 @@ class _RoutingUtilsPayload:  # WHY: cluster wrapper matching the parsing/display
         route_direction: str,
     ) -> None:
         """Attach neighbor IP (and optional route direction) to ``payload``."""
-        if not neighbor_input:  # WHY: neighbor filter is optional; short-circuit when unset
+        if not neighbor_input:  # WHY: neighbor filter is optional. Short-circuit when unset
             return  # WHY: skip both neighbor and direction fields when neighbor is empty
         payload["neighbor"] = neighbor_input  # WHY: preserve exact IP the user entered
         direction = route_direction.lower() if route_direction else ""  # WHY: normalize once
@@ -181,7 +181,7 @@ class _RoutingUtilsPayload:  # WHY: cluster wrapper matching the parsing/display
     @staticmethod
     def _apply_ssr_neighbor(request_body: dict[str, Any], query: SsrRouteQuery) -> None:
         """Attach BGP neighbor (and optional direction) to ``request_body``."""
-        if not query.neighbor_input:  # WHY: neighbor filter is optional; short-circuit when unset
+        if not query.neighbor_input:  # WHY: neighbor filter is optional. Short-circuit when unset
             return  # WHY: skip both neighbor + direction fields when neighbor is empty
         request_body["neighbor"] = query.neighbor_input  # WHY: preserve exact IP the user entered
         if query.route_direction in _VALID_ROUTE_DIRECTIONS:  # WHY: only received/advertised valid
@@ -190,7 +190,7 @@ class _RoutingUtilsPayload:  # WHY: cluster wrapper matching the parsing/display
     @staticmethod
     def _apply_ssr_node(request_body: dict[str, Any], node_input: str) -> None:
         """Attach HA node object to ``request_body`` when identifier validates."""
-        if node_input in _VALID_NODES:  # WHY: only node0/node1 accepted; SSR wraps in nested object
+        if node_input in _VALID_NODES:  # WHY: only node0/node1 accepted. SSR wraps in nested object
             request_body["node"] = {"node": node_input}  # WHY: SSR API expects nested {"node": ...}
 
     def _apply_ssr_refresh_params(
@@ -204,7 +204,7 @@ class _RoutingUtilsPayload:  # WHY: cluster wrapper matching the parsing/display
         if interval_val is None:  # WHY: invalid/blank interval disables the entire refresh block
             return  # WHY: skip both interval and duration when interval is missing
         request_body["interval"] = interval_val  # WHY: always attach interval when it validates
-        if interval_val == 0:  # WHY: interval=0 means one-shot; duration is meaningless then
+        if interval_val == 0:  # WHY: interval=0 means one-shot. Duration is meaningless then
             return  # WHY: early-return omits duration for one-shot queries
         request_body["duration"] = self._parse_refresh_duration(duration_input)  # WHY: parsed once
 
@@ -245,7 +245,7 @@ class _RoutingUtilsPayload:  # WHY: cluster wrapper matching the parsing/display
             return None, "Mist host or API token not found in session or environment"  # WHY: signal
         url = f"https://{host}/api/v1/sites/{site_id}/devices/{device_id}/{endpoint}"  # WHY: standard path
         if debug_mode:  # WHY: expose URL for troubleshooting when debug is on
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.debug("[DEBUG] POST URL = %s", url)  # WHY: match legacy debug output verbatim
         response = requests.post(  # WHY: synchronous POST with hard timeout
             url,
@@ -275,9 +275,9 @@ class _RoutingUtilsPayload:  # WHY: cluster wrapper matching the parsing/display
         """Emit response status + body when debug mode is on."""
         if not debug_mode:  # WHY: guard clause avoids formatting the body when debug is off
             return  # WHY: keeps the hot path free of debug string formatting
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.debug("[DEBUG] HTTP Response Status = %s", response.status_code)  # WHY: legacy debug format
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.debug("[DEBUG] HTTP Response Body = %s", response.text)  # WHY: legacy debug format
 
     @staticmethod
@@ -317,10 +317,10 @@ class _RoutingUtilsPayload:  # WHY: cluster wrapper matching the parsing/display
         debug_mode: bool,
     ) -> str | None:
         """Perform the SSR/SRX API call and hand the response to session-id extraction."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("-> Calling dedicated SSR/SRX routing table API...")  # WHY: legacy UX text preserved
         if debug_mode:  # WHY: mirror legacy verbose logging for debug traces
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.debug("[DEBUG] Calling mistapi.api.v1.sites.devices.showSiteSsrAndSrxRoutes")  # WHY: URL
         response = mistapi.api.v1.sites.devices.showSiteSsrAndSrxRoutes(  # WHY: dedicated endpoint
             self._ru.apisession,  # WHY: reuse the parent-injected authenticated session
@@ -336,42 +336,42 @@ class _RoutingUtilsPayload:  # WHY: cluster wrapper matching the parsing/display
         """Emit SSR API response metadata when debug mode is on."""
         if not debug_mode:  # WHY: guard clause avoids attribute lookups when debug is off
             return  # WHY: keeps hot path free of formatting overhead
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.debug("[DEBUG] API response type: %s", type(response))  # WHY: legacy debug output preserved
-        if hasattr(response, "data"):  # WHY: some responses don't carry a data attribute at all
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        if hasattr(response, "data"):  # WHY: some responses do not carry a data attribute at all
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.debug("[DEBUG] Response data: %s", response.data)  # WHY: expose payload for triage
 
     @staticmethod
     def _handle_ssr_api_error(api_error: Exception, debug_mode: bool) -> None:
         """Emit uniform failure output for an SSR API exception and return ``None``."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.warning("! Error calling SSR/SRX routing table API: %s", api_error)  # WHY: user-facing message
         logger.error("SSR/SRX routing table API error: %s", api_error)  # WHY: capture for logs
         if debug_mode:  # WHY: only dump the traceback when debug mode is explicitly on
             import traceback  # WHY: local import matches legacy lazy behavior (rare failure path)
 
             traceback.print_exc()  # WHY: full stack aids on-site triage
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("\n-> Try the generic routing table command (Menu 7) as fallback")  # WHY: guidance
         return None  # WHY: signal failure to caller so it can skip the results wait
 
     def _extract_ssr_session_id(self, response: Any, debug_mode: bool) -> str | None:
         """Extract session ID from SSR API response."""
         if not (hasattr(response, "data") and response.data):  # WHY: guard against empty responses
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("! Unexpected API response format")  # WHY: legacy message preserved for UX parity
             return None  # WHY: caller treats None as "no session started"
         session_id: str | None = response.data.get("session")  # WHY: 'session' key holds the id
         if not session_id:  # WHY: guard against present-but-empty session field
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("! No session ID returned from SSR/SRX routing API")  # WHY: legacy message
             return None  # WHY: caller cancels the wait when no id is present
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("-> Command initiated (session: %s...)", session_id[:8])  # WHY: legacy UX preserved
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("-> Waiting for SSR/SRX routing table results...")  # WHY: user context between calls
         if debug_mode:  # WHY: full-id debug output when debug is on
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.debug("[DEBUG] Full session ID: %s", session_id)  # WHY: match legacy debug format
         return session_id  # WHY: caller uses this id to correlate WebSocket results
