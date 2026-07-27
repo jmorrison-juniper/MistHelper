@@ -9,6 +9,9 @@
 # The distilled guide documentation/ASD-STE100_writing-guide.md is committed instead.
 documentation/ASD-STE100_ISSUE9.pdf
 
+# STE linter dictionary - generated locally from the licensed PDF, never committed
+data/ste_dictionary.json
+
 .env.local
 .env.production
 .env.staging
