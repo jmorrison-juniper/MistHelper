@@ -28,8 +28,8 @@ if sys.version_info < MINIMUM_PYTHON_VERSION:  # Exit early if Python is too old
     print(f"\n{'=' * 70}", file=sys.stderr)  # noqa: T201
     print(warning_msg, file=sys.stderr)  # noqa: T201
     print(f"{'=' * 70}\n", file=sys.stderr)  # noqa: T201
-    # Log will be configured later, but we can't use logging yet
-    # The warning is printed to stderr so it's visible regardless
+    # Log will be configured later, but we cannot use logging yet
+    # The warning is printed to stderr so it is visible regardless
 
 # ============================================================================
 # GLOBAL DEPENDENCY MANAGEMENT AND IMPORT SYSTEM
@@ -43,7 +43,7 @@ warnings.filterwarnings(
 import argparse  # Import argparse for command-line argument parsing (--menu, --test, --fast flags)
 import logging  # Import logging for structured logging to script.log and console
 import os  # Import os for file path operations, environment variables, and data/ directory setup
-import re  # Import re for regex pattern matching in data parsing (SSIDs, descriptions, etc.)
+import re  # Import re for regex pattern matching in data parsing (SSIDs, descriptions, and so on)
 import subprocess  # nosec B404  # Injected into src/bootstrap/PackageInstaller DI seam only; all runtime calls in this module use SubprocessRunner (initiative 1016).
 import time  # Import time for rate limiting, delays, and performance monitoring
 import traceback  # Import traceback for detailed exception context in error logs
@@ -57,13 +57,13 @@ from typing import TYPE_CHECKING, Any, NoReturn, TextIO, cast
 
 from src.utils.subprocess_runner import (  # Centralized subprocess dispatch + exception re-exports (initiative 1016).
     SubprocessError,  # Base class for subprocess errors (parent of TimeoutExpired/CalledProcessError).
-    SubprocessRunner,  # Audited dispatcher; sole entry point for external command execution.
+    SubprocessRunner,  # Audited dispatcher. Sole entry point for external command execution.
     TimeoutExpired,  # Raised when subprocess.run exceeds its timeout.
 )
 
 # Type stubs for dynamically imported modules
 # These allow type checking while the actual imports happen at runtime via GlobalImportManager
-# Pylance uses these unconditionally; runtime try/except blocks below handle actual loading.
+# Pylance uses these unconditionally. Runtime try/except blocks below handle actual loading.
 if TYPE_CHECKING:  # These imports only used by static type checkers (Pylance, mypy), not at runtime
     from types import ModuleType  # ModuleType annotation for optional-module fallback typing
 
@@ -330,13 +330,13 @@ from src.audit.audit_analysis_ops import (
 from src.auth.interactive import (
     LoginOrchestrator,  # Re-exported so extracted refactors can resolve it via MistHelper (SC-023)
     MspOrgSelector,
-)  # Duplicate import (re-stated with comment below); kept to preserve module load behavior
+)  # Duplicate import (re-stated with comment below). Kept to preserve module load behavior
 from src.bootstrap.dependency_check import (
     DependencyCheckOrchestrator,
-)  # Duplicate import; harmless re-import of dependency check orchestrator
+)  # Duplicate import. Harmless re-import of dependency check orchestrator
 from src.bootstrap.package_installer import (
     PackageInstaller,
-)  # Duplicate import; harmless re-import of package installer
+)  # Duplicate import. Harmless re-import of package installer
 from src.cache.cache_utils import (
     CacheUtils,
 )  # Cat E canonical (1014 P14) -- re-export for MistHelper.CacheUtils callers
@@ -517,10 +517,10 @@ from src.refactors.device_config_template_cloner_manager import (
     DeviceConfigTemplateClonerManager,  # Extracted device config template cloner (SC-020)
 )
 from src.refactors.device_data_fetcher import (
-    DeviceDataFetcher,  # Extracted device fetcher (SC-017); lazy re-export for interactive_display_utils
+    DeviceDataFetcher,  # Extracted device fetcher (SC-017). Lazy re-export for interactive_display_utils
 )
 from src.refactors.fast_mode_backoff_multiplier import (
-    FastModeBackoffMultiplier,  # Extracted backoff multiplier (SC-028); lazy re-export for org_device_stats_exporter
+    FastModeBackoffMultiplier,  # Extracted backoff multiplier (SC-028). Lazy re-export for org_device_stats_exporter
 )
 
 # FastModeDevicesPerThread import removed: only referenced from within ConnectionPoolExecutor (1012 SC-003)
@@ -657,7 +657,7 @@ from src.websocket.manager import WebSocketManager  # Import WebSocket connectio
 # with additional handlers and formatting, but this ensures all early logging
 # calls go to the correct location.
 _early_log_dir = "data"  # Define data directory for logs (same as runtime output directory)
-os.makedirs(_early_log_dir, exist_ok=True)  # Create data/ directory if it doesn't exist (no error if already present)
+os.makedirs(_early_log_dir, exist_ok=True)  # Create data/ directory if it does not exist (no error if already present)
 _early_log_path = os.path.join(
     _early_log_dir, "script.log"
 )  # Define full path to script.log using os.path.join for cross-platform compatibility
@@ -682,11 +682,11 @@ _early_file_level = int(
     os.environ.get("LOGGING_LOG_LEVEL", logging.INFO)
 )  # Read file log level from env (default: INFO=20)
 
-# Make stdout/stderr resilient to non-cp1252 characters in real data (e.g. the Hawaiian
+# Make stdout/stderr resilient to non-cp1252 characters in real data (for example the Hawaiian
 # 'okina in addresses like "Maka'ala Street"). Without this, printing the comparison table
 # or logging such strings raises UnicodeEncodeError under the default Windows console codec.
 for _std_stream in (sys.stdout, sys.stderr):  # Harden both standard streams (best-effort).
-    _reconfigure = getattr(_std_stream, "reconfigure", None)  # TextIOWrapper has this; plain TextIO does not.
+    _reconfigure = getattr(_std_stream, "reconfigure", None)  # TextIOWrapper has this. Plain TextIO does not.
     if callable(_reconfigure):  # Only proceed when the stream supports reconfiguration.
         try:
             _reconfigure(encoding="utf-8", errors="backslashreplace")  # UTF-8 + never-crash fallback
@@ -700,11 +700,11 @@ _early_console_handler.setLevel(
 )  # Set console handler to respect CONSOLE_LOG_LEVEL environment variable
 _early_file_handler = logging.FileHandler(
     _early_log_path, encoding="utf-8"
-)  # script.log file output; UTF-8 so non-cp1252 chars (e.g. Hawaiian 'okina) never crash logging
+)  # script.log file output. UTF-8 keeps non-cp1252 chars (for example Hawaiian 'okina) from a crash in logging
 _early_file_handler.setLevel(_early_file_level)  # Set file handler to respect LOGGING_LOG_LEVEL environment variable
 
 logging.basicConfig(  # Configure root logger with handlers and format
-    level=logging.DEBUG,  # Root logger captures all levels; handlers filter based on their individual levels
+    level=logging.DEBUG,  # Root logger captures all levels. Handlers filter based on their individual levels
     format="%(asctime)s - %(levelname)s - %(message)s",  # Define log message format with timestamp, level, and message
     handlers=[_early_file_handler, _early_console_handler],  # Register both file and console handlers
     force=True,  # Force reconfiguration even if logging was already configured (needed for module init)
@@ -715,8 +715,8 @@ try:  # Attempt to import LogSanitizer from mistapi library
     from mistapi.__logger import LogSanitizer  # Import mistapi log sanitizer (redacts secrets from output)
 
     logging.getLogger().addFilter(LogSanitizer())  # Register sanitizer filter on root logger to redact all log records
-except ImportError:  # If LogSanitizer not available, skip (mistapi pre-0.59.3 doesn't have it)
-    pass  # mistapi pre-0.59.3 does not have LogSanitizer; safe to skip
+except ImportError:  # If LogSanitizer not available, skip (mistapi pre-0.59.3 does not have it)
+    pass  # mistapi pre-0.59.3 does not have LogSanitizer. Safe to skip
 
 # Log Python version warning if below minimum requirement
 if sys.version_info < MINIMUM_PYTHON_VERSION:  # Check if Python is below minimum version
@@ -742,11 +742,11 @@ if sys.version_info < MINIMUM_PYTHON_VERSION:  # Check if Python is below minimu
 # per function. Each dataclass encapsulates configuration for a specific domain.
 
 
-# NOTE: SSHConnectionConfig removed (1014 P3) - was a dead duplicate of src/ssh/ssh_runner.py:155;
-#       nothing in MistHelper.py imported the local copy, and all src/ssh/*.py callers
+# NOTE: SSHConnectionConfig removed (1014 P3) - was a dead duplicate of src/ssh/ssh_runner.py:155.
+#       Nothing in MistHelper.py imported the local copy, and all src/ssh/*.py callers
 #       already imported from src.ssh.ssh_runner. Import from src.ssh.ssh_runner instead.
-# NOTE: SSHExecutionConfig removed (1014 P1) - was a dead duplicate of src/ssh/ssh_runner.py:167;
-#       nothing in MistHelper.py imported the local copy, and all src/ssh/batch/*.py callers
+# NOTE: SSHExecutionConfig removed (1014 P1) - was a dead duplicate of src/ssh/ssh_runner.py:167.
+#       Nothing in MistHelper.py imported the local copy, and all src/ssh/batch/*.py callers
 #       already imported from src.ssh.ssh_runner. Import from src.ssh.ssh_runner instead.
 # NOTE: WebSocketListenerConfig removed - use ARPCommandManager._listen_for_output parameters directly
 # NOTE: MapViewerConfig removed (SC-002) - unused dataclass, MapsManager builds runtime state directly
@@ -782,13 +782,13 @@ except Exception:  # If python-dotenv is not installed yet, fall back to a manua
                     _k, _v = _line.split("=", 1)  # Split on the first '=' into key and value (values may contain '=')
                     os.environ.setdefault(
                         _k.strip(), _v.strip()
-                    )  # Set the var only if not already defined (don't override real env)
+                    )  # Set the var only if not already defined (do not override real env)
     except (FileNotFoundError, PermissionError, OSError) as _dotenv_exc:  # .env absent, unreadable, or IO error.
-        logging.debug("Skipping .env fallback parse: %s", _dotenv_exc)  # Diagnostic-only; .env is optional.
+        logging.debug("Skipping .env fallback parse: %s", _dotenv_exc)  # Diagnostic-only. The .env file is optional.
 
 # NOTE: PACKAGE_IMPORT_MAP extracted to
 # src/refactors/package_import_map.py::PackageImportMapManager.MAPPING
-# per initiative 1011 SC-025 (FR-003: no wrapper shim; FR-005: fn->method).
+# per initiative 1011 SC-025 (FR-003: no wrapper shim, FR-005: fn->method).
 
 
 def _get_installed_version(package_name: str) -> str:  # Look up the installed version string for a package
@@ -796,23 +796,23 @@ def _get_installed_version(package_name: str) -> str:  # Look up the installed v
     try:  # Attempt to read version metadata from the installed distribution
         from importlib.metadata import version as get_version  # Import the stdlib version lookup (Python 3.8+)
 
-        return get_version(package_name)  # Return the installed version string (e.g., '0.59.3')
+        return get_version(package_name)  # Return the installed version string (for example '0.59.3')
     except Exception:  # Package not installed or its metadata is missing
         return ""  # Return empty string to signal 'not installed' to callers
 
 
 def _leading_digits(segment: str) -> str:  # Extract the numeric prefix of one version segment
-    """Return the leading digit run of a version segment (e.g., '0a1' -> '0')."""
+    """Return the leading digit run of a version segment (for example '0a1' -> '0')."""
     numeric = ""  # Accumulate the leading digit characters of this segment
     for char in segment:  # Walk characters left to right until a non-digit ends the prefix
-        if not char.isdigit():  # First non-digit (e.g., the 'a' in '0a1') ends the numeric prefix
+        if not char.isdigit():  # First non-digit (for example the 'a' in '0a1') ends the numeric prefix
             break  # Ignore any pre-release suffix for comparison purposes
         numeric += char  # Append this digit to the numeric prefix
     return numeric  # Caller defaults empty results to 0
 
 
 def _parse_version(version_str: str) -> tuple[int, ...]:  # Convert a version string into a comparable integer tuple
-    """Parse version string into comparable tuple (e.g., '0.59.3' -> (0, 59, 3))."""
+    """Parse version string into comparable tuple (for example '0.59.3' -> (0, 59, 3))."""
     try:  # Malformed input is handled by the except below
         parts = [
             int(_leading_digits(part) or "0") for part in version_str.split(".")
@@ -842,12 +842,12 @@ def _pad_version_tuples(
 ) -> tuple[tuple[int, ...], tuple[int, ...]]:  # Zero-pad two version tuples to equal length
     """Right-pad both version tuples with zeros so they compare element-by-element."""
     max_len = max(len(installed_tuple), len(required_tuple))  # Longest of the two drives the padding width
-    installed_padded = installed_tuple + (0,) * (max_len - len(installed_tuple))  # Pad installed (e.g., 1.2 -> 1.2.0)
+    installed_padded = installed_tuple + (0,) * (max_len - len(installed_tuple))  # Pad installed to equal length
     required_padded = required_tuple + (0,) * (max_len - len(required_tuple))  # Pad required to align lengths
     return installed_padded, required_padded  # Equal-length tuples ready for comparison
 
 
-# Operator symbol -> comparison predicate; dict dispatch keeps _version_satisfies flat (no if/elif chain).
+# Operator symbol -> comparison predicate. Dict dispatch keeps _version_satisfies flat (no if/elif chain).
 _VERSION_COMPARATORS: dict[str, Callable[[tuple[int, ...], tuple[int, ...]], bool]] = {
     ">=": lambda installed, required: installed >= required,  # 'at least' constraint
     ">": lambda installed, required: installed > required,  # 'strictly newer' constraint
@@ -860,7 +860,7 @@ _VERSION_COMPARATORS: dict[str, Callable[[tuple[int, ...], tuple[int, ...]], boo
 
 def _version_satisfies(installed: str, spec: str) -> bool:  # Decide whether installed meets the spec constraint
     """Check if installed version satisfies the version specification."""
-    if not installed:  # An empty installed version means the package isn't present
+    if not installed:  # An empty installed version means the package is not present
         return False  # Treat 'not installed' as 'requirement not satisfied'
 
     operator_symbol, required_version = _extract_version_constraint(spec)  # Parse operator + required version
@@ -882,10 +882,10 @@ def _get_latest_pypi_version(package_name: str) -> str:  # Ask PyPI for a packag
     """Query PyPI for the latest version of a package.
 
     Uses a bounded read to prevent hangs behind corporate
-    proxies (e.g. Zscaler SSL inspection).
+    proxies (for example Zscaler SSL inspection).
     """
-    try:  # Network calls can fail many ways; treat any failure as 'latest unknown'
-        import json as json_mod  # Local import keeps startup fast when this code path isn't used
+    try:  # Network calls can fail many ways. Treat any failure as 'latest unknown'
+        import json as json_mod  # Local import keeps startup fast when this code path is not used
         import ssl  # Needed to build a TLS context for the HTTPS request
         import urllib.request  # Standard-library HTTP client (avoids needing 'requests' this early)
 
@@ -902,7 +902,7 @@ def _get_latest_pypi_version(package_name: str) -> str:  # Ask PyPI for a packag
             data = json_mod.loads(raw.decode())  # Parse the JSON metadata into a dict
             version = data.get("info", {}).get("version", "")  # Return latest version string, or '' if absent
             return str(version) if version else ""  # Cast to str for strict typing
-    except Exception:  # Any error (offline, proxy block, parse failure) means we can't determine the latest version
+    except Exception:  # Any error (offline, proxy block, parse failure) means we cannot determine the latest version
         return ""  # Empty string signals 'latest unknown' so callers skip the upgrade check
 
 
@@ -926,10 +926,10 @@ def _parse_requirement_line(line: str) -> tuple[str, str] | None:  # Parse one r
 def _parse_requirements_file(filepath: str = "requirements.txt") -> list[tuple[str, str]]:
     """Parse requirements.txt into a list of (package_name, package_spec) tuples.
 
-    SECURITY: only reads requirements.txt (no arbitrary file access); skips comments/blanks/dev deps.
+    SECURITY: only reads requirements.txt (no arbitrary file access). Skips comments/blanks/dev deps.
     """
     packages = []  # Accumulate (name, spec) tuples to return to the dependency checker
-    try:  # The file may be missing or unreadable; handle that gracefully below
+    try:  # The file may be missing or unreadable. Handle that gracefully below
         with open(filepath, encoding="utf-8") as requirements_file:  # Open requirements.txt as UTF-8 text
             for line in requirements_file:  # Process one dependency line at a time
                 parsed = _parse_requirement_line(line)  # Parse this line into (name, spec) or None to skip
@@ -953,7 +953,7 @@ def _parse_requirements_file(filepath: str = "requirements.txt") -> list[tuple[s
 
 
 # Simplified facade delegating dependency bootstrap logic to extracted src/bootstrap modules.
-def _early_dependency_check() -> None:  # Public entry point; delegates to the extracted bootstrap modules
+def _early_dependency_check() -> None:  # Public entry point. Delegates to the extracted bootstrap modules
     """Run early dependency checks through the extracted bootstrap orchestrator."""
     installer = PackageInstaller(  # Build the installer with stdlib modules injected (enables testing/mocking)
         os_module=os,  # Inject os for path/env operations
@@ -962,7 +962,7 @@ def _early_dependency_check() -> None:  # Public entry point; delegates to the e
         logging_module=logging,  # Inject logging for progress messages
     )
     orchestrator = DependencyCheckOrchestrator(  # Build the orchestrator that drives the detect-and-install flow
-        os_module=os,  # Inject os for env checks (DISABLE_AUTO_INSTALL, etc.)
+        os_module=os,  # Inject os for env checks (DISABLE_AUTO_INSTALL, and so on)
         logging_module=logging,  # Inject logging for progress messages
         sys_module=sys,  # Inject sys for the interpreter path
         package_import_map=PackageImportMapManager.MAPPING,  # Provide the pip-name -> import-name mapping
@@ -980,20 +980,20 @@ def _is_help_invocation(argv: list[str]) -> bool:
     """Return True when *argv* requests help output (``--help`` or ``-h``).
 
     Why:
-        ``--help`` must be side-effect-free (issue #1641): argparse renders
-        usage and exits immediately, so kicking off dependency installation
-        or eager import initialization before that point is wasted work
-        (and, on a fresh box, actively harmful). This helper is the single
+        ``--help`` must be side-effect-free (issue #1641). The argparse module
+        renders usage and exits at once. Work that starts dependency
+        installation or eager import initialization before that point is
+        wasted, and on a fresh box it is harmful. This helper is the single
         source of truth used by both the dependency-check guard and the
         deferred-imports conditional below.
 
     Args:
         argv: The full argument vector (typically ``sys.argv``). The program
-            name at position 0 is ignored; only the flag tail is inspected.
+            name at position 0 is ignored. Only the flag tail is inspected.
 
     Returns:
-        True if ``--help`` or ``-h`` appears as a full token in the tail;
-        False otherwise. Substring matches (e.g. ``--helpme``) do not count.
+        True if ``--help`` or ``-h`` appears as a full token in the tail.
+        False otherwise. Substring matches (for example ``--helpme``) do not count.
     """
     return any(token in ("--help", "-h") for token in argv[1:])
 
@@ -1046,7 +1046,7 @@ except ImportError:  # Extremely unlikely for a stdlib module, but guard anyway
 
 # Import mistapi later through GlobalImportManager for better dependency management
 # Using Any type since mistapi is dynamically loaded but guaranteed to be available before use
-mistapi: Any = None  # Placeholder; the real mistapi module is loaded later by GlobalImportManager
+mistapi: Any = None  # Placeholder. The real mistapi module is loaded later by GlobalImportManager
 
 
 # tqdm wrapper: canonical home is src/utils/tqdm_wrapper.py (1015 T-14, Cat E).
@@ -1119,7 +1119,7 @@ except ImportError:  # rapidfuzz not installed
 # CENTRALIZED PAGINATION DEFAULTS
 # ============================================================================
 # Several legacy code paths relied on the mistapi client's implicit default page
-# size (commonly 100). That caused excessive paging (e.g., 10x HTTP calls for
+# size (commonly 100). That caused excessive paging (for example 10x HTTP calls for
 # 1000-item datasets). We unify a single configurable default via environment
 # variable MIST_PAGE_LIMIT (clamped to 1..1000). All new/updated listOrgSites /
 # getOrgInventory calls should pass limit=DEFAULT_API_PAGE_LIMIT or use the
@@ -1151,14 +1151,14 @@ def _apply_dotenv_line(line: str) -> None:  # Set one KEY=VALUE pair from a .env
 
 
 # Early dotenv import for configuration loading
-def _fallback_load_dotenv() -> None:  # Minimal .env parser used when python-dotenv isn't installed
+def _fallback_load_dotenv() -> None:  # Minimal .env parser used when python-dotenv is not installed
     """Fallback .env loader when python-dotenv package is not installed."""
-    try:  # The .env file is optional; handle its absence/errors gracefully
+    try:  # The .env file is optional. Handle its absence/errors gracefully
         with open(".env") as dotenv_file:  # Open .env in the current working directory
             for line in dotenv_file:  # Process the file one line at a time
                 _apply_dotenv_line(line)  # Set this KEY=VALUE pair (skips blanks/comments internally)
     except FileNotFoundError:  # No .env file present
-        logging.debug("No .env file found")  # Not an error; just note it at debug level
+        logging.debug("No .env file found")  # Not an error. Just note it at debug level
     except Exception as parse_error:  # Any other read/parse problem
         logging.debug("Error loading .env file: %s", parse_error)  # Log the reason without crashing startup
 
@@ -1170,7 +1170,7 @@ try:  # Prefer the full-featured python-dotenv loader when available
     DOTENV_AVAILABLE = True  # Flag that the real loader is in use
     load_dotenv()  # Load .env now so config is available to the import manager
 except ImportError:  # python-dotenv not installed
-    DOTENV_AVAILABLE = False  # Flag that we're using the minimal fallback
+    DOTENV_AVAILABLE = False  # Flag that we are using the minimal fallback
     # Use fallback loader and create an alias for later calls
     load_dotenv = _fallback_load_dotenv  # Alias so later load_dotenv() calls still work
     _fallback_load_dotenv()  # Load .env now using the fallback parser
@@ -1241,7 +1241,7 @@ class GlobalImportManager:
         self._initialize_dependency_tracking()  # Prepare package-tracking lists and import/UV caches
         self._initialize_import_mappings()  # Build package->import name maps and special import handlers
         self._setup_logging()  # Configure handlers/levels before other init runs
-        self._detect_virtual_environment()  # Log whether we're in a venv (affects installs)
+        self._detect_virtual_environment()  # Log whether we are in a venv (affects installs)
         self._define_package_requirements()  # Populate the required/optional package dicts
 
     def _load_upgrade_configuration(self) -> None:  # Read upgrade/UV/CSV settings from the environment
@@ -1297,7 +1297,7 @@ class GlobalImportManager:
         }
 
     def _detect_virtual_environment(self) -> None:  # Determine and log whether a venv is active
-        """Detect if we're running in a virtual environment and log info."""
+        """Detect if we are running in a virtual environment and log info."""
         self.in_venv = hasattr(sys, "real_prefix") or (
             hasattr(sys, "base_prefix") and sys.base_prefix != sys.prefix
         )  # venv when prefixes differ
@@ -1317,7 +1317,7 @@ class GlobalImportManager:
         console_handler = self._build_console_log_handler(console_log_level)  # Build the console handler at env level
         file_handler = self._build_file_log_handler(file_log_level)  # Build the file handler (creates data/ if missing)
         logging.basicConfig(  # Wire up the root logger with both handlers
-            level=logging.DEBUG,  # Root captures everything; handlers filter by their own levels
+            level=logging.DEBUG,  # Root captures everything. Handlers filter by their own levels
             format="%(asctime)s - %(levelname)s - %(message)s",  # Default format (handlers override with their own)
             handlers=[file_handler, console_handler],  # Register both the file and console handlers
             force=True,  # Replace the earlier module-import basicConfig
@@ -1342,7 +1342,7 @@ class GlobalImportManager:
         os.makedirs("data", exist_ok=True)  # Create data/ if missing (no error if present)
         file_handler = logging.FileHandler(
             log_file_path, encoding="utf-8"
-        )  # script.log writer; UTF-8 so non-cp1252 chars (e.g. Hawaiian 'okina) never crash logging
+        )  # script.log writer. UTF-8 keeps non-cp1252 chars (for example Hawaiian 'okina) from a crash in logging
         file_handler.setLevel(level)  # Apply the file verbosity threshold
         file_formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")  # Same timestamped format
         file_handler.setFormatter(file_formatter)  # Attach the format to the file handler
@@ -1369,13 +1369,13 @@ class GlobalImportManager:
         if self._uv_checked:  # We already probed UV earlier this run
             return self._uv_available  # Reuse the cached answer (avoids repeated subprocess calls)
         self._uv_available = self._probe_uv_binary()  # Probe via subprocess and cache the answer
-        self._uv_checked = True  # Mark that we've probed UV so we don't repeat it
+        self._uv_checked = True  # Mark that we have probed UV so we do not repeat it
         return self._uv_available  # Return the (now cached) availability
 
     def _probe_uv_binary(self) -> bool:  # Run 'uv --version' to detect UV availability
         """Probe the UV binary by running 'uv --version' and log the outcome."""
         logging.debug("_probe_uv_binary: probing UV binary via subprocess")  # Log before probe
-        try:  # Probing UV may fail if it's not installed
+        try:  # Probing UV may fail if it is not installed
             result = SubprocessRunner.run(  # Audited dispatch (initiative 1016) -- shell=False + argv allow-list.
                 ["uv", "--version"], timeout=10, check=False
             )  # Run 'uv --version' via SubprocessRunner (validates argv, no shell).
@@ -1388,10 +1388,10 @@ class GlobalImportManager:
             logging.warning("UV package manager check failed: %s", e)  # Log why the probe failed
             return False  # UV is not usable
 
-    def _install_uv(self) -> bool:  # Attempt to install UV via pip when it's missing
+    def _install_uv(self) -> bool:  # Attempt to install UV via pip when it is missing
         """Install UV package manager if not present."""
         if not self.auto_upgrade_uv:  # UV auto-management disabled by config
-            logging.info("Auto-upgrade of UV is disabled in configuration")  # Note that we won't install UV
+            logging.info("Auto-upgrade of UV is disabled in configuration")  # Note that we will not install UV
             return False  # Signal UV is unavailable
 
         logging.info("Attempting to install UV package manager...")  # Announce the install attempt
@@ -1399,7 +1399,7 @@ class GlobalImportManager:
             # Try installing UV using pip as fallback
             result = SubprocessRunner.run(  # Audited dispatch (initiative 1016) -- interpreter self-invoke allowed.
                 [sys.executable, "-m", "pip", "install", "uv"],  # pip install command for the current interpreter
-                timeout=self.upgrade_check_timeout,  # Bound the install so startup can't hang
+                timeout=self.upgrade_check_timeout,  # Bound the install so startup cannot hang
                 check=False,  # Caller inspects returncode to branch on success/failure.
             )
             if result.returncode == 0:  # pip reported success
@@ -1415,7 +1415,7 @@ class GlobalImportManager:
     def _upgrade_uv(self) -> bool:  # Keep UV up to date, throttled to once per configured interval
         """Upgrade UV package manager to latest version (only if needed)."""
         if not self.auto_upgrade_uv:  # UV auto-management disabled by config
-            return True  # Nothing to do; treat as success
+            return True  # Nothing to do. Treat as success
         now = time.time()  # Current timestamp used for throttling
         if self._uv_update_within_throttle(now):  # Still inside the throttle window
             return True  # No update needed yet
@@ -1436,8 +1436,8 @@ class GlobalImportManager:
         return False  # Throttle window elapsed -- allow the check
 
     def _run_uv_self_update(self, now: float) -> bool:  # Run 'uv self update', recording the attempt time
-        """Attempt 'uv self update'; on failure, dispatch to the pip-fallback handler. Always non-fatal."""
-        try:  # The update may fail; treat most failures as non-critical
+        """Attempt 'uv self update'. On failure, dispatch to the pip-fallback handler. Always non-fatal."""
+        try:  # The update may fail. Treat most failures as non-critical
             logging.info("Checking for UV package manager updates...")  # Announce the update check
             result = SubprocessRunner.run(  # Audited dispatch (initiative 1016) -- 'uv' basename allow-listed.
                 ["uv", "self", "update"],
@@ -1450,13 +1450,13 @@ class GlobalImportManager:
                 return True  # Done
             return self._handle_uv_selfupdate_failure(result)  # Inspect stderr and try the pip fallback
         except (TimeoutExpired, SubprocessError) as e:  # Update process hung or failed to launch
-            self._last_uv_update_check = now  # Record the attempt so we don't retry immediately
+            self._last_uv_update_check = now  # Record the attempt so we do not retry immediately
             logging.warning("UV self-update failed: %s", e)  # Log the exception
             return True  # Non-critical failure -- the current UV still works
 
     def _handle_uv_selfupdate_failure(self, result: Any) -> bool:  # Handle a non-zero 'uv self update' result
-        """When self-update fails because UV was pip-installed, upgrade via pip; otherwise just log. Non-fatal."""
-        pip_installed_marker = (  # Marker stderr emits when self-update isn't supported for this install method
+        """When self-update fails because UV was pip-installed, upgrade via pip. Otherwise just log. Non-fatal."""
+        pip_installed_marker = (  # Marker stderr emits when self-update is not supported for this install method
             "Self-update is only available for uv binaries installed via the standalone installation scripts"
         )
         if pip_installed_marker not in result.stderr:  # Self-update failed for some other reason
@@ -1466,7 +1466,7 @@ class GlobalImportManager:
         pip_result = SubprocessRunner.run(  # Audited dispatch (initiative 1016) -- interpreter self-invoke allowed.
             [sys.executable, "-m", "pip", "install", "--upgrade", "uv"],  # pip upgrade command
             timeout=self.upgrade_check_timeout,  # Bound the upgrade
-            check=False,  # Caller inspects returncode; non-zero is warned, not raised.
+            check=False,  # Caller inspects returncode. Non-zero is warned, not raised.
         )
         if pip_result.returncode == 0:  # pip upgrade succeeded
             logging.info("UV package manager updated successfully via pip")  # Confirm the upgrade
@@ -1490,10 +1490,10 @@ class GlobalImportManager:
             return False  # Signal failure so the caller can fall back to pip
 
     def _attempt_uv_install(self, cmd: list[str], package_spec: str, *, fallback: bool) -> bool:  # One UV install try
-        """Run one UV install attempt; on success log+return True. On failure return False (logs stderr if fallback)."""
+        """Run one UV install attempt. On success log+return True. On failure return False (logs stderr if fallback)."""
         result = SubprocessRunner.run(  # Audited dispatch (initiative 1016) -- cmd argv built from allow-listed pieces.
             cmd,  # The assembled UV command
-            timeout=self.upgrade_check_timeout,  # Bound the install so it can't hang forever
+            timeout=self.upgrade_check_timeout,  # Bound the install so it cannot hang forever
             check=False,  # Non-zero rc is handled by the caller (fallback logging).
         )
         if result.returncode == 0:  # UV reported a successful install
@@ -1515,7 +1515,7 @@ class GlobalImportManager:
         return "uv"  # venv has no local UV -- fall back to PATH 'uv'
 
     def _build_uv_install_cmd(self, uv_cmd: str, package_spec: str, no_build_isolation: bool) -> list[str]:  # UV argv
-        """Assemble the 'uv pip install' argv: pin to this interpreter in a venv; add --no-build-isolation if set."""
+        """Assemble the 'uv pip install' argv: pin to this interpreter in a venv. Add --no-build-isolation if set."""
         cmd = [uv_cmd, "pip", "install"]  # Base UV install command
         if hasattr(self, "in_venv") and self.in_venv:  # Inside a venv -- pin the install to this interpreter
             cmd += ["--python", sys.executable]  # Target the current Python explicitly
@@ -1531,7 +1531,7 @@ class GlobalImportManager:
             # Always use the current Python executable to ensure installation in the right environment
             result = SubprocessRunner.run(  # Audited dispatch (initiative 1016) -- interpreter self-invoke allowed.
                 [sys.executable, "-m", "pip", "install", package_spec],  # Invoke pip as a module of this Python
-                timeout=self.upgrade_check_timeout,  # Bound the install so it can't hang forever
+                timeout=self.upgrade_check_timeout,  # Bound the install so it cannot hang forever
                 check=False,  # Non-zero rc is inspected below rather than raised.
             )
             if result.returncode == 0:  # pip reported a successful install
@@ -1566,7 +1566,7 @@ class GlobalImportManager:
                 ["uv", "--version"], timeout=5, check=False
             )  # Query installed UV version via SubprocessRunner (validates argv, no shell).
             if result.returncode != 0:  # UV is missing or failed to report its version
-                return False  # Can't determine an update is needed
+                return False  # Cannot determine an update is needed
 
             # For now, we'll assume UV is up to date since checking remote version is complex
             # In a production environment, you might want to implement version comparison
@@ -1580,7 +1580,7 @@ class GlobalImportManager:
         """Install missing dependencies and upgrade existing ones."""
         if not self.auto_upgrade_dependencies:  # Auto-upgrade disabled by configuration
             logging.info("Auto-upgrade of dependencies is disabled in configuration")  # Note the skip
-            return True  # Nothing to do; treat as success
+            return True  # Nothing to do. Treat as success
         packages_to_process = self._collect_packages_to_process()  # (name, spec) pairs, built-ins excluded
         if not packages_to_process:  # Caller supplied an empty work list
             logging.info("No packages to process")  # Note there is nothing to do
@@ -1591,7 +1591,7 @@ class GlobalImportManager:
         return success_count > 0  # Report success if at least one package installed
 
     def _install_dependency_batch(self, packages_to_process: list[tuple[str, str]]) -> int:  # Install a batch
-        """Install each (name, spec) package via the best backend; return the count that installed successfully."""
+        """Install each (name, spec) package via the best backend. Return the count that installed successfully."""
         uv_available = self._check_uv_installation()  # Detect whether UV can be used as the fast installer
         logging.info(  # Record which installer backend will be used
             "Using UV package manager for installations"
@@ -1679,7 +1679,7 @@ class GlobalImportManager:
                 if isinstance(iterable, Sized):  # The iterable has a known length
                     total = len(cast(Sized, iterable))  # Compute total item count for the message
                     logging.info("%s: %s %ss to process", desc, total, unit)  # Log a one-shot progress summary
-                else:  # Length is unknown (e.g. a generator)
+                else:  # Length is unknown (for example a generator)
                     logging.info("%s: processing %ss...", desc, unit)  # Log an indefinite progress message
                 return iterable  # Pass the iterable through unchanged (no live bar)
 
@@ -1687,8 +1687,8 @@ class GlobalImportManager:
 
     def _check_and_upgrade_package(self, module_name: str, package_spec: str) -> bool:
         """Check if a package needs upgrading and upgrade it if necessary. Always non-fatal (returns True)."""
-        if not package_spec:  # No version spec provided (e.g. a stdlib module)
-            return True  # Built-in modules don't need upgrading
+        if not package_spec:  # No version spec provided (for example a stdlib module)
+            return True  # Built-in modules do not need upgrading
         try:  # Upgrade problems must never block startup
             package_name = self._bare_package_name(package_spec)  # Strip version operators to the bare name
             result = self._run_pip_show(package_name)  # Ask pip what version is currently installed
@@ -1707,7 +1707,7 @@ class GlobalImportManager:
 
     @staticmethod
     def _bare_package_name(package_spec: str) -> str:  # Strip version operators from a package spec
-        """Return the bare package name from a spec (e.g. 'requests>=2.28.0' -> 'requests')."""
+        """Return the bare package name from a spec (for example 'requests>=2.28.0' -> 'requests')."""
         return package_spec.split(">=")[0].split("==")[0].split("<")[0].split(">")[0].strip()  # Drop any constraint
 
     def _run_pip_show(self, package_name: str) -> Any:  # Query pip for a package's metadata
@@ -1740,7 +1740,7 @@ class GlobalImportManager:
         """Run the upgrade command and log whether the version advanced. Always non-fatal (returns True)."""
         upgrade_result = SubprocessRunner.run(  # Audited dispatch (initiative 1016).
             self._build_upgrade_cmd(package_spec),  # UV or pip upgrade argv
-            timeout=self.upgrade_check_timeout,  # Bound the upgrade so it can't hang
+            timeout=self.upgrade_check_timeout,  # Bound the upgrade so it cannot hang
             check=False,  # Non-zero rc is downgraded to a debug log, not raised.
         )
         if upgrade_result.returncode != 0:  # The upgrade command failed
@@ -1776,7 +1776,7 @@ class GlobalImportManager:
         )  # All four install gates must pass before attempting an install.
 
     def _attempt_install(self, package_spec: str) -> bool:
-        """Install a package, preferring UV then falling back to pip; return True if either succeeded."""
+        """Install a package, preferring UV then falling back to pip. Return True if either succeeded."""
         installed = False  # Track whether any installer succeeded.
         if self._check_uv_installation():  # UV is the preferred fast installer.
             logging.debug("Trying UV installation for %s", package_spec)  # Note the UV attempt.
@@ -1798,7 +1798,7 @@ class GlobalImportManager:
                 logging.debug("Cleared cached module: %s", mod_name)  # Record the cache purge.
 
     def _retry_import_after_install(self, module_name: str, package_spec: str, required: bool) -> Any | None:
-        """Re-import a module after a successful install; return it, or None if the import still fails."""
+        """Re-import a module after a successful install. Return it, or None if the import still fails."""
         try:  # The install may still not satisfy the import in this Python session.
             module = self._resolve_and_import(module_name)  # Re-import now that the package is installed.
             self.imports[module_name] = module  # Cache the now-successful import.
@@ -1820,7 +1820,7 @@ class GlobalImportManager:
     def _install_and_retry(
         self, module_name: str, package_spec: str | None, required: bool, skip_deps: bool
     ) -> Any | None:
-        """Install a missing dependency (when permitted) and retry the import; return the module or None."""
+        """Install a missing dependency (when permitted) and retry the import. Return the module or None."""
         if not self._auto_install_allowed(package_spec, skip_deps):  # Auto-install must be permitted.
             return None  # Installation not allowed -- nothing to retry.
         if package_spec is None:  # Defensive guard: an overridden gate must never trigger an unbounded install.
@@ -1981,12 +1981,12 @@ class GlobalImportManager:
         Import packages concurrently for faster dependency resolution.
 
         Args:
-            packages_dict: Dictionary of package_name: package_spec
-            required: Whether these are required (True) or optional (False) packages
-            skip_deps: Whether to skip dependency installation
-            max_workers: Maximum number of concurrent workers
+            packages_dict: A package to spec map.
+            required: True for required packages.
+            skip_deps: Skip installation when True.
+            max_workers: The thread pool size.
         """
-        log_lock = threading.Lock()  # Guards logging so concurrent threads don't interleave messages
+        log_lock = threading.Lock()  # Guards logging so concurrent threads do not interleave messages
         builtin_packages, external_packages = self._partition_dependencies(packages_dict)  # Split by spec presence
         for item in builtin_packages.items():  # Built-ins import instantly with no network needed
             self._import_single_dependency(item, required, skip_deps, log_lock)  # Import each sequentially
@@ -2243,15 +2243,15 @@ class GlobalImportManager:
 def _get_tuning_data_file_path() -> str:
     """Return full path to tuning data JSON stored in data/ directory.
 
-    Ensures the directory exists. Separated for future extension (e.g.,
+    Ensures the directory exists. Separated for future extension (for example,
     namespacing by org or mode) without scattering path logic.
     """
     data_dir = os.path.join(os.getcwd(), "data")  # Build the path to the data/ subdirectory under the CWD
     try:
         os.makedirs(data_dir, exist_ok=True)  # Create data/ if it does not already exist (idempotent)
     except Exception:
-        # If directory creation fails, fall back to current working directory;
-        # logging deferred until logger configured.
+        # If directory creation fails, fall back to current working directory.
+        # Logging deferred until logger configured.
         return os.path.join(os.getcwd(), "tuning_data.json")  # Degrade gracefully to a CWD-level file
     return os.path.join(data_dir, "tuning_data.json")  # Normal case: store tuning data inside data/
 
@@ -2300,7 +2300,7 @@ if (
     else:  # Some other deferring flag combination
         logging.info("Deferring import initialization due to CLI flags")  # Generic deferral notice
 
-if _initialize_imports_now:  # Eager path: set up all imports now
+if _initialize_imports_now:  # Eager path: prepare all imports now
     # Initialize all imports upfront for faster runtime performance
     success, global_assignments = (
         import_manager.initialize_all_imports()
@@ -2361,7 +2361,7 @@ LAST_SELECTED_SITE_ID: str | None = None
 # transparently -- the re-exported symbol is the same class, not a delegator.
 # The rebind dance ``ensure_tqdm_available`` used to perform is no longer
 # needed since T-14 makes ``tqdm`` resolve through ``src.utils.tqdm_wrapper``
-# at import time; the probe was retained for its logging side effect at the
+# at import time. The probe was retained for its logging side effect at the
 # single caller (``src/refactors/main_entrypoint.py``).
 from src.utils.input_utils import InputUtils  # noqa: E402, I001  # Cat E canonical (1015 T-09) -- re-export.
 
@@ -2377,7 +2377,7 @@ AUTO_UPGRADE_DEPENDENCIES: bool = config["auto_upgrade_dependencies"]  # Whether
 UPGRADE_CHECK_TIMEOUT: int = config["upgrade_check_timeout"]  # Seconds before an install/upgrade subprocess times out
 
 # API Request Timeout (seconds) - prevents indefinite hangs on slow/dropped connections
-# Default 120s is generous; most Mist API calls return within 30s
+# Default 120s is generous. Most Mist API calls return within 30s
 API_REQUEST_TIMEOUT = int(os.getenv("API_REQUEST_TIMEOUT", "120"))  # Hard cap on a single API request
 API_REQUEST_MAX_RETRIES = int(os.getenv("API_REQUEST_MAX_RETRIES", "3"))  # How many times to retry a failed API request
 API_REQUEST_RETRY_DELAY = float(os.getenv("API_REQUEST_RETRY_DELAY", "5.0"))  # Seconds to wait between API retries
@@ -2391,13 +2391,13 @@ org_id = None  # Active organization ID, populated after the user selects an org
 # Additional Fast Mode Configuration from .env (continuing from earlier definitions)
 # NOTE: FAST_MODE_BACKOFF_MULTIPLIER extracted to
 # src/refactors/fast_mode_backoff_multiplier.py::FastModeBackoffMultiplier.VALUE
-# per initiative 1011 SC-028 (FR-003: no wrapper shim; FR-005: const->classattr).
+# per initiative 1011 SC-028 (FR-003: no wrapper shim, FR-005: const->classattr).
 # NOTE: FAST_MODE_DEVICES_PER_THREAD extracted to
 # src/refactors/fast_mode_devices_per_thread.py::FastModeDevicesPerThread.VALUE
-# per initiative 1011 SC-029 (FR-003: no wrapper shim; FR-005: const->classattr).
+# per initiative 1011 SC-029 (FR-003: no wrapper shim, FR-005: const->classattr).
 # NOTE: FAST_MODE_SEQUENTIAL_MAX_RETRIES extracted to
 # src/refactors/fast_mode_sequential_max_retries.py::FastModeSequentialMaxRetries.VALUE
-# per initiative 1011 SC-030 (FR-003: no wrapper shim; FR-005: const->classattr).
+# per initiative 1011 SC-030 (FR-003: no wrapper shim, FR-005: const->classattr).
 FAST_MODE_RETRY_THREADS = int(os.getenv("FAST_MODE_RETRY_THREADS", "4"))  # Thread count for the retry pass
 FAST_MODE_RETRY_MAX_RETRIES = int(os.getenv("FAST_MODE_RETRY_MAX_RETRIES", "2"))  # Retry ceiling within the retry pass
 FAST_MODE_FALLBACK_THREADS = int(os.getenv("FAST_MODE_FALLBACK_THREADS", "8"))  # Thread count for the fallback pass
@@ -2410,7 +2410,7 @@ FAST_MODE_FALLBACK_THREADS = int(os.getenv("FAST_MODE_FALLBACK_THREADS", "8"))  
 FAST_MODE_ENABLED: bool = False  # Set to True via --fast CLI flag at startup
 
 # NOTE: MIST_WAN_TARGET_PORTS extracted to src/refactors/mist_wan_target_ports.py
-# per initiative 1011 SC-032 (FR-003: no wrapper shim; FR-005: assignment->classattr).
+# per initiative 1011 SC-032 (FR-003: no wrapper shim, FR-005: assignment->classattr).
 
 # NOTE: MIST_SITE_EXCLUDE_PREFIX extracted to src/refactors/mist_site_exclude_prefix.py (T-15, Cat E).
 # Site Exclusion Configuration from .env (REQUIRED - no defaults).
@@ -2426,13 +2426,13 @@ OUTPUT_FORMAT = "csv"  # Valid values: "csv", "sqlite"
 DATABASE_PATH = os.path.join("data", "mist_data.db")  # Path to hybrid SQLite database with natural primary keys
 
 # Global progress telemetry emitter (initialized in main(), best-effort per FR-008)
-PROGRESS_EMITTER = None  # Set in main() to a telemetry sink; None disables progress reporting
+PROGRESS_EMITTER = None  # Set in main() to a telemetry sink. None disables progress reporting
 
 # ============================================================================
 # GLOBAL SESSION INITIALIZATION
 # ============================================================================
 
-# Initialize Mist API session (will be set up after authentication)
+# Initialize Mist API session (prepared after authentication)
 # Type annotation uses Any since mistapi is dynamically imported
 apisession: Any | None = None
 
@@ -2480,7 +2480,7 @@ def _restore_session_globals_from_state(state: dict[str, Any]) -> None:
 
 # NOTE: initialize_mist_session_interactive() extracted to
 # src/refactors/initialize_mist_session_interactive.py::MistSessionInteractiveInitializer.initialize
-# per initiative 1011 SC-023 (FR-003: no wrapper shim; FR-005: fn->method).
+# per initiative 1011 SC-023 (FR-003: no wrapper shim, FR-005: fn->method).
 
 
 def _print_switch_login_header() -> None:
@@ -2520,7 +2520,7 @@ def _attempt_interactive_login_with_rollback(old_session: Any, old_org_id: str |
     global apisession, msp_privileges, org_id  # We may overwrite or restore these globals
 
     logging.debug("Entering _attempt_interactive_login_with_rollback()")  # Trace entry for debugging
-    logging.debug("Clearing existing session state for re-authentication")  # Note we're resetting before re-login
+    logging.debug("Clearing existing session state for re-authentication")  # Note we are resetting before re-login
 
     apisession = None  # Drop the current session so the interactive flow starts clean
     msp_privileges = []  # Clear cached MSP grants from the old session
@@ -2642,7 +2642,7 @@ def _select_org_from_session() -> None:
         "  Selecting organization from your session privileges..."
     )  # Legacy console echo routed via logger.
     logging.warning("")  # Legacy console echo routed via logger.
-    _invoke_mistapi_org_picker_and_apply()  # Run picker; updates the org_id global
+    _invoke_mistapi_org_picker_and_apply()  # Run picker. Updates the org_id global
 
 
 def _load_mistapi_module(current_mistapi: Any) -> Any:
@@ -2713,10 +2713,10 @@ def _preflight_verify_credentials(require_token: bool = True) -> None:
     """Fail closed before any mistapi/requests call when host/token config is missing or a placeholder.
 
     Feature 1020 (US3): invoked at the top of ``_establish_mist_session()`` for every dispatch mode. It
-    performs only local string validation - it never imports ``requests``/``mistapi`` and never issues an
-    HTTP request - so a misconfigured run exits with a redacted, actionable message instead of letting
-    mistapi build a malformed URL. Token presence is required for token-based modes
-    (``--test``/``--testinteractive``/TUI/CLI); ``require_token`` is False for interactive ``--login``,
+    performs only local string validation. It never imports ``requests`` or ``mistapi`` and never issues
+    an HTTP request. So a misconfigured run exits with a redacted, actionable message instead of a
+    malformed URL from mistapi. Token presence is required for token-based modes
+    (``--test``/``--testinteractive``/TUI/CLI). The ``require_token`` is False for interactive ``--login``,
     which authenticates via email/password rather than a token. Any token value present is shown only via
     ``_redact_tokens()`` previews, never raw (FR-015/SC-005).
     """
@@ -2748,7 +2748,7 @@ def _preflight_verify_credentials(require_token: bool = True) -> None:
 
 
 def _check_token_rate_limit(token: str, test_host: str) -> bool:
-    """Probe a token via GET /self; True if rate-limited/unreachable, False if usable."""
+    """Probe a token via GET /self. True if rate-limited/unreachable, False if usable."""
     try:
         import requests  # Import here -- only needed for this edge-case rate-limit probe path
 
@@ -2885,7 +2885,7 @@ def _try_single_session_kwargs(
     attempt_num: int,
     total: int,
 ) -> tuple[Any, bool]:
-    """Try one APISession kwargs dict; return (session_or_None, rate_limit_seen)."""
+    """Try one APISession kwargs dict. Return (session_or_None, rate_limit_seen)."""
     if apisession_cls is None:  # Guard: class must be present if attempts list was built
         raise AssertionError("apisession_cls should be set if attempts list is populated")
     try:  # APISession constructor may raise on auth/validation/rate-limit
@@ -2908,7 +2908,7 @@ def _execute_session_attempts(
     apisession_cls: Any,
     attempts: list[dict[str, str]],
 ) -> tuple[Any, Any, bool, list[str]]:
-    """Try each kwargs dict until one constructs a valid APISession; track rate-limit signal."""
+    """Try each kwargs dict until one constructs a valid APISession. Track rate-limit signal."""
     tried_variants: list[str] = []  # Track all attempted kwargs for error reporting on total failure
     successful_method: Any = None  # Will hold the kwargs dict that succeeded
     rate_limit_detected = False  # Set True if NoneType rate-limit error signature is seen
@@ -2917,7 +2917,7 @@ def _execute_session_attempts(
         tried_variants.append(str(list(kwargs.keys())))  # Record attempt as string of keys before trying
         session, attempt_rate_limit = _try_single_session_kwargs(
             apisession_cls, kwargs, i, len(attempts)
-        )  # Try one kwargs dict; capture rate-limit signal
+        )  # Try one kwargs dict. Capture rate-limit signal
         if attempt_rate_limit:  # Even a failed attempt may surface the rate-limit signature
             rate_limit_detected = True  # Preserve the signal across iterations
         if session is not None:  # Successful construction -- record winning kwargs and stop
@@ -3122,7 +3122,7 @@ def _validate_initialized_session(session: Any, successful_method: Any) -> bool:
 
     Calls _ensure_mist_get_method to verify/add mist_get compatibility, then
     calls _log_session_auth_status to warn if authentication cannot be confirmed.
-    Returns False only for hard failures (missing mist_get); auth warnings are non-fatal.
+    Returns False only for hard failures (missing mist_get). Auth warnings are non-fatal.
 
     Args:
         session: The initialized APISession or Session object.
@@ -3163,14 +3163,14 @@ def _log_failed_session_variants(tried_variants: list[str]) -> None:
 
 # NOTE: initialize_mist_session() extracted to
 # src/refactors/initialize_mist_session.py::MistSessionInitializer.initialize
-# per initiative 1011 SC-024 (FR-003: no wrapper shim; FR-005: fn->method).
+# per initiative 1011 SC-024 (FR-003: no wrapper shim, FR-005: fn->method).
 
 
 def _install_default_request_timeout(inner_session: Any) -> None:
     """Install API_REQUEST_TIMEOUT as the default timeout on the requests.Session."""
-    from requests.adapters import HTTPAdapter  # Lazy import; requests is large and only needed here
+    from requests.adapters import HTTPAdapter  # Lazy import. The requests package is large and only needed here
 
-    class TimeoutAdapter(HTTPAdapter):  # Nested so we don't expose a public adapter class
+    class TimeoutAdapter(HTTPAdapter):  # Nested so we do not expose a public adapter class
         """HTTPAdapter that injects a default timeout."""
 
         def __init__(self, default_timeout: int, **kwargs: Any) -> None:  # Capture the project-wide timeout default
@@ -3188,7 +3188,7 @@ def _install_default_request_timeout(inner_session: Any) -> None:
         ) -> Any:
             if timeout is None:  # Caller did not supply a per-call timeout -- substitute our default
                 timeout = self.default_timeout
-            # Issue #431: forward args verbatim; signature must match parent for adapter contract.
+            # Issue #431: forward args verbatim. The signature must match parent for adapter contract.
             return super().send(request, stream=stream, timeout=timeout, verify=verify, cert=cert, proxies=proxies)
 
     adapter = TimeoutAdapter(default_timeout=API_REQUEST_TIMEOUT)  # Single instance shared by both schemes
@@ -3301,7 +3301,7 @@ from src.data.data_processing_utils import DataProcessingUtils  # noqa: E402, I0
 # Dependency injection is used so the module has no circular import with MistHelper.
 # NOTE: marvis_data_utils singleton extracted to
 # src/refactors/marvis_data_utils.py::MarvisDataUtilsFactory.instance()
-# per initiative 1011 SC-027 (FR-003: no wrapper shim; FR-005: fn->method).
+# per initiative 1011 SC-027 (FR-003: no wrapper shim, FR-005: fn->method).
 # DatabaseSchemaUtils moved to src/db/database_schema_utils.py (1013 SC-001 position 38)
 # DataExporter body extracted to src/export/data_exporter.py per issue #1015 T-08 (Cat E).
 # Class is imported at module top via: from src.export.data_exporter import DataExporter
@@ -3339,19 +3339,19 @@ from src.ui.prompt_utils import PromptUtils  # noqa: E402,F401  # T-07 re-export
 
 
 # --- OrgInventoryExporter body removed (1015 T-06 Cat E) ---
-# Canonical implementation lives in src/export/org_inventory_exporter.py; re-exported above.
+# Canonical implementation lives in src/export/org_inventory_exporter.py. Re-exported above.
 
 
 # --- OrgDeviceStatsExporter facade removed (1013 SC-001 Cat B pos 45) ---
-# Canonical implementation lives in src/export/org_device_stats_exporter.py; re-exported above.
+# Canonical implementation lives in src/export/org_device_stats_exporter.py. Re-exported above.
 
 
 # --- OfflineDeviceReporter facade removed (1013 SC-001 Cat B pos 44) ---
-# Canonical implementation lives in src/reports/offline_device_reporter.py; re-exported above.
+# Canonical implementation lives in src/reports/offline_device_reporter.py. Re-exported above.
 
 
 # --- OrgDeviceInventorySummary facade removed (1013 SC-001 Cat B pos 29) ---
-# Canonical implementation lives in src/inventory/org_device_inventory_summary_facade.py; re-exported above.
+# Canonical implementation lives in src/inventory/org_device_inventory_summary_facade.py. Re-exported above.
 
 
 # OrgTemplateExporter moved to src/export/org_template_exporter.py (1013 SC-001 position 22)
@@ -3383,7 +3383,7 @@ from src.ui.prompt_utils import PromptUtils  # noqa: E402,F401  # T-07 re-export
 # OrgConfigExporter moved to src/export/org_config_exporter.py (issue #1013 SC-001 position 31)
 
 
-# --- OrgExportUtils facade removed (1013 SC-001 Cat B pos 47); see src/export/org_export_utils.py ---
+# --- OrgExportUtils facade removed (1013 SC-001 Cat B pos 47). See src/export/org_export_utils.py ---
 
 
 # ============================================================================
@@ -3401,11 +3401,11 @@ from src.ui.prompt_utils import PromptUtils  # noqa: E402,F401  # T-07 re-export
 
 
 # --- SiteAnomalyExporter facade removed (1013 SC-001 Cat B pos 43) ---
-# Canonical implementation lives in src/export/site_anomaly_exporter.py; re-exported above.
+# Canonical implementation lives in src/export/site_anomaly_exporter.py. Re-exported above.
 
 
 # --- SitesByAPModelExporter facade removed (1013 SC-001 Cat B pos 28) ---
-# Canonical implementation lives in src/export/sites_by_ap_model_exporter.py; re-exported above.
+# Canonical implementation lives in src/export/sites_by_ap_model_exporter.py. Re-exported above.
 
 # ============================================================================
 # WEBSOCKET COMMAND FUNCTIONS
@@ -3453,7 +3453,7 @@ def _get_duc_instance() -> DeviceUtilityCommands:  # Build DeviceUtilityCommands
 
 
 # NOTE: DeviceUtilityCommands facade removed 2026-07-07 (Issue #1013, SC-001 position 4).
-# The 188-LOC facade of 35 @staticmethod delegates lived here; menu_actions callsites now
+# The 188-LOC facade of 35 @staticmethod delegates lived here. The menu_actions callsites now
 # invoke `lambda: _get_duc_instance().method_name()` directly against the canonical
 # instance-based class in `src/device/utility_commands.py`. See PR history for details.
 
@@ -3576,7 +3576,7 @@ def _dispatch_gateway_device_configs(debug: bool = False, fast: bool = False) ->
 
 # NOTE: GatewayExportUtils facade removed per 1013 SC-001 (Cat A, position 13).
 # Canonical class lives at src/gateway/gateway_export_utils.py and is imported at
-# top-of-file. DI wiring lives in _configure_gateway_module() above; menu callbacks
+# top-of-file. DI wiring lives in _configure_gateway_module() above. Menu callbacks
 # route through _dispatch_gateway_* shims to ensure DI cascade runs first.
 
 
@@ -3604,7 +3604,7 @@ def _dispatch_gateway_device_configs(debug: bool = False, fast: bool = False) ->
 # ============================================================================
 # SSH RUNNER MANAGER FACADE REMOVED (1014 P15, Cat A)
 # ============================================================================
-# Canonical class lives at src/ssh/ssh_runner_manager.py; imported at top of file.
+# Canonical class lives at src/ssh/ssh_runner_manager.py. Imported at top of file.
 # The helper below builds the DI container from MistHelper module globals.
 def _build_ssh_runner_deps() -> SSHRunnerManagerDeps:  # Build the deps bundle for SSHRunnerManager entrypoints.
     """Build dependency container for SSH runner logic (reads MistHelper globals)."""
@@ -3752,7 +3752,7 @@ def _build_firmware_manager(session: Any, target_org_id: str) -> FirmwareManager
 
 # NOTE: OrgLevelAPFirmwareUpgrader facade removed per initiative 1014 SC-001 position 7
 # (FR-004 fold-in / FR-003 no wrapper shim). The canonical body lives at
-# src/firmware/org_ap_upgrader.py; menu 157 + menu 168 callbacks now build the
+# src/firmware/org_ap_upgrader.py. Menu 157 + menu 168 callbacks now build the
 # implementation directly via _build_org_ap_upgrader() and inline DI.
 
 
@@ -3763,8 +3763,8 @@ def _build_org_ap_upgrader(**overrides: Any) -> _OrgLevelAPFirmwareUpgrader:
     ``selected_msp`` via keyword. All remaining hooks bind to canonical
     MistHelper.py collaborators.
     """
-    # WHY: read-only references to module globals msp_privileges/apisession/selected_msp;
-    # no assignment means `global` is unnecessary (drops PLW0602 site, initiative 1016).
+    # WHY: read-only references to module globals msp_privileges/apisession/selected_msp.
+    # No assignment means `global` is unnecessary (drops PLW0602 site, initiative 1016).
     kwargs: dict[str, Any] = dict(  # WHY: build DI kwargs dict for src class
         org_id=ConfigUtils.get_cached_or_prompted_org_id() or "",
         apisession=apisession,
@@ -3783,7 +3783,7 @@ def _build_org_ap_upgrader(**overrides: Any) -> _OrgLevelAPFirmwareUpgrader:
 
 
 # NOTE: BulkSwitchFirmwareUpgrader folded into FirmwareManager per initiative 1011 SC-033
-# (FR-015: fold-in to caller; FR-003: no wrapper shim). Sole caller now dispatches directly
+# (FR-015: fold-in to caller, FR-003: no wrapper shim). Sole caller now dispatches directly
 # to src.firmware.bulk_switch_upgrader.BulkSwitchFirmwareUpgrader.
 
 
@@ -4846,7 +4846,7 @@ def _systematic_test_build_safe_list(
     for opt in optimized_test_order:  # Place optimized-order options first to minimize total test run time.
         if opt in remaining:  # Only include options present in the actual safe set.
             safe_options.append(opt)  # Add to the ordered result.
-            remaining.discard(opt)  # Remove so it won't appear in the remainder block.
+            remaining.discard(opt)  # Remove so it will not appear in the remainder block.
     safe_options.extend(
         sorted(remaining, key=lambda x: float(x.replace("a", ".1")))
     )  # Append all remaining safe options in natural numeric order.
@@ -4876,7 +4876,7 @@ def _systematic_test_emit_skips(emitter: Any, unsafe_list: list[str]) -> int:
 def _resolve_systematic_test_invoke_kwargs(func: Any, fast_enabled: bool) -> dict[str, Any]:
     """Inspect a menu function's signature and build invoke kwargs (fast=True only if supported)."""
     supports_fast = False  # Default to no fast-mode support until introspection confirms it.
-    try:  # inspect.signature can raise on built-in callables; degrade gracefully.
+    try:  # inspect.signature can raise on built-in callables. Degrade gracefully.
         sig = inspect.signature(func)  # Detect optional 'fast' parameter
         supports_fast = "fast" in sig.parameters  # True when function accepts fast-mode
     except Exception:  # Signature inspection failure is non-fatal
@@ -4890,7 +4890,7 @@ def _resolve_systematic_test_invoke_kwargs(func: Any, fast_enabled: bool) -> dic
 def _invoke_one_systematic_test(
     emitter: Any, case: SystematicTestOption, invoke_kwargs: dict[str, Any], op_start: float
 ) -> tuple[bool, float]:
-    """Call one menu func with the resolved kwargs; record pass/fail in telemetry and return (success, duration)."""
+    """Call one menu func with the resolved kwargs. Record pass/fail in telemetry and return (success, duration)."""
     option, func, description = case.option, case.func, case.description  # Unpack identity (issue #470)
     try:  # Each option runs independently so one failure does not abort remaining tests
         func(**invoke_kwargs)  # Call menu action
@@ -4946,7 +4946,7 @@ def _fast_mode_from_global() -> bool:
 
 def _fast_mode_from_cli_args() -> bool:
     """Return True iff parsed ``args`` exist in globals and carry ``--fast`` (errors -> False)."""
-    try:  # CLI args presence + attribute lookup can both fail; degrade safely.
+    try:  # CLI args presence + attribute lookup can both fail. Degrade safely.
         cli_args = globals().get("args") if "args" in globals() else None  # Locate parsed args, if any.
         return bool(cli_args and getattr(cli_args, "fast", False))  # Truthy only when --fast was set.
     except Exception:  # Defensive -- never propagate.
@@ -5021,7 +5021,7 @@ def _initialize_systematic_telemetry(unsafe_list: list[str]) -> tuple[TelemetryE
     emitter = TelemetryEmitter(telemetry_path)  # Open emitter so all events land in one timestamped file.
     skip_count = _systematic_test_emit_skips(
         emitter, unsafe_list
-    )  # Print skip list and emit skip events; returns actual skip count.
+    )  # Print skip list and emit skip events. Returns actual skip count.
     return emitter, telemetry_path, skip_count
 
 
@@ -5050,7 +5050,7 @@ def _execute_systematic_test_loop(
         else:  # Non-success means the option raised or returned an error.
             error_count += 1  # Increment on failed option execution.
         if not fast_enabled:  # API-respectful delay between test runs in normal mode.
-            time.sleep(1)  # One-second pause so the API isn't hammered by rapid-fire requests.
+            time.sleep(1)  # One-second pause so the API is not hammered by rapid-fire requests.
     return success_count, error_count
 
 
@@ -5087,7 +5087,7 @@ def _report_systematic_outcome(success_count: int, error_count: int, safe_count:
             success_count,
             total_time,
         )  # Record all-pass event for monitoring.
-        return True  # Signal all-pass to callers (e.g., for exit-code logic).
+        return True  # Signal all-pass to callers (for example, for exit-code logic).
     logging.warning(
         "    %d operations failed - check logs for details", error_count
     )  # Legacy console echo routed via logger.
@@ -5320,8 +5320,8 @@ def _add_interface_arguments(parser: argparse.ArgumentParser) -> None:
 
 
 # Mapping of unsupported flag spellings -> the supported canonical spelling.
-# Why: users naturally type hyphenated variants (e.g. `--test-interactive`) but argparse
-# treats a hyphen as a token boundary, so it can't prefix-match to `--testinteractive`.
+# Why: users naturally type hyphenated variants (for example `--test-interactive`) but argparse
+# treats a hyphen as a token boundary, so it cannot prefix-match to `--testinteractive`.
 # Left unchecked, the invocation is rejected by argparse with a generic "unrecognized
 # arguments" message and (worse) the interactive-test module-import sniff at the top of
 # this file — which literally checks `"--testinteractive" in sys.argv` — silently
@@ -5336,11 +5336,11 @@ def _reject_unsupported_flag_variants(argv: list[str]) -> None:
     """Exit with actionable guidance when *argv* contains a known unsupported flag spelling.
 
     Why:
-        argparse cannot prefix-match `--test-interactive` to `--testinteractive` (the hyphen
-        breaks matching), and the module-import-time argv sniff for `--testinteractive`
-        (see top of this file) would silently proceed as if the test flag were absent.
-        Issue #1640 requires that the unsupported spelling produce an actionable error
-        naming the correct canonical flag and NEVER silently reroute the user.
+        argparse cannot prefix-match `--test-interactive` to `--testinteractive`, because the
+        hyphen breaks matching. The module-import-time argv sniff for `--testinteractive`
+        (see top of this file) would then proceed as if the test flag were absent.
+        Issue #1640 requires that the unsupported spelling produce an actionable error.
+        The error must name the correct canonical flag and NEVER silently reroute the user.
 
     Args:
         argv: The raw argument list (typically `sys.argv[1:]`) to scan. Tokens are also
@@ -5351,7 +5351,7 @@ def _reject_unsupported_flag_variants(argv: list[str]) -> None:
             in `_UNSUPPORTED_FLAG_VARIANTS`. The stderr message names both the offending
             spelling and the supported canonical spelling.
     """
-    for token in argv:  # Scan every raw token in argv; order-independent match.
+    for token in argv:  # Scan every raw token in argv. Order-independent match.
         head = token.split("=", 1)[0]  # Strip any `=value` suffix so `--flag=1` is comparable.
         if head in _UNSUPPORTED_FLAG_VARIANTS:  # Only gate the explicitly-listed bad spellings.
             supported = _UNSUPPORTED_FLAG_VARIANTS[head]  # Look up the canonical replacement.
@@ -5488,7 +5488,7 @@ def _establish_mist_session(args: argparse.Namespace) -> None:
     # Feature 1020 (US3, R4 insertion-point 1): host/token preflight for every dispatch mode. Runs before
     # the --login/token branches so a missing/placeholder host or token exits with a redacted, actionable
     # message BEFORE mistapi/requests can build a malformed URL. require_token is False for interactive
-    # --login (email/password auth needs no token); host is still validated in both modes. The second,
+    # --login (email/password auth needs no token). Host is still validated in both modes. The second,
     # distinct failure mode - a non-interactive org-id miss - is guarded separately in ConfigUtils (R4
     # insertion-point 2), since org selection is interactive-vs-non-interactive dependent.
     _preflight_verify_credentials(require_token=not args.login)  # Fail closed pre-network on bad host/token
@@ -5554,7 +5554,7 @@ def _configure_runtime_options(args: argparse.Namespace) -> None:
             "Progress telemetry emitter init failed (non-blocking): %s", emitter_exc
         )  # Log non-fatal failure
         PROGRESS_EMITTER = None  # Set to None so callers skip telemetry gracefully
-    if args.debug:  # Apply debug logging level to file handlers; keep console at INFO to avoid noise
+    if args.debug:  # Apply debug logging level to file handlers. Keep console at INFO to avoid noise
         _apply_debug_log_level()  # Promote root + file handlers to DEBUG
     logging.debug("_configure_runtime_options: complete")  # Log exit
 
@@ -5587,7 +5587,7 @@ def _ensure_tui_api_session() -> None:
 
 
 def _silence_console_handlers_for_tui() -> None:
-    """Remove non-file console handlers from the root logger so they don't disrupt the Rich UI."""
+    """Remove non-file console handlers from the root logger so they do not disrupt the Rich UI."""
     root_logger = logging.getLogger()  # Access root logger to modify handlers.
     console_handlers = [  # Identify console handlers to suppress during TUI.
         h
@@ -5595,7 +5595,7 @@ def _silence_console_handlers_for_tui() -> None:
         if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler)
     ]
     for handler in console_handlers:  # Iterate handlers to remove each.
-        root_logger.removeHandler(handler)  # Remove console handler so logs don't disrupt Rich display.
+        root_logger.removeHandler(handler)  # Remove console handler so logs do not disrupt Rich display.
         logging.debug("TUI_MODE: Removed console handler to prevent interference with Rich TUI")  # Log removal.
 
 
@@ -5679,7 +5679,7 @@ def _resolve_cli_org_id(args: argparse.Namespace) -> str:
     """Return --org if given, otherwise resolve from cache / interactive prompt."""
     if args.org:  # CLI explicitly provided the org ID.
         logging.info("Using org_id from CLI argument: %s", args.org)  # Log CLI org ID.
-        return str(args.org)  # Return the CLI org ID (argparse gives Any; narrow to str).
+        return str(args.org)  # Return the CLI org ID (argparse gives Any, so narrow to str).
     return ConfigUtils.get_cached_or_prompted_org_id()  # Fall back to cache or prompt.
 
 
@@ -5687,12 +5687,12 @@ def _build_site_name_to_id_map(sites: list[dict[str, Any]]) -> dict[str, str]:
     """Build a {name: id} lookup map from a list of site dicts, skipping entries missing either field."""
     return {
         str(site["name"]): str(site["id"]) for site in sites if site.get("name") and site.get("id")
-    }  # Build name->id map; drop sites missing name or id
+    }  # Build name->id map. Drop sites missing name or id
 
 
 def _resolve_cli_site_id(args: argparse.Namespace, org_id: str) -> str | None:
     """Resolve --site name to a site_id via API lookup. Exit 1 if name not found. Return None if no --site."""
-    if not args.site:  # No --site supplied; nothing to resolve.
+    if not args.site:  # No --site supplied. Nothing to resolve.
         return None  # Caller treats None as "no site filter".
     logging.info(
         "Resolving site name '%s' to site_id using unified pagination limit %d...",
@@ -5712,7 +5712,7 @@ def _resolve_cli_site_id(args: argparse.Namespace, org_id: str) -> str | None:
 
 def _resolve_cli_device_id(args: argparse.Namespace, site_id: str | None) -> str | None:
     """Resolve --device name to a device_id via site-scoped API lookup. Requires site context."""
-    if not (args.device and site_id):  # Either no --device or no site context; nothing to resolve.
+    if not (args.device and site_id):  # Either no --device or no site context. Nothing to resolve.
         return None  # Caller treats None as "no device filter".
     logging.info("Resolving device name '%s' at site_id '%s'...", args.device, site_id)  # Log before device resolution.
     response = mistapi.api.v1.sites.devices.listSiteDevices(
@@ -5728,7 +5728,7 @@ def _resolve_cli_device_id(args: argparse.Namespace, site_id: str | None) -> str
         )  # Legacy console echo routed via logger.
         sys.exit(1)  # Exit -- cannot proceed with unknown device.
     logging.info("Resolved device name '%s' to device_id '%s'.", args.device, device_id)  # Log resolution success.
-    return str(device_id)  # Return the resolved device_id (dev["id"] is Any; narrow to str).
+    return str(device_id)  # Return the resolved device_id (dev["id"] is Any, so narrow to str).
 
 
 def _dispatch_cli_menu_action(args: argparse.Namespace, site_id: str | None, device_id: str | None) -> None:
@@ -5785,7 +5785,7 @@ def _run_interactive_mode(args: argparse.Namespace) -> None:
         selected = menu_actions.get(iwant)  # Look up user selection in dispatch table.
         if not selected:  # Invalid (non-empty) selection entered -- redisplay or exit.
             _handle_interactive_invalid_selection(iwant, container_mode)  # Print + maybe exit on invalid input.
-            continue  # In container mode, loop again; direct mode already exited inside the handler.
+            continue  # In container mode, loop again. Direct mode already exited inside the handler.
         func, _ = selected  # Extract callable from menu_actions entry.
         logging.info(
             "User selected menu option '%s'. Executing associated function.", iwant
@@ -5794,7 +5794,7 @@ def _run_interactive_mode(args: argparse.Namespace) -> None:
 
 
 def _setup_interactive_container_mode() -> bool:
-    """Detect whether MistHelper is running inside a container; print banner if yes."""
+    """Detect whether MistHelper is running inside a container. Print banner if yes."""
     container_mode = EnvironmentUtils.is_running_in_container()  # Check Podman/Docker container marker files.
     if container_mode:  # Container mode: show banner and loop after each operation.
         logging.info("Container mode detected - enabling continuous menu loop")  # Log container detection.
@@ -5802,7 +5802,7 @@ def _setup_interactive_container_mode() -> bool:
             "[CONTAINER MODE] MistHelper will return to menu after each operation"
         )  # Legacy console echo routed via logger.
         logging.warning("                 Use option 0 to exit the container")  # Legacy console echo routed via logger.
-    return container_mode  # Return flag so the loop can branch on container vs. direct mode.
+    return container_mode  # Return flag so the loop can branch on container or direct mode.
 
 
 def _print_interactive_menu() -> None:
@@ -5867,9 +5867,9 @@ def _execute_interactive_menu_action(iwant: str, func: Callable[[], None], conta
         logging.info("Menu option '%s' execution complete.", iwant)  # Log completion after function returns.
         _dispatch_post_menu_success(iwant, container_mode)  # Branch on container vs direct + session-management ops.
     except KeyboardInterrupt:  # User pressed Ctrl+C during operation.
-        _handle_post_menu_interrupt(iwant, container_mode)  # Container loops; direct exits with SIGINT code.
+        _handle_post_menu_interrupt(iwant, container_mode)  # Container loops. Direct exits with SIGINT code.
     except Exception as error:  # Unexpected error during menu function execution.
-        _handle_post_menu_exception(iwant, error, container_mode)  # Container loops; direct exits with error code.
+        _handle_post_menu_exception(iwant, error, container_mode)  # Container loops. Direct exits with error code.
 
 
 def _dispatch_post_menu_success(iwant: str, container_mode: bool) -> None:
@@ -5924,7 +5924,7 @@ def _handle_post_menu_exception(iwant: str, error: Exception, container_mode: bo
 
 # NOTE: main entrypoint extracted to
 # src/refactors/main_entrypoint.py::MainEntrypoint.run
-# per initiative 1011 SC-026 (FR-003: no wrapper shim; FR-005: fn->method).
+# per initiative 1011 SC-026 (FR-003: no wrapper shim, FR-005: fn->method).
 
 
 def _run_systematic_test_mode(_args: argparse.Namespace) -> None:
@@ -5968,7 +5968,7 @@ def _dispatch_main_mode(args: argparse.Namespace) -> None:
     for predicate, handler in mode_table:  # Stop on first predicate that matches
         if predicate(args):
             handler(args)
-            return  # Most handlers sys.exit; return is defensive for _run_cli_mode
+            return  # Most handlers call sys.exit. The return is defensive for _run_cli_mode
     _run_interactive_mode(args)  # Fallback: interactive menu loop
 
 
@@ -6002,7 +6002,7 @@ if __name__ == "__main__":
             if IS_TEST_MODE:
                 logging.info("TEST MODE ACTIVE: Reducing default 24h lookback windows to 1h for eligible exports.")
         except NameError:
-            # IS_TEST_MODE may not yet be defined if refactor order changes; ignore safely
+            # IS_TEST_MODE may not yet be defined if refactor order changes. Ignore safely
             pass
 
         # Install a global exception hook early so we capture full tracebacks for unexpected issues
