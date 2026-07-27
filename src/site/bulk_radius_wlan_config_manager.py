@@ -270,7 +270,7 @@ class BulkRadiusWLANConfigManager:
     @staticmethod
     def _is_range_part(part: str) -> bool:
         """Return True when a selection piece is a range like '3-7' (not a leading-minus negative)."""
-        return "-" in part and not part.startswith("-")  # A dash that isn't a leading minus marks a range.
+        return "-" in part and not part.startswith("-")  # A dash that is not a leading minus marks a range.
 
     @staticmethod
     def _parse_range_part(part: str) -> tuple[int, int] | None:
@@ -492,7 +492,7 @@ class BulkRadiusWLANConfigManager:
             "compliance_status": wlan.get("_compliance_status", ""),  # COMPLIANT/NEEDS_UPDATE from the filter step
             "inheritance_level": wlan.get("_inheritance_level", ""),  # template vs org (from _add_inheritance_metadata)
             "inheritance_source": wlan.get("_inheritance_source", ""),  # Where the WLAN is defined
-            "auth_type": auth.get("type", "") if isinstance(auth, dict) else "",  # eap/eap192/psk/etc.
+            "auth_type": auth.get("type", "") if isinstance(auth, dict) else "",  # eap/eap192/psk/and so on
             "num_auth_servers": len(wlan.get("auth_servers", []) or []),  # How many RADIUS servers are configured
             "radsec_enabled": radsec.get("enabled", False) if isinstance(radsec, dict) else False,  # RadSec on/off
             "auth_servers_timeout": wlan.get("auth_servers_timeout", 5),  # Actual value (5 = the check's own default)
@@ -532,7 +532,7 @@ class BulkRadiusWLANConfigManager:
                 writer.writerows(self.change_records)  # Write every recorded change
             print(f"\n[+] Audit trail exported to: {filepath}")
             logging.info("Audit trail exported to %s with %s records", filepath, len(self.change_records))
-        except Exception as e:  # Writing the CSV failed (permissions, disk, etc.)
+        except Exception as e:  # Writing the CSV failed (permissions, disk, and so on)
             print(f"\n[!] Failed to export audit trail: {e}")
             logging.error("Failed to export audit trail: %s", e)
 
@@ -598,7 +598,7 @@ class BulkRadiusWLANConfigManager:
             print("\n[*] No selection made. Exiting.")  # Inform the user.
             return None  # Abort.
         selected_indices = self._parse_selection(selection)  # Parse into 0-based indices.
-        if selected_indices is None:  # User explicitly cancelled (e.g., 'q').
+        if selected_indices is None:  # User explicitly cancelled (for example, 'q').
             print("\n[*] Operation cancelled by user.")  # Acknowledge.
             logging.info("Menu 122 cancelled by user at selection prompt")  # Log cancellation.
             return None  # Abort.

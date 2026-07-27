@@ -172,7 +172,7 @@ class _PlotlyViewer:  # WHY: Class boundary for extracted Plotly/Dash viewer met
                 mode="lines",  # WHY: Line-only trace.
                 line=dict(color=color, width=3),  # WHY: Status-based color for horizontal arm.
                 name=f"{group_name} Orientation",  # WHY: Group name enables layer toggle.
-                showlegend=False,  # WHY: Don't clutter legend with individual crosshair lines.
+                showlegend=False,  # WHY: Do not clutter legend with individual crosshair lines.
                 hoverinfo="skip",  # WHY: No hover needed -- orientation marker only.
             )
         )
@@ -261,7 +261,7 @@ class _PlotlyViewer:  # WHY: Class boundary for extracted Plotly/Dash viewer met
         for beacon in vbeacons:  # WHY: Iterate all virtual beacons.
             x, y = beacon.get("x"), beacon.get("y")  # WHY: Pixel coordinates on map.
             if x is None or y is None:  # WHY: Skip beacons without position data.
-                continue  # WHY: Can't place beacon without coordinates.
+                continue  # WHY: Cannot place beacon without coordinates.
             beacon_x.append(x)  # WHY: Store valid x coordinate.
             beacon_y.append(y)  # WHY: Store valid y coordinate.
             name = beacon.get("name", "Unnamed Beacon")  # WHY: Beacon display name fallback.
@@ -336,7 +336,7 @@ class _PlotlyViewer:  # WHY: Class boundary for extracted Plotly/Dash viewer met
                 fill="toself",  # WHY: Close and fill the ring shape.
                 fillcolor="rgba(0,255,0,0.05)",  # WHY: Very light fill for coverage area visualization.
                 name="vBeacon Coverage",
-                showlegend=False,  # WHY: Don't add each circle to legend -- too many entries.
+                showlegend=False,  # WHY: Do not add each circle to legend -- too many entries.
                 hoverinfo="skip",  # WHY: No hover needed -- visual indicator only.
             )
         )
@@ -350,7 +350,7 @@ class _PlotlyViewer:  # WHY: Class boundary for extracted Plotly/Dash viewer met
             x = beacon.get("x")  # WHY: Beacon center x pixel coordinate.
             y = beacon.get("y")  # WHY: Beacon center y pixel coordinate.
             if x is None or y is None:  # WHY: Skip beacons without coordinates.
-                continue  # WHY: Can't draw circle without center point.
+                continue  # WHY: Cannot draw circle without center point.
             power = beacon.get("power", 0)  # WHY: Transmit power in dBm (typical: -12 to +4).
             self._draw_vbeacon_coverage_ring(fig, x, y, power)  # WHY: Delegate ring drawing to keep CC low.
 
@@ -385,14 +385,14 @@ class _PlotlyViewer:  # WHY: Class boundary for extracted Plotly/Dash viewer met
             x = beacon.get("x")  # WHY: Beacon x pixel coordinate.
             y = beacon.get("y")  # WHY: Beacon y pixel coordinate.
             if x is None or y is None:  # WHY: Skip beacons without position data.
-                continue  # WHY: Can't place beacon without coordinates.
+                continue  # WHY: Cannot place beacon without coordinates.
             ble_x.append(x)  # WHY: Store valid x coordinate.
             ble_y.append(y)  # WHY: Store valid y coordinate.
             name = beacon.get("name", beacon.get("mac", "Unnamed"))  # WHY: Prefer name; fall back to MAC.
             ble_names.append(name)  # WHY: Store name for annotation.
             hover = f"<b>BLE Beacon: {name}</b><br>"  # WHY: Bold header for hover tooltip.
             hover += f"MAC: {beacon.get('mac', 'N/A')}<br>"  # WHY: Hardware MAC address.
-            hover += f"Type: {beacon.get('type', 'N/A')}<br>"  # WHY: Beacon type (iBeacon, Eddystone, etc.).
+            hover += f"Type: {beacon.get('type', 'N/A')}<br>"  # WHY: Beacon type (iBeacon, Eddystone, and so on).
             hover += f"Power: {beacon.get('power', 'N/A')}<br>"  # WHY: Transmit power in dBm.
             hover += f"Position: ({x}, {y})"  # WHY: Pixel coordinates on map.
             ble_hover.append(hover)  # WHY: Append completed hover text.

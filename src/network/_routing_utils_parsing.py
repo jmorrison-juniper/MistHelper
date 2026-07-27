@@ -267,7 +267,7 @@ class _RoutingUtilsParsing:  # WHY: cluster wrapper matching the ``_packet_captu
             current_route["next_hop"] = via_parts  # WHY: store normalized (comma-stripped) form
             return  # WHY: early-return keeps subsequent checks from firing on same token
         if "." in via_parts and "/" not in via_parts:  # WHY: interface names have dot but no slash
-            current_route["interface"] = via_parts.strip()  # WHY: e.g. ``ge-0/0/0.0``
+            current_route["interface"] = via_parts.strip()  # WHY: for example ``ge-0/0/0.0``
             return  # WHY: guard prevents fallthrough from also setting next_hop
         current_route["next_hop"] = via_parts.strip()  # WHY: fallback (hostname/non-numeric next-hop)
 
@@ -316,7 +316,7 @@ class _RoutingUtilsParsing:  # WHY: cluster wrapper matching the ``_packet_captu
             "protocol": protocol,  # WHY: caller-supplied so all rows share the same label
             "admin_distance": "",  # WHY: SSR does not expose admin distance in this response
             "metric": str(row.get("metric", "")),  # WHY: coerce int→str for uniform display formatting
-            "status": row.get("status", ""),  # WHY: e.g. active/inactive per row
+            "status": row.get("status", ""),  # WHY: for example active/inactive per row
             "vrf": row.get("vrfName", "default"),  # WHY: SSR uses ``vrfName`` (camelCase)
             "name": row.get("name", ""),  # WHY: optional route name assigned in SSR config
             "weight": str(row.get("weight", "")),  # WHY: coerce int→str for uniform display formatting
@@ -361,7 +361,7 @@ class _RoutingUtilsParsing:  # WHY: cluster wrapper matching the ``_packet_captu
 
     def _normalize_json_route_list(self, data: list[Any]) -> list[dict[str, Any]]:
         """Normalize a top-level JSON list of route dicts."""
-        # WHY: skip non-dict entries so malformed items don't crash the projection
+        # WHY: skip non-dict entries so malformed items do not crash the projection
         return [self._normalize_json_route_entry(item) for item in data if isinstance(item, dict)]
 
     def _extract_routes_from_json_dict(self, data: dict[str, Any]) -> list[dict[str, Any]]:

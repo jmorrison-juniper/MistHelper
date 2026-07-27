@@ -208,7 +208,7 @@ class HostRunner:
         if len(command.strip()) <= _PASSWORD_RESPONSE_MIN_LEN:  # WHY: too short to be a password.
             return False  # WHY: preserve legacy length gate.
         if prev_command.strip().lower() not in _PRIV_ESC_TRIGGERS:  # WHY: only care after su/sudo.
-            return False  # WHY: prior command doesn't imply a reply.
+            return False  # WHY: prior command does not imply a reply.
         if command.startswith(_SAFE_RESPONSE_PREFIXES):  # WHY: paths + show-cmds are legit follow-ups.
             return False  # WHY: skip legit non-password follow-ups.
         logger.debug(  # WHY: trace which command triggered detection.

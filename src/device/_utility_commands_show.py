@@ -12,7 +12,7 @@ reduces the parent's public-method count so STRUCT-METHOD-COUNT passes.
 
 Because none of the helpers these commands call
 (``_run_websocket_command``, ``_display_and_export_result``,
-``_select_site_and_device``, etc.) are defined on this cluster, plain
+``_select_site_and_device``, and so on) are defined on this cluster, plain
 ``self._method(...)`` calls resolve via the cluster's ``__getattr__``
 back to the parent, so tests that use
 ``patch.object(duc, "_run_websocket_command", ...)`` continue to win.
@@ -54,7 +54,7 @@ class ShowCommandSpec:  # WHY: preset bundle per show command
     shrinking them below the 25-line STRUCT-LENGTH limit.
     """
 
-    sdk_method: Any  # WHY: bound mistapi method (traceroute/show*/monitor/etc.)
+    sdk_method: Any  # WHY: bound mistapi method (traceroute/show*/monitor/and so on)
     command_name: str  # WHY: banner label printed above rendered output
     api_function_name: str  # WHY: audit label recorded on the export row
     filename: str  # WHY: CSV output filename passed to write_export

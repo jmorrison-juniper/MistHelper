@@ -202,7 +202,7 @@ class _ViewerSiteSwitch:  # WHY: wrapper class hosting the site-switch callback 
         import dash  # WHY: local import - dash.callback_context only exists at request time
 
         ctx = dash.callback_context  # WHY: per-request trigger context
-        if not ctx.triggered:  # WHY: empty means we're in the initial page load
+        if not ctx.triggered:  # WHY: empty means we are in the initial page load
             return "initial_load"  # WHY: mirror original label
         prop_id: str = ctx.triggered[0]["prop_id"]  # WHY: annotate for strict-typed str return
         return prop_id.split(".")[0]  # WHY: strip prop suffix to get component id

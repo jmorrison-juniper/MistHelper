@@ -18,7 +18,7 @@ from dataclasses import dataclass  # The standard library dataclass decorator.
 class WebSocketStreamTarget:
     """Connection identity that locates one device's WebSocket command stream."""
 
-    mist_host: str  # Mist API-WS host the stream connects to (e.g. api-ws.mist.com).
+    mist_host: str  # Mist API-WS host the stream connects to (for example api-ws.mist.com).
     mist_apitoken: str  # API token used in the WebSocket Authorization header.
     site_id: str  # Site UUID the target device belongs to.
     device_id: str  # Device UUID whose command output is being streamed.

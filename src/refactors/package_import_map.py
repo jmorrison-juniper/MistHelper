@@ -9,8 +9,8 @@ in MistHelper.py after this extraction.
 
 The mapping keys are pip distribution names and values are the
 corresponding importable module names -- the pair diverges whenever a
-project publishes under one name (e.g. `pillow`) but exposes its API
-under another (e.g. `PIL`). The manager class exposes the mapping as a
+project publishes under one name (for example `pillow`) but exposes its API
+under another (for example `PIL`). The manager class exposes the mapping as a
 class-level attribute so consumers can grab it via
 `PackageImportMapManager.MAPPING` while keeping the moved surface a
 single import symbol.

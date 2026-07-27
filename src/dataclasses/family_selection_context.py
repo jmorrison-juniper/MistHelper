@@ -24,7 +24,7 @@ class FamilySelectionContext:
     output dict as direct parameters, keeping its signature at 3 total params.
     """
 
-    family: str  # Human-readable model-family name (e.g. "AP43"); used only for log/print output.
+    family: str  # Human-readable model-family name (for example "AP43"); used only for log/print output.
     models: list[str]  # List of concrete model SKUs that belong to this family.
     sorted_versions: list[str]  # Operator-visible numbered choices, sorted newest-first.
     current_version: str | None  # The version currently configured on this family (None when unset).

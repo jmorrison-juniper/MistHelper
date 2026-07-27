@@ -155,7 +155,7 @@ def _classify_ssid_count(
     if ssid_count < _MIN_ELIGIBLE_SSIDS:  # WHY: only-target-SSID is not consolidation-ready
         return True, "1 SSID"  # WHY: reason string surfaces in dashboard summaries
     if ssid_count > _MAX_ELIGIBLE_SSIDS:  # WHY: 3+ SSIDs require manual review
-        return True, "3+ SSIDs"  # WHY: string covers 3,4,5+ so downstream doesn't overspecify
+        return True, "3+ SSIDs"  # WHY: string covers 3,4,5+ so downstream does not overspecify
     return False, ""  # WHY: exactly 2 SSIDs — eligible count
 
 

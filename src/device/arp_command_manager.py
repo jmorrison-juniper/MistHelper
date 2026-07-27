@@ -183,7 +183,7 @@ class ARPCommandManager:  # ARP WebSocket command manager.
     @staticmethod
     @staticmethod
     def _parse_ws_arp_payload(message: str):
-        """Parse a WebSocket frame into the inner ARP data dict (returns None when frame can't be unwrapped)."""
+        """Parse a WebSocket frame into the inner ARP data dict (returns None when frame cannot be unwrapped)."""
         msg = json.loads(message)  # Outer envelope
         data_str = msg.get("data", "{}")  # Outer data string
         data_obj = json.loads(data_str) if isinstance(data_str, str) else data_str  # Inner JSON or already-parsed
@@ -313,7 +313,7 @@ class ARPCommandManager:  # ARP WebSocket command manager.
         for line in lines:  # Walk lines.
             if "Total" in line:  # Total marker.
                 current_dataset = dataset2  # Switch datasets.
-                continue  # Marker isn't a row.
+                continue  # Marker is not a row.
             columns = ARPCommandManager._extract_arp_columns(line)  # Delegate tab-split + strip
             if columns:  # Have columns.
                 current_dataset.append(columns)  # Collect the row.

@@ -49,7 +49,7 @@ class StreamWsSpec:  # WHY: bundle for _stream_ws_output single-arg signature
 
     site_id: str  # WHY: mistapi site scope for SDK call
     device_id: str  # WHY: mistapi device scope for SDK call
-    sdk_method: Any  # WHY: bound mistapi method (traceroute/monitor_traffic/etc.)
+    sdk_method: Any  # WHY: bound mistapi method (traceroute/monitor_traffic/and so on)
     body: dict[str, Any] | None  # WHY: optional JSON body; some SDK methods take none
     websocket_manager: Any  # WHY: already-connected WebSocketManager instance
     timeout_seconds: int  # WHY: overall wait budget for streaming result

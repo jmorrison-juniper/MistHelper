@@ -21,7 +21,7 @@ The four mistapi-touching helpers (``_create_or_update_single_template``,
 ``_create_new_template``) and ``_disable_single_ssid`` are intentionally
 *not* moved here: they resolve ``mistapi`` at call time and the historical
 unit tests patch ``mistapi`` through the parent module's namespace
-(e.g. ``patch.object(ssid_template_consolidation, "mistapi", ...)``),
+(for example ``patch.object(ssid_template_consolidation, "mistapi", ...)``),
 which only intercepts calls whose ``__globals__`` binding *is* the
 parent module. Keeping those five helpers in the parent preserves those
 tests without teaching them about internal module boundaries.

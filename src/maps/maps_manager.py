@@ -54,7 +54,7 @@ from src.dataclasses.map_wizard_deps import (  # Issue #433 Phase C T3: replacem
 from src.maps._container_detection import (
     is_running_in_container,
 )  # Detects Docker/container runtimes to gate GUI viewer launches.
-from src.maps._flask_viewer import launch_flask_viewer  # Flask-based fallback viewer for containerized/headless envs.
+from src.maps._flask_viewer import launch_flask_viewer  # Flask fallback viewer for headless environments.
 from src.maps._plotly_viewer import launch_plotly_viewer  # Dash/Plotly interactive viewer for desktop use.
 from src.maps._maps_utils import (  # Shared helpers: dict flattening, filename sanitization, CSV/JSON exports.
     flatten_dict_recursively,
@@ -79,9 +79,9 @@ PIL_AVAILABLE = importlib.util.find_spec("PIL") is not None  # Cached truthy fla
 if PLOTLY_AVAILABLE:  # Only import heavy plotly module when available at runtime.
     import plotly.graph_objects as go  # Bound at module level so downstream figure builders can reference it.
 else:
-    go = None  # Fallback sentinel so attribute checks don't NameError.
+    go = None  # Fallback sentinel so attribute checks do not NameError.
 
-# Dash symbols (Input, Output, State, etc.) are imported locally
+# Dash symbols (Input, Output, State, and so on) are imported locally
 # in methods that need them, since they require dash to be installed.
 Dash = None  # Placeholder; real Dash class imported lazily inside launcher methods.
 html = None  # Placeholder for dash.html; imported lazily where needed.
@@ -253,7 +253,7 @@ class MapsManager:  # WHY: declare MapsManager class
         print(f"{'-' * 80}")  # Separator rule
         for idx, map_item in enumerate(maps, 1):  # Enumerate with 1-based index for humans
             map_name = map_item.get("name", "Unnamed")  # Map display name
-            map_type = map_item.get("type", "N/A")  # Map type (image, geojson, etc.)
+            map_type = map_item.get("type", "N/A")  # Map type (image, geojson, and so on)
             has_image = "with image" if "url" in map_item else "no image"  # Image availability tag
             print(f"  {idx}. {map_name} ({map_type}) - {has_image}")  # Numbered row
         print(f"{'-' * 80}")  # Closing rule
@@ -1181,7 +1181,7 @@ class MapsManager:  # WHY: declare MapsManager class
         print("-" * 80)  # WHY: surface user-facing message
 
     def maps_without_images_report(self):  # WHY: declare public method maps_without_images_report
-        """Generate report of maps that don't have uploaded images."""
+        """Generate report of maps that do not have uploaded images."""
         print("\n" + "-" * 80)  # WHY: surface user-facing message
         print("MAPS WITHOUT IMAGES REPORT")  # WHY: surface user-facing message
         print("-" * 80)  # WHY: surface user-facing message
@@ -1338,7 +1338,7 @@ class MapsManager:  # WHY: declare MapsManager class
         self._confirm_and_apply_map_update(site_id, map_id, update_payload)  # Confirm + PUT
 
     def update_map_properties(self):  # WHY: declare public method update_map_properties
-        """Update existing map properties (name, dimensions, orientation, etc.)."""
+        """Update existing map properties (name, dimensions, orientation, and so on)."""
         self._print_update_map_properties_header()  # Banner
         site_id, site_name = self.get_current_site()  # Require a selected site
         if not site_id:  # Site prompt cancelled

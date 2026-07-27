@@ -94,7 +94,7 @@ class OrgDeviceInventorySummaryCore:  # WHY: single-org inventory summarization 
         )
         counts: dict[str, int] = {}  # WHY: bucket -> running total
         for record in switch_records:  # WHY: walk every switch exactly once
-            value = record.get(distinct) or _UNKNOWN  # WHY: fall back so missing labels don't crash the row build
+            value = record.get(distinct) or _UNKNOWN  # WHY: fall back so missing labels do not crash the row build
             num_members = int(record.get("num_members") or 1)  # WHY: VC stacks count as members, not one chassis
             counts[value] = counts.get(value, 0) + num_members  # WHY: sum VC-accurate physical count
         rows = [  # WHY: materialize the accumulator into row dicts for downstream merge
@@ -129,7 +129,7 @@ class OrgDeviceInventorySummaryCore:  # WHY: single-org inventory summarization 
         )
         counts: dict[str, int] = {}  # WHY: bucket -> physical gateway count
         for record in gateway_records:  # WHY: walk each HA member exactly once
-            value = record.get(distinct) or _UNKNOWN  # WHY: fall back so missing labels don't crash the row build
+            value = record.get(distinct) or _UNKNOWN  # WHY: fall back so missing labels do not crash the row build
             counts[value] = counts.get(value, 0) + 1  # WHY: one record == one physical gateway
         rows = [  # WHY: materialize the accumulator into row dicts for downstream merge
             {"device_type": "gateway", distinct: value, "count": count} for value, count in counts.items()

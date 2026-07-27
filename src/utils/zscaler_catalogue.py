@@ -104,7 +104,7 @@ def _promote_host_entry(entry: str | dict[str, Any]) -> dict[str, Any]:
         # Already v3 (or newer): pass through untouched so re-promotion is a
         # no-op (idempotency required for round-trip write-then-load tests).
         return entry
-    # Defensive: unexpected shape (e.g. int, None). Wrap into a stringified
+    # Defensive: unexpected shape (for example int, None). Wrap into a stringified
     # host so downstream code never blows up on malformed cache entries.
     return {"host": str(entry)}
 
@@ -667,7 +667,7 @@ def fetch_cloud(cloud: str, *, timeout: float = _FETCH_TIMEOUT) -> dict[str, Any
         without special-casing per-cloud errors.
 
     Args:
-        cloud: One of the canonical Zscaler cloud slugs (e.g. ``zscaler.net``).
+        cloud: One of the canonical Zscaler cloud slugs (for example ``zscaler.net``).
         timeout: Wall-clock timeout for the HTTPS GET in seconds.
 
     Returns:
@@ -717,7 +717,7 @@ def _strip_prefix(key: str, prefix: str) -> str:
 
     Args:
         key: Raw key from the CENR JSON (may or may not have the prefix).
-        prefix: The label prefix to strip (e.g. ``"continent"`` or ``"city"``);
+        prefix: The label prefix to strip (for example ``"continent"`` or ``"city"``);
             the tool appends ``" : "`` internally.
 
     Returns:
@@ -743,7 +743,7 @@ def _cloud_root_trees(cloud: str, doc: dict[str, Any]) -> list[dict[str, Any]]:
         not a continent tree.
 
     Args:
-        cloud: Cloud slug (e.g. ``"zscloud"``).
+        cloud: Cloud slug (for example ``"zscloud"``).
         doc: Parsed CENR JSON dict for this cloud.
 
     Returns:
@@ -885,7 +885,7 @@ def _absorb_city_records(
         this function itself under the gate as well.
 
     Args:
-        city: Prefix-stripped city name (e.g. ``"Amsterdam"``).
+        city: Prefix-stripped city name (for example ``"Amsterdam"``).
         records: Raw record list from the city bucket.
         cloud: Cloud slug that supplied these records (recorded under
             ``seen_in_clouds`` on the slot).
@@ -1029,7 +1029,7 @@ def _atomic_write_json(path: Path, doc: dict[str, Any]) -> None:
             handle.write("\n")
         os.replace(tmp_name, path)
     except Exception:
-        # Best-effort cleanup on failure so we don't leak temp files.
+        # Best-effort cleanup on failure so we do not leak temp files.
         try:
             os.unlink(tmp_name)
         except OSError:
@@ -1087,7 +1087,7 @@ def refresh_cenr(cenr_path: Path) -> tuple[dict[str, Any], list[str]]:
         Tuple of ``(new_cenr, warnings)``. ``new_cenr`` is the freshly
         merged and rewritten dict on success, or the untouched stale dict on
         total-failure. ``warnings`` collects non-fatal issues (per-cloud
-        fetch failures, unmapped cities from the metadata attach step, etc.)
+        fetch failures, unmapped cities from the metadata attach step, and so on)
         for the caller to log.
     """
     warnings: list[str] = []

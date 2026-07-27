@@ -6,7 +6,7 @@ rather than scattered across every call site. Every MistHelper.py subprocess
 invocation routes through :class:`SubprocessRunner.run`, which enforces:
 
 * An explicit allow-list of executables (``uv``/``uv.exe`` or the current
-  interpreter, i.e. ``sys.executable``).
+  interpreter, that is ``sys.executable``).
 * A conservative allow-list for each argv element (alphanumeric plus
   ``-_./:=``), rejecting shell metacharacters up-front.
 * A positive, finite timeout on every invocation.
@@ -98,7 +98,7 @@ class SubprocessRunner:
             # Explicit keyword arguments make Bandit's B603 review trivial: shell is not set,
             # capture_output/text are pinned, and the timeout is validated above.
             result = subprocess.run(  # nosec B603  # Audited: argv validated, no shell, capture pinned.
-                list(argv),  # Copy to a plain list so callers can't mutate the sequence mid-flight.
+                list(argv),  # Copy to a plain list so callers cannot mutate the sequence mid-flight.
                 capture_output=True,  # Always capture stdout/stderr for callers that inspect them.
                 text=True,  # Always decode as text; every existing call site expected str output.
                 timeout=timeout,  # Bound the child so a hung process cannot stall MistHelper startup.
@@ -144,12 +144,12 @@ class SubprocessRunner:
             raise ValueError("timeout must be a positive finite number")  # bool would satisfy int otherwise.
         if not math.isfinite(float(timeout)):  # NaN and +/-inf are never valid deadlines.
             raise ValueError("timeout must be a positive finite number")  # Fail closed rather than pass to subprocess.
-        if timeout <= 0:  # Zero and negative timeouts trip subprocess.run behaviour we don't want.
+        if timeout <= 0:  # Zero and negative timeouts trip subprocess.run behaviour we do not want.
             raise ValueError("timeout must be a positive finite number")  # Callers must specify a real deadline.
 
 
 __all__ = [
-    "CalledProcessError",  # Re-exported so callers don't import subprocess directly.
+    "CalledProcessError",  # Re-exported so callers do not import subprocess directly.
     "SubprocessError",  # Base class re-export.
     "SubprocessRunner",  # Primary dispatch helper.
     "TimeoutExpired",  # Timeout exception re-export.

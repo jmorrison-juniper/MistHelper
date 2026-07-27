@@ -65,7 +65,7 @@ def _coerce_layer_list(value: list[str] | None) -> tuple[str, ...]:  # WHY: shar
 class LayerToggleInputs:  # WHY: frozen bundle keeps callback signature narrow
     """Frozen bundle of layer selection lists sourced from Dash toggle inputs."""
 
-    infra: tuple[str, ...] = ()  # WHY: walls, wayfinding, zones, etc.
+    infra: tuple[str, ...] = ()  # WHY: walls, wayfinding, zones, and so on
     beacon: tuple[str, ...] = ()  # WHY: vbeacons + BLE beacons category
     client: tuple[str, ...] = ()  # WHY: wifi/wired client toggles
     device: tuple[str, ...] = ()  # WHY: APs, switches, gateways

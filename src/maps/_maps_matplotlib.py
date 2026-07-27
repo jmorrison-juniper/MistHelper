@@ -240,7 +240,7 @@ class _MapsMatplotlib:  # Wrapper class holding the extracted matplotlib/launch 
         logger.info("  Loading maps for site: %s...", site_name)
         all_maps = self._fetch_site_maps(site_id)  # May be empty on API/no-map failures.
         if not all_maps:
-            _print_no_maps_notice(site_name)  # Tell the user we're deferring selection to the browser.
+            _print_no_maps_notice(site_name)  # Tell the user we are deferring selection to the browser.
             return _StandaloneTargets(site_id, site_name, None, all_maps)  # Return with map_id=None sentinel.
         map_id, target_map = self._resolve_initial_map(all_maps, requested_map_id)  # Pick initial map handle.
         # WHY: preserve operator notice verbatim; route through logger for capture/redirection.

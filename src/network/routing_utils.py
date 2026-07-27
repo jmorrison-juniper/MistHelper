@@ -138,7 +138,7 @@ class RoutingUtils:
         Python only invokes ``__getattr__`` when normal lookup fails, so this
         method resolves cluster method calls (``self._parse_ssr_routing``,
         ``self._display_forwarding_summary``, ``self._post_device_command``,
-        ``self.execute_show_routing_table``, etc.) without explicit delegator
+        ``self.execute_show_routing_table``, and so on) without explicit delegator
         wrappers. The class-level ``hasattr`` check on ``type(cluster)``
         avoids invoking the cluster's own ``__getattr__`` (which would proxy
         back to this class and create infinite recursion for unknown attrs).

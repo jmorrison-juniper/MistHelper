@@ -792,7 +792,7 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
         """Gather scan radio capture parameters interactively.
 
         Args:
-            band: Radio band string (e.g. '24', '5', '6').
+            band: Radio band string (for example '24', '5', '6').
 
         Returns:
             Dict with channel, bandwidth, duration, num_packets, format
@@ -876,7 +876,7 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
         """Gather remaining params and launch a single-AP scan capture."""
         band = self._prompt_scan_band()  # WHY: user picks 2.4/5/6 GHz
         logging.debug("Band selected: %s", band)  # WHY: audit chosen band
-        scan_params = self._gather_scan_radio_params(band)  # WHY: channel/bandwidth/duration/etc.
+        scan_params = self._gather_scan_radio_params(band)  # WHY: channel/bandwidth/duration, and so on.
         if scan_params is None:  # WHY: user cancelled a scan-param prompt
             return  # WHY: propagate cancel
         enable_loop = self._prompt_loop_mode()  # WHY: continuous mode toggle

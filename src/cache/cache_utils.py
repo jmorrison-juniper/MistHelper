@@ -26,7 +26,7 @@ from typing import Any  # WHY: dynamic row payload annotations.
 class CacheUtils:
     """Centralized cache management utilities.
 
-    Handles CSV caching, freshness checks, regeneration, etc.
+    Handles CSV caching, freshness checks, regeneration, and so on
     """
 
     _ADDRESS_PARSE_FAILURE_FIELDNAMES: list[str] = [  # Stable column order for AddressParseFailures CSV
@@ -115,7 +115,7 @@ class CacheUtils:
                 data_key = row.get(key)  # Extract the grouping key value from this row
                 if data_key is None:  # The key column is missing on this row
                     logging.warning("Row missing key '%s': %s", key, row)  # Warn about the malformed row
-                    continue  # Skip rows that can't be grouped
+                    continue  # Skip rows that cannot be grouped
                 if data_key not in data_dict:  # First time we've seen this key value
                     data_dict[data_key] = []  # Start a new bucket for it
                 data_dict[data_key].append(row)  # Add this row to its key's bucket
@@ -206,7 +206,7 @@ class CacheUtils:
         logging.info("Scanning data directory for generated cache CSVs: %s", data_dir)  # Log scan target
         candidates = CacheUtils._scan_cache_candidates(data_dir)  # List safe-to-delete files (None on scan error)
         if candidates is None:  # Directory could not be listed (already reported by the scanner)
-            return  # Abort -- nothing to delete if we can't list the directory
+            return  # Abort -- nothing to delete if we cannot list the directory
         if not candidates:  # Nothing to delete -- inform operator and return early
             # WHY (#886 Phase 2): consolidate print+info into single WARNING so operator sees notice
             # on the default root-logger config (INFO is suppressed by default).
@@ -223,7 +223,7 @@ class CacheUtils:
 
     @staticmethod
     def _scan_cache_candidates(data_dir: str) -> list[str] | None:  # List generated cache files, or None on error
-        """Return the list of generated cache filenames in data_dir, or None if the directory can't be listed."""
+        """Return the list of generated cache filenames in data_dir, or None if the directory cannot be listed."""
         logging.debug("Listing generated cache candidates in %s", data_dir)  # Trace the scan before listing
         try:  # Listing can fail on permissions or a missing directory
             return [

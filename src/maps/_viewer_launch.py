@@ -10,7 +10,7 @@ pieces of the Dash ``html.Div`` layout tree.
 The launcher receives the wrapped :class:`_PlotlyViewer` instance and
 forwards attribute lookups back through it so figure-population helpers
 (``_add_walls``, ``_add_clients_to_figure``, ``_categorize_devices``,
-etc.) still reach the shared implementation without duplication.
+and so on) still reach the shared implementation without duplication.
 """
 
 from __future__ import annotations  # WHY: Defer annotation resolution -- allows PEP 604 unions on 3.10.
@@ -1128,7 +1128,7 @@ def _build_drawing_mode_dropdown(html_mod: Any, dcc_mod: Any) -> Any:  # WHY: Mo
                     {"label": "Wall Segment (orange)", "value": "wall"},
                     {"label": "Measurement Only", "value": "measure"},
                 ],
-                value="measure",  # WHY: Default so drawing doesn't save anything unintentionally.
+                value="measure",  # WHY: Default so drawing does not save anything unintentionally.
                 clearable=False,
                 style={"marginBottom": "10px", "color": "#e0e0e0"},
                 className="dark-dropdown",

@@ -211,7 +211,7 @@ class FunctionExecutor:  # WHY: extracted from MistHelperTUI to own Live-mode ex
     def _reset_post_execute(self) -> None:
         """Reset transient execution state (preserves 'viewing_results' if set)."""
         tui = self._tui  # Local alias
-        if tui.execution_state != "viewing_results":  # Don't clobber grid mode
+        if tui.execution_state != "viewing_results":  # Do not clobber grid mode
             tui.execution_state = None
         tui.current_function = None  # Drop the function reference
         tui.function_params = {}  # Drop captured params

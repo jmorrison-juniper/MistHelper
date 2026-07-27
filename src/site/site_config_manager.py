@@ -613,7 +613,7 @@ class SiteConfigManager:  # WHY: umbrella namespace for the four menu entrypoint
 
     @staticmethod
     def _report_rf_template_results(report: RfTemplateReport) -> None:
-        """Report RF template operation results and export CSVs."""
+        """Report RF template operation results and export CSV files."""
         print("\n" + "=" * 70)  # WHY: open completion banner.
         print(" OPERATION COMPLETE")  # WHY: banner title.
         print("=" * 70)  # WHY: banner divider.
@@ -824,7 +824,7 @@ class SiteConfigManager:  # WHY: umbrella namespace for the four menu entrypoint
         failed: list[dict[str, Any]],
         skipped: list[dict[str, Any]],
     ) -> None:
-        """Report device profile creation results and export CSVs."""
+        """Report device profile creation results and export CSV files."""
         print("\n" + "=" * 70)  # WHY: open completion banner.
         print(" OPERATION COMPLETE")  # WHY: banner title.
         print("=" * 70)  # WHY: banner divider.
@@ -1053,7 +1053,7 @@ class SiteConfigManager:  # WHY: umbrella namespace for the four menu entrypoint
         without_profile: list[dict[str, Any]],
         without_model: list[dict[str, Any]],
     ) -> None:
-        """Report profile assignment results and export CSVs."""
+        """Report profile assignment results and export CSV files."""
         print("\n" + "=" * 70)  # WHY: open completion banner.
         print(" OPERATION COMPLETE")  # WHY: banner title.
         print("=" * 70)  # WHY: banner divider.

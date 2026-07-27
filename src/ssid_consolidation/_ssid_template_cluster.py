@@ -12,7 +12,7 @@ on.
 
 # WHY: the base class delegates unknown attribute access back to the parent
 # manager (which owns all the private state and helpers), so pylint's
-# "too-few-public-methods" and "protected-access" alarms don't apply to this
+# "too-few-public-methods" and "protected-access" alarms do not apply to this
 # proxy pattern.
 # pylint: disable=protected-access,too-few-public-methods
 

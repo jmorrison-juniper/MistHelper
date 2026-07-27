@@ -23,7 +23,7 @@ class ProgressContext:
     """Operation identity shared across a single operation's progress events."""
 
     menu_option: str | int  # Menu option the progress event belongs to (accepts str or int form).
-    operation_name: str  # Human-readable operation label (e.g. "sites", "inventory").
+    operation_name: str  # Human-readable operation label (for example "sites", "inventory").
     total: int  # Total number of items the operation will process (the progress denominator).
 
 
@@ -38,4 +38,4 @@ class TestSummary:
     failed: int  # Count of operations that failed.
     skipped: int  # Count of operations skipped (heavy / destructive / WIP).
     elapsed: float  # Wall-clock seconds the whole test run took.
-    test_mode: str  # Test mode label (e.g. "systematic", "quick").
+    test_mode: str  # Test mode label (for example "systematic", "quick").

@@ -90,7 +90,7 @@ class PackageInstaller:  # WHY: collaborator injecting stdlib modules for testab
 
     def _probe_uv_command(self, cmd: list[str]) -> tuple[list[str], str] | None:  # WHY: single-candidate runner
         """Return (cmd, version) if the candidate runs successfully, else None."""
-        if not self._candidate_is_runnable(cmd):  # WHY: skip absolute paths that don't exist on disk
+        if not self._candidate_is_runnable(cmd):  # WHY: skip absolute paths that do not exist on disk
             return None  # WHY: unreachable binary cannot be probed; skip to next candidate
         try:  # WHY: subprocess.run may raise FileNotFoundError/OSError/SubprocessError
             result = self.subprocess_module.run(  # WHY: --version is the cheapest way to confirm uv works
@@ -106,9 +106,9 @@ class PackageInstaller:  # WHY: collaborator injecting stdlib modules for testab
         return cmd, result.stdout.strip()  # WHY: strip trailing newline from `uv --version` output
 
     def _candidate_is_runnable(self, cmd: list[str]) -> bool:  # WHY: cheap on-disk check before spawn
-        """Reject absolute-path candidates that don't exist on disk."""
+        """Reject absolute-path candidates that do not exist on disk."""
         if len(cmd) != 1:  # WHY: only single-arg absolute paths need existence checks
-            return True  # WHY: multi-arg commands (e.g. python -m uv) always attempt to run
+            return True  # WHY: multi-arg commands (for example python -m uv) always attempt to run
         if self.os_module.path.sep not in cmd[0]:  # WHY: bare names rely on PATH resolution, not disk check
             return True  # WHY: bare executable names are always eligible; PATH resolves them at spawn
         return bool(self.os_module.path.isfile(cmd[0]))  # WHY: skip missing binaries before invoking subprocess

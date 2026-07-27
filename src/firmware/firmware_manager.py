@@ -50,7 +50,7 @@ class _MistHelperProxy:  # WHY: attribute forwarder to live MistHelper module
     """Forward attribute access to the currently-loaded MistHelper module.
 
     Enables the co-located FirmwareUpgradeStatusChecker class to reference
-    MistHelper-owned utility singletons (ConfigUtils, PromptUtils, etc.)
+    MistHelper-owned utility singletons (ConfigUtils, PromptUtils, and so on)
     without importing MistHelper at module load time (which would create a
     circular import). Attributes are resolved at call time so test
     monkey-patches applied to MistHelper are honoured.
@@ -135,18 +135,18 @@ class FirmwareManager:
     """Advanced Firmware Management System for Mist Access Points.
 
     This class provides comprehensive firmware upgrade capabilities including:
-    1. Firmware status monitoring and reporting
-    2. Site-based bulk firmware upgrades
-    3. Gateway template-based firmware upgrades
-    4. Automatic site auto-upgrade configuration
-    5. Multi-strategy upgrade orchestration (big_bang, canary, rrm, serial)
-    6. Progress monitoring and audit logging
+    - Firmware status monitoring and reporting.
+    - Site-based bulk firmware upgrades.
+    - Gateway template-based firmware upgrades.
+    - Automatic site auto-upgrade configuration.
+    - Multi-strategy upgrade orchestration (big_bang, canary, rrm, serial).
+    - Progress monitoring and audit logging.
 
     Follows NASA/JPL coding standards for safety-critical operations with:
-    - Comprehensive validation and error handling
-    - Explicit user confirmation for destructive operations
-    - Complete audit trails and logging
-    - Rollback and recovery capabilities
+    - Comprehensive validation and error handling.
+    - Explicit user confirmation for destructive operations.
+    - Complete audit trails and logging.
+    - Rollback and recovery capabilities.
     """
 
     def __init__(self, config: FirmwareManagerConfig) -> None:
@@ -668,7 +668,7 @@ class FirmwareManager:
         """Ensure that required template and site CSV files are fresh and available.
 
         This method generates or refreshes the CSV files needed for template-based
-        operations if they don't exist or are stale.
+        operations if they do not exist or are stale.
         """
         logging.debug("Ensuring template CSV files are fresh")
         print("  Preparing template and site data...")
@@ -1210,7 +1210,7 @@ class FirmwareManager:
         try:
             selection = (
                 self._safe_input_fn("    Select organization(s): ", context="org_multi_select").strip().lower()
-            )  # WHY: strip + lower normalizes 'ALL', ' 1-3 ', etc.
+            )  # WHY: strip + lower normalizes 'ALL', ' 1-3 ', and so on
         except SystemExit:  # WHY: safe_input raises SystemExit on EOF/interrupt for SSH-safe abort
             logging.info("Org selection prompt cancelled (EOF/interrupt)")  # WHY: audit SSH-safe cancel
             return None  # WHY: signal cancel to caller
@@ -2911,7 +2911,7 @@ class FirmwareManager:
         print("Monitor progress through Mist dashboard or API.")
         print("Check individual SSR status for completion and connectivity.")
         print("Verify SD-WAN tunnel re-establishment after reboots.")
-        # Issue #433 Phase A: hand-converted; codemod doesn't yet detect the
+        # Issue #433 Phase A: hand-converted; codemod does not yet detect the
         # logging.getLogger(__name__).<level>(...) dynamic-call pattern.
         logging.getLogger(__name__).info("SSR firmware upgrade operation completed: %s", results["operation_id"])
 
@@ -3057,7 +3057,7 @@ class FirmwareManager:
     ) -> tuple[dict[str, str], dict[str, list[dict[str, Any]]]] | None:
         """Refresh template CSVs and load the template->sites mapping.
 
-        device_kind is a short label (e.g. 'SSR' or 'switch') used only for
+        device_kind is a short label (for example 'SSR' or 'switch') used only for
         audit logs. Returns (template_name_to_id, sites_mapping) on success
         or None when no Gateway Templates have any assigned sites.
         """
@@ -3863,7 +3863,7 @@ class FirmwareUpgradeStatusChecker:
         if self.site_filter:  # WHY: caller scoped to one site -> no summary line needed
             return
         without = total - sites_with_upgrades  # WHY: sites that came back empty
-        if without > 0:  # WHY: only print when there's something to report
+        if without > 0:  # WHY: only print when there is something to report
             print(f"   -> {without} site(s) have no active upgrade operations")
 
     def _check_site_upgrades(self) -> None:

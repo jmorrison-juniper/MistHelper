@@ -103,7 +103,7 @@ class _AddressAuditConsoleFilter(logging.Filter):
     table, the post-table prompts, the write-back confirmations); every
     ``logging.*`` call it makes is a diagnostic trail destined for
     ``data/script.log``. Attached to the root logger's CONSOLE handlers (and only
-    for the duration of a run), this filter keeps that diagnostic noise -- e.g. the
+    for the duration of a run), this filter keeps that diagnostic noise -- for example the
     Nominatim "no result" warnings -- out of the terminal, where it would corrupt
     the tqdm progress bar. File handlers never receive this filter, so the full log
     trail is preserved.
@@ -206,7 +206,7 @@ class AddressAuditEngine:
 
     @staticmethod
     def _is_console_handler(handler: logging.Handler) -> bool:
-        """Return True for a console-bound ``StreamHandler`` (i.e. not a ``FileHandler``)."""
+        """Return True for a console-bound ``StreamHandler`` (that is not a ``FileHandler``)."""
         if not isinstance(handler, logging.StreamHandler):  # Not a stream handler at all -> never console.
             return False  # Ignore this handler for console-filter purposes.
         return not isinstance(handler, logging.FileHandler)  # StreamHandler AND not-a-FileHandler == console.
@@ -252,7 +252,7 @@ class AddressAuditEngine:
             raw = InputUtils.safe_input("Select file number: ", context="address_audit_csv_pick").strip()
             if (
                 not raw
-            ):  # Empty response (blank Enter or EOF sentinel from safe_input) -> abort so we cannot infinite-loop under non-interactive stdin (e.g. --test).  # noqa: E501
+            ):  # Empty response (blank Enter or EOF sentinel from safe_input) -> abort so we cannot infinite-loop under non-interactive stdin (for example --test).  # noqa: E501
                 logger.info("No CSV selection made (empty input); skipping address audit")  # Action-log the abort.
                 # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
                 logger.info(
@@ -301,7 +301,7 @@ class AddressAuditEngine:
             )  # Normalize once for downstream comparisons.
             if (
                 not raw
-            ):  # Empty response (blank Enter or EOF sentinel) is treated as explicit skip to avoid infinite loops under non-interactive stdin (e.g. --test).  # noqa: E501
+            ):  # Empty response (blank Enter or EOF sentinel) is treated as explicit skip to avoid infinite loops under non-interactive stdin (for example --test).  # noqa: E501
                 logger.info(
                     "Business-authoritative CSV selection skipped (empty input)"
                 )  # Action-log the implicit skip.
@@ -712,7 +712,7 @@ class AddressAuditEngine:
         Both inputs are full formatted address strings ("STREET, CITY, ST ZIP"),
         so we inspect only the leading street segment (before the first comma) and
         require a *leading* digit there. This avoids mistaking a trailing ZIP for a
-        house number -- e.g. Mist ``S Federal Hwy, Fort Pierce, FL 34982`` has no
+        house number -- for example Mist ``S Federal Hwy, Fort Pierce, FL 34982`` has no
         house number even though the ZIP contains digits.
         """
         mist_lead = re.match(r"\s*\d", mist_street.split(",", 1)[0])  # Leading digit of the Mist street.
@@ -800,7 +800,7 @@ class AddressAuditEngine:
     def _leading_directional(street: str) -> str:
         """Return the directional immediately after the house number, normalized, or ''.
 
-        Only the leading directional (e.g. the ``E`` in ``1606 E Jefferson``) is
+        Only the leading directional (for example the ``E`` in ``1606 E Jefferson``) is
         considered, so a directional inside a later city name (``West Palm Beach``)
         never triggers a false street mismatch.
         """

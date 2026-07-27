@@ -79,9 +79,9 @@ class DeviceUtils:  # Device helper utilities.
         match = re.match(r"^(.+/)(\d+)-(\d+)$", port_part)  # Match prefix plus numeric start-end range
         if not match:  # Could not parse as a range
             return [port_part]  # Keep the literal token
-        prefix = match.group(1)  # e.g., "ge-0/0/"
-        start_num = int(match.group(2))  # Range start (e.g., 0)
-        end_num = int(match.group(3))  # Range end (e.g., 2)
+        prefix = match.group(1)  # for example, "ge-0/0/"
+        start_num = int(match.group(2))  # Range start (for example, 0)
+        end_num = int(match.group(3))  # Range end (for example, 2)
         return [f"{prefix}{port_num}" for port_num in range(start_num, end_num + 1)]  # Concrete ports across the range
 
     @staticmethod

@@ -17,7 +17,7 @@ import os  # WHY: environment variable + filesystem probes for container detecti
 class EnvironmentUtils:
     """Centralized environment detection utilities.
 
-    Handles container detection, runtime environment identification, etc.
+    Handles container detection, runtime environment identification, and so on
     """
 
     # Constants for container detection

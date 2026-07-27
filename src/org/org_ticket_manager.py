@@ -283,7 +283,7 @@ class OrgTicketManager:  # Support ticket operations.
             )
             logging.debug("Comment with file submitted to ticket %s", ticket_id)  # Log after API call
             logging.warning("\n  Comment with attachment added to ticket %s", ticket_id)  # Confirm to user
-        elif file_path:  # User specified a path but file doesn't exist
+        elif file_path:  # User specified a path but file does not exist
             logging.warning(  # Warn about missing file path
                 "File not found: %s -- adding comment without attachment", file_path
             )
@@ -423,7 +423,7 @@ class OrgTicketManager:  # Support ticket operations.
         """Parse numeric choice into ticket ID; print error + return '' on bad input."""
         try:
             idx = int(choice) - 1  # Convert 1-based to 0-based index
-        except ValueError:  # Non-numeric input that wasn't 'm'
+        except ValueError:  # Non-numeric input that was not 'm'
             logging.error("  Invalid selection: %s", choice)  # Inform user of bad input
             return ""  # Signal cancellation
         if not 0 <= idx < len(tickets):  # Index out of range

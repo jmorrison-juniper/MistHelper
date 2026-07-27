@@ -123,7 +123,7 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
         """Return True when ``obj`` is a public function whose signature accepts a session arg."""
         import inspect  # Local import to keep top-level imports unchanged
 
-        if not inspect.isfunction(obj):  # Skip classes, builtins, etc.
+        if not inspect.isfunction(obj):  # Skip classes, builtins, and so on
             return False
         sig = inspect.signature(obj)  # Inspect parameters
         param_names = list(sig.parameters.keys())  # Materialize names for membership test

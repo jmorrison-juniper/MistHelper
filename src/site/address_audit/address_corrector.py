@@ -8,7 +8,7 @@ address) and AFTER (suggested correction) side by side. Nothing is written witho
 that per-site yes.
 
 Write mechanics (safe, minimal): a Mist site stores its address as a single
-formatted string in the ``address`` field (e.g. ``"940 James Bowie Dr, New Boston,
+formatted string in the ``address`` field (for example ``"940 James Bowie Dr, New Boston,
 TX 75570, USA"``) alongside ``latlng``, ``country_code``, ``timezone``, and the
 various template IDs. To change only the address without disturbing anything else,
 we fetch the full current site record, replace ``address``, and PUT the whole

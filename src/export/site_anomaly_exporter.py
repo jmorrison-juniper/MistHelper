@@ -336,7 +336,7 @@ class SiteAnomalyExporter:  # Site anomaly exporters.
         all_client_anomaly_data = []  # Accumulate anomaly rows.
         metrics_retrieved = 0  # Success count.
         for metric in SiteAnomalyExporter._CLIENT_ANOMALY_METRICS:  # Fetch each metric independently.
-            try:  # Isolate per-metric failures so one bad metric doesn't abort the rest.
+            try:  # Isolate per-metric failures so one bad metric does not abort the rest.
                 record = SiteAnomalyExporter._anomaly_fetch_one_metric(  # Fetch + tag one metric.
                     site_id, client_mac, site_name, client_hostname, metric
                 )

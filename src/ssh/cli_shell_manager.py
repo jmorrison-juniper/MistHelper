@@ -142,7 +142,7 @@ class CLIShellManager:
         """Handle the '~' exit key by closing the WebSocket socket."""
         logging.warning("\n## Exit from shell ##")  # WHY: user-visible exit banner (was print()).
         if ws.sock is not None:  # Socket present.
-            ws.sock.shutdown(2)  # Shut down the socket.
+            ws.sock.shutdown(2)  # Stop the socket.
             ws.sock.close()  # Close the socket.
 
     @staticmethod

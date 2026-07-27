@@ -327,7 +327,7 @@ class WanClientEventsExporter:
 
         Why:
             The event payloads contain nested objects and multiline strings
-            (e.g., diagnostic details) that break naive CSV writers. Reusing
+            (for example, diagnostic details) that break naive CSV writers. Reusing
             the shared helpers guarantees identical sanitization semantics
             across all site-scoped exporters.
 

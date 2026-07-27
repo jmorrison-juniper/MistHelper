@@ -129,7 +129,7 @@ class ItemExecutor:  # WHY: extracted from MistHelperTUI to own the synchronous 
         logging.exception(_LOG_FAIL, func_name, error)  # WHY: include traceback for triage
 
     def _validated_selection(self) -> dict[str, Any] | None:  # WHY: bounds + type guard
-        """Return the selected item iff it's a function; otherwise ``None``."""
+        """Return the selected item iff it is a function; otherwise ``None``."""
         tui = self._tui  # WHY: local alias
         if not 0 <= tui.current_selection < len(tui.current_items):  # WHY: bounds check
             return None  # WHY: index out of range, not runnable

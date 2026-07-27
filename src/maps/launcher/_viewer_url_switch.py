@@ -130,7 +130,7 @@ class _FigureBuildContext:  # WHY: bundle build inputs so figure builder stays â
     url_map_id: str  # WHY: map id used for heatmap fetch and log correlation
     site_id_local: str  # WHY: site id used for heatmap fetch
     layers: _MapLayers  # WHY: pre-fetched entity bundle
-    config: dict[str, Any]  # WHY: shared config (site_id override, etc.)
+    config: dict[str, Any]  # WHY: shared config (site_id override, and so on)
 
 
 @dataclass(frozen=True)
@@ -926,7 +926,7 @@ class _ViewerUrlSwitch:  # WHY: wrapper class hosting the URL-switch callback cl
         new_map_data: dict[str, Any],  # WHY: new map metadata source
     ) -> dict[str, Any]:
         """Update ``config`` with the newly-switched map info (preserves site_id)."""
-        new_config = config.copy()  # WHY: don't mutate caller's dict
+        new_config = config.copy()  # WHY: do not mutate caller's dict
         new_config["map_id"] = url_map_id  # WHY: set new map id
         new_config["map_name"] = new_map_data.get("name", _DEFAULT_MAP_NAME)  # WHY: display name
         new_config["ppm"] = new_map_data.get("ppm") or _DEFAULT_PPM  # WHY: coverage scaling

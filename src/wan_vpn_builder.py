@@ -155,7 +155,7 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
         assignments: list[dict[str, Any]],
     ) -> None:
         """Create the VPN and, on success, offer to update device profiles."""
-        created_vpn = self._create_vpn(vpn_body)  # WHY: API call isolated so errors don't cascade.
+        created_vpn = self._create_vpn(vpn_body)  # WHY: API call isolated so errors do not cascade.
         if created_vpn is None:  # WHY: creation failed -> do not attempt profile updates.
             return  # WHY: caller already saw an error message from _create_vpn.
         vpn_id = created_vpn.get("id", "")  # WHY: id is required for downstream vpn_paths refs.
@@ -346,7 +346,7 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
             vpns: list[Any] = mistapi.get_all(response=response, mist_session=self.apisession)  # WHY: paginate.
             logging.debug("Fetched %d org VPNs", len(vpns))  # WHY: %s style logging per project rule.
             return vpns  # WHY: caller uses for display + uniqueness check.
-        except Exception:  # WHY: keep the workflow going even if the VPN list can't be fetched.
+        except Exception:  # WHY: keep the workflow going even if the VPN list cannot be fetched.
             logging.exception("Failed to fetch org VPNs")  # WHY: preserve traceback for operator log review.
             logging.error(
                 "! Error retrieving VPN definitions. Check API connectivity."
@@ -415,7 +415,7 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
             wan_list, lan_list = self._classify_interfaces(port_config)  # WHY: reuse classifier here too.
             wan_count = len(wan_list)  # WHY: displayed for operator context.
             lan_count = len(lan_list)  # WHY: displayed for operator context.
-            warning = " (!) No WAN interfaces" if wan_count == 0 else ""  # WHY: flag profiles that can't be hub.
+            warning = " (!) No WAN interfaces" if wan_count == 0 else ""  # WHY: flag profiles that cannot be hub.
             logging.warning(
                 "  %-4d %-30s %4d %4d%s", index, name, wan_count, lan_count, warning
             )  # WHY: aligned row output.
@@ -491,7 +491,7 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
     @staticmethod
     def _classify_name(name: str, lower_names: set[str]) -> str:  # WHY: pure classifier for the prompt loop.
         """Return one of: 'cancel', 'empty', 'duplicate', 'ok'."""
-        if name.lower() == CANCEL_TOKEN:  # WHY: sentinel is checked before empty so 'q' isn't seen as blank.
+        if name.lower() == CANCEL_TOKEN:  # WHY: sentinel is checked before empty so 'q' is not seen as blank.
             return "cancel"  # WHY: caller aborts on this outcome.
         if not name:  # WHY: blank input after strip means the operator hit Enter with nothing.
             return "empty"  # WHY: caller re-prompts with an "empty" message.
@@ -549,7 +549,7 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
     @staticmethod
     def _has_any_active(assignments: list[dict[str, Any]]) -> bool:  # WHY: quick check before building a VPN.
         """Return True if at least one assignment is not the skip role."""
-        return any(a["role"] != ROLE_SKIP for a in assignments)  # WHY: skip-only sets can't form a VPN.
+        return any(a["role"] != ROLE_SKIP for a in assignments)  # WHY: skip-only sets cannot form a VPN.
 
     def _handle_all_skipped(  # WHY: offers a retry loop when the operator skipped everything.
         self, profiles: list[Any]
@@ -720,7 +720,7 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
         assignments: list[dict[str, Any]],
     ) -> None:
         """Offer to update each profile's port_config with vpn_paths."""
-        _ = vpn_id  # WHY: preserved in signature for API stability even though the body doesn't use it.
+        _ = vpn_id  # WHY: preserved in signature for API stability even though the body does not use it.
         non_skip = [a for a in assignments if a["role"] != ROLE_SKIP]  # WHY: skips are never linked to the VPN.
         if not non_skip:  # WHY: nothing to update -> return silently.
             return  # WHY: no active assignments means no profile mutation.
@@ -741,7 +741,7 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
             .strip()
             .lower()
         )
-        if choice != RETRY_YES:  # WHY: default (N) is safer -- don't mutate profiles unless explicitly asked.
+        if choice != RETRY_YES:  # WHY: default (N) is safer -- do not mutate profiles unless explicitly asked.
             logging.warning("  Skipping profile updates.")  # WHY: operator-visible confirmation of the skip.
             return False  # WHY: caller returns without touching profiles.
         return True  # WHY: explicit y -> proceed with the profile-update loop.

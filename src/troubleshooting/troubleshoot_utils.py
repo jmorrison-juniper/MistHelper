@@ -75,7 +75,7 @@ class TroubleshootUtils:  # Marvis troubleshoot delegators.
             #886 slice 17/N migrates ``print()`` to ``logging.warning`` so that
             ruff T20 can stay armed globally. Header + divider are consolidated
             into a single warning record so the banner arrives atomically in
-            handlers that buffer per-record (e.g. remote log shippers).
+            handlers that buffer per-record (for example remote log shippers).
         """
         logging.warning(
             " Starting Marvis (VNA - Virtual Network Assistant) Troubleshooting\n%s\n",

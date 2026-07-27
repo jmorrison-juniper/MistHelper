@@ -24,7 +24,7 @@ IS_TEST_MODE = "--test" in sys.argv or "--testinteractive" in sys.argv  # WHY: m
 class TimeUtils:
     """Centralized time-related utilities.
 
-    Handles dynamic lookback windows, timestamp conversions, etc.
+    Handles dynamic lookback windows, timestamp conversions, and so on
     """
 
     @staticmethod

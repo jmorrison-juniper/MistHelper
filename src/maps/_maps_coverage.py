@@ -299,7 +299,7 @@ class _MapsCoverage:
         logging.info("[Flask API] Fetching %s coverage for map %s", coverage_type, map_id)  # WHY: audit trail.
         try:  # WHY: `api_session.mist_get` may raise on network errors.
             response = api_session.mist_get(coverage_url, query=params)  # WHY: fetch coverage payload from Mist.
-        except Exception as exc:  # WHY: swallow errors so one bad layer doesn't kill the viewer.
+        except Exception as exc:  # WHY: swallow errors so one bad layer does not kill the viewer.
             logging.warning("Error fetching %s coverage: %s", coverage_type, exc)  # WHY: preserve log format.
             return None  # WHY: signal missing layer to the caller.
         if response.status_code != 200:  # WHY: coverage responses may be 400 while other layers succeed.

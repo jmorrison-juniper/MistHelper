@@ -2,8 +2,8 @@
 
 The Tier-3 resolve loop can spend 12-20 seconds per site, and it was not obvious
 where that time went. :class:`PhaseTimer` accumulates wall-clock time under named
-phases so the audit can log a breakdown at the end of a run (e.g. human-like
-typing vs. Nominatim rate-limit vs. politeness delay vs. suite-grace waits),
+phases so the audit can log a breakdown at the end of a run (for example human-like
+typing versus Nominatim rate-limit versus politeness delay versus suite-grace waits),
 turning "it feels slow" into an actionable measurement.
 
 This is deliberately tiny and dependency-free: a dict of ``label -> [count,

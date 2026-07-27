@@ -24,7 +24,7 @@ class AddressRow:
     """One parsed, sanitized CSV row (tab-delimited, header-less customer file)."""
 
     serial: str  # Col 0: Juniper device serial (numeric string); required, non-empty.
-    model: str  # Col 1: device model (e.g. SSR130); display only.
+    model: str  # Col 1: device model (for example SSR130); display only.
     address: str  # Col 2: street address; sanitized (newlines removed, ws collapsed).
     city: str  # Col 3: city name.
     state: str  # Col 4: 2-letter state code.

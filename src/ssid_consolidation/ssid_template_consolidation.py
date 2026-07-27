@@ -283,7 +283,7 @@ class SSIDTemplateConsolidationManager:  # pylint: disable=too-many-instance-att
 
         Python only invokes ``__getattr__`` when normal lookup fails, so
         this method resolves cluster method calls (``self._load_cache``,
-        ``self._save_phase_results``, ``self._offer_resume`` etc.) without
+        ``self._save_phase_results``, ``self._offer_resume`` and so on) without
         explicit delegator wrappers. The class-level ``hasattr`` check on
         ``type(cluster)`` avoids invoking the cluster's own ``__getattr__``
         (which would proxy back to this class and cause infinite recursion
@@ -523,7 +523,7 @@ def _build_success_write_results(entries: list[dict[str, Any]]) -> list[dict[str
     timestamp = datetime.now().isoformat()  # WHY: single ISO timestamp for the batch
     results: list[dict[str, Any]] = []  # WHY: accumulator for the per-entry success rows
     for entry in entries:  # WHY: fan out per-variable success rows
-        entry_copy = dict(entry)  # WHY: don't mutate caller's plan entries
+        entry_copy = dict(entry)  # WHY: do not mutate caller's plan entries
         entry_copy["status"] = "written"  # WHY: sentinel consumed by resume logic
         entry_copy["timestamp"] = timestamp  # WHY: record when the write happened
         results.append(entry_copy)  # WHY: collect the success row
@@ -537,7 +537,7 @@ def _build_failed_write_results(  # WHY: failure rows builder mirrors the succes
     """Build ``status=failed`` result records carrying the error text."""
     results: list[dict[str, Any]] = []  # WHY: accumulator for the per-entry failure rows
     for entry in entries:  # WHY: fan out per-variable failure rows
-        entry_copy = dict(entry)  # WHY: don't mutate caller's plan entries
+        entry_copy = dict(entry)  # WHY: do not mutate caller's plan entries
         entry_copy["status"] = "failed"  # WHY: sentinel consumed by resume + summary logic
         entry_copy["reason"] = str(error)  # WHY: surface stringified error for the report
         results.append(entry_copy)  # WHY: collect the failure row
@@ -590,7 +590,7 @@ def _assign_group_sites(  # WHY: mistapi-touching site-group assigner (parent-ow
     apisession: Any,
 ) -> list[dict[str, Any]]:
     """Assign all sites for a single group."""
-    group_id = group["group_id"]  # WHY: id of the sitegroup we're mutating
+    group_id = group["group_id"]  # WHY: id of the sitegroup we are mutating
     sites_to_assign = _filter_pending_sites(group, group_id, completed_ids)  # WHY: strip pairs already done
     if not sites_to_assign:  # WHY: nothing pending -> skip API call entirely
         return []  # WHY: no rows to append to results
@@ -622,7 +622,7 @@ def _do_assign_group_sites(  # WHY: happy-path branch extracted for complexity r
     """Push merged site_ids and build success result rows (may raise)."""
     group_id = group["group_id"]  # WHY: single source of truth for the sitegroup id
     existing_ids = _get_existing_group_site_ids(cache, group_id)  # WHY: preserve unrelated members
-    new_ids = [  # WHY: subset that isn't already in the group -> triggers the API call
+    new_ids = [  # WHY: subset that is not already in the group -> triggers the API call
         site["site_id"] for site in sites_to_assign if site["site_id"] not in existing_ids
     ]
     _push_group_site_ids(group, existing_ids, new_ids, org_id, apisession)  # WHY: PUT merged set
@@ -824,7 +824,7 @@ def _disable_single_ssid(entry: dict[str, Any], org_id: str, apisession: Any) ->
     """Disable a single SSID in its old template."""
     template_id = entry.get("old_template_id", "")  # WHY: identify template holding the SSID
     ssid_id = entry.get("ssid_id", "")  # WHY: identify the WLAN row to disable
-    result = dict(entry)  # WHY: copy so we don't mutate the input plan entry
+    result = dict(entry)  # WHY: copy so we do not mutate the input plan entry
     try:
         _apply_ssid_disable(result, template_id, ssid_id, org_id, apisession)  # WHY: mutates result in place
     except Exception as error:  # WHY: convert API/network failure into structured record
@@ -856,7 +856,7 @@ def _apply_ssid_disable(
         result["status"] = "disabled"  # WHY: sentinel consumed by resume + summary logic
         result["timestamp"] = datetime.now().isoformat()  # WHY: record when the flip happened
         logging.info("Disabled SSID %s in template %s", ssid_id, template_id)  # WHY: audit-log success
-    else:  # WHY: SSID row not in template -> record skip, don't PUT
+    else:  # WHY: SSID row not in template -> record skip, do not PUT
         result["status"] = "skipped"  # WHY: sentinel consumed by resume + summary logic
         result["reason"] = "SSID not found in template"  # WHY: surface skip reason in the report
 

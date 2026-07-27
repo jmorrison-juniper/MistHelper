@@ -75,7 +75,7 @@ class OrgConfigExporter:
     @staticmethod
     def _show_no_msp_access_guidance() -> None:
         """Print the 'MSP access not available' guidance banner with login + token tips."""
-        logging.warning("MSP data requires MSP-level privileges (not detected)")  # Log why we can't query.
+        logging.warning("MSP data requires MSP-level privileges (not detected)")  # Log why we cannot query.
         print("")  # Spacer.
         print("=" * 60)  # Top border.
         print("  MSP ACCESS NOT AVAILABLE")  # Title.

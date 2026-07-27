@@ -64,7 +64,7 @@ class DatabaseSchemaUtils:  # Build SQLite DDL from data.
             data_fields (list): List of field names in the data
 
         Returns:
-            dict: Strategy configuration including primary key, indexes, etc.
+            dict: Strategy configuration including primary key, indexes, and so on
         """
         # First check if we have a specific strategy for this endpoint
         if api_function_name in ENDPOINT_PRIMARY_KEY_STRATEGIES:  # Use a configured strategy.

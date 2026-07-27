@@ -321,7 +321,7 @@ class DataExporter:  # Multi-backend export facade.
             logging.warning("! Cannot write to %s. Is it open in another program?", csv_file_path)  # User-facing hint
             logging.debug("EXIT: DataExporter.write_to_csv - permission error")  # Trace exit on perm denial
             raise  # Propagate to the caller
-        except OSError as os_error:  # OS-level write failure (disk full, path invalid, etc.)
+        except OSError as os_error:  # OS-level write failure (disk full, path invalid, and so on)
             logging.error("File I/O: OS error when writing to %s: %s", csv_file_path, os_error)  # Log OS failure
             logging.debug("EXIT: DataExporter.write_to_csv - OS error")  # Trace OS error exit
             raise  # Propagate to the caller

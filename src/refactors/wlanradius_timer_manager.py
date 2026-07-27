@@ -8,7 +8,7 @@ Runtime dependencies (apisession module-global, and the utility
 classes InputUtils / PromptUtils / ConfigUtils) are still
 owned by MistHelper.py. They are resolved lazily via the module-level
 _MH proxy so the extracted module keeps its import graph flat, live
-re-bindings of apisession (e.g. after interactive login) are always
+re-bindings of apisession (for example after interactive login) are always
 honoured, and monkeypatched attributes in tests continue to work.
 """
 
@@ -78,10 +78,10 @@ class WLANRadiusTimerManager:  # Menu 148 entrypoint for WLAN RADIUS timer edits
         return self.selected_wlan  # Return the confirmed-non-None WLAN dict
 
     def _discover_radius_wlans(self) -> bool:  # Aggregates site/org/template lookups + filtering
-        """Set up org/site context, fetch all WLANs, filter to RADIUS-only. Return False to abort the workflow."""
+        """Prepare org/site context, fetch all WLANs, filter to RADIUS-only. Return False to abort the workflow."""
         if not self._select_site():  # Prompt for a site; abort if none chosen
             return False  # No site selected -- nothing to manage
-        if not self._get_org_id():  # Resolve the org ID; abort if it can't be determined
+        if not self._get_org_id():  # Resolve the org ID; abort if it cannot be determined
             return False  # Without an org ID we cannot fetch templates
         if not self._fetch_site_info():  # Load site details; abort on failure
             return False  # Site info is required for template resolution
@@ -95,7 +95,7 @@ class WLANRadiusTimerManager:  # Menu 148 entrypoint for WLAN RADIUS timer edits
     def manage(self) -> None:  # Public menu entrypoint invoked by MistHelper menu action 148
         """Main entry point - orchestrates the WLAN timer management workflow."""
         logging.info("Starting WLAN RADIUS authentication timer management")  # Announce the workflow start
-        self._enable_debug_if_requested()  # Turn on verbose logging if the user asked for it
+        self._enable_debug_if_requested()  # Start verbose logging if the user asked for it
         if not self._discover_radius_wlans():  # Site + org + WLAN discovery; bail on abort.
             return  # Discovery aborted -- nothing further to do
         self._display_wlans()  # Show the user the candidate WLANs and their timers

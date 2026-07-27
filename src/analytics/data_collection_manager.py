@@ -128,7 +128,7 @@ class DataCollectionManager:
         logging.info("Support packages generated for applicable sites.")  # Log completion.
 
     @staticmethod
-    def _refresh_support_data() -> None:  # Refresh required CSVs.
+    def _refresh_support_data() -> None:  # Refresh required CSV files.
         """Refresh all required CSV files for support package generation."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of exporter facades + CacheUtils.
         required_files = [  # Required files and fetchers.

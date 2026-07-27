@@ -4,7 +4,7 @@ Owns the site-name-prefix filter originally defined at
 ``MistHelper.py`` lines 2138-2143 as a module-level assignment reading
 the ``MIST_SITE_EXCLUDE_PREFIX`` environment variable. The prefix
 shields sites whose name starts with the configured value from
-destructive operations (e.g. Menu #149 WAN2 migration, Menu #166 WAN
+destructive operations (for example Menu #149 WAN2 migration, Menu #166 WAN
 probe configuration, Menu #167 WAN probe device overrides).
 
 Landing per E-14 as a **bare module-level constant** -- no wrapper

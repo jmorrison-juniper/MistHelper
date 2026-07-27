@@ -243,7 +243,7 @@ class MultiHostRunner:
             "[TRACE] Multi-host wait loop failure: %s: %s", type(loop_error).__name__, loop_error
         )
         for _future, host in future_to_host.items():  # WHY: mark any unhandled hosts as failed.
-            if host not in state.results:  # WHY: don't overwrite completed host records.
+            if host not in state.results:  # WHY: do not overwrite completed host records.
                 state.results[host] = {"success": False, "summary": f"Loop failure: {loop_error}"}
                 state.failed_hosts.append(host)  # WHY: register the host as failed.
 

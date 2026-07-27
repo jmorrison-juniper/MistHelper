@@ -56,10 +56,10 @@ class PacketCaptureExec:
     # ------------------------------------------------------------------ exec
     def execute_site_capture(self, site_id: str, payload: dict[str, Any]) -> None:
         """Execute site-level packet capture via API."""
-        try:  # WHY: broad guard so unexpected failures don't crash the CLI
+        try:  # WHY: broad guard so unexpected failures do not crash the CLI
             print(f"\n> Starting packet capture for site {site_id}...")  # WHY: user progress banner
             logging.info("Initiating site capture with payload: %s", payload)  # WHY: audit request
-            response = _pc().mistapi.api.v1.sites.pcaps.startSitePacketCapture(  # WHY: kick off capture
+            response = _pc().mistapi.api.v1.sites.pcaps.startSitePacketCapture(  # WHY: start capture
                 self.mist_session, site_id, payload
             )
             self._dispatch_start_response(site_id, response)  # WHY: branch on success/failure
@@ -71,7 +71,7 @@ class PacketCaptureExec:
         """Branch on HTTP 200 (success) vs error paths for a start response."""
         if response.status_code == 200:  # WHY: happy path first
             self._handle_start_success(site_id, response.data)  # WHY: delegate success branch
-            return  # WHY: don't fall through to error handling
+            return  # WHY: do not fall through to error handling
         self._handle_start_error(response)  # WHY: consolidated error reporting
 
     def _handle_start_success(self, site_id: str, result: dict[str, Any]) -> None:
@@ -93,7 +93,7 @@ class PacketCaptureExec:
             print("\n> Waiting for PCAP file to be ready...")  # WHY: keep user informed
             print("  This may take a few moments after capture completes.")  # WHY: expectation set
             self._wait_and_download_pcap(site_id, capture_id, result.get("duration", 600))  # WHY: pcap flow
-            return  # WHY: don't also start stream
+            return  # WHY: do not also start stream
         if capture_format == "stream":  # WHY: stream route subscribes to WebSocket
             self._subscribe_to_site_capture_stream(site_id, capture_id)  # WHY: real-time stream
 
@@ -108,7 +108,7 @@ class PacketCaptureExec:
             print("  Only one capture per AP is allowed at a time")  # WHY: educate user
             print("  Wait for the existing capture to complete or check the Mist portal to stop it")  # WHY: remediate
             logging.error("Capture conflict: Recording already in progress on AP")  # WHY: audit conflict
-            return  # WHY: don't print generic error over specialized one
+            return  # WHY: do not print generic error over specialized one
         print(f"\n! Failed to start capture: {response.status_code}")  # WHY: generic failure
         print(f"  Error details: {error_details}")  # WHY: surface API detail
         logging.error("Capture failed: %s - %s", response.status_code, error_details)  # WHY: audit failure
@@ -152,7 +152,7 @@ class PacketCaptureExec:
     def _loop_start_call(self, site_id: str, payload: dict[str, Any], iteration: int) -> Any | None:
         """Wrapped startSitePacketCapture call that traps exceptions."""
         try:  # WHY: catch API/network faults so the loop keeps running
-            return _pc().mistapi.api.v1.sites.pcaps.startSitePacketCapture(  # WHY: kick off new capture
+            return _pc().mistapi.api.v1.sites.pcaps.startSitePacketCapture(  # WHY: start new capture
                 self.mist_session, site_id, payload
             )
         except Exception as capture_error:  # pylint: disable=broad-exception-caught  # WHY: log-and-continue
