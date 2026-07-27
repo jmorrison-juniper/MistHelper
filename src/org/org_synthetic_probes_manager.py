@@ -396,9 +396,7 @@ def _probe_target(fqdn: str, role: dict[str, Any], cenr_source: dict[str, Any]) 
         target = f"{protocol}://{fqdn}"
     else:
         target = f"{protocol}://{fqdn}:{port}"
-    # Exactly one WARN per contract Branch 3 side-effect; the same
-    # logger.debug follows for consistency across all three branches.
-    logger.warning("no observation for %s, using catalogue default %s", fqdn, target)
+    # NOTE(1025-US1): warning moved to load-time _emit_load_time_cenr_warning to avoid N*M duplication
     logger.debug("probe_target: %s -> %s (obs=%s)", fqdn, target, observed_protocol)
     return target
 
@@ -432,6 +430,25 @@ def manage_org_synthetic_probes(mist_session: Any, org_id: str) -> None:
     logging.debug("ENTRY: manage_org_synthetic_probes(org_id=%s)", org_id)
 
     sources = _load_probe_sources(_DEFAULT_DATA_DIR)
+    # NOTE(1025-US1): dedup state for the load-time CENR WARNING lives here so
+    # its lifetime is bounded by the invocation (data-model.md §3 INV-D1;
+    # FR-012 requires re-emission across back-to-back operator runs).
+    warned_cenr_hosts: set[str] = set()  # mutable dedup set, empty per run
+    logging.info(  # Constitution VII: BEFORE the load-time diff
+        "computing load-time CENR missing-host set for org_id=%s",
+        org_id,
+    )
+    _emit_load_time_cenr_warning(  # single call site per invocation
+        _compute_missing_cenr_hosts(  # inner: set difference over frozen universes
+            _collect_catalogue_hosts(sources[0]),  # probes side
+            _collect_cenr_observed_hosts(sources[1]),  # observations side
+        ),
+        warned_cenr_hosts,  # dedup state -- mutated in place
+    )
+    logging.debug(  # Constitution VII: AFTER the load-time emission
+        "load-time CENR check complete; warned_cenr_hosts=%s",
+        len(warned_cenr_hosts),
+    )
     vlan_ids = _prompt_vlan_list()
     setting = _fetch_setting(mist_session, org_id)
     existing_probes = _detect_existing(setting)
@@ -517,6 +534,182 @@ def _load_probe_sources(data_dir: Path) -> tuple[dict[str, Any], dict[str, Any]]
     cenr = promote_cache_document(cenr, kind="cenr")  # legacy CENR proxy/vpn bags
     cenr = ensure_fresh(cenr_path, cenr)
     return probes, cenr
+
+
+def _collect_cenr_observed_hosts(cenr_source: dict[str, Any]) -> frozenset[str]:
+    """Return every FQDN that has a CENR observation record.
+
+    Why:
+        T011 needs the "known observations" side of the catalogue-minus-observations
+        set difference. Rather than teaching ``_compute_missing_cenr_hosts`` about
+        the four bag locations (``proxy_hostnames``, ``vpn_hostnames``, and each
+        ``by_city[*]`` slot's paired bags), we walk them once here and return a
+        frozen set. This mirrors ``_lookup_v3_observation``'s bag traversal so
+        the two functions agree on which bags are authoritative.
+
+    Args:
+        cenr_source: Loaded CENR document, post v2->v3 loader adapter.
+
+    Returns:
+        Frozen set of every host string discovered across all CENR bags.
+        Non-dict / non-string / missing-``host`` entries are silently skipped
+        (defensive against mid-migration flat strings that slipped past the
+        loader adapter).
+    """
+    observed: set[str] = set()  # accumulator; frozen at return time for immutability
+    # Top-level bags first: they are the common case and dominate CENR volume.
+    for bag_key in ("proxy_hostnames", "vpn_hostnames"):  # both bag names per v3 schema
+        bag = cenr_source.get(bag_key) or []  # tolerate missing key -> empty list
+        if not isinstance(bag, list):  # defensive: schema drift would show up here
+            continue  # skip malformed bag rather than crash
+        for entry in bag:  # each entry may be v3 dict or v2 flat string
+            if isinstance(entry, dict):  # v3 case: pull the "host" field
+                host = entry.get("host")  # may be None if the entry is malformed
+                if isinstance(host, str):  # only accept string hosts
+                    observed.add(host)  # add to the observation universe
+            elif isinstance(entry, str):  # v2 legacy flat string tolerated
+                observed.add(entry)  # add the bare host string
+    # by_city bags carry the same shape per cenr_cache_schema_v3.md.
+    by_city = cenr_source.get("by_city")  # may be missing entirely
+    if isinstance(by_city, dict):  # only walk when it's the expected mapping shape
+        for city_slot in by_city.values():  # each city has proxy/vpn bags
+            if not isinstance(city_slot, dict):  # defensive: skip malformed slots
+                continue  # move to the next city
+            for bag_key in ("proxy_hostnames", "vpn_hostnames"):  # same two bag names
+                bag = city_slot.get(bag_key) or []  # tolerate missing bag
+                if not isinstance(bag, list):  # defensive against schema drift
+                    continue  # skip malformed nested bag
+                for entry in bag:  # same v3/v2 tolerance as top-level bags
+                    if isinstance(entry, dict):  # v3 dict entry
+                        host = entry.get("host")  # extract host field
+                        if isinstance(host, str):  # accept only string hosts
+                            observed.add(host)  # add to observation universe
+                    elif isinstance(entry, str):  # v2 flat-string fallback
+                        observed.add(entry)  # add bare host
+    return frozenset(observed)  # freeze so callers cannot mutate the universe
+
+
+def _collect_catalogue_hosts(probes_source: dict[str, Any]) -> frozenset[str]:
+    """Return every catalogue FQDN that ``_probe_target`` may consult observations for.
+
+    Why:
+        The "catalogue hosts" side of the set difference is every non-wildcard
+        FQDN listed on any role in the probe source file. We include role-inline
+        FQDNs (all non-tunnel_zen roles) because ``_probe_target`` consults CENR
+        for their observed protocol/port even though the role also carries a
+        curated ``probe`` block. ``tunnel_zen`` role FQDNs are supplied BY the
+        CENR file itself, so by construction they are already observed and
+        cannot appear as "missing". Wildcard entries (``"*."``) are filtered
+        because they are never emitted as probes (see ``_build_probe_set``
+        line ~798).
+
+    Args:
+        probes_source: Loaded probe source document (post v2->v3 promotion).
+
+    Returns:
+        Frozen set of every non-wildcard catalogue FQDN.
+    """
+    catalogue: set[str] = set()  # accumulator; frozen at return time
+    for role in probes_source.get("roles", []) or []:  # each catalogue role
+        role_name = role.get("role")  # role slug string
+        if role_name == _TUNNEL_ZEN_ROLE:  # tunnel_zen sources FQDNs from CENR itself
+            continue  # by construction those hosts are already observed
+        for entry in role.get("fqdns") or []:  # tolerate missing fqdns key
+            # Unwrap v3 dict entries while tolerating legacy flat strings so
+            # mid-migration catalogues do not silently drop hosts here.
+            fqdn = entry.get("host") if isinstance(entry, dict) else entry  # v3 unwrap
+            if not isinstance(fqdn, str) or fqdn.startswith("*."):  # skip wildcards / non-strings
+                continue  # wildcards are never emitted as probes
+            catalogue.add(fqdn)  # add concrete FQDN to the catalogue universe
+    return frozenset(catalogue)  # freeze so callers cannot mutate
+
+
+def _compute_missing_cenr_hosts(
+    catalogue_hosts: frozenset[str],
+    cenr_observations: frozenset[str],
+) -> frozenset[str]:
+    """Return catalogue FQDNs that have no CENR observation record.
+
+    Why:
+        This is the load-time replacement for the pre-1025 per-emission WARNING
+        storm inside ``_probe_target`` (315 sites x 7 missing hosts = 2205
+        WARNINGs on the reference org). Computed exactly once per invocation,
+        after ``_load_probe_sources`` returns, so the cap becomes M unique
+        hosts instead of N*M repeated emissions (research.md R5).
+
+    Args:
+        catalogue_hosts: Non-wildcard FQDN universe from
+            ``_collect_catalogue_hosts``.
+        cenr_observations: Observed FQDN universe from
+            ``_collect_cenr_observed_hosts``.
+
+    Returns:
+        Frozen set of catalogue hosts absent from ``cenr_observations``. Empty
+        set when every catalogue host has an observation (FR-001 zero-emission
+        edge case).
+    """
+    logging.info(  # Constitution VII action-logging: BEFORE the diff
+        "computing missing CENR hosts: catalogue=%s observed=%s",
+        len(catalogue_hosts),
+        len(cenr_observations),
+    )
+    missing = frozenset(catalogue_hosts - cenr_observations)  # set difference -> frozen
+    logging.debug(  # Constitution VII action-logging: AFTER with result summary
+        "computed missing CENR hosts: %s missing",
+        len(missing),
+    )
+    return missing  # frozen so callers cannot smuggle in extra hosts
+
+
+def _emit_load_time_cenr_warning(
+    missing_hosts: frozenset[str],
+    warned_cenr_hosts: set[str],
+) -> None:
+    """Emit exactly one WARNING per invocation naming all unwarned missing hosts.
+
+    Why:
+        Contract ``log_record_shape.md`` §1.3 mandates a single load-time
+        WARNING record that names every missing host and states catalogue-default
+        fallback URLs are in use. ``warned_cenr_hosts`` is the mutable dedup
+        state owned by ``manage_org_synthetic_probes`` (data-model.md §3 INV-D1)
+        -- we mutate it in place so repeat calls within a single invocation
+        are no-ops. FR-012: dedup state does NOT persist across invocations
+        (caller supplies a fresh set per run).
+
+    Args:
+        missing_hosts: Output of ``_compute_missing_cenr_hosts`` for the
+            current run.
+        warned_cenr_hosts: Per-invocation dedup set. Hosts added here are
+            skipped on any subsequent call within the same invocation.
+    """
+    logging.info(  # Constitution VII: BEFORE the emission decision
+        "evaluating CENR load-time warning: missing=%s already_warned=%s",
+        len(missing_hosts),
+        len(warned_cenr_hosts),
+    )
+    unwarned = missing_hosts - warned_cenr_hosts  # subtract already-emitted hosts
+    if not unwarned:  # zero-emission edge case (FR-001) or repeat call within run
+        logging.debug(  # Constitution VII: AFTER, no-op branch
+            "CENR load-time warning: no unwarned missing hosts; skipping emission",
+        )
+        return  # nothing to warn about
+    # Sort for deterministic message shape (test assertions and log-grep audits
+    # expect a stable ordering across runs regardless of set iteration order).
+    ordered = sorted(unwarned)  # ASCII sort per Constitution V log discipline
+    # Single WARNING record naming every host, matching log_record_shape.md §1.3.
+    # ASCII-only tokens (CENR, using-catalogue-default-URLs) so ``grep -c CENR``
+    # in the operator smoke sequence stays deterministic (SC-001).
+    logging.warning(  # exactly-one-per-run WARNING per contract §1.3
+        "CENR observations missing for %s catalogue host(s); using catalogue-default URLs: %s",
+        len(ordered),
+        ", ".join(ordered),
+    )
+    warned_cenr_hosts.update(unwarned)  # mark as warned so a duplicate call is a no-op
+    logging.debug(  # Constitution VII: AFTER, emission branch
+        "CENR load-time warning emitted for %s hosts; warned_cenr_hosts now %s",
+        len(ordered),
+        len(warned_cenr_hosts),
+    )
 
 
 def _validate_vlan_input(raw: str) -> tuple[bool, str, list[int]]:

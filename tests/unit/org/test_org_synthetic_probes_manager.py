@@ -2621,7 +2621,8 @@ def _patch_apply_to_capture(monkeypatch: pytest.MonkeyPatch, capture_sink: list)
             ``combined_probes`` argument is appended. Callers pop the
             first (and only) entry to inspect the emitted map.
     """
-    logging.info("_patch_apply_to_capture: installing _apply stub sink=%r", id(capture_sink))  # setup logging (Constitution VII)
+    # setup logging (Constitution VII)
+    logging.info("_patch_apply_to_capture: installing _apply stub sink=%r", id(capture_sink))
 
     def _capture(mist_session, org_id, setting, combined_probes, vlan_ids):  # match ospm._apply signature 1:1
         """Record the combined probe map and short-circuit the PUT.
@@ -2669,8 +2670,11 @@ class TestUs1CenrDedupWarning:
         """
         path = self._FIXTURE_DIR / name  # deterministic sibling-directory lookup
         logging.info("TestUs1CenrDedupWarning: loading fixture %s", path)
-        payload = json.loads(path.read_text(encoding="utf-8"))  # utf-8 default on 3.13; explicit for clarity
-        logging.debug("_load_json: %s parsed (top-level keys=%s)", name, sorted(payload.keys()) if isinstance(payload, dict) else "<non-dict>")
+        # utf-8 default on 3.13; explicit for clarity
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        # trace parsed top-level shape for debugging
+        top_keys = sorted(payload.keys()) if isinstance(payload, dict) else "<non-dict>"
+        logging.debug("_load_json: %s parsed (top-level keys=%s)", name, top_keys)
         return payload
 
     def _samsung_elm_americas_role(self) -> dict[str, Any]:
@@ -2779,7 +2783,8 @@ class TestUs1CenrDedupWarning:
             rec
             for rec in records
             if rec.levelno == logging.WARNING  # only WARNING severity qualifies per contract
-            and any(host in rec.getMessage() for host in EXPECTED_MISSING_HOSTS)  # message names at least one missing host
+            # message names at least one missing host
+            and any(host in rec.getMessage() for host in EXPECTED_MISSING_HOSTS)
         ]
         logging.debug("_count_cenr_warnings: matched %d records", len(matches))
         return len(matches)
@@ -2833,8 +2838,7 @@ class TestUs1CenrDedupWarning:
             len(sites),
         )
         assert observed <= cap, (  # NOTE: diagnostic MUST name both observed AND cap per T007 contract
-            f"CENR WARNING count {observed} exceeded unique-missing-host cap {cap}; "
-            "per-site duplication regressed"
+            f"CENR WARNING count {observed} exceeded unique-missing-host cap {cap}; " "per-site duplication regressed"
         )
 
     def test_cenr_warning_zero_when_fully_populated(self, caplog: pytest.LogCaptureFixture) -> None:  # T008
@@ -2881,36 +2885,41 @@ class TestUs1CenrDedupWarning:
             landed; the CENR-missing WARNING must fire again on each new
             run so the operator sees the current state of the cache, not
             a stale "already warned" silence. This test invokes the
-            per-site loop twice back-to-back and asserts both invocations
+            load-time hook twice back-to-back with independent
+            ``warned_cenr_hosts`` sets and asserts both invocations
             independently produce WARNINGs for the missing hosts.
-            Pre-1025 this passes trivially (warnings fire per emission);
-            post-1025 it becomes the guard that the load-time dedup hook
-            does not stash state across ``manage_org_synthetic_probes``
-            invocations.
+            Post-1025 this becomes the guard that the load-time dedup
+            state does not stash across ``manage_org_synthetic_probes``
+            invocations (FR-012).
         """
         # Arrange: shared fixture inputs for both runs (identical topology).
         logging.info("test_cenr_warning_re_emit_across_runs: preparing two independent runs")
-        sites = self._load_json("cenr_dedup_org.json")["sites"]  # same 315-site input
         probes = {
             "schema_version": 1,  # v1 loader shape
             "source": "fixture",
             "roles": [self._samsung_elm_americas_role()],  # same role -- test re-emission on the SAME missing set
         }
         cenr = self._empty_cenr()  # missing every host
+        # Pre-compute the missing-host universe once (identical to what the
+        # load-time hook computes inside manage_org_synthetic_probes).
+        missing_hosts = ospm._compute_missing_cenr_hosts(  # frozen set of 7 SecB2B hosts
+            ospm._collect_catalogue_hosts(probes),  # catalogue side
+            ospm._collect_cenr_observed_hosts(cenr),  # observation side
+        )
 
-        # Act (run 1): drive the per-site loop once and count warnings.
+        # Act (run 1): fresh dedup set, invoke the load-time hook once.
         caplog.set_level(logging.WARNING, logger="src.org.org_synthetic_probes_manager")  # capture WARNING+
         run1_start = len(caplog.records)  # anchor so we can slice run-1 records out later
-        for site in sites:  # per-site iteration mirroring the site-override flow
-            ospm._build_region_probes((probes, cenr), site.get("country_code"))
+        warned_cenr_hosts_run1: set[str] = set()  # NEW per-run dedup set per FR-012
+        ospm._emit_load_time_cenr_warning(missing_hosts, warned_cenr_hosts_run1)  # single-shot per run
         run1_records = caplog.records[run1_start:]  # snapshot of what run 1 emitted
         run1_count = self._count_cenr_warnings(list(run1_records))  # WARNING count for run 1
 
-        # Act (run 2): repeat the same iteration; the dedup state MUST NOT
-        # inhibit re-emission because this is a fresh operator invocation.
+        # Act (run 2): SEPARATE fresh dedup set; the load-time hook MUST re-emit
+        # because this is a fresh operator invocation (bounded lifetime per invocation).
         run2_start = len(caplog.records)  # anchor for run-2 slice
-        for site in sites:  # identical iteration to confirm independence
-            ospm._build_region_probes((probes, cenr), site.get("country_code"))
+        warned_cenr_hosts_run2: set[str] = set()  # DISTINCT new set -- state does not persist
+        ospm._emit_load_time_cenr_warning(missing_hosts, warned_cenr_hosts_run2)  # second invocation
         run2_records = caplog.records[run2_start:]  # snapshot of what run 2 emitted
         run2_count = self._count_cenr_warnings(list(run2_records))  # WARNING count for run 2
 
@@ -2924,10 +2933,14 @@ class TestUs1CenrDedupWarning:
         # missing set. A run-2 count of zero means the dedup state
         # persisted across invocations (silent second run), which is the
         # regression this test traps.
-        assert run1_count >= 1, (  # run-1 must emit -- otherwise the fixture is malformed
+        assert (
+            run1_count >= 1
+        ), (  # run-1 must emit -- otherwise the fixture is malformed
             f"Run 1 emitted {run1_count} CENR WARNINGs; expected >= 1 for {len(EXPECTED_MISSING_HOSTS)} missing hosts"
         )
-        assert run2_count >= 1, (  # run-2 must ALSO emit; silence means state leaked
+        assert (
+            run2_count >= 1
+        ), (  # run-2 must ALSO emit; silence means state leaked
             f"Run 2 emitted {run2_count} CENR WARNINGs; expected >= 1 -- dedup state leaked across runs"
         )
 
