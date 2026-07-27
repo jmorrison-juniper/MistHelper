@@ -719,6 +719,16 @@ def manage_org_synthetic_probes(mist_session: Any, org_id: str) -> None:
         "load-time CENR check complete; warned_cenr_hosts=%s",
         len(warned_cenr_hosts),
     )
+    # NOTE(1025-US2): companion dedup state for the load-time country_code
+    # WARNING lives here so its lifetime is bounded by the invocation
+    # (data-model.md §3 INV-D1; FR-012 requires re-emission across
+    # back-to-back operator runs). Emission itself is delegated to
+    # ``_prompt_and_apply_site_overrides`` because that is where the site
+    # list is materialised via ``_list_org_sites`` -- the site list is
+    # gated behind the operator's site-override opt-in so it is not fetched
+    # unless needed. Threading the empty set from here keeps the set
+    # lifetime pinned to this invocation as required by FR-012.
+    warned_unmapped_codes: set[str] = set()  # mutable dedup set, empty per run
     vlan_ids = _prompt_vlan_list()
     setting = _fetch_setting(mist_session, org_id)
     existing_probes = _detect_existing(setting)
@@ -759,7 +769,13 @@ def manage_org_synthetic_probes(mist_session: Any, org_id: str) -> None:
     # Post-PUT site-override flow: give the operator a chance to push the
     # same probe set into one or more site-level settings so specific
     # sites can override the org-wide config.
-    _prompt_and_apply_site_overrides(mist_session, org_id, resulting_tool, sources)
+    _prompt_and_apply_site_overrides(
+        mist_session,
+        org_id,
+        resulting_tool,
+        sources,
+        warned_unmapped_codes,  # threaded from load-time scope so lifetime is bounded by this invocation
+    )
 
     logging.debug("EXIT: manage_org_synthetic_probes - success")
 
@@ -1441,14 +1457,18 @@ def _build_region_probes(
         wasteful noise. The site-override flow calls this helper instead so
         each picked site only receives the ELM role matching its own
         ``country_code``. Unmapped or missing country codes fall back to
-        EMEA (the broadest surface) and log a warning so operators can
-        extend ``_COUNTRY_CODE_TO_REGION`` when they see the fallback fire.
+        EMEA (the broadest surface); the operator-visible WARNING for the
+        unmapped set is now emitted once at load time by
+        ``_emit_load_time_country_code_warning`` (1025-US2, FR-004 / FR-010)
+        rather than once per site here, so this helper stays silent on the
+        fallback path and returns bytes deterministically for INV-1.
 
     Args:
         sources: The ``(probes, cenr)`` tuple from ``_load_probe_sources``.
         country_code: ISO 3166-1 alpha-2 code from the site dict (case-
             insensitive; may be ``None`` or an unmapped code -- both fall
-            through to EMEA with a warning).
+            through to EMEA silently; see ``_emit_load_time_country_code_warning``
+            for the operator-visible surface).
 
     Returns:
         A ``{probe_name: probe_body}`` map for the one matching role.
@@ -1457,14 +1477,14 @@ def _build_region_probes(
     """
     probes_source, _ = sources
     normalised = (country_code or "").strip().upper()
-    region = _COUNTRY_CODE_TO_REGION.get(normalised)
+    region = _COUNTRY_CODE_TO_REGION.get(normalised)  # None -> unmapped or intentionally omitted
     if region is None:
-        logging.warning(
-            "country_code %r not mapped; defaulting to region %r",
-            country_code,
-            _DEFAULT_REGION,
-        )
-        region = _DEFAULT_REGION
+        # NOTE(1025-US2): warning moved to load-time
+        # ``_emit_load_time_country_code_warning`` to avoid N*K duplication
+        # per FR-004 / FR-010 / SC-002. Region-value resolution behaviour is
+        # unchanged -- unmapped codes still fall through to _DEFAULT_REGION
+        # so regional probes still fire (FR-003 spirit preserved).
+        region = _DEFAULT_REGION  # emea fallback -- deliberate, per data-model.md
     target_role_name = f"{_SAMSUNG_ELM_ROLE_PREFIX}{region}"
     result: dict[str, dict[str, Any]] = {}
     for role in probes_source.get("roles", []) or []:
@@ -2175,6 +2195,7 @@ def _prompt_and_apply_site_overrides(
     org_id: str,
     resulting_tool: dict[str, dict[str, Any]],
     sources: tuple[dict[str, Any], dict[str, Any]],
+    warned_unmapped_codes: set[str],
 ) -> None:
     """Offer to push the tool-authored probe set into per-site settings.
 
@@ -2196,6 +2217,14 @@ def _prompt_and_apply_site_overrides(
         set. This whole flow is optional (default no) so unattended runs
         do not silently mutate site settings.
 
+        1025-US2: the site list is also the natural anchor for the
+        load-time ``country_code`` WARNING dedup path -- every site with
+        an unmapped code is visible in one place, so a single
+        ``_emit_load_time_country_code_warning`` call names every
+        offender once instead of once per site. The ``warned_unmapped_codes``
+        set is threaded in from ``manage_org_synthetic_probes`` so its
+        lifetime is bounded by the invocation (FR-012).
+
     Args:
         mist_session: Authenticated ``mistapi`` session.
         org_id: Mist org UUID -- required for ``listOrgSites`` so the
@@ -2209,6 +2238,10 @@ def _prompt_and_apply_site_overrides(
             Passed through to ``_apply_to_site`` so per-region Samsung
             ELM probes can be built from the same source-of-truth
             catalogue.
+        warned_unmapped_codes: Load-time dedup set constructed in
+            ``manage_org_synthetic_probes`` (1025-US2). Mutated in place
+            by ``_emit_load_time_country_code_warning`` so a subsequent
+            call in the same invocation would suppress duplicates.
     """
     if not resulting_tool:
         return
@@ -2220,6 +2253,28 @@ def _prompt_and_apply_site_overrides(
     if not sites:
         print("  No sites found in this org -- skipping site overrides.")
         return
+    # NOTE(1025-US2): load-time country_code WARNING emission fires exactly
+    # once here, immediately after the site list is materialised and
+    # BEFORE per-site region resolution begins in ``_apply_to_site`` ->
+    # ``_build_region_probes``. Emitting here (rather than per-site in the
+    # resolver) collapses N warnings into 1 (or K, one per distinct
+    # unmapped code) and satisfies FR-004 / FR-010 / SC-002.
+    logging.info(  # Constitution VII: BEFORE the load-time country_code diff
+        "computing load-time country_code unmapped set for %d sites",
+        len(sites),
+    )
+    _emit_load_time_country_code_warning(  # single call site per invocation (FR-012)
+        _compute_unmapped_country_codes(  # inner: set difference over frozen universes
+            sites,  # the just-loaded site list
+            _COUNTRY_CODE_TO_REGION,  # T020-extended region map
+            _COUNTRY_CODE_INTENTIONAL_GAPS,  # T021 gap set (Antarctica etc.)
+        ),
+        warned_unmapped_codes,  # dedup state -- mutated in place
+    )
+    logging.debug(  # Constitution VII: AFTER the load-time emission
+        "load-time country_code check complete; warned_unmapped_codes=%s",
+        len(warned_unmapped_codes),
+    )
     picked_sites = _prompt_site_indexes(sites)
     if not picked_sites:
         print("  No valid site indexes entered -- skipping site overrides.")

@@ -685,34 +685,53 @@ def test_build_region_probes_unmapped_country_falls_back_to_emea(
     region_probes_source: dict,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """DE (unmapped) resolves to EMEA and logs a warning.
+    """DE (not in region map) resolves to EMEA silently.
 
     Why:
         Every ISO code not enumerated in ``_COUNTRY_CODE_TO_REGION`` must
-        default to EMEA (broadest surface) and the warning is the only
-        signal operators get that a code is missing from the mapping.
+        default to EMEA (broadest surface). Post 1025-US2 the WARNING
+        surfaced by ``_build_region_probes`` was relocated to a single
+        load-time emission in ``_emit_load_time_country_code_warning``
+        so that the region resolver stays silent and cannot re-introduce
+        N*K per-site duplication. This test pins BOTH invariants: the
+        EMEA fallback (URL builder unchanged, INV-1) AND resolver
+        silence (no WARN from _build_region_probes itself).
     """
     with caplog.at_level("WARNING"):
         result = ospm._build_region_probes((region_probes_source, {}), "DE")
     assert list(result.keys()) == ["zcc-samsung_elm_activation_emea-elm-eu-example-com"]
-    assert any("not mapped" in rec.message and "emea" in rec.message for rec in caplog.records)
+    # Resolver silence: WARNs live at load time now (1025-US2).
+    warnings = [rec for rec in caplog.records if rec.levelno == logging.WARNING]
+    assert warnings == [], (
+        "_build_region_probes must be silent after 1025-US2; "
+        f"observed {len(warnings)}: {[r.getMessage() for r in warnings]}"
+    )
 
 
 def test_build_region_probes_none_country_falls_back_to_emea(
     region_probes_source: dict,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """Missing / ``None`` country_code still resolves to EMEA (with warning).
+    """Missing / ``None`` country_code still resolves to EMEA silently.
 
     Why:
         Not every Mist site record carries a ``country_code``; the helper
         must degrade to the default region rather than raise so the site-
         override flow does not abort mid-run for one under-configured site.
+        Post 1025-US2 the resolver stays silent -- any operator-visible
+        signal about unmapped codes now lives in the load-time WARNING
+        emitted once per invocation by
+        ``_emit_load_time_country_code_warning``.
     """
     with caplog.at_level("WARNING"):
         result = ospm._build_region_probes((region_probes_source, {}), None)
     assert list(result.keys()) == ["zcc-samsung_elm_activation_emea-elm-eu-example-com"]
-    assert any("not mapped" in rec.message for rec in caplog.records)
+    # Resolver silence: WARNs live at load time now (1025-US2).
+    warnings = [rec for rec in caplog.records if rec.levelno == logging.WARNING]
+    assert warnings == [], (
+        "_build_region_probes must be silent after 1025-US2; "
+        f"observed {len(warnings)}: {[r.getMessage() for r in warnings]}"
+    )
 
 
 def test_build_region_probes_cn_selects_china_role(region_probes_source: dict) -> None:
@@ -1192,7 +1211,7 @@ def test_site_override_prompt_declined_makes_no_calls() -> None:
         patch.object(ospm._mist_site_setting, "getSiteSetting") as get_mock,
         patch.object(ospm._mist_site_setting, "updateSiteSettings") as put_mock,
     ):
-        ospm._prompt_and_apply_site_overrides(session, "org-uuid", {"zcc-x": {"name": "zcc-x"}}, ({"roles": []}, {}))
+        ospm._prompt_and_apply_site_overrides(session, "org-uuid", {"zcc-x": {"name": "zcc-x"}}, ({"roles": []}, {}), set())
     list_mock.assert_not_called()
     get_mock.assert_not_called()
     put_mock.assert_not_called()
@@ -1206,7 +1225,7 @@ def test_site_override_prompt_empty_resulting_tool_returns_immediately() -> None
         patch.object(ospm._mist_orgs_sites, "listOrgSites") as list_mock,
         patch.object(ospm._mist_site_setting, "updateSiteSettings") as put_mock,
     ):
-        ospm._prompt_and_apply_site_overrides(session, "org-uuid", {}, ({"roles": []}, {}))
+        ospm._prompt_and_apply_site_overrides(session, "org-uuid", {}, ({"roles": []}, {}), set())
     input_mock.assert_not_called()
     list_mock.assert_not_called()
     put_mock.assert_not_called()
@@ -1249,7 +1268,7 @@ def test_site_override_indexed_prompt_applies_to_selected_sites() -> None:
         patch.object(ospm._mist_site_setting, "updateSiteSettings", return_value=put_response) as put_mock,
         patch("builtins.input", lambda _prompt: next(inputs)),
     ):
-        ospm._prompt_and_apply_site_overrides(session, "org-uuid", tool_probes, ({"roles": []}, {}))
+        ospm._prompt_and_apply_site_overrides(session, "org-uuid", tool_probes, ({"roles": []}, {}), set())
     list_mock.assert_called_once()
     get_all_mock.assert_called_once()
     # Exactly the two in-range indexes trigger a per-site PUT round-trip.
@@ -1280,7 +1299,7 @@ def test_site_override_indexed_prompt_empty_input_skips() -> None:
         patch.object(ospm._mist_site_setting, "updateSiteSettings") as put_mock,
         patch("builtins.input", lambda _prompt: next(inputs)),
     ):
-        ospm._prompt_and_apply_site_overrides(session, "org-uuid", {"zcc-x": {"name": "zcc-x"}}, ({"roles": []}, {}))
+        ospm._prompt_and_apply_site_overrides(session, "org-uuid", {"zcc-x": {"name": "zcc-x"}}, ({"roles": []}, {}), set())
     get_mock.assert_not_called()
     put_mock.assert_not_called()
 
@@ -1296,7 +1315,7 @@ def test_site_override_no_sites_short_circuits(capsys: pytest.CaptureFixture[str
         patch.object(ospm._mist_site_setting, "updateSiteSettings") as put_mock,
         patch("builtins.input", lambda _prompt: next(inputs)),
     ):
-        ospm._prompt_and_apply_site_overrides(session, "org-uuid", {"zcc-x": {"name": "zcc-x"}}, ({"roles": []}, {}))
+        ospm._prompt_and_apply_site_overrides(session, "org-uuid", {"zcc-x": {"name": "zcc-x"}}, ({"roles": []}, {}), set())
     out = capsys.readouterr().out
     assert "No sites found" in out
     put_mock.assert_not_called()
@@ -1368,7 +1387,7 @@ def test_site_override_indexed_prompt_sorts_by_name() -> None:
         patch.object(ospm._mist_site_setting, "updateSiteSettings", return_value=put_response) as put_mock,
         patch("builtins.input", lambda _prompt: next(inputs)),
     ):
-        ospm._prompt_and_apply_site_overrides(session, "org-uuid", {"zcc-x": {"name": "zcc-x"}}, ({"roles": []}, {}))
+        ospm._prompt_and_apply_site_overrides(session, "org-uuid", {"zcc-x": {"name": "zcc-x"}}, ({"roles": []}, {}), set())
     assert put_mock.call_count == 1
     assert put_mock.call_args.args[1] == "id-alpha"
 
@@ -1402,7 +1421,7 @@ def test_site_override_unnamed_sites_sink_to_end() -> None:
         patch.object(ospm._mist_site_setting, "updateSiteSettings", return_value=put_response) as put_mock,
         patch("builtins.input", lambda _prompt: next(inputs)),
     ):
-        ospm._prompt_and_apply_site_overrides(session, "org-uuid", {"zcc-x": {"name": "zcc-x"}}, ({"roles": []}, {}))
+        ospm._prompt_and_apply_site_overrides(session, "org-uuid", {"zcc-x": {"name": "zcc-x"}}, ({"roles": []}, {}), set())
     put_site_ids = [call.args[1] for call in put_mock.call_args_list]
     # Both blank-name entries land at the end. Ordering between them
     # tie-breaks on the casefolded name string first (empty "" sorts
@@ -1454,7 +1473,7 @@ def test_site_override_indexed_prompt_expands_ranges() -> None:
         patch.object(ospm._mist_site_setting, "updateSiteSettings", return_value=put_response) as put_mock,
         patch("builtins.input", lambda _prompt: next(inputs)),
     ):
-        ospm._prompt_and_apply_site_overrides(session, "org-uuid", {"zcc-x": {"name": "zcc-x"}}, ({"roles": []}, {}))
+        ospm._prompt_and_apply_site_overrides(session, "org-uuid", {"zcc-x": {"name": "zcc-x"}}, ({"roles": []}, {}), set())
     put_site_ids = [call.args[1] for call in put_mock.call_args_list]
     # Sort key is site name, so indexes 1..6 map to SiteA..SiteF in order.
     # 2-4 -> site-2, site-3, site-4; 6 -> site-6.
@@ -1480,7 +1499,7 @@ def test_site_override_indexed_prompt_all_token_selects_every_site() -> None:
         patch.object(ospm._mist_site_setting, "updateSiteSettings", return_value=put_response) as put_mock,
         patch("builtins.input", lambda _prompt: next(inputs)),
     ):
-        ospm._prompt_and_apply_site_overrides(session, "org-uuid", {"zcc-x": {"name": "zcc-x"}}, ({"roles": []}, {}))
+        ospm._prompt_and_apply_site_overrides(session, "org-uuid", {"zcc-x": {"name": "zcc-x"}}, ({"roles": []}, {}), set())
     put_site_ids = sorted(call.args[1] for call in put_mock.call_args_list)
     assert put_site_ids == ["site-1", "site-2", "site-3"]
 
@@ -1504,7 +1523,7 @@ def test_site_override_indexed_prompt_range_drops_out_of_range() -> None:
         patch.object(ospm._mist_site_setting, "updateSiteSettings", return_value=put_response) as put_mock,
         patch("builtins.input", lambda _prompt: next(inputs)),
     ):
-        ospm._prompt_and_apply_site_overrides(session, "org-uuid", {"zcc-x": {"name": "zcc-x"}}, ({"roles": []}, {}))
+        ospm._prompt_and_apply_site_overrides(session, "org-uuid", {"zcc-x": {"name": "zcc-x"}}, ({"roles": []}, {}), set())
     put_site_ids = [call.args[1] for call in put_mock.call_args_list]
     assert put_site_ids == ["site-1", "site-2"]
 
@@ -1747,14 +1766,18 @@ def test_probe_target_tcp_443_observation_also_returns_https_url() -> None:
     assert ":443" not in result
 
 
-def test_probe_target_missing_observation_falls_back_and_warns(caplog: pytest.LogCaptureFixture) -> None:
-    """observed_protocol=None falls back to catalogue default and emits ONE WARNING.
+def test_probe_target_missing_observation_falls_back_silently(caplog: pytest.LogCaptureFixture) -> None:
+    """observed_protocol=None falls back to catalogue default, emits ZERO WARNINGs.
 
     Why:
-        Contract Branch 3 side-effect: exactly one ``logger.warning``
-        with the message ``"no observation for %s, using catalogue
-        default %s"`` -- operators use that record to spot cache-miss
-        hosts and rerun the reachability probe.
+        Contract Branch 3 URL shape (catalogue default fallback) is
+        unchanged, but 1025-US1 relocated the operator-visible WARNING
+        to a single load-time emission in ``manage_org_synthetic_probes``
+        via ``_emit_load_time_cenr_warning``. The per-site warning that
+        pre-1025 fired from Branch 3 was the source of the N*M
+        duplication SC-001 targets. This test now pins the new contract:
+        Branch 3 must fall back deterministically to the catalogue
+        default and emit no warning of its own.
     """
     # Arrange: host present in the bag but observation_protocol=None.
     cenr = _cenr_source_with(
@@ -1764,25 +1787,31 @@ def test_probe_target_missing_observation_falls_back_and_warns(caplog: pytest.Lo
         observed_port=None,
     )
     # Act: capture WARN records; use module-scoped logger to match the
-    # logger.warning call in the production module.
+    # logger.warning call site used elsewhere in the production module.
     with caplog.at_level(logging.WARNING, logger=ospm.__name__):
         result = ospm._probe_target("unprobed.zscaler.net", _make_tunnel_zen_role(), cenr)
-    # Assert: default from cenr_source["probe_default"] with :443 elided.
+    # Assert: default from cenr_source["probe_default"] with :443 elided
+    # -- proves the URL builder is unaffected by the WARN removal (INV-1).
     assert result == "https://unprobed.zscaler.net"
-    # Assert: exactly one WARN, and the message body matches the contract.
+    # Assert: zero WARNs from _probe_target itself (1025-US1 relocation).
     warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
-    assert len(warnings) == 1
-    assert "no observation for" in warnings[0].getMessage()
-    assert "unprobed.zscaler.net" in warnings[0].getMessage()
+    assert warnings == [], (
+        "Branch 3 must be silent after 1025-US1; warnings live at load time. "
+        f"Observed {len(warnings)} warnings: {[r.getMessage() for r in warnings]}"
+    )
 
 
-def test_probe_target_unknown_token_falls_back_and_warns(caplog: pytest.LogCaptureFixture) -> None:
-    """An unrecognised observed_protocol token falls back + WARNs like Branch 3.
+def test_probe_target_unknown_token_falls_back_silently(caplog: pytest.LogCaptureFixture) -> None:
+    """An unrecognised observed_protocol token falls back to Branch 3 silently.
 
     Why:
-        Contract Test Boundaries require Branch 3 to also cover unknown
-        tokens (defensive against future schema drift) -- the tool must
-        never silently emit garbage.
+        Contract Branch 3 URL shape (catalogue default) still holds for
+        unknown tokens (defensive against future schema drift). After
+        1025-US1, the per-site WARNING that used to accompany the
+        fallback moved to the single load-time emission in
+        ``manage_org_synthetic_probes``. This test pins the new contract:
+        garbage tokens fall through silently to the catalogue default
+        without emitting a warning of their own.
     """
     # Arrange: use a bogus token that starts with neither UDP nor TCP
     # nor HTTPS so the dispatch falls through to Branch 3.
@@ -1797,20 +1826,25 @@ def test_probe_target_unknown_token_falls_back_and_warns(caplog: pytest.LogCaptu
         result = ospm._probe_target("weird.zscaler.net", _make_tunnel_zen_role(), cenr)
     # Assert: fell back to catalogue default (https, port elided).
     assert result == "https://weird.zscaler.net"
-    # Assert: exactly one WARN like the missing-observation case.
+    # Assert: zero WARNs from _probe_target itself (1025-US1 relocation).
     warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
-    assert len(warnings) == 1
-    assert "no observation for" in warnings[0].getMessage()
+    assert warnings == [], (
+        "Branch 3 must be silent after 1025-US1; warnings live at load time. "
+        f"Observed {len(warnings)} warnings: {[r.getMessage() for r in warnings]}"
+    )
 
 
-def test_probe_target_missing_key_in_cenr_source_falls_back_and_warns(caplog: pytest.LogCaptureFixture) -> None:
-    """Hostname absent from every bag still yields the fallback + WARN.
+def test_probe_target_missing_key_in_cenr_source_falls_back_silently(caplog: pytest.LogCaptureFixture) -> None:
+    """Hostname absent from every bag still yields the fallback, ZERO WARNINGs.
 
     Why:
         Contract Branch 3 must not crash when the CENR bag has never
         seen the hostname (e.g. a role hard-codes an FQDN that never
-        made it into the CENR JSON). The URL builder must degrade
-        gracefully to the catalogue default AND log so operators notice.
+        made it into the CENR JSON). The URL builder must still degrade
+        gracefully to the catalogue default. Post 1025-US1, the
+        operator-visible WARNING for missing-CENR hosts is emitted once
+        at load time by ``_emit_load_time_cenr_warning`` -- Branch 3
+        stays silent so N*M duplication cannot re-appear.
     """
     # Arrange: include_key=False leaves both bags empty, so the lookup
     # inside _probe_target must miss and hit Branch 3.
@@ -1823,12 +1857,14 @@ def test_probe_target_missing_key_in_cenr_source_falls_back_and_warns(caplog: py
     # Act.
     with caplog.at_level(logging.WARNING, logger=ospm.__name__):
         result = ospm._probe_target("orphan.zscaler.net", _make_tunnel_zen_role(), cenr)
-    # Assert: catalogue default with :443 elided.
+    # Assert: catalogue default with :443 elided (URL builder unchanged).
     assert result == "https://orphan.zscaler.net"
-    # Assert: exactly one WARN mentioning the missing hostname.
+    # Assert: zero WARNs from _probe_target itself (1025-US1 relocation).
     warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
-    assert len(warnings) == 1
-    assert "orphan.zscaler.net" in warnings[0].getMessage()
+    assert warnings == [], (
+        "Branch 3 must be silent after 1025-US1; warnings live at load time. "
+        f"Observed {len(warnings)} warnings: {[r.getMessage() for r in warnings]}"
+    )
 
 
 def test_no_https_vpn_targets_in_generated_payload() -> None:
