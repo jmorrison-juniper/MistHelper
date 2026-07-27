@@ -43,11 +43,11 @@ class OverrideReportWriter:
         output_path = _deps.FilePathUtils.get_csv_path(OUTPUT_FILENAME)  # Resolves data/ output dir
         with open(output_path, mode="w", newline="", encoding="utf-8") as csvfile:  # Truncate-and-write CSV
             writer = csv.DictWriter(csvfile, fieldnames=_EMPTY_FIELDNAMES)  # DictWriter for header-only output
-            writer.writeheader()  # Header row only; no data rows are written when fleet is fully compliant
+            writer.writeheader()  # Header row only. No data rows are written when fleet is fully compliant
         logging.debug("Header-only CSV written to %s", output_path)  # Confirm write completed for operator log
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info("! Gateway override report written to %s", OUTPUT_FILENAME)
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info(" No template overrides found - all gateways are compliant with their assigned templates!")
 
     @staticmethod
@@ -122,25 +122,25 @@ class OverrideReportWriter:
     ) -> None:
         """Emit the legacy console summary lines given precomputed stats."""
         saved_calls = total_gateways - devices_with_overrides_count  # API calls saved by the override pre-filter
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info("! Gateway override report written to %s", OUTPUT_FILENAME)
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info(
             "! Found %d overridden ports across %d of %d gateway devices",
             total_overridden_ports,
             gateways_with_overrides,
             total_gateways,
         )
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info(
             "! API Optimization: Only fetched live data for %d devices with overrides (saved %d unnecessary API calls)",
             devices_with_overrides_count,
             saved_calls,
         )
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info("! Target ports analyzed: %s", ", ".join(target_ports))
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info("! These are outliers that may need correction to match template configuration")
         if total_overridden_ports == 0:  # Repeat compliant-fleet message when full path produces zero rows
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logging.info(" No template overrides found - all gateways are compliant with their assigned templates!")

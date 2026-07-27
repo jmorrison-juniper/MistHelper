@@ -115,7 +115,7 @@ class ClientPacketCaptureDownloader:
     def _step1_select_site(self) -> str | None:
         """Prompt for a site via the shared PromptUtils helper."""
         logging.debug("Step 1: prompting for site selection")  # WHY: action-log entry.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("\n[Step 1/4] Select a site")  # WHY: operator-visible step banner.
         site_id = _get_prompt_utils().select_site_with_logging()  # WHY: shared CSV-driven chooser.
         logging.info("Step 1 selected site_id=%s", site_id)  # WHY: audit selection outcome.
@@ -124,11 +124,11 @@ class ClientPacketCaptureDownloader:
     def _step2_select_client(self, site_id: str) -> str | None:
         """Fetch site wireless clients and let operator pick by index or MAC."""
         logging.debug("Step 2: fetching wireless clients for site %s", site_id)  # WHY: action-log entry.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("\n[Step 2/4] Select a wireless client")  # WHY: operator-visible step banner.
         clients = self._fetch_wireless_clients(site_id)  # WHY: isolate SDK call for testability.
         if not clients:  # WHY: no clients seen in the query window -> abort.
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info("  No wireless clients found in the last 7 days.")  # WHY: operator feedback.
             logging.warning("Step 2 aborted: no wireless clients for site %s", site_id)  # WHY: audit no-op.
             return None  # WHY: caller treats None as cancel/abort.
@@ -149,7 +149,7 @@ class ClientPacketCaptureDownloader:
             return clients  # WHY: caller renders and prompts.
         except Exception as exc:  # pylint: disable=broad-exception-caught  # WHY: keep menu resilient.
             logging.exception("Failed to fetch wireless clients: %s", exc)  # WHY: capture stack for triage.
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.error("  Error fetching wireless clients: %s", exc)  # WHY: operator-visible feedback.
             return []  # WHY: empty list drives abort path.
 
@@ -157,15 +157,15 @@ class ClientPacketCaptureDownloader:
     def _render_client_table(clients: list[dict[str, Any]]) -> None:
         """Display an index/hostname/MAC/last-seen table to the operator."""
         logging.debug("Rendering %s client rows", len(clients))  # WHY: action-log entry.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("\n  %4s  %-32s  %-17s  Last IP", "#", "Hostname", "MAC")  # WHY: column header.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("  %s  %s  %s  %s", "-" * 4, "-" * 32, "-" * 17, "-" * 15)  # WHY: divider row.
         for idx, client in enumerate(clients, start=1):  # WHY: 1-based index matches operator prompt.
             hostname = str(client.get("hostname") or client.get("username") or "-")[:32]  # WHY: truncate wide names.
             mac = str(client.get("mac") or "-")  # WHY: guard missing MAC.
             last_ip = str(client.get("ip") or client.get("last_ip") or "-")  # WHY: helps disambiguate hosts.
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info("  %4d  %-32s  %-17s  %s", idx, hostname, mac, last_ip)  # WHY: uniform aligned rendering.
 
     def _prompt_client_choice(self, clients: list[dict[str, Any]]) -> str | None:
@@ -187,14 +187,14 @@ class ClientPacketCaptureDownloader:
                 mac = str(clients[idx - 1].get("mac") or "")  # WHY: pull MAC from selected row.
                 if mac:  # WHY: guard rows without a MAC field.
                     return normalise_mac(mac)  # WHY: normalise before returning to caller.
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("  Invalid row number: %s", raw)  # WHY: operator feedback on bad index.
             logging.warning("Step 2 rejected bad index: %s", raw)  # WHY: audit bad input.
             return None  # WHY: cancel path.
-        try:  # WHY: non-numeric input treated as MAC; catch bad format loudly.
+        try:  # WHY: non-numeric input treated as MAC. Catch bad format loudly.
             return normalise_mac(raw)  # WHY: accept any punctuation blend.
         except ValueError as exc:  # WHY: normalise_mac raises on non-12-hex input.
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("  %s", exc)  # WHY: operator feedback on bad MAC.
             logging.warning("Step 2 rejected bad MAC: %s", raw)  # WHY: audit bad input.
             return None  # WHY: cancel path.
@@ -202,11 +202,11 @@ class ClientPacketCaptureDownloader:
     def _step3_select_vlan(self, site_id: str, mac: str) -> list[_CaptureRow]:
         """List PCAPs for ``mac`` at ``site_id`` grouped by VLAN and let operator choose."""
         logging.debug("Step 3: listing PCAPs for site %s client %s", site_id, mac)  # WHY: action-log entry.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("\n[Step 3/4] Select a VLAN for client %s", mac)  # WHY: operator-visible step banner.
         captures = self._fetch_captures(site_id, mac)  # WHY: isolate SDK call for testability.
         if not captures:  # WHY: no PCAPs matched -> abort with feedback.
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info("  No packet captures found for this client in the last 7 days.")  # WHY: feedback.
             logging.warning("Step 3 aborted: no PCAPs for %s at %s", mac, site_id)  # WHY: audit no-op.
             return []  # WHY: empty list signals abort to caller.
@@ -231,7 +231,7 @@ class ClientPacketCaptureDownloader:
             return captures  # WHY: caller normalises/groups.
         except Exception as exc:  # pylint: disable=broad-exception-caught  # WHY: keep menu resilient.
             logging.exception("Failed to fetch PCAPs: %s", exc)  # WHY: capture stack for triage.
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.error("  Error fetching PCAPs: %s", exc)  # WHY: operator-visible feedback.
             return []  # WHY: empty list drives abort path.
 
@@ -252,17 +252,17 @@ class ClientPacketCaptureDownloader:
     def _prompt_vlan_choice(self, grouped: dict[str, list[_CaptureRow]]) -> list[_CaptureRow]:
         """Show one VLAN row per bucket with a count column and return the chosen rows."""
         if not grouped:  # WHY: all captures were URL-less -> nothing to download.
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info("  No completed PCAPs available (all still in progress).")  # WHY: operator feedback.
             logging.warning("Step 3: no VLAN groups had downloadable URLs")  # WHY: audit no-op.
             return []  # WHY: caller aborts flow.
         vlan_ids = sorted(grouped.keys())  # WHY: deterministic ordering for stable operator UX.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("\n  %4s  %-10s  Captures", "#", "VLAN")  # WHY: column header for readability.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("  %s  %s  %s", "-" * 4, "-" * 10, "-" * 8)  # WHY: divider separates header/rows.
         for idx, vlan_id in enumerate(vlan_ids, start=1):  # WHY: 1-based index matches prompt.
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info("  %4d  %-10s  %d", idx, vlan_id, len(grouped[vlan_id]))  # WHY: show count per bucket.
         raw = _get_input_utils().safe_input(
             "\nEnter row number to download all captures for that VLAN (blank to cancel): ",
@@ -277,13 +277,13 @@ class ClientPacketCaptureDownloader:
             logging.info("Step 3 cancelled by operator (blank input)")  # WHY: audit cancel.
             return []  # WHY: caller treats [] as cancel.
         if not raw.isdigit():  # WHY: only accept numeric row selection here.
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("  Invalid row number: %s", raw)  # WHY: operator feedback on non-numeric.
             logging.warning("Step 3 rejected non-numeric: %s", raw)  # WHY: audit bad input.
             return []  # WHY: cancel path.
         idx = int(raw)  # WHY: parse 1-based row number.
         if not 1 <= idx <= len(vlan_ids):  # WHY: bounds-check before dereference.
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("  Row number out of range: %s", raw)  # WHY: operator feedback on bad index.
             logging.warning("Step 3 rejected out-of-range: %s", raw)  # WHY: audit bad input.
             return []  # WHY: cancel path.
@@ -296,16 +296,16 @@ class ClientPacketCaptureDownloader:
         vlan_id = rows[0].vlan_id  # WHY: all rows in this call share the same VLAN by construction.
         target = capture_dir(Path("data"), mac, vlan_id)  # WHY: single spec-defined path builder.
         logging.debug("Step 4: creating output dir %s", target)  # WHY: action-log entry.
-        target.mkdir(parents=True, exist_ok=True)  # WHY: idempotent; safe on repeat runs.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        target.mkdir(parents=True, exist_ok=True)  # WHY: idempotent. Safe on repeat runs.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("\n[Step 4/4] Downloading %d PCAP(s) to %s", len(rows), target)  # WHY: banner.
         succeeded = self._download_all(rows, target)  # WHY: isolate loop for testability.
         logging.info("Step 4 done: %s/%s PCAPs downloaded", succeeded, len(rows))  # WHY: audit result.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("\n  Complete: %d/%d files written to %s", succeeded, len(rows), target)  # WHY: summary.
 
     def _download_all(self, rows: list[_CaptureRow], target: Path) -> int:
-        """Iterate over rows and download each; return the count of successful writes."""
+        """Iterate over rows and download each. Return the count of successful writes."""
         succeeded = 0  # WHY: accumulator for summary line.
         for row in rows:  # WHY: sequential to preserve per-file operator feedback ordering.
             if self._download_one(row, target):  # WHY: bool return keeps accumulator arithmetic simple.
@@ -320,7 +320,7 @@ class ClientPacketCaptureDownloader:
         try:  # WHY: transfer + write must not crash the batch.
             response = requests.get(row.pcap_url, stream=True, timeout=_DEFAULT_TIMEOUT_SEC)  # WHY: stream.
             if response.status_code != _HTTP_OK:  # WHY: guard non-200 responses before write.
-                # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+                # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
                 logger.error("    Failed %s: HTTP %s", row.filename, response.status_code)  # WHY: feedback.
                 logging.error("Download failed %s: %s", row.capture_id, response.status_code)  # WHY: audit.
                 return False  # WHY: skip write on failure.
@@ -328,12 +328,12 @@ class ClientPacketCaptureDownloader:
                 for chunk in response.iter_content(chunk_size=_STREAM_CHUNK_BYTES):  # WHY: chunked stream.
                     pcap_file.write(chunk)  # WHY: persist each chunk incrementally.
             size_mb = local_path.stat().st_size / _BYTES_PER_MB  # WHY: compute size for user feedback.
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info("    Downloaded %s (%.2f MB)", row.filename, size_mb)  # WHY: operator success line.
             logging.info("Downloaded %s: %.2f MB -> %s", row.capture_id, size_mb, local_path)  # WHY: audit.
             return True  # WHY: successful write.
         except Exception as exc:  # pylint: disable=broad-exception-caught  # WHY: keep batch resilient.
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.error("    Error downloading %s: %s", row.filename, exc)  # WHY: operator failure line.
             logging.exception("Download exception for %s: %s", row.capture_id, exc)  # WHY: audit stack.
             return False  # WHY: signal failure to accumulator.

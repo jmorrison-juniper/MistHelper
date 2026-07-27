@@ -415,7 +415,7 @@ class OrgConfigMigrationManager:  # Org config migration manager.
 
     @staticmethod
     def _existing_overlaps_new(new_net, existing: dict, new_subnet: str) -> dict | None:  # type: ignore[no-untyped-def]
-        """Return a conflict dict if ``existing``'s subnet overlaps ``new_net``; else None (also on parse error)."""
+        """Return a conflict dict if ``existing``'s subnet overlaps ``new_net``. Else None (also on parse error)."""
         existing_subnet = existing.get("subnet")  # Existing CIDR
         if not existing_subnet:  # Skip un-subnetted existing entries
             return None
@@ -522,7 +522,7 @@ class OrgConfigMigrationManager:  # Org config migration manager.
         """Remap network and VPN IDs in gateway template config."""
         networks = obj.get("networks", {})  # Gateway template networks section
         if isinstance(networks, dict):  # Verify expected dict structure
-            for net_config in networks.values():  # Iterate each network reference; keys unused here
+            for net_config in networks.values():  # Iterate each network reference. Keys unused here
                 if isinstance(net_config, dict) and "id" in net_config:  # Has remappable ID
                     old_id = net_config["id"]  # Capture source org's ID
                     net_config["id"] = self._remap_table.get(old_id, old_id)  # Swap to dest ID

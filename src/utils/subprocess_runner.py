@@ -75,7 +75,7 @@ class SubprocessRunner:
             timeout: Positive finite float seconds; ``None`` and non-positive
                 values raise :class:`ValueError` before any process spawn.
             check: When ``True`` (default) a non-zero exit raises
-                :class:`subprocess.CalledProcessError`; the caller may set
+                :class:`subprocess.CalledProcessError`. The caller may set
                 ``False`` to inspect ``returncode`` manually.
 
         Returns:
@@ -100,9 +100,9 @@ class SubprocessRunner:
             result = subprocess.run(  # nosec B603  # Audited: argv validated, no shell, capture pinned.
                 list(argv),  # Copy to a plain list so callers cannot mutate the sequence mid-flight.
                 capture_output=True,  # Always capture stdout/stderr for callers that inspect them.
-                text=True,  # Always decode as text; every existing call site expected str output.
+                text=True,  # Always decode as text. Every existing call site expected str output.
                 timeout=timeout,  # Bound the child so a hung process cannot stall MistHelper startup.
-                check=check,  # Honour caller's check policy; default True matches most call sites.
+                check=check,  # Honour caller's check policy. Default True matches most call sites.
             )
         except subprocess.TimeoutExpired:  # Timeouts propagate; exc.__str__ contains argv, so log timeout only.
             logger.error("SubprocessRunner timed out %s after %ss", executable, timeout)  # Principle VII: error log.
@@ -115,7 +115,7 @@ class SubprocessRunner:
 
     @classmethod
     def _validate_argv(cls, argv: Sequence[str]) -> None:
-        """Validate argv shape and every element; raises :class:`ValueError` on failure."""
+        """Validate argv shape and every element. Raises :class:`ValueError` on failure."""
         if not argv:  # Empty sequence is never a legitimate command.
             raise ValueError("argv must be a non-empty sequence")  # Fail closed before any spawn.
         executable = argv[0]  # First element is the program to run.

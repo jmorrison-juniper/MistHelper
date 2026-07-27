@@ -96,7 +96,7 @@ from ._ssid_template_phase45 import (  # WHY: re-export phase 4/5 helpers refere
 # WHY: declare the module-level re-export surface so ruff F401 does not flag the
 # intentional pass-throughs above (tests reach these helpers by patching them at
 # ``ssid_template_consolidation.<name>``, which requires the symbol to bind here).
-__all__ = [  # WHY: explicit re-export list; keeps ruff F401 quiet on intentional pass-throughs
+__all__ = [  # WHY: explicit re-export list. Keeps ruff F401 quiet on intentional pass-throughs
     "SSIDTemplateConsolidationManager",
     "SsidTemplateDeps",
     "TemplateOpParams",
@@ -320,7 +320,7 @@ class SSIDTemplateConsolidationManager:  # pylint: disable=too-many-instance-att
         current_org_id, target_ssid = context  # WHY: destructure validated org + ssid pair
         logging.info("Target SSID: %s, Org: %s", target_ssid, current_org_id)  # WHY: audit-log operator inputs
         # fmt: off
-        deps = SsidTemplateDeps(  # WHY: bundle 6 deps into frozen struct; STRUCT-LENGTH block
+        deps = SsidTemplateDeps(  # WHY: bundle 6 deps into frozen struct. STRUCT-LENGTH block
             org_id=current_org_id, target_ssid=target_ssid, apisession=apisession,
             page_limit=page_limit, safe_input_fn=safe_input_fn, write_data_fn=write_data_fn,
         )
@@ -383,7 +383,7 @@ class SSIDTemplateConsolidationManager:  # pylint: disable=too-many-instance-att
                 return  # WHY: unwind the loop when the choice was terminal (quit / phase 6)
 
     def _handle_menu_choice(self, choice: str, dispatch: dict[str, Any]) -> bool:  # WHY: extracted so complexity <= 5
-        """Route one menu selection; return True when the menu should exit."""
+        """Route one menu selection. Return True when the menu should exit."""
         if choice.lower() in ("q", "quit", ""):  # WHY: quit tokens include blank enter
             logging.warning("Returning to main menu.")  # WHY: operator feedback before unwinding
             return True  # WHY: signal caller to exit the menu loop
@@ -460,26 +460,26 @@ class SSIDTemplateConsolidationManager:  # pylint: disable=too-many-instance-att
     # Phase 2: Site Variables
     # ------------------------------------------------------------------
     # WHY: phase2_site_variables + _write_site_variables live on the
-    # phase-2 cluster; access is transparent via __getattr__ delegation.
+    # phase-2 cluster. Access is transparent via __getattr__ delegation.
 
     # ------------------------------------------------------------------
     # Phase 3: Site Groups
     # ------------------------------------------------------------------
     # WHY: phase3_site_groups + _ensure_groups_exist +
-    # _assign_sites_to_groups live on the phase-3 cluster; access is
+    # _assign_sites_to_groups live on the phase-3 cluster. Access is
     # transparent via __getattr__ delegation.
 
     # ------------------------------------------------------------------
     # Phase 4: Templates
     # ------------------------------------------------------------------
     # WHY: phase4_templates + _create_or_update_templates live on the
-    # phase-4/5 cluster; access is transparent via __getattr__ delegation.
+    # phase-4/5 cluster. Access is transparent via __getattr__ delegation.
 
     # ------------------------------------------------------------------
     # Phase 5: Disable Old SSIDs
     # ------------------------------------------------------------------
     # WHY: phase5_disable_old + _disable_ssids live on the phase-4/5
-    # cluster; access is transparent via __getattr__ delegation.
+    # cluster. Access is transparent via __getattr__ delegation.
 
 
 # ------------------------------------------------------------------
@@ -845,11 +845,11 @@ def _apply_ssid_disable(
     response = mistapi.api.v1.orgs.templates.getOrgTemplate(apisession, org_id, template_id)  # WHY: fetch current
     template_data = response.data if hasattr(response, "data") else {}  # WHY: mistapi returns .data
     wlans: list[dict[str, Any]] = template_data.get("wlans", []) or []  # WHY: empty template edge case
-    updated = _set_ssid_disabled(wlans, ssid_id)  # WHY: in-place flip; returns True if found
+    updated = _set_ssid_disabled(wlans, ssid_id)  # WHY: in-place flip. Returns True if found
     if updated:  # WHY: only PUT + report success when the WLAN row was located
         template_data["wlans"] = wlans  # WHY: PUT payload carries the mutated wlan list
         # fmt: off
-        mistapi.api.v1.orgs.templates.updateOrgTemplate(  # WHY: PUT mutated wlans; STRUCT-LENGTH block
+        mistapi.api.v1.orgs.templates.updateOrgTemplate(  # WHY: PUT mutated wlans. STRUCT-LENGTH block
             apisession, org_id, template_id, body=template_data,
         )
         # fmt: on

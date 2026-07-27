@@ -5,7 +5,7 @@ module scope in MistHelper.py, and re-lands it as a class-level
 attribute on `FastModeBackoffMultiplier` per FR-005 / FR-015. Both
 MistHelper callsites (`_handle_site_port_stats_retry` at line ~9899 and
 the fast-retry helper at line ~15328) are rewritten in the same PR to
-reference the extracted class attribute; no wrapper shim remains in
+reference the extracted class attribute. No wrapper shim remains in
 MistHelper.py after this extraction.
 
 The value is the exponential-backoff growth factor applied to the

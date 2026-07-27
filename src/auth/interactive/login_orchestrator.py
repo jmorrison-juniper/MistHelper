@@ -25,7 +25,7 @@ class LoginOrchestrator:
         self.detect_msp_privileges = detect_msp_privileges  # Post-login MSP detection callback
 
     def execute(self) -> bool:
-        """Run the interactive login workflow; return True on successful login."""
+        """Run the interactive login workflow. Return True on successful login."""
         logging.info("LoginOrchestrator.execute() starting")  # Trace entry for operator timeline
         mistapi_module = self._resolve_mistapi()  # Resolve SDK from state or via fallback import
         if mistapi_module is None:  # Hard failure: SDK is not available
@@ -60,7 +60,7 @@ class LoginOrchestrator:
         return mistapi_fallback  # Hand the SDK reference back to the orchestrator
 
     def _collect_credentials(self) -> tuple[str, str] | None:
-        """Collect (email, password); return None when either prompt fails."""
+        """Collect (email, password). Return None when either prompt fails."""
         prompter = CredentialPrompter(self.safe_input)  # Build the per-call prompt helper
         email = prompter.prompt_email()  # Read and validate the operator email
         if email is None:  # Abort or validation failure
@@ -152,7 +152,7 @@ class LoginOrchestrator:
     def _clear_pre_existing_token(apisession: Any) -> None:
         """Clear any cached SDK API token so email/password login is used."""
         # WHY: extracted so _create_api_session drops from 29 lines to 22 (STRUCT-LENGTH).
-        if not apisession._apitoken:  # No cached token; nothing to clear
+        if not apisession._apitoken:  # No cached token. Nothing to clear
             return  # Fast exit preserves legacy behaviour
         logging.debug(  # Legacy debug log preserved verbatim
             "Clearing API token to force email/password login (had %s token(s))",

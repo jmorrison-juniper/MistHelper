@@ -58,7 +58,7 @@ class FilterOperatorEngine:  # Filter operator evaluation engine.
         """Remove delimiters and lowercase for delimiter-insensitive comparison."""
         if not mac_value:  # Empty input.
             return ""  # Return empty.
-        return re.sub(r"[:\-.]", "", mac_value).lower()  # Strip separators; lowercase.
+        return re.sub(r"[:\-.]", "", mac_value).lower()  # Strip separators. Lowercase.
 
     @staticmethod
     def normalize_text(text_value: str) -> str:  # Normalize free text.

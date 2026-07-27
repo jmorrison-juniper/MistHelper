@@ -15,7 +15,7 @@ class CredentialPrompter:
         self.safe_input = safe_input  # Injected EOF-safe input wrapper
 
     def prompt_email(self) -> str | None:
-        """Prompt for an email address; return None on EOF or blank input."""
+        """Prompt for an email address. Return None on EOF or blank input."""
         logging.info("Prompting user for login email")  # Trace prompt start
         try:
             email = self.safe_input("  Email: ", context="interactive_login").strip()  # EOF-safe read
@@ -30,7 +30,7 @@ class CredentialPrompter:
         return email  # Hand back the trimmed email address
 
     def prompt_password(self) -> str | None:
-        """Prompt for a password with masking; return None on EOF, error or blank."""
+        """Prompt for a password with masking. Return None on EOF, error or blank."""
         logging.info("Prompting user for login password (masked)")  # Trace prompt start
         try:
             password = getpass.getpass("  Password: ")  # Masked stdin read via getpass
@@ -49,7 +49,7 @@ class CredentialPrompter:
         return password  # Hand back the raw password for the API session
 
     def prompt_two_factor(self) -> str | None:
-        """Prompt for a 2FA code; return None on EOF or blank input."""
+        """Prompt for a 2FA code. Return None on EOF or blank input."""
         logging.info("Prompting user for 2FA verification code")  # Trace prompt start
         try:
             code = self.safe_input("  Enter 2FA code: ", context="interactive_login").strip()  # EOF-safe read

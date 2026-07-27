@@ -195,7 +195,7 @@ class HostRunner:
         if cmd_lower in _PRIV_ESC_KEYWORDS or cmd_lower.startswith(_PRIV_ESC_PREFIX):  # WHY: match tokens.
             logger.debug("[%s] Interactive mode needed: detected '%s' command", hostname, command)  # WHY: trace.
             return True  # WHY: this command alone justifies interactive mode.
-        return False  # WHY: normal command; not a trigger.
+        return False  # WHY: normal command. Not a trigger.
 
     @staticmethod
     def _is_password_reply(

@@ -16,7 +16,7 @@ websocket        Requires WebSocket + interactive selection
 continuous_loop  Never terminates without user stop
 interactive      Needs user input not automatable
 unregistered     Fail-closed fallback (feature 1020) -- returned by ``get`` for any option
-                 absent from ``_REGISTRY``; a SKIP_CATEGORIES member, never written into
+                 absent from ``_REGISTRY``. A SKIP_CATEGORIES member, never written into
                  ``_REGISTRY`` by hand, so an unclassified option is never auto-run.
 """
 
@@ -32,7 +32,7 @@ _OptionEntry = dict[str, str]
 def _natural_option_sort_key(option: str) -> float:
     """Sort key that treats an ``aN`` suffix as a decimal so ``26a`` sorts just after ``26``.
 
-    The legacy inline sort used ``float(x.replace("a", ".1"))``; keeping the same key preserves
+    The legacy inline sort used ``float(x.replace("a", ".1"))``. Keeping the same key preserves
     the historical ordering the guardrail tests rely on.
     """
     return float(option.replace("a", ".1"))
@@ -289,8 +289,8 @@ class OperationRegistry:
         # 60 previously-unregistered menu_actions keys. Each category was
         # decided from the handler's real read-only versus state-changing
         # behavior (see research.md R1). Read-only exporters are "safe";
-        # heavy sweeps are "resource_intensive"; write/create operations are
-        # "destructive"; ticket viewing prompts for a selection so it is
+        # heavy sweeps are "resource_intensive". Write/create operations are
+        # "destructive". Ticket viewing prompts for a selection so it is
         # "interactive". This removes reliance on the fail-closed default for
         # any currently-reachable option.
         # ------------------------------------------------------------------
@@ -390,7 +390,7 @@ class OperationRegistry:
 
     # Wave 1 deterministic safety-boundary baseline used by classification guardrails.
     # Feature 1020: the former "9999" sentinel was a key absent from menu_actions that only
-    # read True under the old fail-open default; replaced with real safe key "13" now that the
+    # read True under the old fail-open default. Replaced with real safe key "13" now that the
     # default is fail-closed (an unregistered key like "9999" is now correctly is_safe()==False).
     WAVE1_SAFETY_CLASSIFICATION_BASELINE: dict[str, list[str]] = {
         "safe_true": ["26", "58", "13"],

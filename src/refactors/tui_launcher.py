@@ -78,9 +78,9 @@ class TUILauncher:  # Launch TUI mode from interactive menu.
 
     def _print_welcome(self) -> None:
         """Print TUI activation messages."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info("\n>> Terminal User Interface mode activated")
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info(">> Use arrow keys to navigate, Enter to select, Q to quit")
 
     def _ensure_api_session(self) -> bool:
@@ -90,17 +90,17 @@ class TUILauncher:  # Launch TUI mode from interactive menu.
             logging.debug("TUI_MODE: apisession already initialized; reusing existing session")  # Log reuse
             return True  # Signal caller that session is ready
 
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info(">> Initializing Mist API session...")
         misthelper_module = self._deps.misthelper_module  # Cache the module handle for both calls below
         if not misthelper_module.initialize_mist_session():  # Delegate to MistHelper's session bootstrap
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logging.info("[ERROR] Failed to initialize Mist API session")
             logging.error("TUI_MODE: Could not initialize API session")  # Log the failure with error level
             return False  # Signal caller that session initialization failed
 
-        # initialize_mist_session mutates MistHelper.apisession; no additional sync needed since we read via getattr
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # initialize_mist_session mutates MistHelper.apisession. No additional sync needed since we read via getattr
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info(">> API session initialized successfully")
         logging.debug("TUI_MODE: apisession initialized successfully")  # Log after successful init
         return True  # Signal caller that session is ready
@@ -143,13 +143,13 @@ class TUILauncher:  # Launch TUI mode from interactive menu.
     def _handle_keyboard_interrupt(self) -> None:
         """Handle user Ctrl+C interruption."""
         logging.info("TUI_MODE: User interrupted with Ctrl+C")  # Log the intentional keyboard abort
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info("\n[EXIT] TUI mode stopped by user")
 
     def _handle_fatal_error(self, error: Exception) -> None:
         """Handle fatal TUI errors."""
         logging.error("TUI_MODE: Fatal error - %s", error, exc_info=True)  # Log with traceback for postmortem
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info("\n[ERROR] TUI mode crashed: %s", error)
 
     def _restore_console_logging(self) -> None:
@@ -169,5 +169,5 @@ class TUILauncher:  # Launch TUI mode from interactive menu.
             logging.debug("TUI_DEBUG: [%s] TUI_MODE function completed - returning to caller", timestamp)  # Trace
 
         logging.info("TUI_MODE: TUI mode completed successfully")  # Success-path summary log
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info("\n>> Returned from TUI mode to main menu")

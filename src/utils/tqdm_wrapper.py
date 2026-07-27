@@ -5,7 +5,7 @@ MistHelper.py:774-780 as a no-op fallback that was later overridden
 with the real ``tqdm`` package during import initialization.
 
 This module resolves the tension at import time: it tries to import the
-real ``tqdm`` package and re-exports it under the name ``tqdm``; when
+real ``tqdm`` package and re-exports it under the name ``tqdm``. When
 the package is not installed, it falls back to an iterable pass-through
 that preserves caller code unchanged. Callers therefore always get a
 callable named ``tqdm`` that accepts the same signature regardless of
@@ -33,7 +33,7 @@ except ImportError:  # tqdm not installed -- fall back to a no-op pass-through.
     logging.info("tqdm_wrapper: real tqdm not installed; using no-op fallback.")  # Info envelope: fallback path.
 
     def tqdm(iterable: Iterable[Any], *_args: Any, **_kwargs: Any) -> Iterable[Any]:  # No-op fallback.
-        """Return the iterable unchanged; used when the real tqdm is unavailable.
+        """Return the iterable unchanged. Used when the real tqdm is unavailable.
 
         This preserves the caller signature so code that expects a
         progress-bar wrapper keeps working -- there is simply no visible

@@ -14,7 +14,7 @@ from __future__ import annotations  # WHY: postponed evaluation for forward-ref 
 
 from typing import TYPE_CHECKING, Any  # WHY: Any lets __getattr__ proxy any parent method
 
-if TYPE_CHECKING:  # WHY: only pulled in by type checkers; skipped at runtime
+if TYPE_CHECKING:  # WHY: only pulled in by type checkers. Skipped at runtime
     from src.device.utility_commands import DeviceUtilityCommands  # WHY: parent type for annotation
 
 
@@ -34,7 +34,7 @@ class _ClusterBase:  # WHY: shared wrapper base for every utility_commands clust
     def __getattr__(self, name: str) -> Any:  # WHY: proxy unknown attrs back to parent
         """Delegate unknown attributes to the wrapped parent object."""
         parent = self.__dict__.get("_uc")  # WHY: guard against half-initialized instances
-        if parent is None:  # WHY: only trips during broken init; avoid infinite recursion
+        if parent is None:  # WHY: only trips during broken init. Avoid infinite recursion
             raise AttributeError(name)  # WHY: signal missing attribute cleanly to callers
         return getattr(parent, name)  # WHY: transparent proxy so self._apisession / helpers work
 

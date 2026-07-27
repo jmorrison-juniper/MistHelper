@@ -71,7 +71,7 @@ class ZoneConfigurationAnalyzer:
         logging.info("Starting zone and engagement configuration analysis across all sites...")  # WHY: audit trail
         current_org_id = get_org_id_fn()  # WHY: resolve active org id via injected callback
         if not _validate_org_id(current_org_id):  # WHY: cannot analyze without an org selection
-            return  # WHY: precondition failed; abort
+            return  # WHY: precondition failed. Abort
         collected = _collect_all_data(  # WHY: gather zones + settings from every site
             apisession=apisession,
             org_id=current_org_id or "",
@@ -394,7 +394,7 @@ def _print_analytics_status(occupancy_analysis: dict[str, Any]) -> None:
 
 
 def _validate_org_id(current_org_id: str | None) -> bool:
-    """Return True when ``current_org_id`` is usable; emit abort message otherwise."""
+    """Return True when ``current_org_id`` is usable. Emit abort message otherwise."""
     if current_org_id:  # WHY: any truthy id lets the analyzer proceed
         return True  # WHY: precondition satisfied
     print("! No organization selected. Exiting.")  # WHY: user-friendly abort message
@@ -674,7 +674,7 @@ def _empty_zone_stats(total_sites: int, sites_with_zones: int) -> dict[str, Any]
 
 def _std_dev(zone_counts: list[int], mean: float) -> float:
     """Return population standard deviation (matches legacy variance formula)."""
-    if len(zone_counts) <= 1:  # WHY: variance is undefined for n<=1; legacy returns 0
+    if len(zone_counts) <= 1:  # WHY: variance is undefined for n<=1. Legacy returns 0
         return 0.0  # WHY: preserve prior behavior
     variance = sum((c - mean) ** 2 for c in zone_counts) / len(zone_counts)  # WHY: population variance
     return variance**0.5  # WHY: sqrt of variance is std dev
@@ -1137,7 +1137,7 @@ def _normalize_analyses(
     """Accept either the bundled ``analyses`` dict or the legacy positional triple.
 
     Legacy callers passed (zone_analysis, engagement_analysis, occupancy_analysis)
-    as separate arguments; the analyses parameter takes precedence when supplied
+    as separate arguments. The analyses parameter takes precedence when supplied
     as a dict shaped like ``{"zones": {...}, "engagement": {...}, "occupancy": {...}}``.
     """
     if _looks_like_bundle(analyses):  # WHY: bundle path is the modern convention

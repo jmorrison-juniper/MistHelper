@@ -42,7 +42,7 @@ class _LoggedErrorObserver(logging.Handler):
     def __init__(self) -> None:
         """Configure the handler at ERROR level with a zero-count captured tally."""
         super().__init__(level=logging.ERROR)
-        self.error_count = 0  # WHY: cheap monotonic tally; callers only check >0.
+        self.error_count = 0  # WHY: cheap monotonic tally. Callers only check >0.
 
     def emit(self, record: logging.LogRecord) -> None:  # noqa: D401 -- logging.Handler API
         """Increment the captured error tally for each ERROR (or higher) record."""
@@ -65,7 +65,7 @@ class SuiteContext:  # WHY: bundle runtime handles to keep run/finalize signatur
     """Runtime handles + counters threaded through the finalize phase of a suite run."""
 
     all_options: list[str]  # WHY: full option universe used for TestSummary total_ops metric.
-    interactive_options: list[str]  # WHY: subset actually executed; drives coverage denominator.
+    interactive_options: list[str]  # WHY: subset actually executed. Drives coverage denominator.
     test_site_id: str | None  # WHY: resolved test site injected into interactive callables.
     emitter: Any  # WHY: telemetry emitter that receives per-option and summary events.
     telemetry_path: Any  # WHY: destination path echoed in the operator summary block.
@@ -284,7 +284,7 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
 
         Why:
             #886 slice 18/N. Counts and blank-line separators are folded into
-            a single warning record; delegated tested/skipped listings each
+            a single warning record. Delegated tested/skipped listings each
             emit one further warning to preserve section boundaries.
         """
         logging.warning(
@@ -296,7 +296,7 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
         self._print_skipped_options(skip_list)  # WHY: delegate skipped-listing emission.
 
     def _create_emitter(self) -> tuple[Any, Any]:
-        """Initialize telemetry emitter; return (emitter, path) tuple."""
+        """Initialize telemetry emitter. Return (emitter, path) tuple."""
         logging.info("Creating telemetry emitter for interactive test run")  # WHY: log before emitter setup.
         telemetry_path = self.telemetry_emitter_cls.timestamped_path("data")  # WHY: generate timestamped output path.
         emitter = self.telemetry_emitter_cls(telemetry_path)  # WHY: construct emitter instance.
@@ -332,7 +332,7 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
         return org_id  # WHY: return org_id for downstream site resolution.
 
     def _resolve_site_or_close(self, org_id: str, emitter: Any) -> tuple[str | None, str]:
-        """Resolve test site context; close emitter and return (None, '') on failure paths."""
+        """Resolve test site context. Close emitter and return (None, '') on failure paths."""
         try:
             logging.warning("   Fetching test site for interactive operations...")  # WHY: #886 s18 legacy cue.
             test_site_id, test_site_name = self._resolve_test_site(org_id)  # WHY: resolve test site.
@@ -521,7 +521,7 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
 
         Why:
             #886 slice 18/N. The 10-line summary block was 10 separate
-            ``print()`` calls; consolidating into one warning record
+            ``print()`` calls. Consolidating into one warning record
             guarantees the block arrives contiguously in any handler.
         """
         coverage_pct = tallies.success_count / interactive_total * 100  # WHY: precompute coverage %.
@@ -592,7 +592,7 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
         self._print_suite_header()  # WHY: emit legacy header block.
         all_options, interactive_options, skip_list = self._build_option_lists()  # WHY: build option lists.
         self._print_option_listings(interactive_options, skip_list)  # WHY: emit option listings.
-        emitter, telemetry_path = self._create_emitter()  # WHY: initialize telemetry emitter; capture path.
+        emitter, telemetry_path = self._create_emitter()  # WHY: initialize telemetry emitter. Capture path.
         skip_count = self._emit_skip_events(emitter, skip_list)  # WHY: emit skip events and tally count.
         org_id = self._ensure_org_id()  # WHY: resolve org_id with cache fallback.
         test_site_id, _site_name = self._resolve_site_or_close(org_id, emitter)  # WHY: resolve site context or abort.

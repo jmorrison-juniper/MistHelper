@@ -37,7 +37,7 @@ class ImportInitializationService:
                 required=required,
                 skip_deps=skip_deps,
                 skip_upgrade=True,
-            )  # Attempt the import (no upgrade here; upgrades happen in the dependency phase)
+            )  # Attempt the import (no upgrade here. Upgrades happen in the dependency phase)
             if result:  # Import succeeded
                 logging.info("  [OK] %s: Available", module_name)  # Trace availability
             elif required:  # Required import failed - this is an error

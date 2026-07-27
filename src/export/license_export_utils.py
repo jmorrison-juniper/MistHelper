@@ -77,7 +77,7 @@ class LicenseExportUtils:
 
     @staticmethod
     def _prompt_async_claim_include_detail() -> bool:
-        """Prompt user for per-device detail preference; returns parsed boolean."""
+        """Prompt user for per-device detail preference. Returns parsed boolean."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of InputUtils helper.
         logging.info("Prompting for include_detail in async-claim export")  # Log before detail prompt.
         detail_answer = mh.InputUtils.safe_input(  # Collect detail preference from user.

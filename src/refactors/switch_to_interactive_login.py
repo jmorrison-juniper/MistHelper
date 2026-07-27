@@ -45,7 +45,7 @@ class SwitchToInteractiveLoginManager:
     MSP/org selection to the corresponding ``_*_switch_login_*`` /
     ``_*_interactive_login_*`` helpers that remain in MistHelper.
 
-    SECURITY: Prompts the user for credentials; on failure the previous
+    SECURITY: Prompts the user for credentials. On failure the previous
     ``apisession`` and ``org_id`` globals are rolled back inside the
     helper ``_attempt_interactive_login_with_rollback``.
 
@@ -87,7 +87,7 @@ class SwitchToInteractiveLoginManager:
         logging.info("SwitchToInteractiveLoginManager: attempting rollback-guarded login")  # Log attempt entry
         old_session = getattr(misthelper, "apisession", None)  # Preserve current session for rollback
         old_org_id = getattr(misthelper, "org_id", None)  # Preserve current org for rollback
-        if not misthelper._attempt_interactive_login_with_rollback(  # Try login; restores on failure
+        if not misthelper._attempt_interactive_login_with_rollback(  # Try login. Restores on failure
             old_session, old_org_id
         ):
             logging.debug(  # Log rollback path for postmortem tracing

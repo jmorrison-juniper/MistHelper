@@ -3,7 +3,7 @@
 Home for bare module-level constants that tune the fast-mode concurrent-execution
 pipeline in MistHelper. Kept as plain module-level names (not class attributes) per
 the T-02 landing-target decision: single co-location file for the fast-mode
-env-derived constants (T-02 added the connection cap; T-03 folded in the
+env-derived constants (T-02 added the connection cap. T-03 folded in the
 connection-aware threading toggle) to avoid per-constant module proliferation. No
 wrapper class, no facade, no shim -- all callers import the bare name directly
 from this module.
@@ -24,7 +24,7 @@ FAST_MODE_MAX_CONCURRENT_CONNECTIONS: int = int(  # Cap on simultaneous API conn
 
 # WHAT: Toggle selecting the threading strategy for fast-mode batch executors.
 # WHY: When True, ThreadPoolExecutor sizing tracks FAST_MODE_MAX_CONCURRENT_CONNECTIONS
-#      (connection-aware mode); when False, executors fall back to CPU-aware sizing
+#      (connection-aware mode). When False, executors fall back to CPU-aware sizing
 #      (os.cpu_count() or FAST_MODE_FALLBACK_THREADS). Sourced from the
 #      FAST_MODE_USE_CONNECTION_AWARE_THREADING env var (default "true") at import time.
 FAST_MODE_USE_CONNECTION_AWARE_THREADING: bool = (  # Whether to size threads based on connection limits

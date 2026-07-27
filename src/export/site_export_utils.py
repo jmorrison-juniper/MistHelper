@@ -75,7 +75,7 @@ def _channel_planning_rows_from_raw(
     """Return flattened channel-planning rows from a raw API payload shape."""
     if isinstance(raw, dict):  # WHY: dispatch to dict flattener.
         return _flatten_channel_planning_dict(raw, site_id)  # WHY: dict shape needs bespoke flatten.
-    return raw if isinstance(raw, list) else [raw]  # WHY: list stays as-is; scalar wraps.
+    return raw if isinstance(raw, list) else [raw]  # WHY: list stays as-is. Scalar wraps.
 
 
 def _build_insight_rows(  # WHY: per-metric availability row builder.
@@ -254,7 +254,7 @@ class SiteExportUtils(SiteInsightsExporter):  # WHY: inherit insights exporters 
             return site_id  # WHY: fall back to raw id.
 
     def _resolve_site_name(self, site_id: str) -> str:  # WHY: class-side name resolver with legacy log format.
-        """Resolve human-readable site name from org sites list; fall back to site_id."""
+        """Resolve human-readable site name from org sites list. Fall back to site_id."""
         try:
             logging.info("Fetching org sites to resolve site name for %s", site_id)  # WHY: pre-API log.
             site_name = self._fetch_org_site_name(site_id)  # WHY: shared org-name lookup.
@@ -267,7 +267,7 @@ class SiteExportUtils(SiteInsightsExporter):  # WHY: inherit insights exporters 
     def _call_site_api(
         self, api_call: Any, site_id: str, api_kwargs: dict[str, Any]
     ) -> Any:  # WHY: bridge to fetch helper with logs.
-        """Invoke site API call, respecting limit-parameter support; return paginated rawdata."""
+        """Invoke site API call, respecting limit-parameter support. Return paginated rawdata."""
         logging.debug(
             "Making site-specific API call: %s with site_id: %s", api_call.__name__, site_id
         )  # WHY: pre-call log.

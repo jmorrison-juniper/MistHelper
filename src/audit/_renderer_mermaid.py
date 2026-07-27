@@ -48,7 +48,7 @@ class _MermaidCluster:  # WHY: private cluster owned by AuditReportRenderer
         analysis: AuditAnalysisResult,
         lines: list[str],
     ) -> int:  # WHY: returns updated node count so parent can respect global cap
-        """Emit per-admin subgraph blocks; return total node count emitted."""
+        """Emit per-admin subgraph blocks. Return total node count emitted."""
         node_count = 0  # WHY: shared counter respects MERMAID_NODE_CAP across admins
         for timeline in analysis.admin_timelines:  # WHY: one subgraph per admin
             node_count = self._render_one_admin_subgraph(timeline, node_count, lines)  # WHY: accumulate emitted nodes
@@ -97,7 +97,7 @@ class _MermaidCluster:  # WHY: private cluster owned by AuditReportRenderer
         self,
         analysis: AuditAnalysisResult,
         lines: list[str],
-    ) -> None:  # WHY: side effect only; extends the shared lines list
+    ) -> None:  # WHY: side effect only. Extends the shared lines list
         """Append the trailing bulleted summary of per-admin activity."""
         for timeline in analysis.admin_timelines:  # WHY: one bullet per admin
             start = epoch_to_readable(timeline.first_action)  # WHY: shared formatter, module-level import

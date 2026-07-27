@@ -15,7 +15,7 @@ from __future__ import annotations  # WHY: enable PEP 563 postponed annotations 
 import logging  # WHY: structured operator diagnostics (info/debug/exception) for CLI workflow.
 import re  # WHY: regex extraction of trailing pod digits from profile names.
 from collections.abc import Callable  # WHY: precise typing for injected safe_input callable.
-from typing import Any  # WHY: mistapi returns opaque dicts; Any keeps boundary honest without leaking types.
+from typing import Any  # WHY: mistapi returns opaque dicts. Any keeps boundary honest without leaking types.
 
 import mistapi  # WHY: shared API session helper (get_all pagination).
 import mistapi.api.v1.orgs.deviceprofiles  # WHY: gateway device profile list/get/update endpoints.
@@ -93,7 +93,7 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
     # Main workflow (US1 + US2 + US3 orchestration)
     # ------------------------------------------------------------------
 
-    def run(self) -> None:  # WHY: top-level orchestrator; kept small by delegating to focused helpers.
+    def run(self) -> None:  # WHY: top-level orchestrator. Kept small by delegating to focused helpers.
         """Main workflow: fetch, display, build, preview, create."""
         logging.warning(
             "\n=== WAN Hub-Spoke VPN Builder ==="
@@ -101,12 +101,12 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
         logging.info("Starting WAN Hub-Spoke VPN Builder")  # WHY: capture entry timestamp for troubleshooting.
 
         profiles = self._load_profiles_or_none()  # WHY: fetch profiles and short-circuit on empty inventory.
-        if profiles is None:  # WHY: helper already emitted operator message; nothing more to do.
+        if profiles is None:  # WHY: helper already emitted operator message. Nothing more to do.
             return  # WHY: propagate abort without further prompts.
 
         vpn_name = self._prompt_name_after_display(profiles)  # WHY: show existing VPNs then collect unique name.
         if vpn_name is None:  # WHY: user cancelled the name prompt.
-            return  # WHY: silent return; helper already printed the cancel message.
+            return  # WHY: silent return. Helper already printed the cancel message.
 
         assignments = self._collect_role_and_pod_assignments(profiles)  # WHY: gather full role+pod set in one step.
         if assignments is None:  # WHY: cancelled during role or pod prompts.
@@ -120,7 +120,7 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
         self._create_and_optionally_update(vpn_name, vpn_body, assignments)  # WHY: perform side-effects together.
 
     def _load_profiles_or_none(self) -> list[Any] | None:  # WHY: split so run() stays short and testable.
-        """Fetch gateway profiles; return None and warn if inventory is empty."""
+        """Fetch gateway profiles. Return None and warn if inventory is empty."""
         profiles = self._fetch_profiles()  # WHY: API call is isolated for test-time monkeypatch.
         if not profiles:  # WHY: empty list means org has no gateway profiles -> abort with hint.
             logging.warning(
@@ -142,7 +142,7 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
     def _collect_role_and_pod_assignments(  # WHY: chains role prompt then pod prompt, propagates cancel.
         self, profiles: list[Any]
     ) -> list[dict[str, Any]] | None:
-        """Run role prompt then pod prompt; propagate None on cancellation."""
+        """Run role prompt then pod prompt. Propagate None on cancellation."""
         assignments = self._prompt_role_assignments(profiles)  # WHY: collect Hub/Spoke/Skip per profile.
         if assignments is None:  # WHY: user aborted after all-skipped retry prompt.
             return None  # WHY: no assignments means nothing to prompt pods for.
@@ -170,7 +170,7 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _extract_wan_suffix(interface_name: str) -> str:  # WHY: pure helper; safe to call from any thread.
+    def _extract_wan_suffix(interface_name: str) -> str:  # WHY: pure helper. Safe to call from any thread.
         """Extract the suffix after the last underscore.
 
         Examples:
@@ -190,7 +190,7 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
         Returns (wan_list, lan_list) where each item is the
         interface name string.
         """
-        wan_interfaces: list[str] = []  # WHY: collect WAN uplinks; order established by sort() below.
+        wan_interfaces: list[str] = []  # WHY: collect WAN uplinks. Order established by sort() below.
         lan_interfaces: list[str] = []  # WHY: collect LAN interfaces separately for hub/spoke logic.
         for name, config in port_config.items():  # WHY: single-pass classification over configured ports.
             usage = config.get("usage", "")  # WHY: default empty means neither WAN nor LAN -> ignored.
@@ -311,7 +311,7 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
         """Return path dict for one assignment (empty for skip)."""
         if assignment["role"] == ROLE_SKIP:  # WHY: skipped profiles contribute nothing to the VPN body.
             return {}  # WHY: empty dict merges as a no-op.
-        profile = assignment["profile"]  # WHY: extract once; used for name + port_config lookups.
+        profile = assignment["profile"]  # WHY: extract once. Used for name + port_config lookups.
         profile_name = profile.get("name", "")  # WHY: name feeds every generated path key.
         port_config = profile.get("port_config", {})  # WHY: default empty avoids KeyError on partial API objects.
         wan_list, lan_list = self._classify_interfaces(port_config)  # WHY: classifier reused across generators.
@@ -513,7 +513,7 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
             return assignments  # WHY: return the fully-populated assignment list to the caller.
         return self._handle_all_skipped(profiles)  # WHY: dedicated branch handles retry/cancel messaging.
 
-    def _prompt_role_for_profile(  # WHY: per-profile role loop; keeps the caller's list-comp clean.
+    def _prompt_role_for_profile(  # WHY: per-profile role loop. Keeps the caller's list-comp clean.
         self, index: int, profile: dict[str, Any]
     ) -> dict[str, Any]:
         """Loop until the operator supplies a valid H/S/K response for one profile."""
@@ -577,7 +577,7 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
             suggested = self._suggest_pod(profile_name, fallback_counter)  # WHY: use trailing digits if present.
             assignment["pod"] = self._prompt_single_pod(profile_name, suggested)  # WHY: focused per-profile loop.
             fallback_counter += 1  # WHY: bump fallback so successive digit-less profiles get unique pods.
-        return assignments  # WHY: mutation happens in-place; return for chaining convenience.
+        return assignments  # WHY: mutation happens in-place. Return for chaining convenience.
 
     def _prompt_single_pod(self, profile_name: str, suggested: int) -> int:  # WHY: single pod prompt loop.
         """Prompt until the operator provides a valid integer pod (or accepts the suggestion)."""
@@ -589,7 +589,7 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
             if not raw:  # WHY: empty input means "accept suggested value".
                 return suggested  # WHY: hand back the pre-computed suggestion.
             value = self._parse_pod_value(raw)  # WHY: parse helper handles both format and range.
-            if value is not None:  # WHY: parser returns None on invalid input; error already printed.
+            if value is not None:  # WHY: parser returns None on invalid input. Error already printed.
                 return value  # WHY: validated pod integer returned to caller.
 
     def _parse_pod_value(self, raw: str) -> int | None:  # WHY: reusable validator with printed feedback.
@@ -625,7 +625,7 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
         Returns dict of {PathName.VPNName: {key: N, role: role}} entries.
         """
         vpn_paths: dict[str, dict[str, Any]] = {}  # WHY: mapping of path-ref -> {key, role}.
-        is_wan = True  # WHY: preserved from original behavior; WAN interfaces get cross-connects when hub.
+        is_wan = True  # WHY: preserved from original behavior. WAN interfaces get cross-connects when hub.
         direct_key = f"{profile_name}-{interface_name}"  # WHY: direct path key (no suffix segment).
         vpn_ref = f"{direct_key}.{vpn_name}"  # WHY: dotted path.vpn form matches Mist expectations.
         vpn_paths[vpn_ref] = {"key": 0, "role": role}  # WHY: direct entry is always key index 0.
@@ -696,15 +696,15 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
     ) -> None:
         """Union-merge new vpn_paths entries into an existing port_config entry."""
         existing = port_config[interface_name].get("vpn_paths", {})  # WHY: preserve entries from other VPNs.
-        existing.update(new_entries)  # WHY: additive; never removes references to unrelated VPNs.
+        existing.update(new_entries)  # WHY: additive. Never removes references to unrelated VPNs.
         port_config[interface_name]["vpn_paths"] = existing  # WHY: assign back so partial dicts get promoted.
 
     def _push_profile_update(self, profile_id: str, body: dict[str, Any]) -> None:  # WHY: PUT wrapper for tests.
         """Send the mutated profile body back to Mist (retained for external test patchability)."""
-        # WHY: keep this method so downstream monkeypatches keep working; body/id are validated here.
+        # WHY: keep this method so downstream monkeypatches keep working. Body/id are validated here.
         if not isinstance(profile_id, str) or not profile_id:  # WHY: reject empty ids pre-HTTP.
             raise ValueError("profile_id must be a non-empty string")  # WHY: fast failure protects the org.
-        if not isinstance(body, dict):  # WHY: mistapi expects a dict body; caller mistakes get caught early.
+        if not isinstance(body, dict):  # WHY: mistapi expects a dict body. Caller mistakes get caught early.
             raise TypeError("body must be a dict")  # WHY: explicit type feedback beats a mistapi trace.
         mistapi.api.v1.orgs.deviceprofiles.updateOrgDeviceProfile(  # WHY: performs the actual REST PUT.
             self.apisession,  # WHY: authenticated Mist session.
@@ -749,7 +749,7 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
     def _run_profile_updates(  # WHY: performs the actual per-profile update loop and tallies results.
         self, vpn_name: str, non_skip: list[dict[str, Any]]
     ) -> tuple[int, int]:
-        """Iterate assignments, calling _update_single_profile; return (success, fail) tally."""
+        """Iterate assignments, calling _update_single_profile. Return (success, fail) tally."""
         suffixes = self._collect_wan_suffixes(non_skip)  # WHY: cross-connect vpn_paths need the global suffix set.
         success_count = 0  # WHY: tally successful profile PUTs.
         fail_count = 0  # WHY: tally per-profile failures without aborting the loop.
@@ -769,7 +769,7 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _fallback_input(prompt: str, **_kwargs: Any) -> str:  # WHY: default injected input; used when no wrapper.
+    def _fallback_input(prompt: str, **_kwargs: Any) -> str:  # WHY: default injected input. Used when no wrapper.
         """Fallback input when safe_input is not provided.
 
         Delegates to the canonical EOF-safe wrapper instead of a second hand-rolled

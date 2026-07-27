@@ -48,7 +48,7 @@ class SingleCommandRequest:  # WHY: immutable request bundle collapses the multi
     hostname: str  # WHY: SSH target host for the session.
     username: str  # WHY: SSH login user for the target host.
     password: str  # WHY: SSH login secret (never logged verbatim).
-    command: str = ""  # WHY: shell/exec command; empty string preserves original permissive behavior.
+    command: str = ""  # WHY: shell/exec command. Empty string preserves original permissive behavior.
     port: int = 22  # WHY: TCP port used for the SSH connection.
     timeout: int = 30  # WHY: connection + per-command timeout in seconds.
     use_shell: bool = False  # WHY: exec-vs-shell channel toggle passed to the runner.
@@ -71,7 +71,7 @@ class SingleCommandRequest:  # WHY: immutable request bundle collapses the multi
             hostname=config.hostname,  # WHY: propagate connection hostname.
             username=config.username,  # WHY: propagate connection username.
             password=config.password,  # WHY: propagate connection secret.
-            command=command,  # WHY: explicit command; config carries no command field.
+            command=command,  # WHY: explicit command. Config carries no command field.
             port=config.port,  # WHY: propagate connection port.
             timeout=config.timeout,  # WHY: propagate connection timeout.
             use_shell=config.use_shell,  # WHY: propagate the exec-vs-shell flag.
@@ -106,7 +106,7 @@ class SingleCommandRunner:
     # ------------------------------------------------------------------
     @staticmethod
     def run(request: SingleCommandRequest) -> bool:  # WHY: single-request public entrypoint.
-        """Execute the session described by *request*; return success bool."""
+        """Execute the session described by *request*. Return success bool."""
         logger = logging.getLogger(_SSH_LOGGER_NAME)  # WHY: unified SSH logger for all executors.
         SingleCommandRunner._log_session_start(request, logger)  # WHY: emit start banner + debug details.
         log_ctx = SingleCommandRunner._setup_host_log(request, logger)  # WHY: build runner + log writer.
@@ -138,7 +138,7 @@ class SingleCommandRunner:
         logger: logging.Logger,
     ) -> bool:
         """Guarded session flow: catch fatal errors and always write the footer."""
-        single_cmd_success = False  # WHY: default False; flipped only on confirmed success.
+        single_cmd_success = False  # WHY: default False. Flipped only on confirmed success.
         try:
             single_cmd_success = SingleCommandRunner._execute_with_connection(  # WHY: real run.
                 request, log_ctx, logger
@@ -148,7 +148,7 @@ class SingleCommandRunner:
             SingleCommandRunner._handle_run_error(request.hostname, run_error, log_ctx, logger)  # WHY: log path.
             return False  # WHY: signal caller that the command failed.
         finally:
-            log_ctx.runner._disconnect()  # WHY: teardown; safe when client may be None.
+            log_ctx.runner._disconnect()  # WHY: teardown. Safe when client may be None.
             logger.debug("[%s] SSH single command session completed", request.hostname)  # WHY: parity log.
             SingleCommandRunner._write_footer(log_ctx, single_cmd_success, logger)  # WHY: footer always runs.
 
@@ -173,7 +173,7 @@ class SingleCommandRunner:
     # ------------------------------------------------------------------
     @staticmethod
     def _setup_host_log(request: SingleCommandRequest, logger: logging.Logger) -> _LogContext:
-        """Build the runner, create the per-host log file, write the header; return helpers."""
+        """Build the runner, create the per-host log file, write the header. Return helpers."""
         from src.ssh.ssh_runner import EnhancedSSHRunner  # WHY: local import avoids circular module load.
 
         runner = EnhancedSSHRunner(timeout=request.timeout, logger=logger)  # WHY: owns timeout + client.
@@ -207,7 +207,7 @@ class SingleCommandRunner:
     ) -> bool:
         """Connect via SshConnector, execute the command, write results, return success."""
         client = SingleCommandRunner._connect_client(request, log_ctx, logger)  # WHY: real connect step.
-        if client is None:  # WHY: connection failed; connector logged the reason already.
+        if client is None:  # WHY: connection failed. Connector logged the reason already.
             return False  # WHY: propagate failure sentinel to _run_guarded.
         logger.debug("SSH connected to %s, executing single command", request.hostname)  # WHY: parity log.
         success, stdout, stderr = log_ctx.runner._execute_command(  # WHY: dispatcher remains on EnhancedSSHRunner.
@@ -230,7 +230,7 @@ class SingleCommandRunner:
         log_ctx: _LogContext,
         logger: logging.Logger,
     ) -> Any:
-        """Perform the real SSH connect + wire the client into the runner; return client or None."""
+        """Perform the real SSH connect + wire the client into the runner. Return client or None."""
         connector = SshConnector(timeout=log_ctx.runner.timeout, logger=logger)  # WHY: real collaborator.
         logger.info(  # WHY: pre-connect log line for post-mortem correlation.
             "SingleCommandRunner: connecting via SshConnector to %s:%s", request.hostname, request.port
@@ -239,7 +239,7 @@ class SingleCommandRunner:
             request.hostname, request.username, request.password, request.port
         )
         logger.debug("SingleCommandRunner: connect returned client=%s", bool(client))  # WHY: post-connect log.
-        if client is None:  # WHY: connection failed; write the verbatim error line.
+        if client is None:  # WHY: connection failed. Write the verbatim error line.
             error_msg = f"Failed to connect to {request.hostname}"  # WHY: verbatim error text.
             logger.error("SSH connection failed: %s:%s", request.hostname, request.port)  # WHY: log level.
             log_ctx.writer(f"X  {error_msg}")  # WHY: verbatim error line on the per-host log.
@@ -316,7 +316,7 @@ class SingleCommandRunner:
         single_cmd_success: bool,
         logger: logging.Logger,
     ) -> None:
-        """Write the session footer; fall back to a minimal footer on any error."""
+        """Write the session footer. Fall back to a minimal footer on any error."""
         try:
             final_success = single_cmd_success if isinstance(single_cmd_success, bool) else False  # WHY: type guard.
             log_ctx.writer(SingleCommandRunner._build_footer(final_success, log_ctx.log_file))  # WHY: verbatim.

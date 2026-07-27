@@ -1,6 +1,6 @@
 """Pure validation helpers for SSH inputs (hostnames, usernames, commands).
 
-Module-level functions; no class state. Extracted from EnhancedSSHRunner's
+Module-level functions. No class state. Extracted from EnhancedSSHRunner's
 private ``_validate_*`` static methods so the new config submodule and the
 remaining ssh_runner internals share a single, importable source of truth.
 """

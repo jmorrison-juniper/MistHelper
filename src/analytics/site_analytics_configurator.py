@@ -512,7 +512,7 @@ class SiteAnalyticsConfigurator:  # WHY: static namespace collecting configurato
         """Apply standard configuration to a single site."""  # WHY: orchestrate GET + mutate + PUT for one site.
         site_id = site["site_id"]  # WHY: primary key needed for both API calls.
         site_name = site["site_name"]  # WHY: display label for log lines.
-        result: dict[str, Any] = {  # WHY: seed result with PENDING status; helpers mutate as needed.
+        result: dict[str, Any] = {  # WHY: seed result with PENDING status. Helpers mutate as needed.
             "site_id": site_id,
             "site_name": site_name,
             "status": "PENDING",

@@ -8,13 +8,13 @@ Why:
     Operators need a single-command way to keep the Zscaler reachability
     probe fleet in sync with their VLAN topology. Hand-maintaining the
     probe block against Zscaler's evolving Cloud Enforcement Node list is
-    error-prone; this module treats the JSON in ``data/`` as the source of
+    error-prone. This module treats the JSON in ``data/`` as the source of
     truth, and marks every probe it writes with the ``zcc-`` name prefix
     so a follow-up run can safely merge or swap without disturbing
     probes authored elsewhere.
 
 Module-import must remain side-effect free (--help guard):
-    Only ``import`` statements at module scope; all I/O, prompts, and API
+    Only ``import`` statements at module scope. All I/O, prompts, and API
     calls live inside functions invoked from the menu dispatch table.
 """
 
@@ -123,7 +123,7 @@ _COUNTRY_CODE_TO_REGION: dict[str, str] = {
     "VC": "americas",  # Saint Vincent and the Grenadines
     "VG": "americas",  # British Virgin Islands
     "VI": "americas",  # United States Virgin Islands
-    # China + SARs + Taiwan hit ``.com.cn`` endpoints; EMEA fallback uses
+    # China + SARs + Taiwan hit ``.com.cn`` endpoints. EMEA fallback uses
     # ``.com`` so they must be routed to the china role explicitly.
     "CN": "china",  # China (mainland)
     "HK": "china",  # Hong Kong SAR
@@ -287,7 +287,7 @@ _COUNTRY_CODE_INTENTIONAL_GAPS: frozenset[str] = frozenset(
         "SM",  # San Marino
         "UA",  # Ukraine
         "VA",  # Vatican City
-        # Central Asia (EMEA today; no China routing)
+        # Central Asia (EMEA today. No China routing)
         "AM",  # Armenia
         "AZ",  # Azerbaijan
         "KG",  # Kyrgyzstan
@@ -303,7 +303,7 @@ _COUNTRY_CODE_INTENTIONAL_GAPS: frozenset[str] = frozenset(
         "MV",  # Maldives
         "NP",  # Nepal
         "PK",  # Pakistan
-        # Southeast Asia (EMEA today; not classified as China)
+        # Southeast Asia (EMEA today. Not classified as China)
         "BN",  # Brunei
         "ID",  # Indonesia
         "KH",  # Cambodia
@@ -315,7 +315,7 @@ _COUNTRY_CODE_INTENTIONAL_GAPS: frozenset[str] = frozenset(
         "TH",  # Thailand
         "TL",  # Timor-Leste
         "VN",  # Vietnam
-        # Northeast Asia (EMEA today; not classified as China)
+        # Northeast Asia (EMEA today. Not classified as China)
         "JP",  # Japan
         "KP",  # North Korea
         "KR",  # South Korea
@@ -426,7 +426,7 @@ def _is_vpn_host(fqdn: str, cenr_source: dict[str, Any]) -> bool:
 
     Returns:
         True when the FQDN appears anywhere in a ``vpn_hostnames`` list
-        (top-level or under ``by_city[*]``); False otherwise.
+        (top-level or under ``by_city[*]``). False otherwise.
     """
     if _fqdn_in_vpn_bag(cenr_source.get("vpn_hostnames"), fqdn):
         return True
@@ -453,7 +453,7 @@ def _probe_type_for_target(target: str, _role_type: str | None = None) -> str:
         could re-attach the ``application`` label to a bare-hostname
         VPN target and reintroduce the pre-1024 fake-L4 failure mode
         (INV-2, INV-3). ``role_type`` is retained in the signature for
-        backwards compatibility with all three callsites; its value is
+        backwards compatibility with all three callsites. Its value is
         NOT consulted for the decision.
 
     Args:
@@ -471,21 +471,21 @@ def _probe_type_for_target(target: str, _role_type: str | None = None) -> str:
         (bare hostname — the post-1024 VPN emission shape).
     """
     # Scheme detection: case-sensitive prefix match. Targets emitted by
-    # this codebase are always lowercase; no normalisation required.
+    # this codebase are always lowercase. No normalisation required.
     if target.startswith(("http://", "https://")):
         decision = "application"
     else:
         # Port detection: look for ":" AFTER the last "." — a bare host
         # has no ":", a host:port has exactly one ":" after the last dot.
         # This avoids false positives on hypothetical IPv6-literal targets
-        # (unsupported by Mist Marvis Minis today; revisit if support arrives).
+        # (unsupported by Mist Marvis Minis today. Revisit if support arrives).
         last_dot = target.rfind(".")
         if last_dot != -1 and ":" in target[last_dot:]:
             decision = "application"
         else:
             # Bare hostname — the post-1024 VPN reachability shape.
             decision = "reachability"
-    # Debug trace only per contract §Logging; the emitting callsite
+    # Debug trace only per contract §Logging. The emitting callsite
     # handles higher-severity logging per Principle VII. Logger is
     # constructed here (not module-scoped) to match the local-scope
     # pattern used by peers like ``_probe_target``.
@@ -541,12 +541,12 @@ def _lookup_v3_observation(fqdn: str, cenr_source: dict[str, Any]) -> dict[str, 
         ..., "observed_port": ..., "last_probed": ...}``), otherwise
         ``None`` when the FQDN is absent from every bag.
     """
-    # Top-level bags are the common case; iterate them first so the fast
+    # Top-level bags are the common case. Iterate them first so the fast
     # path exits before descending into by_city.
     hit = _find_host_in_bags(cenr_source, fqdn)
     if hit is not None:
         return hit
-    # by_city bags carry the same shape (per cenr_cache_schema_v3.md); walk
+    # by_city bags carry the same shape (per cenr_cache_schema_v3.md). Walk
     # them last because the top-level bags dominate the hit rate.
     by_city = cenr_source.get("by_city")
     if isinstance(by_city, dict):
@@ -567,7 +567,7 @@ def _extract_observed_protocol_port(
     Why:
         Extracted from :func:`_probe_target` so its dispatch body stays under
         the Radon CC gate. The type guards mirror the schema: string protocol
-        and integer port; anything else collapses to ``None`` so the caller's
+        and integer port. Anything else collapses to ``None`` so the caller's
         Branch 3 fallback triggers.
 
     Args:
@@ -632,7 +632,7 @@ def _dispatch_observed_target(
     is_udp = observed_protocol == "UDP" or observed_protocol.startswith("UDP/")
     is_non_443_tcp = observed_protocol.startswith("TCP/") and observed_protocol != "TCP/443"
     if (is_udp or is_non_443_tcp) and observed_port is not None:
-        # Bare host:port form; NO scheme so Mist runs a raw probe
+        # Bare host:port form. NO scheme so Mist runs a raw probe
         # rather than trying TLS on a UDP/IKE endpoint.
         target = f"{fqdn}:{observed_port}"
         logger.debug("probe_target: %s -> %s (obs=%s)", fqdn, target, observed_protocol)
@@ -650,8 +650,8 @@ def _resolve_fallback_probe(
         Split out of :func:`_build_fallback_target` so the protocol
         normalisation and port coercion do not push the parent above the
         Radon CC gate. ``tunnel_zen`` still delegates to
-        ``cenr_source["probe_default"]``; unknown protocols still coerce to
-        ``https``; non-integer port values still fall back to the scheme
+        ``cenr_source["probe_default"]``. Unknown protocols still coerce to
+        ``https``. Non-integer port values still fall back to the scheme
         default.
 
     Args:
@@ -669,7 +669,7 @@ def _resolve_fallback_probe(
         # convention retained from the pre-1023 implementation).
         probe = cenr_source.get("probe_default") or {}
     protocol = str(probe.get("protocol") or "https").lower()
-    # Mist targets are URLs; raw TCP has no URL scheme, so upgrade to HTTPS
+    # Mist targets are URLs. Raw TCP has no URL scheme, so upgrade to HTTPS
     # which exercises the same TCP/443 handshake path.
     if protocol == "tcp":
         protocol = "https"
@@ -694,14 +694,14 @@ def _build_fallback_target(
     Why:
         Extracted from :func:`_probe_target` so the fallback logic is
         testable in isolation. The VPN pre-check and Branches 1/2 already
-        handled everything else; this only fires for non-VPN hosts with
+        handled everything else. This only fires for non-VPN hosts with
         missing / unrecognised observations.
 
     Args:
         fqdn: Hostname to render.
         role: Role dict passed through to :func:`_resolve_fallback_probe`.
         cenr_source: Loaded v3 CENR document.
-        observed_protocol: Original observation value (may be ``None``); used
+        observed_protocol: Original observation value (may be ``None``). Used
             only in the debug log line.
 
     Returns:
@@ -760,7 +760,7 @@ def _probe_target(fqdn: str, role: dict[str, Any], cenr_source: dict[str, Any]) 
         fqdn: The hostname to render into a probe target string. Callers
             strip wildcards before invoking this helper.
         role: The role dict from the probe source file. Retained for
-            signature parity with previous versions; Branch 3's fallback
+            signature parity with previous versions. Branch 3's fallback
             still respects ``role["probe"]`` when present so
             role-specific overrides in the ZCC catalogue continue to
             work.
@@ -773,14 +773,14 @@ def _probe_target(fqdn: str, role: dict[str, Any], cenr_source: dict[str, Any]) 
         (Branch 1) or ``"https://host"`` (Branch 2, default 443 elided)
         or the catalogue default (Branch 3).
     """
-    logger = logging.getLogger(__name__)  # module-scoped logger; matches _warn spec in contract
+    logger = logging.getLogger(__name__)  # module-scoped logger. Matches _warn spec in contract
 
     # --- VPN pre-check (feature 1024) ---------------------------------------
     # MUST run before the non-VPN 3-branch dispatch so that a host present
     # in a ``vpn_hostnames`` bag AND also observed on TCP/443 (Zscaler admin
     # console) is emitted as a VPN reachability probe. Bag membership wins
     # per contract vpn_probe_target_shape.md §Ordering Contract. Pre-1024
-    # this branch returned ``f"{fqdn}:500"``; that fake-L4 shape produced
+    # this branch returned ``f"{fqdn}:500"``. That fake-L4 shape produced
     # 100% guaranteed-fail probes because Mist cannot speak IKEv2.
     if _is_vpn_host(fqdn, cenr_source):
         logger.info("probe_target(vpn): %s -> bare (reachability)", fqdn)
@@ -807,7 +807,7 @@ def manage_org_synthetic_probes(mist_session: Any, org_id: str) -> None:
 
     Why:
         Single public API surface for the feature. The menu dispatch table
-        calls this exact callable; keeping it thin and delegating to the
+        calls this exact callable. Keeping it thin and delegating to the
         ``_``-prefixed helpers below preserves testability -- each helper
         can be exercised directly without stubbing the whole flow.
 
@@ -852,7 +852,7 @@ def manage_org_synthetic_probes(mist_session: Any, org_id: str) -> None:
     )
     # NOTE(1025-US2): companion dedup state for the load-time
     # country_code warning lives here so its lifetime is bounded by the invocation
-    # (data-model.md §3 INV-D1; FR-012 requires re-emission across
+    # (data-model.md §3 INV-D1. FR-012 requires re-emission across
     # back-to-back operator runs). Emission itself is delegated to
     # ``_prompt_and_apply_site_overrides`` because that is where the site
     # list is materialised via ``_list_org_sites`` -- the site list is
@@ -1004,7 +1004,7 @@ def _collect_cenr_observed_hosts(cenr_source: dict[str, Any]) -> frozenset[str]:
         (defensive against mid-migration flat strings that slipped past the
         loader adapter).
     """
-    observed: set[str] = set()  # accumulator; frozen at return time for immutability
+    observed: set[str] = set()  # accumulator. Frozen at return time for immutability
     _add_observed_hosts_from_container(cenr_source, observed)
     # by_city bags carry the same shape per cenr_cache_schema_v3.md.
     by_city = cenr_source.get("by_city")
@@ -1036,7 +1036,7 @@ def _collect_catalogue_hosts(probes_source: dict[str, Any]) -> frozenset[str]:
     Returns:
         Frozen set of every non-wildcard catalogue FQDN.
     """
-    catalogue: set[str] = set()  # accumulator; frozen at return time
+    catalogue: set[str] = set()  # accumulator. Frozen at return time
     for role in probes_source.get("roles", []) or []:  # each catalogue role
         role_name = role.get("role")  # role slug string
         if role_name == _TUNNEL_ZEN_ROLE:  # tunnel_zen sources FQDNs from CENR itself
@@ -1156,7 +1156,7 @@ def _compute_unmapped_country_codes(
         regardless of how many sites share each code (FR-004, FR-010).
         Codes appearing in ``gap_set`` are silently classified (they are
         deliberately EMEA today by contract INV-COVER-2) and therefore never
-        surface here; only truly-new codes bubble up so the operator gets a
+        surface here. Only truly-new codes bubble up so the operator gets a
         signal, not noise.
 
     Args:
@@ -1186,7 +1186,7 @@ def _compute_unmapped_country_codes(
     seen: set[str] = set()  # accumulator for unique codes across all sites
     for site in sites:  # single pass over the site list
         raw = site.get("country_code")  # optional field per Mist site schema
-        if not isinstance(raw, str):  # non-string / missing -> skip; region resolver handles it
+        if not isinstance(raw, str):  # non-string / missing -> skip. Region resolver handles it
             continue
         code = raw.strip().upper()  # normalise like _build_region_probes at line 1068
         if not code:  # blank string after normalisation -> skip
@@ -1227,7 +1227,7 @@ def _emit_load_time_country_code_warning(
         warned_unmapped_codes: Per-invocation dedup set (mutated in place).
             Codes added here are skipped on any subsequent call within the
             same invocation. FR-012: caller supplies a fresh empty set per
-            run; state MUST NOT persist across runs.
+            run. State MUST NOT persist across runs.
     """
     logging.info(  # Constitution VII: BEFORE the emission decision
         "evaluating country_code load-time warning: unmapped=%s already_warned=%s",
@@ -1299,7 +1299,7 @@ def _validate_vlan_input(raw: str) -> tuple[bool, str, list[int]]:
         are 802.1Q-reserved and 4095 is priority-tagged frames), so any
         out-of-range value would produce a red-banner error on the org
         setting push. Operators frequently paste condensed lists like
-        ``"3-6, 10, 200-203"``; expanding ranges here lets them use the
+        ``"3-6, 10, 200-203"``. Expanding ranges here lets them use the
         same shorthand they use in switch configs. Invalid tokens
         (non-integer, out-of-range endpoints, reversed ranges) are
         silently dropped rather than failing the whole entry so a single
@@ -1335,7 +1335,7 @@ def _prompt_vlan_list() -> list[int]:
     """Prompt the operator for a comma-separated VLAN id list.
 
     Why:
-        The VLAN list is the only per-invocation parameter; validating
+        The VLAN list is the only per-invocation parameter. Validating
         the range at prompt time avoids surfacing an opaque API-side
         rejection later. Accepts ranges (``3-6`` expands to ``3,4,5,6``)
         because operators paste condensed lists from switch configs.
@@ -1457,7 +1457,7 @@ def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
         standard closed-form solution: no external dep, no earth-model
         approximation error large enough to affect ranking at the
         continental scale we care about (Zscaler cities are hundreds of
-        kilometres apart; sub-percent radius error is invisible).
+        kilometres apart. Sub-percent radius error is invisible).
 
     Args:
         lat1: First point latitude in decimal degrees.
@@ -1507,7 +1507,7 @@ def _iter_role_fqdns(role: dict[str, Any], cenr: dict[str, Any]) -> list[str]:
     """Yield the concrete FQDN list for a single role, expanding CENR.
 
     Why:
-        Only the ``tunnel_zen`` role expands via the CENR file; every
+        Only the ``tunnel_zen`` role expands via the CENR file. Every
         other role carries its FQDNs inline. Centralising the branch
         keeps ``_build_probe_set`` readable.
 
@@ -1545,7 +1545,7 @@ def _emit_probes_for_role(
         role: One role entry from ``probes_source["roles"]``.
         cenr_source: Loaded CENR document (for FQDN expansion + target
             resolution).
-        result: Aggregating map; probes are inserted under their
+        result: Aggregating map. Probes are inserted under their
             ``zcc-<role>-<slug>`` keys.
 
     Returns:
@@ -1630,7 +1630,7 @@ def _build_probe_set(
 
     Args:
         sources: The ``(probes, cenr)`` tuple from ``_load_probe_sources``.
-        vlan_ids: Kept for signature/back-compat with the caller; ignored
+        vlan_ids: Kept for signature/back-compat with the caller. Ignored
             when building probe bodies because VLAN scoping belongs on
             the ``tests[]`` row that references the probe, not on the
             ``custom_probes`` definition itself (matches Mist's own
@@ -1672,7 +1672,7 @@ def _build_region_probes(
         wasteful noise. The site-override flow calls this helper instead so
         each picked site only receives the ELM role matching its own
         ``country_code``. Unmapped or missing country codes fall back to
-        EMEA (the broadest surface); the operator-visible WARNING for the
+        EMEA (the broadest surface). The operator-visible WARNING for the
         unmapped set is now emitted once at load time by
         ``_emit_load_time_country_code_warning`` (1025-US2, FR-004 / FR-010)
         rather than once per site here, so this helper stays silent on the
@@ -1681,14 +1681,14 @@ def _build_region_probes(
     Args:
         sources: The ``(probes, cenr)`` tuple from ``_load_probe_sources``.
         country_code: ISO 3166-1 alpha-2 code from the site dict (case-
-            insensitive; may be ``None`` or an unmapped code -- both fall
-            through to EMEA silently; see ``_emit_load_time_country_code_warning``
+            insensitive. May be ``None`` or an unmapped code -- both fall
+            through to EMEA silently. See ``_emit_load_time_country_code_warning``
             for the operator-visible surface).
 
     Returns:
         A ``{probe_name: probe_body}`` map for the one matching role.
         Empty dict if the probe source file does not ship a role for the
-        resolved region (defensive; the shipped catalogue has all three).
+        resolved region (defensive. The shipped catalogue has all three).
     """
     probes_source, _ = sources
     normalised = (country_code or "").strip().upper()
@@ -1722,7 +1722,7 @@ def _build_regional_elm_probes(
 
     Args:
         role: The matched Samsung ELM role dict from ``probes_source``.
-        sources: The ``(probes, cenr)`` tuple; only ``cenr`` (index 1) is
+        sources: The ``(probes, cenr)`` tuple. Only ``cenr`` (index 1) is
             passed through to ``_probe_target`` for probe-body wiring.
         target_role_name: Precomputed ``samsung_elm_activation_<region>``
             slug so the probe-name builder does not have to reconstruct
@@ -1770,7 +1770,7 @@ def _is_concrete_probe_fqdn(fqdn: Any) -> bool:
 
     Returns:
         ``True`` if ``fqdn`` is a ``str`` and does not start with
-        ``"*."``; otherwise ``False``.
+        ``"*."``. Otherwise ``False``.
     """
     return isinstance(fqdn, str) and not fqdn.startswith("*.")
 
@@ -1941,7 +1941,7 @@ def _resolve_zen_cities_for_site(
           deduped by location (so same-city pairs count once).
         - Country has more but site lacks ``latlng`` -> return the
           country's ZENs anyway (better to over-probe within-country than
-          to skip; operators can trim later).
+          to skip. Operators can trim later).
         - Site has no country match AND has ``latlng`` -> nearest globally.
         - No country match AND no latlng -> empty list + warn.
 
@@ -2125,7 +2125,7 @@ def _merge_probes(
         new_probes: Freshly-built probe set. Used to look up the
             authoritative ``aggressiveness`` (and ``type``/``target``
             when normalising legacy bodies) for each matching probe.
-        extra_vlans: Ignored; retained for caller signature back-compat.
+        extra_vlans: Ignored. Retained for caller signature back-compat.
 
     Returns:
         Merged probe map. Bodies conform to the mini-* shape:
@@ -2135,7 +2135,7 @@ def _merge_probes(
     del extra_vlans
     merged: dict[str, dict[str, Any]] = {}
     for name, probe in existing_tool.items():
-        # Prefer freshly-built type/target (new source of truth); fall back
+        # Prefer freshly-built type/target (new source of truth). Fall back
         # to on-org values when the probe is not in ``new_probes``.
         template = new_probes.get(name, probe)
         # Resolve target first because the ``type`` classification depends
@@ -2337,7 +2337,7 @@ def _prompt_confirm(summary: str) -> bool:
     Why:
         Isolated so tests can patch ``input`` without touching the rest
         of the flow. Only exact ``y`` / ``yes`` (case-insensitive)
-        answers proceed; anything else aborts as safe-default.
+        answers proceed. Anything else aborts as safe-default.
 
     Args:
         summary: Multi-line pre-PUT summary from ``_summarise``.
@@ -2422,7 +2422,7 @@ def _clean_test_row(row: Any) -> dict[str, Any] | None:
     probes_field = cleaned.get("probes")
     if isinstance(probes_field, list):
         filtered = [p for p in probes_field if not (isinstance(p, str) and p.startswith(_TOOL_NAME_PREFIX))]
-        # Row that only held zcc-* names is a prior injection; drop so
+        # Row that only held zcc-* names is a prior injection. Drop so
         # re-injection is authoritative.
         if probes_field and not filtered:
             return None
@@ -2554,7 +2554,7 @@ def _merge_zcc_criticals_into_tests(
             with its own ``vlan_ids`` exists.
         extra_regular_names: Optional additional ``zcc-*`` probe names
             to schedule at regular (non-critical) priority. Deduplicated
-            against the critical set; ordering-stable via sort. Rows are
+            against the critical set. Ordering-stable via sort. Rows are
             emitted with the same shape/template as critical rows -- the
             tests[] row itself carries no aggressiveness (that lives on
             the probe body in ``custom_probes``).
@@ -2681,7 +2681,7 @@ def _prompt_and_apply_site_overrides(
             target.
         resulting_tool: The tool-authored probe map just written to the
             org. Used as the source of truth (name/target/type/
-            aggressiveness) to push into each chosen site; each probe's
+            aggressiveness) to push into each chosen site. Each probe's
             ``vlan_ids`` is replaced with the freshly-prompted list.
         sources: The ``(probes, cenr)`` tuple from ``_load_probe_sources``.
             Passed through to ``_apply_to_site`` so per-region Samsung
@@ -2777,7 +2777,7 @@ def _sort_sites_for_picker(sites: list[dict[str, Any]]) -> list[dict[str, Any]]:
         gate. Unnamed sites sink to the end (secondary key = 1) so the
         named entries operators actually think about lead the list;
         name comparison is case-folded so ``ACME`` and ``acme`` sort
-        together; id is the final tie-break to keep the ordering stable
+        together. Id is the final tie-break to keep the ordering stable
         across invocations.
 
     Args:
@@ -2909,7 +2909,7 @@ def _prompt_site_indexes(sites: list[dict[str, Any]]) -> list[dict[str, Any]]:
         indexed prompt eliminates that class of typo entirely and lets
         the operator eyeball site names before committing. The list is
         sorted by human-readable site name (case-insensitive) so the
-        picker matches how operators think about their fleet; unnamed
+        picker matches how operators think about their fleet. Unnamed
         sites sink to the bottom. Full site dicts are returned (not just
         ids) so downstream code can read per-site fields like
         ``country_code`` without a second API round-trip. Accepts range
@@ -3086,7 +3086,7 @@ def _apply_to_site(
     if not isinstance(existing_tests, list):
         existing_tests = []
     # Region and ZEN probes are auto-priority, so the default critical-only
-    # filter would not schedule them; pass their names explicitly so each
+    # filter would not schedule them. Pass their names explicitly so each
     # gets a tests[] row and actually runs.
     synthetic["tests"] = _merge_zcc_criticals_into_tests(
         existing_tests,

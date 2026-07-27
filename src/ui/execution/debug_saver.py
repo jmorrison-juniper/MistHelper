@@ -20,7 +20,7 @@ class DebugResultSaver:  # Owns the debug artifact write path for one API result
         self._tui = tui  # Back-reference for function_params
 
     def save(self, func_name: str, raw_result: Any, parsed_data: Any) -> None:  # Public entry point.
-        """Persist the debug artifact for one API call; logs on failure only."""
+        """Persist the debug artifact for one API call. Logs on failure only."""
         logging.info("TUI: saving debug artifact for %s", func_name)  # Action log before write
         try:
             filepath = self._build_filepath(func_name)  # Compose artifact path under DEBUG_DIR
@@ -85,7 +85,7 @@ class _Serializer:  # Internal utility: recursive JSON-safe conversion.
     @classmethod
     def _dict_to_jsonable(cls, obj: dict[Any, Any]) -> dict[Any, Any]:
         """Recursively serialize each value in a mapping."""
-        return {k: cls.to_jsonable(v) for k, v in obj.items()}  # Preserve keys; recurse on values.
+        return {k: cls.to_jsonable(v) for k, v in obj.items()}  # Preserve keys. Recurse on values.
 
     @classmethod
     def _sequence_to_jsonable(cls, obj: Any) -> list[Any]:

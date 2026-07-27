@@ -27,7 +27,7 @@ class AuditAnalysisOps:
         """Capture the audit-log time-range input string (test-mode fixed default or interactive prompt)."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of IS_TEST_MODE + InputUtils.
         if mh.IS_TEST_MODE:  # Use a fixed time range so --test runs without interactive input.
-            return "7d"  # Default to 7 days in test mode; skips the safe_input prompt.
+            return "7d"  # Default to 7 days in test mode. Skips the safe_input prompt.
         logging.warning(  # Uses warning level so the hint shows by default (#886).
             "Time range examples: 7d, 4w, 3m, 1y, 6w-2w (6 weeks ago to 2 weeks ago)"
         )

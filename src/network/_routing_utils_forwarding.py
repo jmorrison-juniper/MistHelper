@@ -23,7 +23,7 @@ import json  # WHY: forwarding output arrives as either raw text or a JSON body
 import logging  # WHY: orchestrator emits structured log lines around device commands
 from typing import TYPE_CHECKING, Any  # WHY: TYPE_CHECKING avoids runtime cycle with parent
 
-if TYPE_CHECKING:  # WHY: only needed for static type checkers; skipped at runtime
+if TYPE_CHECKING:  # WHY: only needed for static type checkers. Skipped at runtime
     from src.network.routing_utils import RoutingUtils  # WHY: parent type for cross-reference only
 
 
@@ -50,7 +50,7 @@ class _RoutingUtilsForwarding:  # WHY: cluster wrapper matching the parsing/disp
     def __getattr__(self, name: str) -> Any:  # WHY: transparent proxy so callers see combined API
         """Delegate unknown attributes to the wrapped parent object."""
         parent = self.__dict__.get("_ru")  # WHY: guard against half-initialized instances
-        if parent is None:  # WHY: only trips during broken init; avoid infinite recursion
+        if parent is None:  # WHY: only trips during broken init. Avoid infinite recursion
             raise AttributeError(name)  # WHY: signal missing attribute cleanly to callers
         return getattr(parent, name)  # WHY: transparent proxy to the parent RoutingUtils
 
@@ -101,7 +101,7 @@ class _RoutingUtilsForwarding:  # WHY: cluster wrapper matching the parsing/disp
         payload: dict[str, Any],
         debug_mode: bool,
     ) -> tuple[Any, str] | None:
-        """Open WebSocket + issue forwarding-table command; return (ws, sid) or None on failure."""
+        """Open WebSocket + issue forwarding-table command. Return (ws, sid) or None on failure."""
         websocket_manager = self._ru._connect_websocket(site_id, device_id, debug_mode)  # WHY: WS
         if not websocket_manager:  # WHY: guard: connection failed
             return None  # WHY: nothing to disconnect

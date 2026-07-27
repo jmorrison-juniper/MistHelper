@@ -48,7 +48,7 @@ class BulkSwitchFirmwareUpgrader:  # pylint: disable=too-few-public-methods,too-
     - Verify backup connectivity paths before execution
     """
 
-    # WHY: relative path so tests can override; kept as class attr for compatibility.
+    # WHY: relative path so tests can override. Kept as class attr for compatibility.
     CACHE_FILE = os.path.join(CACHE_DIR, CACHE_FILENAME)
     CACHE_FRESHNESS_HOURS = 24  # WHY: reuse cached firmware list if newer than one day.
 
@@ -321,7 +321,7 @@ class BulkSwitchFirmwareUpgrader:  # pylint: disable=too-few-public-methods,too-
             # WHY: EOF-safe strategy prompt through injected input helper.
             strategy_choice = self.safe_input_fn("\nSelect upgrade strategy (1-3): ", context="bulk_switch_strategy")
             resolved = self._resolve_strategy_choice(strategy_choice)  # WHY: single-branch mapping.
-            if resolved is not None:  # WHY: None means invalid; loop again.
+            if resolved is not None:  # WHY: None means invalid. Loop again.
                 self.upgrade_strategy = resolved  # WHY: commit valid strategy.
                 break  # WHY: exit prompt loop.
             print("X  Please enter 1, 2, or 3")  # WHY: invalid input feedback.
@@ -461,7 +461,7 @@ class BulkSwitchFirmwareUpgrader:  # pylint: disable=too-few-public-methods,too-
         """Load firmware data from cache or API."""
         print("\n-> Checking for cached firmware versions...")  # WHY: progress cue.
         cached_data = self._load_from_cache()  # WHY: prefer fresh cache to avoid API load.
-        if cached_data:  # WHY: fresh cache returns list; stale/missing returns None.
+        if cached_data:  # WHY: fresh cache returns list. Stale/missing returns None.
             return cached_data  # WHY: short-circuit with cached firmware list.
         return self._fetch_firmware_from_api()  # WHY: fall back to live API.
 
@@ -732,7 +732,7 @@ class BulkSwitchFirmwareUpgrader:  # pylint: disable=too-few-public-methods,too-
                 return result if result else None  # WHY: empty dict -> None on success.
 
     def _version_prompt_iteration(self) -> dict[str, Any] | None:
-        """Run one iteration of the version prompt loop; return dict or None to reloop."""
+        """Run one iteration of the version prompt loop. Return dict or None to reloop."""
         count = len(self.available_versions)  # WHY: recomputed each loop for clarity.
         try:  # WHY: numeric parse must not crash the loop.
             print(f"\nSelect firmware version by index (1-{count}):")  # WHY: instruction.

@@ -7,7 +7,7 @@ helper chain (MistHelper.py:7374-7542), and re-lands them as
 carry-forward. All 7 known callsites (3 in MistHelper.py + 2 in the
 gateway export utilities + 1 in the override device fetcher + 1 in the
 serial-CC helper) are rewritten in the same PR to reference the extracted
-class method; no wrapper shim remains in MistHelper.py after this extraction.
+class method. No wrapper shim remains in MistHelper.py after this extraction.
 
 FR-015 sibling-helpers-travel-with-parent: the full 11-helper chain moves
 together to preserve behavior. Splitting the chain would leave orphaned
@@ -40,10 +40,10 @@ def _resolve_fast_mode_env() -> tuple[bool, int, int]:  # Late-bind MistHelper m
     src/refactors/fast_mode_constants.py per initiative 1015 T-02, and
     FAST_MODE_USE_CONNECTION_AWARE_THREADING is imported from the same
     module per T-03 (both bypass the ``MistHelper.SYMBOL`` module-attribute
-    hop); FAST_MODE_FALLBACK_THREADS remains on MistHelper pending later
+    hop). FAST_MODE_FALLBACK_THREADS remains on MistHelper pending later
     extraction.
     """
-    import MistHelper  # Late-binding import; MistHelper is fully loaded by the time methods run
+    import MistHelper  # Late-binding import. MistHelper is fully loaded by the time methods run
     from src.refactors.fast_mode_constants import (
         FAST_MODE_MAX_CONCURRENT_CONNECTIONS,  # Direct import of the extracted concurrent-connection cap (post-T-02)
         FAST_MODE_USE_CONNECTION_AWARE_THREADING,  # Direct import of the threading-strategy toggle (post-T-03)
@@ -106,7 +106,7 @@ class ConnectionPoolExecutor:  # Class-body seam for the connection-pool-managed
             if result:  # Truthy result means the worker succeeded and returned data
                 return "success", result  # Hand the successful result back to the caller
             return "failed", item  # Falsy result (empty/None) -- treat the item as failed for retry
-        except Exception as exc:  # Worker threw an exception; log and track as failed
+        except Exception as exc:  # Worker threw an exception. Log and track as failed
             logging.error(  # Emit error log with item context for post-mortem debugging
                 "! Future exception for %s %s: %s", config.batch_description.rstrip("s"), item, exc
             )
@@ -115,7 +115,7 @@ class ConnectionPoolExecutor:  # Class-body seam for the connection-pool-managed
     @staticmethod
     def _pool_advance_progress_bar(pbar: Any) -> None:
         """Advance a tqdm progress bar by one, isolating any tqdm.update error so it cannot mask real results."""
-        try:  # tqdm.update can fail in some environments; isolate that error
+        try:  # tqdm.update can fail in some environments. Isolate that error
             pbar.update(1)  # Advance progress bar by one item for each completed future
         except Exception as upd_err:  # Progress bar update failure should not mask the real work result
             logging.error("! Progress bar update failed: %s", upd_err)  # Log progress bar failure for debugging
@@ -186,7 +186,7 @@ class ConnectionPoolExecutor:  # Class-body seam for the connection-pool-managed
     @staticmethod
     def _pool_emit_traceback_lines(batch_exc: Exception) -> None:  # Emit traceback lines to log
         """Format batch exception traceback and emit each line as an error record (best-effort)."""
-        try:  # Best-effort capture; serialization failure must not suppress the re-raise
+        try:  # Best-effort capture. Serialization failure must not suppress the re-raise
             import traceback as _tb2  # Local import to avoid affecting module namespace
 
             formatted = "".join(  # Format the exception into a multi-line string for line-by-line emission
@@ -287,7 +287,7 @@ class ConnectionPoolExecutor:  # Class-body seam for the connection-pool-managed
         # WHY: extracted so execute() drops from 39 lines to <25 per STRUCT-LENGTH.
         if not (failed_items and retry_function):  # Fast-exit when nothing to retry
             return failed_items  # Return unchanged failure list
-        return ConnectionPoolExecutor._pool_apply_retry(  # Retry failed items; merge recoveries in place
+        return ConnectionPoolExecutor._pool_apply_retry(  # Retry failed items. Merge recoveries in place
             failed_items, retry_function, batch_config.connection_semaphore, successful_results, batch_description
         )
 
@@ -303,7 +303,7 @@ class ConnectionPoolExecutor:  # Class-body seam for the connection-pool-managed
             batch_description,
             len(failed_items),
         )
-        logging.debug(  # AFTER: pool run finished; log final counts
+        logging.debug(  # AFTER: pool run finished. Log final counts
             "[POOL-EXECUTE] Pool execution finished: %s successful, %s failed",
             len(successful_results),
             len(failed_items),

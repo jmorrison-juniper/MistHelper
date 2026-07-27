@@ -4,7 +4,7 @@ Extracted from MistHelper.py during initiative 1013 (Cat B, position 17).
 Walks ``mistapi.api.v1.const`` via ``pkgutil.iter_modules``, inspects each
 module's public functions, and dispatches API calls per special-handling flag
 (``all_models`` / ``all_countries`` / ``all_countries_channels`` / ``None``).
-Cached CSVs under 24 hours old are reused; stale or missing files trigger a
+Cached CSVs under 24 hours old are reused. Stale or missing files trigger a
 fresh fetch.  Callers continue to reach the class via the
 ``MistHelper.ConstDefinitionsExporter`` re-export alias.
 """
@@ -252,7 +252,7 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
 
     def _process_all_endpoints(self) -> None:  # Process all endpoints.
         """Process each discovered endpoint."""
-        for config in self.discovered_endpoints.values():  # Walk endpoints; keys are unused here.
+        for config in self.discovered_endpoints.values():  # Walk endpoints. Keys are unused here.
             self._process_single_endpoint(config)  # Process each.
 
     def _process_single_endpoint(self, config: EndpointConfig) -> None:  # Process one endpoint.
@@ -275,7 +275,7 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
             self.endpoints_processed += 1  # Count processed.
 
     def _evaluate_cache_window(self, config: EndpointConfig, file_age_hours: float, file_timestamp: str) -> bool:
-        """Decide whether the file is within the cache window; emit fresh/stale user messages either way."""
+        """Decide whether the file is within the cache window. Emit fresh/stale user messages either way."""
         if file_age_hours < self.CACHE_MAX_AGE_HOURS:  # Within the window.
             print(f"  ! Found fresh {config.filename} (created {file_timestamp}, {file_age_hours:.1f}h old)")
             print(f"  ! Skipping API call - using cached data (cache valid for {self.CACHE_MAX_AGE_HOURS}h)")
@@ -336,14 +336,14 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
         """Fetch data from a standard endpoint with no special parameters."""
         api_function = getattr(config.module, config.function_name)  # Resolve the function.
         response = api_function(self.api_session)  # Call the API.
-        return getattr(response, "data", response) or {}  # Unwrap data; default empty.
+        return getattr(response, "data", response) or {}  # Unwrap data. Default empty.
 
     def _fetch_one_gateway_model(self, config: EndpointConfig, model: str) -> list:
         """Call the per-model API and return normalized records (or [] on empty / error)."""
         try:
             api_function = getattr(config.module, config.function_name)  # Resolve the function.
             response = api_function(self.api_session, model=model)  # Call with the model.
-            model_data = getattr(response, "data", response) or {}  # Unwrap data; default empty.
+            model_data = getattr(response, "data", response) or {}  # Unwrap data. Default empty.
             if model_data:  # Have data.
                 return self._normalize_model_data(model, model_data)  # Normalize and return.
             return []  # No data for this model.
@@ -375,7 +375,7 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
             device_models_module = importlib.import_module("mistapi.api.v1.const.device_models")
             device_models_function = device_models_module.listDeviceModels  # Resolve the function.
             response = device_models_function(self.api_session)  # Call the API.
-            device_models_data = getattr(response, "data", response) or {}  # Unwrap data; default empty.
+            device_models_data = getattr(response, "data", response) or {}  # Unwrap data. Default empty.
 
             gateway_models = self._extract_gateway_models(device_models_data)  # Extract gateway models.
 
@@ -455,7 +455,7 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
             try:
                 api_function = getattr(config.module, config.function_name)  # Resolve the function.
                 response = api_function(self.api_session, country_code=country_code)  # Call with the country.
-                country_data = getattr(response, "data", response) or {}  # Unwrap data; default empty.
+                country_data = getattr(response, "data", response) or {}  # Unwrap data. Default empty.
 
                 if country_data:  # Have data.
                     records = self._normalize_states_data(country_code, country_data)  # Normalize state rows.
@@ -474,7 +474,7 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
             countries_module = importlib.import_module("mistapi.api.v1.const.countries")  # Endpoint module
             countries_function = countries_module.listCountryCodes  # Resolve API entrypoint
             response = countries_function(self.api_session)  # Call the Mist API
-            return getattr(response, "data", response) or {}  # Unwrap; default to empty
+            return getattr(response, "data", response) or {}  # Unwrap. Default to empty
         except Exception as error:  # Network/import/auth failure
             logging.warning("Failed to get countries list: %s", error)  # Warn for diagnostics
             return {}  # Empty signals caller to use fallback
@@ -588,7 +588,7 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
             try:
                 api_function = getattr(config.module, config.function_name)  # Resolve the function.
                 response = api_function(self.api_session, country_code=country_code)  # Call with the country.
-                country_data = getattr(response, "data", response) or {}  # Unwrap data; default empty.
+                country_data = getattr(response, "data", response) or {}  # Unwrap data. Default empty.
 
                 if country_data:  # Have data.
                     records = self._normalize_channels_data(country_code, country_data)  # Normalize channel rows.
@@ -603,7 +603,7 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
 
     @staticmethod
     def _filter_to_iso2_country_codes(country_codes: list[str]) -> list[str]:
-        """Keep only 2-letter alphabetic ISO country codes; log when entries were dropped."""
+        """Keep only 2-letter alphabetic ISO country codes. Log when entries were dropped."""
         original_count = len(country_codes)  # Remember the original count for logging.
         filtered = [c for c in country_codes if ConstDefinitionsExporter._is_valid_alpha2(c)]  # Delegate predicate
         if len(filtered) < original_count:  # Some were filtered.
@@ -618,7 +618,7 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
             countries_module = importlib.import_module("mistapi.api.v1.const.countries")  # Import countries.
             countries_function = countries_module.listCountryCodes  # Resolve the function.
             response = countries_function(self.api_session)  # Call the API.
-            countries_data = getattr(response, "data", response) or {}  # Unwrap data; default empty.
+            countries_data = getattr(response, "data", response) or {}  # Unwrap data. Default empty.
             country_codes = self._extract_channel_country_codes(countries_data)  # Extract country codes.
             if country_codes:  # Have codes.
                 country_codes = self._filter_to_iso2_country_codes(country_codes)  # ISO-2 filter + logging.

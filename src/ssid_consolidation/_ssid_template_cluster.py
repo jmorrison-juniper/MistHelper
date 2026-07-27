@@ -21,7 +21,7 @@ from __future__ import annotations  # WHY: postponed evaluation for forward-ref 
 import logging  # WHY (#886 Phase 2): cluster helper emits bail msg via logger instead of print
 from typing import TYPE_CHECKING, Any  # WHY: Any lets __getattr__ proxy any parent method
 
-if TYPE_CHECKING:  # WHY: only pulled in by type checkers; skipped at runtime
+if TYPE_CHECKING:  # WHY: only pulled in by type checkers. Skipped at runtime
     from src.ssid_consolidation.ssid_template_consolidation import (  # WHY: parent type for annotation
         SSIDTemplateConsolidationManager,
     )
@@ -44,7 +44,7 @@ class _ClusterBase:  # WHY: shared wrapper base for every ssid_template cluster
     def __getattr__(self, name: str) -> Any:  # WHY: proxy unknown attrs back to parent
         """Delegate unknown attributes to the wrapped parent object."""
         parent = self.__dict__.get("_mm")  # WHY: guard against half-initialized instances
-        if parent is None:  # WHY: only trips during broken init; avoid infinite recursion
+        if parent is None:  # WHY: only trips during broken init. Avoid infinite recursion
             raise AttributeError(name)  # WHY: signal missing attribute cleanly to callers
         return getattr(parent, name)  # WHY: transparent proxy so self.org_id / helpers work
 
@@ -59,10 +59,10 @@ class _ClusterBase:  # WHY: shared wrapper base for every ssid_template cluster
         return getattr(self._mm, name)(*args, **kwargs)  # WHY: dynamic dispatch bypasses W0212
 
     def _load_cache_or_bail(self) -> bool:  # WHY: shared Phase 2-5 cache preamble
-        """Load Phase 1 cache onto parent; return False + bail msg when missing.
+        """Load Phase 1 cache onto parent. Return False + bail msg when missing.
 
         Phase 2/3/4/5 orchestrators all share the same "load cache or abort"
-        preamble; centralising it here keeps pylint's R0801 duplicate-code
+        preamble. Centralising it here keeps pylint's R0801 duplicate-code
         warning off the per-phase clusters without leaking parent internals.
         """
         parent = self._mm  # WHY: proxy alias

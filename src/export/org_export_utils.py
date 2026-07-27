@@ -86,11 +86,11 @@ class OrgExportUtils:
             processed = DataProcessingUtils.flatten_nested_fields(all_sites_sle_data)  # Flatten nested fields.
             processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]  # CSV-safe.
             mh.DataExporter.write_with_format_selection(processed, "OrgSitesSLESummary.csv")  # type: ignore[no-untyped-call]
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info("! %d sites SLE summary exported to OrgSitesSLESummary.csv", len(processed))  # Tell the user.
             logging.info("Exported %s sites SLE summary to OrgSitesSLESummary.csv", len(processed))  # Log count.
             return  # Done.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.warning(
             "! 0 sites SLE summary exported to OrgSitesSLESummary.csv (no data available)"
         )  # Tell user zero.
@@ -99,7 +99,7 @@ class OrgExportUtils:
 
     @staticmethod
     def _gather_all_sites_sle(org_id: str, sle_types: list, emitter: Any) -> tuple[list, int]:
-        """Walk SLE types, accumulate rows, tick progress per type; return (rows, items_done)."""
+        """Walk SLE types, accumulate rows, tick progress per type. Return (rows, items_done)."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ProgressContext class.
         all_sites_sle_data: list = []  # Accumulator for SLE rows across types.
         items_done = 0  # Items processed counter.
@@ -119,7 +119,7 @@ class OrgExportUtils:
     def sites_sle_summary():  # Export sites SLE summary.
         """Export SLE summary metrics for all sites in the organization to OrgSitesSLESummary.csv."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ConfigUtils, PROGRESS_EMITTER, ProgressContext.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("Export Organization Sites SLE Summary:")  # Header.
         logging.info("Starting export of sites SLE summary...")  # Log start.
         org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
@@ -199,7 +199,7 @@ class OrgExportUtils:
     def _fetch_single_metric_choice(
         org_id: str, metric: str, choice: str, duration: str
     ) -> dict[str, Any] | None:  # One (metric, choice) GET.
-        """Issue the org-insight GET for one (metric, choice) pair; return a tagged record or None."""
+        """Issue the org-insight GET for one (metric, choice) pair. Return a tagged record or None."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of apisession global.
         uri = f"/api/v1/orgs/{org_id}/insights/{metric}"  # Org insight endpoint for this parameterized metric
         query = {"metric": choice, "duration": duration}  # Required 'metric' choice plus the lookback window
@@ -269,7 +269,7 @@ class OrgExportUtils:
 
     @staticmethod
     def _insight_fetch_one_sle_category(org_id: str, metric: str, sle_category: str) -> dict[str, Any] | None:
-        """Fetch one SLE category's site data; return aggregated result row, or None when empty/failed."""
+        """Fetch one SLE category's site data. Return aggregated result row, or None when empty/failed."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of apisession global.
         try:  # Isolate this category so one failure does not abort the others.
             response = mistapi.api.v1.orgs.insights.getOrgSitesSle(  # Call the sites-SLE API for this category.
@@ -283,13 +283,13 @@ class OrgExportUtils:
                 "Got %s sites for insight metric: %s SLE: %s", len(sites_data), metric, sle_category
             )
             return OrgExportUtils._insight_build_sites_result(org_id, metric, sle_category, sites_data)
-        except Exception as sites_error:  # Category fetch failed; log and report None without counting a failure.
+        except Exception as sites_error:  # Category fetch failed. Log and report None without counting a failure.
             logging.debug("Failed to get sites data for metric '%s' SLE '%s': %s", metric, sle_category, sites_error)
             return None  # Treat the failed category as no data.
 
     @staticmethod
     def _insight_fetch_worst_sites_sle(org_id: str, metric: str) -> tuple[list[dict[str, Any]], int, int]:
-        """Fetch one site-SLE metric across wifi/wan/wired categories; return (records, retrieved, failed)."""
+        """Fetch one site-SLE metric across wifi/wan/wired categories. Return (records, retrieved, failed)."""
         records: list[dict[str, Any]] = []  # Aggregated per-category insight results for this metric.
         retrieved = 0  # Count of categories that returned usable site data.
         for sle_category in ("wifi", "wan", "wired"):  # The three SLE service categories to analyze.
@@ -301,12 +301,12 @@ class OrgExportUtils:
 
     @staticmethod
     def _insight_fetch_default_metric(org_id: str, metric: str) -> tuple[list[dict[str, Any]], int, int]:
-        """Fetch one ordinary metric via getOrgSle; return (records, retrieved, failed)."""
+        """Fetch one ordinary metric via getOrgSle. Return (records, retrieved, failed)."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of apisession global.
         response = mistapi.api.v1.orgs.insights.getOrgSle(
             mh.apisession, org_id, metric, duration="7d"
         )  # Direct SLE GET.
-        insight_data = getattr(response, "data", response) or {}  # Unwrap the response payload; default to empty.
+        insight_data = getattr(response, "data", response) or {}  # Unwrap the response payload. Default to empty.
         if insight_data:  # The metric returned a usable payload.
             insight_data["metric_type"] = metric  # Tag the metric name onto the payload.
             insight_data["org_id"] = org_id  # Tag the owning org onto the payload.
@@ -319,7 +319,7 @@ class OrgExportUtils:
     def _insight_fetch_one_metric(
         org_id: str, metric: str, parameterized_metrics: dict[str, list[str]]
     ) -> tuple[list[dict[str, Any]], int, int]:
-        """Dispatch one metric to the right fetch strategy; return (records, retrieved, failed)."""
+        """Dispatch one metric to the right fetch strategy. Return (records, retrieved, failed)."""
         try:  # Any metric-level failure is caught here so the overall loop continues.
             logging.debug("Attempting to retrieve org insight metric: %s", metric)  # Trace the attempt.
             if metric in parameterized_metrics:  # Parameterized metric -> expand across its required 'metric' choices.
@@ -331,13 +331,13 @@ class OrgExportUtils:
             if OrgExportUtils._insight_is_worst_sites_metric(metric):  # Site-SLE metric -> per-category analysis.
                 return OrgExportUtils._insight_fetch_worst_sites_sle(org_id, metric)  # Fetch across wifi/wan/wired.
             return OrgExportUtils._insight_fetch_default_metric(org_id, metric)  # Ordinary metric -> single getOrgSle.
-        except Exception as metric_error:  # The metric failed entirely; count it and keep going.
+        except Exception as metric_error:  # The metric failed entirely. Count it and keep going.
             logging.debug("Failed to get org insight data for metric '%s': %s", metric, metric_error)  # Trace failure.
             return [], 0, 1  # No records, one failed metric.
 
     @staticmethod
     def _insight_fetch_sites_sle_summary(org_id: str) -> tuple[list[dict[str, Any]], int, int]:
-        """Fetch the org-wide sites SLE summary; return (records, retrieved, failed)."""
+        """Fetch the org-wide sites SLE summary. Return (records, retrieved, failed)."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of apisession global.
         try:  # Isolate the summary fetch so its failure does not abort the export.
             logging.debug("Attempting to retrieve org sites SLE summary")  # Trace the attempt.
@@ -350,8 +350,8 @@ class OrgExportUtils:
                     item["metric_type"] = "org_sites_sle_summary"  # Mark these as the sites SLE summary.
                     item["org_id"] = org_id  # Tag the owning org.
                 logging.debug("Successfully retrieved org sites SLE data for %s sites", len(sites_data))  # Trace count.
-                return list(sites_data), 1, 0  # All rows as records; counts as one successful retrieval.
-            return [], 0, 0  # No summary data; neither retrieved nor failed (matches original).
+                return list(sites_data), 1, 0  # All rows as records. Counts as one successful retrieval.
+            return [], 0, 0  # No summary data. Neither retrieved nor failed (matches original).
         except Exception as sites_error:  # Summary fetch failed.
             logging.debug("Failed to get org sites SLE summary: %s", sites_error)  # Trace the failure.
             return [], 0, 1  # Count the summary as a single failure.
@@ -360,7 +360,7 @@ class OrgExportUtils:
     def _insight_collect_all_metrics(
         org_id: str, org_metrics: list[str], parameterized_metrics: dict[str, list[str]]
     ) -> tuple[list[dict[str, Any]], int, int]:
-        """Retrieve every org-scope metric plus the sites SLE summary; return (all_records, retrieved, failed)."""
+        """Retrieve every org-scope metric plus the sites SLE summary. Return (all_records, retrieved, failed)."""
         all_insight_data: list[dict[str, Any]] = []  # Accumulate every metric's records.
         metrics_retrieved = 0  # Running count of successful retrievals.
         metrics_failed = 0  # Running count of failed or empty retrievals.
@@ -399,10 +399,10 @@ class OrgExportUtils:
     def _insight_export_normalized(all_insight_data: list[dict[str, Any]], org_id: str, metrics_retrieved: int) -> None:
         """Normalize the insight rows and export them to the four normalized CSVs plus the legacy combined file."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataProcessingUtils + DataExporter helpers.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("! Parsing metrics into normalized data structures...")  # Tell the user normalization is starting.
         buckets = OrgExportUtils._insight_normalize_records(all_insight_data, org_id)  # Build the 4 output buckets.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("! Exporting to normalized CSV files...")  # Tell the user the writes are starting.
         outputs = [  # Drive the four normalized writes from one table to avoid repeated blocks.
             (buckets["summary"], "OrgMetricsSummary.csv", "summary"),  # Summary file + its label.
@@ -413,9 +413,9 @@ class OrgExportUtils:
         for rows, filename, label in outputs:  # Write each normalized bucket to its CSV.
             processed = DataProcessingUtils.escape_multiline(rows)  # type: ignore[no-untyped-call]  # Escape newlines.
             mh.DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]  # Write it.
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info("  !? %d %s records -> %s", len(processed), label, filename)  # Report row count.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info(
             "\n! Successfully exported %d organization insight metrics to 4 normalized CSV files",
             metrics_retrieved,
@@ -434,7 +434,7 @@ class OrgExportUtils:
         processed_combined = DataProcessingUtils.flatten_nested_fields(all_insight_data)  # Flatten for combined.
         processed_combined = DataProcessingUtils.escape_multiline(processed_combined)  # type: ignore[no-untyped-call]
         mh.DataExporter.write_with_format_selection(processed_combined, "OrgInsightMetrics_Legacy.csv")  # type: ignore[no-untyped-call]
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("  !? Legacy format maintained -> OrgInsightMetrics_Legacy.csv")  # Confirm the file write.
 
     @staticmethod
@@ -454,17 +454,17 @@ class OrgExportUtils:
 
     @staticmethod
     def _insight_setup_or_empty() -> list[str] | None:
-        """Refresh and load org-scope metrics; write empty outputs and return None when none exist."""
+        """Refresh and load org-scope metrics. Write empty outputs and return None when none exist."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of InsightMetricsUtils helper.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("Export Organization Insight Metrics (Normalized):")  # Header for the operation.
         logging.info("Starting export of organization insight metrics with normalized structure...")  # Log start.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("! Refreshing available insight metrics from Mist API...")  # Tell the user about the refresh.
         mh.InsightMetricsUtils.export_const_insight_metrics()  # Refresh ConstInsightMetrics.csv before scope filtering.
         org_metrics = mh.InsightMetricsUtils.get_by_scope("org")  # Load the metrics that support org scope.
         if not org_metrics:  # No org-scope metrics are available.
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("! No metrics found for org scope. Check ConstInsightMetrics.csv file.")  # Tell the user.
             logging.error("No org-scope metrics found in const insight metrics")  # Log the error condition.
             OrgExportUtils._insight_write_empty_outputs(include_legacy=False)  # Write the 4 empty normalized files.
@@ -474,7 +474,7 @@ class OrgExportUtils:
     @staticmethod
     def _insight_report_totals(metrics_retrieved: int, metrics_failed: int) -> None:
         """Print and log the retrieval totals for the insight-metrics run."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info(
             "! Metric retrieval completed: %d successful, %d failed", metrics_retrieved, metrics_failed
         )  # Tell user.
@@ -490,11 +490,11 @@ class OrgExportUtils:
         if org_metrics is None:  # Setup wrote empty outputs and signaled there is nothing to export.
             return  # Abort the export.
         org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org to query.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info(
             "! Retrieving %d different organization insight metrics...", len(org_metrics)
         )  # Tell the user the count.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("! Processing each metric individually with proper error handling...")  # Explain per-metric.
         parameterized_metrics = OrgExportUtils._load_parameterized_metric_choices()  # Metrics needing a 'metric' param.
         try:  # Guard the whole fetch-and-export so a failure still leaves consistent empty outputs.
@@ -505,12 +505,12 @@ class OrgExportUtils:
             if all_insight_data:  # At least one metric returned data.
                 OrgExportUtils._insight_export_normalized(all_insight_data, org_id, metrics_retrieved)  # Export to CSV.
             else:  # Every metric failed or returned empty.
-                # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+                # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
                 logger.warning("! 0 organization insight metrics exported (no data available)")  # Tell the user zero.
                 logging.warning("No org insight data available - all metrics failed or returned empty")  # Warn no data.
                 OrgExportUtils._insight_write_empty_outputs(include_legacy=True)  # Write the 5 empty files.
         except Exception as exception:  # The export failed unexpectedly.
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.error("! Error exporting organization insight metrics: %s", exception)  # Tell the user.
             logging.error("Failed to export org insight metrics: %s", exception)  # Log the failure with context.
             OrgExportUtils._insight_write_empty_outputs(include_legacy=True)  # Write the 5 empty files on error.
@@ -719,7 +719,7 @@ class OrgExportUtils:
             data = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested fields.
             data = DataProcessingUtils.escape_multiline(data)  # type: ignore[no-untyped-call]
             mh.DataExporter.write_with_format_selection(data, "OrgAuditLogs.csv")  # type: ignore[no-untyped-call]
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info("! %d audit logs exported to OrgAuditLogs.csv", len(data))  # Tell the user.
             logging.info("Completed audit logs export and wrote results to OrgAuditLogs.csv.")  # Log completion.
             logging.info("Menu #22: Audit logs export completed - %s records", len(data))  # Log the count.
@@ -758,7 +758,7 @@ class OrgExportUtils:
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ConfigUtils + apisession + helpers.
         current_org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
         if not current_org_id:  # No org.
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("! No organization selected. Exiting.")  # Tell the user.
             return  # Abort.
         mh.E911BSSIDReportGenerator.execute(  # Run the report.

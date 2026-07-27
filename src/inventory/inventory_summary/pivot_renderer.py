@@ -1,6 +1,6 @@
 """Renders the version-per-model pivot table and exports it via DataExporter."""  # File docstring
 
-from __future__ import annotations  # Defer annotation evaluation; cheap forward refs
+from __future__ import annotations  # Defer annotation evaluation. Cheap forward refs
 
 import logging  # Structured action logging
 
@@ -46,7 +46,7 @@ class PivotRenderer:  # Decomposed replacement for the original `_display_pivot_
         for row in rows:  # Fold every input row into the (model, version) cell
             pivot[row["model"]][row["version"]] = row.get(
                 "count", 0
-            )  # Last write wins; input data has no duplicate cells
+            )  # Last write wins. Input data has no duplicate cells
 
     @staticmethod
     def _compute_pivot(  # Computes axes + nested counts

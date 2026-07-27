@@ -5,13 +5,13 @@ module scope in MistHelper.py, and re-lands it as a class-level
 attribute on `FastModeDevicesPerThread` per FR-005 / FR-015. The sole
 MistHelper callsite (batch-size sizing in `_pool_configure` at line
 ~7392) is rewritten in the same PR to reference the extracted class
-attribute; no wrapper shim remains in MistHelper.py after this
+attribute. No wrapper shim remains in MistHelper.py after this
 extraction.
 
 The value is the number of devices each worker thread handles in
 fast-mode workflows -- multiplied by `max_threads` to yield the effective
 batch size. Source of truth remains the `FAST_MODE_DEVICES_PER_THREAD`
-environment variable (default 10); the class-body evaluation preserves
+environment variable (default 10). The class-body evaluation preserves
 the original `os.getenv` semantics.
 """
 

@@ -17,7 +17,7 @@ import json  # WHY: parse Mist API JSON responses and serialize tracking state
 import logging  # WHY: FR-007 info-before / debug-after logging pattern used throughout module
 import os  # WHY: OS-safe path operations (Constitution VI portable file paths)
 import time  # WHY: unix timestamps for schedule offsets and filename discriminators
-from collections.abc import Callable  # WHY: PEP 585 preferred; ruff UP035 forbids typing.Callable
+from collections.abc import Callable  # WHY: PEP 585 preferred. Ruff UP035 forbids typing.Callable
 from dataclasses import dataclass  # WHY: frozen dataclass replaces 10-param __init__ (FR-004 / Constitution I)
 from datetime import UTC, datetime  # WHY: UTC-anchored timestamps in tracking/results filenames
 from typing import Any  # WHY: type-erase mistapi session for both prod object and MagicMock test doubles
@@ -37,8 +37,8 @@ class BulkAPUpgraderConfig:  # WHY: class definition (see docstring)
     # ------------------------------------------------------------------
     # Required session inputs (no defaults so omission raises TypeError)
     # ------------------------------------------------------------------
-    org_id: str  # WHY: Mist organization UUID this run targets; required by every downstream API call
-    apisession: Any  # WHY: authenticated mistapi session used by every remote call; type-erased for test doubles
+    org_id: str  # WHY: Mist organization UUID this run targets. Required by every downstream API call
+    apisession: Any  # WHY: authenticated mistapi session used by every remote call. Type-erased for test doubles
 
     # ------------------------------------------------------------------
     # Optional behavior flags
@@ -152,12 +152,12 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         """
         logging.info("Starting advanced bulk AP firmware upgrade for org_id=%s", self.org_id)  # WHY: info-before FR-007
         try:
-            self._announce_start()  # WHY: user-facing banner + dry-run notice; extracted so execute stays flat
-            if not self._run_discovery_phase():  # WHY: steps 1-4 populate sites/APs/firmware; may early-exit
+            self._announce_start()  # WHY: user-facing banner + dry-run notice. Extracted so execute stays flat
+            if not self._run_discovery_phase():  # WHY: steps 1-4 populate sites/APs/firmware. May early-exit
                 return  # WHY: early exit from branch
-            if not self._run_planning_phase():  # WHY: steps 5-7 build plan + confirm; may early-exit
+            if not self._run_planning_phase():  # WHY: steps 5-7 build plan + confirm. May early-exit
                 return  # WHY: early exit from branch
-            self._run_execution_phase()  # WHY: steps 8-11 mutate Mist + persist results; terminal
+            self._run_execution_phase()  # WHY: steps 8-11 mutate Mist + persist results. Terminal
         except KeyboardInterrupt:  # WHY: recover from failure
             print("\n Operation cancelled by user.")  # WHY: preserved verbatim per FR-017 observable-equivalence
             logging.info("Bulk AP firmware upgrade cancelled by user interrupt")  # WHY: audit trail for interrupt
@@ -386,7 +386,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         print("\n  Enter site numbers (comma-separated, e.g., 1,3,5):")  # WHY: prompt guidance
 
     def _read_site_indices(self, max_count: int) -> list[int]:
-        """Prompt for site selection; return parsed 0-based indices or empty on abort."""
+        """Prompt for site selection. Return parsed 0-based indices or empty on abort."""
         try:  # WHY: EOF/Ctrl-C during prompt should yield empty selection
             selection = self._input_fn("Selection: ").strip()  # WHY: capture raw user text
         except (EOFError, KeyboardInterrupt):  # WHY: recover from terminal interrupt
@@ -401,7 +401,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         return indices  # WHY: surface computed result
 
     def _absorb_index_token(self, part: str, max_count: int, indices: list[int]) -> None:
-        """Append token's indices to accumulator; silently drop malformed tokens."""
+        """Append token's indices to accumulator. Silently drop malformed tokens."""
         if "-" in part:  # WHY: range token like "3-7" requires range parsing
             self._absorb_range_token(part, max_count, indices)  # WHY: delegate range branch
             return  # WHY: single-branch dispatch keeps nesting shallow
@@ -468,7 +468,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
             site_id,
             type="ap",
         )
-        # WHY: get_all handles pagination transparently; returns list or None on empty
+        # WHY: get_all handles pagination transparently. Returns list or None on empty
         site_aps = mistapi.get_all(response=response, mist_session=self.apisession)  # WHY: capture intermediate value
         return site_aps or []  # WHY: normalise None to [] so callers can iterate safely
 
@@ -672,7 +672,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         if models:  # WHY: multi-model form takes precedence
             return list(models)  # WHY: copy to isolate caller state
         model = version_info.get("model")  # WHY: fallback single-model field
-        return [model] if model else []  # WHY: wrap single into list; empty for missing
+        return [model] if model else []  # WHY: wrap single into list. Empty for missing
 
     # =========================================================================
     # STEP 5: FIRMWARE VERSION SELECTION
@@ -771,13 +771,13 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
     def _dedupe_versions_by_number(self, raw_versions: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Return one entry per unique version-number string (first sighting wins)."""
         version_dict: dict[str, dict[str, Any]] = {}  # WHY: dedup by version-number string
-        for entry in raw_versions:  # WHY: single pass; first entry per number wins
+        for entry in raw_versions:  # WHY: single pass. First entry per number wins
             num = entry.get("version", "Unknown")  # WHY: version string is the dedup key
             version_dict.setdefault(num, entry)  # WHY: preserve API-order priority
         return list(version_dict.values())  # WHY: surface computed result
 
     def _sort_versions_desc(self, versions: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Sort versions descending by numeric dotted tuple; fall back to string sort."""
+        """Sort versions descending by numeric dotted tuple. Fall back to string sort."""
         try:  # WHY: attempt numeric sort first for correct dotted-version ordering
             versions.sort(key=lambda x: tuple(map(int, x.get("version", "0").split("."))), reverse=True)
         except ValueError:  # WHY: non-numeric segment triggers string fallback
@@ -813,11 +813,11 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         devices: list[dict[str, Any]],
         versions: list[dict[str, Any]],
     ) -> bool:
-        """Prompt for version index; loop until user selects or skips."""
+        """Prompt for version index. Loop until user selects or skips."""
         prompt = f"Select version for {model} (0-{len(versions) - 1}, 's' to skip): "  # WHY: reuse prompt text
-        while True:  # WHY: retry on invalid input; explicit exits inside branches
+        while True:  # WHY: retry on invalid input. Explicit exits inside branches
             outcome = self._read_version_choice(model, devices, versions, prompt)  # WHY: single-turn resolver
-            if outcome is not None:  # WHY: helper signals completion via bool; None means "retry"
+            if outcome is not None:  # WHY: helper signals completion via bool. None means "retry"
                 return outcome  # WHY: propagate accept/skip decision
 
     def _read_version_choice(
@@ -827,7 +827,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         versions: list[dict[str, Any]],
         prompt: str,
     ) -> bool | None:
-        """Resolve one prompt turn; None => retry loop, bool => terminate loop."""
+        """Resolve one prompt turn. None => retry loop, bool => terminate loop."""
         try:  # WHY: consolidate parse + interrupt handling in one turn
             user_input = self._input_fn(prompt).strip().lower()  # WHY: normalize whitespace + case
         except KeyboardInterrupt:  # WHY: Ctrl-C during prompt exits selection as "no"
@@ -835,7 +835,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         if user_input == "s":  # WHY: explicit skip token
             print(f"!  Skipping firmware upgrade for {model}")  # WHY: user-facing feedback
             return False  # WHY: skip decision terminates loop
-        try:  # WHY: parse index; ValueError triggers retry
+        try:  # WHY: parse index. ValueError triggers retry
             idx = int(user_input)  # WHY: convert to 0-based index
         except ValueError:  # WHY: non-integer -> retry with feedback
             print(" Invalid input.")  # WHY: user-facing feedback
@@ -910,7 +910,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         logging.debug("record_selection_in_plan committed model=%s", model)  # WHY: FR-007 debug-after
 
     def _validate_upgrade_plan(self) -> bool:
-        """Validate and display upgrade plan summary; prompt only when multi-version."""
+        """Validate and display upgrade plan summary. Prompt only when multi-version."""
         self._print_plan_summary()  # WHY: PCPP present the plan
         if len({p["version"] for p in self.upgrade_plan.values()}) <= 1:  # WHY: single-version needs no prompt
             return True  # WHY: uniform upgrade proceeds without extra confirmation
@@ -929,7 +929,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
             print(f"   Skipped: {self.skipped_already_at_target} devices already at target version")  # WHY: FR-017
 
     def _prompt_multi_version_confirmation(self) -> bool:
-        """Ask user to confirm multi-version upgrade; return True on yes, False otherwise."""
+        """Ask user to confirm multi-version upgrade. Return True on yes, False otherwise."""
         confirm = self._input_fn("\n  Proceed with multi-version upgrade? (y/n): ").strip().lower() or "y"
         return confirm in ("y", "yes")  # WHY: single expression evaluates confirmation
 
@@ -1016,14 +1016,14 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         self.upgrade_config = {  # WHY: single write establishes the mutable config dict for later phases
             "download_strategy": download_strategy,  # WHY: consumed by _build_upgrade_body when POSTing
             "reboot_strategy": reboot_strategy,  # WHY: consumed by _build_upgrade_body when POSTing
-            "force": False,  # WHY: default off; user can flip via _configure_force_option
-            "enable_p2p": True,  # WHY: default on; user can adjust via _configure_p2p
+            "force": False,  # WHY: default off. User can flip via _configure_force_option
+            "enable_p2p": True,  # WHY: default on. User can adjust via _configure_p2p
             "max_failure_percentage": 7,  # WHY: pre-refactor default retained for FR-017 parity
             "start_time": None,  # WHY: None means "start immediately" per Mist API semantics
             "canary_phases": [1, 2, 4, 8, 16, 32, 64, 100],  # WHY: geometric phase ramp used for canary strategy
             "p2p_cluster_size": 5,  # WHY: default cluster size for peer-to-peer downloads
             "p2p_parallelism": 100,  # WHY: default parallelism percentage for P2P transfer
-            "reboot": True,  # WHY: default on; user can override via reboot toggle
+            "reboot": True,  # WHY: default on. User can override via reboot toggle
         }
         # WHY: FR-017 verbatim final-strategy banner preserved from pre-refactor UI
         print(f"\n! Final strategy: Download={download_strategy.upper()}," f" Reboot={reboot_strategy.upper()}")
@@ -1306,7 +1306,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
             print(f"   {model}: {len(plan['devices'])} devices" f" firmware {plan['version']}")  # WHY: user-facing f...
 
     def _get_upgrade_confirmation(self, total: int) -> bool:
-        """Prompt user for UPGRADE confirmation token; return True on match."""
+        """Prompt user for UPGRADE confirmation token. Return True on match."""
         sites_count = len({d.get("_site_id") for p in self.upgrade_plan.values() for d in p["devices"]})  # WHY: unique
         self._print_confirmation_prompt(total, sites_count)  # WHY: single- vs multi-site header
         try:  # WHY: consolidate Ctrl-C / EOF handling around one prompt
@@ -1349,7 +1349,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
             self._execute_site_upgrade(idx, len(sites_with_upgrades), site_id, site_data, mistapi)  # WHY: per-site call
 
     def _prepare_sites_with_upgrades(self) -> dict[str, dict[str, Any]]:
-        """Return only sites that still have devices to upgrade; log any skipped."""
+        """Return only sites that still have devices to upgrade. Log any skipped."""
         devices_by_site = self._organize_devices_by_site()  # WHY: group current plan by site
         sites_with_upgrades = {sid: data for sid, data in devices_by_site.items() if data["devices"]}  # WHY: non-empty
         skipped = len(devices_by_site) - len(sites_with_upgrades)  # WHY: count sites filtered out
@@ -1531,7 +1531,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         resp = mistapi.api.v1.sites.devices.upgradeSiteDevices(self.apisession, site_id, body=body)  # WHY: capture i...
         # WHY: capture upgrade_id when API returns dict payload so status-check step can poll it
         if hasattr(resp, "data") and resp.data and isinstance(resp.data, dict):  # WHY: guard on condition
-            if "upgrade_id" in resp.data:  # WHY: some responses omit id (partial success); guard first
+            if "upgrade_id" in resp.data:  # WHY: some responses omit id (partial success). Guard first
                 self.upgrade_ids.append(resp.data["upgrade_id"])  # WHY: track for post-upgrade status
         self.successful_upgrades += len(devices)  # WHY: increment aggregate counter for summary
         # WHY: user-visible progress line mirrors pre-refactor format for FR-017 equivalence
@@ -1575,7 +1575,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
 
     def _augment_body_p2p(self, body: dict[str, Any]) -> None:  # WHY: helper definition (see docstring)
         """Add p2p_cluster_size when P2P is enabled."""
-        # WHY: p2p_cluster_size only makes sense when enable_p2p is True; guard against noise
+        # WHY: p2p_cluster_size only makes sense when enable_p2p is True. Guard against noise
         if self.upgrade_config["enable_p2p"]:  # WHY: guard on condition
             body["p2p_cluster_size"] = self.upgrade_config["p2p_cluster_size"]  # WHY: capture intermediate value
 
@@ -1589,17 +1589,17 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
 
     def _augment_body_rrm(self, body: dict[str, Any]) -> None:  # WHY: helper definition (see docstring)
         """Add rrm_* tunables when reboot strategy is rrm."""
-        # WHY: RRM fields only accepted by API when reboot_strategy == "rrm"; skip otherwise
+        # WHY: RRM fields only accepted by API when reboot_strategy == "rrm". Skip otherwise
         if self.upgrade_config["reboot_strategy"] != "rrm":  # WHY: guard on condition
             return  # WHY: early exit from branch
-        # WHY: hard-coded key list mirrors pre-refactor logic; each field is optional per key
+        # WHY: hard-coded key list mirrors pre-refactor logic. Each field is optional per key
         for key in ("rrm_node_order", "rrm_first_batch_percentage", "rrm_max_batch_percentage"):  # WHY: iterate coll...
             if key in self.upgrade_config:  # WHY: only copy keys the user actually configured
                 body[key] = self.upgrade_config[key]  # WHY: capture intermediate value
 
     def _augment_body_start_time(self, body: dict[str, Any]) -> None:  # WHY: helper definition (see docstring)
         """Add start_time when user configured a scheduled upgrade window."""
-        # WHY: start_time absent for immediate upgrades; only inject when explicitly set
+        # WHY: start_time absent for immediate upgrades. Only inject when explicitly set
         if self.upgrade_config.get("start_time"):  # WHY: guard on condition
             body["start_time"] = self.upgrade_config["start_time"]  # WHY: capture intermediate value
 
@@ -1655,13 +1655,13 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
 
     def _resolve_upgrade_id_column(self) -> str:  # WHY: helper definition (see docstring)
         """Pick the value for the Upgrade ID CSV column (real id, dry-run sentinel, or N/A)."""
-        # WHY: pull last upgrade id when available; matches pre-refactor selection semantics
+        # WHY: pull last upgrade id when available. Matches pre-refactor selection semantics
         if self.upgrade_ids:  # WHY: guard on condition
             return str(self.upgrade_ids[-1])  # WHY: surface computed result
-        # WHY: dry-run runs never mutate; label sentinel distinguishes them from real N/A
+        # WHY: dry-run runs never mutate. Label sentinel distinguishes them from real N/A
         if self.dry_run:  # WHY: guard on condition
             return "N/A (DRY-RUN)"  # WHY: surface computed result
-        return "N/A"  # WHY: no upgrade_id returned and not a dry-run; report unknown
+        return "N/A"  # WHY: no upgrade_id returned and not a dry-run. Report unknown
 
     def _get_device_target_version(self, device: dict[str, Any]) -> str:  # WHY: helper definition (see docstring)
         """Get target version for a device."""
@@ -1680,7 +1680,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         logging.info("Fetching AP model families from Mist const/device_models")  # WHY: FR-007 info-before
         print("   Fetching AP model definitions from Mist API...")  # WHY: user-visible progress marker
         raw_models = self._request_device_models()  # WHY: Prepare — isolate the API call for error handling
-        if raw_models is None:  # WHY: None sentinel signals request failure; empty list means real empty payload
+        if raw_models is None:  # WHY: None sentinel signals request failure. Empty list means real empty payload
             return {}  # WHY: surface computed result
         families = self._group_models_by_ap_type(raw_models)  # WHY: Compute — pure grouping over raw records
         logging.debug(
@@ -1713,7 +1713,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         return {ap_type: sorted(models) for ap_type, models in sorted(ap_type_to_models.items())}  # WHY: deterministic
 
     def _add_ap_model_to_group(self, model_info: Any, groups: dict[str, list[str]]) -> None:
-        """Append AP model_info's model name to its ap_type bucket; skip non-AP or malformed."""
+        """Append AP model_info's model name to its ap_type bucket. Skip non-AP or malformed."""
         if not isinstance(model_info, dict):  # WHY: skip unexpected payload shapes
             return  # WHY: defensive guard
         if model_info.get("type") != "ap":  # WHY: only APs matter to this workflow
@@ -1782,7 +1782,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         """Prepare phase: ask whether to add versions for other models."""
         try:
             add_more = self._input_fn("\n  Add firmware versions for other AP models? (y/N): ").strip().lower()
-            return add_more in ("y", "yes")  # WHY: default answer is no; only explicit y/yes proceeds
+            return add_more in ("y", "yes")  # WHY: default answer is no. Only explicit y/yes proceeds
         except (EOFError, KeyboardInterrupt):  # WHY: treat Ctrl+C/EOF as decline, matching pre-refactor behavior
             return False  # WHY: surface computed result
 
@@ -1823,7 +1823,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         family_list: list[tuple[str, list[str]]],
         selected: dict[str, list[str]],
     ) -> None:
-        """Append family for one integer token; silently drop malformed/out-of-range tokens."""
+        """Append family for one integer token. Silently drop malformed/out-of-range tokens."""
         if not part.isdigit():  # WHY: only accept pure integer indices
             return  # WHY: match legacy silent-drop behavior
         idx = int(part) - 1  # WHY: convert 1-based UI index to 0-based
@@ -2002,7 +2002,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         print("   Configure when auto-upgrades should occur")  # WHY: one-line intent statement
 
     def _prompt_schedule_day(self) -> str:
-        """Prepare phase: prompt operator to pick a day-of-week; default 'any'."""
+        """Prepare phase: prompt operator to pick a day-of-week. Default 'any'."""
         days = ["any", "mon", "tue", "wed", "thu", "fri", "sat", "sun"]  # WHY: 8 slots, index 0 = any
         self._print_schedule_day_menu(days)  # WHY: extract menu rendering
         try:  # WHY: consolidate parse + interrupt handling
@@ -2019,20 +2019,20 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
             print(f"   [{idx}] {day}")  # WHY: render each real day option
 
     def _resolve_schedule_day(self, day_choice: str, days: list[str]) -> str:
-        """Map digit input to canonical day string; anything else -> 'any'."""
+        """Map digit input to canonical day string. Anything else -> 'any'."""
         if day_choice.isdigit() and 0 <= int(day_choice) < len(days):  # WHY: bounds check before index
             return days[int(day_choice)]  # WHY: numeric pick maps to canonical day string
         return "any"  # WHY: invalid input silently falls back to default
 
     def _prompt_schedule_time(self) -> str:  # WHY: helper definition (see docstring)
-        """Prepare phase: prompt operator to pick HH:MM or 'any'; default 'any'."""
+        """Prepare phase: prompt operator to pick HH:MM or 'any'. Default 'any'."""
         print("\n  Time of day (24-hour format HH:MM, or 'any'):")  # WHY: input format guidance
         print("   Examples: 02:00 (2 AM), 14:00 (2 PM), any")  # WHY: concrete examples reduce operator error
         try:
             time_input = self._input_fn("   Enter time (default=any): ").strip() or "any"  # WHY: default any
             if time_input.lower() == "any":  # WHY: explicit 'any' means no schedule constraint
                 return "any"  # WHY: surface computed result
-            if ":" in time_input:  # WHY: minimal HH:MM shape check; API validates the exact format
+            if ":" in time_input:  # WHY: minimal HH:MM shape check. API validates the exact format
                 return time_input  # WHY: surface computed result
             return "any"  # WHY: fallback for malformed strings without a colon
         except (EOFError, KeyboardInterrupt):  # WHY: Ctrl+C/EOF matches the pre-refactor 'any' default
@@ -2235,7 +2235,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         )
 
     def _write_results_csv(self, filename: str) -> bool:  # WHY: helper definition (see docstring)
-        """Persist self.results to CSV; return True on success."""
+        """Persist self.results to CSV. Return True on success."""
         try:
             # WHY: newline="" required by csv module to avoid double line endings on Windows
             with open(filename, "w", newline="", encoding="utf-8") as fp:  # WHY: scoped resource

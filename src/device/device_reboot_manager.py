@@ -3,7 +3,7 @@
 Extracted from MistHelper.py during initiative 1013 (Cat B, position 41).
 Manages device reboot operations with comprehensive safety checks and audit
 logging. Supports reboot by gateway template list (bulk operations) via
-``GatewayTemplateRebootList.CSV``; logs results to
+``GatewayTemplateRebootList.CSV``. Logs results to
 ``GatewayTemplateRebootResults.CSV``. All operations require explicit user
 confirmation and log results for auditing.
 

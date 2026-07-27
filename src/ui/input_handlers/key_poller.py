@@ -25,7 +25,7 @@ _WINDOWS_SPECIAL_KEYS: dict[bytes, str] = {
 }
 
 # Dispatch table for Unix CSI sequences (ESC [ X ...).
-# Only the simple single-letter terminators are mapped here; the "5~" / "6~"
+# Only the simple single-letter terminators are mapped here. The "5~" / "6~"
 # page sequences are handled inline in _parse_unix_csi because they require
 # inspecting the third byte.
 _UNIX_CSI_LETTERS: dict[str, str] = {

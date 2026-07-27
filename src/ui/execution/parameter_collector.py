@@ -20,7 +20,7 @@ class ParameterCollector:  # WHY: extracted from MistHelperTUI._submit_parameter
         self._executor = executor  # Used to run when collection is done
 
     def submit(self) -> None:  # WHY: user pressed Enter on the parameter prompt
-        """Submit the current parameter value; advance index or run the call."""
+        """Submit the current parameter value. Advance index or run the call."""
         tui = self._tui  # Local alias
         if tui.current_param_index >= len(tui.param_list):  # Guard: nothing pending
             return  # WHY: idempotent no-op when collection already complete
@@ -42,7 +42,7 @@ class ParameterCollector:  # WHY: extracted from MistHelperTUI._submit_parameter
         return self._capture_nonempty(param_info, value)  # Non-empty value branch
 
     def _capture_empty(self, param_info: dict[str, Any]) -> bool:  # WHY: required->error, optional->default/None
-        """Handle empty input: required -> error; optional -> default/None."""
+        """Handle empty input: required -> error. Optional -> default/None."""
         tui = self._tui  # Local alias
         param_name = param_info["name"]  # Used in messages
         if not param_info["has_default"]:  # Required parameter must have a value

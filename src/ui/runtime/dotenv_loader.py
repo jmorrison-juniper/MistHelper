@@ -17,7 +17,7 @@ class DotenvLoader:  # WHY: extracted from MistHelperTUI._load_dotenv_only (was 
         self._tui = tui  # Back-reference for debug flag
 
     def load(self) -> dict[str, str]:  # WHY: read .env once at startup
-        """Return ``{key: value}`` parsed from ``.env``; empty dict on failure."""
+        """Return ``{key: value}`` parsed from ``.env``. Empty dict on failure."""
         logging.info("TUI: loading .env values")  # Action log before read
         if not os.path.exists(DOTENV_FILENAME):  # No file -> empty result
             return {}  # WHY: absent .env is not an error, just an empty result

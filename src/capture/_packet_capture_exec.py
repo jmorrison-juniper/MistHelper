@@ -49,7 +49,7 @@ class PacketCaptureExec:
     def __getattr__(self, name: str) -> Any:
         """Delegate unknown attributes to the wrapped manager."""
         mm = self.__dict__.get("_mm")  # WHY: guard against half-initialized instances
-        if mm is None:  # WHY: only trips during broken init; avoid infinite recursion
+        if mm is None:  # WHY: only trips during broken init. Avoid infinite recursion
             raise AttributeError(name)  # WHY: signal missing attribute cleanly to callers
         return getattr(mm, name)  # WHY: transparent proxy to the parent manager
 
@@ -223,7 +223,7 @@ class PacketCaptureExec:
         """Calculate sleep time before next loop iteration."""
         if wait_time > 0:  # WHY: honor an explicit wait first
             return wait_time  # WHY: user asked to wait
-        if loop_duration < 30:  # WHY: fast iteration; nudge to 30s cadence
+        if loop_duration < 30:  # WHY: fast iteration. Nudge to 30s cadence
             return 30 - loop_duration  # WHY: brings total iteration >= 30s
         return 10  # WHY: default backoff for slow iterations
 
@@ -357,7 +357,7 @@ class PacketCaptureExec:
             logging.exception("Exception in _monitor_capture_stream: %s", error)  # WHY: full traceback
 
     def _subscribe_channel(self, channel: str) -> bool:
-        """Ensure WebSocket manager exists, connect, and subscribe; return confirmation."""
+        """Ensure WebSocket manager exists, connect, and subscribe. Return confirmation."""
         if not self.websocket_manager:  # WHY: lazy WebSocket creation
             self._mm.websocket_manager = _pc()._get_websocket_manager()(self.mist_session)  # WHY: instantiate on parent
         if not self.websocket_manager.connected:  # WHY: reuse existing connection when possible
@@ -385,7 +385,7 @@ class PacketCaptureExec:
             return  # WHY: nothing to read
         state = {"count": 0, "start": _pc().time.time()}  # WHY: mutable state shared with helper
         try:  # WHY: catch Ctrl-C to print summary
-            while True:  # WHY: infinite drain; helper returns when capture ends
+            while True:  # WHY: infinite drain. Helper returns when capture ends
                 if self._drain_stream_batch(channel, capture_id, state):  # WHY: batch drain returns True on end
                     return  # WHY: capture ended cleanly
                 _pc().time.sleep(0.1)  # WHY: gentle CPU yield between batches
@@ -394,7 +394,7 @@ class PacketCaptureExec:
             print(f"  Total packets received: {state['count']}")  # WHY: expose summary
 
     def _drain_stream_batch(self, channel: str, capture_id: str, state: dict[str, Any]) -> bool:
-        """Drain one batch of WebSocket messages; return True when the capture end signal is seen."""
+        """Drain one batch of WebSocket messages. Return True when the capture end signal is seen."""
         with self.websocket_manager.results_lock:  # WHY: consistent read of shared results dict
             messages = list(self.websocket_manager.command_results.values())  # WHY: snapshot values
         for msg in messages:  # WHY: iterate snapshot
@@ -405,7 +405,7 @@ class PacketCaptureExec:
             if msg.get("data", {}).get("pcap_dict") is None:  # WHY: Mist end-of-capture sentinel
                 print(f"\n* Capture completed: {state['count']} packets received")  # WHY: user summary
                 return True  # WHY: signal caller to exit outer loop
-        return False  # WHY: batch drained; keep looping
+        return False  # WHY: batch drained. Keep looping
 
     @staticmethod
     def _msg_matches(msg: dict[str, Any], channel: str, capture_id: str) -> bool:

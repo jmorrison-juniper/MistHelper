@@ -20,7 +20,7 @@ from src.time.time_utils import TimeUtils  # WHY: 1014 P6 direct import (FR-005)
 
 
 class SelfExportUtils:  # Self/account exporters.
-    # pylint: disable=too-few-public-methods  # WHY: static-method utility class; grouping by domain is the point.
+    # pylint: disable=too-few-public-methods  # WHY: static-method utility class. Grouping by domain is the point.
     """Authenticated self/account export utilities.
 
     Exports data scoped to the currently authenticated admin account rather

@@ -213,7 +213,7 @@ class _SsidTemplatePhase2Cluster(_ClusterBase):
     def phase2_site_variables(self) -> None:  # WHY: user-facing Phase 2 entry point
         """Phase 2 orchestrator - compute variable plan, write to sites."""
         logging.warning("=== Phase 2: Write Site Variables ===")  # WHY: banner marks phase boundary
-        # WHY (#886 Phase 2): module already imports `logging` at module top; local re-import removed.
+        # WHY (#886 Phase 2): module already imports `logging` at module top. Local re-import removed.
 
         logging.info("Phase 2: Starting site variable configuration")  # WHY: audit trail
         if not self._load_cache_or_bail():  # WHY: cache preamble aborts on missing Phase 1

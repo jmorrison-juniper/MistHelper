@@ -29,7 +29,7 @@ class WanOverrideWalker:
                 " MIST_WAN_TARGET_PORTS not configured in .env - skipping port override analysis"
             )
             logging.warning("MIST_WAN_TARGET_PORTS environment variable not set")  # operator hint in logs
-            return  # No work possible without target ports; abort the walker
+            return  # No work possible without target ports. Abort the walker
         WanOverrideWalker._run_pipeline(fast=fast, target_ports=target_ports)  # Delegate the full pipeline
 
     @staticmethod
@@ -46,7 +46,7 @@ class WanOverrideWalker:
         )
         if not devices_with_overrides:  # Fleet fully compliant: emit empty CSV and exit
             OverrideReportWriter.write_empty()  # Header-only CSV plus the legacy compliance console message
-            return  # Done; no live API calls needed
+            return  # Done. No live API calls needed
         WanOverrideWalker._run_live_passes(  # Delegate 2nd/3rd passes + final write to keep this fn short
             fast=fast,
             target_ports=target_ports,
@@ -191,7 +191,7 @@ class WanOverrideWalker:
         overridden_ports = OverrideClassifier.classify(row, target_ports)  # Decide which ports are overridden
         if not overridden_ports:  # Skip devices with zero overrides to save API calls in the second pass
             return None  # Caller treats None as "no entry to add"
-        _, site_id, _ = identifiers  # Only site_id is needed here; the rest flow through the builder
+        _, site_id, _ = identifiers  # Only site_id is needed here. The rest flow through the builder
         template_id, template_name = WanOverrideWalker._resolve_template_name(  # Resolve template metadata
             site_id, site_to_template, template_lookup
         )

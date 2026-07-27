@@ -5,7 +5,7 @@ Owns Menu #167 orchestration originally defined as the top-level
 dependency-wiring that used to live in the MistHelper delegation wrapper.
 
 The heavy implementation continues to live in
-`src/gateway/wan_probe_device_override_manager.py`; this refactor module
+`src/gateway/wan_probe_device_override_manager.py`. This refactor module
 is the thin orchestration seam that wires MistHelper globals into that
 implementation. Wiring targets (apisession, ConfigUtils, CacheUtils,
 OrgSiteExporter, GatewayExportUtils, FilePathUtils, InputUtils,

@@ -2,7 +2,7 @@
 
 This is the legacy fall-out-of-Live ``input()``-prompt path used outside the
 in-TUI prompting flow. Decomposed here so every helper is CC <= 5 and every
-function is <= 25 LoC; state is bundled in frozen slotted dataclasses and
+function is <= 25 LoC. State is bundled in frozen slotted dataclasses and
 result-preview branches are driven by a table-of-handlers dispatch.
 """
 
@@ -129,7 +129,7 @@ class ItemExecutor:  # WHY: extracted from MistHelperTUI to own the synchronous 
         logging.exception(_LOG_FAIL, func_name, error)  # WHY: include traceback for triage
 
     def _validated_selection(self) -> dict[str, Any] | None:  # WHY: bounds + type guard
-        """Return the selected item iff it is a function; otherwise ``None``."""
+        """Return the selected item iff it is a function. Otherwise ``None``."""
         tui = self._tui  # WHY: local alias
         if not 0 <= tui.current_selection < len(tui.current_items):  # WHY: bounds check
             return None  # WHY: index out of range, not runnable
@@ -141,7 +141,7 @@ class ItemExecutor:  # WHY: extracted from MistHelperTUI to own the synchronous 
     def _restore_terminal_for_prompt(self) -> None:  # WHY: switch stdin to cooked mode on Unix
         """Switch the Unix terminal back to cooked mode for ``input()``."""
         tui = self._tui  # WHY: local alias
-        if tui.IS_WINDOWS:  # WHY: Windows uses msvcrt; nothing to do
+        if tui.IS_WINDOWS:  # WHY: Windows uses msvcrt. Nothing to do
             return
         tui.termios.tcsetattr(
             sys.stdin, tui.termios.TCSADRAIN, tui.old_terminal_settings
@@ -168,7 +168,7 @@ class ItemExecutor:  # WHY: extracted from MistHelperTUI to own the synchronous 
     def _collect_one_param(  # WHY: single-param table-driven dispatch (session -> env -> prompt)
         self, param_name: str, param: Any, params: dict[str, Any]
     ) -> str:
-        """Collect a single parameter; returns ``_OUTCOME_ABORT`` on hard error, else ``_OUTCOME_OK``."""
+        """Collect a single parameter. Returns ``_OUTCOME_ABORT`` on hard error, else ``_OUTCOME_OK``."""
         outcome = self._session_autofill_outcome(param_name, params)  # WHY: mist_session / apisession branch
         if outcome is not None:  # WHY: session branch handled the param
             return outcome
@@ -199,7 +199,7 @@ class ItemExecutor:  # WHY: extracted from MistHelperTUI to own the synchronous 
     def _prompt_outcome(
         self, param_name: str, param: Any, params: dict[str, Any]
     ) -> str:  # WHY: interactive prompt branch
-        """Prompt the user for ``param_name``; abort when required-and-empty."""
+        """Prompt the user for ``param_name``. Abort when required-and-empty."""
         has_default = param.default != inspect.Parameter.empty  # WHY: required-vs-optional flag
         value = self._prompt_for_value(param_name, param.default, has_default)  # WHY: EOF-safe stdin read
         if not value and not has_default:  # WHY: required-but-empty - hard error
@@ -237,7 +237,7 @@ class ItemExecutor:  # WHY: extracted from MistHelperTUI to own the synchronous 
     def _invoke_and_display(  # WHY: call, capture, and render a bounded preview
         self, func: Any, func_name: str, params: dict[str, Any]
     ) -> None:
-        """Invoke ``func`` with ``params``; render a safe preview to stdout."""
+        """Invoke ``func`` with ``params``. Render a safe preview to stdout."""
         tui = self._tui  # WHY: local alias
         redacted = {k: _redact(k, v) for k, v in params.items()}  # WHY: redact secrets before logging
         logging.info(_LOG_CALL, func_name, redacted)  # WHY: log the redacted call site

@@ -35,7 +35,7 @@ from __future__ import annotations  # Enable PEP 604 unions in annotations on 3.
 import logging  # Structured action logging per Constitution VII.
 import os  # Filesystem + environment primitives for .env parsing and stop-signal check.
 import sys  # sys.exit when org selection fails.
-from typing import Any, ClassVar  # ClassVar for cached state; Any for the mistapi session.
+from typing import Any, ClassVar  # ClassVar for cached state. Any for the mistapi session.
 
 import mistapi  # Third-party API SDK used only for interactive org selection.
 
@@ -79,7 +79,7 @@ class ConfigUtils:
 
     @staticmethod
     def _resolve_org_id_from_dotenv() -> str | None:
-        """Parse org_id from a sibling .env file; return the value or None."""
+        """Parse org_id from a sibling .env file. Return the value or None."""
         try:
             with open(".env") as env_file:  # Fall back to the .env file.
                 for line in env_file:  # Scan each line for org_id.

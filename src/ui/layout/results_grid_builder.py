@@ -11,7 +11,7 @@ import logging  # WHY: structured action logging for build lifecycle
 from typing import Any  # WHY: TUI hooks + payload values are heterogeneous
 
 MAX_VISIBLE_ROWS = 25  # WHY: hard cap on visible rows so wide payloads stay legible
-UUID_LEN = 36  # WHY: canonical hyphenated UUID length; used by _is_uuid_like
+UUID_LEN = 36  # WHY: canonical hyphenated UUID length. Used by _is_uuid_like
 SIMPLE_LIST_TYPES = (str, int, float, bool, type(None))  # WHY: primitives render inline
 SEPARATOR_ROW_TYPE = "separator"  # WHY: sentinel row type read by _populate_table
 _SEPARATOR_FIELD = "[dim]" + "-" * 40 + "[/dim]"  # WHY: pre-built dashed field cell

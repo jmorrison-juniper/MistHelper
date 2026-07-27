@@ -110,7 +110,7 @@ class BusinessAuthorityIngester:
         return {}  # No unique mapping -> fail-safe empty (never bind a row to a wrong authority record).
 
     def _parse_row(self, raw: dict[str, str]) -> BusinessAuthorityRow | None:
-        """Normalize one authority CSV row; skip rows with no usable street/city/state/zip."""
+        """Normalize one authority CSV row. Skip rows with no usable street/city/state/zip."""
         site_name = (raw.get("Name") or "").strip()  # Business storefront name (may be blank on some exports).
         street = (raw.get("Address") or "").strip()  # Base street line from authority export.
         space = (raw.get("Space #") or "").strip()  # Separate suite/unit column in T-Builder exports.
@@ -118,7 +118,7 @@ class BusinessAuthorityIngester:
         state = (raw.get("State") or "").strip()  # State/region field.
         zip_code = (raw.get("Zip") or "").strip()  # ZIP/postal field.
         if not street or not city or not state:  # Reject rows missing basic geocoding identity.
-            return None  # Skip incomplete rows; caller keeps ingestion fail-soft.
+            return None  # Skip incomplete rows. Caller keeps ingestion fail-soft.
         merged = self._merge_street_and_space(street, space)  # Build one street line with space/suite included.
         return BusinessAuthorityRow(site_name=site_name, address=merged, city=city, state=state, zip_code=zip_code)
 

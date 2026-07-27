@@ -44,7 +44,7 @@ class DisplayUtils:
     def dict_list_as_pretty_table(
         data: list[dict[str, Any]], fields: list[str] | None = None, sortby: str | None = None
     ) -> None:
-        """Render a PrettyTable from a list of dicts; debug-log the result. No-op if data is empty."""
+        """Render a PrettyTable from a list of dicts. Debug-log the result. No-op if data is empty."""
         if not data:  # Nothing to render
             return
         if fields is None:

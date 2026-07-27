@@ -27,7 +27,7 @@ _INVALID_FILENAME_CHARS: str = '<>:"/\\|?*'  # WHY: superset of Windows-reserved
 
 _FALLBACK_NAME: str = "unnamed"  # WHY: sentinel returned for empty/whitespace filenames to avoid empty writes.
 _DATA_DIRNAME: str = "data"  # WHY: repo convention places CSV exports under ./data at cwd.
-_CSV_EXT: str = ".csv"  # WHY: single-format export; suffix appended after sanitization.
+_CSV_EXT: str = ".csv"  # WHY: single-format export. Suffix appended after sanitization.
 _REPLACEMENT_CHAR: str = "_"  # WHY: underscore is safe on every target filesystem and shell.
 _STRIP_CHARS: str = " ."  # WHY: Windows rejects trailing space/dot in file/directory names.
 
@@ -36,8 +36,8 @@ _LOG_WRITE_ERROR: str = "Error writing CSV: %s"  # WHY: error template surfaces 
 _LOG_WRITE_OK: str = "Data written to %s (%s rows)"  # WHY: success template shows path + row count for audit.
 _PRINT_SAVED_TMPL: str = "   Data saved to: %s"  # WHY: %s deferred-format template for logger.info (G004-clean).
 
-_CSV_MODE_WRITE: str = "w"  # WHY: overwrite existing file each run; callers version via distinct filenames.
-_CSV_NEWLINE: str = ""  # WHY: csv module handles newlines internally; empty avoids double-CR on Windows.
+_CSV_MODE_WRITE: str = "w"  # WHY: overwrite existing file each run. Callers version via distinct filenames.
+_CSV_NEWLINE: str = ""  # WHY: csv module handles newlines internally. Empty avoids double-CR on Windows.
 _CSV_ENCODING: str = "utf-8"  # WHY: broadest-compatibility encoding for exported Mist data.
 _CSV_EXTRAS: Literal["ignore"] = "ignore"  # WHY: silently drop keys missing from the computed superset header.
 
@@ -45,12 +45,12 @@ _CSV_EXTRAS: Literal["ignore"] = "ignore"  # WHY: silently drop keys missing fro
 def flatten_dict_recursively(d: dict[str, Any], parent_key: str = "", sep: str = "_") -> dict[str, Any]:
     """Flatten nested dicts/lists into a single flat mapping.
 
-    Nested dicts contribute joined keys; lists of dicts contribute
-    index-suffixed keys; scalar lists are stringified so the return
+    Nested dicts contribute joined keys. Lists of dicts contribute
+    index-suffixed keys. Scalar lists are stringified so the return
     value is always a flat ``dict[str, Any]`` suitable for CSV rows.
     """
     items: list[tuple[str, Any]] = []  # WHY: accumulate as pairs so ordering follows insertion for stability.
-    for k, v in d.items():  # WHY: walk top-level keys; dispatch by value type below.
+    for k, v in d.items():  # WHY: walk top-level keys. Dispatch by value type below.
         new_key = f"{parent_key}{sep}{k}" if parent_key else k  # WHY: prefix only when nested to avoid leading sep.
         if isinstance(v, dict):  # WHY: dict branch recurses to flatten nested structures.
             items.extend(flatten_dict_recursively(v, new_key, sep=sep).items())  # WHY: merge child pairs verbatim.
@@ -118,7 +118,7 @@ def write_data_with_format_selection(
         logger.error(_LOG_WRITE_ERROR, write_error)  # WHY: template log includes the underlying error text.
         return False  # WHY: False on write failure preserves batch-export resilience.
     logger.info(_LOG_WRITE_OK, filepath, len(data))  # WHY: audit log includes both path and row count.
-    # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+    # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
     logger.info(_PRINT_SAVED_TMPL, filepath)
     return True  # WHY: True indicates the CSV was successfully committed to disk.
 
@@ -147,7 +147,7 @@ def _write_csv_rows(data: list[dict[str, Any]], filepath: str) -> None:
     for row in data:  # WHY: single pass over rows populates the union of keys.
         all_keys.update(row.keys())  # WHY: update() is O(k) per row and avoids intermediate lists.
     fieldnames = sorted(all_keys)  # WHY: sorted header keeps CSV output deterministic run-to-run.
-    # WHY: text-mode CSV write; csv module inserts its own line terminators.
+    # WHY: text-mode CSV write. Csv module inserts its own line terminators.
     with open(filepath, _CSV_MODE_WRITE, newline=_CSV_NEWLINE, encoding=_CSV_ENCODING) as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames, extrasaction=_CSV_EXTRAS)  # WHY: ignore stray keys.
         writer.writeheader()  # WHY: emit the deterministic header row before data rows.

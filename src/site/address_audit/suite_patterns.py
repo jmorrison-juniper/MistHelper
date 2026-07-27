@@ -16,7 +16,7 @@ hash form (in the classification patterns) requires a leading digit.
 from __future__ import annotations  # WHY: PEP 604 union syntax on Python 3.13
 
 # Single source of truth for suite/unit keywords. ``sute`` is a common misspelling
-# of ``suite`` seen in real customer data; a trailing period (``Ste.``) is matched
+# of ``suite`` seen in real customer data. A trailing period (``Ste.``) is matched
 # by the ``\.?`` in the patterns below, and ``ste`` already covers the abbreviation.
 # ``suit`` is deliberately excluded -- it would match ``lawsuit`` / ``pursuit``.
 SUITE_KEYWORDS = r"ste|suite|sute|unit|apt|apartment|bldg|building|space|spc|rm|room|lot"  # WHY: suite/unit vocabulary

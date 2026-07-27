@@ -25,7 +25,7 @@ class _LoopState:  # WHY: bundle four otherwise-local variables threaded through
     min_interval: int  # WHY: minimum seconds between consecutive capture attempts, sourced from payload
     download_folder: str  # WHY: absolute path where completed pcaps are downloaded each iteration
     iteration: int = 0  # WHY: increment-first counter of loop iterations for user-visible logging
-    last_capture_time: float | None = None  # WHY: epoch of last successful attempt; None on first pass
+    last_capture_time: float | None = None  # WHY: epoch of last successful attempt. None on first pass
 
 
 @dataclass(frozen=True, slots=True)  # WHY: frozen slotted bundle keeps the manager binding immutable
@@ -53,7 +53,7 @@ class SiteCaptureLoopRunner:  # WHY: orchestrator delegating capture steps to a 
         """Execute a single loop iteration: fetch, download, maybe capture, then sleep."""
         state.iteration += 1  # WHY: bump counter first so iteration number is 1-based in logs
         loop_start = time.time()  # WHY: mark iteration start to compute the accurate sleep budget later
-        # WHY: preserve iteration header banner verbatim; route through logger for capture/redirection.
+        # WHY: preserve iteration header banner verbatim. Route through logger for capture/redirection.
         logging.info("\n%s\nLoop Iteration #%s\n%s", _ITER_BANNER, state.iteration, _ITER_BANNER)
         completed = self.manager._fetch_completed_pcaps(site_id, state.iteration)  # WHY: gather ready pcaps
         self.manager._download_manager.download_pending_pcaps(  # WHY: download all currently-ready pcaps
@@ -65,7 +65,7 @@ class SiteCaptureLoopRunner:  # WHY: orchestrator delegating capture steps to a 
         if wait_time == _READY_TO_CAPTURE:  # WHY: zero cooldown means we may attempt a capture this pass
             self._attempt_capture(site_id, payload, state)  # WHY: delegate attempt + timestamp update
         sleep_time = self.manager._calc_loop_sleep(wait_time, time.time() - loop_start)  # WHY: adaptive nap
-        # WHY: preserve iteration close banner + nap notice verbatim; route through logger.
+        # WHY: preserve iteration close banner + nap notice verbatim. Route through logger.
         logging.info("\n%s\nLoop iteration #%s complete", _ITER_BANNER, state.iteration)
         logging.info("Waiting %.0f seconds before next check...\n%s\n", sleep_time, _ITER_BANNER)
         time.sleep(sleep_time)  # WHY: honor cooldown plus remaining sleep budget before next iteration
@@ -80,7 +80,7 @@ class SiteCaptureLoopRunner:  # WHY: orchestrator delegating capture steps to a 
 
     def _handle_user_interrupt(self, iteration: int) -> None:  # WHY: isolate exit-path IO to one helper
         """Print the interrupt banner and notify the manager of graceful loop termination."""
-        # WHY: preserve interrupt banner + iteration count + reassurance line verbatim; route through logger.
+        # WHY: preserve interrupt banner + iteration count + reassurance line verbatim. Route through logger.
         logging.info("\n\n%s\n%s\n%s", _INTERRUPT_BANNER, _LOOP_INTERRUPT_TITLE, _INTERRUPT_BANNER)
         logging.info("  Completed %s loop iteration(s)", iteration)
         logging.info("  All available PCAPs have been downloaded\n  Exiting gracefully...")

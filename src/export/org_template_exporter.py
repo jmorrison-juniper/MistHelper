@@ -61,7 +61,7 @@ class OrgTemplateExporter:
 
     @staticmethod
     def _export_one_template(title: str, api_call: Any, filename: str, error_label: str) -> None:
-        """Fetch one template type to its CSV; log (do not raise) on failure so other types still export."""
+        """Fetch one template type to its CSV. Log (do not raise) on failure so other types still export."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of APIDataFetcher helper.
         try:
             mh.APIDataFetcher(  # Fetch this template type and write it to CSV.
@@ -94,10 +94,10 @@ class OrgTemplateExporter:
 
     @staticmethod
     def _persist_ap_template_profiles(ap_profiles: list[Any], filename: str) -> None:
-        """Flatten + write AP template profiles to CSV; emit operator + log summary."""
+        """Flatten + write AP template profiles to CSV. Emit operator + log summary."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataExporter + DataProcessingUtils helpers.
         if not ap_profiles:  # No AP templates in this org.
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logging.info("! 0 AP templates exported to OrgApTemplates.csv (no templates found)")  # Inform user.
             logging.info(
                 "No AP templates returned from canonical endpoint; writing empty OrgApTemplates.csv"
@@ -107,7 +107,7 @@ class OrgTemplateExporter:
         processed = DataProcessingUtils.flatten_nested_fields(ap_profiles)  # Flatten nested JSON.
         processed = DataProcessingUtils.escape_multiline(processed)  # Escape multiline.
         mh.DataExporter.write_with_format_selection(processed, filename)  # Persist.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info("! %s AP templates exported to %s", len(processed), filename)  # Tell user.
         logging.info("Exported %s AP templates to %s.", len(processed), filename)  # Log count.
 
@@ -115,7 +115,7 @@ class OrgTemplateExporter:
     def ap_templates() -> None:
         """Export AP templates (canonical deviceprofiles type=ap) to OrgApTemplates.csv."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ConfigUtils + DataExporter + apisession.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info("Export Organization AP Templates:")  # Header.
         logging.info("Starting export of organization AP templates (canonical deviceprofiles type=ap)...")  # Log start.
         org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org.
@@ -139,17 +139,17 @@ class OrgTemplateExporter:
         """Flatten + escape + write switch-template payload, then log/emit a success line."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataExporter + DataProcessingUtils helpers.
         if not switch_profiles:  # No templates returned from the API.
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logging.info("! 0 switch templates exported to OrgSwitchTemplates.csv (no templates found)")  # User notice.
             logging.info(  # Trace empty-result branch.
                 "No switch templates returned from canonical endpoint; writing empty OrgSwitchTemplates.csv"
             )
             mh.DataExporter.write_with_format_selection([], filename)
-            return  # Done; empty CSV written.
+            return  # Done. Empty CSV written.
         processed = DataProcessingUtils.flatten_nested_fields(switch_profiles)  # Flatten nested template fields.
         processed = DataProcessingUtils.escape_multiline(processed)  # CSV-safe.
         mh.DataExporter.write_with_format_selection(processed, filename)  # Persist.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info("! %s switch templates exported to %s", len(processed), filename)  # User notice.
         logging.info("Exported %s switch templates to %s.", len(processed), filename)  # Trace count.
 
@@ -157,7 +157,7 @@ class OrgTemplateExporter:
     def switch_templates() -> None:
         """Export switch templates to OrgSwitchTemplates.csv."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ConfigUtils + DataExporter + apisession.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info("Export Organization Switch Templates:")  # Header.
         logging.info("Starting export of organization switch templates (canonical networktemplates)...")  # Log start.
         org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.

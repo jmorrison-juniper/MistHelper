@@ -4,7 +4,7 @@
 matches each row to a Mist site (serial golden key, fuzzy fallback), enriches with
 SNMP location, resolves/validates the address through the free tiers, classifies
 each row into one of eleven states, renders the comparison table, and offers to save
-the results to CSV. The audit itself is read-only; afterwards the operator may
+the results to CSV. The audit itself is read-only. Afterwards the operator may
 opt in to push corrected addresses back to Mist via ``AddressCorrector``, gated by
 a batch confirmation and a per-site ``[y/N]`` before/after review.
 
@@ -25,7 +25,7 @@ from contextlib import contextmanager  # Scope the console-log suppression to on
 from dataclasses import dataclass  # Frozen bundle for audit context (STRUCT-PARAMS fix).
 from typing import Any, TypeVar  # Loose typing for Mist API records + generic collaborator default.
 
-import mistapi  # Mist API SDK (sole Mist interface; hard dependency of MistHelper).
+import mistapi  # Mist API SDK (sole Mist interface. Hard dependency of MistHelper).
 
 from src.site.address_audit.address_corrector import AddressCorrector  # Optional Mist write-back.
 from src.site.address_audit.address_resolver import AddressResolver  # Tiered resolver.
@@ -87,7 +87,7 @@ class _AuditContext:
     Groups the three read-only inputs (business-name prefix, Tier-3 enablement,
     business-authoritative index) that previously travelled as three positional
     arguments through ``_audit_rows``, ``_resolve_and_classify`` and
-    ``_build_audit_result``; bundling them keeps every function within the
+    ``_build_audit_result``. Bundling them keeps every function within the
     five-parameter limit while preserving intent at each call site.
     """
 
@@ -100,7 +100,7 @@ class _AddressAuditConsoleFilter(logging.Filter):
     """Console filter that drops log records emitted from the address_audit package.
 
     The address audit talks to the operator through ``print`` (the comparison
-    table, the post-table prompts, the write-back confirmations); every
+    table, the post-table prompts, the write-back confirmations). Every
     ``logging.*`` call it makes is a diagnostic trail destined for
     ``data/script.log``. Attached to the root logger's CONSOLE handlers (and only
     for the duration of a run), this filter keeps that diagnostic noise -- for example the
@@ -126,7 +126,7 @@ class AddressAuditEngine:
         renderer: ComparisonTableRenderer | None = None,
         reporter: AddressAuditReporter | None = None,
     ) -> None:
-        """Store collaborators (injectable for tests; sensible defaults otherwise)."""
+        """Store collaborators (injectable for tests. Sensible defaults otherwise)."""
         self._ingester = self._default(ingester, CSVAddressIngester)  # CSV parser (default or injected).
         self._authority_ingester = self._default(authority_ingester, BusinessAuthorityIngester)  # Authority parser.
         self._enricher = self._default(enricher, SNMPLocationEnricher)  # SNMP enrichment (default or injected).
@@ -151,7 +151,7 @@ class AddressAuditEngine:
         wrapped so this feature's diagnostic logging goes to ``data/script.log``
         only, never the terminal (keeps the progress bar clean).
         """
-        with self._console_logs_to_file_only():  # Address-audit logs -> file only; console stays clean.
+        with self._console_logs_to_file_only():  # Address-audit logs -> file only. Console stays clean.
             self._run_pipeline(apisession, org_id)  # Drive the actual audit pipeline.
 
     def _run_pipeline(self, apisession: Any, org_id: str) -> None:
@@ -160,12 +160,12 @@ class AddressAuditEngine:
         logger.info("Starting site address audit (tier3_geocode=%s)", ui_geocode)  # Action-log start.
         csv_path = self._select_csv_file()  # Pick the customer CSV from data/.
         if csv_path is None:  # No CSV present -> nothing to audit.
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("No CSV/TSV files found in data/. Drop your address file there and retry.")
             return  # Clean early return.
         rows, failures = self._ingester.load(csv_path)  # Parse the CSV into rows.
         if not rows:  # Every row was malformed/empty-serial.
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("No valid rows parsed from %s (%s skipped).", csv_path, failures)
             return  # Nothing further to do.
         business_csv_path = self._select_business_csv_file(csv_path)  # Optional second prompt for authoritative CSV.
@@ -231,7 +231,7 @@ class AddressAuditEngine:
         return results  # Hand the classified results back to the pipeline.
 
     def _select_csv_file(self) -> str | None:
-        """Find CSV/TSV files in data/; auto-pick one, prompt when several, else None."""
+        """Find CSV/TSV files in data/. Auto-pick one, prompt when several, else None."""
         candidates = sorted(glob.glob(os.path.join(_DATA_DIR, "*.csv")) + glob.glob(os.path.join(_DATA_DIR, "*.tsv")))
         if not candidates:  # No files at all.
             logger.debug("No CSV/TSV files found in %s", _DATA_DIR)  # Trace the empty case.
@@ -242,11 +242,11 @@ class AddressAuditEngine:
         return self._prompt_csv_choice(candidates)  # Multiple -> ask the operator.
 
     def _prompt_csv_choice(self, candidates: list[str]) -> str | None:
-        """Prompt the operator to choose one CSV from a numbered list; empty input aborts."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        """Prompt the operator to choose one CSV from a numbered list. Empty input aborts."""
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("Available CSV files in data/:")  # Header for the choices.
         for index, path in enumerate(candidates, start=1):  # Enumerate options 1..N.
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info("  [%s] %s", index, os.path.basename(path))  # Show each filename.
         while True:  # Loop until a valid selection is made or the operator/EOF aborts.
             raw = InputUtils.safe_input("Select file number: ", context="address_audit_csv_pick").strip()
@@ -254,14 +254,14 @@ class AddressAuditEngine:
                 not raw
             ):  # Empty response (blank Enter or EOF sentinel from safe_input) -> abort so we cannot infinite-loop under non-interactive stdin (for example --test).  # noqa: E501
                 logger.info("No CSV selection made (empty input); skipping address audit")  # Action-log the abort.
-                # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+                # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
                 logger.info(
                     "No CSV selected. Skipping address audit."
                 )  # Inform the operator (also covers non-TTY --test).
                 return None  # Caller treats None as "nothing to audit".
             if raw.isdigit() and 1 <= int(raw) <= len(candidates):  # Valid in-range integer.
                 return candidates[int(raw) - 1]  # Return the chosen path.
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("Invalid selection. Please enter a number between 1 and %s: ", len(candidates))  # Re-prompt.
 
     def _select_business_csv_file(self, primary_csv_path: str) -> str | None:
@@ -280,13 +280,13 @@ class AddressAuditEngine:
     @staticmethod
     def _print_business_csv_menu(candidates: list[str], primary_csv_path: str) -> None:
         """Print the numbered business-authoritative CSV menu with a primary-file marker."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info(
             "\nOptional: select business-authoritative CSV file in data/ (or q to skip):"
         )  # Second prompt header.
         for index, path in enumerate(candidates, start=1):  # Enumerate options 1..N.
             marker = " (primary file)" if path == primary_csv_path else ""  # Guard hint when selecting same file.
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info("  [%s] %s%s", index, os.path.basename(path), marker)  # Show indexed filename choice.
 
     def _read_business_csv_selection(self, candidates: list[str]) -> str | None:
@@ -309,7 +309,7 @@ class AddressAuditEngine:
             picked = self._parse_business_csv_choice(raw, candidates)  # Interpret the raw operator entry.
             if picked is not _INVALID_CHOICE:  # Valid choice (path) or explicit skip (None) -> exit the retry loop.
                 return picked  # type: ignore[no-any-return]  # Sentinel guarantees str|None here.
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning(
                 "Invalid selection. Enter 1-%s or q to skip.", len(candidates)
             )  # One-line validation message.
@@ -356,7 +356,7 @@ class AddressAuditEngine:
         configured = os.environ.get("BUSINESS_NAME", "").strip()  # Preferred .env source.
         if configured:  # Already configured -> use it silently.
             return configured  # Business name from environment.
-        return InputUtils.safe_input(  # Otherwise prompt once; Enter skips the prefix.
+        return InputUtils.safe_input(  # Otherwise prompt once. Enter skips the prefix.
             'Enter business name for geocoding queries (e.g. "Starbucks"), or press Enter to skip: ',
             context="address_audit_business_name",
         ).strip()
@@ -385,7 +385,7 @@ class AddressAuditEngine:
     def _match_sites(
         self, rows: list[AddressRow], matcher: SiteMatchingEngine, sites_list: list[dict[str, Any]]
     ) -> list[MatchedSite]:
-        """Match each row by serial; fall back to fuzzy address match on a miss."""
+        """Match each row by serial. Fall back to fuzzy address match on a miss."""
         matched: list[MatchedSite] = []  # Per-row match outcomes.
         for row in rows:  # Walk every parsed CSV row.
             result = matcher.match_serial(row.serial)  # Try the golden-key serial match first.
@@ -431,11 +431,11 @@ class AddressAuditEngine:
 
         ``ADDRESS_AUDIT_GEOCODE`` accepts: ``off`` (disable Tier 3), ``auto``
         (default -- take over a debuggable browser if present, else spawn one and
-        guide login), ``attach`` (take over only; operator pre-started Edge), or
+        guide login), ``attach`` (take over only. Operator pre-started Edge), or
         ``launch`` (Playwright launches a fresh Edge). Unknown values fall back to
         ``auto`` so a typo never disables suite discovery.
         """
-        raw = os.environ.get("ADDRESS_AUDIT_GEOCODE", "auto").strip().lower()  # Single env knob; default auto.
+        raw = os.environ.get("ADDRESS_AUDIT_GEOCODE", "auto").strip().lower()  # Single env knob. Default auto.
         if raw in ("off", "0", "no", "false", "none", "disabled"):  # Any disable token.
             return "off"  # Tier 3 turned off.
         if raw in ("attach", "launch", "auto"):  # Explicit, recognized mode.
@@ -460,7 +460,7 @@ class AddressAuditEngine:
         SSL inspection, whose MITM cert otherwise breaks the OpenStreetMap call.
         Set ``MIST_SKIP_SSL_VERIFY=false`` to enforce verification (non-Zscaler hosts).
         """
-        raw = os.environ.get("MIST_SKIP_SSL_VERIFY", "true").strip().lower()  # Env override; default on.
+        raw = os.environ.get("MIST_SKIP_SSL_VERIFY", "true").strip().lower()  # Env override. Default on.
         return raw not in ("false", "0", "no", "off")  # Any falsey token re-enables verification.
 
     @staticmethod
@@ -470,7 +470,7 @@ class AddressAuditEngine:
 
         geocoder = MistUIGeocoder(AddressAuditEngine._ui_config(), perf=perf)  # Env-driven config + shared timer.
         if not geocoder.connect():  # Establish the browser session (fail-soft).
-            logger.info(  # No browser is the normal case; degrade quietly to Tier 1/2.
+            logger.info(  # No browser is the normal case. Degrade quietly to Tier 1/2.
                 "Tier-3 web geocoder not available; using internal + OpenStreetMap hints only. "
                 "Set ADDRESS_AUDIT_GEOCODE=off to skip, or 'launch' to force a fresh Edge."
             )
@@ -482,7 +482,7 @@ class AddressAuditEngine:
     def _ui_config() -> UIGeocoderConfig:
         """Build a ``UIGeocoderConfig`` from environment overrides (with safe defaults)."""
         config = UIGeocoderConfig()  # Start from the Zscaler-safe defaults.
-        config.connect_mode = AddressAuditEngine._geocode_mode()  # off is filtered earlier; auto/attach/launch here.
+        config.connect_mode = AddressAuditEngine._geocode_mode()  # off is filtered earlier. Auto/attach/launch here.
         config.dashboard_url = os.environ.get("MIST_DASHBOARD_URL", config.dashboard_url).strip()  # Cloud region.
         config.per_lookup_timeout_s = AddressAuditEngine._env_float(  # Per-lookup timeout override.
             "UI_GEOCODE_TIMEOUT_SECONDS", config.per_lookup_timeout_s
@@ -640,7 +640,7 @@ class AddressAuditEngine:
             matched_site=site,  # Keep the three hint columns visible for manual review.
             issue_type="CONFLICTING_HINTS",  # Never enters the correctable/push set.
             source="-",  # No single trustworthy source to credit.
-            suggested_address="",  # Decline to recommend; operator compares Mist/CSV/SNMP by hand.
+            suggested_address="",  # Decline to recommend. Operator compares Mist/CSV/SNMP by hand.
         )
 
     def _compose_audit_result(
@@ -821,7 +821,7 @@ class AddressAuditEngine:
 
         Includes alphabetic words (``jefferson``) AND ordinal/alphanumeric street
         names (``107th``, ``a1a``) so a numeric-named street still matches when
-        Google spells out ``NW``/``Avenue``; the pure-digit house number is
+        Google spells out ``NW``/``Avenue``. The pure-digit house number is
         excluded so two different streets at the same number never match on it.
         """
         without_suite = re.sub(_SUITE_PATTERN, " ", text.lower())  # Drop the suite token.
@@ -888,11 +888,11 @@ class AddressAuditEngine:
         """Save the report (operator's choice), then optionally write corrections back to Mist."""
         action = self._renderer.prompt_post_table(results)  # Ask save vs quit.
         if action != "save":  # Operator quit without saving.
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info("No file saved. Exiting address audit.")  # Quit branch confirmation.
             return  # No write-back when nothing was saved.
         path = self._reporter.save(results)  # Write the timestamped comparison CSV.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("Saved to %s", path)  # Confirm the written path.
         self._offer_write_back(results, apisession)  # Offer to push corrections to Mist.
 
@@ -906,7 +906,7 @@ class AddressAuditEngine:
         prompt = f"\nPush corrected addresses back to Mist for up to {len(targets)} site(s)? [y/N]: "
         choice = InputUtils.safe_input(prompt, context="address_audit_writeback_gate").strip().lower()
         if choice not in ("y", "yes"):  # Operator declined the whole batch.
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info("Skipped write-back. No Mist changes made.")  # Confirm no writes.
             return  # Audit ends here.
         outcomes = corrector.review_and_apply(results)  # Per-site review + push.
@@ -924,11 +924,11 @@ class AddressAuditEngine:
             .lower()
         )
         if choice not in ("y", "yes"):  # Operator declined the report.
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info("No correction report saved.")  # Confirm the skip.
             return  # Done.
         path = self._reporter.save_corrections(outcomes)  # Write the before/after CSV.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("Saved correction report to %s", path)  # Confirm the written path.
 
     @staticmethod
@@ -956,7 +956,7 @@ class AddressAuditEngine:
     def _csv_text(row: AddressRow) -> str:
         """Join a CSV row's address parts into a single fuzzy-match query string."""
         parts = [row.address, row.city, row.state]  # Address components for fuzzy matching.
-        return " ".join(part for part in parts if part).strip()  # Skip blanks; trim.
+        return " ".join(part for part in parts if part).strip()  # Skip blanks. Trim.
 
     @staticmethod
     def _format_address(address: dict[str, Any]) -> str:
@@ -967,10 +967,10 @@ class AddressAuditEngine:
             address.get("state", ""),  # State.
             str(address.get("zip", "")),  # ZIP.
         ]
-        return " ".join(part for part in parts if part).strip()  # Skip blanks; trim.
+        return " ".join(part for part in parts if part).strip()  # Skip blanks. Trim.
 
     def apply_corrections(self, *args: Any, **kwargs: Any) -> None:
-        """Deferred write-back surface (OQ-003); intentionally not menu-registered."""
+        """Deferred write-back surface (OQ-003). Intentionally not menu-registered."""
         logger.info(  # Action-log the attempt (and reference args/kwargs for the deferred signature).
             "apply_corrections invoked with %d args / %d kwargs (feature disabled)", len(args), len(kwargs)
         )

@@ -20,7 +20,7 @@ from __future__ import annotations  # WHY: PEP 604 unions for future annotations
 
 import importlib  # WHY: lazy MistHelper import avoids circular load at module init.
 import logging  # WHY: structured trace for menu-dispatch lifecycle events.
-from typing import Any  # WHY: MarvisTroubleshootDeps is resolved lazily; annotate as Any.
+from typing import Any  # WHY: MarvisTroubleshootDeps is resolved lazily. Annotate as Any.
 
 from src.data.data_processing_utils import (
     DataProcessingUtils,

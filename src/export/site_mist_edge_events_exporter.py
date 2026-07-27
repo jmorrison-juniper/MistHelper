@@ -23,7 +23,7 @@ import mistapi  # WHY: direct SDK access for searchSiteMistEdgeEvents + get_all 
 
 from src.data.data_processing_utils import (
     DataProcessingUtils,
-)  # WHY: canonical flatten/escape helpers; keeps CSV output consistent with peers.
+)  # WHY: canonical flatten/escape helpers. Keeps CSV output consistent with peers.
 
 
 class SiteMistEdgeEventsExporter:
@@ -42,7 +42,7 @@ class SiteMistEdgeEventsExporter:
 
         Why:
             Empty responses are legitimate (a site with no Mist Edge events
-            in the query window); we surface a friendly message rather than
+            in the query window). We surface a friendly message rather than
             failing so scheduled runs stay quiet in that case.
 
         Args:

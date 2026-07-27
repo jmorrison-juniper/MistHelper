@@ -45,4 +45,4 @@ class MapWizardSummaryContext:  # Bundle inputs for the summary printer.
 
     map_name: str  # Human-readable map name printed in the summary header.
     backup_file: str  # Path to the JSON backup written before any changes were applied.
-    errors: list[str]  # Accumulated apply-step failures; empty means a clean run.
+    errors: list[str]  # Accumulated apply-step failures. Empty means a clean run.

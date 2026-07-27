@@ -16,7 +16,7 @@ from dataclasses import dataclass  # WHY: bundle PID inputs into a frozen slot o
 from datetime import UTC, datetime  # WHY: UTC-anchored hour-boundary detection.
 from typing import Any  # WHY: typed dict payloads flowing through file I/O helpers.
 
-try:  # WHY: numpy is optional; fall back to pure-Python stdev when absent.
+try:  # WHY: numpy is optional. Fall back to pure-Python stdev when absent.
     import numpy as np  # WHY: vectorised std-dev calculation when available.
 
     _has_numpy = True  # WHY: gate numpy branches on import success.
@@ -63,9 +63,9 @@ _MICRO_DIVISOR = 1_000_000  # WHY: microsecond-to-second divisor for subsecond p
 def _get_tuning_data_file_path() -> str:  # WHY: build absolute tuning-data path with graceful fallback.
     """Determine the tuning data file path, preferring data/ directory."""
     data_dir = os.path.join(os.getcwd(), _DATA_DIR)  # WHY: build absolute data/ path once.
-    try:  # WHY: creation may fail on read-only filesystems; fall back cleanly.
+    try:  # WHY: creation may fail on read-only filesystems. Fall back cleanly.
         os.makedirs(data_dir, exist_ok=True)  # WHY: ensure data/ exists idempotently.
-    except OSError:  # WHY: narrow to filesystem errors; other exceptions must bubble.
+    except OSError:  # WHY: narrow to filesystem errors. Other exceptions must bubble.
         return os.path.join(os.getcwd(), _TUNING_FILENAME)  # WHY: cwd fallback keeps writes possible.
     return os.path.join(data_dir, _TUNING_FILENAME)  # WHY: preferred data/ path when writable.
 
@@ -103,7 +103,7 @@ def _defaults() -> dict[str, Any]:  # WHY: single source of truth for cold-start
 
 def _is_finite_number(value: Any) -> bool:  # WHY: shared predicate for input sanitisation across helpers.
     """Return True when value is a finite int/float (bool excluded)."""
-    if isinstance(value, bool):  # WHY: bool is int subclass; excluded to avoid True==1.0 pollution.
+    if isinstance(value, bool):  # WHY: bool is int subclass. Excluded to avoid True==1.0 pollution.
         return False  # WHY: reject boolean sentinel as non-numeric.
     if not isinstance(value, (int, float)):  # WHY: only numeric samples participate in PID math.
         return False  # WHY: reject non-numeric input types.
@@ -125,7 +125,7 @@ class RateLimitingUtils:  # WHY: static-method facade groups rate-limit helpers 
 
     @staticmethod
     def _read_tuning_file() -> dict[str, Any] | None:  # WHY: split I/O from parsing so caller handles None default.
-        """Read raw tuning-data JSON; return None on any I/O or decode error."""
+        """Read raw tuning-data JSON. Return None on any I/O or decode error."""
         if not os.path.exists(tuning_data_file):  # WHY: absence is the common cold-start case.
             logging.debug("File I/O: %s does not exist, using defaults", tuning_data_file)  # WHY: trace missing file.
             return None  # WHY: signal cold-start to caller.
@@ -159,11 +159,11 @@ class RateLimitingUtils:  # WHY: static-method facade groups rate-limit helpers 
         """Save PID tuning data to file with comprehensive logging."""
         keys = list(data.keys()) if data else []  # WHY: log summary avoids leaking full payload.
         logging.debug("ENTRY: RateLimitingUtils._save_pid_tuning_data(data_keys=%s)", keys)  # WHY: entry trace.
-        try:  # WHY: caller expects OSError on unwritable paths; keep raise.
+        try:  # WHY: caller expects OSError on unwritable paths. Keep raise.
             with open(tuning_data_file, "w") as file_handle:  # WHY: overwrite prior tuning snapshot atomically.
                 json.dump(data, file_handle, indent=2)  # WHY: indent keeps file diff-friendly.
             logging.debug("File I/O: Successfully wrote PID tuning data to %s", tuning_data_file)  # WHY: success log.
-        except OSError as write_error:  # WHY: narrow catch; upstream re-raise preserved.
+        except OSError as write_error:  # WHY: narrow catch. Upstream re-raise preserved.
             logging.error("File I/O: Error writing to %s: %s", tuning_data_file, write_error)  # WHY: surface failure.
             raise  # WHY: contract requires caller to see write failures.
 
@@ -184,10 +184,10 @@ class RateLimitingUtils:  # WHY: static-method facade groups rate-limit helpers 
         errors: list[float], min_alpha: float = _ALPHA_MIN, max_alpha: float = _ALPHA_MAX
     ) -> float:  # WHY: adaptive smoothing responds to error dispersion.
         """Compute a dynamic smoothing factor alpha based on error standard deviation."""
-        if len(errors) < 2:  # WHY: std-dev undefined for <2 samples; use safe fallback.
+        if len(errors) < 2:  # WHY: std-dev undefined for <2 samples. Use safe fallback.
             return _ALPHA_FALLBACK  # WHY: default smoothing when history is insufficient.
 
-        try:  # WHY: numpy path may still raise on exotic inputs; be defensive.
+        try:  # WHY: numpy path may still raise on exotic inputs. Be defensive.
             standard_deviation = RateLimitingUtils._calculate_std_dev(errors[-_ADJUST_WINDOW:])  # WHY: window std-dev.
             normalized = min(standard_deviation / _STDDEV_NORMALISER, 1.0)  # WHY: cap at 1.0 for bounded interpolation.
             return round(min_alpha + (max_alpha - min_alpha) * normalized, 3)  # WHY: rounded for stable logs.
@@ -209,10 +209,10 @@ class RateLimitingUtils:  # WHY: static-method facade groups rate-limit helpers 
         """Resolve the metrics log file path into the data/ directory."""
         if filename != _METRICS_FILENAME:  # WHY: only the canonical filename is auto-relocated.
             return filename  # WHY: caller-supplied filenames pass through unchanged.
-        try:  # WHY: makedirs may fail on read-only FS; keep original name if so.
+        try:  # WHY: makedirs may fail on read-only FS. Keep original name if so.
             os.makedirs(_DATA_DIR, exist_ok=True)  # WHY: ensure data/ exists idempotently.
             return os.path.join(_DATA_DIR, filename)  # WHY: relocated path prefers data/ dir.
-        except OSError as directory_error:  # WHY: narrow catch; fall back to bare filename.
+        except OSError as directory_error:  # WHY: narrow catch. Fall back to bare filename.
             logging.error("File I/O: Failed to ensure data directory: %s", directory_error)  # WHY: surface FS issue.
             return filename  # WHY: fallback to bare filename when data/ unwritable.
 
@@ -221,7 +221,7 @@ class RateLimitingUtils:  # WHY: static-method facade groups rate-limit helpers 
         """Read existing JSONL entries from a metrics log file."""
         if not os.path.exists(filepath):  # WHY: absence just means empty history.
             return []  # WHY: no prior entries to preserve.
-        try:  # WHY: partial corruption should not crash the pipeline; discard and start fresh.
+        try:  # WHY: partial corruption should not crash the pipeline. Discard and start fresh.
             entries: list[dict[str, Any]] = []  # WHY: accumulator for decoded rows.
             with open(filepath, encoding="utf-8") as file_handle:  # WHY: explicit utf-8 for portability.
                 for line in file_handle:  # WHY: line-oriented so we can skip blanks.
@@ -282,7 +282,7 @@ class RateLimitingUtils:  # WHY: static-method facade groups rate-limit helpers 
         apisession: Any, api_usage_cache: dict[str, Any], current_time: float
     ) -> None:  # WHY: authoritative refresh from the Mist usage endpoint.
         """Refresh API usage data from the Mist API."""
-        try:  # WHY: mistapi may be absent or the call may fail; swallow gracefully.
+        try:  # WHY: mistapi may be absent or the call may fail. Swallow gracefully.
             import mistapi  # WHY: lazy import keeps module import cheap and testable.
 
             usage = mistapi.api.v1.self.usage.getSelfApiUsage(apisession).data  # WHY: canonical usage endpoint.
@@ -294,7 +294,7 @@ class RateLimitingUtils:  # WHY: static-method facade groups rate-limit helpers 
             logging.debug(
                 "API usage refreshed: %d/%d requests", api_usage_cache["used"], api_usage_cache["limit"]
             )  # WHY: trace successful refresh.
-        except Exception as api_error:  # WHY: mistapi may raise anything; log and continue with cached values.
+        except Exception as api_error:  # WHY: mistapi may raise anything. Log and continue with cached values.
             logging.warning("Failed to refresh API usage data: %s. Using cached values.", api_error)  # WHY: warn.
 
     @staticmethod
@@ -561,7 +561,7 @@ class RateLimitingUtils:  # WHY: static-method facade groups rate-limit helpers 
             return RateLimitingUtils._run_pid_pipeline(
                 apisession, api_usage_cache, tuning_data, smoothed_delay
             )  # WHY: happy path.
-        except Exception as rate_error:  # WHY: safety net; log and use fallback delay for any unexpected failure.
+        except Exception as rate_error:  # WHY: safety net. Log and use fallback delay for any unexpected failure.
             logging.error(
                 "Failed to calculate dynamic delay: %s. Using 500ms fallback.", rate_error
             )  # WHY: surface failure.
@@ -586,7 +586,7 @@ class RateLimitingUtils:  # WHY: static-method facade groups rate-limit helpers 
         logging.debug("ENTRY: get_rate_limited_delay(smoothed_delay=%s)", smoothed_delay)  # WHY: trace entry.
         if api_usage_cache is None:  # WHY: fail-safe when caller omits the shared cache.
             logging.warning("api_usage_cache not provided, using fallback delay")  # WHY: surface missing cache.
-            return smoothed_delay, _FALLBACK_DELAY  # WHY: cannot run PID without cache; return safe fallback.
+            return smoothed_delay, _FALLBACK_DELAY  # WHY: cannot run PID without cache. Return safe fallback.
 
         tuning_data = RateLimitingUtils._load_pid_tuning_data()  # WHY: seed tuning state from disk.
         RateLimitingUtils._reset_gains_if_needed(tuning_data)  # WHY: coerce corrupt gains before math.

@@ -37,7 +37,7 @@ MAX_LOOKBACK_SECONDS = 31536000 * 2  # WHY: 2-year cap keeps audit queries bound
 MIN_DURATION_SECONDS = 60  # WHY: reject sub-minute windows as accidental input
 FUTURE_SKEW_ALLOWANCE = 60  # WHY: tolerate ~1 min of clock skew on end epochs
 
-LEGEND_TEXT = (  # WHY: cached user-facing help block; identical across every call
+LEGEND_TEXT = (  # WHY: cached user-facing help block. Identical across every call
     "\n  Time Range Shortcuts:\n"
     "    2h = 2 hours    3d = 3 days     4w = 4 weeks\n"
     "    6m = 6 months   1y = 1 year\n"

@@ -5,7 +5,7 @@ SQLite database using natural business keys wherever possible and falling
 back to auto-increment when the endpoint has no natural key.
 
 Runtime dependencies (`DATABASE_PATH`, `DatabaseSchemaUtils`,
-`DataProcessingUtils`) are still owned by MistHelper.py; they are resolved
+`DataProcessingUtils`) are still owned by MistHelper.py. They are resolved
 lazily via `importlib.import_module` to keep the extracted module import-
 graph flat and to preserve monkeypatch-friendly test hooks that address
 `MistHelper.DATABASE_PATH` directly.
@@ -362,7 +362,7 @@ class SQLiteDatabaseWriter:  # Upsert records into SQLite.
         values = []  # Collect string values.
         for field_name in self.fields:  # In field order.
             value = row.get(field_name, "")  # Default missing fields.
-            values.append("" if value is None else str(value))  # Stringify; None -> empty.
+            values.append("" if value is None else str(value))  # Stringify. None -> empty.
         values.extend([current_time, current_time])  # Append audit timestamps.
         return values  # Return the value list.
 
@@ -375,7 +375,7 @@ class SQLiteDatabaseWriter:  # Upsert records into SQLite.
         """Build parameterized INSERT SQL statement."""
         placeholders = ", ".join(["?"] * value_count)  # Bind placeholders.
         safe_table_name = self._get_safe_table_name()  # Sanitize the table name.
-        return (  # nosec B608 - identifiers are sanitised above; values are bound via placeholders
+        return (  # nosec B608 - identifiers are sanitised above. Values are bound via placeholders
             f"{insert_mode} INTO {safe_table_name} ({', '.join(safe_fields)}) VALUES ({placeholders})"
         )
 

@@ -65,7 +65,7 @@ class ValidationUtils:
         try:  # WHY: a literal IP address is always a valid target.
             ipaddress.ip_address(target)  # WHY: parse as a literal IP.
             return True  # WHY: valid IP target.
-        except ValueError:  # WHY: not an IP; fall through to hostname validation.
+        except ValueError:  # WHY: not an IP. Fall through to hostname validation.
             pass  # WHY: hostname check happens below.
         return ValidationUtils._is_valid_hostname(target)  # WHY: accept only well-formed hostnames.
 

@@ -82,7 +82,7 @@ class MarvisTroubleshootUtils:
         """Troubleshoot client connectivity issues using Marvis AI.
 
         Why:
-            Entry point for the client-scoped Marvis workflow; routes user
+            Entry point for the client-scoped Marvis workflow. Routes user
             selection into the API-call wrapper and error boundary.
 
         Args:
@@ -105,7 +105,7 @@ class MarvisTroubleshootUtils:
         """Troubleshoot device performance issues using Marvis AI.
 
         Why:
-            Entry point for the device-scoped Marvis workflow; wraps site +
+            Entry point for the device-scoped Marvis workflow. Wraps site +
             device selection prompts, device metadata lookup, and API dispatch.
 
         Args:
@@ -133,7 +133,7 @@ class MarvisTroubleshootUtils:
         """Troubleshoot general network connectivity issues using Marvis AI.
 
         Why:
-            Entry point for site-wide Marvis analysis; dispatches into API
+            Entry point for site-wide Marvis analysis. Dispatches into API
             wrapper after user-facing site selection.
 
         Args:
@@ -441,7 +441,7 @@ class MarvisTroubleshootUtils:
             results_header: heading to render before bullets.
         """
         logging.warning("\n  %s:", results_header)  # WHY: section header.
-        for result in results or []:  # WHY: iterate; treat missing list as empty.
+        for result in results or []:  # WHY: iterate. Treat missing list as empty.
             MarvisTroubleshootUtils._print_result_bullet(result)  # WHY: per-result renderer.
 
     @staticmethod
@@ -470,7 +470,7 @@ class MarvisTroubleshootUtils:
         """Print bullet list for a Marvis ``insights`` array.
 
         Why:
-            Parallel to results dispatch; keeps the insights-vs-results branch
+            Parallel to results dispatch. Keeps the insights-vs-results branch
             symmetrical for maintenance.
 
         Args:
@@ -478,7 +478,7 @@ class MarvisTroubleshootUtils:
             insights_label: heading to render before bullets.
         """
         logging.warning("\n  %s:", insights_label)  # WHY: section header.
-        for insight in insights or []:  # WHY: iterate; treat missing list as empty.
+        for insight in insights or []:  # WHY: iterate. Treat missing list as empty.
             description = MarvisTroubleshootUtils._insight_description(insight)  # WHY: consistent renderer.
             logging.warning("  !? %s", description)  # WHY: bullet output.
 
@@ -523,7 +523,7 @@ class MarvisTroubleshootUtils:
         """Print a bounded stringified preview of a non-dict Marvis response body.
 
         Why:
-            Non-dict payloads still deserve visibility; truncation avoids
+            Non-dict payloads still deserve visibility. Truncation avoids
             flooding the log with huge bodies.
 
         Args:
@@ -539,7 +539,7 @@ class MarvisTroubleshootUtils:
 
         Why:
             Collapses the failure banner + guidance bullets into one atomic
-            record; callers optionally prepend a workflow-specific failure
+            record. Callers optionally prepend a workflow-specific failure
             message so users see the error and remediation together.
 
         Args:
@@ -586,7 +586,7 @@ class MarvisTroubleshootUtils:
 
         Why:
             Users need a visible confirmation of which client is about to be
-            analysed; a paired structured log captures the same context for
+            analysed. A paired structured log captures the same context for
             operators reading the logs.
 
         Args:
@@ -614,7 +614,7 @@ class MarvisTroubleshootUtils:
 
         Why:
             Users need a visible confirmation of which device is about to be
-            analysed; a paired structured log captures the same context for
+            analysed. A paired structured log captures the same context for
             operators reading the logs.
 
         Args:
@@ -641,7 +641,7 @@ class MarvisTroubleshootUtils:
 
         Why:
             Users need a visible confirmation of which site is about to be
-            analysed; a paired structured log captures the same context for
+            analysed. A paired structured log captures the same context for
             operators reading the logs.
 
         Args:
@@ -655,10 +655,10 @@ class MarvisTroubleshootUtils:
 
     @staticmethod
     def _lookup_device(deps: MarvisTroubleshootDeps, site_id: str, device_id: str) -> tuple[str, str] | None:
-        """Fetch a device record and return (mac, name); print + return None on failure.
+        """Fetch a device record and return (mac, name). Print + return None on failure.
 
         Why:
-            Marvis needs a MAC to run; the device lookup lives in its own
+            Marvis needs a MAC to run. The device lookup lives in its own
             helper so the entry point stays small and testable.
 
         Args:
@@ -851,7 +851,7 @@ class MarvisTroubleshootUtils:
         Returns:
             Tuple of ``(display_name, zero_arg_callable)`` pairs.
         """
-        return (  # WHY: single entry today; tuple keeps future additions localised.
+        return (  # WHY: single entry today. Tuple keeps future additions localised.
             (
                 _SITES_SLE_ENDPOINT,
                 lambda: deps.mistapi.api.v1.orgs.insights.getOrgSitesSle(deps.apisession, org_id),
@@ -860,7 +860,7 @@ class MarvisTroubleshootUtils:
 
     @staticmethod
     def _try_insight_endpoint(endpoint_name: str, endpoint_func: Any, deps: MarvisTroubleshootDeps) -> bool:
-        """Invoke one insight endpoint and process its response; return True if data was rendered.
+        """Invoke one insight endpoint and process its response. Return True if data was rendered.
 
         Why:
             Per-endpoint try/except keeps the iteration loop resilient — a
@@ -937,7 +937,7 @@ class MarvisTroubleshootUtils:
         """Return the best-effort description string for an insight payload.
 
         Why:
-            The Marvis SDK returns heterogeneous shapes; this helper picks
+            The Marvis SDK returns heterogeneous shapes. This helper picks
             the most informative field available.
 
         Args:
@@ -956,7 +956,7 @@ class MarvisTroubleshootUtils:
         """Return CSV-ready rows using the SLE-specific formatter when applicable.
 
         Why:
-            SLE data has a dedicated formatter; every other endpoint gets a
+            SLE data has a dedicated formatter. Every other endpoint gets a
             generic flatten + escape pass.
 
         Args:

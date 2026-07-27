@@ -53,7 +53,7 @@ class PromptClientUtils:
 
     @staticmethod
     def _log_combined_client_counts(wireless: list | None, wired: list | None) -> None:
-        """Log counts when at least one of the two client lists has data; silent on fully empty input."""
+        """Log counts when at least one of the two client lists has data. Silent on fully empty input."""
         wireless_list = wireless or []  # Coerce None -> empty for safe len()
         wired_list = wired or []  # Coerce None -> empty for safe len()
         if not (wireless_list or wired_list):  # Nothing to log when both empty
@@ -89,7 +89,7 @@ class PromptClientUtils:
 
     @staticmethod
     def _tag_connection_type(clients: list | None, label: str) -> None:
-        """Tag each ``client`` dict with ``connection_type=label``; tolerate empty/None."""
+        """Tag each ``client`` dict with ``connection_type=label``. Tolerate empty/None."""
         if not clients:  # Nothing to tag.
             return  # No-op when empty.
         for client in clients:  # Iterate clients.
@@ -193,7 +193,7 @@ class PromptClientUtils:
 
     @staticmethod
     def select_client(site_id: str | None = None) -> tuple[str | None, str | None, str | None]:
-        """Prompt user to select a wireless/wired client; returns (mac, type, site_id) or (None,None,None)."""
+        """Prompt user to select a wireless/wired client. Returns (mac, type, site_id) or (None,None,None)."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of PromptUtils + ConfigUtils.
         # WHY (#886 Phase 2): retire print() decorations in favor of logging.warning
         # (visible on default root-logger config while satisfying the ruff T20 ban).

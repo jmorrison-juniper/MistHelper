@@ -48,7 +48,7 @@ class FunctionExecutor:  # WHY: extracted from MistHelperTUI to own Live-mode ex
         self._begin_collection_or_execute()  # Branch on whether params remain
 
     def _prepare_parameter_list(self, func: Any) -> None:  # WHY: signature probe + autofill dispatcher
-        """Inspect ``func``'s signature; build param_list + auto-fill known names."""
+        """Inspect ``func``'s signature. Build param_list + auto-fill known names."""
         tui = self._tui  # Local alias
         sig = inspect.signature(func)  # Signature object
         tui.param_list = []  # Reset collection list
@@ -93,7 +93,7 @@ class FunctionExecutor:  # WHY: extracted from MistHelperTUI to own Live-mode ex
         return True  # WHY: .env value injected
 
     def _begin_collection_or_execute(self) -> None:
-        """Start prompting when params remain; otherwise execute immediately."""
+        """Start prompting when params remain. Otherwise execute immediately."""
         tui = self._tui  # Local alias
         if tui.param_list:  # Prompt mode if any params remain
             tui.execution_state = "prompting"

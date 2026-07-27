@@ -26,7 +26,7 @@ class OrgAPUpgraderConfig:  # WHY: declare OrgAPUpgraderConfig class
     already pass. Satisfies STRUCT-PARAMS (threshold 5) with a formal count
     of 1 (the __init__ signature becomes ``def __init__(self, **cfg)``).
 
-    All six *_fn hooks are Optional; the class supplies sensible defaults
+    All six *_fn hooks are Optional. The class supplies sensible defaults
     (matching pre-refactor `_default_*` fallbacks) when None is provided.
     ``msp_privileges`` and ``selected_msp`` accept None for the org-mode
     entry points (callsites at lines 20247/20269) and are set to real
@@ -35,7 +35,7 @@ class OrgAPUpgraderConfig:  # WHY: declare OrgAPUpgraderConfig class
 
     org_id: str  # WHY: organization scope (empty string permitted at MSP-select callsites)
     apisession: Any  # WHY: Mist API session used for every HTTP call (never None)
-    dry_run: bool = False  # WHY: preview-only toggle; no upgrades committed when True
+    dry_run: bool = False  # WHY: preview-only toggle. No upgrades committed when True
     safe_input_fn: Any | None = None  # WHY: injected safe_input helper (None -> default)
     check_stop_fn: Any | None = None  # WHY: cooperative-cancel probe (None -> no-op)
     get_org_id_fn: Any | None = None  # WHY: resolves org id from prompt / cache (None -> default)
@@ -58,7 +58,7 @@ class OrgAPUpgraderConfig:  # WHY: declare OrgAPUpgraderConfig class
         """Enforce identity-field types per data-model.md validation-rules table."""
         if not isinstance(self.org_id, str):  # WHY: enforce string identity (empty allowed for MSP paths)
             raise TypeError("org_id must be a string")  # WHY: fail-fast on wrong identity type
-        # WHY: apisession=None is permitted here; every network-call site guards it explicitly
+        # WHY: apisession=None is permitted here. Every network-call site guards it explicitly
         # WHY: (see _fetch_org_aps, _step3_fetch_firmware_stats, _step4_fetch_available_firmware,
         # WHY: _select_orgs_from_msp) and returns False/[] for graceful degradation.
 
@@ -207,7 +207,7 @@ class OrgLevelAPFirmwareUpgrader:
         """Entry point that detects MSP privileges and branches accordingly."""
         logging.info("OrgLevelAPFirmwareUpgrader workflow started, dry_run=%s", self.dry_run)  # WHY: audit workflow ent
         if self._try_msp_mode():  # WHY: consume MSP branch when privileges detected and user selects it
-            return  # WHY: MSP mode fully handled; no single-org fallthrough
+            return  # WHY: MSP mode fully handled. No single-org fallthrough
         self._run_single_org_mode()  # WHY: default single-org path
         logging.debug("OrgLevelAPFirmwareUpgrader.run completed")  # WHY: bracket exit
 
@@ -222,7 +222,7 @@ class OrgLevelAPFirmwareUpgrader:
         if mode == "2":  # WHY: option 2 == MSP multi-org
             logging.info("User selected MSP Multi-Org mode")  # WHY: audit selection
             self._execute_msp_mode()  # WHY: run MSP workflow
-            return True  # WHY: MSP path finished; skip single-org
+            return True  # WHY: MSP path finished. Skip single-org
         return False  # WHY: user chose single-org (option 1)
 
     def _has_msp_privileges(self) -> bool:  # WHY: declare private helper _has_msp_privileges
@@ -275,7 +275,7 @@ class OrgLevelAPFirmwareUpgrader:
         """Execute MSP multi-organization upgrade mode via three phase helpers."""
         logging.info("Starting MSP Multi-Org AP firmware upgrade workflow")  # WHY: workflow entry audit
         self._print_msp_mode_header()  # WHY: banner + dry-run notice for user
-        selected_orgs = self._msp_phase_select()  # WHY: pick MSPs, gather orgs; None on cancel
+        selected_orgs = self._msp_phase_select()  # WHY: pick MSPs, gather orgs. None on cancel
         if selected_orgs is None:  # WHY: guard cancelled selection - cancel msg already printed
             return  # WHY: exit early on user cancel
         if not self._confirm_msp_orgs(selected_orgs):  # WHY: user must confirm before execution
@@ -668,7 +668,7 @@ class OrgLevelAPFirmwareUpgrader:
         """Coerce a listMspOrgs data payload into a list of org dicts."""
         if isinstance(raw, list):  # WHY: happy-path is a list of org dicts
             return raw  # WHY: pass through unchanged
-        if raw:  # WHY: single org payload arrives as a dict; wrap to preserve caller contract
+        if raw:  # WHY: single org payload arrives as a dict. Wrap to preserve caller contract
             return [raw]  # WHY: caller iterates a list, wrap scalar to keep loop uniform
         return []  # WHY: None / empty -> caller-visible empty inventory
 
@@ -1095,7 +1095,7 @@ class OrgLevelAPFirmwareUpgrader:
         return self._fetch_org_aps_safely()  # WHY: wrap fetch in guarded helper
 
     def _fetch_org_aps_safely(self) -> bool:  # WHY: declare private helper _fetch_org_aps_safely
-        """Guarded fetch of org devices; return True on success, False on any error."""
+        """Guarded fetch of org devices. Return True on success, False on any error."""
         try:  # WHY: broad guard preserves pre-refactor behavior
             devices_data = self._get_org_inventory()  # WHY: hit inventory API for full page
             return self._process_inventory_result(devices_data)  # WHY: normalize + assign result
@@ -1151,7 +1151,7 @@ class OrgLevelAPFirmwareUpgrader:
     def _collect_paginated_inventory(self, response: Any) -> list[Any]:  # WHY: declare private helper _collect_paginate
         """Normalize mistapi paginated response into a list."""
         logging.info("Collecting paginated inventory for org %s", self.org_id)  # WHY: trace pagination step
-        import mistapi  # WHY: lazy import; only needed for pagination helper
+        import mistapi  # WHY: lazy import. Only needed for pagination helper
 
         devices_data = mistapi.get_all(response=response, mist_session=self.apisession)  # WHY: exhaust pagination curso
         if not isinstance(devices_data, list):  # WHY: mistapi may return a single dict on empty pages
@@ -1910,7 +1910,7 @@ class OrgLevelAPFirmwareUpgrader:
     def _resolve_time_strategy(  # WHY: declare private helper _resolve_time_strategy
         self, strategy: Any, ctx: tuple[str, datetime | None, bool, bool]
     ) -> tuple[bool, str | None]:
-        """Invoke a parser strategy; return (matched, resolved_value) for the dispatcher."""
+        """Invoke a parser strategy. Return (matched, resolved_value) for the dispatcher."""
         outcome = strategy(*ctx)  # WHY: unpack ctx into strategy's argument list
         if outcome is None:  # WHY: None means 'strategy did not match'
             return (False, None)  # WHY: dispatcher keeps iterating on unmatched strategy
@@ -2233,7 +2233,7 @@ class OrgLevelAPFirmwareUpgrader:
     def _tokenize_canary_phases(phases_input: str) -> list[int] | None:  # WHY: declare private helper _tokenize_canary_
         """Split canary-phase CSV and coerce each non-empty token to int()."""
         try:  # WHY: comprehension may raise ValueError on any non-integer token
-            return [  # WHY: build integer list from CSV; skip empty segments so stray commas are tolerated
+            return [  # WHY: build integer list from CSV. Skip empty segments so stray commas are tolerated
                 int(part.strip()) for part in phases_input.split(",") if part.strip()
             ]
         except ValueError:  # WHY: any bad token invalidates the entire wave definition
@@ -2272,7 +2272,7 @@ class OrgLevelAPFirmwareUpgrader:
         print("    Example: '1,2,4,8,16,32,64,100' means 1%, then 2%, then 4%, etc.")  # WHY: illustrate wave format
 
     def _canary_phase_prompt(self) -> str | None:  # WHY: declare private helper _canary_phase_prompt
-        """Prompt for canary phase values; return stripped input or None on SystemExit."""
+        """Prompt for canary phase values. Return stripped input or None on SystemExit."""
         try:  # WHY: safe_input may raise SystemExit if session drops
             phases_input = self._input_fn(  # WHY: safe_input wrapper for SSH/container resiliency
                 "  Canary phases (comma-separated) [1,2,4,8,16,32,64,100]: ",
@@ -2773,7 +2773,7 @@ class OrgLevelAPFirmwareUpgrader:
                     "version": version,  # WHY: retain target firmware version
                     "device_id": device_id,  # WHY: identify the individual AP
                     "upgrade_id": upgrade_id,  # WHY: link result to Mist upgrade job
-                    "status": "Initiated",  # WHY: initial state; polling not part of this workflow
+                    "status": "Initiated",  # WHY: initial state. Polling not part of this workflow
                 }
             )
 

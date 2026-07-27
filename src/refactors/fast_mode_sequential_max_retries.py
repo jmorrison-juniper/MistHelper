@@ -7,7 +7,7 @@ MistHelper callsites -- `_gw_retry_configs` at line ~6294 (which
 previously called `os.getenv` inline) and the sequential-fallback
 `fetch_synthetic_test_stats_with_retry` invocation at line ~15476 --
 are rewritten in the same PR to reference the extracted class
-attribute; no wrapper shim remains in MistHelper.py after this
+attribute. No wrapper shim remains in MistHelper.py after this
 extraction.
 
 The value is the retry ceiling for the sequential fallback pass in

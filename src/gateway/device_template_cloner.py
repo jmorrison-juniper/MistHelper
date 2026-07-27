@@ -147,11 +147,11 @@ class DeviceConfigTemplateClonerManager:  # Menu 194 clone-to-template manager
         sites = self._list_sites()  # Fetch site list from API
         if not sites:  # Guard - nothing to select if org has no sites
             logger.warning("No sites found for org_id %s", self.org_id)  # Warn on empty list
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("No sites found for this org.")
             return None  # Signal caller to abort the workflow
         for index, site in enumerate(sites, start=1):  # Build numbered list for display
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info("  %3d. %s (%s)", index, site.get("name", "Unknown"), site.get("id", ""))
         raw = self.input_fn("Select site number: ", context="site_selection")  # Prompt for choice
         return self._resolve_menu_choice(raw, sites)  # Delegate parse+validate to shared helper
@@ -176,13 +176,13 @@ class DeviceConfigTemplateClonerManager:  # Menu 194 clone-to-template manager
     def _select_gateway(self, gateways: list) -> dict | None:
         """Display a numbered gateway menu and return the device the user picks."""
         if not gateways:  # Guard - nothing to select if site has no gateways
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("No gateway devices found at the selected site.")
             return None  # Signal caller to abort
         for index, device in enumerate(gateways, start=1):  # Build numbered display list
             model = device.get("model", "Unknown")  # Extract model for display
             name = device.get("name", device.get("mac", "Unknown"))  # Fall back to MAC if no name
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info("  %3d. %s - %s (%s)", index, name, model, device.get("id", ""))
         raw = self.input_fn("Select gateway number: ", context="gateway_selection")  # Prompt for choice
         return self._resolve_menu_choice(raw, gateways)  # Delegate parse+validate to shared helper
@@ -192,11 +192,11 @@ class DeviceConfigTemplateClonerManager:  # Menu 194 clone-to-template manager
         try:
             choice = int(raw.strip())  # Parse response as integer index
         except ValueError:  # Non-numeric response - guide the engineer and abort
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("Invalid input - please enter a number.")
             return None  # Signal caller to abort
         if not 1 <= choice <= len(items):  # Validate 1-based range before indexing
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("Invalid selection.")
             return None  # Signal caller to abort
         return items[choice - 1]  # Convert to 0-based and return picked entry
@@ -244,7 +244,7 @@ class DeviceConfigTemplateClonerManager:  # Menu 194 clone-to-template manager
     # ------------------------------------------------------------------
 
     def _prompt_template_meta(self, device_model: str, existing_names: set) -> tuple[str, str, str]:
-        """Prompt engineer for template type, name, and hardware model; return (name, type, model)."""
+        """Prompt engineer for template type, name, and hardware model. Return (name, type, model)."""
         ttype = self._prompt_template_type()  # Get template type first
         name = self._prompt_template_name(device_model, existing_names)  # Get unique name
         model = self._prompt_hardware_platform(device_model)  # Get target hardware model
@@ -252,11 +252,11 @@ class DeviceConfigTemplateClonerManager:  # Menu 194 clone-to-template manager
 
     def _prompt_template_type(self) -> str:
         """Prompt for gateway template type and return 'standalone' or 'spoke'."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("\nTemplate type:")
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("  1. standalone")
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("  2. spoke")
         raw = self.input_fn("Select type [1]: ", context="template_type_selection")  # Prompt with default
         raw = raw.strip()  # Remove leading/trailing whitespace from input
@@ -270,23 +270,23 @@ class DeviceConfigTemplateClonerManager:  # Menu 194 clone-to-template manager
             )
             name = raw.strip() or default_name  # Use default if engineer pressed Enter
             if name in existing_names:  # Reject names already in use
-                # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+                # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
                 logger.warning("Name '%s' already exists - please choose a different name.", name)
                 continue  # Retry the name prompt
             if not name:  # Reject empty names after default resolution
-                # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+                # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
                 logger.warning("Name cannot be empty.")
                 continue  # Retry the name prompt
             return name  # Accept valid unique name
 
     def _prompt_hardware_platform(self, source_model: str) -> str:
         """Prompt engineer to keep source model or select a different target model."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("\nHardware platform (source device: %s):", source_model)
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("  0. Same as source device")
         for index, model in enumerate(COMMON_GATEWAY_MODELS, start=1):  # List common models
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info("  %2d. %s", index, model)
         raw = self.input_fn("Select model [0 = same]: ", context="hardware_platform_selection")  # Prompt
         return self._resolve_hardware_choice(raw.strip(), source_model)  # Delegate parse to helper
@@ -298,12 +298,12 @@ class DeviceConfigTemplateClonerManager:  # Menu 194 clone-to-template manager
         try:
             index = int(raw)  # Parse selection as integer index into COMMON_GATEWAY_MODELS
         except ValueError:  # Non-numeric response - fall through to safe default
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("Invalid selection - using source model.")
             return source_model  # Safe default preserves source model
         if 1 <= index <= len(COMMON_GATEWAY_MODELS):  # Validate range before indexing constant list
             return COMMON_GATEWAY_MODELS[index - 1]  # Return chosen model (1-based to 0-based)
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.warning("Invalid selection - using source model.")
         return source_model  # Safe default preserves source model on out-of-range input
 
@@ -381,17 +381,17 @@ class DeviceConfigTemplateClonerManager:  # Menu 194 clone-to-template manager
 
     def _confirm_creation(self, name: str, ttype: str, model: str) -> bool:
         """Display a pending-operation summary and require typed 'CREATE' confirmation."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("\n%s", "=" * 60)
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("  PENDING OPERATION: Create Org Gateway Template")
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("  Template Name : %s", name)
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("  Template Type : %s", ttype)
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("  Target Model  : %s", model)
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("%s", "=" * 60)
         raw = self.input_fn(  # Prompt for explicit typed confirmation
             "Type CREATE to confirm (or anything else to cancel): ",
@@ -450,7 +450,7 @@ class DeviceConfigTemplateClonerManager:  # Menu 194 clone-to-template manager
             api_function_name="createOrgGatewayTemplate",  # PK strategy key for upsert
         )
         logger.debug("CSV export complete for template_id %s", row["template_id"])  # Log after export
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info(
             "\nSuccess: Created gateway template '%s' (ID: %s)",
             row["template_name"],
@@ -472,7 +472,7 @@ class DeviceConfigTemplateClonerManager:  # Menu 194 clone-to-template manager
             return None  # Signal caller to abort the workflow
         device_config = self._fetch_device_config(site["id"], gateway["id"])  # Step 4: fetch config
         if device_config is None:  # Abort if config fetch returned empty
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.error("Failed to fetch device configuration.")
             return None  # Signal caller to abort the workflow
         return gateway, device_config  # Return combined tuple for downstream phases
@@ -483,7 +483,7 @@ class DeviceConfigTemplateClonerManager:  # Menu 194 clone-to-template manager
         device_model = gateway.get("model", "SRX300")  # Use source model as default suggestion
         name, ttype, model = self._prompt_template_meta(device_model, existing_names)  # Step 6
         if not self._confirm_creation(name, ttype, model):  # Step 7: require explicit confirmation
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info("Operation cancelled.")
             return None  # Signal caller to abort - user declined the CREATE prompt
         return name, ttype, model  # Return metadata tuple for payload construction
@@ -494,7 +494,7 @@ class DeviceConfigTemplateClonerManager:  # Menu 194 clone-to-template manager
         payload = self._build_template_payload(device_config, name, ttype, model)  # Step 8
         new_template = self._create_template(payload)  # Step 9: API write call
         if new_template is None:  # Abort if API returned no data
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.error("Template creation failed - no data returned from API.")
             return False  # Signal failure to caller
         self._export_result(gateway, new_template)  # Step 10: write CSV export row
@@ -513,6 +513,6 @@ class DeviceConfigTemplateClonerManager:  # Menu 194 clone-to-template manager
             return self._create_and_export(gateway, device_config, meta)  # Phase 3: write + export
         except Exception as exc:  # Catch all unexpected errors for safe logging
             logger.exception("DeviceConfigTemplateClonerManager.clone() failed: %s", exc)  # Log context
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.error("Error: %s", exc)
             return False  # Signal failure to caller

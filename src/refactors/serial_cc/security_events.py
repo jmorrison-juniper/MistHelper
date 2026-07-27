@@ -17,7 +17,7 @@ from src.dataclasses.progress_event import (
     ProgressContext,
 )  # Bundles progress identity for emit_progress_* (issue #470).
 
-_OUTPUT_FILES: tuple[str, ...] = (  # Files the service produces; also drives fast-mode freshness.
+_OUTPUT_FILES: tuple[str, ...] = (  # Files the service produces. Also drives fast-mode freshness.
     "OrgSecurityPolicies.csv",  # Flattened org security policies dataset.
     "OrgSecIntelProfiles.csv",  # Flattened org security intelligence profiles dataset.
     "OrgRogueData.csv",  # Combined rogue APs and rogue clients dataset.
@@ -88,18 +88,18 @@ class SecurityEventsService:
             logging.info(
                 "Fast mode cache hit: All security data CSVs are fresh; skipping fetch."
             )  # Trace short-circuit.
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logging.info("* Fast mode: Using cached security data (all files fresh)")
-            return  # No fetch needed; the cached CSVs are still valid.
+            return  # No fetch needed. The cached CSVs are still valid.
         SecurityEventsService._run_export_workflow(deps)  # Delegate the actual export to keep this entrypoint short.
 
     @staticmethod
     def _run_export_workflow(deps: SimpleNamespace) -> None:
         """Execute the three security exports and emit progress bookends."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info("Export Organization Security Data:")
         logging.info("Starting export of organization security policies, intelligence profiles, and rogue data...")
-        emitter = deps.PROGRESS_EMITTER  # Optional; None disables progress emission.
+        emitter = deps.PROGRESS_EMITTER  # Optional. None disables progress emission.
         if emitter:
             emitter.emit_progress_start(
                 _PROGRESS_ISSUE_ID, _PROGRESS_STAGE, _PROGRESS_TOTAL
@@ -109,7 +109,7 @@ class SecurityEventsService:
         for spec in SecurityEventsService._build_flattened_specs(deps, current_org_id):  # Loop over datasets.
             SecurityEventsService._export_flattened_dataset(deps, spec)  # Fetch + flatten + export one dataset.
         SecurityEventsService._export_rogue_data(deps)  # Third file: combined rogue export.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info("Security data export completed (3 files generated)")
         logging.info("Completed security policies, intelligence profiles, and rogue data export aggregate.")
         if emitter:
@@ -123,7 +123,7 @@ class SecurityEventsService:
     @staticmethod
     def _all_outputs_fresh(deps: SimpleNamespace, output_files: list[str]) -> bool:
         """Return True when every expected CSV exists and is still fresh."""
-        for output_file in output_files:  # Every file must pass; a single miss falsifies the check.
+        for output_file in output_files:  # Every file must pass. A single miss falsifies the check.
             try:
                 path = deps.FilePathUtils.get_csv_path(output_file)  # Resolve absolute path via the util.
                 if not os.path.exists(path):  # Missing file means no cache to trust.
@@ -131,7 +131,7 @@ class SecurityEventsService:
                 age_minutes = (time.time() - os.path.getmtime(path)) / 60.0  # Convert mtime delta to minutes.
                 if age_minutes >= deps.csv_freshness_minutes:  # Stale => refetch is required.
                     return False
-            except Exception:  # Any filesystem error means we cannot prove freshness; fall through to refetch.
+            except Exception:  # Any filesystem error means we cannot prove freshness. Fall through to refetch.
                 return False
         return True  # All files exist and are within the freshness window.
 
@@ -166,7 +166,7 @@ class SecurityEventsService:
         """Fetch, flatten, and export a single org dataset described by ``spec``."""
         dataset = SecurityEventsService._fetch_dataset(deps, spec)  # Isolate the try/except paging in a helper.
         if not dataset:  # Guard clause: write an empty file and note the miss for observability.
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logging.info(
                 "! 0 %s exported to %s %s",
                 spec.data_label,
@@ -179,7 +179,7 @@ class SecurityEventsService:
         processed = deps.DataProcessingUtils.flatten_nested_fields(dataset)  # Flatten nested API structures.
         processed = deps.DataProcessingUtils.escape_multiline(processed)  # Escape multiline fields for CSV safety.
         deps.DataExporter.write_with_format_selection(processed, spec.output_file)  # Emit the CSV/XLSX file.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info(
             "! %d %s exported to %s",
             len(processed),
@@ -197,7 +197,7 @@ class SecurityEventsService:
             dataset = deps.mistapi.get_all(response=response, mist_session=deps.apisession) or []  # Page all rows.
             logging.debug("%s fetched: %d", spec.data_label.capitalize(), len(dataset))  # Trace row count.
             return dataset
-        except Exception as error:  # Fetch failure is non-fatal; we still write an empty export downstream.
+        except Exception as error:  # Fetch failure is non-fatal. We still write an empty export downstream.
             logging.warning("Failed to fetch %s: %s", spec.start_label, error)  # Trace the failure cause.
             return []
 
@@ -225,7 +225,7 @@ class SecurityEventsService:
     def _fetch_site_rogue(
         deps: SimpleNamespace, site_id: str, site_name: str, rogue_duration: str
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-        """Fetch tagged rogue APs and rogue clients for one site; return ([],[]) on failure."""
+        """Fetch tagged rogue APs and rogue clients for one site. Return ([],[]) on failure."""
         try:  # Per-site failures are non-fatal for the whole export.
             aps = SecurityEventsService._fetch_tagged_rogue(
                 deps, site_id, site_name, rogue_duration, _ROGUE_KINDS[0]
@@ -250,7 +250,7 @@ class SecurityEventsService:
     ) -> Iterator[tuple[list[dict[str, Any]], list[dict[str, Any]]]]:
         """Yield (aps, clients) tuples per valid site, honoring the stop signal."""
         site_list_path = deps.FilePathUtils.get_csv_path(_SITE_LIST_CSV)  # Resolve the cached site list path.
-        with open(site_list_path, encoding="utf-8") as file_handle:  # Site list is small; read fully.
+        with open(site_list_path, encoding="utf-8") as file_handle:  # Site list is small. Read fully.
             sites = list(csv.DictReader(file_handle))  # Materialize rows so tqdm can size the bar.
         for site in deps.tqdm(sites, desc="Sites", unit="site"):  # Progress bar wraps the site loop.
             if deps.ConfigUtils.check_stop_signal():  # Honor a cooperative user cancel.
@@ -264,8 +264,8 @@ class SecurityEventsService:
     @staticmethod
     def _export_rogue_combined(deps: SimpleNamespace, all_rogue_data: list[dict[str, Any]]) -> None:
         """Flatten + export combined rogue data, or write an empty file when nothing was found."""
-        if not all_rogue_data:  # Guard: no rogue devices anywhere; still emit an empty file for consistency.
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        if not all_rogue_data:  # Guard: no rogue devices anywhere. Still emit an empty file for consistency.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logging.info("! 0 rogue devices exported to OrgRogueData.csv (no rogue devices found)")
             logging.info("No rogue devices found across all sites (OrgRogueData.csv written empty).")  # Trace empty.
             deps.DataExporter.write_with_format_selection([], _ROGUE_OUTPUT)  # Consistent empty export.
@@ -273,7 +273,7 @@ class SecurityEventsService:
         processed = deps.DataProcessingUtils.flatten_nested_fields(all_rogue_data)  # Flatten nested rogue fields.
         processed = deps.DataProcessingUtils.escape_multiline(processed)  # Escape multiline fields for CSV.
         deps.DataExporter.write_with_format_selection(processed, _ROGUE_OUTPUT)  # Write the combined rogue export.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info("! %d rogue devices exported to OrgRogueData.csv", len(processed))
         logging.info("Exported %d rogue devices to OrgRogueData.csv", len(processed))  # Trace export volume.
 
@@ -289,7 +289,7 @@ class SecurityEventsService:
         deps.CacheUtils.check_and_generate_csv(_SITE_LIST_CSV, deps.OrgSiteExporter.sites)  # Ensure site list exists.
         all_rogue_aps: list[dict[str, Any]] = []  # Accumulates tagged rogue APs across sites.
         all_rogue_clients: list[dict[str, Any]] = []  # Accumulates tagged rogue clients across sites.
-        try:  # Guard site-list reading + iteration; failure here aborts this export only.
+        try:  # Guard site-list reading + iteration. Failure here aborts this export only.
             for aps, clients in SecurityEventsService._iterate_site_rogue(deps, rogue_duration):  # Per-site fan-out.
                 all_rogue_aps.extend(aps)  # Accumulate rogue APs.
                 all_rogue_clients.extend(clients)  # Accumulate rogue clients.

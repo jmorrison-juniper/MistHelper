@@ -5,7 +5,7 @@ top-level `initialize_mist_session_interactive` function in MistHelper.py,
 and re-lands it as a class-body method per FR-005. The three MistHelper
 callsites (login retry after args, session-switch flow, entrypoint
 `_establish_mist_session`) are rewritten in the same PR to invoke the
-class method; no wrapper shim remains in MistHelper.py after this
+class method. No wrapper shim remains in MistHelper.py after this
 extraction.
 
 MistHelper module-globals (`apisession`, `mistapi`, `msp_privileges`,

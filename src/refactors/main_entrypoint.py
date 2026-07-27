@@ -4,7 +4,7 @@ Owns the top-level `main` entry function originally defined at module
 scope in MistHelper.py, and re-lands it as a class-body method per
 FR-005. The sole MistHelper callsite (the `__main__` guard invocation
 at the bottom of the module) is rewritten in the same PR to invoke the
-class method; no wrapper shim remains in MistHelper.py after this
+class method. No wrapper shim remains in MistHelper.py after this
 extraction.
 
 All six pipeline dependencies (`_initialize_deferred_imports`,

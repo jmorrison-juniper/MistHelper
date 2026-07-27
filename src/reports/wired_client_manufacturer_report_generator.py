@@ -57,7 +57,7 @@ class WiredClientManufacturerReportGenerator:
                 org_id,
                 limit=1000,
             )
-            records = mistapi.get_all(response=response, mist_session=mh.apisession) or []  # Page all; default empty.
+            records = mistapi.get_all(response=response, mist_session=mh.apisession) or []  # Page all. Default empty.
             logging.info("Retrieved %s wired client records", len(records))  # Log the count.
             logging.warning(
                 "  Retrieved %s wired client records", len(records)

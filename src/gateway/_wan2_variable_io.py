@@ -21,40 +21,40 @@ class _Wan2VariableIO(_ClusterBase):
 
     def _print_header(self) -> None:
         """Display operation header with mode-specific warnings."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("\n  DESTRUCTIVE: Update Gateway Templates for WAN2 Variable Migration")
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("%s", "=" * 70)
         if self._dry_run:  # WHY: dry-run mode gets safer copy
             self._print_dry_run_header()  # WHY: extracted helper keeps block count low
         else:  # WHY: live mode gets destructive warnings
             self._print_live_header()  # WHY: extracted helper keeps block count low
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("%s", "=" * 70)
 
     @staticmethod
     def _print_dry_run_header() -> None:
         """Print the dry-run banner lines."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("  >> DRY-RUN MODE: No changes will be made to templates or devices")
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("  >> This will show what WOULD be changed without modifying anything")
 
     @staticmethod
     def _print_live_header() -> None:
         """Print the live-mode warning banner lines."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.warning("  !? WARNING: This operation modifies gateway templates")
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.warning("  !? All sites using affected templates will inherit the change")
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.warning("  !? Ensure sites have 'wan2_interface' variable set (Menu #103)")
 
     def _load_csv_data(
         self,
     ) -> tuple[list[dict[str, str]], list[dict[str, str]], dict[str, int]] | None:
         """Load template and site CSV data, filter excluded sites."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("\n  Loading gateway template data...")
         self._check_csv("OrgGatewayTemplates.csv", self._gen_templates)  # WHY: ensure freshness
         self._check_csv("SiteList.csv", self._gen_sites)  # WHY: ensure freshness
@@ -76,7 +76,7 @@ class _Wan2VariableIO(_ClusterBase):
     @staticmethod
     def _log_no_templates() -> None:
         """Emit the 'no templates' message and log line."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.warning(" No gateway templates found.")
         logging.warning("No gateway templates available for modification")  # WHY: audit line
 
@@ -93,7 +93,7 @@ class _Wan2VariableIO(_ClusterBase):
 
     def _announce_exclusion(self, excluded: int) -> None:
         """Print SECURITY exclusion notice and matching audit log."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.warning(
             "\n  !? SECURITY: Excluded %d '%s*' sites from template impact analysis (early filter)",
             excluded,
