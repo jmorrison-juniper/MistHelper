@@ -430,7 +430,7 @@ def _is_vpn_host(fqdn: str, cenr_source: dict[str, Any]) -> bool:
     return False
 
 
-def _probe_type_for_target(target: str, role_type: str | None = None) -> str:
+def _probe_type_for_target(target: str, _role_type: str | None = None) -> str:
     """Classify a probe body ``type`` from the emitted target string.
 
     Why:
