@@ -570,3 +570,507 @@ def test_us1_end_to_end_with_mocked_mistapi_session(
     assert "Data-Transfer-Profile" in out
     assert "Main-Profile" in out
     assert str(files[0]) in out or files[0].name in out
+
+
+# ---------------------------------------------------------------------------
+# US2 shared fixtures (T028-T035)
+# ---------------------------------------------------------------------------
+
+
+def _backup_fixture(**overrides: Any) -> dict[str, Any]:
+    """Return a valid backup payload per data-model 1.3 for revert tests.
+
+    Why:
+        Centralises the required-field set so every US2 test can build a
+        partial variant (missing schema, missing org_id, unknown id in
+        aps_reassigned) via a single keyword override without repeating the
+        base dict in every case.
+
+    Args:
+        **overrides: Fields to override on top of the baseline valid payload.
+            Pass a mapping value to replace or add a field.
+
+    Returns:
+        A dict shaped per data-model 1.3 that a spec-conforming revert would
+        accept unmodified.
+    """
+    # WHY: fixed IDs keep the produced backup filename stable across tests so
+    # a follow-up glob under data_dir returns exactly one candidate.
+    src_id = "aaaa1111-2222-3333-4444-555566667777"
+    tgt_id = "bbbb1111-2222-3333-4444-555566667777"
+    base: dict[str, Any] = {
+        "schema_version": 1,
+        "org_id": "203d3d02-dbc0-4c1b-bc44-13e2d1e1a1ff",
+        "migration_timestamp_utc": "2026-07-27T19:30:45Z",
+        "source_profile_id": src_id,
+        "target_profile_id": tgt_id,
+        "source_profile_snapshot": {"id": src_id, "name": "Source-Profile", "type": "ap"},
+        "target_profile_snapshot": {"id": tgt_id, "name": "Target-Profile", "type": "ap"},
+        "aps_planned": [
+            _ap_record("d1", "site-1", "5c5b350e0001", "ap-1"),
+            _ap_record("d2", "site-1", "5c5b350e0002", "ap-2"),
+        ],
+        "aps_reassigned": ["d1", "d2"],
+        "outcome": "success",
+        "failure_detail": None,
+    }
+    for key, value in overrides.items():
+        base[key] = value
+    return base
+
+
+def _write_backup(data_dir: Path, payload: dict[str, Any]) -> Path:
+    """Write ``payload`` to disk under ``data_dir`` and return the Path.
+
+    Why:
+        Centralises the filename convention (data-model 1.1) so US2 tests do
+        not each hand-roll a filename that could drift out of sync with the
+        production writer helper.
+
+    Args:
+        data_dir: Directory under which to write the backup fixture.
+        payload: Backup payload dict to serialise as JSON.
+
+    Returns:
+        The absolute Path of the file just written.
+    """
+    # WHY: use the source/target IDs from the payload so the filename stays
+    # consistent with the on-disk convention even for the malformed fixtures.
+    src = str(payload.get("source_profile_id", "src"))
+    tgt = str(payload.get("target_profile_id", "tgt"))
+    fname = f"ap-profile-migration_20260727T193045Z_{src}_to_{tgt}.json"
+    p = data_dir / fname
+    p.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    return p
+
+
+# ---------------------------------------------------------------------------
+# T028 -- reject wrong schema_version
+# ---------------------------------------------------------------------------
+
+
+def test_revert_rejects_backup_with_wrong_schema_version(
+    fake_mh: types.ModuleType,
+    data_dir: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A backup with ``schema_version = 99`` MUST refuse and issue zero PUTs.
+
+    Why:
+        FR-020 and data-model 1.6 rule 1 pin ``schema_version`` at 1. Any
+        other value MUST be refused so a future backup format cannot silently
+        roll APs to the wrong profile.
+    """
+    # WHY: build a fixture whose schema is intentionally out of range.
+    payload = _backup_fixture(schema_version=99)
+    backup_path = _write_backup(data_dir, payload)
+    put_calls: list[Any] = []
+
+    with (
+        # WHY: create=True lets the patch land before the helper exists in
+        # the skeleton, so this test can be authored before T037.
+        patch.object(APProfileMigrationManager, "_pick_backup_file", return_value=backup_path, create=True),
+        patch(
+            "mistapi.api.v1.sites.devices.updateSiteDevice",
+            side_effect=lambda *a, **kw: put_calls.append((a, kw)),
+        ),
+    ):
+        APProfileMigrationManager.revert_ap_profile_migration(session=MagicMock())
+
+    out = capsys.readouterr().out
+    # WHY: name the exact field the operator must fix -- a generic "invalid
+    # backup" message leaves the operator guessing which rule tripped.
+    assert "schema_version" in out, f"Refusal MUST name schema_version; got: {out!r}"
+    assert put_calls == [], f"Zero PUTs expected on schema refusal; got {len(put_calls)}"
+
+
+# ---------------------------------------------------------------------------
+# T029 -- reject when any required top-level field is missing
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "missing_field",
+    [
+        "org_id",
+        "source_profile_id",
+        "target_profile_id",
+        "migration_timestamp_utc",
+        "aps_planned",
+    ],
+)
+def test_revert_rejects_backup_with_missing_required_fields(
+    missing_field: str,
+    fake_mh: types.ModuleType,
+    data_dir: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Removing any required top-level field MUST refuse and issue zero PUTs.
+
+    Why:
+        Data-model 1.6 rules 2-4 list five required top-level fields; the
+        parametrized run exercises each one so a regression that skips a
+        single rule is caught by the pytest summary rather than surfacing on
+        a live revert against a corrupt backup.
+    """
+    # WHY: start from the valid base fixture and delete exactly one field.
+    payload = _backup_fixture()
+    del payload[missing_field]
+    backup_path = _write_backup(data_dir, payload)
+    put_calls: list[Any] = []
+
+    with (
+        patch.object(APProfileMigrationManager, "_pick_backup_file", return_value=backup_path, create=True),
+        patch(
+            "mistapi.api.v1.sites.devices.updateSiteDevice",
+            side_effect=lambda *a, **kw: put_calls.append((a, kw)),
+        ),
+    ):
+        APProfileMigrationManager.revert_ap_profile_migration(session=MagicMock())
+
+    out = capsys.readouterr().out
+    assert missing_field in out, f"Refusal MUST name the missing field {missing_field!r}; got: {out!r}"
+    assert put_calls == [], f"Zero PUTs expected on missing-field refusal; got {len(put_calls)}"
+
+
+# ---------------------------------------------------------------------------
+# T030 -- reject when aps_reassigned lists an unknown device_id
+# ---------------------------------------------------------------------------
+
+
+def test_revert_rejects_backup_when_aps_reassigned_contains_unknown_id(
+    fake_mh: types.ModuleType,
+    data_dir: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """An unknown ID in ``aps_reassigned`` MUST refuse the revert.
+
+    Why:
+        Data-model 1.6 rule 5 is a defensive check: a hand-edited backup
+        MUST NOT convince the revert to PUT an AP that was never in the
+        migration plan. This test injects an id that is not in ``aps_planned``
+        and asserts refusal.
+    """
+    payload = _backup_fixture(aps_reassigned=["d1", "d2", "ghost-id-not-in-plan"])
+    backup_path = _write_backup(data_dir, payload)
+    put_calls: list[Any] = []
+
+    with (
+        patch.object(APProfileMigrationManager, "_pick_backup_file", return_value=backup_path, create=True),
+        patch(
+            "mistapi.api.v1.sites.devices.updateSiteDevice",
+            side_effect=lambda *a, **kw: put_calls.append((a, kw)),
+        ),
+    ):
+        APProfileMigrationManager.revert_ap_profile_migration(session=MagicMock())
+
+    out = capsys.readouterr().out.lower()
+    # WHY: the operator MUST see either the offending id or the field name so
+    # they can locate the mismatch in the backup file.
+    assert (
+        "aps_reassigned" in out or "ghost-id-not-in-plan" in out
+    ), f"Refusal MUST name aps_reassigned or the offending id; got: {out!r}"
+    assert put_calls == [], f"Zero PUTs expected on unknown-id refusal; got {len(put_calls)}"
+
+
+# ---------------------------------------------------------------------------
+# T031 -- refuse when the source profile no longer exists in the org
+# ---------------------------------------------------------------------------
+
+
+def test_revert_refuses_when_source_profile_deleted_from_org(
+    fake_mh: types.ModuleType,
+    data_dir: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A 404 on ``getOrgDeviceProfile`` MUST stop the revert with an audited failure.
+
+    Why:
+        FR-021 requires the revert to fail loudly (not silently) when the
+        source profile the backup PUT-s back to has been deleted. The
+        operator sees the profile id and a clear next-step message; the audit
+        line records ``outcome == "failure"`` for downstream reporting.
+    """
+    payload = _backup_fixture()
+    backup_path = _write_backup(data_dir, payload)
+    put_calls: list[Any] = []
+
+    with (
+        patch.object(APProfileMigrationManager, "_pick_backup_file", return_value=backup_path, create=True),
+        # WHY: patch the helper so the test does not depend on the exact
+        # exception type raised by mistapi on a 404.
+        patch.object(
+            APProfileMigrationManager,
+            "_verify_source_profile_exists",
+            return_value=False,
+            create=True,
+        ),
+        patch(
+            "mistapi.api.v1.sites.devices.updateSiteDevice",
+            side_effect=lambda *a, **kw: put_calls.append((a, kw)),
+        ),
+        patch("src.analytics.telemetry_emitter.TelemetryEmitter.emit") as mock_emit,
+    ):
+        APProfileMigrationManager.revert_ap_profile_migration(session=MagicMock())
+
+    out = capsys.readouterr().out
+    # WHY: operator MUST see the missing profile id so they can decide
+    # whether to recreate it or hand-edit the backup file.
+    assert payload["source_profile_id"] in out, f"Refusal MUST name the missing source profile id; got: {out!r}"
+    assert put_calls == [], f"Zero PUTs expected when source profile missing; got {len(put_calls)}"
+
+    # WHY: FR-025 -- one audit row MUST land even on this early-refusal path.
+    assert mock_emit.call_count >= 1, "Audit emit MUST fire even when the source profile is missing"
+    event = mock_emit.call_args.args[0]
+    assert event["event_type"] == "ap_profile_migration_revert"
+    assert event["outcome"] == "failure"
+
+
+# ---------------------------------------------------------------------------
+# T032 -- skip a missing AP and report partial success
+# ---------------------------------------------------------------------------
+
+
+def test_revert_skips_missing_ap_and_reports_partial(
+    fake_mh: types.ModuleType,
+    data_dir: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """One AP absent from Mist MUST count as ``missing`` and yield ``outcome == "partial"``.
+
+    Why:
+        FR-023 and data-model 2.2 require the missing-AP path to be tolerant
+        (do not abort) but visible (name the missing AP in the summary and
+        the audit line). This test drives 5 APs with the middle one
+        returning ``"missing"``.
+    """
+    aps_planned = [_ap_record(f"d{i}", "site-1", f"mac{i:012x}", f"ap-{i}") for i in range(1, 6)]
+    aps_reassigned = [rec["device_id"] for rec in aps_planned]
+    payload = _backup_fixture(aps_planned=aps_planned, aps_reassigned=aps_reassigned)
+    backup_path = _write_backup(data_dir, payload)
+
+    reverted_calls: list[str] = []
+
+    def _revert_side(session: Any, device_id: str, site_id: str, source_profile_id: str, **kw: Any) -> Any:
+        """Return ``"missing"`` for d3; record every other id as reverted.
+
+        Why:
+            Simulates one AP that no longer exists in Mist; every other AP
+            reverts successfully so the entry point must count 4 reverts and
+            1 missing.
+        """
+        del session, site_id, source_profile_id, kw  # WHY: signature-only params.
+        reverted_calls.append(device_id)
+        if device_id == "d3":
+            return "missing"
+        return None
+
+    with (
+        patch.object(APProfileMigrationManager, "_pick_backup_file", return_value=backup_path, create=True),
+        patch.object(APProfileMigrationManager, "_verify_source_profile_exists", return_value=True, create=True),
+        patch.object(APProfileMigrationManager, "_confirm_revert", return_value="live", create=True),
+        patch.object(APProfileMigrationManager, "_revert_one_ap", side_effect=_revert_side, create=True),
+        patch("src.analytics.telemetry_emitter.TelemetryEmitter.emit") as mock_emit,
+    ):
+        APProfileMigrationManager.revert_ap_profile_migration(session=MagicMock())
+
+    # WHY: every planned AP MUST be attempted -- FR-023 is tolerant, not
+    # stop-on-failure.
+    assert reverted_calls == ["d1", "d2", "d3", "d4", "d5"], f"Every AP must be attempted; got {reverted_calls!r}"
+
+    out = capsys.readouterr().out
+    # WHY: the missing AP MUST appear by id in the summary so the operator
+    # can decide whether to hand-fix it.
+    assert "d3" in out, f"Summary MUST name the missing AP by id; got: {out!r}"
+
+    mock_emit.assert_called_once()
+    event = mock_emit.call_args.args[0]
+    assert event["event_type"] == "ap_profile_migration_revert"
+    assert event["outcome"] == "partial"
+    assert event["missing_count"] == 1
+    assert event["reverted_count"] == 4
+    assert event["failed_count"] == 0
+
+
+# ---------------------------------------------------------------------------
+# T033 -- never touch APs that are not listed in the backup
+# ---------------------------------------------------------------------------
+
+
+def test_revert_never_touches_aps_not_in_backup(
+    fake_mh: types.ModuleType,
+    data_dir: Path,
+) -> None:
+    """Every ``updateSiteDevice`` call MUST target a ``device_id`` listed in ``aps_planned``.
+
+    Why:
+        FR-022 -- the revert MUST be contained to the backup's AP set even
+        if the ambient org has grown new APs since the migration. This
+        catches an implementation that accidentally iterates a live AP list
+        instead of the backup's ``aps_reassigned`` list.
+    """
+    aps_planned = [
+        _ap_record("d1", "site-1", "5c5b350e0001", "ap-1"),
+        _ap_record("d2", "site-1", "5c5b350e0002", "ap-2"),
+        _ap_record("d3", "site-2", "5c5b350e0003", "ap-3"),
+    ]
+    aps_reassigned = ["d1", "d2", "d3"]
+    payload = _backup_fixture(aps_planned=aps_planned, aps_reassigned=aps_reassigned)
+    backup_path = _write_backup(data_dir, payload)
+
+    touched: list[str] = []
+
+    def _ok_put(session: Any, site_id: str, device_id: str, body: Any) -> Any:
+        """Record the device_id of every PUT and return a healthy 200."""
+        del session, site_id, body  # WHY: signature-only params.
+        touched.append(device_id)
+        r = MagicMock()
+        r.status_code = 200
+        return r
+
+    with (
+        patch.object(APProfileMigrationManager, "_pick_backup_file", return_value=backup_path, create=True),
+        patch.object(APProfileMigrationManager, "_verify_source_profile_exists", return_value=True, create=True),
+        patch.object(APProfileMigrationManager, "_confirm_revert", return_value="live", create=True),
+        patch("mistapi.api.v1.sites.devices.updateSiteDevice", side_effect=_ok_put),
+        patch("time.sleep"),
+        patch("src.analytics.telemetry_emitter.TelemetryEmitter.emit"),
+    ):
+        APProfileMigrationManager.revert_ap_profile_migration(session=MagicMock())
+
+    planned_ids = {rec["device_id"] for rec in aps_planned}
+    # WHY: subset assertion catches the failure mode this test is guarding
+    # against -- any PUT outside the backup's id set fails the subset check.
+    assert set(touched).issubset(planned_ids), f"PUT touched an AP outside the backup: touched={touched!r}"
+
+
+# ---------------------------------------------------------------------------
+# T034 -- one JSONL audit line via TelemetryEmitter, matches data-model 2.2
+# ---------------------------------------------------------------------------
+
+
+def test_revert_appends_jsonl_audit_line_via_telemetry_emitter(
+    fake_mh: types.ModuleType,
+    data_dir: Path,
+) -> None:
+    """A successful revert MUST emit exactly one audit event matching data-model 2.2.
+
+    Why:
+        FR-025 requires the JSONL audit trail so downstream tooling can
+        report on every revert without scraping the terminal. Locks the exact
+        field set and the sentinel ``event_type``.
+    """
+    payload = _backup_fixture()
+    backup_path = _write_backup(data_dir, payload)
+
+    def _ok_put(session: Any, site_id: str, device_id: str, body: Any) -> Any:
+        """Return a healthy 200 for every PUT."""
+        del session, site_id, device_id, body  # WHY: signature-only params.
+        r = MagicMock()
+        r.status_code = 200
+        return r
+
+    with (
+        patch.object(APProfileMigrationManager, "_pick_backup_file", return_value=backup_path, create=True),
+        patch.object(APProfileMigrationManager, "_verify_source_profile_exists", return_value=True, create=True),
+        patch.object(APProfileMigrationManager, "_confirm_revert", return_value="live", create=True),
+        patch("mistapi.api.v1.sites.devices.updateSiteDevice", side_effect=_ok_put),
+        patch("time.sleep"),
+        patch("src.analytics.telemetry_emitter.TelemetryEmitter.emit") as mock_emit,
+    ):
+        APProfileMigrationManager.revert_ap_profile_migration(session=MagicMock())
+
+    mock_emit.assert_called_once()
+    event = mock_emit.call_args.args[0]
+    # WHY: pin every field per data-model 2.2 so a silent drop of one field
+    # breaks the audit consumer and is caught here first.
+    required_keys = {
+        "event_type",
+        "timestamp_utc",
+        "org_id",
+        "backup_file_path",
+        "source_profile_id",
+        "planned_count",
+        "reverted_count",
+        "missing_count",
+        "failed_count",
+        "outcome",
+    }
+    assert required_keys.issubset(
+        event.keys()
+    ), f"Audit event MUST include every data-model 2.2 field; missing: {required_keys - set(event.keys())!r}"
+    assert event["event_type"] == "ap_profile_migration_revert"
+    assert event["outcome"] == "success"
+    assert event["source_profile_id"] == payload["source_profile_id"]
+    assert event["planned_count"] == len(payload["aps_planned"])
+    assert event["reverted_count"] == len(payload["aps_reassigned"])
+
+
+# ---------------------------------------------------------------------------
+# T035 -- US2 end-to-end integration with mocked mistapi session
+# ---------------------------------------------------------------------------
+
+
+def test_us2_end_to_end_with_mocked_mistapi_session(
+    fake_mh: types.ModuleType,
+    data_dir: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Full US2 flow: produced backup drives revert, all PUTs succeed, one audit row lands.
+
+    Why:
+        Ties every US2 helper together and locks the operator-visible
+        contract: every listed AP is PUT with ``deviceprofile_id == source_id``,
+        one audit row records ``outcome == "success"``, and the summary print
+        names the backup path (quickstart Scenario 3).
+    """
+    aps_planned = [
+        _ap_record("d1", "site-1", "5c5b350e0001", "ap-1"),
+        _ap_record("d2", "site-1", "5c5b350e0002", "ap-2"),
+        _ap_record("d3", "site-2", "5c5b350e0003", "ap-3"),
+    ]
+    aps_reassigned = ["d1", "d2", "d3"]
+    payload = _backup_fixture(aps_planned=aps_planned, aps_reassigned=aps_reassigned)
+    backup_path = _write_backup(data_dir, payload)
+    src_id = payload["source_profile_id"]
+
+    put_log: list[tuple[str, Any]] = []
+
+    def _ok_put(session: Any, site_id: str, device_id: str, body: Any) -> Any:
+        """Record (device_id, body) and return a healthy 200."""
+        del session, site_id  # WHY: signature-only params.
+        put_log.append((device_id, body))
+        r = MagicMock()
+        r.status_code = 200
+        return r
+
+    # WHY: stub safe_input directly for REVERT so the confirm helper -- which
+    # may still delegate to the real safe_input -- returns "live".
+    fake_mh.InputUtils.safe_input.return_value = "REVERT"
+
+    with (
+        patch.object(APProfileMigrationManager, "_pick_backup_file", return_value=backup_path, create=True),
+        patch.object(APProfileMigrationManager, "_verify_source_profile_exists", return_value=True, create=True),
+        patch("mistapi.api.v1.sites.devices.updateSiteDevice", side_effect=_ok_put),
+        patch("time.sleep"),
+        patch("src.analytics.telemetry_emitter.TelemetryEmitter.emit") as mock_emit,
+    ):
+        APProfileMigrationManager.revert_ap_profile_migration(session=MagicMock())
+
+    # WHY: every AP MUST be PUT back to the source profile, in order.
+    assert [dev for (dev, _body) in put_log] == ["d1", "d2", "d3"]
+    for _dev, body in put_log:
+        # WHY: every revert PUT MUST target the recorded source profile id.
+        assert body == {"deviceprofile_id": src_id}, f"Wrong body={body!r}; want source_id={src_id!r}"
+
+    mock_emit.assert_called_once()
+    event = mock_emit.call_args.args[0]
+    assert event["outcome"] == "success"
+    assert event["reverted_count"] == 3
+    assert event["missing_count"] == 0
+    assert event["failed_count"] == 0
+
+    out = capsys.readouterr().out
+    # WHY: summary MUST name the backup path so the operator has a
+    # copy-pasteable pointer to the audit source.
+    assert str(backup_path) in out or backup_path.name in out, f"Summary MUST name the backup file; got: {out!r}"

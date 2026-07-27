@@ -66,6 +66,33 @@ _DATA_DIR = str(Path(__file__).resolve().parent.parent.parent / "data")
 # strings so a typo cannot silently arm a destructive run.
 _KEYWORD_LIVE = "MIGRATE"
 _KEYWORD_DRY_RUN = "DRY-RUN"
+_KEYWORD_REVERT = "REVERT"
+
+# WHY: telemetry file name for the JSONL audit stream (data-model 2.1). Kept as
+# a module constant so tests and production point at the same relative path.
+_REVERT_TELEMETRY_FILENAME = "ap_profile_migration_revert.jsonl"
+
+# WHY: sentinel return value from ``_revert_one_ap`` when the AP has been
+# deleted from Mist since the migration (data-model 2.2 -- ``missing_count``).
+_REVERT_MISSING = "missing"
+
+
+def _utc_iso_timestamp() -> str:
+    """Return the current wall-clock time as an ISO 8601 extended UTC string.
+
+    Why:
+        The revert audit event (data-model 2.2) records ``timestamp_utc`` in
+        the canonical trailing-Z form ``YYYY-MM-DDTHH:MM:SSZ``. Centralising
+        the formatting here keeps every audit call site consistent and lets a
+        future change to microsecond precision land in exactly one place.
+
+    Returns:
+        ISO 8601 extended UTC timestamp with a trailing ``Z`` suffix (for
+        example ``"2026-07-27T19:30:45Z"``).
+    """
+    # WHY: aware UTC + ISO extended, then rewrite ``+00:00`` to ``Z`` for the
+    # canonical trailing-Z shape the data-model example uses.
+    return datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
 class APProfileMigrationManager:
@@ -224,15 +251,194 @@ class APProfileMigrationManager:
             caller does not consume any return value.
 
         Raises:
-            NotImplementedError: This is the T005 skeleton placeholder; the
-                real implementation lands in T036-T043.
+            Nothing: No exception is raised for operator-visible failures.
+                Backup validation failures, source-profile-missing, and
+                cancellation are reported on stdout and short-circuit before
+                any PUT is issued.
         """
-        # WHY: skeleton placeholder -- real body lands in T043 (US2
-        # implementation phase). See the sibling migrate entry-point comment
-        # for the interrogate-coverage rationale.
-        raise NotImplementedError(
-            "APProfileMigrationManager.revert_ap_profile_migration is a"
-            " T005 skeleton; implementation lands in T036-T043.",
+        # WHY: destructive-operation banner per Constitution Principle V so the
+        # log timeline shows the exact moment the revert entry point started.
+        _LOGGER.warning("Menu #208 DESTRUCTIVE: revert AP profile migration started")
+
+        # WHY: lazy import for the shared MistHelper helpers keeps this module
+        # circular-import-safe.
+        import MistHelper as _mh  # noqa: PLC0415
+
+        org_id = _mh.ConfigUtils.get_cached_or_prompted_org_id()
+        # WHY: fall back to the ambient MistHelper apisession when the caller
+        # did not pass one -- matches the menu-206 wiring pattern.
+        mist_session = session if session is not None else _mh.apisession
+
+        # WHY: enumerate backup files under the data directory and let the
+        # picker resolve the operator's choice. When zero candidates exist the
+        # helper returns None and we print a short-circuit message.
+        candidates = APProfileMigrationManager._list_backup_files(_DATA_DIR)
+        backup_path = APProfileMigrationManager._pick_backup_file(candidates)
+        if backup_path is None:
+            print("No backup file selected. Revert cancelled.")  # noqa: T201
+            _LOGGER.info("Revert cancelled: no backup file selected")
+            return
+
+        # WHY: rules 1-6 from data-model 1.6. A ValueError names the offending
+        # field so the operator can locate the fix without opening the file.
+        try:
+            payload = APProfileMigrationManager._load_and_validate_backup(str(backup_path))
+        except ValueError as exc:
+            print(f"Invalid backup: {exc}")  # noqa: T201
+            _LOGGER.warning("Revert refused: backup validation failed: %s", exc)
+            return
+
+        # WHY: data-model 1.3 states "Revert refuses if the operator's current
+        # org does not match." Guards against running a backup from org A
+        # against org B, which would touch APs that are not in the backup.
+        if payload["org_id"] != org_id:
+            print(  # noqa: T201
+                f"Refused: backup org_id {payload['org_id']!r} does not match " f"current org_id {org_id!r}.",
+            )
+            _LOGGER.warning(
+                "Revert refused: backup org %s does not match current org %s",
+                payload["org_id"],
+                org_id,
+            )
+            return
+
+        source_id = str(payload["source_profile_id"])
+        source_name = str(
+            payload.get("source_profile_snapshot", {}).get("name", source_id),
+        )
+        planned_count = len(payload.get("aps_planned", []))
+
+        # WHY: FR-021 -- if the source profile was deleted since the migration
+        # ran, refuse the revert with an audited failure so the operator sees a
+        # loud short-circuit rather than a silent "success" with zero PUTs.
+        if not APProfileMigrationManager._verify_source_profile_exists(mist_session, org_id, source_id):
+            print(  # noqa: T201
+                f"Source profile {source_id} no longer exists in org {org_id}. "
+                f"Recreate the profile or hand-edit the backup before retrying.",
+            )
+            _LOGGER.warning("Revert refused: source profile %s missing in org %s", source_id, org_id)
+            # WHY: FR-025 -- emit a failure audit row even on this early exit
+            # so downstream reporting sees every refused revert attempt.
+            APProfileMigrationManager._emit_revert_audit(
+                {
+                    "event_type": "ap_profile_migration_revert",
+                    "timestamp_utc": _utc_iso_timestamp(),
+                    "org_id": org_id,
+                    "backup_file_path": str(backup_path),
+                    "source_profile_id": source_id,
+                    "planned_count": planned_count,
+                    "reverted_count": 0,
+                    "missing_count": 0,
+                    "failed_count": 0,
+                    "outcome": "failure",
+                }
+            )
+            return
+
+        # WHY: guarded confirmation -- the exact keyword REVERT arms the run;
+        # any other input cancels. Mirrors the migrate-side pattern.
+        decision = APProfileMigrationManager._confirm_revert(
+            len(payload.get("aps_reassigned", [])),
+            source_name,
+            str(backup_path),
+        )
+        if decision != "live":
+            print("Revert cancelled.")  # noqa: T201
+            _LOGGER.info("Revert cancelled by operator at confirmation prompt")
+            return
+
+        # WHY: build a lookup so we can retrieve each AP's site_id (required by
+        # updateSiteDevice) from the compact aps_reassigned id list.
+        plan_by_id: dict[str, dict[str, Any]] = {str(rec["device_id"]): rec for rec in payload.get("aps_planned", [])}
+
+        reverted_ids: list[str] = []
+        missing_ids: list[str] = []
+        failed_ids: list[str] = []
+
+        aps_to_revert = [str(x) for x in payload.get("aps_reassigned", [])]
+        total = len(aps_to_revert)
+        for idx, device_id in enumerate(aps_to_revert, start=1):
+            rec = plan_by_id.get(device_id)
+            if rec is None:
+                # WHY: validation rule 5 prevents this, but the guard keeps a
+                # hand-edited backup from crashing the loop instead of the
+                # earlier refusal path.
+                _LOGGER.warning("Skipping unknown device_id %s -- not in aps_planned", device_id)
+                continue
+            # WHY: emit progress at the same cadence as the migration path so
+            # operators see the run is making progress on large fleets.
+            if idx == 1 or idx % _PROGRESS_STRIDE == 0 or idx == total:
+                _LOGGER.info(
+                    "Reverting AP %d of %d: device_id=%s",
+                    idx,
+                    total,
+                    device_id,
+                )
+            try:
+                result = APProfileMigrationManager._revert_one_ap(
+                    mist_session,
+                    device_id,
+                    str(rec["site_id"]),
+                    source_id,
+                )
+            except Exception as exc:  # noqa: BLE001  # WHY: tolerant per FR-023.
+                failed_ids.append(device_id)
+                _LOGGER.warning(
+                    "Revert failed for AP %s after retry exhaustion: %s",
+                    device_id,
+                    exc,
+                )
+                continue
+
+            if result == _REVERT_MISSING:
+                # WHY: FR-023 -- the AP no longer exists in Mist; count and
+                # continue instead of aborting the run.
+                missing_ids.append(device_id)
+                _LOGGER.warning("AP %s no longer exists in Mist; counted as missing", device_id)
+                continue
+
+            reverted_ids.append(device_id)
+
+        # WHY: outcome logic per data-model 2.2 -- "partial" covers the
+        # missing-AP-with-warning case as well as mid-run failures.
+        if not missing_ids and not failed_ids:
+            outcome = "success"
+        elif reverted_ids or missing_ids:
+            outcome = "partial"
+        else:
+            outcome = "failure"
+
+        # WHY: operator-visible summary -- prints the backup path so the
+        # operator can copy-paste it into a bug report or a rollback ticket.
+        print("\nRevert summary:")  # noqa: T201
+        print(f"  Backup file: {backup_path}")  # noqa: T201
+        print(f"  Source profile: {source_name} (id={source_id})")  # noqa: T201
+        print(f"  Planned APs: {planned_count}")  # noqa: T201
+        print(f"  Reverted APs: {len(reverted_ids)}")  # noqa: T201
+        print(f"  Missing APs: {len(missing_ids)}")  # noqa: T201
+        print(f"  Failed APs: {len(failed_ids)}")  # noqa: T201
+        print(f"  Outcome: {outcome}")  # noqa: T201
+        if missing_ids:
+            # WHY: name every missing AP so the operator can hand-fix.
+            print(f"  Missing device_ids: {', '.join(missing_ids)}")  # noqa: T201
+        if failed_ids:
+            print(f"  Failed device_ids: {', '.join(failed_ids)}")  # noqa: T201
+
+        # WHY: FR-025 -- one JSONL audit row per revert invocation. Best-effort
+        # write; TelemetryEmitter swallows OSError and logs a warning.
+        APProfileMigrationManager._emit_revert_audit(
+            {
+                "event_type": "ap_profile_migration_revert",
+                "timestamp_utc": _utc_iso_timestamp(),
+                "org_id": org_id,
+                "backup_file_path": str(backup_path),
+                "source_profile_id": source_id,
+                "planned_count": planned_count,
+                "reverted_count": len(reverted_ids),
+                "missing_count": len(missing_ids),
+                "failed_count": len(failed_ids),
+                "outcome": outcome,
+            }
         )
 
     # ------------------------------------------------------------------
@@ -692,3 +898,345 @@ class APProfileMigrationManager:
             fd = payload.get("failure_detail")
             if fd is not None:
                 print(f"  Failed AP: {fd.get('failed_device_id')}  " f"reason: {fd.get('error_message')}")  # noqa: T201
+
+    # ------------------------------------------------------------------
+    # Private helpers -- revert (T036-T042)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _list_backup_files(data_dir: str) -> list[Path]:
+        """Return every backup file under ``data_dir``, newest first.
+
+        Why:
+            The backup filename convention (data-model 1.1) starts with an
+            ISO-basic UTC timestamp, so a reverse ``sorted`` on the string
+            filename ranks the newest-written file first. This helper hides
+            the glob pattern so the picker only sees ``list[Path]``.
+
+        Args:
+            data_dir: Directory to scan for backup JSON files.
+
+        Returns:
+            A list of ``Path`` values matching ``ap-profile-migration_*.json``
+            under ``data_dir``, newest first. Empty when the directory does
+            not exist or contains no matches.
+        """
+        # WHY: an absent directory is not an error; return empty so the picker
+        # emits the "no backup" short-circuit message.
+        base = Path(data_dir)
+        if not base.is_dir():
+            return []
+        # WHY: glob returns unordered on some filesystems; sort by filename in
+        # reverse so the newest ISO-basic timestamp lands first.
+        candidates = sorted(base.glob("ap-profile-migration_*.json"), reverse=True)
+        return candidates
+
+    @staticmethod
+    def _pick_backup_file(candidates: list[Path]) -> Path | None:
+        """Prompt the operator to pick one backup file from ``candidates``.
+
+        Why:
+            Splitting the picker from the entry point keeps the confirmation
+            flow test-friendly (tests patch this helper with a canned Path).
+            The picker returns ``None`` on cancel or empty so the caller can
+            short-circuit before any validation runs.
+
+        Args:
+            candidates: The list of backup files, in newest-first order.
+
+        Returns:
+            The chosen ``Path``, or ``None`` when the operator cancels or the
+            list is empty.
+        """
+        # WHY: lazy import for InputUtils keeps this module circular-safe.
+        import MistHelper as _mh  # noqa: PLC0415
+
+        if not candidates:
+            print("No backup files found under data/. Nothing to revert.")  # noqa: T201
+            _LOGGER.info("No backup files present under data/")
+            return None
+
+        print("\nSelect the backup file to revert:")  # noqa: T201
+        for idx, path in enumerate(candidates, start=1):
+            print(f"  {idx}. {path.name}")  # noqa: T201
+
+        count = len(candidates)
+        # WHY: retry loop for non-numeric or out-of-range input; matches the
+        # UX pattern used by ``_pick_ap_device_profile``.
+        while True:
+            choice = _mh.InputUtils.safe_input(
+                f"  Select backup (1-{count}) or 'q' to cancel: ",
+                default_value="",
+                allow_empty=True,
+                context="ap_profile_revert_picker",
+            )
+            if choice.lower() == "q":
+                return None
+            try:
+                index = int(choice)
+            except ValueError:
+                print(f"  Enter a number between 1 and {count}.")  # noqa: T201
+                continue
+            if 1 <= index <= count:
+                return candidates[index - 1]
+            print(f"  Enter a number between 1 and {count}.")  # noqa: T201
+
+    @staticmethod
+    def _load_and_validate_backup(path: str) -> dict[str, Any]:
+        """Read ``path`` and enforce data-model 1.6 rules 1 through 6.
+
+        Why:
+            Every rule failure raises ``ValueError`` naming the offending
+            field so the entry-point can print the operator-visible refusal
+            message without re-implementing rule-to-message mapping in the
+            caller.
+
+        Args:
+            path: Absolute filesystem path to the backup JSON file.
+
+        Returns:
+            The parsed backup dict when every rule passes.
+
+        Raises:
+            ValueError: When any rule fails; message names the offending
+                field or rule so the operator can locate the fix.
+        """
+        # WHY: file-load errors surface as ValueError so the caller has one
+        # exception type to catch on the refusal path.
+        try:
+            raw = Path(path).read_text(encoding="utf-8")
+        except OSError as exc:
+            raise ValueError(f"backup file unreadable: {exc}") from exc
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"backup file not valid JSON: {exc}") from exc
+        if not isinstance(payload, dict):
+            raise ValueError("backup file top-level must be a JSON object")
+
+        # WHY: rule 1 -- schema_version pinned to the current constant. A
+        # future format change bumps this integer and refuses older tools.
+        version = payload.get("schema_version")
+        if version != _BACKUP_SCHEMA_VERSION:
+            raise ValueError(f"schema_version must be {_BACKUP_SCHEMA_VERSION}; got {version!r}")
+
+        # WHY: rules 2-3 -- every required top-level string field must be a
+        # non-empty string. Named individually so the refusal message points
+        # at the exact field the operator has to fix.
+        for field in ("org_id", "source_profile_id", "target_profile_id", "migration_timestamp_utc"):
+            value = payload.get(field)
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(f"required field {field!r} must be a non-empty string")
+
+        # WHY: rule 3 -- aps_planned must be a list. An absent key is a
+        # missing field per rule 2/3; report it under the same name so the
+        # refusal message names the field the operator has to add.
+        planned = payload.get("aps_planned")
+        if planned is None:
+            raise ValueError("required field 'aps_planned' is missing")
+        if not isinstance(planned, list):
+            raise ValueError("required field 'aps_planned' must be a JSON array")
+
+        # WHY: rule 4 -- every APRecord must have non-empty device_id,
+        # site_id, and mac. Loop index appears in the error so the operator
+        # can locate the bad entry without opening the JSON.
+        for idx, rec in enumerate(planned):
+            if not isinstance(rec, dict):
+                raise ValueError(f"aps_planned[{idx}] must be a JSON object")
+            for sub in ("device_id", "site_id", "mac"):
+                v = rec.get(sub)
+                if not isinstance(v, str) or not v.strip():
+                    raise ValueError(f"aps_planned[{idx}].{sub} must be a non-empty string")
+
+        # WHY: rule 5 -- every entry of aps_reassigned must appear as a
+        # device_id in aps_planned. Guards against hand-edited backups.
+        reassigned = payload.get("aps_reassigned", [])
+        if not isinstance(reassigned, list):
+            raise ValueError("field 'aps_reassigned' must be a JSON array of strings")
+        planned_ids = {str(rec.get("device_id", "")) for rec in planned}
+        for entry in reassigned:
+            if not isinstance(entry, str):
+                raise ValueError("aps_reassigned entries must be strings")
+            if entry not in planned_ids:
+                raise ValueError(f"aps_reassigned contains id {entry!r} not present in aps_planned")
+
+        # WHY: rule 6 -- snapshot IDs must match the top-level IDs so a
+        # hand-edited pair (snapshot copied from a wrong profile) is caught
+        # before any PUT lands.
+        src_snap = payload.get("source_profile_snapshot")
+        tgt_snap = payload.get("target_profile_snapshot")
+        if isinstance(src_snap, dict) and src_snap.get("id") != payload["source_profile_id"]:
+            raise ValueError("source_profile_snapshot.id does not match source_profile_id")
+        if isinstance(tgt_snap, dict) and tgt_snap.get("id") != payload["target_profile_id"]:
+            raise ValueError("target_profile_snapshot.id does not match target_profile_id")
+
+        return payload
+
+    @staticmethod
+    def _verify_source_profile_exists(session: Any, org_id: str, source_profile_id: str) -> bool:
+        """Return ``True`` when the source profile still exists in ``org_id``.
+
+        Why:
+            FR-021 -- the revert must refuse if the source profile the
+            backup PUT-s each AP back to has been deleted. A dedicated helper
+            makes this seam trivial to patch in unit tests.
+
+        Args:
+            session: The mistapi API session.
+            org_id: The org that owns the profile.
+            source_profile_id: The device-profile UUID to look up.
+
+        Returns:
+            ``True`` when ``getOrgDeviceProfile`` returns a 2xx response with
+            a matching id; ``False`` on 404 or any lookup exception.
+        """
+        # WHY: broad try/except -- any lookup failure (404, network error,
+        # SDK exception) is treated as "does not exist" so the operator gets
+        # a loud refusal instead of a silent no-op. Alternate causes are
+        # visible via the mistapi log line the SDK writes.
+        try:
+            response = _mist_deviceprofiles.getOrgDeviceProfile(session, org_id, source_profile_id)
+        except Exception as exc:  # noqa: BLE001  # WHY: any error treats profile as missing.
+            _LOGGER.warning("getOrgDeviceProfile raised for %s: %s", source_profile_id, exc)
+            return False
+        # WHY: mistapi may return a response object with .status_code; a 404
+        # means the profile is gone.
+        status = getattr(response, "status_code", 200)
+        if status == 404:
+            return False
+        # WHY: defensive id-match check -- an SDK that returns an empty body
+        # on error would otherwise be misread as success.
+        data = getattr(response, "data", None)
+        if isinstance(data, dict) and data.get("id") and data["id"] != source_profile_id:
+            _LOGGER.warning(
+                "getOrgDeviceProfile returned id %s for lookup of %s",
+                data.get("id"),
+                source_profile_id,
+            )
+            return False
+        return True
+
+    @staticmethod
+    def _confirm_revert(count: int, source_name: str, backup_path: str) -> str:
+        """Prompt for the uppercase-exact ``REVERT`` keyword.
+
+        Why:
+            Requiring the operator to type ``REVERT`` (research.md Decision 5)
+            prevents a mis-typed ``r`` or blind Enter from arming a
+            destructive rollback. The three return values mirror the migrate
+            side to keep the caller flat.
+
+        Args:
+            count: Number of APs the revert will attempt.
+            source_name: Human-readable source profile name.
+            backup_path: Absolute path to the backup file being consumed.
+
+        Returns:
+            ``"live"`` when the operator typed ``REVERT``, ``"cancel"``
+            otherwise.
+        """
+        # WHY: lazy import for InputUtils per the module load rule.
+        import MistHelper as _mh  # noqa: PLC0415
+
+        prompt = (
+            f"\nType {_KEYWORD_REVERT!r} to revert {count} APs back to "
+            f"{source_name}\n(backup file: {backup_path}): "
+        )
+        response = _mh.InputUtils.safe_input(
+            prompt,
+            default_value="",
+            allow_empty=True,
+            context="ap_profile_revert_confirm",
+        )
+        # WHY: strip trailing whitespace but keep case-sensitive compare so a
+        # lowercase "revert" is treated as cancel.
+        if response.strip() == _KEYWORD_REVERT:
+            return "live"
+        return "cancel"
+
+    @staticmethod
+    def _revert_one_ap(
+        session: Any,
+        device_id: str,
+        site_id: str,
+        source_profile_id: str,
+    ) -> str | None:
+        """Revert a single AP to ``source_profile_id`` with bounded retry.
+
+        Why:
+            The revert path shares the migrate path's bounded-retry policy
+            (Constitution Principle VI), plus a 404-detects-missing branch
+            required by FR-023. Separating this from ``_reassign_one_ap``
+            keeps the missing-AP path visible at the call site.
+
+        Args:
+            session: The mistapi API session.
+            device_id: The AP device UUID to revert.
+            site_id: The site the AP is under (required by updateSiteDevice).
+            source_profile_id: The device-profile UUID to bind the AP to.
+
+        Returns:
+            ``None`` on a healthy PUT (2xx response, or any SDK success), or
+            the sentinel ``_REVERT_MISSING`` when Mist returns 404 for the AP.
+
+        Raises:
+            Exception: The last exception observed after retry exhaustion.
+        """
+        # WHY: same cadence as the migrate side -- two retries, three total
+        # attempts, sleep only when a next attempt exists.
+        body = {"deviceprofile_id": source_profile_id}
+        last_exc: BaseException | None = None
+        for attempt in range(len(_RETRY_BACKOFF_SECONDS) + 1):
+            try:
+                response = _mist_site_devices.updateSiteDevice(session, site_id, device_id, body)
+            except Exception as exc:  # noqa: BLE001  # WHY: broad catch for retry policy.
+                last_exc = exc
+                if attempt < len(_RETRY_BACKOFF_SECONDS):
+                    time.sleep(_RETRY_BACKOFF_SECONDS[attempt])
+                    continue
+                raise
+            # WHY: mistapi returns a response object; a 404 status means the
+            # AP is missing from Mist -- report as missing (FR-023) not retry.
+            status = getattr(response, "status_code", 200)
+            if status == 404:
+                return _REVERT_MISSING
+            # WHY: any 5xx (or other non-2xx) is a retryable server problem;
+            # treat as failure and back off the same way an exception would.
+            if isinstance(status, int) and status >= 500:
+                last_exc = RuntimeError(f"HTTP {status} on updateSiteDevice for {device_id}")
+                if attempt < len(_RETRY_BACKOFF_SECONDS):
+                    time.sleep(_RETRY_BACKOFF_SECONDS[attempt])
+                    continue
+                raise last_exc
+            # WHY: fell through -- SDK success or 2xx status.
+            return None
+        # WHY: unreachable; guard against typing lint anyway.
+        if last_exc is not None:
+            raise last_exc
+        return None
+
+    @staticmethod
+    def _emit_revert_audit(event: dict[str, Any]) -> None:
+        """Append a single JSONL row to the shared revert telemetry stream.
+
+        Why:
+            FR-025 requires a machine-readable audit trail for every revert
+            invocation. Using ``TelemetryEmitter`` inherits its best-effort
+            write semantics (a disk-full or permission error is logged, not
+            raised) so a telemetry failure never blocks the primary revert.
+
+        Args:
+            event: The audit event dict; shape follows data-model 2.2. The
+                caller is responsible for populating every required key.
+        """
+        # WHY: lazy import so the top-level module load stays circular-safe
+        # even if TelemetryEmitter grows a heavy dependency later.
+        from src.analytics.telemetry_emitter import TelemetryEmitter  # noqa: PLC0415
+
+        # WHY: colocate the telemetry file with the backup files so the
+        # operator finds every audit artefact under one directory.
+        target = Path(_DATA_DIR) / _REVERT_TELEMETRY_FILENAME
+        # WHY: context manager guarantees flush + close even on an emit that
+        # raises inside the writer.
+        with TelemetryEmitter(str(target)) as emitter:
+            emitter.emit(event)
