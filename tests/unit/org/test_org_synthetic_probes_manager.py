@@ -21,6 +21,32 @@ import pytest
 from src.org import org_synthetic_probes_manager as ospm
 
 # --------------------------------------------------------------------------- #
+# Module-level constants (feature 1025)
+# --------------------------------------------------------------------------- #
+
+# Pinned enumeration of the 7 SecB2B catalogue hosts that MUST be absent from
+# the loaded CENR observation cache so the CENR-fallback code path fires and
+# each host contributes exactly one load-time WARNING once feature 1025 lands.
+# Why:
+#     Sourced from the sidecar fixture ``cenr_dedup_missing_observations.json``
+#     authored in T006a. Duplicated here as a module-level constant so every
+#     US1 test (T007/T008/T009) can reuse the same ground truth without
+#     re-reading the sidecar file on each invocation. Encoded as a
+#     ``frozenset`` so downstream tests cannot accidentally mutate the set
+#     mid-run and blur the load-time dedup contract.
+EXPECTED_MISSING_HOSTS: frozenset[str] = frozenset(
+    {
+        "gslb.secb2b.com",  # global SecB2B GSLB endpoint absent from smoke CENR
+        "us-elm.secb2b.com",  # Americas ELM node absent from smoke CENR
+        "us-prod-klm-b2c.secb2b.com",  # Americas B2C KLM host absent from smoke CENR
+        "us-prod-klm.secb2b.com",  # Americas KLM host absent from smoke CENR
+        "eu-elm.secb2b.com",  # EMEA ELM node absent from smoke CENR
+        "eu-prod-klm-b2c.secb2b.com",  # EMEA B2C KLM host absent from smoke CENR
+        "eu-prod-klm.secb2b.com",  # EMEA KLM host absent from smoke CENR
+    }
+)
+
+# --------------------------------------------------------------------------- #
 # Fixtures
 # --------------------------------------------------------------------------- #
 
@@ -2566,3 +2592,383 @@ class TestInv1ByteStability:
                 # INV-3: bare hostname, no scheme, no colon.
                 assert ":" not in target, (probe_name, body)
                 assert not target.startswith("http"), (probe_name, body)
+
+
+# --------------------------------------------------------------------------- #
+# US1: CENR duplicate warning dedup (feature 1025)
+# --------------------------------------------------------------------------- #
+
+
+def _patch_apply_to_capture(monkeypatch: pytest.MonkeyPatch, capture_sink: list) -> None:
+    """Neutralise ``_apply`` and capture the emitted probe map for T010.
+
+    Why:
+        Task T010 (feature 1025) requires the byte-stability check to run
+        against the exact probe map ``manage_org_synthetic_probes`` would
+        PUT to Mist, WITHOUT actually issuing the PUT. Patching the
+        module-level ``_apply`` helper (the real name -- ``tasks.md``
+        refers to it as ``_apply_probe`` but the shipped code uses
+        ``_apply`` at ``org_synthetic_probes_manager.py:1536``) lets the
+        test intercept the combined probe map argument, stash it in the
+        caller-supplied ``capture_sink`` list, and skip the ``PUT``
+        round-trip entirely. Keeping this helper module-scope (per the
+        task contract) means multiple tests can share the same
+        interception idiom without re-copying the patch scaffolding.
+
+    Args:
+        monkeypatch: pytest fixture used to install the patch.
+        capture_sink: Mutable list into which the intercepted
+            ``combined_probes`` argument is appended. Callers pop the
+            first (and only) entry to inspect the emitted map.
+    """
+    logging.info("_patch_apply_to_capture: installing _apply stub sink=%r", id(capture_sink))  # setup logging (Constitution VII)
+
+    def _capture(mist_session, org_id, setting, combined_probes, vlan_ids):  # match ospm._apply signature 1:1
+        """Record the combined probe map and short-circuit the PUT.
+
+        Why:
+            The byte-stability contract compares emitted vs baseline maps;
+            no network I/O is required (or safe) inside pytest.
+        """
+        capture_sink.append(combined_probes)  # stash the map for the caller to compare against baseline
+        logging.debug("_capture: intercepted combined_probes keys=%s", sorted(combined_probes.keys()))
+
+    monkeypatch.setattr(ospm, "_apply", _capture)  # replace the real PUT with the sink recorder
+    logging.debug("_patch_apply_to_capture: _apply replaced (return sink=%r)", id(capture_sink))
+
+
+class TestUs1CenrDedupWarning:
+    """CENR duplicate-warning dedup regression (feature 1025 US1).
+
+    Why:
+        Before 1025, ``_probe_target`` emitted one WARNING per missing
+        CENR observation per emission. Callers in ``_build_region_probes``
+        iterate per-site, so a single missing host in the samsung_elm
+        role produced ~315 WARNINGs on a ~315-site org. 1025 US1 moves
+        the WARNING to load-time (once per unique missing host per run)
+        and deletes the per-emission call at ``org_synthetic_probes_manager.py:401``.
+        This class pins the invariant with fixture-driven scenarios so
+        the storm cannot silently re-emerge after future refactors.
+    """
+
+    _FIXTURE_DIR = Path(__file__).parent / "fixtures"  # sibling directory holding phase-2 dedup fixtures
+
+    def _load_json(self, name: str) -> dict[str, Any]:
+        """Load a JSON fixture from the sibling ``fixtures/`` directory.
+
+        Why:
+            Local loader keeps the drift ownership crystal clear -- if
+            someone renames a fixture, the failing test names the file.
+
+        Args:
+            name: Bare filename (no path components); resolved against
+                ``_FIXTURE_DIR``.
+
+        Returns:
+            The parsed JSON document as a plain Python dict.
+        """
+        path = self._FIXTURE_DIR / name  # deterministic sibling-directory lookup
+        logging.info("TestUs1CenrDedupWarning: loading fixture %s", path)
+        payload = json.loads(path.read_text(encoding="utf-8"))  # utf-8 default on 3.13; explicit for clarity
+        logging.debug("_load_json: %s parsed (top-level keys=%s)", name, sorted(payload.keys()) if isinstance(payload, dict) else "<non-dict>")
+        return payload
+
+    def _samsung_elm_americas_role(self) -> dict[str, Any]:
+        """Return a curated ``samsung_elm_activation_americas`` role dict.
+
+        Why:
+            The storm behaviour only surfaces when a role's fqdns contain
+            hosts that are ABSENT from the CENR observation cache. This
+            fixture inlines the 7 SecB2B hosts from
+            ``cenr_dedup_missing_observations.json`` so tests do not need
+            to load the sidecar file at call time. The role name matches
+            ``_SAMSUNG_ELM_ROLE_PREFIX + "americas"`` so
+            ``_build_region_probes`` picks it for every US-country_code
+            site in ``cenr_dedup_org.json``.
+
+        Returns:
+            A role dict shaped like an entry in
+            ``data/zscaler_client_connector_probes.json``.
+        """
+        logging.info("_samsung_elm_americas_role: assembling role with %d fqdns", len(EXPECTED_MISSING_HOSTS))
+        role = {
+            "role": f"{ospm._SAMSUNG_ELM_ROLE_PREFIX}americas",  # target region-scoped role name
+            "ports": [443],  # matches shipped catalogue's HTTPS port list
+            "probe": {"protocol": "https", "port": 443},  # branch-3 fallback shape when observation missing
+            "fqdns": sorted(EXPECTED_MISSING_HOSTS),  # sort for deterministic iteration in tests
+        }
+        logging.debug("_samsung_elm_americas_role: role dict role=%s fqdns=%s", role["role"], role["fqdns"])
+        return role
+
+    def _empty_cenr(self) -> dict[str, Any]:
+        """Return an empty CENR cache used to trigger the missing-observation path.
+
+        Why:
+            Every FQDN in the samsung_elm role must miss the cache so
+            ``_probe_target`` falls through to Branch 3 (Category 2 of
+            the log-record-shape contract). A ``proxy_hostnames`` and
+            ``vpn_hostnames`` list is required by the loader adapter to
+            avoid tripping the freshness guard.
+
+        Returns:
+            A minimal CENR document with fresh timestamp and empty bags.
+        """
+        logging.info("_empty_cenr: assembling empty CENR document")
+        cenr = {
+            "schema_version": 1,  # matches loader adapter expectation
+            "fetched_utc": datetime.now(UTC).isoformat().replace("+00:00", "Z"),  # keep is_stale false
+            "proxy_hostnames": [],  # empty so every SecB2B host misses the cache
+            "vpn_hostnames": [],  # empty so no host is classified as VPN
+        }
+        logging.debug("_empty_cenr: emitted cache with empty proxy/vpn bags")
+        return cenr
+
+    def _cenr_with_all_hosts(self) -> dict[str, Any]:
+        """Return a CENR cache that observes every FQDN in EXPECTED_MISSING_HOSTS.
+
+        Why:
+            T008 asserts zero CENR WARNINGs are emitted when the cache
+            fully populates the samsung_elm hosts. Constructing v3
+            per-host entries (host + observed_protocol + observed_port)
+            ensures ``_lookup_v3_observation`` finds a hit and
+            ``_probe_target`` dispatches on Branch 2 (HTTPS) rather than
+            Branch 3 (WARNING fallback).
+
+        Returns:
+            A CENR document whose ``proxy_hostnames`` bag lists v3-shaped
+            entries for every EXPECTED_MISSING_HOSTS member.
+        """
+        logging.info("_cenr_with_all_hosts: fully-populating CENR for %d hosts", len(EXPECTED_MISSING_HOSTS))
+        cenr = {
+            "schema_version": 1,  # v3 loader shape
+            "fetched_utc": datetime.now(UTC).isoformat().replace("+00:00", "Z"),  # keep freshness guard happy
+            "proxy_hostnames": [
+                {
+                    "host": host,  # matches _lookup_v3_observation's host key
+                    "observed_protocol": "HTTPS",  # Branch 2 HTTPS dispatch avoids WARNING
+                    "observed_port": 443,  # port required by lookup even though :443 is elided
+                    "last_probed": datetime.now(UTC).isoformat().replace("+00:00", "Z"),  # required by v3 schema
+                }
+                for host in sorted(EXPECTED_MISSING_HOSTS)  # deterministic ordering for readability
+            ],
+            "vpn_hostnames": [],  # keep VPN bag empty so no host is reclassified as reachability
+        }
+        logging.debug("_cenr_with_all_hosts: emitted cache with %d proxy entries", len(cenr["proxy_hostnames"]))
+        return cenr
+
+    def _count_cenr_warnings(self, records: list[logging.LogRecord]) -> int:
+        """Return the number of records matching the CENR-missing warning shape.
+
+        Why:
+            Both the pre-1025 line-401 WARNING and any post-1025 load-time
+            WARNING that names the missing host will contain the host
+            string in the rendered message. Counting on that predicate
+            ignores unrelated warnings (e.g. critical_fqdn fallback) and
+            keeps the invariant tied to CENR missing observations
+            specifically.
+
+        Args:
+            records: Sequence of ``LogRecord`` objects captured via caplog.
+
+        Returns:
+            The number of records at WARNING level whose rendered message
+            references at least one EXPECTED_MISSING_HOSTS entry.
+        """
+        logging.info("_count_cenr_warnings: scanning %d records for CENR warnings", len(records))
+        matches = [
+            rec
+            for rec in records
+            if rec.levelno == logging.WARNING  # only WARNING severity qualifies per contract
+            and any(host in rec.getMessage() for host in EXPECTED_MISSING_HOSTS)  # message names at least one missing host
+        ]
+        logging.debug("_count_cenr_warnings: matched %d records", len(matches))
+        return len(matches)
+
+    def test_cenr_warning_dedup_ge_1_missing(self, caplog: pytest.LogCaptureFixture) -> None:  # T007
+        """CENR warnings dedup to at most ``M`` records per run (M = unique missing hosts).
+
+        Why:
+            Contract ``log_record_shape.md`` §1.4 requires CENR WARNINGs
+            to be emitted once per unique missing host per run, not once
+            per emission. Pre-1025 output is 315 sites * 7 missing hosts
+            = 2205 WARNINGs from ``_build_region_probes`` invoking
+            ``_probe_target`` per site; post-1025 must be <= 7. This
+            test iterates the 315-site fixture and asserts the cap; the
+            failure diagnostic names BOTH the observed count and the cap
+            it exceeded so operators grepping CI logs can spot per-site
+            duplication regressions immediately.
+        """
+        # Arrange: 315-site org fixture; samsung_elm role listing the 7 SecB2B
+        # hosts absent from the empty CENR cache. This is the exact shape the
+        # storm required in production before 1025 landed.
+        logging.info("test_cenr_warning_dedup_ge_1_missing: loading 315-site fixture")
+        sites = self._load_json("cenr_dedup_org.json")["sites"]  # 315 US-country_code site dicts
+        probes = {
+            "schema_version": 1,  # matches shipped catalogue
+            "source": "fixture",  # marker so debugging telemetry sees "fixture"
+            "roles": [self._samsung_elm_americas_role()],  # only the region role -- keeps signal focused
+        }
+        cenr = self._empty_cenr()  # every SecB2B host misses the cache
+        logging.debug(
+            "test_cenr_warning_dedup_ge_1_missing: fixture sites=%d expected_missing=%d",
+            len(sites),
+            len(EXPECTED_MISSING_HOSTS),
+        )
+
+        # Act: iterate _build_region_probes per site to simulate the site-
+        # override flow that drives the storm in production. Capture WARNING
+        # records at module scope so any load-time hook post-1025 also lands
+        # in the same buffer.
+        caplog.set_level(logging.WARNING, logger="src.org.org_synthetic_probes_manager")  # scope the capture
+        for site in sites:  # emulate per-site override loop
+            ospm._build_region_probes((probes, cenr), site.get("country_code"))  # triggers WARNING per host pre-1025
+
+        # Assert: CENR WARNING count <= number of unique missing hosts.
+        cap = len(EXPECTED_MISSING_HOSTS)  # M per contract log_record_shape.md §1.4
+        observed = self._count_cenr_warnings(caplog.records)  # counts WARNING records naming any missing host
+        logging.info(
+            "test_cenr_warning_dedup_ge_1_missing: observed=%d cap=%d sites=%d",
+            observed,
+            cap,
+            len(sites),
+        )
+        assert observed <= cap, (  # NOTE: diagnostic MUST name both observed AND cap per T007 contract
+            f"CENR WARNING count {observed} exceeded unique-missing-host cap {cap}; "
+            "per-site duplication regressed"
+        )
+
+    def test_cenr_warning_zero_when_fully_populated(self, caplog: pytest.LogCaptureFixture) -> None:  # T008
+        """No CENR warnings fire when every catalogue host has an observation.
+
+        Why:
+            The dedup invariant is meaningful only if the WARNING actually
+            correlates with missing observations. If a CENR cache already
+            covers every FQDN in the role, ``_probe_target`` should
+            dispatch on Branch 2 (HTTPS) and never reach the fallback --
+            producing exactly zero WARNING records. This test locks the
+            positive assertion so a future regression that fires WARNINGs
+            unconditionally (e.g. from the load-time hook forgetting to
+            consult observations) trips immediately.
+        """
+        # Arrange: same 315-site fixture but with a fully-populated CENR cache.
+        logging.info("test_cenr_warning_zero_when_fully_populated: loading fixture with populated CENR")
+        sites = self._load_json("cenr_dedup_org.json")["sites"]  # 315-site input
+        probes = {
+            "schema_version": 1,  # required by loader adapter
+            "source": "fixture",
+            "roles": [self._samsung_elm_americas_role()],  # same role as T007 for parity
+        }
+        cenr = self._cenr_with_all_hosts()  # every host has a v3 observation entry
+
+        # Act: iterate per-site as in T007.
+        caplog.set_level(logging.WARNING, logger="src.org.org_synthetic_probes_manager")  # capture at module scope
+        for site in sites:  # exhaustive iteration to catch any per-site leak
+            ospm._build_region_probes((probes, cenr), site.get("country_code"))
+
+        # Assert: zero CENR-missing WARNING records.
+        observed = self._count_cenr_warnings(caplog.records)  # should be 0 given full coverage
+        logging.info("test_cenr_warning_zero_when_fully_populated: observed=%d", observed)
+        assert observed == 0, (  # any non-zero count means WARNING fired despite observation being present
+            f"CENR WARNING count {observed} > 0 with fully-populated cache; "
+            "warnings must correlate with actual missing observations"
+        )
+
+    def test_cenr_warning_re_emit_across_runs(self, caplog: pytest.LogCaptureFixture) -> None:  # T009
+        """Dedup state does NOT persist across independent runs.
+
+        Why:
+            Operators intentionally re-run menu 206 to verify a fix
+            landed; the CENR-missing WARNING must fire again on each new
+            run so the operator sees the current state of the cache, not
+            a stale "already warned" silence. This test invokes the
+            per-site loop twice back-to-back and asserts both invocations
+            independently produce WARNINGs for the missing hosts.
+            Pre-1025 this passes trivially (warnings fire per emission);
+            post-1025 it becomes the guard that the load-time dedup hook
+            does not stash state across ``manage_org_synthetic_probes``
+            invocations.
+        """
+        # Arrange: shared fixture inputs for both runs (identical topology).
+        logging.info("test_cenr_warning_re_emit_across_runs: preparing two independent runs")
+        sites = self._load_json("cenr_dedup_org.json")["sites"]  # same 315-site input
+        probes = {
+            "schema_version": 1,  # v1 loader shape
+            "source": "fixture",
+            "roles": [self._samsung_elm_americas_role()],  # same role -- test re-emission on the SAME missing set
+        }
+        cenr = self._empty_cenr()  # missing every host
+
+        # Act (run 1): drive the per-site loop once and count warnings.
+        caplog.set_level(logging.WARNING, logger="src.org.org_synthetic_probes_manager")  # capture WARNING+
+        run1_start = len(caplog.records)  # anchor so we can slice run-1 records out later
+        for site in sites:  # per-site iteration mirroring the site-override flow
+            ospm._build_region_probes((probes, cenr), site.get("country_code"))
+        run1_records = caplog.records[run1_start:]  # snapshot of what run 1 emitted
+        run1_count = self._count_cenr_warnings(list(run1_records))  # WARNING count for run 1
+
+        # Act (run 2): repeat the same iteration; the dedup state MUST NOT
+        # inhibit re-emission because this is a fresh operator invocation.
+        run2_start = len(caplog.records)  # anchor for run-2 slice
+        for site in sites:  # identical iteration to confirm independence
+            ospm._build_region_probes((probes, cenr), site.get("country_code"))
+        run2_records = caplog.records[run2_start:]  # snapshot of what run 2 emitted
+        run2_count = self._count_cenr_warnings(list(run2_records))  # WARNING count for run 2
+
+        logging.info(
+            "test_cenr_warning_re_emit_across_runs: run1=%d run2=%d",
+            run1_count,
+            run2_count,
+        )
+
+        # Assert: both runs must emit at least one WARNING for the same
+        # missing set. A run-2 count of zero means the dedup state
+        # persisted across invocations (silent second run), which is the
+        # regression this test traps.
+        assert run1_count >= 1, (  # run-1 must emit -- otherwise the fixture is malformed
+            f"Run 1 emitted {run1_count} CENR WARNINGs; expected >= 1 for {len(EXPECTED_MISSING_HOSTS)} missing hosts"
+        )
+        assert run2_count >= 1, (  # run-2 must ALSO emit; silence means state leaked
+            f"Run 2 emitted {run2_count} CENR WARNINGs; expected >= 1 -- dedup state leaked across runs"
+        )
+
+    def test_probe_payload_byte_stability_smoke(self) -> None:  # T010
+        """Non-VPN probe payload is byte-identical to the pinned 1025 baseline.
+
+        Why:
+            Contract ``byte_stability_invariant.md`` §3 requires the
+            non-VPN emission to remain byte-stable across the US1
+            refactor (deleting the per-emission WARNING at line 401 and
+            wiring the load-time hook). This test loads the T005 baseline
+            (captured on the pre-1025 tip) and compares it to the current
+            ``_build_probe_set`` output filtered to non-VPN rows via
+            ``sort_keys=True`` JSON equivalence. Any drift in the emit
+            shape (extra keys, changed URL scheme, new default port)
+            trips this guard immediately -- long before it can reach
+            production.
+        """
+        # Arrange: load the T005-captured baseline (pinned pre-1025) and the
+        # smoke fixture ``_build_probe_set`` consumes. Both fixtures live in
+        # the sibling ``fixtures/`` directory.
+        logging.info("test_probe_payload_byte_stability_smoke: loading baseline + smoke fixture")
+        baseline = self._load_json("smoke_probes_baseline.json")  # T005 output; deterministic
+        smoke = self._load_json("smoke_org.json")  # (probes, cenr) tuple used to regenerate output
+
+        # Act: rebuild the probe set from the same inputs used to capture the
+        # baseline. Any change in ``_build_probe_set`` or its transitive
+        # helpers (e.g. ``_probe_target``) will diff the JSON.
+        emitted = ospm._build_probe_set((smoke["probes"], smoke["cenr"]), [10])  # smoke fixture uses vlan_ids=[10]
+        logging.debug(
+            "test_probe_payload_byte_stability_smoke: emitted %d probes; baseline has %d",
+            len(emitted),
+            len(baseline),
+        )
+
+        # Assert: canonical JSON of the emitted map matches the baseline.
+        # ``sort_keys=True`` neutralises Python's dict-insertion-order so the
+        # comparison targets bytes, not iteration order.
+        emitted_json = json.dumps(emitted, sort_keys=True)  # canonical form for comparison
+        baseline_json = json.dumps(baseline, sort_keys=True)  # canonical form matches T005 capture format
+        assert emitted_json == baseline_json, (
+            "INV-1 drift: _build_probe_set output diverged from smoke_probes_baseline.json. "
+            f"emitted={emitted_json!r} baseline={baseline_json!r}"
+        )
