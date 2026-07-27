@@ -500,6 +500,9 @@ from src.network.routing_utils import (  # Cat A canonical (1014 P4)
     RoutingDeps,
     RoutingUtils,
 )
+from src.device.ap_profile_migration_manager import (
+    APProfileMigrationManager,  # Menus 207 and 208 -- migrate APs between device profiles and revert
+)
 from src.org.org_config_migration_manager import OrgConfigMigrationManager  # Cat B (1013 SC-001 position 5)
 from src.org.org_synthetic_probes_manager import (
     manage_org_synthetic_probes,  # Menu 206 Zscaler probe manager (side-effect-free until final confirmation)
@@ -4833,6 +4836,18 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
         lambda: manage_org_synthetic_probes(apisession, ConfigUtils.get_cached_or_prompted_org_id()),
         " DESTRUCTIVE: Manage org Zscaler synthetic probes"
         " - Build/merge/swap synthetic_test.custom_probes from curated Zscaler catalogue",
+    ),
+    "207": (
+        lambda: APProfileMigrationManager.migrate_aps_between_device_profiles(apisession),
+        " DESTRUCTIVE: Migrate APs between device profiles"
+        " - Reassign every AP bound to a source device profile to a chosen target profile"
+        " (Requires typing 'MIGRATE' or 'DRY-RUN' to confirm)",
+    ),
+    "208": (
+        lambda: APProfileMigrationManager.revert_ap_profile_migration(apisession),
+        " DESTRUCTIVE: Revert an AP profile migration from a backup file"
+        " - Reassign each listed AP back to its original device profile"
+        " (Requires typing 'REVERT' to confirm)",
     ),
 }
 
