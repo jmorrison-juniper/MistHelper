@@ -177,6 +177,4 @@ def test_iso_cover_double_declared() -> None:
         f"country codes {sorted(overlap)} appear in both the region map and "
         f"the intentional-gap set; each code must live in exactly one collection."
     )
-    assert "PA" in diagnostic, (
-        f"double-declared diagnostic must name the offending code; got: {diagnostic!r}"
-    )
+    assert "PA" in diagnostic, f"double-declared diagnostic must name the offending code; got: {diagnostic!r}"

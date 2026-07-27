@@ -1211,7 +1211,9 @@ def test_site_override_prompt_declined_makes_no_calls() -> None:
         patch.object(ospm._mist_site_setting, "getSiteSetting") as get_mock,
         patch.object(ospm._mist_site_setting, "updateSiteSettings") as put_mock,
     ):
-        ospm._prompt_and_apply_site_overrides(session, "org-uuid", {"zcc-x": {"name": "zcc-x"}}, ({"roles": []}, {}), set())
+        ospm._prompt_and_apply_site_overrides(
+            session, "org-uuid", {"zcc-x": {"name": "zcc-x"}}, ({"roles": []}, {}), set()
+        )
     list_mock.assert_not_called()
     get_mock.assert_not_called()
     put_mock.assert_not_called()
@@ -1299,7 +1301,9 @@ def test_site_override_indexed_prompt_empty_input_skips() -> None:
         patch.object(ospm._mist_site_setting, "updateSiteSettings") as put_mock,
         patch("builtins.input", lambda _prompt: next(inputs)),
     ):
-        ospm._prompt_and_apply_site_overrides(session, "org-uuid", {"zcc-x": {"name": "zcc-x"}}, ({"roles": []}, {}), set())
+        ospm._prompt_and_apply_site_overrides(
+            session, "org-uuid", {"zcc-x": {"name": "zcc-x"}}, ({"roles": []}, {}), set()
+        )
     get_mock.assert_not_called()
     put_mock.assert_not_called()
 
@@ -1315,7 +1319,9 @@ def test_site_override_no_sites_short_circuits(capsys: pytest.CaptureFixture[str
         patch.object(ospm._mist_site_setting, "updateSiteSettings") as put_mock,
         patch("builtins.input", lambda _prompt: next(inputs)),
     ):
-        ospm._prompt_and_apply_site_overrides(session, "org-uuid", {"zcc-x": {"name": "zcc-x"}}, ({"roles": []}, {}), set())
+        ospm._prompt_and_apply_site_overrides(
+            session, "org-uuid", {"zcc-x": {"name": "zcc-x"}}, ({"roles": []}, {}), set()
+        )
     out = capsys.readouterr().out
     assert "No sites found" in out
     put_mock.assert_not_called()
@@ -1387,7 +1393,9 @@ def test_site_override_indexed_prompt_sorts_by_name() -> None:
         patch.object(ospm._mist_site_setting, "updateSiteSettings", return_value=put_response) as put_mock,
         patch("builtins.input", lambda _prompt: next(inputs)),
     ):
-        ospm._prompt_and_apply_site_overrides(session, "org-uuid", {"zcc-x": {"name": "zcc-x"}}, ({"roles": []}, {}), set())
+        ospm._prompt_and_apply_site_overrides(
+            session, "org-uuid", {"zcc-x": {"name": "zcc-x"}}, ({"roles": []}, {}), set()
+        )
     assert put_mock.call_count == 1
     assert put_mock.call_args.args[1] == "id-alpha"
 
@@ -1421,7 +1429,9 @@ def test_site_override_unnamed_sites_sink_to_end() -> None:
         patch.object(ospm._mist_site_setting, "updateSiteSettings", return_value=put_response) as put_mock,
         patch("builtins.input", lambda _prompt: next(inputs)),
     ):
-        ospm._prompt_and_apply_site_overrides(session, "org-uuid", {"zcc-x": {"name": "zcc-x"}}, ({"roles": []}, {}), set())
+        ospm._prompt_and_apply_site_overrides(
+            session, "org-uuid", {"zcc-x": {"name": "zcc-x"}}, ({"roles": []}, {}), set()
+        )
     put_site_ids = [call.args[1] for call in put_mock.call_args_list]
     # Both blank-name entries land at the end. Ordering between them
     # tie-breaks on the casefolded name string first (empty "" sorts
@@ -1473,7 +1483,9 @@ def test_site_override_indexed_prompt_expands_ranges() -> None:
         patch.object(ospm._mist_site_setting, "updateSiteSettings", return_value=put_response) as put_mock,
         patch("builtins.input", lambda _prompt: next(inputs)),
     ):
-        ospm._prompt_and_apply_site_overrides(session, "org-uuid", {"zcc-x": {"name": "zcc-x"}}, ({"roles": []}, {}), set())
+        ospm._prompt_and_apply_site_overrides(
+            session, "org-uuid", {"zcc-x": {"name": "zcc-x"}}, ({"roles": []}, {}), set()
+        )
     put_site_ids = [call.args[1] for call in put_mock.call_args_list]
     # Sort key is site name, so indexes 1..6 map to SiteA..SiteF in order.
     # 2-4 -> site-2, site-3, site-4; 6 -> site-6.
@@ -1499,7 +1511,9 @@ def test_site_override_indexed_prompt_all_token_selects_every_site() -> None:
         patch.object(ospm._mist_site_setting, "updateSiteSettings", return_value=put_response) as put_mock,
         patch("builtins.input", lambda _prompt: next(inputs)),
     ):
-        ospm._prompt_and_apply_site_overrides(session, "org-uuid", {"zcc-x": {"name": "zcc-x"}}, ({"roles": []}, {}), set())
+        ospm._prompt_and_apply_site_overrides(
+            session, "org-uuid", {"zcc-x": {"name": "zcc-x"}}, ({"roles": []}, {}), set()
+        )
     put_site_ids = sorted(call.args[1] for call in put_mock.call_args_list)
     assert put_site_ids == ["site-1", "site-2", "site-3"]
 
@@ -1523,7 +1537,9 @@ def test_site_override_indexed_prompt_range_drops_out_of_range() -> None:
         patch.object(ospm._mist_site_setting, "updateSiteSettings", return_value=put_response) as put_mock,
         patch("builtins.input", lambda _prompt: next(inputs)),
     ):
-        ospm._prompt_and_apply_site_overrides(session, "org-uuid", {"zcc-x": {"name": "zcc-x"}}, ({"roles": []}, {}), set())
+        ospm._prompt_and_apply_site_overrides(
+            session, "org-uuid", {"zcc-x": {"name": "zcc-x"}}, ({"roles": []}, {}), set()
+        )
     put_site_ids = [call.args[1] for call in put_mock.call_args_list]
     assert put_site_ids == ["site-1", "site-2"]
 
@@ -3071,9 +3087,7 @@ class TestUs1CenrDedupWarning:
         )
 
         # Assert: run 1 names host_a (baseline missing).
-        assert host_a in run1_messages, (
-            f"Run 1 must name the already-missing host {host_a!r}; got: {run1_messages!r}"
-        )
+        assert host_a in run1_messages, f"Run 1 must name the already-missing host {host_a!r}; got: {run1_messages!r}"
         # Assert: run 2 names host_b (the dropout). This is the core dropout
         # semantics -- host_b was silent in run 1 because it was observed,
         # then dropped out and MUST re-warn in run 2.
@@ -3083,9 +3097,9 @@ class TestUs1CenrDedupWarning:
             f"across the dropout transition."
         )
         # Belt-and-braces: run 2 must also still name host_a (still missing).
-        assert host_a in run2_messages, (
-            f"Run 2 must still name the persistently-missing host {host_a!r}; got: {run2_messages!r}"
-        )
+        assert (
+            host_a in run2_messages
+        ), f"Run 2 must still name the persistently-missing host {host_a!r}; got: {run2_messages!r}"
 
     def test_probe_payload_byte_stability_smoke(self) -> None:  # T010
         """Non-VPN probe payload is byte-identical to the pinned 1025 baseline.
@@ -3385,10 +3399,14 @@ class TestUs2CountryCodeDedupWarning:
         # unmapped set. A run-2 count of zero means the dedup state
         # persisted across invocations (silent second run), which is the
         # regression this test traps.
-        assert run1_count >= 1, (  # run-1 must emit -- otherwise the fixture is malformed
+        assert (
+            run1_count >= 1
+        ), (  # run-1 must emit -- otherwise the fixture is malformed
             f"Run 1 emitted {run1_count} country_code WARNINGs; expected >= 1 for unmapped set {sorted(unmapped)}"
         )
-        assert run2_count >= 1, (  # run-2 must ALSO emit; silence means state leaked
+        assert (
+            run2_count >= 1
+        ), (  # run-2 must ALSO emit; silence means state leaked
             f"Run 2 emitted {run2_count} country_code WARNINGs; expected >= 1 -- dedup state leaked across runs"
         )
 
@@ -3413,14 +3431,13 @@ def test_regression_runtime_under_budget(pytestconfig: pytest.Config) -> None:  
         this task lands. We deliberately EXCLUDE this test from the
         subset it measures (recursion guard).
     """
-    import time  # local import so the top-of-file stays lean when this test skips
-
     # Guard against recursive self-invocation: if pytest is already inside
     # this test's frame (e.g. a user runs the subset manually and the
     # runner sweeps this file), we cannot spawn another pytest without
     # blowing the stack. ``PYTEST_CURRENT_TEST`` env var breadcrumbs the
     # active test so we can detect nested invocation and bail cleanly.
     import os
+    import time  # local import so the top-of-file stays lean when this test skips
 
     if os.environ.get("_1025_RUNTIME_BUDGET_INFLIGHT") == "1":  # recursion guard
         logging.info("test_regression_runtime_under_budget: nested invocation detected -- skipping")
@@ -3464,13 +3481,15 @@ def test_regression_runtime_under_budget(pytestconfig: pytest.Config) -> None:  
         # output, ``--no-header`` trims a few tens of ms, ``-p no:cacheprovider``
         # avoids polluting the parent's cache. The rootdir stays the repo
         # root by default (inherited from the parent pytest invocation).
-        exit_code = pytest.main([
-            "-q",  # quiet mode
-            "--no-header",  # skip pytest header
-            "-p",  # disable plugin
-            "no:cacheprovider",  # skip .pytest_cache writes
-            *subset,  # the curated subset
-        ])
+        exit_code = pytest.main(
+            [
+                "-q",  # quiet mode
+                "--no-header",  # skip pytest header
+                "-p",  # disable plugin
+                "no:cacheprovider",  # skip .pytest_cache writes
+                *subset,  # the curated subset
+            ]
+        )
         elapsed = time.perf_counter() - start  # wall-clock cost of the nested run
     finally:
         # Always clear the breadcrumb, even on assertion failure.
