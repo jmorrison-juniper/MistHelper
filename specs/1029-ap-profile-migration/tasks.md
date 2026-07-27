@@ -149,11 +149,11 @@ Dry-run is a small branch on the migration entry point, not a separate module �
 
 **Purpose**: Final gate checks that span the whole feature — every operator-visible string is STE-compliant, docstring coverage is above 90 percent, the guardrail and registry tests are green, and the quickstart flows land.
 
-- [ ] T053 [P] Run the feature-1026 ASD-STE100 lint over the new module and the two modified files (`src/device/ap_profile_migration_manager.py`, `src/utils/operation_registry.py`, `MistHelper.py` menu additions only). Fix every violation. All operator-visible strings — menu labels, plan text, prompts, progress lines, error text, summary text — MUST pass (FR-002, SC-007).
-- [ ] T054 [P] Run `interrogate -f 90` and `pydoclint --style=google` over the new module. Coverage MUST stay at or above 90 percent and every added function, method, class, and module MUST carry a Google-style docstring with a "Why" section (FR-004, DOCS.md).
-- [ ] T055 [P] Run `ruff check .`, `black --check .`, and `mypy src/device/ap_profile_migration_manager.py src/utils/operation_registry.py` — every command MUST exit 0.
-- [ ] T056 Run the full pytest suite (`cd src && pytest`) and confirm the new tests plus every existing test is green (SC-006 — no coverage regression). Confirm the destructive-registry guardrail from `src/utils/operation_registry.py` passes without modification.
-- [ ] T057 Update `CLAUDE.md` "Recent Changes" section with a one-line entry naming feature 1029, its two menu numbers (207 / 208), and its two persisted artifacts (JSON backup + JSONL audit). Keep the entry under 25 words per the STE style guide.
+- [X] T053 [P] Run the feature-1026 ASD-STE100 lint over the new module and the two modified files (`src/device/ap_profile_migration_manager.py`, `src/utils/operation_registry.py`, `MistHelper.py` menu additions only). Fix every violation. All operator-visible strings — menu labels, plan text, prompts, progress lines, error text, summary text — MUST pass (FR-002, SC-007).
+- [X] T054 [P] Run `interrogate -f 90` and `pydoclint --style=google` over the new module. Coverage MUST stay at or above 90 percent and every added function, method, class, and module MUST carry a Google-style docstring with a "Why" section (FR-004, DOCS.md).
+- [X] T055 [P] Run `ruff check .`, `black --check .`, and `mypy src/device/ap_profile_migration_manager.py src/utils/operation_registry.py` — every command MUST exit 0.
+- [X] T056 Run the full pytest suite (`cd src && pytest`) and confirm the new tests plus every existing test is green (SC-006 — no coverage regression). Confirm the destructive-registry guardrail from `src/utils/operation_registry.py` passes without modification.
+- [X] T057 Update `CLAUDE.md` "Recent Changes" section with a one-line entry naming feature 1029, its two menu numbers (207 / 208), and its two persisted artifacts (JSON backup + JSONL audit). Keep the entry under 25 words per the STE style guide.
 - [ ] T058 Final live-run validation: execute every scenario in `quickstart.md` (1 through 7) in order against a Mist test org. Confirm every "Expected outcome" line for every scenario. Attach the output as an artifact on the PR.
 
 ---

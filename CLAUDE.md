@@ -34,7 +34,7 @@ cd src; pytest; ruff check .
 Python 3.13 (matches project constitution binding minimum).: Follow standard conventions
 
 ## Recent Changes
-- 1029-ap-profile-migration: Added Python 3.13+ (per constitution binding minimum + `mistapi >= 0.63.1` (verified installed
+- 1029-ap-profile-migration: Added menus 207 (migrate APs between device profiles) and 208 (revert); writes JSON backup and JSONL audit under `data/`.
 - 1025-probe-emission-log-fixes: Collapsed per-emission CENR + country_code WARNINGs into single load-time dedup emissions (`_emit_load_time_cenr_warning`, `_emit_load_time_country_code_warning`); extended `_COUNTRY_CODE_TO_REGION` LATAM/Caribbean mappings + added `_COUNTRY_CODE_INTENTIONAL_GAPS` frozenset; INV-1 byte-stability preserved
 - 1024-vpn-icmp-reachability: Added Python 3.13+ (`pyproject.toml` requires `>=3.13`; + Standard library only (`logging`, `pathlib`,
 
