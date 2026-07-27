@@ -15,6 +15,142 @@ Why:
 # test names without evaluating the module-level types.
 from __future__ import annotations
 
+import json
+import logging
+import sys
+import types
+from pathlib import Path
+from typing import Any
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+# WHY: the module-under-test lives here; the alias `apm_mod` gives short access
+# to module-scope names (helpers, logger) when tests need to patch them.
+from src.device import ap_profile_migration_manager as apm_mod
+from src.device.ap_profile_migration_manager import APProfileMigrationManager
+
+# WHY: caplog / patch(...) targets must use the dotted module path so the
+# logger the code writes to matches the logger the test captures on.
+_LOGGER_NAME = "src.device.ap_profile_migration_manager"
+
+
+# ---------------------------------------------------------------------------
+# Shared fixtures
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def fake_mh(monkeypatch: pytest.MonkeyPatch) -> types.ModuleType:
+    """Install a stub ``MistHelper`` module so lazy imports resolve here.
+
+    Why:
+        ``APProfileMigrationManager`` reaches ``ConfigUtils`` and
+        ``InputUtils`` (and possibly ``PromptUtils``) via a call-time
+        ``import MistHelper as _mh`` to avoid a circular import at module
+        load. Registering a synthetic module in ``sys.modules`` lets every
+        test stub only the attributes it needs.
+
+    Args:
+        monkeypatch: pytest's built-in ``sys.modules`` patcher.
+
+    Returns:
+        The synthetic ``MistHelper`` module the test can further customise.
+    """
+    module = types.ModuleType("MistHelper")
+    # WHY: expose the same top-level names the real MistHelper.py exports so
+    # the manager's lazy _get_config_utils()/_get_input_utils() helpers do
+    # not raise AttributeError while the test is mocking behaviour.
+    module.ConfigUtils = MagicMock()
+    module.InputUtils = MagicMock()
+    module.PromptUtils = MagicMock()
+    module.apisession = types.SimpleNamespace(host=None, apitoken=None)
+    # WHY: the default org-resolver returns a stable UUID so tests that do
+    # not care about org selection get a deterministic value.
+    module.ConfigUtils.get_cached_or_prompted_org_id.return_value = "203d3d02-dbc0-4c1b-bc44-13e2d1e1a1ff"
+    # WHY: safe_input defaults to cancel; any test that needs MIGRATE / DRY-RUN
+    # overrides side_effect on the mock explicitly.
+    module.InputUtils.safe_input.return_value = ""
+    monkeypatch.setitem(sys.modules, "MistHelper", module)
+    return module
+
+
+@pytest.fixture
+def data_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Redirect the manager's ``data/`` writes to a per-test tmp dir.
+
+    Why:
+        The backup writer computes its target path under ``data/`` at the
+        repo root; letting a unit test scribble there would pollute the
+        real workspace and break INV-1 byte-stability on unrelated files.
+        We monkeypatch a ``_DATA_DIR`` module constant (the implementation
+        MUST honour it) and also ``chdir`` so a naive ``Path("data")``
+        relative resolution ends up in the same place.
+
+    Args:
+        tmp_path: pytest's per-test temp directory.
+        monkeypatch: pytest's env / attribute patcher.
+
+    Returns:
+        The temp ``data`` sub-directory the tests should point at.
+    """
+    d = tmp_path / "data"
+    d.mkdir()
+    # WHY: chdir keeps a Path("data") resolution consistent with the tmp path
+    # even if the implementation forgets to honour an injected data_dir.
+    monkeypatch.chdir(tmp_path)
+    # WHY: expose an attribute the implementation MAY read; harmless when
+    # the implementation instead accepts a data_dir argument.
+    monkeypatch.setattr(apm_mod, "_DATA_DIR", str(d), raising=False)
+    return d
+
+
+def _profile(pid: str, name: str) -> dict[str, Any]:
+    """Return a minimal Mist device-profile JSON payload.
+
+    Why:
+        Every test that mocks ``getOrgDeviceProfile`` returns a dict; a
+        one-liner factory keeps the fixture data compact and consistent.
+
+    Args:
+        pid: The device-profile UUID.
+        name: The device-profile human-readable name.
+
+    Returns:
+        A dict shaped like Mist's device-profile JSON (minimum fields the
+        backup snapshot validators require).
+    """
+    return {"id": pid, "name": name, "type": "ap"}
+
+
+def _ap_record(device_id: str, site_id: str, mac: str, hostname: str | None = None) -> dict[str, Any]:
+    """Return one entry shaped per data-model §1.4 (``APRecord``).
+
+    Why:
+        Centralises the field set so a spec update (add/remove keys) only
+        needs one edit here.
+
+    Args:
+        device_id: The AP device UUID.
+        site_id: The site UUID the AP is under.
+        mac: The AP MAC address in canonical Mist form.
+        hostname: Optional AP hostname (may be ``None``).
+
+    Returns:
+        A dict shaped per ``data-model.md`` §1.4.
+    """
+    return {
+        "device_id": device_id,
+        "site_id": site_id,
+        "mac": mac,
+        "hostname": hostname,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Skeleton import check (kept from T006 — still valuable as a smoke test)
+# ---------------------------------------------------------------------------
+
 
 def test_placeholder_manager_importable() -> None:
     """Skeleton import check -- proves T005 wired the module up.
@@ -25,12 +161,412 @@ def test_placeholder_manager_importable() -> None:
         test discovery both agree that ``APProfileMigrationManager`` is
         addressable before any real test method depends on it.
     """
-    # WHY: local import keeps module-import side effects out of the test-
-    # collection phase (matches the module docstring's --help guard).
-    from src.device.ap_profile_migration_manager import (
-        APProfileMigrationManager,
-    )
-
     # WHY: assert on the class rather than an instance because the manager is
     # a static-method container -- there is nothing to construct.
     assert APProfileMigrationManager is not None
+
+
+# ---------------------------------------------------------------------------
+# T009 -- refuse when source == target
+# ---------------------------------------------------------------------------
+
+
+def test_migrate_refuses_when_source_equals_target(
+    fake_mh: types.ModuleType,
+    data_dir: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Selecting the same profile for source and target MUST refuse and issue zero PUTs.
+
+    Why:
+        FR-008 protects operators from a no-op destructive run whose only
+        effect is a spurious "success" audit line. The refusal MUST be
+        visible on stdout and MUST short-circuit before any AP is touched.
+    """
+    # WHY: force _pick_ap_device_profile to return the same profile twice.
+    same_id = "aaaa1111-2222-3333-4444-555566667777"
+    same = (same_id, "SharedProfile", _profile(same_id, "SharedProfile"))
+    put_calls: list[Any] = []
+    with (
+        patch.object(APProfileMigrationManager, "_pick_ap_device_profile", side_effect=[same, same]),
+        patch("mistapi.api.v1.sites.devices.updateSiteDevice", side_effect=lambda *a, **kw: put_calls.append((a, kw))),
+    ):
+        APProfileMigrationManager.migrate_aps_between_device_profiles(session=MagicMock())
+
+    out = capsys.readouterr().out
+    # WHY: text-content assertion is deliberately lenient -- any wording that
+    # names "source" and "target" satisfies FR-008; the exact string is
+    # locked by the STE lint (T053), not by this test.
+    assert "source" in out.lower() and "target" in out.lower(), f"Refusal must mention source/target; got: {out!r}"
+    assert put_calls == [], f"Zero PUTs expected on refusal; got {len(put_calls)}"
+
+
+# ---------------------------------------------------------------------------
+# T010 -- report nothing-to-migrate when source is empty
+# ---------------------------------------------------------------------------
+
+
+def test_migrate_reports_nothing_to_migrate_when_source_empty(
+    fake_mh: types.ModuleType,
+    data_dir: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Empty AP-discovery MUST print the short-circuit message; zero files and zero PUTs.
+
+    Why:
+        FR-010 requires an early exit when the source profile has no APs
+        bound so the operator does not stare at a spinning progress bar for
+        an empty fleet. Also proves no backup file is written when there is
+        nothing to migrate (FR-011 negative side).
+    """
+    src = ("aaaa1111-2222-3333-4444-555566667777", "Source", _profile("aaaa1111-2222-3333-4444-555566667777", "Source"))
+    tgt = ("bbbb1111-2222-3333-4444-555566667777", "Target", _profile("bbbb1111-2222-3333-4444-555566667777", "Target"))
+    put_calls: list[Any] = []
+    with (
+        patch.object(APProfileMigrationManager, "_pick_ap_device_profile", side_effect=[src, tgt]),
+        patch.object(APProfileMigrationManager, "_discover_aps_on_source_profile", return_value=[]),
+        patch("mistapi.api.v1.sites.devices.updateSiteDevice", side_effect=lambda *a, **kw: put_calls.append((a, kw))),
+    ):
+        APProfileMigrationManager.migrate_aps_between_device_profiles(session=MagicMock())
+
+    out = capsys.readouterr().out
+    assert (
+        "No APs bound to source profile. Nothing to migrate." in out
+    ), f"Expected exact short-circuit message; got: {out!r}"
+    assert put_calls == [], "Zero PUTs expected on empty source"
+    # WHY: FR-011 negative side -- no backup file must be written when there
+    # is nothing to back up.
+    assert (
+        list(data_dir.glob("ap-profile-migration_*.json")) == []
+    ), "No backup file should be written when the source profile is empty"
+
+
+# ---------------------------------------------------------------------------
+# T011 -- backup file MUST be written before the first PUT
+# ---------------------------------------------------------------------------
+
+
+def test_migrate_writes_backup_before_any_put(
+    fake_mh: types.ModuleType,
+    data_dir: Path,
+) -> None:
+    """The backup file MUST land on disk before the first ``updateSiteDevice`` call.
+
+    Why:
+        FR-011 makes the backup file the single source of truth for a
+        revert; a PUT issued before the file exists is unrecoverable. This
+        test uses a shared call-order recorder to lock the ordering.
+    """
+    order: list[str] = []
+    src = ("src-id", "SourceName", _profile("src-id", "SourceName"))
+    tgt = ("tgt-id", "TargetName", _profile("tgt-id", "TargetName"))
+    aps = [_ap_record("d1", "s1", "5c5b350e0001", "ap-1")]
+
+    def _record_write(payload: dict[str, Any], data_dir_arg: str) -> str:
+        """Record and return a fake backup path."""
+        order.append("backup_write")
+        return str(Path(data_dir_arg) / "ap-profile-migration_20260727T000000Z_src-id_to_tgt-id.json")
+
+    def _record_put(*args: Any, **kwargs: Any) -> Any:
+        """Record any updateSiteDevice call in order."""
+        order.append("put")
+        response = MagicMock()
+        response.status_code = 200
+        return response
+
+    fake_mh.InputUtils.safe_input.return_value = "MIGRATE"
+    with (
+        patch.object(APProfileMigrationManager, "_pick_ap_device_profile", side_effect=[src, tgt]),
+        patch.object(APProfileMigrationManager, "_discover_aps_on_source_profile", return_value=aps),
+        patch.object(APProfileMigrationManager, "_write_backup_file", side_effect=_record_write),
+        patch("mistapi.api.v1.sites.devices.updateSiteDevice", side_effect=_record_put),
+        patch("time.sleep"),  # WHY: never actually sleep in unit tests.
+    ):
+        APProfileMigrationManager.migrate_aps_between_device_profiles(session=MagicMock())
+
+    # WHY: the first observed event MUST be the backup write; every put must
+    # come after it.
+    assert order, "Expected at least one recorded event"
+    assert order[0] == "backup_write", f"Backup MUST precede first PUT; got order={order!r}"
+    assert "put" in order, "Expected at least one PUT call after backup"
+
+
+# ---------------------------------------------------------------------------
+# T012 -- backup shape matches data-model §1.3
+# ---------------------------------------------------------------------------
+
+
+def test_migrate_backup_shape_matches_data_model_section_1_3(
+    fake_mh: types.ModuleType,
+    data_dir: Path,
+) -> None:
+    """The written backup JSON MUST expose every top-level field per data-model §1.3.
+
+    Why:
+        FR-013 pins the on-disk backup schema; a silent drift would break
+        the revert (menu 208) or every downstream forensic tool. This test
+        drives the full entry point with two APs across two sites and
+        loads the resulting file.
+    """
+    src_id = "aaaa1111-2222-3333-4444-555566667777"
+    tgt_id = "bbbb1111-2222-3333-4444-555566667777"
+    src = (src_id, "Source-Profile", _profile(src_id, "Source-Profile"))
+    tgt = (tgt_id, "Target-Profile", _profile(tgt_id, "Target-Profile"))
+    aps = [
+        _ap_record("d1", "site-1", "5c5b350e0001", "ap-1"),
+        _ap_record("d2", "site-2", "5c5b350e0002", None),
+    ]
+
+    def _ok_put(*args: Any, **kwargs: Any) -> Any:
+        """Return a healthy 200 response for every PUT."""
+        r = MagicMock()
+        r.status_code = 200
+        return r
+
+    fake_mh.InputUtils.safe_input.return_value = "MIGRATE"
+    with (
+        patch.object(APProfileMigrationManager, "_pick_ap_device_profile", side_effect=[src, tgt]),
+        patch.object(APProfileMigrationManager, "_discover_aps_on_source_profile", return_value=aps),
+        patch("mistapi.api.v1.sites.devices.updateSiteDevice", side_effect=_ok_put),
+        patch("time.sleep"),
+    ):
+        APProfileMigrationManager.migrate_aps_between_device_profiles(session=MagicMock())
+
+    files = list(data_dir.glob("ap-profile-migration_*.json"))
+    assert len(files) == 1, f"Exactly one backup file expected; got {files!r}"
+    payload = json.loads(files[0].read_text(encoding="utf-8"))
+
+    # WHY: assert every required top-level field per data-model §1.3.
+    assert payload["schema_version"] == 1
+    assert isinstance(payload["org_id"], str) and payload["org_id"]
+    assert isinstance(payload["migration_timestamp_utc"], str) and payload["migration_timestamp_utc"]
+    assert payload["source_profile_id"] == src_id
+    assert payload["target_profile_id"] == tgt_id
+    assert payload["source_profile_snapshot"]["id"] == src_id  # rule 6
+    assert payload["target_profile_snapshot"]["id"] == tgt_id  # rule 6
+    assert isinstance(payload["aps_planned"], list) and len(payload["aps_planned"]) == 2
+    for rec in payload["aps_planned"]:
+        assert set(rec.keys()) >= {"device_id", "site_id", "mac", "hostname"}
+    assert isinstance(payload["aps_reassigned"], list)
+    assert payload["outcome"] in {"success", "partial", "failure"}
+    assert "failure_detail" in payload  # None on success, dict on partial/failure
+
+
+# ---------------------------------------------------------------------------
+# T013 -- retry cadence [0.5, 1.0] on transient PUT failure
+# ---------------------------------------------------------------------------
+
+
+def test_migrate_retries_transient_put_failure_then_succeeds(
+    fake_mh: types.ModuleType,
+    data_dir: Path,
+) -> None:
+    """A transient PUT failure MUST retry with the ``[0.5, 1.0]`` backoff sequence.
+
+    Why:
+        research.md Decision 2 pins the retry cadence as bounded and
+        deterministic. The test observes ``time.sleep`` to lock the
+        [0.5, 1.0] sequence; a silent tune to [1, 2] would break here.
+    """
+    src = ("src-id", "Src", _profile("src-id", "Src"))
+    tgt = ("tgt-id", "Tgt", _profile("tgt-id", "Tgt"))
+    aps = [_ap_record("d1", "site-1", "5c5b350e0001", "ap-1")]
+    put_side = [OSError("boom"), OSError("boom-2"), MagicMock(status_code=200)]
+    sleep_calls: list[float] = []
+
+    def _sleep_spy(seconds: float) -> None:
+        """Record every backoff interval requested by the retry loop."""
+        sleep_calls.append(seconds)
+
+    fake_mh.InputUtils.safe_input.return_value = "MIGRATE"
+    with (
+        patch.object(APProfileMigrationManager, "_pick_ap_device_profile", side_effect=[src, tgt]),
+        patch.object(APProfileMigrationManager, "_discover_aps_on_source_profile", return_value=aps),
+        patch("mistapi.api.v1.sites.devices.updateSiteDevice", side_effect=put_side),
+        patch("time.sleep", side_effect=_sleep_spy),
+    ):
+        APProfileMigrationManager.migrate_aps_between_device_profiles(session=MagicMock())
+
+    # WHY: only the retry backoffs should be observed. Progress-line loops
+    # MUST NOT sleep in this manager (research Decision 2 keeps retries the
+    # only sleep source).
+    assert sleep_calls == [0.5, 1.0], f"Retry cadence MUST be [0.5, 1.0]; observed sleeps={sleep_calls!r}"
+    # WHY: the successful third attempt records the AP as reassigned.
+    files = list(data_dir.glob("ap-profile-migration_*.json"))
+    assert files, "Backup file expected on success"
+    payload = json.loads(files[0].read_text(encoding="utf-8"))
+    assert payload["aps_reassigned"] == ["d1"]
+    assert payload["outcome"] == "success"
+
+
+# ---------------------------------------------------------------------------
+# T014 -- stop-on-second-retry-exhaustion with partial-success record
+# ---------------------------------------------------------------------------
+
+
+def test_migrate_stops_on_second_retry_exhaustion_and_records_partial_success(
+    fake_mh: types.ModuleType,
+    data_dir: Path,
+) -> None:
+    """Retry exhaustion on AP 2 MUST record APs 0/1 as success and stop before 3/4.
+
+    Why:
+        FR-017 requires a stop-on-first-failure policy so the on-disk
+        backup exactly matches the state Mist is in when the run halts.
+        A revert (menu 208) reads ``aps_reassigned`` to know which APs to
+        roll back -- silently continuing past a failed AP would make the
+        revert unsafe.
+    """
+    src = ("src-id", "Src", _profile("src-id", "Src"))
+    tgt = ("tgt-id", "Tgt", _profile("tgt-id", "Tgt"))
+    aps = [_ap_record(f"d{i}", "site-1", f"mac{i:012x}", f"ap-{i}") for i in range(5)]
+
+    put_calls: list[tuple[Any, ...]] = []
+
+    def _put_side(session: Any, site_id: str, device_id: str, body: Any) -> Any:
+        """Succeed for d0/d1; always fail for d2; NEVER be called for d3/d4."""
+        put_calls.append((site_id, device_id))
+        if device_id in {"d0", "d1"}:
+            r = MagicMock()
+            r.status_code = 200
+            return r
+        raise OSError(f"always fails for {device_id}")
+
+    fake_mh.InputUtils.safe_input.return_value = "MIGRATE"
+    with (
+        patch.object(APProfileMigrationManager, "_pick_ap_device_profile", side_effect=[src, tgt]),
+        patch.object(APProfileMigrationManager, "_discover_aps_on_source_profile", return_value=aps),
+        patch("mistapi.api.v1.sites.devices.updateSiteDevice", side_effect=_put_side),
+        patch("time.sleep"),
+    ):
+        APProfileMigrationManager.migrate_aps_between_device_profiles(session=MagicMock())
+
+    # WHY: d3 and d4 MUST NOT appear in the PUT log -- stop-on-first-failure.
+    touched = {dev for (_site, dev) in put_calls}
+    assert "d3" not in touched and "d4" not in touched, f"APs after the failed one MUST NOT be PUT; touched={touched!r}"
+
+    files = list(data_dir.glob("ap-profile-migration_*.json"))
+    assert files, "Backup file expected even on partial failure"
+    payload = json.loads(files[0].read_text(encoding="utf-8"))
+    assert payload["aps_reassigned"] == ["d0", "d1"]
+    assert payload["outcome"] == "partial"
+    fd = payload["failure_detail"]
+    assert fd is not None
+    assert fd["failed_device_id"] == "d2"
+    assert fd["reassigned_count"] == 2
+    assert fd["planned_count"] == 5
+
+
+# ---------------------------------------------------------------------------
+# T015 -- progress prints at N=1, every 10, and N=last
+# ---------------------------------------------------------------------------
+
+
+def test_migrate_progress_prints_at_least_every_10_aps(
+    fake_mh: types.ModuleType,
+    data_dir: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Progress lines MUST appear at N=1, every N%10==0, and at N=27 (last).
+
+    Why:
+        research.md Decision 3 and SC-004 require a visible progress cadence
+        so operators watching a hundred-AP migration do not think the tool
+        has hung. This test drives 27 APs and checks caplog for at least
+        the required index set.
+    """
+    src = ("src-id", "Src", _profile("src-id", "Src"))
+    tgt = ("tgt-id", "Tgt", _profile("tgt-id", "Tgt"))
+    aps = [_ap_record(f"d{i}", "site-1", f"mac{i:012x}", f"ap-{i}") for i in range(27)]
+
+    def _ok_put(*a: Any, **kw: Any) -> Any:
+        """Return healthy 200 for every PUT."""
+        r = MagicMock()
+        r.status_code = 200
+        return r
+
+    fake_mh.InputUtils.safe_input.return_value = "MIGRATE"
+    caplog.set_level(logging.INFO, logger=_LOGGER_NAME)
+    with (
+        patch.object(APProfileMigrationManager, "_pick_ap_device_profile", side_effect=[src, tgt]),
+        patch.object(APProfileMigrationManager, "_discover_aps_on_source_profile", return_value=aps),
+        patch("mistapi.api.v1.sites.devices.updateSiteDevice", side_effect=_ok_put),
+        patch("time.sleep"),
+    ):
+        APProfileMigrationManager.migrate_aps_between_device_profiles(session=MagicMock())
+
+    # WHY: extract any "X of 27" pattern from INFO messages -- the exact
+    # format is up to the implementation; we assert on the required indices.
+    indices_seen: set[int] = set()
+    for rec in caplog.records:
+        text = rec.getMessage()
+        for tok in ("1 of 27", "10 of 27", "20 of 27", "27 of 27"):
+            if tok in text:
+                indices_seen.add(int(tok.split(" ", 1)[0]))
+    required = {1, 10, 20, 27}
+    assert required.issubset(
+        indices_seen
+    ), f"Progress must include indices {sorted(required)}; saw {sorted(indices_seen)}"
+
+
+# ---------------------------------------------------------------------------
+# T016 -- US1 end-to-end with a mocked mistapi session
+# ---------------------------------------------------------------------------
+
+
+def test_us1_end_to_end_with_mocked_mistapi_session(
+    fake_mh: types.ModuleType,
+    data_dir: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Full US1 flow against a mocked mistapi session with 2 sites and 3 APs.
+
+    Why:
+        Ties every private helper together and asserts the operator-visible
+        contract: 3 APs reassigned, backup file written under the tmp
+        ``data/`` dir, ``outcome == "success"``, and the printed summary
+        names the source, the target, and the backup path (quickstart §1).
+    """
+    src_id = "aaaa1111-2222-3333-4444-555566667777"
+    tgt_id = "bbbb1111-2222-3333-4444-555566667777"
+    src = (src_id, "Data-Transfer-Profile", _profile(src_id, "Data-Transfer-Profile"))
+    tgt = (tgt_id, "Main-Profile", _profile(tgt_id, "Main-Profile"))
+    # WHY: 2 sites x 1-or-2 APs = 3 total APs bound to the source profile.
+    aps = [
+        _ap_record("d1", "site-1", "5c5b350e0001", "ap-1"),
+        _ap_record("d2", "site-1", "5c5b350e0002", "ap-2"),
+        _ap_record("d3", "site-2", "5c5b350e0003", "ap-3"),
+    ]
+
+    put_log: list[str] = []
+
+    def _ok_put(session: Any, site_id: str, device_id: str, body: Any) -> Any:
+        """Return healthy 200 and log the device_id for later assertion."""
+        put_log.append(device_id)
+        r = MagicMock()
+        r.status_code = 200
+        return r
+
+    fake_mh.InputUtils.safe_input.return_value = "MIGRATE"
+    with (
+        patch.object(APProfileMigrationManager, "_pick_ap_device_profile", side_effect=[src, tgt]),
+        patch.object(APProfileMigrationManager, "_discover_aps_on_source_profile", return_value=aps),
+        patch("mistapi.api.v1.sites.devices.updateSiteDevice", side_effect=_ok_put),
+        patch("time.sleep"),
+    ):
+        APProfileMigrationManager.migrate_aps_between_device_profiles(session=MagicMock())
+
+    # WHY: every planned AP was PUT exactly once, in order.
+    assert put_log == ["d1", "d2", "d3"]
+
+    files = list(data_dir.glob("ap-profile-migration_*.json"))
+    assert len(files) == 1
+    payload = json.loads(files[0].read_text(encoding="utf-8"))
+    assert payload["outcome"] == "success"
+    assert payload["aps_reassigned"] == ["d1", "d2", "d3"]
+
+    out = capsys.readouterr().out
+    # WHY: summary must name source, target, and the backup file path (FR-018).
+    assert "Data-Transfer-Profile" in out
+    assert "Main-Profile" in out
+    assert str(files[0]) in out or files[0].name in out
