@@ -1435,9 +1435,9 @@ def test_migrate_calls_get_rate_limited_delay_once_per_ap(
     assert len(call_order) == 40, f"expected 40 alternating entries, got {len(call_order)}: {call_order[:6]!r}"
     for i in range(20):
         assert call_order[i * 2] == "pacing", f"position {i * 2} expected pacing, got {call_order[i * 2]!r}"
-        assert call_order[i * 2 + 1].startswith("put:"), (
-            f"position {i * 2 + 1} expected put, got {call_order[i * 2 + 1]!r}"
-        )
+        assert call_order[i * 2 + 1].startswith(
+            "put:"
+        ), f"position {i * 2 + 1} expected put, got {call_order[i * 2 + 1]!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -1938,9 +1938,9 @@ def test_summary_contains_pacing_lines(
     idx_429 = out.index("HTTP 429 responses seen")
     idx_non429 = out.index("Non-429 failures")
     idx_delay = out.index("Rate limiter delay (s)")
-    assert idx_puts < idx_429 < idx_non429 < idx_delay, (
-        f"summary lines out of order: puts={idx_puts}, 429={idx_429}, non429={idx_non429}, delay={idx_delay}"
-    )
+    assert (
+        idx_puts < idx_429 < idx_non429 < idx_delay
+    ), f"summary lines out of order: puts={idx_puts}, 429={idx_429}, non429={idx_non429}, delay={idx_delay}"
 
 
 # ---------------------------------------------------------------------------
@@ -2000,9 +2000,7 @@ def test_jsonl_audit_line_carries_pacing_subdict(
     }
     assert set(pacing.keys()) == expected_keys, f"pacing key set mismatch: got {sorted(pacing.keys())!r}"
     assert pacing["http_429_seen"] == 2, f"expected pacing.http_429_seen==2, got {pacing['http_429_seen']!r}"
-    assert pacing["non_429_failures"] == 0, (
-        f"expected pacing.non_429_failures==0, got {pacing['non_429_failures']!r}"
-    )
+    assert pacing["non_429_failures"] == 0, f"expected pacing.non_429_failures==0, got {pacing['non_429_failures']!r}"
     # WHY: puts_issued is per-iteration (TR024); with 5 APs it is at least 5.
     assert isinstance(pacing["puts_issued"], int) and pacing["puts_issued"] >= 5
     assert isinstance(pacing["delay_seconds_mean"], float)
