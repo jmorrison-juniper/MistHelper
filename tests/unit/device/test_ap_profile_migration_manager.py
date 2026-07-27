@@ -1074,3 +1074,198 @@ def test_us2_end_to_end_with_mocked_mistapi_session(
     # WHY: summary MUST name the backup path so the operator has a
     # copy-pasteable pointer to the audit source.
     assert str(backup_path) in out or backup_path.name in out, f"Summary MUST name the backup file; got: {out!r}"
+
+
+# ---------------------------------------------------------------------------
+# T046-T048 -- US3 dry-run tests
+# ---------------------------------------------------------------------------
+
+
+def test_migrate_dry_run_writes_no_file_and_issues_no_put(
+    fake_mh: types.ModuleType,
+    data_dir: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """DRY-RUN at the confirmation prompt MUST issue zero PUTs and write no file.
+
+    Why:
+        Locks FR-015 and SC-005 (Acceptance Scenario 1): the operator can
+        preview a migration and see the exact AP list without any side
+        effect. The printed line ``Dry run: no changes made`` is the
+        operator-visible contract that no changes occurred.
+    """
+    # WHY: two Mist device profiles with different UUIDs so the source/target
+    # equality guard does not short-circuit the flow before confirmation.
+    src_id = "aaaa1111-2222-3333-4444-555566667777"
+    tgt_id = "bbbb1111-2222-3333-4444-555566667777"
+    src = (src_id, "Data-Transfer-Profile", _profile(src_id, "Data-Transfer-Profile"))
+    tgt = (tgt_id, "Main-Profile", _profile(tgt_id, "Main-Profile"))
+    aps = [
+        _ap_record("d1", "site-1", "5c5b350e0001", "ap-1"),
+        _ap_record("d2", "site-1", "5c5b350e0002", "ap-2"),
+    ]
+
+    # WHY: safe_input returns DRY-RUN at the confirmation prompt so
+    # _confirm_migration returns "dry_run" and the entry point takes the
+    # preview short-circuit branch (FR-015).
+    fake_mh.InputUtils.safe_input.return_value = "DRY-RUN"
+
+    put_calls: list[Any] = []
+
+    def _record_put(session: Any, site_id: str, device_id: str, body: Any) -> Any:
+        """Record any PUT so the assertion below can prove none were made."""
+        put_calls.append((site_id, device_id, body))
+        r = MagicMock()
+        r.status_code = 200
+        return r
+
+    with (
+        patch.object(APProfileMigrationManager, "_pick_ap_device_profile", side_effect=[src, tgt]),
+        patch.object(APProfileMigrationManager, "_discover_aps_on_source_profile", return_value=aps),
+        patch("mistapi.api.v1.sites.devices.updateSiteDevice", side_effect=_record_put),
+        patch("time.sleep"),
+    ):
+        APProfileMigrationManager.migrate_aps_between_device_profiles(session=MagicMock())
+
+    # WHY: FR-015 -- dry-run MUST issue zero PUTs.
+    assert put_calls == [], f"Dry run MUST issue zero PUTs; got {put_calls!r}"
+
+    # WHY: FR-015 -- dry-run MUST write no backup file.
+    files = list(data_dir.glob("ap-profile-migration_*.json"))
+    assert files == [], f"Dry run MUST write no backup file; got {files!r}"
+
+    out = capsys.readouterr().out
+    # WHY: STE-compliant operator-visible marker line -- proves the branch
+    # was taken and the summary was suppressed.
+    assert "Dry run: no changes made" in out, f"Missing dry-run marker in output: {out!r}"
+
+
+def test_migrate_dry_run_ap_list_matches_live_run_plan(
+    fake_mh: types.ModuleType,
+    data_dir: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Pre-confirmation AP list block MUST be byte-identical between dry-run and live.
+
+    Why:
+        SC-005 -- the operator MUST see the same plan block whether they
+        intend to preview or to apply, so a dry-run screenshot proves the
+        upcoming live run is safe. Any drift between the two branches
+        would defeat the whole point of the dry-run affordance.
+    """
+    src_id = "aaaa1111-2222-3333-4444-555566667777"
+    tgt_id = "bbbb1111-2222-3333-4444-555566667777"
+    src = (src_id, "Data-Transfer-Profile", _profile(src_id, "Data-Transfer-Profile"))
+    tgt = (tgt_id, "Main-Profile", _profile(tgt_id, "Main-Profile"))
+    aps = [
+        _ap_record("d1", "site-1", "5c5b350e0001", "ap-1"),
+        _ap_record("d2", "site-1", "5c5b350e0002", "ap-2"),
+        _ap_record("d3", "site-2", "5c5b350e0003", "ap-3"),
+        _ap_record("d4", "site-2", "5c5b350e0004", None),
+        _ap_record("d5", "site-2", "5c5b350e0005", "ap-5"),
+    ]
+
+    def _extract_plan_block(out: str) -> str:
+        """Return the plan block from stdout, up to the confirmation marker.
+
+        Why:
+            The plan block is everything from ``Planned migration:`` up to
+            (but not including) ``Dry run:`` or the summary lines. Slicing
+            here keeps the byte-compare focused on the plan itself and
+            avoids capturing branch-specific summary text.
+        """
+        start = out.find("Planned migration:")
+        assert start != -1, f"Missing 'Planned migration:' marker in: {out!r}"
+        tail = out[start:]
+        # WHY: cut at the first branch-specific marker so we compare only
+        # the plan block itself, not the summary line the branches emit.
+        # The live run appends "\nMigration summary:" after the plan; the
+        # dry-run branch appends "Dry run: no changes made" instead.
+        for marker in ("Dry run: no changes made", "\nMigration summary:"):
+            idx = tail.find(marker)
+            if idx != -1:
+                return tail[:idx]
+        return tail
+
+    def _ok_put(session: Any, site_id: str, device_id: str, body: Any) -> Any:
+        r = MagicMock()
+        r.status_code = 200
+        return r
+
+    # --- Dry-run pass --------------------------------------------------------
+    fake_mh.InputUtils.safe_input.return_value = "DRY-RUN"
+    with (
+        patch.object(APProfileMigrationManager, "_pick_ap_device_profile", side_effect=[src, tgt]),
+        patch.object(APProfileMigrationManager, "_discover_aps_on_source_profile", return_value=aps),
+        patch("mistapi.api.v1.sites.devices.updateSiteDevice", side_effect=_ok_put),
+        patch("time.sleep"),
+    ):
+        APProfileMigrationManager.migrate_aps_between_device_profiles(session=MagicMock())
+    dry_out = capsys.readouterr().out
+    dry_plan = _extract_plan_block(dry_out)
+
+    # --- Live pass -----------------------------------------------------------
+    fake_mh.InputUtils.safe_input.return_value = "MIGRATE"
+    with (
+        patch.object(APProfileMigrationManager, "_pick_ap_device_profile", side_effect=[src, tgt]),
+        patch.object(APProfileMigrationManager, "_discover_aps_on_source_profile", return_value=aps),
+        patch("mistapi.api.v1.sites.devices.updateSiteDevice", side_effect=_ok_put),
+        patch("time.sleep"),
+    ):
+        APProfileMigrationManager.migrate_aps_between_device_profiles(session=MagicMock())
+    live_out = capsys.readouterr().out
+    live_plan = _extract_plan_block(live_out)
+
+    # WHY: byte-identical plan block -- SC-005 forbids any drift between
+    # preview and apply for the pre-confirmation AP list.
+    assert dry_plan == live_plan, f"Plan blocks diverge:\nDRY:\n{dry_plan!r}\nLIVE:\n{live_plan!r}"
+
+
+def test_us3_end_to_end_dry_run_with_mocked_mistapi_session(
+    fake_mh: types.ModuleType,
+    data_dir: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Full US3 flow: DRY-RUN across 2 sites and 3 APs writes nothing and PUTs nothing.
+
+    Why:
+        Quickstart Scenario 2 -- the integration-style test that pins the
+        full public entry point against a fully mocked mistapi session.
+        Guards the destructive-safety promise that the preview branch is
+        genuinely inert on both the file system and the API.
+    """
+    src_id = "aaaa1111-2222-3333-4444-555566667777"
+    tgt_id = "bbbb1111-2222-3333-4444-555566667777"
+    src = (src_id, "Data-Transfer-Profile", _profile(src_id, "Data-Transfer-Profile"))
+    tgt = (tgt_id, "Main-Profile", _profile(tgt_id, "Main-Profile"))
+    aps = [
+        _ap_record("d1", "site-1", "5c5b350e0001", "ap-1"),
+        _ap_record("d2", "site-1", "5c5b350e0002", "ap-2"),
+        _ap_record("d3", "site-2", "5c5b350e0003", "ap-3"),
+    ]
+
+    fake_mh.InputUtils.safe_input.return_value = "DRY-RUN"
+
+    put_calls: list[Any] = []
+
+    def _record_put(session: Any, site_id: str, device_id: str, body: Any) -> Any:
+        put_calls.append((site_id, device_id, body))
+        r = MagicMock()
+        r.status_code = 200
+        return r
+
+    with (
+        patch.object(APProfileMigrationManager, "_pick_ap_device_profile", side_effect=[src, tgt]),
+        patch.object(APProfileMigrationManager, "_discover_aps_on_source_profile", return_value=aps),
+        patch("mistapi.api.v1.sites.devices.updateSiteDevice", side_effect=_record_put),
+        patch("time.sleep"),
+    ):
+        # WHY: the entry point MUST return cleanly with no raised exception.
+        APProfileMigrationManager.migrate_aps_between_device_profiles(session=MagicMock())
+
+    # WHY: quickstart Scenario 2 -- zero PUTs and zero files under data/.
+    assert put_calls == [], f"US3 end-to-end dry run MUST issue zero PUTs; got {put_calls!r}"
+    assert list(data_dir.glob("ap-profile-migration_*.json")) == []
+
+    out = capsys.readouterr().out
+    assert "Dry run: no changes made" in out
