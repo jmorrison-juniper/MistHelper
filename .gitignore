@@ -5,6 +5,10 @@
 .env
 !documentation/sample.env
 
+# Copyrighted standard - do not redistribute (ASD-STE100 license restricts sharing)
+# The distilled guide documentation/ASD-STE100_writing-guide.md is committed instead.
+documentation/ASD-STE100_ISSUE9.pdf
+
 .env.local
 .env.production
 .env.staging
