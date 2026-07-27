@@ -39,7 +39,7 @@ The linter runs with the standard library. To improve the grammar checks, instal
 spaCy and its small English model. The linter uses spaCy when it is present.
 
 ```powershell
-uv pip install spacy
+uv pip install ".[ste-linter]"
 python -m spacy download en_core_web_sm
 ```
 

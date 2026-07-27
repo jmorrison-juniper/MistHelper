@@ -81,6 +81,13 @@ dev = [
 container = [
     "uvicorn>=0.20.0",
 ]
+ste-linter = [
+    # Optional spaCy backend for the STE writing linter. It improves the accuracy
+    # of the part-of-speech, tense, and noun-cluster checks. The linter still runs
+    # without it through the standard-library heuristic backend.
+    # After install, download the model: python -m spacy download en_core_web_sm
+    "spacy>=3.7.0,<4.0.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/jmorrison-juniper/MistHelper"

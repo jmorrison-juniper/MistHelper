@@ -9,9 +9,11 @@ The linter ships with the repository. No extra install is needed for the core.
 Optional, for higher grammar accuracy:
 
 ```powershell
-uv pip install spacy
+uv pip install ".[ste-linter]"
 python -m spacy download en_core_web_sm
 ```
+
+The `ste-linter` extra installs spaCy. The model download is a separate step.
 
 ## Grade a file
 
