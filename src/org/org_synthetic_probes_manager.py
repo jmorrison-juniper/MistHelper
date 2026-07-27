@@ -379,6 +379,33 @@ _SCHEME_DEFAULT_PORT: dict[str, int] = {"http": 80, "https": 443}
 _VPN_DEFAULT_PORT = 500
 
 
+def _fqdn_in_vpn_bag(bag: Any, fqdn: str) -> bool:
+    """Return True when ``fqdn`` appears as a host entry inside ``bag``.
+
+    Why:
+        Extracted from :func:`_is_vpn_host` so the outer classifier stays
+        under Radon CC>10. Tolerates both the v2 flat-string bags and the v3
+        dict bags because the fallback path fires precisely when the loader
+        could not enrich entries with observation metadata.
+
+    Args:
+        bag: Candidate list from either the top-level ``vpn_hostnames`` or a
+            per-city variant. Non-list values return ``False``.
+        fqdn: Hostname to match, case-sensitive.
+
+    Returns:
+        ``True`` when any entry (v2 string or v3 ``{"host": str}`` dict)
+        matches ``fqdn``; ``False`` otherwise.
+    """
+    if not isinstance(bag, list):
+        return False
+    for entry in bag:
+        host = entry.get("host") if isinstance(entry, dict) else entry
+        if isinstance(host, str) and host == fqdn:
+            return True
+    return False
+
+
 def _is_vpn_host(fqdn: str, cenr_source: dict[str, Any]) -> bool:
     """Return True iff ``fqdn`` appears in any ``vpn_hostnames`` bag.
 
@@ -395,38 +422,20 @@ def _is_vpn_host(fqdn: str, cenr_source: dict[str, Any]) -> bool:
     Args:
         fqdn: Hostname to classify.
         cenr_source: Loaded CENR document (v2 flat strings or v3 dicts;
-            both are unwrapped by ``_host_of`` below).
+            both are unwrapped by ``_fqdn_in_vpn_bag`` below).
 
     Returns:
         True when the FQDN appears anywhere in a ``vpn_hostnames`` list
         (top-level or under ``by_city[*]``); False otherwise.
     """
-
-    def _host_of(entry: Any) -> str:
-        # Same unwrap as _lookup_v3_observation but tolerant of v2 strings
-        # because the fallback path fires precisely when the loader could
-        # not enrich the entry with observation metadata.
-        if isinstance(entry, dict):
-            host = entry.get("host")
-            return host if isinstance(host, str) else ""
-        return entry if isinstance(entry, str) else ""
-
-    bag = cenr_source.get("vpn_hostnames") or []
-    if isinstance(bag, list):
-        for entry in bag:
-            if _host_of(entry) == fqdn:
-                return True
+    if _fqdn_in_vpn_bag(cenr_source.get("vpn_hostnames"), fqdn):
+        return True
     by_city = cenr_source.get("by_city")
-    if isinstance(by_city, dict):
-        for city_slot in by_city.values():
-            if not isinstance(city_slot, dict):
-                continue
-            slot_bag = city_slot.get("vpn_hostnames") or []
-            if not isinstance(slot_bag, list):
-                continue
-            for entry in slot_bag:
-                if _host_of(entry) == fqdn:
-                    return True
+    if not isinstance(by_city, dict):
+        return False
+    for city_slot in by_city.values():
+        if isinstance(city_slot, dict) and _fqdn_in_vpn_bag(city_slot.get("vpn_hostnames"), fqdn):
+            return True
     return False
 
 
@@ -1119,6 +1128,37 @@ def _emit_load_time_country_code_warning(
     )
 
 
+def _parse_vlan_token(part: str) -> list[int]:
+    """Return the VLAN ids parsed from one comma-split token.
+
+    Why:
+        Extracted from :func:`_validate_vlan_input` so the outer parser
+        stays under Radon CC>10. Handles both single ids (``"10"``) and
+        ranges (``"3-6"``). Invalid tokens return an empty list so the
+        caller can drop them silently without adding a branch per case.
+
+    Args:
+        part: One already-stripped, non-empty token from the split.
+
+    Returns:
+        List of ids from the token, empty on any parse failure or
+        reversed range.
+    """
+    if "-" in part[1:]:
+        lo_raw, _, hi_raw = part[1:].partition("-")
+        lo_raw = (part[0] + lo_raw).strip()
+        hi_raw = hi_raw.strip()
+        try:
+            lo, hi = int(lo_raw), int(hi_raw)
+        except ValueError:
+            return []
+        return list(range(lo, hi + 1)) if lo <= hi else []
+    try:
+        return [int(part)]
+    except ValueError:
+        return []
+
+
 def _validate_vlan_input(raw: str) -> tuple[bool, str, list[int]]:
     """Parse and validate VLAN input string.
 
@@ -1145,28 +1185,10 @@ def _validate_vlan_input(raw: str) -> tuple[bool, str, list[int]]:
     """
     if not raw.strip():
         return False, "VLAN list cannot be empty. Please try again.", []
-    parts = [item.strip() for item in raw.split(",") if item.strip()]
     ids: list[int] = []
-    for part in parts:
-        # A leading '-' would be a negative int (out of range anyway); a
-        # non-leading '-' means the operator wrote a range like "3-6".
-        if "-" in part[1:]:
-            lo_raw, _, hi_raw = part[1:].partition("-")
-            lo_raw = (part[0] + lo_raw).strip()
-            hi_raw = hi_raw.strip()
-            try:
-                lo = int(lo_raw)
-                hi = int(hi_raw)
-            except ValueError:
-                continue
-            if lo > hi:
-                continue
-            ids.extend(range(lo, hi + 1))
-            continue
-        try:
-            ids.append(int(part))
-        except ValueError:
-            continue
+    for part in (item.strip() for item in raw.split(",")):
+        if part:
+            ids.extend(_parse_vlan_token(part))
     ids = [vid for vid in ids if _VLAN_MIN <= vid <= _VLAN_MAX]
     if not ids:
         return (
@@ -2480,6 +2502,67 @@ def _prompt_site_indexes(sites: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return list(picked_by_id.values())
 
 
+def _put_site_setting(mist_session: Any, site_id: str, body: dict[str, Any]) -> bool:
+    """PUT ``body`` to ``updateSiteSettings`` and log/print any failure.
+
+    Why:
+        Extracted from :func:`_apply_to_site` so the outer function stays
+        under Radon CC>10. Collapses the transport-error branch and the
+        non-2xx status branch into one boolean so the caller has a single
+        gate before the success-line print.
+
+    Args:
+        mist_session: Authenticated ``mistapi`` session.
+        site_id: Site UUID string.
+        body: Full site-setting payload to PUT.
+
+    Returns:
+        ``True`` when the API returned a 2xx status (or no ``status_code``
+        attribute at all — same tolerance the inline code had); ``False``
+        on any exception or non-2xx status. Errors are already printed and
+        logged before returning.
+    """
+    try:
+        put_response = _mist_site_setting.updateSiteSettings(mist_session, site_id, body)
+    except Exception as err:  # noqa: BLE001 -- surface any transport error.
+        print(f"  Site {site_id}: updateSiteSettings failed ({err}); skipping.")
+        logging.error("updateSiteSettings(%s) failed: %s", site_id, err)
+        return False
+    status = getattr(put_response, "status_code", None)
+    if status is not None and not 200 <= status < 300:
+        print(f"  Site {site_id}: updateSiteSettings HTTP {status}")
+        logging.error("updateSiteSettings(%s) HTTP %s", site_id, status)
+        return False
+    return True
+
+
+def _fetch_site_setting(mist_session: Any, site_id: str) -> dict[str, Any] | None:
+    """Return the parsed site-setting dict, or ``None`` on transport failure.
+
+    Why:
+        Extracted from :func:`_apply_to_site` so the outer function stays
+        under Radon CC>10. Prints and logs the same operator-visible
+        message the inline handler used, then returns ``None`` so the
+        caller can skip the site without another exception branch.
+
+    Args:
+        mist_session: Authenticated ``mistapi`` session.
+        site_id: Site UUID string, already validated non-empty by caller.
+
+    Returns:
+        The ``response.data`` dict (empty dict when the API returned a
+        non-dict payload) or ``None`` on any transport error.
+    """
+    try:
+        response = _mist_site_setting.getSiteSetting(mist_session, site_id)
+    except Exception as err:  # noqa: BLE001 -- surface any transport error.
+        print(f"  Site {site_id}: getSiteSetting failed ({err}); skipping.")
+        logging.error("getSiteSetting(%s) failed: %s", site_id, err)
+        return None
+    data = getattr(response, "data", None)
+    return data if isinstance(data, dict) else {}
+
+
 def _apply_to_site(
     mist_session: Any,
     site: dict[str, Any],
@@ -2534,30 +2617,16 @@ def _apply_to_site(
         country_code,
     )
     region_probes = _build_region_probes(sources, country_code)
-    # ZEN scheduling: org PUT defined every tunnel_zen probe but only critical
-    # probes get scheduled tests[] rows by default. Pick the geodesically
-    # nearest ZEN cities for this site and pass their names through
-    # extra_regular_names so each gets its own scheduled row.
     zen_probe_names = _zen_probe_names_for_cities(
         _resolve_zen_cities_for_site(site, sources[1]),
         sources[1],
     )
-    try:
-        response = _mist_site_setting.getSiteSetting(mist_session, site_id)
-    except Exception as err:  # noqa: BLE001 -- surface any transport error.
-        print(f"  Site {site_id}: getSiteSetting failed ({err}); skipping.")
-        logging.error("getSiteSetting(%s) failed: %s", site_id, err)
+    site_setting = _fetch_site_setting(mist_session, site_id)
+    if site_setting is None:
         return
-    site_setting = getattr(response, "data", None)
-    if not isinstance(site_setting, dict):
-        site_setting = {}
     existing_probes = _detect_existing(site_setting)
     _, foreign = _partition_tool_authored(existing_probes)
     foreign_demoted = _demote_stale_critical(foreign)
-    # Region probes appended after tool_probes so any hypothetical name
-    # collision favors the regional entry at site scope; the
-    # ``zcc-samsung_elm_activation_*`` prefix makes collisions structurally
-    # impossible in practice.
     combined = {**foreign_demoted, **tool_probes, **region_probes}
 
     body: dict[str, Any] = json.loads(json.dumps(site_setting)) if site_setting else {}
@@ -2584,16 +2653,7 @@ def _apply_to_site(
         site_id,
         len(combined),
     )
-    try:
-        put_response = _mist_site_setting.updateSiteSettings(mist_session, site_id, body)
-    except Exception as err:  # noqa: BLE001 -- surface any transport error.
-        print(f"  Site {site_id}: updateSiteSettings failed ({err}); skipping.")
-        logging.error("updateSiteSettings(%s) failed: %s", site_id, err)
-        return
-    status = getattr(put_response, "status_code", None)
-    if status is not None and (status < 200 or status >= 300):
-        print(f"  Site {site_id}: updateSiteSettings HTTP {status}")
-        logging.error("updateSiteSettings(%s) HTTP %s", site_id, status)
+    if not _put_site_setting(mist_session, site_id, body):
         return
     print(
         f"  Site {site_id}: override applied "

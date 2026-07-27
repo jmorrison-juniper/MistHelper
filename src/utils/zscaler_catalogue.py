@@ -236,6 +236,24 @@ def _count_zcc_host_entries(doc: dict[str, Any]) -> int:
     return total
 
 
+def _bag_starts_with_str(bag: Any) -> bool:
+    """Return True when ``bag`` is a non-empty list whose first entry is a string.
+
+    Why:
+        Shape-probe primitive shared by :func:`_cenr_needs_promotion` and
+        :func:`_zcc_needs_promotion`. Extracted so the outer helpers stay
+        under Radon CC>10 without duplicating the ``isinstance`` chain.
+
+    Args:
+        bag: Arbitrary value from a parsed cache document.
+
+    Returns:
+        ``True`` when ``bag`` is a non-empty list and ``bag[0]`` is a
+        ``str``; ``False`` otherwise.
+    """
+    return isinstance(bag, list) and bool(bag) and isinstance(bag[0], str)
+
+
 def _cenr_needs_promotion(doc: dict[str, Any]) -> bool:
     """Return True when any CENR host bag still contains a flat-string entry.
 
@@ -259,18 +277,17 @@ def _cenr_needs_promotion(doc: dict[str, Any]) -> bool:
         ``False`` when every non-empty bag already carries dict entries.
     """
     for bag_key in ("proxy_hostnames", "vpn_hostnames"):
-        bag = doc.get(bag_key)
-        if isinstance(bag, list) and bag and isinstance(bag[0], str):
+        if _bag_starts_with_str(doc.get(bag_key)):
             return True
     by_city = doc.get("by_city")
-    if isinstance(by_city, dict):
-        for city_slot in by_city.values():
-            if not isinstance(city_slot, dict):
-                continue
-            for bag_key in ("proxy_hostnames", "vpn_hostnames"):
-                bag = city_slot.get(bag_key)
-                if isinstance(bag, list) and bag and isinstance(bag[0], str):
-                    return True
+    if not isinstance(by_city, dict):
+        return False
+    for city_slot in by_city.values():
+        if not isinstance(city_slot, dict):
+            continue
+        for bag_key in ("proxy_hostnames", "vpn_hostnames"):
+            if _bag_starts_with_str(city_slot.get(bag_key)):
+                return True
     return False
 
 
@@ -366,6 +383,30 @@ def promote_cache_document(doc: dict[str, Any], *, kind: str) -> dict[str, Any]:
     return doc
 
 
+def _pick_udp_observation(
+    udp_states: dict[int, str],
+) -> tuple[str, int] | None:
+    """Return the winning UDP/IKE observation, or ``None`` when both are silent.
+
+    Why:
+        Extracted from :func:`_pick_observation_from_probe_result` so the
+        outer priority ladder stays under Radon CC>10. Keeps the fixed order
+        (UDP/500 before UDP/4500) with the "silent" filter in one place so
+        R-003 does not drift between the two arms.
+
+    Args:
+        udp_states: Per-port state map from ``ProbeResult.udp``.
+
+    Returns:
+        ``("UDP/500", 500)`` or ``("UDP/4500", 4500)`` when the matching
+        port responded non-silently; ``None`` when neither did.
+    """
+    for port in (500, 4500):
+        if port in udp_states and udp_states.get(port) != "silent":
+            return f"UDP/{port}", port
+    return None
+
+
 def _pick_observation_from_probe_result(
     pr: ProbeResult,
 ) -> tuple[str | None, int | None]:
@@ -397,32 +438,16 @@ def _pick_observation_from_probe_result(
         when no port responded so the caller writes ``observed_protocol =
         None`` per contract.
     """
-    # Priority 1: HTTPS/443. Requires BOTH the raw TCP handshake AND a HEAD/GET
-    # that returned some HTTP status code. Either one alone is a partial signal.
-    # `getattr` fallback keeps this helper tolerant of duck-typed stubs used in
-    # older tests that predate the udp/tcp fields on ProbeResult.
     tcp_states: dict[int, str] = getattr(pr, "tcp", None) or {}
     https_status = getattr(pr, "https_status", None)
     if tcp_states.get(443) == "open" and https_status is not None:
         return "HTTPS", 443
-    # Priority 2: UDP/500 (IKE main). Any non-"silent" state is treated as a
-    # positive observation because a "closed" ICMP reply still proves the host
-    # is reachable and the port is being classified by a live IKE responder.
-    udp_states: dict[int, str] = getattr(pr, "udp", None) or {}
-    if 500 in udp_states and udp_states.get(500) != "silent":
-        return "UDP/500", 500
-    # Priority 3: UDP/4500 (IKE NAT-T). Same rule as UDP/500 but only when
-    # UDP/500 did not respond, per the fixed order in R-003.
-    if 4500 in udp_states and udp_states.get(4500) != "silent":
-        return "UDP/4500", 4500
-    # Priority 4: any other open TCP port. Skip 443 because it already lost
-    # priority 1 above (would have needed an https_status to promote).
+    udp_pick = _pick_udp_observation(getattr(pr, "udp", None) or {})
+    if udp_pick is not None:
+        return udp_pick
     for port, state in tcp_states.items():
-        if port == 443:
-            continue
-        if state == "open":
+        if port != 443 and state == "open":
             return "TCP", port
-    # Priority 5: no responding protocol -> caller writes a null observation.
     return None, None
 
 
