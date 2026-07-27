@@ -441,6 +441,84 @@ def _pick_cn(rdns: Any) -> str | None:
     return None
 
 
+def _classify_zscaler_subrule(fqdn: str) -> str:
+    """Return the Zscaler sub-classification for a Zscaler-issued cert host.
+
+    Why:
+        Extracted from :func:`_classify` so the seven-way FQDN sub-tree does
+        not push the parent above the Radon CC gate. Ordering is preserved
+        (most-specific first).
+
+    Args:
+        fqdn: Lower-cased hostname of the endpoint under classification.
+
+    Returns:
+        A short human-readable Zscaler sub-class label; falls back to
+        ``"Zscaler service"`` when no more specific rule matches.
+    """
+    if "pac" in fqdn:
+        return "Zscaler PAC delivery"
+    if "gateway" in fqdn:
+        return "Zscaler captive-portal gateway"
+    if "mobilesupport" in fqdn:
+        return "Zscaler support endpoint"
+    if "login" in fqdn or "mobile" in fqdn:
+        return "Zscaler enrollment/login"
+    if "healthapp" in fqdn:
+        return "Zscaler health-probe endpoint"
+    if "ecdn" in fqdn:
+        return "Zscaler ECDN (update channel)"
+    if "private.zscaler" in fqdn:
+        return "Zscaler private/internal"
+    return "Zscaler service"
+
+
+def _classify_generic(fqdn: str, server: str) -> str:
+    """Return the fall-through classification for non-Zscaler, non-CloudFront hosts.
+
+    Why:
+        Keeps :func:`_classify` under the CC gate by peeling the tail of the
+        rules ladder into its own function. Rules stay in the original order.
+
+    Args:
+        fqdn: Lower-cased hostname of the endpoint under classification.
+        server: Lower-cased ``Server:`` header value from HTTP/HTTPS response,
+            or empty string when neither responded.
+
+    Returns:
+        A short human-readable class label; ``"unknown"`` when no rule
+        matches.
+    """
+    if "digicert" in fqdn or "digicert" in server:
+        return "DigiCert OCSP/CRL responder"
+    if fqdn.endswith("google.com"):
+        return "Google captive-portal probe target"
+    if "secb2b" in fqdn:
+        return "Samsung ELM activation (secb2b.com)"
+    if server:
+        return f"Web server ({server})"
+    return "unknown"
+
+
+def _matches_cloudfront(fqdn: str, server: str, subj: str) -> bool:
+    """Return True when any classification signal names CloudFront.
+
+    Why:
+        Extracted so the CloudFront short-circuit in :func:`_classify` is a
+        single call, keeping the parent under the Radon CC gate. All three
+        signals fire the same label so combining them here loses no fidelity.
+
+    Args:
+        fqdn: Lower-cased hostname of the endpoint.
+        server: Lower-cased HTTP/HTTPS ``Server:`` header value.
+        subj: Lower-cased TLS certificate subject.
+
+    Returns:
+        True when ``"cloudfront"`` appears in any of the three signals.
+    """
+    return "cloudfront" in fqdn or "cloudfront" in server or "cloudfront" in subj
+
+
 def _classify(result: ProbeResult) -> str:
     """Categorize the endpoint from FQDN hints, response headers, and cert.
 
@@ -461,35 +539,13 @@ def _classify(result: ProbeResult) -> str:
     subj = (result.tls_subject or "").lower()
     issuer = (result.tls_issuer or "").lower()
 
-    if "cloudfront" in fqdn or "cloudfront" in server or "cloudfront" in subj:
+    if _matches_cloudfront(fqdn, server, subj):
         return "AWS CloudFront (CDN)"
     if fqdn.endswith(".sme.zscaler.net"):
         return "Zscaler ZEN proxy node"
     if "zscaler" in subj or "zscaler" in issuer:
-        if "pac" in fqdn:
-            return "Zscaler PAC delivery"
-        if "gateway" in fqdn:
-            return "Zscaler captive-portal gateway"
-        if "mobilesupport" in fqdn:
-            return "Zscaler support endpoint"
-        if "login" in fqdn or "mobile" in fqdn:
-            return "Zscaler enrollment/login"
-        if "healthapp" in fqdn:
-            return "Zscaler health-probe endpoint"
-        if "ecdn" in fqdn:
-            return "Zscaler ECDN (update channel)"
-        if "private.zscaler" in fqdn:
-            return "Zscaler private/internal"
-        return "Zscaler service"
-    if "digicert" in fqdn or "digicert" in server:
-        return "DigiCert OCSP/CRL responder"
-    if fqdn.endswith("google.com"):
-        return "Google captive-portal probe target"
-    if "secb2b" in fqdn:
-        return "Samsung ELM activation (secb2b.com)"
-    if server:
-        return f"Web server ({server})"
-    return "unknown"
+        return _classify_zscaler_subrule(fqdn)
+    return _classify_generic(fqdn, server)
 
 
 def _probe_http_stack(

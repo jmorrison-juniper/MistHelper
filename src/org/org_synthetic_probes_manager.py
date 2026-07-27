@@ -559,6 +559,170 @@ def _lookup_v3_observation(fqdn: str, cenr_source: dict[str, Any]) -> dict[str, 
     return None
 
 
+def _extract_observed_protocol_port(
+    entry: Any,
+) -> tuple[str | None, int | None]:
+    """Pull ``observed_protocol`` and ``observed_port`` from a CENR entry.
+
+    Why:
+        Extracted from :func:`_probe_target` so its dispatch body stays under
+        the Radon CC gate. The type guards mirror the schema: string protocol
+        and integer port; anything else collapses to ``None`` so the caller's
+        Branch 3 fallback triggers.
+
+    Args:
+        entry: A per-host observation dict from the v3 CENR document, or
+            ``None`` / any non-dict when the host is absent.
+
+    Returns:
+        ``(observed_protocol, observed_port)``. Either or both fields may be
+        ``None``.
+    """
+    observed_protocol: str | None = None
+    observed_port: int | None = None
+    if isinstance(entry, dict):
+        raw_protocol = entry.get("observed_protocol")
+        if isinstance(raw_protocol, str) and raw_protocol:
+            observed_protocol = raw_protocol
+        raw_port = entry.get("observed_port")
+        if isinstance(raw_port, int):
+            observed_port = raw_port
+    return observed_protocol, observed_port
+
+
+def _dispatch_observed_target(
+    fqdn: str,
+    observed_protocol: str | None,
+    observed_port: int | None,
+) -> str | None:
+    """Apply the non-VPN observation-first Branch 1 / Branch 2 dispatch.
+
+    Why:
+        Split out of :func:`_probe_target` so the contract-heavy branch
+        selection is one focused function. Returning ``None`` signals that
+        the caller must fall through to the Branch 3 role/CENR fallback (no
+        recognised observation or missing port).
+
+    Args:
+        fqdn: Hostname being rendered.
+        observed_protocol: Value from ``observed_protocol`` in the CENR
+            observation, or ``None`` when absent.
+        observed_port: Value from ``observed_port`` in the CENR observation,
+            or ``None`` when absent.
+
+    Returns:
+        The composed target string per Branch 1 or Branch 2, or ``None`` when
+        the observation is missing / unrecognised (caller runs Branch 3).
+    """
+    logger = logging.getLogger(__name__)
+    if observed_protocol is None:
+        return None
+    # Branch 2: HTTPS or TCP/443 collapse to the same URL shape so the
+    # emitted target matches Mist-authored mini-* rows byte-for-byte
+    # (FR-009: any per-run diff of the same host across runs must be
+    # empty when the observation is stable).
+    if observed_protocol == "HTTPS" or observed_protocol == "TCP/443":
+        target = f"https://{fqdn}"
+        logger.debug("probe_target: %s -> %s (obs=%s)", fqdn, target, observed_protocol)
+        return target
+    # Branch 1: UDP family (bare "UDP" or "UDP/<port>") OR non-443 TCP.
+    # The port MUST come from observed_port -- observed_protocol may
+    # carry no port suffix at all (bare "UDP" token per contract Test
+    # Boundaries).
+    is_udp = observed_protocol == "UDP" or observed_protocol.startswith("UDP/")
+    is_non_443_tcp = observed_protocol.startswith("TCP/") and observed_protocol != "TCP/443"
+    if (is_udp or is_non_443_tcp) and observed_port is not None:
+        # Bare host:port form; NO scheme so Mist runs a raw probe
+        # rather than trying TLS on a UDP/IKE endpoint.
+        target = f"{fqdn}:{observed_port}"
+        logger.debug("probe_target: %s -> %s (obs=%s)", fqdn, target, observed_protocol)
+        return target
+    return None
+
+
+def _resolve_fallback_probe(
+    role: dict[str, Any],
+    cenr_source: dict[str, Any],
+) -> tuple[str, int]:
+    """Resolve the Branch 3 fallback ``(protocol, port)`` from role + CENR defaults.
+
+    Why:
+        Split out of :func:`_build_fallback_target` so the protocol
+        normalisation and port coercion do not push the parent above the
+        Radon CC gate. ``tunnel_zen`` still delegates to
+        ``cenr_source["probe_default"]``; unknown protocols still coerce to
+        ``https``; non-integer port values still fall back to the scheme
+        default.
+
+    Args:
+        role: Role dict; ``role["probe"]`` may carry role-specific overrides.
+        cenr_source: Loaded v3 CENR document; ``probe_default`` supplies the
+            tunnel_zen delegation only.
+
+    Returns:
+        ``(protocol, port)`` where ``protocol`` is one of the keys in
+        ``_SCHEME_DEFAULT_PORT`` and ``port`` is an integer.
+    """
+    probe = role.get("probe") or {}
+    if not probe and role.get("role") == _TUNNEL_ZEN_ROLE:
+        # tunnel_zen delegates its default to the CENR file (existing
+        # convention retained from the pre-1023 implementation).
+        probe = cenr_source.get("probe_default") or {}
+    protocol = str(probe.get("protocol") or "https").lower()
+    # Mist targets are URLs; raw TCP has no URL scheme, so upgrade to HTTPS
+    # which exercises the same TCP/443 handshake path.
+    if protocol == "tcp":
+        protocol = "https"
+    if protocol not in _SCHEME_DEFAULT_PORT:
+        protocol = "https"
+    port_raw = probe.get("port")
+    try:
+        port = int(port_raw) if port_raw is not None else _SCHEME_DEFAULT_PORT[protocol]
+    except (TypeError, ValueError):
+        port = _SCHEME_DEFAULT_PORT[protocol]
+    return protocol, port
+
+
+def _build_fallback_target(
+    fqdn: str,
+    role: dict[str, Any],
+    cenr_source: dict[str, Any],
+    observed_protocol: str | None,
+) -> str:
+    """Compose the Branch 3 fallback target from the role or CENR probe defaults.
+
+    Why:
+        Extracted from :func:`_probe_target` so the fallback logic is
+        testable in isolation. The VPN pre-check and Branches 1/2 already
+        handled everything else; this only fires for non-VPN hosts with
+        missing / unrecognised observations.
+
+    Args:
+        fqdn: Hostname to render.
+        role: Role dict passed through to :func:`_resolve_fallback_probe`.
+        cenr_source: Loaded v3 CENR document.
+        observed_protocol: Original observation value (may be ``None``); used
+            only in the debug log line.
+
+    Returns:
+        Fallback target string, ``"<scheme>://<fqdn>"`` when the port matches
+        the scheme default (INV-1 elision) or ``"<scheme>://<fqdn>:<port>"``
+        otherwise.
+    """
+    logger = logging.getLogger(__name__)
+    protocol, port = _resolve_fallback_probe(role, cenr_source)
+    if port == _SCHEME_DEFAULT_PORT[protocol]:
+        # Default-port elision matches Branch 2's convention so both branches
+        # emit identical strings for the common case (INV-1: byte-stable
+        # output when the same host+protocol combination reoccurs).
+        target = f"{protocol}://{fqdn}"
+    else:
+        target = f"{protocol}://{fqdn}:{port}"
+    # NOTE(1025-US1): warning moved to load-time _emit_load_time_cenr_warning to avoid N*M duplication
+    logger.debug("probe_target: %s -> %s (obs=%s)", fqdn, target, observed_protocol)
+    return target
+
+
 def _probe_target(fqdn: str, role: dict[str, Any], cenr_source: dict[str, Any]) -> str:
     """Compose the Mist ``target`` string for one FQDN using the observation-first dispatch.
 
@@ -623,77 +787,19 @@ def _probe_target(fqdn: str, role: dict[str, Any], cenr_source: dict[str, Any]) 
         return fqdn
 
     entry = _lookup_v3_observation(fqdn, cenr_source)
-    observed_protocol: str | None = None
-    observed_port: int | None = None
-    if isinstance(entry, dict):
-        raw_protocol = entry.get("observed_protocol")
-        if isinstance(raw_protocol, str) and raw_protocol:
-            observed_protocol = raw_protocol
-        raw_port = entry.get("observed_port")
-        if isinstance(raw_port, int):
-            observed_port = raw_port
+    observed_protocol, observed_port = _extract_observed_protocol_port(entry)
 
     # --- Dispatch on the observed_protocol prefix per contract ---------------
-
-    if observed_protocol is not None:
-        # Branch 2: HTTPS or TCP/443 collapse to the same URL shape so the
-        # emitted target matches Mist-authored mini-* rows byte-for-byte
-        # (FR-009: any per-run diff of the same host across runs must be
-        # empty when the observation is stable).
-        if observed_protocol == "HTTPS" or observed_protocol == "TCP/443":
-            target = f"https://{fqdn}"
-            logger.debug("probe_target: %s -> %s (obs=%s)", fqdn, target, observed_protocol)
-            return target
-        # Branch 1: UDP family (bare "UDP" or "UDP/<port>") OR non-443 TCP.
-        # The port MUST come from observed_port -- observed_protocol may
-        # carry no port suffix at all (bare "UDP" token per contract Test
-        # Boundaries).
-        is_udp = observed_protocol == "UDP" or observed_protocol.startswith("UDP/")
-        is_non_443_tcp = observed_protocol.startswith("TCP/") and observed_protocol != "TCP/443"
-        if is_udp or is_non_443_tcp:
-            if observed_port is not None:
-                # Bare host:port form; NO scheme so Mist runs a raw probe
-                # rather than trying TLS on a UDP/IKE endpoint.
-                target = f"{fqdn}:{observed_port}"
-                logger.debug("probe_target: %s -> %s (obs=%s)", fqdn, target, observed_protocol)
-                return target
-        # Falls through to Branch 3 when the token is recognised but the
-        # port is missing (defensive), OR when the token is neither UDP/*
-        # nor TCP/* nor HTTPS (e.g. "WEIRD/9999" per contract Test
-        # Boundaries).
+    dispatched = _dispatch_observed_target(fqdn, observed_protocol, observed_port)
+    if dispatched is not None:
+        return dispatched
 
     # Branch 3: no observation OR unrecognised token. Compute the fallback
     # from the role's ``probe`` block (if any) or the CENR probe_default,
     # then log exactly one WARNING so operators spot the cache miss. The
     # VPN pre-check above has already handled bag members, so this branch
     # only fires for non-VPN hosts with missing observations.
-    probe = role.get("probe") or {}
-    if not probe and role.get("role") == _TUNNEL_ZEN_ROLE:
-        # tunnel_zen delegates its default to the CENR file (existing
-        # convention retained from the pre-1023 implementation).
-        probe = cenr_source.get("probe_default") or {}
-    protocol = str(probe.get("protocol") or "https").lower()
-    # Mist targets are URLs; raw TCP has no URL scheme, so upgrade to HTTPS
-    # which exercises the same TCP/443 handshake path.
-    if protocol == "tcp":
-        protocol = "https"
-    if protocol not in _SCHEME_DEFAULT_PORT:
-        protocol = "https"
-    port_raw = probe.get("port")
-    try:
-        port = int(port_raw) if port_raw is not None else _SCHEME_DEFAULT_PORT[protocol]
-    except (TypeError, ValueError):
-        port = _SCHEME_DEFAULT_PORT[protocol]
-    if port == _SCHEME_DEFAULT_PORT[protocol]:
-        # Default-port elision matches Branch 2's convention so both branches
-        # emit identical strings for the common case (INV-1: byte-stable
-        # output when the same host+protocol combination reoccurs).
-        target = f"{protocol}://{fqdn}"
-    else:
-        target = f"{protocol}://{fqdn}:{port}"
-    # NOTE(1025-US1): warning moved to load-time _emit_load_time_cenr_warning to avoid N*M duplication
-    logger.debug("probe_target: %s -> %s (obs=%s)", fqdn, target, observed_protocol)
-    return target
+    return _build_fallback_target(fqdn, role, cenr_source, observed_protocol)
 
 
 def manage_org_synthetic_probes(mist_session: Any, org_id: str) -> None:
