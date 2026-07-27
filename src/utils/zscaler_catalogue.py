@@ -989,6 +989,143 @@ def refresh_cenr(cenr_path: Path) -> tuple[dict[str, Any], list[str]]:
     return merged, warnings
 
 
+def _run_probe_validation(
+    cenr_path: Path,
+    fresh: dict[str, Any],
+) -> tuple[dict[str, Any], list[ProbeResult]]:
+    """Best-effort probe run; returns ``(probes_v3_dict, results)``.
+
+    Why:
+        Extracted from ``ensure_fresh`` so the caller stays under Radon
+        CC=10. Validation is best-effort by contract (menu 206 already
+        writes probes that self-report failures) so any exception is
+        swallowed and returned as an empty ``results`` list rather than
+        propagated. The probes dict is still returned so ``ensure_fresh``
+        can subsequently stamp observations into it.
+
+    Args:
+        cenr_path: Path to the CENR cache; probes cache is resolved as a
+            sibling ``zscaler_client_connector_probes.json``.
+        fresh: Freshly-refreshed CENR document.
+
+    Returns:
+        ``(probes, results)``. ``probes`` is the v3-promoted ZCC roles
+        dict (empty when the file is missing). ``results`` is the probe
+        result list (empty on any exception path).
+    """
+    probes: dict[str, Any] = {}
+    probes_path = cenr_path.parent / "zscaler_client_connector_probes.json"
+    results: list[ProbeResult] = []
+    try:
+        if probes_path.is_file():
+            probes = json.loads(probes_path.read_text(encoding="utf-8"))
+        # Promote the ZCC roles cache so run_full_validation and every
+        # downstream reader work off the shared v3 dict shape.
+        probes = promote_cache_document(probes, kind="zcc")  # v2 -> v3 loader adapter
+        results = run_full_validation(
+            probes,
+            fresh,
+            timeout=DEFAULT_TIMEOUT,
+            workers=DEFAULT_WORKERS,
+        )
+        if results and not any(r.responding_protocols for r in results):
+            logger.warning(
+                "zscaler_catalogue: full-fleet validation showed zero responding "
+                "endpoints (n=%d); refresh kept anyway",
+                len(results),
+            )
+    except Exception as exc:  # noqa: BLE001 -- validation is best-effort
+        logger.warning("zscaler_catalogue: validation crashed: %s", exc)
+    return probes, results
+
+
+def _build_observations_index(
+    results: list[ProbeResult],
+) -> dict[str, tuple[str | None, int | None, str]]:
+    """Fold ``results`` into an FQDN -> (protocol, port, iso8601_utc) index.
+
+    Why:
+        Extracted from ``ensure_fresh`` so both CENR and ZCC observation
+        writers can look up in O(1). Timestamp is a single ``now`` per
+        refresh cycle so every observation from the same probe pass
+        reports the same ``last_probed`` value (deterministic
+        snapshotting -- INV-1 byte-stability).
+
+    Args:
+        results: Probe results from ``run_full_validation``.
+
+    Returns:
+        Mapping FQDN -> (protocol, port, now_iso). Empty when no result
+        carried a usable FQDN.
+    """
+    now_iso = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    observations: dict[str, tuple[str | None, int | None, str]] = {}
+    for pr in results:
+        # `getattr` fallback keeps this loop tolerant of duck-typed stubs
+        # used in older tests that predate the full ProbeResult shape.
+        fqdn = getattr(pr, "fqdn", None)
+        if not isinstance(fqdn, str) or not fqdn:
+            continue
+        protocol, port = _pick_observation_from_probe_result(pr)
+        observations[fqdn] = (protocol, port, now_iso)
+    return observations
+
+
+def _persist_observations(
+    cenr_path: Path,
+    fresh: dict[str, Any],
+    probes: dict[str, Any],
+    results: list[ProbeResult],
+) -> None:
+    """Stamp probe observations onto CENR + ZCC caches on disk.
+
+    Why:
+        Extracted from ``ensure_fresh`` per contract
+        ``cenr_cache_schema_v3.md`` §"Write Path". Both writes must force
+        ``schema_version`` to the current constant so the invariant
+        "on disk == _SCHEMA_VERSION" holds. Failures on either write are
+        logged and swallowed -- refresh already succeeded and the caller
+        returns the in-memory ``fresh`` dict regardless.
+
+    Args:
+        cenr_path: Path to the CENR cache.
+        fresh: Freshly-refreshed CENR document (mutated in place with the
+            stamped observations and current schema version).
+        probes: v3 ZCC roles dict (mutated in place with observations and
+            schema version).
+        results: Probe results from ``run_full_validation``. When empty
+            this function is a no-op.
+    """
+    if not results:
+        return
+    observations = _build_observations_index(results)
+    logger.info(
+        "zscaler_catalogue: merging %d probe observations into v3 caches",
+        len(observations),
+    )
+    # Stamp CENR (all four bags) then ZCC (roles[*].fqdns). Force
+    # schema_version to the current constant on both docs so the write
+    # invariant "on disk == _SCHEMA_VERSION" always holds.
+    cenr_stamped = _merge_observations_into_cenr(fresh, observations)
+    fresh["schema_version"] = _SCHEMA_VERSION
+    try:
+        _atomic_write_json(cenr_path, fresh)
+    except OSError as exc:
+        logger.warning("zscaler_catalogue: CENR observation rewrite failed: %s", exc)
+    probes_path = cenr_path.parent / "zscaler_client_connector_probes.json"
+    zcc_stamped = _merge_observations_into_zcc(probes, observations)
+    probes["schema_version"] = _SCHEMA_VERSION
+    try:
+        _atomic_write_json(probes_path, probes)
+    except OSError as exc:
+        logger.warning("zscaler_catalogue: ZCC observation rewrite failed: %s", exc)
+    logger.debug(
+        "zscaler_catalogue: observation merge complete (cenr=%d, zcc=%d stamped)",
+        cenr_stamped,
+        zcc_stamped,
+    )
+
+
 def ensure_fresh(cenr_path: Path, cenr: dict[str, Any]) -> dict[str, Any]:
     """Return an up-to-date CENR dict, refreshing + validating when stale.
 
@@ -1039,76 +1176,11 @@ def ensure_fresh(cenr_path: Path, cenr: dict[str, Any]) -> dict[str, Any]:
         return cenr
 
     # Best-effort probe run; validation failures do not block the return.
-    probes: dict[str, Any] = {}
-    probes_path = cenr_path.parent / "zscaler_client_connector_probes.json"
-    results: list[ProbeResult] = []
-    try:
-        # Load probes catalogue relative to the CENR path so we don't
-        # hard-code a repo layout inside this helper. The probes file sits
-        # in the same data/ directory.
-        if probes_path.is_file():
-            probes = json.loads(probes_path.read_text(encoding="utf-8"))
-        else:
-            probes = {}
-        # Also promote the ZCC roles cache so run_full_validation and every
-        # downstream reader work off the shared v3 dict shape.
-        probes = promote_cache_document(probes, kind="zcc")  # v2 -> v3 loader adapter
-        results = run_full_validation(
-            probes,
-            fresh,
-            timeout=DEFAULT_TIMEOUT,
-            workers=DEFAULT_WORKERS,
-        )
-        if results and not any(r.responding_protocols for r in results):
-            logger.warning(
-                "zscaler_catalogue: full-fleet validation showed zero responding "
-                "endpoints (n=%d); refresh kept anyway",
-                len(results),
-            )
-    except Exception as exc:  # noqa: BLE001 -- validation is best-effort
-        logger.warning("zscaler_catalogue: validation crashed: %s", exc)
+    probes, results = _run_probe_validation(cenr_path, fresh)
 
     # T028/T029: write persisted observations back onto both cache files so a
     # later menu 206 invocation can dispatch on the last observed protocol
     # without re-probing (contract cenr_cache_schema_v3.md §"Write Path").
-    if results:
-        # Build the FQDN -> (protocol, port, iso8601_utc) index once so both
-        # walkers can look up in O(1). Timestamp is a single `now` per refresh
-        # cycle so every observation from the same probe pass reports the same
-        # `last_probed` value (deterministic snapshotting).
-        now_iso = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-        observations: dict[str, tuple[str | None, int | None, str]] = {}
-        for pr in results:
-            # `getattr` fallback keeps this loop tolerant of duck-typed stubs
-            # used in older tests that predate the full ProbeResult shape.
-            fqdn = getattr(pr, "fqdn", None)
-            if not isinstance(fqdn, str) or not fqdn:
-                continue
-            protocol, port = _pick_observation_from_probe_result(pr)
-            observations[fqdn] = (protocol, port, now_iso)
-        logger.info(
-            "zscaler_catalogue: merging %d probe observations into v3 caches",
-            len(observations),
-        )
-        # Stamp CENR (all four bags) then ZCC (roles[*].fqdns). Force
-        # schema_version to the current constant on both docs so the write
-        # invariant "on disk == _SCHEMA_VERSION" always holds.
-        cenr_stamped = _merge_observations_into_cenr(fresh, observations)
-        fresh["schema_version"] = _SCHEMA_VERSION
-        try:
-            _atomic_write_json(cenr_path, fresh)
-        except OSError as exc:
-            logger.warning("zscaler_catalogue: CENR observation rewrite failed: %s", exc)
-        zcc_stamped = _merge_observations_into_zcc(probes, observations)
-        probes["schema_version"] = _SCHEMA_VERSION
-        try:
-            _atomic_write_json(probes_path, probes)
-        except OSError as exc:
-            logger.warning("zscaler_catalogue: ZCC observation rewrite failed: %s", exc)
-        logger.debug(
-            "zscaler_catalogue: observation merge complete (cenr=%d, zcc=%d stamped)",
-            cenr_stamped,
-            zcc_stamped,
-        )
+    _persist_observations(cenr_path, fresh, probes, results)
 
     return fresh

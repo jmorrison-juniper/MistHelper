@@ -493,6 +493,33 @@ def _probe_type_for_target(target: str, _role_type: str | None = None) -> str:
     return decision
 
 
+def _find_host_in_bags(container: dict[str, Any], fqdn: str) -> dict[str, Any] | None:
+    """Scan ``proxy_hostnames`` / ``vpn_hostnames`` bags on ``container`` for ``fqdn``.
+
+    Why:
+        Extracted from ``_lookup_v3_observation`` so top-level and by_city
+        walks share one predicate. Keeps the dispatcher below Radon CC=10
+        and encapsulates the v2-string guard (bare strings return ``None``
+        so the caller can trigger the fallback branch).
+
+    Args:
+        container: v3-shaped CENR node with ``proxy_hostnames`` and
+            ``vpn_hostnames`` bags (top-level document or per-city slot).
+        fqdn: Fully-qualified hostname to match on ``entry["host"]``.
+
+    Returns:
+        The matching v3 entry dict, or ``None`` when absent.
+    """
+    for bag_key in ("proxy_hostnames", "vpn_hostnames"):
+        bag = container.get(bag_key) or []
+        if not isinstance(bag, list):
+            continue
+        for entry in bag:
+            if isinstance(entry, dict) and entry.get("host") == fqdn:
+                return entry
+    return None
+
+
 def _lookup_v3_observation(fqdn: str, cenr_source: dict[str, Any]) -> dict[str, Any] | None:
     """Locate the v3 host-entry for ``fqdn`` in every CENR bag.
 
@@ -516,16 +543,9 @@ def _lookup_v3_observation(fqdn: str, cenr_source: dict[str, Any]) -> dict[str, 
     """
     # Top-level bags are the common case; iterate them first so the fast
     # path exits before descending into by_city.
-    for bag_key in ("proxy_hostnames", "vpn_hostnames"):
-        bag = cenr_source.get(bag_key) or []
-        if not isinstance(bag, list):
-            continue
-        for entry in bag:
-            # Guard against mid-migration v2 flat strings that slipped past
-            # the loader adapter; those hosts have no observation, so a
-            # bare-string match returns None to trigger the fallback branch.
-            if isinstance(entry, dict) and entry.get("host") == fqdn:
-                return entry
+    hit = _find_host_in_bags(cenr_source, fqdn)
+    if hit is not None:
+        return hit
     # by_city bags carry the same shape (per cenr_cache_schema_v3.md); walk
     # them last because the top-level bags dominate the hit rate.
     by_city = cenr_source.get("by_city")
@@ -533,13 +553,9 @@ def _lookup_v3_observation(fqdn: str, cenr_source: dict[str, Any]) -> dict[str, 
         for city_slot in by_city.values():
             if not isinstance(city_slot, dict):
                 continue
-            for bag_key in ("proxy_hostnames", "vpn_hostnames"):
-                bag = city_slot.get(bag_key) or []
-                if not isinstance(bag, list):
-                    continue
-                for entry in bag:
-                    if isinstance(entry, dict) and entry.get("host") == fqdn:
-                        return entry
+            hit = _find_host_in_bags(city_slot, fqdn)
+            if hit is not None:
+                return hit
     return None
 
 
