@@ -406,7 +406,10 @@ def _tls_peer(
     try:
         ctx = ssl.create_default_context()
         with socket.create_connection((host, port), timeout=timeout) as raw:
-            with ctx.wrap_socket(raw, server_hostname=host) as tls:
+            # ctx = ssl.create_default_context() above — CodeQL flags the local
+            # name ``tls`` as ``py/insecure-protocol``. This is a false positive:
+            # the wrapped socket uses the system-default (modern-TLS) context.
+            with ctx.wrap_socket(raw, server_hostname=host) as tls:  # lgtm[py/insecure-protocol]
                 cert = tls.getpeercert() or {}
         subj = _pick_cn(cert.get("subject", ()))
         issuer = _pick_cn(cert.get("issuer", ()))
@@ -491,7 +494,12 @@ def _classify_generic(fqdn: str, server: str) -> str:
     """
     if "digicert" in fqdn or "digicert" in server:
         return "DigiCert OCSP/CRL responder"
-    if fqdn.endswith("google.com"):
+    # Diagnostic role label, not URL sanitization: the ``endswith`` /
+    # substring checks below classify a probe target for human-readable
+    # log output. CodeQL's ``py/incomplete-url-substring-sanitization``
+    # rule assumes we are gating security decisions on the match, which
+    # we are not.
+    if fqdn.endswith("google.com"):  # lgtm[py/incomplete-url-substring-sanitization]
         return "Google captive-portal probe target"
     if "secb2b" in fqdn:
         return "Samsung ELM activation (secb2b.com)"

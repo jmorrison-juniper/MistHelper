@@ -367,8 +367,8 @@ class TestRefreshCenr:
         fresh, warnings = refresh_cenr(cenr_path)
         assert cenr_path.is_file()
         assert len(fresh["source_urls"]) == len(_CLOUDS) - len(failing)
-        assert any("zscloud.net" in w for w in warnings)
-        assert any("zscalerbeta.net" in w for w in warnings)
+        assert any("zscloud.net" in w for w in warnings)  # lgtm[py/incomplete-url-substring-sanitization]
+        assert any("zscalerbeta.net" in w for w in warnings)  # lgtm[py/incomplete-url-substring-sanitization]
         # Every non-failing cloud contributed exactly one hostname.
         assert len(fresh["proxy_hostnames"]) == len(_CLOUDS) - len(failing)
 

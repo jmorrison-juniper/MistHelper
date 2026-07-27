@@ -425,7 +425,7 @@ class TestRunFullValidation:
 
         fqdns = [fqdn for fqdn, _ in captured]
         assert fqdns.count("shared.zscaler.net") == 1
-        assert "unique.zscaler.net" in fqdns
+        assert "unique.zscaler.net" in fqdns  # lgtm[py/incomplete-url-substring-sanitization]
         # The dedup keeps the ZCC role (first insertion) for the shared host.
         shared_role = next(role for fqdn, role in captured if fqdn == "shared.zscaler.net")
         assert shared_role.get("role") == "pac_delivery"
