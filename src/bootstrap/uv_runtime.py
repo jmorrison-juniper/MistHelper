@@ -76,7 +76,7 @@ class UVRuntimeHelper:  # Groups version parsing/comparison helpers under one na
     @staticmethod
     def package_name_from_spec(package_spec: str) -> str:
         """Extract the package name from a versioned package specification."""
-        package_name = package_spec  # Start with the full spec; strip operator tail if any is found.
+        package_name = package_spec  # Start with the full spec. Strip operator tail if any is found.
         for operator in [">=", "<=", "==", "!=", ">", "<"]:  # 2-char operators first to avoid '>' false-match.
             if operator in package_name:  # Spec contains this operator token.
                 package_name = package_name.split(operator, 1)[0]  # Keep only the name portion.

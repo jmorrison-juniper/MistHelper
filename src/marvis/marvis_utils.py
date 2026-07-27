@@ -69,7 +69,7 @@ class MarvisDataUtils:  # WHY: Class groups Marvis-to-CSV helpers with injected 
     ) -> list[dict[str, Any]]:
         """Convert a raw Marvis API response into a flat list of dicts for CSV export.
 
-        Handles the sites SLE expansion and generic per-item flattening; any
+        Handles the sites SLE expansion and generic per-item flattening. Any
         internal error routes to the legacy flatten+escape fallback so callers
         always receive a list rather than an exception.
         """

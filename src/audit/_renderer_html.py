@@ -21,7 +21,7 @@ from ._renderer_time import epoch_to_readable  # WHY: shared timestamp formatter
 if TYPE_CHECKING:  # WHY: only imported by type-checkers
     from src.audit.analyzer import AuditAnalysisResult  # WHY: analysis payload type
 
-# WHY: Plotly marker palette; index cycles through admins for stable per-admin coloring
+# WHY: Plotly marker palette. Index cycles through admins for stable per-admin coloring
 _TIMELINE_COLORS: tuple[str, ...] = (  # WHY: module constant so palette is shared across trace builds
     "#00d4ff",
     "#ff6b6b",

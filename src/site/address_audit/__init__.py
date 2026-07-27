@@ -5,7 +5,7 @@ device serial number, enriches with SNMP location data, and resolves/validates
 the address through free tiers (internal comparison -> Nominatim -> optional
 Mist-dashboard UI automation). READ-ONLY in v1: no Mist site record is written.
 
-``AddressAuditEngine`` is the menu entry point; the remaining classes are its
+``AddressAuditEngine`` is the menu entry point. The remaining classes are its
 collaborators. ``AddressCorrector`` is an inert, unregistered write-back stub.
 """
 

@@ -92,7 +92,7 @@ class DataExporter:  # Multi-backend export facade.
         fieldnames: list[str] | None,
         api_function_name: str | None,
     ) -> bool:
-        """Pick CSV vs SQLite write path; return success flag; catches and logs write exceptions."""
+        """Pick CSV vs SQLite write path. Return success flag. Catches and logs write exceptions."""
         try:
             if output_format == "csv":  # CSV branch
                 return DataExporter._write_csv_format(data, filename_or_table, fieldnames=fieldnames)
@@ -109,7 +109,7 @@ class DataExporter:  # Multi-backend export facade.
         fieldnames: list[str] | None = None,
         backend_options: ExportBackendOptions | None = None,
     ) -> bool:
-        """Write data to CSV or SQLite per OUTPUT_FORMAT (or backend_options.format_override); mirror to polyglot DB."""
+        """Write data to CSV or SQLite per OUTPUT_FORMAT (or backend_options.format_override). Mirror to polyglot DB."""
         opts = backend_options if backend_options is not None else ExportBackendOptions()  # Resolve defaults
         mh = importlib.import_module("MistHelper")  # OUTPUT_FORMAT is a mutable module-level global in MistHelper.
         output_format = opts.format_override if opts.format_override else mh.OUTPUT_FORMAT  # Override or global
@@ -157,7 +157,7 @@ class DataExporter:  # Multi-backend export facade.
 
     @staticmethod
     def _perform_polyglot_write(payload: list[dict[str, Any]], api_function_name: str) -> None:
-        """Issue the actual router write call, logging result; never raises (logs warning on failure)."""
+        """Issue the actual router write call, logging result. Never raises (logs warning on failure)."""
         try:
             assert DataExporter._router is not None  # Caller checks _should_skip_polyglot first
             result = DataExporter._router.write(payload, api_function_name)  # Write to polyglot DB
@@ -247,7 +247,7 @@ class DataExporter:  # Multi-backend export facade.
         Args:
             data: Rows to write.
             csv_file: Destination filename (placed in data/ if no directory is given).
-            fieldnames: Optional explicit column order; defaults to sorted unique keys.
+            fieldnames: Optional explicit column order. Defaults to sorted unique keys.
         """
         logging.debug("ENTRY: DataExporter.write_to_csv(data_rows=%s, csv_file=%s)", len(data) if data else 0, csv_file)
         if not data:  # No rows to write -- short-circuit and trace the early exit
@@ -277,7 +277,7 @@ class DataExporter:  # Multi-backend export facade.
 
     @staticmethod
     def _resolve_csv_fields(escaped_data: list[dict[str, Any]], fieldnames: list[str] | None) -> list[str]:
-        """Return the CSV column order; honor caller-supplied fieldnames or fall back to sorted unique keys."""
+        """Return the CSV column order. Honor caller-supplied fieldnames or fall back to sorted unique keys."""
         if fieldnames is not None:  # Caller supplied an explicit column order -- preserve it verbatim
             logging.debug("Using caller-supplied fieldnames for CSV column order")  # Trace explicit ordering
             return fieldnames  # Use as-is
@@ -287,7 +287,7 @@ class DataExporter:  # Multi-backend export facade.
 
     @staticmethod
     def _emit_rows(writer: csv.DictWriter, escaped_data: list[dict[str, Any]], fields: list[str]) -> None:
-        """Write every row in escaped_data through writer; debug-log the first three for diagnostics."""
+        """Write every row in escaped_data through writer. Debug-log the first three for diagnostics."""
         for idx, row in enumerate(escaped_data):  # Walk each row in input order
             writer.writerow({field_name: row.get(field_name, "") for field_name in fields})  # Emit in col order
             if idx < 3:  # Trace the first three rows to aid post-mortem debugging
@@ -299,7 +299,7 @@ class DataExporter:  # Multi-backend export facade.
         escaped_data: list[dict[str, Any]],
         fields: list[str],
     ) -> None:
-        """Open the destination CSV and write header + rows; lets I/O errors propagate to the caller."""
+        """Open the destination CSV and write header + rows. Lets I/O errors propagate to the caller."""
         logging.debug("File I/O: Attempting to open %s for writing", csv_file_path)  # Trace pre-open
         with open(csv_file_path, "w", newline="", encoding="utf-8") as file_handle:  # Open CSV for writing
             writer = csv.DictWriter(file_handle, fieldnames=fields)  # Dict-based CSV writer

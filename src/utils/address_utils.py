@@ -16,7 +16,7 @@ import re  # WHY: regex normalization of addresses, zip codes, and business suff
 import time  # WHY: rate-limit + retry backoff around Nominatim API calls
 import traceback  # WHY: capture exception context in geocode debug logs
 import unicodedata  # WHY: NFKD normalization strips diacritics before comparison
-from collections.abc import Callable  # WHY: Any for opaque JSON payloads; Callable for dispatch map
+from collections.abc import Callable  # WHY: Any for opaque JSON payloads. Callable for dispatch map
 from dataclasses import dataclass, field  # WHY: config + address/skip bundling for STRUCT-PARAMS compliance
 from difflib import SequenceMatcher  # WHY: string-ratio helper used by org-name similarity
 from typing import Any
@@ -34,12 +34,12 @@ except ImportError:  # pragma: no cover  # WHY: absence is non-fatal
     urllib3 = None  # type: ignore[assignment]  # WHY: sentinel checked before disabling warnings
     _has_urllib3 = False  # WHY: skip suppression path when the module is missing
 
-try:  # WHY: rapidfuzz is optional; degrade to difflib on absence
+try:  # WHY: rapidfuzz is optional. Degrade to difflib on absence
     from rapidfuzz import fuzz  # WHY: faster token-sort ratio when available
 except ImportError:  # pragma: no cover  # WHY: keep import graph optional
     fuzz = None  # type: ignore[assignment]  # WHY: sentinel checked before use
 
-try:  # WHY: scourgify is optional; heuristic parser handles the rest
+try:  # WHY: scourgify is optional. Heuristic parser handles the rest
     from scourgify import normalize_address_record  # WHY: high-quality USPS-style parse
 except ImportError:  # pragma: no cover  # WHY: fall back to heuristic parser
     normalize_address_record = None  # WHY: sentinel checked before use
@@ -49,7 +49,7 @@ except ImportError:  # pragma: no cover  # WHY: fall back to heuristic parser
 class AddressValidationConfig:
     """Configuration for address validation with Nominatim."""
 
-    timeout: int = 5  # WHY: seconds per HTTP attempt; retries add linear back-off
+    timeout: int = 5  # WHY: seconds per HTTP attempt. Retries add linear back-off
     debug: bool = False  # WHY: enables verbose parse + geocode logging
     skip_ssl_verify: bool = False  # WHY: internal MITM proxies sometimes need this
     org_name: str | None = None  # WHY: powers the org-name similarity tiebreaker
@@ -338,7 +338,7 @@ class AddressUtils:
     @staticmethod
     def _empty_parse_result(address_string: str | None) -> dict[str, Any]:
         """Return the base (all-unset) parsed-address result skeleton."""
-        return {  # WHY: every field starts unset; parser fills them on success
+        return {  # WHY: every field starts unset. Parser fills them on success
             "address": None,  # WHY: street line, None until parsed
             "city": None,  # WHY: city component, None until parsed
             "state": None,  # WHY: state/region, None until parsed
@@ -640,7 +640,7 @@ def _count_field_matches(
     skip_fields: list[str],
 ) -> int:
     """Count how many non-empty skip fields match comparison fields."""
-    return sum(  # WHY: sum booleans; only non-empty skip fields with equal comp count
+    return sum(  # WHY: sum booleans. Only non-empty skip fields with equal comp count
         bool(skip_val and comp_val == skip_val)  # WHY: skip field must be populated to count
         for comp_val, skip_val in zip(comp_fields, skip_fields, strict=True)  # WHY: strict=True catches shape drift
     )
@@ -686,7 +686,7 @@ def _check_parse_status(
     field_weights: dict[str, float],
 ) -> dict[str, Any]:
     """Check if addresses are parseable."""
-    status: dict[str, Any] = {  # WHY: default both sides parseable; downgrade on placeholder tokens
+    status: dict[str, Any] = {  # WHY: default both sides parseable. Downgrade on placeholder tokens
         "mist_parseable": True,  # WHY: assume valid until proven otherwise
         "comparison_parseable": True,  # WHY: assume valid until proven otherwise
         "mist_reason": "valid",  # WHY: default status label

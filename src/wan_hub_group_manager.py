@@ -64,7 +64,7 @@ _POD_LABEL_PREFIX = "Pod: "  # WHY: shared prefix for uniform display.
 _POD_MIXED_PREFIX = "Pod: MIXED "  # WHY: warns operator that paths disagree on pod value.
 
 # --- Confirmation semantics ---------------------------------------------
-_CONFIRM_YES = "y"  # WHY: only case-insensitive 'y' proceeds; anything else cancels.
+_CONFIRM_YES = "y"  # WHY: only case-insensitive 'y' proceeds. Anything else cancels.
 _QUIT_CHAR = "q"  # WHY: canonical cancel key for the profile picker.
 
 
@@ -393,7 +393,7 @@ class WanHubGroupNumberManager:  # WHY: single public surface consumed by Menu 1
     def _confirm(self, prompt: str, context: str) -> bool:  # WHY: y/N gate reused for set + clear flows.
         """Return True only when the operator explicitly answers 'y' (case-insensitive)."""
         answer = self._safe_input(prompt, context=context)  # WHY: reuse injected safe-input for testability.
-        return answer.lower() == _CONFIRM_YES  # WHY: y/Y proceeds; anything else cancels.
+        return answer.lower() == _CONFIRM_YES  # WHY: y/Y proceeds. Anything else cancels.
 
     # ------------------------------------------------------------------
     # Core operations
@@ -451,7 +451,7 @@ class WanHubGroupNumberManager:  # WHY: single public surface consumed by Menu 1
             if vpn_id not in vpn_map:  # WHY: first path for this vpn seeds the entry.
                 vpn_map[vpn_id] = {"name": vpn_name, "paths": []}  # WHY: cache friendly name + empty list.
             vpn_map[vpn_id]["paths"].append(path_key)  # WHY: aggregate path keys per VPN.
-        _ = new_pod  # WHY: parameter reserved for future per-VPN branching; kept for API stability.
+        _ = new_pod  # WHY: parameter reserved for future per-VPN branching. Kept for API stability.
         return vpn_map  # WHY: caller iterates once per VPN.
 
     def _apply_vpn_updates(
@@ -480,7 +480,7 @@ class WanHubGroupNumberManager:  # WHY: single public surface consumed by Menu 1
         info: dict[str, Any],
         new_pod: int,
     ) -> int | None:  # WHY: return None on failure so caller can short-circuit.
-        """Update a single VPN and log outcome; return count or None on error."""
+        """Update a single VPN and log outcome. Return count or None on error."""
         vpn_name = info["name"]  # WHY: friendlier reference in messages.
         path_keys = info["paths"]  # WHY: exact set of keys to overwrite.
         try:  # WHY: isolate per-VPN failure from the loop.
@@ -555,4 +555,4 @@ class WanHubGroupNumberManager:  # WHY: single public surface consumed by Menu 1
         """
         from src.utils.input_utils import InputUtils  # WHY: local import avoids import cycle at module load.
 
-        return InputUtils.safe_input(prompt, context=_CTX_FALLBACK)  # WHY: EOF-safe; returns '' on EOF.
+        return InputUtils.safe_input(prompt, context=_CTX_FALLBACK)  # WHY: EOF-safe. Returns '' on EOF.

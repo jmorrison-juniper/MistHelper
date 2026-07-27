@@ -73,7 +73,7 @@ class DeviceUtils:  # Device helper utilities.
 
     @staticmethod
     def _expand_one_port_part(port_part: str) -> list[str]:  # Expand a single port token into concrete port names
-        """Expand one port token: a 'prefix/N-M' range -> [prefix/N..prefix/M]; anything else -> [port_part]."""
+        """Expand one port token: a 'prefix/N-M' range -> [prefix/N..prefix/M]. Anything else -> [port_part]."""
         if "-" not in port_part:  # Not a range expression
             return [port_part]  # Single literal port name
         match = re.match(r"^(.+/)(\d+)-(\d+)$", port_part)  # Match prefix plus numeric start-end range
@@ -87,7 +87,7 @@ class DeviceUtils:  # Device helper utilities.
     @staticmethod
     def _warn_degraded_identifier(value: str, prior_fields: str, key: str) -> None:
         """Log a warning when ``key`` is used as identifier because ``prior_fields`` were blank."""
-        if not prior_fields:  # First-choice field was non-empty; nothing degraded
+        if not prior_fields:  # First-choice field was non-empty. Nothing degraded
             return
         logging.warning(  # Warn that earlier identifier fields are missing
             "Device %s missing %s field, using %s as identifier",  # Format string

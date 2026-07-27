@@ -2,7 +2,7 @@
 
 Split out of ``src/maps/maps_manager.py`` so the geometry-backup flow
 lives in its own module. Callers construct a :class:`BackupRequest`
-and hand it to :func:`backup_map_geometry`; the module also fixes the
+and hand it to :func:`backup_map_geometry`. The module also fixes the
 missing ``os`` import the original class-based version silently relied
 on. MapsManager keeps a thin ``_backup_map_geometry`` delegating method
 because ``src/maps/launcher/viewer_callbacks.py`` invokes it through
@@ -111,7 +111,7 @@ def _image_ext(url: str) -> str:  # WHY: derive image extension without exceptio
 
 def _http_get_bytes(url: str) -> tuple[bytes | None, int]:  # WHY: isolate HTTP call from callers
     """GET ``url`` and return ``(content-or-None, status_code)``."""
-    try:  # WHY: network I/O may raise; caller wants graceful fallback
+    try:  # WHY: network I/O may raise. Caller wants graceful fallback
         response = requests.get(url, timeout=_IMG_TIMEOUT_SECS)  # WHY: bounded network wait
     except Exception as err:  # WHY: any failure downgrades to warn + skip
         logger.warning("Image backup failed: %s", err)  # WHY: surface reason to operator
@@ -131,7 +131,7 @@ def _write_image(filename: str, content: bytes) -> None:  # WHY: persist downloa
 def _download_image(
     map_data: dict[str, Any], map_name: str, reason: str
 ) -> tuple[str | None, tuple[str, str] | None]:  # WHY: orchestrate image download
-    """Download the map image; return ``(filename, (safe_name, timestamp))`` or ``(None, None)``."""
+    """Download the map image. Return ``(filename, (safe_name, timestamp))`` or ``(None, None)``."""
     url = map_data.get("url")  # WHY: image URL is optional in the map record
     if not url:  # WHY: no URL means nothing to download
         return None, None
@@ -151,7 +151,7 @@ def _call_api(  # WHY: encapsulate try/except around a Mist listSite* call
     api_call: Callable[..., Any], api_session: Any, site_id: str, label: str
 ) -> Any | None:
     """Invoke ``api_call`` and return the response or ``None`` on exception."""
-    try:  # WHY: fetch is best-effort; caller degrades gracefully
+    try:  # WHY: fetch is best-effort. Caller degrades gracefully
         return api_call(api_session, site_id=site_id)  # WHY: shared site-scoped signature
     except Exception as err:  # WHY: swallow to keep the backup usable
         logger.debug("%s backup skipped: %s", label, err)  # WHY: diagnostic trace only
@@ -182,8 +182,8 @@ def _fetch_items(  # WHY: generic fetch + filter for zones / beacons / vbeacons
 
 
 def _fetch_devices(request: BackupRequest) -> Any | None:  # WHY: wrap listSiteDevices exception path
-    """Fetch site-device response object; returns ``None`` on error."""
-    try:  # WHY: network I/O may raise; caller wants graceful fallback
+    """Fetch site-device response object. Returns ``None`` on error."""
+    try:  # WHY: network I/O may raise. Caller wants graceful fallback
         return mistapi.api.v1.sites.devices.listSiteDevices(  # WHY: Mist API listing
             request.api_session, site_id=request.site_id, type="all"
         )
@@ -216,7 +216,7 @@ def _fetch_device_placements(request: BackupRequest) -> list[dict[str, Any]]:  #
 def _write_backup(  # WHY: persist final backup document to disk
     backup: dict[str, Any], map_name: str, reason: str, name_ts: tuple[str, str] | None
 ) -> tuple[str, str]:
-    """Write ``backup`` as JSON; return ``(absolute_path, filename)``."""
+    """Write ``backup`` as JSON. Return ``(absolute_path, filename)``."""
     safe_name, stamp = name_ts if name_ts else (_safe_name(map_name), _timestamp())  # WHY: reuse image stamp
     filename = f"map_backup_{safe_name}_{reason}_{stamp}.json"  # WHY: matches image filename layout
     path = os.path.join(_data_dir(), filename)  # WHY: absolute destination path
@@ -271,17 +271,17 @@ def _print_summary(  # WHY: user-visible backup summary output
     """Log and print a human-readable summary of the backup contents."""
     summary = _build_summary(backup, image_filename)  # WHY: single source of formatted counts
     logger.info("Map backup saved: %s (%s)", backup_filename, summary)  # WHY: structured audit log
-    # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+    # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
     logger.info("\n   [*] Map backup saved: %s", backup_filename)
     if image_filename:  # WHY: only show image line when there is one
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("       Image: %s", image_filename)
-    # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+    # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
     logger.info("       %s", summary)
 
 
 def _fetch_map(request: BackupRequest) -> dict[str, Any] | None:  # WHY: fetch base map data
-    """Fetch the base map record; return dict payload or ``None`` on failure."""
+    """Fetch the base map record. Return dict payload or ``None`` on failure."""
     response = mistapi.api.v1.sites.maps.getSiteMap(  # WHY: Mist API read for map record
         request.api_session, site_id=request.site_id, map_id=request.map_id
     )
@@ -327,7 +327,7 @@ def _populate_related(backup: dict[str, Any], request: BackupRequest) -> None:  
 
 
 def _perform_backup(request: BackupRequest) -> str | None:  # WHY: end-to-end backup pipeline
-    """Run the full backup pipeline; return the JSON backup path or ``None``."""
+    """Run the full backup pipeline. Return the JSON backup path or ``None``."""
     logger.info(  # WHY: audit start of the pipeline
         "Map geometry backup initiated - map: %s (%s), reason: %s",
         request.map_name,
@@ -348,11 +348,11 @@ def _perform_backup(request: BackupRequest) -> str | None:  # WHY: end-to-end ba
 
 
 def backup_map_geometry(request: BackupRequest) -> str | None:  # WHY: public entry point
-    """Backup map geometry data to a JSON file; return path on success or ``None``."""
-    try:  # WHY: pipeline may raise; wrapper degrades to warning
+    """Backup map geometry data to a JSON file. Return path on success or ``None``."""
+    try:  # WHY: pipeline may raise. Wrapper degrades to warning
         return _perform_backup(request)
     except Exception as err:  # WHY: any failure surfaces as warning, not crash
         logger.exception("Map geometry backup failed: %s", err)  # WHY: full traceback in log
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.warning("\n   [!] Warning: Could not backup map geometry: %s", err)
         return None

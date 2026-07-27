@@ -101,7 +101,7 @@ class WanClientEventsExporter:
             header line before the SiteList prompt and a structured info log
             marking the workflow boundary for tracing.
         """
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info("Export Site WAN Client Events:")
         logging.info("Starting export of site WAN client events...")  # WHY: log workflow start boundary.
 
@@ -121,7 +121,7 @@ class WanClientEventsExporter:
         logging.info(
             "Fetching WAN client events for site: %s (ID: %s)", site_name, site_id
         )  # WHY: log before API calls for tracing.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info("! Fetching WAN client events for site: %s", site_name)
 
     @staticmethod
@@ -140,7 +140,7 @@ class WanClientEventsExporter:
         logging.exception(
             "! Failed to fetch WAN client events for site %s: %s", site_id, exception
         )  # WHY: full traceback log.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.error("! Failed to fetch WAN client events: %s", exception)
 
     def _run_export_pipeline(self, stamp: _SiteStamp) -> None:
@@ -170,7 +170,7 @@ class WanClientEventsExporter:
             prompting avoids a redundant round-trip when the operator selects.
 
         Args:
-            site_id: Caller-supplied site UUID; None triggers interactive prompt.
+            site_id: Caller-supplied site UUID. None triggers interactive prompt.
 
         Returns:
             Resolved site UUID string, or None when the operator cancelled.
@@ -185,7 +185,7 @@ class WanClientEventsExporter:
         logging.debug("Site selection prompt completed with site_id=%s", chosen)  # WHY: result for traceability.
         if not chosen:
             logging.error(_NO_SITE_TEXT)  # WHY: cancel-path log preserved for operator debugging.
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logging.info(_NO_SITE_TEXT)
             return None  # WHY: signal abort to orchestrator so no artifacts are written.
         return chosen  # WHY: resolved site identifier to operate on for the remainder of the workflow.
@@ -248,7 +248,7 @@ class WanClientEventsExporter:
             site_id: Site UUID scoping the search endpoint.
 
         Returns:
-            List of event-row dicts (possibly empty); never ``None``.
+            List of event-row dicts (possibly empty). Never ``None``.
         """
         logging.info("Fetching WAN client events data...")  # WHY: log before first-page API call for tracing.
         # WHY: #1639 — mistapi 0.63.3 exposes the callable flat under wan_clients, not under .events.search.
@@ -271,7 +271,7 @@ class WanClientEventsExporter:
             stamp: Site identifiers used to populate the sentinel row.
         """
         logging.warning(_NO_DATA_TEXT)  # WHY: preserve empty-result log severity + text from sibling exporters.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info(_NO_DATA_TEXT)
         logging.info("Writing no-data placeholder CSV for %s", _OUTPUT_CSV)  # WHY: log before placeholder write.
         output_path = self.file_path_utils.get_csv_path(_OUTPUT_CSV)  # WHY: resolve canonical output path.
@@ -289,7 +289,7 @@ class WanClientEventsExporter:
         """Stamp site identifiers on every event row in place.
 
         Why:
-            The SDK returns raw event rows without site context; downstream
+            The SDK returns raw event rows without site context. Downstream
             joins and per-site aggregations rely on both the UUID (stable) and
             the display name (human readability).
 
@@ -379,6 +379,6 @@ class WanClientEventsExporter:
         logging.info(
             "! WAN client events exported to %s (%d records)", _OUTPUT_CSV, total_records
         )  # WHY: structured log mirrors the operator print block for tracing parity.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info("! WAN client events exported to %s", _OUTPUT_CSV)
         logging.info("   %d WAN client event records", total_records)

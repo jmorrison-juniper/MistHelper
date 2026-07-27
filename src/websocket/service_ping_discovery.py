@@ -231,7 +231,7 @@ class ServicePingDiscoveryMixin:  # WHY: define ServicePingDiscoveryMixin type.
 
     @staticmethod
     def _collect_named_items(items: list[Any], sink: set[str]) -> None:  # WHY: define _collect_named_items helper.
-        """Add name field of dict items to sink; skip non-dicts and empty names."""
+        """Add name field of dict items to sink. Skip non-dicts and empty names."""
         for entry in items:  # WHY: iterate raw list entries defensively.
             if not isinstance(entry, dict):  # WHY: skip non-dict entries.
                 continue

@@ -4,7 +4,7 @@ Extracted from MistHelper.py during initiative 1013 (Cat B, position 45)
 under the SC-001 facade pattern. Handles device stats, port stats, VPN
 peer stats, and VC stats exports. Fast mode caches recent CSV
 (CSV_FRESHNESS_MINUTES) and parallelizes site fetches with bounded
-concurrency; non-fast mode issues one org-level paginated call.
+concurrency. Non-fast mode issues one org-level paginated call.
 
 Direct imports cover stdlib (concurrent.futures, csv, importlib, logging,
 os, time) and third-party (tqdm). Every live-global read
@@ -60,7 +60,7 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
                     age_minutes,
                     mh.CSV_FRESHNESS_MINUTES,
                 )
-                # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+                # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
                 logging.info("* Fast mode: Using cached %s (age %.1fm)", output_file, age_minutes)  # User notice
                 return True  # Caller skips re-fetch
         except Exception as e:  # Freshness-check error
@@ -111,7 +111,7 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
                     age_minutes,
                     mh.CSV_FRESHNESS_MINUTES,
                 )  # Record why no API calls were made
-                # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+                # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
                 logging.info("* Fast mode: Using cached %s (age %.1fm)", output_file, age_minutes)  # User notice
                 return True  # Caller can return early
         except Exception as exception:  # Cache metadata problems degrade gracefully
@@ -175,7 +175,7 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
 
     @staticmethod
     def _attempt_site_port_stats_fetch(site_id, site_name, connection_semaphore):
-        """Single fetch attempt for one site's port stats; returns list or raises."""
+        """Single fetch attempt for one site's port stats. Returns list or raises."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of mistapi + apisession.
         with connection_semaphore:  # Bound concurrent API calls
             response = mh.mistapi.api.v1.sites.stats.searchSiteSwOrGwPorts(mh.apisession, site_id, limit=1000)
@@ -195,7 +195,7 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
 
     @staticmethod
     def _handle_site_port_stats_retry(attempt, site_name, exception):
-        """Backoff + log retry; return True if more attempts remain."""
+        """Backoff + log retry. Return True if more attempts remain."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of FAST_MODE_* + FastModeBackoffMultiplier.
         if attempt < mh.FAST_MODE_MAX_RETRIES:  # More retries remain
             backoff_delay = mh.FAST_MODE_RETRY_DELAY * (mh.FastModeBackoffMultiplier.VALUE**attempt)  # Backoff curve
@@ -238,7 +238,7 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
 
     @staticmethod
     def _process_retry_future(future, retry_futures, retry_results, still_failed):
-        """Resolve one retried-site future; mutate retry_results + still_failed."""
+        """Resolve one retried-site future. Mutate retry_results + still_failed."""
         site_info = retry_futures[future]  # Recover original site tuple
         try:
             result = future.result()  # Resolve retried site rows
@@ -311,7 +311,7 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataProcessingUtils/DataExporter.
         if not all_port_stats:  # Empty dataset should skip file creation and clearly tell the operator why.
             logging.warning(" No port statistics collected. CSV not created.")  # Log absence of exportable data.
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logging.warning("! No port statistics collected. CSV not created.")  # Tell operator no file was written.
             return  # Nothing to sort or write.
         try:  # Sorting is best-effort because some rows may lack MACs.
@@ -325,7 +325,7 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
         )  # Normalize nested API payloads into flat CSV-friendly records.
         sanitized = DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]  # Escape embedded newlines so CSV stays row-stable.
         mh.DataExporter.write_with_format_selection(sanitized, output_file, api_function_name="searchSiteSwOrGwPorts")  # type: ignore[no-untyped-call]  # Persist to configured backend with endpoint metadata.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info(
             "! %s port stat records exported to %s", len(all_port_stats), output_file
         )  # Confirm output row count to the operator.
@@ -357,7 +357,7 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
             record_count,
             duration,
         )  # Structured run summary.
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info(
             "* Fast mode: Collected %s port stat records from %s/%s sites in %.1fs",
             record_count,
@@ -421,7 +421,7 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
 
     @staticmethod
     def _vpn_peer_stats_cache_hit(output_file: str, fast: bool) -> bool:
-        """Return True if fast-mode cache for VPN peer stats is fresh; emit cache-hit log + print."""
+        """Return True if fast-mode cache for VPN peer stats is fresh. Emit cache-hit log + print."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of CSV_FRESHNESS_MINUTES.
         if not (fast and os.path.exists(output_file)):  # Either non-fast or no file yet.
             return False
@@ -435,7 +435,7 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
                     age_minutes,
                     mh.CSV_FRESHNESS_MINUTES,
                 )  # Structured log.
-                # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+                # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
                 logging.info("* Fast mode: Using cached %s (age %.1fm)", output_file, age_minutes)  # Operator-facing.
                 return True
         except Exception as e:  # Freshness check failed -- fall through to fetch.
@@ -446,7 +446,7 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
     def vpn_peer_stats(fast: bool = False):  # Export VPN peer stats.
         """Export VPN peer path statistics to OrgVPNPeerStats.csv.
 
-        Fast mode reuses recent CSV; normal mode does an org-level paginated fetch. SECURITY: read-only.
+        Fast mode reuses recent CSV. Normal mode does an org-level paginated fetch. SECURITY: read-only.
         """
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of live globals.
         output_file = "OrgVPNPeerStats.csv"  # Output filename.

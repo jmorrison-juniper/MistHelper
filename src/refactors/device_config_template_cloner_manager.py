@@ -3,7 +3,7 @@
 Thin adapter around ``src.gateway.device_template_cloner`` that wires
 runtime dependencies (API session, input wrapper, path/data helpers,
 config utils) into the extracted implementation. Originally defined
-inline in MistHelper.py; hoisted here per initiative 1011 to shrink the
+inline in MistHelper.py. Hoisted here per initiative 1011 to shrink the
 monolith.
 
 Runtime dependencies (``apisession``, ``InputUtils``, ``FilePathUtils``,

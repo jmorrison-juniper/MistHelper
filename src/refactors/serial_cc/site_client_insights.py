@@ -97,12 +97,12 @@ class _ExportContext:
 
 def _emit_preview_rows(clients: list[dict[str, Any]], site_name: str) -> None:
     """Print the client-count summary and the first _PREVIEW_LIMIT rows (kept CC low)."""
-    # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+    # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
     logger.info(_MSG_FOUND_TMPL, len(clients), site_name)  # WHY: Summary count line
-    # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+    # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
     logger.info(_MSG_PREVIEW_HEADER)  # WHY: Preview header
     for index, client in enumerate(clients[:_PREVIEW_LIMIT]):  # WHY: Show only the first few rows
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info(
             _MSG_PREVIEW_ROW_TMPL,
             index,
@@ -131,7 +131,7 @@ class SiteClientInsightsService:
     @staticmethod
     def _resolve_site_name(deps: SimpleNamespace, site_id: str) -> str:
         """Resolve the human-readable site name, falling back to the site id on failure."""
-        try:  # WHY: Site name lookup is best-effort; any failure falls back to the id
+        try:  # WHY: Site name lookup is best-effort. Any failure falls back to the id
             response = deps.mistapi.api.v1.sites.listSites(deps.apisession, site_id)  # WHY: Fetch site metadata
             sites = deps.mistapi.get_all(response=response, mist_session=deps.apisession)  # WHY: Page all sites
             return next((site[_KEY_NAME] for site in sites if site[_KEY_ID] == site_id), site_id)  # WHY: Match id->name
@@ -140,8 +140,8 @@ class SiteClientInsightsService:
 
     @staticmethod
     def _list_and_display_clients(deps: SimpleNamespace, site_id: str, site_name: str) -> list[dict[str, Any]]:
-        """Fetch wireless clients for the site and print a short preview; return the client list."""
-        try:  # WHY: Client listing is best-effort; failures are warned and yield an empty list
+        """Fetch wireless clients for the site and print a short preview. Return the client list."""
+        try:  # WHY: Client listing is best-effort. Failures are warned and yield an empty list
             response = deps.mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(
                 deps.apisession, site_id
             )  # WHY: Query wireless clients for the site
@@ -152,33 +152,33 @@ class SiteClientInsightsService:
         if clients:  # WHY: Found at least one client - show a short preview
             _emit_preview_rows(clients, site_name)  # WHY: Delegate preview emission
         else:  # WHY: No clients returned for the site
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning(_MSG_NO_CLIENTS_TMPL, site_name)  # WHY: Inform the user
         return clients  # WHY: Hand back whatever clients were found (possibly empty)
 
     @staticmethod
     def _resolve_client_mac(client_input: str, clients: list[dict[str, Any]]) -> str | None:
-        """Resolve a client MAC from raw input; return None to abort (message already printed)."""
+        """Resolve a client MAC from raw input. Return None to abort (message already printed)."""
         if not client_input.isdigit():  # WHY: Non-numeric input is treated as a literal MAC string
             return client_input  # WHY: Use the input directly as the MAC
         try:  # WHY: Numeric input is an index into the displayed client list
             index = int(client_input)  # WHY: Parse the index
         except (ValueError, IndexError):  # WHY: Parsing failed despite isdigit (defensive)
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning(_MSG_INVALID_INDEX_TMPL, client_input)  # WHY: Inform the user
             return None  # WHY: Abort - message already printed
         if not (0 <= index < len(clients)):  # WHY: Index must reference an existing client
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning(_MSG_INDEX_RANGE_TMPL, index, len(clients) - 1)  # WHY: Inform the user
             return None  # WHY: Abort - message already printed
         client_mac = str(clients[index].get(_KEY_MAC, ""))  # WHY: Resolve MAC (may be empty)
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info(_MSG_SELECTED_TMPL, client_mac)  # WHY: Echo the selection
         return client_mac  # WHY: Return the resolved MAC (possibly empty string)
 
     @staticmethod
     def _fetch_single_metric(deps: SimpleNamespace, context: _ExportContext, metric: str) -> dict[str, Any] | None:
-        """Fetch one client-scope insight metric; return the tagged record or None on empty/failure."""
+        """Fetch one client-scope insight metric. Return the tagged record or None on empty/failure."""
         try:  # WHY: Per-metric failures are non-fatal and skip to the next metric
             response = deps.mistapi.api.v1.sites.insights.getSiteInsightMetricsForClient(
                 deps.apisession, context.site_id, context.client_mac, metrics=metric
@@ -197,7 +197,7 @@ class SiteClientInsightsService:
     def _collect_client_metrics(
         cls, deps: SimpleNamespace, context: _ExportContext, client_metrics: list[str]
     ) -> tuple[list[dict[str, Any]], int]:
-        """Fetch every client-scope insight metric; return (collected records, retrieved count)."""
+        """Fetch every client-scope insight metric. Return (collected records, retrieved count)."""
         all_client_data: list[dict[str, Any]] = []  # WHY: Accumulator for tagged records
         for metric in client_metrics:  # WHY: Iterate every client-scope metric
             record = cls._fetch_single_metric(deps, context, metric)  # WHY: Fetch one metric (None on empty/failure)
@@ -215,7 +215,7 @@ class SiteClientInsightsService:
     ) -> None:
         """Flatten and export collected client insight data, or write an empty file when none."""
         if not all_client_data:  # WHY: No data collected for any metric - write empty for consistency
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning(_MSG_EXPORT_EMPTY_TMPL, filename)  # WHY: User summary
             logging.warning(_MSG_EXPORT_EMPTY_LOG, site_name)  # WHY: Warn on empty run
             deps.DataExporter.write_with_format_selection([], filename)  # WHY: Write empty export file
@@ -223,7 +223,7 @@ class SiteClientInsightsService:
         processed = deps.DataProcessingUtils.flatten_nested_fields(all_client_data)  # WHY: Flatten nested structures
         processed = deps.DataProcessingUtils.escape_multiline(processed)  # WHY: Escape multiline fields for CSV
         deps.DataExporter.write_with_format_selection(processed, filename)  # WHY: Write the export file
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info(_MSG_EXPORT_OK_TMPL, metrics_retrieved, filename)  # WHY: User summary
         logging.info(_MSG_EXPORT_OK_LOG, metrics_retrieved, site_name, filename)  # WHY: Trace successful export
 
@@ -237,7 +237,7 @@ class SiteClientInsightsService:
     @staticmethod
     def _read_client_input(deps: SimpleNamespace) -> str:
         """Prompt for the client MAC/index and return the trimmed input string."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info(_MSG_PROMPT_HEADER)  # WHY: Prompt header
         raw = deps.InputUtils.safe_input(_PROMPT_CLIENT, context=_CTX_CLIENT)  # WHY: Read raw client selection
         return str(raw).strip()  # WHY: str-cast narrows Any for downstream str consumers
@@ -246,17 +246,17 @@ class SiteClientInsightsService:
     def _resolve_normalized_mac(
         cls, deps: SimpleNamespace, client_input: str, clients: list[dict[str, Any]]
     ) -> str | None:
-        """Resolve MAC from input, validate/normalize; return the normalized MAC or None to abort."""
+        """Resolve MAC from input, validate/normalize. Return the normalized MAC or None to abort."""
         client_mac = cls._resolve_client_mac(client_input, clients)  # WHY: Resolve MAC from input (None = abort)
         if client_mac is None:  # WHY: Invalid index/value - helper already printed the reason
             return None  # WHY: Abort silently
         if not client_mac:  # WHY: Resolved to an empty MAC (selected client had no MAC)
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning(_MSG_NO_MAC)  # WHY: Inform the user
             return None  # WHY: Abort
         normalized = deps.SiteClientExporter._normalize_client_mac_or_none(client_mac)  # WHY: Validate/normalize
         if not normalized:  # WHY: MAC failed format validation
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning(_MSG_INVALID_MAC_TMPL, client_mac)  # WHY: Inform the user
             logging.error(_MSG_INVALID_MAC_LOG, client_mac)  # WHY: Trace the failure
             return None  # WHY: Abort
@@ -268,7 +268,7 @@ class SiteClientInsightsService:
         client_metrics = deps.InsightMetricsUtils.get_by_scope(_CLIENT_SCOPE)  # WHY: Client-scope metric list
         if client_metrics:  # WHY: At least one metric configured
             return list(client_metrics)  # WHY: Freeze return type (list[str])
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.warning(_MSG_NO_METRICS)  # WHY: Inform the user of misconfiguration
         logging.error(_MSG_NO_METRICS_LOG)  # WHY: Trace the misconfiguration
         deps.DataExporter.write_with_format_selection([], filename)  # WHY: Write an empty export for consistency
@@ -276,7 +276,7 @@ class SiteClientInsightsService:
 
     @classmethod
     def _run_collect_and_export(cls, deps: SimpleNamespace, context: _ExportContext, client_metrics: list[str]) -> None:
-        """Guarded collect+export path; writes an empty file if the top-level fetch fails."""
+        """Guarded collect+export path. Writes an empty file if the top-level fetch fails."""
         try:  # WHY: Guard the fetch+export so failures still write an empty file
             all_client_data, metrics_retrieved = cls._collect_client_metrics(
                 deps, context, client_metrics
@@ -285,7 +285,7 @@ class SiteClientInsightsService:
                 deps, all_client_data, metrics_retrieved, context.filename, context.site_name
             )  # WHY: Export results
         except Exception as exception:  # WHY: Unexpected top-level failure
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.error(_MSG_ERROR_TMPL, exception)  # WHY: User-facing error
             logging.error(_MSG_ERROR_LOG, context.site_name, exception)  # WHY: Trace the failure
             deps.DataExporter.write_with_format_selection([], context.filename)  # WHY: Write empty export on failure
@@ -293,23 +293,23 @@ class SiteClientInsightsService:
     @staticmethod
     def _print_intro_and_refresh(deps: SimpleNamespace) -> None:
         """Emit the banner + refresh notice and run the canonical metric refresh."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info(_BANNER)  # WHY: User-facing banner
         logging.info(_MSG_START)  # WHY: Trace workflow start
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info(_MSG_REFRESH)  # WHY: Inform about the metric refresh
         deps.ConstDefinitionsExporter(deps.apisession).export_all()  # WHY: Regenerate ConstInsightMetrics.csv
 
     @classmethod
     def _resolve_export_context(cls, deps: SimpleNamespace, site_id: str) -> _ExportContext | None:
-        """Resolve site context + client + normalized MAC into an _ExportContext; None aborts."""
+        """Resolve site context + client + normalized MAC into an _ExportContext. None aborts."""
         site_context = cls._prepare_site_context(deps, site_id)  # WHY: Resolve display + sanitized name
         clients = cls._list_and_display_clients(
             deps, site_context.site_id, site_context.site_name
         )  # WHY: Fetch + preview
         client_input = cls._read_client_input(deps)  # WHY: Prompt for the client selection
         if not client_input:  # WHY: User pressed Enter to skip
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning(_MSG_SKIP_EMPTY)  # WHY: Inform the user
             return None  # WHY: Abort the workflow
         normalized_mac = cls._resolve_normalized_mac(deps, client_input, clients)  # WHY: Resolve normalized MAC
@@ -340,6 +340,6 @@ class SiteClientInsightsService:
         client_metrics = cls._load_client_metrics_or_empty(deps, context.filename)  # WHY: Load metric list
         if client_metrics is None:  # WHY: No metrics configured (empty file already written)
             return  # WHY: Abort the workflow
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info(_MSG_RETRIEVING_TMPL, len(client_metrics))  # WHY: Progress info line
         cls._run_collect_and_export(deps, context, client_metrics)  # WHY: Guarded fetch + export

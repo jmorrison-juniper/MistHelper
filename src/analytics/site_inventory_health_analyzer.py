@@ -53,12 +53,12 @@ class SiteInventoryHealthAnalyzer:  # WHY: namespace for the analyzer entry poin
         SiteInventoryHealthAnalyzer._print_header()  # WHY: banner + start log
         org_id = deps.get_org_id_fn()  # WHY: resolve current org id from harness state
         if not org_id:  # WHY: bail early when no org is selected
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("! No organization selected. Exiting.")
             return  # WHY: nothing to analyze without an org
         site_inventory, site_lookup = SiteInventoryHealthAnalyzer._collect_inventory(org_id, deps)  # WHY: fetch+group
         if site_inventory is None:  # WHY: fetch failed → abort with user-facing hint
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.error("! Failed to fetch required data. Please verify API access.")
             return  # WHY: cannot proceed without inventory
         missing_report = SiteInventoryHealthAnalyzer._find_sites_missing_infrastructure(  # WHY: gap analysis
@@ -74,9 +74,9 @@ class SiteInventoryHealthAnalyzer:  # WHY: namespace for the analyzer entry poin
     @staticmethod
     def _print_header() -> None:  # WHY: extracted header block keeps analyze under length cap
         """Emit banner and start log."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("Site Inventory Health Analyzer:")
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("%s", "=" * 60)
         logging.info("Starting site inventory health analysis...")  # WHY: audit trail entry
 
@@ -98,12 +98,12 @@ class SiteInventoryHealthAnalyzer:  # WHY: namespace for the analyzer entry poin
     @staticmethod
     def _fetch_sites(org_id: str, deps: SiteInventoryHealthAnalyzerDeps) -> list[dict[str, Any]]:  # WHY: sites list
         """Fetch all sites in the organization."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("! Fetching sites...")
         logging.info("Fetching all organization sites...")  # WHY: pre-action log
         try:
             sites = deps.all_sites_fn(org_id)  # WHY: injected fetcher for testability
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info("  Found %d sites", len(sites))
             return sites  # WHY: hand off list to caller for grouping
         except Exception as error:  # noqa: BLE001 - Mist SDK raises bare Exception subclasses
@@ -113,7 +113,7 @@ class SiteInventoryHealthAnalyzer:  # WHY: namespace for the analyzer entry poin
     @staticmethod
     def _fetch_devices(org_id: str, deps: SiteInventoryHealthAnalyzerDeps) -> list[dict[str, Any]]:  # WHY: devices
         """Fetch all devices (inventory) in the organization."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("! Fetching device inventory...")
         logging.info("Fetching all organization devices from inventory...")  # WHY: pre-action log
         try:
@@ -138,7 +138,7 @@ class SiteInventoryHealthAnalyzer:  # WHY: namespace for the analyzer entry poin
                 counts[device_type] += 1  # WHY: increment matched-type slot
             if device.get("connected") is True:  # WHY: connected counter independent of type
                 counts["connected"] += 1
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info(
             "  Found %d devices: %d APs, %d switches, %d gateways (%d connected)",
             len(devices),
@@ -312,23 +312,23 @@ class SiteInventoryHealthAnalyzer:  # WHY: namespace for the analyzer entry poin
         missing_report: list[dict[str, Any]], offline_report: list[dict[str, Any]]
     ) -> None:
         """Display analysis results to console."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("\n%s", "=" * 60)
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("ANALYSIS RESULTS")
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("%s", "=" * 60)
         SiteInventoryHealthAnalyzer._display_missing_section(missing_report)  # WHY: missing block
         SiteInventoryHealthAnalyzer._display_offline_section(offline_report)  # WHY: offline block
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("\n%s", "=" * 60)
 
     @staticmethod
     def _display_missing_section(missing_report: list[dict[str, Any]]) -> None:  # WHY: missing console block
         """Console block for sites missing switch/gateway infrastructure."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("\n[SITES MISSING INFRASTRUCTURE]")
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("  Sites with APs but missing switch/gateway: %d", len(missing_report))
         if not missing_report:  # WHY: nothing more to render when report is empty
             return
@@ -340,18 +340,18 @@ class SiteInventoryHealthAnalyzer:  # WHY: namespace for the analyzer entry poin
         """Print aggregate counts of missing switches and gateways."""
         missing_switches = sum(1 for r in missing_report if "switch" in r["missing_types"])  # WHY: switch tally
         missing_gateways = sum(1 for r in missing_report if "gateway" in r["missing_types"])  # WHY: gateway tally
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("    - Missing switches: %d", missing_switches)
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("    - Missing gateways: %d", missing_gateways)
 
     @staticmethod
     def _print_missing_samples(missing_report: list[dict[str, Any]]) -> None:  # WHY: bounded preview helper
         """Print sample preview lines from the missing-infrastructure report."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("\n  Sample sites (first 5):")
         for site in missing_report[:_PREVIEW_LIMIT]:  # WHY: bounded preview
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info(
                 "    - %s: %d APs, missing %s",
                 site["site_name"],
@@ -362,9 +362,9 @@ class SiteInventoryHealthAnalyzer:  # WHY: namespace for the analyzer entry poin
     @staticmethod
     def _display_offline_section(offline_report: list[dict[str, Any]]) -> None:  # WHY: offline console block
         """Console block for sites with offline switch/gateway infrastructure."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("\n[SITES WITH OFFLINE INFRASTRUCTURE]")
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("  Sites with APs and offline switch/gateway: %d", len(offline_report))
         if not offline_report:  # WHY: nothing more to render when report is empty
             return
@@ -376,20 +376,20 @@ class SiteInventoryHealthAnalyzer:  # WHY: namespace for the analyzer entry poin
         """Print aggregate counts of offline switches and gateways."""
         total_switches = sum(r["offline_switches"] for r in offline_report)  # WHY: switch tally
         total_gateways = sum(r["offline_gateways"] for r in offline_report)  # WHY: gateway tally
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("    - Total offline switches: %d", total_switches)
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("    - Total offline gateways: %d", total_gateways)
 
     @staticmethod
     def _print_offline_samples(offline_report: list[dict[str, Any]]) -> None:  # WHY: bounded preview helper
         """Print sample preview lines from the offline-infrastructure report."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("\n  Sample sites (first 5):")
         for site in offline_report[:_PREVIEW_LIMIT]:  # WHY: bounded preview
             label = site["offline_devices"]  # WHY: raw joined label
             suffix = "..." if len(label) > _DETAIL_TRUNC else ""  # WHY: truncate long strings
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info(
                 "    - %s: %d APs, offline: %s%s",
                 site["site_name"],
@@ -431,10 +431,10 @@ class SiteInventoryHealthAnalyzer:  # WHY: namespace for the analyzer entry poin
     ) -> None:
         """Export a single report to CSV or print the empty-message fallback."""
         if not rows:  # WHY: nothing to write → user hint instead
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info("%s", spec.empty_message)
             return
         deps.save_data_fn(rows, spec.filename, api_function_name=spec.api_function_name)  # WHY: delegated write
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("! %s report exported to %s", spec.label, spec.filename)
         logging.info("Exported %d sites to %s", len(rows), spec.filename)  # WHY: audit trail

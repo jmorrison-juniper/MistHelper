@@ -47,7 +47,7 @@ class CacheUtils:
         generate_function: Callable,  # type: ignore[type-arg]
         freshness_minutes: int | None = None,
     ) -> bool:
-        """Return True if file_name's CSV exists and is fresh; otherwise run generate_function.
+        """Return True if file_name's CSV exists and is fresh. Otherwise run generate_function.
 
         freshness_minutes defaults to CSV_FRESHNESS_MINUTES (.env). Returns True when the file is
         fresh or was regenerated successfully, False if regeneration failed.
@@ -89,9 +89,9 @@ class CacheUtils:
 
     @staticmethod
     def _run_csv_generator(generate_function: Callable, file_name: str) -> bool:  # type: ignore[type-arg]  # Run generator
-        """Invoke the generate_function to produce the CSV; return True on success, False on failure."""
+        """Invoke the generate_function to produce the CSV. Return True on success, False on failure."""
         logging.info("* Running %s to generate %s...", generate_function.__name__, file_name)  # Log before generating
-        try:  # The generator may raise; never let that crash the caller
+        try:  # The generator may raise. Never let that crash the caller
             generate_function()  # Produce or refresh the CSV file
             logging.info("! %s generated or refreshed.", file_name)  # Confirm success to operator
             return True  # Generation succeeded
@@ -101,7 +101,7 @@ class CacheUtils:
 
     @staticmethod
     def load_csv_grouped_by_key(filename: str, key: str) -> dict[str, list[dict[str, Any]]]:
-        """Load a CSV into a dict keyed by the named column; value is the list of rows sharing it."""
+        """Load a CSV into a dict keyed by the named column. Value is the list of rows sharing it."""
         logging.info(
             "Loading CSV file '%s' into dictionary keyed by '%s'...", filename, key
         )  # Log before reading the file
@@ -137,9 +137,9 @@ class CacheUtils:
 
     @staticmethod
     def _write_data_rows_to_csv(writer: csv.DictWriter, data: dict[str, list[dict[str, Any]]]) -> int:  # type: ignore[type-arg]
-        """Write every row from every section through writer; return total row count."""
+        """Write every row from every section through writer. Return total row count."""
         row_count = 0  # Tally rows actually written so the caller can log the total
-        for section in data.values():  # Iterate sections in insertion order; keys are unused here
+        for section in data.values():  # Iterate sections in insertion order. Keys are unused here
             for row in section:  # Write each row through the DictWriter
                 writer.writerow(row)  # csv handles encoding/escaping for us
                 row_count += 1  # Increment after a successful write
@@ -237,7 +237,7 @@ class CacheUtils:
 
     @staticmethod
     def _delete_cache_files(data_dir: str, candidates: list[str]) -> tuple[int, int]:  # Delete files, count outcomes
-        """Delete each candidate cache file; return (deleted_count, error_count)."""
+        """Delete each candidate cache file. Return (deleted_count, error_count)."""
         deleted = 0  # Track successful deletions for summary
         errors = 0  # Track failures for summary
         for name in candidates:  # Delete each identified cache file
@@ -258,7 +258,7 @@ class CacheUtils:
     def create_address_parse_failures_csv(
         parse_failures: list[dict[str, Any]], filename: str = "AddressParseFailures.csv"
     ) -> None:
-        """Write address-parse failures to a CSV in data/; safe no-op when list is empty."""
+        """Write address-parse failures to a CSV in data/. Safe no-op when list is empty."""
         if not parse_failures:
             logging.info("No address parsing failures to document.")
             return

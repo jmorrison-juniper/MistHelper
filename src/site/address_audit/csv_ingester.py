@@ -81,7 +81,7 @@ class CSVAddressIngester:
         for candidate in _CANDIDATE_DELIMITERS:  # Probe each candidate delimiter.
             count = len(sample.split(candidate))  # Field count this delimiter would produce.
             if count >= _MIN_COLUMNS and candidate == "\t":  # A tab that yields >=6 wins outright.
-                return candidate  # Tab is the documented format; prefer it when it fits.
+                return candidate  # Tab is the documented format. Prefer it when it fits.
             if count > best_count:  # Otherwise track the delimiter giving the most fields.
                 best_count = count  # Remember the new best field count.
                 best_delimiter = candidate  # Remember the delimiter that produced it.

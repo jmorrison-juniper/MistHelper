@@ -107,7 +107,7 @@ class TelemetryEmitter:
             exc_val: Exception instance if the ``with`` block raised, else None.
             exc_tb: Traceback if the ``with`` block raised, else None.
         """
-        del exc_type, exc_val, exc_tb  # WHY: protocol params unused; silence vulture without renaming public signature.
+        del exc_type, exc_val, exc_tb  # WHY: protocol params unused. Silence vulture without renaming public signature.
         self.close()
 
     # -- test event helpers ---------------------------------------------------

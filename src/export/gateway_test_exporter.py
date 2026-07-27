@@ -322,4 +322,4 @@ class GatewayTestExporter:
         GatewayTestExporter._resolve_misthelper_runtime()  # WHY: the service uses wired gateway helpers.
         from src.refactors.serial_cc.test_results_by_site import GatewayTestResultsService  # noqa: PLC0415
 
-        GatewayTestResultsService.execute(fast=fast)  # Delegate to extracted service; keeps CC at A(1)
+        GatewayTestResultsService.execute(fast=fast)  # Delegate to extracted service. Keeps CC at A(1)

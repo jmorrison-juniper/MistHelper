@@ -18,7 +18,7 @@ from __future__ import annotations  # WHY: postponed evaluation for forward-ref 
 import logging  # WHY: orchestrator emits structured log lines around device commands
 from typing import TYPE_CHECKING, Any  # WHY: TYPE_CHECKING avoids runtime cycle with parent
 
-if TYPE_CHECKING:  # WHY: only needed for static type checkers; skipped at runtime
+if TYPE_CHECKING:  # WHY: only needed for static type checkers. Skipped at runtime
     from src.network.routing_utils import RoutingUtils, SsrRouteContext  # WHY: types only
 
 
@@ -40,7 +40,7 @@ class _RoutingUtilsSSR:  # WHY: cluster wrapper matching parsing/display/payload
     def __getattr__(self, name: str) -> Any:  # WHY: transparent proxy for combined API surface
         """Delegate unknown attributes to the wrapped parent object."""
         parent = self.__dict__.get("_ru")  # WHY: guard against half-initialized instances
-        if parent is None:  # WHY: only trips during broken init; avoid infinite recursion
+        if parent is None:  # WHY: only trips during broken init. Avoid infinite recursion
             raise AttributeError(name)  # WHY: signal missing attribute cleanly to callers
         return getattr(parent, name)  # WHY: transparent proxy to parent RoutingUtils
 
@@ -99,7 +99,7 @@ class _RoutingUtilsSSR:  # WHY: cluster wrapper matching parsing/display/payload
         request_body: dict[str, Any],
         debug_mode: bool,
     ) -> tuple[Any, str] | None:
-        """Open WebSocket + issue SSR command; return (ws, session_id) or None on failure."""
+        """Open WebSocket + issue SSR command. Return (ws, session_id) or None on failure."""
         websocket_manager = self._ru._connect_websocket(site_id, device_id, debug_mode)  # WHY: WS
         if not websocket_manager:  # WHY: guard: connection failed
             return None  # WHY: nothing to disconnect
@@ -163,7 +163,7 @@ class _RoutingUtilsSSR:  # WHY: cluster wrapper matching parsing/display/payload
         interval_input, duration_input = self._collect_ssr_refresh()  # WHY: split for length
         from src.network.routing_utils import SsrRouteQuery  # WHY: lazy import avoids cycle
 
-        query = SsrRouteQuery(  # WHY: dataclass fields auto-populate __init__; not counted as func params
+        query = SsrRouteQuery(  # WHY: dataclass fields auto-populate __init__. Not counted as func params
             protocol_input=protocol_input,  # WHY: mirrors legacy field
             prefix_input=prefix_input,  # WHY: mirrors legacy field
             vrf_input=vrf_input,  # WHY: mirrors legacy field

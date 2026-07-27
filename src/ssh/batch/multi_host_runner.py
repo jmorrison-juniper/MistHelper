@@ -38,7 +38,7 @@ _SUMMARY_DIVIDER = "=" * 60  # WHY: verbatim console divider from the pre-refact
 class MultiHostRunRequest:  # WHY: immutable bundle collapses MultiHostRunner.run to a single param.
     """Immutable request describing one multi-host SSH fan-out."""
 
-    hosts: tuple[str, ...] = ()  # WHY: ordered target host list; empty allowed.
+    hosts: tuple[str, ...] = ()  # WHY: ordered target host list. Empty allowed.
     username: str = ""  # WHY: shared SSH login account applied to every host.
     password: str = ""  # WHY: shared SSH login secret (never logged verbatim).
     commands: tuple[str, ...] = ()  # WHY: ordered commands executed on each host.
@@ -112,7 +112,7 @@ class MultiHostRunner:
 
     @staticmethod
     def run(request: MultiHostRunRequest) -> dict[str, Any]:
-        """Execute commands on each host concurrently; return per-host result summary."""
+        """Execute commands on each host concurrently. Return per-host result summary."""
         logger = logging.getLogger(_SSH_LOGGER_NAME)  # WHY: unified SSH logger for the whole run.
         MultiHostRunner._log_invocation(request, logger)  # WHY: emit verbatim [TRACE] lines (debug only).
         MultiHostRunner._log_startup(request, logger)  # WHY: verbatim banner + info/debug context lines.
@@ -133,7 +133,7 @@ class MultiHostRunner:
     @staticmethod
     def _log_startup(request: MultiHostRunRequest, logger: logging.Logger) -> None:
         """Emit the verbatim startup banner + info/debug context lines."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info(
             "\n>> Starting SSH execution on %d hosts (%d threads)",
             len(request.hosts),
@@ -183,7 +183,7 @@ class MultiHostRunner:
     # ------------------------------------------------------------------
     @staticmethod
     def _dispatch_hosts(request: MultiHostRunRequest, logger: logging.Logger) -> _FanOutState:
-        """Submit one HostRunner.run task per host; return the collected fan-out state."""
+        """Submit one HostRunner.run task per host. Return the collected fan-out state."""
         state = _FanOutState()  # WHY: mutable collector shared across submit/collect helpers.
         with concurrent.futures.ThreadPoolExecutor(  # WHY: bounded worker pool with named threads.
             max_workers=request.max_threads, thread_name_prefix=_THREAD_NAME_PREFIX
@@ -197,7 +197,7 @@ class MultiHostRunner:
         request: MultiHostRunRequest,
         executor: concurrent.futures.ThreadPoolExecutor,
     ) -> dict[concurrent.futures.Future[tuple[str, bool, str]], str]:
-        """Submit one HostRunner.run task per host; return future -> host map."""
+        """Submit one HostRunner.run task per host. Return future -> host map."""
         return {  # WHY: preserve future -> host mapping for post-hoc lookup on error.
             executor.submit(
                 HostRunner.run,
@@ -220,7 +220,7 @@ class MultiHostRunner:
         state: _FanOutState,
         logger: logging.Logger,
     ) -> None:
-        """Drain futures via wait() loop; record per-host success/failure (original UX)."""
+        """Drain futures via wait() loop. Record per-host success/failure (original UX)."""
         try:
             pending = set(future_to_host.keys())  # WHY: working set drained by FIRST_COMPLETED wait().
             iteration = 0  # WHY: trace counter for the verbatim per-iteration debug lines.
@@ -318,25 +318,25 @@ class MultiHostRunner:
         logger: logging.Logger,
     ) -> None:
         """Print the multi-host execution summary block (verbatim)."""
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("\n%s", _SUMMARY_DIVIDER)
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("[STATUS] EXECUTION SUMMARY")
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("%s", _SUMMARY_DIVIDER)
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("Total hosts: %d", len(hosts))
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("Successful: %d [OK]", len(state.successful_hosts))
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("Failed: %d [ERROR]", len(state.failed_hosts))
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("Per-host logs: per-host-logs/ssh_output_<hostname>_<timestamp>.log")
         if state.successful_hosts:  # WHY: skip empty success block for cleaner output.
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info("\n[OK] Successful hosts: %s", ", ".join(state.successful_hosts))
         if state.failed_hosts:  # WHY: skip empty failure block for cleaner output.
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info("\n[ERROR] Failed hosts: %s", ", ".join(state.failed_hosts))
         logger.info(  # WHY: final info line summarizing the run outcome.
             "Multi-host execution completed: %d/%d successful", len(state.successful_hosts), len(hosts)

@@ -90,7 +90,7 @@ class PingDeviceExecutor:  # WHY: orchestrates ping-over-WebSocket diagnostic wo
         logging.debug("ENTER: ping_device_websocket")  # WHY: trace marker kept verbatim.
 
     def _run_workflow(self, deps: WebSocketCmdDeps, debug_mode: bool) -> WebSocketManager | None:
-        """Prompt user, dispatch ping, render output; return WS manager for cleanup."""
+        """Prompt user, dispatch ping, render output. Return WS manager for cleanup."""
         site_id = select_ws_site(deps, debug_mode)  # WHY: interactive site picker.
         if site_id is None:  # WHY: user cancelled site selection.
             return None  # WHY: skip rest of workflow.
@@ -98,7 +98,7 @@ class PingDeviceExecutor:  # WHY: orchestrates ping-over-WebSocket diagnostic wo
         if device_id is None:  # WHY: user cancelled or no devices available.
             return None  # WHY: skip rest of workflow.
         target_host = self._prompt_target_host(deps, debug_mode)  # WHY: validated ping target.
-        if target_host is None:  # WHY: validation failed; message already printed.
+        if target_host is None:  # WHY: validation failed. Message already printed.
             return None  # WHY: skip rest of workflow.
         ping_count = self._prompt_ping_count(deps, debug_mode)  # WHY: clamped packet count.
         request = _PingRequest(  # WHY: bundle all inputs into a frozen record.
@@ -123,7 +123,7 @@ class PingDeviceExecutor:  # WHY: orchestrates ping-over-WebSocket diagnostic wo
         return device_id  # WHY: caller uses the id for downstream calls.
 
     def _prompt_target_host(self, deps: WebSocketCmdDeps, debug_mode: bool) -> str | None:
-        """Ask user for ping target; return validated host string or None on rejection."""
+        """Ask user for ping target. Return validated host string or None on rejection."""
         target_input = deps.safe_input_fn(  # WHY: EOF-safe input wrapper.
             _PROMPT_TARGET, context=_INPUT_CONTEXT
         ).strip()  # WHY: drop incidental whitespace from prompt response.
@@ -139,7 +139,7 @@ class PingDeviceExecutor:  # WHY: orchestrates ping-over-WebSocket diagnostic wo
         return target_host  # WHY: validated host returned to caller.
 
     def _prompt_ping_count(self, deps: WebSocketCmdDeps, debug_mode: bool) -> int:
-        """Ask user for ping packet count; return clamped int with legacy defaults."""
+        """Ask user for ping packet count. Return clamped int with legacy defaults."""
         raw_count = deps.safe_input_fn(  # WHY: EOF-safe input wrapper.
             _PROMPT_COUNT, context=_INPUT_CONTEXT
         ).strip()  # WHY: drop incidental whitespace from prompt response.
@@ -148,10 +148,10 @@ class PingDeviceExecutor:  # WHY: orchestrates ping-over-WebSocket diagnostic wo
 
     @staticmethod
     def _parse_ping_count(raw_count: str) -> int:
-        """Parse and range-check ping count input; fall back to legacy default."""
+        """Parse and range-check ping count input. Fall back to legacy default."""
         if not raw_count:  # WHY: empty input means accept default count.
             return _DEFAULT_PING_COUNT  # WHY: legacy fallback preserved.
-        try:  # WHY: parse user input as integer; revert to default on failure.
+        try:  # WHY: parse user input as integer. Revert to default on failure.
             parsed_count = int(raw_count)  # WHY: raises ValueError on non-numeric input.
         except ValueError:  # WHY: match legacy behavior of warning + default.
             print(_MSG_INVALID_COUNT)  # WHY: legacy phrasing preserved.
@@ -181,7 +181,7 @@ class PingDeviceExecutor:  # WHY: orchestrates ping-over-WebSocket diagnostic wo
         logging.debug("WebSocket connect+subscribe succeeded for ping")  # WHY: log on success.
         context = _PostContext(request=request, websocket_manager=websocket_manager)  # WHY: bundle.
         session_id = self._post_ping_command(context)  # WHY: POST + demux session id.
-        if session_id is None:  # WHY: POST failed; helper already disconnected.
+        if session_id is None:  # WHY: POST failed. Helper already disconnected.
             return websocket_manager  # WHY: hand to finally for cleanup.
         self._await_and_render(  # WHY: wait for WS result then render.
             websocket_manager, session_id, request.target_host, request.debug_mode
@@ -211,7 +211,7 @@ class PingDeviceExecutor:  # WHY: orchestrates ping-over-WebSocket diagnostic wo
         credentials = prepare_command_credentials(  # WHY: pull + validate Mist host/token.
             request.deps.apisession, context.websocket_manager, request.debug_mode
         )
-        if credentials is None:  # WHY: credential lookup failed; helper disconnected.
+        if credentials is None:  # WHY: credential lookup failed. Helper disconnected.
             return None  # WHY: caller aborts the workflow.
         mist_host, mist_apitoken = credentials  # WHY: unpack into local variables.
         ping_url, headers = self._build_ping_request(  # WHY: assemble URL + headers.
@@ -221,7 +221,7 @@ class PingDeviceExecutor:  # WHY: orchestrates ping-over-WebSocket diagnostic wo
         ping_response = post_device_command(  # WHY: POST and capture full response.
             ping_url, headers, payload, request.debug_mode, "ping"
         )
-        if ping_response is None:  # WHY: defensive; helper currently never returns None.
+        if ping_response is None:  # WHY: defensive. Helper currently never returns None.
             return None  # WHY: treat as POST failure.
         return extract_command_session(  # WHY: demux session id for WS wait.
             ping_response, context.websocket_manager, "ping"

@@ -2296,7 +2296,7 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "unique_constraints": [],
         "description": "BLE beacon statistics per site (composite key: beacon id + site)",
     },
-    # --- composite_pk (no single stable UUID; identity is multi-field) ---
+    # --- composite_pk (no single stable UUID. Identity is multi-field) ---
     "getSiteCurrentChannelPlanning": {
         "type": "composite_pk",
         "primary_key": ["ap", "band"],

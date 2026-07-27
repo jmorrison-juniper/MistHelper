@@ -138,7 +138,7 @@ class SwitchVcStatsService:
 
     @staticmethod
     def _build_preview_table(all_vc_stats: list[dict[str, Any]]) -> str:
-        """Assemble a PrettyTable summary string from VC rows; raises on malformed payloads."""
+        """Assemble a PrettyTable summary string from VC rows. Raises on malformed payloads."""
         from prettytable import PrettyTable  # Lazy import to match existing MistHelper display behavior
 
         table = PrettyTable()  # Build compact summary table for debug readability
@@ -151,8 +151,8 @@ class SwitchVcStatsService:
 
     @classmethod
     def _render_preview_table(cls, all_vc_stats: list[dict[str, Any]]) -> None:
-        """Log a PrettyTable summary; swallow rendering errors so export never fails on preview."""
-        try:  # PrettyTable may fail if columns are malformed; keep preview non-fatal
+        """Log a PrettyTable summary. Swallow rendering errors so export never fails on preview."""
+        try:  # PrettyTable may fail if columns are malformed. Keep preview non-fatal
             logging.debug("\n%s", cls._build_preview_table(all_vc_stats))  # Emit rendered summary to debug log
         except Exception as preview_error:  # Never fail export because preview generation failed
             logging.debug("Skipping VC stats PrettyTable preview due to error: %s", preview_error)  # Trace skip cause

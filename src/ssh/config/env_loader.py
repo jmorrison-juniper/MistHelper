@@ -16,7 +16,7 @@ from src.ssh.config.command_parser import CommandListParser  # SSH_COMMANDS pars
 from src.ssh.config.host_parser import HostListParser  # SSH_HOST parsing
 from src.ssh.config.validators import validate_username  # SSH_USER validation
 
-# python-dotenv is optional; mirror the legacy availability flag pattern.
+# python-dotenv is optional. Mirror the legacy availability flag pattern.
 try:
     from dotenv import load_dotenv  # Preferred parser when installed
 
@@ -87,7 +87,7 @@ class EnvSshConfigLoader:
     def _is_safe_env_path(env_file: str) -> bool:
         """Reject path-traversal or absolute paths up front."""
         if not env_file or ".." in env_file or env_file.startswith("/") or "\\" in env_file:
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("[WARNING] Invalid .env file path: %s", env_file)
             return False  # Path is unsafe
         return True  # Path looks acceptable
@@ -98,11 +98,11 @@ class EnvSshConfigLoader:
         try:
             file_size = os.path.getsize(env_file)  # Single stat call
         except OSError as error:  # Permission denied / vanished and so on
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("[WARNING] Cannot access .env file: %s", error)
             return False  # Treat as unloadable
         if file_size > _MAX_ENV_BYTES:  # 1MB defensive cap
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("[WARNING] .env file too large (%s bytes), skipping", file_size)
             return False  # Refuse oversized files
         return True  # Within limits
@@ -120,7 +120,7 @@ class EnvSshConfigLoader:
             if ssh_commands:  # Only parse when present
                 config["commands"] = self._command_parser.parse(ssh_commands)  # Validated command list
         except Exception as error:  # noqa: BLE001 - mirror original broad catch
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("[WARNING] Error loading .env with python-dotenv: %s", error)
 
     def _populate_via_manual_parse(self, env_file: str, config: dict[str, Any]) -> None:
@@ -129,13 +129,13 @@ class EnvSshConfigLoader:
             with open(env_file, encoding="utf-8", errors="ignore") as file_handle:  # Tolerate decode errors
                 self._read_and_apply_lines(file_handle, config)  # Delegated read+cap+dispatch loop
         except UnicodeDecodeError as error:  # Should be rare due to errors="ignore" but kept for parity
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("[WARNING] .env file encoding error: %s", error)
         except OSError as error:  # Filesystem-level errors
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("[WARNING] Error reading %s: %s", env_file, error)
         except Exception as error:  # noqa: BLE001 - mirror original broad catch
-            # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("[WARNING] Unexpected error reading %s: %s", env_file, error)
 
     def _read_and_apply_lines(self, file_handle: Any, config: dict[str, Any]) -> None:
@@ -143,7 +143,7 @@ class EnvSshConfigLoader:
         # WHY: extracting the loop drops _populate_via_manual_parse CC from 6 to 4.
         for line_count, raw_line in enumerate(file_handle, 1):  # 1-based for the cap comparison
             if line_count > _MAX_MANUAL_LINES:  # Stop runaway files defensively
-                # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+                # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
                 logger.warning("[WARNING] .env file has too many lines, stopping at 1000")
                 return  # Exit early once the cap is exceeded
             self._apply_env_line(raw_line, config)  # Delegated single-line handler
@@ -178,18 +178,18 @@ class EnvSshConfigLoader:
         elif key == "SSH_USER":  # Login username
             self._set_username(config, value)  # Shared username application logic
         elif key == "SSH_PASSWORD":  # Password (verbatim)
-            config["password"] = value  # Store as-is; never logged
+            config["password"] = value  # Store as-is. Never logged
         elif key == "SSH_COMMANDS":  # Comma-separated command list
             config["commands"] = self._command_parser.parse(value)  # Validated command list
         # Unknown keys are intentionally ignored to keep the loader minimal
 
     @staticmethod
     def _set_username(config: dict[str, Any], username: str | None) -> None:
-        """Apply a username to ``config`` only after validation; warn otherwise."""
+        """Apply a username to ``config`` only after validation. Warn otherwise."""
         if not username:  # Missing/empty values are silently ignored
             return  # No-op
         if validate_username(username):  # Shared validation
             config["username"] = username  # Accept the username
             return  # Done
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.warning("[WARNING] Invalid username format in .env file: %s", username)

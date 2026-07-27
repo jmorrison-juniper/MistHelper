@@ -87,7 +87,7 @@ class _MapsClone:
         return getattr(mm, name)  # Delegate all missing lookups to the wrapped manager.
 
     def _fetch_source_map_with_display(self, site_id: str, source_map_id: str) -> dict | None:
-        """Fetch source map from API and display its key attributes; return None on failure."""
+        """Fetch source map from API and display its key attributes. Return None on failure."""
         logging.debug(
             "Calling getSiteMap API - site_id: %s, map_id: %s", site_id, source_map_id
         )  # Trace API call args.
@@ -115,7 +115,7 @@ class _MapsClone:
         print(f"{'-' * 80}")  # Divider below the details block.
 
     def _prompt_clone_name(self, source_map: dict) -> str | None:
-        """Prompt for a clone name using the source map name as default; return None on EOF."""
+        """Prompt for a clone name using the source map name as default. Return None on EOF."""
         default_name = (
             f"{source_map.get('name', 'Map')} (Copy)"  # Compose a safe default so blank input still names it.
         )
@@ -133,11 +133,11 @@ class _MapsClone:
         payload: dict[str, Any] = {"name": new_name, "type": source_map.get("type", "image")}  # Required attrs first.
         for field in _CLONEABLE_MAP_FIELDS:  # Iterate the module-level whitelist for stable ordering.
             if field in source_map:  # Skip missing fields so we do not overwrite server defaults with None.
-                payload[field] = source_map[field]  # Copy the raw value; API tolerates whatever type came in.
+                payload[field] = source_map[field]  # Copy the raw value. API tolerates whatever type came in.
         return payload  # Fully assembled body for createSiteMap.
 
     def _fetch_source_zone_count(self, site_id: str, source_map_id: str) -> int:
-        """Count zones belonging to the source map; return 0 if fetch fails."""
+        """Count zones belonging to the source map. Return 0 if fetch fails."""
         try:
             zones_check = mistapi.api.v1.sites.zones.listSiteZones(self.apisession, site_id=site_id)  # Fetch all zones.
             if zones_check.status_code == 200:  # Only trust the count on a clean response.
@@ -147,7 +147,7 @@ class _MapsClone:
         return 0  # Default to zero so the plan text still reads sensibly.
 
     def _confirm_clone(self, source_map: dict, new_name: str, source_zones_count: int, clone_payload: dict) -> bool:
-        """Display the clone plan and prompt user to confirm; return True to proceed."""
+        """Display the clone plan and prompt user to confirm. Return True to proceed."""
         print(f"\n{'-' * 80}")  # Divider above the plan block.
         print("Clone Plan:")  # Section title for the pre-flight summary.
         print(f"  New name: {new_name}")  # Show the resolved clone name.
@@ -169,7 +169,7 @@ class _MapsClone:
         return True  # Green-light the write phase.
 
     def _download_clone_image(self, source_map: dict) -> str | None:
-        """Download the source map image to a temp file; return the temp path or None."""
+        """Download the source map image to a temp file. Return the temp path or None."""
         if "url" not in source_map:  # No image URL means nothing to download.
             return None  # Signal the caller to skip the image upload phase.
         image_temp_path: str | None = None  # Track the temp path so we can clean up on failure.
@@ -177,14 +177,14 @@ class _MapsClone:
             image_temp_path = self._download_image_to_tempfile(source_map["url"])  # Delegate HTTP + write.
             if image_temp_path is not None:  # Only report success when the file actually landed on disk.
                 return image_temp_path  # Path is now owned by the caller until upload/cleanup.
-        except Exception as download_error:  # Network/O errors are non-fatal; clone can proceed without image.
+        except Exception as download_error:  # Network/O errors are non-fatal. Clone can proceed without image.
             logging.error("Error downloading map image: %s", download_error)  # Full stack trace to the log.
             print(f"! Warning: Could not download image: {download_error}")  # User-facing warning.
         self._cleanup_temp_file(image_temp_path)  # Idempotent cleanup handles both partial-download failure modes.
         return None  # Signal image-less clone path.
 
     def _download_image_to_tempfile(self, image_url: str) -> str | None:
-        """Perform the HTTP GET and write the body to a fresh temp file; return path or None."""
+        """Perform the HTTP GET and write the body to a fresh temp file. Return path or None."""
         print("\nDownloading map image...")  # Progress marker for the user.
         file_ext = self._determine_image_extension(image_url)  # Reuse MapsManager's URL->ext heuristic.
         temp_fd, image_temp_path = tempfile.mkstemp(suffix=file_ext)  # Get an exclusive temp file with correct suffix.
@@ -195,20 +195,20 @@ class _MapsClone:
             self._cleanup_temp_file(image_temp_path)  # Remove the empty temp file we just created.
             return None  # Report failure to the caller so it can log a warning.
         with open(image_temp_path, "wb") as f:  # Overwrite the temp file with the image bytes.
-            f.write(response.content)  # Persist the payload in one shot; images fit comfortably in memory.
+            f.write(response.content)  # Persist the payload in one shot. Images fit comfortably in memory.
         print(f"Downloaded image ({len(response.content) / 1024:.1f} KB)")  # Report size for user feedback.
         return image_temp_path  # Hand the path to the caller for upload.
 
     @staticmethod
     def _cleanup_temp_file(path: str | None) -> None:
-        """Remove ``path`` if it exists; tolerate missing paths and OS errors quietly."""
+        """Remove ``path`` if it exists. Tolerate missing paths and OS errors quietly."""
         if not path:  # Guard: nothing to clean up.
             return
         if os.path.exists(path):  # Only unlink real files to avoid noisy exceptions.
-            os.remove(path)  # Best-effort cleanup; errors here are not actionable.
+            os.remove(path)  # Best-effort cleanup. Errors here are not actionable.
 
     def _create_cloned_map_entry(self, site_id: str, clone_payload: dict, image_temp_path: str | None) -> str | None:
-        """Call createSiteMap API and return the new map ID; cleans up temp on failure."""
+        """Call createSiteMap API and return the new map ID. Cleans up temp on failure."""
         print("\nCreating cloned map...")  # Progress marker.
         clone_response = mistapi.api.v1.sites.maps.createSiteMap(self.apisession, site_id=site_id, body=clone_payload)
         if clone_response.status_code not in _OK_CREATE_STATUS:  # Non-success codes abort the flow.
@@ -254,7 +254,7 @@ class _MapsClone:
             self._cleanup_temp_file(image_temp_path)  # Always release the temp file regardless of outcome.
 
     def _clone_single_zone(self, site_id: str, cloned_map_id: str, zone: dict) -> bool:
-        """Clone a single zone to the new map; return True on success."""
+        """Clone a single zone to the new map. Return True on success."""
         try:
             zone_payload: dict[str, Any] = {
                 "name": zone.get("name", "Unnamed Zone"),
@@ -287,7 +287,7 @@ class _MapsClone:
         return [z for z in zones_response.data if z.get("map_id") == source_map_id]  # Filter by owning map.
 
     def _clone_zones(self, site_id: str, source_map_id: str, cloned_map_id: str) -> tuple[int, int]:
-        """Clone all zones from source map to cloned map; return (cloned, failed)."""
+        """Clone all zones from source map to cloned map. Return (cloned, failed)."""
         print("\nCloning zones...")  # Progress marker.
         try:
             source_zones = self._fetch_source_zones(site_id, source_map_id)  # Delegate list+filter.
@@ -301,7 +301,7 @@ class _MapsClone:
             failed = len(results) - cloned  # Failures = total minus successes.
             print(f"Zones cloned: {cloned} (failed: {failed})")  # Summary line.
             return cloned, failed  # Hand the tallies to the caller.
-        except Exception as zones_error:  # Blanket safety net; keeps outer clone flow intact.
+        except Exception as zones_error:  # Blanket safety net. Keeps outer clone flow intact.
             logging.exception("Error during zone cloning: %s", zones_error)  # Full trace to the log.
             print(f"! Warning: Zone cloning failed: {zones_error}")  # User-facing warning.
             return 0, 0  # Fall back to zero counts.

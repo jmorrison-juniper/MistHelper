@@ -53,7 +53,7 @@ class PacketCaptureOrg:  # WHY: wraps org/MxEdge capture helpers extracted from 
     def __getattr__(self, name: str) -> Any:  # WHY: transparent proxy so callers see combined API
         """Delegate unknown attributes to the wrapped manager."""
         mm = self.__dict__.get("_mm")  # WHY: guard against half-initialized instances
-        if mm is None:  # WHY: only trips during broken init; avoid infinite recursion
+        if mm is None:  # WHY: only trips during broken init. Avoid infinite recursion
             raise AttributeError(name)  # WHY: signal missing attribute cleanly to callers
         return getattr(mm, name)  # WHY: transparent proxy to the parent manager
 
@@ -97,14 +97,14 @@ class PacketCaptureOrg:  # WHY: wraps org/MxEdge capture helpers extracted from 
         """Return an ``{id: stats}`` map, best-effort (empty on error)."""
         print("  Fetching MxEdge status information...")  # WHY: cue user before secondary call
         stats_map: dict[str, Any] = {}  # WHY: default-empty so failure still yields a usable value
-        try:  # WHY: stats are advisory; failures must not block capture
+        try:  # WHY: stats are advisory. Failures must not block capture
             stats_response = _pc().mistapi.api.v1.orgs.stats.listOrgMxEdgesStats(  # WHY: org-scope stats endpoint
                 self.mist_session, self.org_id, limit=1000
             )
             stats_data = _pc().mistapi.get_all(response=stats_response, mist_session=self.mist_session)  # WHY: paginate
             for stat in stats_data or []:  # WHY: guard against None response payload
                 mxedge_id = stat.get("id")  # WHY: id keys the map, skip records lacking it
-                if mxedge_id:  # WHY: id is required for the map key; skip records lacking it
+                if mxedge_id:  # WHY: id is required for the map key. Skip records lacking it
                     stats_map[mxedge_id] = stat  # WHY: populate map keyed by mxedge id
         except Exception as error:  # pylint: disable=broad-exception-caught
             logging.warning("Menu #10: Failed to fetch MxEdge stats: %s", error)  # WHY: legacy log line
@@ -146,7 +146,7 @@ class PacketCaptureOrg:  # WHY: wraps org/MxEdge capture helpers extracted from 
         return index_to_mxedge  # WHY: hand map to the outer prompt loop
 
     def _prompt_mxedge_index(self, count: int) -> int | None:  # WHY: safe numeric-index prompt with bounds check
-        """Prompt for a numeric MxEdge index; return None on cancel/invalid input."""
+        """Prompt for a numeric MxEdge index. Return None on cancel/invalid input."""
         try:  # WHY: safe_input can raise on EOF/Ctrl-C
             selection_input = (  # WHY: prompt and strip whitespace inline for parse below
                 _lazy_input_utils()
@@ -158,7 +158,7 @@ class PacketCaptureOrg:  # WHY: wraps org/MxEdge capture helpers extracted from 
             logging.info("Menu #10: User cancelled MxEdge selection")  # WHY: legacy audit log
             return None  # WHY: signal cancel to caller
         try:  # WHY: int() may raise on non-numeric input
-            idx = int(selection_input)  # WHY: parse index; ValueError caught below
+            idx = int(selection_input)  # WHY: parse index. ValueError caught below
         except ValueError:  # WHY: non-numeric input path warns and returns None
             print("\n! Invalid input format. Please enter a single numeric index.")  # WHY: legacy user error
             logging.warning("Menu #10: Invalid selection input: %s", selection_input)  # WHY: legacy log line
@@ -250,7 +250,7 @@ class PacketCaptureOrg:  # WHY: wraps org/MxEdge capture helpers extracted from 
 
     @staticmethod
     def _prompt_port_input(port_list: list[str], mxedge_name: str, mxedge_id: str) -> str | None:  # WHY: safe prompt
-        """Safely prompt for a port index string; None on cancel."""
+        """Safely prompt for a port index string. None on cancel."""
         try:  # WHY: safe_input can raise on EOF/Ctrl-C
             return cast(  # WHY: safe_input->str traverses untyped lazy proxy
                 str,
@@ -270,7 +270,7 @@ class PacketCaptureOrg:  # WHY: wraps org/MxEdge capture helpers extracted from 
     def _resolve_port_index(port_list: list[str], port_input: str) -> list[str] | None:  # WHY: legacy index parser
         """Parse a numeric index and return the selected single-port list."""
         try:  # WHY: int() may raise on non-numeric input
-            idx = int(port_input)  # WHY: parse port index; ValueError caught below
+            idx = int(port_input)  # WHY: parse port index. ValueError caught below
         except ValueError:  # WHY: non-numeric input path warns and returns None
             print("\n! Invalid input format. Please enter a single numeric index.")  # WHY: legacy user error
             logging.warning("Menu #10: Invalid port input: %s", port_input)  # WHY: legacy audit log
@@ -301,7 +301,7 @@ class PacketCaptureOrg:  # WHY: wraps org/MxEdge capture helpers extracted from 
         return self.select_port_by_index(port_list, mxedge_name, mxedge_id)  # WHY: interactive picker
 
     def _fetch_single_mxedge_stats(self, mxedge_id: str, mxedge_name: str) -> dict[str, Any] | None:
-        """Fetch stats for a single MxEdge; return dict or None on failure."""
+        """Fetch stats for a single MxEdge. Return dict or None on failure."""
         try:  # WHY: SDK may raise on transport errors
             stats_response = _pc().mistapi.api.v1.orgs.stats.getOrgMxEdgeStats(  # WHY: per-mxedge stats endpoint
                 self.mist_session, self.org_id, mxedge_id
@@ -333,7 +333,7 @@ class PacketCaptureOrg:  # WHY: wraps org/MxEdge capture helpers extracted from 
 
     @staticmethod
     def _prompt_tzsp_target() -> tuple[str, str | None, int | None] | None:
-        """Prompt for TZSP host + port; return the tzsp tuple or None on invalid."""
+        """Prompt for TZSP host + port. Return the tzsp tuple or None on invalid."""
         tzsp_host = _lazy_input_utils().safe_input("Enter TZSP host (IP address or hostname): ", context="tzsp_host")
         if not tzsp_host:  # WHY: TZSP requires a target host
             print("\n! TZSP host required")
@@ -398,7 +398,7 @@ class PacketCaptureOrg:  # WHY: wraps org/MxEdge capture helpers extracted from 
     ) -> dict[str, Any]:
         """Build the API payload for org-level MxEdge capture."""
         mxedge_id: str = mxedge.get("id", "")  # WHY: default empty preserves legacy behavior
-        capture_format = capture_config["format"]  # WHY: required key; missing = programmer error
+        capture_format = capture_config["format"]  # WHY: required key. Missing = programmer error
         payload: dict[str, Any] = self._base_org_payload(
             mxedge_id, capture_format, capture_config
         )  # WHY: split for length

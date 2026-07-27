@@ -61,7 +61,7 @@ class MacTableCommand:  # WHY: Namespace grouping the show_mac_table workflow he
 
     @staticmethod
     def _run_workflow(deps: WebSocketCmdDeps, debug_mode: bool) -> WebSocketManager | None:  # WHY: Body helper.
-        """Perform target selection, WS connect, RPC trigger, and result display; return WS manager for cleanup."""
+        """Perform target selection, WS connect, RPC trigger, and result display. Return WS manager for cleanup."""
         targets = MacTableCommand._resolve_targets(deps, debug_mode)  # WHY: Prompt operator for site + switch.
         if targets is None:  # WHY: Guard clause — operator abort short-circuits workflow before WS open.
             return None  # WHY: Operator aborted target selection — nothing left to clean up.
@@ -72,13 +72,13 @@ class MacTableCommand:  # WHY: Namespace grouping the show_mac_table workflow he
 
         websocket_manager = MacTableCommand._open_websocket(deps, site_id, device_id, debug_mode)  # WHY: WS setup.
         if websocket_manager is None:  # WHY: Guard clause — no WS means RPC/response phases must be skipped.
-            return None  # WHY: Connect failure already logged inside helper; nothing to display.
+            return None  # WHY: Connect failure already logged inside helper. Nothing to display.
 
         session_id = MacTableCommand._trigger_rpc(  # WHY: Start REST RPC that produces the WS session id.
             deps, websocket_manager, site_id, device_id, debug_mode
         )
         if session_id is None:  # WHY: Guard clause — RPC helper already disconnected WS on failure.
-            return websocket_manager  # WHY: RPC helper disconnected on failure; return manager for cleanup finalize.
+            return websocket_manager  # WHY: RPC helper disconnected on failure. Return manager for cleanup finalize.
 
         MacTableCommand._announce_session(session_id, debug_mode)  # WHY: Emit legacy progress + debug detail lines.
         MacTableCommand._await_and_display(websocket_manager, session_id, debug_mode)  # WHY: Block on WS result.

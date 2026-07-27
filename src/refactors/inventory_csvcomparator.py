@@ -3,7 +3,7 @@
 Thin adapter around ``src.inventory.csv_comparator`` that wires runtime
 dependencies (API session, path utils, cache helpers, address validation
 classes) into the extracted implementation. Originally defined inline in
-MistHelper.py; hoisted here per initiative 1011 to shrink the monolith.
+MistHelper.py. Hoisted here per initiative 1011 to shrink the monolith.
 
 Runtime dependencies (``apisession``, ``FilePathUtils``, ``CacheUtils``,
 ``OrgInventoryExporter``, ``ConfigUtils``, ``DeviceUtils``,

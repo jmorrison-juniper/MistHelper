@@ -273,7 +273,7 @@ class _ViewerUI:  # WHY: wrapper class hosting the UI-toggle callback cluster
     def __getattr__(self, name: str) -> Any:  # WHY: transparent proxy for shared state access
         """Delegate unknown attributes to the wrapped parent manager."""
         mm = self.__dict__.get("_mm")  # WHY: guard against half-initialized instances
-        if mm is None:  # WHY: only trips during broken init; avoid infinite recursion
+        if mm is None:  # WHY: only trips during broken init. Avoid infinite recursion
             raise AttributeError(name)  # WHY: signal missing attribute cleanly
         return getattr(mm, name)  # WHY: forward all other attributes to parent
 
@@ -541,7 +541,7 @@ class _ViewerUI:  # WHY: wrapper class hosting the UI-toggle callback cluster
         return self._render_delete_result(delete_response, resolved.map_name, resolved.map_id, current_trigger)
 
     def _backup_before_delete(self, site_id: str | None, map_id: str | None, map_name: str) -> Any:
-        """Run pre-delete backup and log the outcome; return backup path or None."""
+        """Run pre-delete backup and log the outcome. Return backup path or None."""
         logging.info("Creating safety backup before deleting map '%s'", map_name)  # WHY: audit trail
         backup_path = self._state.maps_manager_ref._backup_map_geometry(  # WHY: MapsManager helper
             api_session=self._state.api_session_ref,

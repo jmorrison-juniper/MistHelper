@@ -3940,7 +3940,7 @@ class ArangoDBWriter:  # WHY: primary writer class for the ArangoDB polyglot bac
         else:
             self._db.create_graph(GRAPH_NAME, edge_definitions=GRAPH_EDGE_DEFINITIONS)  # WHY: create fresh graph
             logger.info("graph_created", name=GRAPH_NAME)  # WHY: audit trail for graph creation
-        self._backfill_snapshot_edges()  # WHY: legacy snapshots may lack edges; fill them in on boot
+        self._backfill_snapshot_edges()  # WHY: legacy snapshots may lack edges. Fill them in on boot
 
     def _refresh_graph_if_stale(self) -> None:  # WHY: extracted helper trims _ensure_graph blocks
         """Recreate the named graph when live edge definitions drift from the expected set."""
@@ -4125,7 +4125,7 @@ class ArangoDBWriter:  # WHY: primary writer class for the ArangoDB polyglot bac
 
     @staticmethod
     def _as_nonempty_list(raw: Any) -> list[Any]:  # WHY: shared normalizer used by edges and stubs
-        """Return raw as a list with falsy entries dropped; empty list when raw is falsy."""
+        """Return raw as a list with falsy entries dropped. Empty list when raw is falsy."""
         if not raw:  # WHY: guard clause propagates a missing/empty value as an empty list
             return []
         values = raw if isinstance(raw, list) else [raw]  # WHY: normalize scalar to list

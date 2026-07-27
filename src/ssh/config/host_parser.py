@@ -31,7 +31,7 @@ class HostListParser:
     def _truncate_oversize(hosts_str: str) -> str:
         """Truncate the raw host string if it exceeds the safety cap."""
         if len(hosts_str) > _MAX_INPUT_LEN:  # Length check to prevent DoS
-            # WHY: Preserve user-facing string; emit through logger for structured output.
+            # WHY: Preserve user-facing string. Emit through logger for structured output.
             logger.warning("[WARNING] Host list too long, truncating to first 10000 characters")
             return hosts_str[:_MAX_INPUT_LEN]  # Return truncated copy
         return hosts_str  # No truncation needed
@@ -57,7 +57,7 @@ class HostListParser:
         if not invalid:  # Nothing to warn about
             return  # No-op for clean inputs
         sample = ", ".join(invalid[:5])  # Show only the first 5 to keep output bounded
-        # WHY: Preserve user-facing string verbatim; emit via logger.
+        # WHY: Preserve user-facing string verbatim. Emit via logger.
         logger.warning("[WARNING] Skipping %d invalid hosts: %s", len(invalid), sample)
         if len(invalid) > 5:  # Indicate truncation only when extra entries exist
             # WHY: Preserve user-facing string verbatim.
@@ -67,7 +67,7 @@ class HostListParser:
     def _enforce_host_cap(hosts: list[str]) -> list[str]:
         """Trim to the per-run host cap and warn if truncation happens."""
         if len(hosts) > _MAX_HOSTS:  # Enforce resource cap
-            # WHY: Preserve user-facing string; emit via logger.
+            # WHY: Preserve user-facing string. Emit via logger.
             logger.warning(
                 "[WARNING] Too many hosts (%d), limiting to first %d",
                 len(hosts),

@@ -270,7 +270,7 @@ class _ViewerUrlSwitch:  # WHY: wrapper class hosting the URL-switch callback cl
     def __getattr__(self, name: str) -> Any:  # WHY: transparent proxy for shared state access
         """Delegate unknown attributes to the wrapped parent manager."""
         mm = self.__dict__.get("_mm")  # WHY: guard against half-initialized instances
-        if mm is None:  # WHY: only trips during broken init; avoid infinite recursion
+        if mm is None:  # WHY: only trips during broken init. Avoid infinite recursion
             raise AttributeError(name)  # WHY: signal missing attribute cleanly
         return getattr(mm, name)  # WHY: forward all other attributes to parent
 
@@ -282,9 +282,9 @@ class _ViewerUrlSwitch:  # WHY: wrapper class hosting the URL-switch callback cl
         self,
         url_search: str | None,  # WHY: URL query string carrying map_id
         config: dict[str, Any] | None,  # WHY: current map-config store contents
-        _current_fig: dict[str, Any],  # WHY: prev figure (unused; kept for callback signature)
+        _current_fig: dict[str, Any],  # WHY: prev figure (unused. Kept for callback signature)
         available_maps: list[dict[str, Any]] | None,  # WHY: cached map allow-list
-        _dropdown_value: str | None,  # WHY: current dropdown (unused; kept for signature)
+        _dropdown_value: str | None,  # WHY: current dropdown (unused. Kept for signature)
     ) -> tuple[Any, Any]:
         """Handle map switching when URL contains map_id parameter."""
         from dash import no_update  # WHY: sentinel used to skip output updates
@@ -305,7 +305,7 @@ class _ViewerUrlSwitch:  # WHY: wrapper class hosting the URL-switch callback cl
         config: dict[str, Any] | None,  # WHY: nullable config store
         available_maps: list[dict[str, Any]] | None,  # WHY: nullable map allow-list
     ) -> tuple[str, str, dict[str, Any]] | None:
-        """Run all URL-switch preflight guards; return ``(url_map_id, site_id, config)`` or ``None``."""
+        """Run all URL-switch preflight guards. Return ``(url_map_id, site_id, config)`` or ``None``."""
         url_map_id = self._extract_url_map_id(url_search)  # WHY: parse map_id from URL
         if url_map_id is None:  # WHY: missing param -> abort
             return None  # WHY: guard failure signals no-update
@@ -369,7 +369,7 @@ class _ViewerUrlSwitch:  # WHY: wrapper class hosting the URL-switch callback cl
         return [m.get("id") for m in available_maps]  # WHY: store fallback on any failure
 
     def _try_fetch_fresh_map_ids(self, site_id_local: str) -> list[str | None] | None:  # WHY: isolate try/except
-        """Attempt a fresh listSiteMaps call; return ``None`` on any failure to signal fallback."""
+        """Attempt a fresh listSiteMaps call. Return ``None`` on any failure to signal fallback."""
         try:
             fresh_response = self._state.mistapi_ref.api.v1.sites.maps.listSiteMaps(  # WHY: call fresh listing
                 self._state.api_session_ref, site_id=site_id_local
@@ -776,7 +776,7 @@ class _ViewerUrlSwitch:  # WHY: wrapper class hosting the URL-switch callback cl
         ppm_local: float,  # WHY: pixels-per-meter for heatmap scaling
         config: dict[str, Any],  # WHY: config store may override site_id
     ) -> None:
-        """Fetch RF coverage and add a heatmap trace; silently logs on failure."""
+        """Fetch RF coverage and add a heatmap trace. Silently logs on failure."""
         site_id_for_coverage = config.get("site_id") or site_id_local  # WHY: mirror original site_id source
         if not site_id_for_coverage:  # WHY: mirror original guard
             logging.warning("URL map switch: Cannot fetch RF coverage - site_id is None")
@@ -790,7 +790,7 @@ class _ViewerUrlSwitch:  # WHY: wrapper class hosting the URL-switch callback cl
             logging.warning("URL map switch: Could not load RF coverage - %s", rf_error, exc_info=True)
 
     def _fetch_url_switch_coverage(self, url_map_id: str, site_id_for_coverage: str) -> dict[str, Any] | None:
-        """Hit the RF coverage endpoint; return parsed data or None on failure/error envelope."""
+        """Hit the RF coverage endpoint. Return parsed data or None on failure/error envelope."""
         coverage_url = f"/api/v1/sites/{site_id_for_coverage}/location/coverage"  # WHY: mirror original path
         coverage_params = dict(_COVERAGE_QUERY_PARAMS, map_id=url_map_id)  # WHY: add map_id to shared params
         logging.info("URL map switch: Fetching RF coverage for map %s", url_map_id)

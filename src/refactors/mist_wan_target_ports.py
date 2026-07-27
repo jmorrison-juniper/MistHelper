@@ -6,13 +6,13 @@ attribute on `MistWanTargetPorts` per FR-005 / FR-015 (assignment ->
 class-body attribute). The sole MistHelper callsite -- the DI kwarg
 `mist_wan_target_ports=MIST_WAN_TARGET_PORTS` in
 `_gateway_export_dependency_kwargs` at line ~15568 -- is rewritten in
-the same PR to reference the extracted class attribute; no wrapper
+the same PR to reference the extracted class attribute. No wrapper
 shim remains in MistHelper.py after this extraction.
 
 The value is the operator-configured, comma-separated list of WAN port
 names to target for gateway-override analysis. Source of truth remains
 the `MIST_WAN_TARGET_PORTS` environment variable (no default -- an
-unset env yields an empty list); the class-body evaluation preserves
+unset env yields an empty list). The class-body evaluation preserves
 the original CSV-parsing semantics.
 
 FR-019 note: The local DI slots named `MIST_WAN_TARGET_PORTS` in
@@ -20,7 +20,7 @@ FR-019 note: The local DI slots named `MIST_WAN_TARGET_PORTS` in
 `src/gateway/overrides/_deps.py:17` are local module-level variables
 that receive their value at runtime via the injected `deps` struct.
 They are not references to the deleted MistHelper.py symbol and remain
-unchanged by this extraction; the cross-file audit trail verifies the
+unchanged by this extraction. The cross-file audit trail verifies the
 sole external-file caller path continues to flow through the DI kwarg.
 """
 

@@ -35,7 +35,7 @@ class InsightMetricsUtils:  # Insight-metrics helpers.
         Refreshes data/ConstInsightMetrics.csv so scope-filtering helpers can read it.
         """
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ConstDefinitionsExporter + apisession.
-        # WHY: Preserve user-facing banner; emit via logging for structured output.
+        # WHY: Preserve user-facing banner. Emit via logging for structured output.
         logging.info("Export Available Insight Metrics:")
         # WHY: Preserve user-facing note verbatim.
         logging.info("! Note: This function now uses the dynamic comprehensive const export system")
@@ -51,7 +51,7 @@ class InsightMetricsUtils:  # Insight-metrics helpers.
             # WHY: Preserve user-facing success message verbatim.
             logging.info("! ConstInsightMetrics.csv is available in the dynamic export results")
         else:
-            # WHY: Preserve user-facing warning verbatim; semantic level is warning.
+            # WHY: Preserve user-facing warning verbatim. Semantic level is warning.
             logging.warning("! Warning: ConstInsightMetrics.csv was not created during dynamic export")
 
     @staticmethod
@@ -248,7 +248,7 @@ class InsightMetricsUtils:  # Insight-metrics helpers.
 
     @staticmethod
     def _parse_results_key(key: str) -> tuple[str, str] | None:
-        """Split a 'results_<index>_<field>' key into (index, field); return None if pattern fails."""
+        """Split a 'results_<index>_<field>' key into (index, field). Return None if pattern fails."""
         if not (key.startswith("results_") and "_" in key):  # Only results_* keys are valid here.
             return None  # Reject non-matching keys.
         parts = key.split("_", 2)  # Split into at most 3 parts: ['results', index, field].

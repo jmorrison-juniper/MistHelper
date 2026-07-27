@@ -124,7 +124,7 @@ class TemplateOutcome:
 
     template_id: str  # WHY: id returned by createOrgTemplate / existing template id
     action: str  # WHY: "created" | "updated_append" | "skipped" | "already_exists" | "failed"
-    error: str = ""  # WHY: exception message on failure; empty on success
+    error: str = ""  # WHY: exception message on failure. Empty on success
 
 
 # ---------------------------------------------------------------------------
@@ -197,7 +197,7 @@ def _record_deviation_choice(
 
 
 def _parse_choice_index(choice: str, param: str) -> int | None:
-    """Convert operator input to a 0-based index; return None + print on invalid input."""
+    """Convert operator input to a 0-based index. Return None + print on invalid input."""
     try:
         return int(choice) - 1  # WHY: 1-based menu -> 0-based index
     except ValueError:  # WHY: non-integer input is a soft failure — skip param, keep loop

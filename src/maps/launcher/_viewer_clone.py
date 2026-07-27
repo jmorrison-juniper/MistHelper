@@ -63,7 +63,7 @@ def _error_response(message: str) -> tuple[Any, Any]:  # WHY: (span, no_update) 
 
 
 def _safe_unlink(path: str | None) -> None:  # WHY: dedup temp-file cleanup across three call sites
-    """Remove ``path`` if it exists; silently ignore missing files."""
+    """Remove ``path`` if it exists. Silently ignore missing files."""
     if path and os.path.exists(path):  # WHY: guard against None and stale paths
         os.remove(path)  # WHY: drop temp file to avoid disk-space leakage
 
@@ -82,7 +82,7 @@ def _create_temp_image_path(image_url: str) -> str:  # WHY: encapsulate temp-fil
     """Create an empty temp file with an extension inferred from ``image_url``."""
     file_ext = _infer_image_extension(image_url)  # WHY: pick correct suffix
     temp_fd, image_temp_path = tempfile.mkstemp(suffix=file_ext)  # WHY: allocate a unique temp path
-    os.close(temp_fd)  # WHY: close fd; caller will reopen the path for writing
+    os.close(temp_fd)  # WHY: close fd. Caller will reopen the path for writing
     return image_temp_path  # WHY: hand back only the path to the caller
 
 
@@ -106,7 +106,7 @@ class _ViewerClone:  # WHY: wrapper class hosting the clone-map callback cluster
     def __getattr__(self, name: str) -> Any:  # WHY: transparent proxy for shared state access
         """Delegate unknown attributes to the wrapped parent manager."""
         mm = self.__dict__.get("_mm")  # WHY: guard against half-initialized instances
-        if mm is None:  # WHY: only trips during broken init; avoid infinite recursion
+        if mm is None:  # WHY: only trips during broken init. Avoid infinite recursion
             raise AttributeError(name)  # WHY: signal missing attribute cleanly
         return getattr(mm, name)  # WHY: forward all other attributes to parent
 
@@ -138,7 +138,7 @@ class _ViewerClone:  # WHY: wrapper class hosting the clone-map callback cluster
         config: dict[str, Any],  # WHY: config store for backup metadata
         current_trigger: int,  # WHY: current cache-bust counter
     ) -> tuple[Any, Any]:
-        """Run the clone workflow under a broad-except guard; return callback tuple."""
+        """Run the clone workflow under a broad-except guard. Return callback tuple."""
         try:
             self._backup_before_clone(site_id, source_map_id, config)  # WHY: safety net
             source_map = self._fetch_source_map(site_id, source_map_id)  # WHY: step 1 fetch
@@ -196,7 +196,7 @@ class _ViewerClone:  # WHY: wrapper class hosting the clone-map callback cluster
             logging.info("Pre-clone backup saved: %s", backup_path)  # WHY: path for operator recovery
 
     def _fetch_source_map(self, site_id: str, source_map_id: str) -> dict[str, Any] | None:
-        """Fetch the source map record from Mist; return None on failure."""
+        """Fetch the source map record from Mist. Return None on failure."""
         logging.info("Fetching source map %s for clone", source_map_id)  # WHY: audit start
         source_response = self._state.mistapi_ref.api.v1.sites.maps.getSiteMap(  # WHY: Mist API read
             self._state.api_session_ref, site_id=site_id, map_id=source_map_id
@@ -245,7 +245,7 @@ class _ViewerClone:  # WHY: wrapper class hosting the clone-map callback cluster
 
     @staticmethod
     def _download_source_image(source_map: dict[str, Any]) -> str | None:
-        """Download the source map image to a temp file; return path or None on any failure."""
+        """Download the source map image to a temp file. Return path or None on any failure."""
         if "url" not in source_map:  # WHY: no image to download
             return None  # WHY: signal absence to callers
         image_url = source_map["url"]  # WHY: URL of the source map image
@@ -271,7 +271,7 @@ class _ViewerClone:  # WHY: wrapper class hosting the clone-map callback cluster
         clone_payload: dict[str, Any],  # WHY: payload prepared by _build_clone_payload
         image_temp_path: str | None,  # WHY: temp file cleaned up on failure
     ) -> str | None:
-        """Call createSiteMap; clean up temp image on failure; return new map_id or None."""
+        """Call createSiteMap. Clean up temp image on failure. Return new map_id or None."""
         logging.info("Creating cloned map '%s' at site %s", clone_payload.get("name"), site_id)  # WHY: audit
         clone_response = self._state.mistapi_ref.api.v1.sites.maps.createSiteMap(  # WHY: Mist API write
             self._state.api_session_ref, site_id=site_id, body=clone_payload
@@ -287,7 +287,7 @@ class _ViewerClone:  # WHY: wrapper class hosting the clone-map callback cluster
         return cloned_map_id  # WHY: hand ID to caller
 
     def _upload_clone_image(self, site_id: str, cloned_map_id: str, image_temp_path: str | None) -> bool:
-        """Upload the temp image to the cloned map; always remove temp file on exit."""
+        """Upload the temp image to the cloned map. Always remove temp file on exit."""
         if not image_temp_path or not os.path.exists(image_temp_path):  # WHY: nothing to upload
             return False  # WHY: signal skipped upload
         try:
@@ -296,7 +296,7 @@ class _ViewerClone:  # WHY: wrapper class hosting the clone-map callback cluster
             _safe_unlink(image_temp_path)  # WHY: always clean up temp file
 
     def _do_image_upload(self, site_id: str, cloned_map_id: str, image_temp_path: str) -> bool:
-        """Invoke Mist ``addSiteMapImageFile`` and log outcome; return True on success."""
+        """Invoke Mist ``addSiteMapImageFile`` and log outcome. Return True on success."""
         try:
             logging.info("Uploading image to cloned map %s", cloned_map_id)  # WHY: audit start
             upload_response = self._state.mistapi_ref.api.v1.sites.maps.addSiteMapImageFile(  # WHY: Mist write
@@ -318,7 +318,7 @@ class _ViewerClone:  # WHY: wrapper class hosting the clone-map callback cluster
             return False  # WHY: never raise past callback boundary
 
     def _clone_zones_for_map(self, site_id: str, source_map_id: str, cloned_map_id: str) -> int:
-        """Replicate each zone associated with source_map_id under cloned_map_id; return count cloned."""
+        """Replicate each zone associated with source_map_id under cloned_map_id. Return count cloned."""
         try:
             source_zones = self._fetch_source_zones(site_id, source_map_id)  # WHY: filtered zone list
         except Exception as zone_err:  # noqa: BLE001 - preserve original broad-except behavior
@@ -342,7 +342,7 @@ class _ViewerClone:  # WHY: wrapper class hosting the clone-map callback cluster
         return source_zones  # WHY: hand filtered list to caller
 
     def _clone_single_zone(self, site_id: str, cloned_map_id: str, zone: dict[str, Any]) -> bool:
-        """Create one zone under cloned_map_id; return True on success."""
+        """Create one zone under cloned_map_id. Return True on success."""
         try:
             zone_payload = self._build_zone_payload(cloned_map_id, zone)  # WHY: shape the create payload
             zone_response = self._state.mistapi_ref.api.v1.sites.zones.createSiteZone(  # WHY: Mist write

@@ -30,7 +30,7 @@ def _add_valid_name(target: set[str], value: Any) -> None:  # Reusable single-va
 
 def _add_valid_names(target: set[str], values: Iterable[Any]) -> None:  # Bulk variant over any iterable
     """Add every non-empty string from ``values`` into ``target`` (dict keys, lists, sets)."""
-    for value in values:  # Iterate any iterable; caller passes dict keys, lists, or generators
+    for value in values:  # Iterate any iterable. Caller passes dict keys, lists, or generators
         _add_valid_name(target, value)  # Delegate per-item validity to keep logic single-sourced
 
 
@@ -151,7 +151,7 @@ class APITenantFetchUtils:  # Public class re-exported to MistHelper.py via the 
 
     # ------------------------------------------------------------------
     # Private helpers -- kept @staticmethod because none touch instance
-    # state; several are called from other @staticmethods via the class.
+    # state. Several are called from other @staticmethods via the class.
     # ------------------------------------------------------------------
 
     @staticmethod

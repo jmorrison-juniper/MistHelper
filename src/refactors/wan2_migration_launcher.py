@@ -112,7 +112,7 @@ class WAN2MigrationLauncher:
             WAN2MigrationManager,  # noqa: PLC0415 - lazy import mirrors _wire_dependencies
         )
 
-        manager = WAN2MigrationManager()  # Canonical class; constructor pulls wired module globals
+        manager = WAN2MigrationManager()  # Canonical class. Constructor pulls wired module globals
         logging.debug("WAN2MigrationLauncher: WAN2MigrationManager instantiated successfully")  # Log build finish
         return manager  # Return the ready-to-run manager to launch()
 

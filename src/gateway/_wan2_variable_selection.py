@@ -184,7 +184,7 @@ class _Wan2VariableSelection(_ClusterBase):
         print("  !? Type 'MIGRATE' (all caps) to proceed" " or anything else to cancel")  # WHY: gate
 
     def _collect_confirmation(self) -> bool:
-        """Prompt for the typed-MIGRATE gate; True in dry-run or on match."""
+        """Prompt for the typed-MIGRATE gate. True in dry-run or on match."""
         if self._dry_run:  # WHY: dry-run bypasses the typed-word gate
             return True  # WHY: safe path proceeds without extra confirmation
         confirmation = self._input_fn("\n  Confirmation: ").strip()  # WHY: normalize input

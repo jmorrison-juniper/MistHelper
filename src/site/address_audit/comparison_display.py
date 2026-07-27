@@ -3,7 +3,7 @@
 Renders the audited rows as a 7-column terminal table (current Mist address on
 the left, the suggested correction on the right) and, afterwards, prompts the
 operator to either save the full results to CSV or quit. The terminal view
-truncates the two widest columns for readability; the saved CSV keeps full
+truncates the two widest columns for readability. The saved CSV keeps full
 values (handled by ``AddressAuditReporter``).
 """
 
@@ -40,7 +40,7 @@ class ComparisonTableRenderer:
         for result in results:  # Add one terminal row per audited CSV row.
             table.add_row(self._build_row(result))  # Append the (truncated) row cells.
         rendered = table.get_string()  # Materialize the table as a string.
-        # WHY: preserve operator-facing table render; route through logger for capture/redirection.
+        # WHY: preserve operator-facing table render. Route through logger for capture/redirection.
         logging.info("%s", rendered)
         logging.debug("Comparison table rendered (%d rows)", len(results))  # Action-log completion.
         return rendered  # Return for tests/callers.
@@ -76,7 +76,7 @@ class ComparisonTableRenderer:
     def prompt_post_table(self, results: list[AuditResult]) -> str:
         """Print a one-line summary, then loop until the operator picks save/quit."""
         logging.info("Prompting operator for post-table action")  # Action-log start.
-        # WHY: preserve operator-facing summary + menu; route through logger for capture/redirection.
+        # WHY: preserve operator-facing summary + menu. Route through logger for capture/redirection.
         logging.info("%s", self._summary_line(results))
         logging.info("\n[1] Save comparison as CSV to data/ for review")
         logging.info("[q] Quit without saving")
@@ -88,7 +88,7 @@ class ComparisonTableRenderer:
             if choice == "q":  # Operator chose to quit.
                 logging.debug("Operator selected quit")  # Trace the choice.
                 return "quit"  # Engine exits without saving.
-            # WHY: preserve invalid-choice feedback verbatim; route through logger for capture/redirection.
+            # WHY: preserve invalid-choice feedback verbatim. Route through logger for capture/redirection.
             logging.warning("Invalid choice. Enter 1 to save or q to quit.")
 
     def _summary_line(self, results: list[AuditResult]) -> str:
@@ -115,10 +115,10 @@ class ComparisonTableRenderer:
             address.get("state", ""),  # State code.
             str(address.get("zip", "")),  # ZIP.
         ]
-        return " ".join(part for part in parts if part).strip()  # Skip blanks; trim.
+        return " ".join(part for part in parts if part).strip()  # Skip blanks. Trim.
 
     @staticmethod
     def _format_csv_address(row) -> str:
         """Join a CSV ``AddressRow`` into a single line."""
         parts = [row.address, row.city, row.state, row.zip_code]  # CSV address components.
-        return " ".join(part for part in parts if part).strip()  # Skip blanks; trim.
+        return " ".join(part for part in parts if part).strip()  # Skip blanks. Trim.

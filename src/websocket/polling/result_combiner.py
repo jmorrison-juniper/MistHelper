@@ -29,7 +29,7 @@ class CombineRequest:  # Immutable transport of the six caller inputs
 
 
 def combine_segments(request: CombineRequest) -> dict[str, Any] | None:  # Public entrypoint
-    """Combine message segments into a single result; mirror original print/log output."""
+    """Combine message segments into a single result. Mirror original print/log output."""
     segments = request.final_results  # Local alias improves readability of guard block
     request.logger.info("Combining %s WebSocket result segments", len(segments))  # Pre-action log
     if not segments:  # Guard: nothing to combine
@@ -60,11 +60,11 @@ def _emit_debug_header(request: CombineRequest) -> None:  # Verbose header emitt
     request.logger.debug("Combining %s result segments", count)  # Logger mirror line
     request.logger.debug("Total wait time: %.2f seconds", request.elapsed)  # Wall time
     request.logger.debug("Total checks performed: %s", request.check_count)  # Poll iterations
-    # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+    # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
     logger.debug("[DEBUG] Combining %s result segments", count)
-    # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+    # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
     logger.debug("[DEBUG] Total wait time: %.2f seconds", request.elapsed)
-    # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+    # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
     logger.debug("[DEBUG] Total checks performed: %s", request.check_count)
 
 
@@ -74,20 +74,20 @@ def _emit_debug_trailer(  # Verbose trailer emitter
     """Emit the trailing debug block including head/tail previews and completion banner."""
     if not request.debug_mode:  # Guard: skip entirely when quiet mode is active
         return  # Nothing to emit when debug is off
-    # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+    # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
     logger.debug("[DEBUG] Final combined result length: %s characters", len(combined_raw))
-    # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+    # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
     logger.debug("[DEBUG] Final result fields: %s", list(final_result.keys()))
-    # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+    # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
     logger.debug("[DEBUG] First 150 chars of final result: %r", combined_raw[:_PREVIEW_CHARS])
-    # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+    # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
     logger.debug("[DEBUG] Last 150 chars of final result: %r", combined_raw[-_PREVIEW_CHARS:])
     if len(combined_raw) == 0:  # Empty payload sentinel
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.warning("[DEBUG] WARNING: Final result is empty - this may indicate an issue")
-    # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+    # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
     logger.debug("[DEBUG] Session %s result collection complete", request.session_id)
-    # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+    # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
     logger.debug("[DEBUG] %s", _TRAILER_BAR)
 
 
@@ -111,7 +111,7 @@ def _absorb_raw_chunk(  # Per-segment raw handler
         return  # Empty chunk contributes nothing to buffer or trace
     buffer.append(raw_content)  # Defer join to caller for single allocation
     if verbose:  # Emit per-segment trace when verbose mode is precomputed on
-        # WHY: preserve operator notice verbatim; route through logger for capture/redirection.
+        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.debug("[DEBUG] Segment %s: %s chars", index + 1, len(raw_content))
 
 

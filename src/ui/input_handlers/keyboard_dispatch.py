@@ -49,7 +49,7 @@ class KeyboardDispatchTable:  # WHY: replaces handle_input (was CC=65) with O(1)
     # ---- shared helpers --------------------------------------------------
 
     def _dispatch_with(self, table: dict[str, Callable[[], None]], key: str, mode: str) -> None:  # WHY: shared O(1)
-        """Invoke ``table[key]`` if present; otherwise debug-log the unhandled key."""
+        """Invoke ``table[key]`` if present. Otherwise debug-log the unhandled key."""
         handler = table.get(key)  # O(1) dispatch lookup
         if handler is None:  # Unknown key for this mode
             if self._tui.debug_mode:  # WHY: only trace unhandled keys in debug mode
@@ -122,7 +122,7 @@ class KeyboardDispatchTable:  # WHY: replaces handle_input (was CC=65) with O(1)
         self._tui.result_row_scroll = max(0, self._tui.result_row_scroll - 10)  # WHY: clamp at top row
 
     def _results_row_down(self) -> None:  # WHY: bound handler for down-arrow in results view
-        """Scroll down 10 rows; ResultsGridBuilder clamps the upper bound."""
+        """Scroll down 10 rows. ResultsGridBuilder clamps the upper bound."""
         self._tui.result_row_scroll += 10  # Builder handles bounds
 
     def _results_page_up(self) -> None:  # WHY: bound handler for page-up in results view
@@ -140,7 +140,7 @@ class KeyboardDispatchTable:  # WHY: replaces handle_input (was CC=65) with O(1)
     def _results_jump_end(self) -> None:  # WHY: bound handler for 'e' shortcut
         """Jump to the end of the current result (builder caps the value)."""
         if self._safe_results():  # Only jump if there is data
-            self._tui.result_row_scroll = 999999  # Sentinel; builder clamps
+            self._tui.result_row_scroll = 999999  # Sentinel. Builder clamps
 
     def _results_close(self) -> None:  # WHY: bound handler for escape/q in results view
         """Exit the results-view state and return to navigation."""
@@ -213,7 +213,7 @@ class KeyboardDispatchTable:  # WHY: replaces handle_input (was CC=65) with O(1)
         logging.info("TUI: Navigated into module: %s", module_name)
 
     def _nav_back(self) -> None:
-        """Escape: pop one level off the path; quit when already at root."""
+        """Escape: pop one level off the path. Quit when already at root."""
         tui = self._tui  # Local alias
         if not tui.current_path:  # Already at root -> escape quits
             tui.running = False

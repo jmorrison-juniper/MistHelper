@@ -102,7 +102,7 @@ class ServicePingLauncher:
             ServicePingManager as ExternalServicePingManager,
         )
 
-        manager = ExternalServicePingManager()  # Canonical class; constructor pulls wired module globals
+        manager = ExternalServicePingManager()  # Canonical class. Constructor pulls wired module globals
         logging.debug("ServicePingLauncher: ServicePingManager instantiated successfully")  # Log build finish
         return manager  # Return the ready-to-run manager to launch()
 

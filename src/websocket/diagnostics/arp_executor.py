@@ -71,7 +71,7 @@ class ArpDeviceExecutor:  # WHY: orchestrates ARP-over-WebSocket diagnostic work
     def _run_workflow(  # WHY: drive site+device prompts, compat check, and ARP dispatch.
         self, deps: WebSocketCmdDeps, debug_mode: bool
     ) -> WebSocketManager | None:
-        """Prompt for site+device, check compatibility, run ARP; returns WS for cleanup."""
+        """Prompt for site+device, check compatibility, run ARP. Returns WS for cleanup."""
         site_id = select_ws_site(deps, debug_mode)  # WHY: interactive site picker.
         if site_id is None:  # WHY: user cancelled site selection.
             return None  # WHY: skip rest of workflow.
@@ -95,7 +95,7 @@ class ArpDeviceExecutor:  # WHY: orchestrates ARP-over-WebSocket diagnostic work
         device_id: str,
         debug_mode: bool,
     ) -> dict[str, Any] | None:
-        """Look up device record for type/model context; return None if unavailable."""
+        """Look up device record for type/model context. Return None if unavailable."""
         logging.debug("Fetching device record for ARP target device=%s", device_id)  # WHY: log.
         device_info = self._lookup_device_record(deps, site_id, device_id, debug_mode)  # WHY: API.
         if device_info and debug_mode:  # WHY: legacy debug echo of resolved attributes.
@@ -110,7 +110,7 @@ class ArpDeviceExecutor:  # WHY: orchestrates ARP-over-WebSocket diagnostic work
         device_id: str,
         debug_mode: bool,
     ) -> dict[str, Any] | None:
-        """Call the device list API and pick the matching record; None on failure."""
+        """Call the device list API and pick the matching record. None on failure."""
         try:  # WHY: legacy swallows errors so ARP attempt still proceeds.
             rawdata = deps.list_devices_fn(deps.apisession, site_id, type="all").data  # WHY: API.
         except Exception as device_check_error:  # noqa: BLE001  # WHY: match legacy broad catch.
@@ -142,7 +142,7 @@ class ArpDeviceExecutor:  # WHY: orchestrates ARP-over-WebSocket diagnostic work
         deps: WebSocketCmdDeps,
         device_info: dict[str, Any] | None,
     ) -> bool:
-        """Print device-type compatibility notes; ask switches to confirm. Returns proceed."""
+        """Print device-type compatibility notes. Ask switches to confirm. Returns proceed."""
         if not device_info:  # WHY: no metadata means proceed (legacy behavior).
             return True  # WHY: proceed unconditionally to preserve legacy behavior.
         device_type = device_info.get("type", "unknown")  # WHY: branch by device type.
@@ -196,7 +196,7 @@ class ArpDeviceExecutor:  # WHY: orchestrates ARP-over-WebSocket diagnostic work
         session_id = self._post_arp_command(  # WHY: POST + demux session id.
             deps, websocket_manager, site_id, device_id, debug_mode
         )
-        if session_id is None:  # WHY: POST failed; helpers already disconnected.
+        if session_id is None:  # WHY: POST failed. Helpers already disconnected.
             return websocket_manager  # WHY: hand to finally for cleanup.
         self._await_and_render(  # WHY: wait for the WS result then render to console.
             websocket_manager, session_id, device_info, device_id, debug_mode
@@ -204,13 +204,13 @@ class ArpDeviceExecutor:  # WHY: orchestrates ARP-over-WebSocket diagnostic work
         return websocket_manager  # WHY: hand to finally for cleanup.
 
     @staticmethod
-    def _connect_ws(  # WHY: build WS manager and subscribe; None on connect failure.
+    def _connect_ws(  # WHY: build WS manager and subscribe. None on connect failure.
         deps: WebSocketCmdDeps,
         site_id: str,
         device_id: str,
         debug_mode: bool,
     ) -> WebSocketManager | None:
-        """Build a WebSocketManager and subscribe to the device; None returns skip caller."""
+        """Build a WebSocketManager and subscribe to the device. None returns skip caller."""
         print(f"\n-> Executing ARP command on device {device_id}...")  # WHY: legacy banner.
         print("-> Establishing WebSocket connection...")  # WHY: legacy banner preserved.
         websocket_manager = WebSocketManager(deps.apisession)  # WHY: per-run WS manager.
@@ -235,14 +235,14 @@ class ArpDeviceExecutor:  # WHY: orchestrates ARP-over-WebSocket diagnostic work
         credentials = prepare_command_credentials(  # WHY: pull + validate Mist host/token.
             deps.apisession, websocket_manager, debug_mode
         )
-        if credentials is None:  # WHY: credential lookup failed; helper disconnected.
+        if credentials is None:  # WHY: credential lookup failed. Helper disconnected.
             return None  # WHY: caller aborts the workflow.
         mist_host, mist_apitoken = credentials  # WHY: unpack into local variables.
         arp_url, headers = self._build_arp_request(  # WHY: build request tuple.
             mist_host, mist_apitoken, site_id, device_id
         )
         arp_response = post_device_command(arp_url, headers, {}, debug_mode, "ARP")  # WHY: POST.
-        if arp_response is None:  # WHY: defensive; helper currently never returns None.
+        if arp_response is None:  # WHY: defensive. Helper currently never returns None.
             return None  # WHY: treat as POST failure.
         return extract_command_session(arp_response, websocket_manager, "ARP")  # WHY: demux.
 
@@ -397,7 +397,7 @@ class ArpDeviceExecutor:  # WHY: orchestrates ARP-over-WebSocket diagnostic work
         device_info: dict[str, Any] | None,
         debug_mode: bool,
     ) -> None:
-        """Render raw output; if gateway JSON, dispatch to table renderer."""
+        """Render raw output. If gateway JSON, dispatch to table renderer."""
         is_gateway = device_info is not None and device_info.get("type") == "gateway"  # WHY: gate.
         looks_like_json = raw_output.strip().startswith("{")  # WHY: cheap JSON sniff.
         if is_gateway and looks_like_json:  # WHY: try tabulate for gateway JSON responses.
@@ -407,10 +407,10 @@ class ArpDeviceExecutor:  # WHY: orchestrates ARP-over-WebSocket diagnostic work
         print("-" * 40)  # WHY: legacy section underline preserved.
         print(raw_output)  # WHY: show captured raw text verbatim.
 
-    def _render_gateway_table_or_fallback(  # WHY: parse gateway JSON; fall back on failure.
+    def _render_gateway_table_or_fallback(  # WHY: parse gateway JSON. Fall back on failure.
         self, raw_output: str, debug_mode: bool
     ) -> None:
-        """Parse gateway JSON ARP response; tabulate on success, fall back on failure."""
+        """Parse gateway JSON ARP response. Tabulate on success, fall back on failure."""
         logging.debug("Attempting to parse gateway ARP JSON payload")  # WHY: log before parse.
         try:  # WHY: match legacy fallback phrasing on JSON parse failure.
             gateway_data = json.loads(raw_output)  # WHY: decode the JSON document.
@@ -451,7 +451,7 @@ class ArpDeviceExecutor:  # WHY: orchestrates ARP-over-WebSocket diagnostic work
     ) -> None:
         """Render the parsed gateway ARP response as an aligned text table."""
         columns = gateway_data.get("columns", [])  # WHY: column metadata describing rows.
-        if not columns:  # WHY: no descriptors means cannot tabulate; fall back.
+        if not columns:  # WHY: no descriptors means cannot tabulate. Fall back.
             print("No column information available in gateway response")  # WHY: legacy phrasing.
             self._echo_raw_fallback(raw_output)  # WHY: emit legacy raw echo block.
             return  # WHY: done with fallback path.

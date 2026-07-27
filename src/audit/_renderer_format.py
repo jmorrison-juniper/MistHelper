@@ -19,8 +19,8 @@ class _DictItemCtx:
 
     key: object  # WHY: dict key to be JSON-quoted then HTML-escaped
     val: object  # WHY: dict value that recurses back through format_delta_html
-    idx: int  # WHY: 0-based entry index; drives trailing comma placement
-    total: int  # WHY: total entry count; comparator for last-item check
+    idx: int  # WHY: 0-based entry index. Drives trailing comma placement
+    total: int  # WHY: total entry count. Comparator for last-item check
     inner_pad: str  # WHY: precomputed indentation prefix for this entry
     indent: int  # WHY: recursion depth passed to the child call
 

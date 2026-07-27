@@ -38,7 +38,7 @@ def redact_secret(value: str) -> str:
         logging.debug("Using credential: %s", redact_secret(password))
         # → "Using credential: ***REDACTED***"
     """
-    _ = value  # Accept the value so callers do not need to gate on None; discard it
+    _ = value  # Accept the value so callers do not need to gate on None. Discard it
     return REDACTED_PLACEHOLDER  # Return placeholder instead of the real value
 
 
@@ -63,7 +63,7 @@ def redact_if_sensitive(key: str, value: str) -> str:
     """
     if _SENSITIVE_KEY_PATTERNS.search(key):  # Key matches a credential pattern
         return REDACTED_PLACEHOLDER  # Discard value and return placeholder
-    return value  # Key is not credential-like; return value unchanged
+    return value  # Key is not credential-like. Return value unchanged
 
 
 class SensitiveFilter(logging.Filter):
@@ -111,5 +111,5 @@ class SensitiveFilter(logging.Filter):
                 record.msg = sanitized  # Replace the message with the sanitized version
                 record.args = ()  # Clear args so getMessage() uses the new msg directly
         except Exception:  # noqa: BLE001 — never crash a logging filter
-            pass  # Silently ignore filter errors; logging must not interrupt execution
-        return True  # Always pass the record on; we only sanitize, never suppress
+            pass  # Silently ignore filter errors. Logging must not interrupt execution
+        return True  # Always pass the record on. We only sanitize, never suppress

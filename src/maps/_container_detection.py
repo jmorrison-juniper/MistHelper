@@ -74,7 +74,7 @@ def _check_container_env_vars() -> bool:  # WHY: runtime/orchestrator env-var sc
 
 def _check_cgroup_markers() -> bool:  # WHY: Linux init cgroup fingerprint scan
     """Return True when /proc/1/cgroup mentions a container runtime."""
-    try:  # /proc/1/cgroup absent on non-Linux; permission may be restricted
+    try:  # /proc/1/cgroup absent on non-Linux. Permission may be restricted
         with open("/proc/1/cgroup", encoding="utf-8", errors="ignore") as cgroup_file:  # Read init's cgroup path
             cgroup_content = cgroup_file.read().lower()  # Normalize case for substring match
     except (FileNotFoundError, PermissionError):  # Non-Linux or restricted env
@@ -88,8 +88,8 @@ def _check_cgroup_markers() -> bool:  # WHY: Linux init cgroup fingerprint scan
 
 def _check_runtime_user() -> bool:  # WHY: image-conventional user identity probe
     """Return True when running as the canonical 'misthelper' user (Unix only)."""
-    try:  # pwd is Unix-only; getuid absent on Windows
-        import pwd  # Unix only; import lazily to keep Windows imports clean.
+    try:  # pwd is Unix-only. Getuid absent on Windows
+        import pwd  # Unix only. Import lazily to keep Windows imports clean.
 
         current_user_name = pwd.getpwuid(os.getuid()).pw_name  # type: ignore[attr-defined]
     except Exception:  # Non-Unix or lookup failure

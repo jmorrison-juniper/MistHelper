@@ -121,7 +121,7 @@ class DatabaseRouter:
         self._connect_redis_json()  # WHY: attempt redis-json connect (non-fatal on failure)
 
     def _connect_arango(self) -> None:  # WHY: isolate connect errors from constructor
-        """Attempt ArangoDB connection; set availability flag."""
+        """Attempt ArangoDB connection. Set availability flag."""
         try:
             self._arango_writer = ArangoDBWriter(self.config)  # WHY: sync connect + probe
             self._arango_available = True  # WHY: mark healthy for later dispatch
@@ -130,7 +130,7 @@ class DatabaseRouter:
             logger.warning(EVT_ARANGO_UNAVAIL, error=str(error))  # WHY: single warning per attempt
 
     def _connect_redis(self) -> None:  # WHY: isolate connect errors from constructor
-        """Attempt Redis connection; set availability flag."""
+        """Attempt Redis connection. Set availability flag."""
         try:
             self._redis_writer = RedisTimeSeriesWriter(self.config)  # WHY: sync connect + probe
             self._redis_available = True  # WHY: mark healthy for later dispatch
@@ -139,7 +139,7 @@ class DatabaseRouter:
             logger.warning(EVT_REDIS_UNAVAIL, error=str(error))  # WHY: single warning per attempt
 
     def _connect_redis_json(self) -> None:  # WHY: isolate connect errors from constructor
-        """Attempt Redis JSON connection; set availability flag."""
+        """Attempt Redis JSON connection. Set availability flag."""
         try:
             self._redis_json_writer = RedisJSONWriter(self.config)  # WHY: sync connect + probe
             self._redis_json_available = True  # WHY: mark healthy for later dispatch
@@ -170,7 +170,7 @@ class DatabaseRouter:
         api_function_name: str,
         strategy: dict[str, Any],
     ) -> WriteResult:  # WHY: arango-only write path with snapshot side-effect
-        """Dispatch to ArangoDB; degrade to csv_only if unavailable."""
+        """Dispatch to ArangoDB. Degrade to csv_only if unavailable."""
         if not self._arango_available or self._arango_writer is None:  # WHY: guard clause for unavailable
             return self._csv_fallback(api_function_name, BACKEND_ARANGO)
         try:
@@ -239,7 +239,7 @@ class DatabaseRouter:
         api_function_name: str,
         strategy: dict[str, Any],
     ) -> WriteResult:  # WHY: redis timeseries write path with csv fallback
-        """Dispatch to Redis TS; degrade to csv_only if unavailable."""
+        """Dispatch to Redis TS. Degrade to csv_only if unavailable."""
         if not self._redis_available or self._redis_writer is None:  # WHY: guard clause for unavailable
             return self._csv_fallback(api_function_name, BACKEND_REDIS)
         try:
@@ -254,7 +254,7 @@ class DatabaseRouter:
         api_function_name: str,
         strategy: dict[str, Any],
     ) -> WriteResult:  # WHY: redis JSON write path with csv fallback
-        """Dispatch to Redis JSON; degrade to csv_only if unavailable."""
+        """Dispatch to Redis JSON. Degrade to csv_only if unavailable."""
         if not self._redis_json_available or self._redis_json_writer is None:  # WHY: guard for unavailable
             return self._csv_fallback(api_function_name, BACKEND_REDIS_JSON)
         try:
@@ -279,7 +279,7 @@ class DatabaseRouter:
         return dual.combined  # WHY: caller receives a single WriteResult regardless of leg outcomes
 
     def _resolve_strategy(self, api_function_name: str) -> dict[str, Any]:  # WHY: strategy lookup helper
-        """Look up PK strategy; fall back to default."""
+        """Look up PK strategy. Fall back to default."""
         if api_function_name in self._strategies:  # WHY: prefer per-endpoint override
             return self._strategies[api_function_name]
         return self._strategies.get("default", DEFAULT_STRATEGY)  # WHY: user default > module default
@@ -340,7 +340,7 @@ class DatabaseRouter:
         return stored  # WHY: return count so caller can log ingestion progress
 
     def _snapshot_config_history_record(self, config_record: dict[str, Any]) -> bool:  # WHY: per-record helper
-        """Snapshot a single config-history record; return True on store."""
+        """Snapshot a single config-history record. Return True on store."""
         entity_id = str(config_record.get("device_id", config_record.get("mac", "")))  # WHY: device_id or mac
         if not entity_id:  # WHY: skip rows missing both identifiers
             return False

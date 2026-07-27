@@ -60,11 +60,11 @@ class _ExtractContext:  # WHY: collapse the 5-arg extract signature into one imm
     api_function_name: str  # WHY: prefix component for every emitted TS key.
     primary_keys: list[str]  # WHY: fields excluded from generic numeric scan.
     entity_key_field: str  # WHY: field whose value becomes the entity id in the TS key.
-    ts_value_fields: list[str] | None  # WHY: explicit numeric field allow-list; None means auto-detect.
+    ts_value_fields: list[str] | None  # WHY: explicit numeric field allow-list. None means auto-detect.
 
 
 def _swallow_already_exists(action: Callable[[], Any]) -> None:  # WHY: reused around TS.CREATE / TS.CREATERULE calls.
-    """Run `action`; re-raise any ResponseError that is not a duplicate-key error."""
+    """Run `action`. Re-raise any ResponseError that is not a duplicate-key error."""
     try:
         action()  # WHY: single call site so both create and createrule share the same suppression policy.
     except redis.ResponseError as error:  # WHY: only ResponseError carries the "already exists" text.
@@ -78,7 +78,7 @@ def _module_names(client: Any) -> list[str]:  # WHY: shared between TS and JSON 
     return [_decode_name(m.get("name", b"")) for m in modules]  # WHY: normalize bytes/str variants in one place.
 
 
-def _decode_name(raw: Any) -> str:  # WHY: decode_responses varies with server config; handle both.
+def _decode_name(raw: Any) -> str:  # WHY: decode_responses varies with server config. Handle both.
     """Return a lowercase str name whether the source is bytes or str."""
     if isinstance(raw, str):  # WHY: fast path when decode_responses already yielded a str.
         return raw.lower()
@@ -98,7 +98,7 @@ class RedisTimeSeriesWriter:
         """Initialize Redis TimeSeries connection and verify module."""
         self._log = structlog.get_logger("redis_writer")  # WHY: structured logger scoped to this writer.
         self._preflight_dns(config.redis_host)  # WHY: fail fast with a clear message before opening the socket.
-        self._client = redis.Redis(  # WHY: sync client is fine; writers run in worker threads.
+        self._client = redis.Redis(  # WHY: sync client is fine. Writers run in worker threads.
             host=config.redis_host,
             port=config.redis_port,
             password=config.redis_password or None,  # WHY: pass None (not "") so redis-py skips AUTH.
@@ -174,11 +174,11 @@ class RedisTimeSeriesWriter:
             for future in futures:  # WHY: preserve chunk order for deterministic first-seen mapping.
                 chunk_adds, chunk_keys = future.result()  # WHY: block for chunk completion.
                 all_adds.extend(chunk_adds)  # WHY: append rather than assign to preserve running total.
-                key_records.update(chunk_keys)  # WHY: dict.update is last-write-wins; chunks are disjoint.
+                key_records.update(chunk_keys)  # WHY: dict.update is last-write-wins. Chunks are disjoint.
         self._log.info("extraction_complete", data_points=len(all_adds), unique_keys=len(key_records), workers=workers)
         return all_adds, key_records
 
-    def _extract_chunk(  # WHY: pure worker; safe to call from any thread.
+    def _extract_chunk(  # WHY: pure worker. Safe to call from any thread.
         self,
         records: list[dict[str, Any]],
         ctx: _ExtractContext,
@@ -192,7 +192,7 @@ class RedisTimeSeriesWriter:
             for field_name, value in numeric.items():  # WHY: each numeric field becomes its own TS key.
                 ts_key = f"{ctx.api_function_name}:{entity_id}:{field_name}"  # WHY: three-part key aids querying.
                 adds.append((ts_key, value))  # WHY: preserve emission order to keep timestamps monotonic.
-                key_records.setdefault(ts_key, record)  # WHY: first-seen only; label state is stable per key.
+                key_records.setdefault(ts_key, record)  # WHY: first-seen only. Label state is stable per key.
         return adds, key_records
 
     @staticmethod
@@ -229,7 +229,7 @@ class RedisTimeSeriesWriter:
         for ts_key, record in batch:  # WHY: enqueue one TS.CREATE per key in the batch.
             labels = self._build_labels(record, api_function_name, ts_key, ts_label_fields)  # WHY: metadata per key.
             self._queue_ts_create(pipe, ts_key, labels)  # WHY: encapsulate the LABELS flag-args expansion.
-        results = pipe.execute(raise_on_error=False)  # WHY: capture per-command errors; do not abort the batch.
+        results = pipe.execute(raise_on_error=False)  # WHY: capture per-command errors. Do not abort the batch.
         self._pipeline_create_compaction(batch, results)  # WHY: proceed with compaction using result-driven filter.
 
     @staticmethod
@@ -266,7 +266,7 @@ class RedisTimeSeriesWriter:
             self._register_compaction_keys(ts_key)
 
     @staticmethod
-    def _collect_pending(  # WHY: pure filter over create results; easy to test in isolation.
+    def _collect_pending(  # WHY: pure filter over create results. Easy to test in isolation.
         batch: list[tuple[str, dict[str, Any]]],
         create_results: list,
     ) -> list[str]:
@@ -348,7 +348,7 @@ class RedisTimeSeriesWriter:
         if ts_key in self._created_keys:  # WHY: cache hit skips network round-trip.
             return
         labels = self._build_labels(record, api_function_name, ts_key)  # WHY: label extraction identical to batch.
-        _swallow_already_exists(  # WHY: idempotent create; parallel workers may have raced ahead.
+        _swallow_already_exists(  # WHY: idempotent create. Parallel workers may have raced ahead.
             lambda: self._ts.create(  # WHY: use TimeSeries wrapper for the single-shot path.
                 ts_key,
                 retention_msecs=RAW_RETENTION_MS,
@@ -454,11 +454,11 @@ class RedisTimeSeriesWriter:
         exclude_keys: list[str],
     ) -> dict[str, float]:
         """Return only numeric (int/float) fields, excluding PKs."""
-        result: dict[str, float] = {}  # WHY: build fresh dict; caller may merge with others.
+        result: dict[str, float] = {}  # WHY: build fresh dict. Caller may merge with others.
         for key, value in record.items():  # WHY: single pass over the record.
             if key in exclude_keys:  # WHY: skip PK fields to avoid emitting identifiers as metrics.
                 continue
-            if isinstance(value, (int, float)) and not isinstance(value, bool):  # WHY: bool is int subclass; exclude.
+            if isinstance(value, (int, float)) and not isinstance(value, bool):  # WHY: bool is int subclass. Exclude.
                 result[key] = float(value)  # WHY: normalize to float so TS.ADD gets a consistent type.
         return result
 
@@ -468,7 +468,7 @@ class RedisTimeSeriesWriter:
         value_fields: list[str],
     ) -> dict[str, float]:
         """Extract only named fields that have numeric values."""
-        result: dict[str, float] = {}  # WHY: local dict; caller merges into per-chunk totals.
+        result: dict[str, float] = {}  # WHY: local dict. Caller merges into per-chunk totals.
         for field in value_fields:  # WHY: iterate over the caller's explicit list.
             value = record.get(field)  # WHY: absent fields silently drop.
             if isinstance(value, (int, float)) and not isinstance(value, bool):  # WHY: bool exclusion mirrors above.
@@ -486,7 +486,7 @@ class RedisTimeSeriesWriter:
         parts = ts_key.rsplit(":", 1)  # WHY: metric name is the trailing token after the final colon.
         metric_name = parts[-1] if len(parts) > 1 else ts_key  # WHY: fall back to full key when no colon.
         labels: dict[str, str] = {"api_function": api_function_name, "metric_name": metric_name}  # WHY: base labels.
-        fields = ts_label_fields or DEFAULT_LABEL_FIELDS  # WHY: single loop; removes if/else branching.
+        fields = ts_label_fields or DEFAULT_LABEL_FIELDS  # WHY: single loop. Removes if/else branching.
         for field in fields:  # WHY: only fields actually present on the record are emitted.
             if field in record:
                 labels[field] = str(record[field])  # WHY: TS labels must be strings.

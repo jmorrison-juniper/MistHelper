@@ -349,7 +349,7 @@ def _ensure_single_group(
     parent: Any,
     create_fn: Any,
 ) -> None:  # WHY: extracted from _ensure_groups_exist loop
-    """Create the group when missing; otherwise log the reuse."""
+    """Create the group when missing. Otherwise log the reuse."""
     if group["exists"]:  # WHY: reuse existing groups without hitting mistapi
         logging.info(_GROUP_EXISTS_LOG, group["group_name"], group["group_id"])  # WHY: audit trail
         return  # WHY: skip create call when already present

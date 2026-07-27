@@ -10,7 +10,7 @@ probe configuration, Menu #167 WAN probe device overrides).
 Landing per E-14 as a **bare module-level constant** -- no wrapper
 class, no getter function. The value is captured once at import time
 from ``os.getenv`` with an empty-string default (no defaults per the
-original comment; missing env var means "no sites excluded").
+original comment. Missing env var means "no sites excluded").
 
 ``MistHelper.py`` re-exports the constant so historical
 ``MistHelper.MIST_SITE_EXCLUDE_PREFIX`` / ``mh.MIST_SITE_EXCLUDE_PREFIX``

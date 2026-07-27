@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING, Any, cast  # WHY: cast narrows Any from parent
 
 from src.network._routing_utils_payload import RoutingPayloadQuery  # WHY: params builder returns one
 
-if TYPE_CHECKING:  # WHY: only needed for static type checkers; skipped at runtime
+if TYPE_CHECKING:  # WHY: only needed for static type checkers. Skipped at runtime
     from src.network.routing_utils import RoutingTableContext, RoutingUtils  # WHY: types only
 
 
@@ -54,7 +54,7 @@ class _RoutingUtilsRouting:  # WHY: cluster wrapper matching the parsing/display
     def __getattr__(self, name: str) -> Any:  # WHY: transparent proxy so callers see combined API
         """Delegate unknown attributes to the wrapped parent object."""
         parent = self.__dict__.get("_ru")  # WHY: guard against half-initialized instances
-        if parent is None:  # WHY: only trips during broken init; avoid infinite recursion
+        if parent is None:  # WHY: only trips during broken init. Avoid infinite recursion
             raise AttributeError(name)  # WHY: signal missing attribute cleanly to callers
         return getattr(parent, name)  # WHY: transparent proxy to the parent RoutingUtils
 
@@ -99,7 +99,7 @@ class _RoutingUtilsRouting:  # WHY: cluster wrapper matching the parsing/display
 
     def _verify_ssr_compatibility(self, device_info: dict[str, Any] | None) -> bool:
         """Verify device is SSR/SRX compatible. False to cancel."""
-        if not device_info:  # WHY: no info → assume compatible; caller keeps going
+        if not device_info:  # WHY: no info → assume compatible. Caller keeps going
             return True  # WHY: matches legacy behavior — proceed on missing metadata
         device_type = device_info.get("type", "unknown")  # WHY: type steers the branch
         device_model = device_info.get("model", "unknown")  # WHY: model shown in guidance text
@@ -407,7 +407,7 @@ class _RoutingUtilsRouting:  # WHY: cluster wrapper matching the parsing/display
         payload: dict[str, Any],
         debug_mode: bool,
     ) -> tuple[Any, str] | None:
-        """Open WebSocket + issue routing-table command; return (ws, sid) or None on failure."""
+        """Open WebSocket + issue routing-table command. Return (ws, sid) or None on failure."""
         websocket_manager = self._ru._connect_websocket(site_id, device_id, debug_mode)  # WHY: WS
         if not websocket_manager:  # WHY: guard: connection failed
             return None  # WHY: nothing to disconnect

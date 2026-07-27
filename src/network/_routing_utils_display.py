@@ -27,7 +27,7 @@ from typing import TYPE_CHECKING, Any  # WHY: TYPE_CHECKING avoids runtime cycle
 
 from prettytable import PrettyTable  # WHY: every table renderer builds a PrettyTable instance
 
-if TYPE_CHECKING:  # WHY: only needed for static type checkers; skipped at runtime
+if TYPE_CHECKING:  # WHY: only needed for static type checkers. Skipped at runtime
     from src.network.routing_utils import RoutingUtils  # WHY: parent type for cross-reference only
 
 
@@ -75,7 +75,7 @@ class RoutingStatsAcc:  # WHY: bundles the 5 routing stat buckets into one param
     """Mutable buckets used while accumulating routing-table statistics.
 
     ``frozen=True`` prevents the *reference* to each container from
-    being swapped mid-loop; the containers themselves stay mutable so
+    being swapped mid-loop. The containers themselves stay mutable so
     per-entry helpers add without re-wiring the accumulator. Bundling
     the five stat buckets into one dataclass drops
     ``_accumulate_route_stats`` from six parameters to two, resolving
@@ -110,7 +110,7 @@ class _RoutingUtilsDisplay:  # WHY: cluster wrapper matches the Phase 1 parsing-
     def __getattr__(self, name: str) -> Any:  # WHY: transparent proxy so callers see combined API
         """Delegate unknown attributes to the wrapped parent object."""
         parent = self.__dict__.get("_ru")  # WHY: guard against half-initialized instances
-        if parent is None:  # WHY: only trips during broken init; avoid infinite recursion
+        if parent is None:  # WHY: only trips during broken init. Avoid infinite recursion
             raise AttributeError(name)  # WHY: signal missing attribute cleanly to callers
         return getattr(parent, name)  # WHY: transparent proxy to the parent RoutingUtils
 
@@ -153,7 +153,7 @@ class _RoutingUtilsDisplay:  # WHY: cluster wrapper matches the Phase 1 parsing-
     ) -> None:
         """Add ``value`` to ``target_set`` if it is truthy and not the sentinel."""
         if value and value != sentinel:  # WHY: two-guard filter keeps "-" placeholders out
-            target_set.add(value)  # WHY: sets deduplicate; caller does not need to check membership
+            target_set.add(value)  # WHY: sets deduplicate. Caller does not need to check membership
 
     def _collect_forwarding_stats(self, entries: list[dict[str, Any]]) -> dict[str, Any]:  # WHY: aggregator
         """Collect summary statistics from forwarding table entries."""
@@ -297,7 +297,7 @@ class _RoutingUtilsDisplay:  # WHY: cluster wrapper matches the Phase 1 parsing-
         acc = RoutingStatsAcc.empty()  # WHY: single dataclass replaces 5 local buckets
         active_routes = 0  # WHY: separate int counter — dataclass fields are containers only
         for entry in route_entries:  # WHY: single pass keeps overall cost O(n)
-            self._accumulate_route_stats(entry, acc)  # WHY: mutates acc in place; two params only
+            self._accumulate_route_stats(entry, acc)  # WHY: mutates acc in place. Two params only
             if entry.get("active"):  # WHY: count active routes outside the acc for clarity
                 active_routes += 1  # WHY: increment only on truthy 'active' field
         return {  # WHY: dict projection preserves the legacy return shape

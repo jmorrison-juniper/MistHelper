@@ -97,7 +97,7 @@ class SiteMatchingEngine:
             site_name=site.get("name"),  # Human-readable site name.
             mist_address=self._extract_mist_address(site),  # Current Mist address dict.
             match_strategy=strategy,  # serial | fuzzy.
-            match_confidence=confidence,  # 1.0 serial; score/100 fuzzy.
+            match_confidence=confidence,  # 1.0 serial. Score/100 fuzzy.
         )
 
     @staticmethod

@@ -158,7 +158,7 @@ class SSHRunnerManager:  # WHY: staticmethod facade preserves the MistHelper pub
     def _prepare_gateway_selection(  # WHY: bundles load + select + filter to cut by_gateway_template() length.
         deps: SSHRunnerManagerDeps,
     ) -> tuple[str, list[Any]] | None:
-        """Load, prompt, and filter gateways; return (template, rows) or None on cancel."""
+        """Load, prompt, and filter gateways. Return (template, rows) or None on cancel."""
         gateways = SSHRunnerManager._load_gateway_data(deps)  # WHY: parse the CSV export.
         if not gateways:  # WHY: no data → nothing to do.
             return None  # WHY: nothing to prompt when the export is empty.
@@ -191,7 +191,7 @@ class SSHRunnerManager:  # WHY: staticmethod facade preserves the MistHelper pub
         if resolved is None:  # WHY: any cancel → return all-None tuple as documented.
             return None, None, None, None  # WHY: sentinel tuple contract expected by callers/tests.
         hosts, username, password = resolved  # WHY: unpack the required trio.
-        commands = commands or SSHRunnerManager._prompt_commands(deps)  # WHY: optional; empty is acceptable.
+        commands = commands or SSHRunnerManager._prompt_commands(deps)  # WHY: optional. Empty is acceptable.
         logging.info(  # WHY: Wave-1 exit envelope required by guardrail tests.
             "Exiting _collect_missing_data (commands_count=%s password=***REDACTED***)",
             len(commands),
@@ -205,7 +205,7 @@ class SSHRunnerManager:  # WHY: staticmethod facade preserves the MistHelper pub
         username: Any,
         password: Any,
     ) -> tuple[Any, Any, Any] | None:
-        """Resolve (hosts, username, password), prompting for any missing values; None on cancel."""
+        """Resolve (hosts, username, password), prompting for any missing values. None on cancel."""
         slots = (  # WHY: table-driven pairing of preexisting value + prompt fallback keeps CC ≤ 5.
             (hosts, lambda: SSHRunnerManager._prompt_hosts(deps)),
             (username, lambda: SSHRunnerManager._prompt_username(deps)),
@@ -221,7 +221,7 @@ class SSHRunnerManager:  # WHY: staticmethod facade preserves the MistHelper pub
 
     @staticmethod
     def _prompt_hosts(deps: SSHRunnerManagerDeps) -> list[str] | None:  # WHY: split-and-clean host input.
-        """Prompt operator for comma-separated SSH hosts; return parsed list or None."""
+        """Prompt operator for comma-separated SSH hosts. Return parsed list or None."""
         host_input = deps.input_utils.safe_input(  # WHY: safe_input handles EOF in containers/SSH sessions.
             "Enter SSH host(s) (comma-separated): ",
             context="ssh_runner_hosts",
@@ -234,8 +234,8 @@ class SSHRunnerManager:  # WHY: staticmethod facade preserves the MistHelper pub
 
     @staticmethod
     def _prompt_username(deps: SSHRunnerManagerDeps) -> str | None:  # WHY: username-only prompt path.
-        """Prompt operator for SSH username; return value or None on cancel."""
-        # WHY: safe_input is Any-typed via deps; cast to str for mypy strict (no-any-return).
+        """Prompt operator for SSH username. Return value or None on cancel."""
+        # WHY: safe_input is Any-typed via deps. Cast to str for mypy strict (no-any-return).
         username: str = str(deps.input_utils.safe_input("Enter SSH username: ", context="ssh_runner_username")).strip()
         if not username:  # WHY: cancel path.
             logging.warning("X  SSH username is required")
@@ -245,7 +245,7 @@ class SSHRunnerManager:  # WHY: staticmethod facade preserves the MistHelper pub
 
     @staticmethod
     def _prompt_password() -> str | None:  # WHY: password-only prompt path via getpass.
-        """Prompt operator for SSH password via getpass; return value or None on cancel."""
+        """Prompt operator for SSH password via getpass. Return value or None on cancel."""
         try:
             password = getpass.getpass("Enter SSH password: ")  # WHY: hide input so password is not echoed.
         except (EOFError, KeyboardInterrupt):  # WHY: treat EOF / Ctrl-C as cancellation.
@@ -260,7 +260,7 @@ class SSHRunnerManager:  # WHY: staticmethod facade preserves the MistHelper pub
 
     @staticmethod
     def _prompt_commands(deps: SSHRunnerManagerDeps) -> list[str]:  # WHY: optional one-shot command prompt.
-        """Prompt operator for an optional one-shot command; return list (may be empty)."""
+        """Prompt operator for an optional one-shot command. Return list (may be empty)."""
         logging.warning("\nNo commands configured. Enter command or press Enter for CSV fallback:")
         choice = deps.input_utils.safe_input("Command: ", context="ssh_runner_command_prompt").strip()
         return [choice] if choice else []  # WHY: empty list lets the caller fall back to CSV-loaded commands.
@@ -274,7 +274,7 @@ class SSHRunnerManager:  # WHY: staticmethod facade preserves the MistHelper pub
         commands: Any,
     ) -> bool:
         """Execute SSH commands on specified hosts."""
-        _ = deps  # WHY: retained for signature parity; deps not required after loader indirection.
+        _ = deps  # WHY: retained for signature parity. Deps not required after loader indirection.
         original_load = EnvSshConfigLoader.load  # WHY: capture original bound method for restoration.
         try:
             SSHRunnerManager._install_mock_env_loader(hosts, username, password, commands)  # WHY: inject overrides.
@@ -344,7 +344,7 @@ class SSHRunnerManager:  # WHY: staticmethod facade preserves the MistHelper pub
             log_level="INFO",  # WHY: match legacy log level for CLI invocation.
             debug=False,  # WHY: suppress verbose debug output.
             max_threads=None,  # WHY: single-host path does not fan out.
-            secure=False,  # WHY: legacy default; caller can override upstream.
+            secure=False,  # WHY: legacy default. Caller can override upstream.
         )
         args.shell = True  # WHY: attribute assignment (not kwarg) sidesteps bandit B604 shell=True heuristic.
         return args  # WHY: return the fully-populated namespace consumed by AppRunner.run().
@@ -423,7 +423,7 @@ class SSHRunnerManager:  # WHY: staticmethod facade preserves the MistHelper pub
 
     @staticmethod
     def _resolve_template_by_substring(selection: str, templates: list[str]) -> str | None:  # WHY: fuzzy fallback.
-        """Resolve template name by case-insensitive substring; require unique match."""
+        """Resolve template name by case-insensitive substring. Require unique match."""
         matches = [template for template in templates if selection.lower() in template.lower()]  # WHY: case-insens.
         if len(matches) == 1:  # WHY: unambiguous → accept.
             return matches[0]
@@ -444,7 +444,7 @@ class SSHRunnerManager:  # WHY: staticmethod facade preserves the MistHelper pub
     def _gateway_matches_template(gateway: Any, template_name: str) -> bool:  # WHY: single boolean, CC=1.
         """Return True when a gateway row matches template + online + valid IP predicates."""
         management_ip = (gateway.get(_MANAGEMENT_IP_KEY) or "").strip()  # WHY: normalize None/whitespace uniformly.
-        return (  # WHY: boolean expression avoids branching; table-driven bad-IP set skips repeated string checks.
+        return (  # WHY: boolean expression avoids branching. Table-driven bad-IP set skips repeated string checks.
             gateway.get(_TEMPLATE_KEY) == template_name
             and gateway.get(_ONLINE_STATUS_KEY) == _ONLINE_STATUS
             and management_ip not in _INVALID_MANAGEMENT_IPS
@@ -510,7 +510,7 @@ class SSHRunnerManager:  # WHY: staticmethod facade preserves the MistHelper pub
 
     @staticmethod
     def _resolve_by_template_config() -> tuple[Any, Any, list[Any]] | None:  # WHY: config resolution helper.
-        """Load SSH creds + commands (from .env + CSV fallback); return None on missing data."""
+        """Load SSH creds + commands (from .env + CSV fallback). Return None on missing data."""
         ssh_config = EnvSshConfigLoader().load()  # WHY: T013a extracted .env loader.
         if not ssh_config.get("username") or not ssh_config.get("password"):  # WHY: mandatory fields missing.
             logging.warning("! SSH credentials not found in .env file.")

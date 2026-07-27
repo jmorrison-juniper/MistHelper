@@ -19,7 +19,7 @@ from src.websocket.polling.result_combiner import CombineRequest, combine_segmen
 # Circuit-breaker constant preserved verbatim from the original implementation.
 _MAX_CHECK_ITERATIONS = 10000  # WHY: Hard cap on polling iterations to avoid infinite loops.
 _DEFAULT_ACTIVITY_TIMEOUT = 2  # WHY: Default idle-window seconds before declaring completion.
-_POLL_INTERVAL = 0.1  # WHY: 100 ms sleep throttles the polling loop; DO NOT REMOVE.
+_POLL_INTERVAL = 0.1  # WHY: 100 ms sleep throttles the polling loop. DO NOT REMOVE.
 _PERF_LOG_INTERVAL = 5.0  # WHY: Periodic [PERF] logging cadence in seconds.
 _TRACE_MODULUS = 50  # WHY: Emit verbose diagnostic traces every N poll iterations.
 _TRACE_REMAINDER = 1  # WHY: Offset chosen so first trace fires on iteration 1.
@@ -46,7 +46,7 @@ class _CollectorDeps:  # WHY: Bundle the 4 constructor args to keep signatures w
     debug: bool  # WHY: Verbose print toggle propagated from the manager.
 
 
-@dataclass(slots=True)  # WHY: Mutable per-call state; frozen would block field updates.
+@dataclass(slots=True)  # WHY: Mutable per-call state. Frozen would block field updates.
 class _CollectorContext:  # WHY: Groups poll-loop state to stay within 5-param limit.
     """Mutable per-call state threaded through the poll loop helpers."""
 
@@ -209,12 +209,12 @@ class ResultCollector:  # WHY: Public API preserved for WebSocketManager collabo
         detector: CompletionDetector,
         timeout_seconds: int,
     ) -> list[dict[str, Any]]:  # WHY: Central polling driver invoked by collect().
-        """Main wait loop; returns the collected segment list on completion or timeout."""
+        """Main wait loop. Returns the collected segment list on completion or timeout."""
         while time.time() - ctx.start_time < timeout_seconds:  # WHY: Absolute timeout guard.
             result = self._poll_once(ctx, detector)  # WHY: Delegate per-iteration work.
             if result is not None:  # WHY: Helper returned finalized segments.
                 return result  # WHY: Indicator or activity timeout succeeded.
-            time.sleep(_POLL_INTERVAL)  # WHY: 100ms throttle; DO NOT REMOVE.
+            time.sleep(_POLL_INTERVAL)  # WHY: 100ms throttle. DO NOT REMOVE.
         return self._drain_on_timeout(ctx)  # WHY: Absolute timeout fell through.
 
     def _poll_once(
@@ -222,7 +222,7 @@ class ResultCollector:  # WHY: Public API preserved for WebSocketManager collabo
         ctx: _CollectorContext,
         detector: CompletionDetector,
     ) -> list[dict[str, Any]] | None:  # WHY: Single-iteration worker keeps _poll_loop short.
-        """Perform one poll iteration; returns segments when the loop should stop."""
+        """Perform one poll iteration. Returns segments when the loop should stop."""
         ctx.perf_monitor.check_iteration(self._deps.debug)  # WHY: Periodic perf + circuit breaker.
         ctx.check_count += 1  # WHY: Count this poll for downstream telemetry.
         self._maybe_emit_progress(ctx)  # WHY: Periodic 5-second progress trace.
@@ -231,14 +231,14 @@ class ResultCollector:  # WHY: Public API preserved for WebSocketManager collabo
             return done  # WHY: Return finalized segments to caller.
         if ctx.check_count > _MAX_CHECK_ITERATIONS:  # WHY: Defensive secondary breaker.
             return self._emergency_drain(ctx)  # WHY: Drain buffer and abort loop.
-        return self._try_activity_timeout(ctx)  # WHY: None keeps loop going; list stops it.
+        return self._try_activity_timeout(ctx)  # WHY: None keeps loop going. List stops it.
 
     def _try_completion(
         self,
         ctx: _CollectorContext,
         detector: CompletionDetector,
     ) -> list[dict[str, Any]] | None:  # WHY: Indicator-driven completion path.
-        """Inspect collected output; if an indicator fires, pop and return the segments."""
+        """Inspect collected output. If an indicator fires, pop and return the segments."""
         with self._deps.lock:  # WHY: Snapshot under lock to keep the dict stable.
             collected = self._results_for(ctx)  # WHY: Guard clause when session absent.
             if collected is None:  # WHY: No entry yet for this session id.
@@ -265,7 +265,7 @@ class ResultCollector:  # WHY: Public API preserved for WebSocketManager collabo
         """Update activity timestamps when new messages have arrived since last poll."""
         current_count = len(collected)  # WHY: Snapshot list length once.
         if current_count <= ctx.last_message_count:  # WHY: No new messages this iteration.
-            return  # WHY: Nothing changed; skip trace + bookkeeping.
+            return  # WHY: Nothing changed. Skip trace + bookkeeping.
         ctx.last_activity = time.time()  # WHY: Anchor new idle window.
         self._maybe_emit_new_activity(ctx, current_count)  # WHY: Trace before overwriting count.
         ctx.last_message_count = current_count  # WHY: Advance edge detector cursor.

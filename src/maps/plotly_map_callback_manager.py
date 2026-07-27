@@ -105,7 +105,7 @@ def _resolve_by_rules(  # WHY: table-driven visibility lookup shared by traces +
     rules: tuple[tuple[str, str], ...],
     all_layers: frozenset[str],
 ) -> bool | None:
-    """Consult a visibility rule table; return None when no rule matches."""
+    """Consult a visibility rule table. Return None when no rule matches."""
     for layer_name, token in rules:  # WHY: linear scan preserves original ordering semantics
         if token in entity_name:  # WHY: substring match against lowercased entity name
             return layer_name in all_layers  # WHY: first-match wins

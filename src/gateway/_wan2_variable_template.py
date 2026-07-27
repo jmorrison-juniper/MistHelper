@@ -104,7 +104,7 @@ class _Wan2VariableTemplate(_ClusterBase):
             return (key, new_key)  # WHY: rename with suffix retained
         if search in key:  # WHY: complex pattern needs manual review
             logging.warning("Found complex port pattern in template %s: %s", template_name, key)  # WHY: audit
-            # WHY: preserve legacy operator warnings verbatim; operators rely on the "!?" prefix.
+            # WHY: preserve legacy operator warnings verbatim. Operators rely on the "!?" prefix.
             logging.warning("\n  !? Template '%s' uses complex port pattern: '%s'", template_name, key)
             logging.warning("     This requires manual review - cannot automatically replace")
         return None  # WHY: unmatched or complex - no automatic edit
@@ -190,7 +190,7 @@ class _Wan2VariableTemplate(_ClusterBase):
         result: dict[str, Any],
         mistapi_mod: Any,
     ) -> None:
-        """Apply changes and set result status; may raise on API failure."""
+        """Apply changes and set result status. May raise on API failure."""
         port_config = tmpl["config"].get("port_config", {})  # WHY: mutate this dict in place
         changes_list = self._rename_template_ports(port_config, tmpl["ports_to_replace"], tmpl["name"])
         if not changes_list:  # WHY: no keys matched at apply time
@@ -222,7 +222,7 @@ class _Wan2VariableTemplate(_ClusterBase):
         result: dict[str, Any],
         mistapi_mod: Any,
     ) -> None:
-        """Send API update or mark dry-run; populates result status/error."""
+        """Send API update or mark dry-run. Populates result status/error."""
         if self._dry_run:  # WHY: dry-run bypasses API mutation
             result["status"] = "DRY-RUN"  # WHY: report path
             logging.info(

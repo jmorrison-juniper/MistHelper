@@ -19,7 +19,7 @@ naturally or by delegating to private ``_handle_*`` helpers.
 
 To add a callback in a later wave:
 
-1. Implement the method on this class (keep CC <= 10; extract
+1. Implement the method on this class (keep CC <= 10. Extract
    ``_handle_*`` helpers when complexity demands it).
 2. Add any new closure dependencies as fields on
    :class:`src.maps.launcher.viewer_state.MapViewerState`.

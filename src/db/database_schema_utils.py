@@ -37,7 +37,7 @@ class DatabaseSchemaUtils:  # Build SQLite DDL from data.
 
     @staticmethod
     def determine_api_function_name_from_context() -> str:  # Infer API name from the call stack.
-        """Walk the call stack and return the first frame whose name looks like a Mist API call; else 'unknown'."""
+        """Walk the call stack and return the first frame whose name looks like a Mist API call. Else 'unknown'."""
         frame = inspect.currentframe()  # Start at the current frame.
         try:
             while frame:  # Walk up the stack.
@@ -94,7 +94,7 @@ class DatabaseSchemaUtils:  # Build SQLite DDL from data.
 
     @staticmethod
     def _sanitize_table_name(name: str) -> str:
-        """Sanitize a SQL table name; force a non-digit leading character to keep DDL valid."""
+        """Sanitize a SQL table name. Force a non-digit leading character to keep DDL valid."""
         safe = re.sub(r"[^a-zA-Z0-9_]", "_", name)  # Replace any non-alphanum/underscore with '_'
         if not safe or safe[0].isdigit():  # Empty or digit-led identifier is not valid SQL
             safe = f"table_{safe}"  # Prefix to ensure a valid identifier
@@ -107,7 +107,7 @@ class DatabaseSchemaUtils:  # Build SQLite DDL from data.
 
     @staticmethod
     def _pk_aware_column_defs(fields: list[str], pk_fields: list[str]) -> list[str]:
-        """Return TEXT column-def strings; columns named in pk_fields are flagged NOT NULL."""
+        """Return TEXT column-def strings. Columns named in pk_fields are flagged NOT NULL."""
         defs: list[str] = []  # Collect column definitions in field order
         for field_name in fields:  # Walk each input field name
             safe = DatabaseSchemaUtils._sanitize_column(field_name)  # Sanitize column for SQL safety

@@ -21,7 +21,7 @@ Callsites rewritten in this PR:
   module-global cache.
 - ``src/refactors/initialize_mist_session_interactive.py`` already passed the
   session and returned the list to the LoginOrchestrator, which stashes it
-  into the state bag; no change required beyond signature (session now
+  into the state bag. No change required beyond signature (session now
   required, no default).
 - ``src/export/msp_inventory_exporter.py`` explicitly assigns the return
   value to ``MistHelper.msp_privileges`` after detection.
@@ -52,7 +52,7 @@ def _fetch_msp_name(msp_id: str, session: Any) -> str | None:
     if session is None:  # No active session to query with
         logging.debug("_fetch_msp_name: no session, returning None")  # AFTER: no-session trace
         return None  # Cannot look anything up
-    try:  # API call and payload parsing may fail; degrade to None on any error
+    try:  # API call and payload parsing may fail. Degrade to None on any error
         import mistapi.api.v1.msps.msps as msps_api  # noqa: PLC0415  # Lazy import of MSP details endpoint
 
         response = msps_api.getMspDetails(session, msp_id)  # Fetch the MSP record by ID via the shared session
@@ -81,7 +81,7 @@ def _msp_parse_one_privilege(priv: Any, session: Any) -> dict[str, Any] | None:
     logging.debug("_msp_parse_one_privilege: entry")  # BEFORE: trace parse entry
     if not (isinstance(priv, dict) and priv.get("msp_id")):  # Only MSP-scoped dict grants qualify.
         logging.debug("_msp_parse_one_privilege: not an MSP grant, returning None")  # AFTER: non-msp trace
-        return None  # Not an MSP grant; skip it.
+        return None  # Not an MSP grant. Skip it.
     logging.debug(
         "MSP privilege found: scope=%s, role=%s", priv.get("scope"), priv.get("role")
     )  # Log the grant details.
@@ -143,7 +143,7 @@ def detect_msp_privileges(session: Any) -> list[dict[str, Any]]:
 
     ``session`` is REQUIRED (an authenticated mistapi session). Returns the list of MSP
     privilege dicts (msp_id, msp_name, role, scope), or [] when there is no MSP access or
-    detection fails. This function does NOT touch any module-global; the caller is
+    detection fails. This function does NOT touch any module-global. The caller is
     responsible for publishing the result to ``MistHelper.msp_privileges`` if desired.
     """
     logging.info(

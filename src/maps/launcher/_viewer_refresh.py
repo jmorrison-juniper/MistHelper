@@ -124,7 +124,7 @@ class _ViewerRefresh:  # WHY: wrapper class hosting the live-refresh callback cl
     def __getattr__(self, name: str) -> Any:  # WHY: transparent proxy for shared state access
         """Delegate unknown attributes to the wrapped parent manager."""
         mm = self.__dict__.get("_mm")  # WHY: guard against half-initialized instances
-        if mm is None:  # WHY: only trips during broken init; avoid infinite recursion
+        if mm is None:  # WHY: only trips during broken init. Avoid infinite recursion
             raise AttributeError(name)  # WHY: signal missing attribute cleanly
         return getattr(mm, name)  # WHY: forward all other attributes to parent
 
@@ -177,7 +177,7 @@ class _ViewerRefresh:  # WHY: wrapper class hosting the live-refresh callback cl
         return self._run_client_refresh(map_ctx, current_fig, updated_refresh_times)  # WHY: try/except body
 
     def _is_refresh_triggered(self) -> bool:  # WHY: guard body returns bool for caller short-circuit
-        """Return True when Dash reports a callback trigger; audit manual clicks in passing."""
+        """Return True when Dash reports a callback trigger. Audit manual clicks in passing."""
         import dash  # WHY: dash.callback_context only exists at request time
 
         ctx = dash.callback_context  # WHY: Dash exposes trigger info on every callback
@@ -453,7 +453,7 @@ class _ViewerRefresh:  # WHY: wrapper class hosting the live-refresh callback cl
     # ------------------------------------------------------------------
 
     def _refresh_zones_silent(self, site_id: str, map_id: str) -> None:
-        """Fetch zones for logging visibility only; swallow errors per original behavior."""
+        """Fetch zones for logging visibility only. Swallow errors per original behavior."""
         try:
             zones_response = self._state.mistapi_ref.api.v1.sites.zones.listSiteZones(  # WHY: API call
                 self._state.api_session_ref, site_id=site_id
@@ -472,7 +472,7 @@ class _ViewerRefresh:  # WHY: wrapper class hosting the live-refresh callback cl
         logging.info("Live data refresh: Found %s zones on map", len(zones_on_map))  # WHY: audit
 
     def _refresh_walls_silent(self, site_id: str, map_id: str, current_fig: dict[str, Any]) -> None:
-        """Fetch map walls for logging visibility only; swallow errors per original behavior."""
+        """Fetch map walls for logging visibility only. Swallow errors per original behavior."""
         try:
             map_response = self._state.mistapi_ref.api.v1.sites.maps.getSiteMap(  # WHY: API call
                 self._state.api_session_ref, site_id=site_id, map_id=map_id
@@ -561,7 +561,7 @@ class _ViewerRefresh:  # WHY: wrapper class hosting the live-refresh callback cl
         layer_values: list[str] | None,
         updated_refresh_times: dict[str, float],
     ) -> tuple[Any, Any]:
-        """Execute coverage fetch + grid projection + trace mutation; broad-except audits."""
+        """Execute coverage fetch + grid projection + trace mutation. Broad-except audits."""
         from dash import no_update  # WHY: local import for the no_update sentinel
 
         try:
@@ -592,7 +592,7 @@ class _ViewerRefresh:  # WHY: wrapper class hosting the live-refresh callback cl
     # ------------------------------------------------------------------
 
     def _fetch_coverage_results(self, site_id: str, map_id: str) -> tuple[list[Any], list[str]] | None:
-        """Call the coverage endpoint and validate the payload; return (results, result_def) or None."""
+        """Call the coverage endpoint and validate the payload. Return (results, result_def) or None."""
         logging.info(  # WHY: preserve original audit log
             "Live data refresh: Fetching RF coverage data for map %s (site: %s)", map_id, site_id
         )
@@ -657,7 +657,7 @@ class _ViewerRefresh:  # WHY: wrapper class hosting the live-refresh callback cl
             return result_def.index("max_rssi")
         if "avg_rssi" in result_def:  # WHY: fall back to avg_rssi
             return result_def.index("avg_rssi")
-        return -1  # WHY: no usable RSSI column; caller handles the sentinel
+        return -1  # WHY: no usable RSSI column. Caller handles the sentinel
 
     @staticmethod
     def _aggregate_grid_cells(
@@ -710,7 +710,7 @@ class _ViewerRefresh:  # WHY: wrapper class hosting the live-refresh callback cl
 
     @staticmethod
     def _compute_rssi_bounds(grid_data: dict[tuple[float, float], float]) -> tuple[float, float]:
-        """Compute (min, max) RSSI for the heatmap color scale; defaults preserve original behavior."""
+        """Compute (min, max) RSSI for the heatmap color scale. Defaults preserve original behavior."""
         all_rssi = [v for v in grid_data.values() if v is not None]  # WHY: non-null samples only
         if not all_rssi:  # WHY: empty grid => use the original defaults
             return _DEFAULT_RSSI_MIN, _DEFAULT_RSSI_MAX
@@ -718,9 +718,9 @@ class _ViewerRefresh:  # WHY: wrapper class hosting the live-refresh callback cl
 
     @classmethod
     def _build_coverage_grid(cls, results: list[Any], result_def: list[str], ppm_local: float) -> _CoverageGrid | None:
-        """Translate the coverage results into a heatmap-ready grid; return None when unusable."""
+        """Translate the coverage results into a heatmap-ready grid. Return None when unusable."""
         indices = cls._extract_coverage_indices(result_def)  # WHY: resolve column indices
-        if indices is None:  # WHY: missing required columns; already logged
+        if indices is None:  # WHY: missing required columns. Already logged
             return None
         x_idx, y_idx, rssi_idx = indices  # WHY: unpack index triple
         grid_data = cls._aggregate_grid_cells(results, x_idx, y_idx, rssi_idx)  # WHY: rows -> cells

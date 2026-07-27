@@ -23,7 +23,7 @@ _MODEL_EXPORT_SUFFIX: str = "_CombinedDeviceModelCounts"  # WHY: filename suffix
 _VERSION_EXPORT_SUFFIX: str = "_CombinedDeviceFirmwareSummary"  # WHY: filename suffix for combined version export.
 _PIVOT_EXPORT_SUFFIX: str = "_CombinedDeviceVersionPerModel"  # WHY: filename suffix for combined pivot export.
 
-apisession: Any = None  # WHY: mistapi session injected by MistHelper; None until configured.
+apisession: Any = None  # WHY: mistapi session injected by MistHelper. None until configured.
 InputUtils: Any = None  # WHY: injected EOF-safe input wrapper (issue #452).
 DataExporter: Any = None  # WHY: injected exporter class exposing write_with_format_selection.
 msp_privileges: list[dict[str, Any]] = []  # WHY: injected MSP privilege records from mistapi self endpoint.
@@ -215,7 +215,7 @@ def _print_dispatch_menu() -> None:
 
 
 def _prompt_dispatch_mode() -> str | None:
-    """Prompt operator for menu mode; return the raw string or None if input aborted."""
+    """Prompt operator for menu mode. Return the raw string or None if input aborted."""
     try:
         return InputUtils.safe_input("  Select mode (1/2/3): ", context="inventory_dispatch").strip()  # WHY: read.
     except SystemExit:  # WHY: EOF/interrupt should exit the dispatcher cleanly.
@@ -448,7 +448,7 @@ class OrgDeviceInventoryMSPOrchestrator:
         run_for_org_fn: Callable[[str], tuple[list[dict], list[dict], list[dict], str]],
         collected: list[dict[str, Any]],
     ) -> None:
-        """Invoke per-org runner and append its outputs; log/surface errors on failure."""
+        """Invoke per-org runner and append its outputs. Log/surface errors on failure."""
         try:
             model_rows, version_rows, ver_per_model, safe_org = run_for_org_fn(child_org_id)  # WHY: invoke runner.
             collected.append(
@@ -458,7 +458,7 @@ class OrgDeviceInventoryMSPOrchestrator:
                     "version_rows": version_rows,  # WHY: per-org firmware rows fed into combined version report.
                     "ver_per_model": ver_per_model,  # WHY: per-org rows fed into combined pivot.
                 }
-            )  # WHY: append raw dict; adapter converts later.
+            )  # WHY: append raw dict. Adapter converts later.
         except Exception as error:  # WHY: one failing org should not abort the whole batch.
             print(f"    X Error processing {child_org_name}: {error}")  # WHY: surface error to operator.
             logging.exception("run_for_org failed for org %s: %s", child_org_id, error)  # WHY: full trace in log.

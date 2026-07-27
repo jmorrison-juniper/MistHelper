@@ -96,7 +96,7 @@ class WANProbeConfigManager:  # WAN probe config manager (Menu 166 destructive e
         logging.info("Menu #166: No WAN interfaces found in selected templates")  # Log it.
 
     def _prepare_templates_with_changes(self) -> list[dict[str, Any]] | None:
-        """Run all init/load/select/analyze guard steps; return analyzed list or None to signal abort."""
+        """Run all init/load/select/analyze guard steps. Return analyzed list or None to signal abort."""
         if not self._initialize():  # Org id resolution
             return None
         if not self._load_data():  # Sites + templates load
@@ -219,7 +219,7 @@ class WANProbeConfigManager:  # WAN probe config manager (Menu 166 destructive e
         return selected
 
     def _select_templates(self) -> list[dict[str, Any]]:  # Select templates.
-        """Display templates and get user selection; returns selected templates."""
+        """Display templates and get user selection. Returns selected templates."""
         templates_sorted = sorted(self.templates, key=lambda t: t.get("name", "").lower())  # Sort by name.
         template_list = self._render_template_list(templates_sorted)  # Show menu + collect rows.
         print("\n  Template Selection:")  # Selection header.
@@ -335,7 +335,7 @@ class WANProbeConfigManager:  # WAN probe config manager (Menu 166 destructive e
 
     def _show_preview(self, templates_with_changes: list[dict[str, Any]], dry_run: bool) -> None:
         """Display preview of changes to be made."""
-        del dry_run  # Kept in signature for API-compat with sibling _apply_changes; not used in preview.
+        del dry_run  # Kept in signature for API-compat with sibling _apply_changes. Not used in preview.
         total_interfaces = sum(len(t["wan_interfaces"]) for t in templates_with_changes)  # Sum across all
         total_sites = sum(t["site_count"] for t in templates_with_changes)  # Sum site reach
         print("\n  Preview of Changes:")  # Section header
@@ -400,7 +400,7 @@ class WANProbeConfigManager:  # WAN probe config manager (Menu 166 destructive e
 
     @staticmethod
     def _blank_template_result(template: dict[str, Any]) -> dict[str, Any]:  # Pre-fill the per-template result
-        """Build the per-template result skeleton (identity fields set; status/error/updates start empty)."""
+        """Build the per-template result skeleton (identity fields set. Status/error/updates start empty)."""
         return {
             "template_name": template["name"],  # Template name for the report.
             "template_id": template["id"],  # Template id for the report.
@@ -411,7 +411,7 @@ class WANProbeConfigManager:  # WAN probe config manager (Menu 166 destructive e
         }
 
     def _apply_wan_probe_overrides(self, template: dict[str, Any], port_config: dict[str, Any]) -> list[str]:
-        """Set wan_probe_override on each WAN interface present in port_config; return the modified port names."""
+        """Set wan_probe_override on each WAN interface present in port_config. Return the modified port names."""
         interfaces_modified: list[str] = []  # Track modified ports.
         template_name = template["name"]  # Template name for trace logging.
         for wan_if in template["wan_interfaces"]:  # Walk WAN ports.
@@ -432,7 +432,7 @@ class WANProbeConfigManager:  # WAN probe config manager (Menu 166 destructive e
         dry_run: bool,
         interfaces_modified: list[str],
     ) -> tuple[str, str]:
-        """Commit the template config (dry-run logs only, else calls the API); return (status, error)."""
+        """Commit the template config (dry-run logs only, else calls the API). Return (status, error)."""
         template_name = template["name"]  # Template name for logging.
         if dry_run:  # Dry-run.
             logging.info("DRY-RUN: Would update template %s interfaces: %s", template_name, interfaces_modified)

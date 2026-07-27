@@ -6,7 +6,7 @@ mistapi SDK hierarchy interactively.
 
 Internally this class is now a *thin orchestrator* that composes focused
 collaborators (input, layout, execution, runtime) under ``src/ui/``. All
-heavy logic lives in those collaborator modules; this class wires them
+heavy logic lives in those collaborator modules. This class wires them
 together and exposes the original public surface unchanged.
 """
 
@@ -207,7 +207,7 @@ class MistHelperTUI:  # WHY: public TUI entrypoint composing all collaborators
         max_items: int = 5,
     ) -> None:
         """Recursively format ``value`` into ``output`` (delegate)."""
-        # ``max_items`` is preserved in the signature for back-compat; the collaborator
+        # ``max_items`` is preserved in the signature for back-compat. The collaborator
         # uses its own MAX_SAMPLE_ITEMS constant.
         del max_items  # Explicitly acknowledge unused param
         self._hier_formatter._render(value, output, indent, key_name)  # Reuse the internal renderer
