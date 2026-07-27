@@ -235,8 +235,13 @@ def test_summarize_counts() -> None:
     """The summary reports the approved and not-approved counts."""
     records = [
         {"keyword": "active", "part_of_speech": "adj", "approved": True, "alternatives": [], "approved_meaning": ""},
-        {"keyword": "accuracy", "part_of_speech": "n", "approved": False, "alternatives": ["precision"],
-         "approved_meaning": ""},
+        {
+            "keyword": "accuracy",
+            "part_of_speech": "n",
+            "approved": False,
+            "alternatives": ["precision"],
+            "approved_meaning": "",
+        },
     ]  # One approved and one not-approved record.
     summary = extract_module._summarize(records)  # Build the summary line.
     assert "2 entries" in summary and "1 approved" in summary  # The counts are shown.
@@ -255,6 +260,7 @@ def test_write_output_round_trip(tmp_path: pathlib.Path) -> None:
 
 def test_import_pdfplumber_returns_module() -> None:
     """The pdfplumber import returns a module when it is installed."""
+    pytest.importorskip("pdfplumber")  # Skip when the optional extraction library is absent.
     module = DictionaryExtractor()._import_pdfplumber()  # Import pdfplumber.
     assert hasattr(module, "open")  # The module exposes the open function.
 
@@ -284,16 +290,12 @@ def test_quality_main_pass_and_fail(tmp_path: pathlib.Path) -> None:
     """The harness command returns zero on a match and one on a mismatch."""
     golden = tmp_path / "golden.json"  # The golden file.
     golden.write_text(
-        json.dumps({"entries": [
-            {"keyword": "active", "part_of_speech": "adj", "approved": True, "alternatives": []}
-        ]}),
+        json.dumps({"entries": [{"keyword": "active", "part_of_speech": "adj", "approved": True, "alternatives": []}]}),
         encoding="utf-8",
     )  # One golden entry.
     good = tmp_path / "good.json"  # A matching dictionary.
     good.write_text(
-        json.dumps({"entries": [
-            {"keyword": "active", "part_of_speech": "adj", "approved": True, "alternatives": []}
-        ]}),
+        json.dumps({"entries": [{"keyword": "active", "part_of_speech": "adj", "approved": True, "alternatives": []}]}),
         encoding="utf-8",
     )  # The dictionary matches the golden entry.
     bad = tmp_path / "bad.json"  # A non-matching dictionary.
