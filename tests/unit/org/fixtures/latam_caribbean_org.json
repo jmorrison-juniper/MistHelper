@@ -1,0 +1,61 @@
+{
+    "_comment": [
+        "LATAM/Caribbean site-list fixture for feature 1025 US2 tests.",
+        "One site per FR-005 code {PA, BS, HT, DO, GT, CU, CR, HN} plus a",
+        "few surrounding Central-American codes. Each site carries a distinct",
+        "site_id UUID and a plausible display name; country_code is the ISO",
+        "3166-1 alpha-2 code the US2 region-map extension MUST classify as",
+        "'americas'. INV-F2 (data-model.md \u00a75) requires every country_code",
+        "here be present in _COUNTRY_CODE_TO_REGION after 1025 ships."
+    ],
+    "sites": [
+        {
+            "id": "aaaaaaaa-1111-4000-8000-000000000001",
+            "name": "Panama City HQ",
+            "country_code": "PA",
+            "latlng": {"lat": 8.9824, "lng": -79.5199}
+        },
+        {
+            "id": "aaaaaaaa-1111-4000-8000-000000000002",
+            "name": "Nassau Branch",
+            "country_code": "BS",
+            "latlng": {"lat": 25.0343, "lng": -77.3963}
+        },
+        {
+            "id": "aaaaaaaa-1111-4000-8000-000000000003",
+            "name": "Port-au-Prince Warehouse",
+            "country_code": "HT",
+            "latlng": {"lat": 18.5944, "lng": -72.3074}
+        },
+        {
+            "id": "aaaaaaaa-1111-4000-8000-000000000004",
+            "name": "Santo Domingo DC",
+            "country_code": "DO",
+            "latlng": {"lat": 18.4861, "lng": -69.9312}
+        },
+        {
+            "id": "aaaaaaaa-1111-4000-8000-000000000005",
+            "name": "Guatemala City Office",
+            "country_code": "GT",
+            "latlng": {"lat": 14.6349, "lng": -90.5069}
+        },
+        {
+            "id": "aaaaaaaa-1111-4000-8000-000000000006",
+            "name": "Havana Regional",
+            "country_code": "CU",
+            "latlng": {"lat": 23.1136, "lng": -82.3666}
+        },
+        {
+            "id": "aaaaaaaa-1111-4000-8000-000000000007",
+            "name": "San Jose Site",
+            "country_code": "CR",
+            "latlng": {"lat": 9.9281, "lng": -84.0907}
+        },
+        {
+            "id": "aaaaaaaa-1111-4000-8000-000000000008",
+            "name": "Tegucigalpa Site",
+            "country_code": "HN",
+            "latlng": {"lat": 14.0723, "lng": -87.1921}
+        }
+    ]
+}
