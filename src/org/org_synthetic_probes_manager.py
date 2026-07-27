@@ -2643,6 +2643,138 @@ def _list_org_sites(mist_session: Any, org_id: str) -> list[dict[str, Any]]:
     return [s for s in sites if isinstance(s, dict) and s.get("id")]
 
 
+def _sort_sites_for_picker(sites: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return ``sites`` sorted for the interactive index picker.
+
+    Why:
+        Extracted so the sort key is unit-testable in isolation and so
+        the parent picker's cyclomatic complexity stays under the CI
+        gate. Unnamed sites sink to the end (secondary key = 1) so the
+        named entries operators actually think about lead the list;
+        name comparison is case-folded so ``ACME`` and ``acme`` sort
+        together; id is the final tie-break to keep the ordering stable
+        across invocations.
+
+    Args:
+        sites: Site dicts as returned by ``_list_org_sites``.
+
+    Returns:
+        A new list of site dicts sorted by (named-first, name-casefold,
+        id). The input is not mutated.
+    """
+    return sorted(
+        sites,
+        key=lambda s: (
+            0 if (s.get("name") or "").strip() else 1,
+            (s.get("name") or "").casefold(),
+            s.get("id") or "",
+        ),
+    )
+
+
+def _pick_site_by_index(
+    idx: int,
+    sorted_sites: list[dict[str, Any]],
+    picked_by_id: dict[str, dict[str, Any]],
+) -> None:
+    """Add ``sorted_sites[idx-1]`` to ``picked_by_id`` if the index is in range.
+
+    Why:
+        The bounds-check + id-guard + setdefault triad appeared three
+        times in ``_prompt_site_indexes`` (single-int branch, range
+        branch, ``all`` branch was similar). Deduplicating it into one
+        helper keeps the picker's dispatch small and makes the "silently
+        ignore garbage" behaviour uniform across all three input shapes.
+
+    Args:
+        idx: 1-based index into ``sorted_sites`` as typed by the operator.
+        sorted_sites: The sorted site view (from ``_sort_sites_for_picker``).
+        picked_by_id: Mutated in place -- new picks are added via
+            ``setdefault`` so earlier entries win on duplicate ids and
+            operator input order is preserved.
+    """
+    if idx < 1 or idx > len(sorted_sites):
+        logging.warning("Ignoring out-of-range site index: %d", idx)
+        return
+    candidate = sorted_sites[idx - 1]
+    site_id = candidate.get("id")
+    if isinstance(site_id, str) and site_id:
+        picked_by_id.setdefault(site_id, candidate)
+
+
+def _expand_range_token(
+    part: str,
+    sorted_sites: list[dict[str, Any]],
+    picked_by_id: dict[str, dict[str, Any]],
+) -> None:
+    """Parse a ``lo-hi`` range shorthand token and add each in-range index.
+
+    Why:
+        Isolates the two-int parse plus reversed-range guard so the
+        parent picker stays under the CC gate. The parse uses ``part[1:]``
+        so a leading ``-`` is treated as a negative int -- matching
+        ``_validate_vlan_input``'s convention: the value will just fail
+        the in-range check inside ``_pick_site_by_index``.
+
+    Args:
+        part: The raw comma-separated token (already stripped) that
+            contains a ``-`` after the first character.
+        sorted_sites: Sorted site view for the range to index into.
+        picked_by_id: Mutated in place (see ``_pick_site_by_index``).
+    """
+    lo_raw, _, hi_raw = part[1:].partition("-")
+    lo_raw = (part[0] + lo_raw).strip()
+    hi_raw = hi_raw.strip()
+    try:
+        lo = int(lo_raw)
+        hi = int(hi_raw)
+    except ValueError:
+        logging.warning("Ignoring unparseable site index range token: %r", part)
+        return
+    if lo > hi:
+        logging.warning("Ignoring reversed site index range: %r", part)
+        return
+    for idx in range(lo, hi + 1):
+        _pick_site_by_index(idx, sorted_sites, picked_by_id)
+
+
+def _apply_picker_token(
+    part: str,
+    sorted_sites: list[dict[str, Any]],
+    picked_by_id: dict[str, dict[str, Any]],
+) -> None:
+    """Route one operator-supplied token to the correct index-picker branch.
+
+    Why:
+        Consolidates the ``all`` / range / single-int dispatch so the
+        parent function's body reduces to ``for part in parts:
+        _apply_picker_token(...)``. Keeps all three token shapes in one
+        auditable place and drops the picker's CC well under the gate.
+
+    Args:
+        part: Stripped, non-empty token from the comma-split raw input.
+        sorted_sites: Sorted site view for indexing.
+        picked_by_id: Mutated in place with any successful picks.
+    """
+    if part.lower() == "all":
+        for candidate in sorted_sites:
+            site_id = candidate.get("id")
+            if isinstance(site_id, str) and site_id:
+                picked_by_id.setdefault(site_id, candidate)
+        return
+    # Range shorthand like "3-6". Leading '-' is treated as a negative int
+    # (out of range anyway), matching _validate_vlan_input's convention.
+    if "-" in part[1:]:
+        _expand_range_token(part, sorted_sites, picked_by_id)
+        return
+    try:
+        idx = int(part)
+    except ValueError:
+        logging.warning("Ignoring non-numeric site index token: %r", part)
+        return
+    _pick_site_by_index(idx, sorted_sites, picked_by_id)
+
+
 def _prompt_site_indexes(sites: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Display an indexed site table and return the site dicts the operator picks.
 
@@ -2676,16 +2808,7 @@ def _prompt_site_indexes(sites: list[dict[str, Any]]) -> list[dict[str, Any]]:
         non-numeric.
     """
     print("  Available sites:")
-    # Sort by name (case-insensitive) so the picker matches how operators think
-    # about their fleet. Unnamed sites sink to the end for stable ordering.
-    sorted_sites = sorted(
-        sites,
-        key=lambda s: (
-            0 if (s.get("name") or "").strip() else 1,
-            (s.get("name") or "").casefold(),
-            s.get("id") or "",
-        ),
-    )
+    sorted_sites = _sort_sites_for_picker(sites)
     width = len(str(len(sorted_sites)))
     for idx, site in enumerate(sorted_sites, start=1):
         name = site.get("name") or "(unnamed)"
@@ -2697,49 +2820,7 @@ def _prompt_site_indexes(sites: list[dict[str, Any]]) -> list[dict[str, Any]]:
     parts = [item.strip() for item in raw.split(",") if item.strip()]
     picked_by_id: dict[str, dict[str, Any]] = {}
     for part in parts:
-        # 'all' short-circuits to the full sorted list; operator intent is clear.
-        if part.lower() == "all":
-            for candidate in sorted_sites:
-                site_id = candidate.get("id")
-                if isinstance(site_id, str) and site_id:
-                    picked_by_id.setdefault(site_id, candidate)
-            continue
-        # Range shorthand like "3-6". Leading '-' is treated as a negative int
-        # (out of range anyway), matching _validate_vlan_input's convention.
-        if "-" in part[1:]:
-            lo_raw, _, hi_raw = part[1:].partition("-")
-            lo_raw = (part[0] + lo_raw).strip()
-            hi_raw = hi_raw.strip()
-            try:
-                lo = int(lo_raw)
-                hi = int(hi_raw)
-            except ValueError:
-                logging.warning("Ignoring unparseable site index range token: %r", part)
-                continue
-            if lo > hi:
-                logging.warning("Ignoring reversed site index range: %r", part)
-                continue
-            for idx in range(lo, hi + 1):
-                if idx < 1 or idx > len(sorted_sites):
-                    logging.warning("Ignoring out-of-range site index: %d", idx)
-                    continue
-                candidate = sorted_sites[idx - 1]
-                site_id = candidate.get("id")
-                if isinstance(site_id, str) and site_id:
-                    picked_by_id.setdefault(site_id, candidate)
-            continue
-        try:
-            idx = int(part)
-        except ValueError:
-            logging.warning("Ignoring non-numeric site index token: %r", part)
-            continue
-        if idx < 1 or idx > len(sorted_sites):
-            logging.warning("Ignoring out-of-range site index: %d", idx)
-            continue
-        candidate = sorted_sites[idx - 1]
-        site_id = candidate.get("id")
-        if isinstance(site_id, str) and site_id:
-            picked_by_id.setdefault(site_id, candidate)
+        _apply_picker_token(part, sorted_sites, picked_by_id)
     return list(picked_by_id.values())
 
 

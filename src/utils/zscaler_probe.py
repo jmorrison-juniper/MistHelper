@@ -744,6 +744,91 @@ a stable role slug (``cenr_zen_proxy``) locally to keep sorting/grouping in
 the report and logs consistent."""
 
 
+def _collect_zcc_probe_entries(
+    probes: dict[str, Any],
+    seen: set[str],
+    entries: list[tuple[str, dict[str, Any]]],
+) -> None:
+    """Append ZCC ``roles[].fqdns`` entries to the probe queue.
+
+    Why:
+        Extracted from ``run_full_validation`` so the parent stays under
+        the CI cyclomatic-complexity gate. The v3 dict unwrap (``{"host":
+        ...}``) plus legacy flat-string tolerance is duplicated between
+        the ZCC and CENR walks, but keeping them separate lets the
+        parent function express "ZCC first, then CENR" order without
+        needing another key argument.
+
+    Args:
+        probes: Parsed ``zscaler_client_connector_probes.json`` document.
+        seen: Deduplication set for FQDNs already queued; mutated in place.
+        entries: Probe queue tuples ``(fqdn, role)``; mutated in place.
+    """
+    for role in probes.get("roles", []) or []:
+        if not isinstance(role, dict):
+            continue
+        for entry in role.get("fqdns", []) or []:
+            # Unwrap v3 dict entries {"host": ...} while still tolerating
+            # legacy flat strings so mid-migration caches keep working.
+            fqdn = entry.get("host") if isinstance(entry, dict) else entry
+            fqdn_s = str(fqdn) if fqdn is not None else ""  # guard None from broken v3 rows
+            if fqdn_s and fqdn_s not in seen:
+                seen.add(fqdn_s)
+                entries.append((fqdn_s, role))
+
+
+def _collect_cenr_probe_entries(
+    cenr: dict[str, Any],
+    seen: set[str],
+    entries: list[tuple[str, dict[str, Any]]],
+) -> None:
+    """Append CENR proxy + VPN hostnames to the probe queue.
+
+    Why:
+        Mirrors ``_collect_zcc_probe_entries`` for the CENR side. ZEN
+        proxies do not appear in the ZCC role catalogue, so every CENR
+        hostname is stamped with the synthetic ``_CENR_SYNTHETIC_ROLE``
+        so downstream sorting/grouping keeps working uniformly.
+
+    Args:
+        cenr: Merged CENR document as produced by ``merge_clouds``.
+        seen: Deduplication set (see peer helper).
+        entries: Probe queue tuples (see peer helper).
+    """
+    for key in ("proxy_hostnames", "vpn_hostnames"):
+        for entry in cenr.get(key, []) or []:
+            # Same v3-dict unwrap for CENR bags; str() must never see the
+            # raw dict or it produces a "{'host': ...}" pseudo-hostname.
+            host = entry.get("host") if isinstance(entry, dict) else entry
+            host_s = str(host) if host is not None else ""  # guard None from broken v3 rows
+            if host_s and host_s not in seen:
+                seen.add(host_s)
+                entries.append((host_s, _CENR_SYNTHETIC_ROLE))
+
+
+def _log_probe_failures(results: list[ProbeResult]) -> None:
+    """Emit a DEBUG line for every ProbeResult with no responding protocols.
+
+    Why:
+        Kept at DEBUG (not INFO) so a batch of transient timeouts during
+        an 8-hour refresh window does not spam operator logs; the caller
+        still emits one INFO summary. Extracted so the parent's CC drops
+        under the gate.
+
+    Args:
+        results: The probe result list returned by ``_run_probes``.
+    """
+    for r in results:
+        if not r.responding_protocols:
+            logger.debug(
+                "zscaler_probe: no response from %s (role=%s ip=%s notes=%s)",
+                r.fqdn,
+                r.role or "<none>",
+                r.ip or "-",
+                "; ".join(r.notes) or "-",
+            )
+
+
 def run_full_validation(
     probes: dict[str, Any],
     cenr: dict[str, Any],
@@ -783,28 +868,8 @@ def run_full_validation(
     """
     entries: list[tuple[str, dict[str, Any]]] = []
     seen: set[str] = set()
-
-    for role in probes.get("roles", []) or []:
-        if not isinstance(role, dict):
-            continue
-        for entry in role.get("fqdns", []) or []:
-            # Unwrap v3 dict entries {"host": ...} while still tolerating
-            # legacy flat strings so mid-migration caches keep working.
-            fqdn = entry.get("host") if isinstance(entry, dict) else entry
-            fqdn_s = str(fqdn) if fqdn is not None else ""  # guard None from broken v3 rows
-            if fqdn_s and fqdn_s not in seen:
-                seen.add(fqdn_s)
-                entries.append((fqdn_s, role))
-
-    for key in ("proxy_hostnames", "vpn_hostnames"):
-        for entry in cenr.get(key, []) or []:
-            # Same v3-dict unwrap for CENR bags; str() must never see the
-            # raw dict or it produces a "{'host': ...}" pseudo-hostname.
-            host = entry.get("host") if isinstance(entry, dict) else entry
-            host_s = str(host) if host is not None else ""  # guard None from broken v3 rows
-            if host_s and host_s not in seen:
-                seen.add(host_s)
-                entries.append((host_s, _CENR_SYNTHETIC_ROLE))
+    _collect_zcc_probe_entries(probes, seen, entries)
+    _collect_cenr_probe_entries(cenr, seen, entries)
 
     logger.info(
         "zscaler_probe: validating %d endpoints (timeout=%.1fs, workers=%d)",
@@ -824,13 +889,5 @@ def run_full_validation(
         dns_fail,
         tls_fail,
     )
-    for r in results:
-        if not r.responding_protocols:
-            logger.debug(
-                "zscaler_probe: no response from %s (role=%s ip=%s notes=%s)",
-                r.fqdn,
-                r.role or "<none>",
-                r.ip or "-",
-                "; ".join(r.notes) or "-",
-            )
+    _log_probe_failures(results)
     return results
