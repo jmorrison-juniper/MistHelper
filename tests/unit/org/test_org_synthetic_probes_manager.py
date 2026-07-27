@@ -2985,3 +2985,196 @@ class TestUs1CenrDedupWarning:
             "INV-1 drift: _build_probe_set output diverged from smoke_probes_baseline.json. "
             f"emitted={emitted_json!r} baseline={baseline_json!r}"
         )
+
+
+class TestUs2CountryCodeDedupWarning:
+    """LATAM/Caribbean region-map extension and unmapped-code dedup (feature 1025 US2).
+
+    Why:
+        Before 1025 US2, ``_COUNTRY_CODE_TO_REGION`` covered only the largest
+        Latin-American markets (AR/BR/CL/CO/MX/PE/US/CA/VE). Every other
+        Central-American, Caribbean, and remaining South-American ISO alpha-2
+        code fell through to ``_DEFAULT_REGION = "emea"`` and produced a
+        per-site WARNING at ``_build_region_probes``. This class pins:
+          - FR-005 / SC-003: LATAM/Caribbean sites resolve to ``"americas"``.
+          - FR-004 / FR-010 / SC-002: the unmapped-code WARNING is deduped
+            to <= K unique unmapped codes per invocation (not N sites).
+        A per-site regression here (or a silent revert of the region map)
+        fires a diagnostic that names the offending code(s).
+    """
+
+    _FIXTURE_DIR = Path(__file__).parent / "fixtures"  # sibling directory holding US2 fixtures
+    _LATAM_FIXTURE = "latam_caribbean_org.json"  # 8-site fixture covering FR-005 codes
+    _AMERICAS_LITERAL = "americas"  # R1 canonical region literal (never "amer")
+
+    def _load_sites(self, name: str) -> list[dict[str, Any]]:
+        """Load the ``sites`` list from a fixture JSON file.
+
+        Why:
+            All US2 site fixtures share the shape ``{"sites": [...]}`` so a
+            single loader eliminates copy-paste at each test.
+
+        Args:
+            name: Bare fixture filename resolved against ``_FIXTURE_DIR``.
+
+        Returns:
+            The parsed ``sites`` array (list of site dicts with ``id``,
+            ``name``, ``country_code``).
+        """
+        path = self._FIXTURE_DIR / name  # deterministic sibling-directory lookup
+        logging.info("TestUs2CountryCodeDedupWarning: loading fixture %s", path)
+        payload = json.loads(path.read_text(encoding="utf-8"))  # utf-8 explicit for clarity
+        sites = payload["sites"]  # KeyError deliberate: malformed fixture must fail loudly
+        logging.debug("_load_sites: %s parsed %d sites", name, len(sites))
+        return sites
+
+    def _count_country_code_warnings(self, records: list[logging.LogRecord]) -> int:
+        """Count log records that qualify as country_code-tokened WARNINGs.
+
+        Why:
+            Contract ``log_record_shape.md`` §2.4 pins the qualifier: level
+            is WARNING and the emitted message contains the literal token
+            ``country_code``. Centralising the filter keeps every US2 test
+            using the same shape and prevents silent drift into stricter or
+            looser matching.
+
+        Args:
+            records: caplog records to scan.
+
+        Returns:
+            The number of records matching (WARNING + ``country_code`` token).
+        """
+        matches = [
+            rec
+            for rec in records
+            if rec.levelno == logging.WARNING  # only WARNING severity qualifies per contract
+            and "country_code" in rec.getMessage()  # grep anchor token from FR-013
+        ]
+        logging.debug(
+            "TestUs2CountryCodeDedupWarning: matched %d country_code WARNING(s)",
+            len(matches),
+        )
+        return len(matches)
+
+    def test_latam_caribbean_region_resolution(self) -> None:
+        """T016. Every LATAM/Caribbean site's country_code MUST resolve to "americas".
+
+        Why:
+            FR-005 requires ``PA, BS, HT, DO, GT, CU, CR, HN`` (and the
+            broader LATAM/Caribbean subset) to classify as ``"americas"``
+            after 1025 lands. This test asserts the region map directly
+            because ``_build_region_probes`` line 1069 looks up exactly
+            this dict; any code path change would have to route through
+            it. FR-011 also requires the R1 canonical literal ``"americas"``
+            (never ``"amer"``).
+        """
+        sites = self._load_sites(self._LATAM_FIXTURE)  # load 8-site fixture
+        logging.info(  # BEFORE the resolution loop per Constitution VII
+            "test_latam_caribbean_region_resolution: verifying %d sites",
+            len(sites),
+        )
+        unresolved: list[tuple[str, str]] = []  # collect all failures for one diagnostic
+        for site in sites:  # every fixture site MUST classify to americas
+            cc = site["country_code"]  # ISO alpha-2 code from the fixture
+            normalised = cc.strip().upper()  # match the resolver's canonicalisation
+            region = ospm._COUNTRY_CODE_TO_REGION.get(normalised)  # exact code path used at line 1069
+            if region != self._AMERICAS_LITERAL:  # collect drift; do not fail-fast
+                unresolved.append((cc, str(region)))  # capture code + observed literal
+        logging.debug(  # AFTER the resolution loop per Constitution VII
+            "test_latam_caribbean_region_resolution: unresolved=%s",
+            unresolved,
+        )
+        assert unresolved == [], (
+            f"LATAM/Caribbean sites failed to resolve to {self._AMERICAS_LITERAL!r}: "
+            f"{unresolved}. Extend _COUNTRY_CODE_TO_REGION per FR-005."
+        )
+
+    def test_latam_caribbean_no_warnings(self, caplog: pytest.LogCaptureFixture) -> None:
+        """T017. LATAM/Caribbean fixture MUST emit zero country_code WARNINGs.
+
+        Why:
+            Contract ``log_record_shape.md`` §2.4 mandates zero WARNINGs
+            for fixtures whose codes are ALL region-mapped after 1025. The
+            LATAM fixture ships only mapped codes (PA/BS/HT/DO/GT/CU/CR/HN)
+            so ``_emit_load_time_country_code_warning`` must skip emission
+            entirely. Any WARNING here indicates the region map extension
+            (T020) regressed.
+        """
+        sites = self._load_sites(self._LATAM_FIXTURE)  # 8-site LATAM fixture
+        gap_set = ospm._COUNTRY_CODE_INTENTIONAL_GAPS  # module-level frozenset installed by T021
+        region_map = ospm._COUNTRY_CODE_TO_REGION  # module-level dict extended by T020
+        unmapped = ospm._compute_unmapped_country_codes(  # exact helper US2 will call at load time
+            sites,
+            region_map,
+            gap_set,
+        )
+        warned_unmapped_codes: set[str] = set()  # fresh per-run dedup state (FR-012)
+        caplog.set_level(logging.WARNING, logger="src.org.org_synthetic_probes_manager")
+        start = len(caplog.records)  # snapshot so we ignore prior records
+        logging.info(  # BEFORE the load-time emission per Constitution VII
+            "test_latam_caribbean_no_warnings: invoking load-time hook (unmapped=%d)",
+            len(unmapped),
+        )
+        ospm._emit_load_time_country_code_warning(unmapped, warned_unmapped_codes)  # single call site
+        logging.debug(  # AFTER the load-time emission per Constitution VII
+            "test_latam_caribbean_no_warnings: warned_unmapped_codes=%s",
+            warned_unmapped_codes,
+        )
+        emitted = caplog.records[start:]  # only records from this test slice
+        count = self._count_country_code_warnings(list(emitted))  # centralised filter
+        assert count == 0, (
+            f"LATAM/Caribbean fixture emitted {count} country_code WARNING(s); "
+            f"expected 0. Codes present in fixture but flagged unmapped: {sorted(unmapped)}"
+        )
+
+    def test_unmapped_country_warning_dedup(self, caplog: pytest.LogCaptureFixture) -> None:
+        """T018. Unmapped-code WARNINGs MUST be deduped to <= K unique codes per run.
+
+        Why:
+            FR-004 / FR-010 / SC-002. A synthetic 30-site fixture where every
+            site shares a single unmapped code ``"ZZ"`` must emit at most 1
+            WARNING (not 30). Emitting per-site would re-introduce the
+            noise storm US2 exists to fix. The diagnostic names BOTH the
+            observed count and the cap so a CI failure directs the reader
+            straight to the regression -- per O2 remediation folding the
+            T027 diagnostic-quality enhancement into MVP tests.
+        """
+        # Deliberately synthesize an unmapped code -- "ZZ" is the ISO 3166
+        # user-assigned range and is guaranteed absent from the alpha-2
+        # universe fixture, so it cannot be silently classified by T020.
+        unmapped_code = "ZZ"  # ISO 3166 user-assigned code -- never officially assigned
+        fake_sites = [
+            {"id": f"synthetic-{idx:04d}", "name": f"site-{idx}", "country_code": unmapped_code}
+            for idx in range(30)  # 30 sites all sharing one unmapped code
+        ]
+        # Sanity: the code must not be mapped or in the gap set, otherwise the test is vacuous.
+        assert (
+            unmapped_code not in ospm._COUNTRY_CODE_TO_REGION
+        ), f"test setup broken: {unmapped_code!r} unexpectedly present in region map"
+        assert (
+            unmapped_code not in ospm._COUNTRY_CODE_INTENTIONAL_GAPS
+        ), f"test setup broken: {unmapped_code!r} unexpectedly present in gap set"
+        unmapped = ospm._compute_unmapped_country_codes(  # compute unique unmapped codes
+            fake_sites,
+            ospm._COUNTRY_CODE_TO_REGION,
+            ospm._COUNTRY_CODE_INTENTIONAL_GAPS,
+        )
+        k_unique = len(unmapped)  # cap for the WARNING count assertion
+        warned_unmapped_codes: set[str] = set()  # fresh dedup state (FR-012)
+        caplog.set_level(logging.WARNING, logger="src.org.org_synthetic_probes_manager")
+        start = len(caplog.records)  # snapshot to isolate this test's records
+        logging.info(  # BEFORE the load-time emission per Constitution VII
+            "test_unmapped_country_warning_dedup: invoking hook (unmapped=%d)",
+            k_unique,
+        )
+        ospm._emit_load_time_country_code_warning(unmapped, warned_unmapped_codes)
+        logging.debug(  # AFTER the load-time emission per Constitution VII
+            "test_unmapped_country_warning_dedup: warned_unmapped_codes=%s",
+            warned_unmapped_codes,
+        )
+        emitted = caplog.records[start:]  # slice to just this call
+        count = self._count_country_code_warnings(list(emitted))  # filter to WARNING+token
+        assert count <= k_unique, (
+            f"country_code WARNING count {count} exceeded unique-unmapped-code cap "
+            f"{k_unique}; per-site duplication regressed."
+        )
