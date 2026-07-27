@@ -847,6 +847,37 @@ def _load_probe_sources(data_dir: Path) -> tuple[dict[str, Any], dict[str, Any]]
     return probes, cenr
 
 
+def _add_observed_hosts_from_container(
+    container: dict[str, Any],
+    observed: set[str],
+) -> None:
+    """Add every host string in ``container``'s proxy/vpn bags to ``observed``.
+
+    Why:
+        Extracted from ``_collect_cenr_observed_hosts`` so the top-level
+        walk and the by_city walk share one predicate (matches the pattern
+        used by ``_find_host_in_bags``). Keeps the caller below Radon
+        CC=10.
+
+    Args:
+        container: v3-shaped node with ``proxy_hostnames`` / ``vpn_hostnames``
+            bags (top-level document or per-city slot).
+        observed: Set to add hosts into (mutated in place).
+    """
+    for bag_key in ("proxy_hostnames", "vpn_hostnames"):
+        bag = container.get(bag_key) or []
+        if not isinstance(bag, list):
+            continue
+        for entry in bag:
+            if isinstance(entry, dict):
+                host = entry.get("host")
+                if isinstance(host, str):
+                    observed.add(host)
+            elif isinstance(entry, str):
+                # v2 legacy flat string tolerated during migration.
+                observed.add(entry)
+
+
 def _collect_cenr_observed_hosts(cenr_source: dict[str, Any]) -> frozenset[str]:
     """Return every FQDN that has a CENR observation record.
 
@@ -868,36 +899,15 @@ def _collect_cenr_observed_hosts(cenr_source: dict[str, Any]) -> frozenset[str]:
         loader adapter).
     """
     observed: set[str] = set()  # accumulator; frozen at return time for immutability
-    # Top-level bags first: they are the common case and dominate CENR volume.
-    for bag_key in ("proxy_hostnames", "vpn_hostnames"):  # both bag names per v3 schema
-        bag = cenr_source.get(bag_key) or []  # tolerate missing key -> empty list
-        if not isinstance(bag, list):  # defensive: schema drift would show up here
-            continue  # skip malformed bag rather than crash
-        for entry in bag:  # each entry may be v3 dict or v2 flat string
-            if isinstance(entry, dict):  # v3 case: pull the "host" field
-                host = entry.get("host")  # may be None if the entry is malformed
-                if isinstance(host, str):  # only accept string hosts
-                    observed.add(host)  # add to the observation universe
-            elif isinstance(entry, str):  # v2 legacy flat string tolerated
-                observed.add(entry)  # add the bare host string
+    _add_observed_hosts_from_container(cenr_source, observed)
     # by_city bags carry the same shape per cenr_cache_schema_v3.md.
-    by_city = cenr_source.get("by_city")  # may be missing entirely
-    if isinstance(by_city, dict):  # only walk when it's the expected mapping shape
-        for city_slot in by_city.values():  # each city has proxy/vpn bags
-            if not isinstance(city_slot, dict):  # defensive: skip malformed slots
-                continue  # move to the next city
-            for bag_key in ("proxy_hostnames", "vpn_hostnames"):  # same two bag names
-                bag = city_slot.get(bag_key) or []  # tolerate missing bag
-                if not isinstance(bag, list):  # defensive against schema drift
-                    continue  # skip malformed nested bag
-                for entry in bag:  # same v3/v2 tolerance as top-level bags
-                    if isinstance(entry, dict):  # v3 dict entry
-                        host = entry.get("host")  # extract host field
-                        if isinstance(host, str):  # accept only string hosts
-                            observed.add(host)  # add to observation universe
-                    elif isinstance(entry, str):  # v2 flat-string fallback
-                        observed.add(entry)  # add bare host
-    return frozenset(observed)  # freeze so callers cannot mutate the universe
+    by_city = cenr_source.get("by_city")
+    if isinstance(by_city, dict):
+        for city_slot in by_city.values():
+            if not isinstance(city_slot, dict):
+                continue
+            _add_observed_hosts_from_container(city_slot, observed)
+    return frozenset(observed)
 
 
 def _collect_catalogue_hosts(probes_source: dict[str, Any]) -> frozenset[str]:
@@ -1410,6 +1420,94 @@ def _iter_role_fqdns(role: dict[str, Any], cenr: dict[str, Any]) -> list[str]:
     return _unwrap_v3_hosts(role.get("fqdns") or [])
 
 
+def _emit_probes_for_role(
+    role: dict[str, Any],
+    cenr_source: dict[str, Any],
+    result: dict[str, dict[str, Any]],
+) -> tuple[bool, bool]:
+    """Emit every probe body for one role into ``result``.
+
+    Why:
+        Extracted from ``_build_probe_set`` so the outer function stays
+        under Radon CC=10. Encapsulates the per-role loop (wildcard skip,
+        one-critical-per-role selection, mini-* body shape). Returns the
+        ``(critical_role, critical_assigned)`` pair so the caller can run
+        the "critical role but no explicit FQDN matched" fallback in one
+        place.
+
+    Args:
+        role: One role entry from ``probes_source["roles"]``.
+        cenr_source: Loaded CENR document (for FQDN expansion + target
+            resolution).
+        result: Aggregating map; probes are inserted under their
+            ``zcc-<role>-<slug>`` keys.
+
+    Returns:
+        ``(critical_role, critical_assigned)``. ``critical_role`` is True
+        when the role carries ``critical: true``; ``critical_assigned``
+        is True when this pass already assigned the role's one critical
+        slot.
+    """
+    role_name = role.get("role") or "unknown"
+    critical_role = bool(role.get("critical"))
+    critical_target = role.get("critical_fqdn")
+    critical_assigned = False
+    for fqdn in _iter_role_fqdns(role, cenr_source):
+        if not isinstance(fqdn, str) or fqdn.startswith("*."):
+            continue
+        # Pick exactly one critical FQDN per critical role. Preference
+        # order: explicit ``critical_fqdn`` if it appears in the
+        # expanded list, otherwise the first non-wildcard hit.
+        is_critical = False
+        if critical_role and not critical_assigned and (critical_target is None or fqdn == critical_target):
+            is_critical = True
+            critical_assigned = True
+        probe_name = f"{_TOOL_NAME_PREFIX}{role_name}-{_fqdn_slug(fqdn)}"
+        target = _probe_target(fqdn, role, cenr_source)
+        probe_body: dict[str, Any] = {
+            # Classify the body type from the target's shape: HTTP/S URLs
+            # are ``application`` probes, bare ``host:port`` (VPN, custom
+            # UDP) are ``reachability`` probes.
+            "type": _probe_type_for_target(target, role.get("type")),
+            "target": target,
+        }
+        probe_body["aggressiveness"] = _CRITICAL_AGGRESSIVENESS if is_critical else _AUTO_AGGRESSIVENESS
+        result[probe_name] = probe_body
+    return critical_role, critical_assigned
+
+
+def _promote_first_probe_to_critical(
+    result: dict[str, dict[str, Any]],
+    role_name: str,
+    critical_target: Any,
+) -> None:
+    """Promote the first probe named for ``role_name`` to critical.
+
+    Why:
+        Fallback for ``_build_probe_set`` when a role declared critical
+        but the requested ``critical_fqdn`` was absent from the FQDN
+        expansion. Extracted so the caller stays under CC=10. Still
+        spending the critical slot on the intended role beats silently
+        downgrading it.
+
+    Args:
+        result: Current probe map (mutated in place).
+        role_name: Role slug to search for.
+        critical_target: Requested critical FQDN (for the warning only).
+    """
+    slug_prefix = f"{_TOOL_NAME_PREFIX}{role_name}-"
+    for probe_name, probe in result.items():
+        if probe_name.startswith(slug_prefix):
+            probe["aggressiveness"] = _CRITICAL_AGGRESSIVENESS
+            logging.warning(
+                "Role %s: critical_fqdn %r not found; promoted %s to critical",
+                role_name,
+                critical_target,
+                probe_name,
+            )
+            return
+
+
 def _build_probe_set(
     sources: tuple[dict[str, Any], dict[str, Any]],
     vlan_ids: list[int],
@@ -1445,56 +1543,13 @@ def _build_probe_set(
         # every region's endpoints everywhere. Skip them here.
         if isinstance(role_name, str) and role_name.startswith(_SAMSUNG_ELM_ROLE_PREFIX):
             continue
-        critical_role = bool(role.get("critical"))
-        critical_target = role.get("critical_fqdn")
-        critical_assigned = False
-        for fqdn in _iter_role_fqdns(role, cenr_source):
-            if not isinstance(fqdn, str) or fqdn.startswith("*."):
-                continue
-            # Pick exactly one critical FQDN per critical role. Preference
-            # order: explicit ``critical_fqdn`` if it appears in the
-            # expanded list, otherwise the first non-wildcard hit.
-            is_critical = False
-            if critical_role and not critical_assigned:
-                if critical_target is None or fqdn == critical_target:
-                    is_critical = True
-                    critical_assigned = True
-            probe_name = f"{_TOOL_NAME_PREFIX}{role_name}-{_fqdn_slug(fqdn)}"
-            # Body shape mirrors Mist's own ``mini-*`` custom_probes: no
-            # ``name`` inside the body (the dict key IS the name) and no
-            # ``vlan_ids`` (VLAN scoping belongs on the tests[] row that
-            # references the probe, not on the probe definition itself).
-            target = _probe_target(fqdn, role, cenr_source)
-            probe_body: dict[str, Any] = {
-                # Classify the body type from the target's shape: HTTP/S
-                # URLs are ``application`` probes, bare ``host:port``
-                # (VPN, custom UDP) are ``reachability`` probes. Emitting
-                # a VPN UDP:500 target as ``application`` would make Mist
-                # attempt an HTTP GET against an IKE listener.
-                "type": _probe_type_for_target(target, role.get("type")),
-                # Scheme/port derived from the role's curated ``probe`` block
-                # (or CENR's ``probe_default`` for ``tunnel_zen``) so operators
-                # can tune protocol per role without touching this file.
-                "target": target,
-            }
-            probe_body["aggressiveness"] = _CRITICAL_AGGRESSIVENESS if is_critical else _AUTO_AGGRESSIVENESS
-            result[probe_name] = probe_body
+        critical_role, critical_assigned = _emit_probes_for_role(role, cenr_source, result)
         # Fallback: role declared critical but the requested
         # ``critical_fqdn`` was absent from the expansion. Promote the
         # first probe emitted for the role so we still spend a critical
         # slot on the intended role rather than silently downgrading.
         if critical_role and not critical_assigned:
-            for probe_name, probe in result.items():
-                slug_prefix = f"{_TOOL_NAME_PREFIX}{role_name}-"
-                if probe_name.startswith(slug_prefix):
-                    probe["aggressiveness"] = _CRITICAL_AGGRESSIVENESS
-                    logging.warning(
-                        "Role %s: critical_fqdn %r not found; promoted %s to critical",
-                        role_name,
-                        critical_target,
-                        probe_name,
-                    )
-                    break
+            _promote_first_probe_to_critical(result, role_name, role.get("critical_fqdn"))
     return result
 
 

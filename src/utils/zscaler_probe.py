@@ -492,6 +492,93 @@ def _classify(result: ProbeResult) -> str:
     return "unknown"
 
 
+def _probe_http_stack(
+    fqdn: str,
+    timeout: float,
+    declared_ports: list[int],
+    result: ProbeResult,
+) -> None:
+    """Run HTTP :80, HTTPS :443 (with TLS peer), and proxy :8080 checks.
+
+    Why:
+        The HTTP/HTTPS/proxy blocks live together because they all depend on
+        TCP scan results already populated in ``result.tcp``. Pulling them into
+        a helper keeps :func:`_probe_fqdn` under the CC gate without changing
+        probe order or side effects.
+
+    Args:
+        fqdn: Hostname being probed (used for HTTP/TLS SNI).
+        timeout: Per-probe timeout in seconds.
+        declared_ports: Ports the catalogue declared for this role. Only 8080
+            probes emit when 8080 is both open and declared.
+        result: Mutated in place; HTTP/HTTPS fields and
+            ``responding_protocols`` are populated on success, ``notes`` on
+            failure.
+    """
+    if result.tcp.get(80) == "open":
+        resp, err = _do_http(fqdn, 80, timeout, tls=False)
+        if resp is not None:
+            result.http_status = resp.status
+            result.http_server = resp.getheader("Server")
+            result.http_location = resp.getheader("Location")
+            result.responding_protocols.append("HTTP")
+        else:
+            result.notes.append(f"HTTP :80 error: {err}")
+
+    if result.tcp.get(443) == "open":
+        subj, issuer, tls_err = _tls_peer(fqdn, 443, timeout)
+        result.tls_subject = subj
+        result.tls_issuer = issuer
+        result.tls_error = tls_err
+        resp, err = _do_http(fqdn, 443, timeout, tls=True)
+        if resp is not None:
+            result.https_status = resp.status
+            result.https_server = resp.getheader("Server")
+            result.https_location = resp.getheader("Location")
+            result.responding_protocols.append("HTTPS")
+        else:
+            result.notes.append(f"HTTPS :443 error: {err}")
+
+    if result.tcp.get(8080) == "open" and 8080 in declared_ports:
+        # ZEN nodes listen on 8080 for explicit-proxy CONNECT; a raw HTTP GET
+        # is usually refused (400/407), but the TCP handshake alone confirms
+        # the port is live.
+        result.responding_protocols.append("TCP/8080 (proxy)")
+
+
+def _probe_udp_ike_if_needed(
+    fqdn: str,
+    timeout: float,
+    result: ProbeResult,
+) -> None:
+    """Fire IKE UDP probes for VPN-tagged hostnames or when every TCP scan died.
+
+    Why:
+        US2 gate: skipping UDP on healthy TCP hosts keeps scan time bounded and
+        avoids gratuitous IKE traffic to non-VPN endpoints. Extracted so the
+        gating logic is testable in isolation and to shrink the parent
+        function under the CC threshold.
+
+    Args:
+        fqdn: Hostname; the ``"-vpn."`` substring is the catalogue-agnostic
+            hint that this is a VPN endpoint.
+        timeout: Per-probe timeout in seconds.
+        result: Mutated in place; ``udp`` and ``responding_protocols`` are
+            populated when any IKE port answers.
+    """
+    is_vpn_hostname = "-vpn." in fqdn.lower()  # catalogue-agnostic pattern hint
+    all_tcp_dead = bool(result.tcp) and all(
+        state != "open" for state in result.tcp.values()
+    )  # every scanned port RST/closed/errored
+    if not (is_vpn_hostname or all_tcp_dead):
+        return
+    for udp_port in IKE_UDP_PORTS:
+        udp_state = _udp_check(fqdn, udp_port, timeout)
+        result.udp[udp_port] = udp_state
+        if udp_state == "open":
+            result.responding_protocols.append(f"UDP/{udp_port}")
+
+
 def _probe_fqdn(
     fqdn: str,
     role: dict[str, Any],
@@ -538,50 +625,8 @@ def _probe_fqdn(
         if state == "open":
             result.responding_protocols.append(f"TCP/{port}")
 
-    if result.tcp.get(80) == "open":
-        resp, err = _do_http(fqdn, 80, timeout, tls=False)
-        if resp is not None:
-            result.http_status = resp.status
-            result.http_server = resp.getheader("Server")
-            result.http_location = resp.getheader("Location")
-            result.responding_protocols.append("HTTP")
-        else:
-            result.notes.append(f"HTTP :80 error: {err}")
-
-    if result.tcp.get(443) == "open":
-        subj, issuer, tls_err = _tls_peer(fqdn, 443, timeout)
-        result.tls_subject = subj
-        result.tls_issuer = issuer
-        result.tls_error = tls_err
-        resp, err = _do_http(fqdn, 443, timeout, tls=True)
-        if resp is not None:
-            result.https_status = resp.status
-            result.https_server = resp.getheader("Server")
-            result.https_location = resp.getheader("Location")
-            result.responding_protocols.append("HTTPS")
-        else:
-            result.notes.append(f"HTTPS :443 error: {err}")
-
-    if result.tcp.get(8080) == "open" and 8080 in declared_ports:
-        # ZEN nodes listen on 8080 for explicit-proxy CONNECT; a raw HTTP GET
-        # is usually refused (400/407), but the TCP handshake alone confirms
-        # the port is live.
-        result.responding_protocols.append("TCP/8080 (proxy)")
-
-    # US2 UDP dispatch: fire IKE probes when the FQDN is tagged VPN-by-name OR
-    # when every TCP handshake failed (last-ditch recovery for mis-tagged
-    # VPN hosts). Skipping this branch on healthy TCP hosts keeps scan time
-    # bounded and avoids gratuitous IKE traffic to non-VPN endpoints.
-    is_vpn_hostname = "-vpn." in fqdn.lower()  # catalogue-agnostic pattern hint
-    all_tcp_dead = bool(result.tcp) and all(
-        state != "open" for state in result.tcp.values()
-    )  # every scanned port RST/closed/errored
-    if is_vpn_hostname or all_tcp_dead:
-        for udp_port in IKE_UDP_PORTS:
-            udp_state = _udp_check(fqdn, udp_port, timeout)
-            result.udp[udp_port] = udp_state
-            if udp_state == "open":
-                result.responding_protocols.append(f"UDP/{udp_port}")
+    _probe_http_stack(fqdn, timeout, declared_ports, result)
+    _probe_udp_ike_if_needed(fqdn, timeout, result)
 
     result.server_class = _classify(result)
     return result
