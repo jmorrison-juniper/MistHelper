@@ -87,6 +87,10 @@ ste-linter = [
     # without it through the standard-library heuristic backend.
     # After install, download the model: python -m spacy download en_core_web_sm
     "spacy>=3.7.0,<4.0.0",
+    # pdfplumber reads the licensed ASD-STE100 PDF by word position for the
+    # dictionary extraction tool (tools/ste_linter/dictionary/extract.py). It is
+    # needed only to build the local dictionary, not to run the linter.
+    "pdfplumber>=0.11.0",
 ]
 
 [project.urls]
