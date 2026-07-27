@@ -1326,6 +1326,29 @@ def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return earth_radius_km * c
 
 
+def _unwrap_v3_hosts(entries: list[Any]) -> list[str]:
+    """Return concrete hostname strings from a mixed v2/v3 CENR host list.
+
+    Why:
+        CENR is mid-migration from a flat ``list[str]`` (v2) to a list of
+        ``{"host": str, ...}`` dicts (v3). Every consumer must handle
+        both shapes or silently drop hosts, so this helper centralises
+        the unwrap so ``_iter_role_fqdns`` and future callers do not
+        each reinvent the v3-tolerant read.
+
+    Args:
+        entries: A raw list from the CENR file or a role's ``fqdns`` --
+            a mix of plain strings (v2), dicts with a ``host`` key (v3),
+            and possible falsy entries produced by upstream ``... or
+            []`` fallbacks.
+
+    Returns:
+        The concrete host string for every truthy entry, with v3 dict
+        entries unwrapped to their ``host`` value.
+    """
+    return [e["host"] if isinstance(e, dict) else e for e in entries if e]
+
+
 def _iter_role_fqdns(role: dict[str, Any], cenr: dict[str, Any]) -> list[str]:
     """Yield the concrete FQDN list for a single role, expanding CENR.
 
@@ -1345,15 +1368,8 @@ def _iter_role_fqdns(role: dict[str, Any], cenr: dict[str, Any]) -> list[str]:
     if role.get("role") == _TUNNEL_ZEN_ROLE:
         proxy = cenr.get("proxy_hostnames", []) or []  # v3 dicts or v2 flat strings
         vpn = cenr.get("vpn_hostnames", []) or []  # v3 dicts or v2 flat strings
-        combined = [*proxy, *vpn]  # merge before v3 unwrap
-        # Unwrap v3 dict entries {"host": ...} while tolerating legacy
-        # flat strings so mid-migration caches keep flowing through the URL
-        # builder without silently dropping every host.
-        return [e["host"] if isinstance(e, dict) else e for e in combined if e]
-    fqdns = role.get("fqdns") or []  # role-scoped list, mix of v2/v3 entries
-    # Same v3-dict unwrap for role-scoped FQDNs so non-tunnel_zen roles
-    # (pac, service_discovery, etc.) also survive the mid-migration mix.
-    return [e["host"] if isinstance(e, dict) else e for e in fqdns if e]
+        return _unwrap_v3_hosts([*proxy, *vpn])
+    return _unwrap_v3_hosts(role.get("fqdns") or [])
 
 
 def _build_probe_set(
@@ -1486,33 +1502,78 @@ def _build_region_probes(
         # so regional probes still fire (FR-003 spirit preserved).
         region = _DEFAULT_REGION  # emea fallback -- deliberate, per data-model.md
     target_role_name = f"{_SAMSUNG_ELM_ROLE_PREFIX}{region}"
-    result: dict[str, dict[str, Any]] = {}
     for role in probes_source.get("roles", []) or []:
-        if role.get("role") != target_role_name:
+        if role.get("role") == target_role_name:
+            return _build_regional_elm_probes(role, sources, target_role_name)
+    return {}
+
+
+def _build_regional_elm_probes(
+    role: dict[str, Any],
+    sources: tuple[dict[str, Any], dict[str, Any]],
+    target_role_name: str,
+) -> dict[str, dict[str, Any]]:
+    """Emit the ``{probe_name: probe_body}`` map for one Samsung ELM role.
+
+    Why:
+        Extracted from ``_build_region_probes`` so the outer helper can
+        stay under the project's CC<=10 gate. The inner loop is
+        catalogue-shape-specific (v3 dict / v2 flat unwrap plus wildcard
+        filtering), and the two concerns read more cleanly split apart.
+
+    Args:
+        role: The matched Samsung ELM role dict from ``probes_source``.
+        sources: The ``(probes, cenr)`` tuple; only ``cenr`` (index 1) is
+            passed through to ``_probe_target`` for probe-body wiring.
+        target_role_name: Precomputed ``samsung_elm_activation_<region>``
+            slug so the probe-name builder does not have to reconstruct
+            it.
+
+    Returns:
+        A ``{probe_name: probe_body}`` map for the resolved role.
+    """
+    result: dict[str, dict[str, Any]] = {}
+    for entry in role.get("fqdns") or []:
+        # Accept both v3 dict {"host": ...} and legacy flat strings so a
+        # mid-migration CENR cache does not silently drop every regional
+        # ELM host. The isinstance guard below already excludes non-strings,
+        # so unwrap up-front and let the wildcard filter proceed as before.
+        fqdn = entry.get("host") if isinstance(entry, dict) else entry
+        if not _is_concrete_probe_fqdn(fqdn):
             continue
-        for entry in role.get("fqdns") or []:
-            # Accept both v3 dict {"host": ...} and legacy flat strings so a
-            # mid-migration CENR cache does not silently drop every regional
-            # ELM host. The isinstance guard below already excludes non-strings,
-            # so unwrap up-front and let the wildcard filter proceed as before.
-            fqdn = entry.get("host") if isinstance(entry, dict) else entry
-            if not isinstance(fqdn, str) or fqdn.startswith("*."):
-                continue
-            probe_name = f"{_TOOL_NAME_PREFIX}{target_role_name}-{_fqdn_slug(fqdn)}"
-            # Regional ELM probes are never critical (source catalogue omits
-            # the flag), so aggressiveness is ``auto``.
-            target = _probe_target(fqdn, role, sources[1])
-            result[probe_name] = {
-                # Same target-shape classification as ``_build_probe_set``:
-                # HTTP/S URLs stay ``application``, bare host:port becomes
-                # ``reachability``. Regional ELM roles ship as HTTPS today
-                # but this future-proofs the emit path.
-                "type": _probe_type_for_target(target, role.get("type")),
-                "target": target,
-                "aggressiveness": _AUTO_AGGRESSIVENESS,
-            }
-        break
+        probe_name = f"{_TOOL_NAME_PREFIX}{target_role_name}-{_fqdn_slug(fqdn)}"
+        # Regional ELM probes are never critical (source catalogue omits
+        # the flag), so aggressiveness is ``auto``.
+        target = _probe_target(fqdn, role, sources[1])
+        result[probe_name] = {
+            # Same target-shape classification as ``_build_probe_set``:
+            # HTTP/S URLs stay ``application``, bare host:port becomes
+            # ``reachability``. Regional ELM roles ship as HTTPS today
+            # but this future-proofs the emit path.
+            "type": _probe_type_for_target(target, role.get("type")),
+            "target": target,
+            "aggressiveness": _AUTO_AGGRESSIVENESS,
+        }
     return result
+
+
+def _is_concrete_probe_fqdn(fqdn: Any) -> bool:
+    """Return ``True`` for a plain string FQDN that is not a wildcard.
+
+    Why:
+        Every probe-emitting loop drops wildcard entries (``*.example.com``)
+        because Mist synthetic probes require a resolvable single host.
+        Sharing the check centralises the filter and helps helpers stay
+        under the CC gate.
+
+    Args:
+        fqdn: A candidate value from a v3-dict unwrap or a v2 flat list.
+
+    Returns:
+        ``True`` if ``fqdn`` is a ``str`` and does not start with
+        ``"*."``; otherwise ``False``.
+    """
+    return isinstance(fqdn, str) and not fqdn.startswith("*.")
 
 
 # Compression rule: countries with at most this many distinct ZEN locations

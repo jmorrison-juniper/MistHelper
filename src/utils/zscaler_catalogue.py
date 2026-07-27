@@ -517,37 +517,83 @@ def _merge_observations_into_zcc(
         Total number of FQDN entries mutated across all roles.
     """
     stamped = 0
-    roles = doc.get("roles")
-    # Same list-vs-dict tolerance as `_promote_zcc_document`; keeps this walker
-    # shape-agnostic against hand-authored variants.
-    role_bodies: list[Any] = []
-    if isinstance(roles, list):
-        role_bodies = list(roles)
-    elif isinstance(roles, dict):
-        role_bodies = list(roles.values())
-    for role_body in role_bodies:
-        if not isinstance(role_body, dict):
-            continue
+    for role_body in _iter_zcc_role_bodies(doc):
         fqdns = role_body.get("fqdns")
         if not isinstance(fqdns, list):
             continue
         for entry in fqdns:
-            if not isinstance(entry, dict):
-                continue
-            host = entry.get("host")
-            if not isinstance(host, str):
-                continue
-            obs = observations.get(host)
-            if obs is None:
-                continue
-            protocol, port, ts = obs
-            entry["observed_protocol"] = protocol
-            entry["observed_port"] = port
-            # Match the CENR walker: silent hosts get a null triplet so the
-            # on-disk shape between the two files stays symmetric.
-            entry["last_probed"] = ts if protocol is not None else None
-            stamped += 1
+            if _stamp_zcc_entry(entry, observations):
+                stamped += 1
     return stamped
+
+
+def _iter_zcc_role_bodies(doc: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return the role-body dicts from a ZCC document regardless of container shape.
+
+    Why:
+        The ZCC catalogue is shape-tolerant on read: ``roles`` may be
+        stored as a list of dicts (the shipped shape) or as a dict of
+        role-name -> body (a hand-authored variant). Centralising the
+        unwrap here lets ``_merge_observations_into_zcc`` and future
+        callers walk role bodies without repeating the isinstance dance.
+
+    Args:
+        doc: Parsed ZCC probes document.
+
+    Returns:
+        A concrete list of role-body dicts. Non-dict entries and unknown
+        container shapes yield an empty list rather than raising, so the
+        caller can still return a zero-stamp count.
+    """
+    roles = doc.get("roles")
+    if isinstance(roles, list):
+        candidates: list[Any] = list(roles)
+    elif isinstance(roles, dict):
+        candidates = list(roles.values())
+    else:
+        candidates = []
+    return [item for item in candidates if isinstance(item, dict)]
+
+
+def _stamp_zcc_entry(
+    entry: Any,
+    observations: dict[str, tuple[str | None, int | None, str]],
+) -> bool:
+    """Stamp one ``fqdns[]`` entry with its matching observation, in place.
+
+    Why:
+        The inner per-entry logic (v3 dict guard + host lookup + triplet
+        write with silent-host null semantics) is trivial on its own but
+        pushed ``_merge_observations_into_zcc`` above the CC gate.
+        Splitting it keeps the outer walker at the level of "roles ->
+        fqdns" and this helper at the level of "one entry -> one
+        observation".
+
+    Args:
+        entry: Candidate ``fqdns[]`` item. Only dict entries with a
+            string ``host`` are eligible; every other shape is skipped.
+        observations: The ``fqdn -> (protocol, port, iso8601_utc)`` map
+            passed through from :func:`_merge_observations_into_zcc`.
+
+    Returns:
+        ``True`` if the entry was stamped (observation matched a probed
+        host); ``False`` if it was skipped or had no observation.
+    """
+    if not isinstance(entry, dict):
+        return False
+    host = entry.get("host")
+    if not isinstance(host, str):
+        return False
+    obs = observations.get(host)
+    if obs is None:
+        return False
+    protocol, port, ts = obs
+    entry["observed_protocol"] = protocol
+    entry["observed_port"] = port
+    # Match the CENR walker: silent hosts get a null triplet so the
+    # on-disk shape between the two files stays symmetric.
+    entry["last_probed"] = ts if protocol is not None else None
+    return True
 
 
 def is_stale(cenr: dict[str, Any]) -> bool:
@@ -831,6 +877,35 @@ def _atomic_write_json(path: Path, doc: dict[str, Any]) -> None:
         raise
 
 
+def _load_stale_cenr_cache(cenr_path: Path, warnings: list[str]) -> dict[str, Any]:
+    """Return the on-disk stale CENR dict when every cloud fetch fails.
+
+    Why:
+        Extracted from :func:`refresh_cenr` so the total-failure fallback
+        does not add branches to the outer function (Radon CC>10 gate). Fails
+        open: a missing file, an unreadable file, or non-dict JSON all return
+        an empty dict plus a captured warning so menu 206 keeps running.
+
+    Args:
+        cenr_path: Path to ``data/zscaler_cenr_hostnames.json``. May not
+            exist; a missing file is a packaging error, not a crash.
+        warnings: Mutable warning list from the caller. Appended in place
+            with any read or decode failure so the caller can log them.
+
+    Returns:
+        The stale-but-valid CENR dict, or an empty dict when the file is
+        missing, unreadable, or does not decode to a dict.
+    """
+    if not cenr_path.is_file():
+        return {}
+    try:
+        stale = json.loads(cenr_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        warnings.append(f"stale cache read failed: {exc}")
+        return {}
+    return stale if isinstance(stale, dict) else {}
+
+
 def refresh_cenr(cenr_path: Path) -> tuple[dict[str, Any], list[str]]:
     """Fetch every Zscaler cloud, merge, decorate, and rewrite ``cenr_path``.
 
@@ -865,18 +940,9 @@ def refresh_cenr(cenr_path: Path) -> tuple[dict[str, Any], list[str]]:
         per_cloud[cloud] = doc
 
     if not per_cloud:
-        # Total failure: keep whatever is on disk (or an empty dict if the
-        # file is missing) so callers can degrade gracefully.
         warnings.append("all Zscaler cloud fetches failed; keeping stale cache at " f"{cenr_path}")
         logger.warning(warnings[-1])
-        if cenr_path.is_file():
-            try:
-                stale = json.loads(cenr_path.read_text(encoding="utf-8"))
-                if isinstance(stale, dict):
-                    return stale, warnings
-            except (OSError, json.JSONDecodeError) as exc:
-                warnings.append(f"stale cache read failed: {exc}")
-        return {}, warnings
+        return _load_stale_cenr_cache(cenr_path, warnings), warnings
 
     merged = merge_clouds(per_cloud)
     merged, city_warnings = attach_city_metadata(merged)
