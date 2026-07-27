@@ -1,0 +1,19 @@
+{
+    "_comment": [
+        "Missing-observations sidecar for cenr_dedup_org.json (feature 1025 US1).",
+        "Enumerates the 7 SecB2B catalogue hosts that MUST be absent from the",
+        "loaded CENR observation cache so the CENR-fallback code path fires and",
+        "each host contributes exactly one load-time WARNING after 1025 lands.",
+        "Consumers construct a probes/cenr tuple where these hosts appear in the",
+        "catalogue but NOT in cenr.proxy_hostnames / cenr.vpn_hostnames."
+    ],
+    "missing_hosts": [
+        "gslb.secb2b.com",
+        "us-elm.secb2b.com",
+        "us-prod-klm-b2c.secb2b.com",
+        "us-prod-klm.secb2b.com",
+        "eu-elm.secb2b.com",
+        "eu-prod-klm-b2c.secb2b.com",
+        "eu-prod-klm.secb2b.com"
+    ]
+}

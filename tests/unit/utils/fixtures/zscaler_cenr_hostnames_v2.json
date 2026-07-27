@@ -1,0 +1,4069 @@
+{
+  "schema_version": 2,
+  "fetched_utc": "2026-07-25T23:27:03Z",
+  "source_urls": [
+    "https://config.zscaler.com/api/zscaler.net/cenr/json",
+    "https://config.zscaler.com/api/zscalerbeta.net/cenr/json",
+    "https://config.zscaler.com/api/zscalergov.net/cenr/json",
+    "https://config.zscaler.com/api/zscalerone.net/cenr/json",
+    "https://config.zscaler.com/api/zscalerthree.net/cenr/json",
+    "https://config.zscaler.com/api/zscalertwo.net/cenr/json",
+    "https://config.zscaler.com/api/zscloud.net/cenr/json"
+  ],
+  "description": "Merged Zscaler Cloud Enforcement Node Ranges (CENR) hostnames across all Zscaler public clouds. Auto-refreshed by src/utils/zscaler_catalogue.py every 8 hours.",
+  "probe_default": {
+    "protocol": "https",
+    "port": 443,
+    "ignore_cert": false,
+    "reason": "ZEN edges terminate TLS on 443; ignore_cert is left False so certificate rotations at Zscaler surface as probe failures."
+  },
+  "proxy_hostnames": [
+    "Mad3.sme.zscaler.net",
+    "Mad3.sme.zscalerthree.net",
+    "Mad3.sme.zscalertwo.net",
+    "Mad3.sme.zscloud.net",
+    "Man1.sme.zscaler.net",
+    "Man1.sme.zscalerthree.net",
+    "Man1.sme.zscalertwo.net",
+    "Man1.sme.zscloud.net",
+    "akl2.sme.zscaler.net",
+    "akl2.sme.zscalerthree.net",
+    "akl2.sme.zscalertwo.net",
+    "akl2.sme.zscloud.net",
+    "ams2-2.sme.zscaler.net",
+    "ams2-2.sme.zscalerthree.net",
+    "ams2-2.sme.zscalertwo.net",
+    "ams2-2.sme.zscloud.net",
+    "ams2.sme.zscaler.net",
+    "ams2.sme.zscalerthree.net",
+    "ams2.sme.zscalertwo.net",
+    "ams2.sme.zscloud.net",
+    "ams3.sme.zscaler.net",
+    "ams3.sme.zscalerthree.net",
+    "ams3.sme.zscalertwo.net",
+    "ams3.sme.zscloud.net",
+    "atl2-2.sme.zscalertwo.net",
+    "atl2.sme.zscaler.net",
+    "atl2.sme.zscalerthree.net",
+    "atl2.sme.zscalertwo.net",
+    "atl2.sme.zscloud.net",
+    "atl3.sme.zscaler.net",
+    "atl3.sme.zscalerthree.net",
+    "atl3.sme.zscalertwo.net",
+    "atl3.sme.zscloud.net",
+    "bjs1.sme.zscaler.net",
+    "bjs1.sme.zscalerthree.net",
+    "bjs1.sme.zscalertwo.net",
+    "bjs1.sme.zscloud.net",
+    "bjs3.sme.zscaler.net",
+    "bjs3.sme.zscalerthree.net",
+    "bjs3.sme.zscalertwo.net",
+    "bjs3.sme.zscloud.net",
+    "bog1-2.sme.zscaler.net",
+    "bog1-2.sme.zscalerthree.net",
+    "bog1-2.sme.zscalertwo.net",
+    "bog1-2.sme.zscloud.net",
+    "bog1.sme.zscaler.net",
+    "bog1.sme.zscalerthree.net",
+    "bog1.sme.zscalertwo.net",
+    "bog1.sme.zscloud.net",
+    "bom4.sme.zscaler.net",
+    "bom6.sme.zscaler.net",
+    "bom6.sme.zscalerthree.net",
+    "bom6.sme.zscalertwo.net",
+    "bom6.sme.zscloud.net",
+    "bom7.sme.zscaler.net",
+    "bom7.sme.zscalerthree.net",
+    "bom7.sme.zscalertwo.net",
+    "bom7.sme.zscloud.net",
+    "bos1.sme.zscaler.net",
+    "bos1.sme.zscalerthree.net",
+    "bos1.sme.zscalertwo.net",
+    "bos1.sme.zscloud.net",
+    "bru2.sme.zscaler.net",
+    "bru2.sme.zscalerthree.net",
+    "bru2.sme.zscalertwo.net",
+    "bru2.sme.zscloud.net",
+    "bue1-2.sme.zscaler.net",
+    "bue1-2.sme.zscalerthree.net",
+    "bue1-2.sme.zscalertwo.net",
+    "bue1-2.sme.zscloud.net",
+    "bue1.sme.zscaler.net",
+    "bue1.sme.zscalerthree.net",
+    "bue1.sme.zscalertwo.net",
+    "bue1.sme.zscloud.net",
+    "cbr1.sme.zscaler.net",
+    "cbr1.sme.zscalerthree.net",
+    "cbr1.sme.zscalertwo.net",
+    "cbr1.sme.zscloud.net",
+    "ccu1.sme.zscaler.net",
+    "ccu1.sme.zscalerthree.net",
+    "ccu1.sme.zscalertwo.net",
+    "ccu1.sme.zscloud.net",
+    "chi1-2.sme.zscaler.net",
+    "chi1-2.sme.zscalergov.net",
+    "chi1-2.sme.zscalerthree.net",
+    "chi1-2.sme.zscalertwo.net",
+    "chi1-2.sme.zscloud.net",
+    "chi1.sme.zscaler.net",
+    "chi1.sme.zscalerthree.net",
+    "chi1.sme.zscalertwo.net",
+    "chi1.sme.zscloud.net",
+    "chi2.sme.zscaler.net",
+    "chi2.sme.zscalerthree.net",
+    "chi2.sme.zscalertwo.net",
+    "chi2.sme.zscloud.net",
+    "cph2.sme.zscaler.net",
+    "cph2.sme.zscalerthree.net",
+    "cph2.sme.zscalertwo.net",
+    "cph2.sme.zscloud.net",
+    "cpt4.sme.zscaler.net",
+    "cpt4.sme.zscalerone.net",
+    "cpt4.sme.zscalerthree.net",
+    "cpt4.sme.zscalertwo.net",
+    "cpt4.sme.zscloud.net",
+    "del1.sme.zscaler.net",
+    "del1.sme.zscalerthree.net",
+    "del1.sme.zscalertwo.net",
+    "del1.sme.zscloud.net",
+    "den3.sme.zscaler.net",
+    "den3.sme.zscalerthree.net",
+    "den3.sme.zscalertwo.net",
+    "den3.sme.zscloud.net",
+    "dfw1-2.sme.zscaler.net",
+    "dfw1-2.sme.zscalerthree.net",
+    "dfw1-2.sme.zscalertwo.net",
+    "dfw1-2.sme.zscloud.net",
+    "dfw1.sme.zscalerthree.net",
+    "dfw1.sme.zscalertwo.net",
+    "dfw1.sme.zscloud.net",
+    "dfw2.sme.zscaler.net",
+    "dfw2.sme.zscalerthree.net",
+    "dfw2.sme.zscalertwo.net",
+    "dfw2.sme.zscloud.net",
+    "dus1.sme.zscaler.net",
+    "dus1.sme.zscalerthree.net",
+    "dus1.sme.zscalertwo.net",
+    "dus1.sme.zscloud.net",
+    "dxb1-2.sme.zscloud.net",
+    "dxb1.sme.zscaler.net",
+    "dxb1.sme.zscalerthree.net",
+    "dxb1.sme.zscalertwo.net",
+    "fra4-2.sme.zscaler.net",
+    "fra4-2.sme.zscalerthree.net",
+    "fra4-2.sme.zscalertwo.net",
+    "fra4-2.sme.zscloud.net",
+    "fra4.sme.zscaler.net",
+    "fra4.sme.zscalerbeta.net",
+    "fra4.sme.zscalertwo.net",
+    "fra4.sme.zscloud.net",
+    "fra6.sme.zscaler.net",
+    "fra6.sme.zscalerthree.net",
+    "fra6.sme.zscalertwo.net",
+    "fra6.sme.zscloud.net",
+    "hel1.sme.zscaler.net",
+    "hel1.sme.zscalerthree.net",
+    "hel1.sme.zscalertwo.net",
+    "hel1.sme.zscloud.net",
+    "hkg3.sme.zscaler.net",
+    "hkg3.sme.zscalerthree.net",
+    "hkg3.sme.zscalertwo.net",
+    "hkg3.sme.zscloud.net",
+    "hyd1.sme.zscaler.net",
+    "hyd1.sme.zscalerthree.net",
+    "hyd1.sme.zscalertwo.net",
+    "hyd1.sme.zscloud.net",
+    "jnb3.sme.zscaler.net",
+    "jnb3.sme.zscalerone.net",
+    "jnb3.sme.zscalerthree.net",
+    "jnb3.sme.zscalertwo.net",
+    "jnb3.sme.zscloud.net",
+    "ksa1.sme.zscaler.net",
+    "ksa1.sme.zscalerthree.net",
+    "ksa1.sme.zscalertwo.net",
+    "ksa1.sme.zscloud.net",
+    "kul1.sme.zscaler.net",
+    "kul2.sme.zscaler.net",
+    "kul2.sme.zscalerthree.net",
+    "kul2.sme.zscalertwo.net",
+    "kul2.sme.zscloud.net",
+    "lis1.sme.zscaler.net",
+    "lis1.sme.zscalerthree.net",
+    "lis1.sme.zscalertwo.net",
+    "lis1.sme.zscloud.net",
+    "lon3-2.sme.zscalertwo.net",
+    "lon3-2.sme.zscloud.net",
+    "lon3.sme.zscaler.net",
+    "lon3.sme.zscalerone.net",
+    "lon3.sme.zscalerthree.net",
+    "lon3.sme.zscalertwo.net",
+    "lon3.sme.zscloud.net",
+    "lon5.sme.zscaler.net",
+    "lon5.sme.zscalerthree.net",
+    "lon5.sme.zscalertwo.net",
+    "lon5.sme.zscloud.net",
+    "los2.sme.zscaler.net",
+    "los2.sme.zscalerthree.net",
+    "los2.sme.zscalertwo.net",
+    "los2.sme.zscloud.net",
+    "los3.sme.zscaler.net",
+    "los3.sme.zscalerthree.net",
+    "los3.sme.zscalertwo.net",
+    "los3.sme.zscloud.net",
+    "maa1.sme.zscaler.net",
+    "maa2.sme.zscaler.net",
+    "maa2.sme.zscalerthree.net",
+    "maa2.sme.zscalertwo.net",
+    "maa2.sme.zscloud.net",
+    "maa3.sme.zscaler.net",
+    "maa3.sme.zscalerthree.net",
+    "maa3.sme.zscalertwo.net",
+    "maa3.sme.zscloud.net",
+    "mad4.sme.zscaler.net",
+    "mad4.sme.zscalerthree.net",
+    "mad4.sme.zscalertwo.net",
+    "mad4.sme.zscloud.net",
+    "man2.sme.zscaler.net",
+    "man2.sme.zscalerthree.net",
+    "man2.sme.zscalertwo.net",
+    "man2.sme.zscloud.net",
+    "mel2.sme.zscaler.net",
+    "mel2.sme.zscalerthree.net",
+    "mel2.sme.zscalertwo.net",
+    "mel2.sme.zscloud.net",
+    "mex1.sme.zscaler.net",
+    "mex1.sme.zscalerthree.net",
+    "mex1.sme.zscalertwo.net",
+    "mex1.sme.zscloud.net",
+    "mex2.sme.zscaler.net",
+    "mex2.sme.zscalerthree.net",
+    "mex2.sme.zscalertwo.net",
+    "mex2.sme.zscloud.net",
+    "mia3.sme.zscaler.net",
+    "mia3.sme.zscalerthree.net",
+    "mia3.sme.zscalertwo.net",
+    "mia3.sme.zscloud.net",
+    "mia4.sme.zscaler.net",
+    "mia4.sme.zscalerthree.net",
+    "mia4.sme.zscalertwo.net",
+    "mia4.sme.zscloud.net",
+    "mil3.sme.zscaler.net",
+    "mil3.sme.zscalerthree.net",
+    "mil3.sme.zscalertwo.net",
+    "mil3.sme.zscloud.net",
+    "mrs1.sme.zscaler.net",
+    "mrs1.sme.zscalerthree.net",
+    "mrs1.sme.zscalertwo.net",
+    "mrs1.sme.zscloud.net",
+    "muc1.sme.zscaler.net",
+    "muc1.sme.zscalerthree.net",
+    "muc1.sme.zscalertwo.net",
+    "muc1.sme.zscloud.net",
+    "nld1.sme.zscaler.net",
+    "nld1.sme.zscalerthree.net",
+    "nld1.sme.zscalertwo.net",
+    "nld1.sme.zscloud.net",
+    "nyc3.sme.zscaler.net",
+    "nyc3.sme.zscalerone.net",
+    "nyc3.sme.zscalerthree.net",
+    "nyc3.sme.zscalertwo.net",
+    "nyc3.sme.zscloud.net",
+    "nyc4.sme.zscaler.net",
+    "nyc4.sme.zscalerthree.net",
+    "nyc4.sme.zscalertwo.net",
+    "nyc4.sme.zscloud.net",
+    "osa1.sme.zscaler.net",
+    "osa1.sme.zscalerthree.net",
+    "osa1.sme.zscalertwo.net",
+    "osa1.sme.zscloud.net",
+    "osl3.sme.zscaler.net",
+    "osl3.sme.zscalerthree.net",
+    "osl3.sme.zscalertwo.net",
+    "osl3.sme.zscloud.net",
+    "par2-2.sme.zscaler.net",
+    "par2-2.sme.zscalerthree.net",
+    "par2-2.sme.zscalertwo.net",
+    "par2-2.sme.zscloud.net",
+    "par2.sme.zscaler.net",
+    "par2.sme.zscalertwo.net",
+    "par2.sme.zscloud.net",
+    "par4.sme.zscaler.net",
+    "par4.sme.zscalerthree.net",
+    "par4.sme.zscalertwo.net",
+    "par4.sme.zscloud.net",
+    "per1.sme.zscaler.net",
+    "per1.sme.zscalerthree.net",
+    "per1.sme.zscalertwo.net",
+    "per1.sme.zscloud.net",
+    "qla1.sme.zscaler.net",
+    "qla1.sme.zscalerthree.net",
+    "qla1.sme.zscalertwo.net",
+    "qla1.sme.zscloud.net",
+    "qla2.sme.zscaler.net",
+    "qla2.sme.zscalerthree.net",
+    "qla2.sme.zscalertwo.net",
+    "qla2.sme.zscloud.net",
+    "rio1.sme.zscaler.net",
+    "rio1.sme.zscalerthree.net",
+    "rio1.sme.zscalertwo.net",
+    "rio1.sme.zscloud.net",
+    "sao2-2.sme.zscaler.net",
+    "sao2-2.sme.zscalerthree.net",
+    "sao2-2.sme.zscalertwo.net",
+    "sao2-2.sme.zscloud.net",
+    "sao2.sme.zscaler.net",
+    "sao2.sme.zscalertwo.net",
+    "sao2.sme.zscloud.net",
+    "sao4.sme.zscaler.net",
+    "sao4.sme.zscalerthree.net",
+    "sao4.sme.zscalertwo.net",
+    "sao4.sme.zscloud.net",
+    "scl1-2.sme.zscaler.net",
+    "scl1-2.sme.zscalerthree.net",
+    "scl1-2.sme.zscalertwo.net",
+    "scl1-2.sme.zscloud.net",
+    "scl1.sme.zscaler.net",
+    "scl1.sme.zscalerthree.net",
+    "scl1.sme.zscalertwo.net",
+    "scl1.sme.zscloud.net",
+    "scl2.sme.zscaler.net",
+    "scl2.sme.zscalerthree.net",
+    "scl2.sme.zscalertwo.net",
+    "scl2.sme.zscloud.net",
+    "sea1.sme.zscaler.net",
+    "sea1.sme.zscalerthree.net",
+    "sea1.sme.zscalertwo.net",
+    "sea1.sme.zscloud.net",
+    "sel1.sme.zscaler.net",
+    "sel1.sme.zscalerthree.net",
+    "sel1.sme.zscalertwo.net",
+    "sel1.sme.zscloud.net",
+    "sha1.sme.zscaler.net",
+    "sha1.sme.zscalerthree.net",
+    "sha1.sme.zscalertwo.net",
+    "sha1.sme.zscloud.net",
+    "sha2.sme.zscaler.net",
+    "sha2.sme.zscalerthree.net",
+    "sha2.sme.zscalertwo.net",
+    "sha2.sme.zscloud.net",
+    "sin4.sme.zscaler.net",
+    "sin4.sme.zscalerbeta.net",
+    "sin4.sme.zscalergov.net",
+    "sin4.sme.zscalerthree.net",
+    "sin4.sme.zscalertwo.net",
+    "sin4.sme.zscloud.net",
+    "sin5.sme.zscaler.net",
+    "sin5.sme.zscalerthree.net",
+    "sin5.sme.zscalertwo.net",
+    "sin5.sme.zscloud.net",
+    "sjc4-2.sme.zscaler.net",
+    "sjc4-2.sme.zscalergov.net",
+    "sjc4-2.sme.zscalerthree.net",
+    "sjc4-2.sme.zscalertwo.net",
+    "sjc4-2.sme.zscloud.net",
+    "sjc4.sme.zscaler.net",
+    "sjc4.sme.zscalerbeta.net",
+    "sjc4.sme.zscalerthree.net",
+    "sjc4.sme.zscalertwo.net",
+    "sjc4.sme.zscloud.net",
+    "sto3.sme.zscaler.net",
+    "sto3.sme.zscalerthree.net",
+    "sto3.sme.zscalertwo.net",
+    "sto3.sme.zscloud.net",
+    "syd3.sme.zscaler.net",
+    "syd3.sme.zscalerthree.net",
+    "syd3.sme.zscalertwo.net",
+    "syd3.sme.zscloud.net",
+    "syd5.sme.zscaler.net",
+    "syd5.sme.zscalerthree.net",
+    "syd5.sme.zscalertwo.net",
+    "syd5.sme.zscloud.net",
+    "tlv2.sme.zscaler.net",
+    "tlv2.sme.zscalerthree.net",
+    "tlv2.sme.zscalertwo.net",
+    "tlv2.sme.zscloud.net",
+    "tpe2.sme.zscaler.net",
+    "tpe2.sme.zscalerthree.net",
+    "tpe2.sme.zscalertwo.net",
+    "tpe2.sme.zscloud.net",
+    "tsn1.sme.zscaler.net",
+    "tsn1.sme.zscalertwo.net",
+    "tsn1.sme.zscloud.net",
+    "tyo4-2.sme.zscloud.net",
+    "tyo4.sme.zscaler.net",
+    "tyo4.sme.zscalerthree.net",
+    "tyo4.sme.zscalertwo.net",
+    "tyo4.sme.zscloud.net",
+    "tyo5.sme.zscaler.net",
+    "tyo5.sme.zscalerthree.net",
+    "tyo5.sme.zscalertwo.net",
+    "tyo5.sme.zscloud.net",
+    "uro1.sme.zscaler.net",
+    "uro1.sme.zscalerthree.net",
+    "uro1.sme.zscalertwo.net",
+    "uro1.sme.zscloud.net",
+    "vie1.sme.zscaler.net",
+    "vie1.sme.zscalerthree.net",
+    "vie1.sme.zscalertwo.net",
+    "vie1.sme.zscloud.net",
+    "was1-2.sme.zscaler.net",
+    "was1-2.sme.zscalergov.net",
+    "was1-2.sme.zscalerthree.net",
+    "was1-2.sme.zscalertwo.net",
+    "was1-2.sme.zscloud.net",
+    "was1.sme.zscaler.net",
+    "was1.sme.zscalerbeta.net",
+    "was1.sme.zscalerthree.net",
+    "was1.sme.zscalertwo.net",
+    "was1.sme.zscloud.net",
+    "was4.sme.zscaler.net",
+    "was4.sme.zscalerbeta.net",
+    "was4.sme.zscalerthree.net",
+    "was4.sme.zscalertwo.net",
+    "was4.sme.zscloud.net",
+    "waw2.sme.zscaler.net",
+    "waw2.sme.zscalerthree.net",
+    "waw2.sme.zscalertwo.net",
+    "waw2.sme.zscloud.net",
+    "ymq1.sme.zscaler.net",
+    "ymq1.sme.zscalerthree.net",
+    "ymq1.sme.zscalertwo.net",
+    "ymq1.sme.zscloud.net",
+    "yto3.sme.zscaler.net",
+    "yto3.sme.zscalerthree.net",
+    "yto3.sme.zscalertwo.net",
+    "yto3.sme.zscloud.net",
+    "yvr1.sme.zscaler.net",
+    "yvr1.sme.zscalerthree.net",
+    "yvr1.sme.zscalertwo.net",
+    "yvr1.sme.zscloud.net",
+    "zrh1-2.sme.zscaler.net",
+    "zrh1-2.sme.zscalertwo.net",
+    "zrh1-2.sme.zscloud.net",
+    "zrh1.sme.zscalerbeta.net",
+    "zrh1.sme.zscalergov.net",
+    "zrh1.sme.zscalerthree.net"
+  ],
+  "vpn_hostnames": [
+    "Mad3-vpn.zscaler.net",
+    "Mad3-vpn.zscalerthree.net",
+    "Mad3-vpn.zscalertwo.net",
+    "Mad3-vpn.zscloud.net",
+    "Man1-vpn.zscaler.net",
+    "Man1-vpn.zscalerthree.net",
+    "Man1-vpn.zscalertwo.net",
+    "Man1-vpn.zscloud.net",
+    "akl2-vpn.zscaler.net",
+    "akl2-vpn.zscalerthree.net",
+    "akl2-vpn.zscalertwo.net",
+    "akl2-vpn.zscloud.net",
+    "ams2-2-vpn.zscaler.net",
+    "ams2-2-vpn.zscalerthree.net",
+    "ams2-2-vpn.zscalertwo.net",
+    "ams2-2-vpn.zscloud.net",
+    "ams2-vpn.zscalerthree.net",
+    "ams3-vpn.zscaler.net",
+    "ams3-vpn.zscalerthree.net",
+    "ams3-vpn.zscalertwo.net",
+    "ams3-vpn.zscloud.net",
+    "amsterdam2-vpn.zscaler.net",
+    "amsterdam2-vpn.zscalertwo.net",
+    "amsterdam2-vpn.zscloud.net",
+    "atl2-2-vpn.zscalertwo.net",
+    "atl2-vpn.zscaler.net",
+    "atl2-vpn.zscalerthree.net",
+    "atl2-vpn.zscalertwo.net",
+    "atl2-vpn.zscloud.net",
+    "atl3-vpn.zscaler.net",
+    "atl3-vpn.zscalerthree.net",
+    "atl3-vpn.zscalertwo.net",
+    "atl3-vpn.zscloud.net",
+    "bjs1-vpn.zscaler.net",
+    "bjs1-vpn.zscalerthree.net",
+    "bjs1-vpn.zscalertwo.net",
+    "bjs1-vpn.zscloud.net",
+    "bjs3-vpn.zscaler.net",
+    "bjs3-vpn.zscalerthree.net",
+    "bjs3-vpn.zscalertwo.net",
+    "bjs3-vpn.zscloud.net",
+    "bog1-2-vpn.zscaler.net",
+    "bog1-2-vpn.zscalerthree.net",
+    "bog1-2-vpn.zscalertwo.net",
+    "bog1-2-vpn.zscloud.net",
+    "bog1-vpn.zscaler.net",
+    "bog1-vpn.zscalerthree.net",
+    "bog1-vpn.zscalertwo.net",
+    "bog1-vpn.zscloud.net",
+    "bom4-vpn.zscaler.net",
+    "bom6-vpn.zscaler.net",
+    "bom6-vpn.zscalerthree.net",
+    "bom6-vpn.zscalertwo.net",
+    "bom6-vpn.zscloud.net",
+    "bom7-vpn.zscaler.net",
+    "bom7-vpn.zscalerthree.net",
+    "bom7-vpn.zscalertwo.net",
+    "bom7-vpn.zscloud.net",
+    "bos1-vpn.zscaler.net",
+    "bos1-vpn.zscalerthree.net",
+    "bos1-vpn.zscalertwo.net",
+    "bos1-vpn.zscloud.net",
+    "bru2-vpn.zscaler.net",
+    "bru2-vpn.zscalerthree.net",
+    "bru2-vpn.zscalertwo.net",
+    "bru2-vpn.zscloud.net",
+    "bue1-2-vpn.zscaler.net",
+    "bue1-2-vpn.zscalerthree.net",
+    "bue1-2-vpn.zscalertwo.net",
+    "bue1-2-vpn.zscloud.net",
+    "bue1-vpn.zscaler.net",
+    "bue1-vpn.zscalerthree.net",
+    "bue1-vpn.zscalertwo.net",
+    "bue1-vpn.zscloud.net",
+    "cbr1-vpn.zscaler.net",
+    "cbr1-vpn.zscalerthree.net",
+    "cbr1-vpn.zscalertwo.net",
+    "cbr1-vpn.zscloud.net",
+    "ccu1-vpn.zscaler.net",
+    "ccu1-vpn.zscalerthree.net",
+    "ccu1-vpn.zscalertwo.net",
+    "ccu1-vpn.zscloud.net",
+    "chi1-2-vpn.zscaler.net",
+    "chi1-2-vpn.zscalergov.net",
+    "chi1-2-vpn.zscalerthree.net",
+    "chi1-2-vpn.zscalertwo.net",
+    "chi1-2-vpn.zscloud.net",
+    "chi1-vpn.zscaler.net",
+    "chi1-vpn.zscalerthree.net",
+    "chi1-vpn.zscalertwo.net",
+    "chi1-vpn.zscloud.net",
+    "chi2-vpn.zscaler.net",
+    "chi2-vpn.zscalerthree.net",
+    "chi2-vpn.zscalertwo.net",
+    "chi2-vpn.zscloud.net",
+    "cph2-vpn.zscaler.net",
+    "cph2-vpn.zscalerthree.net",
+    "cph2-vpn.zscalertwo.net",
+    "cph2-vpn.zscloud.net",
+    "cpt4-vpn.zscaler.net",
+    "cpt4-vpn.zscalerone.net",
+    "cpt4-vpn.zscalerthree.net",
+    "cpt4-vpn.zscalertwo.net",
+    "cpt4-vpn.zscloud.net",
+    "del1-vpn.zscaler.net",
+    "del1-vpn.zscalerthree.net",
+    "del1-vpn.zscalertwo.net",
+    "del1-vpn.zscloud.net",
+    "den3-vpn.zscaler.net",
+    "den3-vpn.zscalerthree.net",
+    "den3-vpn.zscalertwo.net",
+    "den3-vpn.zscloud.net",
+    "dfw1-2-vpn.zscaler.net",
+    "dfw1-2-vpn.zscalerthree.net",
+    "dfw1-2-vpn.zscalertwo.net",
+    "dfw1-2-vpn.zscloud.net",
+    "dfw1-vpn.zscalerthree.net",
+    "dfw1-vpn.zscalertwo.net",
+    "dfw1-vpn.zscloud.net",
+    "dfw2-vpn.zscaler.net",
+    "dfw2-vpn.zscalerthree.net",
+    "dfw2-vpn.zscalertwo.net",
+    "dfw2-vpn.zscloud.net",
+    "dus1-vpn.zscaler.net",
+    "dus1-vpn.zscalerthree.net",
+    "dus1-vpn.zscalertwo.net",
+    "dus1-vpn.zscloud.net",
+    "dxb1-vpn.zscaler.net",
+    "dxb1-vpn.zscalerthree.net",
+    "dxb1-vpn.zscalertwo.net",
+    "dxb1-vpn.zscloud.net",
+    "fra4-2-vpn.zscaler.net",
+    "fra4-2-vpn.zscalerthree.net",
+    "fra4-2-vpn.zscalertwo.net",
+    "fra4-2-vpn.zscloud.net",
+    "fra4-vpn.zscaler.net",
+    "fra4-vpn.zscalerbeta.net",
+    "fra4-vpn.zscalertwo.net",
+    "fra4-vpn.zscloud.net",
+    "fra6-vpn.zscaler.net",
+    "fra6-vpn.zscalerthree.net",
+    "fra6-vpn.zscalertwo.net",
+    "fra6-vpn.zscloud.net",
+    "hel1-vpn.zscaler.net",
+    "hel1-vpn.zscalerthree.net",
+    "hel1-vpn.zscalertwo.net",
+    "hel1-vpn.zscloud.net",
+    "hkg3-vpn.zscaler.net",
+    "hkg3-vpn.zscalerthree.net",
+    "hkg3-vpn.zscalertwo.net",
+    "hkg3-vpn.zscloud.net",
+    "hyd1-vpn.zscaler.net",
+    "hyd1-vpn.zscalerthree.net",
+    "hyd1-vpn.zscalertwo.net",
+    "hyd1-vpn.zscloud.net",
+    "jnb3-vpn.zscaler.net",
+    "jnb3-vpn.zscalerone.net",
+    "jnb3-vpn.zscalerthree.net",
+    "jnb3-vpn.zscalertwo.net",
+    "jnb3-vpn.zscloud.net",
+    "ksa1-vpn.zscaler.net",
+    "ksa1-vpn.zscalerthree.net",
+    "ksa1-vpn.zscalertwo.net",
+    "ksa1-vpn.zscloud.net",
+    "kul1-vpn.zscaler.net",
+    "kul2-vpn.zscaler.net",
+    "kul2-vpn.zscalerthree.net",
+    "kul2-vpn.zscalertwo.net",
+    "kul2-vpn.zscloud.net",
+    "lis1-vpn.zscaler.net",
+    "lis1-vpn.zscalerthree.net",
+    "lis1-vpn.zscalertwo.net",
+    "lis1-vpn.zscloud.net",
+    "lon3-2-vpn.zscalertwo.net",
+    "lon3-2-vpn.zscloud.net",
+    "lon3-vpn.zscaler.net",
+    "lon3-vpn.zscalerone.net",
+    "lon3-vpn.zscalerthree.net",
+    "lon3-vpn.zscalertwo.net",
+    "lon3-vpn.zscloud.net",
+    "lon5-vpn.zscaler.net",
+    "lon5-vpn.zscalerthree.net",
+    "lon5-vpn.zscalertwo.net",
+    "lon5-vpn.zscloud.net",
+    "los2-vpn.zscaler.net",
+    "los2-vpn.zscalerthree.net",
+    "los2-vpn.zscalertwo.net",
+    "los2-vpn.zscloud.net",
+    "los3-vpn.zscaler.net",
+    "los3-vpn.zscalerthree.net",
+    "los3-vpn.zscalertwo.net",
+    "los3-vpn.zscloud.net",
+    "maa1-vpn.zscaler.net",
+    "maa2-vpn.zscaler.net",
+    "maa2-vpn.zscalerthree.net",
+    "maa2-vpn.zscalertwo.net",
+    "maa2-vpn.zscloud.net",
+    "maa3-vpn.zscaler.net",
+    "maa3-vpn.zscalerthree.net",
+    "maa3-vpn.zscalertwo.net",
+    "maa3-vpn.zscloud.net",
+    "mad4-vpn.zscaler.net",
+    "mad4-vpn.zscalerthree.net",
+    "mad4-vpn.zscalertwo.net",
+    "mad4-vpn.zscloud.net",
+    "man2-vpn.zscaler.net",
+    "man2-vpn.zscalerthree.net",
+    "man2-vpn.zscalertwo.net",
+    "man2-vpn.zscloud.net",
+    "mel2-vpn.zscaler.net",
+    "mel2-vpn.zscalerthree.net",
+    "mel2-vpn.zscalertwo.net",
+    "mel2-vpn.zscloud.net",
+    "mex1-vpn.zscaler.net",
+    "mex1-vpn.zscalerthree.net",
+    "mex1-vpn.zscalertwo.net",
+    "mex1-vpn.zscloud.net",
+    "mex2-vpn.zscaler.net",
+    "mex2-vpn.zscalerthree.net",
+    "mex2-vpn.zscalertwo.net",
+    "mex2-vpn.zscloud.net",
+    "mia3-vpn.zscaler.net",
+    "mia3-vpn.zscalerthree.net",
+    "mia3-vpn.zscalertwo.net",
+    "mia3-vpn.zscloud.net",
+    "mia4-vpn.zscaler.net",
+    "mia4-vpn.zscalerthree.net",
+    "mia4-vpn.zscalertwo.net",
+    "mia4-vpn.zscloud.net",
+    "mil3-vpn.zscaler.net",
+    "mil3-vpn.zscalerthree.net",
+    "mil3-vpn.zscalertwo.net",
+    "mil3-vpn.zscloud.net",
+    "mrs1-vpn.zscaler.net",
+    "mrs1-vpn.zscalerthree.net",
+    "mrs1-vpn.zscalertwo.net",
+    "mrs1-vpn.zscloud.net",
+    "muc1-vpn.zscaler.net",
+    "muc1-vpn.zscalerthree.net",
+    "muc1-vpn.zscalertwo.net",
+    "muc1-vpn.zscloud.net",
+    "nld1-vpn.zscaler.net",
+    "nld1-vpn.zscalerthree.net",
+    "nld1-vpn.zscalertwo.net",
+    "nld1-vpn.zscloud.net",
+    "nyc3-2-vpn.zscalertwo.net",
+    "nyc3-2-vpn.zscloud.net",
+    "nyc3-vpn.zscaler.net",
+    "nyc3-vpn.zscalerthree.net",
+    "nyc3-vpn.zscalertwo.net",
+    "nyc3-vpn.zscloud.net",
+    "nyc4-vpn.zscaler.net",
+    "nyc4-vpn.zscalerthree.net",
+    "nyc4-vpn.zscalertwo.net",
+    "nyc4-vpn.zscloud.net",
+    "osa1-vpn.zscaler.net",
+    "osa1-vpn.zscalerthree.net",
+    "osa1-vpn.zscalertwo.net",
+    "osa1-vpn.zscloud.net",
+    "osl3-vpn.zscaler.net",
+    "osl3-vpn.zscalerthree.net",
+    "osl3-vpn.zscalertwo.net",
+    "osl3-vpn.zscloud.net",
+    "par2-2-vpn.zscaler.net",
+    "par2-2-vpn.zscalerthree.net",
+    "par2-2-vpn.zscalertwo.net",
+    "par2-2-vpn.zscloud.net",
+    "par2-vpn.zscaler.net",
+    "par2-vpn.zscalertwo.net",
+    "par2-vpn.zscloud.net",
+    "par4-vpn.zscaler.net",
+    "par4-vpn.zscalerthree.net",
+    "par4-vpn.zscalertwo.net",
+    "par4-vpn.zscloud.net",
+    "per1-vpn.zscaler.net",
+    "per1-vpn.zscalerthree.net",
+    "per1-vpn.zscalertwo.net",
+    "per1-vpn.zscloud.net",
+    "qla1-vpn.zscaler.net",
+    "qla1-vpn.zscalerthree.net",
+    "qla1-vpn.zscalertwo.net",
+    "qla1-vpn.zscloud.net",
+    "qla2-vpn.zscaler.net",
+    "qla2-vpn.zscalerthree.net",
+    "qla2-vpn.zscalertwo.net",
+    "qla2-vpn.zscloud.net",
+    "rio1-vpn.zscaler.net",
+    "rio1-vpn.zscalerthree.net",
+    "rio1-vpn.zscalertwo.net",
+    "rio1-vpn.zscloud.net",
+    "sao2-2-vpn.zscaler.net",
+    "sao2-2-vpn.zscalerthree.net",
+    "sao2-2-vpn.zscalertwo.net",
+    "sao2-2-vpn.zscloud.net",
+    "sao4-vpn.zscaler.net",
+    "sao4-vpn.zscalerthree.net",
+    "sao4-vpn.zscalertwo.net",
+    "sao4-vpn.zscloud.net",
+    "saopaulo2-vpn.zscaler.net",
+    "saopaulo2-vpn.zscalertwo.net",
+    "saopaulo2-vpn.zscloud.net",
+    "scl1-2-vpn.zscaler.net",
+    "scl1-2-vpn.zscalerthree.net",
+    "scl1-2-vpn.zscalertwo.net",
+    "scl1-2-vpn.zscloud.net",
+    "scl1-vpn.zscaler.net",
+    "scl1-vpn.zscalerthree.net",
+    "scl1-vpn.zscalertwo.net",
+    "scl1-vpn.zscloud.net",
+    "scl2-vpn.zscaler.net",
+    "scl2-vpn.zscalerthree.net",
+    "scl2-vpn.zscalertwo.net",
+    "scl2-vpn.zscloud.net",
+    "sea1-vpn.zscaler.net",
+    "sea1-vpn.zscalerthree.net",
+    "sea1-vpn.zscalertwo.net",
+    "sea1-vpn.zscloud.net",
+    "sel1-vpn.zscaler.net",
+    "sel1-vpn.zscalerthree.net",
+    "sel1-vpn.zscalertwo.net",
+    "sel1-vpn.zscloud.net",
+    "sha1-vpn.zscaler.net",
+    "sha1-vpn.zscalerthree.net",
+    "sha1-vpn.zscalertwo.net",
+    "sha1-vpn.zscloud.net",
+    "sha2-vpn.zscaler.net",
+    "sha2-vpn.zscalerthree.net",
+    "sha2-vpn.zscalertwo.net",
+    "sha2-vpn.zscloud.net",
+    "sin4-vpn.zscaler.net",
+    "sin4-vpn.zscalerbeta.net",
+    "sin4-vpn.zscalergov.net",
+    "sin4-vpn.zscalerthree.net",
+    "sin4-vpn.zscalertwo.net",
+    "sin4-vpn.zscloud.net",
+    "sin5-vpn.zscaler.net",
+    "sin5-vpn.zscalerthree.net",
+    "sin5-vpn.zscalertwo.net",
+    "sin5-vpn.zscloud.net",
+    "sjc4-2-vpn.zscaler.net",
+    "sjc4-2-vpn.zscalergov.net",
+    "sjc4-2-vpn.zscalerthree.net",
+    "sjc4-2-vpn.zscalertwo.net",
+    "sjc4-2-vpn.zscloud.net",
+    "sjc4-vpn.zscaler.net",
+    "sjc4-vpn.zscalerbeta.net",
+    "sjc4-vpn.zscalerthree.net",
+    "sjc4-vpn.zscalertwo.net",
+    "sjc4-vpn.zscloud.net",
+    "sto3-vpn.zscaler.net",
+    "sto3-vpn.zscalerthree.net",
+    "sto3-vpn.zscalertwo.net",
+    "sto3-vpn.zscloud.net",
+    "syd3-vpn.zscaler.net",
+    "syd3-vpn.zscalerthree.net",
+    "syd3-vpn.zscalertwo.net",
+    "syd3-vpn.zscloud.net",
+    "syd5-vpn.zscaler.net",
+    "syd5-vpn.zscalerthree.net",
+    "syd5-vpn.zscalertwo.net",
+    "syd5-vpn.zscloud.net",
+    "tlv2-vpn.zscaler.net",
+    "tlv2-vpn.zscalerthree.net",
+    "tlv2-vpn.zscalertwo.net",
+    "tlv2-vpn.zscloud.net",
+    "tpe2-vpn.zscaler.net",
+    "tpe2-vpn.zscalerthree.net",
+    "tpe2-vpn.zscalertwo.net",
+    "tpe2-vpn.zscloud.net",
+    "tsn1-vpn.zscaler.net",
+    "tsn1-vpn.zscalertwo.net",
+    "tsn1-vpn.zscloud.net",
+    "tyo4-2-vpn.zscloud.net",
+    "tyo4-vpn.zscaler.net",
+    "tyo4-vpn.zscalerthree.net",
+    "tyo4-vpn.zscalertwo.net",
+    "tyo4-vpn.zscloud.net",
+    "tyo5-vpn.zscaler.net",
+    "tyo5-vpn.zscalerthree.net",
+    "tyo5-vpn.zscalertwo.net",
+    "tyo5-vpn.zscloud.net",
+    "uro1-vpn.zscaler.net",
+    "uro1-vpn.zscalerthree.net",
+    "uro1-vpn.zscalertwo.net",
+    "uro1-vpn.zscloud.net",
+    "vie1-vpn.zscaler.net",
+    "vie1-vpn.zscalerthree.net",
+    "vie1-vpn.zscalertwo.net",
+    "vie1-vpn.zscloud.net",
+    "was1-2-vpn.zscaler.net",
+    "was1-2-vpn.zscalergov.net",
+    "was1-2-vpn.zscalerthree.net",
+    "was1-2-vpn.zscalertwo.net",
+    "was1-2-vpn.zscloud.net",
+    "was1-vpn.zscaler.net",
+    "was1-vpn.zscalerbeta.net",
+    "was1-vpn.zscalerthree.net",
+    "was1-vpn.zscalertwo.net",
+    "was1-vpn.zscloud.net",
+    "was4-vpn.zscaler.net",
+    "was4-vpn.zscalerbeta.net",
+    "was4-vpn.zscalerthree.net",
+    "was4-vpn.zscalertwo.net",
+    "was4-vpn.zscloud.net",
+    "waw2-vpn.zscaler.net",
+    "waw2-vpn.zscalerthree.net",
+    "waw2-vpn.zscalertwo.net",
+    "waw2-vpn.zscloud.net",
+    "ymq1-vpn.zscaler.net",
+    "ymq1-vpn.zscalerthree.net",
+    "ymq1-vpn.zscalertwo.net",
+    "ymq1-vpn.zscloud.net",
+    "yto3-vpn.zscaler.net",
+    "yto3-vpn.zscalerthree.net",
+    "yto3-vpn.zscalertwo.net",
+    "yto3-vpn.zscloud.net",
+    "yvr1-vpn.zscaler.net",
+    "yvr1-vpn.zscalerthree.net",
+    "yvr1-vpn.zscalertwo.net",
+    "yvr1-vpn.zscloud.net",
+    "zrh1-2-vpn.zscaler.net",
+    "zrh1-2-vpn.zscalertwo.net",
+    "zrh1-2-vpn.zscloud.net",
+    "zrh1-vpn.zscalerbeta.net",
+    "zrh1-vpn.zscalergov.net",
+    "zrh1-vpn.zscalerthree.net"
+  ],
+  "by_city": {
+    "Abu Dhabi II": {
+      "proxy_hostnames": [],
+      "vpn_hostnames": [],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Amsterdam II": {
+      "proxy_hostnames": [
+        "ams2-2.sme.zscaler.net",
+        "ams2-2.sme.zscalerthree.net",
+        "ams2-2.sme.zscalertwo.net",
+        "ams2-2.sme.zscloud.net",
+        "ams2.sme.zscaler.net",
+        "ams2.sme.zscalerthree.net",
+        "ams2.sme.zscalertwo.net",
+        "ams2.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "ams2-2-vpn.zscaler.net",
+        "ams2-2-vpn.zscalerthree.net",
+        "ams2-2-vpn.zscalertwo.net",
+        "ams2-2-vpn.zscloud.net",
+        "ams2-vpn.zscalerthree.net",
+        "amsterdam2-vpn.zscaler.net",
+        "amsterdam2-vpn.zscalertwo.net",
+        "amsterdam2-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Amsterdam III": {
+      "proxy_hostnames": [
+        "ams3.sme.zscaler.net",
+        "ams3.sme.zscalerthree.net",
+        "ams3.sme.zscalertwo.net",
+        "ams3.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "ams3-vpn.zscaler.net",
+        "ams3-vpn.zscalerthree.net",
+        "ams3-vpn.zscalertwo.net",
+        "ams3-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Atlanta II": {
+      "proxy_hostnames": [
+        "atl2-2.sme.zscalertwo.net",
+        "atl2.sme.zscaler.net",
+        "atl2.sme.zscalerthree.net",
+        "atl2.sme.zscalertwo.net",
+        "atl2.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "atl2-2-vpn.zscalertwo.net",
+        "atl2-vpn.zscaler.net",
+        "atl2-vpn.zscalerthree.net",
+        "atl2-vpn.zscalertwo.net",
+        "atl2-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Atlanta III": {
+      "proxy_hostnames": [
+        "atl3.sme.zscaler.net",
+        "atl3.sme.zscalerthree.net",
+        "atl3.sme.zscalertwo.net",
+        "atl3.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "atl3-vpn.zscaler.net",
+        "atl3-vpn.zscalerthree.net",
+        "atl3-vpn.zscalertwo.net",
+        "atl3-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Auckland II": {
+      "proxy_hostnames": [
+        "akl2.sme.zscaler.net",
+        "akl2.sme.zscalerthree.net",
+        "akl2.sme.zscalertwo.net",
+        "akl2.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "akl2-vpn.zscaler.net",
+        "akl2-vpn.zscalerthree.net",
+        "akl2-vpn.zscalertwo.net",
+        "akl2-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Beijing": {
+      "proxy_hostnames": [
+        "bjs1.sme.zscaler.net",
+        "bjs1.sme.zscalerthree.net",
+        "bjs1.sme.zscalertwo.net",
+        "bjs1.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "bjs1-vpn.zscaler.net",
+        "bjs1-vpn.zscalerthree.net",
+        "bjs1-vpn.zscalertwo.net",
+        "bjs1-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Beijing III": {
+      "proxy_hostnames": [
+        "bjs3.sme.zscaler.net",
+        "bjs3.sme.zscalerthree.net",
+        "bjs3.sme.zscalertwo.net",
+        "bjs3.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "bjs3-vpn.zscaler.net",
+        "bjs3-vpn.zscalerthree.net",
+        "bjs3-vpn.zscalertwo.net",
+        "bjs3-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Bogota I": {
+      "proxy_hostnames": [
+        "bog1-2.sme.zscaler.net",
+        "bog1-2.sme.zscalerthree.net",
+        "bog1-2.sme.zscalertwo.net",
+        "bog1-2.sme.zscloud.net",
+        "bog1.sme.zscaler.net",
+        "bog1.sme.zscalerthree.net",
+        "bog1.sme.zscalertwo.net",
+        "bog1.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "bog1-2-vpn.zscaler.net",
+        "bog1-2-vpn.zscalerthree.net",
+        "bog1-2-vpn.zscalertwo.net",
+        "bog1-2-vpn.zscloud.net",
+        "bog1-vpn.zscaler.net",
+        "bog1-vpn.zscalerthree.net",
+        "bog1-vpn.zscalertwo.net",
+        "bog1-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Bogota II": {
+      "proxy_hostnames": [],
+      "vpn_hostnames": [],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Boston I": {
+      "proxy_hostnames": [
+        "bos1.sme.zscaler.net",
+        "bos1.sme.zscalerthree.net",
+        "bos1.sme.zscalertwo.net",
+        "bos1.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "bos1-vpn.zscaler.net",
+        "bos1-vpn.zscalerthree.net",
+        "bos1-vpn.zscalertwo.net",
+        "bos1-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Brussels II": {
+      "proxy_hostnames": [
+        "bru2.sme.zscaler.net",
+        "bru2.sme.zscalerthree.net",
+        "bru2.sme.zscalertwo.net",
+        "bru2.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "bru2-vpn.zscaler.net",
+        "bru2-vpn.zscalerthree.net",
+        "bru2-vpn.zscalertwo.net",
+        "bru2-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Buenos Aires I": {
+      "proxy_hostnames": [
+        "bue1-2.sme.zscaler.net",
+        "bue1-2.sme.zscalerthree.net",
+        "bue1-2.sme.zscalertwo.net",
+        "bue1-2.sme.zscloud.net",
+        "bue1.sme.zscaler.net",
+        "bue1.sme.zscalerthree.net",
+        "bue1.sme.zscalertwo.net",
+        "bue1.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "bue1-2-vpn.zscaler.net",
+        "bue1-2-vpn.zscalerthree.net",
+        "bue1-2-vpn.zscalertwo.net",
+        "bue1-2-vpn.zscloud.net",
+        "bue1-vpn.zscaler.net",
+        "bue1-vpn.zscalerthree.net",
+        "bue1-vpn.zscalertwo.net",
+        "bue1-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Buenos Aires II": {
+      "proxy_hostnames": [],
+      "vpn_hostnames": [],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Canberra I": {
+      "proxy_hostnames": [
+        "cbr1.sme.zscaler.net",
+        "cbr1.sme.zscalerthree.net",
+        "cbr1.sme.zscalertwo.net",
+        "cbr1.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "cbr1-vpn.zscaler.net",
+        "cbr1-vpn.zscalerthree.net",
+        "cbr1-vpn.zscalertwo.net",
+        "cbr1-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Capetown IV": {
+      "proxy_hostnames": [
+        "cpt4.sme.zscaler.net",
+        "cpt4.sme.zscalerone.net",
+        "cpt4.sme.zscalerthree.net",
+        "cpt4.sme.zscalertwo.net",
+        "cpt4.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "cpt4-vpn.zscaler.net",
+        "cpt4-vpn.zscalerone.net",
+        "cpt4-vpn.zscalerthree.net",
+        "cpt4-vpn.zscalertwo.net",
+        "cpt4-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerone.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Chennai": {
+      "proxy_hostnames": [
+        "maa1.sme.zscaler.net"
+      ],
+      "vpn_hostnames": [
+        "maa1-vpn.zscaler.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net"
+      ]
+    },
+    "Chennai II": {
+      "proxy_hostnames": [
+        "maa2.sme.zscaler.net",
+        "maa2.sme.zscalerthree.net",
+        "maa2.sme.zscalertwo.net",
+        "maa2.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "maa2-vpn.zscaler.net",
+        "maa2-vpn.zscalerthree.net",
+        "maa2-vpn.zscalertwo.net",
+        "maa2-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Chennai III": {
+      "proxy_hostnames": [
+        "maa3.sme.zscaler.net",
+        "maa3.sme.zscalerthree.net",
+        "maa3.sme.zscalertwo.net",
+        "maa3.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "maa3-vpn.zscaler.net",
+        "maa3-vpn.zscalerthree.net",
+        "maa3-vpn.zscalertwo.net",
+        "maa3-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Chicago": {
+      "proxy_hostnames": [
+        "chi1-2.sme.zscaler.net",
+        "chi1-2.sme.zscalergov.net",
+        "chi1-2.sme.zscalerthree.net",
+        "chi1-2.sme.zscalertwo.net",
+        "chi1-2.sme.zscloud.net",
+        "chi1.sme.zscaler.net",
+        "chi1.sme.zscalerthree.net",
+        "chi1.sme.zscalertwo.net",
+        "chi1.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "chi1-2-vpn.zscaler.net",
+        "chi1-2-vpn.zscalergov.net",
+        "chi1-2-vpn.zscalerthree.net",
+        "chi1-2-vpn.zscalertwo.net",
+        "chi1-2-vpn.zscloud.net",
+        "chi1-vpn.zscaler.net",
+        "chi1-vpn.zscalerthree.net",
+        "chi1-vpn.zscalertwo.net",
+        "chi1-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalergov.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Chicago II": {
+      "proxy_hostnames": [
+        "chi2.sme.zscaler.net",
+        "chi2.sme.zscalerthree.net",
+        "chi2.sme.zscalertwo.net",
+        "chi2.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "chi2-vpn.zscaler.net",
+        "chi2-vpn.zscalerthree.net",
+        "chi2-vpn.zscalertwo.net",
+        "chi2-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Copenhagen II": {
+      "proxy_hostnames": [
+        "cph2.sme.zscaler.net",
+        "cph2.sme.zscalerthree.net",
+        "cph2.sme.zscalertwo.net",
+        "cph2.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "cph2-vpn.zscaler.net",
+        "cph2-vpn.zscalerthree.net",
+        "cph2-vpn.zscalertwo.net",
+        "cph2-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Dallas I": {
+      "proxy_hostnames": [
+        "dfw1-2.sme.zscaler.net",
+        "dfw1-2.sme.zscalerthree.net",
+        "dfw1-2.sme.zscalertwo.net",
+        "dfw1-2.sme.zscloud.net",
+        "dfw1.sme.zscalerthree.net",
+        "dfw1.sme.zscalertwo.net",
+        "dfw1.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "dfw1-2-vpn.zscaler.net",
+        "dfw1-2-vpn.zscalerthree.net",
+        "dfw1-2-vpn.zscalertwo.net",
+        "dfw1-2-vpn.zscloud.net",
+        "dfw1-vpn.zscalerthree.net",
+        "dfw1-vpn.zscalertwo.net",
+        "dfw1-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Dallas II": {
+      "proxy_hostnames": [
+        "dfw2.sme.zscaler.net",
+        "dfw2.sme.zscalerthree.net",
+        "dfw2.sme.zscalertwo.net",
+        "dfw2.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "dfw2-vpn.zscaler.net",
+        "dfw2-vpn.zscalerthree.net",
+        "dfw2-vpn.zscalertwo.net",
+        "dfw2-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Denver III": {
+      "proxy_hostnames": [
+        "den3.sme.zscaler.net",
+        "den3.sme.zscalerthree.net",
+        "den3.sme.zscalertwo.net",
+        "den3.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "den3-vpn.zscaler.net",
+        "den3-vpn.zscalerthree.net",
+        "den3-vpn.zscalertwo.net",
+        "den3-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Dubai I": {
+      "proxy_hostnames": [
+        "dxb1-2.sme.zscloud.net",
+        "dxb1.sme.zscaler.net",
+        "dxb1.sme.zscalerthree.net",
+        "dxb1.sme.zscalertwo.net"
+      ],
+      "vpn_hostnames": [
+        "dxb1-vpn.zscaler.net",
+        "dxb1-vpn.zscalerthree.net",
+        "dxb1-vpn.zscalertwo.net",
+        "dxb1-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Dusseldorf I": {
+      "proxy_hostnames": [
+        "dus1.sme.zscaler.net",
+        "dus1.sme.zscalerthree.net",
+        "dus1.sme.zscalertwo.net",
+        "dus1.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "dus1-vpn.zscaler.net",
+        "dus1-vpn.zscalerthree.net",
+        "dus1-vpn.zscalertwo.net",
+        "dus1-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Frankfurt IV": {
+      "proxy_hostnames": [
+        "fra4-2.sme.zscaler.net",
+        "fra4-2.sme.zscalerthree.net",
+        "fra4-2.sme.zscalertwo.net",
+        "fra4-2.sme.zscloud.net",
+        "fra4.sme.zscaler.net",
+        "fra4.sme.zscalerbeta.net",
+        "fra4.sme.zscalertwo.net",
+        "fra4.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "fra4-2-vpn.zscaler.net",
+        "fra4-2-vpn.zscalerthree.net",
+        "fra4-2-vpn.zscalertwo.net",
+        "fra4-2-vpn.zscloud.net",
+        "fra4-vpn.zscaler.net",
+        "fra4-vpn.zscalerbeta.net",
+        "fra4-vpn.zscalertwo.net",
+        "fra4-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerbeta.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Frankfurt VI": {
+      "proxy_hostnames": [
+        "fra6.sme.zscaler.net",
+        "fra6.sme.zscalerthree.net",
+        "fra6.sme.zscalertwo.net",
+        "fra6.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "fra6-vpn.zscaler.net",
+        "fra6-vpn.zscalerthree.net",
+        "fra6-vpn.zscalertwo.net",
+        "fra6-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Helsinki I": {
+      "proxy_hostnames": [
+        "hel1.sme.zscaler.net",
+        "hel1.sme.zscalerthree.net",
+        "hel1.sme.zscalertwo.net",
+        "hel1.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "hel1-vpn.zscaler.net",
+        "hel1-vpn.zscalerthree.net",
+        "hel1-vpn.zscalertwo.net",
+        "hel1-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Hong Kong III": {
+      "proxy_hostnames": [
+        "hkg3.sme.zscaler.net",
+        "hkg3.sme.zscalerthree.net",
+        "hkg3.sme.zscalertwo.net",
+        "hkg3.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "hkg3-vpn.zscaler.net",
+        "hkg3-vpn.zscalerthree.net",
+        "hkg3-vpn.zscalertwo.net",
+        "hkg3-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Hong Kong IV": {
+      "proxy_hostnames": [],
+      "vpn_hostnames": [],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Honolulu I": {
+      "proxy_hostnames": [],
+      "vpn_hostnames": [],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Hyderabad I": {
+      "proxy_hostnames": [
+        "hyd1.sme.zscaler.net",
+        "hyd1.sme.zscalerthree.net",
+        "hyd1.sme.zscalertwo.net",
+        "hyd1.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "hyd1-vpn.zscaler.net",
+        "hyd1-vpn.zscalerthree.net",
+        "hyd1-vpn.zscalertwo.net",
+        "hyd1-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Jakarta I": {
+      "proxy_hostnames": [],
+      "vpn_hostnames": [],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Johannesburg III": {
+      "proxy_hostnames": [
+        "jnb3.sme.zscaler.net",
+        "jnb3.sme.zscalerone.net",
+        "jnb3.sme.zscalerthree.net",
+        "jnb3.sme.zscalertwo.net",
+        "jnb3.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "jnb3-vpn.zscaler.net",
+        "jnb3-vpn.zscalerone.net",
+        "jnb3-vpn.zscalerthree.net",
+        "jnb3-vpn.zscalertwo.net",
+        "jnb3-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerone.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Kingdom of Saudi Arabia I": {
+      "proxy_hostnames": [
+        "ksa1.sme.zscaler.net",
+        "ksa1.sme.zscalerthree.net",
+        "ksa1.sme.zscalertwo.net",
+        "ksa1.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "ksa1-vpn.zscaler.net",
+        "ksa1-vpn.zscalerthree.net",
+        "ksa1-vpn.zscalertwo.net",
+        "ksa1-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Kolkata I": {
+      "proxy_hostnames": [
+        "ccu1.sme.zscaler.net",
+        "ccu1.sme.zscalerthree.net",
+        "ccu1.sme.zscalertwo.net",
+        "ccu1.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "ccu1-vpn.zscaler.net",
+        "ccu1-vpn.zscalerthree.net",
+        "ccu1-vpn.zscalertwo.net",
+        "ccu1-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Kuala Lumpur I": {
+      "proxy_hostnames": [
+        "kul1.sme.zscaler.net"
+      ],
+      "vpn_hostnames": [
+        "kul1-vpn.zscaler.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net"
+      ]
+    },
+    "Kuala Lumpur II": {
+      "proxy_hostnames": [
+        "kul2.sme.zscaler.net",
+        "kul2.sme.zscalerthree.net",
+        "kul2.sme.zscalertwo.net",
+        "kul2.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "kul2-vpn.zscaler.net",
+        "kul2-vpn.zscalerthree.net",
+        "kul2-vpn.zscalertwo.net",
+        "kul2-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Lagos II": {
+      "proxy_hostnames": [
+        "los2.sme.zscaler.net",
+        "los2.sme.zscalerthree.net",
+        "los2.sme.zscalertwo.net",
+        "los2.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "los2-vpn.zscaler.net",
+        "los2-vpn.zscalerthree.net",
+        "los2-vpn.zscalertwo.net",
+        "los2-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Lagos III": {
+      "proxy_hostnames": [
+        "los3.sme.zscaler.net",
+        "los3.sme.zscalerthree.net",
+        "los3.sme.zscalertwo.net",
+        "los3.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "los3-vpn.zscaler.net",
+        "los3-vpn.zscalerthree.net",
+        "los3-vpn.zscalertwo.net",
+        "los3-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Lisbon I": {
+      "proxy_hostnames": [
+        "lis1.sme.zscaler.net",
+        "lis1.sme.zscalerthree.net",
+        "lis1.sme.zscalertwo.net",
+        "lis1.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "lis1-vpn.zscaler.net",
+        "lis1-vpn.zscalerthree.net",
+        "lis1-vpn.zscalertwo.net",
+        "lis1-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "London III": {
+      "proxy_hostnames": [
+        "lon3-2.sme.zscalertwo.net",
+        "lon3-2.sme.zscloud.net",
+        "lon3.sme.zscaler.net",
+        "lon3.sme.zscalerone.net",
+        "lon3.sme.zscalerthree.net",
+        "lon3.sme.zscalertwo.net",
+        "lon3.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "lon3-2-vpn.zscalertwo.net",
+        "lon3-2-vpn.zscloud.net",
+        "lon3-vpn.zscaler.net",
+        "lon3-vpn.zscalerone.net",
+        "lon3-vpn.zscalerthree.net",
+        "lon3-vpn.zscalertwo.net",
+        "lon3-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerone.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "London V": {
+      "proxy_hostnames": [
+        "lon5.sme.zscaler.net",
+        "lon5.sme.zscalerthree.net",
+        "lon5.sme.zscalertwo.net",
+        "lon5.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "lon5-vpn.zscaler.net",
+        "lon5-vpn.zscalerthree.net",
+        "lon5-vpn.zscalertwo.net",
+        "lon5-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Los Angeles": {
+      "proxy_hostnames": [
+        "qla1.sme.zscaler.net",
+        "qla1.sme.zscalerthree.net",
+        "qla1.sme.zscalertwo.net",
+        "qla1.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "qla1-vpn.zscaler.net",
+        "qla1-vpn.zscalerthree.net",
+        "qla1-vpn.zscalertwo.net",
+        "qla1-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Los Angeles II": {
+      "proxy_hostnames": [
+        "qla2.sme.zscaler.net",
+        "qla2.sme.zscalerthree.net",
+        "qla2.sme.zscalertwo.net",
+        "qla2.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "qla2-vpn.zscaler.net",
+        "qla2-vpn.zscalerthree.net",
+        "qla2-vpn.zscalertwo.net",
+        "qla2-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Madrid III": {
+      "proxy_hostnames": [
+        "Mad3.sme.zscaler.net",
+        "Mad3.sme.zscalerthree.net",
+        "Mad3.sme.zscalertwo.net",
+        "Mad3.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "Mad3-vpn.zscaler.net",
+        "Mad3-vpn.zscalerthree.net",
+        "Mad3-vpn.zscalertwo.net",
+        "Mad3-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Madrid IV": {
+      "proxy_hostnames": [
+        "mad4.sme.zscaler.net",
+        "mad4.sme.zscalerthree.net",
+        "mad4.sme.zscalertwo.net",
+        "mad4.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "mad4-vpn.zscaler.net",
+        "mad4-vpn.zscalerthree.net",
+        "mad4-vpn.zscalertwo.net",
+        "mad4-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Manchester I": {
+      "proxy_hostnames": [
+        "Man1.sme.zscaler.net",
+        "Man1.sme.zscalerthree.net",
+        "Man1.sme.zscalertwo.net",
+        "Man1.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "Man1-vpn.zscaler.net",
+        "Man1-vpn.zscalerthree.net",
+        "Man1-vpn.zscalertwo.net",
+        "Man1-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Manchester II": {
+      "proxy_hostnames": [
+        "man2.sme.zscaler.net",
+        "man2.sme.zscalerthree.net",
+        "man2.sme.zscalertwo.net",
+        "man2.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "man2-vpn.zscaler.net",
+        "man2-vpn.zscalerthree.net",
+        "man2-vpn.zscalertwo.net",
+        "man2-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Marseille I": {
+      "proxy_hostnames": [
+        "mrs1.sme.zscaler.net",
+        "mrs1.sme.zscalerthree.net",
+        "mrs1.sme.zscalertwo.net",
+        "mrs1.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "mrs1-vpn.zscaler.net",
+        "mrs1-vpn.zscalerthree.net",
+        "mrs1-vpn.zscalertwo.net",
+        "mrs1-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Melbourne II": {
+      "proxy_hostnames": [
+        "mel2.sme.zscaler.net",
+        "mel2.sme.zscalerthree.net",
+        "mel2.sme.zscalertwo.net",
+        "mel2.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "mel2-vpn.zscaler.net",
+        "mel2-vpn.zscalerthree.net",
+        "mel2-vpn.zscalertwo.net",
+        "mel2-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Mexico City I": {
+      "proxy_hostnames": [
+        "mex1.sme.zscaler.net",
+        "mex1.sme.zscalerthree.net",
+        "mex1.sme.zscalertwo.net",
+        "mex1.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "mex1-vpn.zscaler.net",
+        "mex1-vpn.zscalerthree.net",
+        "mex1-vpn.zscalertwo.net",
+        "mex1-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Mexico City II": {
+      "proxy_hostnames": [
+        "mex2.sme.zscaler.net",
+        "mex2.sme.zscalerthree.net",
+        "mex2.sme.zscalertwo.net",
+        "mex2.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "mex2-vpn.zscaler.net",
+        "mex2-vpn.zscalerthree.net",
+        "mex2-vpn.zscalertwo.net",
+        "mex2-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Miami III": {
+      "proxy_hostnames": [
+        "mia3.sme.zscaler.net",
+        "mia3.sme.zscalerthree.net",
+        "mia3.sme.zscalertwo.net",
+        "mia3.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "mia3-vpn.zscaler.net",
+        "mia3-vpn.zscalerthree.net",
+        "mia3-vpn.zscalertwo.net",
+        "mia3-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Miami IV": {
+      "proxy_hostnames": [
+        "mia4.sme.zscaler.net",
+        "mia4.sme.zscalerthree.net",
+        "mia4.sme.zscalertwo.net",
+        "mia4.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "mia4-vpn.zscaler.net",
+        "mia4-vpn.zscalerthree.net",
+        "mia4-vpn.zscalertwo.net",
+        "mia4-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Milan III": {
+      "proxy_hostnames": [
+        "mil3.sme.zscaler.net",
+        "mil3.sme.zscalerthree.net",
+        "mil3.sme.zscalertwo.net",
+        "mil3.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "mil3-vpn.zscaler.net",
+        "mil3-vpn.zscalerthree.net",
+        "mil3-vpn.zscalertwo.net",
+        "mil3-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Milan IV": {
+      "proxy_hostnames": [],
+      "vpn_hostnames": [],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Montreal I": {
+      "proxy_hostnames": [
+        "ymq1.sme.zscaler.net",
+        "ymq1.sme.zscalerthree.net",
+        "ymq1.sme.zscalertwo.net",
+        "ymq1.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "ymq1-vpn.zscaler.net",
+        "ymq1-vpn.zscalerthree.net",
+        "ymq1-vpn.zscalertwo.net",
+        "ymq1-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Mumbai IV": {
+      "proxy_hostnames": [
+        "bom4.sme.zscaler.net"
+      ],
+      "vpn_hostnames": [
+        "bom4-vpn.zscaler.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net"
+      ]
+    },
+    "Mumbai VI": {
+      "proxy_hostnames": [
+        "bom6.sme.zscaler.net",
+        "bom6.sme.zscalerthree.net",
+        "bom6.sme.zscalertwo.net",
+        "bom6.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "bom6-vpn.zscaler.net",
+        "bom6-vpn.zscalerthree.net",
+        "bom6-vpn.zscalertwo.net",
+        "bom6-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Mumbai VII": {
+      "proxy_hostnames": [
+        "bom7.sme.zscaler.net",
+        "bom7.sme.zscalerthree.net",
+        "bom7.sme.zscalertwo.net",
+        "bom7.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "bom7-vpn.zscaler.net",
+        "bom7-vpn.zscalerthree.net",
+        "bom7-vpn.zscalertwo.net",
+        "bom7-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Munich I": {
+      "proxy_hostnames": [
+        "muc1.sme.zscaler.net",
+        "muc1.sme.zscalerthree.net",
+        "muc1.sme.zscalertwo.net",
+        "muc1.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "muc1-vpn.zscaler.net",
+        "muc1-vpn.zscalerthree.net",
+        "muc1-vpn.zscalertwo.net",
+        "muc1-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "New Delhi I": {
+      "proxy_hostnames": [
+        "del1.sme.zscaler.net",
+        "del1.sme.zscalerthree.net",
+        "del1.sme.zscalertwo.net",
+        "del1.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "del1-vpn.zscaler.net",
+        "del1-vpn.zscalerthree.net",
+        "del1-vpn.zscalertwo.net",
+        "del1-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "New York III": {
+      "proxy_hostnames": [
+        "nyc3.sme.zscaler.net",
+        "nyc3.sme.zscalerone.net",
+        "nyc3.sme.zscalerthree.net",
+        "nyc3.sme.zscalertwo.net",
+        "nyc3.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "nyc3-2-vpn.zscalertwo.net",
+        "nyc3-2-vpn.zscloud.net",
+        "nyc3-vpn.zscaler.net",
+        "nyc3-vpn.zscalerthree.net",
+        "nyc3-vpn.zscalertwo.net",
+        "nyc3-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerone.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "New York IV": {
+      "proxy_hostnames": [
+        "nyc4.sme.zscaler.net",
+        "nyc4.sme.zscalerthree.net",
+        "nyc4.sme.zscalertwo.net",
+        "nyc4.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "nyc4-vpn.zscaler.net",
+        "nyc4-vpn.zscalerthree.net",
+        "nyc4-vpn.zscalertwo.net",
+        "nyc4-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Nuevo Laredo I": {
+      "proxy_hostnames": [
+        "nld1.sme.zscaler.net",
+        "nld1.sme.zscalerthree.net",
+        "nld1.sme.zscalertwo.net",
+        "nld1.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "nld1-vpn.zscaler.net",
+        "nld1-vpn.zscalerthree.net",
+        "nld1-vpn.zscalertwo.net",
+        "nld1-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Osaka I": {
+      "proxy_hostnames": [
+        "osa1.sme.zscaler.net",
+        "osa1.sme.zscalerthree.net",
+        "osa1.sme.zscalertwo.net",
+        "osa1.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "osa1-vpn.zscaler.net",
+        "osa1-vpn.zscalerthree.net",
+        "osa1-vpn.zscalertwo.net",
+        "osa1-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Oslo III": {
+      "proxy_hostnames": [
+        "osl3.sme.zscaler.net",
+        "osl3.sme.zscalerthree.net",
+        "osl3.sme.zscalertwo.net",
+        "osl3.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "osl3-vpn.zscaler.net",
+        "osl3-vpn.zscalerthree.net",
+        "osl3-vpn.zscalertwo.net",
+        "osl3-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Paris II": {
+      "proxy_hostnames": [
+        "par2-2.sme.zscaler.net",
+        "par2-2.sme.zscalerthree.net",
+        "par2-2.sme.zscalertwo.net",
+        "par2-2.sme.zscloud.net",
+        "par2.sme.zscaler.net",
+        "par2.sme.zscalertwo.net",
+        "par2.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "par2-2-vpn.zscaler.net",
+        "par2-2-vpn.zscalerthree.net",
+        "par2-2-vpn.zscalertwo.net",
+        "par2-2-vpn.zscloud.net",
+        "par2-vpn.zscaler.net",
+        "par2-vpn.zscalertwo.net",
+        "par2-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Paris IV": {
+      "proxy_hostnames": [
+        "par4.sme.zscaler.net",
+        "par4.sme.zscalerthree.net",
+        "par4.sme.zscalertwo.net",
+        "par4.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "par4-vpn.zscaler.net",
+        "par4-vpn.zscalerthree.net",
+        "par4-vpn.zscalertwo.net",
+        "par4-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Perth I": {
+      "proxy_hostnames": [
+        "per1.sme.zscaler.net",
+        "per1.sme.zscalerthree.net",
+        "per1.sme.zscalertwo.net",
+        "per1.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "per1-vpn.zscaler.net",
+        "per1-vpn.zscalerthree.net",
+        "per1-vpn.zscalertwo.net",
+        "per1-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Rio de Janeiro I": {
+      "proxy_hostnames": [
+        "rio1.sme.zscaler.net",
+        "rio1.sme.zscalerthree.net",
+        "rio1.sme.zscalertwo.net",
+        "rio1.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "rio1-vpn.zscaler.net",
+        "rio1-vpn.zscalerthree.net",
+        "rio1-vpn.zscalertwo.net",
+        "rio1-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Rouen I": {
+      "proxy_hostnames": [
+        "uro1.sme.zscaler.net",
+        "uro1.sme.zscalerthree.net",
+        "uro1.sme.zscalertwo.net",
+        "uro1.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "uro1-vpn.zscaler.net",
+        "uro1-vpn.zscalerthree.net",
+        "uro1-vpn.zscalertwo.net",
+        "uro1-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "San Francisco IV": {
+      "proxy_hostnames": [
+        "sjc4-2.sme.zscaler.net",
+        "sjc4-2.sme.zscalergov.net",
+        "sjc4-2.sme.zscalerthree.net",
+        "sjc4-2.sme.zscalertwo.net",
+        "sjc4-2.sme.zscloud.net",
+        "sjc4.sme.zscaler.net",
+        "sjc4.sme.zscalerbeta.net",
+        "sjc4.sme.zscalerthree.net",
+        "sjc4.sme.zscalertwo.net",
+        "sjc4.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "sjc4-2-vpn.zscaler.net",
+        "sjc4-2-vpn.zscalergov.net",
+        "sjc4-2-vpn.zscalerthree.net",
+        "sjc4-2-vpn.zscalertwo.net",
+        "sjc4-2-vpn.zscloud.net",
+        "sjc4-vpn.zscaler.net",
+        "sjc4-vpn.zscalerbeta.net",
+        "sjc4-vpn.zscalerthree.net",
+        "sjc4-vpn.zscalertwo.net",
+        "sjc4-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerbeta.net",
+        "zscalergov.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Santiago I": {
+      "proxy_hostnames": [
+        "scl1-2.sme.zscaler.net",
+        "scl1-2.sme.zscalerthree.net",
+        "scl1-2.sme.zscalertwo.net",
+        "scl1-2.sme.zscloud.net",
+        "scl1.sme.zscaler.net",
+        "scl1.sme.zscalerthree.net",
+        "scl1.sme.zscalertwo.net",
+        "scl1.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "scl1-2-vpn.zscaler.net",
+        "scl1-2-vpn.zscalerthree.net",
+        "scl1-2-vpn.zscalertwo.net",
+        "scl1-2-vpn.zscloud.net",
+        "scl1-vpn.zscaler.net",
+        "scl1-vpn.zscalerthree.net",
+        "scl1-vpn.zscalertwo.net",
+        "scl1-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Santiago II": {
+      "proxy_hostnames": [
+        "scl2.sme.zscaler.net",
+        "scl2.sme.zscalerthree.net",
+        "scl2.sme.zscalertwo.net",
+        "scl2.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "scl2-vpn.zscaler.net",
+        "scl2-vpn.zscalerthree.net",
+        "scl2-vpn.zscalertwo.net",
+        "scl2-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Sao Paulo": {
+      "proxy_hostnames": [
+        "sao2.sme.zscaler.net",
+        "sao2.sme.zscalertwo.net",
+        "sao2.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "saopaulo2-vpn.zscaler.net",
+        "saopaulo2-vpn.zscalertwo.net",
+        "saopaulo2-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Sao Paulo II": {
+      "proxy_hostnames": [
+        "sao2-2.sme.zscaler.net",
+        "sao2-2.sme.zscalerthree.net",
+        "sao2-2.sme.zscalertwo.net",
+        "sao2-2.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "sao2-2-vpn.zscaler.net",
+        "sao2-2-vpn.zscalerthree.net",
+        "sao2-2-vpn.zscalertwo.net",
+        "sao2-2-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Sao Paulo IV": {
+      "proxy_hostnames": [
+        "sao4.sme.zscaler.net",
+        "sao4.sme.zscalerthree.net",
+        "sao4.sme.zscalertwo.net",
+        "sao4.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "sao4-vpn.zscaler.net",
+        "sao4-vpn.zscalerthree.net",
+        "sao4-vpn.zscalertwo.net",
+        "sao4-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalergov.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Seattle": {
+      "proxy_hostnames": [
+        "sea1.sme.zscaler.net",
+        "sea1.sme.zscalerthree.net",
+        "sea1.sme.zscalertwo.net",
+        "sea1.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "sea1-vpn.zscaler.net",
+        "sea1-vpn.zscalerthree.net",
+        "sea1-vpn.zscalertwo.net",
+        "sea1-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Seoul I": {
+      "proxy_hostnames": [
+        "sel1.sme.zscaler.net",
+        "sel1.sme.zscalerthree.net",
+        "sel1.sme.zscalertwo.net",
+        "sel1.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "sel1-vpn.zscaler.net",
+        "sel1-vpn.zscalerthree.net",
+        "sel1-vpn.zscalertwo.net",
+        "sel1-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Shanghai": {
+      "proxy_hostnames": [
+        "sha1.sme.zscaler.net",
+        "sha1.sme.zscalerthree.net",
+        "sha1.sme.zscalertwo.net",
+        "sha1.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "sha1-vpn.zscaler.net",
+        "sha1-vpn.zscalerthree.net",
+        "sha1-vpn.zscalertwo.net",
+        "sha1-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Shanghai II": {
+      "proxy_hostnames": [
+        "sha2.sme.zscaler.net",
+        "sha2.sme.zscalerthree.net",
+        "sha2.sme.zscalertwo.net",
+        "sha2.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "sha2-vpn.zscaler.net",
+        "sha2-vpn.zscalerthree.net",
+        "sha2-vpn.zscalertwo.net",
+        "sha2-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Singapore IV": {
+      "proxy_hostnames": [
+        "sin4.sme.zscaler.net",
+        "sin4.sme.zscalerbeta.net",
+        "sin4.sme.zscalergov.net",
+        "sin4.sme.zscalerthree.net",
+        "sin4.sme.zscalertwo.net",
+        "sin4.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "sin4-vpn.zscaler.net",
+        "sin4-vpn.zscalerbeta.net",
+        "sin4-vpn.zscalergov.net",
+        "sin4-vpn.zscalerthree.net",
+        "sin4-vpn.zscalertwo.net",
+        "sin4-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerbeta.net",
+        "zscalergov.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Singapore V": {
+      "proxy_hostnames": [
+        "sin5.sme.zscaler.net",
+        "sin5.sme.zscalerthree.net",
+        "sin5.sme.zscalertwo.net",
+        "sin5.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "sin5-vpn.zscaler.net",
+        "sin5-vpn.zscalerthree.net",
+        "sin5-vpn.zscalertwo.net",
+        "sin5-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Stockholm III": {
+      "proxy_hostnames": [
+        "sto3.sme.zscaler.net",
+        "sto3.sme.zscalerthree.net",
+        "sto3.sme.zscalertwo.net",
+        "sto3.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "sto3-vpn.zscaler.net",
+        "sto3-vpn.zscalerthree.net",
+        "sto3-vpn.zscalertwo.net",
+        "sto3-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Sydney III": {
+      "proxy_hostnames": [
+        "syd3.sme.zscaler.net",
+        "syd3.sme.zscalerthree.net",
+        "syd3.sme.zscalertwo.net",
+        "syd3.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "syd3-vpn.zscaler.net",
+        "syd3-vpn.zscalerthree.net",
+        "syd3-vpn.zscalertwo.net",
+        "syd3-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Sydney V": {
+      "proxy_hostnames": [
+        "syd5.sme.zscaler.net",
+        "syd5.sme.zscalerthree.net",
+        "syd5.sme.zscalertwo.net",
+        "syd5.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "syd5-vpn.zscaler.net",
+        "syd5-vpn.zscalerthree.net",
+        "syd5-vpn.zscalertwo.net",
+        "syd5-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Taipei": {
+      "proxy_hostnames": [
+        "tpe2.sme.zscaler.net",
+        "tpe2.sme.zscalerthree.net",
+        "tpe2.sme.zscalertwo.net",
+        "tpe2.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "tpe2-vpn.zscaler.net",
+        "tpe2-vpn.zscalerthree.net",
+        "tpe2-vpn.zscalertwo.net",
+        "tpe2-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Tel Aviv II": {
+      "proxy_hostnames": [
+        "tlv2.sme.zscaler.net",
+        "tlv2.sme.zscalerthree.net",
+        "tlv2.sme.zscalertwo.net",
+        "tlv2.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "tlv2-vpn.zscaler.net",
+        "tlv2-vpn.zscalerthree.net",
+        "tlv2-vpn.zscalertwo.net",
+        "tlv2-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Tianjin": {
+      "proxy_hostnames": [
+        "tsn1.sme.zscaler.net",
+        "tsn1.sme.zscalertwo.net",
+        "tsn1.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "tsn1-vpn.zscaler.net",
+        "tsn1-vpn.zscalertwo.net",
+        "tsn1-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Tokyo IV": {
+      "proxy_hostnames": [
+        "tyo4-2.sme.zscloud.net",
+        "tyo4.sme.zscaler.net",
+        "tyo4.sme.zscalerthree.net",
+        "tyo4.sme.zscalertwo.net",
+        "tyo4.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "tyo4-2-vpn.zscloud.net",
+        "tyo4-vpn.zscaler.net",
+        "tyo4-vpn.zscalerthree.net",
+        "tyo4-vpn.zscalertwo.net",
+        "tyo4-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Tokyo V": {
+      "proxy_hostnames": [
+        "tyo5.sme.zscaler.net",
+        "tyo5.sme.zscalerthree.net",
+        "tyo5.sme.zscalertwo.net",
+        "tyo5.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "tyo5-vpn.zscaler.net",
+        "tyo5-vpn.zscalerthree.net",
+        "tyo5-vpn.zscalertwo.net",
+        "tyo5-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Tokyo VI": {
+      "proxy_hostnames": [],
+      "vpn_hostnames": [],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Toronto III": {
+      "proxy_hostnames": [
+        "yto3.sme.zscaler.net",
+        "yto3.sme.zscalerthree.net",
+        "yto3.sme.zscalertwo.net",
+        "yto3.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "yto3-vpn.zscaler.net",
+        "yto3-vpn.zscalerthree.net",
+        "yto3-vpn.zscalertwo.net",
+        "yto3-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Vancouver I": {
+      "proxy_hostnames": [
+        "yvr1.sme.zscaler.net",
+        "yvr1.sme.zscalerthree.net",
+        "yvr1.sme.zscalertwo.net",
+        "yvr1.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "yvr1-vpn.zscaler.net",
+        "yvr1-vpn.zscalerthree.net",
+        "yvr1-vpn.zscalertwo.net",
+        "yvr1-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Vienna I": {
+      "proxy_hostnames": [
+        "vie1.sme.zscaler.net",
+        "vie1.sme.zscalerthree.net",
+        "vie1.sme.zscalertwo.net",
+        "vie1.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "vie1-vpn.zscaler.net",
+        "vie1-vpn.zscalerthree.net",
+        "vie1-vpn.zscalertwo.net",
+        "vie1-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Warsaw II": {
+      "proxy_hostnames": [
+        "waw2.sme.zscaler.net",
+        "waw2.sme.zscalerthree.net",
+        "waw2.sme.zscalertwo.net",
+        "waw2.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "waw2-vpn.zscaler.net",
+        "waw2-vpn.zscalerthree.net",
+        "waw2-vpn.zscalertwo.net",
+        "waw2-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Washington DC": {
+      "proxy_hostnames": [
+        "was1-2.sme.zscaler.net",
+        "was1-2.sme.zscalergov.net",
+        "was1-2.sme.zscalerthree.net",
+        "was1-2.sme.zscalertwo.net",
+        "was1-2.sme.zscloud.net",
+        "was1.sme.zscaler.net",
+        "was1.sme.zscalerbeta.net",
+        "was1.sme.zscalerthree.net",
+        "was1.sme.zscalertwo.net",
+        "was1.sme.zscloud.net",
+        "was4.sme.zscalerbeta.net"
+      ],
+      "vpn_hostnames": [
+        "was1-2-vpn.zscaler.net",
+        "was1-2-vpn.zscalergov.net",
+        "was1-2-vpn.zscalerthree.net",
+        "was1-2-vpn.zscalertwo.net",
+        "was1-2-vpn.zscloud.net",
+        "was1-vpn.zscaler.net",
+        "was1-vpn.zscalerbeta.net",
+        "was1-vpn.zscalerthree.net",
+        "was1-vpn.zscalertwo.net",
+        "was1-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerbeta.net",
+        "zscalergov.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Washington DC IV": {
+      "proxy_hostnames": [
+        "was4.sme.zscaler.net",
+        "was4.sme.zscalerbeta.net",
+        "was4.sme.zscalerthree.net",
+        "was4.sme.zscalertwo.net",
+        "was4.sme.zscloud.net"
+      ],
+      "vpn_hostnames": [
+        "was4-vpn.zscaler.net",
+        "was4-vpn.zscalerbeta.net",
+        "was4-vpn.zscalerthree.net",
+        "was4-vpn.zscalertwo.net",
+        "was4-vpn.zscloud.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerbeta.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Zurich": {
+      "proxy_hostnames": [
+        "zrh1-2.sme.zscaler.net",
+        "zrh1-2.sme.zscalertwo.net",
+        "zrh1-2.sme.zscloud.net",
+        "zrh1.sme.zscalerbeta.net",
+        "zrh1.sme.zscalerthree.net"
+      ],
+      "vpn_hostnames": [
+        "zrh1-2-vpn.zscaler.net",
+        "zrh1-2-vpn.zscalertwo.net",
+        "zrh1-2-vpn.zscloud.net",
+        "zrh1-vpn.zscalerbeta.net",
+        "zrh1-vpn.zscalerthree.net"
+      ],
+      "seen_in_clouds": [
+        "zscaler.net",
+        "zscalerbeta.net",
+        "zscalerthree.net",
+        "zscalertwo.net",
+        "zscloud.net"
+      ]
+    },
+    "Zurich I": {
+      "proxy_hostnames": [
+        "zrh1.sme.zscalergov.net"
+      ],
+      "vpn_hostnames": [
+        "zrh1-vpn.zscalergov.net"
+      ],
+      "seen_in_clouds": [
+        "zscalergov.net"
+      ]
+    }
+  },
+  "city_metadata": {
+    "Abu Dhabi II": {
+      "country_code": "AE",
+      "continent": "AS",
+      "lat": 24.4539,
+      "lon": 54.3773
+    },
+    "Amsterdam II": {
+      "country_code": "NL",
+      "continent": "EU",
+      "lat": 52.3676,
+      "lon": 4.9041,
+      "probe_hostnames": [
+        "ams2-2.sme.zscaler.net",
+        "ams2-2-vpn.zscaler.net"
+      ],
+      "probe_hostname": "ams2-2.sme.zscaler.net"
+    },
+    "Amsterdam III": {
+      "country_code": "NL",
+      "continent": "EU",
+      "lat": 52.3676,
+      "lon": 4.9041,
+      "probe_hostnames": [
+        "ams3.sme.zscaler.net",
+        "ams3-vpn.zscaler.net"
+      ],
+      "probe_hostname": "ams3.sme.zscaler.net"
+    },
+    "Atlanta II": {
+      "country_code": "US",
+      "continent": "NA",
+      "lat": 33.749,
+      "lon": -84.388,
+      "probe_hostnames": [
+        "atl2-2.sme.zscalertwo.net",
+        "atl2-2-vpn.zscalertwo.net"
+      ],
+      "probe_hostname": "atl2-2.sme.zscalertwo.net"
+    },
+    "Atlanta III": {
+      "country_code": "US",
+      "continent": "NA",
+      "lat": 33.749,
+      "lon": -84.388,
+      "probe_hostnames": [
+        "atl3.sme.zscaler.net",
+        "atl3-vpn.zscaler.net"
+      ],
+      "probe_hostname": "atl3.sme.zscaler.net"
+    },
+    "Auckland II": {
+      "country_code": "NZ",
+      "continent": "OC",
+      "lat": -36.8485,
+      "lon": 174.7633,
+      "probe_hostnames": [
+        "akl2.sme.zscaler.net",
+        "akl2-vpn.zscaler.net"
+      ],
+      "probe_hostname": "akl2.sme.zscaler.net"
+    },
+    "Beijing": {
+      "country_code": "CN",
+      "continent": "AS",
+      "lat": 39.9042,
+      "lon": 116.4074,
+      "probe_hostnames": [
+        "bjs1.sme.zscaler.net",
+        "bjs1-vpn.zscaler.net"
+      ],
+      "probe_hostname": "bjs1.sme.zscaler.net"
+    },
+    "Beijing III": {
+      "country_code": "CN",
+      "continent": "AS",
+      "lat": 39.9042,
+      "lon": 116.4074,
+      "probe_hostnames": [
+        "bjs3.sme.zscaler.net",
+        "bjs3-vpn.zscaler.net"
+      ],
+      "probe_hostname": "bjs3.sme.zscaler.net"
+    },
+    "Bogota I": {
+      "country_code": "CO",
+      "continent": "SA",
+      "lat": 4.711,
+      "lon": -74.0721,
+      "probe_hostnames": [
+        "bog1-2.sme.zscaler.net",
+        "bog1-2-vpn.zscaler.net"
+      ],
+      "probe_hostname": "bog1-2.sme.zscaler.net"
+    },
+    "Bogota II": {
+      "country_code": "CO",
+      "continent": "SA",
+      "lat": 4.711,
+      "lon": -74.0721
+    },
+    "Boston I": {
+      "country_code": "US",
+      "continent": "NA",
+      "lat": 42.3601,
+      "lon": -71.0589,
+      "probe_hostnames": [
+        "bos1.sme.zscaler.net",
+        "bos1-vpn.zscaler.net"
+      ],
+      "probe_hostname": "bos1.sme.zscaler.net"
+    },
+    "Brussels II": {
+      "country_code": "BE",
+      "continent": "EU",
+      "lat": 50.8503,
+      "lon": 4.3517,
+      "probe_hostnames": [
+        "bru2.sme.zscaler.net",
+        "bru2-vpn.zscaler.net"
+      ],
+      "probe_hostname": "bru2.sme.zscaler.net"
+    },
+    "Buenos Aires I": {
+      "country_code": "AR",
+      "continent": "SA",
+      "lat": -34.6037,
+      "lon": -58.3816,
+      "probe_hostnames": [
+        "bue1-2.sme.zscaler.net",
+        "bue1-2-vpn.zscaler.net"
+      ],
+      "probe_hostname": "bue1-2.sme.zscaler.net"
+    },
+    "Buenos Aires II": {
+      "country_code": "AR",
+      "continent": "SA",
+      "lat": -34.6037,
+      "lon": -58.3816
+    },
+    "Canberra I": {
+      "country_code": "AU",
+      "continent": "OC",
+      "lat": -35.2809,
+      "lon": 149.13,
+      "probe_hostnames": [
+        "cbr1.sme.zscaler.net",
+        "cbr1-vpn.zscaler.net"
+      ],
+      "probe_hostname": "cbr1.sme.zscaler.net"
+    },
+    "Capetown IV": {
+      "country_code": "ZA",
+      "continent": "AF",
+      "lat": -33.9249,
+      "lon": 18.4241,
+      "probe_hostnames": [
+        "cpt4.sme.zscaler.net",
+        "cpt4-vpn.zscaler.net"
+      ],
+      "probe_hostname": "cpt4.sme.zscaler.net"
+    },
+    "Chennai": {
+      "country_code": "IN",
+      "continent": "AS",
+      "lat": 13.0827,
+      "lon": 80.2707,
+      "probe_hostnames": [
+        "maa1.sme.zscaler.net",
+        "maa1-vpn.zscaler.net"
+      ],
+      "probe_hostname": "maa1.sme.zscaler.net"
+    },
+    "Chennai II": {
+      "country_code": "IN",
+      "continent": "AS",
+      "lat": 13.0827,
+      "lon": 80.2707,
+      "probe_hostnames": [
+        "maa2.sme.zscaler.net",
+        "maa2-vpn.zscaler.net"
+      ],
+      "probe_hostname": "maa2.sme.zscaler.net"
+    },
+    "Chennai III": {
+      "country_code": "IN",
+      "continent": "AS",
+      "lat": 13.0827,
+      "lon": 80.2707,
+      "probe_hostnames": [
+        "maa3.sme.zscaler.net",
+        "maa3-vpn.zscaler.net"
+      ],
+      "probe_hostname": "maa3.sme.zscaler.net"
+    },
+    "Chicago": {
+      "country_code": "US",
+      "continent": "NA",
+      "lat": 41.8781,
+      "lon": -87.6298,
+      "probe_hostnames": [
+        "chi1-2.sme.zscaler.net",
+        "chi1-2-vpn.zscaler.net"
+      ],
+      "probe_hostname": "chi1-2.sme.zscaler.net"
+    },
+    "Chicago II": {
+      "country_code": "US",
+      "continent": "NA",
+      "lat": 41.8781,
+      "lon": -87.6298,
+      "probe_hostnames": [
+        "chi2.sme.zscaler.net",
+        "chi2-vpn.zscaler.net"
+      ],
+      "probe_hostname": "chi2.sme.zscaler.net"
+    },
+    "Copenhagen II": {
+      "country_code": "DK",
+      "continent": "EU",
+      "lat": 55.6761,
+      "lon": 12.5683,
+      "probe_hostnames": [
+        "cph2.sme.zscaler.net",
+        "cph2-vpn.zscaler.net"
+      ],
+      "probe_hostname": "cph2.sme.zscaler.net"
+    },
+    "Dallas I": {
+      "country_code": "US",
+      "continent": "NA",
+      "lat": 32.7767,
+      "lon": -96.797,
+      "probe_hostnames": [
+        "dfw1-2.sme.zscaler.net",
+        "dfw1-2-vpn.zscaler.net"
+      ],
+      "probe_hostname": "dfw1-2.sme.zscaler.net"
+    },
+    "Dallas II": {
+      "country_code": "US",
+      "continent": "NA",
+      "lat": 32.7767,
+      "lon": -96.797,
+      "probe_hostnames": [
+        "dfw2.sme.zscaler.net",
+        "dfw2-vpn.zscaler.net"
+      ],
+      "probe_hostname": "dfw2.sme.zscaler.net"
+    },
+    "Denver III": {
+      "country_code": "US",
+      "continent": "NA",
+      "lat": 39.7392,
+      "lon": -104.9903,
+      "probe_hostnames": [
+        "den3.sme.zscaler.net",
+        "den3-vpn.zscaler.net"
+      ],
+      "probe_hostname": "den3.sme.zscaler.net"
+    },
+    "Dubai I": {
+      "country_code": "AE",
+      "continent": "AS",
+      "lat": 25.2048,
+      "lon": 55.2708,
+      "probe_hostnames": [
+        "dxb1-2.sme.zscloud.net",
+        "dxb1-vpn.zscaler.net"
+      ],
+      "probe_hostname": "dxb1-2.sme.zscloud.net"
+    },
+    "Dusseldorf I": {
+      "country_code": "DE",
+      "continent": "EU",
+      "lat": 51.2277,
+      "lon": 6.7735,
+      "probe_hostnames": [
+        "dus1.sme.zscaler.net",
+        "dus1-vpn.zscaler.net"
+      ],
+      "probe_hostname": "dus1.sme.zscaler.net"
+    },
+    "Frankfurt IV": {
+      "country_code": "DE",
+      "continent": "EU",
+      "lat": 50.1109,
+      "lon": 8.6821,
+      "probe_hostnames": [
+        "fra4-2.sme.zscaler.net",
+        "fra4-2-vpn.zscaler.net"
+      ],
+      "probe_hostname": "fra4-2.sme.zscaler.net"
+    },
+    "Frankfurt VI": {
+      "country_code": "DE",
+      "continent": "EU",
+      "lat": 50.1109,
+      "lon": 8.6821,
+      "probe_hostnames": [
+        "fra6.sme.zscaler.net",
+        "fra6-vpn.zscaler.net"
+      ],
+      "probe_hostname": "fra6.sme.zscaler.net"
+    },
+    "Helsinki I": {
+      "country_code": "FI",
+      "continent": "EU",
+      "lat": 60.1699,
+      "lon": 24.9384,
+      "probe_hostnames": [
+        "hel1.sme.zscaler.net",
+        "hel1-vpn.zscaler.net"
+      ],
+      "probe_hostname": "hel1.sme.zscaler.net"
+    },
+    "Hong Kong III": {
+      "country_code": "HK",
+      "continent": "AS",
+      "lat": 22.3193,
+      "lon": 114.1694,
+      "probe_hostnames": [
+        "hkg3.sme.zscaler.net",
+        "hkg3-vpn.zscaler.net"
+      ],
+      "probe_hostname": "hkg3.sme.zscaler.net"
+    },
+    "Hong Kong IV": {
+      "country_code": "HK",
+      "continent": "AS",
+      "lat": 22.3193,
+      "lon": 114.1694
+    },
+    "Honolulu I": {
+      "country_code": "US",
+      "continent": "NA",
+      "lat": 21.3099,
+      "lon": -157.8581
+    },
+    "Hyderabad I": {
+      "country_code": "IN",
+      "continent": "AS",
+      "lat": 17.385,
+      "lon": 78.4867,
+      "probe_hostnames": [
+        "hyd1.sme.zscaler.net",
+        "hyd1-vpn.zscaler.net"
+      ],
+      "probe_hostname": "hyd1.sme.zscaler.net"
+    },
+    "Jakarta I": {
+      "country_code": "ID",
+      "continent": "AS",
+      "lat": -6.2088,
+      "lon": 106.8456
+    },
+    "Johannesburg III": {
+      "country_code": "ZA",
+      "continent": "AF",
+      "lat": -26.2041,
+      "lon": 28.0473,
+      "probe_hostnames": [
+        "jnb3.sme.zscaler.net",
+        "jnb3-vpn.zscaler.net"
+      ],
+      "probe_hostname": "jnb3.sme.zscaler.net"
+    },
+    "Kingdom of Saudi Arabia I": {
+      "country_code": "SA",
+      "continent": "AS",
+      "lat": 24.7136,
+      "lon": 46.6753,
+      "probe_hostnames": [
+        "ksa1.sme.zscaler.net",
+        "ksa1-vpn.zscaler.net"
+      ],
+      "probe_hostname": "ksa1.sme.zscaler.net"
+    },
+    "Kolkata I": {
+      "country_code": "IN",
+      "continent": "AS",
+      "lat": 22.5726,
+      "lon": 88.3639,
+      "probe_hostnames": [
+        "ccu1.sme.zscaler.net",
+        "ccu1-vpn.zscaler.net"
+      ],
+      "probe_hostname": "ccu1.sme.zscaler.net"
+    },
+    "Kuala Lumpur I": {
+      "country_code": "MY",
+      "continent": "AS",
+      "lat": 3.139,
+      "lon": 101.6869,
+      "probe_hostnames": [
+        "kul1.sme.zscaler.net",
+        "kul1-vpn.zscaler.net"
+      ],
+      "probe_hostname": "kul1.sme.zscaler.net"
+    },
+    "Kuala Lumpur II": {
+      "country_code": "MY",
+      "continent": "AS",
+      "lat": 3.139,
+      "lon": 101.6869,
+      "probe_hostnames": [
+        "kul2.sme.zscaler.net",
+        "kul2-vpn.zscaler.net"
+      ],
+      "probe_hostname": "kul2.sme.zscaler.net"
+    },
+    "Lagos II": {
+      "country_code": "NG",
+      "continent": "AF",
+      "lat": 6.5244,
+      "lon": 3.3792,
+      "probe_hostnames": [
+        "los2.sme.zscaler.net",
+        "los2-vpn.zscaler.net"
+      ],
+      "probe_hostname": "los2.sme.zscaler.net"
+    },
+    "Lagos III": {
+      "country_code": "NG",
+      "continent": "AF",
+      "lat": 6.5244,
+      "lon": 3.3792,
+      "probe_hostnames": [
+        "los3.sme.zscaler.net",
+        "los3-vpn.zscaler.net"
+      ],
+      "probe_hostname": "los3.sme.zscaler.net"
+    },
+    "Lisbon I": {
+      "country_code": "PT",
+      "continent": "EU",
+      "lat": 38.7223,
+      "lon": -9.1393,
+      "probe_hostnames": [
+        "lis1.sme.zscaler.net",
+        "lis1-vpn.zscaler.net"
+      ],
+      "probe_hostname": "lis1.sme.zscaler.net"
+    },
+    "London III": {
+      "country_code": "GB",
+      "continent": "EU",
+      "lat": 51.5074,
+      "lon": -0.1278,
+      "probe_hostnames": [
+        "lon3-2.sme.zscalertwo.net",
+        "lon3-2-vpn.zscalertwo.net"
+      ],
+      "probe_hostname": "lon3-2.sme.zscalertwo.net"
+    },
+    "London V": {
+      "country_code": "GB",
+      "continent": "EU",
+      "lat": 51.5074,
+      "lon": -0.1278,
+      "probe_hostnames": [
+        "lon5.sme.zscaler.net",
+        "lon5-vpn.zscaler.net"
+      ],
+      "probe_hostname": "lon5.sme.zscaler.net"
+    },
+    "Los Angeles": {
+      "country_code": "US",
+      "continent": "NA",
+      "lat": 34.0522,
+      "lon": -118.2437,
+      "probe_hostnames": [
+        "qla1.sme.zscaler.net",
+        "qla1-vpn.zscaler.net"
+      ],
+      "probe_hostname": "qla1.sme.zscaler.net"
+    },
+    "Los Angeles II": {
+      "country_code": "US",
+      "continent": "NA",
+      "lat": 34.0522,
+      "lon": -118.2437,
+      "probe_hostnames": [
+        "qla2.sme.zscaler.net",
+        "qla2-vpn.zscaler.net"
+      ],
+      "probe_hostname": "qla2.sme.zscaler.net"
+    },
+    "Madrid III": {
+      "country_code": "ES",
+      "continent": "EU",
+      "lat": 40.4168,
+      "lon": -3.7038,
+      "probe_hostnames": [
+        "Mad3.sme.zscaler.net",
+        "Mad3-vpn.zscaler.net"
+      ],
+      "probe_hostname": "Mad3.sme.zscaler.net"
+    },
+    "Madrid IV": {
+      "country_code": "ES",
+      "continent": "EU",
+      "lat": 40.4168,
+      "lon": -3.7038,
+      "probe_hostnames": [
+        "mad4.sme.zscaler.net",
+        "mad4-vpn.zscaler.net"
+      ],
+      "probe_hostname": "mad4.sme.zscaler.net"
+    },
+    "Manchester I": {
+      "country_code": "GB",
+      "continent": "EU",
+      "lat": 53.4808,
+      "lon": -2.2426,
+      "probe_hostnames": [
+        "Man1.sme.zscaler.net",
+        "Man1-vpn.zscaler.net"
+      ],
+      "probe_hostname": "Man1.sme.zscaler.net"
+    },
+    "Manchester II": {
+      "country_code": "GB",
+      "continent": "EU",
+      "lat": 53.4808,
+      "lon": -2.2426,
+      "probe_hostnames": [
+        "man2.sme.zscaler.net",
+        "man2-vpn.zscaler.net"
+      ],
+      "probe_hostname": "man2.sme.zscaler.net"
+    },
+    "Marseille I": {
+      "country_code": "FR",
+      "continent": "EU",
+      "lat": 43.2965,
+      "lon": 5.3698,
+      "probe_hostnames": [
+        "mrs1.sme.zscaler.net",
+        "mrs1-vpn.zscaler.net"
+      ],
+      "probe_hostname": "mrs1.sme.zscaler.net"
+    },
+    "Melbourne II": {
+      "country_code": "AU",
+      "continent": "OC",
+      "lat": -37.8136,
+      "lon": 144.9631,
+      "probe_hostnames": [
+        "mel2.sme.zscaler.net",
+        "mel2-vpn.zscaler.net"
+      ],
+      "probe_hostname": "mel2.sme.zscaler.net"
+    },
+    "Mexico City I": {
+      "country_code": "MX",
+      "continent": "NA",
+      "lat": 19.4326,
+      "lon": -99.1332,
+      "probe_hostnames": [
+        "mex1.sme.zscaler.net",
+        "mex1-vpn.zscaler.net"
+      ],
+      "probe_hostname": "mex1.sme.zscaler.net"
+    },
+    "Mexico City II": {
+      "country_code": "MX",
+      "continent": "NA",
+      "lat": 19.4326,
+      "lon": -99.1332,
+      "probe_hostnames": [
+        "mex2.sme.zscaler.net",
+        "mex2-vpn.zscaler.net"
+      ],
+      "probe_hostname": "mex2.sme.zscaler.net"
+    },
+    "Miami III": {
+      "country_code": "US",
+      "continent": "NA",
+      "lat": 25.7617,
+      "lon": -80.1918,
+      "probe_hostnames": [
+        "mia3.sme.zscaler.net",
+        "mia3-vpn.zscaler.net"
+      ],
+      "probe_hostname": "mia3.sme.zscaler.net"
+    },
+    "Miami IV": {
+      "country_code": "US",
+      "continent": "NA",
+      "lat": 25.7617,
+      "lon": -80.1918,
+      "probe_hostnames": [
+        "mia4.sme.zscaler.net",
+        "mia4-vpn.zscaler.net"
+      ],
+      "probe_hostname": "mia4.sme.zscaler.net"
+    },
+    "Milan III": {
+      "country_code": "IT",
+      "continent": "EU",
+      "lat": 45.4642,
+      "lon": 9.19,
+      "probe_hostnames": [
+        "mil3.sme.zscaler.net",
+        "mil3-vpn.zscaler.net"
+      ],
+      "probe_hostname": "mil3.sme.zscaler.net"
+    },
+    "Milan IV": {
+      "country_code": "IT",
+      "continent": "EU",
+      "lat": 45.4642,
+      "lon": 9.19
+    },
+    "Montreal I": {
+      "country_code": "CA",
+      "continent": "NA",
+      "lat": 45.5017,
+      "lon": -73.5673,
+      "probe_hostnames": [
+        "ymq1.sme.zscaler.net",
+        "ymq1-vpn.zscaler.net"
+      ],
+      "probe_hostname": "ymq1.sme.zscaler.net"
+    },
+    "Mumbai IV": {
+      "country_code": "IN",
+      "continent": "AS",
+      "lat": 19.076,
+      "lon": 72.8777,
+      "probe_hostnames": [
+        "bom4.sme.zscaler.net",
+        "bom4-vpn.zscaler.net"
+      ],
+      "probe_hostname": "bom4.sme.zscaler.net"
+    },
+    "Mumbai VI": {
+      "country_code": "IN",
+      "continent": "AS",
+      "lat": 19.076,
+      "lon": 72.8777,
+      "probe_hostnames": [
+        "bom6.sme.zscaler.net",
+        "bom6-vpn.zscaler.net"
+      ],
+      "probe_hostname": "bom6.sme.zscaler.net"
+    },
+    "Mumbai VII": {
+      "country_code": "IN",
+      "continent": "AS",
+      "lat": 19.076,
+      "lon": 72.8777,
+      "probe_hostnames": [
+        "bom7.sme.zscaler.net",
+        "bom7-vpn.zscaler.net"
+      ],
+      "probe_hostname": "bom7.sme.zscaler.net"
+    },
+    "Munich I": {
+      "country_code": "DE",
+      "continent": "EU",
+      "lat": 48.1351,
+      "lon": 11.582,
+      "probe_hostnames": [
+        "muc1.sme.zscaler.net",
+        "muc1-vpn.zscaler.net"
+      ],
+      "probe_hostname": "muc1.sme.zscaler.net"
+    },
+    "New Delhi I": {
+      "country_code": "IN",
+      "continent": "AS",
+      "lat": 28.6139,
+      "lon": 77.209,
+      "probe_hostnames": [
+        "del1.sme.zscaler.net",
+        "del1-vpn.zscaler.net"
+      ],
+      "probe_hostname": "del1.sme.zscaler.net"
+    },
+    "New York III": {
+      "country_code": "US",
+      "continent": "NA",
+      "lat": 40.7128,
+      "lon": -74.006,
+      "probe_hostnames": [
+        "nyc3.sme.zscaler.net",
+        "nyc3-2-vpn.zscalertwo.net"
+      ],
+      "probe_hostname": "nyc3.sme.zscaler.net"
+    },
+    "New York IV": {
+      "country_code": "US",
+      "continent": "NA",
+      "lat": 40.7128,
+      "lon": -74.006,
+      "probe_hostnames": [
+        "nyc4.sme.zscaler.net",
+        "nyc4-vpn.zscaler.net"
+      ],
+      "probe_hostname": "nyc4.sme.zscaler.net"
+    },
+    "Nuevo Laredo I": {
+      "country_code": "MX",
+      "continent": "NA",
+      "lat": 27.4767,
+      "lon": -99.5164,
+      "probe_hostnames": [
+        "nld1.sme.zscaler.net",
+        "nld1-vpn.zscaler.net"
+      ],
+      "probe_hostname": "nld1.sme.zscaler.net"
+    },
+    "Osaka I": {
+      "country_code": "JP",
+      "continent": "AS",
+      "lat": 34.6937,
+      "lon": 135.5023,
+      "probe_hostnames": [
+        "osa1.sme.zscaler.net",
+        "osa1-vpn.zscaler.net"
+      ],
+      "probe_hostname": "osa1.sme.zscaler.net"
+    },
+    "Oslo III": {
+      "country_code": "NO",
+      "continent": "EU",
+      "lat": 59.9139,
+      "lon": 10.7522,
+      "probe_hostnames": [
+        "osl3.sme.zscaler.net",
+        "osl3-vpn.zscaler.net"
+      ],
+      "probe_hostname": "osl3.sme.zscaler.net"
+    },
+    "Paris II": {
+      "country_code": "FR",
+      "continent": "EU",
+      "lat": 48.8566,
+      "lon": 2.3522,
+      "probe_hostnames": [
+        "par2-2.sme.zscaler.net",
+        "par2-2-vpn.zscaler.net"
+      ],
+      "probe_hostname": "par2-2.sme.zscaler.net"
+    },
+    "Paris IV": {
+      "country_code": "FR",
+      "continent": "EU",
+      "lat": 48.8566,
+      "lon": 2.3522,
+      "probe_hostnames": [
+        "par4.sme.zscaler.net",
+        "par4-vpn.zscaler.net"
+      ],
+      "probe_hostname": "par4.sme.zscaler.net"
+    },
+    "Perth I": {
+      "country_code": "AU",
+      "continent": "OC",
+      "lat": -31.9505,
+      "lon": 115.8605,
+      "probe_hostnames": [
+        "per1.sme.zscaler.net",
+        "per1-vpn.zscaler.net"
+      ],
+      "probe_hostname": "per1.sme.zscaler.net"
+    },
+    "Rio de Janeiro I": {
+      "country_code": "BR",
+      "continent": "SA",
+      "lat": -22.9068,
+      "lon": -43.1729,
+      "probe_hostnames": [
+        "rio1.sme.zscaler.net",
+        "rio1-vpn.zscaler.net"
+      ],
+      "probe_hostname": "rio1.sme.zscaler.net"
+    },
+    "Rouen I": {
+      "country_code": "FR",
+      "continent": "EU",
+      "lat": 49.4432,
+      "lon": 1.0993,
+      "probe_hostnames": [
+        "uro1.sme.zscaler.net",
+        "uro1-vpn.zscaler.net"
+      ],
+      "probe_hostname": "uro1.sme.zscaler.net"
+    },
+    "San Francisco IV": {
+      "country_code": "US",
+      "continent": "NA",
+      "lat": 37.7749,
+      "lon": -122.4194,
+      "probe_hostnames": [
+        "sjc4-2.sme.zscaler.net",
+        "sjc4-2-vpn.zscaler.net"
+      ],
+      "probe_hostname": "sjc4-2.sme.zscaler.net"
+    },
+    "Santiago I": {
+      "country_code": "CL",
+      "continent": "SA",
+      "lat": -33.4489,
+      "lon": -70.6693,
+      "probe_hostnames": [
+        "scl1-2.sme.zscaler.net",
+        "scl1-2-vpn.zscaler.net"
+      ],
+      "probe_hostname": "scl1-2.sme.zscaler.net"
+    },
+    "Santiago II": {
+      "country_code": "CL",
+      "continent": "SA",
+      "lat": -33.4489,
+      "lon": -70.6693,
+      "probe_hostnames": [
+        "scl2.sme.zscaler.net",
+        "scl2-vpn.zscaler.net"
+      ],
+      "probe_hostname": "scl2.sme.zscaler.net"
+    },
+    "Sao Paulo": {
+      "country_code": "BR",
+      "continent": "SA",
+      "lat": -23.5505,
+      "lon": -46.6333,
+      "probe_hostnames": [
+        "sao2.sme.zscaler.net",
+        "saopaulo2-vpn.zscaler.net"
+      ],
+      "probe_hostname": "sao2.sme.zscaler.net"
+    },
+    "Sao Paulo II": {
+      "country_code": "BR",
+      "continent": "SA",
+      "lat": -23.5505,
+      "lon": -46.6333,
+      "probe_hostnames": [
+        "sao2-2.sme.zscaler.net",
+        "sao2-2-vpn.zscaler.net"
+      ],
+      "probe_hostname": "sao2-2.sme.zscaler.net"
+    },
+    "Sao Paulo IV": {
+      "country_code": "BR",
+      "continent": "SA",
+      "lat": -23.5505,
+      "lon": -46.6333,
+      "probe_hostnames": [
+        "sao4.sme.zscaler.net",
+        "sao4-vpn.zscaler.net"
+      ],
+      "probe_hostname": "sao4.sme.zscaler.net"
+    },
+    "Seattle": {
+      "country_code": "US",
+      "continent": "NA",
+      "lat": 47.6062,
+      "lon": -122.3321,
+      "probe_hostnames": [
+        "sea1.sme.zscaler.net",
+        "sea1-vpn.zscaler.net"
+      ],
+      "probe_hostname": "sea1.sme.zscaler.net"
+    },
+    "Seoul I": {
+      "country_code": "KR",
+      "continent": "AS",
+      "lat": 37.5665,
+      "lon": 126.978,
+      "probe_hostnames": [
+        "sel1.sme.zscaler.net",
+        "sel1-vpn.zscaler.net"
+      ],
+      "probe_hostname": "sel1.sme.zscaler.net"
+    },
+    "Shanghai": {
+      "country_code": "CN",
+      "continent": "AS",
+      "lat": 31.2304,
+      "lon": 121.4737,
+      "probe_hostnames": [
+        "sha1.sme.zscaler.net",
+        "sha1-vpn.zscaler.net"
+      ],
+      "probe_hostname": "sha1.sme.zscaler.net"
+    },
+    "Shanghai II": {
+      "country_code": "CN",
+      "continent": "AS",
+      "lat": 31.2304,
+      "lon": 121.4737,
+      "probe_hostnames": [
+        "sha2.sme.zscaler.net",
+        "sha2-vpn.zscaler.net"
+      ],
+      "probe_hostname": "sha2.sme.zscaler.net"
+    },
+    "Singapore IV": {
+      "country_code": "SG",
+      "continent": "AS",
+      "lat": 1.3521,
+      "lon": 103.8198,
+      "probe_hostnames": [
+        "sin4.sme.zscaler.net",
+        "sin4-vpn.zscaler.net"
+      ],
+      "probe_hostname": "sin4.sme.zscaler.net"
+    },
+    "Singapore V": {
+      "country_code": "SG",
+      "continent": "AS",
+      "lat": 1.3521,
+      "lon": 103.8198,
+      "probe_hostnames": [
+        "sin5.sme.zscaler.net",
+        "sin5-vpn.zscaler.net"
+      ],
+      "probe_hostname": "sin5.sme.zscaler.net"
+    },
+    "Stockholm III": {
+      "country_code": "SE",
+      "continent": "EU",
+      "lat": 59.3293,
+      "lon": 18.0686,
+      "probe_hostnames": [
+        "sto3.sme.zscaler.net",
+        "sto3-vpn.zscaler.net"
+      ],
+      "probe_hostname": "sto3.sme.zscaler.net"
+    },
+    "Sydney III": {
+      "country_code": "AU",
+      "continent": "OC",
+      "lat": -33.8688,
+      "lon": 151.2093,
+      "probe_hostnames": [
+        "syd3.sme.zscaler.net",
+        "syd3-vpn.zscaler.net"
+      ],
+      "probe_hostname": "syd3.sme.zscaler.net"
+    },
+    "Sydney V": {
+      "country_code": "AU",
+      "continent": "OC",
+      "lat": -33.8688,
+      "lon": 151.2093,
+      "probe_hostnames": [
+        "syd5.sme.zscaler.net",
+        "syd5-vpn.zscaler.net"
+      ],
+      "probe_hostname": "syd5.sme.zscaler.net"
+    },
+    "Taipei": {
+      "country_code": "TW",
+      "continent": "AS",
+      "lat": 25.033,
+      "lon": 121.5654,
+      "probe_hostnames": [
+        "tpe2.sme.zscaler.net",
+        "tpe2-vpn.zscaler.net"
+      ],
+      "probe_hostname": "tpe2.sme.zscaler.net"
+    },
+    "Tel Aviv II": {
+      "country_code": "IL",
+      "continent": "AS",
+      "lat": 32.0853,
+      "lon": 34.7818,
+      "probe_hostnames": [
+        "tlv2.sme.zscaler.net",
+        "tlv2-vpn.zscaler.net"
+      ],
+      "probe_hostname": "tlv2.sme.zscaler.net"
+    },
+    "Tianjin": {
+      "country_code": "CN",
+      "continent": "AS",
+      "lat": 39.3434,
+      "lon": 117.3616,
+      "probe_hostnames": [
+        "tsn1.sme.zscaler.net",
+        "tsn1-vpn.zscaler.net"
+      ],
+      "probe_hostname": "tsn1.sme.zscaler.net"
+    },
+    "Tokyo IV": {
+      "country_code": "JP",
+      "continent": "AS",
+      "lat": 35.6762,
+      "lon": 139.6503,
+      "probe_hostnames": [
+        "tyo4-2.sme.zscloud.net",
+        "tyo4-2-vpn.zscloud.net"
+      ],
+      "probe_hostname": "tyo4-2.sme.zscloud.net"
+    },
+    "Tokyo V": {
+      "country_code": "JP",
+      "continent": "AS",
+      "lat": 35.6762,
+      "lon": 139.6503,
+      "probe_hostnames": [
+        "tyo5.sme.zscaler.net",
+        "tyo5-vpn.zscaler.net"
+      ],
+      "probe_hostname": "tyo5.sme.zscaler.net"
+    },
+    "Tokyo VI": {
+      "country_code": "JP",
+      "continent": "AS",
+      "lat": 35.6762,
+      "lon": 139.6503
+    },
+    "Toronto III": {
+      "country_code": "CA",
+      "continent": "NA",
+      "lat": 43.6532,
+      "lon": -79.3832,
+      "probe_hostnames": [
+        "yto3.sme.zscaler.net",
+        "yto3-vpn.zscaler.net"
+      ],
+      "probe_hostname": "yto3.sme.zscaler.net"
+    },
+    "Vancouver I": {
+      "country_code": "CA",
+      "continent": "NA",
+      "lat": 49.2827,
+      "lon": -123.1207,
+      "probe_hostnames": [
+        "yvr1.sme.zscaler.net",
+        "yvr1-vpn.zscaler.net"
+      ],
+      "probe_hostname": "yvr1.sme.zscaler.net"
+    },
+    "Vienna I": {
+      "country_code": "AT",
+      "continent": "EU",
+      "lat": 48.2082,
+      "lon": 16.3738,
+      "probe_hostnames": [
+        "vie1.sme.zscaler.net",
+        "vie1-vpn.zscaler.net"
+      ],
+      "probe_hostname": "vie1.sme.zscaler.net"
+    },
+    "Warsaw II": {
+      "country_code": "PL",
+      "continent": "EU",
+      "lat": 52.2297,
+      "lon": 21.0122,
+      "probe_hostnames": [
+        "waw2.sme.zscaler.net",
+        "waw2-vpn.zscaler.net"
+      ],
+      "probe_hostname": "waw2.sme.zscaler.net"
+    },
+    "Washington DC": {
+      "country_code": "US",
+      "continent": "NA",
+      "lat": 38.9072,
+      "lon": -77.0369,
+      "probe_hostnames": [
+        "was1-2.sme.zscaler.net",
+        "was1-2-vpn.zscaler.net"
+      ],
+      "probe_hostname": "was1-2.sme.zscaler.net"
+    },
+    "Washington DC IV": {
+      "country_code": "US",
+      "continent": "NA",
+      "lat": 38.9072,
+      "lon": -77.0369,
+      "probe_hostnames": [
+        "was4.sme.zscaler.net",
+        "was4-vpn.zscaler.net"
+      ],
+      "probe_hostname": "was4.sme.zscaler.net"
+    },
+    "Zurich": {
+      "country_code": "CH",
+      "continent": "EU",
+      "lat": 47.3769,
+      "lon": 8.5417,
+      "probe_hostnames": [
+        "zrh1-2.sme.zscaler.net",
+        "zrh1-2-vpn.zscaler.net"
+      ],
+      "probe_hostname": "zrh1-2.sme.zscaler.net"
+    },
+    "Zurich I": {
+      "country_code": "CH",
+      "continent": "EU",
+      "lat": 47.3769,
+      "lon": 8.5417,
+      "probe_hostnames": [
+        "zrh1.sme.zscalergov.net",
+        "zrh1-vpn.zscalergov.net"
+      ],
+      "probe_hostname": "zrh1.sme.zscalergov.net"
+    }
+  },
+  "city_metadata_notes": "country_code is ISO 3166-1 alpha-2. continent is one of NA/SA/EU/AS/AF/OC (Middle East folded into AS). lat/lon are the city centre in decimal degrees. probe_hostnames is the list of representative hostnames for this city -- first entry of by_city[city].proxy_hostnames (ZIA HTTPS proxy) followed by first entry of by_city[city].vpn_hostnames (IPsec/GRE tunnel initiator). Both are pinned as site-scope critical so proxy and VPN paths are monitored independently -- they share the same PoP but different service planes. Legacy probe_hostname (scalar) is kept for readers that predate the list form."
+}
