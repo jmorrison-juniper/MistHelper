@@ -69,6 +69,15 @@ git checkout main && git pull origin main
   files/functions -- never entire repos. Start only needed MCP servers. Use agent mode for
   multi-step tasks, standard chat for quick questions. Ask for a plan before large changes.
   See `copilot-token-efficiency.instructions.md` for full details.
+- **Writing style -- Simplified Technical English (STE)** (NON-NEGOTIABLE): All
+  documentation, code comments, pull request text, error messages, user-facing
+  communication and printed output, and agent output MUST follow the STE writing
+  guide at `documentation/ASD-STE100_writing-guide.md`. One word = one meaning; one
+  term per concept, reused consistently; active voice; simple tenses; short
+  sentences (<=20 words instructions, <=25 descriptions); imperative for steps with
+  the condition first ("If X, do Y"); no semicolons, slang, jargon, or Latin
+  abbreviations (e.g./i.e./etc.); American spelling; never alter quoted
+  strings/identifiers. Warnings lead with a signal word and state the consequence.
 
 ## External Resources
 

@@ -1,0 +1,35 @@
+name: STE Writing Lint
+
+# Grade documentation prose against the Simplified Technical English rules. The
+# job fails when a graded file scores below the threshold. Widen the file list to
+# cover more documents as they reach the standard.
+
+on:
+  pull_request:
+    paths:
+      - "documentation/**/*.md"
+      - "tools/ste_linter/**"
+      - ".github/workflows/ste-lint.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ste-lint:
+    name: STE compliance
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Grade documentation with the STE linter
+        run: >
+          python -m tools.ste_linter --min-score 80
+          documentation/ASD-STE100_writing-guide.md
+          tools/ste_linter/README.md
