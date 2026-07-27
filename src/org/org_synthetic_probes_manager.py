@@ -63,21 +63,72 @@ _PRIORITY_AGGRESSIVENESS: frozenset[str] = frozenset({"critical", "high"})
 # picked site's ``country_code``.
 _SAMSUNG_ELM_ROLE_PREFIX = "samsung_elm_activation_"
 _COUNTRY_CODE_TO_REGION: dict[str, str] = {
-    "US": "americas",
-    "CA": "americas",
-    "MX": "americas",
-    "AR": "americas",
-    "BR": "americas",
-    "CL": "americas",
-    "CO": "americas",
-    "PE": "americas",
-    "VE": "americas",
+    # North America -- pre-1025 baseline.
+    "US": "americas",  # United States
+    "CA": "americas",  # Canada
+    "MX": "americas",  # Mexico
+    # South America -- large markets from the pre-1025 baseline.
+    "AR": "americas",  # Argentina
+    "BR": "americas",  # Brazil
+    "CL": "americas",  # Chile
+    "CO": "americas",  # Colombia
+    "PE": "americas",  # Peru
+    "VE": "americas",  # Venezuela
+    # South America -- 1025 US2 extension (residual sovereign codes so the
+    # continent classifies without falling through to EMEA).
+    "BO": "americas",  # Bolivia
+    "EC": "americas",  # Ecuador
+    "FK": "americas",  # Falkland Islands (Islas Malvinas)
+    "GF": "americas",  # French Guiana
+    "GY": "americas",  # Guyana
+    "PY": "americas",  # Paraguay
+    "SR": "americas",  # Suriname
+    "UY": "americas",  # Uruguay
+    # Central America -- 1025 US2 extension.
+    "BZ": "americas",  # Belize
+    "CR": "americas",  # Costa Rica
+    "GT": "americas",  # Guatemala
+    "HN": "americas",  # Honduras
+    "NI": "americas",  # Nicaragua
+    "PA": "americas",  # Panama
+    "SV": "americas",  # El Salvador
+    # Caribbean -- 1025 US2 extension (every ISO-listed island so the region
+    # never falls through to the EMEA default).
+    "AG": "americas",  # Antigua and Barbuda
+    "AI": "americas",  # Anguilla
+    "AW": "americas",  # Aruba
+    "BB": "americas",  # Barbados
+    "BL": "americas",  # Saint Barthelemy
+    "BM": "americas",  # Bermuda
+    "BQ": "americas",  # Bonaire, Sint Eustatius and Saba
+    "BS": "americas",  # Bahamas
+    "CU": "americas",  # Cuba
+    "CW": "americas",  # Curacao
+    "DM": "americas",  # Dominica
+    "DO": "americas",  # Dominican Republic
+    "GD": "americas",  # Grenada
+    "GP": "americas",  # Guadeloupe
+    "HT": "americas",  # Haiti
+    "JM": "americas",  # Jamaica
+    "KN": "americas",  # Saint Kitts and Nevis
+    "KY": "americas",  # Cayman Islands
+    "LC": "americas",  # Saint Lucia
+    "MF": "americas",  # Saint Martin (French part)
+    "MQ": "americas",  # Martinique
+    "MS": "americas",  # Montserrat
+    "PR": "americas",  # Puerto Rico
+    "SX": "americas",  # Sint Maarten (Dutch part)
+    "TC": "americas",  # Turks and Caicos Islands
+    "TT": "americas",  # Trinidad and Tobago
+    "VC": "americas",  # Saint Vincent and the Grenadines
+    "VG": "americas",  # British Virgin Islands
+    "VI": "americas",  # United States Virgin Islands
     # China + SARs + Taiwan hit ``.com.cn`` endpoints; EMEA fallback uses
     # ``.com`` so they must be routed to the china role explicitly.
-    "CN": "china",
-    "HK": "china",
-    "MO": "china",
-    "TW": "china",
+    "CN": "china",  # China (mainland)
+    "HK": "china",  # Hong Kong SAR
+    "MO": "china",  # Macao SAR
+    "TW": "china",  # Taiwan
 }
 # Anything not listed above falls through to EMEA. EMEA endpoints are the
 # broadest surface (Africa, Middle East, Europe, plus every APAC/Oceania code
@@ -85,6 +136,225 @@ _COUNTRY_CODE_TO_REGION: dict[str, str] = {
 # warning is logged when the fallback fires so operators can spot unmapped
 # country codes and extend ``_COUNTRY_CODE_TO_REGION`` if needed.
 _DEFAULT_REGION = "emea"
+
+# Deliberately-unmapped ISO-3166-1 alpha-2 codes. These fall through to
+# ``_DEFAULT_REGION`` today by design (they map onto EMEA's ``.com`` endpoint
+# surface which is the correct behaviour for Africa, the Middle East, Europe,
+# Central/South/Southeast/Northeast Asia, Oceania, and Antarctica -- none of
+# which have a dedicated regional Samsung ELM role). Enumerating every
+# residual code explicitly (rather than leaving them implicit in the fall-
+# through) turns the pairing (``_COUNTRY_CODE_TO_REGION``, this set) into a
+# machine-checkable coverage contract: together they must cover every ISO
+# alpha-2 code exactly once. See ``iso_coverage_invariant.md`` INV-COVER-1..4
+# and the regression suite in ``tests/unit/org/test_country_region_coverage.py``
+# which fails CI the moment a code is silently added, removed, or duplicated.
+# Membership is a frozenset so downstream helpers cannot mutate the coverage
+# invariant at runtime.
+_COUNTRY_CODE_INTENTIONAL_GAPS: frozenset[str] = frozenset(
+    {
+        # Africa (EMEA -- broadest fallback surface today)
+        "AO",  # Angola
+        "BF",  # Burkina Faso
+        "BI",  # Burundi
+        "BJ",  # Benin
+        "BW",  # Botswana
+        "CD",  # DR Congo
+        "CF",  # Central African Republic
+        "CG",  # Congo
+        "CI",  # Cote d'Ivoire
+        "CM",  # Cameroon
+        "CV",  # Cabo Verde
+        "DJ",  # Djibouti
+        "DZ",  # Algeria
+        "EG",  # Egypt
+        "EH",  # Western Sahara
+        "ER",  # Eritrea
+        "ET",  # Ethiopia
+        "GA",  # Gabon
+        "GH",  # Ghana
+        "GM",  # Gambia
+        "GN",  # Guinea
+        "GQ",  # Equatorial Guinea
+        "GW",  # Guinea-Bissau
+        "KE",  # Kenya
+        "KM",  # Comoros
+        "LR",  # Liberia
+        "LS",  # Lesotho
+        "LY",  # Libya
+        "MA",  # Morocco
+        "MG",  # Madagascar
+        "ML",  # Mali
+        "MR",  # Mauritania
+        "MU",  # Mauritius
+        "MW",  # Malawi
+        "MZ",  # Mozambique
+        "NA",  # Namibia
+        "NE",  # Niger
+        "NG",  # Nigeria
+        "RE",  # Reunion
+        "RW",  # Rwanda
+        "SC",  # Seychelles
+        "SD",  # Sudan
+        "SH",  # Saint Helena
+        "SL",  # Sierra Leone
+        "SN",  # Senegal
+        "SO",  # Somalia
+        "SS",  # South Sudan
+        "ST",  # Sao Tome and Principe
+        "SZ",  # Eswatini
+        "TD",  # Chad
+        "TG",  # Togo
+        "TN",  # Tunisia
+        "TZ",  # Tanzania
+        "UG",  # Uganda
+        "YT",  # Mayotte
+        "ZA",  # South Africa
+        "ZM",  # Zambia
+        "ZW",  # Zimbabwe
+        # Middle East (EMEA -- broadest fallback surface today)
+        "AE",  # United Arab Emirates
+        "AF",  # Afghanistan
+        "BH",  # Bahrain
+        "IL",  # Israel
+        "IQ",  # Iraq
+        "IR",  # Iran
+        "JO",  # Jordan
+        "KW",  # Kuwait
+        "LB",  # Lebanon
+        "OM",  # Oman
+        "PS",  # Palestine
+        "QA",  # Qatar
+        "SA",  # Saudi Arabia
+        "SY",  # Syria
+        "TR",  # Turkey
+        "YE",  # Yemen
+        # Europe + European overseas / crown dependencies (EMEA)
+        "AD",  # Andorra
+        "AL",  # Albania
+        "AT",  # Austria
+        "AX",  # Aland Islands
+        "BA",  # Bosnia and Herzegovina
+        "BE",  # Belgium
+        "BG",  # Bulgaria
+        "BV",  # Bouvet Island
+        "BY",  # Belarus
+        "CH",  # Switzerland
+        "CY",  # Cyprus
+        "CZ",  # Czechia
+        "DE",  # Germany
+        "DK",  # Denmark
+        "EE",  # Estonia
+        "ES",  # Spain
+        "FI",  # Finland
+        "FO",  # Faroe Islands
+        "FR",  # France
+        "GB",  # United Kingdom
+        "GE",  # Georgia
+        "GG",  # Guernsey
+        "GI",  # Gibraltar
+        "GL",  # Greenland
+        "GR",  # Greece
+        "GS",  # South Georgia
+        "HM",  # Heard and McDonald Islands
+        "HR",  # Croatia
+        "HU",  # Hungary
+        "IE",  # Ireland
+        "IM",  # Isle of Man
+        "IS",  # Iceland
+        "IT",  # Italy
+        "JE",  # Jersey
+        "LI",  # Liechtenstein
+        "LT",  # Lithuania
+        "LU",  # Luxembourg
+        "LV",  # Latvia
+        "MC",  # Monaco
+        "MD",  # Moldova
+        "ME",  # Montenegro
+        "MK",  # North Macedonia
+        "MT",  # Malta
+        "NL",  # Netherlands
+        "NO",  # Norway
+        "PL",  # Poland
+        "PM",  # Saint Pierre and Miquelon
+        "PT",  # Portugal
+        "RO",  # Romania
+        "RS",  # Serbia
+        "RU",  # Russia
+        "SE",  # Sweden
+        "SI",  # Slovenia
+        "SJ",  # Svalbard and Jan Mayen
+        "SK",  # Slovakia
+        "SM",  # San Marino
+        "UA",  # Ukraine
+        "VA",  # Vatican City
+        # Central Asia (EMEA today; no China routing)
+        "AM",  # Armenia
+        "AZ",  # Azerbaijan
+        "KG",  # Kyrgyzstan
+        "KZ",  # Kazakhstan
+        "TJ",  # Tajikistan
+        "TM",  # Turkmenistan
+        "UZ",  # Uzbekistan
+        # South Asia (EMEA today)
+        "BD",  # Bangladesh
+        "BT",  # Bhutan
+        "IN",  # India
+        "LK",  # Sri Lanka
+        "MV",  # Maldives
+        "NP",  # Nepal
+        "PK",  # Pakistan
+        # Southeast Asia (EMEA today; not classified as China)
+        "BN",  # Brunei
+        "ID",  # Indonesia
+        "KH",  # Cambodia
+        "LA",  # Laos
+        "MM",  # Myanmar
+        "MY",  # Malaysia
+        "PH",  # Philippines
+        "SG",  # Singapore
+        "TH",  # Thailand
+        "TL",  # Timor-Leste
+        "VN",  # Vietnam
+        # Northeast Asia (EMEA today; not classified as China)
+        "JP",  # Japan
+        "KP",  # North Korea
+        "KR",  # South Korea
+        "MN",  # Mongolia
+        # Oceania + Pacific outposts (EMEA today)
+        "AS",  # American Samoa
+        "AU",  # Australia
+        "CC",  # Cocos (Keeling) Islands
+        "CK",  # Cook Islands
+        "CX",  # Christmas Island
+        "FJ",  # Fiji
+        "FM",  # Micronesia
+        "GU",  # Guam
+        "IO",  # British Indian Ocean Territory
+        "KI",  # Kiribati
+        "MH",  # Marshall Islands
+        "MP",  # Northern Mariana Islands
+        "NC",  # New Caledonia
+        "NF",  # Norfolk Island
+        "NR",  # Nauru
+        "NU",  # Niue
+        "NZ",  # New Zealand
+        "PF",  # French Polynesia
+        "PG",  # Papua New Guinea
+        "PN",  # Pitcairn
+        "PW",  # Palau
+        "SB",  # Solomon Islands
+        "TF",  # French Southern Territories
+        "TK",  # Tokelau
+        "TO",  # Tonga
+        "TV",  # Tuvalu
+        "UM",  # US Minor Outlying Islands
+        "VU",  # Vanuatu
+        "WF",  # Wallis and Futuna
+        "WS",  # Samoa
+        # Antarctica -- no plausible Mist site
+        "AQ",  # Antarctica
+    }
+)
 
 # Default URL scheme / port pairs. Mist's ``target`` field is a URL, so a
 # per-role ``probe.protocol`` chosen from the curated JSON maps directly to a
@@ -709,6 +979,127 @@ def _emit_load_time_cenr_warning(
         "CENR load-time warning emitted for %s hosts; warned_cenr_hosts now %s",
         len(ordered),
         len(warned_cenr_hosts),
+    )
+
+
+def _compute_unmapped_country_codes(
+    sites: list[dict[str, Any]],
+    region_map: dict[str, str],
+    gap_set: frozenset[str],
+) -> frozenset[str]:
+    """Return unique ISO codes present in ``sites`` but neither region-mapped nor gap-listed.
+
+    Why:
+        Load-time counterpart to ``_compute_missing_cenr_hosts`` for the
+        country_code axis. Pre-1025, every site with an unmapped code
+        triggered a fresh WARNING inside ``_build_region_probes`` (research.md
+        R5 quantifies the N*K duplication: 315 sites * K unmapped codes). By
+        collapsing to the set of *unique* codes here -- exactly once per
+        invocation -- the downstream emitter caps output at K messages
+        regardless of how many sites share each code (FR-004, FR-010).
+        Codes appearing in ``gap_set`` are silently classified (they are
+        deliberately EMEA today by contract INV-COVER-2) and therefore never
+        surface here; only truly-new codes bubble up so the operator gets a
+        signal, not noise.
+
+    Args:
+        sites: List of site dicts as returned by ``_list_org_sites``. Each
+            dict is expected to carry a ``country_code`` string (missing /
+            blank entries are treated as "not classifiable" and skipped
+            silently -- the region resolver already falls those through to
+            the default region and emitting a WARNING for a null value
+            would be indistinguishable from an unmapped-code warning).
+        region_map: ``_COUNTRY_CODE_TO_REGION`` (passed as an argument so
+            tests can exercise the classifier with fixture-scoped maps
+            without patching the module-level constant).
+        gap_set: ``_COUNTRY_CODE_INTENTIONAL_GAPS`` (same rationale).
+
+    Returns:
+        Frozen set of ISO alpha-2 codes appearing in ``sites`` that are
+        neither in ``region_map`` nor in ``gap_set``. Empty set when every
+        code is classified (FR-005 zero-emission edge case for the LATAM
+        fixture after T020).
+    """
+    logging.info(  # Constitution VII action-logging: BEFORE the scan
+        "computing unmapped country codes: sites=%s region_map=%s gap_set=%s",
+        len(sites),
+        len(region_map),
+        len(gap_set),
+    )
+    seen: set[str] = set()  # accumulator for unique codes across all sites
+    for site in sites:  # single pass over the site list
+        raw = site.get("country_code")  # optional field per Mist site schema
+        if not isinstance(raw, str):  # non-string / missing -> skip; region resolver handles it
+            continue
+        code = raw.strip().upper()  # normalise like _build_region_probes at line 1068
+        if not code:  # blank string after normalisation -> skip
+            continue
+        if code in region_map:  # already region-classified -> silent success
+            continue
+        if code in gap_set:  # intentional gap -> silently falls through to EMEA
+            continue
+        seen.add(code)  # genuinely unclassified -> record for warning
+    unmapped = frozenset(seen)  # freeze so callers cannot smuggle in extras
+    logging.debug(  # Constitution VII: AFTER with unique-code count
+        "computed unmapped country codes: %s unique code(s)",
+        len(unmapped),
+    )
+    return unmapped  # frozenset consumed by _emit_load_time_country_code_warning
+
+
+def _emit_load_time_country_code_warning(
+    unmapped_codes: frozenset[str],
+    warned_unmapped_codes: set[str],
+) -> None:
+    """Emit exactly one WARNING per invocation naming all unwarned unmapped codes.
+
+    Why:
+        Contract ``log_record_shape.md`` §2.4 mandates a single load-time
+        WARNING when at least one site's country_code is neither region-mapped
+        nor listed as an intentional gap. The message MUST contain the literal
+        token ``country_code`` (test filter anchor from ``_count_country_code_warnings``
+        at line 3050) and MUST name every unwarned code plus the default
+        region literal so an operator can either extend
+        ``_COUNTRY_CODE_TO_REGION`` or add the code to
+        ``_COUNTRY_CODE_INTENTIONAL_GAPS`` in the same commit. FR-012 pins
+        per-invocation lifetime: ``warned_unmapped_codes`` is caller-owned and
+        recreated per run.
+
+    Args:
+        unmapped_codes: Output of ``_compute_unmapped_country_codes``.
+        warned_unmapped_codes: Per-invocation dedup set (mutated in place).
+            Codes added here are skipped on any subsequent call within the
+            same invocation. FR-012: caller supplies a fresh empty set per
+            run; state MUST NOT persist across runs.
+    """
+    logging.info(  # Constitution VII: BEFORE the emission decision
+        "evaluating country_code load-time warning: unmapped=%s already_warned=%s",
+        len(unmapped_codes),
+        len(warned_unmapped_codes),
+    )
+    unwarned = unmapped_codes - warned_unmapped_codes  # subtract codes already emitted this run
+    if not unwarned:  # zero-emission (FR-005 LATAM path) or repeat call within run
+        logging.debug(  # Constitution VII: AFTER, no-op branch
+            "country_code load-time warning: no unwarned unmapped codes; skipping emission",
+        )
+        return  # nothing to warn about
+    # Deterministic ordering so ``grep -c country_code`` in the operator smoke
+    # sequence stays stable across runs regardless of set iteration order.
+    ordered = sorted(unwarned)  # ASCII sort per Constitution V log discipline
+    # Single WARNING record naming every code plus the default region literal
+    # so the operator knows exactly which routing decision was made. ASCII
+    # tokens only (``country_code``, ``defaulting to region``) so the grep
+    # anchor stays deterministic (SC-002, log_record_shape.md §2.4).
+    logging.warning(  # exactly-one-per-run WARNING per contract §2.4
+        "country_code(s) %s not mapped; defaulting to region %r",
+        ", ".join(ordered),
+        _DEFAULT_REGION,
+    )
+    warned_unmapped_codes.update(unwarned)  # mark as warned so a duplicate call is a no-op
+    logging.debug(  # Constitution VII: AFTER, emission branch
+        "country_code load-time warning emitted for %s code(s); warned_unmapped_codes now %s",
+        len(ordered),
+        len(warned_unmapped_codes),
     )
 
 
