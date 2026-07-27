@@ -2406,7 +2406,7 @@ class TestProbeTargetVpn:
             for r in caplog.records
             if r.levelno == logging.INFO
             and "probe_target(vpn)" in r.getMessage()
-            and "log-check-vpn.zscaler.net" in r.getMessage()  # lgtm[py/incomplete-url-substring-sanitization]
+            and "log-check-vpn.zscaler.net" in r.getMessage()
             and "bare (reachability)" in r.getMessage()
         ]
         assert len(matching) == 1, [r.getMessage() for r in caplog.records]
