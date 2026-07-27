@@ -30,7 +30,6 @@ import pytest  # test framework — used for skip guard, not for assertions
 
 from src.org import org_synthetic_probes_manager as ospm  # target module under 1025 edit surface
 
-
 # Path to the smoke_org fixture that _build_probe_set consumes.
 # Why: this fixture already ships from 1024 (verified during T002 inventory) and
 # defines every emit shape the byte-stability test T010 must pin.
