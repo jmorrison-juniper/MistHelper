@@ -1,0 +1,37 @@
+{
+    "_comment": [
+        "Expected bundle for tests/unit/org/fixtures/smoke_org.json (feature 1024 US2 INV-1).",
+        "Hand-authored ground truth for _build_probe_set output. Any post-1024 code",
+        "change that alters non-VPN row bytes here is a REGRESSION; do not mutate",
+        "this baseline to hide drift (per tasks.md T018).",
+        "",
+        "Ordering reflects _iter_role_fqdns for tunnel_zen: proxy_hostnames first,",
+        "then vpn_hostnames, each in input order.",
+        "aggressiveness=auto everywhere because the smoke role is critical=false."
+    ],
+    "zcc-tunnel_zen-edge-zscalerthree-net": {
+        "type": "application",
+        "target": "https://edge.zscalerthree.net",
+        "aggressiveness": "auto"
+    },
+    "zcc-tunnel_zen-custom-svc-zscalerthree-net": {
+        "type": "application",
+        "target": "custom-svc.zscalerthree.net:8080",
+        "aggressiveness": "auto"
+    },
+    "zcc-tunnel_zen-gateway-zscalerthree-net": {
+        "type": "reachability",
+        "target": "gateway.zscalerthree.net",
+        "aggressiveness": "auto"
+    },
+    "zcc-tunnel_zen-ike-observed-zscalerthree-net": {
+        "type": "reachability",
+        "target": "ike-observed.zscalerthree.net",
+        "aggressiveness": "auto"
+    },
+    "zcc-tunnel_zen-fra4-vpn-zscalerthree-net": {
+        "type": "reachability",
+        "target": "fra4-vpn.zscalerthree.net",
+        "aggressiveness": "auto"
+    }
+}

@@ -13,7 +13,7 @@ Why:
     so a follow-up run can safely merge or swap without disturbing
     probes authored elsewhere.
 
-Module-import must remain side-effect free (issue #1641 --help guard):
+Module-import must remain side-effect free (--help guard):
     Only ``import`` statements at module scope; all I/O, prompts, and API
     calls live inside functions invoked from the menu dispatch table.
 """
@@ -33,14 +33,14 @@ from mistapi.api.v1.orgs import setting as _mist_setting
 from mistapi.api.v1.orgs import sites as _mist_orgs_sites
 from mistapi.api.v1.sites import setting as _mist_site_setting
 
-from src.utils.zscaler_catalogue import ensure_fresh
+from src.utils.zscaler_catalogue import ensure_fresh, promote_cache_document
 
 _DEFAULT_DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
 _PROBE_SOURCE_FILE = "zscaler_client_connector_probes.json"
 _CENR_SOURCE_FILE = "zscaler_cenr_hostnames.json"
 _TOOL_NAME_PREFIX = "zcc-"
 _TUNNEL_ZEN_ROLE = "tunnel_zen"  # Only role that expands via CENR hostnames.
-_VLAN_MIN = 0
+_VLAN_MIN = 1
 _VLAN_MAX = 4094
 _CRITICAL_AGGRESSIVENESS = "high"
 _AUTO_AGGRESSIVENESS = "auto"
@@ -99,40 +99,287 @@ _DEFAULT_REGION = "emea"
 #      writes an explicit ``:443`` on HTTPS targets).
 _SCHEME_DEFAULT_PORT: dict[str, int] = {"http": 80, "https": 443}
 
+# UDP/500 (IKE_SA_INIT) is the ZEN VPN service plane. When a VPN-bag host has
+# no live UDP observation yet, defaulting to bare ``host:500`` is still
+# correct -- the alternative (``https://vpn-host``) was the pre-1023 bug that
+# emitted 400+ never-succeed HTTPS probes against IPsec/IKE endpoints. See
+# probe_target_url_builder.md SC-001 and the 2026-07-26 regression that
+# resurfaced after the schema-v3 cache promotion left ``observed_protocol``
+# unpopulated on every VPN host.
+_VPN_DEFAULT_PORT = 500
 
-def _probe_target(fqdn: str, role: dict[str, Any], cenr_source: dict[str, Any]) -> str:
-    """Compose the Mist ``target`` URL for one FQDN of ``role``.
+
+def _is_vpn_host(fqdn: str, cenr_source: dict[str, Any]) -> bool:
+    """Return True iff ``fqdn`` appears in any ``vpn_hostnames`` bag.
 
     Why:
-        Mist stores the probe protocol as the URL scheme on ``target`` rather
-        than as an independent field. The curated JSON now encodes each
-        role's chosen protocol under ``probe.protocol`` (see
-        ``zscaler_client_connector_probes.json`` schema v2), and CENR hosts
-        (the ``tunnel_zen`` role's expansion set) inherit protocol from the
-        CENR file's ``probe_default``. Centralising the URL construction
-        keeps org-scope and site-scope builders in lockstep and lets the
-        ``tcp``-to-``https`` upgrade (see module-level comment on
-        ``_SCHEME_DEFAULT_PORT``) live in exactly one place.
+        The CENR file classifies every ZEN hostname as either proxy (HTTPS
+        service plane) or vpn (IKE/IPsec service plane). When Branch 3's
+        fallback fires because no live observation exists yet, the bag
+        that the host lives in tells us the correct default port/scheme
+        without needing a probe cycle. This is the deterministic, no-
+        heuristic classifier -- no ``-vpn.`` string matching, no role
+        peek -- so a hostname is treated as VPN iff the operator or the
+        CENR feed said so.
 
     Args:
-        fqdn: The host portion of the URL (never a wildcard -- callers strip
-            those upstream).
-        role: The role dict from the probe source file. Its ``probe`` block
-            (if present) supplies ``protocol`` and ``port``.
-        cenr_source: Parsed CENR source dict; consulted when ``role`` is the
-            ``tunnel_zen`` role, since that role delegates its probe
-            configuration to the CENR file's ``probe_default``.
+        fqdn: Hostname to classify.
+        cenr_source: Loaded CENR document (v2 flat strings or v3 dicts;
+            both are unwrapped by ``_host_of`` below).
 
     Returns:
-        A URL string like ``"https://example.com"`` (default port elided) or
-        ``"https://example.com:8443"`` (non-default port explicit).
+        True when the FQDN appears anywhere in a ``vpn_hostnames`` list
+        (top-level or under ``by_city[*]``); False otherwise.
     """
+
+    def _host_of(entry: Any) -> str:
+        # Same unwrap as _lookup_v3_observation but tolerant of v2 strings
+        # because the fallback path fires precisely when the loader could
+        # not enrich the entry with observation metadata.
+        if isinstance(entry, dict):
+            host = entry.get("host")
+            return host if isinstance(host, str) else ""
+        return entry if isinstance(entry, str) else ""
+
+    bag = cenr_source.get("vpn_hostnames") or []
+    if isinstance(bag, list):
+        for entry in bag:
+            if _host_of(entry) == fqdn:
+                return True
+    by_city = cenr_source.get("by_city")
+    if isinstance(by_city, dict):
+        for city_slot in by_city.values():
+            if not isinstance(city_slot, dict):
+                continue
+            slot_bag = city_slot.get("vpn_hostnames") or []
+            if not isinstance(slot_bag, list):
+                continue
+            for entry in slot_bag:
+                if _host_of(entry) == fqdn:
+                    return True
+    return False
+
+
+def _probe_type_for_target(target: str, role_type: str | None = None) -> str:
+    """Classify a probe body ``type`` from the emitted target string.
+
+    Why:
+        Mist synthetic tests use ``type: "application"`` for URL-based
+        checks (HTTP/HTTPS GETs against the ``target`` URL) and
+        ``type: "reachability"`` for raw ICMP checks (bare hostname).
+        Feature 1024 tightened the classifier to be **shape-based**: the
+        target's own shape is the source of truth for the probe type,
+        not any upstream ``role_type`` hint. This closes an
+        overwrite window where a role tagged ``type: application``
+        could re-attach the ``application`` label to a bare-hostname
+        VPN target and reintroduce the pre-1024 fake-L4 failure mode
+        (INV-2, INV-3). ``role_type`` is retained in the signature for
+        backwards compatibility with all three callsites; its value is
+        NOT consulted for the decision.
+
+    Args:
+        target: The fully-built probe target string as returned by
+            ``_probe_target``. HTTP/HTTPS URLs start with the scheme;
+            bare hostnames carry no scheme and no ``":port"`` suffix;
+            L4 targets appear as ``host:port`` (no scheme).
+        role_type: Legacy hint from role metadata. Ignored — kept only
+            so existing callers compile. Removal is a follow-up cleanup.
+
+    Returns:
+        ``"application"`` when *target* starts with ``http://`` /
+        ``https://`` OR contains a ``":"`` after the last ``"."``
+        (a bare ``host:port`` shape). ``"reachability"`` otherwise
+        (bare hostname — the post-1024 VPN emission shape).
+    """
+    # Scheme detection: case-sensitive prefix match. Targets emitted by
+    # this codebase are always lowercase; no normalisation required.
+    if target.startswith(("http://", "https://")):
+        decision = "application"
+    else:
+        # Port detection: look for ":" AFTER the last "." — a bare host
+        # has no ":", a host:port has exactly one ":" after the last dot.
+        # This avoids false positives on hypothetical IPv6-literal targets
+        # (unsupported by Mist Marvis Minis today; revisit if support arrives).
+        last_dot = target.rfind(".")
+        if last_dot != -1 and ":" in target[last_dot:]:
+            decision = "application"
+        else:
+            # Bare hostname — the post-1024 VPN reachability shape.
+            decision = "reachability"
+    # Debug trace only per contract §Logging; the emitting callsite
+    # handles higher-severity logging per Principle VII. Logger is
+    # constructed here (not module-scoped) to match the local-scope
+    # pattern used by peers like ``_probe_target``.
+    logging.getLogger(__name__).debug("probe_type: target=%s -> %s", target, decision)
+    return decision
+
+
+def _lookup_v3_observation(fqdn: str, cenr_source: dict[str, Any]) -> dict[str, Any] | None:
+    """Locate the v3 host-entry for ``fqdn`` in every CENR bag.
+
+    Why:
+        Contract ``probe_target_url_builder.md`` Preconditions require
+        the URL builder to consult the v3 per-host observation object
+        wherever the FQDN lives -- top-level ``proxy_hostnames`` /
+        ``vpn_hostnames`` or nested under ``by_city[*]``. Centralising
+        the lookup keeps the dispatch in ``_probe_target`` short and
+        guarantees identical semantics across bags (contract Non-Goals:
+        never mutate ``cenr_source``).
+
+    Args:
+        fqdn: Fully-qualified hostname to look up.
+        cenr_source: Loaded CENR document, post v2->v3 loader adapter.
+
+    Returns:
+        The v3 entry dict when found (``{"host": ..., "observed_protocol":
+        ..., "observed_port": ..., "last_probed": ...}``), otherwise
+        ``None`` when the FQDN is absent from every bag.
+    """
+    # Top-level bags are the common case; iterate them first so the fast
+    # path exits before descending into by_city.
+    for bag_key in ("proxy_hostnames", "vpn_hostnames"):
+        bag = cenr_source.get(bag_key) or []
+        if not isinstance(bag, list):
+            continue
+        for entry in bag:
+            # Guard against mid-migration v2 flat strings that slipped past
+            # the loader adapter; those hosts have no observation, so a
+            # bare-string match returns None to trigger the fallback branch.
+            if isinstance(entry, dict) and entry.get("host") == fqdn:
+                return entry
+    # by_city bags carry the same shape (per cenr_cache_schema_v3.md); walk
+    # them last because the top-level bags dominate the hit rate.
+    by_city = cenr_source.get("by_city")
+    if isinstance(by_city, dict):
+        for city_slot in by_city.values():
+            if not isinstance(city_slot, dict):
+                continue
+            for bag_key in ("proxy_hostnames", "vpn_hostnames"):
+                bag = city_slot.get(bag_key) or []
+                if not isinstance(bag, list):
+                    continue
+                for entry in bag:
+                    if isinstance(entry, dict) and entry.get("host") == fqdn:
+                        return entry
+    return None
+
+
+def _probe_target(fqdn: str, role: dict[str, Any], cenr_source: dict[str, Any]) -> str:
+    """Compose the Mist ``target`` string for one FQDN using the observation-first dispatch.
+
+    Why:
+        Contract ``probe_target_url_builder.md`` (feature 1023) requires
+        three-branch dispatch on the v3 per-host observation for **non-VPN**
+        hosts. Contract ``vpn_probe_target_shape.md`` (feature 1024) requires
+        the VPN pre-check to run **before** the non-VPN dispatch: a bag
+        member always emits as a bare hostname (ICMP reachability), even
+        when the host also has a TCP/443 observation (bag wins per
+        Ordering Contract).
+
+        Non-VPN dispatch (unchanged from 1023):
+
+        - Branch 1 (UDP-family or non-HTTP TCP): return bare
+          ``host:port`` so Mist runs a raw reachability probe (SC-001
+          eliminates the ``https://*-vpn.*`` regression).
+        - Branch 2 (HTTPS or TCP/443): return ``https://host`` with the
+          default port elided (INV-1, FR-009 keep the shipped rows
+          byte-identical to previous versions).
+        - Branch 3 (no observation, absent key, or unrecognised token):
+          fall back to the catalogue default and emit exactly ONE
+          ``logger.warning`` so operators notice the cache miss.
+
+        VPN pre-check (new in 1024): if ``_is_vpn_host`` classifies the
+        FQDN, return bare ``fqdn`` immediately. Pre-1024 this branch
+        returned ``f"{fqdn}:500"`` — the fake-L4 shape that Mist could
+        not actually IKE-negotiate. INV-3 forbids any VPN row from
+        carrying a scheme or a ``:port`` suffix.
+
+        The function is pure — it never mutates ``cenr_source`` (contract
+        Non-Goals) and is deterministic on repeat calls.
+
+    Args:
+        fqdn: The hostname to render into a probe target string. Callers
+            strip wildcards before invoking this helper.
+        role: The role dict from the probe source file. Retained for
+            signature parity with previous versions; Branch 3's fallback
+            still respects ``role["probe"]`` when present so
+            role-specific overrides in the ZCC catalogue continue to
+            work.
+        cenr_source: Loaded CENR document (v3-shaped). The v2->v3 loader
+            adapter guarantees per-host observation objects.
+
+    Returns:
+        A non-empty target string. For VPN-classified FQDNs: bare
+        ``fqdn`` (no scheme, no port). Otherwise: ``"host:port"``
+        (Branch 1) or ``"https://host"`` (Branch 2, default 443 elided)
+        or the catalogue default (Branch 3).
+    """
+    logger = logging.getLogger(__name__)  # module-scoped logger; matches _warn spec in contract
+
+    # --- VPN pre-check (feature 1024) ---------------------------------------
+    # MUST run before the non-VPN 3-branch dispatch so that a host present
+    # in a ``vpn_hostnames`` bag AND also observed on TCP/443 (Zscaler admin
+    # console) is emitted as a VPN reachability probe. Bag membership wins
+    # per contract vpn_probe_target_shape.md §Ordering Contract. Pre-1024
+    # this branch returned ``f"{fqdn}:500"``; that fake-L4 shape produced
+    # 100% guaranteed-fail probes because Mist cannot speak IKEv2.
+    if _is_vpn_host(fqdn, cenr_source):
+        logger.info("probe_target(vpn): %s -> bare (reachability)", fqdn)
+        return fqdn
+
+    entry = _lookup_v3_observation(fqdn, cenr_source)
+    observed_protocol: str | None = None
+    observed_port: int | None = None
+    if isinstance(entry, dict):
+        raw_protocol = entry.get("observed_protocol")
+        if isinstance(raw_protocol, str) and raw_protocol:
+            observed_protocol = raw_protocol
+        raw_port = entry.get("observed_port")
+        if isinstance(raw_port, int):
+            observed_port = raw_port
+
+    # --- Dispatch on the observed_protocol prefix per contract ---------------
+
+    if observed_protocol is not None:
+        # Branch 2: HTTPS or TCP/443 collapse to the same URL shape so the
+        # emitted target matches Mist-authored mini-* rows byte-for-byte
+        # (FR-009: any per-run diff of the same host across runs must be
+        # empty when the observation is stable).
+        if observed_protocol == "HTTPS" or observed_protocol == "TCP/443":
+            target = f"https://{fqdn}"
+            logger.debug("probe_target: %s -> %s (obs=%s)", fqdn, target, observed_protocol)
+            return target
+        # Branch 1: UDP family (bare "UDP" or "UDP/<port>") OR non-443 TCP.
+        # The port MUST come from observed_port -- observed_protocol may
+        # carry no port suffix at all (bare "UDP" token per contract Test
+        # Boundaries).
+        is_udp = observed_protocol == "UDP" or observed_protocol.startswith("UDP/")
+        is_non_443_tcp = observed_protocol.startswith("TCP/") and observed_protocol != "TCP/443"
+        if is_udp or is_non_443_tcp:
+            if observed_port is not None:
+                # Bare host:port form; NO scheme so Mist runs a raw probe
+                # rather than trying TLS on a UDP/IKE endpoint.
+                target = f"{fqdn}:{observed_port}"
+                logger.debug("probe_target: %s -> %s (obs=%s)", fqdn, target, observed_protocol)
+                return target
+        # Falls through to Branch 3 when the token is recognised but the
+        # port is missing (defensive), OR when the token is neither UDP/*
+        # nor TCP/* nor HTTPS (e.g. "WEIRD/9999" per contract Test
+        # Boundaries).
+
+    # Branch 3: no observation OR unrecognised token. Compute the fallback
+    # from the role's ``probe`` block (if any) or the CENR probe_default,
+    # then log exactly one WARNING so operators spot the cache miss. The
+    # VPN pre-check above has already handled bag members, so this branch
+    # only fires for non-VPN hosts with missing observations.
     probe = role.get("probe") or {}
     if not probe and role.get("role") == _TUNNEL_ZEN_ROLE:
+        # tunnel_zen delegates its default to the CENR file (existing
+        # convention retained from the pre-1023 implementation).
         probe = cenr_source.get("probe_default") or {}
     protocol = str(probe.get("protocol") or "https").lower()
-    # Mist targets are URLs; raw TCP has no URL scheme. HTTPS exercises the
-    # same TCP/443 handshake path used by the underlying reachability check.
+    # Mist targets are URLs; raw TCP has no URL scheme, so upgrade to HTTPS
+    # which exercises the same TCP/443 handshake path.
     if protocol == "tcp":
         protocol = "https"
     if protocol not in _SCHEME_DEFAULT_PORT:
@@ -143,8 +390,17 @@ def _probe_target(fqdn: str, role: dict[str, Any], cenr_source: dict[str, Any]) 
     except (TypeError, ValueError):
         port = _SCHEME_DEFAULT_PORT[protocol]
     if port == _SCHEME_DEFAULT_PORT[protocol]:
-        return f"{protocol}://{fqdn}"
-    return f"{protocol}://{fqdn}:{port}"
+        # Default-port elision matches Branch 2's convention so both branches
+        # emit identical strings for the common case (INV-1: byte-stable
+        # output when the same host+protocol combination reoccurs).
+        target = f"{protocol}://{fqdn}"
+    else:
+        target = f"{protocol}://{fqdn}:{port}"
+    # Exactly one WARN per contract Branch 3 side-effect; the same
+    # logger.debug follows for consistency across all three branches.
+    logger.warning("no observation for %s, using catalogue default %s", fqdn, target)
+    logger.debug("probe_target: %s -> %s (obs=%s)", fqdn, target, observed_protocol)
+    return target
 
 
 def manage_org_synthetic_probes(mist_session: Any, org_id: str) -> None:
@@ -253,6 +509,12 @@ def _load_probe_sources(data_dir: Path) -> tuple[dict[str, Any], dict[str, Any]]
         cenr = json.loads(cenr_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as err:
         raise ValueError(f"Malformed JSON in {cenr_path}: {err}") from err
+    # Promote both caches to v3 shape at the earliest possible moment so
+    # every downstream reader (URL builder, probe fanout, telemetry) works off
+    # dict host entries rather than a mix of flat strings and dicts. Both
+    # calls are idempotent for v3+ documents.
+    probes = promote_cache_document(probes, kind="zcc")  # legacy ZCC roles bag
+    cenr = promote_cache_document(cenr, kind="cenr")  # legacy CENR proxy/vpn bags
     cenr = ensure_fresh(cenr_path, cenr)
     return probes, cenr
 
@@ -260,19 +522,58 @@ def _load_probe_sources(data_dir: Path) -> tuple[dict[str, Any], dict[str, Any]]
 def _validate_vlan_input(raw: str) -> tuple[bool, str, list[int]]:
     """Parse and validate VLAN input string.
 
+    Why:
+        Mist's UI validator rejects VLAN ids outside 1-4094 (0 and 4095
+        are 802.1Q-reserved and 4095 is priority-tagged frames), so any
+        out-of-range value would produce a red-banner error on the org
+        setting push. Operators frequently paste condensed lists like
+        ``"3-6, 10, 200-203"``; expanding ranges here lets them use the
+        same shorthand they use in switch configs. Invalid tokens
+        (non-integer, out-of-range endpoints, reversed ranges) are
+        silently dropped rather than failing the whole entry so a single
+        typo in a long list does not force the operator to re-type
+        everything.
+
+    Args:
+        raw: Comma-separated VLAN ids and/or ranges (e.g. ``"3-6, 10"``).
+
     Returns:
-        (is_valid, error_message, vlan_ids). If is_valid is True, vlan_ids
-        is non-empty and deduplicated; error_message is empty.
+        ``(is_valid, error_message, vlan_ids)``. ``is_valid`` is True
+        only when at least one in-range id survived parsing;
+        ``vlan_ids`` is sorted and deduplicated. Out-of-range or
+        unparseable tokens are dropped silently.
     """
     if not raw.strip():
         return False, "VLAN list cannot be empty. Please try again.", []
     parts = [item.strip() for item in raw.split(",") if item.strip()]
-    try:
-        ids = [int(part) for part in parts]
-    except ValueError:
-        return False, "Non-integer VLAN id detected. Please try again.", []
-    if any(vid < _VLAN_MIN or vid > _VLAN_MAX for vid in ids):
-        return False, f"VLAN ids must be in [{_VLAN_MIN}, {_VLAN_MAX}]. Please try again.", []
+    ids: list[int] = []
+    for part in parts:
+        # A leading '-' would be a negative int (out of range anyway); a
+        # non-leading '-' means the operator wrote a range like "3-6".
+        if "-" in part[1:]:
+            lo_raw, _, hi_raw = part[1:].partition("-")
+            lo_raw = (part[0] + lo_raw).strip()
+            hi_raw = hi_raw.strip()
+            try:
+                lo = int(lo_raw)
+                hi = int(hi_raw)
+            except ValueError:
+                continue
+            if lo > hi:
+                continue
+            ids.extend(range(lo, hi + 1))
+            continue
+        try:
+            ids.append(int(part))
+        except ValueError:
+            continue
+    ids = [vid for vid in ids if _VLAN_MIN <= vid <= _VLAN_MAX]
+    if not ids:
+        return (
+            False,
+            f"No valid VLAN ids in [{_VLAN_MIN}, {_VLAN_MAX}] parsed. Please try again.",
+            [],
+        )
     return True, "", sorted(set(ids))
 
 
@@ -282,15 +583,16 @@ def _prompt_vlan_list() -> list[int]:
     Why:
         The VLAN list is the only per-invocation parameter; validating
         the range at prompt time avoids surfacing an opaque API-side
-        rejection later.
+        rejection later. Accepts ranges (``3-6`` expands to ``3,4,5,6``)
+        because operators paste condensed lists from switch configs.
 
     Returns:
-        Sorted, deduplicated list of VLAN ids in ``[0, 4094]``. Never
+        Sorted, deduplicated list of VLAN ids in ``[1, 4094]``. Never
         returns an empty list -- the prompt loops until at least one
         valid id is entered.
     """
     while True:
-        raw = input("  Enter VLAN ids (comma-separated, each in [0, 4094]): ")
+        raw = input("  Enter VLAN ids (comma-separated, ranges ok e.g. 3-6, each in [1, 4094]): ")
         is_valid, error, ids = _validate_vlan_input(raw)
         if is_valid:
             return ids
@@ -441,11 +743,17 @@ def _iter_role_fqdns(role: dict[str, Any], cenr: dict[str, Any]) -> list[str]:
         caller will filter).
     """
     if role.get("role") == _TUNNEL_ZEN_ROLE:
-        proxy = cenr.get("proxy_hostnames", []) or []
-        vpn = cenr.get("vpn_hostnames", []) or []
-        return [*proxy, *vpn]
-    fqdns = role.get("fqdns") or []
-    return list(fqdns)
+        proxy = cenr.get("proxy_hostnames", []) or []  # v3 dicts or v2 flat strings
+        vpn = cenr.get("vpn_hostnames", []) or []  # v3 dicts or v2 flat strings
+        combined = [*proxy, *vpn]  # merge before v3 unwrap
+        # Unwrap v3 dict entries {"host": ...} while tolerating legacy
+        # flat strings so mid-migration caches keep flowing through the URL
+        # builder without silently dropping every host.
+        return [e["host"] if isinstance(e, dict) else e for e in combined if e]
+    fqdns = role.get("fqdns") or []  # role-scoped list, mix of v2/v3 entries
+    # Same v3-dict unwrap for role-scoped FQDNs so non-tunnel_zen roles
+    # (pac, service_discovery, etc.) also survive the mid-migration mix.
+    return [e["host"] if isinstance(e, dict) else e for e in fqdns if e]
 
 
 def _build_probe_set(
@@ -502,12 +810,18 @@ def _build_probe_set(
             # ``name`` inside the body (the dict key IS the name) and no
             # ``vlan_ids`` (VLAN scoping belongs on the tests[] row that
             # references the probe, not on the probe definition itself).
+            target = _probe_target(fqdn, role, cenr_source)
             probe_body: dict[str, Any] = {
-                "type": role.get("type", "application"),
+                # Classify the body type from the target's shape: HTTP/S
+                # URLs are ``application`` probes, bare ``host:port``
+                # (VPN, custom UDP) are ``reachability`` probes. Emitting
+                # a VPN UDP:500 target as ``application`` would make Mist
+                # attempt an HTTP GET against an IKE listener.
+                "type": _probe_type_for_target(target, role.get("type")),
                 # Scheme/port derived from the role's curated ``probe`` block
                 # (or CENR's ``probe_default`` for ``tunnel_zen``) so operators
                 # can tune protocol per role without touching this file.
-                "target": _probe_target(fqdn, role, cenr_source),
+                "target": target,
             }
             probe_body["aggressiveness"] = _CRITICAL_AGGRESSIVENESS if is_critical else _AUTO_AGGRESSIVENESS
             result[probe_name] = probe_body
@@ -572,15 +886,25 @@ def _build_region_probes(
     for role in probes_source.get("roles", []) or []:
         if role.get("role") != target_role_name:
             continue
-        for fqdn in role.get("fqdns") or []:
+        for entry in role.get("fqdns") or []:
+            # Accept both v3 dict {"host": ...} and legacy flat strings so a
+            # mid-migration CENR cache does not silently drop every regional
+            # ELM host. The isinstance guard below already excludes non-strings,
+            # so unwrap up-front and let the wildcard filter proceed as before.
+            fqdn = entry.get("host") if isinstance(entry, dict) else entry
             if not isinstance(fqdn, str) or fqdn.startswith("*."):
                 continue
             probe_name = f"{_TOOL_NAME_PREFIX}{target_role_name}-{_fqdn_slug(fqdn)}"
             # Regional ELM probes are never critical (source catalogue omits
             # the flag), so aggressiveness is ``auto``.
+            target = _probe_target(fqdn, role, sources[1])
             result[probe_name] = {
-                "type": role.get("type", "application"),
-                "target": _probe_target(fqdn, role, sources[1]),
+                # Same target-shape classification as ``_build_probe_set``:
+                # HTTP/S URLs stay ``application``, bare host:port becomes
+                # ``reachability``. Regional ELM roles ship as HTTPS today
+                # but this future-proofs the emit path.
+                "type": _probe_type_for_target(target, role.get("type")),
+                "target": target,
                 "aggressiveness": _AUTO_AGGRESSIVENESS,
             }
         break
@@ -886,9 +1210,21 @@ def _merge_probes(
         # Prefer freshly-built type/target (new source of truth); fall back
         # to on-org values when the probe isn't in ``new_probes``.
         template = new_probes.get(name, probe)
+        # Resolve target first because the ``type`` classification depends
+        # on whether the target string carries an HTTP scheme.
+        merged_target = template.get("target") or probe.get("target")
         merged_probe: dict[str, Any] = {
-            "type": template.get("type") or probe.get("type") or "application",
-            "target": template.get("target") or probe.get("target"),
+            # Prefer explicit type on the new/existing body when present,
+            # but reclassify by target-shape so a body inherited from a
+            # pre-1023 push (``type: "application"`` + ``target: "host:500"``)
+            # gets corrected to ``reachability`` on merge. Passing the
+            # existing body's type as the ``role_type`` preserves overrides
+            # for HTTP/S targets while still fixing reachability rows.
+            "type": _probe_type_for_target(
+                merged_target if isinstance(merged_target, str) else "",
+                template.get("type") or probe.get("type"),
+            ),
+            "target": merged_target,
         }
         # Sync aggressiveness from the freshly-built set so demotions
         # propagate. ``_build_probe_set`` always emits an explicit value;
@@ -929,13 +1265,16 @@ def _prompt_mode(existing_tool: dict[str, dict[str, Any]]) -> str:
     Why:
         Displaying the existing probe count and VLAN union up-front gives
         the operator the context needed to make the call without needing
-        to walk the setting themselves.
+        to walk the setting themselves. Swap is the default because the
+        typical operator intent for this menu is a clean rebuild from
+        the freshly-generated probe set -- merge is the exception path
+        used when preserving hand-added foreign probes matters.
 
     Args:
         existing_tool: Tool-authored probes currently on the org.
 
     Returns:
-        Either ``"merge"`` or ``"swap"``.
+        Either ``"merge"`` or ``"swap"``. Empty input returns ``"swap"``.
     """
     all_vlans: set[int] = set()
     for probe in existing_tool.values():
@@ -945,7 +1284,9 @@ def _prompt_mode(existing_tool: dict[str, dict[str, Any]]) -> str:
     print(f"  Existing tool-authored probes: {len(existing_tool)}")
     print(f"  VLAN union across existing probes: {sorted(all_vlans)}")
     while True:
-        choice = input("  Choose action [merge/swap]: ").strip().lower()
+        choice = input("  Choose action [merge/swap] (default: swap): ").strip().lower()
+        if choice == "":
+            return "swap"
         if choice in ("merge", "swap"):
             return choice
         print("  Please answer 'merge' or 'swap'.")
@@ -1351,9 +1692,13 @@ def _prompt_site_indexes(sites: list[dict[str, Any]]) -> list[dict[str, Any]]:
         picker matches how operators think about their fleet; unnamed
         sites sink to the bottom. Full site dicts are returned (not just
         ids) so downstream code can read per-site fields like
-        ``country_code`` without a second API round-trip. Kept in its
-        own helper so tests can patch ``input`` for this stage
-        independently of the earlier y/N prompt.
+        ``country_code`` without a second API round-trip. Accepts range
+        shorthand (``3-6`` expands to ``3,4,5,6``) and a literal
+        ``all`` token (case-insensitive) that selects every listed site
+        -- operators paste condensed lists and frequently want to push
+        the override org-wide. Kept in its own helper so tests can
+        patch ``input`` for this stage independently of the earlier
+        y/N prompt.
 
     Args:
         sites: List of site dicts as returned by ``_list_org_sites``. The
@@ -1383,10 +1728,43 @@ def _prompt_site_indexes(sites: list[dict[str, Any]]) -> list[dict[str, Any]]:
         name = site.get("name") or "(unnamed)"
         site_id = site.get("id", "")
         print(f"    [{idx:>{width}}] {name}  ({site_id})")
-    raw = input("  Enter comma-separated site indexes to override, or leave blank to cancel: ")
+    raw = input(
+        "  Enter comma-separated site indexes (ranges ok e.g. 3-6, 'all' for every site), " "or leave blank to cancel: "
+    )
     parts = [item.strip() for item in raw.split(",") if item.strip()]
     picked_by_id: dict[str, dict[str, Any]] = {}
     for part in parts:
+        # 'all' short-circuits to the full sorted list; operator intent is clear.
+        if part.lower() == "all":
+            for candidate in sorted_sites:
+                site_id = candidate.get("id")
+                if isinstance(site_id, str) and site_id:
+                    picked_by_id.setdefault(site_id, candidate)
+            continue
+        # Range shorthand like "3-6". Leading '-' is treated as a negative int
+        # (out of range anyway), matching _validate_vlan_input's convention.
+        if "-" in part[1:]:
+            lo_raw, _, hi_raw = part[1:].partition("-")
+            lo_raw = (part[0] + lo_raw).strip()
+            hi_raw = hi_raw.strip()
+            try:
+                lo = int(lo_raw)
+                hi = int(hi_raw)
+            except ValueError:
+                logging.warning("Ignoring unparseable site index range token: %r", part)
+                continue
+            if lo > hi:
+                logging.warning("Ignoring reversed site index range: %r", part)
+                continue
+            for idx in range(lo, hi + 1):
+                if idx < 1 or idx > len(sorted_sites):
+                    logging.warning("Ignoring out-of-range site index: %d", idx)
+                    continue
+                candidate = sorted_sites[idx - 1]
+                site_id = candidate.get("id")
+                if isinstance(site_id, str) and site_id:
+                    picked_by_id.setdefault(site_id, candidate)
+            continue
         try:
             idx = int(part)
         except ValueError:

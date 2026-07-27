@@ -22,8 +22,10 @@ from __future__ import annotations
 import concurrent.futures
 import logging
 import platform
+import secrets
 import socket
 import ssl
+import struct
 import subprocess
 from dataclasses import dataclass, field
 from http.client import HTTPConnection, HTTPResponse, HTTPSConnection
@@ -40,6 +42,20 @@ DEFAULT_WORKERS = 16
 COMMON_TCP_PORTS: tuple[int, ...] = (80, 443, 8080)
 """Ports referenced anywhere in the ZCC catalogue; always scanned in addition
 to a role's declared ports so we can spot endpoints answering off-doc."""
+
+IKE_UDP_PORTS: tuple[int, int] = (500, 4500)
+"""IKE UDP port pair Zscaler VPN initiators answer on.
+
+Why:
+    Port 500 is the classic IKEv1/IKEv2 SA-init port; 4500 is the NAT-T
+    encapsulated fallback that fires when a middlebox rewrites source ports.
+    The two-tuple ordering (500 first, 4500 second) is contractual: the
+    write-path priority in :mod:`src.utils.zscaler_catalogue` prefers 500
+    over 4500 when both responded, matching how real IKE initiators pick a
+    peer. Also referenced by the URL builder in
+    :mod:`src.org.org_synthetic_probes_manager` to convert observations
+    into ``host:port`` targets.
+"""
 
 
 @dataclass
@@ -93,6 +109,10 @@ class ProbeResult:
             issuer.
         notes (list[str]): Freeform per-endpoint diagnostics (HTTP/HTTPS/TLS
             error text).
+        udp (dict[int, str]): Map ``port -> "open"/"no_reply"/"error:<name>"``
+            for IKE UDP probes. Empty when UDP probing did not fire (host had
+            live TCP responses and no ``-vpn.`` name hint). Populated only for
+            ports in :data:`IKE_UDP_PORTS`.
     """
 
     fqdn: str
@@ -116,6 +136,7 @@ class ProbeResult:
     responding_protocols: list[str] = field(default_factory=list)
     server_class: str = "unknown"
     notes: list[str] = field(default_factory=list)
+    udp: dict[int, str] = field(default_factory=dict)
 
 
 def _resolve(fqdn: str) -> tuple[str | None, str | None]:
@@ -197,6 +218,96 @@ def _tcp_check(host: str, port: int, timeout: float) -> str:
         return "closed"
     except OSError as exc:
         return f"error:{type(exc).__name__}"
+
+
+def _build_ike_sa_init() -> bytes:
+    """Return a minimal IKE_SA_INIT header suitable for a discovery datagram.
+
+    Why:
+        Real IKE responders will not complete an SA to a probe, but they
+        will reply (even with an error notify) to a well-formed
+        IKE_SA_INIT header. We only need the 28-byte fixed header with a
+        random 8-byte initiator SPI, zero responder SPI, and
+        exchange_type=34 (IKE_SA_INIT). Everything after byte 28 is treated
+        as payload and is safe to omit for a mere presence probe.
+
+    Returns:
+        A 28-byte IKE header suitable for sending to UDP/500 or (with the
+        non-ESP marker prefix) UDP/4500.
+    """
+    # 8-byte cryptographically random initiator SPI so consecutive probes
+    # cannot be mistaken for a replay by a real responder.
+    initiator_spi = secrets.token_bytes(8)
+    responder_spi = b"\x00" * 8  # zero SPI: we are initiating a brand new SA
+    next_payload = 0  # 0 = "no next payload" per RFC 7296 (probe-only)
+    version = 0x20  # major=2 minor=0 (IKEv2)
+    exchange_type = 34  # IKE_SA_INIT per IANA IKEv2 exchange types
+    flags = 0x08  # Initiator flag set; Response/Version cleared
+    message_id = 0  # first message in the exchange
+    length = 28  # header-only; no payloads included in the probe
+    # ``!`` selects network (big-endian) byte order as required by RFC 7296.
+    # B/B/B/B/I = 1+1+1+1+4 bytes = 8 bytes; combined with the two 8-byte SPIs
+    # this yields the 28-byte header the responder expects.
+    return (
+        initiator_spi
+        + responder_spi
+        + struct.pack(
+            "!BBBBII",
+            next_payload,
+            version,
+            exchange_type,
+            flags,
+            message_id,
+            length,
+        )
+    )
+
+
+def _udp_check(host: str, port: int, timeout: float) -> str:
+    """Return ``open``/``no_reply``/``error:<reason>`` for a single IKE UDP probe.
+
+    Why:
+        Zscaler VPN gateways answer IKE on UDP/500 and NAT-T-encapsulated
+        UDP/4500 rather than any TCP port; TCP-only probing silently
+        mislabels them dead. The three-value return vocabulary matches
+        :func:`_tcp_check` so downstream reporting can share code paths.
+        Port 4500 requires a four-byte non-ESP marker (0x00000000) prefix
+        so the responder demultiplexes the packet as IKE rather than ESP;
+        omitting the marker turns the probe into a silent black-hole.
+
+    Args:
+        host: Target hostname or IP address.
+        port: Either ``500`` or ``4500`` (any other value is accepted but
+            will not carry the non-ESP marker).
+        timeout: Wall-clock recvfrom timeout in seconds; also bounds how
+            long a silent-drop firewall can stall the probe thread.
+
+    Returns:
+        ``"open"`` when *any* reply datagram was received, ``"no_reply"``
+        on ``socket.timeout``/``TimeoutError`` (matches a firewall silent
+        drop), or ``"error:<ExceptionClassName>"`` on any other OSError.
+    """
+    # Assemble the payload: bare IKE header on 500, marker-prefixed on 4500.
+    ike_header = _build_ike_sa_init()  # 28-byte fixed IKEv2 header
+    if port == 4500:
+        # RFC 3948 s.2.2: 4 bytes of zero prefix means "IKE, not ESP".
+        payload = b"\x00\x00\x00\x00" + ike_header
+    else:
+        payload = ike_header  # port 500 is IKE-only: no marker
+    logger.info("zscaler_probe: udp_check host=%s port=%d", host, port)
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.settimeout(timeout)  # bound blocking recvfrom
+            sock.sendto(payload, (host, port))
+            data, _addr = sock.recvfrom(4096)
+            # Any inbound datagram (even an error notify) proves the port is live.
+            state = "open" if data is not None else "no_reply"
+    except TimeoutError:
+        state = "no_reply"  # silent-drop firewall / route missing / peer offline
+    except OSError as exc:
+        state = f"error:{type(exc).__name__}"  # e.g. PermissionError, NetworkUnreachable
+    logger.debug("zscaler_probe: udp_check result host=%s port=%d state=%s", host, port, state)
+    return state
 
 
 def _do_http(
@@ -457,6 +568,21 @@ def _probe_fqdn(
         # the port is live.
         result.responding_protocols.append("TCP/8080 (proxy)")
 
+    # US2 UDP dispatch: fire IKE probes when the FQDN is tagged VPN-by-name OR
+    # when every TCP handshake failed (last-ditch recovery for mis-tagged
+    # VPN hosts). Skipping this branch on healthy TCP hosts keeps scan time
+    # bounded and avoids gratuitous IKE traffic to non-VPN endpoints.
+    is_vpn_hostname = "-vpn." in fqdn.lower()  # catalogue-agnostic pattern hint
+    all_tcp_dead = bool(result.tcp) and all(
+        state != "open" for state in result.tcp.values()
+    )  # every scanned port RST/closed/errored
+    if is_vpn_hostname or all_tcp_dead:
+        for udp_port in IKE_UDP_PORTS:
+            udp_state = _udp_check(fqdn, udp_port, timeout)
+            result.udp[udp_port] = udp_state
+            if udp_state == "open":
+                result.responding_protocols.append(f"UDP/{udp_port}")
+
     result.server_class = _classify(result)
     return result
 
@@ -560,15 +686,21 @@ def run_full_validation(
     for role in probes.get("roles", []) or []:
         if not isinstance(role, dict):
             continue
-        for fqdn in role.get("fqdns", []) or []:
-            fqdn_s = str(fqdn)
+        for entry in role.get("fqdns", []) or []:
+            # Unwrap v3 dict entries {"host": ...} while still tolerating
+            # legacy flat strings so mid-migration caches keep working.
+            fqdn = entry.get("host") if isinstance(entry, dict) else entry
+            fqdn_s = str(fqdn) if fqdn is not None else ""  # guard None from broken v3 rows
             if fqdn_s and fqdn_s not in seen:
                 seen.add(fqdn_s)
                 entries.append((fqdn_s, role))
 
     for key in ("proxy_hostnames", "vpn_hostnames"):
-        for host in cenr.get(key, []) or []:
-            host_s = str(host)
+        for entry in cenr.get(key, []) or []:
+            # Same v3-dict unwrap for CENR bags; str() must never see the
+            # raw dict or it produces a "{'host': ...}" pseudo-hostname.
+            host = entry.get("host") if isinstance(entry, dict) else entry
+            host_s = str(host) if host is not None else ""  # guard None from broken v3 rows
             if host_s and host_s not in seen:
                 seen.add(host_s)
                 entries.append((host_s, _CENR_SYNTHETIC_ROLE))

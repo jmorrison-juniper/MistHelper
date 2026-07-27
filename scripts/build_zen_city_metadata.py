@@ -198,15 +198,36 @@ def attach_city_metadata(
         proxy_hostnames = list(proxy_hostnames_raw) if isinstance(proxy_hostnames_raw, list) else []
         vpn_hostnames_raw = by_city[city].get("vpn_hostnames", []) or []
         vpn_hostnames = list(vpn_hostnames_raw) if isinstance(vpn_hostnames_raw, list) else []
-        # First proxy + first vpn — proxy and vpn ride the same PoP but are
+
+        def _pick_host(entry: object) -> str:
+            """Return the bare FQDN whether the bag entry is a legacy string or a v3 dict.
+
+            Why:
+                The upstream CENR merger emits ``list[dict]`` under
+                schema_version=3 (per contract cenr_cache_schema_v3.md), but
+                hand-authored or legacy caches may still contain flat strings.
+                A raw ``str(entry)`` on a dict yields ``"{'host': 'foo.com'}"``
+                which then gets stamped as a probe target -- ugly at best,
+                and it would break the synthetic-test URL builder in menu 206.
+            """
+            if isinstance(entry, dict):
+                host = entry.get("host")
+                return host if isinstance(host, str) else ""
+            return str(entry)
+
+        # First proxy + first vpn -- proxy and vpn ride the same PoP but are
         # distinct service planes (ZIA HTTPS proxy vs IPsec/GRE tunnel init),
         # so we pin both as site-scope critical to catch either service failing
         # independently.
         probe_hostnames: list[str] = []
         if proxy_hostnames:
-            probe_hostnames.append(str(proxy_hostnames[0]))
+            picked = _pick_host(proxy_hostnames[0])
+            if picked:
+                probe_hostnames.append(picked)
         if vpn_hostnames:
-            probe_hostnames.append(str(vpn_hostnames[0]))
+            picked = _pick_host(vpn_hostnames[0])
+            if picked:
+                probe_hostnames.append(picked)
         entry: dict[str, float | str | list[str]] = {
             "country_code": country,
             "continent": continent,

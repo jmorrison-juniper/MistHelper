@@ -578,3 +578,285 @@ class TestModuleConstants:
         assert set(_CENR_SYNTHETIC_ROLE["ports"]) == {80, 443, 8080}
         assert _CENR_SYNTHETIC_ROLE["critical"] is False
         assert "description" in _CENR_SYNTHETIC_ROLE
+
+
+# --------------------------------------------------------------------------- #
+# Feature 1023 US2: IKE UDP probe primitive + trigger dispatch                #
+# --------------------------------------------------------------------------- #
+# Why:
+#   Zscaler VPN endpoints (``*-vpn.*`` hostnames) answer IKE on UDP/500 and
+#   the NAT-T fallback UDP/4500 rather than any TCP port. Without a
+#   UDP probe path Menu 206 schedules TCP-only synthetic tests against
+#   these FQDNs and silently labels them dead. US2 adds a stdlib-only
+#   IKE_SA_INIT-shaped datagram probe and wires it into ``_probe_fqdn``
+#   behind a narrow trigger predicate (vpn hostname OR all TCP dead) so
+#   TCP-only endpoints do not regress with pointless UDP overhead.
+
+
+class _StubDatagramSocket:
+    """In-memory ``socket.socket`` double for exercising ``_udp_check`` without touching the network.
+
+    Why:
+        The UDP probe must never hit a real name-server or peer during
+        pytest; a stub keeps the test suite deterministic and hermetic while
+        still asserting the exact datagram bytes we put on the wire (which
+        is the load-bearing protocol contract for IKE_SA_INIT + non-ESP
+        marker).
+    """
+
+    def __init__(
+        self,
+        *,
+        recv_bytes: bytes | None = None,
+        recv_exc: Exception | None = None,
+        connect_exc: Exception | None = None,
+    ) -> None:
+        self.sent: list[tuple[bytes, tuple[str, int]]] = []  # captured sendto args
+        self.timeout: float | None = None  # captured settimeout arg
+        self.closed = False  # so tests can assert cleanup happened
+        self._recv_bytes = recv_bytes  # payload returned by recvfrom
+        self._recv_exc = recv_exc  # exception raised by recvfrom (e.g. timeout)
+        self._connect_exc = connect_exc  # exception raised at socket construction
+
+    def settimeout(self, seconds: float) -> None:
+        """Record the timeout the caller set; a real socket would apply it globally."""
+        self.timeout = seconds
+
+    def sendto(self, data: bytes, addr: tuple[str, int]) -> int:
+        """Capture the outbound datagram bytes and destination for later assertion."""
+        self.sent.append((data, addr))
+        return len(data)
+
+    def recvfrom(self, _bufsize: int) -> tuple[bytes, tuple[str, int]]:
+        """Return the pre-programmed reply or raise the pre-programmed exception."""
+        if self._recv_exc is not None:
+            raise self._recv_exc
+        return (self._recv_bytes or b""), ("0.0.0.0", 0)
+
+    def close(self) -> None:
+        """Flip the ``closed`` sentinel so tests can assert the caller cleaned up."""
+        self.closed = True
+
+    def __enter__(self) -> _StubDatagramSocket:
+        if self._connect_exc is not None:
+            raise self._connect_exc
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        self.close()
+
+
+def _install_udp_stub(monkeypatch: pytest.MonkeyPatch, stub: _StubDatagramSocket) -> list[tuple[int, int, int]]:
+    """Patch ``socket.socket`` in ``zscaler_probe`` so ``_udp_check`` uses *stub*.
+
+    Why:
+        Consolidates the monkeypatch so each test just declares intent
+        (open/timeout/error) without duplicating the boilerplate. Returns the
+        capture list of ``(family, type, proto)`` calls so a dedicated test
+        can assert that the SOCK_DGRAM path is never accidentally called
+        outside the UDP tests.
+    """
+    calls: list[tuple[int, int, int]] = []  # captured (family, type, proto)
+
+    def _factory(family: int, type_: int, proto: int = 0) -> _StubDatagramSocket:
+        calls.append((family, type_, proto))  # record so tests can assert
+        return stub
+
+    monkeypatch.setattr(zp_mod.socket, "socket", _factory)
+    return calls
+
+
+def test_udp_check_returns_open_on_datagram(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A reply datagram of any length marks the port ``open``.
+
+    Why (FR-002): IKE responders answer with an IKE_SA_INIT-RESP; even a
+    stray ICMP-hosted UDP echo is treated as ``open`` because the mere
+    presence of any inbound datagram proves the port is not black-holed.
+    """
+    stub = _StubDatagramSocket(recv_bytes=b"\x00" * 28)  # any non-empty datagram
+    _install_udp_stub(monkeypatch, stub)
+    assert zp_mod._udp_check("gateway.zscaler.net", 500, timeout=1.0) == "open"
+
+
+def test_udp_check_returns_no_reply_on_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A ``socket.timeout`` on ``recvfrom`` must produce ``no_reply``.
+
+    Why (FR-002): Silent-drop firewalls do not RST UDP; the only signal is
+    absence. ``no_reply`` distinguishes "black hole" from a genuine OSError
+    so operators can tell "middlebox drop" apart from "route missing".
+    """
+    stub = _StubDatagramSocket(recv_exc=TimeoutError())  # simulate silent drop
+    _install_udp_stub(monkeypatch, stub)
+    assert zp_mod._udp_check("gateway.zscaler.net", 4500, timeout=1.0) == "no_reply"
+
+
+def test_udp_check_returns_error_prefix_on_oserror(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Any non-timeout ``OSError`` returns ``error:<ExceptionClassName>``.
+
+    Why (FR-002): The exception class name is the operator's fault-domain
+    hint (``NetworkUnreachable`` vs ``PermissionError`` vs generic
+    ``OSError``). Prefixing with ``error:`` keeps the return type a plain
+    string that matches ``_tcp_check``'s vocabulary.
+    """
+    stub = _StubDatagramSocket(recv_exc=PermissionError())  # simulate raw-socket denial
+    _install_udp_stub(monkeypatch, stub)
+    result = zp_mod._udp_check("gateway.zscaler.net", 500, timeout=1.0)
+    assert result.startswith("error:")
+    assert "PermissionError" in result
+
+
+def test_udp_check_uses_settimeout_and_closes_socket(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The caller must apply ``settimeout`` and always release the socket.
+
+    Why (FR-002): Without ``settimeout`` a silent-drop endpoint would block
+    the probe thread forever, stalling the whole ThreadPoolExecutor. Leaked
+    sockets exhaust the ephemeral-port range on long-running scans.
+    """
+    stub = _StubDatagramSocket(recv_exc=TimeoutError())  # timeout also triggers close
+    _install_udp_stub(monkeypatch, stub)
+    zp_mod._udp_check("gateway.zscaler.net", 500, timeout=2.5)
+    assert stub.timeout == 2.5  # timeout was applied to the socket
+    assert stub.closed is True  # context manager released the socket
+
+
+def test_udp_check_port_4500_prepends_non_esp_marker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """On UDP/4500 the payload MUST begin with the four-byte non-ESP marker.
+
+    Why (contract udp_probe_wire_format.md): NAT-T listeners multiplex ESP
+    and IKE on 4500 by inspecting the first 4 bytes: 0x00000000 means
+    "IKE payload follows"; anything else is treated as ESP and silently
+    dropped. Missing this marker turns every UDP/4500 probe into a false
+    negative.
+    """
+    stub = _StubDatagramSocket(recv_bytes=b"\x00" * 28)  # arbitrary reply
+    _install_udp_stub(monkeypatch, stub)
+    zp_mod._udp_check("vpn.example.zscaler.net", 4500, timeout=1.0)
+    assert stub.sent, "sendto was never called"
+    payload, addr = stub.sent[0]
+    assert addr == ("vpn.example.zscaler.net", 4500)
+    assert payload[:4] == b"\x00\x00\x00\x00", "port 4500 requires non-ESP marker"
+    # And the IKE header (28 bytes) must actually be present after the marker.
+    assert len(payload) >= 4 + 28
+
+
+def test_udp_check_port_500_omits_non_esp_marker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """On UDP/500 the payload MUST NOT include the non-ESP marker.
+
+    Why (contract udp_probe_wire_format.md): Port 500 is IKE-only and does
+    not multiplex with ESP, so the marker would be interpreted as part of
+    the IKE header (leading to a malformed SPI) and the responder would
+    drop the datagram.
+    """
+    stub = _StubDatagramSocket(recv_bytes=b"\x00" * 28)  # arbitrary reply
+    _install_udp_stub(monkeypatch, stub)
+    zp_mod._udp_check("vpn.example.zscaler.net", 500, timeout=1.0)
+    payload, _addr = stub.sent[0]
+    # First bytes are the SPI (random), NOT the four-byte zero marker.
+    assert payload[:4] != b"\x00\x00\x00\x00", "port 500 must NOT carry marker"
+
+
+def test_probe_fqdn_triggers_udp_for_vpn_hostname(monkeypatch: pytest.MonkeyPatch) -> None:
+    """When the FQDN contains ``-vpn.``, both UDP ports are probed regardless of TCP state.
+
+    Why (FR-002 trigger 1): The catalogue tags VPN hosts by hostname pattern
+    since the CENR feed does not distinguish protocol. Firing UDP on the
+    pattern match ensures we never miss a VPN endpoint that also happens to
+    RST-close port 443.
+    """
+    # Force all lower-level probes to be no-ops except the UDP path.
+    monkeypatch.setattr(zp_mod, "_resolve", lambda _f: ("10.0.0.1", None))
+    monkeypatch.setattr(zp_mod, "_icmp_ping", lambda *_a, **_kw: False)
+    monkeypatch.setattr(zp_mod, "_tcp_check", lambda *_a, **_kw: "open")  # TCP live
+    monkeypatch.setattr(zp_mod, "_do_http", lambda *_a, **_kw: (None, "stub"))
+    monkeypatch.setattr(zp_mod, "_tls_peer", lambda *_a, **_kw: (None, None, "stub"))
+    seen_udp: list[tuple[str, int]] = []  # captured (host, port) calls
+
+    def _udp_stub(host: str, port: int, _timeout: float) -> str:
+        seen_udp.append((host, port))
+        return "open"
+
+    monkeypatch.setattr(zp_mod, "_udp_check", _udp_stub)
+    result = zp_mod._probe_fqdn("gw-vpn.example.zscaler.net", {"role": "r"}, timeout=1.0)
+    assert [p for _h, p in seen_udp] == [500, 4500], "vpn hostname must fire both UDP ports"
+    assert result.udp == {500: "open", 4500: "open"}
+
+
+def test_probe_fqdn_triggers_udp_when_all_tcp_dead(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When every TCP port is dead the fallback UDP probe MUST fire.
+
+    Why (FR-002 trigger 2): A non-``-vpn.`` host with every TCP port
+    black-holed is our only signal that we may have misclassified a VPN
+    endpoint. Firing UDP in this last-ditch case recovers those endpoints
+    without noisily probing every healthy host.
+    """
+    monkeypatch.setattr(zp_mod, "_resolve", lambda _f: ("10.0.0.1", None))
+    monkeypatch.setattr(zp_mod, "_icmp_ping", lambda *_a, **_kw: False)
+    # Every TCP probe returns closed -> triggers the "all dead" fallback branch.
+    monkeypatch.setattr(zp_mod, "_tcp_check", lambda *_a, **_kw: "closed")
+    monkeypatch.setattr(zp_mod, "_do_http", lambda *_a, **_kw: (None, "stub"))
+    monkeypatch.setattr(zp_mod, "_tls_peer", lambda *_a, **_kw: (None, None, "stub"))
+    seen: list[int] = []
+
+    def _udp_stub(_host: str, port: int, _timeout: float) -> str:
+        seen.append(port)
+        return "no_reply"
+
+    monkeypatch.setattr(zp_mod, "_udp_check", _udp_stub)
+    result = zp_mod._probe_fqdn("mystery.example.net", {"role": "r"}, timeout=1.0)
+    assert seen == [500, 4500], "all-TCP-dead must fire both UDP ports"
+    assert result.udp == {500: "no_reply", 4500: "no_reply"}
+
+
+def test_probe_fqdn_skips_udp_when_tcp_live_and_not_vpn(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A healthy non-VPN host must not incur any UDP overhead.
+
+    Why (FR-002 negative case): UDP probing on every host would double the
+    scan wall-time and generate unwanted IKE traffic to non-VPN
+    endpoints. The trigger must be strictly (vpn hostname OR all TCP dead).
+    """
+    monkeypatch.setattr(zp_mod, "_resolve", lambda _f: ("10.0.0.1", None))
+    monkeypatch.setattr(zp_mod, "_icmp_ping", lambda *_a, **_kw: False)
+    # At least one TCP port must return "open" to skip the fallback.
+    monkeypatch.setattr(zp_mod, "_tcp_check", lambda *_a, **_kw: "open")
+    monkeypatch.setattr(zp_mod, "_do_http", lambda *_a, **_kw: (None, "stub"))
+    monkeypatch.setattr(zp_mod, "_tls_peer", lambda *_a, **_kw: (None, None, "stub"))
+    udp_called = False
+
+    def _udp_stub(*_a: object, **_kw: object) -> str:
+        nonlocal udp_called
+        udp_called = True  # any invocation is a regression
+        return "open"
+
+    monkeypatch.setattr(zp_mod, "_udp_check", _udp_stub)
+    result = zp_mod._probe_fqdn("proxy.example.zscaler.net", {"role": "r"}, timeout=1.0)
+    assert udp_called is False, "UDP must not fire on healthy non-VPN host"
+    assert result.udp == {}, "empty udp dict = no probe attempted"
+
+
+def test_no_real_sock_dgram_socket_created(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Guard-rail: nothing outside ``_udp_check`` may build a SOCK_DGRAM socket.
+
+    Why:
+        This test doubles as a canary. If any future refactor accidentally
+        creates a raw datagram socket outside the covered ``_udp_check``
+        path, this test's assertion trips and forces the author to route
+        through the monkey-patch-friendly primitive instead.
+    """
+    stub = _StubDatagramSocket(recv_bytes=b"\x00" * 28)
+    calls = _install_udp_stub(monkeypatch, stub)
+    zp_mod._udp_check("host.example", 500, timeout=1.0)
+    assert calls, "the socket factory should have been called exactly once"
+    for _family, sock_type, _proto in calls:
+        # ``socket.SOCK_DGRAM`` is the enum flag for UDP; anything else here
+        # means the probe accidentally opened a TCP or raw socket.
+        assert sock_type == zp_mod.socket.SOCK_DGRAM

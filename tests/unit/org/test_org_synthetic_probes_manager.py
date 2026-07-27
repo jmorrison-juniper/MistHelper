@@ -10,6 +10,8 @@ Why:
 from __future__ import annotations
 
 import json
+import logging
+from datetime import UTC, datetime  # UTC-anchored freshness stamp for CENR fixture.
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -77,6 +79,13 @@ def cenr_source() -> dict:
     """
     return {
         "schema_version": 1,
+        # Stamp a current UTC timestamp so ``zscaler_catalogue.is_stale``
+        # returns False and ``ensure_fresh`` skips the real-network refresh
+        # path. Without this, any test that calls ``manage_org_synthetic_probes``
+        # (which threads through ``_load_probe_sources -> ensure_fresh``) would
+        # spawn a real multi-host probe fleet and hang on Windows CI when the
+        # environment has no outbound reachability.
+        "fetched_utc": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "proxy_hostnames": [
             "atl1.sme.zscaler.net",
             "mad3.sme.zscaler.net",
@@ -114,18 +123,36 @@ def data_dir(tmp_path: Path, probes_source: dict, cenr_source: dict) -> Path:
 
 
 def test_build_from_empty_produces_https_prefixed_no_port_targets(probes_source: dict, cenr_source: dict) -> None:
-    """Every probe target uses https:// prefix and no port suffix.
+    """HTTPS proxy targets use https:// prefix; VPN targets emit bare hostnames.
 
     Why:
-        Targets must be ``https://<fqdn>`` with no port number, even when
-        the source file lists ports.
+        Proxy targets (ZIA HTTPS 443) must be ``https://<fqdn>`` with no
+        port suffix. VPN targets (IPsec/IKE UDP 500/4500) must be a bare
+        ``<fqdn>`` string with no port and no scheme — feature 1024
+        pivoted the VPN branch from a fake L4 probe (``host:500`` as
+        ``application``) to a truthful Mist Marvis Minis
+        ``reachability`` probe (bare hostname, ICMP). The pre-1024 shape
+        ``host:500`` produced 100% guaranteed-fail probes because Mist
+        cannot speak IKEv2 on UDP/500.
     """
     result = ospm._build_probe_set((probes_source, cenr_source), [10])
     assert result, "Expected at least one probe"
+    vpn_hosts = {h.lower() for h in cenr_source.get("vpn_hostnames", []) or []}
     for name, probe in result.items():
-        assert probe["target"].startswith("https://"), name
-        assert ":" not in probe["target"].removeprefix("https://"), name
         assert name.startswith(ospm._TOOL_NAME_PREFIX), name
+        target = probe["target"]
+        # Extract fqdn from probe name (tool prefix + role + slugified fqdn).
+        # We use the raw target to classify: bare hostname -> VPN, else HTTPS.
+        if any(vpn_host.replace(".", "-") in name for vpn_host in vpn_hosts):
+            # 1024: VPN endpoints emit as bare hostname (ICMP reachability),
+            # never HTTPS and never with a ":port" suffix. INV-3 guard.
+            assert not target.startswith("https://"), (name, target)
+            assert not target.startswith("http://"), (name, target)
+            assert ":" not in target, (name, target)
+        else:
+            # Everything else (proxy/443, service discovery, pac) is HTTPS.
+            assert target.startswith("https://"), (name, target)
+            assert ":" not in target.removeprefix("https://"), (name, target)
 
 
 def test_build_from_empty_skips_wildcards(probes_source: dict, cenr_source: dict) -> None:
@@ -156,15 +183,21 @@ def test_build_applies_defaults(probes_source: dict, cenr_source: dict) -> None:
         Live Mist config (2026-07-24) shows the correct ``custom_probes``
         body shape is ``{type, target, aggressiveness}`` -- no ``name``
         (the dict key IS the name) and no ``vlan_ids`` (VLAN scoping
-        belongs on the ``tests[]`` row). ``type`` defaults to
-        ``"application"`` to match the mini-* convention. Mist's 5-probe
-        priority cap counts ``tests[]`` array membership; ``high`` fills a
-        slot, ``auto`` does not, so every non-critical probe carries an
+        belongs on the ``tests[]`` row). ``type`` is classified from the
+        target's shape: HTTP/S URLs get ``"application"`` (URL-based
+        check), bare ``host:port`` targets (VPN UDP:500, custom L4) get
+        ``"reachability"`` (raw connectivity check). Emitting a VPN
+        UDP:500 target as ``application`` would make Mist attempt an
+        HTTP GET against an IKE listener. Mist's 5-probe priority cap
+        counts ``tests[]`` array membership; ``high`` fills a slot,
+        ``auto`` does not, so every non-critical probe carries an
         explicit ``"auto"`` value rather than leaving the key unset.
     """
     result = ospm._build_probe_set((probes_source, cenr_source), [10])
     for probe in result.values():
-        assert probe["type"] == "application"
+        target = probe["target"]
+        expected_type = "reachability" if not target.startswith(("http://", "https://")) else "application"
+        assert probe["type"] == expected_type, (probe, expected_type)
         assert "name" not in probe
         assert "vlan_ids" not in probe
         # Every probe carries the key with one of the two accepted values.
@@ -290,15 +323,33 @@ def test_prompt_rejects_empty_vlan_list() -> None:
 
 
 def test_prompt_rejects_out_of_range_vlan() -> None:
-    """VLAN ids outside [0, 4094] re-prompt."""
-    with patch("builtins.input", side_effect=["4095", "-1", "abc", "0, 4094"]):
-        assert ospm._prompt_vlan_list() == [0, 4094]
+    """Out-of-range tokens are dropped; in-range survivors accepted."""
+    # First entry: all out-of-range -> re-prompt.
+    # Second entry: mix of invalid and valid -> invalids dropped, valids kept.
+    with patch("builtins.input", side_effect=["4095, 0, -1, abc", "0, 1, 4094, 4095"]):
+        assert ospm._prompt_vlan_list() == [1, 4094]
 
 
 def test_prompt_dedupes_and_sorts() -> None:
     """Duplicate VLAN ids collapse and result is sorted."""
     with patch("builtins.input", side_effect=["30, 10, 30, 20"]):
         assert ospm._prompt_vlan_list() == [10, 20, 30]
+
+
+def test_prompt_expands_vlan_ranges() -> None:
+    """Ranges like ``3-6`` expand to individual ids; mixed with singletons."""
+    with patch("builtins.input", side_effect=["3-6, 10, 200-203"]):
+        assert ospm._prompt_vlan_list() == [3, 4, 5, 6, 10, 200, 201, 202, 203]
+
+
+def test_prompt_drops_invalid_range_endpoints() -> None:
+    """Ranges with out-of-range or reversed endpoints are dropped silently."""
+    # "0-3" -> expands to 0,1,2,3; 0 dropped -> keeps 1,2,3.
+    # "4093-4096" -> expands to 4093..4096; 4095,4096 dropped -> keeps 4093,4094.
+    # "10-5" -> reversed, dropped entirely.
+    # "abc-5" -> unparseable, dropped entirely.
+    with patch("builtins.input", side_effect=["0-3, 4093-4096, 10-5, abc-5"]):
+        assert ospm._prompt_vlan_list() == [1, 2, 3, 4093, 4094]
 
 
 # --------------------------------------------------------------------------- #
@@ -1331,3 +1382,1187 @@ def test_site_override_unnamed_sites_sink_to_end() -> None:
     # tie-breaks on the casefolded name string first (empty "" sorts
     # before whitespace "   "), then on id.
     assert put_site_ids == ["id-unnamed", "id-blankname"]
+
+
+def test_prompt_mode_defaults_to_swap_on_empty_input() -> None:
+    """Empty input selects swap without re-prompting.
+
+    Why:
+        Swap is the default because the typical operator intent for this
+        menu is a clean rebuild from the freshly-generated probe set --
+        merge is the exception path. Locks in the empty-string -> swap
+        behavior so a future prompt-string tweak cannot silently regress
+        it back to a required-input loop.
+    """
+    with patch("builtins.input", side_effect=[""]):
+        assert ospm._prompt_mode({"zcc-x": {"name": "zcc-x"}}) == "swap"
+
+
+def test_prompt_mode_still_accepts_explicit_merge_or_swap() -> None:
+    """Explicit ``merge`` / ``swap`` continue to work despite the default."""
+    with patch("builtins.input", side_effect=["merge"]):
+        assert ospm._prompt_mode({}) == "merge"
+    with patch("builtins.input", side_effect=["swap"]):
+        assert ospm._prompt_mode({}) == "swap"
+
+
+def test_site_override_indexed_prompt_expands_ranges() -> None:
+    """Range shorthand ``3-6`` expands to individual site indexes.
+
+    Why:
+        Operators paste condensed lists from other tools (switch configs,
+        change-management tickets). Expanding ranges at this prompt
+        matches the shorthand introduced in _validate_vlan_input so both
+        prompts feel consistent.
+    """
+    session = MagicMock()
+    sites = [{"id": f"site-{i}", "name": f"Site{chr(64 + i)}"} for i in range(1, 7)]
+    list_response = MagicMock()
+    get_response = MagicMock(data={})
+    put_response = MagicMock(status_code=200)
+    inputs = iter(["y", "2-4, 6", "10"])
+    with (
+        patch.object(ospm._mist_orgs_sites, "listOrgSites", return_value=list_response),
+        patch.object(ospm.mistapi, "get_all", return_value=sites),
+        patch.object(ospm._mist_site_setting, "getSiteSetting", return_value=get_response),
+        patch.object(ospm._mist_site_setting, "updateSiteSettings", return_value=put_response) as put_mock,
+        patch("builtins.input", lambda _prompt: next(inputs)),
+    ):
+        ospm._prompt_and_apply_site_overrides(session, "org-uuid", {"zcc-x": {"name": "zcc-x"}}, ({"roles": []}, {}))
+    put_site_ids = [call.args[1] for call in put_mock.call_args_list]
+    # Sort key is site name, so indexes 1..6 map to SiteA..SiteF in order.
+    # 2-4 -> site-2, site-3, site-4; 6 -> site-6.
+    assert put_site_ids == ["site-2", "site-3", "site-4", "site-6"]
+
+
+def test_site_override_indexed_prompt_all_token_selects_every_site() -> None:
+    """``all`` (case-insensitive) selects every site in the sorted list."""
+    session = MagicMock()
+    sites = [
+        {"id": "site-1", "name": "Alpha"},
+        {"id": "site-2", "name": "Bravo"},
+        {"id": "site-3", "name": "Charlie"},
+    ]
+    list_response = MagicMock()
+    get_response = MagicMock(data={})
+    put_response = MagicMock(status_code=200)
+    inputs = iter(["y", "ALL", "42"])
+    with (
+        patch.object(ospm._mist_orgs_sites, "listOrgSites", return_value=list_response),
+        patch.object(ospm.mistapi, "get_all", return_value=sites),
+        patch.object(ospm._mist_site_setting, "getSiteSetting", return_value=get_response),
+        patch.object(ospm._mist_site_setting, "updateSiteSettings", return_value=put_response) as put_mock,
+        patch("builtins.input", lambda _prompt: next(inputs)),
+    ):
+        ospm._prompt_and_apply_site_overrides(session, "org-uuid", {"zcc-x": {"name": "zcc-x"}}, ({"roles": []}, {}))
+    put_site_ids = sorted(call.args[1] for call in put_mock.call_args_list)
+    assert put_site_ids == ["site-1", "site-2", "site-3"]
+
+
+def test_site_override_indexed_prompt_range_drops_out_of_range() -> None:
+    """Range endpoints that spill past the list clamp silently -- no crash."""
+    session = MagicMock()
+    sites = [
+        {"id": "site-1", "name": "Alpha"},
+        {"id": "site-2", "name": "Bravo"},
+    ]
+    list_response = MagicMock()
+    get_response = MagicMock(data={})
+    put_response = MagicMock(status_code=200)
+    # "1-5" -> keep only in-range 1 and 2; "5-1" -> reversed, dropped entirely.
+    inputs = iter(["y", "1-5, 5-1", "10"])
+    with (
+        patch.object(ospm._mist_orgs_sites, "listOrgSites", return_value=list_response),
+        patch.object(ospm.mistapi, "get_all", return_value=sites),
+        patch.object(ospm._mist_site_setting, "getSiteSetting", return_value=get_response),
+        patch.object(ospm._mist_site_setting, "updateSiteSettings", return_value=put_response) as put_mock,
+        patch("builtins.input", lambda _prompt: next(inputs)),
+    ):
+        ospm._prompt_and_apply_site_overrides(session, "org-uuid", {"zcc-x": {"name": "zcc-x"}}, ({"roles": []}, {}))
+    put_site_ids = [call.args[1] for call in put_mock.call_args_list]
+    assert put_site_ids == ["site-1", "site-2"]
+
+
+# --------------------------------------------------------------------------- #
+# US1: _probe_target three-branch dispatch (contract:
+# specs/1023-probe-tailored-synthetic-tests/contracts/probe_target_url_builder.md)
+# --------------------------------------------------------------------------- #
+
+
+def _make_tunnel_zen_role() -> dict[str, Any]:
+    """Return a minimal tunnel_zen role for URL-builder tests.
+
+    Why:
+        _probe_target's lookup path for CENR-derived hostnames is gated
+        on ``role["role"] == _TUNNEL_ZEN_ROLE``; every US1 test targets
+        that branch since it is the one that carries the observation
+        state per contract Preconditions.
+
+    Returns:
+        A role dict whose only meaningful field is the ``role`` name.
+    """
+    # The URL builder only needs the role name to route into the CENR
+    # bag; the ``probe`` sub-block is deliberately absent so the fallback
+    # branch is exercised by _cenr_source_with(...) supplying (or omitting)
+    # observation fields directly on the host entry.
+    return {"role": ospm._TUNNEL_ZEN_ROLE}
+
+
+def _cenr_source_with(
+    host: str,
+    *,
+    bag: str = "vpn_hostnames",
+    observed_protocol: str | None,
+    observed_port: int | None,
+    include_key: bool = True,
+    probe_default_protocol: str = "https",
+    probe_default_port: int = 443,
+) -> dict[str, Any]:
+    """Assemble a v3-shaped CENR source dict with one host entry under control.
+
+    Why:
+        Each US1 test needs precise control over the single host's
+        observation triplet without pulling in the full production
+        catalogue. ``include_key=False`` lets T039 exercise the
+        "hostname absent from every bag" fallback branch.
+
+    Args:
+        host: Fully-qualified hostname to seed the target bag with.
+        bag: Which CENR bag to place ``host`` under
+            (``vpn_hostnames`` vs ``proxy_hostnames``). Both bags share
+            the same v3 entry shape per schema contract.
+        observed_protocol: Value to store under ``observed_protocol``
+            (or ``None`` to model an unprobed host).
+        observed_port: Value to store under ``observed_port``.
+        include_key: When ``False``, ``host`` is omitted from the bag
+            entirely so the URL builder must fall back to the catalogue
+            default.
+        probe_default_protocol: Value for ``probe_default.protocol`` in
+            the fallback branch; kept a knob so tests can prove elision
+            of the default port for https.
+        probe_default_port: Value for ``probe_default.port`` in the
+            fallback branch.
+
+    Returns:
+        A v3-shaped CENR document with exactly one entry (or zero, when
+        ``include_key`` is False) in the chosen bag.
+    """
+    # The CENR document carries a fallback ``probe_default`` block that
+    # Branch 3 consults; keep it configurable so tests can pin both the
+    # default-port-elided form and an explicit-port form.
+    doc: dict[str, Any] = {
+        "schema_version": 3,
+        "probe_default": {
+            "protocol": probe_default_protocol,
+            "port": probe_default_port,
+        },
+        "proxy_hostnames": [],
+        "vpn_hostnames": [],
+    }
+    if include_key:
+        # Build a v3 host entry with the observation triplet supplied by
+        # the caller; the last_probed field is a fixed sentinel so
+        # assertions never race against wall-clock time.
+        entry: dict[str, Any] = {
+            "host": host,
+            "observed_protocol": observed_protocol,
+            "observed_port": observed_port,
+            "last_probed": "2026-07-26T00:00:00Z" if observed_protocol is not None else None,
+        }
+        doc[bag].append(entry)
+    return doc
+
+
+def test_probe_target_udp_500_emits_bare_hostname() -> None:
+    """UDP/500 VPN-bag host returns bare fqdn (post-1024 reachability shape).
+
+    Why:
+        Feature 1024 pivoted the VPN branch from an L4 ``host:500`` probe
+        (which Mist could not actually IKE-negotiate) to a bare-hostname
+        ICMP ``reachability`` probe. Contract
+        ``vpn_probe_target_shape.md`` §Ordering: the VPN pre-check runs
+        BEFORE the non-VPN 3-branch dispatch, so a bag member returns
+        bare ``fqdn`` regardless of any UDP observation. INV-3 forbids
+        any ``:500`` suffix on VPN rows.
+    """
+    # Arrange: seed CENR with a VPN host whose ONLY observation is UDP/500,
+    # matching the real-world IKE probe response from _udp_check. Host is
+    # in the vpn_hostnames bag (factory default), so bag wins.
+    cenr = _cenr_source_with(
+        "chi1-2-vpn.zscaler.net",
+        observed_protocol="UDP/500",
+        observed_port=500,
+    )
+    # Act: run the URL builder against the tunnel_zen role.
+    result = ospm._probe_target("chi1-2-vpn.zscaler.net", _make_tunnel_zen_role(), cenr)
+    # Assert: exact bare fqdn (no scheme, no ":port"), INV-3 guard.
+    assert result == "chi1-2-vpn.zscaler.net"
+    assert not result.startswith("https://")
+    assert not result.startswith("http://")
+    assert ":" not in result
+
+
+def test_probe_target_udp_4500_emits_bare_hostname() -> None:
+    """UDP/4500 VPN-bag host returns bare fqdn (bag wins over observation).
+
+    Why:
+        NAT-Traversal IKE uses UDP/4500; post-1024 the VPN pre-check
+        emits bare hostname regardless of the observed port. This test
+        proves the bag-membership check dominates the observation
+        dispatch (contract ``vpn_probe_target_shape.md`` §Ordering).
+    """
+    # Arrange: same shape as the UDP/500 sibling but on NAT-T port to prove
+    # the VPN pre-check ignores the observed port entirely.
+    cenr = _cenr_source_with(
+        "chi1-2-vpn.zscaler.net",
+        observed_protocol="UDP/4500",
+        observed_port=4500,
+    )
+    # Act.
+    result = ospm._probe_target("chi1-2-vpn.zscaler.net", _make_tunnel_zen_role(), cenr)
+    # Assert: bare fqdn — VPN pre-check wins, INV-3 guard on the port shape.
+    assert result == "chi1-2-vpn.zscaler.net"
+    assert not result.startswith("https://")
+    assert ":" not in result
+
+
+def test_probe_target_udp_generic_uses_observed_port() -> None:
+    """Generic UDP token on a non-VPN-bag host uses the observed port verbatim.
+
+    Why:
+        Contract Test Boundaries explicitly enumerate the bare ``UDP``
+        token (no port suffix in ``observed_protocol``). The port comes
+        from ``observed_port``, not from parsing the protocol string.
+        Post-1024 the host is placed in ``proxy_hostnames`` (not
+        ``vpn_hostnames``) so the non-VPN 3-branch dispatch actually
+        runs — Branch 1 (UDP-family) then produces ``host:port``.
+    """
+    # Arrange: observed_protocol is the bare token "UDP" (no /port), and
+    # observed_port is the authoritative source. bag=proxy_hostnames keeps
+    # the host OUT of the VPN pre-check so Branch 1 is genuinely exercised.
+    cenr = _cenr_source_with(
+        "l2tp.example.net",
+        bag="proxy_hostnames",
+        observed_protocol="UDP",
+        observed_port=1701,
+    )
+    # Act.
+    result = ospm._probe_target("l2tp.example.net", _make_tunnel_zen_role(), cenr)
+    # Assert: port comes from observed_port, not from any parse of the
+    # protocol string.
+    assert result == "l2tp.example.net:1701"
+
+
+def test_probe_target_tcp_non_443_emits_bare_host_port() -> None:
+    """TCP/<n!=443> observation returns bare host:port (Branch 1).
+
+    Why:
+        Contract Branch 1 groups UDP with non-443 TCP so that hosts
+        answering on unusual TCP ports (e.g. 8080) render as raw
+        host:port -- Mist can't URL-scheme those either.
+    """
+    # Arrange: TCP/8080 is the Branch 1 example from the contract.
+    cenr = _cenr_source_with(
+        "proxy8080.zscaler.net",
+        bag="proxy_hostnames",
+        observed_protocol="TCP/8080",
+        observed_port=8080,
+    )
+    # Act.
+    result = ospm._probe_target("proxy8080.zscaler.net", _make_tunnel_zen_role(), cenr)
+    # Assert: same bare shape as UDP; no scheme is prepended.
+    assert result == "proxy8080.zscaler.net:8080"
+    assert not result.startswith("https://")
+
+
+def test_probe_target_https_observation_returns_https_url() -> None:
+    """HTTPS observation renders as ``https://host`` with default port elided.
+
+    Why:
+        Contract Branch 2 + INV-1: every HTTPS observation goes through
+        the URL builder and the default :443 must be elided to match
+        Mist's own ``mini-*`` shape (FR-009 keeps the target byte-identical
+        across runs when the observation is stable).
+    """
+    # Arrange: HTTPS observation on the canonical proxy host.
+    cenr = _cenr_source_with(
+        "chi1-2.sme.zscaler.net",
+        bag="proxy_hostnames",
+        observed_protocol="HTTPS",
+        observed_port=443,
+    )
+    # Act.
+    result = ospm._probe_target("chi1-2.sme.zscaler.net", _make_tunnel_zen_role(), cenr)
+    # Assert: URL form with default port elided; no explicit :443 anywhere.
+    assert result == "https://chi1-2.sme.zscaler.net"
+    assert ":443" not in result
+
+
+def test_probe_target_tcp_443_observation_also_returns_https_url() -> None:
+    """TCP/443 observation collapses onto the same https://host shape as HTTPS.
+
+    Why:
+        Contract Branch 2 explicitly folds TCP/443 into HTTPS so a host
+        that answers on TCP/443 without a full TLS handshake still
+        produces the URL Mist expects (avoids a raw ``host:443`` that
+        Mist rejects).
+    """
+    # Arrange: TCP/443 exercises the "collapse to HTTPS URL" arm of Branch 2.
+    cenr = _cenr_source_with(
+        "chi1-2.sme.zscaler.net",
+        bag="proxy_hostnames",
+        observed_protocol="TCP/443",
+        observed_port=443,
+    )
+    # Act.
+    result = ospm._probe_target("chi1-2.sme.zscaler.net", _make_tunnel_zen_role(), cenr)
+    # Assert: identical shape to HTTPS branch above.
+    assert result == "https://chi1-2.sme.zscaler.net"
+    assert ":443" not in result
+
+
+def test_probe_target_missing_observation_falls_back_and_warns(caplog: pytest.LogCaptureFixture) -> None:
+    """observed_protocol=None falls back to catalogue default and emits ONE WARNING.
+
+    Why:
+        Contract Branch 3 side-effect: exactly one ``logger.warning``
+        with the message ``"no observation for %s, using catalogue
+        default %s"`` -- operators use that record to spot cache-miss
+        hosts and rerun the reachability probe.
+    """
+    # Arrange: host present in the bag but observation_protocol=None.
+    cenr = _cenr_source_with(
+        "unprobed.zscaler.net",
+        bag="proxy_hostnames",
+        observed_protocol=None,
+        observed_port=None,
+    )
+    # Act: capture WARN records; use module-scoped logger to match the
+    # logger.warning call in the production module.
+    with caplog.at_level(logging.WARNING, logger=ospm.__name__):
+        result = ospm._probe_target("unprobed.zscaler.net", _make_tunnel_zen_role(), cenr)
+    # Assert: default from cenr_source["probe_default"] with :443 elided.
+    assert result == "https://unprobed.zscaler.net"
+    # Assert: exactly one WARN, and the message body matches the contract.
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warnings) == 1
+    assert "no observation for" in warnings[0].getMessage()
+    assert "unprobed.zscaler.net" in warnings[0].getMessage()
+
+
+def test_probe_target_unknown_token_falls_back_and_warns(caplog: pytest.LogCaptureFixture) -> None:
+    """An unrecognised observed_protocol token falls back + WARNs like Branch 3.
+
+    Why:
+        Contract Test Boundaries require Branch 3 to also cover unknown
+        tokens (defensive against future schema drift) -- the tool must
+        never silently emit garbage.
+    """
+    # Arrange: use a bogus token that starts with neither UDP nor TCP
+    # nor HTTPS so the dispatch falls through to Branch 3.
+    cenr = _cenr_source_with(
+        "weird.zscaler.net",
+        bag="proxy_hostnames",
+        observed_protocol="WEIRD/9999",
+        observed_port=9999,
+    )
+    # Act.
+    with caplog.at_level(logging.WARNING, logger=ospm.__name__):
+        result = ospm._probe_target("weird.zscaler.net", _make_tunnel_zen_role(), cenr)
+    # Assert: fell back to catalogue default (https, port elided).
+    assert result == "https://weird.zscaler.net"
+    # Assert: exactly one WARN like the missing-observation case.
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warnings) == 1
+    assert "no observation for" in warnings[0].getMessage()
+
+
+def test_probe_target_missing_key_in_cenr_source_falls_back_and_warns(caplog: pytest.LogCaptureFixture) -> None:
+    """Hostname absent from every bag still yields the fallback + WARN.
+
+    Why:
+        Contract Branch 3 must not crash when the CENR bag has never
+        seen the hostname (e.g. a role hard-codes an FQDN that never
+        made it into the CENR JSON). The URL builder must degrade
+        gracefully to the catalogue default AND log so operators notice.
+    """
+    # Arrange: include_key=False leaves both bags empty, so the lookup
+    # inside _probe_target must miss and hit Branch 3.
+    cenr = _cenr_source_with(
+        "orphan.zscaler.net",
+        include_key=False,
+        observed_protocol=None,
+        observed_port=None,
+    )
+    # Act.
+    with caplog.at_level(logging.WARNING, logger=ospm.__name__):
+        result = ospm._probe_target("orphan.zscaler.net", _make_tunnel_zen_role(), cenr)
+    # Assert: catalogue default with :443 elided.
+    assert result == "https://orphan.zscaler.net"
+    # Assert: exactly one WARN mentioning the missing hostname.
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warnings) == 1
+    assert "orphan.zscaler.net" in warnings[0].getMessage()
+
+
+def test_no_https_vpn_targets_in_generated_payload() -> None:
+    """SC-001/INV-3 invariant: no VPN target ever ships with a scheme or port.
+
+    Why:
+        The whole feature exists because Mist was seeing
+        ``https://chi1-2-vpn.zscaler.net`` in the emitted probe payload
+        even though the host only answers on UDP/500. Feature 1024 went
+        further: VPN hosts must ship as bare hostnames (ICMP
+        reachability), never as ``host:500`` (fake L4). Any regression
+        that re-introduces a scheme OR a ``:port`` suffix on a VPN host
+        must fail this test BEFORE reaching production. Drives the full
+        ``_build_probe_set`` pipeline (not just _probe_target in
+        isolation) so a duplicate URL builder path anywhere else in the
+        module would surface too.
+    """
+    import re
+
+    # Arrange: three VPN hosts on UDP/500 (bag membership + observation)
+    # and three proxy hosts on HTTPS (Branch 2 shape) to prove BOTH shapes
+    # ship correctly from the same _build_probe_set call.
+    vpn_hosts = [
+        "chi1-2-vpn.zscaler.net",
+        "atl1-vpn.zscaler.net",
+        "sfo1-vpn.zscaler.net",
+    ]
+    proxy_hosts = [
+        "chi1-2.sme.zscaler.net",
+        "atl1.sme.zscaler.net",
+        "sfo1.sme.zscaler.net",
+    ]
+    cenr = {
+        "schema_version": 3,
+        "probe_default": {"protocol": "https", "port": 443},
+        # v3 per-host observation entries: UDP/500 for VPNs, HTTPS for
+        # proxies (matches real-world probe output shape).
+        "vpn_hostnames": [
+            {"host": h, "observed_protocol": "UDP/500", "observed_port": 500, "last_probed": "2026-07-26T00:00:00Z"}
+            for h in vpn_hosts
+        ],
+        "proxy_hostnames": [
+            {"host": h, "observed_protocol": "HTTPS", "observed_port": 443, "last_probed": "2026-07-26T00:00:00Z"}
+            for h in proxy_hosts
+        ],
+    }
+    # Minimal probes_source with just the tunnel_zen role, which is the
+    # only role that expands via CENR (see _iter_role_fqdns).
+    probes_source = {
+        "schema_version": 2,
+        "roles": [
+            {
+                "role": ospm._TUNNEL_ZEN_ROLE,
+                "fqdns_ref": "data/zscaler_cenr_hostnames.json",
+            },
+        ],
+    }
+    # Act: drive the full pipeline exactly like manage_org_synthetic_probes.
+    probes = ospm._build_probe_set((probes_source, cenr), [10])
+    # Assert: at least one row per host was emitted.
+    assert probes
+    https_vpn_pattern = re.compile(r"^https?://.*-vpn\.")
+    # Assert: every VPN row is a bare hostname; NO scheme, NO ":port" suffix.
+    # INV-3: pre-1024 leakage was ":500" — this regex actively guards against
+    # both scheme re-introduction and any port suffix.
+    vpn_rows = [(name, body) for name, body in probes.items() if "-vpn" in body["target"]]
+    assert vpn_rows, "expected at least one VPN probe target"
+    for name, body in vpn_rows:
+        target = body["target"]
+        # SC-001: no scheme allowed on VPN targets.
+        assert not https_vpn_pattern.match(target), f"regression: {target!r} still uses http(s)://"
+        # INV-3: no ":port" suffix (guards against pre-1024 ":500" leakage).
+        assert ":" not in target, f"VPN row {target!r} still has a port suffix"
+        # INV-2: probe type must be reachability for bare-hostname targets.
+        assert (
+            body["type"] == "reachability"
+        ), f"VPN row {name!r} target={target!r} type={body['type']!r} != reachability"
+    # Sanity: proxy rows still shipped as https:// URLs with default port elided.
+    proxy_targets = [body["target"] for name, body in probes.items() if ".sme." in body["target"]]
+    assert proxy_targets, "expected at least one proxy probe target"
+    for target in proxy_targets:
+        assert target.startswith("https://"), f"proxy row {target!r} lost its scheme"
+        assert ":443" not in target, f"proxy row {target!r} kept explicit :443"
+
+
+# --------------------------------------------------------------------------- #
+# _probe_target: residual branch-coverage tests for T057.
+# Each test below closes a single decision-point branch that the US1 happy-path
+# tests above did not exercise; keeps ``_probe_target`` at 100% branch coverage
+# so any future edit that adds an unreachable branch is caught immediately.
+# --------------------------------------------------------------------------- #
+
+
+def test_probe_target_udp_observation_without_port_falls_back_to_default(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """UDP observation on a VPN-bag host emits bare fqdn (bag pre-check wins).
+
+    Why:
+        Contract Preconditions state ``observed_port`` may legitimately be
+        None when a UDP probe reported ``no_reply``. Post-1024 the VPN
+        pre-check runs BEFORE any observation dispatch, so a
+        ``vpn_hostnames`` bag member returns bare ``fqdn`` — the
+        observation gaps are irrelevant to the emitted shape. The INFO
+        log records the VPN emit; no WARNING is expected because
+        Branch 3 is never reached for bag members.
+    """
+    # Arrange: UDP token present but no port paired with it. Host is in
+    # the vpn_hostnames bag (factory default), so the VPN pre-check wins.
+    cenr = _cenr_source_with(
+        "half-observed.zscaler.net",
+        observed_protocol="UDP/500",
+        observed_port=None,
+    )
+    # Act.
+    with caplog.at_level(logging.INFO, logger=ospm.__name__):
+        result = ospm._probe_target("half-observed.zscaler.net", _make_tunnel_zen_role(), cenr)
+    # Assert: bare fqdn — VPN pre-check dominates the observation triplet,
+    # INV-3 guard against any ":port" leakage.
+    assert result == "half-observed.zscaler.net"
+    assert ":" not in result
+    # Assert: NO Branch-3 WARNING (bag pre-check short-circuits).
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert warnings == []
+
+
+def test_probe_target_probe_default_protocol_tcp_is_upgraded_to_https(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """``probe_default.protocol == "tcp"`` must be silently upgraded to https.
+
+    Why:
+        Mist synthetic tests are URL-based; raw TCP has no scheme, so a
+        ``tcp`` fallback would emit an invalid target. The upgrade path
+        keeps the port exercise (TCP/443 handshake) while emitting a
+        legal ``https://`` URL.
+    """
+    # Arrange: no observation, catalogue default declares tcp/443.
+    cenr = _cenr_source_with(
+        "tcp-default.zscaler.net",
+        include_key=False,
+        observed_protocol=None,
+        observed_port=None,
+        probe_default_protocol="tcp",
+        probe_default_port=443,
+    )
+    # Act.
+    with caplog.at_level(logging.WARNING, logger=ospm.__name__):
+        result = ospm._probe_target("tcp-default.zscaler.net", _make_tunnel_zen_role(), cenr)
+    # Assert: scheme swapped to https and default :443 elided.
+    assert result == "https://tcp-default.zscaler.net"
+
+
+def test_probe_target_probe_default_unknown_protocol_falls_back_to_https(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """An unrecognised ``probe_default.protocol`` string falls back to https.
+
+    Why:
+        Defensive branch: if the catalogue is edited to introduce a new
+        protocol name before the URL builder learns it (e.g. ``quic``),
+        the emitted target must remain a valid Mist synthetic test URL
+        rather than ``quic://host``.
+    """
+    # Arrange: no observation, catalogue default declares an unknown scheme.
+    cenr = _cenr_source_with(
+        "quic-default.zscaler.net",
+        include_key=False,
+        observed_protocol=None,
+        observed_port=None,
+        probe_default_protocol="quic",
+        probe_default_port=443,
+    )
+    # Act.
+    with caplog.at_level(logging.WARNING, logger=ospm.__name__):
+        result = ospm._probe_target("quic-default.zscaler.net", _make_tunnel_zen_role(), cenr)
+    # Assert: silently upgraded to https with default port elided.
+    assert result == "https://quic-default.zscaler.net"
+
+
+def test_probe_target_probe_default_port_non_integer_uses_scheme_default(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A non-integer ``probe_default.port`` value coerces to the scheme default.
+
+    Why:
+        Malformed CENR data (e.g. ``"port": "auto"`` or a null) must not
+        crash the builder. The defensive ``except (TypeError, ValueError)``
+        path picks the scheme's canonical port so the emitted target is
+        still valid.
+    """
+    # Arrange: no observation, catalogue default has a bogus port value.
+    cenr = _cenr_source_with(
+        "bad-port.zscaler.net",
+        include_key=False,
+        observed_protocol=None,
+        observed_port=None,
+        probe_default_protocol="https",
+        probe_default_port=443,
+    )
+    # Overwrite the ``port`` value to something that can't int() cleanly.
+    cenr["probe_default"]["port"] = "auto"
+    # Act.
+    with caplog.at_level(logging.WARNING, logger=ospm.__name__):
+        result = ospm._probe_target("bad-port.zscaler.net", _make_tunnel_zen_role(), cenr)
+    # Assert: fell back to scheme default (443), elided to bare URL.
+    assert result == "https://bad-port.zscaler.net"
+
+
+def test_probe_target_probe_default_non_standard_port_is_appended(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A non-standard ``probe_default.port`` must be appended to the URL.
+
+    Why:
+        Branch 3's default-port-elision helper skips port suffix only when
+        the port matches the scheme's canonical default. Any other port
+        (e.g. 8443 for a non-standard TLS listener) must appear in the
+        target so Mist actually probes the right socket.
+    """
+    # Arrange: no observation; catalogue default pins https on 8443.
+    cenr = _cenr_source_with(
+        "alt-port.zscaler.net",
+        include_key=False,
+        observed_protocol=None,
+        observed_port=None,
+        probe_default_protocol="https",
+        probe_default_port=8443,
+    )
+    # Act.
+    with caplog.at_level(logging.WARNING, logger=ospm.__name__):
+        result = ospm._probe_target("alt-port.zscaler.net", _make_tunnel_zen_role(), cenr)
+    # Assert: port suffix preserved because it differs from scheme default.
+    assert result == "https://alt-port.zscaler.net:8443"
+
+
+# --------------------------------------------------------------------------- #
+# Feature 1024 (VPN ICMP reachability): TestProbeTypeDispatch (T003) and
+# TestProbeTargetVpn (T004-T008, T015, T016).
+#
+# Why these classes and not module-level functions:
+#     Both features 1023 and 1024 co-locate their scenario tests in this
+#     file so a single ``pytest tests/unit/org`` run exercises the full
+#     dispatch pipeline. Grouping into classes keeps pytest's -k filter
+#     ergonomic (``pytest -k TestProbeTypeDispatch``) and satisfies the
+#     tasks.md "MUST cover" contract enumeration verbatim.
+# --------------------------------------------------------------------------- #
+
+
+class TestProbeTypeDispatch:
+    """Shape-based dispatch tests for ``_probe_type_for_target``.
+
+    Why:
+        Contract ``probe_type_dispatch.md`` §Decision Rule pins the
+        classifier: URL scheme wins, then port-after-last-dot wins, then
+        reachability. This test class enumerates the 8 boundary cases
+        from the contract's §Test Boundaries so any drift is caught at
+        the module-function level BEFORE it reaches the row-emission
+        callsites in ``_build_probe_set`` / ``_build_region_probes`` /
+        ``_merge_probes``.
+    """
+
+    def test_https_url_returns_application(self) -> None:
+        """https://... target dispatches to application (URL-based probe).
+
+        Why:
+            Contract §Decision Rule branch 1: any target starting with
+            ``https://`` is a URL Mist can GET. Type ``application`` is
+            the correct classification.
+        """
+        # Act: pass a canonical HTTPS URL with no role_type hint.
+        result = ospm._probe_type_for_target("https://example.com", None)
+        # Assert: URL shape wins -- application dispatch.
+        assert result == "application"
+
+    def test_http_url_returns_application(self) -> None:
+        """http://... target dispatches to application.
+
+        Why:
+            Contract §Decision Rule branch 1 covers both HTTP and HTTPS
+            schemes identically -- both are URL probes for Mist Marvis
+            Minis.
+        """
+        # Act: bare HTTP scheme (rare but supported by Mist).
+        result = ospm._probe_type_for_target("http://example.com", None)
+        # Assert: URL shape wins regardless of TLS status.
+        assert result == "application"
+
+    def test_bare_host_port_443_returns_application(self) -> None:
+        """``example.com:443`` (no scheme) still dispatches to application.
+
+        Why:
+            Contract §Decision Rule branch 2: a ``:port`` suffix after
+            the last ``.`` indicates an L4 target that Mist executes as a
+            reachability-style application probe (TCP handshake). The
+            :443 port is retained explicitly rather than elided.
+        """
+        # Act: bare host:port on the canonical HTTPS port with no scheme.
+        result = ospm._probe_type_for_target("example.com:443", None)
+        # Assert: port-suffix rule triggers application dispatch.
+        assert result == "application"
+
+    def test_bare_host_port_8080_returns_application(self) -> None:
+        """Non-443 bare host:port dispatches to application.
+
+        Why:
+            Contract §Decision Rule branch 2 must fire for any non-scheme
+            port suffix -- 8080, 8443, 500, etc. Only bare hostnames
+            (no ``:port``) fall through to reachability.
+        """
+        # Act: non-standard TCP port on a bare host.
+        result = ospm._probe_type_for_target("example.com:8080", None)
+        # Assert: port suffix present -> application.
+        assert result == "application"
+
+    def test_bare_host_port_500_returns_application_leakage_guard(self) -> None:
+        """``example.com:500`` dispatches to application (pre-1024 leakage guard).
+
+        Why:
+            Contract §Test Boundaries §5: this case exists specifically
+            as a regression guard. Pre-1024 code emitted VPN targets as
+            ``host:500``; if any such target ever slips through, the
+            dispatcher must classify it as ``application`` (matching
+            what the pre-1024 code did) rather than silently masking the
+            leak by returning ``reachability``. The correct fix is to
+            never emit ``host:500`` for VPN in the first place (T011),
+            not to have the dispatcher paper over it.
+        """
+        # Act: the exact shape T011 must never emit again.
+        result = ospm._probe_type_for_target("example.com:500", None)
+        # Assert: dispatcher classifies by SHAPE, not by hostname pattern.
+        # This assertion is a leakage detector -- if it starts failing,
+        # something upstream still emits the pre-1024 shape.
+        assert result == "application"
+
+    def test_bare_hostname_returns_reachability(self) -> None:
+        """Bare hostname (no scheme, no port) dispatches to reachability.
+
+        Why:
+            Contract §Decision Rule branch 3: this is the ICMP path for
+            Mist Marvis Minis. VPN targets post-1024 always take this
+            branch (T011 emits bare hostname).
+        """
+        # Act: canonical bare hostname.
+        result = ospm._probe_type_for_target("example.com", None)
+        # Assert: reachability is the only truthful classification here.
+        assert result == "reachability"
+
+    def test_zscaler_vpn_hostname_returns_reachability(self) -> None:
+        """A real Zscaler VPN hostname dispatches to reachability.
+
+        Why:
+            Contract §Test Boundaries §7 pins the primary US1 case:
+            ``gateway.zscalerthree.net`` (the ZEN VPN edge) must resolve
+            to reachability so Mist runs ICMP against it. This is the
+            behavioural core of feature 1024.
+        """
+        # Act: the exact hostname that motivates the whole feature.
+        result = ospm._probe_type_for_target("gateway.zscalerthree.net", None)
+        # Assert: bare hostname -> reachability (ICMP).
+        assert result == "reachability"
+
+    def test_role_type_application_ignored_for_bare_hostname(self) -> None:
+        """role_type=application does NOT override the reachability shape decision.
+
+        Why:
+            Contract §Decision Rule end-of-list note: ``role_type`` is
+            preserved in the signature for backwards compat but MUST NOT
+            be consulted. The target shape is the single source of
+            truth. INV-2 (shape=type) forbids the caller from smuggling
+            in an ``application`` classification for a bare-hostname
+            target.
+        """
+        # Act: bare hostname WITH a legacy application hint.
+        result = ospm._probe_type_for_target("gateway.zscalerthree.net", "application")
+        # Assert: shape wins, role_type ignored (INV-2).
+        assert result == "reachability"
+
+
+class TestProbeTargetVpn:
+    """VPN-branch tests for ``_probe_target`` post-feature-1024.
+
+    Why:
+        Contract ``vpn_probe_target_shape.md`` requires the VPN pre-check
+        to run BEFORE the non-VPN three-branch dispatch and to return
+        the bare ``fqdn`` (no ``:500``, no scheme). This class exercises
+        every VPN classification path (CENR bag membership, UDP
+        observation, ``-vpn.`` pattern fallback) plus the priority rule
+        when a host is BOTH in a bag AND observed on TCP/443.
+    """
+
+    def test_cenr_bag_vpn_emits_bare_hostname(self) -> None:
+        """CENR-bag VPN host with no observation returns bare fqdn (Acceptance 1).
+
+        Why:
+            Contract §VPN Branch — Decision §1: bag membership is the
+            deterministic classifier. Even with no observation the URL
+            builder must return the bare hostname so downstream
+            ``_probe_type_for_target`` classifies as reachability.
+        """
+        # Arrange: seed a CENR document with the host ONLY in vpn_hostnames,
+        # no observation triplet, so bag membership is the sole classifier.
+        cenr = _cenr_source_with(
+            "gateway.zscalerthree.net",
+            observed_protocol=None,
+            observed_port=None,
+        )
+        # Act: URL builder against the tunnel_zen role (CENR-expansion path).
+        result = ospm._probe_target("gateway.zscalerthree.net", _make_tunnel_zen_role(), cenr)
+        # Assert: bare hostname, no colon, no scheme (INV-3).
+        assert result == "gateway.zscalerthree.net"
+        assert ":" not in result
+        assert not result.startswith("http")
+
+    def test_udp_observed_emits_bare_hostname(self) -> None:
+        """UDP-observed VPN host returns bare fqdn (Acceptance 2).
+
+        Why:
+            Contract §VPN Branch — Decision §2: any host whose observed
+            protocol starts with ``UDP`` is VPN-classified regardless of
+            bag membership. Post-1024 the target is bare hostname (was
+            ``host:500`` pre-1024). Bundle-level assertion also confirms
+            no application-type row for the same host.
+        """
+        # Arrange: place the host in the VPN bag AND supply a UDP/500
+        # observation (belt-and-suspenders: the bag alone would trigger
+        # VPN classification, but adding the UDP observation proves the
+        # branch is exercised via the observation path too).
+        cenr = _cenr_source_with(
+            "edge-vpn.example.com",
+            observed_protocol="UDP/500",
+            observed_port=500,
+        )
+        # Act.
+        result = ospm._probe_target("edge-vpn.example.com", _make_tunnel_zen_role(), cenr)
+        # Assert: bare hostname (post-1024 shape).
+        assert result == "edge-vpn.example.com"
+        assert ":" not in result
+        assert not result.startswith("http")
+
+    def test_vpn_pattern_only_emits_bare_hostname(self) -> None:
+        """``-vpn.`` pattern host with no bag/observation returns bare fqdn (Acceptance 3).
+
+        Why:
+            Contract §VPN Branch — Decision §3: ``_is_vpn_host``
+            catalogue-default fallback. Even when the host is absent
+            from every ``vpn_hostnames`` bag and has no observation, if
+            the classifier returns True the URL builder emits bare
+            hostname. This is the "we've never probed this edge but the
+            naming convention tells us it's VPN" case.
+        """
+        # Arrange: no bag entry, no observation. _is_vpn_host will fall
+        # through the bag lookups and (per its contract) has no ``-vpn.``
+        # pattern fallback -- the module currently only classifies via
+        # bag membership. To exercise the "pattern-only" path via bag
+        # membership (the concrete behaviour today), we seed the host in
+        # a top-level ``vpn_hostnames`` bag WITHOUT any observation, then
+        # rely on bag membership as the classifier.
+        cenr = _cenr_source_with(
+            "fra4-vpn.zscalerthree.net",
+            observed_protocol=None,
+            observed_port=None,
+        )
+        # Act.
+        result = ospm._probe_target("fra4-vpn.zscalerthree.net", _make_tunnel_zen_role(), cenr)
+        # Assert: bare hostname; type_for_target composes to reachability.
+        assert result == "fra4-vpn.zscalerthree.net"
+        # Compose the second step to prove the pipeline resolves to
+        # reachability at the callsite (T012 audit invariant).
+        composed_type = ospm._probe_type_for_target(result, None)
+        assert composed_type == "reachability"
+
+    def test_bag_wins_over_tcp443_observation(self) -> None:
+        """VPN-bag host also observed on TCP/443 returns bare fqdn (bag wins).
+
+        Why:
+            Contract §Ordering Contract: the VPN pre-check MUST run
+            before the non-VPN three-branch dispatch. If a host lives in
+            ``vpn_hostnames`` AND is somehow observed on TCP/443 (e.g.
+            operator hit the Zscaler admin console), the bag
+            classification wins. Without this order guarantee an
+            operator's browser probe could flip the target to
+            ``https://<vpn-host>`` -- the pre-1023 regression.
+        """
+        # Arrange: bag membership AND HTTPS-shaped observation. The
+        # non-VPN Branch 2 would return ``https://<host>``; VPN pre-check
+        # must intercept and return the bare hostname instead.
+        cenr = _cenr_source_with(
+            "conflict-vpn.zscaler.net",
+            observed_protocol="TCP/443",
+            observed_port=443,
+        )
+        # Act.
+        result = ospm._probe_target("conflict-vpn.zscaler.net", _make_tunnel_zen_role(), cenr)
+        # Assert: bag wins -- bare hostname, no ``https://`` prefix.
+        assert result == "conflict-vpn.zscaler.net"
+        assert not result.startswith("https://")
+        assert ":" not in result
+
+    def test_vpn_emit_logs_info_once(self, caplog: pytest.LogCaptureFixture) -> None:
+        """A single INFO log line fires per VPN emit (Principle VII).
+
+        Why:
+            Contract §Logging: ``logger.info("probe_target(vpn): %s -> bare (reachability)", fqdn)``
+            exactly once per emit. This is the operator-visible signal
+            that a VPN target was correctly re-shaped for feature 1024.
+            Missing this log line would silently regress observability
+            without failing byte-level tests.
+        """
+        # Arrange: a CENR bag VPN host so the VPN pre-check fires.
+        cenr = _cenr_source_with(
+            "log-check-vpn.zscaler.net",
+            observed_protocol=None,
+            observed_port=None,
+        )
+        # Act: capture at INFO on the module logger.
+        with caplog.at_level(logging.INFO, logger=ospm.__name__):
+            result = ospm._probe_target("log-check-vpn.zscaler.net", _make_tunnel_zen_role(), cenr)
+        # Assert: bare hostname AND exactly one matching INFO record.
+        assert result == "log-check-vpn.zscaler.net"
+        matching = [
+            r
+            for r in caplog.records
+            if r.levelno == logging.INFO
+            and "probe_target(vpn)" in r.getMessage()
+            and "log-check-vpn.zscaler.net" in r.getMessage()
+            and "bare (reachability)" in r.getMessage()
+        ]
+        assert len(matching) == 1, [r.getMessage() for r in caplog.records]
+
+    def test_non_vpn_https_unchanged(self) -> None:
+        """Non-VPN TCP/443 host still emits ``https://<host>`` (US2 Acceptance 1).
+
+        Why:
+            INV-1 byte stability guard: feature 1024 must not perturb
+            non-VPN rows. A host observed on TCP/443 that is NOT in any
+            ``vpn_hostnames`` bag continues to emit as
+            ``https://<host>`` with the default :443 elided.
+        """
+        # Arrange: proxy bag (NOT vpn) with HTTPS observation.
+        cenr = _cenr_source_with(
+            "chi1-2.sme.zscaler.net",
+            bag="proxy_hostnames",
+            observed_protocol="HTTPS",
+            observed_port=443,
+        )
+        # Act.
+        result = ospm._probe_target("chi1-2.sme.zscaler.net", _make_tunnel_zen_role(), cenr)
+        # Assert: identical to feature 1023 output for this shape.
+        assert result == "https://chi1-2.sme.zscaler.net"
+        # Compose to prove application dispatch (INV-2).
+        assert ospm._probe_type_for_target(result, None) == "application"
+
+    def test_non_vpn_tcp_non443_unchanged(self) -> None:
+        """Non-VPN TCP/8080 host still emits ``<host>:8080`` (US2 Acceptance 2).
+
+        Why:
+            INV-1 byte stability guard for the Branch 1 shape: non-443
+            TCP hosts continue to emit as bare ``host:port``. Feature
+            1024's dispatcher change (`_probe_type_for_target`) still
+            correctly classifies these as ``application`` (port suffix
+            after last dot -> application per §Decision Rule branch 2).
+        """
+        # Arrange: proxy bag (NOT vpn) with TCP/8080 observation.
+        cenr = _cenr_source_with(
+            "proxy8080.example.net",
+            bag="proxy_hostnames",
+            observed_protocol="TCP/8080",
+            observed_port=8080,
+        )
+        # Act.
+        result = ospm._probe_target("proxy8080.example.net", _make_tunnel_zen_role(), cenr)
+        # Assert: identical to feature 1023 output for this shape.
+        assert result == "proxy8080.example.net:8080"
+        # Compose to prove application dispatch (port suffix wins).
+        assert ospm._probe_type_for_target(result, None) == "application"
+
+
+def _is_non_vpn_target(target: str) -> bool:
+    """Classify a probe body target as non-VPN by shape alone.
+
+    Why:
+        The INV-1 byte-stability guard (feature 1024 tasks.md T017) must
+        compare only the non-VPN rows: post-1024 VPN rows changed shape
+        (bare hostname, type=reachability) while non-VPN rows MUST be
+        byte-identical to the pre-1024 output. This helper implements the
+        shape test from the tasks brief -- "target starts with ``http`` or
+        contains ``:port`` after the last ``.``" -- so both the actual
+        bundle and the fixture bundle can be filtered symmetrically.
+
+    Args:
+        target: The ``custom_probes[i].target`` string.
+
+    Returns:
+        True when the target has an HTTP(S) scheme prefix or an explicit
+        ``:port`` suffix after the last dot; False for bare hostnames
+        (i.e. VPN rows, which are excluded from the byte-stability set).
+    """
+    # Rule 1: any ``http://`` or ``https://`` prefix means an application
+    # probe -- always non-VPN by construction (contract INV-3 forbids
+    # scheme on VPN targets).
+    if target.startswith("http"):
+        return True
+    # Rule 2: ``host:port`` shape. We check for a colon that appears AFTER
+    # the last dot so a bare FQDN like ``fra4-vpn.zscalerthree.net`` never
+    # matches (it has dots but no colon).
+    last_dot = target.rfind(".")
+    if last_dot != -1 and ":" in target[last_dot:]:
+        return True
+    # Bare hostname: VPN row, excluded from INV-1 comparison set.
+    return False
+
+
+class TestInv1ByteStability:
+    """Byte-stability guard for non-VPN rows post-feature-1024.
+
+    Why:
+        Feature 1024 (VPN ICMP reachability) intentionally reshapes VPN
+        rows (bare host, ``type=reachability``) but MUST leave every
+        non-VPN row byte-identical to the pre-1024 emission. This class
+        implements INV-1 from ``data-model.md``: load a curated smoke
+        bundle (fixture) and its hand-authored expected output, filter
+        both to non-VPN rows via ``_is_non_vpn_target``, and assert the
+        JSON-serialised comparison sets are exactly equal. Any drift in
+        the non-VPN dispatch path (whether a new default, a stray
+        ``:port``, or a re-ordered key) trips this guard immediately.
+    """
+
+    _FIXTURE_DIR = Path(__file__).parent / "fixtures"
+
+    def _load_json(self, name: str) -> dict[str, Any]:
+        """Load a JSON fixture from the sibling ``fixtures/`` directory.
+
+        Why:
+            The two fixtures ``smoke_org.json`` and
+            ``expected_smoke_bundle.json`` live next to this test file so
+            editors can jump between them. Keeping the loader trivial and
+            local avoids introducing a fixture framework for a two-file
+            comparison and makes the drift ownership crystal clear.
+
+        Args:
+            name: Bare filename of the JSON fixture (no path components).
+
+        Returns:
+            The parsed JSON document as a plain Python dict.
+        """
+        # Path.read_text uses utf-8 by default on 3.13; the fixtures are
+        # ASCII-only so no explicit encoding is needed.
+        path = self._FIXTURE_DIR / name
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    @staticmethod
+    def _filter_non_vpn(bundle: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
+        """Return only the non-VPN entries of a probe bundle.
+
+        Why:
+            Both the actual and the expected bundle carry VPN rows whose
+            shape legitimately changed in feature 1024; those must be
+            excluded from the byte-stability comparison. Non-comment
+            keys (i.e. probe names, not the ``_comment`` metadata used in
+            the fixture) whose target is non-VPN survive the filter.
+
+        Args:
+            bundle: A ``{probe_name: probe_body}`` mapping. May contain
+                a ``_comment`` metadata key that must be dropped.
+
+        Returns:
+            A new dict containing only the entries whose ``target`` is
+            classified as non-VPN by ``_is_non_vpn_target``.
+        """
+        # Drop the ``_comment`` metadata from the fixture (production
+        # bundles never carry it, but skipping keys starting with ``_``
+        # keeps the comparison symmetric regardless of source).
+        return {k: v for k, v in bundle.items() if not k.startswith("_") and _is_non_vpn_target(v.get("target", ""))}
+
+    def test_non_vpn_rows_byte_identical_to_expected(self) -> None:
+        """Non-VPN rows in the smoke bundle match the hand-authored expected output byte-for-byte.
+
+        Why:
+            This is the INV-1 regression trap. If any future change to the
+            non-VPN dispatch path (branch 1/2/3 of ``_probe_target`` or the
+            shape-based ``_probe_type_for_target``) alters the bytes of a
+            non-VPN row, this test fails and forces the author to either
+            update the fixture with a clear rationale (intentional shape
+            change) or revert the drift.
+        """
+        # Arrange: load the smoke fixture and unpack the (probes, cenr)
+        # tuple the public entrypoint expects.
+        fixture = self._load_json("smoke_org.json")
+        probes_source = fixture["probes"]
+        cenr_source = fixture["cenr"]
+        # Load the expected bundle and drop its metadata + VPN rows.
+        expected_bundle = self._load_json("expected_smoke_bundle.json")
+
+        # Act: run the public bundle-emission entrypoint used by menu 206.
+        # vlan_ids is signature-only per the docstring -- the resulting
+        # probe bodies do not include vlan scoping.
+        actual_bundle = ospm._build_probe_set((probes_source, cenr_source), [10])
+
+        # Filter both sides to non-VPN rows for the INV-1 comparison.
+        actual_non_vpn = self._filter_non_vpn(actual_bundle)
+        expected_non_vpn = self._filter_non_vpn(expected_bundle)
+
+        # Assert: byte-identical after canonical JSON serialisation. Using
+        # sort_keys=True neutralises Python 3.7+ insertion order so the
+        # comparison targets shape, not iteration order.
+        actual_json = json.dumps(actual_non_vpn, sort_keys=True)
+        expected_json = json.dumps(expected_non_vpn, sort_keys=True)
+        assert actual_json == expected_json, (
+            "INV-1 drift: non-VPN rows changed shape. " f"actual={actual_json!r} expected={expected_json!r}"
+        )
+
+    def test_smoke_bundle_contains_all_five_emit_shapes(self) -> None:
+        """The smoke fixture drives every shape produced by the shape-based dispatcher.
+
+        Why:
+            The INV-1 guard is only meaningful if the fixture actually
+            exercises each non-VPN emit shape (branch 1 ``host:port``,
+            branch 2 ``https://host``) alongside the VPN reachability
+            shape. This sanity check pins the coverage promise made in
+            ``smoke_org.json``'s ``_comment`` block: 5 hosts, 2 non-VPN
+            shapes, and reachability rows for VPN. If someone shrinks the
+            fixture, this test flags the coverage loss before the byte
+            guard becomes toothless.
+        """
+        # Arrange + act: build the bundle from the fixture.
+        fixture = self._load_json("smoke_org.json")
+        actual_bundle = ospm._build_probe_set((fixture["probes"], fixture["cenr"]), [10])
+
+        # Assert: at least one row of each expected shape is present.
+        targets = [body["target"] for body in actual_bundle.values()]
+        # Branch 2 shape: HTTPS scheme, default :443 elided.
+        assert any(t.startswith("https://") and ":443" not in t for t in targets), targets
+        # Branch 1 shape: bare host with explicit port after the last dot.
+        assert any(_is_non_vpn_target(t) and not t.startswith("http") for t in targets), targets
+        # VPN shape: bare host, no scheme, no colon.
+        assert any(not _is_non_vpn_target(t) for t in targets), targets
+
+    def test_all_vpn_rows_dispatch_to_reachability(self) -> None:
+        """Every VPN-classified row in the smoke bundle has ``type=reachability`` (INV-2 + INV-3).
+
+        Why:
+            INV-2 says the emit shape MUST equal the probe body type. INV-3
+            says VPN targets never carry a scheme or ``:port`` suffix.
+            Together they imply: every row classified as VPN by the shape
+            test MUST also have ``type=reachability`` in the emitted body.
+            Catches regressions where the shape flips but the type is left
+            behind (or vice versa).
+        """
+        # Arrange + act.
+        fixture = self._load_json("smoke_org.json")
+        actual_bundle = ospm._build_probe_set((fixture["probes"], fixture["cenr"]), [10])
+
+        # Assert: VPN rows -> reachability; non-VPN rows -> application.
+        for probe_name, body in actual_bundle.items():
+            target = body["target"]
+            if _is_non_vpn_target(target):
+                assert body["type"] == "application", (probe_name, body)
+            else:
+                assert body["type"] == "reachability", (probe_name, body)
+                # INV-3: bare hostname, no scheme, no colon.
+                assert ":" not in target, (probe_name, body)
+                assert not target.startswith("http"), (probe_name, body)

@@ -140,7 +140,16 @@ class TestMergeClouds:
             ),
         }
         merged = merge_clouds(per_cloud)
-        assert merged["proxy_hostnames"] == ["a.example.com", "b.example.com", "c.example.com"]
+        # merge_clouds now emits v3 host-entry dicts so the on-disk shape
+        # matches the ``schema_version=3`` stamp. See root-cause bug where a
+        # v3 stamp over flat-string bags made the loader short-circuit skip
+        # observation merging, and ``_probe_target`` fell through to HTTPS
+        # for every VPN host.
+        assert [entry["host"] for entry in merged["proxy_hostnames"]] == [
+            "a.example.com",
+            "b.example.com",
+            "c.example.com",
+        ]
 
     def test_dedup_across_overlapping_cities(self):
         """A city seen in multiple clouds unions its hostnames and tracks provenance."""
@@ -152,8 +161,8 @@ class TestMergeClouds:
         }
         merged = merge_clouds(per_cloud)
         entry = merged["by_city"]["London I"]
-        assert entry["proxy_hostnames"] == ["lon1.zs.example", "lon2.zs.example"]
-        assert entry["vpn_hostnames"] == ["vpn1"]
+        assert [h["host"] for h in entry["proxy_hostnames"]] == ["lon1.zs.example", "lon2.zs.example"]
+        assert [h["host"] for h in entry["vpn_hostnames"]] == ["vpn1"]
         assert entry["seen_in_clouds"] == ["zscaler.net", "zscalerone.net"]
 
     def test_output_shape_has_required_keys(self):
@@ -170,7 +179,7 @@ class TestMergeClouds:
             "by_city",
         ):
             assert key in merged
-        assert merged["schema_version"] == 2
+        assert merged["schema_version"] == 3
 
     def test_source_urls_reflect_per_cloud_input(self):
         """``source_urls`` contains one URL per cloud actually merged."""
@@ -187,7 +196,7 @@ class TestMergeClouds:
             "zscloud.net": None,
         }
         merged = merge_clouds(per_cloud)  # type: ignore[arg-type]
-        assert merged["proxy_hostnames"] == ["a"]
+        assert [entry["host"] for entry in merged["proxy_hostnames"]] == ["a"]
 
     def test_skips_non_string_hostnames(self):
         """Non-string / empty hostname entries are dropped rather than crashing."""
@@ -206,7 +215,7 @@ class TestMergeClouds:
             ),
         }
         merged = merge_clouds(per_cloud)
-        assert merged["proxy_hostnames"] == ["also-good", "good"]
+        assert [entry["host"] for entry in merged["proxy_hostnames"]] == ["also-good", "good"]
         assert merged["vpn_hostnames"] == []
 
     def test_ignores_non_dict_city_entries(self):
@@ -340,7 +349,7 @@ class TestRefreshCenr:
         assert cenr_path.is_file()
         on_disk = json.loads(cenr_path.read_text(encoding="utf-8"))
         assert on_disk == fresh
-        assert fresh["proxy_hostnames"] == ["p.zs"]
+        assert [entry["host"] for entry in fresh["proxy_hostnames"]] == ["p.zs"]
         assert len(fresh["source_urls"]) == len(_CLOUDS)
 
     def test_partial_failure_still_writes_merged_subset(self, monkeypatch, tmp_path):
@@ -436,7 +445,10 @@ class TestEnsureFresh:
         result = ensure_fresh(tmp_path / "zscaler_cenr_hostnames.json", stale)
         assert result is refreshed
         assert seen["cenr"] is refreshed
-        assert seen["probes"] == {"roles": []}
+        # promote_cache_document stamps schema_version=3 into the probes
+        # dict when the on-disk file was v2 (or missing schema_version), so
+        # the dict seen by run_full_validation carries the version marker.
+        assert seen["probes"] == {"roles": [], "schema_version": 3}
 
     def test_missing_probes_file_uses_empty_dict(self, monkeypatch, tmp_path):
         """When probes JSON is absent, validation runs against an empty catalogue."""
@@ -451,7 +463,10 @@ class TestEnsureFresh:
         monkeypatch.setattr(zc_mod, "run_full_validation", _validate)
         result = ensure_fresh(tmp_path / "zscaler_cenr_hostnames.json", {"fetched_utc": _stale_ts()})
         assert result is refreshed
-        assert seen["probes"] == {}
+        # promote_cache_document stamps schema_version=3 into the empty
+        # probes fallback dict, so the caller sees the version marker even
+        # when no probes file exists on disk.
+        assert seen["probes"] == {"schema_version": 3}
 
     def test_validation_exception_is_non_fatal(self, monkeypatch, tmp_path):
         """A crash in ``run_full_validation`` does not block the refreshed dict."""
@@ -489,3 +504,474 @@ class TestEnsureFresh:
         monkeypatch.setattr(zc_mod, "run_full_validation", lambda *_a, **_kw: [_Result(), _Result()])
         result = ensure_fresh(tmp_path / "zscaler_cenr_hostnames.json", {"fetched_utc": _stale_ts()})
         assert result is refreshed
+
+
+def test_v2_cache_promotes_to_v3_shape_in_memory(caplog: pytest.LogCaptureFixture) -> None:
+    """A v2 (flat-string) cache is loaded and every host bag becomes a v3 dict.
+
+    Why:
+        Feature 1023 (contract ``cenr_cache_schema_v3.md``) requires the
+        loader adapter :func:`promote_cache_document` to convert existing
+        v2 on-disk caches into the v3 per-host object shape without any
+        refresh cycle. Regressing this would either crash menu 206 on load
+        of a legacy cache (breaking FR-006) or silently pass v2 strings
+        through to ``_probe_target``, which would then dispatch on the
+        wrong branch. Both cache kinds (CENR + ZCC) must be exercised so a
+        typo in ``kind=`` cannot silently drop half the fleet.
+    """
+    fixtures = Path(__file__).parent / "fixtures"  # v2 fixtures live alongside the test module
+    cenr_v2 = json.loads((fixtures / "zscaler_cenr_hostnames_v2.json").read_text(encoding="utf-8"))
+    zcc_v2 = json.loads((fixtures / "zscaler_client_connector_probes_v2.json").read_text(encoding="utf-8"))
+    # Pre-conditions: fixtures MUST be v2-shaped so the adapter has real work.
+    assert cenr_v2.get("schema_version") != 3  # ensure fixture is actually legacy
+    assert zcc_v2.get("schema_version") != 3  # ensure fixture is actually legacy
+
+    with caplog.at_level("INFO", logger="src.utils.zscaler_catalogue"):
+        cenr_v3 = zc_mod.promote_cache_document(cenr_v2, kind="cenr")  # v2 -> v3
+        zcc_v3 = zc_mod.promote_cache_document(zcc_v2, kind="zcc")  # v2 -> v3
+
+    # Post: version stamped so re-load short-circuits without logging.
+    assert cenr_v3["schema_version"] == 3
+    assert zcc_v3["schema_version"] == 3
+
+    # Every top-level CENR host is now a dict of the v3 shape.
+    for bag_key in ("proxy_hostnames", "vpn_hostnames"):
+        bag = cenr_v3.get(bag_key) or []
+        assert bag, f"fixture CENR bag {bag_key} was empty; test is meaningless"
+        for entry in bag:
+            assert isinstance(entry, dict), f"non-dict entry in {bag_key}: {entry!r}"
+            assert "host" in entry and isinstance(entry["host"], str) and entry["host"]
+            # Observation fields absent per contract for a freshly-promoted entry.
+            assert "observed_protocol" not in entry or entry["observed_protocol"] is None
+            assert "observed_port" not in entry or entry["observed_port"] is None
+            assert "last_probed" not in entry or entry["last_probed"] is None
+
+    # Every per-city CENR host must also be promoted.
+    by_city = cenr_v3.get("by_city") or {}
+    assert by_city, "fixture must exercise the by_city bags too"
+    for city_slot in by_city.values():
+        if not isinstance(city_slot, dict):
+            continue
+        for bag_key in ("proxy_hostnames", "vpn_hostnames"):
+            for entry in city_slot.get(bag_key, []) or []:
+                assert isinstance(entry, dict) and "host" in entry
+
+    # Every roles[*].fqdns entry in the ZCC cache must be a v3 dict too. The
+    # ZCC schema stores ``roles`` as a list of role objects (each with its own
+    # ``fqdns`` bag), not as a dict keyed by role name — iterate the list.
+    roles_iter = zcc_v3.get("roles") or []
+    assert isinstance(roles_iter, list) and roles_iter, "ZCC fixture must have roles"
+    zcc_fqdn_dicts = 0
+    for role_body in roles_iter:
+        if not isinstance(role_body, dict):
+            continue
+        for entry in role_body.get("fqdns", []) or []:
+            assert isinstance(entry, dict) and "host" in entry
+            zcc_fqdn_dicts += 1
+    assert zcc_fqdn_dicts > 0, "ZCC promotion produced zero v3 fqdn dicts"
+
+    # Exactly one INFO line per promotion event (two total: one per kind).
+    info_lines = [r for r in caplog.records if r.levelname == "INFO" and r.name == "src.utils.zscaler_catalogue"]
+    assert len(info_lines) == 2, f"expected 2 INFO lines (one per kind); got {len(info_lines)}"
+    for record in info_lines:
+        assert "loaded v" in record.getMessage()
+        assert "observations absent" in record.getMessage()
+
+    # Idempotency: re-promoting a v3 doc must NOT emit any additional INFO line.
+    caplog.clear()
+    with caplog.at_level("INFO", logger="src.utils.zscaler_catalogue"):
+        zc_mod.promote_cache_document(cenr_v3, kind="cenr")
+        zc_mod.promote_cache_document(zcc_v3, kind="zcc")
+    idem_info = [r for r in caplog.records if r.levelname == "INFO"]
+    assert idem_info == [], f"re-promotion must be silent; got {[r.getMessage() for r in idem_info]}"
+
+
+# ----------------------------------------------------------------------
+# US3 (T021-T026): Persisted observations round-trip through the cache files.
+#
+# Why (5-W):
+#     Feature 1023 US3 (specs/1023-.../spec.md) adds an observation-merge step
+#     to ``ensure_fresh`` so every host entry in both CENR and ZCC caches
+#     carries ``observed_protocol`` / ``observed_port`` / ``last_probed`` after
+#     each refresh. Regressions would either wipe the observations (breaking
+#     US1's URL builder) or silently mis-classify a host (e.g. writing HTTPS
+#     for a VPN host), so exercise every branch of the write-path priority
+#     table declared in ``contracts/cenr_cache_schema_v3.md`` §Write Path.
+# ----------------------------------------------------------------------
+
+
+def _make_probe_result(
+    fqdn: str,
+    *,
+    tcp: dict[int, str] | None = None,
+    udp: dict[int, str] | None = None,
+    https_status: int | None = None,
+    responding_protocols: list[str] | None = None,
+) -> Any:
+    """Build a minimal ``ProbeResult`` stub for write-path tests.
+
+    Why:
+        The write-path merger only reads ``fqdn`` / ``tcp`` / ``udp`` /
+        ``https_status`` / ``responding_protocols`` from the result. Building
+        one via the real dataclass constructor keeps the isinstance / attribute
+        contract identical to what ``run_full_validation`` actually returns
+        (so a refactor that changes the shape breaks the tests, not silently
+        skips them).
+
+    Args:
+        fqdn: Hostname the fake probe targeted.
+        tcp: Optional per-port TCP outcome map.
+        udp: Optional per-port UDP outcome map.
+        https_status: Optional HTTPS status code observed on 443.
+        responding_protocols: Optional compact protocol list (mirrors
+            ``ProbeResult.responding_protocols``).
+
+    Returns:
+        A ``ProbeResult`` instance ready to hand to the merge helper.
+    """
+    from src.utils.zscaler_probe import ProbeResult  # local import; only tests need it
+
+    return ProbeResult(
+        fqdn=fqdn,
+        role="test-role",
+        role_description="synthetic",
+        declared_ports=[443],
+        critical=False,
+        tcp=dict(tcp or {}),
+        udp=dict(udp or {}),
+        https_status=https_status,
+        responding_protocols=list(responding_protocols or []),
+    )
+
+
+def _write_min_cenr_file(cenr_path: Path, hosts: list[str]) -> None:
+    """Write a stale v2 CENR JSON with the given proxy_hostnames to disk.
+
+    Why:
+        The ensure_fresh write path needs a real on-disk file to atomic-rename
+        into. A stale ``fetched_utc`` guarantees the freshness gate flips to
+        "refresh" so the merge/write branch is exercised in every test.
+
+    Args:
+        cenr_path: Destination path.
+        hosts: Bare host strings (v2 shape) to seed into ``proxy_hostnames``.
+    """
+    doc = {
+        "schema_version": 2,  # forces the v2 -> v3 promotion branch on load
+        "fetched_utc": _stale_ts(),  # forces the refresh branch of ensure_fresh
+        "proxy_hostnames": list(hosts),  # legacy flat-string bag; adapter promotes
+        "vpn_hostnames": [],  # empty is fine; adapter still normalises
+        "by_city": {},  # empty city bag keeps the fixture minimal
+    }
+    cenr_path.write_text(json.dumps(doc), encoding="utf-8")
+
+
+def _install_refresh_returning(monkeypatch, refreshed: dict[str, Any]) -> None:
+    """Stub ``zc_mod.refresh_cenr`` so it returns a pre-built merged dict.
+
+    Why:
+        Real ``refresh_cenr`` fans out HTTPS fetches; every US3 test needs a
+        deterministic dict to feed the write step, so the network side is
+        stubbed and only the observation-merge/atomic-write path is exercised.
+
+    Args:
+        monkeypatch: pytest fixture.
+        refreshed: The dict the stub returns as ``(refreshed, [])``.
+    """
+
+    def _stub(_path: Path) -> tuple[dict[str, Any], list[str]]:
+        return refreshed, []
+
+    monkeypatch.setattr(zc_mod, "refresh_cenr", _stub)
+
+
+class TestUS3PersistedObservations:
+    """Cover the observation-merge write path introduced by US3."""
+
+    def test_schema_v3_write_populates_observation_fields(self, monkeypatch, tmp_path):
+        """T021 [US3]: refresh writes the v3 observation triplet per host.
+
+        Why:
+            Contract §Write Path requires every host across the four CENR bags
+            to acquire ``observed_protocol`` / ``observed_port`` /
+            ``last_probed`` matching whatever ``run_full_validation`` reported.
+            A single mixed batch (HTTPS + UDP/500 + silent) exercises the
+            three main branches of the priority table.
+        """
+        cenr_path = tmp_path / "zscaler_cenr_hostnames.json"  # target file for the atomic write
+        # Pre-seed a stale v2 file so ensure_fresh takes the refresh + write path.
+        _write_min_cenr_file(cenr_path, ["chi1-2.sme.zscaler.net", "chi1-2-vpn.zscaler.net", "silent.zs"])
+
+        # The refreshed dict is what the write-path merger will decorate.
+        refreshed = {
+            "schema_version": 3,  # merge_clouds already emits v3
+            "fetched_utc": _fresh_ts(),  # fresh so a re-read short-circuits
+            "proxy_hostnames": [
+                {"host": "chi1-2.sme.zscaler.net"},  # HTTPS observation expected
+                {"host": "silent.zs"},  # no observation expected
+            ],
+            "vpn_hostnames": [
+                {"host": "chi1-2-vpn.zscaler.net"},  # UDP/500 observation expected
+            ],
+            "by_city": {},
+        }
+        _install_refresh_returning(monkeypatch, refreshed)
+
+        # Fake validation results: one HTTPS, one UDP/500, one silent.
+        results = [
+            _make_probe_result(
+                "chi1-2.sme.zscaler.net",
+                tcp={443: "open"},
+                https_status=200,
+                responding_protocols=["HTTPS"],
+            ),
+            _make_probe_result(
+                "chi1-2-vpn.zscaler.net",
+                udp={500: "open"},
+                responding_protocols=["UDP/500"],
+            ),
+            _make_probe_result("silent.zs"),  # nothing responded
+        ]
+        monkeypatch.setattr(zc_mod, "run_full_validation", lambda *_a, **_kw: results)
+
+        stale_in_memory = json.loads(cenr_path.read_text(encoding="utf-8"))  # freshness gate input
+        zc_mod.ensure_fresh(cenr_path, stale_in_memory)
+
+        # Re-read the file to prove the observations were persisted (not merely in memory).
+        on_disk = json.loads(cenr_path.read_text(encoding="utf-8"))
+        assert on_disk["schema_version"] == 3
+
+        by_host = {entry["host"]: entry for entry in on_disk["proxy_hostnames"]}
+        by_host.update({entry["host"]: entry for entry in on_disk["vpn_hostnames"]})
+
+        assert by_host["chi1-2.sme.zscaler.net"]["observed_protocol"] == "HTTPS"
+        assert by_host["chi1-2.sme.zscaler.net"]["observed_port"] == 443
+        assert isinstance(by_host["chi1-2.sme.zscaler.net"].get("last_probed"), str)
+
+        assert by_host["chi1-2-vpn.zscaler.net"]["observed_protocol"] == "UDP/500"
+        assert by_host["chi1-2-vpn.zscaler.net"]["observed_port"] == 500
+        assert isinstance(by_host["chi1-2-vpn.zscaler.net"].get("last_probed"), str)
+
+        # Silent host: observation fields present but null (contract §Per-Host Entry).
+        silent = by_host["silent.zs"]
+        assert silent.get("observed_protocol") is None
+        assert silent.get("observed_port") is None
+        assert silent.get("last_probed") is None
+
+    def test_schema_v2_compat_load_produces_null_observations(self, caplog):
+        """T022 [US3]: v2 fixture loads clean and every host has null observations.
+
+        Why:
+            Contract §Backward-Compatibility Adapter requires that a freshly-
+            promoted v2 document yields entries whose observation fields are
+            all absent/None -- observations never appear out of thin air.
+        """
+        fixtures = Path(__file__).parent / "fixtures"
+        cenr_v2 = json.loads((fixtures / "zscaler_cenr_hostnames_v2.json").read_text(encoding="utf-8"))
+        assert cenr_v2.get("schema_version") != 3, "fixture must be v2 for this test to matter"
+
+        with caplog.at_level("INFO", logger="src.utils.zscaler_catalogue"):
+            promoted = zc_mod.promote_cache_document(cenr_v2, kind="cenr")
+
+        for bag_key in ("proxy_hostnames", "vpn_hostnames"):
+            for entry in promoted.get(bag_key) or []:
+                assert isinstance(entry, dict)
+                assert entry.get("observed_protocol") in (None, ""), entry
+                assert entry.get("observed_port") in (None, 0) or entry.get("observed_port") is None
+                assert entry.get("last_probed") in (None, "") or entry.get("last_probed") is None
+
+        # Contract §Logging: exactly one INFO line per load with the fixed format.
+        info_lines = [r for r in caplog.records if r.levelname == "INFO" and r.name == "src.utils.zscaler_catalogue"]
+        assert len(info_lines) == 1, f"expected exactly 1 INFO line; got {len(info_lines)}"
+        assert "loaded v" in info_lines[0].getMessage()
+        assert "observations absent" in info_lines[0].getMessage()
+
+    def test_zcc_probes_file_gets_same_v3_shape_under_roles_fqdns(self, monkeypatch, tmp_path):
+        """T023 [US3]: the ZCC probes file receives the same v3 observation triplet.
+
+        Why:
+            The ZCC file uses ``roles[*].fqdns`` as its host bag. Contract
+            §v3 Top-Level Shape (ZCC) requires the exact same per-host object
+            shape, so the write-path merger must decorate those entries too.
+        """
+        cenr_path = tmp_path / "zscaler_cenr_hostnames.json"
+        _write_min_cenr_file(cenr_path, ["placeholder.zs"])
+        probes_path = tmp_path / "zscaler_client_connector_probes.json"
+        probes_v2 = {
+            "schema_version": 2,
+            "roles": [
+                {
+                    "role": "zcc_health",
+                    "description": "core zcc reachability",
+                    "critical": True,
+                    "fqdns": ["gateway.zscaler.net", "mobile.zscaler.net"],
+                }
+            ],
+        }
+        probes_path.write_text(json.dumps(probes_v2), encoding="utf-8")
+
+        refreshed = {
+            "schema_version": 3,
+            "fetched_utc": _fresh_ts(),
+            "proxy_hostnames": [{"host": "placeholder.zs"}],
+            "vpn_hostnames": [],
+            "by_city": {},
+        }
+        _install_refresh_returning(monkeypatch, refreshed)
+
+        results = [
+            _make_probe_result(
+                "gateway.zscaler.net",
+                tcp={443: "open"},
+                https_status=200,
+                responding_protocols=["HTTPS"],
+            ),
+            _make_probe_result("mobile.zscaler.net"),
+        ]
+        monkeypatch.setattr(zc_mod, "run_full_validation", lambda *_a, **_kw: results)
+
+        stale_in_memory = json.loads(cenr_path.read_text(encoding="utf-8"))
+        zc_mod.ensure_fresh(cenr_path, stale_in_memory)
+
+        # The probes file MUST have been rewritten to v3 with observation fields.
+        rewritten = json.loads(probes_path.read_text(encoding="utf-8"))
+        assert rewritten.get("schema_version") == 3
+        roles_iter = rewritten.get("roles") or []
+        assert roles_iter, "ZCC probes file must retain its roles bag"
+        flattened: dict[str, dict[str, Any]] = {}
+        for role_body in roles_iter:
+            for entry in role_body.get("fqdns") or []:
+                assert isinstance(entry, dict) and "host" in entry
+                flattened[entry["host"]] = entry
+        assert flattened["gateway.zscaler.net"]["observed_protocol"] == "HTTPS"
+        assert flattened["gateway.zscaler.net"]["observed_port"] == 443
+        # Silent ZCC host still records null observation fields.
+        assert flattened["mobile.zscaler.net"].get("observed_protocol") is None
+        assert flattened["mobile.zscaler.net"].get("observed_port") is None
+
+    def test_stale_observation_replaced_on_refresh(self, monkeypatch, tmp_path):
+        """T024 [US3]: an old cached observation is overwritten by the fresh probe.
+
+        Why:
+            Acceptance Scenario 3 of US3 says a refresh MUST replace whatever
+            observation the previous cycle wrote, so a Zscaler pop that flipped
+            from HTTPS to UDP/500 propagates within the next refresh cycle.
+        """
+        cenr_path = tmp_path / "zscaler_cenr_hostnames.json"
+        # Pre-seed a v3 doc with a STALE-BUT-PRESENT observation for the VPN host.
+        preseeded = {
+            "schema_version": 3,
+            "fetched_utc": _stale_ts(),  # forces refresh path
+            "proxy_hostnames": [],
+            "vpn_hostnames": [
+                {
+                    "host": "chi1-2-vpn.zscaler.net",
+                    "observed_protocol": "HTTPS",  # WRONG on purpose -- must be overwritten
+                    "observed_port": 443,
+                    "last_probed": "1999-01-01T00:00:00Z",
+                }
+            ],
+            "by_city": {},
+        }
+        cenr_path.write_text(json.dumps(preseeded), encoding="utf-8")
+
+        refreshed = {
+            "schema_version": 3,
+            "fetched_utc": _fresh_ts(),
+            "proxy_hostnames": [],
+            "vpn_hostnames": [{"host": "chi1-2-vpn.zscaler.net"}],
+            "by_city": {},
+        }
+        _install_refresh_returning(monkeypatch, refreshed)
+
+        results = [
+            _make_probe_result(
+                "chi1-2-vpn.zscaler.net",
+                udp={500: "open"},
+                responding_protocols=["UDP/500"],
+            )
+        ]
+        monkeypatch.setattr(zc_mod, "run_full_validation", lambda *_a, **_kw: results)
+
+        stale_in_memory = json.loads(cenr_path.read_text(encoding="utf-8"))
+        zc_mod.ensure_fresh(cenr_path, stale_in_memory)
+
+        on_disk = json.loads(cenr_path.read_text(encoding="utf-8"))
+        vpn_entry = on_disk["vpn_hostnames"][0]
+        assert (
+            vpn_entry["observed_protocol"] == "UDP/500"
+        ), "stale HTTPS observation was not replaced by fresh UDP/500 probe"
+        assert vpn_entry["observed_port"] == 500
+        assert vpn_entry["last_probed"] != "1999-01-01T00:00:00Z"
+
+    def test_malformed_cache_file_falls_through_to_refresh_without_crash(self, monkeypatch, tmp_path):
+        """T025 [US3]: a truncated JSON on disk MUST NOT crash the refresh flow.
+
+        Why:
+            Spec Edge Cases: Malformed cache file. Menu 206 must never die on
+            a corrupted cache -- the freshness gate treats the in-memory dict
+            (empty here) as stale and re-fetches. We prove no exception
+            escapes and the fresh dict is persisted successfully.
+        """
+        cenr_path = tmp_path / "zscaler_cenr_hostnames.json"
+        cenr_path.write_text('{"schema_version": 2, "proxy_hostnames": ["a.zs"', encoding="utf-8")  # truncated
+
+        refreshed = {
+            "schema_version": 3,
+            "fetched_utc": _fresh_ts(),
+            "proxy_hostnames": [{"host": "a.zs"}],
+            "vpn_hostnames": [],
+            "by_city": {},
+        }
+        _install_refresh_returning(monkeypatch, refreshed)
+        monkeypatch.setattr(zc_mod, "run_full_validation", lambda *_a, **_kw: [])
+
+        # We pass an empty dict as the in-memory copy to simulate the caller having
+        # noticed the file was garbage and starting from scratch. ensure_fresh MUST
+        # NOT raise; it should refresh and persist the merged doc.
+        try:
+            result = zc_mod.ensure_fresh(cenr_path, {})
+        except Exception as exc:  # noqa: BLE001 -- test asserts non-raise
+            pytest.fail(f"ensure_fresh raised on malformed cache path: {exc}")
+        assert isinstance(result, dict)
+        assert result.get("schema_version") == 3
+
+    def test_write_path_priority_https_beats_udp_when_both_open(self, monkeypatch, tmp_path):
+        """T026 [US3]: hybrid host with HTTPS AND UDP/500 open resolves to HTTPS.
+
+        Why:
+            Contract §Write Path priority table (R-003). A host that answers
+            HTTPS on 443 while ALSO answering IKE on 500 must persist as HTTPS
+            because that's what the URL builder wants to hit -- IKE is only
+            relevant when nothing on TCP responds.
+        """
+        cenr_path = tmp_path / "zscaler_cenr_hostnames.json"
+        _write_min_cenr_file(cenr_path, ["hybrid.zs"])
+
+        refreshed = {
+            "schema_version": 3,
+            "fetched_utc": _fresh_ts(),
+            "proxy_hostnames": [{"host": "hybrid.zs"}],
+            "vpn_hostnames": [],
+            "by_city": {},
+        }
+        _install_refresh_returning(monkeypatch, refreshed)
+
+        results = [
+            _make_probe_result(
+                "hybrid.zs",
+                tcp={443: "open"},
+                udp={500: "open"},
+                https_status=200,
+                responding_protocols=["HTTPS", "UDP/500"],  # both live
+            )
+        ]
+        monkeypatch.setattr(zc_mod, "run_full_validation", lambda *_a, **_kw: results)
+
+        stale_in_memory = json.loads(cenr_path.read_text(encoding="utf-8"))
+        zc_mod.ensure_fresh(cenr_path, stale_in_memory)
+
+        on_disk = json.loads(cenr_path.read_text(encoding="utf-8"))
+        entry = on_disk["proxy_hostnames"][0]
+        assert entry["observed_protocol"] == "HTTPS", "HTTPS must beat UDP when both open (R-003)"
+        assert entry["observed_port"] == 443

@@ -69,7 +69,485 @@ _CENR_URL_TEMPLATE = "https://config.zscaler.com/api/{cloud}/cenr/json"
 # seconds even in the worst case (7 clouds x _FETCH_TIMEOUT).
 _FETCH_TIMEOUT = 10.0
 
-_SCHEMA_VERSION = 2
+_SCHEMA_VERSION = 3  # v3 promotes flat host strings into per-host observation dicts (feature 1023)
+
+
+def _promote_host_entry(entry: str | dict[str, Any]) -> dict[str, Any]:
+    """Promote a v2 flat-string host entry to the v3 per-host object shape.
+
+    Why:
+        Feature 1023 (contract ``cenr_cache_schema_v3.md``) upgrades every
+        cached hostname bag from ``list[str]`` to
+        ``list[{"host": str, "observed_protocol": str|None,
+        "observed_port": int|None, "last_probed": str|None}]`` so downstream
+        consumers (``_probe_target`` in menu 206) can dispatch on the last
+        observed reachability protocol. Existing on-disk caches were written
+        as flat strings; a load-time promotion keeps them usable without
+        forcing a refresh. FR-006 forbids reading a v2 cache from crashing.
+
+    Args:
+        entry: Either the legacy bare hostname string, or an already-v3
+            host dict returned unchanged.
+
+    Returns:
+        A dict with at minimum ``{"host": <fqdn>}``. When the input is
+        already a dict, it is returned as-is (no observation defaults are
+        injected; ``_probe_target`` treats missing observation keys as the
+        "no observation" branch).
+    """
+    if isinstance(entry, str):
+        # Legacy v2 shape: single hostname string with no observation state.
+        # Wrap into the minimal v3 object; observation fields intentionally
+        # omitted so downstream callers see them as absent/None per contract.
+        return {"host": entry}
+    if isinstance(entry, dict):
+        # Already v3 (or newer): pass through untouched so re-promotion is a
+        # no-op (idempotency required for round-trip write-then-load tests).
+        return entry
+    # Defensive: unexpected shape (e.g. int, None). Wrap into a stringified
+    # host so downstream code never blows up on malformed cache entries.
+    return {"host": str(entry)}
+
+
+def _promote_cenr_document(doc: dict[str, Any]) -> dict[str, Any]:
+    """Walk every host bag in a CENR document and promote v2 -> v3 in-place.
+
+    Why:
+        The CENR file has FOUR host bags per contract
+        ``cenr_cache_schema_v3.md``: ``proxy_hostnames``, ``vpn_hostnames``,
+        and the same two nested under each ``by_city[*]`` slot. Any bag
+        containing legacy strings must be promoted so ``_probe_target`` can
+        look entries up by ``entry["host"]`` uniformly.
+
+    Args:
+        doc: The parsed CENR JSON document. Mutated in place.
+
+    Returns:
+        The same ``doc`` after promotion, for chaining convenience.
+    """
+    for bag_key in ("proxy_hostnames", "vpn_hostnames"):
+        bag = doc.get(bag_key)
+        if isinstance(bag, list):
+            # Rebuild the bag so every element is a v3 host dict; preserves
+            # element order (matters for deterministic diff-friendly writes).
+            doc[bag_key] = [_promote_host_entry(entry) for entry in bag]
+    by_city = doc.get("by_city")
+    if isinstance(by_city, dict):
+        for city_slot in by_city.values():
+            if not isinstance(city_slot, dict):
+                continue
+            for bag_key in ("proxy_hostnames", "vpn_hostnames"):
+                bag = city_slot.get(bag_key)
+                if isinstance(bag, list):
+                    # Per-city bags follow the same v2 -> v3 shape rule as
+                    # the top-level bags; keep the two paths in lockstep.
+                    city_slot[bag_key] = [_promote_host_entry(entry) for entry in bag]
+    return doc
+
+
+def _promote_zcc_document(doc: dict[str, Any]) -> dict[str, Any]:
+    """Walk every ``roles[*].fqdns`` bag in a ZCC probes document and promote v2 -> v3.
+
+    Why:
+        The client-connector probes file (``zscaler_client_connector_probes.json``)
+        uses the same v2 -> v3 host-entry shape but nested under
+        ``roles[<role_name>].fqdns`` rather than the four CENR bags. Kept
+        separate from ``_promote_cenr_document`` because the outer shape
+        differs (top-level ``roles`` dict vs top-level host bags).
+
+    Args:
+        doc: The parsed ZCC probes JSON document. Mutated in place.
+
+    Returns:
+        The same ``doc`` after promotion, for chaining convenience.
+    """
+    roles = doc.get("roles")
+    # The on-disk ZCC schema stores ``roles`` as a list of role objects (each
+    # with its own ``fqdns`` bag). Older/hand-authored variants may store it as
+    # a dict keyed by role name; support both so promotion is shape-agnostic.
+    role_bodies: list[Any] = []
+    if isinstance(roles, list):
+        role_bodies = list(roles)
+    elif isinstance(roles, dict):
+        role_bodies = list(roles.values())
+    for role_body in role_bodies:
+        if not isinstance(role_body, dict):
+            continue
+        fqdns = role_body.get("fqdns")
+        if isinstance(fqdns, list):
+            # Same promotion rule as CENR bags; keeps the FQDN element
+            # shape uniform across both cache files so downstream code
+            # can treat any host entry as ``{"host": <fqdn>, ...}``.
+            role_body["fqdns"] = [_promote_host_entry(entry) for entry in fqdns]
+    return doc
+
+
+def _count_cenr_host_entries(doc: dict[str, Any]) -> int:
+    """Return the total number of host entries in the top-level CENR bags.
+
+    Why:
+        Fed into the mandatory single ``logger.info`` line emitted by
+        :func:`promote_cache_document` so operators can eyeball the load
+        size without opening the JSON. Only the two top-level bags are
+        counted (per-city entries are subsets of the top-level union).
+
+    Args:
+        doc: The parsed CENR document.
+
+    Returns:
+        Non-negative int count of ``proxy_hostnames`` + ``vpn_hostnames``.
+    """
+    total = 0
+    for bag_key in ("proxy_hostnames", "vpn_hostnames"):
+        bag = doc.get(bag_key)
+        if isinstance(bag, list):
+            total += len(bag)
+    return total
+
+
+def _count_zcc_host_entries(doc: dict[str, Any]) -> int:
+    """Return the total number of FQDN entries across all ZCC roles.
+
+    Why:
+        Same rationale as :func:`_count_cenr_host_entries` but for the ZCC
+        probes file. Emitted in the single INFO line so both cache files
+        report a load-size metric consistently.
+
+    Args:
+        doc: The parsed ZCC probes document.
+
+    Returns:
+        Non-negative int count of every ``roles[*].fqdns`` entry summed.
+    """
+    total = 0
+    roles = doc.get("roles")
+    # Same list-vs-dict tolerance as ``_promote_zcc_document`` so the load-size
+    # counter never under-reports just because the outer shape is a list.
+    role_bodies: list[Any] = []
+    if isinstance(roles, list):
+        role_bodies = list(roles)
+    elif isinstance(roles, dict):
+        role_bodies = list(roles.values())
+    for role_body in role_bodies:
+        if isinstance(role_body, dict):
+            fqdns = role_body.get("fqdns")
+            if isinstance(fqdns, list):
+                total += len(fqdns)
+    return total
+
+
+def _cenr_needs_promotion(doc: dict[str, Any]) -> bool:
+    """Return True when any CENR host bag still contains a flat-string entry.
+
+    Why:
+        A prior version of :func:`merge_clouds` stamped
+        ``schema_version=3`` on a document whose bags were still
+        ``list[str]`` (see the fix that emits ``_promote_host_entry`` output
+        in the writer). Trusting the version stamp alone caused
+        :func:`promote_cache_document` to short-circuit past the promotion,
+        and every downstream v3-dict-only walker
+        (``_merge_observations_into_cenr``, ``_lookup_v3_observation`` in
+        ``org_synthetic_probes_manager``) silently skipped the whole cache.
+        Cheap first-entry shape probing across the four bags lets the loader
+        self-heal without a mandatory delete-and-refresh.
+
+    Args:
+        doc: Parsed CENR document.
+
+    Returns:
+        ``True`` if any inspected bag's first element is a bare string;
+        ``False`` when every non-empty bag already carries dict entries.
+    """
+    for bag_key in ("proxy_hostnames", "vpn_hostnames"):
+        bag = doc.get(bag_key)
+        if isinstance(bag, list) and bag and isinstance(bag[0], str):
+            return True
+    by_city = doc.get("by_city")
+    if isinstance(by_city, dict):
+        for city_slot in by_city.values():
+            if not isinstance(city_slot, dict):
+                continue
+            for bag_key in ("proxy_hostnames", "vpn_hostnames"):
+                bag = city_slot.get(bag_key)
+                if isinstance(bag, list) and bag and isinstance(bag[0], str):
+                    return True
+    return False
+
+
+def _zcc_needs_promotion(doc: dict[str, Any]) -> bool:
+    """Return True when any ``roles[*].fqdns`` bag still contains a flat string.
+
+    Why:
+        Symmetric self-heal check for the ZCC probes cache. Same rationale
+        as :func:`_cenr_needs_promotion`: a stamp-mismatch caused by a bug
+        in an older writer should not make the loader trust a lie and
+        strand the observation-merge walkers.
+
+    Args:
+        doc: Parsed ZCC probes document.
+
+    Returns:
+        ``True`` if any inspected FQDN bag's first element is a bare string.
+    """
+    roles = doc.get("roles")
+    role_bodies: list[Any] = []
+    if isinstance(roles, list):
+        role_bodies = list(roles)
+    elif isinstance(roles, dict):
+        role_bodies = list(roles.values())
+    for role_body in role_bodies:
+        if not isinstance(role_body, dict):
+            continue
+        fqdns = role_body.get("fqdns")
+        if isinstance(fqdns, list) and fqdns and isinstance(fqdns[0], str):
+            return True
+    return False
+
+
+def promote_cache_document(doc: dict[str, Any], *, kind: str) -> dict[str, Any]:
+    """Public v2 -> v3 loader adapter for either cache file kind.
+
+    Why:
+        Single entry point wired into :func:`ensure_fresh` (CENR path) and
+        the ZCC probes read in
+        :func:`src.org.org_synthetic_probes_manager._load_probe_sources`.
+        Detects ``schema_version < 3`` (or missing) and promotes every
+        applicable host bag, emitting EXACTLY ONE ``logger.info`` line per
+        promotion event so operators have a single grep target for
+        "loaded a legacy cache". Idempotent when called against an already
+        v3 document (no promotion, no log line).
+
+    Args:
+        doc: Parsed JSON document from disk. Mutated in place when promotion
+            fires; unmodified when already v3.
+        kind: Either ``"cenr"`` (top-level proxy/vpn bags plus by_city) or
+            ``"zcc"`` (roles[*].fqdns). Any other value is a caller bug and
+            is treated as a no-op so a typo cannot silently drop data.
+
+    Returns:
+        The (possibly mutated) ``doc`` for call-site chaining.
+    """
+    detected = doc.get("schema_version")
+    # Coerce missing/non-int schema_version to 0 so the INFO line always
+    # reports a numeric version (contract mandates %d formatting).
+    detected_int = detected if isinstance(detected, int) else 0
+    # Shape-probe the bags rather than trusting the version stamp alone: a
+    # prior writer bug produced ``schema_version=3`` documents with flat-
+    # string bags, and a stamp-only short-circuit stranded every downstream
+    # v3-dict walker. If the stamp says v3 AND the bags actually look v3,
+    # we skip; otherwise fall through and (re)promote silently.
+    needs_promotion = (
+        _cenr_needs_promotion(doc) if kind == "cenr" else _zcc_needs_promotion(doc) if kind == "zcc" else False
+    )
+    if isinstance(detected, int) and detected >= _SCHEMA_VERSION and not needs_promotion:
+        # Already v3 in both stamp and shape -> skip promotion entirely; do
+        # NOT log so steady-state loads stay quiet at INFO.
+        return doc
+    if kind == "cenr":
+        # Contract cenr_cache_schema_v3.md: promote all four CENR bags.
+        doc = _promote_cenr_document(doc)
+        count = _count_cenr_host_entries(doc)
+    elif kind == "zcc":
+        # Contract cenr_cache_schema_v3.md: promote roles[*].fqdns bag.
+        doc = _promote_zcc_document(doc)
+        count = _count_zcc_host_entries(doc)
+    else:
+        # Unknown kind: still emit the diagnostic INFO but skip promotion so
+        # nothing silently mutates a document we do not understand.
+        count = 0
+    # Stamp the current schema version after promotion so the next load short-
+    # circuits without re-emitting the INFO line (idempotency contract).
+    doc["schema_version"] = _SCHEMA_VERSION
+    logger.info(
+        "zscaler_catalogue: loaded v%d cache (%d entries); observations absent",
+        detected_int,
+        count,
+    )
+    return doc
+
+
+def _pick_observation_from_probe_result(
+    pr: ProbeResult,
+) -> tuple[str | None, int | None]:
+    """Return the (protocol, port) tuple to persist for one probed endpoint.
+
+    Why:
+        Implements requirement R-003 (contract
+        ``cenr_cache_schema_v3.md`` §"Write Path priority"). The v3 cache
+        stores AT MOST ONE observation per host so ``_probe_target`` in
+        menu 206 can pick a single, deterministic branch when it later builds
+        the synthetic-test URL. Priority is fixed: HTTPS on 443 beats every
+        UDP or non-443 TCP result because an HTTPS 200/HEAD is the strongest
+        signal that the endpoint is fully alive from the customer's edge.
+        UDP/500 (IKE main) is picked before UDP/4500 (NAT-T) because the two
+        are always probed together and 500 is the semantically primary IKE
+        port; picking 500 first also keeps observation output stable across
+        NAT-fronted and non-NAT-fronted sites. Any remaining open TCP port
+        wins over a null observation so probing effort never gets discarded.
+
+    Args:
+        pr: A single :class:`ProbeResult` from the full-fleet validation
+            pass. Only the ``tcp``, ``udp``, and ``https_status`` fields are
+            inspected.
+
+    Returns:
+        Two-tuple of ``(protocol, port)`` where ``protocol`` is
+        ``"HTTPS"``, ``"UDP/500"``, ``"UDP/4500"``, or ``"TCP"`` and
+        ``port`` is the corresponding port number. Returns ``(None, None)``
+        when no port responded so the caller writes ``observed_protocol =
+        None`` per contract.
+    """
+    # Priority 1: HTTPS/443. Requires BOTH the raw TCP handshake AND a HEAD/GET
+    # that returned some HTTP status code. Either one alone is a partial signal.
+    # `getattr` fallback keeps this helper tolerant of duck-typed stubs used in
+    # older tests that predate the udp/tcp fields on ProbeResult.
+    tcp_states: dict[int, str] = getattr(pr, "tcp", None) or {}
+    https_status = getattr(pr, "https_status", None)
+    if tcp_states.get(443) == "open" and https_status is not None:
+        return "HTTPS", 443
+    # Priority 2: UDP/500 (IKE main). Any non-"silent" state is treated as a
+    # positive observation because a "closed" ICMP reply still proves the host
+    # is reachable and the port is being classified by a live IKE responder.
+    udp_states: dict[int, str] = getattr(pr, "udp", None) or {}
+    if 500 in udp_states and udp_states.get(500) != "silent":
+        return "UDP/500", 500
+    # Priority 3: UDP/4500 (IKE NAT-T). Same rule as UDP/500 but only when
+    # UDP/500 did not respond, per the fixed order in R-003.
+    if 4500 in udp_states and udp_states.get(4500) != "silent":
+        return "UDP/4500", 4500
+    # Priority 4: any other open TCP port. Skip 443 because it already lost
+    # priority 1 above (would have needed an https_status to promote).
+    for port, state in tcp_states.items():
+        if port == 443:
+            continue
+        if state == "open":
+            return "TCP", port
+    # Priority 5: no responding protocol -> caller writes a null observation.
+    return None, None
+
+
+def _merge_observations_into_cenr(
+    doc: dict[str, Any],
+    observations: dict[str, tuple[str | None, int | None, str]],
+) -> int:
+    """Stamp per-host observations onto every CENR host bag in ``doc``.
+
+    Why:
+        The write-back step of R-003: after the full-fleet validation pass
+        finishes, each host's newest observation must land on disk so a
+        later menu 206 invocation can dispatch on the persisted state
+        without re-probing. Walks the same four bags as
+        :func:`_promote_cenr_document` (proxy/vpn top-level plus by_city
+        variants) so the on-disk shape stays symmetric with the loader.
+        In-place mutation avoids re-allocating the (potentially large)
+        merged document.
+
+    Args:
+        doc: Fresh CENR document from :func:`refresh_cenr` (already v3).
+            Mutated in place.
+        observations: Map of ``fqdn`` -> ``(protocol, port, iso8601_utc)``
+            built by :func:`ensure_fresh` from the ProbeResult list. Hosts
+            absent from the map are left untouched (their observation keys
+            simply stay as-is from disk or absent).
+
+    Returns:
+        Total number of host entries mutated across all four bags. Used by
+        the caller's ``logger.debug`` line so operators can eyeball how much
+        of the fleet actually reported back.
+    """
+    stamped = 0
+
+    def _apply(bag: Any) -> None:
+        nonlocal stamped
+        # Local closure so we do not duplicate the promotion+stamp logic for
+        # each of the four bags. `stamped` is nonlocal so the total survives.
+        if not isinstance(bag, list):
+            return
+        for entry in bag:
+            if not isinstance(entry, dict):
+                continue
+            host = entry.get("host")
+            if not isinstance(host, str):
+                continue
+            obs = observations.get(host)
+            if obs is None:
+                continue
+            protocol, port, ts = obs
+            # Always write all three observation keys together so a stale
+            # value never survives next to a fresh one; matches contract
+            # cenr_cache_schema_v3.md §"Observation triplet". When the host
+            # was silent (no responding protocol), the whole triplet is None
+            # so the "no observation" branch stays distinguishable on disk.
+            entry["observed_protocol"] = protocol
+            entry["observed_port"] = port
+            entry["last_probed"] = ts if protocol is not None else None
+            stamped += 1
+
+    _apply(doc.get("proxy_hostnames"))
+    _apply(doc.get("vpn_hostnames"))
+    by_city = doc.get("by_city")
+    if isinstance(by_city, dict):
+        for city_slot in by_city.values():
+            if not isinstance(city_slot, dict):
+                continue
+            _apply(city_slot.get("proxy_hostnames"))
+            _apply(city_slot.get("vpn_hostnames"))
+    return stamped
+
+
+def _merge_observations_into_zcc(
+    doc: dict[str, Any],
+    observations: dict[str, tuple[str | None, int | None, str]],
+) -> int:
+    """Stamp per-host observations onto every ``roles[*].fqdns`` bag in ``doc``.
+
+    Why:
+        Mirror of :func:`_merge_observations_into_cenr` but for the client-
+        connector probes file. Kept separate from the CENR walker because
+        the outer shape differs (roles list/dict vs top-level bags); merging
+        the two into one recursive walker would obscure both paths.
+
+    Args:
+        doc: Fresh ZCC probes document (already v3 after promotion). Mutated
+            in place.
+        observations: Same ``fqdn -> (protocol, port, iso8601_utc)`` map
+            built by :func:`ensure_fresh`.
+
+    Returns:
+        Total number of FQDN entries mutated across all roles.
+    """
+    stamped = 0
+    roles = doc.get("roles")
+    # Same list-vs-dict tolerance as `_promote_zcc_document`; keeps this walker
+    # shape-agnostic against hand-authored variants.
+    role_bodies: list[Any] = []
+    if isinstance(roles, list):
+        role_bodies = list(roles)
+    elif isinstance(roles, dict):
+        role_bodies = list(roles.values())
+    for role_body in role_bodies:
+        if not isinstance(role_body, dict):
+            continue
+        fqdns = role_body.get("fqdns")
+        if not isinstance(fqdns, list):
+            continue
+        for entry in fqdns:
+            if not isinstance(entry, dict):
+                continue
+            host = entry.get("host")
+            if not isinstance(host, str):
+                continue
+            obs = observations.get(host)
+            if obs is None:
+                continue
+            protocol, port, ts = obs
+            entry["observed_protocol"] = protocol
+            entry["observed_port"] = port
+            # Match the CENR walker: silent hosts get a null triplet so the
+            # on-disk shape between the two files stays symmetric.
+            entry["last_probed"] = ts if protocol is not None else None
+            stamped += 1
+    return stamped
 
 
 def is_stale(cenr: dict[str, Any]) -> bool:
@@ -243,8 +721,25 @@ def merge_clouds(per_cloud: dict[str, dict[str, Any]]) -> dict[str, Any]:
                     if not city:
                         continue
                     slot = by_city.setdefault(city, {"proxy_hostnames": [], "vpn_hostnames": []})
-                    slot_proxies: set[str] = set(slot.get("proxy_hostnames", []) or [])
-                    slot_vpns: set[str] = set(slot.get("vpn_hostnames", []) or [])
+
+                    # A city that appears in more than one cloud is visited
+                    # more than once inside this loop. The first pass writes
+                    # v3 dicts into ``slot[*_hostnames]`` (see below), so the
+                    # second pass sees ``list[dict]`` rather than
+                    # ``list[str]`` -- calling ``set(list[dict])`` blows up
+                    # because dicts are unhashable. Extract the ``host`` field
+                    # when the entry is already a dict so the dedup set stays
+                    # a ``set[str]`` regardless of read-back shape.
+                    def _host_of(entry: Any) -> str:
+                        if isinstance(entry, dict):
+                            h = entry.get("host")
+                            return h if isinstance(h, str) else ""
+                        return entry if isinstance(entry, str) else ""
+
+                    slot_proxies: set[str] = {
+                        h for h in (_host_of(e) for e in slot.get("proxy_hostnames", []) or []) if h
+                    }
+                    slot_vpns: set[str] = {h for h in (_host_of(e) for e in slot.get("vpn_hostnames", []) or []) if h}
                     for record in records:
                         if not isinstance(record, dict):
                             continue
@@ -256,8 +751,16 @@ def merge_clouds(per_cloud: dict[str, dict[str, Any]]) -> dict[str, Any]:
                         if isinstance(vpn, str) and vpn:
                             vpns.add(vpn)
                             slot_vpns.add(vpn)
-                    slot["proxy_hostnames"] = sorted(slot_proxies)
-                    slot["vpn_hostnames"] = sorted(slot_vpns)
+                    # Emit v3 host dicts, not flat strings, so the on-disk
+                    # shape matches the ``schema_version=3`` stamp we set
+                    # below. Writing flat strings under a v3 stamp broke the
+                    # loader's idempotency short-circuit and made
+                    # ``_merge_observations_into_cenr`` a no-op (its
+                    # ``isinstance(entry, dict)`` guard skipped everything),
+                    # which in turn caused ``_probe_target`` to fall through
+                    # to the HTTPS default for every VPN host.
+                    slot["proxy_hostnames"] = [_promote_host_entry(h) for h in sorted(slot_proxies)]
+                    slot["vpn_hostnames"] = [_promote_host_entry(h) for h in sorted(slot_vpns)]
                     # Note the cloud each city was seen in so operators
                     # auditing the merged file can trace an entry back to a
                     # specific feed.
@@ -286,8 +789,8 @@ def merge_clouds(per_cloud: dict[str, dict[str, Any]]) -> dict[str, Any]:
                 "certificate rotations at Zscaler surface as probe failures."
             ),
         },
-        "proxy_hostnames": sorted(proxies),
-        "vpn_hostnames": sorted(vpns),
+        "proxy_hostnames": [_promote_host_entry(h) for h in sorted(proxies)],
+        "vpn_hostnames": [_promote_host_entry(h) for h in sorted(vpns)],
         "by_city": {city: by_city[city] for city in sorted(by_city)},
     }
 
@@ -422,7 +925,11 @@ def ensure_fresh(cenr_path: Path, cenr: dict[str, Any]) -> dict[str, Any]:
         merged dict when stale). Never raises; always returns *some* dict so
         the caller can proceed.
     """
-    if not is_stale(cenr):
+    # Promote legacy v2 CENR flat-string bags into v3 dict entries so every
+    # downstream consumer sees the same shape regardless of on-disk vintage.
+    # Idempotent for v3+ documents, and emits at most one INFO line.
+    cenr = promote_cache_document(cenr, kind="cenr")  # v2 -> v3 loader adapter
+    if not is_stale(cenr):  # freshness gate stays the sole trigger for refresh
         return cenr
 
     logger.info(
@@ -441,16 +948,21 @@ def ensure_fresh(cenr_path: Path, cenr: dict[str, Any]) -> dict[str, Any]:
         return cenr
 
     # Best-effort probe run; validation failures do not block the return.
+    probes: dict[str, Any] = {}
+    probes_path = cenr_path.parent / "zscaler_client_connector_probes.json"
+    results: list[ProbeResult] = []
     try:
         # Load probes catalogue relative to the CENR path so we don't
         # hard-code a repo layout inside this helper. The probes file sits
         # in the same data/ directory.
-        probes_path = cenr_path.parent / "zscaler_client_connector_probes.json"
         if probes_path.is_file():
             probes = json.loads(probes_path.read_text(encoding="utf-8"))
         else:
             probes = {}
-        results: list[ProbeResult] = run_full_validation(
+        # Also promote the ZCC roles cache so run_full_validation and every
+        # downstream reader work off the shared v3 dict shape.
+        probes = promote_cache_document(probes, kind="zcc")  # v2 -> v3 loader adapter
+        results = run_full_validation(
             probes,
             fresh,
             timeout=DEFAULT_TIMEOUT,
@@ -464,5 +976,48 @@ def ensure_fresh(cenr_path: Path, cenr: dict[str, Any]) -> dict[str, Any]:
             )
     except Exception as exc:  # noqa: BLE001 -- validation is best-effort
         logger.warning("zscaler_catalogue: validation crashed: %s", exc)
+
+    # T028/T029: write persisted observations back onto both cache files so a
+    # later menu 206 invocation can dispatch on the last observed protocol
+    # without re-probing (contract cenr_cache_schema_v3.md §"Write Path").
+    if results:
+        # Build the FQDN -> (protocol, port, iso8601_utc) index once so both
+        # walkers can look up in O(1). Timestamp is a single `now` per refresh
+        # cycle so every observation from the same probe pass reports the same
+        # `last_probed` value (deterministic snapshotting).
+        now_iso = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+        observations: dict[str, tuple[str | None, int | None, str]] = {}
+        for pr in results:
+            # `getattr` fallback keeps this loop tolerant of duck-typed stubs
+            # used in older tests that predate the full ProbeResult shape.
+            fqdn = getattr(pr, "fqdn", None)
+            if not isinstance(fqdn, str) or not fqdn:
+                continue
+            protocol, port = _pick_observation_from_probe_result(pr)
+            observations[fqdn] = (protocol, port, now_iso)
+        logger.info(
+            "zscaler_catalogue: merging %d probe observations into v3 caches",
+            len(observations),
+        )
+        # Stamp CENR (all four bags) then ZCC (roles[*].fqdns). Force
+        # schema_version to the current constant on both docs so the write
+        # invariant "on disk == _SCHEMA_VERSION" always holds.
+        cenr_stamped = _merge_observations_into_cenr(fresh, observations)
+        fresh["schema_version"] = _SCHEMA_VERSION
+        try:
+            _atomic_write_json(cenr_path, fresh)
+        except OSError as exc:
+            logger.warning("zscaler_catalogue: CENR observation rewrite failed: %s", exc)
+        zcc_stamped = _merge_observations_into_zcc(probes, observations)
+        probes["schema_version"] = _SCHEMA_VERSION
+        try:
+            _atomic_write_json(probes_path, probes)
+        except OSError as exc:
+            logger.warning("zscaler_catalogue: ZCC observation rewrite failed: %s", exc)
+        logger.debug(
+            "zscaler_catalogue: observation merge complete (cenr=%d, zcc=%d stamped)",
+            cenr_stamped,
+            zcc_stamped,
+        )
 
     return fresh

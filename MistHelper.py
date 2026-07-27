@@ -502,7 +502,7 @@ from src.network.routing_utils import (  # Cat A canonical (1014 P4)
 )
 from src.org.org_config_migration_manager import OrgConfigMigrationManager  # Cat B (1013 SC-001 position 5)
 from src.org.org_synthetic_probes_manager import (
-    manage_org_synthetic_probes,  # 1022: menu 206 Zscaler probe manager (side-effect-free, #1641)
+    manage_org_synthetic_probes,  # Menu 206 Zscaler probe manager (side-effect-free until final confirmation)
 )
 from src.org.org_ticket_manager import (
     OrgTicketManager,  # Cat B (1013 SC-001 position 46) -- re-export for MistHelper.OrgTicketManager callers
