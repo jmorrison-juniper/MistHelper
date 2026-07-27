@@ -94,7 +94,7 @@ except ImportError:  # If database dependencies (python-arango, redis) not insta
     DB_LAYER_AVAILABLE = False  # Set flag to disable database output formats (CSV/SQLite only)
 
 # Explicit public API surface (issue #895).
-# Every name below is re-exported from a src.* submodule for external
+# A src.* submodule re-exports every name below for external
 # consumers. Adding a name here MUST accompany a corresponding update to
 # specs/1016-misthelper-suppression-cleanup/contracts/public_api_snapshot.txt.
 __all__ = [
@@ -653,7 +653,7 @@ from src.websocket.manager import WebSocketManager  # Import WebSocket connectio
 # ============================================================================
 # Configure logging IMMEDIATELY after imports to prevent Python from creating
 # a default handler that writes script.log to the root directory.
-# This configuration will be enhanced later by GlobalImportManager._setup_logging()
+# GlobalImportManager._setup_logging() enhances this configuration later
 # with additional handlers and formatting, but this ensures all early logging
 # calls go to the correct location.
 _early_log_dir = "data"  # Define data directory for logs (same as runtime output directory)
@@ -724,7 +724,7 @@ if sys.version_info < MINIMUM_PYTHON_VERSION:  # Check if Python is below minimu
         f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"  # Format current Python version
     )
     required_str = f"{MINIMUM_PYTHON_VERSION[0]}.{MINIMUM_PYTHON_VERSION[1]}"  # Format minimum required version
-    logging.warning(  # Log warning (will be written to script.log after handler setup)
+    logging.warning(  # Log warning (this text goes to script.log after handler setup)
         "Python %s detected. MistHelper requires Python %s+. Some features may not work correctly.",
         version_str,
         required_str,
@@ -813,7 +813,7 @@ def _leading_digits(segment: str) -> str:  # Extract the numeric prefix of one v
 
 def _parse_version(version_str: str) -> tuple[int, ...]:  # Convert a version string into a comparable integer tuple
     """Parse version string into comparable tuple (for example '0.59.3' -> (0, 59, 3))."""
-    try:  # Malformed input is handled by the except below
+    try:  # The except below handles malformed input
         parts = [
             int(_leading_digits(part) or "0") for part in version_str.split(".")
         ]  # Numeric prefix of each dotted segment, defaulting empty/non-numeric segments to 0
@@ -864,7 +864,7 @@ def _version_satisfies(installed: str, spec: str) -> bool:  # Decide whether ins
         return False  # Treat 'not installed' as 'requirement not satisfied'
 
     operator_symbol, required_version = _extract_version_constraint(spec)  # Parse operator + required version
-    if not required_version:  # No version constraint was found in the spec
+    if not required_version:  # The spec had no version constraint
         return True  # No version requirement, any version satisfies
 
     installed_tuple, required_tuple = _pad_version_tuples(  # Align both versions to equal length for comparison
@@ -1016,7 +1016,7 @@ from datetime import UTC, timezone  # UTC marker plus timezone helper for tz-awa
 # Required dependencies: raise clear error if missing (auto-installed by early dependency check)
 # Optional dependencies: use _has_X availability flags for runtime guards
 # Pylance uses the TYPE_CHECKING imports above for type analysis.
-try:  # PrettyTable is required for formatted console tables
+try:  # The tool needs PrettyTable for formatted console tables
     from prettytable import PrettyTable  # ASCII table renderer used across menus and reports
 except ImportError as _pt_err:  # Required dependency is not installed
     raise ImportError(
@@ -1030,7 +1030,7 @@ try:  # numpy is optional (only some analytics need it)
 except ImportError:  # numpy not installed
     np = None  # None lets runtime guards detect absence
 
-try:  # websocket-client is required for live device diagnostics
+try:  # The tool needs websocket-client for live device diagnostics
     import websocket  # WebSocket client fail-fast install guard (used by src.device.arp_command_manager)
 except ImportError as _ws_err:  # Required dependency is not installed
     raise ImportError(
@@ -1045,7 +1045,7 @@ except ImportError:  # Extremely unlikely for a stdlib module, but guard anyway
     SequenceMatcher = None  # None lets callers detect absence
 
 # Import mistapi later through GlobalImportManager for better dependency management
-# Using Any type since mistapi is dynamically loaded but guaranteed to be available before use
+# Using Any type since GlobalImportManager loads mistapi dynamically but it is available before use
 mistapi: Any = None  # Placeholder. The real mistapi module is loaded later by GlobalImportManager
 
 
@@ -1054,7 +1054,7 @@ mistapi: Any = None  # Placeholder. The real mistapi module is loaded later by G
 # Re-exported here so ``MistHelper.tqdm`` / ``mh.tqdm`` callers keep working unchanged.
 from src.utils.tqdm_wrapper import tqdm  # noqa: E402, I001  # Cat E canonical (1015 T-14) -- re-export.
 
-try:  # requests is required for all HTTP calls
+try:  # The tool needs requests for all HTTP calls
     import requests  # HTTP library fail-fast install guard (also used via function-local imports)
 except ImportError as _req_err:  # Required dependency is not installed
     raise ImportError(
@@ -1103,7 +1103,7 @@ try:  # rapidfuzz is optional (fast fuzzy string matching)
 except ImportError:  # rapidfuzz not installed
     fuzz = None  # None lets callers skip fuzzy matching
 
-# Keyboard listener functionality was extracted to src/refactors/keyboard_listener.py
+# Keyboard listener functionality moved to src/refactors/keyboard_listener.py
 # (PR-13). The extracted class KeyboardListener preserves the no-op stub for the
 # single remaining call site (interactive SSR/SRX websocket shell). No wrapper or
 # alias is retained here per FR-005 (no shims left in MistHelper).
@@ -1592,7 +1592,7 @@ class GlobalImportManager:
 
     def _install_dependency_batch(self, packages_to_process: list[tuple[str, str]]) -> int:  # Install a batch
         """Install each (name, spec) package via the best backend. Return the count that installed successfully."""
-        uv_available = self._check_uv_installation()  # Detect whether UV can be used as the fast installer
+        uv_available = self._check_uv_installation()  # Detect whether the tool can use UV as the fast installer
         logging.info(  # Record which installer backend will be used
             "Using UV package manager for installations"
             if uv_available
@@ -2260,9 +2260,9 @@ tuning_data_file = _get_tuning_data_file_path()  # Resolve the tuning-data path 
 
 # API usage tracking cache
 _api_usage_cache = {  # Module-level cache for Mist API rate-limit accounting
-    "timestamp": 0,  # Epoch seconds when the cache was last populated from the API
+    "timestamp": 0,  # Epoch seconds when the code last populated the cache from the API
     "used": 0,  # Number of API requests the server reports as consumed
-    "limit": 5000,  # Default per-window request quota until the real limit is learned
+    "limit": 5000,  # Default per-window request quota until the code learns the real limit
     "last_updated": 0,  # Epoch seconds of the most recent local update
     "perceived_requests": 0,  # Locally counted requests since the last server sync
     "initialized": False,  # Whether the cache was seeded from a real API response yet
@@ -2319,7 +2319,7 @@ if _initialize_imports_now:  # Eager path: prepare all imports now
             "Applied %s global variable assignments", len(global_assignments)
         )  # Report how many bindings were applied
 
-        # Verify tqdm was properly imported
+        # Verify the import loaded tqdm properly
         if "tqdm" in global_assignments:  # tqdm binding is present
             logging.info(
                 "tqdm is available in global namespace: %s", type(globals().get("tqdm"))
@@ -2334,7 +2334,7 @@ if _initialize_imports_now:  # Eager path: prepare all imports now
             "Some required imports failed - functionality may be limited"
         )  # Warn the user features may be degraded
 else:  # Deferred path: imports happen later in main()
-    # Deferred initialization - will be done in main()
+    # Deferred initialization - main() does this
     success, global_assignments = False, {}  # Placeholder values until main() runs initialization
 
 # ============================================================================
@@ -2361,7 +2361,7 @@ LAST_SELECTED_SITE_ID: str | None = None
 # transparently -- the re-exported symbol is the same class, not a delegator.
 # The rebind dance ``ensure_tqdm_available`` used to perform is no longer
 # needed since T-14 makes ``tqdm`` resolve through ``src.utils.tqdm_wrapper``
-# at import time. The probe was retained for its logging side effect at the
+# at import time. This code keeps the probe for its logging side effect at the
 # single caller (``src/refactors/main_entrypoint.py``).
 from src.utils.input_utils import InputUtils  # noqa: E402, I001  # Cat E canonical (1015 T-09) -- re-export.
 
@@ -2433,7 +2433,7 @@ PROGRESS_EMITTER = None  # Set in main() to a telemetry sink. None disables prog
 # ============================================================================
 
 # Initialize Mist API session (prepared after authentication)
-# Type annotation uses Any since mistapi is dynamically imported
+# Type annotation uses Any since the code imports mistapi dynamically
 apisession: Any | None = None
 
 # MSP privilege tracking (populated after authentication)
@@ -2589,7 +2589,7 @@ def _prompt_switch_login_confirmation() -> bool:
 
 def _select_msp_and_org() -> None:
     """Select MSP and organization via extracted interactive session manager."""
-    global apisession, mistapi, msp_privileges, selected_msp, org_id  # These globals are updated by the selection flow
+    global apisession, mistapi, msp_privileges, selected_msp, org_id  # The selection flow updates these globals
 
     state = {  # Snapshot current session globals into a mutable bag for the manager to update
         "apisession": apisession,  # Current API session object
@@ -2626,7 +2626,7 @@ def _invoke_mistapi_org_picker_and_apply() -> None:
             ConfigUtils.set_cached_org_id(org_id)  # Mirror the picker's choice into ConfigUtils cache (1015 T-12)
             logging.warning("  + Organization ID set: %s", org_id)  # Legacy console echo routed via logger.
             logging.info("User selected org from session: %s", org_id)  # Log the chosen org
-        else:  # Nothing was selected
+        else:  # The user selected nothing
             logging.warning("  X No organization selected")  # Legacy console echo routed via logger.
             logging.warning("No organization selected from session privileges")  # Log the empty selection
     except Exception as e:  # The SDK picker raised an error
@@ -2715,7 +2715,7 @@ def _preflight_verify_credentials(require_token: bool = True) -> None:
     Feature 1020 (US3): invoked at the top of ``_establish_mist_session()`` for every dispatch mode. It
     performs only local string validation. It never imports ``requests`` or ``mistapi`` and never issues
     an HTTP request. So a misconfigured run exits with a redacted, actionable message instead of a
-    malformed URL from mistapi. Token presence is required for token-based modes
+    malformed URL from mistapi. Token-based modes need a token
     (``--test``/``--testinteractive``/TUI/CLI). The ``require_token`` is False for interactive ``--login``,
     which authenticates via email/password rather than a token. Any token value present is shown only via
     ``_redact_tokens()`` previews, never raw (FR-015/SC-005).
@@ -2744,7 +2744,7 @@ def _preflight_verify_credentials(require_token: bool = True) -> None:
     logging.error(
         "[ERROR] For --test/--testinteractive, also set org_id (or ORG_ID) - not MIST_ORG_ID - for this path."
     )  # Legacy console echo routed via logger.
-    sys.exit(1)  # Exit non-zero before any session/network object is constructed.
+    sys.exit(1)  # Exit non-zero before the code constructs any session or network object.
 
 
 def _check_token_rate_limit(token: str, test_host: str) -> bool:
@@ -2833,7 +2833,7 @@ def _build_fallback_session_attempts(
     """Build env_file/host fallback attempts, only when no env tokens are present."""
     logging.debug("Building fallback (env_file/host) APISession attempts")  # Trace fallback construction
     attempts: list[dict[str, str]] = []  # Accumulate fallback attempts
-    if tokens:  # Env tokens present -- fallbacks are skipped to avoid duplicate token reads
+    if tokens:  # Env tokens present -- the code skips fallbacks to avoid duplicate token reads
         return attempts  # No fallback needed -- token attempts already cover auth
     if "env_file" in sig_params:  # env_file only when no env tokens (avoids double-read)
         attempts.append({"env_file": ".env"})  # Read credentials from .env file
@@ -2886,7 +2886,7 @@ def _try_single_session_kwargs(
     total: int,
 ) -> tuple[Any, bool]:
     """Try one APISession kwargs dict. Return (session_or_None, rate_limit_seen)."""
-    if apisession_cls is None:  # Guard: class must be present if attempts list was built
+    if apisession_cls is None:  # Guard: the class must be present if the code built the attempts list
         raise AssertionError("apisession_cls should be set if attempts list is populated")
     try:  # APISession constructor may raise on auth/validation/rate-limit
         session = apisession_cls(**kwargs)  # Attempt APISession constructor with these kwargs
@@ -2911,7 +2911,7 @@ def _execute_session_attempts(
     """Try each kwargs dict until one constructs a valid APISession. Track rate-limit signal."""
     tried_variants: list[str] = []  # Track all attempted kwargs for error reporting on total failure
     successful_method: Any = None  # Will hold the kwargs dict that succeeded
-    rate_limit_detected = False  # Set True if NoneType rate-limit error signature is seen
+    rate_limit_detected = False  # Set True when a NoneType rate-limit error signature appears
     session: Any = None  # Will hold the created APISession object on success
     for i, kwargs in enumerate(attempts, start=1):  # Try each kwargs dict in priority order
         tried_variants.append(str(list(kwargs.keys())))  # Record attempt as string of keys before trying
@@ -3095,7 +3095,7 @@ def _log_detected_auth(used_env_file: bool, used_direct_token: bool, has_readabl
     """Emit a single debug line describing the detected auth path (env_file > token param > attr)."""
     if used_env_file:  # Highest-priority detected path -- credentials came from .env
         logging.debug("Session initialized using env_file - authentication configured via .env file")  # env_file path
-    elif used_direct_token:  # Next priority -- a token was passed directly to the constructor
+    elif used_direct_token:  # Next priority -- the caller passed a token directly to the constructor
         logging.debug(
             "Session initialized using direct token parameter - authentication configured"
         )  # token-param path
@@ -3238,7 +3238,7 @@ def _configure_session_timeout(session_obj: Any) -> None:
 
 
 # Issue #431: module-level alias `PacketCaptureManager = ExtractedPacketCaptureManager`
-# was removed. The canonical name is now imported directly at module top.
+# was removed. The code now imports the canonical name directly at module top.
 
 
 # SFPTransceiverDataProcessor moved to src/reports/sfp_transceiver_data_processor.py
@@ -3621,7 +3621,7 @@ def _build_ssh_runner_deps() -> SSHRunnerManagerDeps:  # Build the deps bundle f
     )
 
 
-# CLIShellManager was extracted to src/ssh/cli_shell_manager.py in initiative 1013 (Cat B, position 30).
+# CLIShellManager moved to src/ssh/cli_shell_manager.py in initiative 1013 (Cat B, position 30).
 # Re-exported via the alphabetized `from src.ssh.cli_shell_manager import CLIShellManager` alias above.
 
 
@@ -3790,7 +3790,7 @@ def _build_org_ap_upgrader(**overrides: Any) -> _OrgLevelAPFirmwareUpgrader:
 # BulkRadiusWLANConfigManager moved to src/site/bulk_radius_wlan_config_manager.py (1013 SC-001 position 15)
 
 
-# SiteAnalyticsConfigurator and SiteInventoryHealthAnalyzer were extracted to
+# SiteAnalyticsConfigurator and SiteInventoryHealthAnalyzer moved to
 # src/analytics/site_analytics_configurator.py and
 # src/analytics/site_inventory_health_analyzer.py for phase-1 decomposition.
 
@@ -4948,7 +4948,7 @@ def _fast_mode_from_cli_args() -> bool:
     """Return True iff parsed ``args`` exist in globals and carry ``--fast`` (errors -> False)."""
     try:  # CLI args presence + attribute lookup can both fail. Degrade safely.
         cli_args = globals().get("args") if "args" in globals() else None  # Locate parsed args, if any.
-        return bool(cli_args and getattr(cli_args, "fast", False))  # Truthy only when --fast was set.
+        return bool(cli_args and getattr(cli_args, "fast", False))  # Truthy only when the caller set --fast.
     except Exception:  # Defensive -- never propagate.
         return False  # Safe default for any introspection failure.
 
@@ -5322,7 +5322,7 @@ def _add_interface_arguments(parser: argparse.ArgumentParser) -> None:
 # Mapping of unsupported flag spellings -> the supported canonical spelling.
 # Why: users naturally type hyphenated variants (for example `--test-interactive`) but argparse
 # treats a hyphen as a token boundary, so it cannot prefix-match to `--testinteractive`.
-# Left unchecked, the invocation is rejected by argparse with a generic "unrecognized
+# Left unchecked, argparse rejects the invocation with a generic "unrecognized
 # arguments" message and (worse) the interactive-test module-import sniff at the top of
 # this file — which literally checks `"--testinteractive" in sys.argv` — silently
 # proceeds as if no test flag were present, misrouting the user into normal interactive
@@ -5632,7 +5632,7 @@ def _run_tui_event_loop(args: argparse.Namespace) -> None:
 
         tui = MistHelperTUI(debug_mode=args.debug)  # Create TUI with debug flag
         tui.apisession = apisession  # Pass global API session so TUI can execute live API calls
-        if args.debug:  # Debug: record that TUI was launched with debug enabled
+        if args.debug:  # Debug: record that the code launched the TUI with debug enabled
             logging.debug("TUI_MODE: Debug mode is ACTIVE - enhanced logging enabled")  # Log debug state
         tui.run()  # Launch TUI event loop (blocks until user exits)
     except KeyboardInterrupt:  # User pressed Ctrl+C inside the TUI
@@ -5983,7 +5983,7 @@ _MEANINGFUL_CLI_ATTRS: tuple[str, ...] = (
 
 
 def _has_meaningful_cli_args(args: argparse.Namespace) -> bool:
-    """Return True if any non-interactive CLI flag was provided (triggers CLI dispatch mode)."""
+    """Return True if the caller provided any non-interactive CLI flag (triggers CLI dispatch mode)."""
     return any(getattr(args, name, None) for name in _MEANINGFUL_CLI_ATTRS)  # Any flag => CLI mode
 
 
