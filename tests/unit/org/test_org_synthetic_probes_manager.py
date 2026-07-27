@@ -21,6 +21,32 @@ import pytest
 from src.org import org_synthetic_probes_manager as ospm
 
 # --------------------------------------------------------------------------- #
+# Module-level constants (feature 1025)
+# --------------------------------------------------------------------------- #
+
+# Pinned enumeration of the 7 SecB2B catalogue hosts that MUST be absent from
+# the loaded CENR observation cache so the CENR-fallback code path fires and
+# each host contributes exactly one load-time WARNING once feature 1025 lands.
+# Why:
+#     Sourced from the sidecar fixture ``cenr_dedup_missing_observations.json``
+#     authored in T006a. Duplicated here as a module-level constant so every
+#     US1 test (T007/T008/T009) can reuse the same ground truth without
+#     re-reading the sidecar file on each invocation. Encoded as a
+#     ``frozenset`` so downstream tests cannot accidentally mutate the set
+#     mid-run and blur the load-time dedup contract.
+EXPECTED_MISSING_HOSTS: frozenset[str] = frozenset(
+    {
+        "gslb.secb2b.com",  # global SecB2B GSLB endpoint absent from smoke CENR
+        "us-elm.secb2b.com",  # Americas ELM node absent from smoke CENR
+        "us-prod-klm-b2c.secb2b.com",  # Americas B2C KLM host absent from smoke CENR
+        "us-prod-klm.secb2b.com",  # Americas KLM host absent from smoke CENR
+        "eu-elm.secb2b.com",  # EMEA ELM node absent from smoke CENR
+        "eu-prod-klm-b2c.secb2b.com",  # EMEA B2C KLM host absent from smoke CENR
+        "eu-prod-klm.secb2b.com",  # EMEA KLM host absent from smoke CENR
+    }
+)
+
+# --------------------------------------------------------------------------- #
 # Fixtures
 # --------------------------------------------------------------------------- #
 
@@ -659,34 +685,53 @@ def test_build_region_probes_unmapped_country_falls_back_to_emea(
     region_probes_source: dict,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """DE (unmapped) resolves to EMEA and logs a warning.
+    """DE (not in region map) resolves to EMEA silently.
 
     Why:
         Every ISO code not enumerated in ``_COUNTRY_CODE_TO_REGION`` must
-        default to EMEA (broadest surface) and the warning is the only
-        signal operators get that a code is missing from the mapping.
+        default to EMEA (broadest surface). Post 1025-US2 the WARNING
+        surfaced by ``_build_region_probes`` was relocated to a single
+        load-time emission in ``_emit_load_time_country_code_warning``
+        so that the region resolver stays silent and cannot re-introduce
+        N*K per-site duplication. This test pins BOTH invariants: the
+        EMEA fallback (URL builder unchanged, INV-1) AND resolver
+        silence (no WARN from _build_region_probes itself).
     """
     with caplog.at_level("WARNING"):
         result = ospm._build_region_probes((region_probes_source, {}), "DE")
     assert list(result.keys()) == ["zcc-samsung_elm_activation_emea-elm-eu-example-com"]
-    assert any("not mapped" in rec.message and "emea" in rec.message for rec in caplog.records)
+    # Resolver silence: WARNs live at load time now (1025-US2).
+    warnings = [rec for rec in caplog.records if rec.levelno == logging.WARNING]
+    assert warnings == [], (
+        "_build_region_probes must be silent after 1025-US2; "
+        f"observed {len(warnings)}: {[r.getMessage() for r in warnings]}"
+    )
 
 
 def test_build_region_probes_none_country_falls_back_to_emea(
     region_probes_source: dict,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """Missing / ``None`` country_code still resolves to EMEA (with warning).
+    """Missing / ``None`` country_code still resolves to EMEA silently.
 
     Why:
         Not every Mist site record carries a ``country_code``; the helper
         must degrade to the default region rather than raise so the site-
         override flow does not abort mid-run for one under-configured site.
+        Post 1025-US2 the resolver stays silent -- any operator-visible
+        signal about unmapped codes now lives in the load-time WARNING
+        emitted once per invocation by
+        ``_emit_load_time_country_code_warning``.
     """
     with caplog.at_level("WARNING"):
         result = ospm._build_region_probes((region_probes_source, {}), None)
     assert list(result.keys()) == ["zcc-samsung_elm_activation_emea-elm-eu-example-com"]
-    assert any("not mapped" in rec.message for rec in caplog.records)
+    # Resolver silence: WARNs live at load time now (1025-US2).
+    warnings = [rec for rec in caplog.records if rec.levelno == logging.WARNING]
+    assert warnings == [], (
+        "_build_region_probes must be silent after 1025-US2; "
+        f"observed {len(warnings)}: {[r.getMessage() for r in warnings]}"
+    )
 
 
 def test_build_region_probes_cn_selects_china_role(region_probes_source: dict) -> None:
@@ -1166,7 +1211,9 @@ def test_site_override_prompt_declined_makes_no_calls() -> None:
         patch.object(ospm._mist_site_setting, "getSiteSetting") as get_mock,
         patch.object(ospm._mist_site_setting, "updateSiteSettings") as put_mock,
     ):
-        ospm._prompt_and_apply_site_overrides(session, "org-uuid", {"zcc-x": {"name": "zcc-x"}}, ({"roles": []}, {}))
+        ospm._prompt_and_apply_site_overrides(
+            session, "org-uuid", {"zcc-x": {"name": "zcc-x"}}, ({"roles": []}, {}), set()
+        )
     list_mock.assert_not_called()
     get_mock.assert_not_called()
     put_mock.assert_not_called()
@@ -1180,7 +1227,7 @@ def test_site_override_prompt_empty_resulting_tool_returns_immediately() -> None
         patch.object(ospm._mist_orgs_sites, "listOrgSites") as list_mock,
         patch.object(ospm._mist_site_setting, "updateSiteSettings") as put_mock,
     ):
-        ospm._prompt_and_apply_site_overrides(session, "org-uuid", {}, ({"roles": []}, {}))
+        ospm._prompt_and_apply_site_overrides(session, "org-uuid", {}, ({"roles": []}, {}), set())
     input_mock.assert_not_called()
     list_mock.assert_not_called()
     put_mock.assert_not_called()
@@ -1223,7 +1270,7 @@ def test_site_override_indexed_prompt_applies_to_selected_sites() -> None:
         patch.object(ospm._mist_site_setting, "updateSiteSettings", return_value=put_response) as put_mock,
         patch("builtins.input", lambda _prompt: next(inputs)),
     ):
-        ospm._prompt_and_apply_site_overrides(session, "org-uuid", tool_probes, ({"roles": []}, {}))
+        ospm._prompt_and_apply_site_overrides(session, "org-uuid", tool_probes, ({"roles": []}, {}), set())
     list_mock.assert_called_once()
     get_all_mock.assert_called_once()
     # Exactly the two in-range indexes trigger a per-site PUT round-trip.
@@ -1254,7 +1301,9 @@ def test_site_override_indexed_prompt_empty_input_skips() -> None:
         patch.object(ospm._mist_site_setting, "updateSiteSettings") as put_mock,
         patch("builtins.input", lambda _prompt: next(inputs)),
     ):
-        ospm._prompt_and_apply_site_overrides(session, "org-uuid", {"zcc-x": {"name": "zcc-x"}}, ({"roles": []}, {}))
+        ospm._prompt_and_apply_site_overrides(
+            session, "org-uuid", {"zcc-x": {"name": "zcc-x"}}, ({"roles": []}, {}), set()
+        )
     get_mock.assert_not_called()
     put_mock.assert_not_called()
 
@@ -1270,7 +1319,9 @@ def test_site_override_no_sites_short_circuits(capsys: pytest.CaptureFixture[str
         patch.object(ospm._mist_site_setting, "updateSiteSettings") as put_mock,
         patch("builtins.input", lambda _prompt: next(inputs)),
     ):
-        ospm._prompt_and_apply_site_overrides(session, "org-uuid", {"zcc-x": {"name": "zcc-x"}}, ({"roles": []}, {}))
+        ospm._prompt_and_apply_site_overrides(
+            session, "org-uuid", {"zcc-x": {"name": "zcc-x"}}, ({"roles": []}, {}), set()
+        )
     out = capsys.readouterr().out
     assert "No sites found" in out
     put_mock.assert_not_called()
@@ -1342,7 +1393,9 @@ def test_site_override_indexed_prompt_sorts_by_name() -> None:
         patch.object(ospm._mist_site_setting, "updateSiteSettings", return_value=put_response) as put_mock,
         patch("builtins.input", lambda _prompt: next(inputs)),
     ):
-        ospm._prompt_and_apply_site_overrides(session, "org-uuid", {"zcc-x": {"name": "zcc-x"}}, ({"roles": []}, {}))
+        ospm._prompt_and_apply_site_overrides(
+            session, "org-uuid", {"zcc-x": {"name": "zcc-x"}}, ({"roles": []}, {}), set()
+        )
     assert put_mock.call_count == 1
     assert put_mock.call_args.args[1] == "id-alpha"
 
@@ -1376,7 +1429,9 @@ def test_site_override_unnamed_sites_sink_to_end() -> None:
         patch.object(ospm._mist_site_setting, "updateSiteSettings", return_value=put_response) as put_mock,
         patch("builtins.input", lambda _prompt: next(inputs)),
     ):
-        ospm._prompt_and_apply_site_overrides(session, "org-uuid", {"zcc-x": {"name": "zcc-x"}}, ({"roles": []}, {}))
+        ospm._prompt_and_apply_site_overrides(
+            session, "org-uuid", {"zcc-x": {"name": "zcc-x"}}, ({"roles": []}, {}), set()
+        )
     put_site_ids = [call.args[1] for call in put_mock.call_args_list]
     # Both blank-name entries land at the end. Ordering between them
     # tie-breaks on the casefolded name string first (empty "" sorts
@@ -1428,7 +1483,9 @@ def test_site_override_indexed_prompt_expands_ranges() -> None:
         patch.object(ospm._mist_site_setting, "updateSiteSettings", return_value=put_response) as put_mock,
         patch("builtins.input", lambda _prompt: next(inputs)),
     ):
-        ospm._prompt_and_apply_site_overrides(session, "org-uuid", {"zcc-x": {"name": "zcc-x"}}, ({"roles": []}, {}))
+        ospm._prompt_and_apply_site_overrides(
+            session, "org-uuid", {"zcc-x": {"name": "zcc-x"}}, ({"roles": []}, {}), set()
+        )
     put_site_ids = [call.args[1] for call in put_mock.call_args_list]
     # Sort key is site name, so indexes 1..6 map to SiteA..SiteF in order.
     # 2-4 -> site-2, site-3, site-4; 6 -> site-6.
@@ -1454,7 +1511,9 @@ def test_site_override_indexed_prompt_all_token_selects_every_site() -> None:
         patch.object(ospm._mist_site_setting, "updateSiteSettings", return_value=put_response) as put_mock,
         patch("builtins.input", lambda _prompt: next(inputs)),
     ):
-        ospm._prompt_and_apply_site_overrides(session, "org-uuid", {"zcc-x": {"name": "zcc-x"}}, ({"roles": []}, {}))
+        ospm._prompt_and_apply_site_overrides(
+            session, "org-uuid", {"zcc-x": {"name": "zcc-x"}}, ({"roles": []}, {}), set()
+        )
     put_site_ids = sorted(call.args[1] for call in put_mock.call_args_list)
     assert put_site_ids == ["site-1", "site-2", "site-3"]
 
@@ -1478,7 +1537,9 @@ def test_site_override_indexed_prompt_range_drops_out_of_range() -> None:
         patch.object(ospm._mist_site_setting, "updateSiteSettings", return_value=put_response) as put_mock,
         patch("builtins.input", lambda _prompt: next(inputs)),
     ):
-        ospm._prompt_and_apply_site_overrides(session, "org-uuid", {"zcc-x": {"name": "zcc-x"}}, ({"roles": []}, {}))
+        ospm._prompt_and_apply_site_overrides(
+            session, "org-uuid", {"zcc-x": {"name": "zcc-x"}}, ({"roles": []}, {}), set()
+        )
     put_site_ids = [call.args[1] for call in put_mock.call_args_list]
     assert put_site_ids == ["site-1", "site-2"]
 
@@ -1721,14 +1782,18 @@ def test_probe_target_tcp_443_observation_also_returns_https_url() -> None:
     assert ":443" not in result
 
 
-def test_probe_target_missing_observation_falls_back_and_warns(caplog: pytest.LogCaptureFixture) -> None:
-    """observed_protocol=None falls back to catalogue default and emits ONE WARNING.
+def test_probe_target_missing_observation_falls_back_silently(caplog: pytest.LogCaptureFixture) -> None:
+    """observed_protocol=None falls back to catalogue default, emits ZERO WARNINGs.
 
     Why:
-        Contract Branch 3 side-effect: exactly one ``logger.warning``
-        with the message ``"no observation for %s, using catalogue
-        default %s"`` -- operators use that record to spot cache-miss
-        hosts and rerun the reachability probe.
+        Contract Branch 3 URL shape (catalogue default fallback) is
+        unchanged, but 1025-US1 relocated the operator-visible WARNING
+        to a single load-time emission in ``manage_org_synthetic_probes``
+        via ``_emit_load_time_cenr_warning``. The per-site warning that
+        pre-1025 fired from Branch 3 was the source of the N*M
+        duplication SC-001 targets. This test now pins the new contract:
+        Branch 3 must fall back deterministically to the catalogue
+        default and emit no warning of its own.
     """
     # Arrange: host present in the bag but observation_protocol=None.
     cenr = _cenr_source_with(
@@ -1738,25 +1803,31 @@ def test_probe_target_missing_observation_falls_back_and_warns(caplog: pytest.Lo
         observed_port=None,
     )
     # Act: capture WARN records; use module-scoped logger to match the
-    # logger.warning call in the production module.
+    # logger.warning call site used elsewhere in the production module.
     with caplog.at_level(logging.WARNING, logger=ospm.__name__):
         result = ospm._probe_target("unprobed.zscaler.net", _make_tunnel_zen_role(), cenr)
-    # Assert: default from cenr_source["probe_default"] with :443 elided.
+    # Assert: default from cenr_source["probe_default"] with :443 elided
+    # -- proves the URL builder is unaffected by the WARN removal (INV-1).
     assert result == "https://unprobed.zscaler.net"
-    # Assert: exactly one WARN, and the message body matches the contract.
+    # Assert: zero WARNs from _probe_target itself (1025-US1 relocation).
     warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
-    assert len(warnings) == 1
-    assert "no observation for" in warnings[0].getMessage()
-    assert "unprobed.zscaler.net" in warnings[0].getMessage()
+    assert warnings == [], (
+        "Branch 3 must be silent after 1025-US1; warnings live at load time. "
+        f"Observed {len(warnings)} warnings: {[r.getMessage() for r in warnings]}"
+    )
 
 
-def test_probe_target_unknown_token_falls_back_and_warns(caplog: pytest.LogCaptureFixture) -> None:
-    """An unrecognised observed_protocol token falls back + WARNs like Branch 3.
+def test_probe_target_unknown_token_falls_back_silently(caplog: pytest.LogCaptureFixture) -> None:
+    """An unrecognised observed_protocol token falls back to Branch 3 silently.
 
     Why:
-        Contract Test Boundaries require Branch 3 to also cover unknown
-        tokens (defensive against future schema drift) -- the tool must
-        never silently emit garbage.
+        Contract Branch 3 URL shape (catalogue default) still holds for
+        unknown tokens (defensive against future schema drift). After
+        1025-US1, the per-site WARNING that used to accompany the
+        fallback moved to the single load-time emission in
+        ``manage_org_synthetic_probes``. This test pins the new contract:
+        garbage tokens fall through silently to the catalogue default
+        without emitting a warning of their own.
     """
     # Arrange: use a bogus token that starts with neither UDP nor TCP
     # nor HTTPS so the dispatch falls through to Branch 3.
@@ -1771,20 +1842,25 @@ def test_probe_target_unknown_token_falls_back_and_warns(caplog: pytest.LogCaptu
         result = ospm._probe_target("weird.zscaler.net", _make_tunnel_zen_role(), cenr)
     # Assert: fell back to catalogue default (https, port elided).
     assert result == "https://weird.zscaler.net"
-    # Assert: exactly one WARN like the missing-observation case.
+    # Assert: zero WARNs from _probe_target itself (1025-US1 relocation).
     warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
-    assert len(warnings) == 1
-    assert "no observation for" in warnings[0].getMessage()
+    assert warnings == [], (
+        "Branch 3 must be silent after 1025-US1; warnings live at load time. "
+        f"Observed {len(warnings)} warnings: {[r.getMessage() for r in warnings]}"
+    )
 
 
-def test_probe_target_missing_key_in_cenr_source_falls_back_and_warns(caplog: pytest.LogCaptureFixture) -> None:
-    """Hostname absent from every bag still yields the fallback + WARN.
+def test_probe_target_missing_key_in_cenr_source_falls_back_silently(caplog: pytest.LogCaptureFixture) -> None:
+    """Hostname absent from every bag still yields the fallback, ZERO WARNINGs.
 
     Why:
         Contract Branch 3 must not crash when the CENR bag has never
         seen the hostname (e.g. a role hard-codes an FQDN that never
-        made it into the CENR JSON). The URL builder must degrade
-        gracefully to the catalogue default AND log so operators notice.
+        made it into the CENR JSON). The URL builder must still degrade
+        gracefully to the catalogue default. Post 1025-US1, the
+        operator-visible WARNING for missing-CENR hosts is emitted once
+        at load time by ``_emit_load_time_cenr_warning`` -- Branch 3
+        stays silent so N*M duplication cannot re-appear.
     """
     # Arrange: include_key=False leaves both bags empty, so the lookup
     # inside _probe_target must miss and hit Branch 3.
@@ -1797,12 +1873,14 @@ def test_probe_target_missing_key_in_cenr_source_falls_back_and_warns(caplog: py
     # Act.
     with caplog.at_level(logging.WARNING, logger=ospm.__name__):
         result = ospm._probe_target("orphan.zscaler.net", _make_tunnel_zen_role(), cenr)
-    # Assert: catalogue default with :443 elided.
+    # Assert: catalogue default with :443 elided (URL builder unchanged).
     assert result == "https://orphan.zscaler.net"
-    # Assert: exactly one WARN mentioning the missing hostname.
+    # Assert: zero WARNs from _probe_target itself (1025-US1 relocation).
     warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
-    assert len(warnings) == 1
-    assert "orphan.zscaler.net" in warnings[0].getMessage()
+    assert warnings == [], (
+        "Branch 3 must be silent after 1025-US1; warnings live at load time. "
+        f"Observed {len(warnings)} warnings: {[r.getMessage() for r in warnings]}"
+    )
 
 
 def test_no_https_vpn_targets_in_generated_payload() -> None:
@@ -2566,3 +2644,872 @@ class TestInv1ByteStability:
                 # INV-3: bare hostname, no scheme, no colon.
                 assert ":" not in target, (probe_name, body)
                 assert not target.startswith("http"), (probe_name, body)
+
+
+# --------------------------------------------------------------------------- #
+# US1: CENR duplicate warning dedup (feature 1025)
+# --------------------------------------------------------------------------- #
+
+
+def _patch_apply_to_capture(monkeypatch: pytest.MonkeyPatch, capture_sink: list) -> None:
+    """Neutralise ``_apply`` and capture the emitted probe map for T010.
+
+    Why:
+        Task T010 (feature 1025) requires the byte-stability check to run
+        against the exact probe map ``manage_org_synthetic_probes`` would
+        PUT to Mist, WITHOUT actually issuing the PUT. Patching the
+        module-level ``_apply`` helper (the real name -- ``tasks.md``
+        refers to it as ``_apply_probe`` but the shipped code uses
+        ``_apply`` at ``org_synthetic_probes_manager.py:1536``) lets the
+        test intercept the combined probe map argument, stash it in the
+        caller-supplied ``capture_sink`` list, and skip the ``PUT``
+        round-trip entirely. Keeping this helper module-scope (per the
+        task contract) means multiple tests can share the same
+        interception idiom without re-copying the patch scaffolding.
+
+    Args:
+        monkeypatch: pytest fixture used to install the patch.
+        capture_sink: Mutable list into which the intercepted
+            ``combined_probes`` argument is appended. Callers pop the
+            first (and only) entry to inspect the emitted map.
+    """
+    # setup logging (Constitution VII)
+    logging.info("_patch_apply_to_capture: installing _apply stub sink=%r", id(capture_sink))
+
+    def _capture(mist_session, org_id, setting, combined_probes, vlan_ids):  # match ospm._apply signature 1:1
+        """Record the combined probe map and short-circuit the PUT.
+
+        Why:
+            The byte-stability contract compares emitted vs baseline maps;
+            no network I/O is required (or safe) inside pytest.
+        """
+        capture_sink.append(combined_probes)  # stash the map for the caller to compare against baseline
+        logging.debug("_capture: intercepted combined_probes keys=%s", sorted(combined_probes.keys()))
+
+    monkeypatch.setattr(ospm, "_apply", _capture)  # replace the real PUT with the sink recorder
+    logging.debug("_patch_apply_to_capture: _apply replaced (return sink=%r)", id(capture_sink))
+
+
+class TestUs1CenrDedupWarning:
+    """CENR duplicate-warning dedup regression (feature 1025 US1).
+
+    Why:
+        Before 1025, ``_probe_target`` emitted one WARNING per missing
+        CENR observation per emission. Callers in ``_build_region_probes``
+        iterate per-site, so a single missing host in the samsung_elm
+        role produced ~315 WARNINGs on a ~315-site org. 1025 US1 moves
+        the WARNING to load-time (once per unique missing host per run)
+        and deletes the per-emission call at ``org_synthetic_probes_manager.py:401``.
+        This class pins the invariant with fixture-driven scenarios so
+        the storm cannot silently re-emerge after future refactors.
+    """
+
+    _FIXTURE_DIR = Path(__file__).parent / "fixtures"  # sibling directory holding phase-2 dedup fixtures
+
+    def _load_json(self, name: str) -> dict[str, Any]:
+        """Load a JSON fixture from the sibling ``fixtures/`` directory.
+
+        Why:
+            Local loader keeps the drift ownership crystal clear -- if
+            someone renames a fixture, the failing test names the file.
+
+        Args:
+            name: Bare filename (no path components); resolved against
+                ``_FIXTURE_DIR``.
+
+        Returns:
+            The parsed JSON document as a plain Python dict.
+        """
+        path = self._FIXTURE_DIR / name  # deterministic sibling-directory lookup
+        logging.info("TestUs1CenrDedupWarning: loading fixture %s", path)
+        # utf-8 default on 3.13; explicit for clarity
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        # trace parsed top-level shape for debugging
+        top_keys = sorted(payload.keys()) if isinstance(payload, dict) else "<non-dict>"
+        logging.debug("_load_json: %s parsed (top-level keys=%s)", name, top_keys)
+        return payload
+
+    def _samsung_elm_americas_role(self) -> dict[str, Any]:
+        """Return a curated ``samsung_elm_activation_americas`` role dict.
+
+        Why:
+            The storm behaviour only surfaces when a role's fqdns contain
+            hosts that are ABSENT from the CENR observation cache. This
+            fixture inlines the 7 SecB2B hosts from
+            ``cenr_dedup_missing_observations.json`` so tests do not need
+            to load the sidecar file at call time. The role name matches
+            ``_SAMSUNG_ELM_ROLE_PREFIX + "americas"`` so
+            ``_build_region_probes`` picks it for every US-country_code
+            site in ``cenr_dedup_org.json``.
+
+        Returns:
+            A role dict shaped like an entry in
+            ``data/zscaler_client_connector_probes.json``.
+        """
+        logging.info("_samsung_elm_americas_role: assembling role with %d fqdns", len(EXPECTED_MISSING_HOSTS))
+        role = {
+            "role": f"{ospm._SAMSUNG_ELM_ROLE_PREFIX}americas",  # target region-scoped role name
+            "ports": [443],  # matches shipped catalogue's HTTPS port list
+            "probe": {"protocol": "https", "port": 443},  # branch-3 fallback shape when observation missing
+            "fqdns": sorted(EXPECTED_MISSING_HOSTS),  # sort for deterministic iteration in tests
+        }
+        logging.debug("_samsung_elm_americas_role: role dict role=%s fqdns=%s", role["role"], role["fqdns"])
+        return role
+
+    def _empty_cenr(self) -> dict[str, Any]:
+        """Return an empty CENR cache used to trigger the missing-observation path.
+
+        Why:
+            Every FQDN in the samsung_elm role must miss the cache so
+            ``_probe_target`` falls through to Branch 3 (Category 2 of
+            the log-record-shape contract). A ``proxy_hostnames`` and
+            ``vpn_hostnames`` list is required by the loader adapter to
+            avoid tripping the freshness guard.
+
+        Returns:
+            A minimal CENR document with fresh timestamp and empty bags.
+        """
+        logging.info("_empty_cenr: assembling empty CENR document")
+        cenr = {
+            "schema_version": 1,  # matches loader adapter expectation
+            "fetched_utc": datetime.now(UTC).isoformat().replace("+00:00", "Z"),  # keep is_stale false
+            "proxy_hostnames": [],  # empty so every SecB2B host misses the cache
+            "vpn_hostnames": [],  # empty so no host is classified as VPN
+        }
+        logging.debug("_empty_cenr: emitted cache with empty proxy/vpn bags")
+        return cenr
+
+    def _cenr_with_all_hosts(self) -> dict[str, Any]:
+        """Return a CENR cache that observes every FQDN in EXPECTED_MISSING_HOSTS.
+
+        Why:
+            T008 asserts zero CENR WARNINGs are emitted when the cache
+            fully populates the samsung_elm hosts. Constructing v3
+            per-host entries (host + observed_protocol + observed_port)
+            ensures ``_lookup_v3_observation`` finds a hit and
+            ``_probe_target`` dispatches on Branch 2 (HTTPS) rather than
+            Branch 3 (WARNING fallback).
+
+        Returns:
+            A CENR document whose ``proxy_hostnames`` bag lists v3-shaped
+            entries for every EXPECTED_MISSING_HOSTS member.
+        """
+        logging.info("_cenr_with_all_hosts: fully-populating CENR for %d hosts", len(EXPECTED_MISSING_HOSTS))
+        cenr = {
+            "schema_version": 1,  # v3 loader shape
+            "fetched_utc": datetime.now(UTC).isoformat().replace("+00:00", "Z"),  # keep freshness guard happy
+            "proxy_hostnames": [
+                {
+                    "host": host,  # matches _lookup_v3_observation's host key
+                    "observed_protocol": "HTTPS",  # Branch 2 HTTPS dispatch avoids WARNING
+                    "observed_port": 443,  # port required by lookup even though :443 is elided
+                    "last_probed": datetime.now(UTC).isoformat().replace("+00:00", "Z"),  # required by v3 schema
+                }
+                for host in sorted(EXPECTED_MISSING_HOSTS)  # deterministic ordering for readability
+            ],
+            "vpn_hostnames": [],  # keep VPN bag empty so no host is reclassified as reachability
+        }
+        logging.debug("_cenr_with_all_hosts: emitted cache with %d proxy entries", len(cenr["proxy_hostnames"]))
+        return cenr
+
+    def _count_cenr_warnings(self, records: list[logging.LogRecord]) -> int:
+        """Return the number of records matching the CENR-missing warning shape.
+
+        Why:
+            Both the pre-1025 line-401 WARNING and any post-1025 load-time
+            WARNING that names the missing host will contain the host
+            string in the rendered message. Counting on that predicate
+            ignores unrelated warnings (e.g. critical_fqdn fallback) and
+            keeps the invariant tied to CENR missing observations
+            specifically.
+
+        Args:
+            records: Sequence of ``LogRecord`` objects captured via caplog.
+
+        Returns:
+            The number of records at WARNING level whose rendered message
+            references at least one EXPECTED_MISSING_HOSTS entry.
+        """
+        logging.info("_count_cenr_warnings: scanning %d records for CENR warnings", len(records))
+        matches = [
+            rec
+            for rec in records
+            if rec.levelno == logging.WARNING  # only WARNING severity qualifies per contract
+            # message names at least one missing host
+            and any(host in rec.getMessage() for host in EXPECTED_MISSING_HOSTS)
+        ]
+        logging.debug("_count_cenr_warnings: matched %d records", len(matches))
+        return len(matches)
+
+    def test_cenr_warning_dedup_ge_1_missing(self, caplog: pytest.LogCaptureFixture) -> None:  # T007
+        """CENR warnings dedup to at most ``M`` records per run (M = unique missing hosts).
+
+        Why:
+            Contract ``log_record_shape.md`` §1.4 requires CENR WARNINGs
+            to be emitted once per unique missing host per run, not once
+            per emission. Pre-1025 output is 315 sites * 7 missing hosts
+            = 2205 WARNINGs from ``_build_region_probes`` invoking
+            ``_probe_target`` per site; post-1025 must be <= 7. This
+            test iterates the 315-site fixture and asserts the cap; the
+            failure diagnostic names BOTH the observed count and the cap
+            it exceeded so operators grepping CI logs can spot per-site
+            duplication regressions immediately.
+        """
+        # Arrange: 315-site org fixture; samsung_elm role listing the 7 SecB2B
+        # hosts absent from the empty CENR cache. This is the exact shape the
+        # storm required in production before 1025 landed.
+        logging.info("test_cenr_warning_dedup_ge_1_missing: loading 315-site fixture")
+        sites = self._load_json("cenr_dedup_org.json")["sites"]  # 315 US-country_code site dicts
+        probes = {
+            "schema_version": 1,  # matches shipped catalogue
+            "source": "fixture",  # marker so debugging telemetry sees "fixture"
+            "roles": [self._samsung_elm_americas_role()],  # only the region role -- keeps signal focused
+        }
+        cenr = self._empty_cenr()  # every SecB2B host misses the cache
+        logging.debug(
+            "test_cenr_warning_dedup_ge_1_missing: fixture sites=%d expected_missing=%d",
+            len(sites),
+            len(EXPECTED_MISSING_HOSTS),
+        )
+
+        # Act: iterate _build_region_probes per site to simulate the site-
+        # override flow that drives the storm in production. Capture WARNING
+        # records at module scope so any load-time hook post-1025 also lands
+        # in the same buffer.
+        caplog.set_level(logging.WARNING, logger="src.org.org_synthetic_probes_manager")  # scope the capture
+        for site in sites:  # emulate per-site override loop
+            ospm._build_region_probes((probes, cenr), site.get("country_code"))  # triggers WARNING per host pre-1025
+
+        # Assert: CENR WARNING count <= number of unique missing hosts.
+        cap = len(EXPECTED_MISSING_HOSTS)  # M per contract log_record_shape.md §1.4
+        observed = self._count_cenr_warnings(caplog.records)  # counts WARNING records naming any missing host
+        logging.info(
+            "test_cenr_warning_dedup_ge_1_missing: observed=%d cap=%d sites=%d",
+            observed,
+            cap,
+            len(sites),
+        )
+        assert observed <= cap, (  # NOTE: diagnostic MUST name both observed AND cap per T007 contract
+            f"CENR WARNING count {observed} exceeded unique-missing-host cap {cap}; " "per-site duplication regressed"
+        )
+
+    def test_cenr_warning_zero_when_fully_populated(self, caplog: pytest.LogCaptureFixture) -> None:  # T008
+        """No CENR warnings fire when every catalogue host has an observation.
+
+        Why:
+            The dedup invariant is meaningful only if the WARNING actually
+            correlates with missing observations. If a CENR cache already
+            covers every FQDN in the role, ``_probe_target`` should
+            dispatch on Branch 2 (HTTPS) and never reach the fallback --
+            producing exactly zero WARNING records. This test locks the
+            positive assertion so a future regression that fires WARNINGs
+            unconditionally (e.g. from the load-time hook forgetting to
+            consult observations) trips immediately.
+        """
+        # Arrange: same 315-site fixture but with a fully-populated CENR cache.
+        logging.info("test_cenr_warning_zero_when_fully_populated: loading fixture with populated CENR")
+        sites = self._load_json("cenr_dedup_org.json")["sites"]  # 315-site input
+        probes = {
+            "schema_version": 1,  # required by loader adapter
+            "source": "fixture",
+            "roles": [self._samsung_elm_americas_role()],  # same role as T007 for parity
+        }
+        cenr = self._cenr_with_all_hosts()  # every host has a v3 observation entry
+
+        # Act: iterate per-site as in T007.
+        caplog.set_level(logging.WARNING, logger="src.org.org_synthetic_probes_manager")  # capture at module scope
+        for site in sites:  # exhaustive iteration to catch any per-site leak
+            ospm._build_region_probes((probes, cenr), site.get("country_code"))
+
+        # Assert: zero CENR-missing WARNING records.
+        observed = self._count_cenr_warnings(caplog.records)  # should be 0 given full coverage
+        logging.info("test_cenr_warning_zero_when_fully_populated: observed=%d", observed)
+        assert observed == 0, (  # any non-zero count means WARNING fired despite observation being present
+            f"CENR WARNING count {observed} > 0 with fully-populated cache; "
+            "warnings must correlate with actual missing observations"
+        )
+
+    def test_cenr_warning_re_emit_across_runs(self, caplog: pytest.LogCaptureFixture) -> None:  # T009
+        """Dedup state does NOT persist across independent runs.
+
+        Why:
+            Operators intentionally re-run menu 206 to verify a fix
+            landed; the CENR-missing WARNING must fire again on each new
+            run so the operator sees the current state of the cache, not
+            a stale "already warned" silence. This test invokes the
+            load-time hook twice back-to-back with independent
+            ``warned_cenr_hosts`` sets and asserts both invocations
+            independently produce WARNINGs for the missing hosts.
+            Post-1025 this becomes the guard that the load-time dedup
+            state does not stash across ``manage_org_synthetic_probes``
+            invocations (FR-012).
+        """
+        # Arrange: shared fixture inputs for both runs (identical topology).
+        logging.info("test_cenr_warning_re_emit_across_runs: preparing two independent runs")
+        probes = {
+            "schema_version": 1,  # v1 loader shape
+            "source": "fixture",
+            "roles": [self._samsung_elm_americas_role()],  # same role -- test re-emission on the SAME missing set
+        }
+        cenr = self._empty_cenr()  # missing every host
+        # Pre-compute the missing-host universe once (identical to what the
+        # load-time hook computes inside manage_org_synthetic_probes).
+        missing_hosts = ospm._compute_missing_cenr_hosts(  # frozen set of 7 SecB2B hosts
+            ospm._collect_catalogue_hosts(probes),  # catalogue side
+            ospm._collect_cenr_observed_hosts(cenr),  # observation side
+        )
+
+        # Act (run 1): fresh dedup set, invoke the load-time hook once.
+        caplog.set_level(logging.WARNING, logger="src.org.org_synthetic_probes_manager")  # capture WARNING+
+        run1_start = len(caplog.records)  # anchor so we can slice run-1 records out later
+        warned_cenr_hosts_run1: set[str] = set()  # NEW per-run dedup set per FR-012
+        ospm._emit_load_time_cenr_warning(missing_hosts, warned_cenr_hosts_run1)  # single-shot per run
+        run1_records = caplog.records[run1_start:]  # snapshot of what run 1 emitted
+        run1_count = self._count_cenr_warnings(list(run1_records))  # WARNING count for run 1
+
+        # Act (run 2): SEPARATE fresh dedup set; the load-time hook MUST re-emit
+        # because this is a fresh operator invocation (bounded lifetime per invocation).
+        run2_start = len(caplog.records)  # anchor for run-2 slice
+        warned_cenr_hosts_run2: set[str] = set()  # DISTINCT new set -- state does not persist
+        ospm._emit_load_time_cenr_warning(missing_hosts, warned_cenr_hosts_run2)  # second invocation
+        run2_records = caplog.records[run2_start:]  # snapshot of what run 2 emitted
+        run2_count = self._count_cenr_warnings(list(run2_records))  # WARNING count for run 2
+
+        logging.info(
+            "test_cenr_warning_re_emit_across_runs: run1=%d run2=%d",
+            run1_count,
+            run2_count,
+        )
+
+        # Assert: both runs must emit at least one WARNING for the same
+        # missing set. A run-2 count of zero means the dedup state
+        # persisted across invocations (silent second run), which is the
+        # regression this test traps.
+        assert (
+            run1_count >= 1
+        ), (  # run-1 must emit -- otherwise the fixture is malformed
+            f"Run 1 emitted {run1_count} CENR WARNINGs; expected >= 1 for {len(EXPECTED_MISSING_HOSTS)} missing hosts"
+        )
+        assert (
+            run2_count >= 1
+        ), (  # run-2 must ALSO emit; silence means state leaked
+            f"Run 2 emitted {run2_count} CENR WARNINGs; expected >= 1 -- dedup state leaked across runs"
+        )
+
+    def test_cenr_warning_re_emit_on_dropout(self, caplog: pytest.LogCaptureFixture) -> None:  # T030
+        """A CENR host that DROPS OUT between runs MUST re-emit its WARNING.
+
+        Why:
+            US1 Acceptance Scenario 4: operator has a live cache, then the
+            cache is invalidated (upstream refresh drops a host, TTL
+            expiry, cache rebuild). Between two invocations of menu 206
+            the same host transitions from "observed" to "missing". The
+            second run MUST WARN about that host even though it was
+            silent in run 1. This test exercises exactly that transition:
+
+              run 1: cache observes 6/7 hosts -- one host is already missing
+              run 2: cache observes 5/7 hosts -- previously-observed host has dropped
+
+            The WARNING for the newly-missing host MUST fire in run 2. The
+            regression this traps is a stale dedup-set that carries over
+            "already warned this session" state and silences the newly-missing
+            host. Fresh ``warned_cenr_hosts`` sets per run guarantee correct
+            behaviour per FR-012.
+        """
+        # Arrange: full 7-host catalogue with the samsung_elm americas role.
+        logging.info("test_cenr_warning_re_emit_on_dropout: preparing dropout scenario")
+        probes = {
+            "schema_version": 1,  # v1 loader shape
+            "source": "fixture",
+            "roles": [self._samsung_elm_americas_role()],  # references all 7 SecB2B hosts
+        }
+        # A "partial" cenr snapshot with 6 hosts observed, 1 already missing
+        # (call it host_A) -- baseline for run 1.
+        all_hosts = sorted(EXPECTED_MISSING_HOSTS)  # deterministic ordering
+        host_a = all_hosts[0]  # the host that is ALREADY missing in run 1
+        host_b = all_hosts[1]  # the host that DROPS OUT between runs
+        # Build a v3-shaped cache observing every host EXCEPT host_a.
+        observed_run1 = [
+            {"host": h, "observed_protocol": "https", "observed_port": 443}
+            for h in all_hosts
+            if h != host_a  # host_a already missing in the baseline
+        ]
+        cenr_run1 = {
+            "schema_version": 1,
+            "fetched_utc": datetime.now(UTC).isoformat().replace("+00:00", "Z"),  # keep is_stale false
+            "proxy_hostnames": observed_run1,  # 6/7 observed
+            "vpn_hostnames": [],  # empty so no host classified as VPN
+        }
+        # Between runs, host_b drops out too, leaving 5/7 observed.
+        observed_run2 = [
+            {"host": h, "observed_protocol": "https", "observed_port": 443}
+            for h in all_hosts
+            if h not in {host_a, host_b}  # host_a and host_b both missing now
+        ]
+        cenr_run2 = {
+            "schema_version": 1,
+            "fetched_utc": datetime.now(UTC).isoformat().replace("+00:00", "Z"),  # keep is_stale false
+            "proxy_hostnames": observed_run2,  # 5/7 observed -- host_b dropped
+            "vpn_hostnames": [],
+        }
+
+        # Act (run 1): compute the missing set from run-1 cache, emit once.
+        caplog.set_level(logging.WARNING, logger="src.org.org_synthetic_probes_manager")  # WARNING+
+        run1_start = len(caplog.records)  # anchor to isolate run-1 records
+        missing_run1 = ospm._compute_missing_cenr_hosts(  # {host_a} in run 1
+            ospm._collect_catalogue_hosts(probes),
+            ospm._collect_cenr_observed_hosts(cenr_run1),
+        )
+        warned_cenr_hosts_run1: set[str] = set()  # fresh dedup per FR-012
+        ospm._emit_load_time_cenr_warning(missing_run1, warned_cenr_hosts_run1)  # first emission
+        run1_records = caplog.records[run1_start:]  # snapshot
+        # Message rendered must include host_a (the already-missing one).
+        run1_messages = " | ".join(rec.getMessage() for rec in run1_records if rec.levelno == logging.WARNING)
+
+        # Act (run 2): compute missing set from run-2 cache -- host_b now
+        # newly missing. Fresh dedup set means run 2 has no memory of run 1.
+        run2_start = len(caplog.records)  # anchor to isolate run-2 records
+        missing_run2 = ospm._compute_missing_cenr_hosts(  # {host_a, host_b} in run 2
+            ospm._collect_catalogue_hosts(probes),
+            ospm._collect_cenr_observed_hosts(cenr_run2),
+        )
+        warned_cenr_hosts_run2: set[str] = set()  # DISTINCT fresh set
+        ospm._emit_load_time_cenr_warning(missing_run2, warned_cenr_hosts_run2)  # second emission
+        run2_records = caplog.records[run2_start:]  # snapshot
+        run2_messages = " | ".join(rec.getMessage() for rec in run2_records if rec.levelno == logging.WARNING)
+
+        logging.info(
+            "test_cenr_warning_re_emit_on_dropout: host_a=%s host_b=%s missing_run1=%d missing_run2=%d",
+            host_a,
+            host_b,
+            len(missing_run1),
+            len(missing_run2),
+        )
+
+        # Assert: run 1 names host_a (baseline missing).
+        assert host_a in run1_messages, f"Run 1 must name the already-missing host {host_a!r}; got: {run1_messages!r}"
+        # Assert: run 2 names host_b (the dropout). This is the core dropout
+        # semantics -- host_b was silent in run 1 because it was observed,
+        # then dropped out and MUST re-warn in run 2.
+        assert host_b in run2_messages, (
+            f"Run 2 must name the newly-dropped host {host_b!r} even though it was "
+            f"observed in run 1; got: {run2_messages!r}. Dedup state leaked "
+            f"across the dropout transition."
+        )
+        # Belt-and-braces: run 2 must also still name host_a (still missing).
+        assert (
+            host_a in run2_messages
+        ), f"Run 2 must still name the persistently-missing host {host_a!r}; got: {run2_messages!r}"
+
+    def test_probe_payload_byte_stability_smoke(self) -> None:  # T010
+        """Non-VPN probe payload is byte-identical to the pinned 1025 baseline.
+
+        Why:
+            Contract ``byte_stability_invariant.md`` §3 requires the
+            non-VPN emission to remain byte-stable across the US1
+            refactor (deleting the per-emission WARNING at line 401 and
+            wiring the load-time hook). This test loads the T005 baseline
+            (captured on the pre-1025 tip) and compares it to the current
+            ``_build_probe_set`` output filtered to non-VPN rows via
+            ``sort_keys=True`` JSON equivalence. Any drift in the emit
+            shape (extra keys, changed URL scheme, new default port)
+            trips this guard immediately -- long before it can reach
+            production.
+        """
+        # Arrange: load the T005-captured baseline (pinned pre-1025) and the
+        # smoke fixture ``_build_probe_set`` consumes. Both fixtures live in
+        # the sibling ``fixtures/`` directory.
+        logging.info("test_probe_payload_byte_stability_smoke: loading baseline + smoke fixture")
+        baseline = self._load_json("smoke_probes_baseline.json")  # T005 output; deterministic
+        smoke = self._load_json("smoke_org.json")  # (probes, cenr) tuple used to regenerate output
+
+        # Act: rebuild the probe set from the same inputs used to capture the
+        # baseline. Any change in ``_build_probe_set`` or its transitive
+        # helpers (e.g. ``_probe_target``) will diff the JSON.
+        emitted = ospm._build_probe_set((smoke["probes"], smoke["cenr"]), [10])  # smoke fixture uses vlan_ids=[10]
+        logging.debug(
+            "test_probe_payload_byte_stability_smoke: emitted %d probes; baseline has %d",
+            len(emitted),
+            len(baseline),
+        )
+
+        # Assert: canonical JSON of the emitted map matches the baseline.
+        # ``sort_keys=True`` neutralises Python's dict-insertion-order so the
+        # comparison targets bytes, not iteration order.
+        emitted_json = json.dumps(emitted, sort_keys=True)  # canonical form for comparison
+        baseline_json = json.dumps(baseline, sort_keys=True)  # canonical form matches T005 capture format
+        assert emitted_json == baseline_json, (
+            "INV-1 drift: _build_probe_set output diverged from smoke_probes_baseline.json. "
+            f"emitted={emitted_json!r} baseline={baseline_json!r}"
+        )
+
+
+class TestUs2CountryCodeDedupWarning:
+    """LATAM/Caribbean region-map extension and unmapped-code dedup (feature 1025 US2).
+
+    Why:
+        Before 1025 US2, ``_COUNTRY_CODE_TO_REGION`` covered only the largest
+        Latin-American markets (AR/BR/CL/CO/MX/PE/US/CA/VE). Every other
+        Central-American, Caribbean, and remaining South-American ISO alpha-2
+        code fell through to ``_DEFAULT_REGION = "emea"`` and produced a
+        per-site WARNING at ``_build_region_probes``. This class pins:
+          - FR-005 / SC-003: LATAM/Caribbean sites resolve to ``"americas"``.
+          - FR-004 / FR-010 / SC-002: the unmapped-code WARNING is deduped
+            to <= K unique unmapped codes per invocation (not N sites).
+        A per-site regression here (or a silent revert of the region map)
+        fires a diagnostic that names the offending code(s).
+    """
+
+    _FIXTURE_DIR = Path(__file__).parent / "fixtures"  # sibling directory holding US2 fixtures
+    _LATAM_FIXTURE = "latam_caribbean_org.json"  # 8-site fixture covering FR-005 codes
+    _AMERICAS_LITERAL = "americas"  # R1 canonical region literal (never "amer")
+
+    def _load_sites(self, name: str) -> list[dict[str, Any]]:
+        """Load the ``sites`` list from a fixture JSON file.
+
+        Why:
+            All US2 site fixtures share the shape ``{"sites": [...]}`` so a
+            single loader eliminates copy-paste at each test.
+
+        Args:
+            name: Bare fixture filename resolved against ``_FIXTURE_DIR``.
+
+        Returns:
+            The parsed ``sites`` array (list of site dicts with ``id``,
+            ``name``, ``country_code``).
+        """
+        path = self._FIXTURE_DIR / name  # deterministic sibling-directory lookup
+        logging.info("TestUs2CountryCodeDedupWarning: loading fixture %s", path)
+        payload = json.loads(path.read_text(encoding="utf-8"))  # utf-8 explicit for clarity
+        sites = payload["sites"]  # KeyError deliberate: malformed fixture must fail loudly
+        logging.debug("_load_sites: %s parsed %d sites", name, len(sites))
+        return sites
+
+    def _count_country_code_warnings(self, records: list[logging.LogRecord]) -> int:
+        """Count log records that qualify as country_code-tokened WARNINGs.
+
+        Why:
+            Contract ``log_record_shape.md`` §2.4 pins the qualifier: level
+            is WARNING and the emitted message contains the literal token
+            ``country_code``. Centralising the filter keeps every US2 test
+            using the same shape and prevents silent drift into stricter or
+            looser matching.
+
+        Args:
+            records: caplog records to scan.
+
+        Returns:
+            The number of records matching (WARNING + ``country_code`` token).
+        """
+        matches = [
+            rec
+            for rec in records
+            if rec.levelno == logging.WARNING  # only WARNING severity qualifies per contract
+            and "country_code" in rec.getMessage()  # grep anchor token from FR-013
+        ]
+        logging.debug(
+            "TestUs2CountryCodeDedupWarning: matched %d country_code WARNING(s)",
+            len(matches),
+        )
+        return len(matches)
+
+    def test_latam_caribbean_region_resolution(self) -> None:
+        """T016. Every LATAM/Caribbean site's country_code MUST resolve to "americas".
+
+        Why:
+            FR-005 requires ``PA, BS, HT, DO, GT, CU, CR, HN`` (and the
+            broader LATAM/Caribbean subset) to classify as ``"americas"``
+            after 1025 lands. This test asserts the region map directly
+            because ``_build_region_probes`` line 1069 looks up exactly
+            this dict; any code path change would have to route through
+            it. FR-011 also requires the R1 canonical literal ``"americas"``
+            (never ``"amer"``).
+        """
+        sites = self._load_sites(self._LATAM_FIXTURE)  # load 8-site fixture
+        logging.info(  # BEFORE the resolution loop per Constitution VII
+            "test_latam_caribbean_region_resolution: verifying %d sites",
+            len(sites),
+        )
+        unresolved: list[tuple[str, str]] = []  # collect all failures for one diagnostic
+        for site in sites:  # every fixture site MUST classify to americas
+            cc = site["country_code"]  # ISO alpha-2 code from the fixture
+            normalised = cc.strip().upper()  # match the resolver's canonicalisation
+            region = ospm._COUNTRY_CODE_TO_REGION.get(normalised)  # exact code path used at line 1069
+            if region != self._AMERICAS_LITERAL:  # collect drift; do not fail-fast
+                unresolved.append((cc, str(region)))  # capture code + observed literal
+        logging.debug(  # AFTER the resolution loop per Constitution VII
+            "test_latam_caribbean_region_resolution: unresolved=%s",
+            unresolved,
+        )
+        assert unresolved == [], (
+            f"LATAM/Caribbean sites failed to resolve to {self._AMERICAS_LITERAL!r}: "
+            f"{unresolved}. Extend _COUNTRY_CODE_TO_REGION per FR-005."
+        )
+
+    def test_latam_caribbean_no_warnings(self, caplog: pytest.LogCaptureFixture) -> None:
+        """T017. LATAM/Caribbean fixture MUST emit zero country_code WARNINGs.
+
+        Why:
+            Contract ``log_record_shape.md`` §2.4 mandates zero WARNINGs
+            for fixtures whose codes are ALL region-mapped after 1025. The
+            LATAM fixture ships only mapped codes (PA/BS/HT/DO/GT/CU/CR/HN)
+            so ``_emit_load_time_country_code_warning`` must skip emission
+            entirely. Any WARNING here indicates the region map extension
+            (T020) regressed.
+        """
+        sites = self._load_sites(self._LATAM_FIXTURE)  # 8-site LATAM fixture
+        gap_set = ospm._COUNTRY_CODE_INTENTIONAL_GAPS  # module-level frozenset installed by T021
+        region_map = ospm._COUNTRY_CODE_TO_REGION  # module-level dict extended by T020
+        unmapped = ospm._compute_unmapped_country_codes(  # exact helper US2 will call at load time
+            sites,
+            region_map,
+            gap_set,
+        )
+        warned_unmapped_codes: set[str] = set()  # fresh per-run dedup state (FR-012)
+        caplog.set_level(logging.WARNING, logger="src.org.org_synthetic_probes_manager")
+        start = len(caplog.records)  # snapshot so we ignore prior records
+        logging.info(  # BEFORE the load-time emission per Constitution VII
+            "test_latam_caribbean_no_warnings: invoking load-time hook (unmapped=%d)",
+            len(unmapped),
+        )
+        ospm._emit_load_time_country_code_warning(unmapped, warned_unmapped_codes)  # single call site
+        logging.debug(  # AFTER the load-time emission per Constitution VII
+            "test_latam_caribbean_no_warnings: warned_unmapped_codes=%s",
+            warned_unmapped_codes,
+        )
+        emitted = caplog.records[start:]  # only records from this test slice
+        count = self._count_country_code_warnings(list(emitted))  # centralised filter
+        assert count == 0, (
+            f"LATAM/Caribbean fixture emitted {count} country_code WARNING(s); "
+            f"expected 0. Codes present in fixture but flagged unmapped: {sorted(unmapped)}"
+        )
+
+    def test_unmapped_country_warning_dedup(self, caplog: pytest.LogCaptureFixture) -> None:
+        """T018. Unmapped-code WARNINGs MUST be deduped to <= K unique codes per run.
+
+        Why:
+            FR-004 / FR-010 / SC-002. A synthetic 30-site fixture where every
+            site shares a single unmapped code ``"ZZ"`` must emit at most 1
+            WARNING (not 30). Emitting per-site would re-introduce the
+            noise storm US2 exists to fix. The diagnostic names BOTH the
+            observed count and the cap so a CI failure directs the reader
+            straight to the regression -- per O2 remediation folding the
+            T027 diagnostic-quality enhancement into MVP tests.
+        """
+        # Deliberately synthesize an unmapped code -- "ZZ" is the ISO 3166
+        # user-assigned range and is guaranteed absent from the alpha-2
+        # universe fixture, so it cannot be silently classified by T020.
+        unmapped_code = "ZZ"  # ISO 3166 user-assigned code -- never officially assigned
+        fake_sites = [
+            {"id": f"synthetic-{idx:04d}", "name": f"site-{idx}", "country_code": unmapped_code}
+            for idx in range(30)  # 30 sites all sharing one unmapped code
+        ]
+        # Sanity: the code must not be mapped or in the gap set, otherwise the test is vacuous.
+        assert (
+            unmapped_code not in ospm._COUNTRY_CODE_TO_REGION
+        ), f"test setup broken: {unmapped_code!r} unexpectedly present in region map"
+        assert (
+            unmapped_code not in ospm._COUNTRY_CODE_INTENTIONAL_GAPS
+        ), f"test setup broken: {unmapped_code!r} unexpectedly present in gap set"
+        unmapped = ospm._compute_unmapped_country_codes(  # compute unique unmapped codes
+            fake_sites,
+            ospm._COUNTRY_CODE_TO_REGION,
+            ospm._COUNTRY_CODE_INTENTIONAL_GAPS,
+        )
+        k_unique = len(unmapped)  # cap for the WARNING count assertion
+        warned_unmapped_codes: set[str] = set()  # fresh dedup state (FR-012)
+        caplog.set_level(logging.WARNING, logger="src.org.org_synthetic_probes_manager")
+        start = len(caplog.records)  # snapshot to isolate this test's records
+        logging.info(  # BEFORE the load-time emission per Constitution VII
+            "test_unmapped_country_warning_dedup: invoking hook (unmapped=%d)",
+            k_unique,
+        )
+        ospm._emit_load_time_country_code_warning(unmapped, warned_unmapped_codes)
+        logging.debug(  # AFTER the load-time emission per Constitution VII
+            "test_unmapped_country_warning_dedup: warned_unmapped_codes=%s",
+            warned_unmapped_codes,
+        )
+        emitted = caplog.records[start:]  # slice to just this call
+        count = self._count_country_code_warnings(list(emitted))  # filter to WARNING+token
+        assert count <= k_unique, (
+            f"country_code WARNING count {count} exceeded unique-unmapped-code cap "
+            f"{k_unique}; per-site duplication regressed."
+        )
+
+    def test_country_warning_re_emit_across_runs(self, caplog: pytest.LogCaptureFixture) -> None:
+        """T029a. Country-code dedup state does NOT persist across independent runs.
+
+        Why:
+            Sibling of ``TestUs1CenrDedupWarning.test_cenr_warning_re_emit_across_runs``
+            (T009) but for the country-code path. Operators intentionally
+            re-run menu 206 to verify a fix landed; the unmapped-code
+            WARNING must fire again on each new run so the operator sees
+            the current unmapped set, not a stale "already warned"
+            silence. This test invokes the load-time hook twice back-to-back
+            with independent ``warned_unmapped_codes`` sets and asserts
+            both invocations independently produce WARNINGs. G1 remediation
+            closed the asymmetric FR-012 coverage gap by adding this
+            country-code sibling.
+        """
+        # Arrange: shared fixture -- 30 synthetic sites with one unmapped
+        # code "ZZ". Both runs see the identical unmapped set so any
+        # dedup-state leak would silence run 2 (the regression trap).
+        logging.info("test_country_warning_re_emit_across_runs: preparing two independent runs")
+        unmapped_code = "ZZ"  # ISO 3166 user-assigned range; guaranteed unmapped
+        fake_sites = [
+            {"id": f"synthetic-{idx:04d}", "name": f"site-{idx}", "country_code": unmapped_code}
+            for idx in range(30)  # 30 sites all sharing one unmapped code
+        ]
+        # Sanity: the code must not be mapped or in the gap set, otherwise the test is vacuous.
+        assert (
+            unmapped_code not in ospm._COUNTRY_CODE_TO_REGION
+        ), f"test setup broken: {unmapped_code!r} unexpectedly present in region map"
+        assert (
+            unmapped_code not in ospm._COUNTRY_CODE_INTENTIONAL_GAPS
+        ), f"test setup broken: {unmapped_code!r} unexpectedly present in gap set"
+        unmapped = ospm._compute_unmapped_country_codes(  # unique unmapped codes across the site set
+            fake_sites,
+            ospm._COUNTRY_CODE_TO_REGION,
+            ospm._COUNTRY_CODE_INTENTIONAL_GAPS,
+        )
+
+        # Act (run 1): fresh dedup set, invoke the load-time hook once.
+        caplog.set_level(logging.WARNING, logger="src.org.org_synthetic_probes_manager")  # WARNING+
+        run1_start = len(caplog.records)  # anchor to slice run-1 records later
+        warned_unmapped_codes_run1: set[str] = set()  # NEW per-run dedup set per FR-012
+        ospm._emit_load_time_country_code_warning(unmapped, warned_unmapped_codes_run1)  # single call
+        run1_records = caplog.records[run1_start:]  # snapshot of run-1 emissions
+        run1_count = self._count_country_code_warnings(list(run1_records))  # WARNING count for run 1
+
+        # Act (run 2): SEPARATE fresh dedup set; the hook MUST re-emit
+        # because this is a fresh operator invocation (bounded per FR-012).
+        run2_start = len(caplog.records)  # anchor to slice run-2 records
+        warned_unmapped_codes_run2: set[str] = set()  # DISTINCT new set -- state must not persist
+        ospm._emit_load_time_country_code_warning(unmapped, warned_unmapped_codes_run2)  # 2nd call
+        run2_records = caplog.records[run2_start:]  # snapshot of run-2 emissions
+        run2_count = self._count_country_code_warnings(list(run2_records))  # WARNING count for run 2
+
+        logging.info(
+            "test_country_warning_re_emit_across_runs: run1=%d run2=%d",
+            run1_count,
+            run2_count,
+        )
+
+        # Assert: both runs must emit at least one WARNING for the same
+        # unmapped set. A run-2 count of zero means the dedup state
+        # persisted across invocations (silent second run), which is the
+        # regression this test traps.
+        assert (
+            run1_count >= 1
+        ), (  # run-1 must emit -- otherwise the fixture is malformed
+            f"Run 1 emitted {run1_count} country_code WARNINGs; expected >= 1 for unmapped set {sorted(unmapped)}"
+        )
+        assert (
+            run2_count >= 1
+        ), (  # run-2 must ALSO emit; silence means state leaked
+            f"Run 2 emitted {run2_count} country_code WARNINGs; expected >= 1 -- dedup state leaked across runs"
+        )
+
+
+def test_regression_runtime_under_budget(pytestconfig: pytest.Config) -> None:  # T029
+    """The 1025 regression suite MUST complete under a 5.0 s wall-clock budget.
+
+    Why:
+        SC-007 pins a soft-real-time performance envelope for the entire
+        1025 regression subset (all dedup + coverage + byte-stability
+        tests) so CI cost does not creep as tests are added. Running the
+        curated subset via ``pytest.main`` from within a test lets us
+        measure the actual wall-clock cost with ``time.perf_counter``
+        bookends -- the same clock the pytest runner uses.
+
+        The budget of 5.0 s is generous enough to accommodate the
+        reference dev machine's cold-start caching while surfacing any
+        multi-second regression (e.g. a fixture-load loop that scales
+        with site count). Per O1 remediation, SC-007 is annotated in
+        spec.md as verified only after US3 lands; if MVP-first ship path
+        is chosen (US1 only), SC-007 remains provably-unverified until
+        this task lands. We deliberately EXCLUDE this test from the
+        subset it measures (recursion guard).
+    """
+    # Guard against recursive self-invocation: if pytest is already inside
+    # this test's frame (e.g. a user runs the subset manually and the
+    # runner sweeps this file), we cannot spawn another pytest without
+    # blowing the stack. ``PYTEST_CURRENT_TEST`` env var breadcrumbs the
+    # active test so we can detect nested invocation and bail cleanly.
+    import os
+    import time  # local import so the top-of-file stays lean when this test skips
+
+    if os.environ.get("_1025_RUNTIME_BUDGET_INFLIGHT") == "1":  # recursion guard
+        logging.info("test_regression_runtime_under_budget: nested invocation detected -- skipping")
+        pytest.skip("nested pytest invocation would recurse into the runtime-budget test")
+
+    # The curated 1025 regression subset -- one representative per contract.
+    # Kept minimal because pytest-in-pytest still has ~500 ms of fixed
+    # overhead per node. Adding tests here MUST be a conscious decision
+    # (they contribute directly to the SC-007 budget).
+    #
+    # Absolute node IDs are anchored to this file's absolute path via
+    # ``Path(__file__)`` so the nested ``pytest.main`` invocation does not
+    # depend on cwd or rootdir agreement with the parent runner. Windows
+    # test collection was silently failing with relative "tests/..." paths
+    # when the outer pytest run set rootdir to an alternative ancestor.
+    _this_file = str(Path(__file__).resolve())  # absolute path to the current test module
+    _coverage_file = str(  # absolute path to the ISO coverage sibling test file
+        (Path(__file__).parent / "test_country_region_coverage.py").resolve()
+    )
+    subset = [
+        # US1 CENR dedup contract representatives
+        f"{_this_file}::TestUs1CenrDedupWarning::test_cenr_warning_dedup_ge_1_missing",
+        f"{_this_file}::TestUs1CenrDedupWarning::test_cenr_warning_zero_when_fully_populated",
+        f"{_this_file}::TestUs1CenrDedupWarning::test_cenr_warning_re_emit_across_runs",
+        f"{_this_file}::TestUs1CenrDedupWarning::test_probe_payload_byte_stability_smoke",
+        # US2 country-code dedup contract representatives
+        f"{_this_file}::TestUs2CountryCodeDedupWarning::test_latam_caribbean_region_resolution",
+        f"{_this_file}::TestUs2CountryCodeDedupWarning::test_latam_caribbean_no_warnings",
+        f"{_this_file}::TestUs2CountryCodeDedupWarning::test_unmapped_country_warning_dedup",
+        # ISO coverage invariants (SC-005)
+        _coverage_file,
+    ]
+
+    logging.info("test_regression_runtime_under_budget: measuring %d nodes", len(subset))
+    # Set the breadcrumb before spawning the nested runner so any child
+    # invocation short-circuits via the guard above.
+    os.environ["_1025_RUNTIME_BUDGET_INFLIGHT"] = "1"
+    try:
+        start = time.perf_counter()  # monotonic wall-clock anchor
+        # Invoke pytest directly; ``-q`` suppresses the noisy per-node
+        # output, ``--no-header`` trims a few tens of ms, ``-p no:cacheprovider``
+        # avoids polluting the parent's cache. The rootdir stays the repo
+        # root by default (inherited from the parent pytest invocation).
+        exit_code = pytest.main(
+            [
+                "-q",  # quiet mode
+                "--no-header",  # skip pytest header
+                "-p",  # disable plugin
+                "no:cacheprovider",  # skip .pytest_cache writes
+                *subset,  # the curated subset
+            ]
+        )
+        elapsed = time.perf_counter() - start  # wall-clock cost of the nested run
+    finally:
+        # Always clear the breadcrumb, even on assertion failure.
+        os.environ.pop("_1025_RUNTIME_BUDGET_INFLIGHT", None)
+
+    logging.info(
+        "test_regression_runtime_under_budget: elapsed=%.3fs exit_code=%d",
+        elapsed,
+        exit_code,
+    )
+    # Correctness precondition: the subset must have passed. If a nested
+    # test failed, budget verification is meaningless -- surface that first.
+    assert exit_code == 0, (
+        f"1025 regression subset did not fully pass (pytest exit_code={exit_code}); "
+        f"fix the failing tests before evaluating the runtime budget"
+    )
+    # SC-007: wall-clock budget assertion.
+    budget_seconds = 5.0  # SC-007 canonical budget on the reference dev machine
+    assert elapsed < budget_seconds, (
+        f"1025 regression subset took {elapsed:.3f}s, exceeding the {budget_seconds:.1f}s "
+        f"SC-007 budget. Investigate slow fixtures or add a fresh justification if the "
+        f"budget must grow."
+    )

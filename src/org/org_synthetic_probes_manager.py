@@ -63,21 +63,72 @@ _PRIORITY_AGGRESSIVENESS: frozenset[str] = frozenset({"critical", "high"})
 # picked site's ``country_code``.
 _SAMSUNG_ELM_ROLE_PREFIX = "samsung_elm_activation_"
 _COUNTRY_CODE_TO_REGION: dict[str, str] = {
-    "US": "americas",
-    "CA": "americas",
-    "MX": "americas",
-    "AR": "americas",
-    "BR": "americas",
-    "CL": "americas",
-    "CO": "americas",
-    "PE": "americas",
-    "VE": "americas",
+    # North America -- pre-1025 baseline.
+    "US": "americas",  # United States
+    "CA": "americas",  # Canada
+    "MX": "americas",  # Mexico
+    # South America -- large markets from the pre-1025 baseline.
+    "AR": "americas",  # Argentina
+    "BR": "americas",  # Brazil
+    "CL": "americas",  # Chile
+    "CO": "americas",  # Colombia
+    "PE": "americas",  # Peru
+    "VE": "americas",  # Venezuela
+    # South America -- 1025 US2 extension (residual sovereign codes so the
+    # continent classifies without falling through to EMEA).
+    "BO": "americas",  # Bolivia
+    "EC": "americas",  # Ecuador
+    "FK": "americas",  # Falkland Islands (Islas Malvinas)
+    "GF": "americas",  # French Guiana
+    "GY": "americas",  # Guyana
+    "PY": "americas",  # Paraguay
+    "SR": "americas",  # Suriname
+    "UY": "americas",  # Uruguay
+    # Central America -- 1025 US2 extension.
+    "BZ": "americas",  # Belize
+    "CR": "americas",  # Costa Rica
+    "GT": "americas",  # Guatemala
+    "HN": "americas",  # Honduras
+    "NI": "americas",  # Nicaragua
+    "PA": "americas",  # Panama
+    "SV": "americas",  # El Salvador
+    # Caribbean -- 1025 US2 extension (every ISO-listed island so the region
+    # never falls through to the EMEA default).
+    "AG": "americas",  # Antigua and Barbuda
+    "AI": "americas",  # Anguilla
+    "AW": "americas",  # Aruba
+    "BB": "americas",  # Barbados
+    "BL": "americas",  # Saint Barthelemy
+    "BM": "americas",  # Bermuda
+    "BQ": "americas",  # Bonaire, Sint Eustatius and Saba
+    "BS": "americas",  # Bahamas
+    "CU": "americas",  # Cuba
+    "CW": "americas",  # Curacao
+    "DM": "americas",  # Dominica
+    "DO": "americas",  # Dominican Republic
+    "GD": "americas",  # Grenada
+    "GP": "americas",  # Guadeloupe
+    "HT": "americas",  # Haiti
+    "JM": "americas",  # Jamaica
+    "KN": "americas",  # Saint Kitts and Nevis
+    "KY": "americas",  # Cayman Islands
+    "LC": "americas",  # Saint Lucia
+    "MF": "americas",  # Saint Martin (French part)
+    "MQ": "americas",  # Martinique
+    "MS": "americas",  # Montserrat
+    "PR": "americas",  # Puerto Rico
+    "SX": "americas",  # Sint Maarten (Dutch part)
+    "TC": "americas",  # Turks and Caicos Islands
+    "TT": "americas",  # Trinidad and Tobago
+    "VC": "americas",  # Saint Vincent and the Grenadines
+    "VG": "americas",  # British Virgin Islands
+    "VI": "americas",  # United States Virgin Islands
     # China + SARs + Taiwan hit ``.com.cn`` endpoints; EMEA fallback uses
     # ``.com`` so they must be routed to the china role explicitly.
-    "CN": "china",
-    "HK": "china",
-    "MO": "china",
-    "TW": "china",
+    "CN": "china",  # China (mainland)
+    "HK": "china",  # Hong Kong SAR
+    "MO": "china",  # Macao SAR
+    "TW": "china",  # Taiwan
 }
 # Anything not listed above falls through to EMEA. EMEA endpoints are the
 # broadest surface (Africa, Middle East, Europe, plus every APAC/Oceania code
@@ -85,6 +136,225 @@ _COUNTRY_CODE_TO_REGION: dict[str, str] = {
 # warning is logged when the fallback fires so operators can spot unmapped
 # country codes and extend ``_COUNTRY_CODE_TO_REGION`` if needed.
 _DEFAULT_REGION = "emea"
+
+# Deliberately-unmapped ISO-3166-1 alpha-2 codes. These fall through to
+# ``_DEFAULT_REGION`` today by design (they map onto EMEA's ``.com`` endpoint
+# surface which is the correct behaviour for Africa, the Middle East, Europe,
+# Central/South/Southeast/Northeast Asia, Oceania, and Antarctica -- none of
+# which have a dedicated regional Samsung ELM role). Enumerating every
+# residual code explicitly (rather than leaving them implicit in the fall-
+# through) turns the pairing (``_COUNTRY_CODE_TO_REGION``, this set) into a
+# machine-checkable coverage contract: together they must cover every ISO
+# alpha-2 code exactly once. See ``iso_coverage_invariant.md`` INV-COVER-1..4
+# and the regression suite in ``tests/unit/org/test_country_region_coverage.py``
+# which fails CI the moment a code is silently added, removed, or duplicated.
+# Membership is a frozenset so downstream helpers cannot mutate the coverage
+# invariant at runtime.
+_COUNTRY_CODE_INTENTIONAL_GAPS: frozenset[str] = frozenset(
+    {
+        # Africa (EMEA -- broadest fallback surface today)
+        "AO",  # Angola
+        "BF",  # Burkina Faso
+        "BI",  # Burundi
+        "BJ",  # Benin
+        "BW",  # Botswana
+        "CD",  # DR Congo
+        "CF",  # Central African Republic
+        "CG",  # Congo
+        "CI",  # Cote d'Ivoire
+        "CM",  # Cameroon
+        "CV",  # Cabo Verde
+        "DJ",  # Djibouti
+        "DZ",  # Algeria
+        "EG",  # Egypt
+        "EH",  # Western Sahara
+        "ER",  # Eritrea
+        "ET",  # Ethiopia
+        "GA",  # Gabon
+        "GH",  # Ghana
+        "GM",  # Gambia
+        "GN",  # Guinea
+        "GQ",  # Equatorial Guinea
+        "GW",  # Guinea-Bissau
+        "KE",  # Kenya
+        "KM",  # Comoros
+        "LR",  # Liberia
+        "LS",  # Lesotho
+        "LY",  # Libya
+        "MA",  # Morocco
+        "MG",  # Madagascar
+        "ML",  # Mali
+        "MR",  # Mauritania
+        "MU",  # Mauritius
+        "MW",  # Malawi
+        "MZ",  # Mozambique
+        "NA",  # Namibia
+        "NE",  # Niger
+        "NG",  # Nigeria
+        "RE",  # Reunion
+        "RW",  # Rwanda
+        "SC",  # Seychelles
+        "SD",  # Sudan
+        "SH",  # Saint Helena
+        "SL",  # Sierra Leone
+        "SN",  # Senegal
+        "SO",  # Somalia
+        "SS",  # South Sudan
+        "ST",  # Sao Tome and Principe
+        "SZ",  # Eswatini
+        "TD",  # Chad
+        "TG",  # Togo
+        "TN",  # Tunisia
+        "TZ",  # Tanzania
+        "UG",  # Uganda
+        "YT",  # Mayotte
+        "ZA",  # South Africa
+        "ZM",  # Zambia
+        "ZW",  # Zimbabwe
+        # Middle East (EMEA -- broadest fallback surface today)
+        "AE",  # United Arab Emirates
+        "AF",  # Afghanistan
+        "BH",  # Bahrain
+        "IL",  # Israel
+        "IQ",  # Iraq
+        "IR",  # Iran
+        "JO",  # Jordan
+        "KW",  # Kuwait
+        "LB",  # Lebanon
+        "OM",  # Oman
+        "PS",  # Palestine
+        "QA",  # Qatar
+        "SA",  # Saudi Arabia
+        "SY",  # Syria
+        "TR",  # Turkey
+        "YE",  # Yemen
+        # Europe + European overseas / crown dependencies (EMEA)
+        "AD",  # Andorra
+        "AL",  # Albania
+        "AT",  # Austria
+        "AX",  # Aland Islands
+        "BA",  # Bosnia and Herzegovina
+        "BE",  # Belgium
+        "BG",  # Bulgaria
+        "BV",  # Bouvet Island
+        "BY",  # Belarus
+        "CH",  # Switzerland
+        "CY",  # Cyprus
+        "CZ",  # Czechia
+        "DE",  # Germany
+        "DK",  # Denmark
+        "EE",  # Estonia
+        "ES",  # Spain
+        "FI",  # Finland
+        "FO",  # Faroe Islands
+        "FR",  # France
+        "GB",  # United Kingdom
+        "GE",  # Georgia
+        "GG",  # Guernsey
+        "GI",  # Gibraltar
+        "GL",  # Greenland
+        "GR",  # Greece
+        "GS",  # South Georgia
+        "HM",  # Heard and McDonald Islands
+        "HR",  # Croatia
+        "HU",  # Hungary
+        "IE",  # Ireland
+        "IM",  # Isle of Man
+        "IS",  # Iceland
+        "IT",  # Italy
+        "JE",  # Jersey
+        "LI",  # Liechtenstein
+        "LT",  # Lithuania
+        "LU",  # Luxembourg
+        "LV",  # Latvia
+        "MC",  # Monaco
+        "MD",  # Moldova
+        "ME",  # Montenegro
+        "MK",  # North Macedonia
+        "MT",  # Malta
+        "NL",  # Netherlands
+        "NO",  # Norway
+        "PL",  # Poland
+        "PM",  # Saint Pierre and Miquelon
+        "PT",  # Portugal
+        "RO",  # Romania
+        "RS",  # Serbia
+        "RU",  # Russia
+        "SE",  # Sweden
+        "SI",  # Slovenia
+        "SJ",  # Svalbard and Jan Mayen
+        "SK",  # Slovakia
+        "SM",  # San Marino
+        "UA",  # Ukraine
+        "VA",  # Vatican City
+        # Central Asia (EMEA today; no China routing)
+        "AM",  # Armenia
+        "AZ",  # Azerbaijan
+        "KG",  # Kyrgyzstan
+        "KZ",  # Kazakhstan
+        "TJ",  # Tajikistan
+        "TM",  # Turkmenistan
+        "UZ",  # Uzbekistan
+        # South Asia (EMEA today)
+        "BD",  # Bangladesh
+        "BT",  # Bhutan
+        "IN",  # India
+        "LK",  # Sri Lanka
+        "MV",  # Maldives
+        "NP",  # Nepal
+        "PK",  # Pakistan
+        # Southeast Asia (EMEA today; not classified as China)
+        "BN",  # Brunei
+        "ID",  # Indonesia
+        "KH",  # Cambodia
+        "LA",  # Laos
+        "MM",  # Myanmar
+        "MY",  # Malaysia
+        "PH",  # Philippines
+        "SG",  # Singapore
+        "TH",  # Thailand
+        "TL",  # Timor-Leste
+        "VN",  # Vietnam
+        # Northeast Asia (EMEA today; not classified as China)
+        "JP",  # Japan
+        "KP",  # North Korea
+        "KR",  # South Korea
+        "MN",  # Mongolia
+        # Oceania + Pacific outposts (EMEA today)
+        "AS",  # American Samoa
+        "AU",  # Australia
+        "CC",  # Cocos (Keeling) Islands
+        "CK",  # Cook Islands
+        "CX",  # Christmas Island
+        "FJ",  # Fiji
+        "FM",  # Micronesia
+        "GU",  # Guam
+        "IO",  # British Indian Ocean Territory
+        "KI",  # Kiribati
+        "MH",  # Marshall Islands
+        "MP",  # Northern Mariana Islands
+        "NC",  # New Caledonia
+        "NF",  # Norfolk Island
+        "NR",  # Nauru
+        "NU",  # Niue
+        "NZ",  # New Zealand
+        "PF",  # French Polynesia
+        "PG",  # Papua New Guinea
+        "PN",  # Pitcairn
+        "PW",  # Palau
+        "SB",  # Solomon Islands
+        "TF",  # French Southern Territories
+        "TK",  # Tokelau
+        "TO",  # Tonga
+        "TV",  # Tuvalu
+        "UM",  # US Minor Outlying Islands
+        "VU",  # Vanuatu
+        "WF",  # Wallis and Futuna
+        "WS",  # Samoa
+        # Antarctica -- no plausible Mist site
+        "AQ",  # Antarctica
+    }
+)
 
 # Default URL scheme / port pairs. Mist's ``target`` field is a URL, so a
 # per-role ``probe.protocol`` chosen from the curated JSON maps directly to a
@@ -396,9 +666,7 @@ def _probe_target(fqdn: str, role: dict[str, Any], cenr_source: dict[str, Any]) 
         target = f"{protocol}://{fqdn}"
     else:
         target = f"{protocol}://{fqdn}:{port}"
-    # Exactly one WARN per contract Branch 3 side-effect; the same
-    # logger.debug follows for consistency across all three branches.
-    logger.warning("no observation for %s, using catalogue default %s", fqdn, target)
+    # NOTE(1025-US1): warning moved to load-time _emit_load_time_cenr_warning to avoid N*M duplication
     logger.debug("probe_target: %s -> %s (obs=%s)", fqdn, target, observed_protocol)
     return target
 
@@ -432,6 +700,35 @@ def manage_org_synthetic_probes(mist_session: Any, org_id: str) -> None:
     logging.debug("ENTRY: manage_org_synthetic_probes(org_id=%s)", org_id)
 
     sources = _load_probe_sources(_DEFAULT_DATA_DIR)
+    # NOTE(1025-US1): dedup state for the load-time CENR WARNING lives here so
+    # its lifetime is bounded by the invocation (data-model.md §3 INV-D1;
+    # FR-012 requires re-emission across back-to-back operator runs).
+    warned_cenr_hosts: set[str] = set()  # mutable dedup set, empty per run
+    logging.info(  # Constitution VII: BEFORE the load-time diff
+        "computing load-time CENR missing-host set for org_id=%s",
+        org_id,
+    )
+    _emit_load_time_cenr_warning(  # single call site per invocation
+        _compute_missing_cenr_hosts(  # inner: set difference over frozen universes
+            _collect_catalogue_hosts(sources[0]),  # probes side
+            _collect_cenr_observed_hosts(sources[1]),  # observations side
+        ),
+        warned_cenr_hosts,  # dedup state -- mutated in place
+    )
+    logging.debug(  # Constitution VII: AFTER the load-time emission
+        "load-time CENR check complete; warned_cenr_hosts=%s",
+        len(warned_cenr_hosts),
+    )
+    # NOTE(1025-US2): companion dedup state for the load-time country_code
+    # WARNING lives here so its lifetime is bounded by the invocation
+    # (data-model.md §3 INV-D1; FR-012 requires re-emission across
+    # back-to-back operator runs). Emission itself is delegated to
+    # ``_prompt_and_apply_site_overrides`` because that is where the site
+    # list is materialised via ``_list_org_sites`` -- the site list is
+    # gated behind the operator's site-override opt-in so it is not fetched
+    # unless needed. Threading the empty set from here keeps the set
+    # lifetime pinned to this invocation as required by FR-012.
+    warned_unmapped_codes: set[str] = set()  # mutable dedup set, empty per run
     vlan_ids = _prompt_vlan_list()
     setting = _fetch_setting(mist_session, org_id)
     existing_probes = _detect_existing(setting)
@@ -472,7 +769,13 @@ def manage_org_synthetic_probes(mist_session: Any, org_id: str) -> None:
     # Post-PUT site-override flow: give the operator a chance to push the
     # same probe set into one or more site-level settings so specific
     # sites can override the org-wide config.
-    _prompt_and_apply_site_overrides(mist_session, org_id, resulting_tool, sources)
+    _prompt_and_apply_site_overrides(
+        mist_session,
+        org_id,
+        resulting_tool,
+        sources,
+        warned_unmapped_codes,  # threaded from load-time scope so lifetime is bounded by this invocation
+    )
 
     logging.debug("EXIT: manage_org_synthetic_probes - success")
 
@@ -517,6 +820,303 @@ def _load_probe_sources(data_dir: Path) -> tuple[dict[str, Any], dict[str, Any]]
     cenr = promote_cache_document(cenr, kind="cenr")  # legacy CENR proxy/vpn bags
     cenr = ensure_fresh(cenr_path, cenr)
     return probes, cenr
+
+
+def _collect_cenr_observed_hosts(cenr_source: dict[str, Any]) -> frozenset[str]:
+    """Return every FQDN that has a CENR observation record.
+
+    Why:
+        T011 needs the "known observations" side of the catalogue-minus-observations
+        set difference. Rather than teaching ``_compute_missing_cenr_hosts`` about
+        the four bag locations (``proxy_hostnames``, ``vpn_hostnames``, and each
+        ``by_city[*]`` slot's paired bags), we walk them once here and return a
+        frozen set. This mirrors ``_lookup_v3_observation``'s bag traversal so
+        the two functions agree on which bags are authoritative.
+
+    Args:
+        cenr_source: Loaded CENR document, post v2->v3 loader adapter.
+
+    Returns:
+        Frozen set of every host string discovered across all CENR bags.
+        Non-dict / non-string / missing-``host`` entries are silently skipped
+        (defensive against mid-migration flat strings that slipped past the
+        loader adapter).
+    """
+    observed: set[str] = set()  # accumulator; frozen at return time for immutability
+    # Top-level bags first: they are the common case and dominate CENR volume.
+    for bag_key in ("proxy_hostnames", "vpn_hostnames"):  # both bag names per v3 schema
+        bag = cenr_source.get(bag_key) or []  # tolerate missing key -> empty list
+        if not isinstance(bag, list):  # defensive: schema drift would show up here
+            continue  # skip malformed bag rather than crash
+        for entry in bag:  # each entry may be v3 dict or v2 flat string
+            if isinstance(entry, dict):  # v3 case: pull the "host" field
+                host = entry.get("host")  # may be None if the entry is malformed
+                if isinstance(host, str):  # only accept string hosts
+                    observed.add(host)  # add to the observation universe
+            elif isinstance(entry, str):  # v2 legacy flat string tolerated
+                observed.add(entry)  # add the bare host string
+    # by_city bags carry the same shape per cenr_cache_schema_v3.md.
+    by_city = cenr_source.get("by_city")  # may be missing entirely
+    if isinstance(by_city, dict):  # only walk when it's the expected mapping shape
+        for city_slot in by_city.values():  # each city has proxy/vpn bags
+            if not isinstance(city_slot, dict):  # defensive: skip malformed slots
+                continue  # move to the next city
+            for bag_key in ("proxy_hostnames", "vpn_hostnames"):  # same two bag names
+                bag = city_slot.get(bag_key) or []  # tolerate missing bag
+                if not isinstance(bag, list):  # defensive against schema drift
+                    continue  # skip malformed nested bag
+                for entry in bag:  # same v3/v2 tolerance as top-level bags
+                    if isinstance(entry, dict):  # v3 dict entry
+                        host = entry.get("host")  # extract host field
+                        if isinstance(host, str):  # accept only string hosts
+                            observed.add(host)  # add to observation universe
+                    elif isinstance(entry, str):  # v2 flat-string fallback
+                        observed.add(entry)  # add bare host
+    return frozenset(observed)  # freeze so callers cannot mutate the universe
+
+
+def _collect_catalogue_hosts(probes_source: dict[str, Any]) -> frozenset[str]:
+    """Return every catalogue FQDN that ``_probe_target`` may consult observations for.
+
+    Why:
+        The "catalogue hosts" side of the set difference is every non-wildcard
+        FQDN listed on any role in the probe source file. We include role-inline
+        FQDNs (all non-tunnel_zen roles) because ``_probe_target`` consults CENR
+        for their observed protocol/port even though the role also carries a
+        curated ``probe`` block. ``tunnel_zen`` role FQDNs are supplied BY the
+        CENR file itself, so by construction they are already observed and
+        cannot appear as "missing". Wildcard entries (``"*."``) are filtered
+        because they are never emitted as probes (see ``_build_probe_set``
+        line ~798).
+
+    Args:
+        probes_source: Loaded probe source document (post v2->v3 promotion).
+
+    Returns:
+        Frozen set of every non-wildcard catalogue FQDN.
+    """
+    catalogue: set[str] = set()  # accumulator; frozen at return time
+    for role in probes_source.get("roles", []) or []:  # each catalogue role
+        role_name = role.get("role")  # role slug string
+        if role_name == _TUNNEL_ZEN_ROLE:  # tunnel_zen sources FQDNs from CENR itself
+            continue  # by construction those hosts are already observed
+        for entry in role.get("fqdns") or []:  # tolerate missing fqdns key
+            # Unwrap v3 dict entries while tolerating legacy flat strings so
+            # mid-migration catalogues do not silently drop hosts here.
+            fqdn = entry.get("host") if isinstance(entry, dict) else entry  # v3 unwrap
+            if not isinstance(fqdn, str) or fqdn.startswith("*."):  # skip wildcards / non-strings
+                continue  # wildcards are never emitted as probes
+            catalogue.add(fqdn)  # add concrete FQDN to the catalogue universe
+    return frozenset(catalogue)  # freeze so callers cannot mutate
+
+
+def _compute_missing_cenr_hosts(
+    catalogue_hosts: frozenset[str],
+    cenr_observations: frozenset[str],
+) -> frozenset[str]:
+    """Return catalogue FQDNs that have no CENR observation record.
+
+    Why:
+        This is the load-time replacement for the pre-1025 per-emission WARNING
+        storm inside ``_probe_target`` (315 sites x 7 missing hosts = 2205
+        WARNINGs on the reference org). Computed exactly once per invocation,
+        after ``_load_probe_sources`` returns, so the cap becomes M unique
+        hosts instead of N*M repeated emissions (research.md R5).
+
+    Args:
+        catalogue_hosts: Non-wildcard FQDN universe from
+            ``_collect_catalogue_hosts``.
+        cenr_observations: Observed FQDN universe from
+            ``_collect_cenr_observed_hosts``.
+
+    Returns:
+        Frozen set of catalogue hosts absent from ``cenr_observations``. Empty
+        set when every catalogue host has an observation (FR-001 zero-emission
+        edge case).
+    """
+    logging.info(  # Constitution VII action-logging: BEFORE the diff
+        "computing missing CENR hosts: catalogue=%s observed=%s",
+        len(catalogue_hosts),
+        len(cenr_observations),
+    )
+    missing = frozenset(catalogue_hosts - cenr_observations)  # set difference -> frozen
+    logging.debug(  # Constitution VII action-logging: AFTER with result summary
+        "computed missing CENR hosts: %s missing",
+        len(missing),
+    )
+    return missing  # frozen so callers cannot smuggle in extra hosts
+
+
+def _emit_load_time_cenr_warning(
+    missing_hosts: frozenset[str],
+    warned_cenr_hosts: set[str],
+) -> None:
+    """Emit exactly one WARNING per invocation naming all unwarned missing hosts.
+
+    Why:
+        Contract ``log_record_shape.md`` §1.3 mandates a single load-time
+        WARNING record that names every missing host and states catalogue-default
+        fallback URLs are in use. ``warned_cenr_hosts`` is the mutable dedup
+        state owned by ``manage_org_synthetic_probes`` (data-model.md §3 INV-D1)
+        -- we mutate it in place so repeat calls within a single invocation
+        are no-ops. FR-012: dedup state does NOT persist across invocations
+        (caller supplies a fresh set per run).
+
+    Args:
+        missing_hosts: Output of ``_compute_missing_cenr_hosts`` for the
+            current run.
+        warned_cenr_hosts: Per-invocation dedup set. Hosts added here are
+            skipped on any subsequent call within the same invocation.
+    """
+    logging.info(  # Constitution VII: BEFORE the emission decision
+        "evaluating CENR load-time warning: missing=%s already_warned=%s",
+        len(missing_hosts),
+        len(warned_cenr_hosts),
+    )
+    unwarned = missing_hosts - warned_cenr_hosts  # subtract already-emitted hosts
+    if not unwarned:  # zero-emission edge case (FR-001) or repeat call within run
+        logging.debug(  # Constitution VII: AFTER, no-op branch
+            "CENR load-time warning: no unwarned missing hosts; skipping emission",
+        )
+        return  # nothing to warn about
+    # Sort for deterministic message shape (test assertions and log-grep audits
+    # expect a stable ordering across runs regardless of set iteration order).
+    ordered = sorted(unwarned)  # ASCII sort per Constitution V log discipline
+    # Single WARNING record naming every host, matching log_record_shape.md §1.3.
+    # ASCII-only tokens (CENR, using-catalogue-default-URLs) so ``grep -c CENR``
+    # in the operator smoke sequence stays deterministic (SC-001).
+    logging.warning(  # exactly-one-per-run WARNING per contract §1.3
+        "CENR observations missing for %s catalogue host(s); using catalogue-default URLs: %s",
+        len(ordered),
+        ", ".join(ordered),
+    )
+    warned_cenr_hosts.update(unwarned)  # mark as warned so a duplicate call is a no-op
+    logging.debug(  # Constitution VII: AFTER, emission branch
+        "CENR load-time warning emitted for %s hosts; warned_cenr_hosts now %s",
+        len(ordered),
+        len(warned_cenr_hosts),
+    )
+
+
+def _compute_unmapped_country_codes(
+    sites: list[dict[str, Any]],
+    region_map: dict[str, str],
+    gap_set: frozenset[str],
+) -> frozenset[str]:
+    """Return unique ISO codes present in ``sites`` but neither region-mapped nor gap-listed.
+
+    Why:
+        Load-time counterpart to ``_compute_missing_cenr_hosts`` for the
+        country_code axis. Pre-1025, every site with an unmapped code
+        triggered a fresh WARNING inside ``_build_region_probes`` (research.md
+        R5 quantifies the N*K duplication: 315 sites * K unmapped codes). By
+        collapsing to the set of *unique* codes here -- exactly once per
+        invocation -- the downstream emitter caps output at K messages
+        regardless of how many sites share each code (FR-004, FR-010).
+        Codes appearing in ``gap_set`` are silently classified (they are
+        deliberately EMEA today by contract INV-COVER-2) and therefore never
+        surface here; only truly-new codes bubble up so the operator gets a
+        signal, not noise.
+
+    Args:
+        sites: List of site dicts as returned by ``_list_org_sites``. Each
+            dict is expected to carry a ``country_code`` string (missing /
+            blank entries are treated as "not classifiable" and skipped
+            silently -- the region resolver already falls those through to
+            the default region and emitting a WARNING for a null value
+            would be indistinguishable from an unmapped-code warning).
+        region_map: ``_COUNTRY_CODE_TO_REGION`` (passed as an argument so
+            tests can exercise the classifier with fixture-scoped maps
+            without patching the module-level constant).
+        gap_set: ``_COUNTRY_CODE_INTENTIONAL_GAPS`` (same rationale).
+
+    Returns:
+        Frozen set of ISO alpha-2 codes appearing in ``sites`` that are
+        neither in ``region_map`` nor in ``gap_set``. Empty set when every
+        code is classified (FR-005 zero-emission edge case for the LATAM
+        fixture after T020).
+    """
+    logging.info(  # Constitution VII action-logging: BEFORE the scan
+        "computing unmapped country codes: sites=%s region_map=%s gap_set=%s",
+        len(sites),
+        len(region_map),
+        len(gap_set),
+    )
+    seen: set[str] = set()  # accumulator for unique codes across all sites
+    for site in sites:  # single pass over the site list
+        raw = site.get("country_code")  # optional field per Mist site schema
+        if not isinstance(raw, str):  # non-string / missing -> skip; region resolver handles it
+            continue
+        code = raw.strip().upper()  # normalise like _build_region_probes at line 1068
+        if not code:  # blank string after normalisation -> skip
+            continue
+        if code in region_map:  # already region-classified -> silent success
+            continue
+        if code in gap_set:  # intentional gap -> silently falls through to EMEA
+            continue
+        seen.add(code)  # genuinely unclassified -> record for warning
+    unmapped = frozenset(seen)  # freeze so callers cannot smuggle in extras
+    logging.debug(  # Constitution VII: AFTER with unique-code count
+        "computed unmapped country codes: %s unique code(s)",
+        len(unmapped),
+    )
+    return unmapped  # frozenset consumed by _emit_load_time_country_code_warning
+
+
+def _emit_load_time_country_code_warning(
+    unmapped_codes: frozenset[str],
+    warned_unmapped_codes: set[str],
+) -> None:
+    """Emit exactly one WARNING per invocation naming all unwarned unmapped codes.
+
+    Why:
+        Contract ``log_record_shape.md`` §2.4 mandates a single load-time
+        WARNING when at least one site's country_code is neither region-mapped
+        nor listed as an intentional gap. The message MUST contain the literal
+        token ``country_code`` (test filter anchor from ``_count_country_code_warnings``
+        at line 3050) and MUST name every unwarned code plus the default
+        region literal so an operator can either extend
+        ``_COUNTRY_CODE_TO_REGION`` or add the code to
+        ``_COUNTRY_CODE_INTENTIONAL_GAPS`` in the same commit. FR-012 pins
+        per-invocation lifetime: ``warned_unmapped_codes`` is caller-owned and
+        recreated per run.
+
+    Args:
+        unmapped_codes: Output of ``_compute_unmapped_country_codes``.
+        warned_unmapped_codes: Per-invocation dedup set (mutated in place).
+            Codes added here are skipped on any subsequent call within the
+            same invocation. FR-012: caller supplies a fresh empty set per
+            run; state MUST NOT persist across runs.
+    """
+    logging.info(  # Constitution VII: BEFORE the emission decision
+        "evaluating country_code load-time warning: unmapped=%s already_warned=%s",
+        len(unmapped_codes),
+        len(warned_unmapped_codes),
+    )
+    unwarned = unmapped_codes - warned_unmapped_codes  # subtract codes already emitted this run
+    if not unwarned:  # zero-emission (FR-005 LATAM path) or repeat call within run
+        logging.debug(  # Constitution VII: AFTER, no-op branch
+            "country_code load-time warning: no unwarned unmapped codes; skipping emission",
+        )
+        return  # nothing to warn about
+    # Deterministic ordering so ``grep -c country_code`` in the operator smoke
+    # sequence stays stable across runs regardless of set iteration order.
+    ordered = sorted(unwarned)  # ASCII sort per Constitution V log discipline
+    # Single WARNING record naming every code plus the default region literal
+    # so the operator knows exactly which routing decision was made. ASCII
+    # tokens only (``country_code``, ``defaulting to region``) so the grep
+    # anchor stays deterministic (SC-002, log_record_shape.md §2.4).
+    logging.warning(  # exactly-one-per-run WARNING per contract §2.4
+        "country_code(s) %s not mapped; defaulting to region %r",
+        ", ".join(ordered),
+        _DEFAULT_REGION,
+    )
+    warned_unmapped_codes.update(unwarned)  # mark as warned so a duplicate call is a no-op
+    logging.debug(  # Constitution VII: AFTER, emission branch
+        "country_code load-time warning emitted for %s code(s); warned_unmapped_codes now %s",
+        len(ordered),
+        len(warned_unmapped_codes),
+    )
 
 
 def _validate_vlan_input(raw: str) -> tuple[bool, str, list[int]]:
@@ -857,14 +1457,18 @@ def _build_region_probes(
         wasteful noise. The site-override flow calls this helper instead so
         each picked site only receives the ELM role matching its own
         ``country_code``. Unmapped or missing country codes fall back to
-        EMEA (the broadest surface) and log a warning so operators can
-        extend ``_COUNTRY_CODE_TO_REGION`` when they see the fallback fire.
+        EMEA (the broadest surface); the operator-visible WARNING for the
+        unmapped set is now emitted once at load time by
+        ``_emit_load_time_country_code_warning`` (1025-US2, FR-004 / FR-010)
+        rather than once per site here, so this helper stays silent on the
+        fallback path and returns bytes deterministically for INV-1.
 
     Args:
         sources: The ``(probes, cenr)`` tuple from ``_load_probe_sources``.
         country_code: ISO 3166-1 alpha-2 code from the site dict (case-
             insensitive; may be ``None`` or an unmapped code -- both fall
-            through to EMEA with a warning).
+            through to EMEA silently; see ``_emit_load_time_country_code_warning``
+            for the operator-visible surface).
 
     Returns:
         A ``{probe_name: probe_body}`` map for the one matching role.
@@ -873,14 +1477,14 @@ def _build_region_probes(
     """
     probes_source, _ = sources
     normalised = (country_code or "").strip().upper()
-    region = _COUNTRY_CODE_TO_REGION.get(normalised)
+    region = _COUNTRY_CODE_TO_REGION.get(normalised)  # None -> unmapped or intentionally omitted
     if region is None:
-        logging.warning(
-            "country_code %r not mapped; defaulting to region %r",
-            country_code,
-            _DEFAULT_REGION,
-        )
-        region = _DEFAULT_REGION
+        # NOTE(1025-US2): warning moved to load-time
+        # ``_emit_load_time_country_code_warning`` to avoid N*K duplication
+        # per FR-004 / FR-010 / SC-002. Region-value resolution behaviour is
+        # unchanged -- unmapped codes still fall through to _DEFAULT_REGION
+        # so regional probes still fire (FR-003 spirit preserved).
+        region = _DEFAULT_REGION  # emea fallback -- deliberate, per data-model.md
     target_role_name = f"{_SAMSUNG_ELM_ROLE_PREFIX}{region}"
     result: dict[str, dict[str, Any]] = {}
     for role in probes_source.get("roles", []) or []:
@@ -1591,6 +2195,7 @@ def _prompt_and_apply_site_overrides(
     org_id: str,
     resulting_tool: dict[str, dict[str, Any]],
     sources: tuple[dict[str, Any], dict[str, Any]],
+    warned_unmapped_codes: set[str],
 ) -> None:
     """Offer to push the tool-authored probe set into per-site settings.
 
@@ -1612,6 +2217,14 @@ def _prompt_and_apply_site_overrides(
         set. This whole flow is optional (default no) so unattended runs
         do not silently mutate site settings.
 
+        1025-US2: the site list is also the natural anchor for the
+        load-time ``country_code`` WARNING dedup path -- every site with
+        an unmapped code is visible in one place, so a single
+        ``_emit_load_time_country_code_warning`` call names every
+        offender once instead of once per site. The ``warned_unmapped_codes``
+        set is threaded in from ``manage_org_synthetic_probes`` so its
+        lifetime is bounded by the invocation (FR-012).
+
     Args:
         mist_session: Authenticated ``mistapi`` session.
         org_id: Mist org UUID -- required for ``listOrgSites`` so the
@@ -1625,6 +2238,10 @@ def _prompt_and_apply_site_overrides(
             Passed through to ``_apply_to_site`` so per-region Samsung
             ELM probes can be built from the same source-of-truth
             catalogue.
+        warned_unmapped_codes: Load-time dedup set constructed in
+            ``manage_org_synthetic_probes`` (1025-US2). Mutated in place
+            by ``_emit_load_time_country_code_warning`` so a subsequent
+            call in the same invocation would suppress duplicates.
     """
     if not resulting_tool:
         return
@@ -1636,6 +2253,28 @@ def _prompt_and_apply_site_overrides(
     if not sites:
         print("  No sites found in this org -- skipping site overrides.")
         return
+    # NOTE(1025-US2): load-time country_code WARNING emission fires exactly
+    # once here, immediately after the site list is materialised and
+    # BEFORE per-site region resolution begins in ``_apply_to_site`` ->
+    # ``_build_region_probes``. Emitting here (rather than per-site in the
+    # resolver) collapses N warnings into 1 (or K, one per distinct
+    # unmapped code) and satisfies FR-004 / FR-010 / SC-002.
+    logging.info(  # Constitution VII: BEFORE the load-time country_code diff
+        "computing load-time country_code unmapped set for %d sites",
+        len(sites),
+    )
+    _emit_load_time_country_code_warning(  # single call site per invocation (FR-012)
+        _compute_unmapped_country_codes(  # inner: set difference over frozen universes
+            sites,  # the just-loaded site list
+            _COUNTRY_CODE_TO_REGION,  # T020-extended region map
+            _COUNTRY_CODE_INTENTIONAL_GAPS,  # T021 gap set (Antarctica etc.)
+        ),
+        warned_unmapped_codes,  # dedup state -- mutated in place
+    )
+    logging.debug(  # Constitution VII: AFTER the load-time emission
+        "load-time country_code check complete; warned_unmapped_codes=%s",
+        len(warned_unmapped_codes),
+    )
     picked_sites = _prompt_site_indexes(sites)
     if not picked_sites:
         print("  No valid site indexes entered -- skipping site overrides.")
