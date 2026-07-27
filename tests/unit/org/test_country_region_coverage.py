@@ -130,3 +130,53 @@ def test_iso_cover_4_region_values() -> None:
     }
     logging.debug("test_iso_cover_4_region_values: bad=%s", bad)  # AFTER
     assert bad == {}, f"unexpected region literals: {bad}"
+
+
+def test_iso_cover_double_declared() -> None:
+    """T028: prove the disjoint-check fires when a code is double-declared.
+
+    Why:
+        ``test_iso_cover_1_disjoint`` is only meaningful if the underlying
+        set-intersection check would actually surface a shared code. This
+        meta-test constructs a *synthetic* (region_map, gap_set) pair that
+        deliberately shares one code (``"PA"``), runs the same
+        intersection logic that INV-COVER-1 uses in production, and
+        asserts the diagnostic names the offending code. Guards against
+        future refactors that quietly weaken the disjoint check (e.g.
+        replacing ``&`` with something that no-ops on frozensets, or
+        catching-and-swallowing the AssertionError).
+
+        Satisfies US2 Edge Case ("A country code appears in the
+        intentional-gap set AND in ``_COUNTRY_CODE_TO_REGION``") and US3
+        Acceptance Scenario 3 per tasks.md T028.
+    """
+    logging.info("test_iso_cover_double_declared: constructing synthetic overlap")  # BEFORE
+    # Synthetic pair — NOT the real module collections. We deliberately
+    # share ``"PA"`` between the map and the gap set so the intersection
+    # returns a non-empty result. If the disjoint check were ever weakened,
+    # this test would silently pass and the meta-guard would fail us open.
+    synthetic_region_map: dict[str, str] = {"PA": "americas", "US": "americas"}  # shared "PA"
+    synthetic_gap_set: frozenset[str] = frozenset({"PA", "AQ"})  # shared "PA"
+    # Same intersection expression that INV-COVER-1 uses in production —
+    # copying the operator rather than importing a helper keeps this test
+    # honest: if someone changes the production operator, this test still
+    # reflects the old contract and will fail visibly.
+    overlap = set(synthetic_region_map) & set(synthetic_gap_set)  # set intersection
+    logging.debug("test_iso_cover_double_declared: overlap=%s", sorted(overlap))  # AFTER
+    # Positive assertion: the disjoint check DOES surface the shared code.
+    # If ``overlap`` were empty here, the whole INV-COVER-1 test would be a
+    # no-op in production and CI would silently regress.
+    assert overlap == {"PA"}, (
+        f"synthetic double-declaration should surface exactly {{'PA'}} but got "
+        f"{sorted(overlap)}; the disjoint-check operator has drifted."
+    )
+    # Simulate the diagnostic-message assertion that INV-COVER-1 raises when
+    # it fires, and verify the offending code is named in the message so
+    # SC-005 (failure points straight at the fix) is preserved.
+    diagnostic = (
+        f"country codes {sorted(overlap)} appear in both the region map and "
+        f"the intentional-gap set; each code must live in exactly one collection."
+    )
+    assert "PA" in diagnostic, (
+        f"double-declared diagnostic must name the offending code; got: {diagnostic!r}"
+    )

@@ -2980,6 +2980,113 @@ class TestUs1CenrDedupWarning:
             f"Run 2 emitted {run2_count} CENR WARNINGs; expected >= 1 -- dedup state leaked across runs"
         )
 
+    def test_cenr_warning_re_emit_on_dropout(self, caplog: pytest.LogCaptureFixture) -> None:  # T030
+        """A CENR host that DROPS OUT between runs MUST re-emit its WARNING.
+
+        Why:
+            US1 Acceptance Scenario 4: operator has a live cache, then the
+            cache is invalidated (upstream refresh drops a host, TTL
+            expiry, cache rebuild). Between two invocations of menu 206
+            the same host transitions from "observed" to "missing". The
+            second run MUST WARN about that host even though it was
+            silent in run 1. This test exercises exactly that transition:
+
+              run 1: cache observes 6/7 hosts -- one host is already missing
+              run 2: cache observes 5/7 hosts -- previously-observed host has dropped
+
+            The WARNING for the newly-missing host MUST fire in run 2. The
+            regression this traps is a stale dedup-set that carries over
+            "already warned this session" state and silences the newly-missing
+            host. Fresh ``warned_cenr_hosts`` sets per run guarantee correct
+            behaviour per FR-012.
+        """
+        # Arrange: full 7-host catalogue with the samsung_elm americas role.
+        logging.info("test_cenr_warning_re_emit_on_dropout: preparing dropout scenario")
+        probes = {
+            "schema_version": 1,  # v1 loader shape
+            "source": "fixture",
+            "roles": [self._samsung_elm_americas_role()],  # references all 7 SecB2B hosts
+        }
+        # A "partial" cenr snapshot with 6 hosts observed, 1 already missing
+        # (call it host_A) -- baseline for run 1.
+        all_hosts = sorted(EXPECTED_MISSING_HOSTS)  # deterministic ordering
+        host_a = all_hosts[0]  # the host that is ALREADY missing in run 1
+        host_b = all_hosts[1]  # the host that DROPS OUT between runs
+        # Build a v3-shaped cache observing every host EXCEPT host_a.
+        observed_run1 = [
+            {"host": h, "observed_protocol": "https", "observed_port": 443}
+            for h in all_hosts
+            if h != host_a  # host_a already missing in the baseline
+        ]
+        cenr_run1 = {
+            "schema_version": 1,
+            "fetched_utc": datetime.now(UTC).isoformat().replace("+00:00", "Z"),  # keep is_stale false
+            "proxy_hostnames": observed_run1,  # 6/7 observed
+            "vpn_hostnames": [],  # empty so no host classified as VPN
+        }
+        # Between runs, host_b drops out too, leaving 5/7 observed.
+        observed_run2 = [
+            {"host": h, "observed_protocol": "https", "observed_port": 443}
+            for h in all_hosts
+            if h not in {host_a, host_b}  # host_a and host_b both missing now
+        ]
+        cenr_run2 = {
+            "schema_version": 1,
+            "fetched_utc": datetime.now(UTC).isoformat().replace("+00:00", "Z"),  # keep is_stale false
+            "proxy_hostnames": observed_run2,  # 5/7 observed -- host_b dropped
+            "vpn_hostnames": [],
+        }
+
+        # Act (run 1): compute the missing set from run-1 cache, emit once.
+        caplog.set_level(logging.WARNING, logger="src.org.org_synthetic_probes_manager")  # WARNING+
+        run1_start = len(caplog.records)  # anchor to isolate run-1 records
+        missing_run1 = ospm._compute_missing_cenr_hosts(  # {host_a} in run 1
+            ospm._collect_catalogue_hosts(probes),
+            ospm._collect_cenr_observed_hosts(cenr_run1),
+        )
+        warned_cenr_hosts_run1: set[str] = set()  # fresh dedup per FR-012
+        ospm._emit_load_time_cenr_warning(missing_run1, warned_cenr_hosts_run1)  # first emission
+        run1_records = caplog.records[run1_start:]  # snapshot
+        # Message rendered must include host_a (the already-missing one).
+        run1_messages = " | ".join(rec.getMessage() for rec in run1_records if rec.levelno == logging.WARNING)
+
+        # Act (run 2): compute missing set from run-2 cache -- host_b now
+        # newly missing. Fresh dedup set means run 2 has no memory of run 1.
+        run2_start = len(caplog.records)  # anchor to isolate run-2 records
+        missing_run2 = ospm._compute_missing_cenr_hosts(  # {host_a, host_b} in run 2
+            ospm._collect_catalogue_hosts(probes),
+            ospm._collect_cenr_observed_hosts(cenr_run2),
+        )
+        warned_cenr_hosts_run2: set[str] = set()  # DISTINCT fresh set
+        ospm._emit_load_time_cenr_warning(missing_run2, warned_cenr_hosts_run2)  # second emission
+        run2_records = caplog.records[run2_start:]  # snapshot
+        run2_messages = " | ".join(rec.getMessage() for rec in run2_records if rec.levelno == logging.WARNING)
+
+        logging.info(
+            "test_cenr_warning_re_emit_on_dropout: host_a=%s host_b=%s missing_run1=%d missing_run2=%d",
+            host_a,
+            host_b,
+            len(missing_run1),
+            len(missing_run2),
+        )
+
+        # Assert: run 1 names host_a (baseline missing).
+        assert host_a in run1_messages, (
+            f"Run 1 must name the already-missing host {host_a!r}; got: {run1_messages!r}"
+        )
+        # Assert: run 2 names host_b (the dropout). This is the core dropout
+        # semantics -- host_b was silent in run 1 because it was observed,
+        # then dropped out and MUST re-warn in run 2.
+        assert host_b in run2_messages, (
+            f"Run 2 must name the newly-dropped host {host_b!r} even though it was "
+            f"observed in run 1; got: {run2_messages!r}. Dedup state leaked "
+            f"across the dropout transition."
+        )
+        # Belt-and-braces: run 2 must also still name host_a (still missing).
+        assert host_a in run2_messages, (
+            f"Run 2 must still name the persistently-missing host {host_a!r}; got: {run2_messages!r}"
+        )
+
     def test_probe_payload_byte_stability_smoke(self) -> None:  # T010
         """Non-VPN probe payload is byte-identical to the pinned 1025 baseline.
 
@@ -3214,3 +3321,176 @@ class TestUs2CountryCodeDedupWarning:
             f"country_code WARNING count {count} exceeded unique-unmapped-code cap "
             f"{k_unique}; per-site duplication regressed."
         )
+
+    def test_country_warning_re_emit_across_runs(self, caplog: pytest.LogCaptureFixture) -> None:
+        """T029a. Country-code dedup state does NOT persist across independent runs.
+
+        Why:
+            Sibling of ``TestUs1CenrDedupWarning.test_cenr_warning_re_emit_across_runs``
+            (T009) but for the country-code path. Operators intentionally
+            re-run menu 206 to verify a fix landed; the unmapped-code
+            WARNING must fire again on each new run so the operator sees
+            the current unmapped set, not a stale "already warned"
+            silence. This test invokes the load-time hook twice back-to-back
+            with independent ``warned_unmapped_codes`` sets and asserts
+            both invocations independently produce WARNINGs. G1 remediation
+            closed the asymmetric FR-012 coverage gap by adding this
+            country-code sibling.
+        """
+        # Arrange: shared fixture -- 30 synthetic sites with one unmapped
+        # code "ZZ". Both runs see the identical unmapped set so any
+        # dedup-state leak would silence run 2 (the regression trap).
+        logging.info("test_country_warning_re_emit_across_runs: preparing two independent runs")
+        unmapped_code = "ZZ"  # ISO 3166 user-assigned range; guaranteed unmapped
+        fake_sites = [
+            {"id": f"synthetic-{idx:04d}", "name": f"site-{idx}", "country_code": unmapped_code}
+            for idx in range(30)  # 30 sites all sharing one unmapped code
+        ]
+        # Sanity: the code must not be mapped or in the gap set, otherwise the test is vacuous.
+        assert (
+            unmapped_code not in ospm._COUNTRY_CODE_TO_REGION
+        ), f"test setup broken: {unmapped_code!r} unexpectedly present in region map"
+        assert (
+            unmapped_code not in ospm._COUNTRY_CODE_INTENTIONAL_GAPS
+        ), f"test setup broken: {unmapped_code!r} unexpectedly present in gap set"
+        unmapped = ospm._compute_unmapped_country_codes(  # unique unmapped codes across the site set
+            fake_sites,
+            ospm._COUNTRY_CODE_TO_REGION,
+            ospm._COUNTRY_CODE_INTENTIONAL_GAPS,
+        )
+
+        # Act (run 1): fresh dedup set, invoke the load-time hook once.
+        caplog.set_level(logging.WARNING, logger="src.org.org_synthetic_probes_manager")  # WARNING+
+        run1_start = len(caplog.records)  # anchor to slice run-1 records later
+        warned_unmapped_codes_run1: set[str] = set()  # NEW per-run dedup set per FR-012
+        ospm._emit_load_time_country_code_warning(unmapped, warned_unmapped_codes_run1)  # single call
+        run1_records = caplog.records[run1_start:]  # snapshot of run-1 emissions
+        run1_count = self._count_country_code_warnings(list(run1_records))  # WARNING count for run 1
+
+        # Act (run 2): SEPARATE fresh dedup set; the hook MUST re-emit
+        # because this is a fresh operator invocation (bounded per FR-012).
+        run2_start = len(caplog.records)  # anchor to slice run-2 records
+        warned_unmapped_codes_run2: set[str] = set()  # DISTINCT new set -- state must not persist
+        ospm._emit_load_time_country_code_warning(unmapped, warned_unmapped_codes_run2)  # 2nd call
+        run2_records = caplog.records[run2_start:]  # snapshot of run-2 emissions
+        run2_count = self._count_country_code_warnings(list(run2_records))  # WARNING count for run 2
+
+        logging.info(
+            "test_country_warning_re_emit_across_runs: run1=%d run2=%d",
+            run1_count,
+            run2_count,
+        )
+
+        # Assert: both runs must emit at least one WARNING for the same
+        # unmapped set. A run-2 count of zero means the dedup state
+        # persisted across invocations (silent second run), which is the
+        # regression this test traps.
+        assert run1_count >= 1, (  # run-1 must emit -- otherwise the fixture is malformed
+            f"Run 1 emitted {run1_count} country_code WARNINGs; expected >= 1 for unmapped set {sorted(unmapped)}"
+        )
+        assert run2_count >= 1, (  # run-2 must ALSO emit; silence means state leaked
+            f"Run 2 emitted {run2_count} country_code WARNINGs; expected >= 1 -- dedup state leaked across runs"
+        )
+
+
+def test_regression_runtime_under_budget(pytestconfig: pytest.Config) -> None:  # T029
+    """The 1025 regression suite MUST complete under a 5.0 s wall-clock budget.
+
+    Why:
+        SC-007 pins a soft-real-time performance envelope for the entire
+        1025 regression subset (all dedup + coverage + byte-stability
+        tests) so CI cost does not creep as tests are added. Running the
+        curated subset via ``pytest.main`` from within a test lets us
+        measure the actual wall-clock cost with ``time.perf_counter``
+        bookends -- the same clock the pytest runner uses.
+
+        The budget of 5.0 s is generous enough to accommodate the
+        reference dev machine's cold-start caching while surfacing any
+        multi-second regression (e.g. a fixture-load loop that scales
+        with site count). Per O1 remediation, SC-007 is annotated in
+        spec.md as verified only after US3 lands; if MVP-first ship path
+        is chosen (US1 only), SC-007 remains provably-unverified until
+        this task lands. We deliberately EXCLUDE this test from the
+        subset it measures (recursion guard).
+    """
+    import time  # local import so the top-of-file stays lean when this test skips
+
+    # Guard against recursive self-invocation: if pytest is already inside
+    # this test's frame (e.g. a user runs the subset manually and the
+    # runner sweeps this file), we cannot spawn another pytest without
+    # blowing the stack. ``PYTEST_CURRENT_TEST`` env var breadcrumbs the
+    # active test so we can detect nested invocation and bail cleanly.
+    import os
+
+    if os.environ.get("_1025_RUNTIME_BUDGET_INFLIGHT") == "1":  # recursion guard
+        logging.info("test_regression_runtime_under_budget: nested invocation detected -- skipping")
+        pytest.skip("nested pytest invocation would recurse into the runtime-budget test")
+
+    # The curated 1025 regression subset -- one representative per contract.
+    # Kept minimal because pytest-in-pytest still has ~500 ms of fixed
+    # overhead per node. Adding tests here MUST be a conscious decision
+    # (they contribute directly to the SC-007 budget).
+    #
+    # Absolute node IDs are anchored to this file's absolute path via
+    # ``Path(__file__)`` so the nested ``pytest.main`` invocation does not
+    # depend on cwd or rootdir agreement with the parent runner. Windows
+    # test collection was silently failing with relative "tests/..." paths
+    # when the outer pytest run set rootdir to an alternative ancestor.
+    _this_file = str(Path(__file__).resolve())  # absolute path to the current test module
+    _coverage_file = str(  # absolute path to the ISO coverage sibling test file
+        (Path(__file__).parent / "test_country_region_coverage.py").resolve()
+    )
+    subset = [
+        # US1 CENR dedup contract representatives
+        f"{_this_file}::TestUs1CenrDedupWarning::test_cenr_warning_dedup_ge_1_missing",
+        f"{_this_file}::TestUs1CenrDedupWarning::test_cenr_warning_zero_when_fully_populated",
+        f"{_this_file}::TestUs1CenrDedupWarning::test_cenr_warning_re_emit_across_runs",
+        f"{_this_file}::TestUs1CenrDedupWarning::test_probe_payload_byte_stability_smoke",
+        # US2 country-code dedup contract representatives
+        f"{_this_file}::TestUs2CountryCodeDedupWarning::test_latam_caribbean_region_resolution",
+        f"{_this_file}::TestUs2CountryCodeDedupWarning::test_latam_caribbean_no_warnings",
+        f"{_this_file}::TestUs2CountryCodeDedupWarning::test_unmapped_country_warning_dedup",
+        # ISO coverage invariants (SC-005)
+        _coverage_file,
+    ]
+
+    logging.info("test_regression_runtime_under_budget: measuring %d nodes", len(subset))
+    # Set the breadcrumb before spawning the nested runner so any child
+    # invocation short-circuits via the guard above.
+    os.environ["_1025_RUNTIME_BUDGET_INFLIGHT"] = "1"
+    try:
+        start = time.perf_counter()  # monotonic wall-clock anchor
+        # Invoke pytest directly; ``-q`` suppresses the noisy per-node
+        # output, ``--no-header`` trims a few tens of ms, ``-p no:cacheprovider``
+        # avoids polluting the parent's cache. The rootdir stays the repo
+        # root by default (inherited from the parent pytest invocation).
+        exit_code = pytest.main([
+            "-q",  # quiet mode
+            "--no-header",  # skip pytest header
+            "-p",  # disable plugin
+            "no:cacheprovider",  # skip .pytest_cache writes
+            *subset,  # the curated subset
+        ])
+        elapsed = time.perf_counter() - start  # wall-clock cost of the nested run
+    finally:
+        # Always clear the breadcrumb, even on assertion failure.
+        os.environ.pop("_1025_RUNTIME_BUDGET_INFLIGHT", None)
+
+    logging.info(
+        "test_regression_runtime_under_budget: elapsed=%.3fs exit_code=%d",
+        elapsed,
+        exit_code,
+    )
+    # Correctness precondition: the subset must have passed. If a nested
+    # test failed, budget verification is meaningless -- surface that first.
+    assert exit_code == 0, (
+        f"1025 regression subset did not fully pass (pytest exit_code={exit_code}); "
+        f"fix the failing tests before evaluating the runtime budget"
+    )
+    # SC-007: wall-clock budget assertion.
+    budget_seconds = 5.0  # SC-007 canonical budget on the reference dev machine
+    assert elapsed < budget_seconds, (
+        f"1025 regression subset took {elapsed:.3f}s, exceeding the {budget_seconds:.1f}s "
+        f"SC-007 budget. Investigate slow fixtures or add a fresh justification if the "
+        f"budget must grow."
+    )
