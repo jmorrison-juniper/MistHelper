@@ -375,7 +375,7 @@ class _MapsClone:
         )  # Bundle write outputs for the summary phase.
 
     def _finalize_clone(self, site_id: str, source_map_id: str, prep: _ClonePrep, result: _CloneWriteResult) -> None:
-        """Emit the summary block and audit log once the write phase has succeeded."""
+        """Emit the summary block and audit log after the write phase succeeds."""
         summary = MapCloneSummary(
             source_map=prep.source_map,
             new_name=prep.new_name,

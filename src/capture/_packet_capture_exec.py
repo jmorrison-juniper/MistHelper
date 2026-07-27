@@ -235,7 +235,7 @@ class PacketCaptureExec:
         expected_duration: int,
         progress: tuple[float, int],
     ) -> bool | None:
-        """Check if a specific capture has completed."""
+        """Check if a specific capture is complete."""
         elapsed, poll_attempt = progress  # WHY: unpack progress tuple for readability
         match = self._find_capture_record(captures, capture_id)  # WHY: locate our capture row
         if match is None:  # WHY: not seen in this poll
