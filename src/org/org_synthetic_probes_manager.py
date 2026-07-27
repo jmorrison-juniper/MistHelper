@@ -2351,6 +2351,176 @@ def _prompt_confirm(summary: str) -> bool:
     return answer in ("y", "yes")
 
 
+def _compute_scheduled_probe_names(
+    combined_probes: dict[str, dict[str, Any]],
+    extra_regular_names: list[str] | None,
+) -> tuple[list[str], list[str]]:
+    """Return ``(critical_names, regular_names)`` for injection.
+
+    Why:
+        Extracted so the parent stays under the CC gate. Sorted output
+        gives us stable row ordering across re-injections (Mist compares
+        setting blocks by value on PUT, so drift-free sort keeps diffs
+        clean). Regular names are deduplicated against the critical set
+        so a Samsung ELM probe promoted to critical does not get two
+        scheduled rows.
+
+    Args:
+        combined_probes: Union of foreign + tool-authored probes about
+            to be written to ``synthetic_test.custom_probes``.
+        extra_regular_names: Optional additional ``zcc-*`` names to
+            schedule at regular (non-critical) priority.
+
+    Returns:
+        Tuple ``(critical_names, regular_names)``. Both lists are
+        sorted; ``regular_names`` excludes any name already in
+        ``critical_names``.
+    """
+    critical_names = sorted(
+        name
+        for name, probe in combined_probes.items()
+        if isinstance(probe, dict) and probe.get("aggressiveness") in _PRIORITY_AGGRESSIVENESS
+    )
+    critical_set = set(critical_names)
+    regular_names = sorted(
+        {name for name in (extra_regular_names or []) if isinstance(name, str) and name not in critical_set}
+    )
+    return critical_names, regular_names
+
+
+def _clean_test_row(row: Any) -> dict[str, Any] | None:
+    """Return a cleaned row copy, or ``None`` if the row should be dropped.
+
+    Why:
+        Extracted from ``_filter_surviving_test_rows`` so both loop and
+        drop rules stay under the CC gate. Encapsulates the two drop
+        reasons (legacy aggregate row / row that only held ``zcc-*``
+        names) so callers see one predicate.
+
+    Args:
+        row: A raw entry from the fetched ``tests[]`` list. Non-dict
+            entries are accepted and yield ``None``.
+
+    Returns:
+        A shallow-copied dict with ``zcc-*`` names stripped from its
+        ``probes`` list, or ``None`` when the row should be dropped
+        entirely.
+    """
+    if not isinstance(row, dict):
+        return None
+    row_name = row.get("name")
+    # Drop legacy tool-authored aggregate rows (name="zcc-critical-probes")
+    # written by earlier versions -- they diverge from Mist's one-row-per-probe
+    # convention and re-injection below is authoritative.
+    if isinstance(row_name, str) and row_name.startswith(_TOOL_NAME_PREFIX):
+        logging.info(
+            "Dropping legacy tool-authored tests[] row %r (aggregate-row migration)",
+            row_name,
+        )
+        return None
+    cleaned = dict(row)
+    probes_field = cleaned.get("probes")
+    if isinstance(probes_field, list):
+        filtered = [p for p in probes_field if not (isinstance(p, str) and p.startswith(_TOOL_NAME_PREFIX))]
+        # Row that only held zcc-* names is a prior injection; drop so
+        # re-injection is authoritative.
+        if probes_field and not filtered:
+            return None
+        cleaned["probes"] = filtered
+    return cleaned
+
+
+def _filter_surviving_test_rows(existing_tests: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Drop legacy tool-authored rows and strip stale ``zcc-*`` names.
+
+    Why:
+        Re-injection below is authoritative -- keeping stale ``zcc-*``
+        entries would double-book probes in the eventual PUT body. The
+        per-row predicate is delegated to ``_clean_test_row`` so this
+        function stays a trivial fold.
+
+    Args:
+        existing_tests: The ``tests[]`` list read from the fetched
+            setting (may be empty).
+
+    Returns:
+        A new list of cleaned row dicts (originals are not mutated).
+    """
+    surviving: list[dict[str, Any]] = []
+    for row in existing_tests:
+        cleaned = _clean_test_row(row)
+        if cleaned is not None:
+            surviving.append(cleaned)
+    return surviving
+
+
+def _first_vlan_template(surviving: list[dict[str, Any]]) -> list[int] | None:
+    """Return the first surviving row's ``vlan_ids`` (int-filtered), or ``None``.
+
+    Why:
+        Split out of ``_derive_test_row_template`` so each field's
+        scanner stays under the CC gate. Non-int entries in ``vlan_ids``
+        are dropped defensively -- Mist's schema is ints-only, but
+        malformed operator-authored rows shouldn't crash injection.
+
+    Args:
+        surviving: Cleaned rows from ``_filter_surviving_test_rows``.
+
+    Returns:
+        A copied int-only list, or ``None`` if no surviving row carried
+        a ``vlan_ids`` list.
+    """
+    for row in surviving:
+        row_vlans = row.get("vlan_ids")
+        if isinstance(row_vlans, list):
+            return [v for v in row_vlans if isinstance(v, int)]
+    return None
+
+
+def _first_lan_template(surviving: list[dict[str, Any]]) -> list[str] | None:
+    """Return the first surviving row's ``lan_networks`` (str-filtered), or ``None``.
+
+    Why:
+        Peer of ``_first_vlan_template``. Non-str entries are dropped
+        defensively -- Mist stores network refs as strings but again
+        we don't want a malformed row to crash injection.
+
+    Args:
+        surviving: Cleaned rows from ``_filter_surviving_test_rows``.
+
+    Returns:
+        A copied str-only list, or ``None`` if no surviving row carried
+        a ``lan_networks`` list.
+    """
+    for row in surviving:
+        row_lans = row.get("lan_networks")
+        if isinstance(row_lans, list):
+            return [ln for ln in row_lans if isinstance(ln, str)]
+    return None
+
+
+def _derive_test_row_template(
+    surviving: list[dict[str, Any]],
+) -> tuple[list[int] | None, list[str] | None]:
+    """Return the first surviving row's ``vlan_ids`` and ``lan_networks``.
+
+    Why:
+        Injected rows must inherit operator scoping from foreign rows
+        so a targeted deployment (e.g. VLAN 42 only) does not silently
+        widen when the tool adds new probes. The two fields are looked
+        up independently so a mixed-shape ``tests[]`` list still yields
+        a complete template.
+
+    Args:
+        surviving: Cleaned rows from ``_filter_surviving_test_rows``.
+
+    Returns:
+        Tuple ``(template_vlan_ids, template_lan_networks)`` -- either
+        or both may be ``None`` if no surviving row supplied them.
+    """
+    return _first_vlan_template(surviving), _first_lan_template(surviving)
+
+
 def _merge_zcc_criticals_into_tests(
     existing_tests: list[dict[str, Any]],
     combined_probes: dict[str, dict[str, Any]],
@@ -2398,58 +2568,13 @@ def _merge_zcc_criticals_into_tests(
         scheduled ``zcc-*`` probe, each carrying only that probe's name
         plus inherited ``vlan_ids`` / ``lan_networks``.
     """
-    critical_names = sorted(
-        name
-        for name, probe in combined_probes.items()
-        if isinstance(probe, dict) and probe.get("aggressiveness") in _PRIORITY_AGGRESSIVENESS
-    )
-    critical_set = set(critical_names)
-    regular_names = sorted(
-        {name for name in (extra_regular_names or []) if isinstance(name, str) and name not in critical_set}
-    )
-
-    surviving: list[dict[str, Any]] = []
-    for row in existing_tests:
-        if not isinstance(row, dict):
-            continue
-        row_name = row.get("name")
-        # Drop legacy tool-authored aggregate rows (name="zcc-critical-probes")
-        # written by earlier versions -- they diverge from Mist's one-row-per-probe
-        # convention and re-injection below is authoritative.
-        if isinstance(row_name, str) and row_name.startswith(_TOOL_NAME_PREFIX):
-            logging.info(
-                "Dropping legacy tool-authored tests[] row %r (aggregate-row migration)",
-                row_name,
-            )
-            continue
-        cleaned = dict(row)
-        probes_field = cleaned.get("probes")
-        if isinstance(probes_field, list):
-            filtered = [p for p in probes_field if not (isinstance(p, str) and p.startswith(_TOOL_NAME_PREFIX))]
-            # Row that only held zcc-* names is a prior injection; drop so
-            # re-injection is authoritative.
-            if probes_field and not filtered:
-                continue
-            cleaned["probes"] = filtered
-        surviving.append(cleaned)
+    critical_names, regular_names = _compute_scheduled_probe_names(combined_probes, extra_regular_names)
+    surviving = _filter_surviving_test_rows(existing_tests)
 
     if not critical_names and not regular_names:
         return surviving
 
-    # Inherit vlan/lan scoping from the first surviving foreign row so injected
-    # rows match operator intent; fall back to the supplied vlan_ids arg.
-    template_vlan_ids: list[int] | None = None
-    template_lan_networks: list[str] | None = None
-    for row in surviving:
-        row_vlans = row.get("vlan_ids")
-        row_lans = row.get("lan_networks")
-        if isinstance(row_vlans, list) and template_vlan_ids is None:
-            template_vlan_ids = [v for v in row_vlans if isinstance(v, int)]
-        if isinstance(row_lans, list) and template_lan_networks is None:
-            template_lan_networks = [ln for ln in row_lans if isinstance(ln, str)]
-        if template_vlan_ids is not None and template_lan_networks is not None:
-            break
-
+    template_vlan_ids, template_lan_networks = _derive_test_row_template(surviving)
     effective_vlans = template_vlan_ids if template_vlan_ids is not None else list(vlan_ids)
 
     for name in critical_names + regular_names:

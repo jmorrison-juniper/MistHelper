@@ -730,6 +730,207 @@ def _strip_prefix(key: str, prefix: str) -> str:
     return key
 
 
+def _cloud_root_trees(cloud: str, doc: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return the continent-tree dicts hanging off a per-cloud CENR doc.
+
+    Why:
+        Extracted from ``merge_clouds`` so the parent stays under the
+        CI cyclomatic-complexity gate. The interesting tree normally
+        hangs off a top-level key equal to the cloud slug (Zscaler's
+        canonical shape); on unexpected shapes we walk every dict-valued
+        top-level key so a partially-broken feed still contributes what
+        it can. ``svpnIPs`` is excluded because it is a metadata list,
+        not a continent tree.
+
+    Args:
+        cloud: Cloud slug (e.g. ``"zscloud"``).
+        doc: Parsed CENR JSON dict for this cloud.
+
+    Returns:
+        A list (possibly empty) of continent-tree dicts to walk.
+    """
+    if isinstance(doc.get(cloud), dict):
+        return [doc[cloud]]
+    fallback: list[dict[str, Any]] = []
+    for top_key, top_val in doc.items():
+        if top_key == "svpnIPs":
+            continue
+        if isinstance(top_val, dict):
+            fallback.append(top_val)
+    return fallback
+
+
+def _slot_host_field(entry: Any) -> str:
+    """Return the ``host`` string from a v3 dict entry or a legacy flat string.
+
+    Why:
+        A city that appears in more than one cloud is revisited by
+        ``merge_clouds``: the first pass writes v3 dicts into
+        ``slot[*_hostnames]``, so the second pass sees ``list[dict]``.
+        ``set(list[dict])`` blows up because dicts are unhashable, so we
+        normalise every entry to a string here before dedup.
+
+    Args:
+        entry: Either a v3 host dict (``{"host": ...}``) or a legacy
+            flat hostname string.
+
+    Returns:
+        The hostname string, or empty string when the entry is neither
+        a dict-with-host nor a plain string.
+    """
+    if isinstance(entry, dict):
+        h = entry.get("host")
+        return h if isinstance(h, str) else ""
+    return entry if isinstance(entry, str) else ""
+
+
+def _seed_slot_host_sets(slot: dict[str, Any]) -> tuple[set[str], set[str]]:
+    """Rehydrate proxy/vpn dedup sets from a slot's existing v3 host dicts.
+
+    Why:
+        Split out of ``_absorb_city_records`` so the parent stays under the
+        CC gate. On the second cloud pass for a shared city the slot lists
+        already hold v3 dicts; ``set(list[dict])`` would blow up because
+        dicts are unhashable, so we normalise through ``_slot_host_field``
+        first.
+
+    Args:
+        slot: The per-city slot dict; may hold legacy strings or v3 dicts.
+
+    Returns:
+        A ``(proxy_hosts, vpn_hosts)`` tuple of hostname sets, ready to
+        receive new hosts by ``.add``.
+    """
+    slot_proxies: set[str] = {h for h in (_slot_host_field(e) for e in slot.get("proxy_hostnames", []) or []) if h}
+    slot_vpns: set[str] = {h for h in (_slot_host_field(e) for e in slot.get("vpn_hostnames", []) or []) if h}
+    return slot_proxies, slot_vpns
+
+
+def _ingest_record(
+    record: Any,
+    proxies: set[str],
+    vpns: set[str],
+    slot_proxies: set[str],
+    slot_vpns: set[str],
+) -> None:
+    """Fold one CENR record's ``hostname`` / ``vpn`` fields into the dedup sets.
+
+    Why:
+        Split out of ``_absorb_city_records`` so the parent stays under
+        the CC gate. The four ``isinstance`` gates each add a branch, and
+        moving them here keeps the parent at a simple ``for record in
+        records`` loop.
+
+    Args:
+        record: Raw CENR record; skipped when not a dict.
+        proxies: Global proxy-hostname dedup set; mutated in place.
+        vpns: Global vpn-hostname dedup set; mutated in place.
+        slot_proxies: Per-city proxy-hostname set; mutated in place.
+        slot_vpns: Per-city vpn-hostname set; mutated in place.
+    """
+    if not isinstance(record, dict):
+        return
+    host = record.get("hostname")
+    if isinstance(host, str) and host:
+        proxies.add(host)
+        slot_proxies.add(host)
+    vpn = record.get("vpn")
+    if isinstance(vpn, str) and vpn:
+        vpns.add(vpn)
+        slot_vpns.add(vpn)
+
+
+def _finalize_slot(
+    slot: dict[str, Any],
+    slot_proxies: set[str],
+    slot_vpns: set[str],
+    cloud: str,
+) -> None:
+    """Write v3 host dicts and ``seen_in_clouds`` back onto a per-city slot.
+
+    Why:
+        Emit v3 dicts (not flat strings) so the on-disk shape stays
+        consistent with ``schema_version=3``; writing flat strings under
+        a v3 stamp previously broke the loader's idempotency
+        short-circuit. ``seen_in_clouds`` lets operators auditing the
+        merged file trace an entry back to a specific feed.
+
+    Args:
+        slot: The per-city slot dict, mutated in place.
+        slot_proxies: Final proxy-hostname set for this city.
+        slot_vpns: Final vpn-hostname set for this city.
+        cloud: Cloud slug that supplied this pass's records.
+    """
+    slot["proxy_hostnames"] = [_promote_host_entry(h) for h in sorted(slot_proxies)]
+    slot["vpn_hostnames"] = [_promote_host_entry(h) for h in sorted(slot_vpns)]
+    seen_clouds: set[str] = set(slot.get("seen_in_clouds", []) or [])
+    seen_clouds.add(cloud)
+    slot["seen_in_clouds"] = sorted(seen_clouds)
+
+
+def _absorb_city_records(
+    city: str,
+    records: list[Any],
+    cloud: str,
+    proxies: set[str],
+    vpns: set[str],
+    by_city: dict[str, dict[str, Any]],
+) -> None:
+    """Fold ``records`` into the per-city slot and the global proxy/vpn sets.
+
+    Why:
+        Split out of ``merge_clouds`` so the parent function stays under
+        the CC gate. Delegates the three sub-steps (rehydrate slot sets,
+        ingest each record, emit v3 dicts + ``seen_in_clouds``) to keep
+        this function itself under the gate as well.
+
+    Args:
+        city: Prefix-stripped city name (e.g. ``"Amsterdam"``).
+        records: Raw record list from the city bucket.
+        cloud: Cloud slug that supplied these records (recorded under
+            ``seen_in_clouds`` on the slot).
+        proxies: Global proxy-hostname dedup set; mutated in place.
+        vpns: Global vpn-hostname dedup set; mutated in place.
+        by_city: Merged-by-city map; the target slot is mutated in place.
+    """
+    slot = by_city.setdefault(city, {"proxy_hostnames": [], "vpn_hostnames": []})
+    slot_proxies, slot_vpns = _seed_slot_host_sets(slot)
+    for record in records:
+        _ingest_record(record, proxies, vpns, slot_proxies, slot_vpns)
+    _finalize_slot(slot, slot_proxies, slot_vpns, cloud)
+
+
+def _walk_city_map(
+    city_map: dict[str, Any],
+    cloud: str,
+    proxies: set[str],
+    vpns: set[str],
+    by_city: dict[str, dict[str, Any]],
+) -> None:
+    """Fold every ``city : X`` bucket in a continent tree into the merged view.
+
+    Why:
+        Split out of ``merge_clouds`` so the parent stays under the CC
+        gate. The ``_strip_prefix`` call drops the ``"city : "``
+        namespace prefix so ``by_city`` keys match the plain city names
+        used by :func:`scripts.build_zen_city_metadata.attach_city_metadata`.
+
+    Args:
+        city_map: One continent's dict of city buckets.
+        cloud: Cloud slug supplying these buckets.
+        proxies: Global proxy-hostname dedup set; mutated in place.
+        vpns: Global vpn-hostname dedup set; mutated in place.
+        by_city: Merged-by-city map; mutated in place.
+    """
+    for city_key, records in city_map.items():
+        if not isinstance(records, list):
+            continue
+        city = _strip_prefix(city_key, "city")
+        if not city:
+            continue
+        _absorb_city_records(city, records, cloud, proxies, vpns, by_city)
+
+
 def merge_clouds(per_cloud: dict[str, dict[str, Any]]) -> dict[str, Any]:
     """Flat-merge per-cloud CENR documents into a single cache-file dict.
 
@@ -766,78 +967,12 @@ def merge_clouds(per_cloud: dict[str, dict[str, Any]]) -> dict[str, Any]:
     for cloud, doc in per_cloud.items():
         if not isinstance(doc, dict):
             continue
-        # The interesting tree hangs off a key equal to the cloud slug; any
-        # other top-level key (e.g. ``svpnIPs``) is metadata we ignore. Fall
-        # back to walking every dict-valued top-level key so an unexpected
-        # cloud response still contributes what it can.
-        cloud_roots: list[dict[str, Any]] = []
-        if isinstance(doc.get(cloud), dict):
-            cloud_roots.append(doc[cloud])
-        else:
-            for top_key, top_val in doc.items():
-                if top_key == "svpnIPs":
-                    continue
-                if isinstance(top_val, dict):
-                    cloud_roots.append(top_val)
-
-        for continent_tree in cloud_roots:
+        for continent_tree in _cloud_root_trees(cloud, doc):
             for continent_key, city_map in continent_tree.items():
                 if not isinstance(city_map, dict):
                     continue
                 _ = _strip_prefix(continent_key, "continent")  # future: expose continent
-                for city_key, records in city_map.items():
-                    if not isinstance(records, list):
-                        continue
-                    city = _strip_prefix(city_key, "city")
-                    if not city:
-                        continue
-                    slot = by_city.setdefault(city, {"proxy_hostnames": [], "vpn_hostnames": []})
-
-                    # A city that appears in more than one cloud is visited
-                    # more than once inside this loop. The first pass writes
-                    # v3 dicts into ``slot[*_hostnames]`` (see below), so the
-                    # second pass sees ``list[dict]`` rather than
-                    # ``list[str]`` -- calling ``set(list[dict])`` blows up
-                    # because dicts are unhashable. Extract the ``host`` field
-                    # when the entry is already a dict so the dedup set stays
-                    # a ``set[str]`` regardless of read-back shape.
-                    def _host_of(entry: Any) -> str:
-                        if isinstance(entry, dict):
-                            h = entry.get("host")
-                            return h if isinstance(h, str) else ""
-                        return entry if isinstance(entry, str) else ""
-
-                    slot_proxies: set[str] = {
-                        h for h in (_host_of(e) for e in slot.get("proxy_hostnames", []) or []) if h
-                    }
-                    slot_vpns: set[str] = {h for h in (_host_of(e) for e in slot.get("vpn_hostnames", []) or []) if h}
-                    for record in records:
-                        if not isinstance(record, dict):
-                            continue
-                        host = record.get("hostname")
-                        if isinstance(host, str) and host:
-                            proxies.add(host)
-                            slot_proxies.add(host)
-                        vpn = record.get("vpn")
-                        if isinstance(vpn, str) and vpn:
-                            vpns.add(vpn)
-                            slot_vpns.add(vpn)
-                    # Emit v3 host dicts, not flat strings, so the on-disk
-                    # shape matches the ``schema_version=3`` stamp we set
-                    # below. Writing flat strings under a v3 stamp broke the
-                    # loader's idempotency short-circuit and made
-                    # ``_merge_observations_into_cenr`` a no-op (its
-                    # ``isinstance(entry, dict)`` guard skipped everything),
-                    # which in turn caused ``_probe_target`` to fall through
-                    # to the HTTPS default for every VPN host.
-                    slot["proxy_hostnames"] = [_promote_host_entry(h) for h in sorted(slot_proxies)]
-                    slot["vpn_hostnames"] = [_promote_host_entry(h) for h in sorted(slot_vpns)]
-                    # Note the cloud each city was seen in so operators
-                    # auditing the merged file can trace an entry back to a
-                    # specific feed.
-                    seen_clouds: set[str] = set(slot.get("seen_in_clouds", []) or [])
-                    seen_clouds.add(cloud)
-                    slot["seen_in_clouds"] = sorted(seen_clouds)
+                _walk_city_map(city_map, cloud, proxies, vpns, by_city)
 
     source_urls = sorted(_CENR_URL_TEMPLATE.format(cloud=c) for c in per_cloud)
     now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
