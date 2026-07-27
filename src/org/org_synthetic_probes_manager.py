@@ -1677,6 +1677,71 @@ def _distinct_zen_locations(city_metadata: dict[str, dict[str, Any]]) -> dict[st
     return groups
 
 
+def _zens_in_country(
+    city_metadata: dict[str, dict[str, Any]],
+    normalised_cc: str,
+) -> dict[str, dict[str, Any]]:
+    """Filter ``city_metadata`` down to entries matching ``normalised_cc``.
+
+    Why:
+        Extracted from ``_resolve_zen_cities_for_site`` so the caller stays
+        below the Radon CC=10 quality gate. The predicate is one call site
+        today but the isolation makes the rule ("case-insensitive match on
+        ``country_code`` string") testable in isolation.
+
+    Args:
+        city_metadata: ``cenr["city_metadata"]`` mapping.
+        normalised_cc: Uppercased ISO country code (empty string disables
+            the filter and returns ``{}``).
+
+    Returns:
+        Sub-mapping of cities whose ``country_code`` matches. Empty when
+        ``normalised_cc`` is empty or no city matches.
+    """
+    if not normalised_cc:
+        return {}
+    result: dict[str, dict[str, Any]] = {}
+    for city, meta in city_metadata.items():
+        meta_cc = meta.get("country_code")
+        if isinstance(meta_cc, str) and meta_cc.upper() == normalised_cc:
+            result[city] = meta
+    return result
+
+
+def _pick_zens_from_in_country(
+    in_country: dict[str, dict[str, Any]],
+    site_coords: tuple[float, float] | None,
+    normalised_cc: str,
+) -> list[str]:
+    """Apply the in-country compression rules (rules 1-3 of ZEN selection).
+
+    Why:
+        ``_resolve_zen_cities_for_site`` was CC=13 because the in-country
+        branch alone stacks three sub-decisions (threshold vs latlng vs
+        fallback). Splitting them out drops the outer function to CC<=10
+        and keeps the rule numbering discoverable from one place.
+
+    Args:
+        in_country: Result of ``_zens_in_country`` (non-empty).
+        site_coords: ``(lat, lon)`` for the site, or ``None``.
+        normalised_cc: Uppercased ISO country code (for logging only).
+
+    Returns:
+        Sorted, deduped list of ZEN city names per rules 1-3.
+    """
+    location_groups = _distinct_zen_locations(in_country)
+    if len(location_groups) <= _ZEN_COMPRESSION_THRESHOLD:
+        return sorted(in_country.keys())
+    if site_coords is not None:
+        return _nearest_zens_from_pool(in_country, site_coords, _ZEN_NEAREST_COUNT)
+    logging.info(
+        "Site missing latlng but has country %s with %d ZEN locations; " "scheduling all in-country ZENs",
+        normalised_cc,
+        len(location_groups),
+    )
+    return sorted(in_country.keys())
+
+
 def _resolve_zen_cities_for_site(
     site: dict[str, Any],
     cenr: dict[str, Any],
@@ -1720,29 +1785,9 @@ def _resolve_zen_cities_for_site(
     normalised_cc = country_code.strip().upper() if isinstance(country_code, str) else ""
     site_coords = _site_latlng(site)
 
-    in_country: dict[str, dict[str, Any]] = {}
-    if normalised_cc:
-        for city, meta in city_metadata.items():
-            meta_cc = meta.get("country_code")
-            if isinstance(meta_cc, str) and meta_cc.upper() == normalised_cc:
-                in_country[city] = meta
-
+    in_country = _zens_in_country(city_metadata, normalised_cc)
     if in_country:
-        location_groups = _distinct_zen_locations(in_country)
-        if len(location_groups) <= _ZEN_COMPRESSION_THRESHOLD:
-            # Rule 1: probe every ZEN in-country.
-            return sorted(in_country.keys())
-        if site_coords is not None:
-            # Rule 2: nearest N locations, then expand back to all names at each.
-            return _nearest_zens_from_pool(in_country, site_coords, _ZEN_NEAREST_COUNT)
-        # Rule 3: fall back to probing the whole in-country set. Not ideal
-        # but better than dropping the site entirely.
-        logging.info(
-            "Site missing latlng but has country %s with %d ZEN locations; " "scheduling all in-country ZENs",
-            normalised_cc,
-            len(location_groups),
-        )
-        return sorted(in_country.keys())
+        return _pick_zens_from_in_country(in_country, site_coords, normalised_cc)
 
     if site_coords is not None:
         # Rule 4: no country match but we know where the site is.
@@ -1811,6 +1856,33 @@ def _nearest_zens_from_pool(
     return sorted(picked_names)
 
 
+def _probe_hostnames_for_city(meta: dict[str, Any]) -> list[str]:
+    """Return the ZEN probe hostnames for one ``city_metadata`` entry.
+
+    Why:
+        Extracted from ``_zen_probe_names_for_cities`` so the caller stays
+        under Radon CC=10. Encapsulates the v3 (``probe_hostnames`` list)
+        vs legacy v2 (``probe_hostname`` scalar) fallback in one place so
+        future migrations only touch this helper.
+
+    Args:
+        meta: One ``city_metadata`` value (already type-checked as dict).
+
+    Returns:
+        Non-empty ``str`` hostnames. Empty list when neither v3 nor legacy
+        forms are present.
+    """
+    hostnames_raw = meta.get("probe_hostnames")
+    if isinstance(hostnames_raw, list):
+        hostnames = [h for h in hostnames_raw if isinstance(h, str) and h]
+        if hostnames:
+            return hostnames
+    legacy = meta.get("probe_hostname")
+    if isinstance(legacy, str) and legacy:
+        return [legacy]
+    return []
+
+
 def _zen_probe_names_for_cities(
     cities: list[str],
     cenr: dict[str, Any],
@@ -1851,15 +1923,7 @@ def _zen_probe_names_for_cities(
         meta = city_metadata.get(city)
         if not isinstance(meta, dict):
             continue
-        hostnames_raw = meta.get("probe_hostnames")
-        hostnames: list[str] = []
-        if isinstance(hostnames_raw, list):
-            hostnames = [h for h in hostnames_raw if isinstance(h, str) and h]
-        if not hostnames:
-            legacy = meta.get("probe_hostname")
-            if isinstance(legacy, str) and legacy:
-                hostnames = [legacy]
-        for hostname in hostnames:
+        for hostname in _probe_hostnames_for_city(meta):
             result.append(f"{_TOOL_NAME_PREFIX}{_TUNNEL_ZEN_ROLE}-{_fqdn_slug(hostname)}")
     return result
 
