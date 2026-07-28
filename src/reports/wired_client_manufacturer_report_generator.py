@@ -20,6 +20,7 @@ import mistapi  # WHY: direct SDK access for search + pagination helpers.
 from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
+from src.utils.console import echo  # WHY: 1031 stdout + INFO log helper replaces legacy WARNING-channel echoes.
 
 
 class WiredClientManufacturerReportGenerator:
@@ -33,7 +34,7 @@ class WiredClientManufacturerReportGenerator:
         records = WiredClientManufacturerReportGenerator._fetch_all_clients(org_id)  # Fetch all clients.
         if not records:  # No records.
             logging.warning("No wired clients retrieved from API")  # Warn none retrieved.
-            logging.warning("\n  No wired clients found in the organization.")  # Legacy console echo routed via logger.
+            echo("\n  No wired clients found in the organization.")
             return  # Abort.
         WiredClientManufacturerReportGenerator._write_outputs(records, "")  # Write the full export.
         summary = WiredClientManufacturerReportGenerator._build_manufacturer_summary(records)
@@ -49,9 +50,7 @@ class WiredClientManufacturerReportGenerator:
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of live apisession global.
         try:
             logging.info("Fetching all organization wired clients for manufacturer report...")  # Log the fetch.
-            logging.warning(
-                "\n  Retrieving all wired clients from organization..."
-            )  # Legacy console echo routed via logger.
+            echo("\n  Retrieving all wired clients from organization...")
             response = mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients(  # Call the API.
                 mh.apisession,
                 org_id,
@@ -59,15 +58,11 @@ class WiredClientManufacturerReportGenerator:
             )
             records = mistapi.get_all(response=response, mist_session=mh.apisession) or []  # Page all. Default empty.
             logging.info("Retrieved %s wired client records", len(records))  # Log the count.
-            logging.warning(
-                "  Retrieved %s wired client records", len(records)
-            )  # Legacy console echo routed via logger.
+            echo("  Retrieved %s wired client records", len(records))
             return records  # Return records.
         except Exception as exception:  # Fetch failed.
             logging.exception("Failed to fetch wired clients: %s", exception)  # Log the exception.
-            logging.warning(
-                "\n  Error retrieving wired clients: %s", exception
-            )  # Legacy console echo routed via logger.
+            echo("\n  Error retrieving wired clients: %s", exception)
             return []  # Return empty.
 
     @staticmethod
@@ -101,13 +96,13 @@ class WiredClientManufacturerReportGenerator:
         try:
             selection_index = int(choice)  # Parse the numeric selection.
         except ValueError:  # Non-numeric input.
-            logging.warning("  Invalid selection.")  # Legacy console echo routed via logger.
+            echo("  Invalid selection.")
             return None  # Abort.
         if 1 <= selection_index <= len(summary):  # In valid range.
             selected_manufacturer = summary[selection_index - 1][0]  # Pick the manufacturer name.
             logging.info("User selected manufacturer: %s", selected_manufacturer)  # Log the choice.
             return selected_manufacturer  # Return chosen manufacturer.
-        logging.warning("  Selection out of range.")  # Legacy console echo routed via logger.
+        echo("  Selection out of range.")
         return None  # Abort.
 
     @staticmethod
@@ -152,9 +147,7 @@ class WiredClientManufacturerReportGenerator:
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataProcessingUtils + DataExporter helpers.
         label = manufacturer if manufacturer else "ALL manufacturers"  # Label for messages.
         filename = WiredClientManufacturerReportGenerator._build_filename(manufacturer)  # Build the filename.
-        logging.warning(
-            "\n  Exporting %s records for: %s", len(filtered), label
-        )  # Legacy console echo routed via logger.
+        echo("\n  Exporting %s records for: %s", len(filtered), label)
         if filtered:  # Have records.
             flattened = DataProcessingUtils.flatten_nested_fields(filtered)  # Flatten nested fields.
             sanitized = DataProcessingUtils.escape_multiline(flattened)
@@ -165,5 +158,5 @@ class WiredClientManufacturerReportGenerator:
             filename,
             api_function_name="wiredClientManufacturerReport",
         )
-        logging.warning("  Exported to: data/%s.csv", filename)  # Legacy console echo routed via logger.
+        echo("  Exported to: data/%s.csv", filename)
         logging.info("Manufacturer report exported: %s records for %s -> %s", len(sanitized), label, filename)

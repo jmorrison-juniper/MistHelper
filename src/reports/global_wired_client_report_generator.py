@@ -28,6 +28,7 @@ import mistapi  # WHY: direct SDK access for search + pagination helpers.
 from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
+from src.utils.console import echo  # WHY: 1031 stdout + INFO log helper replaces legacy WARNING-channel echoes.
 
 
 class GlobalWiredClientReportGenerator:
@@ -44,7 +45,7 @@ class GlobalWiredClientReportGenerator:
         records, remote_used = GlobalWiredClientReportGenerator._fetch_clients(org_id, criteria)
         if not records:  # No records.
             logging.warning("No wired clients retrieved from API")  # Warn none retrieved.
-            logging.warning("\n  No wired clients found in the organization.")  # Legacy console echo routed via logger.
+            echo("\n  No wired clients found in the organization.")
             return  # Abort.
         matched, metadata = GlobalWiredClientReportGenerator._apply_filters(records, criteria, remote_used)
         GlobalWiredClientReportGenerator._write_outputs(matched, metadata)  # Write the outputs.
@@ -52,8 +53,8 @@ class GlobalWiredClientReportGenerator:
     @staticmethod
     def _prompt_filter_criteria() -> dict[str, str] | Literal[False] | None:  # False = user cancelled, never True
         """Collect optional MAC and manufacturer filter criteria from user."""
-        logging.warning("\n--- Global Wired Client Report ---")  # Legacy console echo routed via logger.
-        logging.warning("Optional filters (press Enter to skip):\n")  # Legacy console echo routed via logger.
+        echo("\n--- Global Wired Client Report ---")
+        echo("Optional filters (press Enter to skip):\n")
         criteria: dict[str, str] = {}  # Collect criteria.
         mac_result = GlobalWiredClientReportGenerator._collect_single_filter("MAC address", "mac", criteria)
         if mac_result is False:  # User cancelled.
@@ -93,19 +94,17 @@ class GlobalWiredClientReportGenerator:
                 return selected  # type: ignore[no-any-return]
         except ValueError:  # Non-numeric input -> treat as invalid
             pass
-        logging.warning(
-            "  Invalid selection. No %s filter will be applied.", field_name
-        )  # Legacy console echo routed via logger.
+        echo("  Invalid selection. No %s filter will be applied.", field_name)
         return None
 
     @staticmethod
     def _prompt_operator(field_name: str) -> str | None:  # Prompt an operator choice.
         """Display operator selection menu and return chosen operator or None."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of FilterOperatorEngine + InputUtils.
-        logging.warning("  %s filter operator:", field_name)  # Legacy console echo routed via logger.
-        logging.warning("    0. No filter (skip)")  # Legacy console echo routed via logger.
+        echo("  %s filter operator:", field_name)
+        echo("    0. No filter (skip)")
         for index, operator in enumerate(mh.FilterOperatorEngine.OPERATOR_CATALOG, 1):  # List operators
-            logging.warning("    %s. %s", index, operator)  # Legacy console echo routed via logger.
+            echo("    %s. %s", index, operator)
         choice = mh.InputUtils.safe_input(  # Read the choice
             f"  Select {field_name} operator (0-12, default 0): ",
             default_value="0",
@@ -123,9 +122,7 @@ class GlobalWiredClientReportGenerator:
             remote_used = GlobalWiredClientReportGenerator._build_remote_params(criteria, remote_params)
         try:
             logging.info("Fetching organization wired clients...")  # Log the fetch.
-            logging.warning(
-                "\n  Retrieving wired clients from organization..."
-            )  # Legacy console echo routed via logger.
+            echo("\n  Retrieving wired clients from organization...")
             response = mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients(  # Call the API.
                 mh.apisession,
                 org_id,
@@ -133,15 +130,11 @@ class GlobalWiredClientReportGenerator:
             )
             records = mistapi.get_all(response=response, mist_session=mh.apisession) or []  # Page all. Default empty.
             logging.info("Retrieved %s wired client records", len(records))  # Log the count.
-            logging.warning(
-                "  Retrieved %s wired client records", len(records)
-            )  # Legacy console echo routed via logger.
+            echo("  Retrieved %s wired client records", len(records))
             return records, remote_used  # Return records and flag.
         except Exception as exception:  # Fetch failed.
             logging.exception("Failed to fetch wired clients: %s", exception)  # Log the exception.
-            logging.warning(
-                "\n  Error retrieving wired clients: %s", exception
-            )  # Legacy console echo routed via logger.
+            echo("\n  Error retrieving wired clients: %s", exception)
             return [], False  # Return empty.
 
     @staticmethod
@@ -258,12 +251,10 @@ class GlobalWiredClientReportGenerator:
         """Write matched records to both local report artifact and standard export."""
         matched_count = metadata["records_matched"]  # Matched count.
         retrieved_count = metadata["records_retrieved"]  # Retrieved count.
-        logging.warning(
-            "\n  Matched %s of %s wired client records", matched_count, retrieved_count
-        )  # Legacy console echo routed via logger.
+        echo("\n  Matched %s of %s wired client records", matched_count, retrieved_count)
         if matched_count == 0:  # Nothing matched.
             logging.info("Zero records matched filters -- producing empty outputs")  # Log empty result.
-            logging.warning("  No records matched the specified filters.")  # Legacy console echo routed via logger.
+            echo("  No records matched the specified filters.")
         GlobalWiredClientReportGenerator._write_standard_export(matched)  # Write the CSV export.
         GlobalWiredClientReportGenerator._write_local_report(matched, metadata)  # Write the JSON summary.
 
@@ -295,9 +286,7 @@ class GlobalWiredClientReportGenerator:
             with open(report_path, "w", encoding="utf-8") as report_file:  # Open the report file.
                 json.dump(report_payload, report_file, indent=2, default=str)  # Dump JSON.
             logging.info("Local report artifact written to %s", report_path)  # Log the write.
-            logging.warning("  Report summary written to %s", report_path)  # Legacy console echo routed via logger.
+            echo("  Report summary written to %s", report_path)
         except OSError as error:  # Write failed.
             logging.error("Failed to write local report artifact: %s", error)  # Log the error.
-            logging.warning(
-                "  Warning: Could not write report summary to %s", report_path
-            )  # Legacy console echo routed via logger.
+            echo("  Warning: Could not write report summary to %s", report_path)

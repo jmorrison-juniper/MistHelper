@@ -25,6 +25,8 @@ from typing import Any  # WHY: device dicts carry heterogeneous values.
 
 from prettytable import PrettyTable  # WHY: render offline device rows as a table.
 
+from src.utils.console import echo  # WHY: 1031 stdout + INFO log helper replaces legacy WARNING-channel echoes.
+
 
 class OfflineDeviceReporter:  # Offline device inventory report.
     """Offline Device Report (Menu 158).
@@ -77,11 +79,9 @@ class OfflineDeviceReporter:  # Offline device inventory report.
                 return parsed
             remaining = OfflineDeviceReporter.MAX_INPUT_RETRIES - attempt - 1  # Attempts left.
             if remaining > 0:
-                logging.warning("  (%s attempt(s) remaining)", remaining)  # Legacy console echo routed via logger.
+                echo("  (%s attempt(s) remaining)", remaining)
         logging.warning("Max retries exceeded for threshold input, using default 48 hours")  # Log fallback.
-        logging.warning(
-            "  Using default threshold: %s hours", OfflineDeviceReporter.DEFAULT_THRESHOLD_HOURS
-        )  # Legacy console echo routed via logger.
+        echo("  Using default threshold: %s hours", OfflineDeviceReporter.DEFAULT_THRESHOLD_HOURS)
         return OfflineDeviceReporter.DEFAULT_THRESHOLD_HOURS
 
     @staticmethod
@@ -89,7 +89,7 @@ class OfflineDeviceReporter:  # Offline device inventory report.
         """Fetch site lookup and device stats from Mist API."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of APICoreFetchUtils/mistapi/apisession.
         logging.info("Fetching site information for offline device report...")
-        logging.warning("  Fetching site information...")  # Legacy console echo routed via logger.
+        echo("  Fetching site information...")
         all_sites = mh.APICoreFetchUtils.all_sites_with_limit(current_org_id)
         site_lookup: dict[str, str] = {}
         for site in all_sites:
@@ -98,13 +98,13 @@ class OfflineDeviceReporter:  # Offline device inventory report.
                 site_lookup[site_id] = site.get("name", "Unknown Site")
 
         logging.info("Fetching device stats for offline device report...")
-        logging.warning("  Fetching device statistics...")  # Legacy console echo routed via logger.
+        echo("  Fetching device statistics...")
         stats_resp = mh.mistapi.api.v1.orgs.stats.listOrgDevicesStats(
             mh.apisession, current_org_id, type="all", status="all", fields="*", limit=1000
         )
         all_devices: list[dict[str, Any]] = mh.mistapi.get_all(response=stats_resp, mist_session=mh.apisession)
         logging.info("Retrieved stats for %s devices", len(all_devices))
-        logging.warning("  Retrieved %s devices from API", len(all_devices))  # Legacy console echo routed via logger.
+        echo("  Retrieved %s devices from API", len(all_devices))
         return site_lookup, all_devices
 
     @staticmethod
@@ -190,18 +190,16 @@ class OfflineDeviceReporter:  # Offline device inventory report.
     @staticmethod
     def _render_offline_breakdowns(type_counts: dict[str, int], site_counts: dict[str, int]) -> None:
         """Print 'By Type' and 'Top 5 Sites' breakdowns from precomputed counts."""
-        logging.warning("\nBy Type:")  # Legacy console echo routed via logger.
+        echo("\nBy Type:")
         for device_type in ["AP", "Switch", "Gateway"]:  # Stable display order.
             count = type_counts.get(device_type, 0)  # Lookup count.
             if count > 0:  # Suppress zeros.
-                logging.warning("  %ss: %s", device_type, count)  # Legacy console echo routed via logger.
+                echo("  %ss: %s", device_type, count)
         sorted_sites = sorted(site_counts.items(), key=lambda item: item[1], reverse=True)[:5]  # Top 5 by count.
         if sorted_sites:
-            logging.warning("\nTop 5 Sites:")  # Legacy console echo routed via logger.
+            echo("\nTop 5 Sites:")
             for rank, (site_name, count) in enumerate(sorted_sites, 1):  # Rank each top site.
-                logging.warning(
-                    "  %s. %s: %s offline", rank, site_name, count
-                )  # Legacy console echo routed via logger.
+                echo("  %s. %s: %s offline", rank, site_name, count)
 
     @staticmethod
     def _display_summary(
@@ -210,11 +208,9 @@ class OfflineDeviceReporter:  # Offline device inventory report.
         threshold_hours: int,
     ) -> None:
         """Display summary statistics before the detail table."""
-        logging.warning("\n--- Summary ---")  # Legacy console echo routed via logger.
-        logging.warning("Total devices in org: %s", f"{total_device_count:,}")  # Legacy console echo routed via logger.
-        logging.warning(
-            "Devices offline > %s hours: %s", threshold_hours, len(offline_records)
-        )  # Legacy console echo routed via logger.
+        echo("\n--- Summary ---")
+        echo("Total devices in org: %s", f"{total_device_count:,}")
+        echo("Devices offline > %s hours: %s", threshold_hours, len(offline_records))
         type_counts: dict[str, int] = {}  # Per-type tally.
         site_counts: dict[str, int] = {}  # Per-site tally.
         for record in offline_records:  # Walk each offline record once.
@@ -246,9 +242,7 @@ class OfflineDeviceReporter:  # Offline device inventory report.
             data=csv_records, filename_or_table=filename, api_function_name="listOrgDevicesStats"
         )  # Persist.
         logging.info("CSV saved: data/%s (%s devices)", filename, total_count)  # Log save.
-        logging.warning(
-            "\nCSV saved: data/%s (%s devices)", filename, total_count
-        )  # Legacy console echo routed via logger.
+        echo("\nCSV saved: data/%s (%s devices)", filename, total_count)
 
     @staticmethod
     def _present_results(offline_records: list[dict[str, str]]) -> None:  # Render and save offline results.
@@ -256,14 +250,12 @@ class OfflineDeviceReporter:  # Offline device inventory report.
         fields = OfflineDeviceReporter._OFFLINE_DISPLAY_FIELDS  # Column order.
         total_count = len(offline_records)  # Total rows.
         show_count = min(total_count, OfflineDeviceReporter.MAX_DISPLAY_ROWS)  # Cap display.
-        logging.warning(
-            "\n--- Offline Devices (showing %s of %s) ---", show_count, total_count
-        )  # Legacy console echo routed via logger.
+        echo("\n--- Offline Devices (showing %s of %s) ---", show_count, total_count)
         table = PrettyTable()  # Build display table.
         table.field_names = list(fields)  # Set columns.
         for record in offline_records[:show_count]:  # Show capped rows.
             table.add_row([record.get(f, "") for f in fields])  # Add each row.
-        logging.warning("%s", table)  # Legacy console echo routed via logger.
+        echo("%s", table)
         OfflineDeviceReporter._save_offline_csv(offline_records, total_count)  # Persist CSV + log.
 
     @staticmethod
@@ -272,10 +264,10 @@ class OfflineDeviceReporter:  # Offline device inventory report.
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ConfigUtils.
         current_org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
         if not current_org_id:  # No org selected.
-            logging.warning("! No organization selected. Exiting.")  # Legacy console echo routed via logger.
+            echo("! No organization selected. Exiting.")
             return None, 0  # Caller must abort.
         threshold_hours = OfflineDeviceReporter._prompt_threshold()  # Prompt threshold.
-        logging.warning("Threshold: %s hours\n", threshold_hours)  # Legacy console echo routed via logger.
+        echo("Threshold: %s hours\n", threshold_hours)
         return current_org_id, threshold_hours
 
     @staticmethod
@@ -287,12 +279,12 @@ class OfflineDeviceReporter:  # Offline device inventory report.
         OfflineDeviceReporter._present_results(offline_records)  # Detail table + CSV.
         elapsed = time.time() - start_time  # Elapsed wall time.
         logging.info("Offline device report completed in %.1f seconds", elapsed)  # Log duration.
-        logging.warning("\nReport completed in %.1f seconds", elapsed)  # Legacy console echo routed via logger.
+        echo("\nReport completed in %.1f seconds", elapsed)
 
     @staticmethod
     def execute() -> None:  # Run the offline report.
         """Main entry point for offline device report (Menu 158)."""
-        logging.warning("\n=== Offline Device Report ===")  # Legacy console echo routed via logger.
+        echo("\n=== Offline Device Report ===")
         logging.info("Starting offline device report...")  # Log start.
         start_time = time.time()  # Start timer.
         current_org_id, threshold_hours = OfflineDeviceReporter._gather_offline_inputs()  # Org + threshold.
@@ -302,19 +294,15 @@ class OfflineDeviceReporter:  # Offline device inventory report.
             site_lookup, all_devices = OfflineDeviceReporter._fetch_data(current_org_id)  # Fetch sites + devices.
         except Exception as error:  # Fetch failed.
             logging.error("Failed to fetch data from Mist API: %s", error)  # Log error.
-            logging.warning(
-                "! Failed to fetch data. Please check your API credentials and network connection."
-            )  # Legacy console echo routed via logger.
+            echo("! Failed to fetch data. Please check your API credentials and network connection.")
             return
         if not all_devices:  # No devices in org.
             logging.info("No devices found in organization")  # Log it.
-            logging.warning("No devices found in this organization.")  # Legacy console echo routed via logger.
+            echo("No devices found in this organization.")
             return
         offline_records = OfflineDeviceReporter._process_devices(all_devices, site_lookup, threshold_hours)  # Filter.
         if not offline_records:  # Nothing offline.
-            logging.warning(
-                "No devices found offline for more than %s hours. All clear!", threshold_hours
-            )  # Legacy console echo routed via logger.
+            echo("No devices found offline for more than %s hours. All clear!", threshold_hours)
             logging.info("No devices offline beyond %sh threshold", threshold_hours)  # Log all-clear.
             return
         OfflineDeviceReporter._finalize_offline_report(len(all_devices), offline_records, threshold_hours, start_time)

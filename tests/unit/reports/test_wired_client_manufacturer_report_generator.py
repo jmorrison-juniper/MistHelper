@@ -41,7 +41,7 @@ def _make_mh(**extra):
 
 def test_execute_aborts_when_no_records(caplog: pytest.LogCaptureFixture) -> None:
     """Empty fetch -> warning + user notice, no exports invoked."""
-    caplog.set_level(logging.WARNING)
+    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
     fake_mh = _make_mh()
     fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-uuid"
     with (
@@ -140,7 +140,7 @@ def test_fetch_all_clients_defaults_none_pagination_to_empty_list() -> None:
 
 def test_fetch_all_clients_returns_empty_on_api_exception(caplog: pytest.LogCaptureFixture) -> None:
     """API failure logs + prints and returns an empty list (no re-raise)."""
-    caplog.set_level(logging.WARNING)
+    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
     fake_mh = _make_mh()
     fake_mistapi = MagicMock(name="mistapi")
     fake_mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients.side_effect = RuntimeError("boom")
@@ -185,7 +185,7 @@ def test_build_manufacturer_summary_uses_unknown_for_missing_or_empty() -> None:
 
 def test_print_manufacturer_table_renders_totals_and_rows(caplog: pytest.LogCaptureFixture) -> None:
     """Header shows totals; rows list each manufacturer with count."""
-    caplog.set_level(logging.WARNING)
+    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
     R._print_manufacturer_table([("Cisco", 3), ("Juniper", 1)])
     output = caplog.text
     assert "Found 4 clients from 2 manufacturers" in output
@@ -195,7 +195,7 @@ def test_print_manufacturer_table_renders_totals_and_rows(caplog: pytest.LogCapt
 
 def test_print_manufacturer_table_truncates_long_names(caplog: pytest.LogCaptureFixture) -> None:
     """Names longer than 44 characters are truncated for column alignment."""
-    caplog.set_level(logging.WARNING)
+    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
     long_name = "X" * 60
     R._print_manufacturer_table([(long_name, 1)])
     output = caplog.text
@@ -213,7 +213,7 @@ def test_parse_manufacturer_choice_returns_none_for_empty_input() -> None:
 
 def test_parse_manufacturer_choice_returns_none_for_non_numeric(caplog: pytest.LogCaptureFixture) -> None:
     """Non-numeric input prints an error and returns None."""
-    caplog.set_level(logging.WARNING)
+    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
     assert R._parse_manufacturer_choice("abc", [("Cisco", 1)]) is None
     assert "Invalid selection" in caplog.text
 
@@ -226,7 +226,7 @@ def test_parse_manufacturer_choice_returns_selected_name_for_valid_index() -> No
 
 def test_parse_manufacturer_choice_returns_none_when_out_of_range(caplog: pytest.LogCaptureFixture) -> None:
     """Out-of-range indexes print an error and return None."""
-    caplog.set_level(logging.WARNING)
+    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
     assert R._parse_manufacturer_choice("99", [("Cisco", 1)]) is None
     assert "out of range" in caplog.text
 
