@@ -249,10 +249,20 @@ jobs:
           cache: pip
       - run: pip install pip-audit
       - name: Run pip-audit
-        # CVE-2026-4539: false positive in cryptography (see linked issue)
-        # PYSEC-2025-183 / CVE-2025-45768: disputed by PyJWT upstream -- relates to app-level
-        # key length choices, not a library defect; no fix version exists; tracked in issue #346
-        run: pip-audit -r requirements.txt --ignore-vuln CVE-2026-4539 --ignore-vuln PYSEC-2025-183
+        # Reviewed 2026-07-28 under issue #890. Both historical --ignore-vuln entries
+        # are removed. `pip-audit -r requirements.txt` with no ignore flags reports
+        # "No known vulnerabilities found" against the current dependency set, which
+        # resolves cryptography 49.0.0 and PyJWT 2.13.0. Both packages are transitive.
+        # cryptography arrives through paramiko.
+        #   CVE-2026-4539  -- was recorded as a false positive in cryptography.
+        #                     pip-audit no longer reports it.
+        #   PYSEC-2025-183 -- also tracked as CVE-2025-45768. PyJWT upstream disputed it.
+        #                     Closed issue #346 holds the dispute record. pip-audit no
+        #                     longer reports it.
+        # Before you add a new --ignore-vuln entry, record three facts in a comment:
+        # the date of the review, a link to the upstream tracker, and the condition
+        # that triggers the next review.
+        run: pip-audit -r requirements.txt
 
   # ──────────────────────────────────────────────────────────────
   # CODE QUALITY

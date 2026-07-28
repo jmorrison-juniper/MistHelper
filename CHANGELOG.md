@@ -7,6 +7,21 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Remove both pip-audit `--ignore-vuln` entries after review (issue #890)
+
+- **CVE suppression review (Removed)**: deleted `--ignore-vuln CVE-2026-4539`
+  and `--ignore-vuln PYSEC-2025-183` from the pip-audit step in
+  `.github/workflows/ci.yml`. A run of `pip-audit -r requirements.txt` with no
+  ignore flags reports "No known vulnerabilities found" against the current
+  dependency set, which resolves cryptography 49.0.0 and PyJWT 2.13.0. Both
+  packages are transitive, and cryptography arrives through paramiko. Neither
+  suppressed identifier fires any longer, so both entries were dead weight that
+  could have masked a future finding under the same identifier.
+- **Review policy (Added)**: the replacement comment states the review date and
+  the evidence, and it requires three facts before anyone adds a new
+  `--ignore-vuln` entry. Those facts are the date of the review, a link to the
+  upstream tracker, and the condition that triggers the next review.
+
 ### Set STE precedence over caveman compression and add an `ste-writing` skill (issue #1714)
 
 - **Writing standards (Changed)**: added the same precedence block to every
