@@ -367,6 +367,9 @@ from src.dataclasses.websocket_stream_target import (
 from src.db.database_schema_utils import (
     DatabaseSchemaUtils,  # Cat B (1013 SC-001 position 38) -- re-export for MistHelper.DatabaseSchemaUtils callers
 )
+from src.device.ap_profile_migration_manager import (
+    APProfileMigrationManager,  # Menus 207 and 208 -- migrate APs between device profiles and revert
+)
 from src.device.arp_command_manager import (
     ARPCommandManager,  # Cat B (1013 SC-001 position 42) -- re-export for MistHelper.ARPCommandManager callers
 )
@@ -4833,6 +4836,18 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
         lambda: manage_org_synthetic_probes(apisession, ConfigUtils.get_cached_or_prompted_org_id()),
         " DESTRUCTIVE: Manage org Zscaler synthetic probes"
         " - Build/merge/swap synthetic_test.custom_probes from curated Zscaler catalogue",
+    ),
+    "207": (
+        lambda: APProfileMigrationManager.migrate_aps_between_device_profiles(apisession),
+        " DESTRUCTIVE: Migrate APs between device profiles"
+        " - Reassign every AP bound to a source device profile to a chosen target profile"
+        " (Requires typing 'MIGRATE' or 'DRY-RUN' to confirm)",
+    ),
+    "208": (
+        lambda: APProfileMigrationManager.revert_ap_profile_migration(apisession),
+        " DESTRUCTIVE: Revert an AP profile migration from a backup file"
+        " - Reassign each listed AP back to its original device profile"
+        " (Requires typing 'REVERT' to confirm)",
     ),
 }
 
