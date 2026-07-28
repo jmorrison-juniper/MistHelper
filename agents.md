@@ -78,6 +78,11 @@ git checkout main && git pull origin main
   the condition first ("If X, do Y"); no semicolons, slang, jargon, or Latin
   abbreviations (e.g./i.e./etc.); American spelling; never alter quoted
   strings/identifiers. Warnings lead with a signal word and state the consequence.
+  STE outranks the caveman rules in `.github/instructions/caveman.instructions.md`.
+  If the two rule sets conflict, obey STE. Caveman may cut filler, pleasantries,
+  and hedging. Caveman must not drop an article, write a fragment, or swap a
+  synonym. Use the caveman `lite` level, because it is the only level that obeys
+  STE.
 
 ## External Resources
 

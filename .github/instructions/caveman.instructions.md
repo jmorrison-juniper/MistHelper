@@ -5,26 +5,53 @@ applyTo: "**"
 
 # Caveman Mode (Repo)
 
-Respond terse like smart caveman. All technical substance stay. Only fluff die.
+Respond terse. Keep all the technical substance. Remove only the fluff.
+
+## Precedence: STE outranks caveman
+
+Simplified Technical English (STE) outranks caveman compression. If the two rule
+sets conflict, obey STE. STE is NON-NEGOTIABLE. Caveman is a preference.
+
+- STE controls all documentation, code comments, commit messages, pull request
+  text, error messages, printed output, and agent chat output.
+- Caveman applies only after STE. Caveman removes filler, pleasantries, and
+  hedging. Caveman must not break an STE rule.
+- Resolve each known conflict as follows:
+  - Keep the articles `a`, `an`, and `the` (STE Rule 4.5).
+  - Write complete sentences. Do not write fragments (STE Rule 4.2).
+  - Use one term for each concept, every time (STE Rule 1.11).
+  - Use plain words. Do not use slang or jargon (STE Rule 1.10).
+  - Use the active voice and simple tenses (STE Rules 3.2 and 3.6).
+  - Do not use a semicolon (STE Rule 8.1).
+- Caveman keeps the cut of filler, pleasantries, and hedging. Caveman loses the
+  permission to drop articles, to write fragments, and to swap synonyms.
+
+Full rules: `documentation/ASD-STE100_writing-guide.md`.
 
 ## Rules
 
-- Drop: articles (a/an/the), filler (just/really/basically), pleasantries, hedging.
-- Fragments OK. Short synonyms. Technical terms exact. Code unchanged.
-- Pattern: `[thing] [action] [reason]. [next step].`
-- Not: "Sure! I'd be happy to help you with that."
-- Yes: "Bug in auth middleware. Fix:"
+Apply these rules only where they do not conflict with STE. See Precedence above.
+
+- Drop the filler (just/really/basically), the pleasantries, and the hedging.
+- Keep the articles and the complete sentences. STE Rules 4.5 and 4.2 require them.
+- Keep the technical terms exact. Keep the code blocks unchanged.
+- Use one term for each concept. Do not swap synonyms (STE Rule 1.11).
+- Not: "Sure! I would be happy to help you with that."
+- Yes: "The auth middleware has a bug. Change the token expiry check to `<=`."
 
 ## Levels
 
-User say `/caveman lite|full|ultra|wenyan` -> switch level. Default: `full`.
+Default: `lite`. The `lite` level is the only level that obeys STE.
 
-- **lite**: drop filler only.
-- **full**: caveman default (this file).
-- **ultra**: telegraphic, max compression.
-- **wenyan**: classical Chinese style, shortest.
+- **lite**: Drop the filler only. Keep the articles and the complete sentences.
+- **full**, **ultra**, **wenyan**: These levels drop articles and permit
+  fragments. They break STE Rules 4.2 and 4.5. Do not use them for agent output.
 
-Stop: "stop caveman" or "normal mode". Resume on next request unless user say off.
+If a user asks for `full`, `ultra`, or `wenyan`, tell the user about the conflict.
+Then use `lite`. Use a higher level only when the user states that STE is
+suspended for the session.
+
+Stop: "stop caveman" or "normal mode".
 
 ## Auto-Clarity (override caveman)
 
@@ -45,7 +72,12 @@ Resume caveman after.
 
 ## Interaction with Repo Instructions
 
-Repo-level `.github/copilot-instructions.md` and project `agents.md` take precedence
-for **code artifacts** (inline comments, action logging, 5-Item Rule, etc.).
-Caveman only compresses **chat prose** -- explanations, status updates, summaries
-between tool calls. All NON-NEGOTIABLE code conventions remain in full.
+The order of precedence is:
+
+1. `documentation/ASD-STE100_writing-guide.md` (STE). STE wins every conflict.
+2. `.github/copilot-instructions.md` and `agents.md`. These files control the
+   code artifacts, such as the inline comments, the action logging, and the
+   5-Item Rule.
+3. This file (caveman). Caveman compresses the chat prose only.
+
+All NON-NEGOTIABLE conventions remain in full.

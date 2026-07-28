@@ -19,6 +19,12 @@ All documentation, code comments, pull request text, error messages, user-facing
 
 Core defaults: one word = one meaning; one term per concept, reused consistently (no synonym swapping); active voice; simple tenses; short sentences (<=20 words for instructions, <=25 for descriptions); imperative for instructions with one action per step and the condition first ("If X, do Y"); no semicolons, slang, jargon, phrasal verbs, or Latin abbreviations (e.g./i.e./etc.); American spelling; never alter quoted strings or identifiers. Warnings lead with a signal word (Warning = harm/irreversible; Caution = recoverable) and state the specific consequence. These rules reinforce the existing NON-NEGOTIABLE inline-comment and action-logging conventions.
 
+### Precedence: STE outranks caveman
+
+STE outranks the caveman compression rules in `.github/instructions/caveman.instructions.md`. If the two rule sets conflict, obey STE. STE is NON-NEGOTIABLE. Caveman is a preference.
+
+Caveman may remove filler, pleasantries, and hedging. Caveman must not drop an article, write a fragment, swap a synonym, or use slang. Use the caveman `lite` level, because it is the only level that obeys STE. Use a higher caveman level only when the user states that STE is suspended for the session.
+
 ---
 
 ## Core Architecture
