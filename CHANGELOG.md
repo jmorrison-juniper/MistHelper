@@ -7,6 +7,27 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Set STE precedence over caveman compression and add an `ste-writing` skill (issue #1714)
+
+- **Writing standards (Changed)**: added the same precedence block to every
+  file that states a caveman rule or a Simplified Technical English rule.
+  Simplified Technical English now outranks caveman compression in every
+  conflict. Caveman keeps its cut of filler, pleasantries, and hedging, and
+  loses the permission to drop an article, to write a fragment, or to swap a
+  synonym. Files changed: `.github/copilot-instructions.md`,
+  `.github/instructions/caveman.instructions.md`, `agents.md`, `CLAUDE.md`,
+  and `documentation/ASD-STE100_writing-guide.md`.
+- **Caveman default level (Changed)**: the default level moves from `full` to
+  `lite`. The `lite` level is the only level that keeps the articles and the
+  complete sentences that Simplified Technical English Rules 4.5 and 4.2
+  require.
+- **Agent skill (Added)**: `.github/skills/ste-writing/SKILL.md` holds the
+  eight core rules, the repair for each of the 13 linter rule identifiers, the
+  three-part warning structure, and the self-check command. Before this change,
+  the 700-line writing guide loaded only when an agent chose to open it.
+- **Verification**: every changed Markdown file passes
+  `python -m tools.ste_linter --min-score 80`.
+
 ### #887 slice 4/N: drop `capture` from pydocstyle `match-dir` exclusion (issue #887)
 
 - **Pydocstyle scope narrowing (Changed)**: removed `capture` from the
