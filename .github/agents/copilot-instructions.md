@@ -68,6 +68,8 @@ Auto-generated from all feature plans. Last updated: 2026-03-03
 - N/A (no schema changes; existing JSONL telemetry under `data/` via `TelemetryEmitter`, unchanged shape — see `data-model.md` §3). (1020-safe-test-clean-run)
 - Python 3.13+ (`pyproject.toml` requires `>=3.13`) + Standard-library `argparse`, `logging`, and `inspect`; `mistapi>=0.63.1` (the verified installed surface is `0.63.3`) (1021-testinteractive-reliability-defects)
 - Local append-only JSONL telemetry only; future interactive-test artifacts must remain under an explicitly controlled `data/` subdirectory. No remote persistence or mutations. (1021-testinteractive-reliability-defects)
+- Python 3.13 (`pyproject.toml` target `py313`) + `bandit[toml]` (no new runtime dependency) (1032-bandit-severity-gate)
+- N/A (comment and guard changes only) (1032-bandit-severity-gate)
 
 - Python 3.13+ + mistapi>=0.59.0, python-dotenv>=1.0.0 (001-radius-wlan-config)
 
@@ -87,9 +89,9 @@ cd src; pytest; ruff check .
 Python 3.13+: Follow standard conventions
 
 ## Recent Changes
+- 1032-bandit-severity-gate: Added Python 3.13 (`pyproject.toml` target `py313`) + `bandit[toml]` (no new runtime dependency)
 - 1021-testinteractive-reliability-defects: Added Python 3.13+ (`pyproject.toml` requires `>=3.13`) + Standard-library `argparse`, `logging`, and `inspect`; `mistapi>=0.63.1` (the verified installed surface is `0.63.3`)
 - 1020-safe-test-clean-run: Added Python 3.13+ (per constitution and `pyproject.toml` py313 target). + mistapi 0.63.1+, requests, pytest/pytest-cov, ruff/black/mypy (no new dependency added).
-- feat/194-capture-bootstrap-session-refactor: Added Python 3.13+ + `mistapi>=0.59`, `requests`, existing `src/*` extraction modules, `ruff`, `black`, `radon`
 
 
 <!-- MANUAL ADDITIONS START -->
