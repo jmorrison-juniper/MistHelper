@@ -87,7 +87,7 @@ def test_execute_returns_when_user_cancels_filter_prompt() -> None:
 
 def test_execute_returns_when_no_records(caplog: pytest.LogCaptureFixture) -> None:
     """Empty fetch prints notice and skips write."""
-    caplog.set_level(logging.WARNING)
+    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
     fake_mh = _make_mh()
     fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-uuid"
     with (
@@ -227,7 +227,7 @@ def test_resolve_operator_choice_returns_catalog_entry_for_valid_index() -> None
 
 def test_resolve_operator_choice_returns_none_when_out_of_range(caplog: pytest.LogCaptureFixture) -> None:
     """Index outside catalog -> None + warning."""
-    caplog.set_level(logging.WARNING)
+    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
     with _patch_mh(_make_mh()):
         assert R._resolve_operator_choice("99", "MAC") is None
     assert "Invalid selection" in caplog.text
@@ -235,7 +235,7 @@ def test_resolve_operator_choice_returns_none_when_out_of_range(caplog: pytest.L
 
 def test_resolve_operator_choice_returns_none_for_non_numeric(caplog: pytest.LogCaptureFixture) -> None:
     """Non-numeric input -> None + warning."""
-    caplog.set_level(logging.WARNING)
+    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
     with _patch_mh(_make_mh()):
         assert R._resolve_operator_choice("abc", "MAC") is None
     assert "Invalid selection" in caplog.text
@@ -246,7 +246,7 @@ def test_resolve_operator_choice_returns_none_for_non_numeric(caplog: pytest.Log
 
 def test_prompt_operator_delegates_to_resolve(caplog: pytest.LogCaptureFixture) -> None:
     """Prompt shows menu, reads input, then delegates parsing."""
-    caplog.set_level(logging.WARNING)
+    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
     fake_mh = _make_mh()
     fake_mh.InputUtils.safe_input.return_value = "1"
     with _patch_mh(fake_mh):
@@ -299,7 +299,7 @@ def test_fetch_clients_success_with_pushable_criteria() -> None:
 
 def test_fetch_clients_returns_empty_on_exception(caplog: pytest.LogCaptureFixture) -> None:
     """API failure returns ([], False) and prints error."""
-    caplog.set_level(logging.WARNING)
+    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
     fake_mh = _make_mh()
     fake_mistapi = MagicMock(name="mistapi")
     fake_mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients.side_effect = RuntimeError("boom")
@@ -484,7 +484,7 @@ def test_build_metadata_with_both_filters() -> None:
 
 def test_write_outputs_prints_zero_match_message(caplog: pytest.LogCaptureFixture) -> None:
     """Zero matched records prints the no-matches notice."""
-    caplog.set_level(logging.WARNING)
+    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
     metadata = {"records_matched": 0, "records_retrieved": 5}
     with (
         patch.object(R, "_write_standard_export") as write_export,
@@ -498,7 +498,7 @@ def test_write_outputs_prints_zero_match_message(caplog: pytest.LogCaptureFixtur
 
 def test_write_outputs_with_matches_skips_no_match_notice(caplog: pytest.LogCaptureFixture) -> None:
     """When records match, only summary is printed; no zero-match notice."""
-    caplog.set_level(logging.WARNING)
+    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
     metadata = {"records_matched": 1, "records_retrieved": 5}
     matched = [{"mac": "aa"}]
     with (
@@ -544,7 +544,7 @@ def test_write_standard_export_runs_pipeline_when_populated() -> None:
 
 def test_write_local_report_writes_summary_json(tmp_path, monkeypatch, caplog: pytest.LogCaptureFixture) -> None:
     """Writes JSON summary file to the data/ directory."""
-    caplog.set_level(logging.WARNING)
+    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
     monkeypatch.chdir(tmp_path)
     (tmp_path / "data").mkdir()
     metadata = {"records_matched": 1, "records_retrieved": 5}
@@ -556,7 +556,7 @@ def test_write_local_report_writes_summary_json(tmp_path, monkeypatch, caplog: p
 
 def test_write_local_report_handles_os_error(caplog: pytest.LogCaptureFixture) -> None:
     """OSError during write logs + warns without raising."""
-    caplog.set_level(logging.WARNING)
+    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
     metadata = {"records_matched": 0, "records_retrieved": 0}
     with patch(
         "src.reports.global_wired_client_report_generator.open",

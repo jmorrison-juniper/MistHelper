@@ -5,6 +5,8 @@ from __future__ import annotations  # Defer annotation evaluation for forward re
 import logging  # Standard library structured logging
 from collections.abc import Callable  # Typing for the injected safe_input dependency
 
+from src.utils.console import echo  # Stdout echo + INFO log record (feature 1031).
+
 MIST_CLOUDS: dict[str, tuple[str, str]] = {  # Selectable Mist clouds keyed by menu number
     "1": ("Global 01", "api.mist.com"),  # Default global cloud
     "2": ("Global 02", "api.gc1.mist.com"),  # Secondary global cluster
@@ -50,7 +52,7 @@ class CloudSelector:
         if cloud_choice == "" or cloud_choice not in MIST_CLOUDS:  # Default to Global 01
             cloud_choice = "1"  # Preserve legacy default behaviour
         cloud_name, host = MIST_CLOUDS[cloud_choice]  # Resolve label + host from catalog
-        logging.warning("  Using cloud: %s (%s)", cloud_name, host)  # Legacy console echo routed via logger
+        echo("  Using cloud: %s (%s)", cloud_name, host)  # Print + INFO log via 1031 helper
         logging.warning("")  # Blank spacer matches the original output exactly
         logging.debug("Cloud selected: %s (%s)", cloud_name, host)  # Trace selection result
         return (cloud_name, host)  # Hand off to the login orchestrator

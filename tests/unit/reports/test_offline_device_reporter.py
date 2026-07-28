@@ -57,21 +57,21 @@ def test_parse_threshold_attempt_returns_int_when_in_range() -> None:
 
 def test_parse_threshold_attempt_returns_none_when_below_min(caplog: pytest.LogCaptureFixture) -> None:
     """Zero is below MIN_THRESHOLD_HOURS: returns None with range message."""
-    caplog.set_level(logging.WARNING)
+    caplog.set_level(logging.WARNING)  # WHY: _parse_threshold_attempt remains a legitimate logging.warning site.
     assert R._parse_threshold_attempt("0") is None
     assert "must be between" in caplog.text
 
 
 def test_parse_threshold_attempt_returns_none_when_above_max(caplog: pytest.LogCaptureFixture) -> None:
     """Above MAX_THRESHOLD_HOURS: returns None with range message."""
-    caplog.set_level(logging.WARNING)
+    caplog.set_level(logging.WARNING)  # WHY: _parse_threshold_attempt remains a legitimate logging.warning site.
     assert R._parse_threshold_attempt("99999") is None
     assert "must be between" in caplog.text
 
 
 def test_parse_threshold_attempt_returns_none_on_value_error(caplog: pytest.LogCaptureFixture) -> None:
     """Non-numeric input triggers ValueError branch and prints invalid message."""
-    caplog.set_level(logging.WARNING)
+    caplog.set_level(logging.WARNING)  # WHY: _parse_threshold_attempt remains a legitimate logging.warning site.
     assert R._parse_threshold_attempt("abc") is None
     assert "Invalid input" in caplog.text
 
@@ -102,7 +102,7 @@ def test_prompt_threshold_returns_first_valid_attempt() -> None:
 
 def test_prompt_threshold_retries_then_succeeds(caplog: pytest.LogCaptureFixture) -> None:
     """Bad input on first attempt: retry counter decrements and second attempt wins."""
-    caplog.set_level(logging.WARNING)
+    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
     fake_mh = _make_mh()
     fake_mh.InputUtils.safe_input.side_effect = ["bad", "72"]
     with patch(
@@ -115,7 +115,7 @@ def test_prompt_threshold_retries_then_succeeds(caplog: pytest.LogCaptureFixture
 
 def test_prompt_threshold_falls_back_when_max_retries_exceeded(caplog: pytest.LogCaptureFixture) -> None:
     """All MAX_INPUT_RETRIES attempts fail -> DEFAULT_THRESHOLD_HOURS."""
-    caplog.set_level(logging.WARNING)
+    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
     fake_mh = _make_mh()
     fake_mh.InputUtils.safe_input.side_effect = ["bad"] * R.MAX_INPUT_RETRIES
     with patch(
@@ -284,7 +284,7 @@ def test_render_offline_breakdowns_hides_zero_type_and_lists_top_sites(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Zero counts are suppressed; sites render sorted descending, capped at 5."""
-    caplog.set_level(logging.WARNING)
+    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
     type_counts = {"AP": 3, "Switch": 0, "Gateway": 1}
     site_counts = {f"site-{i}": i for i in range(1, 8)}
     R._render_offline_breakdowns(type_counts, site_counts)
@@ -300,7 +300,7 @@ def test_render_offline_breakdowns_skips_top_sites_when_empty(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Empty site_counts hides the Top 5 leaderboard entirely."""
-    caplog.set_level(logging.WARNING)
+    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
     R._render_offline_breakdowns({"AP": 1}, {})
     output = caplog.text
     assert "Top 5 Sites" not in output
@@ -311,7 +311,7 @@ def test_render_offline_breakdowns_skips_top_sites_when_empty(
 
 def test_display_summary_prints_counts_and_calls_breakdown(caplog: pytest.LogCaptureFixture) -> None:
     """Header + totals print; per-type/per-site counts render via helper."""
-    caplog.set_level(logging.WARNING)
+    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
     offline_records = [
         {"Device Type": "AP", "Site Name": "HQ"},
         {"Device Type": "AP", "Site Name": "HQ"},
@@ -330,7 +330,7 @@ def test_display_summary_prints_counts_and_calls_breakdown(caplog: pytest.LogCap
 
 def test_save_offline_csv_strips_helper_keys_and_writes(caplog: pytest.LogCaptureFixture) -> None:
     """Helper keys (_sort_key) are stripped; DataExporter is called with expected filename."""
-    caplog.set_level(logging.WARNING)
+    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
     fake_mh = _make_mh()
     records = [
         {
@@ -364,7 +364,7 @@ def test_save_offline_csv_strips_helper_keys_and_writes(caplog: pytest.LogCaptur
 
 def test_present_results_caps_display_rows_and_calls_save(caplog: pytest.LogCaptureFixture) -> None:
     """Table display honors MAX_DISPLAY_ROWS; _save_offline_csv gets the full list."""
-    caplog.set_level(logging.WARNING)
+    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
     records = [
         {
             "Device Name": f"d{i}",
@@ -391,7 +391,7 @@ def test_present_results_caps_display_rows_and_calls_save(caplog: pytest.LogCapt
 
 def test_gather_offline_inputs_aborts_when_no_org(caplog: pytest.LogCaptureFixture) -> None:
     """Missing org -> (None, 0)."""
-    caplog.set_level(logging.WARNING)
+    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
     fake_mh = _make_mh()
     fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = ""
     with patch(
@@ -404,7 +404,7 @@ def test_gather_offline_inputs_aborts_when_no_org(caplog: pytest.LogCaptureFixtu
 
 def test_gather_offline_inputs_returns_org_and_threshold(caplog: pytest.LogCaptureFixture) -> None:
     """Happy path resolves org + prompts threshold + echoes."""
-    caplog.set_level(logging.WARNING)
+    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
     fake_mh = _make_mh()
     fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-x"
     with (
@@ -425,7 +425,7 @@ def test_finalize_offline_report_runs_summary_present_and_elapsed(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Finalize walks summary -> present -> elapsed."""
-    caplog.set_level(logging.WARNING)
+    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
     with (
         patch.object(R, "_display_summary") as summary,
         patch.object(R, "_present_results") as present,
@@ -452,7 +452,7 @@ def test_execute_returns_early_when_no_org() -> None:
 
 def test_execute_handles_fetch_exception(caplog: pytest.LogCaptureFixture) -> None:
     """_fetch_data exception -> user-facing error + no processing."""
-    caplog.set_level(logging.WARNING)
+    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
     with (
         patch.object(R, "_gather_offline_inputs", return_value=("org", 48)),
         patch.object(R, "_fetch_data", side_effect=RuntimeError("boom")),
@@ -465,7 +465,7 @@ def test_execute_handles_fetch_exception(caplog: pytest.LogCaptureFixture) -> No
 
 def test_execute_prints_notice_when_no_devices(caplog: pytest.LogCaptureFixture) -> None:
     """Empty device list -> "No devices found" notice + early return."""
-    caplog.set_level(logging.WARNING)
+    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
     with (
         patch.object(R, "_gather_offline_inputs", return_value=("org", 48)),
         patch.object(R, "_fetch_data", return_value=({}, [])),
@@ -478,7 +478,7 @@ def test_execute_prints_notice_when_no_devices(caplog: pytest.LogCaptureFixture)
 
 def test_execute_prints_all_clear_when_none_offline(caplog: pytest.LogCaptureFixture) -> None:
     """Devices exist but none offline beyond threshold -> all-clear message."""
-    caplog.set_level(logging.WARNING)
+    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
     with (
         patch.object(R, "_gather_offline_inputs", return_value=("org", 48)),
         patch.object(R, "_fetch_data", return_value=({}, [{"mac": "aa"}])),

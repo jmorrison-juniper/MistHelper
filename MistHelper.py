@@ -55,6 +55,7 @@ from collections.abc import (
 from datetime import datetime  # Import datetime for timestamping logs and events
 from typing import TYPE_CHECKING, Any, NoReturn, TextIO, cast
 
+from src.utils.console import echo  # WHY: 1031 stdout + INFO log helper replaces legacy WARNING-channel echoes.
 from src.utils.subprocess_runner import (  # Centralized subprocess dispatch + exception re-exports (initiative 1016).
     SubprocessError,  # Base class for subprocess errors (parent of TimeoutExpired/CalledProcessError).
     SubprocessRunner,  # Audited dispatcher. Sole entry point for external command execution.
@@ -2214,9 +2215,7 @@ class GlobalImportManager:
         if hasattr(mistapi, "api") and hasattr(mistapi.api, "v1"):  # Confirm expected nested API surface
             logging.debug("mistapi.api.v1 module structure confirmed")  # Structure looks correct
         else:  # The expected nested structure is absent
-            logging.warning(
-                "mistapi.api.v1 structure not found - this may cause API call failures"
-            )  # Warn about likely failures
+            echo("mistapi.api.v1 structure not found - this may cause API call failures")  # Warn about likely failures
 
     def _log_websocket_availability(self) -> None:
         """Log whether websocket-client successfully loaded."""
@@ -2340,14 +2339,12 @@ if _initialize_imports_now:  # Eager path: prepare all imports now
                 "tqdm is available in global namespace: %s", type(globals().get("tqdm"))
             )  # Confirm availability and type
         else:  # tqdm binding is absent
-            logging.warning(
+            echo(
                 "tqdm was not found in global assignments - progress bars will not be functional"
             )  # Warn progress bars are off
 
     if not success:  # One or more required imports failed
-        logging.warning(
-            "Some required imports failed - functionality may be limited"
-        )  # Warn the user features may be degraded
+        echo("Some required imports failed - functionality may be limited")  # Warn the user features may be degraded
 else:  # Deferred path: imports happen later in main()
     # Deferred initialization - main() does this
     success, global_assignments = False, {}  # Placeholder values until main() runs initialization
@@ -2501,29 +2498,27 @@ def _restore_session_globals_from_state(state: dict[str, Any]) -> None:
 def _print_switch_login_header() -> None:
     """Display switch to interactive login header and benefits."""
     logging.debug("Entering _print_switch_login_header()")  # Trace entry for debugging
-    logging.warning("")  # Legacy console echo routed via logger.
-    logging.warning("=" * 60)  # Legacy console echo routed via logger.
-    logging.warning("  SWITCH TO INTERACTIVE LOGIN")  # Legacy console echo routed via logger.
-    logging.warning("=" * 60)  # Legacy console echo routed via logger.
-    logging.warning("")  # Legacy console echo routed via logger.
-    logging.warning("  This will replace your current API token session with")  # Legacy console echo routed via logger.
-    logging.warning("  an interactive (email/password) session.")  # Legacy console echo routed via logger.
-    logging.warning("")  # Legacy console echo routed via logger.
-    logging.warning("  Benefits of interactive login:")  # Legacy console echo routed via logger.
-    logging.warning(
-        "    - Can access MSP-level APIs (if you have MSP privileges)"
-    )  # Legacy console echo routed via logger.
-    logging.warning("    - Session-based auth with cookie management")  # Legacy console echo routed via logger.
-    logging.warning("    - Supports 2FA authentication")  # Legacy console echo routed via logger.
-    logging.warning("    - Select and switch between MSPs and Organizations")  # Legacy console echo routed via logger.
-    logging.warning("")  # Legacy console echo routed via logger.
+    echo("")
+    echo("=" * 60)
+    echo("  SWITCH TO INTERACTIVE LOGIN")
+    echo("=" * 60)
+    echo("")
+    echo("  This will replace your current API token session with")
+    echo("  an interactive (email/password) session.")
+    echo("")
+    echo("  Benefits of interactive login:")
+    echo("    - Can access MSP-level APIs (if you have MSP privileges)")
+    echo("    - Session-based auth with cookie management")
+    echo("    - Supports 2FA authentication")
+    echo("    - Select and switch between MSPs and Organizations")
+    echo("")
     if msp_privileges:  # The user already has MSP grants detected
         logging.debug("MSP privileges already detected: %s MSP(s)", len(msp_privileges))  # Trace the existing grants
-        logging.warning(
+        echo(
             "  Note: You already have MSP access to %s MSP(s)",
             len(msp_privileges),
-        )  # Legacy console echo routed via logger.
-        logging.warning("")  # Legacy console echo routed via logger.
+        )
+        echo("")
 
 
 def _attempt_interactive_login_with_rollback(old_session: Any, old_org_id: str | None) -> bool:
@@ -2544,8 +2539,8 @@ def _attempt_interactive_login_with_rollback(old_session: Any, old_org_id: str |
     ConfigUtils.set_cached_org_id(None)  # Clear the ConfigUtils org_id cache to match (1015 T-12)
 
     if not MistSessionInteractiveInitializer.initialize():  # Attempt the interactive login
-        logging.warning("")  # Legacy console echo routed via logger.
-        logging.warning("  X Login failed - restoring previous session")  # Legacy console echo routed via logger.
+        echo("")
+        echo("  X Login failed - restoring previous session")
         apisession = old_session  # Restore the prior API session
         org_id = old_org_id  # Restore the prior org selection
         msp_privileges = detect_msp_privileges(apisession)  # Re-detect MSP grants and publish to module global
@@ -2561,12 +2556,10 @@ def _attempt_interactive_login_with_rollback(old_session: Any, old_org_id: str |
 def _handle_interactive_login_success() -> None:
     """Handle successful interactive login - display status and select MSP/org."""
     logging.debug("Entering _handle_interactive_login_success()")  # Trace entry for debugging
-    logging.warning("")  # Legacy console echo routed via logger.
-    logging.warning("  + Successfully switched to interactive login")  # Legacy console echo routed via logger.
+    echo("")
+    echo("  + Successfully switched to interactive login")
     if msp_privileges:  # The new session has MSP grants
-        logging.warning(
-            "  + MSP access available: %s MSP(s)", len(msp_privileges)
-        )  # Legacy console echo routed via logger.
+        echo("  + MSP access available: %s MSP(s)", len(msp_privileges))
         logging.info(
             "Successfully switched to interactive login session with %s MSP(s)", len(msp_privileges)
         )  # Log the success with MSP count
@@ -2596,7 +2589,7 @@ def _prompt_switch_login_confirmation() -> bool:
         return False  # Treat as cancel
     logging.debug("User confirmation received: '%s'", confirm)  # Log the captured response
     if confirm != "y":  # User declined or pressed Enter
-        logging.warning("  Cancelled.")  # Legacy console echo routed via logger.
+        echo("  Cancelled.")
         logging.warning("User cancelled switch to interactive login")  # Log the cancel
         return False  # Caller should stay on the menu
     return True  # User explicitly chose to proceed
@@ -2639,24 +2632,22 @@ def _invoke_mistapi_org_picker_and_apply() -> None:
         if org_id_list and len(org_id_list) > 0:  # The user selected at least one org
             org_id = org_id_list[0]  # Use the first selected org ID
             ConfigUtils.set_cached_org_id(org_id)  # Mirror the picker's choice into ConfigUtils cache (1015 T-12)
-            logging.warning("  + Organization ID set: %s", org_id)  # Legacy console echo routed via logger.
+            echo("  + Organization ID set: %s", org_id)
             logging.info("User selected org from session: %s", org_id)  # Log the chosen org
         else:  # The user selected nothing
-            logging.warning("  X No organization selected")  # Legacy console echo routed via logger.
+            echo("  X No organization selected")
             logging.warning("No organization selected from session privileges")  # Log the empty selection
     except Exception as e:  # The SDK picker raised an error
-        logging.warning("  X Error selecting organization: %s", e)  # Legacy console echo routed via logger.
+        echo("  X Error selecting organization: %s", e)
         logging.error("Failed to select org from session: %s", e)  # Log the failure detail (not a SQL statement)
 
 
 def _select_org_from_session() -> None:
     """Pick an org via mistapi's built-in selector (non-MSP path)."""
     logging.debug("Entering _select_org_from_session()")  # Trace entry for debugging
-    logging.warning("")  # Legacy console echo routed via logger.
-    logging.warning(
-        "  Selecting organization from your session privileges..."
-    )  # Legacy console echo routed via logger.
-    logging.warning("")  # Legacy console echo routed via logger.
+    echo("")
+    echo("  Selecting organization from your session privileges...")
+    echo("")
     _invoke_mistapi_org_picker_and_apply()  # Run picker. Updates the org_id global
 
 
@@ -2748,17 +2739,13 @@ def _preflight_verify_credentials(require_token: bool = True) -> None:
         logging.debug("Credential/config preflight passed (require_token=%s)", require_token)  # After-action log.
         return
     logging.error("Credential/config preflight failed: %s", "; ".join(problems))  # Names only - never secrets.
-    logging.error(
-        "[ERROR] Cannot start a Mist session - credential/config preflight failed:"
-    )  # Legacy console echo routed via logger.
+    logging.error("[ERROR] Cannot start a Mist session - credential/config preflight failed:")
     for problem in problems:  # Enumerate each distinct problem on its own line.
-        logging.error("[ERROR]   - %s", problem)  # Legacy console echo routed via logger.
-    logging.error(
-        "[ERROR] Copy deploy/.env.example to .env, then set MIST_HOST and MIST_APITOKEN/MIST_API_TOKEN."
-    )  # Legacy console echo routed via logger.
+        logging.error("[ERROR]   - %s", problem)  # Log per-problem detail at ERROR level.
+    logging.error("[ERROR] Copy deploy/.env.example to .env, then set MIST_HOST and MIST_APITOKEN/MIST_API_TOKEN.")
     logging.error(
         "[ERROR] For --test/--testinteractive, also set org_id (or ORG_ID) - not MIST_ORG_ID - for this path."
-    )  # Legacy console echo routed via logger.
+    )
     sys.exit(1)  # Exit non-zero before the code constructs any session or network object.
 
 
@@ -4882,21 +4869,21 @@ def _systematic_test_build_safe_list(
 
 def _systematic_test_emit_skips(emitter: Any, unsafe_list: list[str]) -> int:
     """Emit a skip event for each unsafe operation and print an explanation."""
-    logging.warning(" Skipping unsafe operations:")  # Legacy console echo routed via logger.
+    echo(" Skipping unsafe operations:")
     for opt in unsafe_list:  # Iterate every unsafe option so none are silently omitted.
         if opt in menu_actions:  # Guard against stale unsafe lists that reference removed options.
             _, description = menu_actions[opt]  # Unpack action tuple to get the display description.
             reason = OperationRegistry.skip_reason(opt)  # Retrieve structured skip reason text from registry.
-            logging.warning(
+            echo(
                 "   %3s: %s... (Reason: %s)",
                 opt,
                 description[:60],
                 reason,
-            )  # Legacy console echo routed via logger.
+            )
             emitter.emit_test_skip(
                 opt, description, reason, OperationRegistry.skip_category(opt), "systematic"
             )  # Record skip in telemetry for coverage reporting.
-    logging.warning("")  # Legacy console echo routed via logger.
+    echo("")
     return len([opt for opt in unsafe_list if opt in menu_actions])  # Return actual skip count for summary reporting.
 
 
@@ -4922,17 +4909,13 @@ def _invoke_one_systematic_test(
     try:  # Each option runs independently so one failure does not abort remaining tests
         func(**invoke_kwargs)  # Call menu action
         duration = time.time() - op_start  # Elapsed seconds
-        logging.warning(
-            "   [SUCCESS] Option %s completed successfully", option
-        )  # Legacy console echo routed via logger.
+        echo("   [SUCCESS] Option %s completed successfully", option)
         emitter.emit_test_pass(option, description, duration, "systematic")  # Record pass
         logging.info("SYSTEMATIC_TEST: Successfully completed menu option %s", option)
         return True, duration
     except Exception as exc:  # Catch all so harness continues
         duration = time.time() - op_start  # Still record elapsed
-        logging.warning(
-            "   [FAILED]  Option %s failed: %s...", option, str(exc)[:100]
-        )  # Legacy console echo routed via logger.
+        echo("   [FAILED]  Option %s failed: %s...", option, str(exc)[:100])
         emitter.emit_test_fail(option, description, duration, exc, "systematic")  # Record failure
         logging.error("SYSTEMATIC_TEST: Failed menu option %s: %s", option, exc)
         return False, duration
@@ -4947,9 +4930,7 @@ def _systematic_test_run_option(
 ) -> tuple[bool, float]:
     """Run one menu option in the systematic test harness and return (success, duration)."""
     option, func, description = case.option, case.func, case.description  # Unpack identity (issue #470)
-    logging.warning(
-        "   [%2d/%d] Testing option %3s: %s...", i, total_safe, option, description[:60]
-    )  # Legacy console echo routed via logger.
+    echo("   [%2d/%d] Testing option %3s: %s...", i, total_safe, option, description[:60])
     emitter.emit_test_start(option, description, "systematic")  # Telemetry start
     op_start = time.time()  # Capture start time before invocation overhead
     invoke_kwargs = _resolve_systematic_test_invoke_kwargs(func, fast_enabled)  # Signature-aware kwargs
@@ -4991,15 +4972,15 @@ def _systematic_test_resolve_fast_mode() -> bool:
 
 def _print_systematic_banner() -> None:
     """Print the test-start banner + timestamp + separator to the operator console."""
-    logging.warning(" Starting systematic test of MistHelper menu options...")  # Legacy console echo routed via logger.
-    logging.warning(
+    echo(" Starting systematic test of MistHelper menu options...")
+    echo(
         "  Note: This will skip interactive, websocket, POST, and destructive operations",
-    )  # Legacy console echo routed via logger.
-    logging.warning(
+    )
+    echo(
         "! Test started at: %s",
         datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-    )  # Legacy console echo routed via logger.
-    logging.warning("=" * 80)  # Legacy console echo routed via logger.
+    )
+    echo("=" * 80)
 
 
 _SYSTEMATIC_TEST_OPTIMIZED_ORDER = [  # Shortest-running operations first to surface failures early.
@@ -5034,10 +5015,10 @@ def _build_systematic_test_options() -> tuple[list[str], list[str], list[str]]:
 
 def _print_systematic_pre_run_counts(all_options: list[str], safe_options: list[str], unsafe_list: list[str]) -> None:
     """Print the total / safe / unsafe option counts before the test loop runs."""
-    logging.warning("! Found %d total menu options", len(all_options))  # Legacy console echo routed via logger.
-    logging.warning("! %d safe options will be tested", len(safe_options))  # Legacy console echo routed via logger.
-    logging.warning("!  %d unsafe options will be skipped", len(unsafe_list))  # Legacy console echo routed via logger.
-    logging.warning("")  # Legacy console echo routed via logger.
+    echo("! Found %d total menu options", len(all_options))
+    echo("! %d safe options will be tested", len(safe_options))
+    echo("!  %d unsafe options will be skipped", len(unsafe_list))
+    echo("")
 
 
 def _initialize_systematic_telemetry(unsafe_list: list[str]) -> tuple[TelemetryEmitter, str, int]:
@@ -5064,7 +5045,7 @@ def _execute_systematic_test_loop(
     emitter: TelemetryEmitter, safe_options: list[str], fast_enabled: bool
 ) -> tuple[int, int]:
     """Iterate safe options through the runner, counting successes/failures."""
-    logging.warning(" Testing safe operations:")  # Legacy console echo routed via logger.
+    echo(" Testing safe operations:")
     success_count = 0  # Track how many options completed without raising.
     error_count = 0  # Track how many options raised an exception.
     for i, option in enumerate(safe_options, 1):  # Iterate options in optimized order, 1-indexed for display.
@@ -5090,34 +5071,30 @@ def _finalize_systematic_telemetry(emitter: TelemetryEmitter, summary: TestSumma
 
 def _print_systematic_summary(summary: TestSummary, telemetry_path: str) -> None:
     """Print the human-readable summary block (totals, coverage %, paths)."""
-    logging.warning("")  # Legacy console echo routed via logger.
-    logging.warning("=" * 80)  # Legacy console echo routed via logger.
-    logging.warning(" Systematic Test Summary:")  # Legacy console echo routed via logger.
-    logging.warning("   Successful operations: %d", summary.passed)  # Legacy console echo routed via logger.
-    logging.warning("   Failed operations: %d", summary.failed)  # Legacy console echo routed via logger.
-    logging.warning("   Skipped unsafe operations: %d", summary.skipped)  # Legacy console echo routed via logger.
+    echo("")
+    echo("=" * 80)
+    echo(" Systematic Test Summary:")
+    echo("   Successful operations: %d", summary.passed)
+    echo("   Failed operations: %d", summary.failed)
+    echo("   Skipped unsafe operations: %d", summary.skipped)
     coverage_pct = summary.passed / summary.total * 100 if summary.total else 0.0  # Coverage as a percent.
-    logging.warning(
-        "   Total coverage: %d/%d (%.1f%%)", summary.passed, summary.total, coverage_pct
-    )  # Legacy console echo routed via logger.
-    logging.warning("    Total execution time: %.2f seconds", summary.elapsed)  # Legacy console echo routed via logger.
-    logging.warning("   Telemetry written to: %s", telemetry_path)  # Legacy console echo routed via logger.
-    logging.warning("   Detailed logs in: script.log")  # Legacy console echo routed via logger.
+    echo("   Total coverage: %d/%d (%.1f%%)", summary.passed, summary.total, coverage_pct)
+    echo("    Total execution time: %.2f seconds", summary.elapsed)
+    echo("   Telemetry written to: %s", telemetry_path)
+    echo("   Detailed logs in: script.log")
 
 
 def _report_systematic_outcome(success_count: int, error_count: int, safe_count: int, total_time: float) -> bool:
     """Emit the final all-pass / partial-failure message and return the boolean result."""
     if error_count == 0:  # All-pass outcome deserves an explicit success message.
-        logging.warning("   All tested operations completed successfully!")  # Legacy console echo routed via logger.
+        echo("   All tested operations completed successfully!")
         logging.info(
             "SYSTEMATIC_TEST: All %s tested operations completed successfully in %.2fs",
             success_count,
             total_time,
         )  # Record all-pass event for monitoring.
         return True  # Signal all-pass to callers (for example, for exit-code logic).
-    logging.warning(
-        "    %d operations failed - check logs for details", error_count
-    )  # Legacy console echo routed via logger.
+    echo("    %d operations failed - check logs for details", error_count)
     logging.warning(
         "SYSTEMATIC_TEST: %s operations failed out of %s tested", error_count, safe_count
     )  # Log failure count for alerting systems.
@@ -5146,12 +5123,12 @@ def _run_web_portal_server(app: Any, host: str, port: int, dev_debug: bool) -> N
     in_container = EnvironmentUtils.is_running_in_container()  # Detect container runtime to switch banner + debug flag
     if in_container:
         logging.info("WEB_PORTAL: Container detected - use wsgi.py with Gunicorn")  # Log container path
-        logging.warning(">> Running Flask dev server on %s:%s", host, port)  # Legacy console echo routed via logger.
-        logging.warning(">> For production, use: gunicorn wsgi:app")  # Legacy console echo routed via logger.
+        echo(">> Running Flask dev server on %s:%s", host, port)
+        echo(">> For production, use: gunicorn wsgi:app")
         app.run(host=host, port=port, debug=False)  # Force debug=False inside container
     else:
         logging.info("WEB_PORTAL: Local mode - Flask dev server on %s:%s", host, port)  # Log local dev path
-        logging.warning(">> Web portal starting at http://127.0.0.1:%s", port)  # Legacy console echo routed via logger.
+        echo(">> Web portal starting at http://127.0.0.1:%s", port)
         app.run(host=host, port=port, debug=dev_debug)  # Honor caller's debug flag locally
 
 
@@ -5429,11 +5406,9 @@ def _announce_fast_mode_scope() -> None:
         "FAST MODE ACTIVE: Enabling caching/concurrency shortcuts for: %s",
         ", ".join(_FAST_MODE_CAPABLE_FUNCTIONS),
     )  # Log fast scope for log-correlation
-    logging.warning(
-        "* Fast mode active (caching/concurrency). Functions optimized:"
-    )  # Legacy console echo routed via logger.
+    echo("* Fast mode active (caching/concurrency). Functions optimized:")
     for name in _FAST_MODE_CAPABLE_FUNCTIONS:  # Iterate the module-level constant
-        logging.warning("  - %s", name)  # Legacy console echo routed via logger.
+        echo("  - %s", name)
 
 
 def _setup_runtime_flags(args: argparse.Namespace) -> None:
@@ -5479,9 +5454,7 @@ def _run_full_dependency_init(args: argparse.Namespace) -> None:
     _apply_dependency_assignments(skip_mode=False)  # Publish resolved symbols into module namespace
     if not success and not args.test:  # Abort on critical failure unless running in test mode
         logging.error("Critical dependencies missing. Exiting.")  # Log fatal dependency failure before exit
-        logging.warning(
-            "!! Critical dependencies missing. Use --skip-deps to bypass or install missing packages."
-        )  # Legacy console echo routed via logger.
+        echo("!! Critical dependencies missing. Use --skip-deps to bypass or install missing packages.")
         sys.exit(1)  # Exit with error code -- cannot continue without required modules
 
 
@@ -5534,17 +5507,13 @@ def _establish_mist_session(args: argparse.Namespace) -> None:
         logging.info("Interactive login mode requested via --login flag")  # Log before interactive login
         if not MistSessionInteractiveInitializer.initialize():  # Attempt email/password login
             logging.error("Failed to initialize Mist API session via interactive login")  # Log auth failure
-            logging.warning(
-                " Failed to initialize Mist API session. Check your credentials."
-            )  # Legacy console echo routed via logger.
+            echo(" Failed to initialize Mist API session. Check your credentials.")
             sys.exit(1)  # Exit -- cannot proceed without authenticated session
         ConfigUtils.set_apisession(apisession)  # Publish authenticated session to ConfigUtils cache (1015 T-12)
     else:  # Default path: use API token from .env or environment variables
         if not MistSessionInitializer.initialize():  # Attempt token-based session init
             logging.error("Failed to initialize Mist API session")  # Log token auth failure
-            logging.warning(
-                " Failed to initialize Mist API session. Check your credentials."
-            )  # Legacy console echo routed via logger.
+            echo(" Failed to initialize Mist API session. Check your credentials.")
             sys.exit(1)  # Exit -- cannot proceed without authenticated session
         ConfigUtils.set_apisession(apisession)  # Publish authenticated session to ConfigUtils cache (1015 T-12)
         msp_privileges = detect_msp_privileges(apisession)  # Detect MSP grants for token session and publish to global
@@ -5577,9 +5546,7 @@ def _configure_runtime_options(args: argparse.Namespace) -> None:
         )  # Initialize JSONL telemetry emitter
         logging.info("Progress telemetry emitter initialized: data/test_events.jsonl")  # Log emitter ready
     except Exception as emitter_exc:
-        logging.warning(
-            "Progress telemetry emitter init failed (non-blocking): %s", emitter_exc
-        )  # Log non-fatal failure
+        echo("Progress telemetry emitter init failed (non-blocking): %s", emitter_exc)  # Log non-fatal failure
         PROGRESS_EMITTER = None  # Set to None so callers skip telemetry gracefully
     if args.debug:  # Apply debug logging level to file handlers. Keep console at INFO to avoid noise
         _apply_debug_log_level()  # Promote root + file handlers to DEBUG
@@ -5589,7 +5556,7 @@ def _configure_runtime_options(args: argparse.Namespace) -> None:
 def _run_tui_mode(args: argparse.Namespace) -> None:
     """Launch MistHelper Terminal User Interface (TUI) mode using the Rich library."""
     logging.info("TUI_MODE: Starting Terminal User Interface mode")  # Log before TUI launch
-    logging.warning(">> Terminal User Interface mode activated")  # Legacy console echo routed via logger.
+    echo(">> Terminal User Interface mode activated")
     _ensure_tui_api_session()  # Initialize the Mist API session if not already established.
     _silence_console_handlers_for_tui()  # Remove console log handlers so Rich owns the screen.
     _run_tui_event_loop(args)  # Run the TUI event loop (handles Ctrl+C + fatal errors internally).
@@ -5605,12 +5572,12 @@ def _ensure_tui_api_session() -> None:
     """Initialize the Mist API session if not already established. Exits 1 on auth failure."""
     if apisession:  # Already authenticated -- nothing to do.
         return  # Reuse the existing session.
-    logging.warning(">> Initializing Mist API session...")  # Legacy console echo routed via logger.
+    echo(">> Initializing Mist API session...")
     if not MistSessionInitializer.initialize():  # Attempt session init for TUI
-        logging.error("[ERROR] Failed to initialize Mist API session")  # Legacy console echo routed via logger.
+        logging.error("[ERROR] Failed to initialize Mist API session")  # Auth-init failure at ERROR level.
         logging.error("TUI_MODE: Could not initialize API session")  # Log auth failure.
         sys.exit(1)  # Exit -- TUI cannot function without a session.
-    logging.warning(">> API session initialized successfully")  # Legacy console echo routed via logger.
+    echo(">> API session initialized successfully")
 
 
 def _silence_console_handlers_for_tui() -> None:
@@ -5634,7 +5601,7 @@ def _handle_tui_keyboard_interrupt(debug: bool) -> None:
             "TUI_DEBUG: [%s] KeyboardInterrupt caught - user pressed Ctrl+C", timestamp
         )  # Log interrupt with time
     logging.info("TUI_MODE: User interrupted with Ctrl+C")  # Log clean user exit
-    logging.warning("\n[EXIT] TUI mode stopped by user")  # Legacy console echo routed via logger.
+    echo("\n[EXIT] TUI mode stopped by user")
 
 
 def _handle_tui_exception(debug: bool, error: Exception) -> None:
@@ -5648,7 +5615,7 @@ def _handle_tui_exception(debug: bool, error: Exception) -> None:
             error,
         )  # Log error
     logging.exception("TUI_MODE: Fatal error - %s", error)  # Log full traceback to file
-    logging.error("\n[ERROR] TUI mode crashed: %s", error)  # Legacy console echo routed via logger.
+    logging.error("\n[ERROR] TUI mode crashed: %s", error)  # Crash message at ERROR level.
     sys.exit(1)  # Exit with error code after TUI crash
 
 
@@ -5731,7 +5698,7 @@ def _resolve_cli_site_id(args: argparse.Namespace, org_id: str) -> str | None:
     site_id = site_lookup.get(args.site)  # Look up site ID by human-readable name.
     if not site_id:  # Site name not found in org -- abort with error.
         logging.error("! Site name '%s' not found.", args.site)  # Log resolution failure.
-        logging.warning("! Site name '%s' not found.", args.site)  # Legacy console echo routed via logger.
+        echo("! Site name '%s' not found.", args.site)
         sys.exit(1)  # Exit -- cannot proceed with unknown site.
     logging.info("Resolved site name '%s' to site_id '%s'.", args.site, site_id)  # Log resolution success.
     return site_id  # Return the resolved site_id.
@@ -5750,9 +5717,7 @@ def _resolve_cli_device_id(args: argparse.Namespace, site_id: str | None) -> str
     device_id = device_lookup.get(args.device)  # Look up device ID by human-readable name.
     if not device_id:  # Device name not found at site -- abort with error.
         logging.error("! Device name '%s' not found at site '%s'.", args.device, args.site)  # Log resolution failure.
-        logging.warning(
-            "! Device name '%s' not found at site '%s'.", args.device, args.site
-        )  # Legacy console echo routed via logger.
+        echo("! Device name '%s' not found at site '%s'.", args.device, args.site)
         sys.exit(1)  # Exit -- cannot proceed with unknown device.
     logging.info("Resolved device name '%s' to device_id '%s'.", args.device, device_id)  # Log resolution success.
     return str(device_id)  # Return the resolved device_id (dev["id"] is Any, so narrow to str).
@@ -5762,7 +5727,7 @@ def _dispatch_cli_menu_action(args: argparse.Namespace, site_id: str | None, dev
     """Look up args.menu in menu_actions, build kwargs, call the target. Exits 0/1 -- never returns on success."""
     if args.menu not in menu_actions:  # Invalid menu number -- abort with error.
         logging.error("! Invalid menu option: %s", args.menu)  # Log invalid menu selection.
-        logging.warning("! Invalid menu option: %s", args.menu)  # Legacy console echo routed via logger.
+        echo("! Invalid menu option: %s", args.menu)
         sys.exit(1)  # Exit with error code on invalid menu option.
     func, _ = menu_actions[args.menu]  # Extract callable from menu_actions dispatch table.
     logging.info("Executing menu action '%s'.", args.menu)  # Log before function dispatch.
@@ -5825,22 +5790,20 @@ def _setup_interactive_container_mode() -> bool:
     container_mode = EnvironmentUtils.is_running_in_container()  # Check Podman/Docker container marker files.
     if container_mode:  # Container mode: show banner and loop after each operation.
         logging.info("Container mode detected - enabling continuous menu loop")  # Log container detection.
-        logging.warning(
-            "[CONTAINER MODE] MistHelper will return to menu after each operation"
-        )  # Legacy console echo routed via logger.
-        logging.warning("                 Use option 0 to exit the container")  # Legacy console echo routed via logger.
+        echo("[CONTAINER MODE] MistHelper will return to menu after each operation")
+        echo("                 Use option 0 to exit the container")
     return container_mode  # Return flag so the loop can branch on container or direct mode.
 
 
 def _print_interactive_menu() -> None:
     """Print the sorted list of available menu options."""
-    logging.warning("\nAvailable Options:")  # Legacy console echo routed via logger.
+    echo("\nAvailable Options:")
     sorted_menu_keys = sorted(
         menu_actions.keys(), key=lambda x: float(x.replace("a", ".1"))
     )  # Sort numerically (not lexically) so 10 sorts after 9.
     for key in sorted_menu_keys:  # Iterate every menu key in numeric order.
         _, description = menu_actions[key]  # Unpack description from dispatch table tuple.
-        logging.warning("%s: %s", key, description)  # Legacy console echo routed via logger.
+        echo("%s: %s", key, description)
 
 
 def _prompt_interactive_selection() -> str:
@@ -5854,29 +5817,25 @@ def _prompt_interactive_selection() -> str:
 
 def _handle_interactive_eof(container_mode: bool) -> None:
     """Print the EOF (Ctrl+D / SSH disconnect / pipe close) messages."""
-    logging.warning("\n[EOF] Input stream closed. Exiting gracefully...")  # Legacy console echo routed via logger.
+    echo("\n[EOF] Input stream closed. Exiting gracefully...")
     logging.info("EOF encountered on input - user disconnected or input stream closed")  # Log EOF event.
     if container_mode:  # Container mode: additional context message for SSH session termination.
-        logging.warning(
-            "[CONTAINER MODE] SSH session ended. Terminating MistHelper."
-        )  # Legacy console echo routed via logger.
+        echo("[CONTAINER MODE] SSH session ended. Terminating MistHelper.")
 
 
 def _handle_interactive_empty_input(container_mode: bool) -> None:
     """Print the empty-input notice (different copy for container vs direct mode)."""
     if container_mode:  # Container mode shows prompt to clarify nothing happened.
-        logging.warning(
-            "[CONTAINER MODE] No selection entered. Redisplaying menu..."
-        )  # Legacy console echo routed via logger.
-        logging.warning("=" * 60)  # Legacy console echo routed via logger.
+        echo("[CONTAINER MODE] No selection entered. Redisplaying menu...")
+        echo("=" * 60)
     else:  # Direct mode shows simpler reminder.
-        logging.warning("No selection entered. Please enter a menu number.")  # Legacy console echo routed via logger.
+        echo("No selection entered. Please enter a menu number.")
 
 
 def _handle_interactive_invalid_selection(iwant: str, container_mode: bool) -> None:
     """Handle an invalid (non-empty, not in dispatch table) menu selection. May call sys.exit."""
     logging.error("Invalid selection '%s' entered by user.", iwant)  # Log invalid selection.
-    logging.warning("Invalid selection. Please try again.")  # Legacy console echo routed via logger.
+    echo("Invalid selection. Please try again.")
     if not container_mode:  # Direct mode: exit on invalid selection.
         logging.debug("EXIT: _run_interactive_mode - invalid selection (direct mode)")  # Log exit point.
         sys.exit(1)  # Exit with error code on invalid selection in direct mode.
@@ -5906,15 +5865,13 @@ def _dispatch_post_menu_success(iwant: str, container_mode: bool) -> None:
         logging.debug(
             "Container mode: option '%s' completed successfully, returning to menu", iwant
         )  # Log container loop.
-        logging.warning(
-            "\n[CONTAINER MODE] Operation '%s' completed. Returning to menu...", iwant
-        )  # Legacy console echo routed via logger.
-        logging.warning("=" * 60)  # Legacy console echo routed via logger.
+        echo("\n[CONTAINER MODE] Operation '%s' completed. Returning to menu...", iwant)
+        echo("=" * 60)
         return  # Return so the outer while loop continues.
     if iwant in session_management_options:  # Direct mode + session management: keep loop running.
         logging.info("Session management option '%s' completed - returning to menu", iwant)  # Log session update.
-        logging.warning("\n[SESSION] Context updated. Returning to menu...")  # Legacy console echo routed via logger.
-        logging.warning("=" * 60)  # Legacy console echo routed via logger.
+        echo("\n[SESSION] Context updated. Returning to menu...")
+        echo("=" * 60)
         return  # Return so the outer while loop continues with updated session context.
     logging.debug("EXIT: _run_interactive_mode - interactive success (direct mode)")  # Log exit point.
     sys.exit(0)  # Exit after single operation in direct mode.
@@ -5925,10 +5882,8 @@ def _handle_post_menu_interrupt(iwant: str, container_mode: bool) -> None:
     logging.info("Operation interrupted by user (Ctrl+C)")  # Log user interrupt.
     if container_mode:  # Container mode: return to menu after interrupt.
         logging.debug("Container mode: option '%s' interrupted, returning to menu", iwant)  # Log container interrupt.
-        logging.warning(
-            "\n[CONTAINER MODE] Operation interrupted. Returning to menu..."
-        )  # Legacy console echo routed via logger.
-        logging.warning("=" * 60)  # Legacy console echo routed via logger.
+        echo("\n[CONTAINER MODE] Operation interrupted. Returning to menu...")
+        echo("=" * 60)
         return  # Return so the outer while loop continues.
     logging.debug("EXIT: _run_interactive_mode - user interrupt")  # Log exit point.
     sys.exit(130)  # Exit 130 is the standard exit code for SIGINT (Ctrl+C).
@@ -5939,11 +5894,9 @@ def _handle_post_menu_exception(iwant: str, error: Exception, container_mode: bo
     logging.error("Error executing menu option '%s': %s", iwant, error)  # Log error with context.
     if container_mode:  # Container mode: show error but return to menu.
         logging.debug("Container mode: option '%s' failed with error, returning to menu", iwant)  # Log container error.
-        logging.error(
-            "\n[CONTAINER MODE] Error in operation '%s': %s", iwant, error
-        )  # Legacy console echo routed via logger.
-        logging.warning("Returning to menu...")  # Legacy console echo routed via logger.
-        logging.warning("=" * 60)  # Legacy console echo routed via logger.
+        logging.error("\n[CONTAINER MODE] Error in operation '%s': %s", iwant, error)
+        echo("Returning to menu...")
+        echo("=" * 60)
         return  # Return so the outer while loop continues despite the error.
     logging.debug("EXIT: _run_interactive_mode - interactive error (direct mode)")  # Log exit point.
     sys.exit(1)  # Exit with error code on unexpected exception in direct mode.

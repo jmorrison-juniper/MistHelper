@@ -12,6 +12,8 @@ from dataclasses import dataclass, field  # WHY: bundle 7+ related params into â
 from datetime import datetime, timedelta  # WHY: timestamp checkpoints and predict rate-limit reset window
 from typing import Any, ClassVar  # WHY: mistapi returns untyped JSON dicts. ClassVar for typed static tables
 
+from src.utils.console import echo  # WHY: 1031 stdout + INFO log helper replaces legacy WARNING-channel echoes.
+
 
 @dataclass  # WHY: promote plain class into an auto-init dataclass
 class SiteBatchContext:  # WHY: bundle per-batch state as a single object passed to helpers
@@ -103,7 +105,7 @@ class E911BSSIDReportGenerator:  # WHY: static-method namespace for the Menu 160
         These are the expensive bulk queries that only need to run once.
         Results are cached in the checkpoint file so they survive a 429.
         """
-        logging.warning("  Phase 1: Fetching org-level bulk data...")  # Legacy console echo routed via logger.
+        echo("  Phase 1: Fetching org-level bulk data...")
         sites_data = E911BSSIDReportGenerator._fetch_site_and_ap_bulk(apisession, org_id, page_limit)  # WHY: sites+APs
         wlan_data = E911BSSIDReportGenerator._fetch_wlan_bulk(  # WHY: bulk WLAN + templates fetch
             apisession, org_id, page_limit, sites_data["sites"]
@@ -129,11 +131,11 @@ class E911BSSIDReportGenerator:  # WHY: static-method namespace for the Menu 160
 
         WHY: extracted from `_fetch_org_bulk_data` to keep parent â‰¤25 lines.
         """
-        logging.warning("    Fetching site information...")  # Legacy console echo routed via logger.
+        echo("    Fetching site information...")
         all_sites = E911BSSIDReportGenerator._fetch_all_sites(apisession, org_id, page_limit)  # WHY: paginated list
         site_lookup = E911BSSIDReportGenerator._build_site_lookup(all_sites)  # WHY: dict for O(1) lookup by id
         logging.info("Sites fetched: %d", len(site_lookup))  # WHY: telemetry for run-size auditing
-        logging.warning("    Fetching AP inventory stats...")  # Legacy console echo routed via logger.
+        echo("    Fetching AP inventory stats...")
         ap_lookup = E911BSSIDReportGenerator._fetch_ap_stats(apisession, org_id, page_limit)  # WHY: MAC-indexed AP data
         logging.info("AP device stats fetched: %d", len(ap_lookup))  # WHY: audit AP inventory size
         return {"sites": site_lookup, "aps": ap_lookup}  # WHY: bundled return keeps caller signature small
@@ -149,11 +151,11 @@ class E911BSSIDReportGenerator:  # WHY: static-method namespace for the Menu 160
 
         WHY: extracted so `_fetch_org_bulk_data` stays under the 25-line ceiling.
         """
-        logging.warning("    Fetching org WLAN templates and org WLANs...")  # Legacy console echo routed via logger.
+        echo("    Fetching org WLAN templates and org WLANs...")
         wlan_templates, org_wlans = E911BSSIDReportGenerator._fetch_wlan_sources(  # WHY: pair template+wlan fetch
             apisession, org_id, page_limit
         )
-        logging.warning("    Pre-fetching unique site template WLANs...")  # Legacy console echo routed via logger.
+        echo("    Pre-fetching unique site template WLANs...")
         cache = E911BSSIDReportGenerator._prefetch_site_templates(  # WHY: cache SSIDs per template
             apisession, org_id, site_lookup
         )
@@ -190,13 +192,13 @@ class E911BSSIDReportGenerator:  # WHY: static-method namespace for the Menu 160
         """
         import mistapi  # noqa: E402  # WHY: lazy import so non-report menus start fast
 
-        logging.warning("    Fetching AP radio MACs...")  # Legacy console echo routed via logger.
+        echo("    Fetching AP radio MACs...")
         radio_response = mistapi.api.v1.orgs.devices.listOrgApsMacs(apisession, org_id, limit=page_limit)  # WHY: page 1
         radio_macs_data: list[dict[str, Any]] = mistapi.get_all(  # WHY: fetch all remaining pages
             response=radio_response, mist_session=apisession
         )
         logging.info("Radio MAC records fetched: %d", len(radio_macs_data))  # WHY: audit radio-record count
-        logging.warning("    Inferring radio bands from MAC positions...")  # Legacy console echo routed via logger.
+        echo("    Inferring radio bands from MAC positions...")
         radio_band_lookup = E911BSSIDReportGenerator._infer_radio_bands(radio_macs_data)  # WHY: position -> band
         logging.info("Radio bands inferred: %d broadcast radios", len(radio_band_lookup))  # WHY: audit inference
         return {"radio_macs": radio_macs_data, "radio_bands": radio_band_lookup}  # WHY: bundle for parent
@@ -765,22 +767,16 @@ class E911BSSIDReportGenerator:  # WHY: static-method namespace for the Menu 160
         compliance_gaps: list[dict[str, str]],
     ) -> None:
         """Display E911 report summary with compliance gap detection."""
-        logging.warning("\n--- E911 BSSID Report Summary ---")  # Legacy console echo routed via logger.
-        logging.warning("  Sites processed: %s", f"{total_sites:,}")  # Legacy console echo routed via logger.
-        logging.warning("  APs processed: %s", f"{total_aps:,}")  # Legacy console echo routed via logger.
-        logging.warning("  BSSIDs generated: %s", f"{total_bssids:,}")  # Legacy console echo routed via logger.
+        echo("\n--- E911 BSSID Report Summary ---")
+        echo("  Sites processed: %s", f"{total_sites:,}")
+        echo("  APs processed: %s", f"{total_aps:,}")
+        echo("  BSSIDs generated: %s", f"{total_bssids:,}")
         if not compliance_gaps:  # WHY: happy-path exits with a positive message
-            logging.warning(
-                "\n  No compliance gaps detected -- all APs are assigned to floor plans."
-            )  # Legacy console echo routed via logger.
+            echo("\n  No compliance gaps detected -- all APs are assigned to floor plans.")
             return  # WHY: nothing more to print
-        logging.warning(
-            "\n  Compliance Gaps: %s AP(s) require attention", len(compliance_gaps)
-        )  # Legacy console echo routed via logger.
+        echo("\n  Compliance Gaps: %s AP(s) require attention", len(compliance_gaps))
         for gap in compliance_gaps:  # WHY: enumerate each gap with reason
-            logging.warning(
-                "    - %s (%s): %s", gap["ap_name"], gap["ap_mac"], gap["reason"]
-            )  # Legacy console echo routed via logger.
+            echo("    - %s (%s): %s", gap["ap_name"], gap["ap_mac"], gap["reason"])
 
     @staticmethod
     def _process_sites(
@@ -799,14 +795,14 @@ class E911BSSIDReportGenerator:  # WHY: static-method namespace for the Menu 160
             org_data, completed_sites
         )
         if not remaining:  # WHY: everything cached from a prior run
-            logging.warning("  All %s sites already cached.", total_sites)  # Legacy console echo routed via logger.
+            echo("  All %s sites already cached.", total_sites)
             return True  # WHY: nothing to do
-        logging.warning(
+        echo(
             "  Phase 2: Processing %s sites (%s cached, %s total)...",
             len(remaining),
             len(completed_sites),
             total_sites,
-        )  # Legacy console echo routed via logger.
+        )
         batch = E911BSSIDReportGenerator._build_batch_context(org_id, org_data, site_state, total_sites)  # WHY: bundle
         return E911BSSIDReportGenerator._process_site_batch(apisession, page_limit, remaining, batch)
 
@@ -881,12 +877,8 @@ class E911BSSIDReportGenerator:  # WHY: static-method namespace for the Menu 160
                 E911BSSIDReportGenerator._save_checkpoint(
                     batch.org_id, batch.org_data, batch.completed_sites, batch.map_lookup, batch.wlan_band_lookup
                 )
-                logging.warning(
-                    "    Progress: %s/%s sites", len(batch.completed_sites), batch.total_sites
-                )  # Legacy console echo routed via logger.
-        logging.warning(
-            "    Done: %s/%s sites enriched.", len(batch.completed_sites), batch.total_sites
-        )  # Legacy console echo routed via logger.
+                echo("    Progress: %s/%s sites", len(batch.completed_sites), batch.total_sites)
+        echo("    Done: %s/%s sites enriched.", len(batch.completed_sites), batch.total_sites)
         return True  # WHY: caller writes the report
 
     @staticmethod
@@ -922,19 +914,13 @@ class E911BSSIDReportGenerator:  # WHY: static-method namespace for the Menu 160
         index: int,
     ) -> bool:
         """Handle HTTP 429 rate limit by saving checkpoint."""
-        logging.warning(
-            "\n  ! Rate limited (HTTP 429) after %s sites this run.", index
-        )  # Legacy console echo routed via logger.
+        echo("\n  ! Rate limited (HTTP 429) after %s sites this run.", index)
         E911BSSIDReportGenerator._save_checkpoint(
             batch.org_id, batch.org_data, batch.completed_sites, batch.map_lookup, batch.wlan_band_lookup
         )
         next_hour = datetime.now().replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)  # WHY: rate reset
-        logging.warning(
-            "    Checkpoint saved: %s/%s sites.", len(batch.completed_sites), batch.total_sites
-        )  # Legacy console echo routed via logger.
-        logging.warning(
-            "    Run Menu 160 again after %s to resume.", next_hour.strftime("%H:%M")
-        )  # Legacy console echo routed via logger.
+        echo("    Checkpoint saved: %s/%s sites.", len(batch.completed_sites), batch.total_sites)
+        echo("    Run Menu 160 again after %s to resume.", next_hour.strftime("%H:%M"))
         return False  # WHY: caller uses False to abort the run cleanly
 
     @staticmethod
@@ -950,7 +936,7 @@ class E911BSSIDReportGenerator:  # WHY: static-method namespace for the Menu 160
         Supports checkpoint/resume for large orgs that exceed the
         5000 API calls per clock-hour rate limit.
         """
-        logging.warning("\n=== E911 BSSID Compliance Report ===")  # Legacy console echo routed via logger.
+        echo("\n=== E911 BSSID Compliance Report ===")
         logging.info("Starting E911 BSSID compliance report generation...")  # WHY: audit trail entry
         start_time = time.time()  # WHY: elapsed-time telemetry at the end
         site_state = E911BSSIDReportGenerator._restore_or_init(org_id, safe_input_fn)  # WHY: resume or fresh state
@@ -971,7 +957,7 @@ class E911BSSIDReportGenerator:  # WHY: static-method namespace for the Menu 160
         """
         radio_macs_data: list[dict[str, Any]] = org_data["radio_macs"]  # WHY: primary iteration payload
         if not radio_macs_data:  # WHY: nothing to report -> operator feedback + audit trail
-            logging.warning("No APs found in this organization.")  # Legacy console echo routed via logger.
+            echo("No APs found in this organization.")
             logging.info("No APs found - skipping E911 report generation")  # WHY: audit trail
         return radio_macs_data  # WHY: caller uses truthiness to short-circuit
 
@@ -1028,14 +1014,12 @@ class E911BSSIDReportGenerator:  # WHY: static-method namespace for the Menu 160
         """
         done = len(checkpoint.get("completed_sites", []))  # WHY: for progress display
         total = checkpoint.get("total_sites", "?")  # WHY: total may be missing on very old checkpoints
-        logging.warning(
-            "  Found checkpoint: %s/%s sites completed.", done, total
-        )  # Legacy console echo routed via logger.
+        echo("  Found checkpoint: %s/%s sites completed.", done, total)
         resume = safe_input_fn("  Resume from checkpoint? (y/n): ", context="e911_resume")  # WHY: user consent
         if resume.lower() != "y":  # WHY: any answer besides 'y' discards checkpoint
             E911BSSIDReportGenerator._clear_checkpoint()  # WHY: remove stale file
             return E911BSSIDReportGenerator._blank_state()  # WHY: start fresh
-        logging.warning("  Restored org data from checkpoint.")  # Legacy console echo routed via logger.
+        echo("  Restored org data from checkpoint.")
         return {  # WHY: restored state is what `execute` feeds into `_process_sites`
             "org_data": checkpoint["org_data"],
             "maps": checkpoint.get("map_lookup", {}),
@@ -1055,15 +1039,13 @@ class E911BSSIDReportGenerator:  # WHY: static-method namespace for the Menu 160
         lookups = E911BSSIDReportGenerator._build_report_lookups(org_data, radio_macs_data, site_state)  # WHY: unified
         rows, compliance_gaps = E911BSSIDReportGenerator._build_bssid_rows(radio_macs_data, lookups)  # WHY: E911 rows
         filename = E911BSSIDReportGenerator._write_csv(rows, write_data_fn)  # WHY: file naming isolated
-        logging.warning(
-            "\nCSV saved: data/%s (%s BSSIDs)", filename, f"{len(rows):,}"
-        )  # Legacy console echo routed via logger.
+        echo("\nCSV saved: data/%s (%s BSSIDs)", filename, f"{len(rows):,}")
         unique_sites = {row["Site Name"] for row in rows} - {"Unassigned"}  # WHY: unique real sites in output
         E911BSSIDReportGenerator._display_summary(len(unique_sites), len(radio_macs_data), len(rows), compliance_gaps)
         E911BSSIDReportGenerator._clear_checkpoint()  # WHY: successful run -> no checkpoint needed
         elapsed = time.time() - start_time  # WHY: telemetry for report duration
         logging.info("E911 BSSID report completed in %.1f seconds", elapsed)  # WHY: audit trail
-        logging.warning("\nReport completed in %.1f seconds", elapsed)  # Legacy console echo routed via logger.
+        echo("\nReport completed in %.1f seconds", elapsed)
 
     @staticmethod
     def _build_report_lookups(

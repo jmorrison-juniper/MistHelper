@@ -60,7 +60,7 @@ def test_ensure_prereq_csvs_generates_port_stats_when_missing(caplog: pytest.Log
     def exists(path: str) -> bool:
         return path != "port.csv"
 
-    caplog.set_level(logging.WARNING)
+    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
     with (
         patch("src.reports.sfp_transceiver_data_processor.OrgInventoryExporter") as inv_exporter,
         patch("src.reports.sfp_transceiver_data_processor.os.path.exists", side_effect=exists),
@@ -79,7 +79,7 @@ def test_ensure_prereq_csvs_generates_devices_when_missing(caplog: pytest.LogCap
     def exists(path: str) -> bool:
         return path != "devices.csv"
 
-    caplog.set_level(logging.WARNING)
+    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
     with (
         patch("src.reports.sfp_transceiver_data_processor.OrgInventoryExporter") as inv_exporter,
         patch("src.reports.sfp_transceiver_data_processor.os.path.exists", side_effect=exists),
@@ -217,7 +217,7 @@ def test_finalize_merge_output_writes_via_backend_and_notifies_user(
     """Writes via DataExporter and prints the user-facing filename notice."""
     fake_mh = _make_mh()
     rows = [{"site_name": "HQ"}]
-    caplog.set_level(logging.WARNING)
+    caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
     with patch("src.reports.sfp_transceiver_data_processor.importlib.import_module", return_value=fake_mh):
         P._finalize_merge_output(rows)
     fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(rows, "MergedTransceiverData.csv")
