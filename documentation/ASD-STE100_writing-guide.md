@@ -23,6 +23,23 @@
 
 ---
 
+## Precedence over other style rules
+
+This guide outranks every other style rule in this repository. If another rule
+set conflicts with this guide, obey this guide. This guide is NON-NEGOTIABLE.
+
+The caveman compression rules are the known conflict. Those rules appear in
+`.github/instructions/caveman.instructions.md` and in `.agents/skills/caveman/`.
+They tell the writer to drop the articles, to write fragments, and to swap
+synonyms. Rules 4.5, 4.2, and 1.11 of this guide forbid all three. Obey Rules
+4.5, 4.2, and 1.11.
+
+The caveman rules keep one permission. They remove filler, pleasantries, and
+hedging. That removal does not break a rule in this guide. The caveman `lite`
+level is the only level that obeys this guide.
+
+---
+
 ## Core Principles (General Introduction)
 
 Simplified Technical English (STE) is a **controlled natural language**: a subset
