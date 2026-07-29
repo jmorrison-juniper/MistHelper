@@ -7,6 +7,24 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Resolve the Redis time-series entity identifier from a fallback list (issue #990)
+
+- **Entity identifier (Fixed)**: `RedisTimeSeriesWriter` read the entity
+  identifier from one field only. A record that omitted that field landed under
+  the text `unknown`. Many unrelated records then shared one time-series key.
+  The writer now walks the ordered fallback list `device_id`, `site_id`,
+  `org_id`, `mac`, `id` when the strategy field holds no usable value.
+- **Existing keys (Unchanged)**: a record that carries a usable value in the
+  strategy field produces the same key as before. The key still holds three
+  parts that a colon separates. The text `unknown` stays as the final fallback,
+  because `RedisJSONWriter._build_key` depends on a stable key length.
+- **Usable value (Added)**: a new test accepts the number `0` as an identifier.
+  A plain truth test rejected `0` and sent the record to the fallback list.
+- **Resolution summary (Added)**: each extraction call emits one debug event
+  that reports three counts. The counts name the records that used the strategy
+  field, a fallback field, and the sentinel. The writer emits no log line for a
+  single record, so a large export produces one summary line.
+
 ### Remove the vulture and CodeQL gate silencers (issues #892, #893)
 
 - **Pylint scope (Attempted and reverted)**: the removal of
