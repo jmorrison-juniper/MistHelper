@@ -2323,8 +2323,8 @@ class FirmwareManager:
                 return
             ssr_count, models, versions = self._collect_ssr_inventory_data(response.data or [])
             self._display_ssr_inventory_stats(ssr_count, models, versions)
-        except Exception:
-            pass  # Inventory info is informational only
+        except Exception as error:  # WHY: an informational summary must never break the firmware flow.
+            logging.debug("SSR inventory display skipped: %s", error)  # The summary is informational only.
 
     def _select_ssr_version_from_list(self, available_versions: list[dict[str, Any]]) -> str:
         """Display version list and prompt user to select target version.
@@ -2960,7 +2960,7 @@ class FirmwareManager:
         prepared, error = self._prepare_ssr_bulk_upgrade(sites_to_upgrade_override)  # WHY: gather org/sites/version
         if error is not None:  # WHY: propagate first prep failure
             return error  # WHY: cancel/validation error surfaces to caller
-        assert prepared is not None  # WHY: mypy narrowing - error None implies prepared populated
+        assert prepared is not None  # nosec B101 - The error guard above proves prepared is set.
         org_name, selected_sites, upgrade_config, target_version = prepared  # WHY: unpack ready state
         if not self._confirm_ssr_upgrade(org_name, selected_sites, target_version, upgrade_config):  # WHY: last gate
             logging.info("SSR bulk upgrade cancelled at confirmation prompt")  # WHY: audit user cancel
@@ -2988,12 +2988,12 @@ class FirmwareManager:
         org_and_sites, error = self._resolve_ssr_org_and_sites(sites_to_upgrade_override)  # WHY: org + sites gate
         if error:  # WHY: propagate org / site resolution error uniformly
             return None, error  # WHY: preserve pre-refactor return shape
-        assert org_and_sites is not None  # WHY: narrow after error None guard
+        assert org_and_sites is not None  # nosec B101 - The error guard above proves org_and_sites is set.
         org_name, selected_sites = org_and_sites  # WHY: unpack org name + selected sites
         config_and_version, error = self._resolve_ssr_config_and_version()  # WHY: pick channel/strategy + version
         if error:  # WHY: propagate cancel / version resolution error uniformly
             return None, error  # WHY: preserve pre-refactor return shape
-        assert config_and_version is not None  # WHY: narrow after error None guard
+        assert config_and_version is not None  # nosec B101 - The error guard above proves config_and_version is set.
         upgrade_config, target_version = config_and_version  # WHY: unpack resolver tuple
         logging.debug("SSR bulk upgrade prep complete sites=%d", len(selected_sites))  # WHY: trace success
         return (org_name, selected_sites, upgrade_config, target_version), None  # WHY: tuple + None-error signals ok
@@ -3008,7 +3008,7 @@ class FirmwareManager:
         selected_sites, error = self._resolve_ssr_sites_or_error(sites_to_upgrade_override)  # WHY: pick+guard sites
         if error:  # WHY: propagate site-resolution error
             return None, error  # WHY: preserve pre-refactor return shape
-        assert selected_sites is not None  # WHY: narrow after error None guard
+        assert selected_sites is not None  # nosec B101 - The error guard above proves selected_sites is set.
         return (org_name, selected_sites), None  # WHY: success two-slot tuple
 
     def _resolve_ssr_config_and_version(

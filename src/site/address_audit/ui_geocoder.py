@@ -45,7 +45,7 @@ import os  # Filesystem probing for the Edge executable.
 import re  # House-number extraction + suggestion cleanup (defeats the autocomplete lag race).
 import secrets  # Unpredictable RNG source for human-like typing jitter (lint-clean, not security-critical).
 import shutil  # PATH lookup fallback for the Edge executable.
-import subprocess  # Spawn a debuggable browser for CDP takeover.
+import subprocess  # nosec B404 - The module spawns a debuggable browser, and the call below uses shell=False.
 import tempfile  # Dedicated throwaway profile for the spawned browser.
 import time  # Politeness delay between Google Places lookups.
 from typing import Any  # Loose typing for Playwright handles (kept import-light).
@@ -622,7 +622,8 @@ class MistUIGeocoder:
         profile = tempfile.mkdtemp(prefix=_PROFILE_PREFIX)  # WHY: dedicated dir so the operator's profile is untouched.
         args = MistUIGeocoder._debuggable_edge_args(edge, cdp_port, profile, dashboard_url)  # Build the CLI flags.
         logging.info("Spawning debuggable Edge on port %d (profile=%s)", cdp_port, profile)  # Action-log spawn.
-        proc = subprocess.Popen(args)  # Launch Edge. The operator logs in, then we attach.
+        # WHY: launch Edge now. The operator logs into Mist in this window, then the audit attaches over CDP.
+        proc = subprocess.Popen(args)  # nosec B603 - _edge_executable resolved the path and the flags are literals.
         logging.debug("Debuggable Edge started (pid=%s)", proc.pid)  # Trace the PID.
         return proc  # Caller terminates it when the audit finishes.
 

@@ -27,8 +27,8 @@ DEFAULT_PROBE_IPS = [ip.strip() for ip in _DEFAULT_PROBE_IPS_ENV.split(",") if i
 DEFAULT_PROBE_PROFILE = os.getenv("MIST_WAN_PROBE_PROFILE", "lte")  # WHY: env-configurable probe profile.
 HEADER_RULE = "=" * 70  # WHY: reusable banner separator.
 PREVIEW_DEVICE_LIMIT = 5  # WHY: cap sample devices printed in preview banner.
-APPLY_CONFIRM_TOKEN = "APPLY"  # WHY: required uppercase confirmation phrase.
-CANCEL_TOKEN = "cancel"  # WHY: template selection cancel keyword.
+APPLY_CONFIRM_TOKEN = "APPLY"  # nosec B105 - The value is the typed confirmation word for the prompt.
+CANCEL_TOKEN = "cancel"  # nosec B105 - The value is the cancel keyword for template selection.
 HTTP_OK = 200  # WHY: expected Mist update success status code.
 AUDIT_OUTPUT_FILE = "GatewayDevice_WAN_Probe_Override_Audit.csv"  # WHY: stable audit filename.
 

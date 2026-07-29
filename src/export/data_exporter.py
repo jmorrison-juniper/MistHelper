@@ -59,9 +59,9 @@ class DataExporter:  # Multi-backend export facade.
     def _build_polyglot_router(cls) -> None:
         """Construct DatabaseRouter from env (called only when the polyglot layer is available)."""
         try:  # Router construction reads env and opens connections — guard against any startup failure
-            assert configure_db_logging is not None  # Guarded by _polyglot_db_layer_available
-            assert DatabaseConfig is not None  # Guarded by _polyglot_db_layer_available
-            assert DatabaseRouter is not None  # Guarded by _polyglot_db_layer_available
+            assert configure_db_logging is not None  # nosec B101 - _polyglot_db_layer_available proved this symbol.
+            assert DatabaseConfig is not None  # nosec B101 - _polyglot_db_layer_available proved this symbol.
+            assert DatabaseRouter is not None  # nosec B101 - _polyglot_db_layer_available proved this symbol.
             configure_db_logging()  # Route DB layer's logger into MistHelper logging before first use
             config = DatabaseConfig.from_env()  # Build connection settings from .env so secrets stay out of code
             cls._router = DatabaseRouter(  # Cache the shared router on the class for every later export call
@@ -159,7 +159,7 @@ class DataExporter:  # Multi-backend export facade.
     def _perform_polyglot_write(payload: list[dict[str, Any]], api_function_name: str) -> None:
         """Issue the actual router write call, logging result. Never raises (logs warning on failure)."""
         try:
-            assert DataExporter._router is not None  # Caller checks _should_skip_polyglot first
+            assert DataExporter._router is not None  # nosec B101 - The caller checked _should_skip_polyglot first.
             result = DataExporter._router.write(payload, api_function_name)  # Write to polyglot DB
             logging.info(  # Log the polyglot result
                 "Polyglot write: backend=%s, written=%s, failed=%s",
@@ -180,7 +180,7 @@ class DataExporter:  # Multi-backend export facade.
         if DataExporter._should_skip_polyglot(api_function_name):  # Combined eligibility check
             return
         polyglot_data = raw_data or data  # Prefer raw payload when caller supplied it
-        assert api_function_name is not None  # _should_skip_polyglot returns True for None
+        assert api_function_name is not None  # nosec B101 - _should_skip_polyglot returns True for a None name.
         DataExporter._perform_polyglot_write(polyglot_data, api_function_name)  # Issue write (catches errors)
 
     @classmethod

@@ -15,10 +15,27 @@ Dependencies:
 
 import logging
 import os
-import subprocess
+import shutil  # PATH lookup that turns a partial executable name into an absolute path.
+import subprocess  # nosec B404 - This is the bootstrap seam, and every call below uses shell=False.
 import sys
 from datetime import datetime
 from typing import Any
+
+
+def _resolve_executable(name: str) -> str:
+    """Return the absolute path of *name*, or *name* itself when PATH holds no match.
+
+    Args:
+        name: The bare executable name, such as "uv".
+
+    Returns:
+        str: The absolute path when PATH holds the program. The bare name otherwise.
+        The bare name is safe, because PATH then holds no program that could take its place.
+    """
+    logging.debug("Resolving the %s executable on PATH", name)  # Log before the PATH lookup runs.
+    resolved = shutil.which(name)  # An absolute path stops an earlier PATH entry from supplying another program.
+    logging.debug("Resolved the %s executable to %s", name, resolved)  # Log the result of the PATH lookup.
+    return resolved or name  # Fall back to the bare name, so the existing FileNotFoundError branch still runs.
 
 
 def check_and_install_uv() -> bool:
@@ -31,7 +48,13 @@ def check_and_install_uv() -> bool:
     """
     try:
         # Check if UV is already installed
-        result = subprocess.run(["uv", "--version"], capture_output=True, text=True, timeout=5)
+        uv_path = _resolve_executable("uv")  # Absolute path when uv is installed, bare name otherwise.
+        result = subprocess.run(  # nosec B603 B607 - shutil.which resolved the path and the rest are literals.
+            [uv_path, "--version"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
         if result.returncode == 0:
             print(f"UV package manager found: {result.stdout.strip()}")
             return True
@@ -44,7 +67,7 @@ def check_and_install_uv() -> bool:
 
     try:
         # Install UV using pip
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603 - Every argument is a literal or the running interpreter.
             [sys.executable, "-m", "pip", "install", "uv"], capture_output=True, text=True, timeout=60
         )
 
@@ -95,14 +118,15 @@ def check_and_install_grpcio() -> tuple[bool, str]:
             # Use UV for faster installation
             print("Using UV for faster installation...")
             print(f"Installing: {', '.join(packages)}")
-            result = subprocess.run(
-                ["uv", "pip", "install"] + packages, capture_output=False, timeout=300  # Show progress to user
+            uv_path = _resolve_executable("uv")  # Absolute path, so PATH order cannot substitute another program.
+            result = subprocess.run(  # nosec B603 - shutil.which resolved the path and packages is a module literal.
+                [uv_path, "pip", "install"] + packages, capture_output=False, timeout=300  # Show progress to user
             )
         else:
             # Fall back to pip
             print("Using pip for installation...")
             print(f"Installing: {', '.join(packages)}")
-            result = subprocess.run(
+            result = subprocess.run(  # nosec B603 - Every argument is a literal or the running interpreter.
                 [sys.executable, "-m", "pip", "install"] + packages,
                 capture_output=False,  # Show progress to user
                 timeout=300,
@@ -168,14 +192,15 @@ def check_and_install_pyqt6() -> tuple[bool, str]:
             # Use UV for faster installation
             print("Using UV for faster installation...")
             print("Please wait, downloading and installing PyQt6 (approximately 50MB)...")
-            result = subprocess.run(
-                ["uv", "pip", "install", "PyQt6"], capture_output=False, timeout=300  # Show progress to user
+            uv_path = _resolve_executable("uv")  # Absolute path, so PATH order cannot substitute another program.
+            result = subprocess.run(  # nosec B603 B607 - shutil.which resolved the path and the rest are literals.
+                [uv_path, "pip", "install", "PyQt6"], capture_output=False, timeout=300  # Show progress to user
             )
         else:
             # Fall back to pip
             print("Using pip for installation...")
             print("Please wait, downloading and installing PyQt6 (approximately 50MB)...")
-            result = subprocess.run(
+            result = subprocess.run(  # nosec B603 - Every argument is a literal or the running interpreter.
                 [sys.executable, "-m", "pip", "install", "PyQt6"],
                 capture_output=False,  # Show progress to user
                 timeout=300,
@@ -188,7 +213,7 @@ def check_and_install_pyqt6() -> tuple[bool, str]:
             print("Restarting application with GUI support...\n")
 
             # Restart the script to load the newly installed PyQt6
-            os.execv(sys.executable, [sys.executable] + sys.argv)
+            os.execv(sys.executable, [sys.executable] + sys.argv)  # nosec B606 - The target is the running interpreter.
 
         else:
             error_msg = (

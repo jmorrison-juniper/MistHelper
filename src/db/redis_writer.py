@@ -43,7 +43,7 @@ DEFAULT_LABEL_FIELDS = (
     "device_id",
 )  # WHY: fallback TS labels when strategy omits ts_label_fields.
 WEBHOOK_ENTITY_KEYS = ("mac", "device_id")  # WHY: webhook events identify entities via one of these fields.
-ALREADY_EXISTS_TOKEN = "already exists"  # WHY: substring used to distinguish benign duplicate-create errors.
+ALREADY_EXISTS_TOKEN = "already exists"  # nosec B105 - The value is an error-message fragment that marks a duplicate.
 
 _TOPIC_KEY_PREFIX: dict[str, str] = {  # WHY: map Kafka topic names to TS key prefixes for webhook ingest.
     "client-sessions": "client_stats",

@@ -7,6 +7,34 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Drop the bandit `-ll` severity suppression and clear all 54 findings (issue #889)
+
+- **Security gate (Changed)**: removed `-ll` from the bandit step in
+  `.github/workflows/ci.yml`. The command is now
+  `bandit -c pyproject.toml -r .`. The flag had hidden every finding below
+  MEDIUM severity from both the report and the exit code, so a LOW finding
+  could never fail the build.
+- **Finding triage (Fixed)**: cleared all 54 in-scope findings across 21 files.
+  The split is 15 real fixes and 39 annotated suppressions. No suppression is
+  bare. Each one names the rule and states why the finding is a false positive.
+  Rules cleared: B101 (18), B105 (11), B603 (9), B110 (7), B404 (4), B607 (3),
+  B107 (1), and B606 (1).
+- **Assert removal (Fixed)**: converted 7 asserts that guarded real behavior
+  into runtime checks that raise. An assert disappears under `python -O`, which
+  had made `validate_template` a silent no-op in that mode.
+- **Silent exception handlers (Fixed)**: replaced 5 `try`/`except`/`pass` blocks
+  with a logged handler, so an error no longer disappears without a trace. Three
+  further sites keep a broad catch, because unit tests prove a documented
+  fail-open contract at each one. Those three gained a log call instead.
+- **Executable resolution (Changed)**: `starlink_dashboard.py` and
+  `tools/compliance_analyzer/engine.py` now resolve an executable through
+  `shutil.which` before they run it, which removes the partial-path risk.
+- **Measurement note**: a local Windows run still reports 51 findings. Every one
+  sits in `tools/test_quality_analyzer/fixtures/` or in an untracked file.
+  `[tool.bandit].exclude_dirs` already excludes the fixture path, but a Windows
+  scan does not match it, because bandit compares the configured forward-slash
+  path against a backslash path. A clean CI checkout reports zero.
+
 ### Remove both pip-audit `--ignore-vuln` entries after review (issue #890)
 
 - **CVE suppression review (Removed)**: deleted `--ignore-vuln CVE-2026-4539`
