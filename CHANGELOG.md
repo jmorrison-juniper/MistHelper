@@ -7,6 +7,52 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Remove the pylint, vulture, and CodeQL gate silencers (issues #891, #892, #893)
+
+- **Pylint scope (Removed)**: deleted `--ignore=maps,ssh,ui` from the pylint
+  step in `.github/workflows/ci.yml`. That flag hid every message from
+  `src/maps`, `src/ssh`, and `src/ui` from the report and from the reviewer.
+  The issue #891 baseline records 757 messages with the flag and 1259 messages
+  without it. A re-measurement on this checkout with pylint 4.0.6 reports 806
+  messages with the flag and 1339 messages without it. Both runs exit 0,
+  because the score of 9.71 stays above the `--fail-under=9.5` threshold. This
+  change adds visibility. It fixes none of the newly visible messages. A
+  follow-up issue tracks that backlog.
+- **Dead code floor (Changed)**: lowered the vulture confidence floor from 90
+  to 70 in `.github/workflows/ci.yml`. The file holds that value at two sites.
+  Line 35 is the `workflow_call` input default and line 51 is the `env`
+  fallback. Both sites now read `'70'`. A caller that uses `workflow_call`
+  therefore runs the same floor as a pull request. A measurement on this
+  checkout reports 0 findings at confidence 90, 0 findings at confidence 70,
+  and 306 findings at confidence 60. The floor stops at 70, because the step
+  from 70 to 60 crosses a false positive cliff. Issue #1703 removes the dynamic
+  `mh.*` lookup that drives most of that rate. A later slice re-measures
+  confidence 60 after that issue lands.
+- **CodeQL exclusions (Removed)**: deleted the whole `query-filters` block from
+  `.github/codeql/codeql-config.yml`. The block excluded
+  `py/clear-text-logging-sensitive-data` and `py/stack-trace-exposure`. The
+  first exclusion carried an eight line rationale that claimed the tool never
+  logs an actual secret. Issue #1710 contradicts that claim, because it found a
+  partial API token value in `data/script.log`. The second exclusion carried no
+  rationale at all. This work deletes the key itself, because an empty
+  `query-filters` key parses as `null` and a `null` value can stop the whole
+  analysis. The file now holds the `name` key alone.
+- **CodeQL result (Pending)**: CodeQL runs only in CI, so no local command can
+  predict the outcome. TODO before merge: record the alert count for
+  `py/stack-trace-exposure` and the alert count for
+  `py/clear-text-logging-sensitive-data` from the pull request run. Record the
+  decision for each query. An exclusion returns only with a review record that
+  states the review date, the evidence link, the reason, and the next review
+  trigger.
+- **Gate comments (Added)**: the pylint step and the dead code step each hold a
+  new comment. The comment states the review date, the measurement, and the
+  condition that starts the next review. The pylint comment also states the
+  three facts that any future `--ignore` entry must record first.
+- **Out of scope (Note)**: `.github/quality-gates-portable.yml` is a template
+  copy for other repositories. It still holds the confidence value `'90'` at
+  two sites. GitHub never runs that file in this repository, so this work
+  leaves it unchanged.
+
 ### Drop the bandit `-ll` severity suppression and clear all 54 findings (issue #889)
 
 - **Security gate (Changed)**: removed `-ll` from the bandit step in

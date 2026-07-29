@@ -32,7 +32,7 @@ on:
         default: '90'
       vulture-confidence:
         type: string
-        default: '90'
+        default: '70'
       create-issues:
         type: boolean
         default: true
@@ -48,7 +48,7 @@ env:
   COVERAGE_THRESHOLD: ${{ inputs.coverage-threshold || '80' }}
   PYLINT_THRESHOLD: ${{ inputs.pylint-threshold || '9.5' }}
   INTERROGATE_THRESHOLD: ${{ inputs.interrogate-threshold || '90' }}
-  VULTURE_CONFIDENCE: ${{ inputs.vulture-confidence || '90' }}
+  VULTURE_CONFIDENCE: ${{ inputs.vulture-confidence || '70' }}
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 # Execution is staged by observed runtime so quick feedback lands first.
@@ -287,8 +287,19 @@ jobs:
         run: |
           pip install -r requirements.txt
           pip install pylint
+      # Pylint reads every package under SRC_PATH. Reviewed 2026-07-28 for issue #891.
+      # The step ran with --ignore=maps,ssh,ui until this date. That flag hid every message
+      # from src/maps, src/ssh, and src/ui.
+      # The issue #891 baseline records 757 messages with the flag and 1259 messages without
+      # it. This checkout re-measured the pair with pylint 4.0.6 on 2026-07-28. The run with
+      # the flag reports 806 messages and a score of 9.77. The run without the flag reports
+      # 1339 messages and a score of 9.71. Both runs exit 0 at the 9.5 threshold, so the
+      # removal adds visibility and adds no build failure.
+      # Next review: any proposal to add a new --ignore entry. Record three facts in a
+      # comment first. The three facts are the date of the review, a link to the evidence,
+      # and the condition that triggers the next review.
       - name: Run Pylint
-        run: pylint ${{ env.SRC_PATH }} --fail-under=${{ env.PYLINT_THRESHOLD }} --ignore=maps,ssh,ui
+        run: pylint ${{ env.SRC_PATH }} --fail-under=${{ env.PYLINT_THRESHOLD }}
 
   radon:
     name: "Radon (complexity)"
@@ -335,6 +346,14 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
       - run: pip install vulture
+      # Dead code gate. Reviewed 2026-07-28 for issue #892.
+      # Measured on this checkout: confidence 90 reports 0 findings, confidence 70
+      # reports 0 findings, and confidence 60 reports 306 findings. The floor sits at 70,
+      # because the cliff between 70 and 60 is a false positive cliff, not a defect cliff.
+      # Two patterns drive that rate. The first is module level dependency injection.
+      # The second is a dynamic mh.* lookup that vulture cannot resolve.
+      # Next review: issue #1703 removes the second pattern. Re-measure at confidence 60
+      # after that issue lands. A later slice owns the move to 60.
       - name: Detect dead code
         run: vulture ${{ env.SRC_PATH }} --min-confidence ${{ env.VULTURE_CONFIDENCE }}
 
