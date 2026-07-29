@@ -287,6 +287,15 @@ jobs:
         run: |
           pip install -r requirements.txt
           pip install pylint
+      # Pylint reads every package under SRC_PATH except the three the ignore list names.
+      # Reviewed 2026-07-28 for issue #891. The removal of --ignore=maps,ssh,ui was tried
+      # and reverted, because it fails the gate. The evidence is pull request #1723.
+      # A Windows checkout with pylint 4.0.6 reports a score of 9.71 without the flag, which
+      # passes. The ubuntu-latest runner reports 9.41 for the same commit, which fails the
+      # 9.5 threshold and exits 30. A local run is therefore not a safe proxy for this gate.
+      # The flag stays until src/maps, src/ssh, and src/ui gain enough fixes to hold the
+      # score above 9.5 on Linux. Issue #891 tracks that work and holds the measurements.
+      # Next review: when issue #891 reports a Linux score above 9.5 without the flag.
       - name: Run Pylint
         run: pylint ${{ env.SRC_PATH }} --fail-under=${{ env.PYLINT_THRESHOLD }} --ignore=maps,ssh,ui
 
