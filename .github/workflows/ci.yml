@@ -32,7 +32,7 @@ on:
         default: '90'
       vulture-confidence:
         type: string
-        default: '90'
+        default: '70'
       create-issues:
         type: boolean
         default: true
@@ -48,7 +48,10 @@ env:
   COVERAGE_THRESHOLD: ${{ inputs.coverage-threshold || '80' }}
   PYLINT_THRESHOLD: ${{ inputs.pylint-threshold || '9.5' }}
   INTERROGATE_THRESHOLD: ${{ inputs.interrogate-threshold || '90' }}
-  VULTURE_CONFIDENCE: ${{ inputs.vulture-confidence || '90' }}
+  # Vulture reports 0 findings at 90, at 80, and at 70. The cliff sits at 60, which
+  # reports 306. The floor stops at 70 for issue #892, because 70 removes the maximum
+  # value without hiding a finding. A move to 60 needs its own issue and its own triage.
+  VULTURE_CONFIDENCE: ${{ inputs.vulture-confidence || '70' }}
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 # Execution is staged by observed runtime so quick feedback lands first.
