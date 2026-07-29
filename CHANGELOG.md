@@ -7,6 +7,25 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Lower the vulture confidence floor to 70 (issue #892)
+
+- **Dead code floor (Changed)**: lowered the vulture confidence floor from 90 to
+  70 in `.github/workflows/ci.yml`. The file holds that value at two sites. Line
+  35 is the `workflow_call` input default and line 51 is the `env` fallback.
+  Both sites now read `'70'`. A caller that uses `workflow_call` therefore runs
+  the same floor as a pull request.
+- **Measurement (Recorded)**: this checkout reports 0 findings at confidence 90,
+  0 at 80, 0 at 70, and 306 at 60. The floor stops at 70, because the step from
+  70 to 60 crosses a false positive cliff. Issue #1703 removes the dynamic
+  `mh.*` lookup that drives most of that rate. A later slice re-measures
+  confidence 60 after that issue lands.
+- **Repeat delivery (Fixed)**: the entry below this one recorded the same change
+  for pull request #1723, but that change never reached `main`. The revert of
+  the issue #891 work restored the whole `ci.yml` file, which silently undid
+  this floor change in the same file. The squash merge still read `Closes #892`
+  and closed the issue. This entry records the real delivery, on a branch that
+  carries this issue alone.
+
 ### Resolve the Redis time-series entity identifier from a fallback list (issue #990)
 
 - **Entity identifier (Fixed)**: `RedisTimeSeriesWriter` read the entity
@@ -37,16 +56,16 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
   stays in place. Issue #891 now carries the correct measurement and the real
   remaining work, which is to raise the Linux score above 9.5 before the flag
   can come off. A local run is not a safe proxy for this gate.
-- **Dead code floor (Changed)**: lowered the vulture confidence floor from 90
-  to 70 in `.github/workflows/ci.yml`. The file holds that value at two sites.
-  Line 35 is the `workflow_call` input default and line 51 is the `env`
-  fallback. Both sites now read `'70'`. A caller that uses `workflow_call`
-  therefore runs the same floor as a pull request. A measurement on this
-  checkout reports 0 findings at confidence 90, 0 findings at confidence 70,
-  and 306 findings at confidence 60. The floor stops at 70, because the step
-  from 70 to 60 crosses a false positive cliff. Issue #1703 removes the dynamic
-  `mh.*` lookup that drives most of that rate. A later slice re-measures
-  confidence 60 after that issue lands.
+- **Dead code floor (Attempted and lost)**: this entry claimed that the vulture
+  confidence floor moved from 90 to 70. The claim is wrong. The change never
+  reached `main`. The revert of the pylint work restored the whole `ci.yml`
+  file, and that revert undid this floor change too, because both changes edit
+  the same file. The `ci.yml` change that pull request #1723 delivered is nine
+  added comment lines and no deleted line. The squash merge still read
+  `Closes #892` from the first commit message and closed the issue. The entry at
+  the top of this release records the real delivery. The lesson is that a
+  file level revert reverts every change in that file, so a partial revert needs
+  a line level edit.
 - **CodeQL exclusions (Removed)**: deleted the whole `query-filters` block from
   `.github/codeql/codeql-config.yml`. The block excluded
   `py/clear-text-logging-sensitive-data` and `py/stack-trace-exposure`. The
