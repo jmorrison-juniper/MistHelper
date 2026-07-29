@@ -5,6 +5,7 @@ All redis interactions are mocked — no live Redis required.
 
 from __future__ import annotations
 
+from collections import Counter  # WHY: the mocked _extract_chunk must return the same tally type as the real worker.
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -201,7 +202,9 @@ class TestExtractAllAddsThreadPoolBranch:
             entity_key_field="id",
             ts_value_fields=None,
         )
-        with patch.object(writer, "_extract_chunk", return_value=([], {})) as mock_chunk:  # Mock worker
+        with patch.object(  # Mock worker so the test measures the pool fan-out and not the extraction itself
+            writer, "_extract_chunk", return_value=([], {}, Counter())
+        ) as mock_chunk:  # The worker now returns three items, so the mock must match that shape
             adds, keys = writer._extract_all_adds(records, ctx)  # Route through parallel branch via context
         assert adds == []  # Thread pool collects empty adds from mocked chunks
         assert keys == {}  # Thread pool collects empty keys from mocked chunks
@@ -268,3 +271,176 @@ class TestCoverageGapTargets:
             writer._ensure_key_single(  # Key is NOT in cache, so ts.create will be called
                 "new:ts:key", {"id": "dev-1"}, "testFunc"  # Fresh key — triggers ts.create which raises
             )
+
+
+def _entity_context(entity_key_field: str = "entity_id"):  # WHY: every resolution test needs the same frozen context.
+    """Return an _ExtractContext that names one strategy field and turns off the allow-list."""
+    from src.db.redis_writer import _ExtractContext  # WHY: import inside the helper to match the file style.
+
+    return _ExtractContext(  # WHY: the frozen context carries the four extraction inputs.
+        api_function_name="testFunc",  # WHY: the first part of every generated time-series key.
+        primary_keys=[entity_key_field],  # WHY: the primary key list excludes the identifier from the numeric scan.
+        entity_key_field=entity_key_field,  # WHY: the field that the strategy branch reads first.
+        ts_value_fields=None,  # WHY: None selects the automatic numeric scan rather than the allow-list.
+    )
+
+
+class TestResolveEntityIdFallbackBranch:
+    """Tests for the fallback branch of the resolution rule (User Story 1)."""
+
+    def test_record_without_strategy_field_uses_device_id(self) -> None:
+        """FR-002: a record that omits the strategy field resolves through the fallback list."""
+        from src.db.redis_writer import RedisTimeSeriesWriter  # WHY: import the class that owns the rule.
+
+        record = {"device_id": "dev-1", "cpu": 42.0}  # WHY: the record carries no 'entity_id' field.
+        entity_id, source = RedisTimeSeriesWriter._resolve_entity_id(record, "entity_id")  # WHY: run the rule.
+        assert entity_id == "dev-1"  # WHY: the rule returns the text form of the device_id value.
+        assert source == "fallback"  # WHY: the rule reports the fallback branch.
+
+    def test_two_records_produce_two_distinct_keys(self, config, mock_redis) -> None:
+        """SC-001: two records with different device_id values must not collapse into one key."""
+        from src.db.redis_writer import RedisTimeSeriesWriter  # WHY: import the class under test.
+
+        writer = RedisTimeSeriesWriter(config)  # WHY: the extraction path is an instance method.
+        records = [  # WHY: neither record carries the strategy field.
+            {"device_id": "dev-1", "cpu": 1.0},  # WHY: the first record names the first entity.
+            {"device_id": "dev-2", "cpu": 2.0},  # WHY: the second record names a different entity.
+        ]
+        adds, _key_records, _sources = writer._extract_chunk(records, _entity_context())  # WHY: run the extraction.
+        keys = [ts_key for ts_key, _value in adds]  # WHY: read only the key part of each pair.
+        assert keys == ["testFunc:dev-1:cpu", "testFunc:dev-2:cpu"]  # WHY: each entity keeps its own series.
+        assert len(set(keys)) == 2  # WHY: the two keys are distinct, so the records no longer collapse.
+        assert all("unknown" not in ts_key for ts_key in keys)  # WHY: no record lands in the sentinel bucket.
+
+    @pytest.mark.parametrize("unusable", [None, "", "   "])  # WHY: the three unusable strategy values.
+    def test_unusable_strategy_value_falls_back(self, unusable) -> None:
+        """Edge cases 1 to 3: an unusable strategy value must not block the fallback list."""
+        from src.db.redis_writer import RedisTimeSeriesWriter  # WHY: import the class under test.
+
+        record = {"entity_id": unusable, "device_id": "dev-1"}  # WHY: the strategy field holds an unusable value.
+        entity_id, source = RedisTimeSeriesWriter._resolve_entity_id(record, "entity_id")  # WHY: run the rule.
+        assert entity_id == "dev-1"  # WHY: the fallback list supplies the identifier.
+        assert source == "fallback"  # WHY: the rule reports the fallback branch.
+
+    def test_fallback_order_prefers_the_earlier_name(self) -> None:
+        """FR-006: the fallback order decides the winner when a record carries two candidate fields."""
+        from src.db.redis_writer import RedisTimeSeriesWriter  # WHY: import the class under test.
+
+        both = {"site_id": "site-1", "org_id": "org-1"}  # WHY: site_id sits before org_id in the order.
+        assert RedisTimeSeriesWriter._resolve_entity_id(both, "entity_id") == ("site-1", "fallback")  # WHY: order.
+        empty_device = {"device_id": "", "site_id": "site-1"}  # WHY: an empty device_id is not a usable value.
+        assert RedisTimeSeriesWriter._resolve_entity_id(empty_device, "entity_id") == (
+            "site-1",
+            "fallback",
+        )  # WHY: the walk skips the empty field and takes the next usable name.
+
+
+class TestResolveEntityIdStrategyBranch:
+    """Tests for the strategy branch of the resolution rule (User Story 2)."""
+
+    def test_usable_strategy_value_wins(self) -> None:
+        """FR-001: a usable strategy value returns its text form and the source 'strategy'."""
+        from src.db.redis_writer import RedisTimeSeriesWriter  # WHY: import the class under test.
+
+        record = {"entity_id": "dev-1", "cpu": 42.0}  # WHY: the strategy field holds a usable value.
+        entity_id, source = RedisTimeSeriesWriter._resolve_entity_id(record, "entity_id")  # WHY: run the rule.
+        assert entity_id == "dev-1"  # WHY: the identifier equals the text form of the strategy value.
+        assert source == "strategy"  # WHY: the rule reports the strategy branch.
+
+    def test_strategy_value_outranks_a_fallback_field(self) -> None:
+        """INV-3: the strategy field wins even when the record also carries a fallback field."""
+        from src.db.redis_writer import RedisTimeSeriesWriter  # WHY: import the class under test.
+
+        record = {"entity_id": "strategy-1", "device_id": "dev-1"}  # WHY: the two fields hold different values.
+        entity_id, source = RedisTimeSeriesWriter._resolve_entity_id(record, "entity_id")  # WHY: run the rule.
+        assert entity_id == "strategy-1"  # WHY: the rule never reads device_id on this path.
+        assert source == "strategy"  # WHY: the rule reports the strategy branch.
+
+    def test_zero_is_a_usable_identifier(self) -> None:
+        """INV-5: the number 0 must resolve to the text '0' and not to the sentinel."""
+        from src.db.redis_writer import RedisTimeSeriesWriter  # WHY: import the class under test.
+
+        record = {"entity_id": 0, "device_id": "dev-1"}  # WHY: a plain truth test would reject this value.
+        entity_id, source = RedisTimeSeriesWriter._resolve_entity_id(record, "entity_id")  # WHY: run the rule.
+        assert entity_id == "0"  # WHY: the rule returns the text form of the number.
+        assert source == "strategy"  # WHY: the value is usable, so the walk never starts.
+        assert RedisTimeSeriesWriter._is_usable(0) is True  # WHY: guard the helper that the rule depends on.
+
+    def test_existing_key_stays_byte_identical(self, config, mock_redis) -> None:
+        """SC-002 and SC-004: a record with the strategy field produces the same three-part key as before."""
+        from src.db.redis_writer import RedisTimeSeriesWriter  # WHY: import the class under test.
+
+        writer = RedisTimeSeriesWriter(config)  # WHY: the extraction path is an instance method.
+        records = [{"entity_id": "dev-1", "cpu": 42.0}]  # WHY: one record with one numeric field.
+        adds, _key_records, _sources = writer._extract_chunk(records, _entity_context())  # WHY: run the extraction.
+        assert adds == [("testFunc:dev-1:cpu", 42.0)]  # WHY: the key text must not change for an existing export.
+        assert adds[0][0].split(":") == ["testFunc", "dev-1", "cpu"]  # WHY: the key holds three colon parts.
+
+    def test_strategy_field_name_that_matches_a_fallback_name(self) -> None:
+        """Edge case 7: a strategy field name that also sits in the fallback list reads the field once."""
+        from src.db.redis_writer import RedisTimeSeriesWriter  # WHY: import the class under test.
+
+        record = {"device_id": "dev-1", "site_id": "site-1"}  # WHY: 'device_id' is both the strategy and a fallback.
+        entity_id, source = RedisTimeSeriesWriter._resolve_entity_id(record, "device_id")  # WHY: run the rule.
+        assert entity_id == "dev-1"  # WHY: the early return stops the walk before it reads the same field again.
+        assert source == "strategy"  # WHY: the rule reports the strategy branch and never reaches the walk.
+
+
+class TestResolveEntityIdUnknownBranch:
+    """Tests for the sentinel branch of the resolution rule (User Story 3)."""
+
+    def test_record_without_any_identifier_uses_the_sentinel(self, config, mock_redis) -> None:
+        """FR-003: a record that carries no identifier still writes under the sentinel."""
+        from src.db.redis_writer import RedisTimeSeriesWriter  # WHY: import the class under test.
+
+        writer = RedisTimeSeriesWriter(config)  # WHY: the extraction path is an instance method.
+        record = {"cpu": 7.0}  # WHY: the record carries a numeric field and no identifier.
+        assert RedisTimeSeriesWriter._resolve_entity_id(record, "entity_id") == ("unknown", "unknown")  # WHY: rule.
+        adds, _key_records, _sources = writer._extract_chunk([record], _entity_context())  # WHY: run the extraction.
+        assert adds == [("testFunc:unknown:cpu", 7.0)]  # WHY: the sentinel keeps the key length stable.
+
+    def test_empty_record_raises_no_error(self) -> None:
+        """INV-1: the rule accepts an empty dictionary and returns the sentinel."""
+        from src.db.redis_writer import RedisTimeSeriesWriter  # WHY: import the class under test.
+
+        entity_id, source = RedisTimeSeriesWriter._resolve_entity_id({}, "entity_id")  # WHY: run the rule.
+        assert entity_id == "unknown"  # WHY: no field holds a usable value.
+        assert source == "unknown"  # WHY: the rule reports the sentinel branch.
+
+
+class TestResolutionSummaryLogging:
+    """Tests for the one summary event that each extraction call emits."""
+
+    def test_one_summary_event_reports_three_counts(self, config, mock_redis) -> None:
+        """FR-007 and FR-008: the writer emits one debug summary per call and no per-record line."""
+        from src.db.redis_writer import RedisTimeSeriesWriter  # WHY: import the class under test.
+
+        writer = RedisTimeSeriesWriter(config)  # WHY: the extraction path is an instance method.
+        writer._log = MagicMock()  # WHY: replace the logger after connect, so the test reads extraction events only.
+        records = [  # WHY: the set covers all three resolution branches.
+            {"entity_id": "dev-1", "cpu": 1.0},  # WHY: the strategy branch.
+            {"entity_id": "dev-2", "cpu": 2.0},  # WHY: the strategy branch a second time.
+            {"device_id": "dev-3", "cpu": 3.0},  # WHY: the fallback branch.
+            {"cpu": 4.0},  # WHY: the sentinel branch.
+        ]
+        writer._extract_all_adds(records, _entity_context())  # WHY: run the single entry point for both paths.
+        assert writer._log.debug.call_count == 1  # WHY: exactly one summary for the whole call.
+        counts = writer._log.debug.call_args_list[0].kwargs  # WHY: the summary reports the counts as keywords.
+        assert counts["strategy"] == 2  # WHY: two records read the strategy field.
+        assert counts["fallback"] == 1  # WHY: one record read a fallback field.
+        assert counts["unknown"] == 1  # WHY: one record reached the sentinel.
+        assert counts["strategy"] + counts["fallback"] + counts["unknown"] == len(records)  # WHY: the counts sum.
+        assert writer._log.info.call_count == 1  # WHY: one action log before the extraction and no per-record line.
+
+    def test_parallel_path_emits_one_summary_for_a_large_export(self, config, mock_redis) -> None:
+        """SC-007: an extraction of 10000 records emits one summary whose counts sum to 10000."""
+        from src.db.redis_writer import RedisTimeSeriesWriter  # WHY: import the class under test.
+
+        writer = RedisTimeSeriesWriter(config)  # WHY: the extraction path is an instance method.
+        writer._log = MagicMock()  # WHY: replace the logger after connect, so the test reads extraction events only.
+        records = [{"device_id": f"dev-{i}", "cpu": float(i)} for i in range(10000)]  # WHY: 10000 crosses the pool.
+        writer._extract_all_adds(records, _entity_context())  # WHY: the size routes the call through the thread pool.
+        assert writer._log.debug.call_count == 1  # WHY: one summary for the whole call, not one for each chunk.
+        counts = writer._log.debug.call_args_list[0].kwargs  # WHY: the summary reports the counts as keywords.
+        assert counts["fallback"] == 10000  # WHY: every record resolves through the fallback list.
+        assert counts["strategy"] + counts["fallback"] + counts["unknown"] == 10000  # WHY: the merge loses no count.

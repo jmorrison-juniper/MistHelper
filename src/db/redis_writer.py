@@ -14,6 +14,7 @@ from __future__ import annotations  # WHY: postpone annotations for cross-versio
 import os  # WHY: read env-driven retention/TTL knobs at import time.
 import socket  # WHY: pre-flight DNS resolution before opening the Redis socket.
 import time  # WHY: webhook path stamps points with wall-clock ms rather than server '*'.
+from collections import Counter  # WHY: tally the resolution branches without shared mutable state.
 from collections.abc import Callable  # WHY: type helper wrappers that swallow "already exists" errors.
 from concurrent.futures import ThreadPoolExecutor  # WHY: parallel numeric extraction on large batches.
 from dataclasses import dataclass  # WHY: frozen extraction context collapses many parallel params.
@@ -43,6 +44,7 @@ DEFAULT_LABEL_FIELDS = (
     "device_id",
 )  # WHY: fallback TS labels when strategy omits ts_label_fields.
 WEBHOOK_ENTITY_KEYS = ("mac", "device_id")  # WHY: webhook events identify entities via one of these fields.
+BATCH_ENTITY_FALLBACK_KEYS = ("device_id", "site_id", "org_id", "mac", "id")  # WHY: the batch path reads this order.
 ALREADY_EXISTS_TOKEN = "already exists"  # nosec B105 - The value is an error-message fragment that marks a duplicate.
 
 _TOPIC_KEY_PREFIX: dict[str, str] = {  # WHY: map Kafka topic names to TS key prefixes for webhook ingest.
@@ -154,46 +156,59 @@ class RedisTimeSeriesWriter:
         ctx: _ExtractContext,
     ) -> tuple[list[tuple[str, float]], dict[str, dict[str, Any]]]:
         """Extract (ts_key, value) pairs and first-seen record per key."""
+        self._log.info("extraction_started", records=len(data))  # WHY: action log before the extraction runs.
         if len(data) <= PARALLEL_EXTRACT_THRESHOLD:  # WHY: small inputs skip the pool for lower latency.
-            return self._extract_chunk(data, ctx)
-        return self._extract_parallel(data, ctx)  # WHY: large inputs benefit from thread-pool parallelism.
+            adds, key_records, sources = self._extract_chunk(data, ctx)  # WHY: the sequential path returns one tally.
+        else:
+            adds, key_records, sources = self._extract_parallel(data, ctx)  # WHY: the parallel path merges the tallies.
+        self._log.debug(  # WHY: one summary per call, because a per-record line floods a large export.
+            "entity_id_resolution_summary",
+            strategy=sources["strategy"],  # WHY: report the count of records that used the strategy field.
+            fallback=sources["fallback"],  # WHY: report the count of records that used a fallback field.
+            unknown=sources["unknown"],  # WHY: a high count here marks an endpoint that needs a new fallback name.
+        )
+        return adds, key_records  # WHY: return a pair, so the signature that `write` consumes does not change.
 
     def _extract_parallel(  # WHY: extracted helper keeps _extract_all_adds within length/complexity limits.
         self,
         data: list[dict[str, Any]],
         ctx: _ExtractContext,
-    ) -> tuple[list[tuple[str, float]], dict[str, dict[str, Any]]]:
+    ) -> tuple[list[tuple[str, float]], dict[str, dict[str, Any]], Counter[str]]:
         """Run _extract_chunk across a thread pool and merge results."""
         workers = min(MAX_EXTRACT_WORKERS, os.cpu_count() or 4)  # WHY: fall back to 4 on hosts w/o cpu_count.
         chunk_size = max(1, len(data) // workers)  # WHY: at least one record per chunk to avoid empties.
         chunks = [data[i : i + chunk_size] for i in range(0, len(data), chunk_size)]  # WHY: fixed-size slicing.
         all_adds: list[tuple[str, float]] = []  # WHY: accumulator for (key, value) pairs across chunks.
         key_records: dict[str, dict[str, Any]] = {}  # WHY: first-seen record per key for label extraction.
+        sources: Counter[str] = Counter()  # WHY: merged tally so the caller emits one summary for the whole call.
         with ThreadPoolExecutor(max_workers=workers) as pool:  # WHY: context manager ensures pool shutdown.
             futures = [pool.submit(self._extract_chunk, chunk, ctx) for chunk in chunks]  # WHY: fan out extraction.
             for future in futures:  # WHY: preserve chunk order for deterministic first-seen mapping.
-                chunk_adds, chunk_keys = future.result()  # WHY: block for chunk completion.
+                chunk_adds, chunk_keys, chunk_sources = future.result()  # WHY: block for chunk completion.
                 all_adds.extend(chunk_adds)  # WHY: append rather than assign to preserve running total.
                 key_records.update(chunk_keys)  # WHY: dict.update is last-write-wins. Chunks are disjoint.
+                sources.update(chunk_sources)  # WHY: Counter.update adds the counts rather than replacing them.
         self._log.info("extraction_complete", data_points=len(all_adds), unique_keys=len(key_records), workers=workers)
-        return all_adds, key_records
+        return all_adds, key_records, sources  # WHY: the third item carries the merged tally to the one summary site.
 
     def _extract_chunk(  # WHY: pure worker. Safe to call from any thread.
         self,
         records: list[dict[str, Any]],
         ctx: _ExtractContext,
-    ) -> tuple[list[tuple[str, float]], dict[str, dict[str, Any]]]:
-        """Extract adds and key->record map from a chunk of records."""
+    ) -> tuple[list[tuple[str, float]], dict[str, dict[str, Any]], Counter[str]]:
+        """Extract adds, the key to record map, and the resolution tally from a chunk of records."""
         adds: list[tuple[str, float]] = []  # WHY: local accumulator so callers can merge from many threads.
         key_records: dict[str, dict[str, Any]] = {}  # WHY: local first-seen map merged by caller.
+        sources: Counter[str] = Counter()  # WHY: a local tally keeps this worker free of shared mutable state.
         for record in records:  # WHY: per-record loop is simple enough to inline.
-            entity_id = str(record.get(ctx.entity_key_field, "unknown"))  # WHY: "unknown" keeps schema stable.
+            entity_id, source = self._resolve_entity_id(record, ctx.entity_key_field)  # WHY: one resolution rule.
+            sources[source] += 1  # WHY: tally the branch here, because the caller reports the counts once.
             numeric = self._select_numeric(record, ctx)  # WHY: single call site for the two extraction modes.
             for field_name, value in numeric.items():  # WHY: each numeric field becomes its own TS key.
                 ts_key = f"{ctx.api_function_name}:{entity_id}:{field_name}"  # WHY: three-part key aids querying.
                 adds.append((ts_key, value))  # WHY: preserve emission order to keep timestamps monotonic.
                 key_records.setdefault(ts_key, record)  # WHY: first-seen only. Label state is stable per key.
-        return adds, key_records
+        return adds, key_records, sources  # WHY: the third item lets the caller merge the tally without shared state.
 
     @staticmethod
     def _select_numeric(record: dict[str, Any], ctx: _ExtractContext) -> dict[str, float]:  # WHY: mode dispatch.
@@ -443,10 +458,29 @@ class RedisTimeSeriesWriter:
     @staticmethod
     def _pick_entity_field(primary_keys: list[str]) -> str:  # WHY: shared preference order for entity id fields.
         """Choose the entity identifier from PK fields."""
-        for field in ("device_id", "site_id", "org_id", "mac", "id"):  # WHY: inline tuple avoids module-level table.
-            if field in primary_keys:
-                return field
+        for field in BATCH_ENTITY_FALLBACK_KEYS:  # WHY: one module constant holds the order for both readers.
+            if field in primary_keys:  # WHY: the strategy list decides which candidate name applies to the endpoint.
+                return field  # WHY: the first match in the shared order wins.
         return primary_keys[0] if primary_keys else "id"  # WHY: fall back to first PK or literal 'id'.
+
+    @staticmethod
+    def _is_usable(value: Any) -> bool:  # WHY: one named test that every candidate identifier passes through.
+        """Return True when the value can serve as an entity identifier."""
+        if value is None:  # WHY: an absent value never names an entity.
+            return False  # WHY: stop here, because a missing value holds no text form to read.
+        return bool(str(value).strip())  # WHY: the text form rejects blank space and still accepts the number 0.
+
+    @staticmethod
+    def _resolve_entity_id(record: dict[str, Any], entity_key_field: str) -> tuple[str, str]:  # WHY: one rule.
+        """Return the entity identifier and the name of the branch that produced it."""
+        strategy_value = record.get(entity_key_field)  # WHY: the primary key strategy names the preferred field.
+        if RedisTimeSeriesWriter._is_usable(strategy_value):  # WHY: the strategy field wins when it holds a value.
+            return str(strategy_value), "strategy"  # WHY: an existing export therefore keeps a byte-identical key.
+        for field in BATCH_ENTITY_FALLBACK_KEYS:  # WHY: the ordered walk finds a common identifier.
+            candidate = record.get(field)  # WHY: read the value once, so the test and the return agree.
+            if RedisTimeSeriesWriter._is_usable(candidate):  # WHY: the first usable value wins.
+                return str(candidate), "fallback"  # WHY: the record now leaves the 'unknown' bucket.
+        return "unknown", "unknown"  # WHY: the sentinel keeps the key length stable for every downstream reader.
 
     @staticmethod
     def _extract_numeric(  # WHY: pure helper used by both batch and webhook paths.

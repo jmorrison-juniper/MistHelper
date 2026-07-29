@@ -72,6 +72,8 @@ Auto-generated from all feature plans. Last updated: 2026-03-03
 - N/A (comment and guard changes only) (1032-bandit-severity-gate)
 - Python 3.13. The workstation interpreter is `.venv\Scripts\python.exe`. The global `python` on this machine is broken and must not run any gate command. + `pylint`, `vulture`, and the GitHub CodeQL Action v4. This work adds no dependency and pins no version. (1033-ci-gate-silencer-removal)
 - N/A. The work changes two configuration files and one changelog file. (1033-ci-gate-silencer-removal)
+- Python 3.13 or newer. The project interpreter is `.venv\Scripts\python.exe`. The global `python` on this machine is broken. + The standard library only. The change adds `collections.Counter` and no package. (990-redis-entity-id)
+- Redis TimeSeries through the `redis-stack` service. The change adds no key, no index, and no migration. (990-redis-entity-id)
 
 - Python 3.13+ + mistapi>=0.59.0, python-dotenv>=1.0.0 (001-radius-wlan-config)
 
@@ -91,9 +93,9 @@ cd src; pytest; ruff check .
 Python 3.13+: Follow standard conventions
 
 ## Recent Changes
+- 990-redis-entity-id: Added an entity identifier fallback to `RedisTimeSeriesWriter`. The writer reads the strategy field first, then walks `device_id`, `site_id`, `org_id`, `mac`, `id`, and uses the `unknown` sentinel last.
 - 1033-ci-gate-silencer-removal: Added Python 3.13. The workstation interpreter is `.venv\Scripts\python.exe`. The global `python` on this machine is broken and must not run any gate command. + `pylint`, `vulture`, and the GitHub CodeQL Action v4. This work adds no dependency and pins no version.
 - 1032-bandit-severity-gate: Added Python 3.13 (`pyproject.toml` target `py313`) + `bandit[toml]` (no new runtime dependency)
-- 1021-testinteractive-reliability-defects: Added Python 3.13+ (`pyproject.toml` requires `>=3.13`) + Standard-library `argparse`, `logging`, and `inspect`; `mistapi>=0.63.1` (the verified installed surface is `0.63.3`)
 
 
 <!-- MANUAL ADDITIONS START -->
