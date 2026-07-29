@@ -184,21 +184,26 @@ _APP_META: dict[str, Any] = {
 
 
 def _rule_css_length(css: str, _html: str, _meta: dict[str, Any]) -> None:  # WHY: length gate helper.
-    assert len(css) > _MIN_CSS_LENGTH, "CSS too short (validation failed)"  # WHY: guard empty CSS.
+    if len(css) <= _MIN_CSS_LENGTH:  # WHY: guard empty CSS. An assert vanishes under the -O flag.
+        raise ValueError("CSS too short (validation failed)")  # WHY: name the rule that failed.
 
 
 def _rule_html_entry(_css: str, html: str, _meta: dict[str, Any]) -> None:  # WHY: entry-placeholder gate.
-    assert _PLACEHOLDER_APP_ENTRY in html, "HTML template missing app entry point"  # WHY: required by Dash.
+    if _PLACEHOLDER_APP_ENTRY not in html:  # WHY: required by Dash. An assert vanishes under the -O flag.
+        raise ValueError("HTML template missing app entry point")  # WHY: name the rule that failed.
 
 
 def _rule_html_style(_css: str, html: str, _meta: dict[str, Any]) -> None:  # WHY: style block gate.
     has_style = _PLACEHOLDER_CUSTOM_CSS in html or _STYLE_FALLBACK_TOKEN in html  # WHY: either style form ok.
-    assert has_style, "HTML template missing style section"  # WHY: viewer needs CSS injection.
+    if not has_style:  # WHY: viewer needs CSS injection. An assert vanishes under the -O flag.
+        raise ValueError("HTML template missing style section")  # WHY: name the rule that failed.
 
 
 def _rule_meta_shape(_css: str, _html: str, meta: dict[str, Any]) -> None:  # WHY: metadata shape gate.
-    assert isinstance(meta, dict), "App metadata must be dict"  # WHY: Dash expects dict.
-    assert _META_KEY_TITLE in meta, "App metadata must include 'title'"  # WHY: title is required key.
+    if not isinstance(meta, dict):  # WHY: Dash expects dict. An assert vanishes under the -O flag.
+        raise TypeError("App metadata must be dict")  # WHY: name the rule that failed.
+    if _META_KEY_TITLE not in meta:  # WHY: title is a required key. An assert vanishes under the -O flag.
+        raise ValueError("App metadata must include 'title'")  # WHY: name the rule that failed.
 
 
 _ValidatorFn = Callable[[str, str, dict[str, Any]], None]  # WHY: shorthand alias for rule table entries.
@@ -253,11 +258,12 @@ class DashTemplateManager:
             True if all templates pass validation
 
         Raises:
-            AssertionError: If templates fail validation
+            ValueError: If a template rule fails its content check
+            TypeError: If the app metadata is not a dictionary
         """
         css = self.get_custom_css()  # WHY: gather artifact once for all rules.
         html = self.get_html_template()  # WHY: reuse artifact across rules.
         meta = self.get_app_meta()  # WHY: reuse metadata across rules.
-        for rule in _VALIDATION_RULES:  # WHY: each rule asserts and returns None.
-            rule(css, html, meta)  # WHY: rule contract is (css, html, meta) -> None with assert.
+        for rule in _VALIDATION_RULES:  # WHY: each rule raises and returns None.
+            rule(css, html, meta)  # WHY: rule contract is (css, html, meta) -> None with an explicit raise.
         return True  # WHY: all rules passed.

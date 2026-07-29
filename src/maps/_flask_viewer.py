@@ -39,7 +39,7 @@ _ERR_MAPS_LIST_FAILED = "Failed to fetch maps. Check server logs for details."  
 _ERR_MAP_IMAGE_FAILED = (
     "Failed to fetch map image. Check server logs for details."  # WHY: friendly 500 for image proxy.
 )
-_TOKEN_ATTR = "_api_token"  # WHY: named constant documents the mistapi session attribute holding the bearer token.
+_TOKEN_ATTR = "_api_token"  # nosec B105 - The value is the mistapi attribute name, not a token value.
 _AUTHORIZATION_HEADER = "Authorization"  # WHY: exposes header key so proxies + tests do not repeat the literal.
 _CONTENT_TYPE_HEADER = "Content-Type"  # WHY: response-header key reused between fetch + proxy paths.
 _JSON_SORT_KEYS_CONFIG = "JSON_SORT_KEYS"  # WHY: Flask config key kept as constant to avoid typos on re-mount.

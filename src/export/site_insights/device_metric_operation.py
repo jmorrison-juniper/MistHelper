@@ -160,8 +160,9 @@ class DeviceMetricOperation:
                     "mac": device["mac"],
                     "model": device.get("model", ""),
                 }
-        except Exception:
-            pass  # WHY: Degrade gracefully so the rest of the flow can still emit a friendly error
+        except Exception as error:  # WHY: a lookup failure must not stop the friendly error message below.
+            # WHY: Degrade gracefully so the rest of the flow can still emit a friendly error
+            logging.debug("Device lookup failed for %s: %s", device_id, error)  # Make the failure visible.
         return {"name": device_id, "mac": None, "model": ""}  # WHY: Defaults match legacy fallback exactly
 
     def _validate_mac(

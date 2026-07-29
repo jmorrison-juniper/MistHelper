@@ -35,8 +35,8 @@ USAGE_LAN = "lan"  # WHY: port_config.usage marker classifying an interface as L
 VPN_TYPE_HUB_SPOKE = "hub_spoke"  # WHY: Mist VPN body 'type' value for hub-spoke topology.
 PATH_STRATEGY_SIMPLE = "simple"  # WHY: default path_selection.strategy for hub-spoke overlays.
 
-CANCEL_TOKEN = "q"  # WHY: sentinel prompt response that aborts the VPN name flow.
-CONFIRM_TOKEN = "CREATE"  # WHY: sentinel prompt response that arms VPN creation (case-sensitive by design).
+CANCEL_TOKEN = "q"  # nosec B105 - The value is the prompt sentinel that aborts the VPN name flow.
+CONFIRM_TOKEN = "CREATE"  # nosec B105 - The value is the typed word that arms VPN creation.
 RETRY_YES = "y"  # WHY: affirmative response used for retry / profile-update prompts.
 
 CHOICE_HUB = frozenset({"h", "hub"})  # WHY: accepted synonyms for the Hub role prompt.

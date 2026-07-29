@@ -35,9 +35,9 @@ _ZONE_LABEL_BORDER_PAD = 4  # WHY: zone annotation border padding in pixels.
 _ZONE_LABEL_FONT_FAMILY = "Arial Black"  # WHY: zone annotation font family.
 _ZONE_LABEL_FONT_COLOR = "white"  # WHY: zone annotation text color.
 _ZONE_LABEL_BORDER_COLOR = "white"  # WHY: zone annotation border color.
-_FILL_ALPHA_TOKEN = "0.2"  # WHY: token replaced to derive darker border variant.
-_BORDER_ALPHA_TOKEN = "0.8"  # WHY: token replaced again to derive label background variant.
-_LABEL_BG_ALPHA_TOKEN = "0.9"  # WHY: label background alpha derived from border token.
+_FILL_ALPHA_TOKEN = "0.2"  # nosec B105 - The value is a CSS alpha string that seeds the border variant.
+_BORDER_ALPHA_TOKEN = "0.8"  # nosec B105 - The value is a CSS alpha string that seeds the label background.
+_LABEL_BG_ALPHA_TOKEN = "0.9"  # nosec B105 - The value is a CSS alpha string for the label background.
 
 _ZONE_FILL_COLORS: tuple[str, ...] = (  # WHY: table-driven palette cycled per zone index.
     "rgba(255,165,0,0.2)",

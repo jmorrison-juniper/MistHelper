@@ -24,7 +24,7 @@ class EmailAdapter:
         host: str = "localhost",
         port: int = 587,
         username: str = "",
-        password: str = "",
+        password: str = "",  # nosec B107 - The empty string is a "not provided" sentinel.
     ) -> None:
         self._host = host
         self._port = port

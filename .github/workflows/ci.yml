@@ -215,8 +215,8 @@ jobs:
       - run: pip install 'bandit[toml]'
       - name: Run Bandit
         # -c pyproject.toml picks up [tool.bandit] targets/exclude_dirs (issue #881)
-        # -ll gates on MEDIUM+ severity (LOW findings surface in logs but don't fail)
-        run: bandit -c pyproject.toml -r . -ll
+        # No severity flag: the gate fails on a finding at any severity, including LOW (issue #889)
+        run: bandit -c pyproject.toml -r .
 
   pip_audit:
     name: "pip-audit (CVE scan)"

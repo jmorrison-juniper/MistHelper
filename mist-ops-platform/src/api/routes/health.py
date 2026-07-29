@@ -6,6 +6,7 @@ notification channels (system-level concern per api-overview.md).
 
 from __future__ import annotations
 
+import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -19,6 +20,7 @@ from src.api.schemas.common import ResponseEnvelope
 from src.shared.models.operations import NotificationChannel
 
 router = APIRouter(tags=["system"])
+logger = logging.getLogger(__name__)  # Records the best-effort failures that this module tolerates.
 
 
 @router.get("/healthz")
@@ -205,8 +207,9 @@ async def login(
         for oid in privs.org_ids:
             _redis.setex(f"mist_token:{oid}", 8 * 3600, body.token)
         _redis.close()
-    except Exception:
-        pass  # Redis unavailable — worker falls back to env token
+    except (redis_lib.RedisError, OSError, ValueError) as error:  # Redis, socket, and bad-URL faults.
+        # WHY: the worker falls back to the environment token. A cache miss must not fail login.
+        logger.debug("Redis token cache unavailable: %s", error)  # Make the cache miss visible.
 
     # Trigger immediate inventory sync for each org
     try:
@@ -214,8 +217,9 @@ async def login(
 
         for oid in privs.org_ids:
             sync_org_inventory.delay(oid)
-    except Exception:
-        pass  # Worker unavailable — beat will catch up
+    except Exception as error:  # WHY: the Celery broker raises types this app cannot name.
+        # WHY: beat retries the sync later, so a dispatch failure must not fail the login.
+        logger.debug("Inventory sync dispatch unavailable: %s", error)  # Make the miss visible.
 
     session_id = secrets.token_urlsafe(32)
     expires = datetime.now(timezone.utc) + timedelta(hours=8)

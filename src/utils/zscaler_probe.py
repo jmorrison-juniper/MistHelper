@@ -26,7 +26,7 @@ import secrets
 import socket
 import ssl
 import struct
-import subprocess
+import subprocess  # nosec B404 - The ICMP probe runs the OS ping binary, and the call below uses shell=False.
 from dataclasses import dataclass, field
 from http.client import HTTPConnection, HTTPResponse, HTTPSConnection
 from typing import Any
@@ -182,7 +182,7 @@ def _icmp_ping(host: str, timeout: float) -> bool:
     cmd = ["ping", count_flag, "1", timeout_flag, timeout_val, host]
     try:
         completed = subprocess.run(  # noqa: S603 - args are validated above
-            cmd,
+            cmd,  # nosec B603 - shell stays False, so host becomes one argv element and cannot start a program.
             capture_output=True,
             text=True,
             timeout=timeout + 2.0,
@@ -369,7 +369,7 @@ def _do_http(
             try:
                 conn.close()
             except Exception:  # pragma: no cover - best-effort cleanup
-                pass
+                pass  # nosec B110 - The block is a best-effort cleanup that must not mask the original result.
     except TimeoutError as exc:
         return None, f"timeout: {exc}"
     except ssl.SSLError as exc:

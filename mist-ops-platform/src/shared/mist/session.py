@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 TOKEN_CACHE_TTL = 300  # seconds (5 min)
-VAULT_SECRET_PREFIX = "secret/data/mist/tokens"
+VAULT_SECRET_PREFIX = "secret/data/mist/tokens"  # nosec B105 - This is a Vault path, not a secret.
 
 
 class MistSessionFactory:

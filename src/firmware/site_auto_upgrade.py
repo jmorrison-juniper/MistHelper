@@ -50,9 +50,15 @@ class SiteAutoUpgradeConfig:
     dry_run: bool = False  # WHY: when True, suppress API mutations. Print-only mode.
 
     def __post_init__(self) -> None:
-        """Permissive validation - only reject clearly-wrong types."""
-        assert isinstance(self.org_id, str), "org_id must be str"  # WHY: catch obvious misuse.
-        assert isinstance(self.dry_run, bool), "dry_run must be bool"  # WHY: catch obvious misuse.
+        """Permissive validation - only reject clearly-wrong types.
+
+        Raises:
+            TypeError: If org_id is not a string, or dry_run is not a boolean
+        """
+        if not isinstance(self.org_id, str):  # WHY: catch obvious misuse. An assert vanishes under -O.
+            raise TypeError("org_id must be str")  # WHY: name the field and the expected type.
+        if not isinstance(self.dry_run, bool):  # WHY: catch obvious misuse. An assert vanishes under -O.
+            raise TypeError("dry_run must be bool")  # WHY: name the field and the expected type.
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -85,7 +91,7 @@ def _resolve_configurator_kwargs(cfg: dict[str, Any]) -> SiteAutoUpgradeConfig:
     """
     if "config" in cfg:  # WHY: new form - config already resolved.
         resolved = cfg["config"]  # WHY: extract the pre-built record.
-        assert isinstance(resolved, SiteAutoUpgradeConfig)  # WHY: shape guard.
+        assert isinstance(resolved, SiteAutoUpgradeConfig)  # nosec B101 - The "config" branch proved the shape.
         return resolved  # WHY: pass through unchanged.
     if "org_id" in cfg and "deps" in cfg:  # WHY: legacy form - build from deps bundle.
         deps = cfg["deps"]  # WHY: unpack the deps bundle.
