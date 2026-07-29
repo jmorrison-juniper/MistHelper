@@ -49,7 +49,7 @@ def check_and_install_uv() -> bool:
     try:
         # Check if UV is already installed
         uv_path = _resolve_executable("uv")  # Absolute path when uv is installed, bare name otherwise.
-        result = subprocess.run(  # nosec B603 B607 - shutil.which resolved the path and the rest are literals.
+        result = subprocess.run(  # nosec B603 - shutil.which resolved the path and the rest are literals.
             [uv_path, "--version"],
             capture_output=True,
             text=True,
@@ -193,7 +193,7 @@ def check_and_install_pyqt6() -> tuple[bool, str]:
             print("Using UV for faster installation...")
             print("Please wait, downloading and installing PyQt6 (approximately 50MB)...")
             uv_path = _resolve_executable("uv")  # Absolute path, so PATH order cannot substitute another program.
-            result = subprocess.run(  # nosec B603 B607 - shutil.which resolved the path and the rest are literals.
+            result = subprocess.run(  # nosec B603 - shutil.which resolved the path and the rest are literals.
                 [uv_path, "pip", "install", "PyQt6"], capture_output=False, timeout=300  # Show progress to user
             )
         else:

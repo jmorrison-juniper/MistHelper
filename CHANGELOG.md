@@ -22,10 +22,12 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 - **Assert removal (Fixed)**: converted 7 asserts that guarded real behavior
   into runtime checks that raise. An assert disappears under `python -O`, which
   had made `validate_template` a silent no-op in that mode.
-- **Silent exception handlers (Fixed)**: replaced 5 `try`/`except`/`pass` blocks
-  with a logged handler, so an error no longer disappears without a trace. Three
-  further sites keep a broad catch, because unit tests prove a documented
-  fail-open contract at each one. Those three gained a log call instead.
+- **Silent exception handlers (Fixed)**: five `try`/`except`/`pass` blocks now
+  log the error, so it no longer disappears without a trace. One of the five
+  also narrowed its catch to `(redis_lib.RedisError, OSError, ValueError)`. The
+  other four keep a broad catch, because a unit test proves a documented
+  fail-open contract at each one. The remaining two findings in this group took
+  an annotated suppression.
 - **Executable resolution (Changed)**: `starlink_dashboard.py` and
   `tools/compliance_analyzer/engine.py` now resolve an executable through
   `shutil.which` before they run it, which removes the partial-path risk.

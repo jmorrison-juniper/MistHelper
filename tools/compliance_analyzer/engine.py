@@ -238,7 +238,7 @@ class ComplianceAnalyzer:
             return files  # Fail open: never hide files when git cannot be consulted.
         payload = b"\0".join(path.as_posix().encode("utf-8") for path in files)  # NUL-delimited path list.
         try:
-            completed = subprocess.run(  # nosec B603 B607 - shutil.which resolved the path and the rest are literals.
+            completed = subprocess.run(  # nosec B603 - shutil.which resolved the path and the rest are literals.
                 [git_path, "check-ignore", "-z", "--stdin"],  # -z: NUL-delimited in and out, no quoting.
                 input=payload,  # Feed the collected file list as raw bytes.
                 capture_output=True,  # Capture the ignored-path bytes from stdout.
