@@ -282,3 +282,12 @@ specs/**/evidence/.tmp_*
 # uv lockfile — project uses pip via hatchling, not uv
 uv.lock
 
+# SpecKit Companion extension (local dev tool, re-installable)
+# The payload holds 15 third-party Python scripts. The repo-wide gates
+# (black, bandit, CodeQL) do not exclude .specify, so the payload stays untracked.
+# To install, run: specify extension add companion --from <release-url>
+# The .github patterns are scoped, because both folders hold tracked spec-kit files.
+.specify/extensions/companion/
+.github/agents/speckit.companion.*
+.github/prompts/speckit.companion.*
+

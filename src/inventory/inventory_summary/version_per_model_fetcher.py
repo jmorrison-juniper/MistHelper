@@ -12,8 +12,7 @@ class VersionPerModelFetcher:  # WHY: namespace for the decomposed version-per-m
 
     @staticmethod
     def _expand_model_rows(  # Walks model_rows and produces per-model expansion via helper
-        target_org_id: str,
-        model_rows: list[dict],
+        model_rows: list[dict],  # WHY: the callee stopped needing the org id, so this level drops it too
         switch_records: list[dict],
         gateway_records: list[dict],
     ) -> list[dict]:
@@ -23,8 +22,7 @@ class VersionPerModelFetcher:  # WHY: namespace for the decomposed version-per-m
             if model_row.get("device_type") == "ap":  # APs are expanded in bulk from inventory
                 continue  # Skip here so AP counts are not produced twice
             rows = VersionPerModelFetcher._rows_for_model(
-                target_org_id,
-                model_row,
+                model_row,  # WHY: model_row now sits first, because the org id left the signature
                 switch_records,
                 gateway_records,
             )  # Delegate per-row expansion to a small helper
@@ -70,8 +68,8 @@ class VersionPerModelFetcher:  # WHY: namespace for the decomposed version-per-m
         switch_records = VersionPerModelFetcher._prefetch_switches(target_org_id, model_rows)  # switches once
         gateway_records = VersionPerModelFetcher._prefetch_gateways(target_org_id, model_rows)  # gateways once
         all_rows = VersionPerModelFetcher._expand_model_rows(
-            target_org_id, model_rows, switch_records, gateway_records
-        )  # Per-model expansion (non-AP)
+            model_rows, switch_records, gateway_records
+        )  # Per-model expansion (non-AP). The org id stops at this orchestrator
         VersionPerModelFetcher._append_bulk_rows(
             target_org_id, all_rows, ap_records, unassigned_records
         )  # Adds AP + unassigned rows in-place
@@ -185,8 +183,7 @@ class VersionPerModelFetcher:  # WHY: namespace for the decomposed version-per-m
 
     @staticmethod
     def _rows_for_model(
-        target_org_id: str,
-        model_row: dict,
+        model_row: dict,  # WHY: the body dispatches on prefetched records only, so the org id left the signature
         switch_records: list[dict],
         gateway_records: list[dict],
     ) -> list[dict]:

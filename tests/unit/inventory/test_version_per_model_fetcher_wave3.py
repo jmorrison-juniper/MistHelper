@@ -114,32 +114,32 @@ class TestRowsForModel:
 
     def test_blank_model_returns_empty_list(self) -> None:
         """Rows with an empty model name are skipped before any dispatch."""
-        result = VersionPerModelFetcher._rows_for_model(_ORG_ID, {"device_type": "switch"}, [], [])  # WHY: blank.
+        result = VersionPerModelFetcher._rows_for_model({"device_type": "switch"}, [], [])  # WHY: blank.
         assert result == []  # WHY: no output emitted for blank-model rows.
 
     def test_ap_device_type_returns_empty_list(self) -> None:
         """AP device type falls through to the trailing return."""
         row = {"device_type": "ap", "model": "AP45"}  # WHY: AP dispatch is handled in bulk elsewhere.
-        assert VersionPerModelFetcher._rows_for_model(_ORG_ID, row, [], []) == []  # WHY: dispatcher skips.
+        assert VersionPerModelFetcher._rows_for_model(row, [], []) == []  # WHY: dispatcher skips.
 
     def test_switch_dispatch_returns_switch_rows(self) -> None:
         """The switch branch produces per-model rows via the switch helper."""
         row = {"device_type": "switch", "model": "EX4300"}  # WHY: minimal model row.
         switch_records = [{"model": "EX4300", "version": "22.4", "num_members": 1}]  # WHY: one matching record.
-        rows = VersionPerModelFetcher._rows_for_model(_ORG_ID, row, switch_records, [])  # WHY: dispatch.
+        rows = VersionPerModelFetcher._rows_for_model(row, switch_records, [])  # WHY: dispatch.
         assert len(rows) == 1 and rows[0]["device_type"] == "switch"  # WHY: dispatch reached _switch_rows.
 
     def test_gateway_dispatch_returns_gateway_rows(self) -> None:
         """The gateway branch produces per-model rows via the gateway helper."""
         row = {"device_type": "gateway", "model": "SRX300"}  # WHY: minimal model row.
         gateway_records = [{"model": "SRX300", "version": "23.2"}]  # WHY: one matching record.
-        rows = VersionPerModelFetcher._rows_for_model(_ORG_ID, row, [], gateway_records)  # WHY: dispatch.
+        rows = VersionPerModelFetcher._rows_for_model(row, [], gateway_records)  # WHY: dispatch.
         assert len(rows) == 1 and rows[0]["device_type"] == "gateway"  # WHY: dispatch reached _gateway_rows.
 
     def test_unknown_device_type_returns_empty_list(self) -> None:
         """An unrecognized device_type hits the trailing return."""
         row = {"device_type": "mystery", "model": "X"}  # WHY: forces final ``return []`` line.
-        assert VersionPerModelFetcher._rows_for_model(_ORG_ID, row, [], []) == []  # WHY: no dispatch match.
+        assert VersionPerModelFetcher._rows_for_model(row, [], []) == []  # WHY: no dispatch match.
 
 
 # ---------------------------------------------------------------------------
@@ -318,7 +318,7 @@ class TestExpandModelRows:
         switch_records = [{"model": "EX4300", "version": "22.4", "num_members": 1}]  # WHY: one match.
         gateway_records = [{"model": "SRX300", "version": "23.2"}]  # WHY: one match.
         rows = VersionPerModelFetcher._expand_model_rows(  # WHY: exercise iteration + AP skip.
-            _ORG_ID, model_rows, switch_records, gateway_records
+            model_rows, switch_records, gateway_records  # WHY: the org id left both signatures in issue #887.
         )
         by_type = sorted(row["device_type"] for row in rows)  # WHY: order-agnostic assertion.
         assert by_type == ["gateway", "switch"]  # WHY: proves AP row was skipped; other two dispatched.

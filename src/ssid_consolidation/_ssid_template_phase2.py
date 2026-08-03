@@ -235,7 +235,7 @@ class _SsidTemplatePhase2Cluster(_ClusterBase):
     def _execute_phase2_plan(self, plan: list[dict[str, Any]]) -> None:  # WHY: post-confirm coordinator
         """Run resume + write + persist + summary in one flow."""
         parent = self._mm  # WHY: proxy alias for readability + W0212 avoidance
-        resuming, prior_results = parent._offer_resume(2, [])  # noqa: SLF001
+        resuming, prior_results = parent._offer_resume(2)  # noqa: SLF001
         results = self._call("_write_site_variables", plan, prior_results if resuming else [])
         parent._save_phase_results(2, results)  # noqa: SLF001
         parent.write_data_fn(  # WHY: persist to org-scoped sink for later phases

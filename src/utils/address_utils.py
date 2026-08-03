@@ -490,8 +490,7 @@ class AddressUtils:
     @staticmethod
     def apply_business_context_rules(
         mist_result: dict[str, Any],
-        comparison_result: dict[str, Any],
-        debug: bool = False,  # noqa: ARG004  # WHY: signature preserved for callers passing debug
+        comparison_result: dict[str, Any],  # WHY: no caller ever passed a debug flag, so the parameter went
     ) -> str:
         """Apply business context rules for address tiebreaking."""
         mist_biz, mist_res = AddressUtils._classify_place_type(mist_result.get("place_type", ""))  # WHY: mist tags
@@ -898,8 +897,7 @@ class NominatimValidator:
 
     def _make_api_request(
         self,
-        address_string: str,
-        source: str,  # noqa: ARG002  # WHY: kept for tests + future log context
+        address_string: str,  # WHY: the body builds the query from this string alone, so source left the signature
     ) -> Any | None:
         """Make Nominatim API request with retry logic."""
         if requests is None:  # WHY: missing dependency -> no-op
@@ -943,8 +941,7 @@ class NominatimValidator:
     def _calculate_component_match(
         self,
         address_parts: list[str],
-        display_name: str,
-        source: str,  # noqa: ARG002  # WHY: retained for future logging + test signature stability
+        display_name: str,  # WHY: the score reads the parts and the display name only, so source left the signature
     ) -> float:
         """Calculate match score based on address component matching."""
         total = len(address_parts)  # WHY: number of address parts to score against display name
@@ -973,8 +970,7 @@ class NominatimValidator:
 
     def _calculate_quality_boost(
         self,
-        result: dict[str, Any],
-        source: str,  # noqa: ARG002  # WHY: reserved for future logging
+        result: dict[str, Any],  # WHY: both boost helpers read the result only, so source left the signature
     ) -> float:
         """Calculate quality boost from place type and address details."""
         return self._place_type_boost(result) + self._address_detail_boost(result)  # WHY: sum the two boost sources
@@ -1007,23 +1003,21 @@ class NominatimValidator:
     def _calculate_confidence(
         self,
         result: dict[str, Any],
-        address_parts: list[str],
-        source: str,
+        address_parts: list[str],  # WHY: both callees below stopped taking source, so this level drops it too
     ) -> float:
         """Calculate overall confidence score for geocode result."""
         importance = float(result.get("importance", 0.0))  # WHY: Nominatim's own importance score
         if importance > 0.01:  # WHY: trust importance when it is non-trivial
             return min(1.0, importance * 2.0)  # WHY: scale + cap at 1.0
         display_name = result.get("display_name", "")  # WHY: cache to shorten next call
-        component = self._calculate_component_match(address_parts, display_name, source)  # WHY: fallback match
-        boost = self._calculate_quality_boost(result, source)  # WHY: quality boost adds to component score
+        component = self._calculate_component_match(address_parts, display_name)  # WHY: fallback match
+        boost = self._calculate_quality_boost(result)  # WHY: quality boost adds to component score
         return min(1.0, component + boost)  # WHY: bound confidence to [0, 1]
 
     def _parse_geocode_response(
         self,
         response: Any,
-        address_parts: list[str],
-        source: str,
+        address_parts: list[str],  # WHY: the only callee below stopped taking source, so this level drops it too
     ) -> dict[str, Any]:
         """Parse successful geocode response."""
         if response.status_code != 200:  # WHY: any non-200 is a failure
@@ -1032,7 +1026,7 @@ class NominatimValidator:
         if not results:  # WHY: empty result list = no geocode match
             return self._create_empty_result("No results found")  # WHY: canonical no-match error
         result = results[0]  # WHY: use only the top match
-        confidence = self._calculate_confidence(result, address_parts, source)  # WHY: score the match
+        confidence = self._calculate_confidence(result, address_parts)  # WHY: score the match
         return {  # WHY: canonical success shape
             "valid": True,  # WHY: geocode succeeded
             "confidence": confidence,  # WHY: 0-1 score
@@ -1055,10 +1049,10 @@ class NominatimValidator:
             addr_str, parts = self._build_address_string(address_dict)  # WHY: derive query string + parts list
             if not addr_str:  # WHY: nothing to geocode
                 return self._create_empty_result("Empty address")  # WHY: canonical empty-input error
-            response = self._make_api_request(addr_str, source)  # WHY: run the retryable HTTP call
+            response = self._make_api_request(addr_str)  # WHY: run the retryable HTTP call. It logs no source label
             if response is None:  # WHY: all retries failed
                 return self._create_empty_result("No response received")  # WHY: canonical no-response error
-            return self._parse_geocode_response(response, parts, source)  # WHY: shape the successful body
+            return self._parse_geocode_response(response, parts)  # WHY: shape the successful body
         except Exception as exc:  # WHY: never let a geocode bubble kill validation
             if self.debug:  # WHY: only log full traceback in debug mode
                 logging.debug("GEOCODE [%s]: %s", source, exc)
@@ -1142,7 +1136,7 @@ class NominatimValidator:
     ) -> tuple[str, str]:
         """Apply business context rules as final tiebreaker."""
         # WHY: biz/res + conf blend as the final recommendation
-        rec = AddressUtils.apply_business_context_rules(mist_result, comp_result, self.debug)
+        rec = AddressUtils.apply_business_context_rules(mist_result, comp_result)
         if rec == "mist":  # WHY: rule preferred the mist side
             return "mist", f"Mist more business-appropriate ({mist_result.get('place_type', 'unknown')})"
         if rec == "comparison":  # WHY: rule preferred the ref side

@@ -146,7 +146,7 @@ class _MapsClone:
             logging.debug("Could not fetch zone count for clone plan: %s", zone_error)  # Debug-only breadcrumb.
         return 0  # Default to zero so the plan text still reads sensibly.
 
-    def _confirm_clone(self, source_map: dict, new_name: str, source_zones_count: int, clone_payload: dict) -> bool:
+    def _confirm_clone(self, source_map: dict, new_name: str, source_zones_count: int) -> bool:
         """Display the clone plan and prompt user to confirm. Return True to proceed."""
         print(f"\n{'-' * 80}")  # Divider above the plan block.
         print("Clone Plan:")  # Section title for the pre-flight summary.
@@ -349,7 +349,7 @@ class _MapsClone:
             return None
         clone_payload = self._build_clone_payload(source_map, new_name)  # Assemble POST body.
         zones_count = self._fetch_source_zone_count(site_id, source_map_id)  # Pre-count for plan display.
-        if not self._confirm_clone(source_map, new_name, zones_count, clone_payload):  # Interactive confirm.
+        if not self._confirm_clone(source_map, new_name, zones_count):  # Interactive confirm. The plan text is static.
             return None  # User declined.
         return _ClonePrep(
             source_map=source_map,

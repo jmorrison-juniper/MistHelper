@@ -1396,7 +1396,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
             if len(versions) == 1:  # WHY: guard on condition
                 self._execute_single_version_upgrade(site_id, site_name, site_data, mistapi)  # WHY: instance state
             else:
-                self._execute_multi_version_upgrade(site_id, site_name, site_data, mistapi)  # WHY: instance state
+                self._execute_multi_version_upgrade(site_id, site_name, site_data)  # WHY: callee needs no mistapi
             self._log_upgrade_results(site_id, site_name, site_data, "Upgrade Initiated")  # WHY: instance state
         except Exception as error:  # WHY: recover from failure
             print(f"      Failed: {error}")  # WHY: user-facing feedback
@@ -1461,8 +1461,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         self,
         site_id: str,
         site_name: str,
-        site_data: dict[str, Any],
-        mistapi: Any,
+        site_data: dict[str, Any],  # WHY: the only callee below imports mistapi lazily, so the module stops here
     ) -> None:
         """Execute upgrade when devices use different versions."""
         print("      Multiple versions - grouping by target version...")  # WHY: user-facing feedback
@@ -1476,15 +1475,14 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
             devices_by_version[version]["models"].append(model)  # WHY: workflow step
 
         for version, version_info in devices_by_version.items():  # WHY: iterate collection
-            self._upgrade_version_group(site_id, site_name, version, version_info, mistapi)  # WHY: instance state
+            self._upgrade_version_group(site_id, site_name, version, version_info)  # WHY: callee imports mistapi itself
 
     def _upgrade_version_group(  # WHY: helper definition (see docstring)
         self,
         site_id: str,
         site_name: str,
         version: str,
-        version_info: dict[str, Any],
-        mistapi: Any,
+        version_info: dict[str, Any],  # WHY: _invoke_upgrade_api imports mistapi lazily, so no module is threaded in
     ) -> None:
         """Upgrade a group of devices sharing the same target version (PCPP orchestrator)."""
         devices = version_info["devices"]  # WHY: extract group's device list from the tuple/dict

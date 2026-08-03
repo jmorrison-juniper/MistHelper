@@ -607,7 +607,7 @@ class _SsidTemplatePhase45Cluster(_ClusterBase):
         parent = self._mm  # WHY: proxy alias
         if not self._load_cache_or_bail():  # WHY: shared preamble — abort when Phase 1 skipped
             return None  # WHY: cache preamble already printed the bail message
-        resuming, prior_results = parent._offer_resume(_PHASE5_ID, [])  # noqa: SLF001
+        resuming, prior_results = parent._offer_resume(_PHASE5_ID)  # noqa: SLF001
         plan = _build_disable_plan(parent.cache)  # WHY: shape the per-site disable plan
         to_disable = [entry for entry in plan if entry["status"] == _STATUS_TO_DISABLE]  # WHY: actionable slice
         _display_disable_plan(plan)  # WHY: user preview before confirming

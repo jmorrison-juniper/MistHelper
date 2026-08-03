@@ -80,7 +80,7 @@ class AddressResolver:
                 osm = self._validate_nominatim(candidates, query)  # Tier 2: OpenStreetMap street validation.
             with self._perf.phase("tier3_ui"):  # Time the browser tier incl. typing/read/politeness.
                 ui = self._maybe_ui(candidates, query)  # Tier 3: Google-via-Mist authority (gated. Fail-soft).
-            return self._combine(internal, osm, ui, candidates, query)  # Merge the tiers into one result.
+            return self._combine(internal, osm, ui, query)  # Merge the tiers into one result. Candidates are unused.
         except Exception as exc:  # noqa: BLE001 -- one row must never abort the audit.
             logging.warning("Resolve failed for key derived from '%s': %s", query, exc)  # Log and continue.
             return ResolverResult(query=query, canonical_address=None, source="internal", confidence=0.0)
@@ -90,8 +90,7 @@ class AddressResolver:
         internal: ResolverResult | None,
         osm: ResolverResult | None,
         ui: ResolverResult | None,
-        candidates: ResolveCandidates,
-        query: str,
+        query: str,  # WHY: candidates left the signature, so query now sits in the fourth slot.
     ) -> ResolverResult:  # WHY: fan-in point where the three tiers collapse to one authoritative answer.
         """Merge results with the web (Tier 3) as the authority for the true suite.
 
