@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://misthelper/specs/671/contracts/get-site-beacon-response.schema.json",
+  "title": "getSiteBeaconResponse",
+  "type": "object",
+  "required": ["id", "site_id"],
+  "properties": {
+    "id": { "type": "string", "description": "Beacon UUID" },
+    "site_id": { "type": "string", "description": "Site UUID" },
+    "org_id": { "type": "string" },
+    "map_id": { "type": "string" },
+    "name": { "type": "string" },
+    "type": { "type": "string", "enum": ["eddystone-uid", "eddystone-url", "ibeacon"] },
+    "mac": { "type": "string" },
+    "x": { "type": "number" },
+    "y": { "type": "number" },
+    "power": { "type": "integer", "minimum": -12, "maximum": 100 },
+    "for_site": { "type": "boolean" },
+    "ibeacon_uuid": { "type": ["string", "null"] },
+    "ibeacon_major": { "type": ["integer", "null"], "minimum": 1, "maximum": 65535 },
+    "ibeacon_minor": { "type": ["integer", "null"], "minimum": 1, "maximum": 65535 },
+    "eddystone_namespace": { "type": "string" },
+    "eddystone_instance": { "type": "string" },
+    "eddystone_url": { "type": "string" },
+    "created_time": { "type": "number" },
+    "modified_time": { "type": "number" }
+  },
+  "additionalProperties": true
+}

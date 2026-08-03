@@ -18,6 +18,9 @@ Covers every branch of ``SiteClientExporter`` static methods:
 - ``beacons``: constructs SiteExportUtils with every kwarg wired to
   MistHelper globals then invokes ``_export_data`` with the beacons
   api_call + data_type + sort_key contract.
+- ``get_site_beacon``: prompts for site/beacon identifiers via
+  ``safe_input``, retries 429 with adaptive delay, normalizes payload,
+  and persists via ``api_function_name="getSiteBeacon"``.
 
 Every collaborator (DataProcessingUtils, mistapi, WifiClientsExporter,
 SiteExportUtils, MistHelper.* globals) is monkeypatched. No live
@@ -87,6 +90,11 @@ def wired_deps(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     is_debug_mode = MagicMock(name="IsDebugMode")  # WHY: .check attribute forwarded into SiteExportUtils.
     pretty_table = MagicMock(name="PrettyTable")  # WHY: forwarded into SiteExportUtils.
     mh_mistapi = MagicMock(name="mh_mistapi")  # WHY: forwarded into SiteExportUtils constructor separately.
+    input_utils = MagicMock(name="InputUtils")  # WHY: safe_input collaborator used by get_site_beacon prompts.
+    rate_limiting_utils = MagicMock(name="RateLimitingUtils")  # WHY: adaptive delay helper for 429 retry flow.
+    api_usage_cache = {"used": 1, "limit": 5000}  # WHY: mutable cache passed into RateLimitingUtils during retries.
+    retry_config = MagicMock(name="FastModeSequentialMaxRetries")  # WHY: retry limit config for SUT.
+    retry_config.VALUE = 1  # WHY: keep retry-loop expectations deterministic for unit assertions.
 
     monkeypatch.setattr("MistHelper.DataExporter", data_exporter, raising=False)  # WHY: proxy lookup.
     monkeypatch.setattr("MistHelper.apisession", apisession, raising=False)  # WHY: proxy lookup.
@@ -108,6 +116,14 @@ def wired_deps(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     monkeypatch.setattr("MistHelper.IsDebugMode", is_debug_mode, raising=False)  # WHY: proxy lookup.
     monkeypatch.setattr("MistHelper.PrettyTable", pretty_table, raising=False)  # WHY: proxy lookup.
     monkeypatch.setattr("MistHelper.mistapi", mh_mistapi, raising=False)  # WHY: proxy lookup (distinct from module).
+    monkeypatch.setattr("MistHelper.InputUtils", input_utils, raising=False)  # WHY: prompt helper lookup.
+    monkeypatch.setattr("MistHelper.RateLimitingUtils", rate_limiting_utils, raising=False)  # WHY: delay helper lookup.
+    monkeypatch.setattr("MistHelper._api_usage_cache", api_usage_cache, raising=False)  # WHY: delay cache lookup.
+    monkeypatch.setattr(
+        "MistHelper.FastModeSequentialMaxRetries",
+        retry_config,
+        raising=False,
+    )  # WHY: retry config lookup.
 
     return {
         "DataProcessingUtils": data_processing,
@@ -131,6 +147,10 @@ def wired_deps(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
         "IsDebugMode": is_debug_mode,
         "PrettyTable": pretty_table,
         "mh_mistapi": mh_mistapi,
+        "InputUtils": input_utils,
+        "RateLimitingUtils": rate_limiting_utils,
+        "api_usage_cache": api_usage_cache,
+        "FastModeSequentialMaxRetries": retry_config,
     }
 
 
@@ -366,3 +386,130 @@ class TestBeacons:
             ),
             call.write([{"mac": "aa"}], "SiteClients_N.csv"),
         ]
+
+
+class TestGetSiteBeacon:
+    """Cover prompt, success, empty-response, and retry/error branches of get_site_beacon."""
+
+    def test_happy_path_prompts_fetches_and_persists(self, wired_deps: dict[str, Any]) -> None:
+        """Validated identifiers trigger one SDK call and one DataExporter write_with_format_selection call."""
+        wired_deps["InputUtils"].safe_input.side_effect = [  # WHY: prompt helper asks for site_id then beacon_id.
+            "site-123",
+            "beacon-456",
+        ]
+        wired_deps["mistapi"].api.v1.sites.beacons.getSiteBeacon.return_value = {  # WHY: dict payload -> one row.
+            "id": "beacon-456",
+            "site_id": "site-123",
+            "name": "Lobby Beacon",
+        }
+
+        SiteClientExporter.get_site_beacon()  # WHY: execute full getSiteBeacon workflow.
+
+        wired_deps["InputUtils"].safe_input.assert_has_calls(  # WHY: validate prompt sequencing + safe_input usage.
+            [
+                call(
+                    "Enter Site ID for getSiteBeacon: ",
+                    allow_empty=False,
+                    context="site_client_exporter.getSiteBeacon.site_id",
+                ),
+                call(
+                    "Enter Beacon ID for getSiteBeacon: ",
+                    allow_empty=False,
+                    context="site_client_exporter.getSiteBeacon.beacon_id",
+                ),
+            ]
+        )
+        (
+            wired_deps["mistapi"].api.v1.sites.beacons.getSiteBeacon
+        ).assert_called_once_with(  # WHY: endpoint gets validated ids.
+            wired_deps["apisession"],
+            site_id="site-123",
+            beacon_id="beacon-456",
+        )
+        (
+            wired_deps["DataExporter"].write_with_format_selection
+        ).assert_called_once_with(  # WHY: persistence contract check.
+            [{"id": "beacon-456", "site_id": "site-123", "name": "Lobby Beacon"}],
+            "SiteBeacon_site_123_beacon_456.csv",
+            api_function_name="getSiteBeacon",
+        )
+
+    def test_eof_or_blank_site_id_aborts_without_api_call(
+        self, wired_deps: dict[str, Any], caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Blank site_id (safe_input EOF fallback) exits cleanly without invoking SDK or exporter."""
+        wired_deps["InputUtils"].safe_input.return_value = ""  # WHY: simulate EOF/default blank safe_input return.
+
+        with caplog.at_level(logging.INFO, logger="root"):  # WHY: capture user-facing cancellation log message.
+            SiteClientExporter.get_site_beacon()  # WHY: execute cancellation path.
+
+        (
+            wired_deps["mistapi"].api.v1.sites.beacons.getSiteBeacon
+        ).assert_not_called()  # WHY: no API call without site id.
+        wired_deps["DataExporter"].write_with_format_selection.assert_not_called()  # WHY: no persistence on cancel.
+        assert any(  # WHY: cancel message emitted.
+            "No site selected. Exiting." in record.message for record in caplog.records
+        )
+
+    def test_empty_payload_skips_export(self, wired_deps: dict[str, Any], caplog: pytest.LogCaptureFixture) -> None:
+        """None payload from SDK is normalized to empty rows and does not write artifacts."""
+        wired_deps["InputUtils"].safe_input.side_effect = ["site-123", "beacon-456"]  # WHY: satisfy both prompts.
+        (wired_deps["mistapi"].api.v1.sites.beacons.getSiteBeacon).return_value = (
+            None  # WHY: exercise normalize(None)->[].
+        )
+
+        with caplog.at_level(logging.INFO, logger="root"):  # WHY: capture no-data user-facing message.
+            SiteClientExporter.get_site_beacon()  # WHY: execute empty-response branch.
+
+        wired_deps["DataExporter"].write_with_format_selection.assert_not_called()  # WHY: no export on empty payload.
+        assert any("No beacon data found" in record.message for record in caplog.records)  # WHY: empty-result notice.
+
+    def test_rate_limit_retry_uses_adaptive_delay_then_succeeds(
+        self, wired_deps: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """429-like failure triggers RateLimitingUtils delay and retries once before successful export."""
+        wired_deps["InputUtils"].safe_input.side_effect = ["site-123", "beacon-456"]  # WHY: provide required ids.
+        wired_deps["mistapi"].api.v1.sites.beacons.getSiteBeacon.side_effect = [  # WHY: first 429, then success.
+            RuntimeError("429 Too Many Requests"),
+            {"id": "beacon-456", "site_id": "site-123"},
+        ]
+        (wired_deps["RateLimitingUtils"].get_rate_limited_delay).return_value = (
+            0.25,
+            0.5,
+        )  # WHY: deterministic delay tuple.
+        sleep_spy = MagicMock(name="sleep_spy")  # WHY: observe delay application without real waiting.
+        monkeypatch.setattr(
+            "src.export.site_client_exporter.time.sleep",
+            sleep_spy,
+            raising=True,
+        )  # WHY: intercept sleep.
+
+        SiteClientExporter.get_site_beacon()  # WHY: execute retry success path.
+
+        assert wired_deps["mistapi"].api.v1.sites.beacons.getSiteBeacon.call_count == 2  # WHY: one retry after 429.
+        wired_deps["RateLimitingUtils"].get_rate_limited_delay.assert_called_once_with(  # WHY: retry uses delay helper.
+            None,
+            wired_deps["apisession"],
+            wired_deps["api_usage_cache"],
+        )
+        sleep_spy.assert_called_once_with(0.5)  # WHY: adaptive delay duration applied before retry.
+        (
+            wired_deps["DataExporter"].write_with_format_selection
+        ).assert_called_once_with(  # WHY: successful retry persists payload.
+            [{"id": "beacon-456", "site_id": "site-123"}],
+            "SiteBeacon_site_123_beacon_456.csv",
+            api_function_name="getSiteBeacon",
+        )
+
+    def test_non_rate_limit_error_does_not_retry(self, wired_deps: dict[str, Any]) -> None:
+        """Non-429 API error logs and exits without calling adaptive delay helper or exporter."""
+        wired_deps["InputUtils"].safe_input.side_effect = ["site-123", "beacon-456"]  # WHY: satisfy prompts.
+        (wired_deps["mistapi"].api.v1.sites.beacons.getSiteBeacon).side_effect = RuntimeError(
+            "500 Internal Server Error"
+        )  # WHY: non-429 should not retry.
+
+        SiteClientExporter.get_site_beacon()  # WHY: execute non-rate-limit failure path.
+
+        wired_deps["RateLimitingUtils"].get_rate_limited_delay.assert_not_called()  # WHY: adaptive delay only on 429.
+        wired_deps["DataExporter"].write_with_format_selection.assert_not_called()  # WHY: failed fetch never persists.
+        wired_deps["mistapi"].api.v1.sites.beacons.getSiteBeacon.assert_called_once()  # WHY: no retries on non-429.

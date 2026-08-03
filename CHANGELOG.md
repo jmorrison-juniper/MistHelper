@@ -7,6 +7,26 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Add menu operation 209 for getSiteBeacon (issue #1420, spec 671)
+
+- **New endpoint workflow (Added)**: added `SiteClientExporter.get_site_beacon`
+  and menu option `209` to execute
+  `mistapi.api.v1.sites.beacons.getSiteBeacon` with safe prompts for `site_id`
+  and `beacon_id`.
+- **Persistence contract (Added)**: normalized single-record payloads to a
+  list and persisted via
+  `DataExporter.write_with_format_selection(..., api_function_name="getSiteBeacon")`
+  using deterministic filenames per site/beacon pair.
+- **Resilience (Added)**: applied adaptive retry/backoff behavior for 429
+  responses via `RateLimitingUtils.get_rate_limited_delay` before retrying.
+- **Registry and key strategy (Added)**: registered menu option `209` as
+  `interactive_safe` in `OperationRegistry` and added `getSiteBeacon`
+  natural-key strategy (`id`) to
+  `ENDPOINT_PRIMARY_KEY_STRATEGIES`.
+- **Tests (Added)**: added unit coverage for prompt validation, happy path,
+  empty payload, 429 retry, and non-429 failure handling; added integration
+  menu dispatch smoke test for option `209`.
+
 ### Lower the vulture confidence floor to 70 (issue #892)
 
 - **Dead code floor (Changed)**: lowered the vulture confidence floor from 90 to
