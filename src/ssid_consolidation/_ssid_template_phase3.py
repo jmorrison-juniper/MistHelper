@@ -273,7 +273,7 @@ class _SsidTemplatePhase3Cluster(_ClusterBase):  # WHY: exported for parent __in
         _log_phase3_start()  # WHY: emit banner + telemetry once
         if not self._load_cache_or_bail():  # WHY: shared preamble — abort when Phase 1 skipped
             return  # WHY: cache preamble already printed the bail message
-        resuming, prior_results = parent._offer_resume(_PHASE_ID, [])  # noqa: SLF001
+        resuming, prior_results = parent._offer_resume(_PHASE_ID)  # noqa: SLF001
         group_plan = _compute_group_plan(parent.cache)  # WHY: derive plan from Phase 1 cache
         _display_group_plan(group_plan)  # WHY: user preview before confirming
         prompt = f"Create/assign {len(group_plan['groups'])} site groups?"  # WHY: confirmation prompt copy

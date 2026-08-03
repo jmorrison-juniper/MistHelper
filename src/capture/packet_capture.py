@@ -908,7 +908,7 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
         bandwidth = self._prompt_scan_bandwidth(band)  # WHY: width also band-dependent
         return {"band": band, "channel": channel, "bandwidth": bandwidth}  # WHY: return radio triplet
 
-    def _multi_ap_gather_params(self, ap_macs: list[str]) -> dict[str, Any] | None:
+    def _multi_ap_gather_params(self) -> dict[str, Any] | None:  # WHY: prompts read no AP list, so the parameter went
         """Prompt user for common multi-AP scan parameters.
 
         Returns:
@@ -1015,7 +1015,7 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
         ap_macs = self._multi_ap_preflight(site_id)  # WHY: enumerate APs and print preflight banner
         if ap_macs is None:  # WHY: preflight aborted because site had no APs
             return  # WHY: cancel gracefully
-        params = self._multi_ap_gather_params(ap_macs)  # WHY: cluster prompts into one call
+        params = self._multi_ap_gather_params()  # WHY: cluster prompts into one call. The helper reads no AP list
         if params is None:  # WHY: user cancelled somewhere in the prompt chain
             return  # WHY: bail without side effects
         self._multi_ap_confirm_and_launch(site_id, ap_macs, params)  # WHY: summary+confirm+launch cluster

@@ -528,9 +528,7 @@ class MapsManager:  # WHY: declare MapsManager class
         return f"{map_name:<35} {map_type:<15} {dimensions:<20} {has_image:<8}"  # WHY: return computed result
 
     @staticmethod
-    def _render_site_maps_table(
-        site_name: str, maps: list
-    ) -> None:  # WHY: declare private helper _render_site_maps_table
+    def _render_site_maps_table(maps: list) -> None:  # WHY: the table prints no site name, so the parameter went
         """Print the header + all rows for the site-map summary table."""
         print(f"\n{'-' * 80}")  # WHY: surface user-facing message
         print(f"Total Maps Found: {len(maps)}")  # WHY: surface user-facing message
@@ -556,7 +554,7 @@ class MapsManager:  # WHY: declare MapsManager class
         if not maps:  # WHY: guard against missing precondition
             print(f"\n! No maps found for site: {site_name}")  # WHY: surface user-facing message
             return  # WHY: return early
-        self._render_site_maps_table(site_name, maps)  # WHY: advance computation
+        self._render_site_maps_table(maps)  # WHY: advance computation. The caller above already printed the site name
         logging.info("Listed %s maps for site %s", len(maps), site_name)  # WHY: action-log before operation
 
     @staticmethod

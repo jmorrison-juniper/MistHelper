@@ -725,57 +725,53 @@ class TestNominatimValidatorHelpers:
         assert "springfield" in key
 
     def test_calculate_component_match_empty(self):
-        score = self.validator._calculate_component_match([], "Some Display", "test")
+        score = self.validator._calculate_component_match([], "Some Display")  # WHY: source left the signature
         assert score == 0.0
 
     def test_calculate_component_match_full(self):
         parts = ["123 Main St", "Springfield", "Illinois"]
         display = "123 Main St, Springfield, Illinois, USA"
-        score = self.validator._calculate_component_match(parts, display, "test")
+        score = self.validator._calculate_component_match(parts, display)  # WHY: source left the signature
         assert score > 0.0
 
     def test_calculate_component_match_partial(self):
         parts = ["123 Main St", "Springfield"]
         display = "Main St, Different City, IL"
-        score = self.validator._calculate_component_match(parts, display, "test")
+        score = self.validator._calculate_component_match(parts, display)  # WHY: source left the signature
         assert 0.0 < score < 1.0
 
     def test_calculate_quality_boost_high(self):
-        boost = self.validator._calculate_quality_boost(
+        boost = self.validator._calculate_quality_boost(  # WHY: source left the signature
             {"type": "building", "class": "building", "address": {"a": 1, "b": 2, "c": 3, "d": 4, "e": 5}},
-            "test",
         )
         assert boost >= 0.5  # 0.3 type + 0.2 details
 
     def test_calculate_quality_boost_medium(self):
-        boost = self.validator._calculate_quality_boost(
+        boost = self.validator._calculate_quality_boost(  # WHY: source left the signature
             {"type": "residential", "class": "other", "address": {"a": 1}},
-            "test",
         )
         assert boost == 0.2
 
     def test_calculate_quality_boost_class(self):
-        boost = self.validator._calculate_quality_boost(
+        boost = self.validator._calculate_quality_boost(  # WHY: source left the signature
             {"type": "other", "class": "place", "address": {}},
-            "test",
         )
         assert boost == 0.1
 
     def test_calculate_quality_boost_none(self):
-        boost = self.validator._calculate_quality_boost(
+        boost = self.validator._calculate_quality_boost(  # WHY: source left the signature
             {"type": "other", "class": "other"},
-            "test",
         )
         assert boost == 0.0
 
     def test_calculate_confidence_with_importance(self):
         result = {"importance": 0.6}
-        conf = self.validator._calculate_confidence(result, [], "test")
+        conf = self.validator._calculate_confidence(result, [])  # WHY: source left the signature
         assert conf > 0.0
 
     def test_calculate_confidence_no_importance(self):
         result = {"importance": 0.0, "display_name": "123 Main St", "type": "house", "class": "building", "address": {}}
-        conf = self.validator._calculate_confidence(result, ["123 Main St"], "test")
+        conf = self.validator._calculate_confidence(result, ["123 Main St"])  # WHY: source left the signature
         assert conf > 0.0
 
 
@@ -787,7 +783,7 @@ class TestNominatimValidatorAPI:
 
     def test_make_api_request_no_requests(self):
         with patch("src.utils.address_utils.requests", None):
-            result = self.validator._make_api_request("123 Main", "test")
+            result = self.validator._make_api_request("123 Main")  # WHY: source left the signature
             assert result is None
 
     def test_make_api_request_success(self):
@@ -795,7 +791,7 @@ class TestNominatimValidatorAPI:
         mock_resp.status_code = 200
         with patch("src.utils.address_utils.requests") as mock_req:
             mock_req.get.return_value = mock_resp
-            result = self.validator._make_api_request("123 Main", "test")
+            result = self.validator._make_api_request("123 Main")  # WHY: source left the signature
             assert result is not None
 
     def test_make_api_request_retry_then_success(self):
@@ -803,20 +799,20 @@ class TestNominatimValidatorAPI:
         with patch("src.utils.address_utils.requests") as mock_req:
             mock_req.get.side_effect = [Exception("timeout"), mock_resp]
             with patch("time.sleep"):
-                result = self.validator._make_api_request("123 Main", "test")
+                result = self.validator._make_api_request("123 Main")  # WHY: source left the signature
                 assert result is mock_resp
 
     def test_make_api_request_all_retries_fail(self):
         with patch("src.utils.address_utils.requests") as mock_req:
             mock_req.get.side_effect = Exception("timeout")
             with patch("time.sleep"):
-                result = self.validator._make_api_request("123 Main", "test")
+                result = self.validator._make_api_request("123 Main")  # WHY: source left the signature
                 assert result is None
 
     def test_parse_geocode_response_not_200(self):
         mock_resp = MagicMock()
         mock_resp.status_code = 404
-        result = self.validator._parse_geocode_response(mock_resp, [], "test")
+        result = self.validator._parse_geocode_response(mock_resp, [])  # WHY: source left the signature
         assert result["valid"] is False
         assert "404" in result["error"]
 
@@ -824,7 +820,7 @@ class TestNominatimValidatorAPI:
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = []
-        result = self.validator._parse_geocode_response(mock_resp, [], "test")
+        result = self.validator._parse_geocode_response(mock_resp, [])  # WHY: source left the signature
         assert result["valid"] is False
 
     def test_parse_geocode_response_success(self):
@@ -841,7 +837,7 @@ class TestNominatimValidatorAPI:
                 "address": {},
             }
         ]
-        result = self.validator._parse_geocode_response(mock_resp, ["Springfield"], "test")
+        result = self.validator._parse_geocode_response(mock_resp, ["Springfield"])  # WHY: source left the signature
         assert result["valid"] is True
         assert result["lat"] == 39.78
 

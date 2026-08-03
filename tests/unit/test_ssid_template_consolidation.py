@@ -420,7 +420,7 @@ class TestResolveTemplate:
                 "applies": {"site_ids": ["site-1"], "sitegroup_ids": []},
             }
         }
-        tmpl, tid = _resolve_template(site, lookup, {})
+        tmpl, tid = _resolve_template(site, lookup)  # WHY: sitegroup_lookup left the signature in issue #887.
         assert tid == "tmpl-1"
 
     def test_sitegroup_match(self) -> None:
@@ -431,7 +431,7 @@ class TestResolveTemplate:
                 "applies": {"site_ids": [], "sitegroup_ids": ["g1"]},
             }
         }
-        tmpl, tid = _resolve_template(site, lookup, {})
+        tmpl, tid = _resolve_template(site, lookup)  # WHY: sitegroup_lookup left the signature in issue #887.
         assert tid == "tmpl-1"
 
     def test_no_match(self) -> None:
@@ -442,7 +442,7 @@ class TestResolveTemplate:
                 "applies": {"site_ids": ["site-2"], "sitegroup_ids": []},
             }
         }
-        tmpl, tid = _resolve_template(site, lookup, {})
+        tmpl, tid = _resolve_template(site, lookup)  # WHY: sitegroup_lookup left the signature in issue #887.
         assert tmpl is None
         assert tid == ""
 
@@ -2024,7 +2024,7 @@ class TestOfferResume:
             )
         )
         mgr._load_phase_results = MagicMock(return_value=None)  # type: ignore[method-assign]
-        resuming, results = mgr._offer_resume(2, [])
+        resuming, results = mgr._offer_resume(2)  # WHY: the results parameter left the signature in issue #887.
         assert resuming is False
         assert results == []
 

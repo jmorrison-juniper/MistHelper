@@ -1699,7 +1699,7 @@ class TestStep8ExecuteExtended:
             },
         }
         with patch.dict(sys.modules, {"mistapi": _mock_mistapi}):
-            upgrader._execute_multi_version_upgrade("site-001", "HQ", site_data, _mock_mistapi)
+            upgrader._execute_multi_version_upgrade("site-001", "HQ", site_data)  # WHY: mistapi left the signature
         assert upgrader.successful_upgrades == 2
 
     def test_upgrade_version_group_non_dry_run(self):
@@ -1721,7 +1721,9 @@ class TestStep8ExecuteExtended:
         mock_resp.data = {"upgrade_id": "upgrade-xyz"}
         with patch.dict(sys.modules, {"mistapi": _mock_mistapi}):
             _mock_mistapi.api.v1.sites.devices.upgradeSiteDevices.return_value = mock_resp
-            upgrader._upgrade_version_group("site-001", "HQ", "0.14.123", version_info, _mock_mistapi)
+            upgrader._upgrade_version_group(  # WHY: Keep position arguments to match upstream method signature.
+                "site-001", "HQ", "0.14.123", version_info
+            )
         assert upgrader.successful_upgrades == 1
         assert "upgrade-xyz" in upgrader.upgrade_ids
 

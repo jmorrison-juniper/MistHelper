@@ -117,8 +117,7 @@ def _template_applies_to_site(  # WHY: direct-scope + group-scope check used by 
 
 def _resolve_template(  # WHY: match a site to its owning template via first-hit iteration
     site: dict[str, Any],
-    template_lookup: dict[str, dict[str, Any]],
-    sitegroup_lookup: dict[str, dict[str, Any]],  # noqa: ARG001 — signature preserved for tests
+    template_lookup: dict[str, dict[str, Any]],  # WHY: the scope check reads site["sitegroup_ids"] directly instead
 ) -> tuple[dict[str, Any] | None, str]:
     """Find the WLAN template assigned to a site via applies scope."""
     for template_id, template in template_lookup.items():  # WHY: iterate all until first match
@@ -282,11 +281,10 @@ def _assemble_site_row(**inputs: Any) -> dict[str, Any]:
 def _resolve_site_wlan(  # WHY: bundles template + wlans + matched lookup into a single 4-tuple
     site: dict[str, Any],
     target_ssid: str,
-    template_lookup: dict[str, dict[str, Any]],
-    sitegroup_lookup: dict[str, dict[str, Any]],
+    template_lookup: dict[str, dict[str, Any]],  # WHY: the callee stopped taking the group map, so this level drops it
 ) -> tuple[dict[str, Any] | None, str, list[dict[str, Any]], dict[str, Any] | None]:
     """Resolve the assigned template + matched WLAN for a site."""
-    template, template_id = _resolve_template(site, template_lookup, sitegroup_lookup)  # WHY: scope
+    template, template_id = _resolve_template(site, template_lookup)  # WHY: scope check needs the template map only
     wlans = _get_template_wlans(template) if template else []  # WHY: guard None template
     matched_wlan = _find_target_wlan(wlans, target_ssid)  # WHY: locate target SSID in list
     return template, template_id, wlans, matched_wlan
@@ -349,7 +347,7 @@ def _build_site_row(  # WHY: 5-param signature (lookups bundled) preserves test-
     if not site.get("id", ""):  # WHY: unidentifiable site cannot be reported
         return None
     resolution = _resolve_site_wlan(  # WHY: bundle template + wlans + matched into one tuple
-        site, target_ssid, lookups.template_lookup, lookups.sitegroup_lookup
+        site, target_ssid, lookups.template_lookup  # WHY: the group map left the callee signature in issue #887
     )
     _, _, wlans, matched_wlan = resolution  # WHY: extract fields needed for classify/tunnel steps
     classification = _classify_site(  # WHY: five-way classification result

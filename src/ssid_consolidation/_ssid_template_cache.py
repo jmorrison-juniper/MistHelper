@@ -189,8 +189,7 @@ class _SsidTemplateCacheCluster(_ClusterBase):  # WHY: proxy cluster grouping ca
 
     def _offer_resume(
         self,
-        phase: int,
-        results: list[dict[str, Any]],  # noqa: ARG002 — signature preserved for tests
+        phase: int,  # WHY: the prior results load from disk below, so no caller supplies them.
     ) -> tuple[bool, list[dict[str, Any]]]:
         """Detect partial run and offer to resume or restart."""
         parent = self._mm  # WHY: proxy alias — reused thrice below

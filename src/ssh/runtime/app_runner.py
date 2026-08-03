@@ -259,10 +259,10 @@ class AppRunner:  # WHY: decomposed orchestrator preserving legacy CLI entrypoin
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info("!? Loaded %d commands from data/SSH_COMMANDS.CSV", len(csv_cmds))
             return csv_cmds
-        return AppRunner._prompt_for_commands(env_cmds, csv_cmds)  # Priority 4: interactive
+        return AppRunner._prompt_for_commands()  # Priority 4: interactive. Both earlier lists are empty at this line
 
     @staticmethod
-    def _prompt_for_commands(env_cmds: list[str], csv_cmds: list[str]) -> list[str]:  # WHY: last-resort prompt.
+    def _prompt_for_commands() -> list[str]:  # WHY: last-resort prompt. It reads no earlier command list.
         """Interactive command-source picker used when no other source supplied commands."""
         logging.info("Prompting user for SSH command(s) at runtime")  # Before-action log
         command = InputUtils.safe_input("!? Enter command to execute: ", context="ssh_app_runner_command")  # EOF-safe

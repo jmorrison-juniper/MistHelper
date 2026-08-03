@@ -614,7 +614,7 @@ class OrgLevelAPFirmwareUpgrader:
             orgs = self._fetch_msp_orgs(msp_id, msp_name)  # WHY: hit Mist API for MSP -> orgs
             if not orgs:  # WHY: guard empty result
                 return []  # WHY: nothing to display
-            self._display_org_list(orgs, msp_name)  # WHY: show user picking list
+            self._display_org_list(orgs)  # WHY: show user picking list. The banner already named the MSP
             return self._collect_org_selection(orgs, msp_name)  # WHY: capture user choice
         except Exception as error:  # WHY: broad guard preserves pre-refactor behavior
             print(f"  X Error fetching organizations: {error}")  # WHY: user-visible error
@@ -672,7 +672,7 @@ class OrgLevelAPFirmwareUpgrader:
             return [raw]  # WHY: caller iterates a list, wrap scalar to keep loop uniform
         return []  # WHY: None / empty -> caller-visible empty inventory
 
-    def _display_org_list(self, orgs: list[Any], msp_name: str) -> None:  # WHY: declare private helper _display_org_lis
+    def _display_org_list(self, orgs: list[Any]) -> None:  # WHY: the body prints no MSP name, so the parameter went
         """Display numbered organization list."""
         print("")  # WHY: surface user-facing message
         print("  Organizations:")  # WHY: surface user-facing message
