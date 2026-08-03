@@ -104,7 +104,7 @@ flowchart LR
   'fontFamily': 'ui-monospace, monospace'
 }}}%%
 mindmap
-   root((MistHelper<br/>195 Operations))
+   root((MistHelper<br/>210 Operations))
     Safe Org Exports (60)
       Sites and Analysis 1-7
       Device Inventory 8-14
@@ -116,8 +116,8 @@ mindmap
       Config and Admin 42-50
       SLE and Insights 51-55
       Misc Exports 56-59
-    Interactive Safe (37)
-      Site Devices 60-72
+    Interactive Safe (38)
+      Site Devices 60-72, 209
       Site Insights 73-79
       Site Stats 80-91
       Viewers 92-96

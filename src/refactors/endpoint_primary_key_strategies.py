@@ -319,6 +319,13 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "unique_constraints": [],
         "description": "BLE beacons deployed on site maps",
     },
+    "getSiteBeacon": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["site_id", "map_id", "name", "type"],
+        "unique_constraints": [],
+        "description": "Single BLE beacon detail by site + beacon identifier",
+    },
     "listSiteVBeacons": {
         "type": "natural_pk",
         "primary_key": ["id"],

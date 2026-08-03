@@ -111,6 +111,7 @@ per-host-logs/
 # Package manager artifacts
 *.lock
 uv.lock
+node_modules/
 
 # Archive and backup files
 *.tar

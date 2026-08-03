@@ -268,6 +268,7 @@ class OperationRegistry:
         "201": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
         "202": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
         "203": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
+        "209": {"category": "interactive_safe", "skip_reason": "Requires site and beacon selection"},
         "186": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Deletes all generated cache CSV files"},
         "58": {"category": "safe"},
         "187": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Creates config objects in destination org"},

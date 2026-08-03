@@ -205,6 +205,7 @@ menu_actions = {
     "184": (SiteExportUtils.current_channel_planning, "Export current RRM channel & power plan per AP radio"),
     "185": (SelfExportUtils.audit_logs, "Export self (admin account) audit log"),
     "186": (GatewayHaExporter.ha_cluster_info, "Export HA gateway cluster info, stats & node pair for a site"),
+    "209": (SiteClientExporter.get_site_beacon, "Get site beacon detail by site_id + beacon_id (getSiteBeacon)"),
 }
 ```
 
