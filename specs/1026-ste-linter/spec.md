@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-26
 
-**Status**: Draft
+**Status**: Implemented and merged in pull request #1673. The package ships at `tools/ste_linter/`. The task list below stayed unchecked during delivery, so read the merged pull request as the record of truth. Issue #1672 is ready to close.
 
 **Input**: User description: "Take the ASD-STE100 PDF and create a complete,
 comprehensive, deep Python linter that grades a file's compliance with the rules

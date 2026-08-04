@@ -171,7 +171,7 @@
 
 - [x] T042 [US3] List every added suppression with `git diff main...HEAD -- '*.py' | Select-String -Pattern 'nosec'`. Check each line against `specs/1032-bandit-severity-gate/contracts/suppression-comment.md`. Confirm that each line names at least one rule identifier, holds one reason sentence, uses an ASCII hyphen, and stays inside its line-length limit. Reject any bare suppression, per FR-007 and SC-005.
 - [x] T043 [US3] Check every added comment against `documentation/ASD-STE100_writing-guide.md`. Confirm the active voice, a simple tense, one idea for each sentence, no semicolon, no Latin abbreviation, and American spelling. Requirement FR-019 demands this check.
-- [ ] T044 [US3] Ask a reviewer who did not write the change to read three added suppression comments. The reviewer must state the reason for each comment in under one minute and without help from the author. SC-008 defines this outcome.
+- [ ] T044 [US3] Ask a reviewer who did not write the change to read three added suppression comments. The reviewer must state the reason for each comment in under one minute and without help from the author. SC-008 defines this outcome. **PENDING REVIEWER STEP**: this task needs a second person. An agent session cannot run it. Issue #1719 raises a related question about the ruff suppression comments in the same tree.
 
 **Checkpoint**: Every suppression carries a verified reason. SC-005 and SC-008 now hold.
 
@@ -203,7 +203,7 @@
 - [x] T049 Prove the negative case for SC-003. Add one temporary `assert True` line to a tracked file under `src/`. Run `bandit -c pyproject.toml -r .` and confirm that it reports one B101 finding and exits with code 1. Remove the line. Run `git status` and confirm that the tree holds no leftover change.
 - [x] T050 [P] Prove SC-006. Run `.venv\Scripts\python.exe -O -m pytest tests/unit -q`. The `-O` flag removes every `assert`, so a suite that keeps the T008 pass count proves that no converted guard lost its duty.
 - [x] T051 [P] Prove SC-009. Run `git diff --name-only main...HEAD`. Confirm that the list holds the 21 source files and `.github/workflows/ci.yml` only. Confirm that the list holds no path under `tools/test_quality_analyzer/fixtures/`, no `_tr042_synthetic.py`, and no `mist-ops-platform/src/shared/config/settings.py`.
-- [ ] T052 Open the pull request against `main` from `security/889-bandit-ll`. Write `Closes #889` in the body. Link `specs/1032-bandit-severity-gate/spec.md`. Attach the completed ledger from `specs/1032-bandit-severity-gate/data-model.md` as the evidence for all 54 rows. Complete the checklist in `.github/PULL_REQUEST_TEMPLATE.md`. Add the `auto-merge` label only after every check passes, including CodeQL.
+- [X] T052 Open the pull request against `main` from `security/889-bandit-ll`. Write `Closes #889` in the body. Link `specs/1032-bandit-severity-gate/spec.md`. Attach the completed ledger from `specs/1032-bandit-severity-gate/data-model.md` as the evidence for all 54 rows. Complete the checklist in `.github/PULL_REQUEST_TEMPLATE.md`. Add the `auto-merge` label only after every check passes, including CodeQL. **Pull request #1717 merged and closed issue #889.**
 
 ---
 

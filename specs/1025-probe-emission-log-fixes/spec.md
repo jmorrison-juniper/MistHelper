@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-26
 
-**Status**: Draft
+**Status**: Implemented and merged in pull request #1674. Issues #1667 and #1668 are resolved. Task T039 stays open, because it needs a live organization.
 
 **Input**: User description: "Menu 206 probe-emission log quality & correctness fixes. Two issues surfaced during a post-1024 log review: (1) CENR probe-population gap for SecB2B b2c/gslb hosts causing ~1,261 duplicate WARNINGs per menu 206 run on a ~315-site org; (2) `_COUNTRY_CODE_TO_REGION` missing LATAM/Caribbean codes, causing Central America / Caribbean sites to be mislabeled as `emea` and emitting per-site WARNINGs."
 

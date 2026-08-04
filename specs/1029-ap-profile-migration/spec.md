@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-27
 
-**Status**: Draft
+**Status**: Implemented and merged in pull request #1691. Menus 207 and 208 ship. Four manual live run tasks stay open, because they need a Mist test organization. Issue #1700 reports that a menu 207 PUT returns 200 without a persisted profile change, so keep that issue open.
 
 **Input**: User description: "Add two new MistHelper menu operations. (1) Migrate all Access Points from a source device profile to a target device profile within one Mist organization, with a full pre-change backup written to `data/`. (2) Revert a prior migration by reading its backup file and reassigning each listed AP back to its original device profile. Both operations mutate Mist cloud configuration and MUST be classified as destructive in `src/utils/operation_registry.py`."
 

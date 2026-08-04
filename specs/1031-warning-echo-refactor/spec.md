@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-27
 
-**Status**: Draft
+**Status**: Implemented and merged in pull request #1694. Four tasks stay open. Three of them argue their outcome by construction, because the team never captured the baseline. One of them needs a manual launch.
 
 **Input**: User description: "Replace ~170 legacy WARNING-level user-facing console echoes with a new `echo()` helper that prints the message to stdout so users still see it, and records it in the log at INFO level so we retain an audit trail of what was shown to the user. This removes semantic pollution from the log's WARNING channel without changing any user-visible behavior or altering any legitimate warning."
 

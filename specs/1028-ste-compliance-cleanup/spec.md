@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-27
 
-**Status**: Draft
+**Status**: Implemented and merged in pull request #1686. The task list below stayed unchecked during delivery, so read the merged pull request as the record of truth. Issue #1685 is ready to close.
 
 **Input**: User request: "Start a new issue and SpecKit workflow to use our new
 report results to clean up our MistHelper file to bring it into compliance.
