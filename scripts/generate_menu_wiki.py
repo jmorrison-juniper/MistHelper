@@ -69,7 +69,8 @@ class WikiMenuReferenceGenerator:
         markdown = self.render_markdown(entries, categories)
         for output_path in self.output_paths:
             output_path.parent.mkdir(parents=True, exist_ok=True)
-            output_path.write_text(markdown, encoding="utf-8")
+            # newline="\n" stops Windows from writing CRLF, which would show as a spurious diff.
+            output_path.write_text(markdown, encoding="utf-8", newline="\n")
             print(f"WROTE {output_path}")
 
     def extract_entries(self, source: str) -> list[MenuEntry]:
