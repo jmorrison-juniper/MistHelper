@@ -7,6 +7,34 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Reconcile the speckit records with the merged work (issues #1667, #1668, #891)
+
+- **Spec 1025 (Fixed)**: marked tasks T024, T025, T026, and T027 complete. The
+  code for both fixes sits on `main` today. The dedup set sits at line 862 of
+  `src/org/org_synthetic_probes_manager.py` and the single load time call site
+  sits at lines 2715 to 2721. The `NOTE(1025-US2)` comment sits at lines 1697
+  to 1698. The two test files report 107 passed. Task T039 stays open, because
+  it needs a live organization. Issues #1667 and #1668 are ready to close.
+- **Spec 1033 (Fixed)**: reopened tasks T003, T004, T005, and T006. The record
+  claimed that User Story 1 shipped, but pull request #1723 reverted that edit
+  before the merge. The pylint ignore flag still sits at line 303 of
+  `.github/workflows/ci.yml`. The record now states the revert and the measured
+  backlog of 683 pylint messages in `src/maps`, `src/ssh`, and `src/ui`. Issue
+  #891 holds that work.
+- **Spec 1033 (Added)**: closed tasks T017 through T028 and T030 through T034
+  with the evidence from pull request #1723 and pull request #1726.
+- **CodeQL counts (Corrected)**: replaced the stale claim of 0 alerts for both
+  removed queries. A read of `refs/heads/main` on 2026-08-04 reports 0 alerts
+  for `py/stack-trace-exposure` and 21 open alerts for
+  `py/clear-text-logging-sensitive-data`. Issue #1710 owns the fix for the 21
+  alerts.
+- **Spec 1032 (Fixed)**: marked task T052 complete against merged pull request
+  #1717. Task T044 stays open, because it needs a second reviewer.
+- **Spec status headers (Changed)**: replaced the `Draft` status in specs 1025
+  through 1033 with the real delivery state and the merged pull request number.
+  A reader can now tell a planned feature from a shipped feature without a
+  search of the pull request history.
+
 ### Add menu operation 209 for getSiteBeacon (issue #1420, spec 671)
 
 - **New endpoint workflow (Added)**: added `SiteClientExporter.get_site_beacon`
@@ -97,13 +125,19 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
   analysis. The file now holds the `name` key alone.
 - **CodeQL result (Recorded)**: the CodeQL analysis on pull request #1723
   completed successfully with both exclusions removed, and the code scanning
-  API reports **0 alerts** for the merge reference. Neither
-  `py/stack-trace-exposure` nor `py/clear-text-logging-sensitive-data`
-  produced a finding. Both exclusions therefore stay deleted. A zero count also
-  means the configuration declares no `queries` key, so the default suite
-  decides which queries run. Any future proposal to restore an exclusion must
-  carry a review record that states the review date, the evidence link, the
-  reason, and the next review trigger.
+  API reported **0 alerts** for the merge reference at that time. A later read
+  of `refs/heads/main` on 2026-08-04 reports the true post merge counts, because
+  the default branch analysis runs after the merge. `py/stack-trace-exposure`
+  reports **0 alerts**, so its verdict is `clean` and its removal stays.
+  `py/clear-text-logging-sensitive-data` reports **21 open alerts** across six
+  files, so its verdict is `real` and its removal also stays. The counts are
+  `src/site/address_audit/address_resolver.py` 10, `src/capture/packet_capture.py`
+  4, `MistHelper.py` 2, `src/ssh/ssh_runner_manager.py` 2, `starlink_dashboard.py`
+  2, and `src/device/_utility_commands_action.py` 1. Issue #1710 owns the fix for
+  these 21 alerts. The removal of the exclusion is what made them visible, which
+  is the outcome that this work wanted. Any future proposal to restore an
+  exclusion must carry a review record that states the review date, the evidence
+  link, the reason, and the next review trigger.
 - **Gate comments (Added)**: the pylint step and the dead code step each hold a
   new comment. The comment states the review date, the measurement, and the
   condition that starts the next review. The pylint comment records the Linux

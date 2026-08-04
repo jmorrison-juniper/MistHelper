@@ -10,7 +10,7 @@
 
 **Created**: 2026-07-28
 
-**Status**: Draft
+**Status**: Partly delivered. Pull request #1723 merged User Story 2, User Story 3, and User Story 4, and closed issue #892 and issue #893. Pull request #1726 restored the vulture floor of 70 that a revert had undone. User Story 1 was reverted, because the pylint gate fails on `ubuntu-latest` without the ignore flag. Issue #891 stays open and holds that work.
 
 **Input**: Remove the last command line suppression and the last configuration suppression from three CI quality gates. Keep a suppression only when a written rationale defends it. Do not fix the newly visible findings in this feature.
 

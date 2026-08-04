@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-27
 
-**Status**: Draft
+**Status**: Implemented and merged in three pull requests, which are #1688 for phase 1, #1689 for phase 2, and #1690 for phase 3. The task list below stayed unchecked during delivery, so read the merged pull requests as the record of truth.
 
 **Input**: User description: "use the linter on the python submodules for this
 repo and build a new speckit workflow to address all of those results."

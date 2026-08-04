@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-27
 
-**Status**: Draft
+**Status**: Implemented and merged in pull request #1681. The extractor ships at `tools/ste_linter/dictionary/extract.py`. The task list below stayed unchecked during delivery, so read the merged pull request as the record of truth. Issue #1680 is ready to close.
 
 **Input**: User request: "Improve the extractor iteratively over and over with
 SpecKit workflows until it is near flawless."

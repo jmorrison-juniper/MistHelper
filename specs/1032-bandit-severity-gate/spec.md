@@ -6,7 +6,7 @@
 
 **Created**: 2026-07-28
 
-**Status**: Draft
+**Status**: Implemented and merged in pull request #1717. Issue #889 is closed. Task T044 stays open, because it needs a second reviewer.
 
 **Input**: Remove the `-ll` severity suppression from the bandit step in `.github/workflows/ci.yml`. Triage every finding that the removal makes visible. Apply the project rule of fix over suppress.
 
