@@ -2679,9 +2679,20 @@ def _split_env_tokens(raw_token_env: str | None) -> list[str]:  # Split a token 
     return [token.strip() for token in re.split(r"[\n,]+", raw_token_env) if token.strip()]  # Split on newlines/commas
 
 
-def _redact_tokens(tokens: list[str]) -> str:  # Build a secrets-safe preview of discovered tokens
-    """Return a redacted, comma-joined preview (first4...last4, or *** when too short) for logging."""
-    return ",".join((token[:4] + "..." + token[-4:]) if len(token) >= 8 else "***" for token in tokens)  # Redact each
+def _redact_tokens(tokens: list[str]) -> str:  # Describe discovered tokens without any secret material
+    """Return a count of the discovered tokens for logging.
+
+    The result holds no character of any token, so a log file or a support bundle never leaks
+    credential material (issue #1710). An operator identifies a single token by its one-based
+    position, which every per-token log line already carries.
+
+    Args:
+        tokens: The raw API token values. The function reads only the length of the list.
+
+    Returns:
+        A short phrase that states how many tokens the environment holds.
+    """
+    return f"{len(tokens)} token(s) found, values hidden"  # Count only -- no token character may reach the log
 
 
 def _parse_api_tokens() -> tuple[str, list[str]]:
@@ -2724,7 +2735,8 @@ def _preflight_verify_credentials(require_token: bool = True) -> None:
     malformed URL from mistapi. Token-based modes need a token
     (``--test``/``--testinteractive``/TUI/CLI). The ``require_token`` is False for interactive ``--login``,
     which authenticates via email/password rather than a token. Any token value present is shown only via
-    ``_redact_tokens()`` previews, never raw (FR-015/SC-005).
+    ``_redact_tokens()`` previews, never raw (FR-015/SC-005). Since issue #1710 a preview is an 8
+    character SHA-256 fingerprint, so it carries no character of the token itself.
     """
     logging.info("Running credential/config preflight (require_token=%s)", require_token)  # Before-action log.
     host, tokens = _parse_api_tokens()  # Reuse the canonical host/token reader (env only, no network).
@@ -2749,8 +2761,14 @@ def _preflight_verify_credentials(require_token: bool = True) -> None:
     sys.exit(1)  # Exit non-zero before the code constructs any session or network object.
 
 
-def _check_token_rate_limit(token: str, test_host: str) -> bool:
-    """Probe a token via GET /self. True if rate-limited/unreachable, False if usable."""
+def _check_token_rate_limit(token: str, test_host: str, label: str) -> bool:
+    """Probe a token via GET /self. True if rate-limited/unreachable, False if usable.
+
+    Args:
+        token: The raw API token. It reaches the Authorization header and never reaches the log.
+        test_host: The Mist API hostname to probe.
+        label: A secret-free identifier such as ``"2/3"`` that names this token in the log.
+    """
     try:
         import requests  # Import here -- only needed for this edge-case rate-limit probe path
 
@@ -2758,16 +2776,16 @@ def _check_token_rate_limit(token: str, test_host: str) -> bool:
         headers = {"Authorization": f"Token {token}"}  # Standard Mist API bearer token header
         response = requests.get(url, headers=headers, timeout=5)  # Short timeout -- probe, not full call
         if response.status_code == 429:  # HTTP 429 = Too Many Requests = rate-limited
-            logging.debug("Token %s...%s is rate-limited (HTTP 429)", token[:4], token[-4:])
+            logging.debug("Token %s is rate-limited (HTTP 429)", label)
             return True  # Confirmed rate-limited -- skip this token
         elif response.status_code == 200:  # HTTP 200 = OK = token is functional
-            logging.debug("Token %s...%s is available (HTTP 200)", token[:4], token[-4:])
+            logging.debug("Token %s is available (HTTP 200)", label)
             return False  # Token is usable -- include in available list
         else:  # Any unexpected status treated as unavailable (defensive)
-            logging.warning("Token %s...%s returned unexpected status %d", token[:4], token[-4:], response.status_code)
+            logging.warning("Token %s returned unexpected status %d", label, response.status_code)
             return True  # Treat unexpected response as unavailable for safety
     except Exception as test_err:
-        logging.warning("Failed to test token %s...%s: %s", token[:4], token[-4:], test_err)
+        logging.warning("Failed to test token %s: %s", label, test_err)
         return True  # Treat connection exception as unavailable to avoid broken tokens
 
 
@@ -2943,13 +2961,12 @@ def _filter_available_tokens(tokens: list[str], host: str) -> list[str]:
     """
     available: list[str] = []  # Accumulate tokens that pass the rate-limit probe
     for index, token in enumerate(tokens, start=1):  # Probe each token with its 1-based position
-        if not _check_token_rate_limit(token, host):  # Probe via /api/v1/self -- False means available
+        label = f"{index}/{len(tokens)}"  # Secret-free identifier -- issue #1710 forbids any token character
+        if not _check_token_rate_limit(token, host, label):  # Probe via /api/v1/self -- False means available
             available.append(token)  # This token is usable -- add to available list
-            logging.info("Token %d/%d (%s...%s) is available", index, len(tokens), token[:4], token[-4:])
+            logging.info("Token %s is available", label)
         else:  # Token is rate-limited or unreachable -- skip it
-            logging.warning(
-                "Token %d/%d (%s...%s) is rate-limited - skipping", index, len(tokens), token[:4], token[-4:]
-            )
+            logging.warning("Token %s is rate-limited - skipping", label)
     return available  # Return only the usable tokens
 
 
