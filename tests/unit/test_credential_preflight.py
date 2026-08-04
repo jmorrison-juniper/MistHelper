@@ -85,7 +85,7 @@ class TestCredentialPreflight:
         assert "import mistapi" not in source, "preflight must not import mistapi"
 
     def test_no_raw_token_leaks_in_failure_message(self, monkeypatch, caplog):
-        """SC-005: only redacted token previews (first4...last4) may appear, never the raw token value."""
+        """SC-005 and issue #1710: the failure message shows a fingerprint, never any token character."""
         _clear_credential_env(monkeypatch)
         monkeypatch.setenv("MIST_HOST", "api.mist.com")
         raw_token = "your_verylongsecret_here"  # WHY: a placeholder token (>=8 chars) so a preview is emitted.
@@ -95,7 +95,9 @@ class TestCredentialPreflight:
             MistHelper._preflight_verify_credentials()
         out = caplog.text
         assert raw_token not in out, "raw token must never appear verbatim in output"
-        assert "your...here" in out, "only the redacted first4...last4 preview may appear"
+        assert "1 token(s) found, values hidden" in out, "the failure message must report the token count"
+        assert "your" not in out, "issue #1710: no leading token characters may appear"
+        assert "here" not in out, "issue #1710: no trailing token characters may appear"
 
     @pytest.mark.parametrize("mode_name", ("test", "testinteractive"))
     def test_systematic_org_preflight_precedes_session_initialization(self, monkeypatch, mode_name):
@@ -133,3 +135,51 @@ class TestCredentialPreflight:
         )  # WHY: org preflight preserves the established non-zero configuration failure contract.
         org_preflight.assert_called_once()  # WHY: systematic startup resolves org_id before session construction.
         session_initializer.assert_not_called()  # WHY: no session/MSP HTTP path may begin when org_id is unavailable.
+
+
+class TestTokenPreviewCarriesNoSecret:
+    """Issue #1710: a log record must identify a token without exposing any character of it."""
+
+    # WHY: hexadecimal-style fake tokens hold no English word, so an assertion cannot collide by accident.
+    _RAW_TOKEN = "AAAA1111BBBB2222CCCC3333"
+    _OTHER_TOKEN = "DDDD4444EEEE5555FFFF6666"
+
+    def test_redact_tokens_reports_a_count_only(self):
+        """``_redact_tokens`` reports how many tokens exist and no character of any one of them."""
+        tokens = [self._RAW_TOKEN, self._OTHER_TOKEN]  # Two fake tokens exercise the count path
+        preview = MistHelper._redact_tokens(tokens)  # Build the preview string that reaches the log
+        assert preview == "2 token(s) found, values hidden"  # The count is the whole message
+        for token in tokens:  # Every token must be absent in whole and in part
+            assert token not in preview, "the preview must not carry a whole token"
+            assert token[:4] not in preview, "the preview must not carry the leading characters"
+            assert token[-4:] not in preview, "the preview must not carry the trailing characters"
+
+    def test_redact_tokens_handles_an_empty_list(self):
+        """A run with no token must still produce a readable message."""
+        assert MistHelper._redact_tokens([]) == "0 token(s) found, values hidden"
+
+    def test_rate_limit_probe_logs_the_label_and_no_token_character(self, caplog, monkeypatch):
+        """``_check_token_rate_limit`` must log its label, never a slice of the token."""
+
+        def _raise_probe_error(*_args, **_kwargs):  # Force the except branch without any network call
+            raise RuntimeError("probe unavailable")  # WHY: the except branch also emits a token identifier
+
+        monkeypatch.setattr("requests.get", _raise_probe_error)  # Replace the only network call in the probe
+        caplog.set_level(logging.DEBUG)  # Capture every level so no leaking record escapes the assertion
+        MistHelper._check_token_rate_limit(self._RAW_TOKEN, "api.mist.com", "1/1")  # Probe with a fake host
+        assert self._RAW_TOKEN not in caplog.text, "the log must not carry the whole token"
+        assert self._RAW_TOKEN[:4] not in caplog.text, "the log must not carry the leading characters"
+        assert self._RAW_TOKEN[-4:] not in caplog.text, "the log must not carry the trailing characters"
+        assert "token 1/1" in caplog.text, "the log must carry the positional label"
+
+    def test_availability_loop_logs_a_distinct_label_per_token(self, caplog, monkeypatch):
+        """An operator must still tell one token from another in the log."""
+        monkeypatch.setattr(MistHelper, "_check_token_rate_limit", lambda *_args: False)  # Report every token usable
+        caplog.set_level(logging.INFO)  # The available branch logs at INFO level
+        tokens = [self._RAW_TOKEN, self._OTHER_TOKEN]  # Two tokens produce two distinct labels
+        MistHelper._filter_available_tokens(tokens, "api.mist.com")  # Run the loop that emits the labels
+        assert "Token 1/2 is available" in caplog.text, "the first token carries position 1"
+        assert "Token 2/2 is available" in caplog.text, "the second token carries position 2"
+        for token in tokens:  # No token character may reach any record
+            assert token[:4] not in caplog.text, "the log must not carry the leading characters"
+            assert token[-4:] not in caplog.text, "the log must not carry the trailing characters"

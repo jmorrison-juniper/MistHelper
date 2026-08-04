@@ -7,6 +7,41 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Stop writing partial API token values to the log (issue #1710)
+
+- **Token previews (Changed)**: `_redact_tokens()` now returns a count in the
+  form `2 token(s) found, values hidden`. It no longer builds the
+  `first4...last4` preview. Six log call sites that built the same preview
+  inline now print a positional label instead. The call sites sit in
+  `_check_token_rate_limit()` and in the token availability loop. They run at
+  DEBUG, INFO, and WARNING level, so a normal run wrote 8 characters of a live
+  credential into `data/script.log` before this change.
+- **Token identity (Changed)**: `_check_token_rate_limit()` takes a third
+  argument named `label`. The caller passes a secret-free identifier such as
+  `2/3`. An operator still tells one token from another by that position, which
+  the per-token log lines already carried.
+- **No hash of a secret (Security)**: an earlier draft of this work hashed each
+  token with SHA-256. CodeQL raised `py/weak-sensitive-data-hashing` at high
+  severity, because SHA-256 is not a computationally expensive hash for
+  credential material. The final change removes the hash and passes no token
+  into any digest function. No secret now reaches a hash, a log, or a report.
+- **Why this matters (Security)**: a log file travels with a support bundle, and
+  menu 101 builds a support package for each site. A reader of that bundle must
+  never see a credential fragment. Eight characters also reduce the search space
+  for an attacker who already holds part of a token.
+- **CodeQL follow-up (Recorded)**: this change clears the 2 alerts that
+  `py/clear-text-logging-sensitive-data` reported in `MistHelper.py`. The query
+  reports 19 more alerts in five other files, which this change does not touch.
+  Those need their own triage.
+- **Tests (Added)**: added `TestTokenPreviewCarriesNoSecret` to
+  `tests/unit/test_credential_preflight.py`. The tests assert the count message,
+  the empty list case, a clean probe log, and a distinct label for each token in
+  the availability loop. Each test also asserts that neither the leading 4
+  characters nor the trailing 4 characters of a token reach the output.
+- **Tests (Changed)**: `test_no_raw_token_leaks_in_failure_message` no longer
+  accepts the `first4...last4` preview. It now asserts the count message and
+  that no leading or trailing token character appears.
+
 ### Reconcile the speckit records with the merged work (issues #1667, #1668, #891)
 
 - **Spec 1025 (Fixed)**: marked tasks T024, T025, T026, and T027 complete. The
