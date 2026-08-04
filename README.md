@@ -4,7 +4,9 @@ Network Operations & Data Export Tool for Juniper Mist Cloud
 [![Quality Gates](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/ci.yml/badge.svg)](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/ci.yml)
 [![Container Build](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/container-build.yml/badge.svg)](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/container-build.yml)
 
-**Operation Count:** The code currently defines 194 actionable menu entries (1-194), organized into 31 logical groups with no gaps. Exit is menu 0.
+**Operation Count:** The code defines 209 actionable menu entries, numbered 1 to
+209 with no gaps. Exit is menu 0, so the registry holds 210 entries in total.
+The [Menu Reference](#menu-reference) section lists every category and range.
 
 MistHelper is a production-focused Python application that streamlines large-scale Juniper Mist Cloud data extraction, enrichment, transformation, and limited lifecycle operations. It supports both interactive (menu) and fully automated CLI execution, with flexible output to CSV files, a local SQLite database, or a polyglot backend (ArangoDB for documents, Redis for time-series and JSON caching) using natural/composite business keys (no artificial surrogate IDs for core entities). The codebase emphasizes safety, transparency, and predictable behavior-aligned with the included internal Agents Guide and NASA/JPL style defensive programming practices.
 
@@ -12,15 +14,31 @@ MistHelper is a production-focused Python application that streamlines large-sca
 
 ## Quality Gates
 
-Every PR runs these checks in parallel via GitHub Actions:
+Every pull request runs these 13 checks in parallel through GitHub Actions. The
+workflow is `.github/workflows/ci.yml`. A caller can override each threshold
+through a `workflow_call` input. The table lists the default.
 
 | Gate | Tool | Threshold |
 |------|------|-----------|
 | Lint | Ruff | Zero violations |
-| Type Check | mypy --strict | Phased enforcement |
-| Tests | pytest + coverage | >= 70% |
-| Security | Bandit | Zero findings |
-| Dependencies | pip-audit | Zero vulnerabilities |
+| Format | Black | Zero files need reformatting |
+| Type check | mypy | Zero errors under the `pyproject.toml` settings |
+| Tests | pytest with coverage | Coverage >= 80 percent |
+| Security | Bandit | Zero findings at any severity |
+| Dependencies | pip-audit | Zero known vulnerabilities |
+| Code quality | Pylint | Score >= 9.5 |
+| Complexity | Radon | No block above cyclomatic complexity 10 |
+| Dead code | Vulture | Zero findings at confidence 70 |
+| Docstring style | pydocstyle | Zero violations |
+| Docstring coverage | interrogate | Coverage >= 90 percent |
+| Diagram references | `tools/diagram_lint` | Every diagram reference resolves |
+| Browser tests | Playwright | Every end-to-end test passes |
+
+CodeQL runs in a separate workflow, `.github/workflows/codeql.yml`. A code pull
+request must wait for CodeQL before it takes the `auto-merge` label.
+
+A gate that fails on `main` opens an issue with the `quality-gate` label. The
+same gate closes that issue when it passes again.
 
 ## Deployment Options
 
@@ -105,34 +123,43 @@ flowchart LR
 }}}%%
 mindmap
    root((MistHelper<br/>210 Operations))
-    Safe Org Exports (60)
+    Safe Org Exports (61)
       Sites and Analysis 1-7
-      Device Inventory 8-14
-      Device Stats 15-19
+      Device Inventory 8-13
+      Device Stats 15-17
       Events and Logs 20-26
       Client Stats 27-30
       Gateway Ops 31-36
       Templates 37-41
       Config and Admin 42-50
       SLE and Insights 51-55
-      Misc Exports 56-59
-    Interactive Safe (38)
-      Site Devices 60-72, 209
+      Misc Exports 56-58
+      Support and Assets 188, 193
+      Address and License 195-196
+      JSI and Mist Edge 204-205
+    Interactive Safe (45)
+      Site Devices 60-72
       Site Insights 73-79
       Site Stats 80-91
       Viewers 92-96
-    Resource Intensive (6)
+      Site Searches 197-203
+      Site Beacon 209
+    Resource Intensive (10)
+      Heavy Inventory 14, 18-19
+      Bulk Exports 59
       Long-Running 97-101
-      Bulk 153
+      Bulk Upgrade 153
     WebSocket (22)
       Show Commands 102-115
       Diagnostics 116-123
-    Interactive (27)
+    Interactive (29)
+      Exit 0
       Device Diag 124-127
       Device Mgmt 128-133
       Packet Capture 134-135
       Tools 136-147
       Config Mgmt 148-150
+      Ticket Viewer 192
     Continuous (2)
       Loops 151-152
     Destructive (41)
@@ -145,8 +172,10 @@ mindmap
       Test Data 171-174
       SSH Runners 175-176
       Clear Reset 177-187
-      Support Tickets 188-193
+      Support Tickets 189-191
       Gateway Template 194
+      Synthetic Probes 206
+      AP Profile Migration 207-208
 ```
 
 > See [full operations reference](documentation/diagrams/operations/operations-reference.md) with lifecycle states, NOC engineer journey, and safety requirements.
@@ -176,8 +205,9 @@ mindmap
 
 | Path | Purpose |
 |------|---------|
-| `MistHelper.py` | Legacy entrypoint -- actively being decomposed into `src/` modules (see Architecture Evolution below) |
-| `src/` | Extracted modules mirroring the Mist API / mistapi hierarchy (db, output, constants, WAN builders) |
+| `MistHelper.py` | Runtime entrypoint and menu registry. The decomposition moved most logic into `src/`. |
+| `src/` | Extracted modules that mirror the Mist API and mistapi hierarchy |
+| `tools/ste_linter/` | Simplified Technical English compliance linter and dictionary extractor |
 | `data/` | SQLite DB (`mist_data.db`), generated CSV outputs, derived artifacts; polyglot backends run in containers |
 | `CombinedInventory_ByWeek/` | Time-series weekly inventory snapshots |
 | `data/SSH_COMMANDS.CSV` | Fallback SSH command list (legacy root path still supported) |
@@ -193,7 +223,24 @@ All export CSVs are now written inside `data/` (the code enforces a data directo
 
 ## Architecture Evolution
 
-MistHelper started as a single-file script (`MistHelper.py`) and is being incrementally decomposed into a modular `src/` package. The target structure mirrors both the **Mist Cloud API hierarchy** (from the OpenAPI spec) and **Thomas Munzer's mistapi library** (`tmunzer/mistapi_python`), so that MistHelper's internal organization matches the APIs it consumes.
+MistHelper started as a single-file script (`MistHelper.py`). The decomposition
+moved most logic into a modular `src/` package. The target structure mirrors
+both the **Mist Cloud API hierarchy** (from the OpenAPI spec) and **Thomas
+Munzer's mistapi library** (`tmunzer/mistapi_python`), so that the internal
+organization matches the APIs that the tool consumes.
+
+### Size Facts
+
+Measured on 2026-08-04.
+
+| Area | Python lines | Files |
+|------|--------------|-------|
+| `MistHelper.py` | 6,054 | 1 |
+| `src/` | 123,785 | 360 |
+| `tests/` | 129,364 | -- |
+
+The entrypoint held roughly 28,000 lines before the decomposition. It now holds
+6,054. The test suite is now larger than the source it covers.
 
 ### Current `src/` Layout
 
@@ -203,10 +250,14 @@ src/
 ├── api/                    # API operation modules (orgs, sites, const)
 ├── audit/                  # Audit log operations
 ├── auth/                   # Authentication and session management
+├── bootstrap/              # Dependency checks and package installation
 ├── cache/                  # Caching utilities
 ├── capture/                # Packet capture workflows and download management
+├── config/                 # Configuration loading and resolution
+├── data/                   # Shared data helpers
+├── dataclasses/            # Structured payload definitions
 ├── db/                     # Database backends (ArangoDB, Redis, retention, routing)
-├── device/                 # Device utility operations
+├── device/                 # Device utility operations and AP profile migration
 ├── export/                 # Site data export and insights extraction
 ├── firmware/               # Firmware management operations
 ├── gateway/                # Gateway exports, stats, overrides, WAN migration
@@ -214,16 +265,21 @@ src/
 ├── inventory/              # Device inventory summary, MSP orchestration, CSV comparison
 ├── maps/                   # Maps manager operations
 ├── marvis/                 # Marvis AI integration
+├── menu/                   # Menu system and option dispatch
 ├── network/                # Network configuration operations
+├── org/                    # Organization operations and synthetic probes
 ├── org_data_collector.py   # Org-level data collection
 ├── output/                 # Output formatting (writer)
+├── refactors/              # Extraction targets from the decomposition waves
 ├── reports/                # Report generation
 ├── site/                   # Site configuration management (test sites, RF, profiles)
 ├── ssh/                    # SSH runner and execution management
 ├── ssid_consolidation/     # SSID consolidation operations
+├── time/                   # Time and lookback window utilities
 ├── troubleshooting/        # Marvis troubleshooting workflows
 ├── ui/                     # Web portal components
-├── utils/                  # Shared utility functions
+├── utils/                  # Shared utilities and the operation registry
+├── validation/             # Input validation
 ├── wan_hub_group_manager.py  # WAN hub/group operations
 ├── wan_vpn_builder.py      # WAN VPN builder
 ├── websocket/              # WebSocket commands, diagnostics, service ping
@@ -280,6 +336,16 @@ Compatibility surface preserved: `MistHelper.py` remains the runtime entrypoint 
 ---
 
 ## Installation and Setup
+
+### Requirements
+
+| Item | Minimum |
+|------|---------|
+| Python | 3.13 |
+| mistapi | 0.63.1 |
+| Container runtime | Podman (primary) or Docker |
+
+`requirements.txt` and `pyproject.toml` hold the full dependency list.
 
 ### Step 1: Get the Code
 ```powershell
@@ -420,23 +486,58 @@ Interactive fallback occurs if no `-M/--menu` is supplied.
 
 ## Menu Reference
 
-This README is intentionally lean. The full, up-to-date menu reference (each option, description, safety level, and usage examples) is maintained in the repository documentation and the GitHub Wiki:
+This README stays lean. The full menu reference names each option, its
+description, its safety level, and a usage example.
 
-- Repository copy (authoritative, auto-generated): documentation/menu_reference.md
-- GitHub Wiki mirror: https://github.com/jmorrison-juniper/MistHelper/wiki/Menu-Reference
+- Repository copy, which is authoritative: `documentation/menu_reference.md`
+- Wiki mirror: <https://github.com/jmorrison-juniper/MistHelper/wiki/Menu-Reference>
 
-For quick category guidance, see the Wiki Menu Reference page linked above.
+### Categories and ranges
 
-- New in this branch: Menu `196` exports org async license-claim status summary and optional per-device detail rows.
-- New in this branch: Menu `197` interactively downloads client packet captures grouped by VLAN (site -> client -> VLAN -> `data/packet_captures/<mac>/vlan_<id>/`).
-- New in this branch: Menu `198` searches site WAN usage records (`searchSiteWanUsage`) and exports them to `SiteWanUsages_<site>.csv` (CSV/SQLite/ArangoDB via `DataExporter`).
-- New in this branch: Menu `199` searches site webhook delivery attempts (`searchSiteWebhooksDeliveries`) and exports them to `SiteWebhookDeliveries_<site>_<webhook>.csv` (CSV/SQLite/ArangoDB via `DataExporter`).
-- New in this branch: Menu `200` searches site guest authorization records (`searchSiteGuestAuthorization`) and exports them to `SiteGuestAuthorizations_<site>.csv` (CSV/SQLite/ArangoDB via `DataExporter`).
-- New in this branch: Menu `201` searches site Mist Edge events (`searchSiteMistEdgeEvents`) and exports them to `SiteMistEdgeEvents_<site>.csv` (CSV/SQLite/ArangoDB via `DataExporter`).
-- New in this branch: Menu `202` searches site NAC client events (`searchSiteNacClientEvents`) and exports them to `SiteNacClientEvents_<site>.csv` (CSV/SQLite/ArangoDB via `DataExporter`).
-- New in this branch: Menu `203` searches WAN client events for a selected site via `searchSiteWanClientEvents` (spec 899 / issue #1407) and persists paginated results to `SiteWanClientEvents.CSV` (or the configured SQLite/ArangoDB backend).
-- New in this branch: Menu `204` searches org JSI assets and contract coverage via `searchOrgJsiAssetsAndContracts` (spec 865 / issue #1373) and exports the paginated results to `OrgJsiAssets.CSV` (CSV/SQLite/ArangoDB via `DataExporter`).
-- New in this branch: Menu `205` searches org-wide Mist Edge events via `searchOrgMistEdgeEvents` (spec 866 / issue #1374) -- org-scope peer of the site-scoped Menu `201` -- and persists paginated results to `OrgMistEdgeEvents.CSV` (CSV/SQLite/ArangoDB via `DataExporter`).
+`src/utils/operation_registry.py` classifies every menu number. The classifier
+fails closed, so `--test` skips any option that the registry does not name
+`safe` or `interactive_safe`. Counts were measured on 2026-08-04.
+
+| Category | Count | Menu numbers | Behavior under `--test` |
+|----------|-------|--------------|-------------------------|
+| `safe` | 61 | 1-13, 15-17, 20-58, 188, 193, 195-196, 204-205 | Runs |
+| `interactive_safe` | 45 | 60-96, 197-203, 209 | Runs under `--testinteractive` |
+| `destructive` | 41 | 154-187, 189-191, 194, 206-208 | Never runs |
+| `interactive` | 29 | 0, 124-150, 192 | Never runs |
+| `websocket` | 22 | 102-123 | Never runs |
+| `resource_intensive` | 10 | 14, 18-19, 59, 97-101, 153 | Never runs |
+| `continuous_loop` | 2 | 151-152 | Never runs |
+| **Total** | **210** | 0-209, no gaps | Menu 0 is Exit |
+
+Warning: A destructive operation changes the Mist cloud configuration. Read
+`documentation/menu_reference.md` before you run one.
+
+### Recent additions
+
+| Menu | Operation | Category |
+|------|-----------|----------|
+| 195 | Audit site addresses from a CSV file. Read-only. | `safe` |
+| 196 | Export the async organization license claim status | `safe` |
+| 197 | Download client packet captures grouped by VLAN | `interactive_safe` |
+| 198 | Search site WAN usages (`searchSiteWanUsage`) | `interactive_safe` |
+| 199 | Search site webhook deliveries (`searchSiteWebhooksDeliveries`) | `interactive_safe` |
+| 200 | Search site guest authorization (`searchSiteGuestAuthorization`) | `interactive_safe` |
+| 201 | Search site Mist Edge events (`searchSiteMistEdgeEvents`) | `interactive_safe` |
+| 202 | Search site NAC client events (`searchSiteNacClientEvents`) | `interactive_safe` |
+| 203 | Search site WAN client events (`searchSiteWanClientEvents`) | `interactive_safe` |
+| 204 | Search organization JSI assets and contracts | `safe` |
+| 205 | Search organization Mist Edge events. Org peer of menu 201. | `safe` |
+| 206 | Manage organization Zscaler synthetic probes | `destructive` |
+| 207 | Migrate access points between device profiles | `destructive` |
+| 208 | Revert an access point profile migration from a backup | `destructive` |
+| 209 | Get the site beacon detail (`getSiteBeacon`) | `interactive_safe` |
+
+Menu 197 writes to `data/packet_captures/<mac>/vlan_<id>/`. Every other
+operation in the table writes through `DataExporter`, so it honors the CSV,
+SQLite, and ArangoDB backends.
+
+---
+
 ## Security & Safety
 
 | Area | Practice |
