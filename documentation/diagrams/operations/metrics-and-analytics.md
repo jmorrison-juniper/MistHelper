@@ -6,7 +6,7 @@ Operation distribution, rate limiting behavior, data flow volumes, and version h
 
 ## Operation Category Distribution
 
-How MistHelper's 194 operations break down by safety classification.
+How MistHelper's 209 operations break down by safety classification.
 
 ```mermaid
 %%{init: {'theme': 'dark', 'themeVariables': {
@@ -177,7 +177,7 @@ timeline
                 : Auto-merge workflow
                 : Web portal (Gunicorn)
     section Current
-        2026 : 194 operations
+        2026 : 209 operations
              : 30-group menu reorg (issue #368)
              : SpecKit integration
              : Mermaid documentation suite
