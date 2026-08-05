@@ -16,27 +16,33 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-# --- Module-level mistapi mock (identity-checked teardown) ---
-_had_mistapi = "mistapi" in sys.modules
+# --- Module-level mistapi stub, restored the moment the import finishes ---
+# WHY: pytest imports every test module during collection but runs teardown_module only
+# for a module that has a selected test. A stub left in sys.modules therefore leaks for
+# the whole session and breaks mistapi's lazy subpackage import. See issue #1739.
 _saved_mistapi = sys.modules.get("mistapi")
 _our_mock = MagicMock()
 sys.modules["mistapi"] = _our_mock
-
-
-from src.network.routing_utils import RoutingDeps, RoutingTableContext, RoutingUtils, SsrRouteContext
+try:
+    from src.network.routing_utils import RoutingDeps, RoutingTableContext, RoutingUtils, SsrRouteContext
+finally:
+    if _saved_mistapi is not None:
+        sys.modules["mistapi"] = _saved_mistapi
+    else:
+        sys.modules.pop("mistapi", None)
 
 
 def setup_module() -> None:
-    """Re-assert our mock in sys.modules before tests run."""
+    """Re-assert our stub for the duration of this module's tests."""
     sys.modules["mistapi"] = _our_mock
 
 
 def teardown_module() -> None:
-    """Restore sys.modules only if our mock is still installed."""
+    """Restore sys.modules only if our stub is still installed."""
     if sys.modules.get("mistapi") is not _our_mock:
         return
-    if _had_mistapi:
-        sys.modules["mistapi"] = _saved_mistapi  # type: ignore[assignment]
+    if _saved_mistapi is not None:
+        sys.modules["mistapi"] = _saved_mistapi
     else:
         sys.modules.pop("mistapi", None)
 

@@ -24,86 +24,124 @@ import pytest
 # Mock mistapi before importing the module under test
 # ---------------------------------------------------------------------------
 _mock_mistapi = MagicMock()
-# WHY: install mistapi mocks permanently in sys.modules so that any lazy
-# re-imports triggered by cluster methods (e.g. `from .ssid_template_consolidation
-# import _disable_single_ssid` inside _SsidTemplatePhase45Cluster) resolve the
-# same mocked mistapi.  A `with patch.dict(...)` block would REMOVE the fake
-# entries on exit, and the ssid_consolidation package itself, causing lazy
-# imports to trigger a real re-import with the real mistapi bound in globals.
-sys.modules["mistapi"] = _mock_mistapi
-sys.modules["mistapi.api"] = MagicMock()
-sys.modules["mistapi.api.v1"] = MagicMock()
-sys.modules["mistapi.api.v1.orgs"] = MagicMock()
-sys.modules["mistapi.api.v1.orgs.templates"] = MagicMock()
-sys.modules["mistapi.api.v1.orgs.wlans"] = MagicMock()
-sys.modules["mistapi.api.v1.orgs.sites"] = MagicMock()
-sys.modules["mistapi.api.v1.orgs.mxtunnels"] = MagicMock()
-sys.modules["mistapi.api.v1.orgs.sitegroups"] = MagicMock()
-sys.modules["mistapi.api.v1.sites"] = MagicMock()
-sys.modules["mistapi.api.v1.sites.sites"] = MagicMock()
-sys.modules["mistapi.get_all"] = MagicMock()
+# WHY: the cluster methods do lazy re-imports (for example `from
+# .ssid_template_consolidation import _disable_single_ssid` inside
+# _SsidTemplatePhase45Cluster). Those must resolve the same mocked mistapi, so the
+# stubs stay installed for the whole time this module's tests run. setup_module
+# re-installs them and teardown_module removes them again.
+_MISTAPI_STUBS: dict[str, MagicMock] = {
+    "mistapi": _mock_mistapi,
+    "mistapi.api": MagicMock(),
+    "mistapi.api.v1": MagicMock(),
+    "mistapi.api.v1.orgs": MagicMock(),
+    "mistapi.api.v1.orgs.templates": MagicMock(),
+    "mistapi.api.v1.orgs.wlans": MagicMock(),
+    "mistapi.api.v1.orgs.sites": MagicMock(),
+    "mistapi.api.v1.orgs.mxtunnels": MagicMock(),
+    "mistapi.api.v1.orgs.sitegroups": MagicMock(),
+    "mistapi.api.v1.sites": MagicMock(),
+    "mistapi.api.v1.sites.sites": MagicMock(),
+    "mistapi.get_all": MagicMock(),
+}
+_saved_mistapi_modules = {name: sys.modules.get(name) for name in _MISTAPI_STUBS}
 
-import src.ssid_consolidation.ssid_template_consolidation as _mod  # noqa: E402
-from src.ssid_consolidation.ssid_template_consolidation import (  # noqa: E402
-    SSIDTemplateConsolidationManager,
-    SsidTemplateDeps,
-    TemplateOpParams,
-    TemplateOutcome,
-    _add_pilot_group,
-    _append_drift_record,
-    _append_ssid_to_template,
-    _assign_matrix_sites,
-    _build_all_template_configs,
-    _build_cluster_groups,
-    _build_deviation_record,
-    _build_disable_base,
-    _build_disable_plan,
-    _build_mxtunnel_lookup,
-    _build_site_row,
-    _build_sitegroup_lookup,
-    _build_skip_entry,
-    _build_template_config,
-    _build_template_lookup,
-    _build_variable_entry,
-    _cache_age_minutes,
-    _check_cache_exists,
-    _check_prerequisite_for_all,
-    _classify_disable_entry,
-    _classify_site,
-    _collect_comparison_keys,
-    _collect_group_wlan_configs,
-    _collect_key_values,
-    _compute_group_plan,
-    _compute_variable_plan,
-    _create_new_template,
-    _create_site_group,
-    _detect_cross_cluster_drift,
-    _determine_target_group,
-    _display_disable_plan,
-    _display_group_plan,
-    _display_template_plan,
-    _display_variable_summary,
-    _extract_deviation_params,
-    _find_representative,
-    _find_target_wlan,
-    _get_cached_site_vars,
-    _get_existing_group_site_ids,
-    _get_template_wlans,
-    _group_by_target,
-    _group_entries_by_site,
-    _handle_completed_resume,
-    _handle_existing_non_misthelper,
-    _handle_partial_resume,
-    _load_group_plan_from_results,
-    _populate_from_representative,
-    _print_conflicts,
-    _print_phase1_summary,
-    _print_phase_summary,
-    _resolve_template,
-    _set_ssid_disabled,
-    _SiteLookups,
-    _template_result,
-)
+
+def _install_mistapi_stubs() -> None:
+    """Put every mistapi stub into sys.modules."""
+    sys.modules.update(_MISTAPI_STUBS)
+
+
+def _restore_mistapi_modules() -> None:
+    """Undo _install_mistapi_stubs for each entry we still own."""
+    for name, saved in _saved_mistapi_modules.items():
+        if sys.modules.get(name) is not _MISTAPI_STUBS[name]:
+            continue  # Another module replaced our stub; leave it alone.
+        if saved is not None:
+            sys.modules[name] = saved
+        else:
+            sys.modules.pop(name, None)
+
+
+# Restore the moment the import finishes. pytest imports every test module during
+# collection but runs teardown_module only for a module that has a selected test, so a
+# stub left here leaks for the whole session and breaks mistapi's lazy subpackage
+# import. See issue #1739.
+_install_mistapi_stubs()
+try:
+    import src.ssid_consolidation.ssid_template_consolidation as _mod  # noqa: E402
+    from src.ssid_consolidation.ssid_template_consolidation import (  # noqa: E402
+        SSIDTemplateConsolidationManager,
+        SsidTemplateDeps,
+        TemplateOpParams,
+        TemplateOutcome,
+        _add_pilot_group,
+        _append_drift_record,
+        _append_ssid_to_template,
+        _assign_matrix_sites,
+        _build_all_template_configs,
+        _build_cluster_groups,
+        _build_deviation_record,
+        _build_disable_base,
+        _build_disable_plan,
+        _build_mxtunnel_lookup,
+        _build_site_row,
+        _build_sitegroup_lookup,
+        _build_skip_entry,
+        _build_template_config,
+        _build_template_lookup,
+        _build_variable_entry,
+        _cache_age_minutes,
+        _check_cache_exists,
+        _check_prerequisite_for_all,
+        _classify_disable_entry,
+        _classify_site,
+        _collect_comparison_keys,
+        _collect_group_wlan_configs,
+        _collect_key_values,
+        _compute_group_plan,
+        _compute_variable_plan,
+        _create_new_template,
+        _create_site_group,
+        _detect_cross_cluster_drift,
+        _determine_target_group,
+        _display_disable_plan,
+        _display_group_plan,
+        _display_template_plan,
+        _display_variable_summary,
+        _extract_deviation_params,
+        _find_representative,
+        _find_target_wlan,
+        _get_cached_site_vars,
+        _get_existing_group_site_ids,
+        _get_template_wlans,
+        _group_by_target,
+        _group_entries_by_site,
+        _handle_completed_resume,
+        _handle_existing_non_misthelper,
+        _handle_partial_resume,
+        _load_group_plan_from_results,
+        _populate_from_representative,
+        _print_conflicts,
+        _print_phase1_summary,
+        _print_phase_summary,
+        _resolve_template,
+        _set_ssid_disabled,
+        _SiteLookups,
+        _template_result,
+    )
+finally:
+    _restore_mistapi_modules()
+
+
+def setup_module() -> None:
+    """Re-install the stubs for the duration of this module's tests."""
+    _install_mistapi_stubs()
+
+
+def teardown_module() -> None:
+    """Remove the stubs again after this module's tests finish."""
+    _restore_mistapi_modules()
+
 
 # ===================================================================
 # Helpers

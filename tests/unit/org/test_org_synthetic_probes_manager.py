@@ -3506,10 +3506,22 @@ def test_regression_runtime_under_budget(pytestconfig: pytest.Config) -> None:  
         f"1025 regression subset did not fully pass (pytest exit_code={exit_code}); "
         f"fix the failing tests before evaluating the runtime budget"
     )
-    # SC-007: wall-clock budget assertion.
-    budget_seconds = 5.0  # SC-007 canonical budget on the reference dev machine
-    assert elapsed < budget_seconds, (
-        f"1025 regression subset took {elapsed:.3f}s, exceeding the {budget_seconds:.1f}s "
-        f"SC-007 budget. Investigate slow fixtures or add a fresh justification if the "
-        f"budget must grow."
+    # SC-007 part 1: the deterministic guard. The real concern is subset creep, because
+    # each added node costs about 500 ms of fixed pytest-in-pytest overhead. A node count
+    # does not move with machine load, so this assertion is the one that must hold.
+    max_nodes = 8  # SC-007 canonical subset size; growing it is a conscious decision
+    assert len(subset) <= max_nodes, (
+        f"the 1025 regression subset holds {len(subset)} nodes, above the SC-007 cap of "
+        f"{max_nodes}. Each node costs about 500 ms. Trim the subset or raise the cap "
+        f"with a written justification."
+    )
+    # SC-007 part 2: a catastrophic-regression ceiling only. The former 5.0 s budget
+    # measured a nested pytest run, so it failed whenever the full suite loaded the
+    # machine. Measured alone it took 0.93 s and under full-suite load 22.99 s, with no
+    # code change between the two. See issue #1738. This ceiling catches a real runaway
+    # such as a fixture loop that scales with site count, and ignores scheduling noise.
+    ceiling_seconds = 120.0
+    assert elapsed < ceiling_seconds, (
+        f"1025 regression subset took {elapsed:.3f}s, above the {ceiling_seconds:.0f}s "
+        f"runaway ceiling. This is not scheduling noise. Investigate slow fixtures."
     )
