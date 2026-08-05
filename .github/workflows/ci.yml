@@ -401,6 +401,32 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
       - run: python scripts/lint_diagram_refs.py
 
+  menu_reference_drift:
+    name: "Menu reference drift"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      # The generator failed silently for months, so the committed pages froze on
+      # an old numbering. This step re-runs it and fails when the output moves.
+      - name: Regenerate the menu reference
+        run: python scripts/generate_menu_wiki.py
+      - name: Fail when the committed output is stale
+        run: |
+          set -euo pipefail
+          if ! git diff --quiet -- documentation/menu_reference.md documentation/wiki/Menu-Reference.md; then
+            echo "The committed menu reference does not match the generator output."
+            echo "Run 'python scripts/generate_menu_wiki.py' and commit both files."
+            git --no-pager diff --stat -- documentation/menu_reference.md documentation/wiki/Menu-Reference.md
+            exit 1
+          fi
+          echo "The menu reference matches the generator output."
+
   playwright:
     name: "E2E smoke tests"
     needs:
