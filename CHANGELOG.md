@@ -7,6 +7,36 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Add five site-scoped read operations, menus 210 to 214 (issues #1416, #1417, #1418, #1419, #1406)
+
+- **Menu 210 (Added)**: `getSiteAssetsOfInterest` exports the BLE beacons that
+  match an Asset or an AssetFilter for a site. Spec 670, issue #1419.
+- **Menu 211 (Added)**: `getSiteAssetFilter` reads one asset filter by
+  identifier. Spec 668, issue #1418.
+- **Menu 212 (Added)**: `getSiteAsset` reads one asset by identifier. Spec 667,
+  issue #1417.
+- **Menu 213 (Added)**: `getSiteApplicationList` exports the applications a site
+  recognizes for WxLAN tag rules. Spec 666, issue #1416.
+- **Menu 214 (Added)**: `searchSiteSystemEvents` searches the system events for a
+  site. Spec 898, issue #1406.
+- **New modules (Added)**: `src/export/site_asset_exporter.py`,
+  `src/export/site_application_list_exporter.py`, and
+  `src/export/site_system_events_exporter.py`. Every operation is read-only and
+  writes through `DataExporter.write_with_format_selection`, so the CSV, SQLite,
+  and ArangoDB backends all work.
+- **Primary keys (Added)**: `getSiteAssetFilter`, `getSiteAsset`, and
+  `getSiteApplicationList` gained a strategy in
+  `ENDPOINT_PRIMARY_KEY_STRATEGIES`. `getSiteAssetsOfInterest` and
+  `searchSiteSystemEvents` already had one, so this change reuses it.
+- **Wrong SDK module paths (Fixed)**: the source specs named a mistapi module
+  that does not exist for `getSiteApplicationList` and `searchSiteSystemEvents`.
+  The real modules are `mistapi.api.v1.sites.wxtags` and
+  `mistapi.api.v1.sites.events`. Issue #1757 tracks the same defect across 245
+  other endpoint specs.
+- **Tests (Added)**: `tests/unit/export/test_site_asset_and_events_exporters.py`
+  covers the happy path, the empty result, the declined site prompt, the blank
+  identifier, and the API error path for all five operations.
+
 ### Stop writing partial API token values to the log (issue #1710)
 
 - **Token previews (Changed)**: `_redact_tokens()` now returns a count in the

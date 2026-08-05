@@ -326,6 +326,27 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "unique_constraints": [],
         "description": "Single BLE beacon detail by site + beacon identifier",
     },
+    "getSiteAssetFilter": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["site_id", "name"],
+        "unique_constraints": [],
+        "description": "Single asset filter detail by site + assetfilter identifier",
+    },
+    "getSiteAsset": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["site_id", "map_id", "name", "mac"],
+        "unique_constraints": [],
+        "description": "Single asset detail by site + asset identifier",
+    },
+    "getSiteApplicationList": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["app_id", "display_name"],
+        "unique_constraints": [],
+        "description": "Applications a site recognizes for WxLAN tag rules",
+    },
     "listSiteVBeacons": {
         "type": "natural_pk",
         "primary_key": ["id"],

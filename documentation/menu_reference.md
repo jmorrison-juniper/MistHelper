@@ -3,9 +3,9 @@
 This page is generated. Run `python scripts/generate_menu_wiki.py` after any
 change to `menu_actions` in `MistHelper.py` or to `src/utils/operation_registry.py`.
 
-MistHelper defines **209 actionable menu entries**, numbered
-1 to 209 with no gaps.
-Menu 0 is Exit, so the registry holds 210 entries in total.
+MistHelper defines **214 actionable menu entries**, numbered
+1 to 214 with no gaps.
+Menu 0 is Exit, so the registry holds 215 entries in total.
 
 The Safety column reads from `src/utils/operation_registry.py`, which is the
 single source of truth. The classifier fails closed, so an unregistered option
@@ -23,7 +23,7 @@ never runs in an automated test pass.
 | Menu numbers | Category | Summary |
 |---|---|---|
 | 1-13, 15-17, 20-58, 188, 193, 195-196, 204-205 | Safe org exports | 61 operations. Read-only org exports. The --test run includes them. |
-| 60-96, 197-203, 209 | Interactive safe | 45 operations. Read-only, but they prompt for a site or a device. The --testinteractive run includes them. |
+| 60-96, 197-203, 209-214 | Interactive safe | 50 operations. Read-only, but they prompt for a site or a device. The --testinteractive run includes them. |
 | 154-187, 189-191, 194, 206-208 | Destructive | 41 operations. They change the Mist cloud configuration. Each one needs a typed confirmation. |
 | 0, 124-150, 192 | Interactive | 29 operations. They prompt the operator, so no automated run includes them. |
 | 102-123 | WebSocket | 22 operations. They open a WebSocket stream to a device. |
@@ -244,6 +244,11 @@ never runs in an automated test pass.
 | 207 | DESTRUCTIVE: Migrate APs between device profiles - Reassign every AP bound to a source device profile to a chosen target profile (Requires typing 'MIGRATE' or 'DRY-RUN' to confirm) | Destructive | `lambda: APProfileMigrationManager.migrate_aps_between_device_profiles(apisession)` |
 | 208 | DESTRUCTIVE: Revert an AP profile migration from a backup file - Reassign each listed AP back to its original device profile (Requires typing 'REVERT' to confirm) | Destructive | `lambda: APProfileMigrationManager.revert_ap_profile_migration(apisession)` |
 | 209 | Get site beacon detail by site_id + beacon_id (getSiteBeacon) | Interactive safe | `SiteClientExporter.get_site_beacon` |
+| 210 | Export BLE beacons matching an Asset or AssetFilter for a site (getSiteAssetsOfInterest) | Interactive safe | `SiteAssetExporter.assets_of_interest` |
+| 211 | Get site asset filter detail by site_id + assetfilter_id (getSiteAssetFilter) | Interactive safe | `SiteAssetExporter.asset_filter` |
+| 212 | Get site asset detail by site_id + asset_id (getSiteAsset) | Interactive safe | `SiteAssetExporter.asset` |
+| 213 | Export the application list for a selected site (getSiteApplicationList) | Interactive safe | `SiteApplicationListExporter.application_list` |
+| 214 | Search system events for a selected site (searchSiteSystemEvents) | Interactive safe | `SiteSystemEventsExporter.system_events` |
 
 This page should be regenerated whenever `menu_actions` or the operation registry
 changes, so the wiki stays aligned with the code.
