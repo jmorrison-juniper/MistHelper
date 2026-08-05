@@ -7,6 +7,29 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Add five site-scoped search operations, menus 215 to 219 (issues #1387, #1388, #1389, #1390, #1405)
+
+- **Menu 215 (Added)**: `searchSiteAlarms` searches the alarms for a site. Spec
+  879, issue #1387.
+- **Menu 216 (Added)**: `searchSiteAssets` searches the tracked assets for a
+  site. Spec 880, issue #1388.
+- **Menu 217 (Added)**: `searchSiteBgpStats` searches the BGP peer statistics for
+  a site. Spec 881, issue #1389.
+- **Menu 218 (Added)**: `searchSiteCalls` searches the call quality records for a
+  site. Spec 882, issue #1390.
+- **Menu 219 (Added)**: `searchSiteSkyatpEvents` searches the Sky ATP security
+  events for a site. Spec 897, issue #1405.
+- **New module (Added)**: `src/export/site_search_exporter.py`. The five
+  endpoints take the same arguments and return the same shape, so one shared
+  helper runs the prompt, fetch, and persist sequence. Each menu entry supplies
+  only the SDK callable and the naming. That avoids five copies of the same code.
+- **Primary keys (Unchanged)**: all five operationIds already had a strategy in
+  `ENDPOINT_PRIMARY_KEY_STRATEGIES`, so this change adds none.
+- **Tests (Added)**: `tests/unit/export/test_site_search_exporter.py`. The
+  per-menu bindings are checked by a parametrized case, so each entry is proven
+  to call its own endpoint and write its own file. The shared branches are
+  covered once.
+
 ### Add five site-scoped read operations, menus 210 to 214 (issues #1416, #1417, #1418, #1419, #1406)
 
 - **Menu 210 (Added)**: `getSiteAssetsOfInterest` exports the BLE beacons that
@@ -570,7 +593,7 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 - **Level assignment (Changed)**: banner and prompt-header lines (intro
   banner, client/AP option menus, loop-mode header, capture-summary block)
   now emit at `logger.info`; validation misses ("no client MAC provided",
-  "invalid MAC", "invalid <int>", range violations) emit at
+  "invalid MAC", "invalid `<int>`", range violations) emit at
   `logger.warning`. No error/debug channels are used in this module.
 - **Format-string constants (Changed)**: the four module-level `_INVALID_*_MSG`
   constants were tightened from f-style `{value}` placeholders to `%s`
@@ -1914,7 +1937,7 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
   `logging.info(...)` using `%`-style deferred formatting. One call lives in
   `GatewayTestResultsService._export_results` for the empty-result branch
   ("No gateway test results found. CSV not created.") and one for the export
-  count summary ("<N> gateway test results exported to <file>"); the third is
+  count summary ("`<N>` gateway test results exported to `<file>`"); the third is
   the "Gateway Synthetic Test Results:" operation banner in
   `GatewayTestResultsService.execute`. Each print's inline `# User-facing ...`
   comment was moved one line above the migrated `logging.info(...)` call to
@@ -3308,7 +3331,7 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
   by parsing on the fixed serial/model + city/state/zip anchors. Verified against
   a real 44-row customer export (44 parsed, 0 skipped).
 
-### Added
+### Added -- site address audit from CSV
 
 - **Site Address Audit from CSV (menu 195, read-only)**: New `src/site/address_audit/`
   subpackage that reconciles a customer-provided tab-delimited CSV (serial, model,
@@ -3356,7 +3379,7 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 - Live compatibility validation against `mistapi 0.63.1` succeeded for MistHelper session initialization plus representative org/site read paths: self lookup, sites, inventory, wireless clients, alarms, events, SLE exports, audit logs, and support tickets.
 
-### Changed
+### Changed -- serial CC refactor extractions
 
 - **Serial CC refactor (offender #8)**: Extracted `OrgClientSecurityExporter.security_events` workflow into `src/refactors/serial_cc/security_events.py` (`SecurityEventsService`) and reduced `MistHelper.py` method to thin delegator. Post-refactor Radon complexity in `MistHelper.py` is now `A (1)` for this symbol.
 - **Serial CC refactor (offender #9)**: Extracted `OrgExportUtils.sle_metrics` workflow into `src/refactors/serial_cc/sle_metrics.py` (`SLEMetricsService`) and reduced `MistHelper.py` method to thin delegator. Post-refactor Radon complexity in `MistHelper.py` is now `A (1)` for this symbol.
@@ -3376,7 +3399,7 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 - **Dead legacy classes**: Removed 5 orphaned `_Legacy*` classes (`_LegacyPacketCaptureManager`, `_LegacyGatewayStatsExporter`, `_LegacyGatewayExportUtils`, `_LegacyWAN2MigrationManager`, `_LegacyWANProbeDeviceOverrideManager`) from `MistHelper.py`. These were inline implementations retained for rollback safety after their logic was migrated to canonical classes (`PacketCaptureManager` -> `src/capture/`, `GatewayStatsExporter`, `GatewayExportUtils`, `WAN2MigrationManager`, `WANProbeDeviceOverrideManager`). Verified unreferenced (no instantiations, aliases, subclasses, or dynamic forwarders reach them). Deletion removed 3,939 lines (27,666 -> 23,722) and cleared the two worst CRITICAL complexity hotspots (`start_org_packet_capture_legacy` CC 53, `with_wan_overrides_legacy` CC 46). Compliance violations dropped 1440 -> 1214; classes 101 -> 96.
 
-### Fixed
+### Fixed -- menu 13 access point undercount
 
 - **Menu 13 still undercounted APs (claimed-but-never-connected APs dropped)** (#417): Even after #415, AP counts were short because the AP path used `countOrgDevices(distinct="version")`, which only returns version-keyed buckets. APs that are **claimed and assigned to a site but have never connected** report no firmware version and were silently dropped (e.g. T-Mobile_USA_Retail AP41 showed 9428 vs the portal's 9676). These APs have a `site_id`, so the #415 unassigned supplement did not catch them either. APs are now counted directly from `getOrgInventory(type="ap")` — the same source as the portal "Claim APs" screen — so every claimed AP is counted exactly once with a three-way version bucket: `unassigned` (no `site_id`), the real firmware version (assigned + connected), or `unknown` (assigned but never connected). Switches and gateways are unchanged, and the unassigned supplement is now switch-only to avoid double counting APs. Conservation is verified against real inventory data and four new unit tests cover every AP state.
 - **Menu 13 undercounted devices (unassigned AP/switch inventory excluded)** (#415): The Org Device Inventory Summary counted APs via `countOrgDevices` and switches via `searchOrgDevices`, both of which return only devices **assigned to a site**. Unassigned APs and switches sitting in org inventory were therefore omitted from the model-count, firmware-summary, and version-per-model reports, understating totals and leaving the reports internally inconsistent (gateways already used `getOrgInventory`, which includes unassigned stock). A supplemental `getOrgInventory(type="ap,switch")` fetch now pulls claimed-but-unassigned APs and switches (filtered client-side on a missing `site_id`), merges them into the model counts, and surfaces them under a dedicated `unassigned` firmware column in the firmware summary and version-per-model pivot (single-org and MSP combined). The `unassigned` bucket is kept distinct from `unknown` (an assigned device that never reported firmware). Assigned-but-offline/disconnected devices were already counted (the assigned-device APIs do not filter on connection state), so no change was needed there. Gateways are intentionally excluded from the supplemental fetch to avoid double counting.
@@ -3561,7 +3584,7 @@ Closes #368
 - 18 net-new `ENDPOINT_PRIMARY_KEY_STRATEGIES` entries for previously uncovered endpoints
   (15 natural_pk, 3 composite_pk, 3 auto_increment_with_unique from probe run 3)
 
-### Changed
+### Changed -- menu reference documentation
 
 - `documentation/menu_reference.md` extended to include all menus 164-185 (was truncated at 163)
 - README operation count updated from 176 to 184
@@ -3599,7 +3622,7 @@ Closes #368
   - Replaced inline callback bodies with `apply_layer_toggles(...)` and `build_click_details(...)`
   - Added callback manager unit tests in `tests/maps/test_plotly_map_callback_manager.py` (5 tests)
 
-### Refactored
+### Refactored -- maps manager complexity
 
 - Reduced cyclomatic complexity of most methods in `src/maps/maps_manager.py` (#251); remaining high-CC methods deferred to dedicated follow-on issues (#293–#296)
   - Extracted `_check_dependencies`, `_configure_logging`, `_setup_api_session`, `_filter_org_privileges`, `_prompt_org_selection`, `_detect_org_from_session`, and `_resolve_org_id` from `main()` (CC 29→7)
@@ -3674,14 +3697,8 @@ Closes #368
 
 ### Added
 
-- WAN Hub Group Number Manager (Menu 163): New external module `src/wan_hub_group_manager.py` with `WanHubGroupNumberManager` class. Lists all gateway device profiles with current pod (group number) values from hub-spoke VPN paths, lets the user select a profile, then set pod (1-128) or clear to default (1). Batch updates all matching VPN paths across multiple VPN objects. Uses trailing-hyphen prefix matching to avoid false collisions (e.g., DC1- vs DC1-BACKUP-). Warns on inconsistent pod values. Follows external module pattern with `execute(apisession, get_org_id_func, safe_input_func)` static method. Includes 33 unit tests covering all four user stories.
-
-## [26.04.22.20.38] - 2026-04-22
-
-### Added
-
-- WAN Hub Group Number Manager (Menu 163): New interactive operation to view, set, and clear pod (group_number) values on WAN hub profile VPN paths. First menu operation extracted into an external module under src/wan_hub_group_manager.py following dependency-injection pattern.
-- 33 unit tests for WanHubGroupNumberManager covering profile fetching, path matching, pod set/clear, input validation, and module architecture.
+- WAN Hub Group Number Manager (Menu 163): New external module `src/wan_hub_group_manager.py` with `WanHubGroupNumberManager` class. Lists all gateway device profiles with current pod (group number) values from hub-spoke VPN paths, lets the user select a profile, then set pod (1-128) or clear to default (1). Batch updates all matching VPN paths across multiple VPN objects. Uses trailing-hyphen prefix matching to avoid false collisions (for example, DC1- against DC1-BACKUP-). Warns on inconsistent pod values. Follows the external module pattern with an `execute(apisession, get_org_id_func, safe_input_func)` static method. This was the first menu operation extracted into an external module under `src/`, following the dependency-injection pattern.
+- 33 unit tests for WanHubGroupNumberManager covering profile fetching, path matching, pod set and clear, input validation, and module architecture. They cover all four user stories.
 
 ## [26.04.20.20.23] - 2026-04-20
 
@@ -4805,7 +4822,7 @@ Closes #368
 - Changed self.apisession to self.mist_session in _wait_and_download_pcap() (line 4072)
 - Changed self.apisession to self.mist_session in _wait_and_download_pcap_org() (line 4212)
 - PCAP downloads now work correctly - polling no longer throws AttributeError
-- Root cause: PacketCaptureManager.__init__ stores session as self.mist_session, not self.apisession
+- Root cause: `PacketCaptureManager.__init__` stores session as `self.mist_session`, not `self.apisession`
 
 ## [25.10.06.18.25] - 2025-10-06
 
