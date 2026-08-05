@@ -1,0 +1,23 @@
+{
+  "workflow": "speckit",
+  "specName": "Resolve the open clear-text logging alerts",
+  "branch": "1034-codeql-cleartext-logging",
+  "currentStep": "plan",
+  "status": "planned",
+  "history": [
+    {
+      "step": "specify",
+      "substep": null,
+      "kind": "start",
+      "by": "extension",
+      "at": "2026-08-05T02:21:40.572Z"
+    },
+    {
+      "step": "plan",
+      "substep": null,
+      "kind": "complete",
+      "by": "agent",
+      "at": "2026-08-05T02:47:32.178Z"
+    }
+  ]
+}
