@@ -3,9 +3,9 @@
 This page is generated. Run `python scripts/generate_menu_wiki.py` after any
 change to `menu_actions` in `MistHelper.py` or to `src/utils/operation_registry.py`.
 
-MistHelper defines **219 actionable menu entries**, numbered
-1 to 219 with no gaps.
-Menu 0 is Exit, so the registry holds 220 entries in total.
+MistHelper defines **224 actionable menu entries**, numbered
+1 to 224 with no gaps.
+Menu 0 is Exit, so the registry holds 225 entries in total.
 
 The Safety column reads from `src/utils/operation_registry.py`, which is the
 single source of truth. The classifier fails closed, so an unregistered option
@@ -23,7 +23,7 @@ never runs in an automated test pass.
 | Menu numbers | Category | Summary |
 |---|---|---|
 | 1-13, 15-17, 20-58, 188, 193, 195-196, 204-205 | Safe org exports | 61 operations. Read-only org exports. The --test run includes them. |
-| 60-96, 197-203, 209-219 | Interactive safe | 55 operations. Read-only, but they prompt for a site or a device. The --testinteractive run includes them. |
+| 60-96, 197-203, 209-224 | Interactive safe | 60 operations. Read-only, but they prompt for a site or a device. The --testinteractive run includes them. |
 | 154-187, 189-191, 194, 206-208 | Destructive | 41 operations. They change the Mist cloud configuration. Each one needs a typed confirmation. |
 | 0, 124-150, 192 | Interactive | 29 operations. They prompt the operator, so no automated run includes them. |
 | 102-123 | WebSocket | 22 operations. They open a WebSocket stream to a device. |
@@ -254,6 +254,11 @@ never runs in an automated test pass.
 | 217 | Search BGP peer statistics for a selected site (searchSiteBgpStats) | Interactive safe | `SiteSearchExporter.bgp_stats` |
 | 218 | Search call quality records for a selected site (searchSiteCalls) | Interactive safe | `SiteSearchExporter.calls` |
 | 219 | Search Sky ATP security events for a selected site (searchSiteSkyatpEvents) | Interactive safe | `SiteSearchExporter.skyatp_events` |
+| 220 | Search wireless client events for a selected site (searchSiteWirelessClientEvents) | Interactive safe | `SiteSearchExporter.wireless_client_events` |
+| 221 | Search WAN clients for a selected site (searchSiteWanClients) | Interactive safe | `SiteSearchExporter.wan_clients` |
+| 222 | Search device events for a selected site (searchSiteDeviceEvents) | Interactive safe | `SiteSearchExporter.device_events` |
+| 223 | Search devices for a selected site (searchSiteDevices) | Interactive safe | `SiteSearchExporter.devices` |
+| 224 | Search rogue access point events for a selected site (searchSiteRogueEvents) | Interactive safe | `SiteSearchExporter.rogue_events` |
 
 This page should be regenerated whenever `menu_actions` or the operation registry
 changes, so the wiki stays aligned with the code.
