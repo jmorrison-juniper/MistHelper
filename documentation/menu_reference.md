@@ -22,8 +22,8 @@ never runs in an automated test pass.
 
 | Menu numbers | Category | Summary |
 |---|---|---|
-| 1-13, 15-17, 20-58, 188, 193, 195-196, 204-205, 230-234 | Safe org exports | 66 operations. Read-only org exports. The --test run includes them. |
-| 60-96, 197-203, 209-229 | Interactive safe | 65 operations. Read-only, but they prompt for a site or a device. The --testinteractive run includes them. |
+| 60-96, 195-203, 209-229 | Interactive safe | 67 operations. Read-only, but they prompt for a site or a device. The --testinteractive run includes them. |
+| 1-13, 15-17, 20-58, 188, 193, 204-205, 230-234 | Safe org exports | 64 operations. Read-only org exports. The --test run includes them. |
 | 154-187, 189-191, 194, 206-208 | Destructive | 41 operations. They change the Mist cloud configuration. Each one needs a typed confirmation. |
 | 0, 124-150, 192 | Interactive | 29 operations. They prompt the operator, so no automated run includes them. |
 | 102-123 | WebSocket | 22 operations. They open a WebSocket stream to a device. |
@@ -229,8 +229,8 @@ never runs in an automated test pass.
 | 192 | View a support ticket with full comments and history | Interactive | `OrgTicketManager.view_ticket` |
 | 193 | Export all tickets with full details and comments | Safe org exports | `OrgTicketManager.export_ticket_details` |
 | 194 | DESTRUCTIVE: Clone Device Config to Gateway Template - Select a gateway, extract its local config, and create a new org gateway template (Requires typing 'CREATE' to confirm) | Destructive | `DeviceConfigTemplateClonerManager.clone` |
-| 195 | Audit site addresses from CSV (data/) - fuse Mist + SNMP + CSV hints, verify vs. web; READ-ONLY, saves report. Tier-3 browser geocoding auto-engages when available (ADDRESS_AUDIT_GEOCODE=off to skip) | Safe org exports | `lambda: AddressAuditEngine().run(apisession, ConfigUtils.get_cached_or_prompted_org_id())` |
-| 196 | Export async organization license-claim status summary (and optional per-device details) | Safe org exports | `LicenseExportUtils.export_org_license_async_claim_status` |
+| 195 | Audit site addresses from CSV (data/) - fuse Mist + SNMP + CSV hints, verify vs. web; READ-ONLY, saves report. Tier-3 browser geocoding auto-engages when available (ADDRESS_AUDIT_GEOCODE=off to skip) | Interactive safe | `lambda: AddressAuditEngine().run(apisession, ConfigUtils.get_cached_or_prompted_org_id())` |
+| 196 | Export async organization license-claim status summary (and optional per-device details) | Interactive safe | `LicenseExportUtils.export_org_license_async_claim_status` |
 | 197 | Download client packet captures grouped by VLAN (site -> client -> VLAN -> data/packet_captures/) | Interactive safe | `lambda: ClientPacketCaptureDownloader(apisession).run()` |
 | 198 | Search Site WAN Usages (searchSiteWanUsage) - Export per-site WAN usage records to SiteWanUsages.csv | Interactive safe | `SiteWanUsageExporter.wan_usages` |
 | 199 | Search Site Webhook Deliveries (searchSiteWebhooksDeliveries) - Per site+webhook delivery audit CSV | Interactive safe | `SiteWebhookDeliveriesExporter.deliveries` |

@@ -260,7 +260,10 @@ class OperationRegistry:
         "72": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
         "88": {"category": "interactive_safe", "skip_reason": "Requires AP model selection"},
         "25": {"category": "safe"},
-        "196": {"category": "safe"},
+        "196": {
+            "category": "interactive_safe",
+            "skip_reason": "Prompts for the per-device detail preference",
+        },
         "197": {"category": "interactive_safe", "skip_reason": "Requires site + client + VLAN selection"},
         "198": {"category": "interactive_safe", "skip_reason": "Requires site selection"},
         "199": {"category": "interactive_safe", "skip_reason": "Requires site + webhook selection"},
@@ -375,7 +378,11 @@ class OperationRegistry:
         "205": {"category": "safe"},  # OrgExportUtils.mist_edge_events - read-only export (spec 866 / #1374).
         "188": {"category": "safe"},  # OrgTicketManager.list_tickets - read-only ticket list export (no selection).
         "193": {"category": "safe"},  # OrgTicketManager.export_ticket_details - read-only (exports all, no selection).
-        "195": {"category": "safe"},  # Site address audit - self-described READ-ONLY report.
+        # Read-only, but it prompts the operator to pick a CSV, so it is not unattended.
+        "195": {
+            "category": "interactive_safe",
+            "skip_reason": "Prompts the operator to choose a CSV file from data/",
+        },
         # --- heavy sweeps (resource_intensive) ------------------------------
         "14": {
             "category": "resource_intensive",
