@@ -7,6 +7,29 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Add five more site-scoped search operations, menus 220 to 224 (issues #1411, #1408, #1392, #1394, #1403)
+
+- **Menu 220 (Added)**: `searchSiteWirelessClientEvents` searches the wireless
+  client events for a site. Spec 903, issue #1411.
+- **Menu 221 (Added)**: `searchSiteWanClients` searches the WAN clients for a
+  site. Spec 900, issue #1408.
+- **Menu 222 (Added)**: `searchSiteDeviceEvents` searches the device events for a
+  site. Spec 884, issue #1392.
+- **Menu 223 (Added)**: `searchSiteDevices` searches the devices for a site.
+  Spec 886, issue #1394.
+- **Menu 224 (Added)**: `searchSiteRogueEvents` searches the rogue access point
+  events for a site. Spec 895, issue #1403.
+- **Shared helper (Changed)**: `src/export/site_search_exporter.py` gained five
+  more thin menu entries. The prompt, fetch, and persist sequence is unchanged,
+  because every one of these endpoints takes a session and a site and returns a
+  paginated row set.
+- **Primary keys (Unchanged)**: all five operationIds already had a strategy in
+  `ENDPOINT_PRIMARY_KEY_STRATEGIES`, so this change adds none.
+- **Tests (Added)**: the parametrized binding table in
+  `tests/unit/export/test_site_search_exporter.py` covers the five new entries.
+  Each entry is proven to call its own endpoint and write its own file, so the
+  shared helper cannot silently point two menus at one endpoint.
+
 ### Add five site-scoped search operations, menus 215 to 219 (issues #1387, #1388, #1389, #1390, #1405)
 
 - **Menu 215 (Added)**: `searchSiteAlarms` searches the alarms for a site. Spec

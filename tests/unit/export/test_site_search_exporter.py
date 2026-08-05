@@ -25,6 +25,16 @@ MENU_BINDINGS = [
     ("bgp_stats", "searchSiteBgpStats", "SiteBgpStats", ("stats", "searchSiteBgpStats")),
     ("calls", "searchSiteCalls", "SiteCalls", ("stats", "searchSiteCalls")),
     ("skyatp_events", "searchSiteSkyatpEvents", "SiteSkyatpEvents", ("skyatp", "searchSiteSkyatpEvents")),
+    (
+        "wireless_client_events",
+        "searchSiteWirelessClientEvents",
+        "SiteWirelessClientEvents",
+        ("clients", "searchSiteWirelessClientEvents"),
+    ),
+    ("wan_clients", "searchSiteWanClients", "SiteWanClients", ("wan_clients", "searchSiteWanClients")),
+    ("device_events", "searchSiteDeviceEvents", "SiteDeviceEvents", ("devices", "searchSiteDeviceEvents")),
+    ("devices", "searchSiteDevices", "SiteDevices", ("devices", "searchSiteDevices")),
+    ("rogue_events", "searchSiteRogueEvents", "SiteRogueEvents", ("rogues", "searchSiteRogueEvents")),
 ]
 
 

@@ -4086,6 +4086,26 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
         SiteSearchExporter.skyatp_events,
         "Search Sky ATP security events for a selected site (searchSiteSkyatpEvents)",
     ),
+    "220": (
+        SiteSearchExporter.wireless_client_events,
+        "Search wireless client events for a selected site (searchSiteWirelessClientEvents)",
+    ),
+    "221": (
+        SiteSearchExporter.wan_clients,
+        "Search WAN clients for a selected site (searchSiteWanClients)",
+    ),
+    "222": (
+        SiteSearchExporter.device_events,
+        "Search device events for a selected site (searchSiteDeviceEvents)",
+    ),
+    "223": (
+        SiteSearchExporter.devices,
+        "Search devices for a selected site (searchSiteDevices)",
+    ),
+    "224": (
+        SiteSearchExporter.rogue_events,
+        "Search rogue access point events for a selected site (searchSiteRogueEvents)",
+    ),
     "44": (OrgConfigExporter.psks, "Export PSK (Pre-Shared Key) information for the organization"),
     "45": (OrgConfigExporter.webhooks, "Export webhook configuration for the organization"),
     "46": (OrgConfigExporter.wlans, "Export WLAN configuration for the organization"),

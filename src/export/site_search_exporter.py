@@ -1,9 +1,10 @@
 """SiteSearchExporter -- site-scoped search export operations.
 
 Added for specs 879, 880, 881, 882 and 897 (issues #1387, #1388, #1389, #1390
-and #1405). Wraps five read-only Mist API search endpoints so operators reach
-them through the standard MistHelper menu and DataExporter pipeline (CSV,
-SQLite, or ArangoDB).
+and #1405), then extended for specs 903, 900, 884, 886 and 895 (issues #1411,
+#1408, #1392, #1394 and #1403). Wraps read-only Mist API search endpoints so
+operators reach them through the standard MistHelper menu and DataExporter
+pipeline (CSV, SQLite, or ArangoDB).
 
 Covered operations:
     - ``searchSiteAlarms`` (menu 215)
@@ -11,13 +12,18 @@ Covered operations:
     - ``searchSiteBgpStats`` (menu 217)
     - ``searchSiteCalls`` (menu 218)
     - ``searchSiteSkyatpEvents`` (menu 219)
+    - ``searchSiteWirelessClientEvents`` (menu 220)
+    - ``searchSiteWanClients`` (menu 221)
+    - ``searchSiteDeviceEvents`` (menu 222)
+    - ``searchSiteDevices`` (menu 223)
+    - ``searchSiteRogueEvents`` (menu 224)
 
 Why:
-    All five endpoints take the same arguments, a session and a site, and return
-    a paginated row set. One shared helper therefore runs the whole prompt,
-    fetch, and persist sequence, and each menu entry supplies only the parts that
-    differ. That keeps the five operations consistent and avoids five copies of
-    the same code.
+    All of these endpoints take the same arguments, a session and a site, and
+    return a paginated row set. One shared helper therefore runs the whole
+    prompt, fetch, and persist sequence, and each menu entry supplies only the
+    parts that differ. That keeps the operations consistent and avoids one copy
+    of the same code per endpoint.
 
 Warning: the ``**mistapi SDK module**`` line in the source specs is wrong for
 several of these operations. See issue #1757. Every module path below was
@@ -42,9 +48,9 @@ class SiteSearchExporter:
     """Site-scoped search exporter.
 
     Why:
-        Provides the only MistHelper entry points for five search operationIds.
-        Static methods only, with no per-instance state, matching the peer site
-        exporters.
+        Provides the only MistHelper entry points for the search operationIds
+        listed above. Static methods only, with no per-instance state, matching
+        the peer site exporters.
     """
 
     @staticmethod
@@ -159,4 +165,54 @@ class SiteSearchExporter:
             "searchSiteSkyatpEvents",
             "SiteSkyatpEvents",
             "Sky ATP event",
+        )
+
+    @staticmethod
+    def wireless_client_events() -> None:
+        """Search the wireless client events for a site and export them (menu 220)."""
+        SiteSearchExporter._run_site_search(
+            mistapi.api.v1.sites.clients.searchSiteWirelessClientEvents,
+            "searchSiteWirelessClientEvents",
+            "SiteWirelessClientEvents",
+            "wireless client event",
+        )
+
+    @staticmethod
+    def wan_clients() -> None:
+        """Search the WAN clients for a site and export them (menu 221)."""
+        SiteSearchExporter._run_site_search(
+            mistapi.api.v1.sites.wan_clients.searchSiteWanClients,
+            "searchSiteWanClients",
+            "SiteWanClients",
+            "WAN client",
+        )
+
+    @staticmethod
+    def device_events() -> None:
+        """Search the device events for a site and export them (menu 222)."""
+        SiteSearchExporter._run_site_search(
+            mistapi.api.v1.sites.devices.searchSiteDeviceEvents,
+            "searchSiteDeviceEvents",
+            "SiteDeviceEvents",
+            "device event",
+        )
+
+    @staticmethod
+    def devices() -> None:
+        """Search the devices for a site and export them (menu 223)."""
+        SiteSearchExporter._run_site_search(
+            mistapi.api.v1.sites.devices.searchSiteDevices,
+            "searchSiteDevices",
+            "SiteDevices",
+            "device",
+        )
+
+    @staticmethod
+    def rogue_events() -> None:
+        """Search the rogue access point events for a site and export them (menu 224)."""
+        SiteSearchExporter._run_site_search(
+            mistapi.api.v1.sites.rogues.searchSiteRogueEvents,
+            "searchSiteRogueEvents",
+            "SiteRogueEvents",
+            "rogue event",
         )
