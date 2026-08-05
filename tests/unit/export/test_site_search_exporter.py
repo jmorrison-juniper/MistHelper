@@ -35,6 +35,25 @@ MENU_BINDINGS = [
     ("device_events", "searchSiteDeviceEvents", "SiteDeviceEvents", ("devices", "searchSiteDeviceEvents")),
     ("devices", "searchSiteDevices", "SiteDevices", ("devices", "searchSiteDevices")),
     ("rogue_events", "searchSiteRogueEvents", "SiteRogueEvents", ("rogues", "searchSiteRogueEvents")),
+    ("ospf_stats", "searchSiteOspfStats", "SiteOspfStats", ("stats", "searchSiteOspfStats")),
+    (
+        "device_last_configs",
+        "searchSiteDeviceLastConfigs",
+        "SiteDeviceLastConfigs",
+        ("devices", "searchSiteDeviceLastConfigs"),
+    ),
+    (
+        "device_config_history",
+        "searchSiteDeviceConfigHistory",
+        "SiteDeviceConfigHistory",
+        ("devices", "searchSiteDeviceConfigHistory"),
+    ),
+    (
+        "discovered_switches",
+        "searchSiteDiscoveredSwitches",
+        "SiteDiscoveredSwitches",
+        ("stats", "searchSiteDiscoveredSwitches"),
+    ),
 ]
 
 
@@ -58,6 +77,9 @@ def wired(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     apisession = MagicMock(name="apisession")  # Forwarded into every SDK call.
     site_device_exporter = MagicMock(name="SiteDeviceExporter")  # Supplies _resolve_site_for_stats.
     site_device_exporter._resolve_site_for_stats.return_value = ("site-1", "HQ Site")  # Default happy path.
+    input_utils = MagicMock(name="InputUtils")  # Supplies safe_input for the zone type prompt.
+    input_utils.safe_input.return_value = "zones"  # Default answer for the zone session menu.
+    monkeypatch.setattr("MistHelper.InputUtils", input_utils, raising=False)
 
     monkeypatch.setattr("MistHelper.DataExporter", data_exporter, raising=False)
     monkeypatch.setattr("MistHelper.apisession", apisession, raising=False)
@@ -69,6 +91,7 @@ def wired(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
         "DataExporter": data_exporter,
         "apisession": apisession,
         "SiteDeviceExporter": site_device_exporter,
+        "InputUtils": input_utils,
     }
 
 
@@ -152,3 +175,57 @@ class TestSharedBehavior:
         SiteSearchExporter.alarms()
 
         wired["mistapi"].get_all.assert_called_once_with(response=[{"id": "row-1"}], mist_session=wired["apisession"])
+
+
+class TestZoneSessions:
+    """Menu 229 needs a zone type in the URL path, so it prompts for one.
+
+    A wrong zone type produces a 404 rather than an empty result, so the prompt
+    must reject anything outside the two values the SDK accepts.
+    """
+
+    def test_default_zone_type_is_forwarded_to_the_endpoint(self, wired: dict[str, Any]) -> None:
+        """An empty answer must fall back to the common zone type."""
+        wired["InputUtils"].safe_input.return_value = ""
+        target = wired["mistapi"].api.v1.sites.visits.searchSiteZoneSessions
+        target.return_value = [{"id": "session-1"}]
+
+        SiteSearchExporter.zone_sessions()
+
+        target.assert_called_once_with(wired["apisession"], "site-1", "zones")
+
+    def test_rssizones_is_forwarded_and_named_in_the_filename(self, wired: dict[str, Any]) -> None:
+        """The chosen zone type must reach the endpoint and the output filename."""
+        wired["InputUtils"].safe_input.return_value = "rssizones"
+        target = wired["mistapi"].api.v1.sites.visits.searchSiteZoneSessions
+        target.return_value = [{"id": "session-1"}]
+
+        SiteSearchExporter.zone_sessions()
+
+        target.assert_called_once_with(wired["apisession"], "site-1", "rssizones")
+        wired["DataExporter"].write_with_format_selection.assert_called_once_with(
+            [{"id": "session-1"}],
+            "SiteZoneSessions_rssizones_HQ_Site.csv",
+            api_function_name="searchSiteZoneSessions",
+        )
+
+    def test_invalid_zone_type_aborts_before_the_api_call(
+        self, wired: dict[str, Any], caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """An unsupported zone type must stop the flow instead of causing a 404."""
+        wired["InputUtils"].safe_input.return_value = "floors"
+
+        with caplog.at_level(logging.ERROR):
+            SiteSearchExporter.zone_sessions()
+
+        assert "Invalid zone type" in caplog.text
+        wired["mistapi"].api.v1.sites.visits.searchSiteZoneSessions.assert_not_called()
+        wired["DataExporter"].write_with_format_selection.assert_not_called()
+
+    def test_zone_type_prompt_runs_before_the_site_prompt_is_wasted(self, wired: dict[str, Any]) -> None:
+        """An invalid zone type must not make the operator pick a site first."""
+        wired["InputUtils"].safe_input.return_value = "bogus"
+
+        SiteSearchExporter.zone_sessions()
+
+        wired["SiteDeviceExporter"]._resolve_site_for_stats.assert_not_called()

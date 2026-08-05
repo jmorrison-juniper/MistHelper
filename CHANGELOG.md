@@ -7,6 +7,34 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Add five site-scoped search operations, menus 225 to 229 (issues #1401, #1393, #1391, #1396, #1412)
+
+- **Menu 225 (Added)**: `searchSiteOspfStats` searches the OSPF neighbor
+  statistics for a site. Spec 893, issue #1401.
+- **Menu 226 (Added)**: `searchSiteDeviceLastConfigs` searches the last device
+  configurations for a site. Spec 885, issue #1393.
+- **Menu 227 (Added)**: `searchSiteDeviceConfigHistory` searches the device
+  configuration history for a site. Spec 883, issue #1391.
+- **Menu 228 (Added)**: `searchSiteDiscoveredSwitches` searches the discovered
+  switches for a site. Spec 887, issue #1396.
+- **Menu 229 (Added)**: `searchSiteZoneSessions` searches the zone sessions for a
+  site. Spec 904, issue #1412.
+- **Zone type prompt (Added)**: `searchSiteZoneSessions` puts a zone type in the
+  URL path, so menu 229 asks for one before it calls the endpoint. The SDK
+  accepts only `zones` and `rssizones`. A wrong value returns 404 rather than an
+  empty result, so the prompt rejects anything else before any request goes out.
+  An empty answer means `zones`. The chosen value also appears in the output
+  filename, which keeps the two zone families in separate artifacts.
+- **Shared helper (Changed)**: `_run_site_search` accepts an optional
+  `extra_args` tuple. Menu 229 is the only caller that needs it today. Every
+  other menu entry is unchanged.
+- **Primary keys (Unchanged)**: all five operationIds already had a strategy in
+  `ENDPOINT_PRIMARY_KEY_STRATEGIES`, so this change adds none.
+- **Tests (Added)**: the parametrized binding table covers the four plain
+  entries. Menu 229 has its own tests for the default value, the explicit
+  `rssizones` value, the rejected value, and the fact that a bad zone type stops
+  the flow before the operator is asked to pick a site.
+
 ### Add five more site-scoped search operations, menus 220 to 224 (issues #1411, #1408, #1392, #1394, #1403)
 
 - **Menu 220 (Added)**: `searchSiteWirelessClientEvents` searches the wireless

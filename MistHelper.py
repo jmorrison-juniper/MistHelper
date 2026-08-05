@@ -4106,6 +4106,26 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
         SiteSearchExporter.rogue_events,
         "Search rogue access point events for a selected site (searchSiteRogueEvents)",
     ),
+    "225": (
+        SiteSearchExporter.ospf_stats,
+        "Search OSPF neighbor statistics for a selected site (searchSiteOspfStats)",
+    ),
+    "226": (
+        SiteSearchExporter.device_last_configs,
+        "Search the last device configurations for a selected site (searchSiteDeviceLastConfigs)",
+    ),
+    "227": (
+        SiteSearchExporter.device_config_history,
+        "Search device configuration history for a selected site (searchSiteDeviceConfigHistory)",
+    ),
+    "228": (
+        SiteSearchExporter.discovered_switches,
+        "Search discovered switches for a selected site (searchSiteDiscoveredSwitches)",
+    ),
+    "229": (
+        SiteSearchExporter.zone_sessions,
+        "Search zone sessions for a selected site and zone type (searchSiteZoneSessions)",
+    ),
     "44": (OrgConfigExporter.psks, "Export PSK (Pre-Shared Key) information for the organization"),
     "45": (OrgConfigExporter.webhooks, "Export webhook configuration for the organization"),
     "46": (OrgConfigExporter.wlans, "Export WLAN configuration for the organization"),

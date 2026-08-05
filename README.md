@@ -4,8 +4,8 @@ Network Operations & Data Export Tool for Juniper Mist Cloud
 [![Quality Gates](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/ci.yml/badge.svg)](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/ci.yml)
 [![Container Build](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/container-build.yml/badge.svg)](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/container-build.yml)
 
-**Operation Count:** The code defines 224 actionable menu entries, numbered 1 to
-224 with no gaps. Exit is menu 0, so the registry holds 225 entries in total.
+**Operation Count:** The code defines 229 actionable menu entries, numbered 1 to
+229 with no gaps. Exit is menu 0, so the registry holds 230 entries in total.
 The [Menu Reference](#menu-reference) section lists every category and range.
 
 MistHelper is a production-focused Python application that streamlines large-scale Juniper Mist Cloud data extraction, enrichment, transformation, and limited lifecycle operations. It supports both interactive (menu) and fully automated CLI execution, with flexible output to CSV files, a local SQLite database, or a polyglot backend (ArangoDB for documents, Redis for time-series and JSON caching) using natural/composite business keys (no artificial surrogate IDs for core entities). The codebase emphasizes safety, transparency, and predictable behavior-aligned with the included internal Agents Guide and NASA/JPL style defensive programming practices.
@@ -501,13 +501,13 @@ fails closed, so `--test` skips any option that the registry does not name
 | Category | Count | Menu numbers | Behavior under `--test` |
 |----------|-------|--------------|-------------------------|
 | `safe` | 61 | 1-13, 15-17, 20-58, 188, 193, 195-196, 204-205 | Runs |
-| `interactive_safe` | 60 | 60-96, 197-203, 209-224 | Runs under `--testinteractive` |
+| `interactive_safe` | 65 | 60-96, 197-203, 209-229 | Runs under `--testinteractive` |
 | `destructive` | 41 | 154-187, 189-191, 194, 206-208 | Never runs |
 | `interactive` | 29 | 0, 124-150, 192 | Never runs |
 | `websocket` | 22 | 102-123 | Never runs |
 | `resource_intensive` | 10 | 14, 18-19, 59, 97-101, 153 | Never runs |
 | `continuous_loop` | 2 | 151-152 | Never runs |
-| **Total** | **225** | 0-224, no gaps | Menu 0 is Exit |
+| **Total** | **230** | 0-229, no gaps | Menu 0 is Exit |
 
 Warning: A destructive operation changes the Mist cloud configuration. Read
 `documentation/menu_reference.md` before you run one.
@@ -546,6 +546,11 @@ Warning: A destructive operation changes the Mist cloud configuration. Read
 | 222 | Search site device events (`searchSiteDeviceEvents`) | `interactive_safe` |
 | 223 | Search site devices (`searchSiteDevices`) | `interactive_safe` |
 | 224 | Search site rogue access point events (`searchSiteRogueEvents`) | `interactive_safe` |
+| 225 | Search site OSPF neighbor statistics (`searchSiteOspfStats`) | `interactive_safe` |
+| 226 | Search the last site device configurations (`searchSiteDeviceLastConfigs`) | `interactive_safe` |
+| 227 | Search site device configuration history (`searchSiteDeviceConfigHistory`) | `interactive_safe` |
+| 228 | Search site discovered switches (`searchSiteDiscoveredSwitches`) | `interactive_safe` |
+| 229 | Search site zone sessions by zone type (`searchSiteZoneSessions`) | `interactive_safe` |
 
 Menu 197 writes to `data/packet_captures/<mac>/vlan_<id>/`. Every other
 operation in the table writes through `DataExporter`, so it honors the CSV,
