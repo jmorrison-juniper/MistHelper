@@ -101,7 +101,7 @@ How feature branches flow through the auto-merge pipeline.
   'tertiaryColor': '#1A1A2E',
   'fontFamily': 'ui-monospace, monospace'
 }}}%%
-gitgraph
+gitGraph
     commit id: "main"
     branch feature/new-operation
     checkout feature/new-operation

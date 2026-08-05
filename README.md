@@ -122,7 +122,7 @@ flowchart LR
   'fontFamily': 'ui-monospace, monospace'
 }}}%%
 mindmap
-   root((MistHelper<br/>210 Operations))
+   root((MistHelper<br/>230 Operations))
     Safe Org Exports (61)
       Sites and Analysis 1-7
       Device Inventory 8-13
@@ -137,13 +137,16 @@ mindmap
       Support and Assets 188, 193
       Address and License 195-196
       JSI and Mist Edge 204-205
-    Interactive Safe (45)
+    Interactive Safe (65)
       Site Devices 60-72
       Site Insights 73-79
       Site Stats 80-91
       Viewers 92-96
       Site Searches 197-203
-      Site Beacon 209
+      Site Beacon and Assets 209-213
+      Site Event Searches 214-220
+      Site Client and Device Searches 221-224
+      Site Stats and Zones 225-229
     Resource Intensive (10)
       Heavy Inventory 14, 18-19
       Bulk Exports 59
