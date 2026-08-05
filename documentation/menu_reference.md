@@ -3,9 +3,9 @@
 This page is generated. Run `python scripts/generate_menu_wiki.py` after any
 change to `menu_actions` in `MistHelper.py` or to `src/utils/operation_registry.py`.
 
-MistHelper defines **229 actionable menu entries**, numbered
-1 to 229 with no gaps.
-Menu 0 is Exit, so the registry holds 230 entries in total.
+MistHelper defines **234 actionable menu entries**, numbered
+1 to 234 with no gaps.
+Menu 0 is Exit, so the registry holds 235 entries in total.
 
 The Safety column reads from `src/utils/operation_registry.py`, which is the
 single source of truth. The classifier fails closed, so an unregistered option
@@ -22,8 +22,8 @@ never runs in an automated test pass.
 
 | Menu numbers | Category | Summary |
 |---|---|---|
+| 1-13, 15-17, 20-58, 188, 193, 195-196, 204-205, 230-234 | Safe org exports | 66 operations. Read-only org exports. The --test run includes them. |
 | 60-96, 197-203, 209-229 | Interactive safe | 65 operations. Read-only, but they prompt for a site or a device. The --testinteractive run includes them. |
-| 1-13, 15-17, 20-58, 188, 193, 195-196, 204-205 | Safe org exports | 61 operations. Read-only org exports. The --test run includes them. |
 | 154-187, 189-191, 194, 206-208 | Destructive | 41 operations. They change the Mist cloud configuration. Each one needs a typed confirmation. |
 | 0, 124-150, 192 | Interactive | 29 operations. They prompt the operator, so no automated run includes them. |
 | 102-123 | WebSocket | 22 operations. They open a WebSocket stream to a device. |
@@ -264,6 +264,11 @@ never runs in an automated test pass.
 | 227 | Search device configuration history for a selected site (searchSiteDeviceConfigHistory) | Interactive safe | `SiteSearchExporter.device_config_history` |
 | 228 | Search discovered switches for a selected site (searchSiteDiscoveredSwitches) | Interactive safe | `SiteSearchExporter.discovered_switches` |
 | 229 | Search zone sessions for a selected site and zone type (searchSiteZoneSessions) | Interactive safe | `SiteSearchExporter.zone_sessions` |
+| 230 | Search wireless client sessions for the organization (searchOrgWirelessClientSessions) | Safe org exports | `OrgSearchExporter.wireless_client_sessions` |
+| 231 | Search wireless client events for the organization (searchOrgWirelessClientEvents) | Safe org exports | `OrgSearchExporter.wireless_client_events` |
+| 232 | Search WAN clients for the organization (searchOrgWanClients) | Safe org exports | `OrgSearchExporter.wan_clients` |
+| 233 | Search WAN client events for the organization (searchOrgWanClientEvents) | Safe org exports | `OrgSearchExporter.wan_client_events` |
+| 234 | Search system events for the organization (searchOrgSystemEvents) | Safe org exports | `OrgSearchExporter.system_events` |
 
 This page should be regenerated whenever `menu_actions` or the operation registry
 changes, so the wiki stays aligned with the code.
