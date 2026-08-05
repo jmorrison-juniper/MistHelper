@@ -1,0 +1,17 @@
+# Pinned versions for the CI gate tools.
+#
+# Why this file exists:
+#   The workflow installed several gate tools with no version constraint, so a
+#   new release could fail CI on a commit that changed nothing. Bandit is the
+#   sharpest case. Issue #889 removed the `-ll` severity flag, so the gate now
+#   fails on a finding at any severity, and a new rule in a new release breaks
+#   the build immediately. Issue #1718 records that exposure.
+#
+#   Dependabot watches the pip ecosystem at the repository root and reads every
+#   requirements file there. Putting the pin here means a new release arrives as
+#   a reviewable pull request instead of as a surprise CI failure.
+#
+#   Runtime dependencies stay in requirements.txt. This file holds only the
+#   tools that grade the code.
+
+bandit[toml]==1.9.4
