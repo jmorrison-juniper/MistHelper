@@ -1,19 +1,43 @@
 name: Close linked issues on merge
 
+# GitHub does not start a workflow from an event that the GITHUB_TOKEN created,
+# and auto-merge.yml enables auto-merge with that token. The pull_request trigger
+# below therefore never fires for an auto-merged pull request. Measured on
+# 2026-08-04: pull requests #1745, #1746, and #1748 all merged by the auto-merge
+# label and started nothing at all. The schedule below sweeps for those.
+# See issue #1742.
+
 on:
   pull_request:
     types: [closed]
+  schedule:
+    # Every 2 hours. Catches an auto-merge, which starts no pull_request event.
+    - cron: '43 */2 * * *'
+  workflow_dispatch:
+    inputs:
+      lookback-hours:
+        description: 'How many hours of merged pull requests to sweep'
+        required: false
+        default: '24'
 
 permissions:
   issues: write
+  pull-requests: read
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
+concurrency:
+  # One sweep at a time. Two runs would race on the same issue.
+  group: close-linked-issues
+  cancel-in-progress: false
+
 jobs:
-  close-linked-issues:
-    if: github.event.pull_request.merged == true
+  close-from-event:
+    name: "Close issues linked by the merged pull request"
+    if: github.event_name == 'pull_request' && github.event.pull_request.merged == true
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Close issues referenced in PR body
         env:
@@ -37,3 +61,53 @@ jobs:
               echo "Issue #${ISSUE} is already ${STATE}, skipping."
             fi
           done
+
+  sweep-recent-merges:
+    name: "Sweep recently merged pull requests"
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Close issues linked by any recently merged pull request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LOOKBACK_HOURS: ${{ github.event.inputs.lookback-hours || '24' }}
+        run: |
+          set -euo pipefail
+          SINCE=$(date -u -d "${LOOKBACK_HOURS} hours ago" +%Y-%m-%dT%H:%M:%SZ)
+          echo "Sweeping pull requests merged since ${SINCE}."
+
+          # A merged pull request keeps its body, so this reads the same keywords
+          # the event path reads. The sweep is safe to repeat, because it skips
+          # any issue that is already closed.
+          PRS=$(gh pr list --repo "$GITHUB_REPOSITORY" --state merged --limit 100 \
+                  --json number,body,mergedAt \
+                  --jq "[.[] | select(.mergedAt >= \"${SINCE}\")] | .[] | @base64")
+
+          if [ -z "$PRS" ]; then
+            echo "No pull request merged in the window."
+            exit 0
+          fi
+
+          CLOSED=0
+          for ROW in $PRS; do
+            PR_JSON=$(echo "$ROW" | base64 -d)
+            PR_NUMBER=$(echo "$PR_JSON" | jq -r '.number')
+            PR_BODY=$(echo "$PR_JSON" | jq -r '.body // ""')
+
+            ISSUES=$(echo "$PR_BODY" | grep -oiE '(close[sd]?|fix(e[sd])?|resolve[sd]?) #[0-9]+' | grep -oE '[0-9]+' | sort -u || true)
+            if [ -z "$ISSUES" ]; then
+              continue
+            fi
+
+            for ISSUE in $ISSUES; do
+              STATE=$(gh issue view "$ISSUE" --repo "$GITHUB_REPOSITORY" --json state --jq '.state' 2>/dev/null || echo "MISSING")
+              if [ "$STATE" = "OPEN" ]; then
+                gh issue close "$ISSUE" --repo "$GITHUB_REPOSITORY" --reason completed \
+                  --comment "Automatically closed by the merge of PR #${PR_NUMBER}. The scheduled sweep found this link, because an auto-merged pull request starts no event. See issue #1742."
+                echo "Closed issue #${ISSUE} from PR #${PR_NUMBER}"
+                CLOSED=$((CLOSED + 1))
+              fi
+            done
+          done
+          echo "The sweep closed ${CLOSED} issue(s)."
