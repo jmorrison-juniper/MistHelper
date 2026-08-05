@@ -291,3 +291,6 @@ uv.lock
 .github/agents/speckit.companion.*
 .github/prompts/speckit.companion.*
 
+
+# Claude Code agent scratch. A worktree here was committed as a broken gitlink once (issue #1752).
+.claude/
