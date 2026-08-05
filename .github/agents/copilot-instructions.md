@@ -76,6 +76,8 @@ Auto-generated from all feature plans. Last updated: 2026-03-03
 - Redis TimeSeries through the `redis-stack` service. The change adds no key, no index, and no migration. (990-redis-entity-id)
 - Python 3.13+ + `mistapi>=0.63.1`, `python-dotenv`, `PyYAML`, `structlog`, existing MistHelper utility modules (`InputUtils`, `DataExporter`) (671-mist-get-site-beacon)
 - CSV files under `data/`, SQLite (`data/mist_data.db`), optional ArangoDB + Redis through `DatabaseRouter` (671-mist-get-site-beacon)
+- Python 3.13 or newer. The `pyproject.toml` file targets `py313`. + `mistapi>=0.63.1`. This feature adds no dependency. (1034-codeql-cleartext-logging)
+- No database change. The verdict register is a Markdown file under (1034-codeql-cleartext-logging)
 
 - Python 3.13+ + mistapi>=0.59.0, python-dotenv>=1.0.0 (001-radius-wlan-config)
 
@@ -95,9 +97,9 @@ cd src; pytest; ruff check .
 Python 3.13+: Follow standard conventions
 
 ## Recent Changes
+- 1034-codeql-cleartext-logging: Added Python 3.13 or newer. The `pyproject.toml` file targets `py313`. + `mistapi>=0.63.1`. This feature adds no dependency.
 - 671-mist-get-site-beacon: Added Python 3.13+ + `mistapi>=0.63.1`, `python-dotenv`, `PyYAML`, `structlog`, existing MistHelper utility modules (`InputUtils`, `DataExporter`)
 - 990-redis-entity-id: Added an entity identifier fallback to `RedisTimeSeriesWriter`. The writer reads the strategy field first, then walks `device_id`, `site_id`, `org_id`, `mac`, `id`, and uses the `unknown` sentinel last.
-- 1033-ci-gate-silencer-removal: Added Python 3.13. The workstation interpreter is `.venv\Scripts\python.exe`. The global `python` on this machine is broken and must not run any gate command. + `pylint`, `vulture`, and the GitHub CodeQL Action v4. This work adds no dependency and pins no version.
 
 
 <!-- MANUAL ADDITIONS START -->
