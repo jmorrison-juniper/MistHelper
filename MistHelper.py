@@ -470,6 +470,9 @@ from src.export.site_mist_edge_events_exporter import (
 from src.export.site_nac_client_events_exporter import (
     SiteNacClientEventsExporter,  # Spec 891 / issue #1399 -- searchSiteNacClientEvents menu 202
 )
+from src.export.site_search_exporter import (
+    SiteSearchExporter,  # Specs 879-882/897 / issues #1387-#1390, #1405 -- site search menus 215-219
+)
 from src.export.site_system_events_exporter import (
     SiteSystemEventsExporter,  # Spec 898 / issue #1406 -- searchSiteSystemEvents menu 214
 )
@@ -4062,6 +4065,26 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     "214": (
         SiteSystemEventsExporter.system_events,
         "Search system events for a selected site (searchSiteSystemEvents)",
+    ),
+    "215": (
+        SiteSearchExporter.alarms,
+        "Search alarms for a selected site (searchSiteAlarms)",
+    ),
+    "216": (
+        SiteSearchExporter.assets,
+        "Search tracked assets for a selected site (searchSiteAssets)",
+    ),
+    "217": (
+        SiteSearchExporter.bgp_stats,
+        "Search BGP peer statistics for a selected site (searchSiteBgpStats)",
+    ),
+    "218": (
+        SiteSearchExporter.calls,
+        "Search call quality records for a selected site (searchSiteCalls)",
+    ),
+    "219": (
+        SiteSearchExporter.skyatp_events,
+        "Search Sky ATP security events for a selected site (searchSiteSkyatpEvents)",
     ),
     "44": (OrgConfigExporter.psks, "Export PSK (Pre-Shared Key) information for the organization"),
     "45": (OrgConfigExporter.webhooks, "Export webhook configuration for the organization"),
