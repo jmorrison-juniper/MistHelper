@@ -1,0 +1,86 @@
+name: Publish wiki
+
+# The repository holds the wiki source under documentation/wiki/. This workflow
+# copies those pages to the MistHelper.wiki.git repository.
+#
+# Trigger choice matters. GitHub does not start a workflow from an event that the
+# GITHUB_TOKEN created, and auto-merge.yml enables auto-merge with that token. A
+# push trigger alone would therefore miss every auto-merged pull request. The
+# schedule catches those. The push trigger gives an immediate publish for a merge
+# that a human performs. See issue #1749 for the measurements.
+
+on:
+  schedule:
+    # Every 6 hours. Catches an auto-merge, which starts no push event.
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'documentation/wiki/**'
+      - '.github/workflows/wiki-publish.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  # One publish at a time. A second run would race the wiki push.
+  group: wiki-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: "Sync documentation/wiki to the GitHub wiki"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+        with:
+          submodules: false
+
+      - name: Clone the wiki repository
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.wiki.git" wiki
+
+      - name: Copy the pages and report any live-only page
+        id: copy
+        run: |
+          set -euo pipefail
+          changed=0
+          # Copy every source page. Compare first so an identical file makes no commit.
+          for src in documentation/wiki/*.md; do
+            name="$(basename "$src")"
+            dest="wiki/${name}"
+            if [ ! -f "$dest" ] || ! cmp -s "$src" "$dest"; then
+              cp "$src" "$dest"
+              echo "updated ${name}"
+              changed=1
+            fi
+          done
+          # Never delete. A live-only page may hold content the repository lacks,
+          # which is exactly what happened to Development.md before issue #1747.
+          for live in wiki/*.md; do
+            name="$(basename "$live")"
+            if [ ! -f "documentation/wiki/${name}" ]; then
+              echo "::warning::${name} exists only on the live wiki. This workflow leaves it alone. Copy it into documentation/wiki/ to bring it under source control."
+            fi
+          done
+          echo "changed=${changed}" >> "$GITHUB_OUTPUT"
+
+      - name: Commit and push
+        if: steps.copy.outputs.changed == '1'
+        working-directory: wiki
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- '*.md'
+          git commit -m "Sync the wiki from documentation/wiki at ${GITHUB_SHA}"
+          git push origin master
+
+      - name: Report a no-op run
+        if: steps.copy.outputs.changed != '1'
+        run: echo "The live wiki already matches documentation/wiki. No commit was made."
