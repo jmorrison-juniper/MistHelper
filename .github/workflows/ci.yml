@@ -215,7 +215,9 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
-      - run: pip install 'bandit[toml]'
+      # Pinned in requirements-dev.txt so Dependabot raises a new release as a
+      # reviewable pull request rather than breaking CI on an unrelated commit (issue #1718)
+      - run: pip install -r requirements-dev.txt
       - name: Run Bandit
         # -c pyproject.toml picks up [tool.bandit] targets/exclude_dirs (issue #881)
         # No severity flag: the gate fails on a finding at any severity, including LOW (issue #889)
