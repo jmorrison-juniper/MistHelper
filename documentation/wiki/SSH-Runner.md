@@ -1,6 +1,8 @@
 # Enhanced SSH Command Runner
 
-## Option 97: Interactive SSH Runner
+## Menu 175: Interactive SSH Runner
+
+Category: `destructive`. The operation runs commands on live network devices.
 
 Features:
 - Auto-detects hostname, username, password from `.env` (if supplied)
@@ -10,14 +12,16 @@ Features:
 
 > **Note:** Legacy root `SSH_COMMANDS.CSV` is auto-detected if the `data/` copy is absent; you will see an informational message. Migrate to `data/` to suppress it.
 
-## Option 98: SSH by Gateway Template
+## Menu 176: SSH by Gateway Template
+
+Category: `destructive`. The operation runs commands on live network devices.
 
 Features:
-- Integrates with Menu Option 4 (Gateway Management IPs) for target discovery
+- Integrates with menu 31 (Export gateway management overlay IPs) for target discovery
 - Filters gateways by user-selected template name AND online status
 - Only targets gateways with configured management IPs
 - Interactive template selection with gateway counts
-- Uses same SSH configuration as Option 97 (`.env` and `data/SSH_COMMANDS.CSV`)
+- Uses the same SSH configuration as menu 175 (`.env` and `data/SSH_COMMANDS.CSV`)
 - Provides confirmation before execution with target list preview
 
 ## Configuration

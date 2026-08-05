@@ -8,7 +8,7 @@
 
 ## Quality
 - [ ] Tests added or updated for all changed functionality
-- [ ] Coverage meets or exceeds 70% threshold
+- [ ] Coverage meets or exceeds 80% threshold
 - [ ] No new Ruff lint violations (`ruff check .`)
 - [ ] Code formatted with Ruff (`ruff format --check .`)
 - [ ] mypy passes (`mypy MistHelper.py`)

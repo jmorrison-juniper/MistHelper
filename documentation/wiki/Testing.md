@@ -57,6 +57,6 @@ Every PR runs these checks in parallel via GitHub Actions:
 |------|------|-----------|
 | Lint | Ruff | Zero violations |
 | Type Check | mypy --strict | Phased enforcement |
-| Tests | pytest + coverage | >= 70% |
+| Tests | pytest + coverage | >= 80% |
 | Security | Bandit | Zero findings |
 | Dependencies | pip-audit | Zero vulnerabilities |

@@ -7,7 +7,7 @@ When refactoring code, avoid using wrappers; actually restructure into classes a
 ---
 
 ## Project Overview
-MistHelper is a production-grade Python tool (~28K lines) for Juniper Mist Cloud network operations. It provides 194 menu-driven operations for data extraction, device management, and firmware upgrades with multi-backend output (CSV, SQLite, or polyglot ArangoDB/Redis) and containerized SSH access.
+MistHelper is a production-grade Python tool for Juniper Mist Cloud network operations. It provides 209 menu-driven operations for data extraction, device management, and firmware upgrades with multi-backend output (CSV, SQLite, or polyglot ArangoDB/Redis) and containerized SSH access.
 
 **Target Audience**: Junior NOC engineers. Use clear, professional language without jargon. Think Fred Rogers meets NASA/JPL safety standards.
 
@@ -150,7 +150,7 @@ chmod -R 777 data/   # Required before first container run
 .venv\Scripts\Activate.ps1
 python MistHelper.py --test
 ```
-**Skip List**: Operations 14, 18 (heavy), 63-65 (WIP), 90-100 (destructive)
+**Skip List**: `OperationRegistry` decides. `--test` runs only `safe`, and `--testinteractive` adds `interactive_safe`. Every other category is skipped, which covers `resource_intensive` (14, 18-19, 59, 97-101, 153), `destructive` (154-187, 189-191, 194, 206-208), `interactive`, `websocket`, and `continuous_loop`.
 
 ---
 
@@ -257,17 +257,30 @@ is_running_in_container()  # Checks /.dockerenv, /run/.containerenv
 
 ## Menu System & Operations
 
-### Menu Categories (Full Range: 1-194)
+### Menu Categories (Full Range: 1-209)
 
-| Range | Category | Notes |
+`src/utils/operation_registry.py` is the single source of truth. Read it before
+you trust this table. Counts were measured on 2026-08-04. Run
+`python scripts/generate_menu_wiki.py` to regenerate the full reference.
+
+| Category | Count | Menu numbers |
 | - | - | - |
-| 1-59 | Safe Org Exports | Sites (1-7), Inventory (8-14), Device stats (15-19), Events (20-26), Clients (27-30), Gateways (31-36), Templates (37-41), Config/Admin (42-50), SLE (51-55), Misc (56-59) |
-| 60-96 | Interactive Safe | Site devices (60-72), Insights (73-79), Stats (80-91), Viewers (92-96) |
-| 97-101, 153 | Resource Intensive | Long-running operations, bulk operations |
-| 102-123 | WebSocket | Show commands (102-115), Diagnostics (116-123) |
-| 124-150 | Interactive | Diagnostics (124-127), Management (128-133), Packet captures (134-135), Tools (136-147), Config (148-150) |
-| 151-152 | Continuous | Monitoring loops |
-| 154-194 | **Destructive** | Firmware (154-157), Reboots (158-160), VC (161-162), Templates (163-167), Site config (168-170), Test data (171-174), SSH runners (175-176), Clear/reset (177-187), Support tickets (188-193), Clone device config to gateway template (194). **NEVER automate without explicit user confirmation.** |
+| `safe` | 61 | 1-13, 15-17, 20-58, 188, 193, 195-196, 204-205 |
+| `interactive_safe` | 45 | 60-96, 197-203, 209 |
+| `destructive` | 41 | 154-187, 189-191, 194, 206-208 |
+| `interactive` | 29 | 0, 124-150, 192 |
+| `websocket` | 22 | 102-123 |
+| `resource_intensive` | 10 | 14, 18-19, 59, 97-101, 153 |
+| `continuous_loop` | 2 | 151-152 |
+
+Warning: A `destructive` operation changes the Mist cloud configuration. Never
+automate one without explicit user confirmation. The destructive set is
+154-187, 189-191, 194, and 206-208. It is not a single block, so do not treat
+any range boundary as a shortcut.
+
+The newest operations are 195 through 209. Three of them are destructive: 206
+manages Zscaler synthetic probes, 207 migrates access points between device
+profiles, and 208 reverts that migration.
 
 ### Interactive vs Direct Invocation
 - **Interactive**: No args = menu-driven selection with safe navigation
@@ -311,7 +324,7 @@ See `coding-standards.instructions.md` for naming standards and code readability
 ## Key Files & Documentation
 | File | Purpose |
 |------|---------|
-| `MistHelper.py` | Main implementation (~28K lines) |
+| `MistHelper.py` | Entrypoint and menu registry (6,054 lines; `src/` holds 123,785 across 360 files) |
 | `CHANGELOG.md` | Version history (Keep a Changelog format) |
 | `agents.md` | VS Code Chat agent supplement (points here) |
 | `README.md` | User-facing operations guide |
@@ -494,7 +507,7 @@ Every new feature begins as a **Feature Spec** (using SpecKit / Specifying). The
 2. **Interfaces & Behavior** -- CLI flags, `.env` vars, I/O, error model.
 3. **Constraints / Performance** -- Latency, throughput, resource bounds.
 4. **Security & Secrets** -- `.env` only; logging/redaction expectations.
-5. **Test Plan** -- Unit cases, Hypothesis properties, E2E host+container dry-runs, coverage threshold (>=70%).
+5. **Test Plan** -- Unit cases, Hypothesis properties, E2E host+container dry-runs, coverage threshold (>=80%).
 6. **Migration / Compatibility** -- Data/flag changes, deprecation plan.
 7. **Acceptance Criteria** -- Verifiable outcome checklist.
 8. **Implementation Notes (AI hints)** -- Pseudocode, modules, files, risk hotspots.
@@ -511,15 +524,26 @@ All tools run in `.github/workflows/ci.yml` as a parallel matrix. A PR cannot au
 
 | Gate | Tool | What It Checks |
 |------|------|----------------|
-| Lint + Format | **Ruff** | Style violations, import order, auto-fixable issues, formatting |
-| Type Safety | **mypy** | PEP 484 type annotations, strict optional |
-| Tests + Coverage | **pytest + pytest-cov** | Unit/integration tests, coverage >= 70% threshold |
+| Lint | **Ruff** | Style violations, import order, auto-fixable issues |
+| Format | **Black** | Formatting. Zero files may need reformatting. |
+| Type Safety | **mypy** | PEP 484 type annotations under the `pyproject.toml` settings |
+| Tests + Coverage | **pytest + pytest-cov** | Unit and integration tests, coverage >= 80 percent |
 | Property Tests | **Hypothesis** | Invariants hold for all generated inputs |
-| Security Lint | **Bandit** | AST-based Python security issues |
+| Security Lint | **Bandit** | AST-based Python security issues at every severity |
 | Dependency CVEs | **pip-audit** | Known vulnerabilities in `requirements.txt` |
-| Static Analysis | **CodeQL** (`.github/workflows/codeql.yml`) | Deep code + workflow vulnerability scanning |
+| Code Quality | **Pylint** | Score >= 9.5 |
+| Complexity | **Radon** | No block above cyclomatic complexity 10 |
+| Dead Code | **Vulture** | Zero findings at confidence 70 |
+| Docstring Style | **pydocstyle** | Zero violations |
+| Docstring Coverage | **interrogate** | Coverage >= 90 percent |
+| Diagram References | **`scripts/lint_diagram_refs.py`** | Every diagram reference resolves |
 | E2E Browser | **Playwright** (CI `playwright` job) | Gunicorn web UI functional tests |
+| Static Analysis | **CodeQL** (`.github/workflows/codeql.yml`) | Deep code and workflow vulnerability scanning |
 | Dependency Updates | **Dependabot** (`.github/dependabot.yml`) | Weekly pip update PRs |
+
+The workflow runs 13 jobs. CodeQL runs in a separate workflow, and Dependabot is
+not a gate. A caller can override each threshold through a `workflow_call`
+input. The table lists the default.
 
 **Pre-commit hooks** (`.pre-commit-config.yaml`) run Ruff, mypy, and Bandit locally to catch issues before push.
 
@@ -549,7 +573,7 @@ Triggered by tag push (`v*.*.*`) via `.github/workflows/release.yml`:
 - AI must tick all conformance checklist boxes in the PR template.
 - AI must **wait for CodeQL to pass** before adding the `auto-merge` label.
   Use `gh pr checks <pr-number> --watch` to confirm all checks are green.
-- Destructive operations (menu 90-100) require explicit human review regardless of AI authorship.
+- Destructive operations (154-187, 189-191, 194, 206-208) require explicit human review regardless of AI authorship.
 
 ---
 
@@ -584,7 +608,7 @@ PRs touching web UI must include:
 See `git-workflow.instructions.md` § SpecKit Escalation for the full decision tree.
 
 **MistHelper-specific escalation triggers**:
-- Any change to destructive operations (menu 90-100)
+- Any change to a destructive operation (154-187, 189-191, 194, 206-208)
 - Database schema or primary key strategy changes
 - Changes touching 3+ files or 2+ classes
 
@@ -599,7 +623,7 @@ When implementing a Feature Spec, AI agents must follow this protocol:
 3. **Check for file overlap** with other open PRs (`gh pr list --json files`). Wait if MistHelper.py is contested.
 4. **Read the Feature Spec Issue** as the authoritative plan; confirm all Acceptance Criteria.
 5. **Implement only necessary files/modules**; keep secrets externalized to `.env`.
-6. **Add/modify tests** to meet unit + property requirements and maintain >= 70% coverage.
+6. **Add/modify tests** to meet unit + property requirements and maintain >= 80% coverage.
 7. **Update `deploy/.env.example`** if introducing new environment variables.
 8. **For UI features**: open the Gunicorn page using browser agent tools, interact to validate behavior, generate Playwright tests, save to `tests/e2e/`.
 9. **Prepare the PR** using the PR template; include `Closes #<issue-number>`, link the Spec, and complete all checklist items.
