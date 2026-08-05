@@ -235,16 +235,16 @@ organization matches the APIs that the tool consumes.
 
 ### Size Facts
 
-Measured on 2026-08-04.
+Measured on 2026-08-05.
 
 | Area | Python lines | Files |
 |------|--------------|-------|
-| `MistHelper.py` | 6,054 | 1 |
-| `src/` | 123,785 | 360 |
-| `tests/` | 129,364 | -- |
+| `MistHelper.py` | 6,169 | 1 |
+| `src/` | 124,675 | 363 |
+| `tests/` | 129,893 | -- |
 
 The entrypoint held roughly 28,000 lines before the decomposition. It now holds
-6,054. The test suite is now larger than the source it covers.
+6,169. The test suite is now larger than the source it covers.
 
 ### Current `src/` Layout
 
@@ -296,7 +296,7 @@ src/
 | Module | Status | Description |
 |--------|--------|-------------|
 | `src/db/` | **Done** | ArangoDB writer, Redis writer, retention, routing |
-| `src/output/` | **Done** | Output writer |
+| `src/export/` | **Done** | Output writer (`DataExporter.write_with_format_selection`) |
 | `src/constants.py` | **Done** | Shared constants |
 | `src/wan_*.py` | **Done** | WAN hub group manager, VPN builder |
 | `src/analytics/` | **Done (Wave 2)** | Site inventory health analyzer, site analytics configurator, zone analyzer |
