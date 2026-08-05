@@ -437,6 +437,12 @@ from src.export.self_export_utils import (
 from src.export.site_anomaly_exporter import (
     SiteAnomalyExporter,  # Cat B (1013 SC-001 position 43) -- re-export for MistHelper.SiteAnomalyExporter callers
 )
+from src.export.site_application_list_exporter import (
+    SiteApplicationListExporter,  # Spec 666 / issue #1416 -- getSiteApplicationList menu 213
+)
+from src.export.site_asset_exporter import (
+    SiteAssetExporter,  # Specs 667/668/670 / issues #1417, #1418, #1419 -- site asset menus 210-212
+)
 from src.export.site_client_exporter import (
     SiteClientExporter,  # Cat B (1013 SC-001 position 14) -- re-export for MistHelper.SiteClientExporter callers
 )
@@ -463,6 +469,9 @@ from src.export.site_mist_edge_events_exporter import (
 )
 from src.export.site_nac_client_events_exporter import (
     SiteNacClientEventsExporter,  # Spec 891 / issue #1399 -- searchSiteNacClientEvents menu 202
+)
+from src.export.site_system_events_exporter import (
+    SiteSystemEventsExporter,  # Spec 898 / issue #1406 -- searchSiteSystemEvents menu 214
 )
 from src.export.site_wan_usage_exporter import (
     SiteWanUsageExporter,  # Spec 901 / issue #1409 -- searchSiteWanUsage menu 198
@@ -4033,6 +4042,26 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     "209": (
         SiteClientExporter.get_site_beacon,
         "Get site beacon detail by site_id + beacon_id (getSiteBeacon)",
+    ),
+    "210": (
+        SiteAssetExporter.assets_of_interest,
+        "Export BLE beacons matching an Asset or AssetFilter for a site (getSiteAssetsOfInterest)",
+    ),
+    "211": (
+        SiteAssetExporter.asset_filter,
+        "Get site asset filter detail by site_id + assetfilter_id (getSiteAssetFilter)",
+    ),
+    "212": (
+        SiteAssetExporter.asset,
+        "Get site asset detail by site_id + asset_id (getSiteAsset)",
+    ),
+    "213": (
+        SiteApplicationListExporter.application_list,
+        "Export the application list for a selected site (getSiteApplicationList)",
+    ),
+    "214": (
+        SiteSystemEventsExporter.system_events,
+        "Search system events for a selected site (searchSiteSystemEvents)",
     ),
     "44": (OrgConfigExporter.psks, "Export PSK (Pre-Shared Key) information for the organization"),
     "45": (OrgConfigExporter.webhooks, "Export webhook configuration for the organization"),
