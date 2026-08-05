@@ -24,7 +24,9 @@ python -m py_compile MistHelper.py
 python -m ruff check MistHelper.py
 python -m black --check MistHelper.py
 
-# Test suite (skip heavy/destructive: 14, 18, 63-65, 90-100)
+# Test suite. The registry decides what runs: --test covers `safe`, and
+# --testinteractive adds `interactive_safe`. Every other category is skipped,
+# including destructive (154-187, 189-191, 194, 206-208).
 python MistHelper.py --test
 
 # Worktree setup for feature work

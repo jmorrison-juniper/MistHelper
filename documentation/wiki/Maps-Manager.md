@@ -1,33 +1,35 @@
 # Standalone Maps Manager
 
-The Maps Manager (Menu 112, Option 40) can be run independently using `maps_manager.py`.
+The Maps Manager is menu 142 in MistHelper. It also runs on its own from
+`src/maps/maps_manager.py`.
 
 ## Quick Start
 
 ```powershell
-# Launch directly into interactive map viewer
-python maps_manager.py --viewer
+# Through the MistHelper menu
+python MistHelper.py -M 142
 
-# Launch with specific site
-python maps_manager.py --site YOUR_SITE_ID --viewer
+# Standalone. Launches the interactive viewer by default.
+python src/maps/maps_manager.py
 
-# Full interactive menu
-python maps_manager.py
+# Standalone with the operations menu instead of the viewer
+python src/maps/maps_manager.py --menu
+
+# Standalone against a specific organization
+python src/maps/maps_manager.py --org YOUR_ORG_ID
 
 # Debug mode
-python maps_manager.py --debug --viewer
+python src/maps/maps_manager.py --debug
 ```
 
 ## Command Line Options
 
 | Flag | Description |
 |------|-------------|
-| `--org ORG_ID` | Specify organization ID (overrides .env) |
-| `--site SITE_ID` | Skip site selection, go directly to site |
-| `--map MAP_ID` | Skip map selection (requires --site) |
-| `--viewer` | Launch interactive Plotly/Dash map viewer directly |
+| `--menu` | Show the operations menu instead of launching the viewer directly |
+| `--org ORG_ID` | Organization ID to use. Optional. |
 | `--debug` | Enable debug logging |
-| `--env PATH` | Path to .env file (default: .env) |
+| `--test` | Run a systematic test of the safe operations |
 
 ## Environment Variables
 
@@ -38,7 +40,9 @@ The standalone module reads from `.env` or environment variables:
 
 ## Architecture
 
-The `maps_manager.py` module imports `MapsManager` from `MistHelper.py`, maintaining a single source of truth. This avoids code duplication while enabling:
+The `src/maps/maps_manager.py` module holds the `MapsManager` class.
+`MistHelper.py` reaches it through `src/refactors/maps_manager_launcher.py`, so
+both entry points share one implementation. This enables:
 
 - Independent execution without loading the full MistHelper
 - Direct access to the interactive map viewer for quick visualization
