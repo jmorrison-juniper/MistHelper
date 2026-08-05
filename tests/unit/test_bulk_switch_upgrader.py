@@ -19,24 +19,34 @@ import pytest
 # ---------------------------------------------------------------------------
 # Mock mistapi before importing the module under test
 # ---------------------------------------------------------------------------
-_had_mistapi = "mistapi" in sys.modules
+# ---------------------------------------------------------------------------
+# Stub mistapi for the import, then restore sys.modules at once.
+# WHY: pytest imports every test module during collection but runs teardown_module only
+# for a module that has a selected test. A stub left in sys.modules therefore leaks for
+# the whole session and breaks mistapi's lazy subpackage import. See issue #1739.
+# ---------------------------------------------------------------------------
 _saved_mistapi = sys.modules.get("mistapi")
 _our_mock = MagicMock()
 sys.modules["mistapi"] = _our_mock
-
-from src.firmware.bulk_switch_upgrader import BulkSwitchFirmwareUpgrader
+try:
+    from src.firmware.bulk_switch_upgrader import BulkSwitchFirmwareUpgrader
+finally:
+    if _saved_mistapi is not None:
+        sys.modules["mistapi"] = _saved_mistapi
+    else:
+        sys.modules.pop("mistapi", None)
 
 
 def setup_module() -> None:
-    """Re-assert mocks in sys.modules before tests run."""
+    """Re-assert our stub for the duration of this module's tests."""
     sys.modules["mistapi"] = _our_mock
 
 
 def teardown_module() -> None:
-    """Restore sys.modules only if our mock is still installed."""
+    """Restore sys.modules only if our stub is still installed."""
     if sys.modules.get("mistapi") is not _our_mock:
-        return  # Another module replaced our mock; leave it alone
-    if _had_mistapi:
+        return  # Another module replaced our stub; leave it alone
+    if _saved_mistapi is not None:
         sys.modules["mistapi"] = _saved_mistapi
     else:
         sys.modules.pop("mistapi", None)

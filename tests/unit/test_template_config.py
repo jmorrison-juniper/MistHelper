@@ -11,40 +11,47 @@ import sys
 import tempfile
 from unittest.mock import MagicMock, patch
 
-# --- Module-level mistapi mock (identity-checked teardown) ---
-_had_mistapi = "mistapi" in sys.modules
+# --- Module-level mistapi stub, restored the moment the import finishes ---
+# WHY: pytest imports every test module during collection but runs teardown_module only
+# for a module that has a selected test. A stub left in sys.modules therefore leaks for
+# the whole session and breaks mistapi's lazy subpackage import. See issue #1739.
 _saved_mistapi = sys.modules.get("mistapi")
 _our_mock = MagicMock()
 sys.modules["mistapi"] = _our_mock
-
-from src.gateway.template_config import (
-    GatewayTemplateConfigManager,
-    _filter_sites_with_location,
-    _find_existing_picocell_index,
-    _find_picocell_policy,
-    _infer_state_without_postal,  # private — used for edge-case coverage of line 1034
-    _insert_picocell_policy,
-    _merge_dia_pico,
-    _merge_picocell,
-    _parse_canadian_state,  # private — used for edge-case coverage of line 997
-    _parse_general_state,  # private — used for edge-case coverage of line 1016
-    _parse_state_comma_separated,
-    _parse_state_space_separated,
-    _parse_template_indices,
-    parse_state_from_address,
-)
+try:
+    from src.gateway.template_config import (
+        GatewayTemplateConfigManager,
+        _filter_sites_with_location,
+        _find_existing_picocell_index,
+        _find_picocell_policy,
+        _infer_state_without_postal,  # private — used for edge-case coverage of line 1034
+        _insert_picocell_policy,
+        _merge_dia_pico,
+        _merge_picocell,
+        _parse_canadian_state,  # private — used for edge-case coverage of line 997
+        _parse_general_state,  # private — used for edge-case coverage of line 1016
+        _parse_state_comma_separated,
+        _parse_state_space_separated,
+        _parse_template_indices,
+        parse_state_from_address,
+    )
+finally:
+    if _saved_mistapi is not None:
+        sys.modules["mistapi"] = _saved_mistapi
+    else:
+        sys.modules.pop("mistapi", None)
 
 
 def setup_module() -> None:
-    """Re-assert our mock in sys.modules before tests run."""
+    """Re-assert our stub for the duration of this module's tests."""
     sys.modules["mistapi"] = _our_mock
 
 
 def teardown_module() -> None:
-    """Restore sys.modules only if our mock is still installed."""
+    """Restore sys.modules only if our stub is still installed."""
     if sys.modules.get("mistapi") is not _our_mock:
         return
-    if _had_mistapi:
+    if _saved_mistapi is not None:
         sys.modules["mistapi"] = _saved_mistapi
     else:
         sys.modules.pop("mistapi", None)

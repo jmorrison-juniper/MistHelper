@@ -59,9 +59,8 @@ class InputUtils:
         """Return trimmed user input, degrading to ``default_value`` on EOF/empty."""
         logging.debug("safe_input entered (context=%s)", context)  # Action-log entry per project rule.
         try:
-            user_input = input(
-                prompt
-            ).strip()  # noqa: STRUCT-PARAMS  # bare input() OK here -- this IS the safe wrapper.
+            # A bare input() is correct here, because this method IS the safe wrapper.
+            user_input = input(prompt).strip()
         except EOFError:  # Stream closed (Ctrl+D, broken pipe, SSH disconnect).
             return InputUtils._handle_eof(context, default_value)  # Degrade gracefully to the default.
         except KeyboardInterrupt:  # Operator pressed Ctrl+C to abort the prompt.

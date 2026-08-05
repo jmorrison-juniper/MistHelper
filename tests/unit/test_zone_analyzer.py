@@ -15,67 +15,76 @@ import pytest
 # ---------------------------------------------------------------------------
 _mock_mistapi = MagicMock()
 
-_MOCKED_MODULES = {
+# Mock tqdm too, to avoid import issues in CI.
+_mock_tqdm_mod = MagicMock()
+_mock_tqdm_mod.tqdm = lambda items, **_kw: items
+
+_MOCKED_MODULES: dict[str, Any] = {
     "mistapi": _mock_mistapi,
     "mistapi.api": _mock_mistapi.api,
     "mistapi.api.v1": _mock_mistapi.api.v1,
     "mistapi.api.v1.sites": _mock_mistapi.api.v1.sites,
     "mistapi.api.v1.sites.setting": _mock_mistapi.api.v1.sites.setting,
     "mistapi.api.v1.sites.zones": _mock_mistapi.api.v1.sites.zones,
+    "tqdm": _mock_tqdm_mod,
 }
 
-# Remember what was there before (if anything)
-_saved: dict[str, Any] = {}
-_absent: list[str] = []
-for _key, _val in _MOCKED_MODULES.items():
-    if _key in sys.modules:
-        _saved[_key] = sys.modules[_key]
-    else:
-        _absent.append(_key)
-    sys.modules[_key] = _val
+# Remember what was there before (if anything).
+_saved: dict[str, Any] = {key: sys.modules.get(key) for key in _MOCKED_MODULES}
 
-# Mock tqdm to avoid import issues in CI
-_mock_tqdm_mod = MagicMock()
-_mock_tqdm_mod.tqdm = lambda items, **_kw: items
-if "tqdm" not in sys.modules:
-    _absent.append("tqdm")
-elif "tqdm" in sys.modules:
-    _saved["tqdm"] = sys.modules["tqdm"]
-sys.modules["tqdm"] = _mock_tqdm_mod
 
-from src.analytics.zone_analyzer import (
-    ZoneConfigurationAnalyzer,
-    _build_one_summary_row,
-    _build_summary_rows,
-    _compute_zone_stats,
-    _dwell_config_key,
-    _empty_zone_entry,
-    _find_dwell_deviations,
-    _find_occupancy_deviations,
-    _find_sites_missing_common,
-    _find_sites_with_unique,
-    _find_zone_count_deviations,
-    _occupancy_config_key,
-    _track_custom_names,
-)
+def _install_stub_modules() -> None:
+    """Put every stub into sys.modules."""
+    sys.modules.update(_MOCKED_MODULES)
+
+
+def _restore_stub_modules() -> None:
+    """Undo _install_stub_modules for each entry we still own."""
+    for key, saved in _saved.items():
+        if sys.modules.get(key) is not _MOCKED_MODULES[key]:
+            continue  # Another module replaced our stub; leave it alone.
+        if saved is not None:
+            sys.modules[key] = saved
+        else:
+            sys.modules.pop(key, None)
+
+
+# Restore the moment the import finishes. pytest imports every test module during
+# collection but runs teardown_module only for a module that has a selected test, so a
+# stub left here leaks for the whole session and breaks mistapi's lazy subpackage
+# import. See issue #1739.
+_install_stub_modules()
+try:
+    from src.analytics.zone_analyzer import (
+        ZoneConfigurationAnalyzer,
+        _build_one_summary_row,
+        _build_summary_rows,
+        _compute_zone_stats,
+        _dwell_config_key,
+        _empty_zone_entry,
+        _find_dwell_deviations,
+        _find_occupancy_deviations,
+        _find_sites_missing_common,
+        _find_sites_with_unique,
+        _find_zone_count_deviations,
+        _occupancy_config_key,
+        _track_custom_names,
+    )
+finally:
+    _restore_stub_modules()
 
 
 # ---------------------------------------------------------------------------
 # Module setup/teardown -- ensure mocks survive pytest collection ordering
 # ---------------------------------------------------------------------------
 def setup_module() -> None:
-    """Re-assert mocks in sys.modules before tests run."""
-    for key, val in _MOCKED_MODULES.items():
-        sys.modules[key] = val
-    sys.modules["tqdm"] = _mock_tqdm_mod
+    """Re-install the stubs for the duration of this module's tests."""
+    _install_stub_modules()
 
 
 def teardown_module() -> None:
-    """Restore sys.modules to pre-test state."""
-    for key in _absent:
-        sys.modules.pop(key, None)
-    for key, val in _saved.items():
-        sys.modules[key] = val
+    """Remove the stubs again after this module's tests finish."""
+    _restore_stub_modules()
 
 
 # ---------------------------------------------------------------------------

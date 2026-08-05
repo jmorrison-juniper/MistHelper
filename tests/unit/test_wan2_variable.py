@@ -9,32 +9,35 @@ import sys
 import threading
 from unittest.mock import MagicMock
 
-# --- Module-level mistapi mock (identity-checked teardown) ---
-_had_mistapi = "mistapi" in sys.modules
+# --- Module-level mistapi stub, restored the moment the import finishes ---
+# WHY: pytest imports every test module during collection but runs teardown_module only
+# for a module that has a selected test. A stub left in sys.modules therefore leaks for
+# the whole session and breaks mistapi's lazy subpackage import. See issue #1739.
 _saved_mistapi = sys.modules.get("mistapi")
 _our_mock = MagicMock()
 sys.modules["mistapi"] = _our_mock
-
-from src.gateway._wan2_variable_device import _Wan2VariableDevice
-from src.gateway._wan2_variable_io import _Wan2VariableIO
-from src.gateway._wan2_variable_reporting import _Wan2VariableReporting
-from src.gateway.wan2_variable import GatewayWan2VariableMigrator, Wan2VariableDeps
+try:
+    from src.gateway._wan2_variable_device import _Wan2VariableDevice
+    from src.gateway._wan2_variable_io import _Wan2VariableIO
+    from src.gateway._wan2_variable_reporting import _Wan2VariableReporting
+    from src.gateway.wan2_variable import GatewayWan2VariableMigrator, Wan2VariableDeps
+finally:
+    if _saved_mistapi is not None:
+        sys.modules["mistapi"] = _saved_mistapi
+    else:
+        sys.modules.pop("mistapi", None)
 
 
 def setup_module() -> None:
-    """Re-assert our mock in sys.modules before tests run.
-
-    During pytest collection, other test files may overwrite sys.modules["mistapi"]
-    after our module-level setup but before our tests execute.
-    """
+    """Re-assert our stub for the duration of this module's tests."""
     sys.modules["mistapi"] = _our_mock
 
 
 def teardown_module() -> None:
-    """Restore sys.modules only if our mock is still installed."""
+    """Restore sys.modules only if our stub is still installed."""
     if sys.modules.get("mistapi") is not _our_mock:
         return
-    if _had_mistapi:
+    if _saved_mistapi is not None:
         sys.modules["mistapi"] = _saved_mistapi
     else:
         sys.modules.pop("mistapi", None)
