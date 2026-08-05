@@ -138,7 +138,7 @@ mindmap
       Address and License 195-196
       JSI and Mist Edge 204-205
       Org Searches 230-234
-    Interactive Safe (65)
+    Interactive Safe (67)
       Site Devices 60-72
       Site Insights 73-79
       Site Stats 80-91
@@ -504,8 +504,8 @@ fails closed, so `--test` skips any option that the registry does not name
 
 | Category | Count | Menu numbers | Behavior under `--test` |
 |----------|-------|--------------|-------------------------|
-| `safe` | 66 | 1-13, 15-17, 20-58, 188, 193, 195-196, 204-205, 230-234 | Runs |
-| `interactive_safe` | 65 | 60-96, 197-203, 209-229 | Runs under `--testinteractive` |
+| `safe` | 64 | 1-13, 15-17, 20-58, 188, 193, 204-205, 230-234 | Runs |
+| `interactive_safe` | 67 | 60-96, 195-203, 209-229 | Runs under `--testinteractive` |
 | `destructive` | 41 | 154-187, 189-191, 194, 206-208 | Never runs |
 | `interactive` | 29 | 0, 124-150, 192 | Never runs |
 | `websocket` | 22 | 102-123 | Never runs |

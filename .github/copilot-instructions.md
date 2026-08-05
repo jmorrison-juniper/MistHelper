@@ -257,16 +257,16 @@ is_running_in_container()  # Checks /.dockerenv, /run/.containerenv
 
 ## Menu System & Operations
 
-### Menu Categories (Full Range: 1-209)
+### Menu Categories (Full Range: 0-234)
 
 `src/utils/operation_registry.py` is the single source of truth. Read it before
-you trust this table. Counts were measured on 2026-08-04. Run
+you trust this table. Counts were measured on 2026-08-05. Run
 `python scripts/generate_menu_wiki.py` to regenerate the full reference.
 
 | Category | Count | Menu numbers |
 | - | - | - |
-| `safe` | 61 | 1-13, 15-17, 20-58, 188, 193, 195-196, 204-205 |
-| `interactive_safe` | 45 | 60-96, 197-203, 209 |
+| `interactive_safe` | 67 | 60-96, 195-203, 209-229 |
+| `safe` | 64 | 1-13, 15-17, 20-58, 188, 193, 204-205, 230-234 |
 | `destructive` | 41 | 154-187, 189-191, 194, 206-208 |
 | `interactive` | 29 | 0, 124-150, 192 |
 | `websocket` | 22 | 102-123 |
