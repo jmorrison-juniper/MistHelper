@@ -35,7 +35,8 @@ Recommended incremental refactor targets (mirrors Agents Guide Section 18):
 
 All 9 phases are complete. The decomposition moved feature-domain packages out
 of `MistHelper.py` into `src/`. The entrypoint fell from roughly 28,000 lines to
-6,054, and `src/` now holds 123,785 lines across 360 files.
+6,169, and `src/` now holds 124,675 lines across 363 files. Measured on
+2026-08-05.
 
 The phase-by-phase table of packages, key classes, and owned menu operations
 lives in the repository README, under **Wave 2 Module Ownership**:
