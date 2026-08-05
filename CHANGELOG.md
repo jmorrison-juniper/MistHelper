@@ -7,6 +7,26 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Add five organization-scoped search operations, menus 230 to 234 (issues #1386, #1385, #1383, #1382, #1379)
+
+- **Menu 230 (Added)**: `searchOrgWirelessClientSessions`. Spec 878, issue #1386.
+- **Menu 231 (Added)**: `searchOrgWirelessClientEvents`. Spec 877, issue #1385.
+- **Menu 232 (Added)**: `searchOrgWanClients`. Spec 875, issue #1383.
+- **Menu 233 (Added)**: `searchOrgWanClientEvents`. Spec 874, issue #1382.
+- **Menu 234 (Added)**: `searchOrgSystemEvents`. Spec 879, issue #1379.
+- **New module (Added)**: `src/export/org_search_exporter.py`. It mirrors
+  `SiteSearchExporter` for the organization scope. Every one of these endpoints
+  takes a session and an organization and returns a paginated row set, so one
+  shared helper runs the resolve, fetch, and persist sequence.
+- **Category (Added)**: these five are `safe`, not `interactive_safe`, because
+  they resolve the organization from the cached context rather than prompting
+  for a site. The `--test` run therefore covers them.
+- **Primary keys (Unchanged)**: all five operationIds already had a strategy in
+  `ENDPOINT_PRIMARY_KEY_STRATEGIES`, so this change adds none.
+- **Tests (Added)**: `tests/unit/export/test_org_search_exporter.py`. The
+  per-menu bindings are checked by a parametrized case, so each entry is proven
+  to call its own endpoint and write its own file.
+
 ### Add five site-scoped search operations, menus 225 to 229 (issues #1401, #1393, #1391, #1396, #1412)
 
 - **Menu 225 (Added)**: `searchSiteOspfStats` searches the OSPF neighbor
