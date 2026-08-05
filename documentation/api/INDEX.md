@@ -1,6 +1,6 @@
 # Mist API Endpoint Index
 
-> 1013 operations across 206 tags
+> 1013 spec operations, 61 library-only stubs (1074 total)
 
 ## Admins
 
@@ -2044,4 +2044,72 @@
 | POST | /api/v1/utils/test_smsglobal | testSiteWlanSmsGlobal | testSiteWlanSmsGlobal | [POST_utils_test_smsglobal.md](utilities/POST_utils_test_smsglobal.md) |
 | POST | /api/v1/utils/test_telstra | testSiteWlanTelstraSetup | testSiteWlanTelstraSetup | [POST_utils_test_telstra.md](utilities/POST_utils_test_telstra.md) |
 | POST | /api/v1/utils/test_twilio | testSiteWlanTwilioSetup | testSiteWlanTwilioSetup | [POST_utils_test_twilio.md](utilities/POST_utils_test_twilio.md) |
+
+## Library-Only (mistapi SDK, not in OpenAPI spec)
+
+> The following endpoints exist in the installed `mistapi` Python library but are absent from the OpenAPI specification. Stub documentation was auto-generated from the library source.
+
+| Function | Module | Category | File |
+|----------|--------|----------|------|
+| UploadOrgTicketAttachmentFile | `mistapi.api.v1.orgs.tickets` | orgs | [SDK_UploadOrgTicketAttachmentFile.md](orgs/SDK_UploadOrgTicketAttachmentFile.md) |
+| acceptSiteApLocalizationData | `mistapi.api.v1.sites.maps` | sites | [SDK_acceptSiteApLocalizationData.md](sites/SDK_acceptSiteApLocalizationData.md) |
+| addInstallerDeviceImageFile | `mistapi.api.v1.installer.orgs.devices` | installer | [SDK_addInstallerDeviceImageFile.md](installer/SDK_addInstallerDeviceImageFile.md) |
+| addOrgMxEdgeImageFile | `mistapi.api.v1.orgs.mxedges` | orgs | [SDK_addOrgMxEdgeImageFile.md](orgs/SDK_addOrgMxEdgeImageFile.md) |
+| addOrgTicketCommentFile | `mistapi.api.v1.orgs.tickets` | orgs | [SDK_addOrgTicketCommentFile.md](orgs/SDK_addOrgTicketCommentFile.md) |
+| addSiteDeviceImageFile | `mistapi.api.v1.sites.devices` | sites | [SDK_addSiteDeviceImageFile.md](sites/SDK_addSiteDeviceImageFile.md) |
+| addSiteMapImageFile | `mistapi.api.v1.sites.maps` | sites | [SDK_addSiteMapImageFile.md](sites/SDK_addSiteMapImageFile.md) |
+| applySiteAutoMapAssignment | `mistapi.api.v1.sites.apply_auto_map_assignment` | sites | [SDK_applySiteAutoMapAssignment.md](sites/SDK_applySiteAutoMapAssignment.md) |
+| attachSiteAssetImageFile | `mistapi.api.v1.sites.assets` | sites | [SDK_attachSiteAssetImageFile.md](sites/SDK_attachSiteAssetImageFile.md) |
+| cancelOrgMxEdgeUpgrade | `mistapi.api.v1.orgs.mxedges` | orgs | [SDK_cancelOrgMxEdgeUpgrade.md](orgs/SDK_cancelOrgMxEdgeUpgrade.md) |
+| cancelSiteAutoMapAssignment | `mistapi.api.v1.sites.auto_map_assignment` | sites | [SDK_cancelSiteAutoMapAssignment.md](sites/SDK_cancelSiteAutoMapAssignment.md) |
+| cancelSiteMxEdgeUpgrade | `mistapi.api.v1.sites.mxedges` | sites | [SDK_cancelSiteMxEdgeUpgrade.md](sites/SDK_cancelSiteMxEdgeUpgrade.md) |
+| clearSiteAutoMapAssignment | `mistapi.api.v1.sites.clear_auto_map_assignment` | sites | [SDK_clearSiteAutoMapAssignment.md](sites/SDK_clearSiteAutoMapAssignment.md) |
+| countOrgMarvisClientEvents | `mistapi.api.v1.orgs.marvisclients` | orgs | [SDK_countOrgMarvisClientEvents.md](orgs/SDK_countOrgMarvisClientEvents.md) |
+| countOrgMarvisClientsStats | `mistapi.api.v1.orgs.stats` | orgs | [SDK_countOrgMarvisClientsStats.md](orgs/SDK_countOrgMarvisClientsStats.md) |
+| countSiteClientFingerprints | `mistapi.api.v1.sites.insights` | sites | [SDK_countSiteClientFingerprints.md](sites/SDK_countSiteClientFingerprints.md) |
+| countSiteMarvisConfigActions | `mistapi.api.v1.sites.marvis_configs` | sites | [SDK_countSiteMarvisConfigActions.md](sites/SDK_countSiteMarvisConfigActions.md) |
+| createOrgAsyncClaim | `mistapi.api.v1.orgs.claims` | orgs | [SDK_createOrgAsyncClaim.md](orgs/SDK_createOrgAsyncClaim.md) |
+| deleteMspSsoAdmins | `mistapi.api.v1.msps.ssos` | msps | [SDK_deleteMspSsoAdmins.md](msps/SDK_deleteMspSsoAdmins.md) |
+| deleteOrgSsoAdmins | `mistapi.api.v1.orgs.ssos` | orgs | [SDK_deleteOrgSsoAdmins.md](orgs/SDK_deleteOrgSsoAdmins.md) |
+| deleteSiteMarvisConfigAction | `mistapi.api.v1.sites.marvis_configs` | sites | [SDK_deleteSiteMarvisConfigAction.md](sites/SDK_deleteSiteMarvisConfigAction.md) |
+| disableOrgE911Report | `mistapi.api.v1.orgs.exports` | orgs | [SDK_disableOrgE911Report.md](orgs/SDK_disableOrgE911Report.md) |
+| enableOrgE911Report | `mistapi.api.v1.orgs.exports` | orgs | [SDK_enableOrgE911Report.md](orgs/SDK_enableOrgE911Report.md) |
+| enableSiteDeviceZigbeeJoin | `mistapi.api.v1.sites.devices` | sites | [SDK_enableSiteDeviceZigbeeJoin.md](sites/SDK_enableSiteDeviceZigbeeJoin.md) |
+| getOrgAsyncClaimStatus | `mistapi.api.v1.orgs.claims` | orgs | [SDK_getOrgAsyncClaimStatus.md](orgs/SDK_getOrgAsyncClaimStatus.md) |
+| getOrgE911Report | `mistapi.api.v1.orgs.exports` | orgs | [SDK_getOrgE911Report.md](orgs/SDK_getOrgE911Report.md) |
+| getOrgMarvisClientInsights | `mistapi.api.v1.orgs.insights` | orgs | [SDK_getOrgMarvisClientInsights.md](orgs/SDK_getOrgMarvisClientInsights.md) |
+| getSiteAutoMapAssignmentStatus | `mistapi.api.v1.sites.auto_map_assignment` | sites | [SDK_getSiteAutoMapAssignmentStatus.md](sites/SDK_getSiteAutoMapAssignmentStatus.md) |
+| getSiteChannelScores | `mistapi.api.v1.sites.rrm` | sites | [SDK_getSiteChannelScores.md](sites/SDK_getSiteChannelScores.md) |
+| getSiteInsightMetricsForAP | `mistapi.api.v1.sites.insights` | sites | [SDK_getSiteInsightMetricsForAP.md](sites/SDK_getSiteInsightMetricsForAP.md) |
+| getSiteMxEdgeUpgrade | `mistapi.api.v1.sites.mxedges` | sites | [SDK_getSiteMxEdgeUpgrade.md](sites/SDK_getSiteMxEdgeUpgrade.md) |
+| importInstallerMapFile | `mistapi.api.v1.installer.orgs.sites` | installer | [SDK_importInstallerMapFile.md](installer/SDK_importInstallerMapFile.md) |
+| importOrgAssetsFile | `mistapi.api.v1.orgs.assets` | orgs | [SDK_importOrgAssetsFile.md](orgs/SDK_importOrgAssetsFile.md) |
+| importOrgMapToSiteFile | `mistapi.api.v1.orgs.sites` | orgs | [SDK_importOrgMapToSiteFile.md](orgs/SDK_importOrgMapToSiteFile.md) |
+| importOrgMapsFile | `mistapi.api.v1.orgs.maps` | orgs | [SDK_importOrgMapsFile.md](orgs/SDK_importOrgMapsFile.md) |
+| importOrgNacCrlFile | `mistapi.api.v1.orgs.setting` | orgs | [SDK_importOrgNacCrlFile.md](orgs/SDK_importOrgNacCrlFile.md) |
+| importOrgPsksFile | `mistapi.api.v1.orgs.psks` | orgs | [SDK_importOrgPsksFile.md](orgs/SDK_importOrgPsksFile.md) |
+| importOrgUserMacsFile | `mistapi.api.v1.orgs.usermacs` | orgs | [SDK_importOrgUserMacsFile.md](orgs/SDK_importOrgUserMacsFile.md) |
+| importSiteAssetsFile | `mistapi.api.v1.sites.assets` | sites | [SDK_importSiteAssetsFile.md](sites/SDK_importSiteAssetsFile.md) |
+| importSiteDevicesFile | `mistapi.api.v1.sites.devices` | sites | [SDK_importSiteDevicesFile.md](sites/SDK_importSiteDevicesFile.md) |
+| importSiteMapsFile | `mistapi.api.v1.sites.maps` | sites | [SDK_importSiteMapsFile.md](sites/SDK_importSiteMapsFile.md) |
+| importSitePsksFile | `mistapi.api.v1.sites.psks` | sites | [SDK_importSitePsksFile.md](sites/SDK_importSitePsksFile.md) |
+| listOrgAsyncClaims | `mistapi.api.v1.orgs.claims` | orgs | [SDK_listOrgAsyncClaims.md](orgs/SDK_listOrgAsyncClaims.md) |
+| listSiteMxEdgeUpgrades | `mistapi.api.v1.sites.mxedges` | sites | [SDK_listSiteMxEdgeUpgrades.md](sites/SDK_listSiteMxEdgeUpgrades.md) |
+| replaceSiteMapImageFile | `mistapi.api.v1.sites.maps` | sites | [SDK_replaceSiteMapImageFile.md](sites/SDK_replaceSiteMapImageFile.md) |
+| searchOrgMarvisClientEvents | `mistapi.api.v1.orgs.marvisclients` | orgs | [SDK_searchOrgMarvisClientEvents.md](orgs/SDK_searchOrgMarvisClientEvents.md) |
+| searchOrgMarvisClientsStats | `mistapi.api.v1.orgs.stats` | orgs | [SDK_searchOrgMarvisClientsStats.md](orgs/SDK_searchOrgMarvisClientsStats.md) |
+| searchSiteClientFingerprints | `mistapi.api.v1.sites.insights` | sites | [SDK_searchSiteClientFingerprints.md](sites/SDK_searchSiteClientFingerprints.md) |
+| searchSiteIotEndpoints | `mistapi.api.v1.sites.iotendpoints` | sites | [SDK_searchSiteIotEndpoints.md](sites/SDK_searchSiteIotEndpoints.md) |
+| searchSiteMarvisConfigActions | `mistapi.api.v1.sites.marvis_configs` | sites | [SDK_searchSiteMarvisConfigActions.md](sites/SDK_searchSiteMarvisConfigActions.md) |
+| sendOrgNacClientCoA | `mistapi.api.v1.orgs.nac_clients` | orgs | [SDK_sendOrgNacClientCoA.md](orgs/SDK_sendOrgNacClientCoA.md) |
+| sendSiteNacClientCoA | `mistapi.api.v1.sites.nac_clients` | sites | [SDK_sendSiteNacClientCoA.md](sites/SDK_sendSiteNacClientCoA.md) |
+| startSiteAutoMapAssignment | `mistapi.api.v1.sites.auto_map_assignment` | sites | [SDK_startSiteAutoMapAssignment.md](sites/SDK_startSiteAutoMapAssignment.md) |
+| submitSiteMarvisConfigFeedback | `mistapi.api.v1.sites.marvis_configs` | sites | [SDK_submitSiteMarvisConfigFeedback.md](sites/SDK_submitSiteMarvisConfigFeedback.md) |
+| updateOrgMxEdgeUpgrade | `mistapi.api.v1.orgs.mxedges` | orgs | [SDK_updateOrgMxEdgeUpgrade.md](orgs/SDK_updateOrgMxEdgeUpgrade.md) |
+| updateSiteMxEdgeUpgrade | `mistapi.api.v1.sites.mxedges` | sites | [SDK_updateSiteMxEdgeUpgrade.md](sites/SDK_updateSiteMxEdgeUpgrade.md) |
+| upgradeSiteMxEdges | `mistapi.api.v1.sites.mxedges` | sites | [SDK_upgradeSiteMxEdges.md](sites/SDK_upgradeSiteMxEdges.md) |
+| uploadOrgNacPortalImageFile | `mistapi.api.v1.orgs.nacportals` | orgs | [SDK_uploadOrgNacPortalImageFile.md](orgs/SDK_uploadOrgNacPortalImageFile.md) |
+| uploadOrgPskPortalImageFile | `mistapi.api.v1.orgs.pskportals` | orgs | [SDK_uploadOrgPskPortalImageFile.md](orgs/SDK_uploadOrgPskPortalImageFile.md) |
+| uploadOrgWlanPortalImageFile | `mistapi.api.v1.orgs.wlans` | orgs | [SDK_uploadOrgWlanPortalImageFile.md](orgs/SDK_uploadOrgWlanPortalImageFile.md) |
+| uploadSiteWlanPortalImageFile | `mistapi.api.v1.sites.wlans` | sites | [SDK_uploadSiteWlanPortalImageFile.md](sites/SDK_uploadSiteWlanPortalImageFile.md) |
 

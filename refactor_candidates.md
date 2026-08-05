@@ -1,7 +1,7 @@
 # Refactor candidates: MistHelper.py
 
 - Entrypoint: `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`
-- Module graph size: 261 first-party files
+- Module graph size: 275 first-party files
 - Definitions analyzed: 2
 - LOC saveable (unused + single-use): 0
 - Category counts: unused=0, single-use=0, low-use=0, hot=1, skipped=1
@@ -32,14 +32,14 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
 
 | Name | Kind | Lines | Refs | Category | Suggested class | Flags |
 |---|---|---:|---:|---|---|---|
-| `GlobalImportManager` | class | 1003 | 1 | skipped |  | oversize_25_lines |
-| `menu_actions` | assignment | 887 | 17 | hot |  | oversize_25_lines,missing_inline_comments,missing_action_logging |
+| `GlobalImportManager` | class | 1063 | 1 | skipped |  | oversize_25_lines |
+| `menu_actions` | assignment | 1023 | 17 | hot |  | oversize_25_lines,missing_inline_comments,missing_action_logging |
 
 ## Hot (1)
 
-### `menu_actions` (assignment, 887 lines)
+### `menu_actions` (assignment, 1023 lines)
 
-- Def site: line 3406-4292
+- Def site: line 3838-4860
 - References: 17
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -49,14 +49,14 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
   - [ ] missing_inline_comments
   - [ ] missing_action_logging
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 3406, 4327, 4328, 4337, 4457, 4457, 4499, 4555, 4600, 5094, 5098, 5143, 5143, 5170, 5170, 5173
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\troubleshooting\interactive_test_runner.py`: lines 43
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 3838, 4895, 4896, 4908, 5029, 5029, 5073, 5129, 5174, 5749, 5753, 5798, 5798, 5823, 5823, 5826
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\src\troubleshooting\interactive_test_runner.py`: lines 80
 
 ## Skipped (1)
 
-### `GlobalImportManager` (class, 1003 lines)
+### `GlobalImportManager` (class, 1063 lines)
 
-- Def site: line 893-1895
+- Def site: line 1183-2245
 - References: 1
 - Suggested class: _n/a_
 - Suggested module: _n/a_
@@ -64,7 +64,7 @@ Reference sites are grouped **per file** so each candidate maps cleanly to one P
 - Guideline flags (address during the move):
   - [ ] oversize_25_lines
 - Reference sites (one PR cluster per file):
-  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 1940
+  - `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\MistHelper.py`: lines 2290
 
 ## Limitations
 
