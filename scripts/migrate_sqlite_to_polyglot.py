@@ -116,7 +116,7 @@ class SqliteReader:
     def read_table(self, table_name: str) -> list[dict]:
         """Read all rows from a table as list of dicts."""
         cursor = self._connection.cursor()
-        cursor.execute(f'SELECT * FROM "{table_name}"')  # noqa: S608
+        cursor.execute(f'SELECT * FROM "{table_name}"')  # nosec B608 - name comes from sqlite_master
         columns = [desc[0] for desc in cursor.description]
         rows = []
         for row in cursor.fetchall():

@@ -677,7 +677,7 @@ def fetch_cloud(cloud: str, *, timeout: float = _FETCH_TIMEOUT) -> dict[str, Any
     url = _CENR_URL_TEMPLATE.format(cloud=cloud)
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "MistHelper-menu206/1.0"})
-        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 -- fixed HTTPS host  # nosec B310
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # nosec B310 - the host is a fixed HTTPS URL
             status = getattr(resp, "status", 200)
             if status != 200:
                 logger.warning(
