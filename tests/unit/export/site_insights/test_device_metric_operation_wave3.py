@@ -34,7 +34,9 @@ from src.export.site_insights.device_metric_operation import (  # WHY: SUTs unde
 def _make_deps() -> dict:
     """Return the eight injected constructor kwargs as a fresh dict of MagicMocks."""
     apisession = MagicMock(name="apisession")  # WHY: opaque session object; passed through unchanged.
-    prompt_utils = MagicMock(name="PromptUtils")  # WHY: select_site/select_device stubs bound per-test.
+    prompt_utils = MagicMock(
+        name="PromptUtils"
+    )  # WHY: select_site/select_device_id_from_inventory stubs bound per-test.
     data_processing = MagicMock(name="DataProcessingUtils")  # WHY: flatten/escape helpers.
     data_exporter = MagicMock(name="DataExporter")  # WHY: write_with_format_selection observed.
     enhanced_ssh = MagicMock(name="EnhancedSSHRunner")  # WHY: sanitize_filename returns predictable token.
@@ -111,13 +113,13 @@ class TestExecute:
         with caplog.at_level(logging.INFO):  # WHY: capture starting log entry too.
             op.execute()  # WHY: exercise the top-level dispatcher.
         op.InsightMetricsUtils.export_const_insight_metrics.assert_called_once()  # WHY: refresh still ran.
-        op.PromptUtils.select_device.assert_not_called()  # WHY: cancelled before device prompt.
+        op.PromptUtils.select_device_id_from_inventory.assert_not_called()  # WHY: cancelled before device prompt.
 
     def test_execute_returns_when_context_fails(self, monkeypatch) -> None:
         """When _build_context returns None (bad MAC), execute() must skip _run_export."""
         op = _make_op()  # WHY: fresh SUT.
         op.PromptUtils.select_site.return_value = "site-xyz"  # WHY: happy prompt path.
-        op.PromptUtils.select_device.return_value = "dev-abc"  # WHY: device prompt succeeds.
+        op.PromptUtils.select_device_id_from_inventory.return_value = "dev-abc"  # WHY: device prompt succeeds.
         # WHY: force _build_context to return None so _run_export must never fire.
         monkeypatch.setattr(op, "_build_context", lambda *_args, **_kw: None)
         run_export = MagicMock(name="_run_export")  # WHY: assert we never enter the export pipeline.
@@ -129,7 +131,7 @@ class TestExecute:
         """When both helpers succeed, execute() must invoke _run_export with the built context."""
         op = _make_op()  # WHY: fresh SUT.
         op.PromptUtils.select_site.return_value = "site-xyz"  # WHY: happy prompt path.
-        op.PromptUtils.select_device.return_value = "dev-abc"  # WHY: device prompt succeeds.
+        op.PromptUtils.select_device_id_from_inventory.return_value = "dev-abc"  # WHY: device prompt succeeds.
         context = _make_context()  # WHY: canned frozen context handed downstream.
         monkeypatch.setattr(op, "_build_context", lambda *_a, **_kw: context)  # WHY: stub the builder.
         run_export = MagicMock(name="_run_export")  # WHY: observe the orchestrator call site.
@@ -164,14 +166,14 @@ class TestPromptSiteAndDevice:
         with caplog.at_level(logging.ERROR):
             result = op._prompt_site_and_device()  # WHY: exercise cancel-at-site branch.
         assert result is None  # WHY: contract: None means cancel.
-        op.PromptUtils.select_device.assert_not_called()  # WHY: never advance to device prompt.
+        op.PromptUtils.select_device_id_from_inventory.assert_not_called()  # WHY: never advance to device prompt.
         assert any("No site selected" in r.message for r in caplog.records)  # WHY: log preserved.
 
     def test_returns_none_when_device_falsy(self, caplog) -> None:
         """A falsy device_id after a good site_id also returns None."""
         op = _make_op()  # WHY: fresh SUT.
         op.PromptUtils.select_site.return_value = "site-xyz"  # WHY: first prompt succeeds.
-        op.PromptUtils.select_device.return_value = None  # WHY: user cancels at second prompt.
+        op.PromptUtils.select_device_id_from_inventory.return_value = None  # WHY: user cancels at second prompt.
         with caplog.at_level(logging.ERROR):
             result = op._prompt_site_and_device()  # WHY: exercise cancel-at-device branch.
         assert result is None  # WHY: contract: None means cancel.
@@ -181,7 +183,7 @@ class TestPromptSiteAndDevice:
         """When both prompts succeed, the helper returns (site_id, device_id)."""
         op = _make_op()  # WHY: fresh SUT.
         op.PromptUtils.select_site.return_value = "site-xyz"  # WHY: first prompt happy.
-        op.PromptUtils.select_device.return_value = "dev-abc"  # WHY: second prompt happy.
+        op.PromptUtils.select_device_id_from_inventory.return_value = "dev-abc"  # WHY: second prompt happy.
         assert op._prompt_site_and_device() == ("site-xyz", "dev-abc")  # WHY: contract shape.
 
 

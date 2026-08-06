@@ -80,7 +80,8 @@ class DeviceMetricOperation:
         if not site_id:
             logging.error("No site selected. Exiting.")  # WHY: Match legacy error log message verbatim
             return None
-        device_id = self.PromptUtils.select_device(site_id)  # WHY: Device prompt is scoped by site
+        # Issue #431 renamed select_device to select_device_id_from_inventory. This call site was missed.
+        device_id = self.PromptUtils.select_device_id_from_inventory(site_id)  # WHY: Device prompt is scoped by site
         if not device_id:
             logging.error("No device selected. Exiting.")  # WHY: Match legacy error log message verbatim
             return None
