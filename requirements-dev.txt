@@ -1,17 +1,54 @@
 # Pinned versions for the CI gate tools.
 #
 # Why this file exists:
-#   The workflow installed several gate tools with no version constraint, so a
-#   new release could fail CI on a commit that changed nothing. Bandit is the
-#   sharpest case. Issue #889 removed the `-ll` severity flag, so the gate now
-#   fails on a finding at any severity, and a new rule in a new release breaks
-#   the build immediately. Issue #1718 records that exposure.
+#   The workflow installed the gate tools with no version constraint, so a new
+#   release could fail CI on a commit that changed nothing. Each gate fails on a
+#   threshold or on a finding count, so a new rule, a new default, or a changed
+#   score moves the result without any change to this repository.
+#
+#   Two gates hold very little margin. Pylint scores 9.53 against a 9.5 floor.
+#   Radon fails when any block passes complexity 10. Bandit fails on a finding at
+#   any severity, because issue #889 removed the severity flag.
 #
 #   Dependabot watches the pip ecosystem at the repository root and reads every
-#   requirements file there. Putting the pin here means a new release arrives as
+#   requirements file there. Putting the pins here means a new release arrives as
 #   a reviewable pull request instead of as a surprise CI failure.
 #
-#   Runtime dependencies stay in requirements.txt. This file holds only the
-#   tools that grade the code.
+#   Issue #1718 started this file with bandit. Issue #1779 added the rest.
+#
+# How to change a pin:
+#   Let Dependabot raise it. If you raise one by hand, run the matching gate
+#   first and record the result in the pull request.
+#
+# Runtime dependencies stay in requirements.txt. This file holds only the tools
+# that grade the code. Every version below is the version CI already resolved, so
+# these pins do not change any gate result.
 
+# Lint and format
+ruff==0.16.1
+black==26.5.1
+
+# Type checking
+mypy==1.20.2
+types-requests==2.33.0.20260408
+types-paramiko==5.0.0.20260724
+types-tqdm==4.70.0.20260805
+
+# Tests and coverage
+pytest==9.1.1
+pytest-cov==7.1.0
+pytest-timeout==2.4.0
+hypothesis==6.165.2
+
+# Security
 bandit[toml]==1.9.4
+pip-audit==2.10.1
+
+# Code quality
+pylint==4.0.6
+radon==6.0.1
+vulture==2.16
+
+# Docstrings
+pydocstyle[toml]==6.3.0
+interrogate==1.7.0
