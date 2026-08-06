@@ -438,6 +438,26 @@ target-version = ["py313"]
 [tool.pylint.main]
 fail-under = 9.5
 
+# src/maps, src/ssh, and src/ui stay out of the pylint run.
+#
+# The exclusion used to sit on the CI command line as --ignore=maps,ssh,ui, where a
+# reader of this file could not see it. Issue #891 moved it here, so one file holds
+# the whole gate configuration. Issue #889 set the same rule for bandit.
+#
+# Reason: the three packages report 529 messages. The largest groups are 123
+# import-outside-toplevel, 93 invalid-name, 71 protected-access, and 61
+# use-dict-literal. Without the exclusion the Linux score falls from 9.53 to 9.41,
+# which fails the 9.5 gate. Pull request #1723 tried the removal and reverted it.
+#
+# Removal plan: issue #891 tracks the fixes. Delete an entry below when its package
+# holds the score above 9.5 on Linux. A Windows run is not a valid check, because it
+# reports 9.71 where Linux reports 9.41 for the same commit.
+ignore-paths = [
+  '^src[\\/]maps[\\/].*$',
+  '^src[\\/]ssh[\\/].*$',
+  '^src[\\/]ui[\\/].*$',
+]
+
 [tool.pylint.format]
 max-line-length = 120
 
