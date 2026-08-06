@@ -2685,17 +2685,36 @@ def _preflight_verify_credentials(require_token: bool = True) -> None:
     character SHA-256 fingerprint, so it carries no character of the token itself.
     """
     logging.info("Running credential/config preflight (require_token=%s)", require_token)  # Before-action log.
+    problems = _collect_credential_problems(require_token)  # Local string checks only, no network.
+    if not problems:  # Host present and (when required) a real token present -> continue to session init.
+        logging.debug("Credential/config preflight passed (require_token=%s)", require_token)  # After-action log.
+        return
+    _report_credential_failure(problems)  # Emits the operator guidance and exits non-zero.
+
+
+def _collect_credential_problems(require_token: bool) -> list[str]:
+    """Return every host/token configuration problem so the operator sees all fixes in one pass."""
     host, tokens = _parse_api_tokens()  # Reuse the canonical host/token reader (env only, no network).
     problems: list[str] = []  # Collect all issues so the operator sees every fix in one pass.
     if _looks_like_placeholder(host):  # Blank/placeholder host makes mistapi build malformed URLs.
         problems.append("MIST_HOST is blank or a placeholder - set a real host (e.g. api.mist.com)")
-    if require_token and not tokens:  # No MIST_APITOKEN/MIST_API_TOKEN resolved to a non-empty value.
-        problems.append("no API token found - set MIST_APITOKEN or MIST_API_TOKEN")
-    elif require_token and all(_looks_like_placeholder(token) for token in tokens):  # Only placeholders present.
-        problems.append(f"API token is a placeholder value (redacted: {_redact_tokens(tokens)})")
-    if not problems:  # Host present and (when required) a real token present -> continue to session init.
-        logging.debug("Credential/config preflight passed (require_token=%s)", require_token)  # After-action log.
-        return
+    problems.extend(_collect_token_problems(require_token, tokens))  # Token rules are token-mode only.
+    return problems  # Empty list means the preflight passed.
+
+
+def _collect_token_problems(require_token: bool, tokens: list[str]) -> list[str]:
+    """Return the token problems for modes that need a token, or nothing for interactive login."""
+    if not require_token:  # Interactive --login authenticates by email/password, so no token is needed.
+        return []
+    if not tokens:  # No MIST_APITOKEN/MIST_API_TOKEN resolved to a non-empty value.
+        return ["no API token found - set MIST_APITOKEN or MIST_API_TOKEN"]
+    if all(_looks_like_placeholder(token) for token in tokens):  # Only placeholders present.
+        return [f"API token is a placeholder value (redacted: {_redact_tokens(tokens)})"]
+    return []  # At least one real token is present.
+
+
+def _report_credential_failure(problems: list[str]) -> NoReturn:
+    """Log every preflight problem with remediation guidance, then exit before any session is built."""
     logging.error("Credential/config preflight failed: %s", "; ".join(problems))  # Names only - never secrets.
     logging.error("[ERROR] Cannot start a Mist session - credential/config preflight failed:")
     for problem in problems:  # Enumerate each distinct problem on its own line.
@@ -5177,7 +5196,6 @@ def _initialize_dependencies(args: argparse.Namespace) -> None:
 
 def _establish_mist_session(args: argparse.Namespace) -> None:
     """Initialize Mist API session using interactive login or API token, then detect MSP privileges."""
-    global msp_privileges  # We publish detected MSP grants to the module global for later menus/exporters to reuse
     logging.debug("_establish_mist_session: starting session initialization")  # Log entry
     # Feature 1020 (US3, R4 insertion-point 1): host/token preflight for every dispatch mode. Runs before
     # the --login/token branches so a missing/placeholder host or token exits with a redacted, actionable
@@ -5186,31 +5204,49 @@ def _establish_mist_session(args: argparse.Namespace) -> None:
     # distinct failure mode - a non-interactive org-id miss - is guarded separately in ConfigUtils (R4
     # insertion-point 2), since org selection is interactive-vs-non-interactive dependent.
     _preflight_verify_credentials(require_token=not args.login)  # Fail closed pre-network on bad host/token
+    _preflight_systematic_test_org(args)  # Resolve org before any session or MSP call in systematic modes.
+    if args.login:  # Interactive login requested via --login flag
+        _init_interactive_session()  # Email/password path. Exits non-zero on failure.
+    else:  # Default path: use API token from .env or environment variables
+        _init_token_session()  # Token path. Exits non-zero on failure, then publishes MSP grants.
+    logging.debug("_establish_mist_session: session established successfully")  # Log successful auth
+
+
+def _preflight_systematic_test_org(args: argparse.Namespace) -> None:
+    """Resolve the org id before session work when running either systematic test mode."""
     is_systematic_test = bool(  # WHY: both systematic modes need a resolved org before any API session work.
         getattr(args, "test", False) or getattr(args, "testinteractive", False)
     )
-    if is_systematic_test:  # WHY: no session or MSP privilege request is useful without the required org context.
-        logging.info(
-            "SYSTEMATIC_TEST: validating org_id before Mist session initialization"
-        )  # Log before local org-id resolution.
-        ConfigUtils.get_cached_or_prompted_org_id()  # Fail closed before session construction or MSP HTTP calls.
-        logging.debug(
-            "SYSTEMATIC_TEST: org_id preflight passed before Mist session initialization"
-        )  # Log successful local validation.
-    if args.login:  # Interactive login requested via --login flag
-        logging.info("Interactive login mode requested via --login flag")  # Log before interactive login
-        if not MistSessionInteractiveInitializer.initialize():  # Attempt email/password login
-            logging.error("Failed to initialize Mist API session via interactive login")  # Log auth failure
-            echo(" Failed to initialize Mist API session. Check your credentials.")
-            sys.exit(1)  # Exit -- cannot proceed without authenticated session
-        ConfigUtils.set_apisession(apisession)  # Publish authenticated session to ConfigUtils cache (1015 T-12)
-    else:  # Default path: use API token from .env or environment variables
-        if not MistSessionInitializer.initialize():  # Attempt token-based session init
-            logging.error("Failed to initialize Mist API session")  # Log token auth failure
-            echo(" Failed to initialize Mist API session. Check your credentials.")
-            sys.exit(1)  # Exit -- cannot proceed without authenticated session
-        ConfigUtils.set_apisession(apisession)  # Publish authenticated session to ConfigUtils cache (1015 T-12)
-        msp_privileges = detect_msp_privileges(apisession)  # Detect MSP grants for token session and publish to global
+    if not is_systematic_test:  # WHY: interactive and single-menu runs resolve the org later, on demand.
+        return
+    logging.info(
+        "SYSTEMATIC_TEST: validating org_id before Mist session initialization"
+    )  # Log before local org-id resolution.
+    ConfigUtils.get_cached_or_prompted_org_id()  # Fail closed before session construction or MSP HTTP calls.
+    logging.debug(
+        "SYSTEMATIC_TEST: org_id preflight passed before Mist session initialization"
+    )  # Log successful local validation.
+
+
+def _init_interactive_session() -> None:
+    """Authenticate with email and password, then publish the session to the shared config cache."""
+    logging.info("Interactive login mode requested via --login flag")  # Log before interactive login
+    if not MistSessionInteractiveInitializer.initialize():  # Attempt email/password login
+        logging.error("Failed to initialize Mist API session via interactive login")  # Log auth failure
+        echo(" Failed to initialize Mist API session. Check your credentials.")
+        sys.exit(1)  # Exit -- cannot proceed without authenticated session
+    ConfigUtils.set_apisession(apisession)  # Publish authenticated session to ConfigUtils cache (1015 T-12)
+
+
+def _init_token_session() -> None:
+    """Authenticate with an API token, publish the session, and detect MSP privileges."""
+    global msp_privileges  # We publish detected MSP grants to the module global for later menus/exporters to reuse
+    if not MistSessionInitializer.initialize():  # Attempt token-based session init
+        logging.error("Failed to initialize Mist API session")  # Log token auth failure
+        echo(" Failed to initialize Mist API session. Check your credentials.")
+        sys.exit(1)  # Exit -- cannot proceed without authenticated session
+    ConfigUtils.set_apisession(apisession)  # Publish authenticated session to ConfigUtils cache (1015 T-12)
+    msp_privileges = detect_msp_privileges(apisession)  # Detect MSP grants for token session and publish to global
     logging.debug("_establish_mist_session: session established successfully")  # Log successful auth
 
 
