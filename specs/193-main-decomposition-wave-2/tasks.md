@@ -12,12 +12,12 @@
 **Goal**: Lock the wave scope and hard-gate behavior before any extraction work starts.
 **Independent Test**: Scope guard checklist exists and is acknowledged before Phase 1.
 
-- [ ] T000 [US1] Record explicit out-of-scope guard in `specs/193-main-decomposition-wave-2/checklists/scope-guard.md` confirming `GlobalImportManager` is excluded from this wave and must not be modified except import rewiring strictly required by moved classes
-- [ ] T000A [US1] Record hard-gate remediation policy in `specs/193-main-decomposition-wave-2/checklists/scope-guard.md`: any failed validation/parity/import/runtime check must be remediated in-phase and re-run to pass before signoff
-- [ ] T000B [US1] Create shared import-cycle gate test `tests/contract/test_import_graph.py` with assertions covering extracted module boundaries and one-way layering (`MistHelper.py` orchestrator -> `src/*` modules)
-- [ ] T000C [US1] Create shared runtime coupling gate harness `tests/integration/test_runtime_coupling.py` with phase-selectable fixtures/profiles (`phase_1` through `phase_9`)
-- [ ] T000D [US2] Create deterministic parity contract at `specs/193-main-decomposition-wave-2/contracts/parity-contract.md` defining baseline sources, normalization rules, comparison dimensions, and fail criteria
-- [ ] T000E [US2] Capture pre-refactor parity baseline artifacts for all targeted menu/API/backend paths in `specs/193-main-decomposition-wave-2/checklists/parity-baseline/`
+- [X] T000 [US1] Record explicit out-of-scope guard in `specs/193-main-decomposition-wave-2/checklists/scope-guard.md` confirming `GlobalImportManager` is excluded from this wave and must not be modified except import rewiring strictly required by moved classes
+- [X] T000A [US1] Record hard-gate remediation policy in `specs/193-main-decomposition-wave-2/checklists/scope-guard.md`: any failed validation/parity/import/runtime check must be remediated in-phase and re-run to pass before signoff
+- [X] T000B [US1] Create shared import-cycle gate test `tests/contract/test_import_graph.py` with assertions covering extracted module boundaries and one-way layering (`MistHelper.py` orchestrator -> `src/*` modules)
+- [X] T000C [US1] Create shared runtime coupling gate harness `tests/integration/test_runtime_coupling.py` with phase-selectable fixtures/profiles (`phase_1` through `phase_9`)
+- [X] T000D [US2] Create deterministic parity contract at `specs/193-main-decomposition-wave-2/contracts/parity-contract.md` defining baseline sources, normalization rules, comparison dimensions, and fail criteria
+- [X] T000E [US2] Capture pre-refactor parity baseline artifacts for all targeted menu/API/backend paths in `specs/193-main-decomposition-wave-2/checklists/parity-baseline/`
 ---
 
 ## Format: `[ID] [P?] [Story] Description`
