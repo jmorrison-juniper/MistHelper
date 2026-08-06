@@ -84,7 +84,7 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
-      - run: pip install ruff
+      - run: pip install -r requirements-dev.txt  # pinned (issue #1779)
       - name: Ruff lint
         run: ruff check .
 
@@ -115,7 +115,7 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
-      - run: pip install black==26.5.1
+      - run: pip install -r requirements-dev.txt  # pinned (issue #1779)
       - name: Black format check
         run: black --check --diff .
 
@@ -154,7 +154,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
-          pip install 'mypy<2.0' 'types-requests<2.33.0.20260503' types-paramiko types-tqdm
+          pip install -r requirements-dev.txt  # pinned mypy and stubs (issue #1779)
       - name: Run mypy
         run: mypy ${{ env.SRC_PATH }} --config-file pyproject.toml
 
@@ -188,7 +188,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
-          pip install pytest pytest-cov hypothesis
+          pip install -r requirements-dev.txt  # pinned pytest stack (issue #1779)
       - name: Run tests with coverage
         run: pytest --cov=${{ env.SRC_PATH }} --cov-fail-under=${{ env.COVERAGE_THRESHOLD }}
 
@@ -217,7 +217,7 @@ jobs:
           cache: pip
       # Pinned in requirements-dev.txt so Dependabot raises a new release as a
       # reviewable pull request rather than breaking CI on an unrelated commit (issue #1718)
-      - run: pip install -r requirements-dev.txt
+      - run: pip install -r requirements-dev.txt  # pinned (issue #1779)
       - name: Run Bandit
         # -c pyproject.toml picks up [tool.bandit] targets/exclude_dirs (issue #881)
         # No severity flag: the gate fails on a finding at any severity, including LOW (issue #889)
@@ -252,7 +252,7 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
-      - run: pip install pip-audit
+      - run: pip install -r requirements-dev.txt  # pinned (issue #1779)
       - name: Run pip-audit
         # Reviewed 2026-07-28 under issue #890. Both historical --ignore-vuln entries
         # are removed. `pip-audit -r requirements.txt` with no ignore flags reports
@@ -291,7 +291,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
-          pip install pylint
+          pip install -r requirements-dev.txt  # pinned pylint (issue #1779)
       # The package exclusion lives in [tool.pylint.main] ignore-paths in pyproject.toml,
       # not on this line. Issue #891 moved it there so one file holds the gate config.
       # That comment carries the reason, the measurements, and the removal plan.
@@ -310,7 +310,7 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
-      - run: pip install radon
+      - run: pip install -r requirements-dev.txt  # pinned (issue #1779)
       - name: Check cyclomatic complexity
         run: |
           radon cc ${{ env.SRC_PATH }} -a -nb
@@ -342,7 +342,7 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
-      - run: pip install vulture
+      - run: pip install -r requirements-dev.txt  # pinned (issue #1779)
       - name: Detect dead code
         run: vulture ${{ env.SRC_PATH }} --min-confidence ${{ env.VULTURE_CONFIDENCE }}
 
@@ -361,7 +361,7 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
-      - run: pip install "pydocstyle[toml]"
+      - run: pip install -r requirements-dev.txt  # pinned (issue #1779)
       - name: Check docstring conventions
         run: pydocstyle ${{ env.SRC_PATH }}
 
@@ -377,7 +377,7 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
-      - run: pip install interrogate
+      - run: pip install -r requirements-dev.txt  # pinned (issue #1779)
       - name: Check docstring coverage
         run: interrogate ${{ env.SRC_PATH }} --fail-under ${{ env.INTERROGATE_THRESHOLD }} -v
 
@@ -442,7 +442,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
-          pip install pytest pytest-timeout
+          pip install -r requirements-dev.txt  # pinned pytest and timeout plugin (issue #1779)
       - name: Run E2E smoke tests
         run: pytest tests/e2e/ -v --timeout=60
 
