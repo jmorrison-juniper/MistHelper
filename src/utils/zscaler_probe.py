@@ -181,7 +181,7 @@ def _icmp_ping(host: str, timeout: float) -> bool:
     timeout_val = str(int(timeout * 1000)) if is_win else str(int(timeout))
     cmd = ["ping", count_flag, "1", timeout_flag, timeout_val, host]
     try:
-        completed = subprocess.run(  # noqa: S603 - args are validated above
+        completed = subprocess.run(  # the argv parts are validated above
             cmd,  # nosec B603 - shell stays False, so host becomes one argv element and cannot start a program.
             capture_output=True,
             text=True,
