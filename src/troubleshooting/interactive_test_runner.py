@@ -26,6 +26,11 @@ class TestSiteSelectorUnresolved(RuntimeError):
     """
 
 
+_THIRD_PARTY_LOGGER_ROOTS = frozenset(
+    {"mistapi", "websocket", "urllib3", "requests", "paramiko"}
+)  # WHY: #1786 -- these libraries log a transport condition the caller may treat as normal.
+
+
 class _LoggedErrorObserver(logging.Handler):
     """Root-logger handler that counts ERROR (or higher) records emitted during an option run.
 
@@ -37,17 +42,31 @@ class _LoggedErrorObserver(logging.Handler):
         the ``_invoke_option`` call gives the runner a deterministic signal
         that a logged-error occurred without an exception being raised, so it
         can route to the failure emitter and keep the exit code accurate.
+
+        Issue #1786 — the handler sits on the root logger, so it also saw
+        records from third-party libraries. The ``mistapi`` SDK logs an ERROR
+        for every HTTP 404, and a probe-style operation treats a 404 as the
+        answer rather than a fault. Menu 74 asks for 61 insight metrics and a
+        site rarely carries them all, which produced 122 records and one false
+        failure. Only a MistHelper logger now counts, which keeps the whole
+        intent of #1636, because a handler that swallows its own logged error
+        still reports under a MistHelper logger name.
     """
 
     def __init__(self) -> None:
         """Configure the handler at ERROR level with a zero-count captured tally."""
         super().__init__(level=logging.ERROR)
         self.error_count = 0  # WHY: cheap monotonic tally. Callers only check >0.
+        self.ignored_count = 0  # WHY: #1786 -- third-party records, reported so they stay visible.
 
     def emit(self, record: logging.LogRecord) -> None:  # noqa: D401 -- logging.Handler API
         """Increment the captured error tally for each ERROR (or higher) record."""
-        if record.levelno >= logging.ERROR:
-            self.error_count += 1
+        if record.levelno < logging.ERROR:
+            return
+        if record.name.split(".", 1)[0] in _THIRD_PARTY_LOGGER_ROOTS:
+            self.ignored_count += 1  # WHY: #1786 -- the operation decides whether this matters.
+            return
+        self.error_count += 1
 
 
 @dataclass(frozen=True, slots=True)
@@ -458,6 +477,12 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
                 self._invoke_option(option, test_site_id)  # WHY: invoke the menu callable.
             finally:
                 root_logger.removeHandler(observer)  # WHY: detach before pass/fail emission to avoid self-count.
+            if observer.ignored_count:
+                logging.debug(
+                    "INTERACTIVE_TEST: option %s ignored %d third-party ERROR record(s)",
+                    option,
+                    observer.ignored_count,
+                )  # WHY: #1786 -- keep SDK transport errors visible without failing the option.
             if observer.error_count > 0:
                 # WHY: #1636 — logged error without an exception is still a failure.
                 synthesized = RuntimeError(f"operation logged {observer.error_count} error record(s) without raising")
