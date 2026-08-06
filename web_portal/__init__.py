@@ -1,2 +1,4 @@
-# web_portal - MistHelper Web Portal Interface
-# Flask-based web portal for browser access to MistHelper operations
+"""MistHelper web portal interface.
+
+A Flask web portal that gives browser access to the MistHelper operations.
+"""

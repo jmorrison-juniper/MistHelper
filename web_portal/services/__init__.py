@@ -1,1 +1,1 @@
-# web_portal.services - Business logic service classes
+"""Business logic service classes for the web portal."""

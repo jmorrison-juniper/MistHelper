@@ -2413,7 +2413,7 @@ API_REQUEST_RETRY_DELAY = float(os.getenv("API_REQUEST_RETRY_DELAY", "5.0"))  # 
 FAST_MODE_MAX_RETRIES = int(os.getenv("FAST_MODE_MAX_RETRIES", "3"))  # Retry ceiling when --fast is active
 FAST_MODE_RETRY_DELAY = float(os.getenv("FAST_MODE_RETRY_DELAY", "0.5"))  # Shorter retry delay for fast mode
 
-org_id = None  # Active organization ID, populated after the user selects an org
+org_id: str | None = None  # Active organization ID, populated after the user selects an org
 
 # Additional Fast Mode Configuration from .env (continuing from earlier definitions)
 # NOTE: FAST_MODE_BACKOFF_MULTIPLIER extracted to
