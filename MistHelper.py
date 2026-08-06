@@ -25,9 +25,9 @@ if sys.version_info < MINIMUM_PYTHON_VERSION:  # Exit early if Python is too old
         f"Download from: https://www.python.org/downloads/"
     )
     # Pre-logging setup: logging module not yet imported, so stderr prints are the only viable channel.
-    print(f"\n{'=' * 70}", file=sys.stderr)  # noqa: T201
-    print(warning_msg, file=sys.stderr)  # noqa: T201
-    print(f"{'=' * 70}\n", file=sys.stderr)  # noqa: T201
+    print(f"\n{'=' * 70}", file=sys.stderr)
+    print(warning_msg, file=sys.stderr)
+    print(f"{'=' * 70}\n", file=sys.stderr)
     # Log will be configured later, but we cannot use logging yet
     # The warning is printed to stderr so it is visible regardless
 
@@ -53,7 +53,7 @@ from collections.abc import (
     Iterable,  # Type hints for static analysis
 )
 from datetime import datetime  # Import datetime for timestamping logs and events
-from typing import TYPE_CHECKING, Any, NoReturn, TextIO, cast
+from typing import TYPE_CHECKING, Any, ClassVar, NoReturn, TextIO, cast
 
 from src.utils.console import echo  # WHY: 1031 stdout + INFO log helper replaces legacy WARNING-channel echoes.
 from src.utils.subprocess_runner import (  # Centralized subprocess dispatch + exception re-exports (initiative 1016).
@@ -99,16 +99,36 @@ except ImportError:  # If database dependencies (python-arango, redis) not insta
 # consumers. Adding a name here MUST accompany a corresponding update to
 # specs/1016-misthelper-suppression-cleanup/contracts/public_api_snapshot.txt.
 __all__ = [
+    "API_REQUEST_MAX_RETRIES",
+    "API_REQUEST_RETRY_DELAY",
+    "API_REQUEST_TIMEOUT",
+    "AUTO_UPGRADE_DEPENDENCIES",
+    "AUTO_UPGRADE_UV",
+    "CSV_FRESHNESS_MINUTES",
+    "DATABASE_PATH",
+    "DB_LAYER_AVAILABLE",
+    "DEFAULT_API_PAGE_LIMIT",
+    "DOTENV_AVAILABLE",
+    "FAST_MODE_ENABLED",
+    "FAST_MODE_FALLBACK_THREADS",
+    "FAST_MODE_MAX_RETRIES",
+    "FAST_MODE_RETRY_DELAY",
+    "FAST_MODE_RETRY_MAX_RETRIES",
+    "FAST_MODE_RETRY_THREADS",
+    "IS_TEST_MODE",
+    "LAST_SELECTED_SITE_ID",
+    "MINIMUM_PYTHON_VERSION",
+    "MIST_SITE_EXCLUDE_PREFIX",
+    "OUTPUT_FORMAT",
+    "PROGRESS_EMITTER",
+    "TYPE_CHECKING",
+    "UPGRADE_CHECK_TIMEOUT",
+    "UTC",
     "APICoreFetchUtils",
     "APIDataFetcher",
     "APIFetchUtils",
     "APITenantFetchUtils",
-    "API_REQUEST_MAX_RETRIES",
-    "API_REQUEST_RETRY_DELAY",
-    "API_REQUEST_TIMEOUT",
     "ARPCommandManager",
-    "AUTO_UPGRADE_DEPENDENCIES",
-    "AUTO_UPGRADE_UV",
     "AddressAuditEngine",
     "AnomalyMetricsDiscovery",
     "Any",
@@ -116,15 +136,10 @@ __all__ = [
     "AuditAnalysisOps",
     "BulkRadiusWLANConfigManager",
     "CLIShellManager",
-    "CSV_FRESHNESS_MINUTES",
     "CacheUtils",
     "ConfigUtils",
     "ConnectionPoolExecutor",
     "ConstDefinitionsExporter",
-    "DATABASE_PATH",
-    "DB_LAYER_AVAILABLE",
-    "DEFAULT_API_PAGE_LIMIT",
-    "DOTENV_AVAILABLE",
     "DataCollectionManager",
     "DataDirectoryChecker",
     "DataExporter",
@@ -147,12 +162,6 @@ __all__ = [
     "ExtractedMarvisTroubleshootUtils",
     "ExtractedSiteAnalyticsConfigurator",
     "ExtractedSiteInventoryHealthAnalyzer",
-    "FAST_MODE_ENABLED",
-    "FAST_MODE_FALLBACK_THREADS",
-    "FAST_MODE_MAX_RETRIES",
-    "FAST_MODE_RETRY_DELAY",
-    "FAST_MODE_RETRY_MAX_RETRIES",
-    "FAST_MODE_RETRY_THREADS",
     "FastModeBackoffMultiplier",
     "FastModeSequentialMaxRetries",
     "FilePathUtils",
@@ -166,7 +175,6 @@ __all__ = [
     "GatewayTestExporter",
     "GlobalImportManager",
     "GlobalWiredClientReportGenerator",
-    "IS_TEST_MODE",
     "InputUtils",
     "InsightMetricsUtils",
     "InteractiveDisplayUtils",
@@ -174,12 +182,9 @@ __all__ = [
     "InventoryCSVComparator",
     "IsDebugMode",
     "KeyboardListener",
-    "LAST_SELECTED_SITE_ID",
     "LicenseExportUtils",
     "LogSanitizer",
     "LoginOrchestrator",
-    "MINIMUM_PYTHON_VERSION",
-    "MIST_SITE_EXCLUDE_PREFIX",
     "MSPInventoryExporter",
     "MacTableCommand",
     "MainEntrypoint",
@@ -190,7 +195,6 @@ __all__ = [
     "MistSessionInteractiveInitializer",
     "MistWanTargetPorts",
     "MspOrgSelector",
-    "OUTPUT_FORMAT",
     "OfflineDeviceReporter",
     "OperationRegistry",
     "OrgAdminExporter",
@@ -206,7 +210,6 @@ __all__ = [
     "OrgSiteExporter",
     "OrgTemplateExporter",
     "OrgTicketManager",
-    "PROGRESS_EMITTER",
     "PackageImportMapManager",
     "PackageInstaller",
     "PacketCaptureManager",
@@ -242,12 +245,9 @@ __all__ = [
     "SwitchToInteractiveLoginManager",
     "SystematicTestOption",
     "TUILauncher",
-    "TYPE_CHECKING",
     "TelemetryEmitter",
     "TimeUtils",
     "TroubleshootUtils",
-    "UPGRADE_CHECK_TIMEOUT",
-    "UTC",
     "ValidationUtils",
     "VirtualChassisManager",
     "WAN2MigrationLauncher",
@@ -750,29 +750,11 @@ if sys.version_info < MINIMUM_PYTHON_VERSION:  # Check if Python is below minimu
     )
 
 
-# Debug mode detection helper
-# NOTE: is_debug_mode extracted to IsDebugMode.check. See specs/1012-misthelper-refactor-hot-functions/spec.md.
-
-
 # ============================================================================
 # CONFIGURATION DATACLASSES (5-Item Rule Compliance)
 # ============================================================================
 # These dataclasses group related parameters to comply with the 5-parameter limit
 # per function. Each dataclass encapsulates configuration for a specific domain.
-
-
-# NOTE: SSHConnectionConfig removed (1014 P3) - was a dead duplicate of src/ssh/ssh_runner.py:155.
-#       Nothing in MistHelper.py imported the local copy, and all src/ssh/*.py callers
-#       already imported from src.ssh.ssh_runner. Import from src.ssh.ssh_runner instead.
-# NOTE: SSHExecutionConfig removed (1014 P1) - was a dead duplicate of src/ssh/ssh_runner.py:167.
-#       Nothing in MistHelper.py imported the local copy, and all src/ssh/batch/*.py callers
-#       already imported from src.ssh.ssh_runner. Import from src.ssh.ssh_runner instead.
-# NOTE: WebSocketListenerConfig removed - use ARPCommandManager._listen_for_output parameters directly
-# NOTE: MapViewerConfig removed (SC-002) - unused dataclass, MapsManager builds runtime state directly
-
-
-# NOTE: DeviceFetchConfig extracted to src/refactors/device_data_fetcher.py::DeviceFetchConfig.
-# See specs/1015-misthelper-refactor-final-15/spec.md.
 
 
 # ============================================================================
@@ -804,10 +786,6 @@ except Exception:  # If python-dotenv is not installed yet, fall back to a manua
                     )  # Set the var only if not already defined (do not override real env)
     except (FileNotFoundError, PermissionError, OSError) as _dotenv_exc:  # .env absent, unreadable, or IO error.
         logging.debug("Skipping .env fallback parse: %s", _dotenv_exc)  # Diagnostic-only. The .env file is optional.
-
-# NOTE: PACKAGE_IMPORT_MAP extracted to
-# src/refactors/package_import_map.py::PackageImportMapManager.MAPPING
-# per initiative 1011 SC-025 (FR-003: no wrapper shim, FR-005: fn->method).
 
 
 def _get_installed_version(package_name: str) -> str:  # Look up the installed version string for a package
@@ -1071,7 +1049,7 @@ mistapi: Any = None  # Placeholder. The real mistapi module is loaded later by G
 # tqdm wrapper: canonical home is src/utils/tqdm_wrapper.py (1015 T-14, Cat E).
 # The wrapper resolves to the real tqdm package if installed, else a no-op pass-through.
 # Re-exported here so ``MistHelper.tqdm`` / ``mh.tqdm`` callers keep working unchanged.
-from src.utils.tqdm_wrapper import tqdm  # noqa: E402, I001  # Cat E canonical (1015 T-14) -- re-export.
+from src.utils.tqdm_wrapper import tqdm  # Cat E canonical (1015 T-14) -- re-export.
 
 try:  # The tool needs requests for all HTTP calls
     import requests  # HTTP library fail-fast install guard (also used via function-local imports)
@@ -1207,7 +1185,7 @@ class GlobalImportManager:
     - Performance optimization through early imports
     """
 
-    _REQUIRED_PACKAGES: dict[str, str | None] = {  # Class-level required spec map (data, not behavior)
+    _REQUIRED_PACKAGES: ClassVar[dict[str, str | None]] = {  # Class-level required spec map (data, not behavior)
         # Core API and networking
         "mistapi": "mistapi>=0.63.1",  # Official Mist API SDK floor aligned with latest validated upstream release
         "requests": "requests>=2.28.0",  # HTTP client used for API calls
@@ -1242,7 +1220,7 @@ class GlobalImportManager:
         "traceback": None,  # Built-in
     }
 
-    _OPTIONAL_PACKAGES_RAW: dict[str, str | None] = {  # Class-level optional spec map (data, not behavior)
+    _OPTIONAL_PACKAGES_RAW: ClassVar[dict[str, str | None]] = {  # Class-level optional spec map (data, not behavior)
         "sshkeyboard": "sshkeyboard>=2.3.0",  # Keyboard capture (legacy/optional)
         "pyte": "pyte>=0.8.0",  # Terminal emulation for parsing device output
         "usaddress-scourgify": "usaddress-scourgify>=0.6.0",  # US address normalization
@@ -2049,7 +2027,7 @@ class GlobalImportManager:
 
     # Simple module -> [(global_name, attr_name_or_None)] hoists. attr None binds the module object itself.
     # Used by _hoist_module_globals so _make_modules_global stays a flat loop instead of a long if/elif chain.
-    _SIMPLE_GLOBAL_HOISTS: dict[str, list[tuple[str, str | None]]] = {
+    _SIMPLE_GLOBAL_HOISTS: ClassVar[dict[str, list[tuple[str, str | None]]]] = {
         "datetime": [("timezone", "timezone"), ("timedelta", "timedelta")],  # Hoist datetime's tz/delta helpers
         "concurrent.futures": [  # Hoist the thread-pool primitives plus the package itself
             ("ThreadPoolExecutor", "ThreadPoolExecutor"),
@@ -2373,24 +2351,12 @@ IS_TEST_MODE = "--test" in sys.argv or "--testinteractive" in sys.argv
 LAST_SELECTED_SITE_ID: str | None = None
 
 
-# NOTE: TimeUtils removed (1014 P6, Cat E) - canonical body at src/time/time_utils.py.
-#       Import from src.time.time_utils. MistHelper.py re-exports at top import block.
-
-
 # ============================================================================
 # IMPORT STATUS AND INPUT UTILITIES CLASS
 # ============================================================================
 
 
-# NOTE: ``InputUtils`` extracted to ``src/utils/input_utils.py`` per initiative
-# 1015 T-09 (Cat E fold-in). ``MistHelper.py`` re-exports the class so
-# ``MistHelper.InputUtils`` / ``mh.InputUtils`` callers keep working
-# transparently -- the re-exported symbol is the same class, not a delegator.
-# The rebind dance ``ensure_tqdm_available`` used to perform is no longer
-# needed since T-14 makes ``tqdm`` resolve through ``src.utils.tqdm_wrapper``
-# at import time. This code keeps the probe for its logging side effect at the
-# single caller (``src/refactors/main_entrypoint.py``).
-from src.utils.input_utils import InputUtils  # noqa: E402, I001  # Cat E canonical (1015 T-09) -- re-export.
+from src.utils.input_utils import InputUtils  # Cat E canonical (1015 T-09) -- re-export.
 
 # ============================================================================
 # CONFIGURATION VARIABLES
@@ -2413,37 +2379,16 @@ API_REQUEST_RETRY_DELAY = float(os.getenv("API_REQUEST_RETRY_DELAY", "5.0"))  # 
 FAST_MODE_MAX_RETRIES = int(os.getenv("FAST_MODE_MAX_RETRIES", "3"))  # Retry ceiling when --fast is active
 FAST_MODE_RETRY_DELAY = float(os.getenv("FAST_MODE_RETRY_DELAY", "0.5"))  # Shorter retry delay for fast mode
 
+FAST_MODE_ENABLED: bool = False  # Set to True via --fast CLI flag at startup
+
 org_id: str | None = None  # Active organization ID, populated after the user selects an org
 
-# Additional Fast Mode Configuration from .env (continuing from earlier definitions)
-# NOTE: FAST_MODE_BACKOFF_MULTIPLIER extracted to
-# src/refactors/fast_mode_backoff_multiplier.py::FastModeBackoffMultiplier.VALUE
-# per initiative 1011 SC-028 (FR-003: no wrapper shim, FR-005: const->classattr).
-# NOTE: FAST_MODE_DEVICES_PER_THREAD extracted to
-# src/refactors/fast_mode_devices_per_thread.py::FastModeDevicesPerThread.VALUE
-# per initiative 1011 SC-029 (FR-003: no wrapper shim, FR-005: const->classattr).
-# NOTE: FAST_MODE_SEQUENTIAL_MAX_RETRIES extracted to
-# src/refactors/fast_mode_sequential_max_retries.py::FastModeSequentialMaxRetries.VALUE
-# per initiative 1011 SC-030 (FR-003: no wrapper shim, FR-005: const->classattr).
+
 FAST_MODE_RETRY_THREADS = int(os.getenv("FAST_MODE_RETRY_THREADS", "4"))  # Thread count for the retry pass
 FAST_MODE_RETRY_MAX_RETRIES = int(os.getenv("FAST_MODE_RETRY_MAX_RETRIES", "2"))  # Retry ceiling within the retry pass
 FAST_MODE_FALLBACK_THREADS = int(os.getenv("FAST_MODE_FALLBACK_THREADS", "8"))  # Thread count for the fallback pass
-# NOTE: FAST_MODE_MAX_CONCURRENT_CONNECTIONS extracted to
-# src/refactors/fast_mode_constants.py::FAST_MODE_MAX_CONCURRENT_CONNECTIONS.
-# See specs/1015-misthelper-refactor-final-15/spec.md.
-# NOTE: FAST_MODE_USE_CONNECTION_AWARE_THREADING extracted to
-# src/refactors/fast_mode_constants.py::FAST_MODE_USE_CONNECTION_AWARE_THREADING (T-03).
-# See specs/1015-misthelper-refactor-final-15/spec.md.
-FAST_MODE_ENABLED: bool = False  # Set to True via --fast CLI flag at startup
 
-# NOTE: MIST_WAN_TARGET_PORTS extracted to src/refactors/mist_wan_target_ports.py
-# per initiative 1011 SC-032 (FR-003: no wrapper shim, FR-005: assignment->classattr).
-
-# NOTE: MIST_SITE_EXCLUDE_PREFIX extracted to src/refactors/mist_site_exclude_prefix.py (T-15, Cat E).
-# Site Exclusion Configuration from .env (REQUIRED - no defaults).
-# The re-export below preserves MistHelper.MIST_SITE_EXCLUDE_PREFIX for backward-compat consumers
-# (guardrail tests, historical mh.* callers) -- the canonical body lives in the extracted module.
-from src.refactors.mist_site_exclude_prefix import (  # noqa: E402 - re-export after top-of-file imports.
+from src.refactors.mist_site_exclude_prefix import (
     MIST_SITE_EXCLUDE_PREFIX,
 )
 
@@ -2466,18 +2411,6 @@ apisession: Any | None = None
 # MSP privilege tracking (populated after authentication)
 msp_privileges: list[dict[str, Any]] = []  # List of {msp_id, msp_name, role, scope} dicts if user has MSP access
 selected_msp: dict[str, Any] | None = None  # Currently selected MSP (from menu 115 or elsewhere)
-
-
-# NOTE: detect_msp_privileges and its entire private helper chain (formerly
-# _msp_resolve_name, _msp_parse_one_privilege, _msp_extract_from_user_data,
-# _msp_fetch_user_data, _msp_cache_and_report, _extract_msp_name, _fetch_msp_name)
-# were co-migrated to src/refactors/msp_privilege_detection.py during the T-05
-# cleanup pass on initiative 1015. That module is fully self-contained and
-# takes ``session`` as a required positional argument (no MistHelper reach-back,
-# no module-global reads). Callers that want to publish the result into this
-# module's ``msp_privileges`` global do so explicitly at the callsite:
-# ``msp_privileges = detect_msp_privileges(apisession)``. See
-# specs/1015-misthelper-refactor-final-15/spec.md.
 
 
 def _snapshot_session_globals_to_state() -> dict[str, Any]:
@@ -2503,11 +2436,6 @@ def _restore_session_globals_from_state(state: dict[str, Any]) -> None:
     org_id = state.get("org_id", org_id)  # Copy the selected org ID back
     ConfigUtils.set_apisession(apisession)  # Mirror the restored session into ConfigUtils class cache (1015 T-12)
     ConfigUtils.set_cached_org_id(org_id)  # Mirror the restored org_id into ConfigUtils class cache (1015 T-12)
-
-
-# NOTE: initialize_mist_session_interactive() extracted to
-# src/refactors/initialize_mist_session_interactive.py::MistSessionInteractiveInitializer.initialize
-# per initiative 1011 SC-023 (FR-003: no wrapper shim, FR-005: fn->method).
 
 
 def _print_switch_login_header() -> None:
@@ -3195,11 +3123,6 @@ def _log_failed_session_variants(tried_variants: list[str]) -> None:
         logging.error("  - %s", variant)
 
 
-# NOTE: initialize_mist_session() extracted to
-# src/refactors/initialize_mist_session.py::MistSessionInitializer.initialize
-# per initiative 1011 SC-024 (FR-003: no wrapper shim, FR-005: fn->method).
-
-
 def _install_default_request_timeout(inner_session: Any) -> None:
     """Install API_REQUEST_TIMEOUT as the default timeout on the requests.Session."""
     from requests.adapters import HTTPAdapter  # Lazy import. The requests package is large and only needed here
@@ -3243,227 +3166,10 @@ def _configure_session_timeout(session_obj: Any) -> None:
         logging.warning("Failed to configure session timeout: %s", timeout_err)
 
 
-# ============================================================================
-# ENDPOINT PRIMARY KEY STRATEGY CONFIGURATION
-# ============================================================================
-# NOTE: ENDPOINT_PRIMARY_KEY_STRATEGIES moved to
-# src/refactors/endpoint_primary_key_strategies.py (initiative 1015 T-04, Cat E).
-# External consumers (src/db/database_schema_utils.py, tests/test_ticket_manager.py)
-# import the symbol directly from that module. MistHelper.py imports it at the
-# top of the file solely for internal use at DatabaseRouter init -- there is no
-# re-export shim, no facade, and no lazy `importlib.import_module("MistHelper")`
-# lookup.
-
-
-# ============================================================================
-# CACHE UTILITIES CLASS
-# ============================================================================
-# NOTE: CacheUtils moved to
-# src/cache/cache_utils.py (initiative 1014 P14, Cat E position 14)
-# The top-level from src.cache.cache_utils import CacheUtils re-export
-# alias keeps historical MistHelper.CacheUtils callers working unchanged.
-
-
-# ============================================================================
-# DISPLAY UTILITIES CLASS
-# ============================================================================
-# NOTE: DisplayUtils moved to
-# src/ui/display_utils.py (issue #1013 SC-001 position 11)
-
-
-# Issue #431: module-level alias `PacketCaptureManager = ExtractedPacketCaptureManager`
-# was removed. The code now imports the canonical name directly at module top.
-
-
-# SFPTransceiverDataProcessor moved to src/reports/sfp_transceiver_data_processor.py
-# (1013 SC-001 position 27)
-
-
-# FilePathUtils moved to src/utils/file_path_utils.py (initiative 1015 T-13).
-# The top-level from src.utils.file_path_utils import FilePathUtils re-export
-# alias keeps historical MistHelper.FilePathUtils callers working unchanged.
-
-
-# ============================================================================
-# ENVIRONMENT UTILITIES CLASS
-# ============================================================================
-# EnvironmentUtils body removed 1013 SC-001 P33 -- see src/utils/environment_utils.py.
-
-
-# ============================================================================
-# VALIDATION UTILITIES CLASS
-# ============================================================================
-# NOTE: ValidationUtils removed (1014 P5, Cat E) - canonical body at
-#       src/validation/validation_utils.py. Import from src.validation.validation_utils
-#       instead. MistHelper.py re-exports ValidationUtils at the top import block
-#       for legacy in-file callsites.
-
-
-# ============================================================================
-# CONFIGURATION UTILITIES CLASS
-# ============================================================================
-# NOTE: ConfigUtils removed (1015 T-12, Cat E) - canonical body at
-#       src/config/config_utils.py. Import from src.config.config_utils
-#       instead. MistHelper.py re-exports ConfigUtils at the top import block
-#       for legacy in-file callsites.
-
-
-# ============================================================================
-# API FETCH UTILITIES CLASS
-# ============================================================================
-# NOTE: APICoreFetchUtils removed (1014 P10, Cat E) - canonical body at src/api/api_core_fetch_utils.py.
-
-
-# APITenantFetchUtils extracted to src/api/tenant_fetch.py (issue #331).
-# Dependency injection is used so the module has no circular import with MistHelper.
-# Instances are created at each call site using the runtime apisession and org ID resolver.
 from src.api.tenant_fetch import APITenantFetchUtils  # Re-exported for ServicePingLauncher late-binding
-
-# NOTE: APIFetchUtils removed (1014 P8, Cat E) - canonical body at src/api/api_fetch_utils.py.
-# ============================================================================
-# DATA PROCESSING UTILITIES CLASS
-# ============================================================================
-# NOTE: ``DataProcessingUtils`` extracted to ``src/data/data_processing_utils.py``
-# per initiative 1015 T-10 (Cat E). ``MistHelper.py`` re-exports the class so
-# historical ``MistHelper.DataProcessingUtils`` / ``mh.DataProcessingUtils``
-# callers keep working transparently -- the re-exported symbol is the same
-# class, not a delegator. All methods are ``@staticmethod`` with no runtime
-# dependencies, so no Pattern 1 wrapper is required.
-from src.data.data_processing_utils import DataProcessingUtils  # noqa: E402, I001  # Cat E canonical (1015 T-10).
-
-# MarvisDataUtils extracted to src/marvis/marvis_utils.py (issue #330).
-# Dependency injection is used so the module has no circular import with MistHelper.
-# NOTE: marvis_data_utils singleton extracted to
-# src/refactors/marvis_data_utils.py::MarvisDataUtilsFactory.instance()
-# per initiative 1011 SC-027 (FR-003: no wrapper shim, FR-005: fn->method).
-# DatabaseSchemaUtils moved to src/db/database_schema_utils.py (1013 SC-001 position 38)
-# DataExporter body extracted to src/export/data_exporter.py per issue #1015 T-08 (Cat E).
-# Class is imported at module top via: from src.export.data_exporter import DataExporter
-from src.export.data_exporter import DataExporter  # noqa: E402,F401  # T-08 re-export
-
-# APIDataFetcher moved to src/api/api_data_fetcher.py (1013 SC-001 position 21)
-# NOTE: execute_with_connection_pool_management extracted to ConnectionPoolExecutor.execute.
-# See specs/1012-misthelper-refactor-hot-functions/spec.md.
-# ============================================================================
-# PROMPT UTILITIES CLASS
-# ============================================================================
-# PromptNetworkDeviceUtils -- extracted to src/device/prompt_utils.py (issue #332)
-# PromptClientUtils moved to src/input/prompt_client_utils.py (1013 SC-001 position 35)
-# PromptUtils body extracted to src/ui/prompt_utils.py per issue #1015 T-07 (Cat E).
-# Class is imported at module top via: from src.ui.prompt_utils import PromptUtils
-from src.ui.prompt_utils import PromptUtils  # noqa: E402,F401  # T-07 re-export
-
-# NOTE: show_site_device_inventory() moved into SiteDeviceExporter.device_inventory()
-
-
-# NOTE: DeviceUtils moved to src/device/device_utils.py (issue #1013 SC-001 position 6)
-
-
-# OrgTicketManager moved to src/org/org_ticket_manager.py (1013 SC-001 Cat B position 46)
-
-
-# OrgAlarmEventExporter moved to src/export/org_alarm_event_exporter.py (1013 SC-001 position 18)
-
-
-# ============================================================================
-# ORGANIZATION DATA EXPORT UTILITIES CLASS
-# ============================================================================
-# NOTE: OrgSiteExporter moved to
-# src/export/org_site_exporter.py (issue #1014 P9)
-
-
-# --- OrgInventoryExporter body removed (1015 T-06 Cat E) ---
-# Canonical implementation lives in src/export/org_inventory_exporter.py. Re-exported above.
-
-
-# --- OrgDeviceStatsExporter facade removed (1013 SC-001 Cat B pos 45) ---
-# Canonical implementation lives in src/export/org_device_stats_exporter.py. Re-exported above.
-
-
-# --- OfflineDeviceReporter facade removed (1013 SC-001 Cat B pos 44) ---
-# Canonical implementation lives in src/reports/offline_device_reporter.py. Re-exported above.
-
-
-# --- OrgDeviceInventorySummary facade removed (1013 SC-001 Cat B pos 29) ---
-# Canonical implementation lives in src/inventory/org_device_inventory_summary_facade.py. Re-exported above.
-
-
-# OrgTemplateExporter moved to src/export/org_template_exporter.py (1013 SC-001 position 22)
-
-
-# OrgClientSecurityExporter body removed 1013 SC-001 P32 -- see src/export/org_client_security_exporter.py.
-
-
-# FilterOperatorEngine moved to src/utils/filter_operator_engine.py (1013 SC-001 position 40)
-
-
-# GlobalWiredClientReportGenerator moved to src/reports/global_wired_client_report_generator.py (1013 SC-001 position
-# 36)
-
-
-# WiredClientManufacturerReportGenerator moved to src/reports/wired_client_manufacturer_report_generator.py
-# (1013 SC-001 position 26)
-
-
-# OrgAdminExporter moved to src/export/org_admin_exporter.py (1013 SC-001 position 20)
-
-
-# LicenseExportUtils moved to src/export/license_export_utils.py (1013 SC-001 position 24)
-
-
-# NOTE: SelfExportUtils moved to src/export/self_export_utils.py (issue #1013 SC-001 position 7)
-
-
-# OrgConfigExporter moved to src/export/org_config_exporter.py (issue #1013 SC-001 position 31)
-
-
-# --- OrgExportUtils facade removed (1013 SC-001 Cat B pos 47). See src/export/org_export_utils.py ---
-
-
-# ============================================================================
-# SITE DATA EXPORT UTILITIES CLASS
-# ============================================================================
-
-
-# SiteDeviceExporter moved to src/export/site_device_exporter.py (1013 SC-001 position 34)
-
-
-# SiteClientExporter moved to src/export/site_client_exporter.py (1013 SC-001 position 14)
-
-
-# SiteConfigExporter moved to src/export/site_config_exporter.py (1013 SC-001 position 19)
-
-
-# --- SiteAnomalyExporter facade removed (1013 SC-001 Cat B pos 43) ---
-# Canonical implementation lives in src/export/site_anomaly_exporter.py. Re-exported above.
-
-
-# --- SitesByAPModelExporter facade removed (1013 SC-001 Cat B pos 28) ---
-# Canonical implementation lives in src/export/sites_by_ap_model_exporter.py. Re-exported above.
-
-# ============================================================================
-# WEBSOCKET COMMAND FUNCTIONS
-# ============================================================================
-
-
-# SiteExportUtils moved to src/export/site_export_utils.py (1014 P16 Cat A) — imported at top
-# GatewayHaExporter moved to src/gateway/gateway_ha_exporter.py (1013 SC-001 position 23)
-
-
-# ============================================================================
-# ROUTING UTILITIES - Extracted to src/network/routing_utils.py (Issue #207)
-# ============================================================================
-
-
-# NOTE: RoutingUtils facade + _get_routing_utils_instance() removed (1014 P4, Cat A) -
-#       canonical body at src/network/routing_utils.py:106. Menus 103-105 now inline
-#       DI via lambdas (see MENU_ENTRIES).
-
-
-# ============================================================================
-# DEVICE UTILITY COMMANDS - Complete Mist API Coverage (Menus 123-157)
-# Implementation extracted to src/device/utility_commands.py (Issue #210)
-# ============================================================================
+from src.data.data_processing_utils import DataProcessingUtils  # Cat E canonical (1015 T-10).
+from src.export.data_exporter import DataExporter  # T-08 re-export
+from src.ui.prompt_utils import PromptUtils  # T-07 re-export
 
 
 def _get_duc_instance() -> DeviceUtilityCommands:  # Build DeviceUtilityCommands.
@@ -3484,54 +3190,6 @@ def _get_duc_instance() -> DeviceUtilityCommands:  # Build DeviceUtilityCommands
         websocket_manager_factory=WebSocketManager,
     )
     return _DUC(deps)  # Instantiate with bundled deps.
-
-
-# NOTE: DeviceUtilityCommands facade removed 2026-07-07 (Issue #1013, SC-001 position 4).
-# The 188-LOC facade of 35 @staticmethod delegates lived here. The menu_actions callsites now
-# invoke `lambda: _get_duc_instance().method_name()` directly against the canonical
-# instance-based class in `src/device/utility_commands.py`. See PR history for details.
-
-
-# ==============================
-# INSIGHTS API FUNCTIONS - Organization & Site Analytics
-# ==============================
-
-
-# EndpointConfig moved to src/dataclasses/endpoint_config.py (1013 SC-001 position 16)
-
-
-# ConstDefinitionsExporter moved to src/export/const_definitions_exporter.py (1013 SC-001 position 17)
-
-
-# InsightMetricsUtils moved to src/analytics/insight_metrics_utils.py (1014 SC-001 position 11)
-
-
-# NOTE: create_test_sites_from_csv moved to SiteConfigManager.create_test_sites_from_csv
-# NOTE: create_country_rf_templates_and_assign moved to SiteConfigManager.create_country_rf_templates_and_assign
-# NOTE: create_ap_model_device_profiles moved to SiteConfigManager.create_ap_model_device_profiles
-# NOTE: assign_aps_to_matching_device_profiles moved to SiteConfigManager.assign_aps_to_matching_device_profiles
-# NOTE: continuous_data_collection_loop moved to DataCollectionManager.continuous_loop
-# NOTE: generate_support_package moved to DataCollectionManager.generate_support_packages
-
-
-# DataCollectionManager moved to src/analytics/data_collection_manager.py (1013 SC-001 position 25)
-
-
-# ============================================================================
-# INTERACTIVE DISPLAY UTILITIES CLASS
-# ============================================================================
-# NOTE: InteractiveDisplayUtils moved to
-# src/ui/interactive_display_utils.py (issue #1013 SC-001 position 10)
-
-
-# GatewayTestExporter moved to src/export/gateway_test_exporter.py (1013 SC-001 position 37)
-
-
-# GatewayStatsExporter moved to src/gateway/gateway_stats_exporter.py (1014 SC-001 position 12)
-# Top-level import above re-exports the canonical class. Menu dispatch uses the
-# dispatch shims below to ensure _configure_gateway_module() runs (which cascades
-# DI wiring through configure_gateway_stats_exporter_dependencies and the WAN
-# override subsystem) before the canonical class methods execute.
 
 
 def _build_gateway_export_kwargs() -> dict[str, Any]:
@@ -3608,38 +3266,11 @@ def _dispatch_gateway_device_configs(debug: bool = False, fast: bool = False) ->
     GatewayExportUtils.device_configs(debug=debug, fast=fast)
 
 
-# NOTE: GatewayExportUtils facade removed per 1013 SC-001 (Cat A, position 13).
-# Canonical class lives at src/gateway/gateway_export_utils.py and is imported at
-# top-of-file. DI wiring lives in _configure_gateway_module() above. Menu callbacks
-# route through _dispatch_gateway_* shims to ensure DI cascade runs first.
-
-
-# NOTE: generate_support_package moved to DataCollectionManager.generate_support_packages
-
-
 # ============================================================================
 # TROUBLESHOOTING UTILITIES CLASS
 # ============================================================================
 
 
-# TroubleshootUtils moved to src/troubleshooting/troubleshoot_utils.py (1013 SC-001 position 39)
-
-
-# NOTE: GatewayTemplateConfigManager facade removed per 1013 SC-001 (Cat A, position 1).
-# Canonical class lives at src/gateway/template_config.py and is imported at top-of-file.
-# Menu 105/106/111 handlers construct it directly with 8 injected deps (see menu_actions).
-
-
-# NOTE: DeviceConfigTemplateClonerManager extracted per SC-020.
-# Now lives at src/refactors/device_config_template_cloner_manager.py.
-# Callers should reference the imported DeviceConfigTemplateClonerManager symbol (see top-of-file imports).
-
-
-# ============================================================================
-# SSH RUNNER MANAGER FACADE REMOVED (1014 P15, Cat A)
-# ============================================================================
-# Canonical class lives at src/ssh/ssh_runner_manager.py. Imported at top of file.
-# The helper below builds the DI container from MistHelper module globals.
 def _build_ssh_runner_deps() -> SSHRunnerManagerDeps:  # Build the deps bundle for SSHRunnerManager entrypoints.
     """Build dependency container for SSH runner logic (reads MistHelper globals)."""
     cli_args = globals().get("args") if "args" in globals() else None  # Read parsed CLI args.
@@ -3655,35 +3286,20 @@ def _build_ssh_runner_deps() -> SSHRunnerManagerDeps:  # Build the deps bundle f
     )
 
 
-# CLIShellManager moved to src/ssh/cli_shell_manager.py in initiative 1013 (Cat B, position 30).
-# Re-exported via the alphabetized `from src.ssh.cli_shell_manager import CLIShellManager` alias above.
-
-
-# ARPCommandManager moved to src/device/arp_command_manager.py (1013 SC-001 position 42)
-# NOTE: listen_for_command_output removed - use ARPCommandManager._listen_for_output directly
-# NOTE: loop_refresh_core_datasets moved to DataCollectionManager.continuous_loop
-
-
 # ============================================================================
 # RATE LIMITING & ADDRESS UTILITIES (extracted to src/utils/)
 # ============================================================================
-from src.utils.rate_limiting import RateLimitingUtils  # noqa: E402
+from src.utils.rate_limiting import RateLimitingUtils
 
 # ============================================================================
 # ORG CONFIG MIGRATION MANAGER CLASS
 # ============================================================================
-# NOTE: OrgConfigMigrationManager extracted to src/org/org_config_migration_manager.py
-# (SC-001 position 5, issue #1013). Menus 176/177 continue to reference the class
-# name directly via the top-of-file import.
-
 
 # ============================================================================
 # VIRTUAL CHASSIS MANAGER CLASS
 # ============================================================================
-# NOTE: VirtualChassisManager folded fully into src/device/virtual_chassis.py
-# per 1015 T-11 (Cat E). Menu wire-up lives in _configure_virtual_chassis_manager()
-# below (single seam for menu 161/162/14 dispatch lambdas). No stub or delegator
-# remains in MistHelper.py after this extraction.
+
+
 def _configure_virtual_chassis_manager() -> type[VirtualChassisManager]:
     """Wire VirtualChassisDependencies and return the canonical VirtualChassisManager class."""
     _configure_virtual_chassis_dependencies(  # Publish MistHelper globals into the impl module.
@@ -3705,10 +3321,8 @@ def _configure_virtual_chassis_manager() -> type[VirtualChassisManager]:
 # ============================================================================
 # SITE CONFIGURATION MANAGER CLASS
 # ============================================================================
-# NOTE: SiteConfigManager facade removed per 1013 SC-003 (Cat A, position 3).
-# Canonical class lives at src/site/site_config_manager.py and is imported at
-# top-of-file. DI wiring lives in _configure_site_config_manager() below
-# (single seam for menu 171/172/173/174 lambdas).
+
+
 def _configure_site_config_manager() -> type[SiteConfigManager]:
     """Wire SiteConfigDependencies and return the canonical SiteConfigManager class."""
     _configure_site_config_dependencies(
@@ -3725,17 +3339,6 @@ def _configure_site_config_manager() -> type[SiteConfigManager]:
     return SiteConfigManager  # Canonical class ready for menu callback dispatch
 
 
-# DeviceRebootManager moved to src/device/device_reboot_manager.py (1013 SC-001 position 41)
-
-
-# The standalone function reboot_devices_by_gateway_template_list() moved
-# into DeviceRebootManager class methods.
-
-
-# NOTE: FirmwareManager facade removed per 1013 SC-002 (Cat A, position 2).
-# Canonical class lives at src/firmware/firmware_manager.py and is imported at top-of-file.
-# DI wiring lives in _build_firmware_manager() below (single seam for menu 137/154/155/156
-# plus the internal src re-check call via _MH._build_firmware_manager).
 def _build_firmware_manager(session: Any, target_org_id: str) -> FirmwareManager:
     """Build a fully DI-wired FirmwareManager instance for menu callbacks and internal re-checks."""
     logging.debug("Building firmware manager impl for org %s", target_org_id)  # Trace factory build
@@ -3751,43 +3354,6 @@ def _build_firmware_manager(session: Any, target_org_id: str) -> FirmwareManager
         sites_fn=OrgSiteExporter.sites,  # Fetch org site list
     )
     return FirmwareManager(fw_config)  # Single-positional-arg constructor per FR-014
-
-
-# NOTE: check_firmware_upgrade_status_direct removed - use FirmwareManager.create(apisession,
-# org_id).check_firmware_upgrade_status()
-
-# NOTE: FirmwareUpgradeStatusChecker folded into src/firmware/firmware_manager.py per SC-019.
-# Callers should use FirmwareManager.create(apisession, org_id).check_firmware_upgrade_status().
-
-# NOTE: check_firmware_upgrade_status_impl removed - refactored into FirmwareUpgradeStatusChecker,
-# which now lives at src/firmware/firmware_manager.py.
-
-# NOTE: get_auto_upgrade_time_settings removed - dead code (never called)
-
-# NOTE: The standalone functions bulk_upgrade_ap_firmware_by_site() and
-# bulk_upgrade_switch_firmware_by_site() moved to class methods. Menu entries
-# now call FirmwareManager class methods directly.
-
-
-# NOTE: BulkAPFirmwareUpgrader wrapper removed - folded into
-# src/firmware/firmware_manager.py::FirmwareManager._dispatch_bulk_ap_upgrade
-# per initiative 1011 SC-022 (FR-015 fold-in eliminates wrapper shim).
-
-
-# NOTE: bulk_upgrade_ap_firmware_by_site_impl removed - use BulkAPFirmwareUpgrader class directly
-
-
-# NOTE: MSPInventoryExporter moved to src/export/msp_inventory_exporter.py (issue #1013 SC-001 position 8)
-
-
-# NOTE: SiteAutoUpgradeConfigurator facade removed (1014 P2, Cat A) - canonical body at
-# src/firmware/site_auto_upgrade.py:105. Menu 168 now inlines DI via lambda (see below).
-
-
-# NOTE: OrgLevelAPFirmwareUpgrader facade removed per initiative 1014 SC-001 position 7
-# (FR-004 fold-in / FR-003 no wrapper shim). The canonical body lives at
-# src/firmware/org_ap_upgrader.py. Menu 157 + menu 168 callbacks now build the
-# implementation directly via _build_org_ap_upgrader() and inline DI.
 
 
 def _build_org_ap_upgrader(**overrides: Any) -> _OrgLevelAPFirmwareUpgrader:
@@ -3816,22 +3382,9 @@ def _build_org_ap_upgrader(**overrides: Any) -> _OrgLevelAPFirmwareUpgrader:
     return _OrgLevelAPFirmwareUpgrader(**kwargs)  # WHY: single src-class construction path
 
 
-# NOTE: BulkSwitchFirmwareUpgrader folded into FirmwareManager per initiative 1011 SC-033
-# (FR-015: fold-in to caller, FR-003: no wrapper shim). Sole caller now dispatches directly
-# to src.firmware.bulk_switch_upgrader.BulkSwitchFirmwareUpgrader.
-
-
-# BulkRadiusWLANConfigManager moved to src/site/bulk_radius_wlan_config_manager.py (1013 SC-001 position 15)
-
-
-# SiteAnalyticsConfigurator and SiteInventoryHealthAnalyzer moved to
-# src/analytics/site_analytics_configurator.py and
-# src/analytics/site_inventory_health_analyzer.py for phase-1 decomposition.
-
-
 def _ws_cmd_deps() -> WebSocketCmdDeps:
     """Create WebSocket command dependency context for the dispatch table."""
-    import mistapi.api.v1.sites.devices as _site_devices  # noqa: PLC0415
+    import mistapi.api.v1.sites.devices as _site_devices
 
     return WebSocketCmdDeps(
         apisession=apisession,
@@ -3846,8 +3399,6 @@ def _ws_cmd_deps() -> WebSocketCmdDeps:
 # ============================================================================
 # AUDIT ANALYSIS OPS CLASS
 # ============================================================================
-# NOTE: AuditAnalysisOps moved to
-# src/audit/audit_analysis_ops.py (issue #1013 SC-001 position 12)
 
 
 menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
@@ -4975,12 +4526,6 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
 }
 
 
-# NOTE: TelemetryEmitter moved to src/analytics/telemetry_emitter.py (issue #1013 SC-001 position 9)
-
-
-# OperationRegistry moved to src/utils/operation_registry.py (1013 SC-001 position 13)
-
-
 def _systematic_test_build_safe_list(
     all_options: list[str], optimized_test_order: list[str]
 ) -> tuple[list[str], list[str]]:
@@ -5101,9 +4646,7 @@ def _systematic_test_resolve_fast_mode() -> bool:
     """Return whether fast mode is active for the current systematic test run."""
     if _fast_mode_from_global():  # Primary source: module-level flag set at startup.
         return True
-    if _fast_mode_from_cli_args():  # Fallback: parsed --fast on CLI args namespace.
-        return True
-    return False  # Neither source enabled fast mode.
+    return _fast_mode_from_cli_args()  # Fallback: parsed --fast on CLI args namespace.
 
 
 def _print_systematic_banner() -> None:
@@ -5114,7 +4657,7 @@ def _print_systematic_banner() -> None:
     )
     echo(
         "! Test started at: %s",
-        datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        datetime.now(UTC).astimezone().strftime("%Y-%m-%d %H:%M:%S"),
     )
     echo("=" * 80)
 
@@ -5697,7 +5240,7 @@ def _run_tui_mode(args: argparse.Namespace) -> None:
     _silence_console_handlers_for_tui()  # Remove console log handlers so Rich owns the screen.
     _run_tui_event_loop(args)  # Run the TUI event loop (handles Ctrl+C + fatal errors internally).
     if args.debug:  # Debug: log a final timestamped marker after the loop exits cleanly.
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]  # Format ms timestamp.
+        timestamp = datetime.now(UTC).astimezone().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]  # Format ms timestamp.
         logging.debug(
             "TUI_DEBUG: [%s] TUI mode completed successfully - about to exit", timestamp
         )  # Log clean completion.
@@ -5732,7 +5275,7 @@ def _silence_console_handlers_for_tui() -> None:
 def _handle_tui_keyboard_interrupt(debug: bool) -> None:
     """Log clean exit when user pressed Ctrl+C inside the TUI and inform them at the console."""
     if debug:  # Debug: log timestamped interrupt event
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]  # Format timestamp
+        timestamp = datetime.now(UTC).astimezone().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]  # Format timestamp
         logging.debug(
             "TUI_DEBUG: [%s] KeyboardInterrupt caught - user pressed Ctrl+C", timestamp
         )  # Log interrupt with time
@@ -5743,7 +5286,7 @@ def _handle_tui_keyboard_interrupt(debug: bool) -> None:
 def _handle_tui_exception(debug: bool, error: Exception) -> None:
     """Log fatal error from the TUI event loop and exit with code 1."""
     if debug:  # Debug: log timestamped exception detail
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]  # Format timestamp
+        timestamp = datetime.now(UTC).astimezone().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]  # Format timestamp
         logging.debug(
             "TUI_DEBUG: [%s] Exception caught in TUI mode: %s: %s",
             timestamp,
@@ -6038,16 +5581,11 @@ def _handle_post_menu_exception(iwant: str, error: Exception, container_mode: bo
     sys.exit(1)  # Exit with error code on unexpected exception in direct mode.
 
 
-# NOTE: main entrypoint extracted to
-# src/refactors/main_entrypoint.py::MainEntrypoint.run
-# per initiative 1011 SC-026 (FR-003: no wrapper shim, FR-005: fn->method).
-
-
 def _run_systematic_test_mode(_args: argparse.Namespace) -> None:
     """Run all safe menu options once and exit 0 on pass / 1 on fail."""
     logging.info("SYSTEMATIC_TEST: Starting systematic test mode")  # Trace before dispatch
     from src.refactors.run_systematic_test import (
-        RunSystematicTestManager,  # noqa: PLC0415 - lazy import keeps module startup path light
+        RunSystematicTestManager,
     )
 
     sys.exit(0 if RunSystematicTestManager().run() else 1)  # Delegate to extracted manager
