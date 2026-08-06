@@ -392,6 +392,9 @@ from src.device.virtual_chassis import (
 from src.export.const_definitions_exporter import (
     ConstDefinitionsExporter,  # Cat B (1013 SC-001 position 17) -- re-export
 )
+from src.export.count_exporter import (
+    CountExporter,  # Issue #1802 -- the 70 Mist count endpoints, grouped by scope, menus 235-237
+)
 from src.export.device_events_52w_exporter import (
     DeviceEvents52wExporter,  # Re-export preserved after OrgAlarmEventExporter extraction (1013 SC-001 position 18)
 )
@@ -3699,6 +3702,18 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     "234": (
         OrgSearchExporter.system_events,
         "Search system events for the organization (searchOrgSystemEvents)",
+    ),
+    "235": (
+        CountExporter.org_counts,
+        "Run any org-scoped Mist count endpoint (35 operations, issue #1802)",
+    ),
+    "236": (
+        CountExporter.site_counts,
+        "Run any site-scoped Mist count endpoint (32 operations, issue #1802)",
+    ),
+    "237": (
+        CountExporter.msp_counts,
+        "Run any MSP-scoped Mist count endpoint (3 operations, issue #1802)",
     ),
     "44": (OrgConfigExporter.psks, "Export PSK (Pre-Shared Key) information for the organization"),
     "45": (OrgConfigExporter.webhooks, "Export webhook configuration for the organization"),

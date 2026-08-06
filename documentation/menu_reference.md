@@ -3,9 +3,9 @@
 This page is generated. Run `python scripts/generate_menu_wiki.py` after any
 change to `menu_actions` in `MistHelper.py` or to `src/utils/operation_registry.py`.
 
-MistHelper defines **234 actionable menu entries**, numbered
-1 to 234 with no gaps.
-Menu 0 is Exit, so the registry holds 235 entries in total.
+MistHelper defines **237 actionable menu entries**, numbered
+1 to 237 with no gaps.
+Menu 0 is Exit, so the registry holds 238 entries in total.
 
 The Safety column reads from `src/utils/operation_registry.py`, which is the
 single source of truth. The classifier fails closed, so an unregistered option
@@ -22,7 +22,7 @@ never runs in an automated test pass.
 
 | Menu numbers | Category | Summary |
 |---|---|---|
-| 60-96, 195-203, 209-229 | Interactive safe | 67 operations. Read-only, but they prompt for a site or a device. The --testinteractive run includes them. |
+| 60-96, 195-203, 209-229, 235-237 | Interactive safe | 70 operations. Read-only, but they prompt for a site or a device. The --testinteractive run includes them. |
 | 1-13, 15-17, 20-58, 188, 193, 204-205, 230-234 | Safe org exports | 64 operations. Read-only org exports. The --test run includes them. |
 | 154-187, 189-191, 194, 206-208 | Destructive | 41 operations. They change the Mist cloud configuration. Each one needs a typed confirmation. |
 | 0, 124-150, 192 | Interactive | 29 operations. They prompt the operator, so no automated run includes them. |
@@ -269,6 +269,9 @@ never runs in an automated test pass.
 | 232 | Search WAN clients for the organization (searchOrgWanClients) | Safe org exports | `OrgSearchExporter.wan_clients` |
 | 233 | Search WAN client events for the organization (searchOrgWanClientEvents) | Safe org exports | `OrgSearchExporter.wan_client_events` |
 | 234 | Search system events for the organization (searchOrgSystemEvents) | Safe org exports | `OrgSearchExporter.system_events` |
+| 235 | Run any org-scoped Mist count endpoint (35 operations, issue #1802) | Interactive safe | `CountExporter.org_counts` |
+| 236 | Run any site-scoped Mist count endpoint (32 operations, issue #1802) | Interactive safe | `CountExporter.site_counts` |
+| 237 | Run any MSP-scoped Mist count endpoint (3 operations, issue #1802) | Interactive safe | `CountExporter.msp_counts` |
 
 This page should be regenerated whenever `menu_actions` or the operation registry
 changes, so the wiki stays aligned with the code.
