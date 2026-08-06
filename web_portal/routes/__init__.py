@@ -1,1 +1,1 @@
-# web_portal.routes - Flask route blueprints
+"""Flask route blueprints for the web portal."""
