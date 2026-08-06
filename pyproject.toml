@@ -257,12 +257,15 @@ explicit_package_bases = true
 #                            under a future Phase-2 tests-typing issue.
 #   scripts               -- 584 mypy errors at strict; out of scope for #884. Dev tooling
 #                            typing sweep will be tracked separately.
-#   tools                 -- 47 mypy errors; dev tooling with codemod fixtures whose bad/
+#   tools                 -- 61 mypy errors; dev tooling with codemod fixtures whose bad/
 #                            files deliberately embody anti-patterns. Track under a future
-#                            tools-typing sweep.
-#   MistHelper.py         -- monolith being refactored (Wave 2); 118 strict errors. Already
-#                            covered by follow_imports=silent (#883) for cross-module bug
-#                            catches. Shrinks as classes graduate out into src/*.
+#                            tools-typing sweep. Re-measured 2026-08-05 for #888.
+#   MistHelper.py         -- REMOVED from this list on 2026-08-05 for issue #888. The file
+#                            reported 118 strict errors when #884 wrote this note. It
+#                            reports 0 today, because the decomposition waves moved the
+#                            untyped code into src/. The CI mypy gate now scans it through
+#                            MYPY_PATHS in .github/workflows/ci.yml. Proved by injecting a
+#                            type error and confirming the gate caught it.
 #   starlink_dashboard.py -- standalone dashboard app; 76 strict errors. Needs its own
 #                            typing sweep — track separately.
 # Dropped from prior list in #884: ops-portal (0 .py files), maps_manager (never existed
@@ -274,7 +277,6 @@ exclude = [
     "tests",
     "scripts",
     "tools",
-    "MistHelper.py",
     "starlink_dashboard.py",
 ]
 

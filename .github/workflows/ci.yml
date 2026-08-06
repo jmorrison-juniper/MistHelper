@@ -45,6 +45,29 @@ env:
   # --- Customize per repo (overridden by workflow_call inputs) ---
   PYTHON_VERSION: ${{ inputs.python-version || '3.13' }}
   SRC_PATH: ${{ inputs.src-path || 'src/' }}
+  # Issue #888: SRC_PATH used to scope every gate to src/, so MistHelper.py, wsgi.py,
+  # web_portal, tools, and starlink_dashboard.py went unscanned. Each gate below now
+  # names the widest scope it passes today. The measurement date is 2026-08-05, and
+  # every exclusion states the count that blocks it. Widen a scope when its count
+  # reaches zero. SRC_PATH still drives the two gates whose scope changes their
+  # threshold arithmetic, which are the coverage gate and the pylint score gate.
+  #
+  # mypy: clean on src/, MistHelper.py, and wsgi.py under the strict settings.
+  # MistHelper.py is genuinely checked here, proved by injecting a type error and
+  # watching the gate catch it. Excludes starlink_dashboard.py (76 errors),
+  # web_portal (168), and tools (61). See [tool.mypy] exclude in pyproject.toml.
+  MYPY_PATHS: 'src/ MistHelper.py wsgi.py'
+  # radon: no block passes complexity 10 in src/, MistHelper.py, wsgi.py, or
+  # starlink_dashboard.py. Excludes web_portal (2 blocks) and tools (20 blocks).
+  RADON_PATHS: 'src/ MistHelper.py wsgi.py starlink_dashboard.py'
+  # vulture: 0 findings at confidence 70 everywhere except tools, which reports 6.
+  VULTURE_PATHS: 'src/ MistHelper.py wsgi.py starlink_dashboard.py web_portal'
+  # pydocstyle: 0 violations in src/, wsgi.py, and web_portal. Excludes
+  # MistHelper.py (3), starlink_dashboard.py (11), and tools (2).
+  PYDOCSTYLE_PATHS: 'src/ wsgi.py web_portal'
+  # interrogate: every target clears the 90 percent floor, so this gate covers the
+  # whole project. Lowest measured value is web_portal at 97.5 percent.
+  INTERROGATE_PATHS: 'src/ MistHelper.py wsgi.py starlink_dashboard.py web_portal tools'
   COVERAGE_THRESHOLD: ${{ inputs.coverage-threshold || '80' }}
   PYLINT_THRESHOLD: ${{ inputs.pylint-threshold || '9.5' }}
   INTERROGATE_THRESHOLD: ${{ inputs.interrogate-threshold || '90' }}
@@ -156,7 +179,7 @@ jobs:
           pip install -r requirements.txt
           pip install -r requirements-dev.txt  # pinned mypy and stubs (issue #1779)
       - name: Run mypy
-        run: mypy ${{ env.SRC_PATH }} --config-file pyproject.toml
+        run: mypy ${{ env.MYPY_PATHS }} --config-file pyproject.toml
 
   # ──────────────────────────────────────────────────────────────
   # TESTS + COVERAGE
@@ -190,6 +213,10 @@ jobs:
           pip install -r requirements.txt
           pip install -r requirements-dev.txt  # pinned pytest stack (issue #1779)
       - name: Run tests with coverage
+        # Issue #888: this gate keeps SRC_PATH. Widening the measured scope adds
+        # uncovered lines to the denominator, so the percentage drops against the 80
+        # floor without any test changing. Widen it only together with the tests that
+        # cover the added code.
         run: pytest --cov=${{ env.SRC_PATH }} --cov-fail-under=${{ env.COVERAGE_THRESHOLD }}
 
   # ──────────────────────────────────────────────────────────────
@@ -295,6 +322,8 @@ jobs:
       # The package exclusion lives in [tool.pylint.main] ignore-paths in pyproject.toml,
       # not on this line. Issue #891 moved it there so one file holds the gate config.
       # That comment carries the reason, the measurements, and the removal plan.
+      # Issue #888: this gate keeps SRC_PATH. The score is 9.53 against a 9.5 floor, so
+      # a margin of 0.03 cannot absorb a new package. Widen it only with a measurement.
       - name: Run Pylint
         run: pylint ${{ env.SRC_PATH }} --fail-under=${{ env.PYLINT_THRESHOLD }}
 
@@ -313,8 +342,8 @@ jobs:
       - run: pip install -r requirements-dev.txt  # pinned (issue #1779)
       - name: Check cyclomatic complexity
         run: |
-          radon cc ${{ env.SRC_PATH }} -a -nb
-          radon cc ${{ env.SRC_PATH }} -j | python3 -c "
+          radon cc ${{ env.RADON_PATHS }} -a -nb
+          radon cc ${{ env.RADON_PATHS }} -j | python3 -c "
           import json, sys
           data = json.load(sys.stdin)
           bad = []
@@ -344,7 +373,7 @@ jobs:
           cache: pip
       - run: pip install -r requirements-dev.txt  # pinned (issue #1779)
       - name: Detect dead code
-        run: vulture ${{ env.SRC_PATH }} --min-confidence ${{ env.VULTURE_CONFIDENCE }}
+        run: vulture ${{ env.VULTURE_PATHS }} --min-confidence ${{ env.VULTURE_CONFIDENCE }}
 
   # ──────────────────────────────────────────────────────────────
   # DOCUMENTATION
@@ -363,7 +392,7 @@ jobs:
           cache: pip
       - run: pip install -r requirements-dev.txt  # pinned (issue #1779)
       - name: Check docstring conventions
-        run: pydocstyle ${{ env.SRC_PATH }}
+        run: pydocstyle ${{ env.PYDOCSTYLE_PATHS }}
 
   interrogate:
     name: "Interrogate (docstring coverage)"
@@ -379,7 +408,7 @@ jobs:
           cache: pip
       - run: pip install -r requirements-dev.txt  # pinned (issue #1779)
       - name: Check docstring coverage
-        run: interrogate ${{ env.SRC_PATH }} --fail-under ${{ env.INTERROGATE_THRESHOLD }} -v
+        run: interrogate ${{ env.INTERROGATE_PATHS }} --fail-under ${{ env.INTERROGATE_THRESHOLD }} -v
 
   # ──────────────────────────────────────────────────────────────
   # PROJECT-SPECIFIC (remove or adapt when copying to other repos)
