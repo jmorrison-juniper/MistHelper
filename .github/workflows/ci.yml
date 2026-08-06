@@ -103,7 +103,7 @@ jobs:
           else
             echo "No .gitmodules found; skipping submodule init"
           fi
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
@@ -134,7 +134,7 @@ jobs:
           else
             echo "No .gitmodules found; skipping submodule init"
           fi
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
@@ -170,7 +170,7 @@ jobs:
           else
             echo "No .gitmodules found; skipping submodule init"
           fi
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
@@ -204,7 +204,7 @@ jobs:
           else
             echo "No .gitmodules found; skipping submodule init"
           fi
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
@@ -238,7 +238,7 @@ jobs:
           else
             echo "No .gitmodules found; skipping submodule init"
           fi
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
@@ -275,7 +275,7 @@ jobs:
           else
             echo "No .gitmodules found; skipping submodule init"
           fi
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
@@ -311,7 +311,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: false
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
@@ -335,7 +335,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: false
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
@@ -367,7 +367,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: false
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
@@ -386,7 +386,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: false
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
@@ -402,7 +402,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: false
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
@@ -421,7 +421,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: false
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - run: python scripts/lint_diagram_refs.py
@@ -434,7 +434,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: false
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       # The generator failed silently for months, so the committed pages froze on
@@ -464,7 +464,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: false
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
