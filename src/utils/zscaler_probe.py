@@ -17,21 +17,21 @@ Why:
     anywhere MistHelper runs.
 """
 
-from __future__ import annotations
+from __future__ import annotations  # WHY: PEP 604 unions on the project toolchain.
 
-import concurrent.futures
-import logging
-import platform
-import secrets
-import socket
-import ssl
-import struct
+import concurrent.futures  # WHY: probe the fleet in parallel rather than serially.
+import logging  # WHY: structured trace for probe lifecycle and failures.
+import platform  # WHY: the ping flag for a timeout differs between Windows and POSIX.
+import secrets  # WHY: cryptographically random ICMP identifiers avoid collisions.
+import socket  # WHY: DNS resolution and raw TCP connect checks.
+import ssl  # WHY: TLS handshake validation against the system trust store.
+import struct  # WHY: pack and unpack the ICMP echo header.
 import subprocess  # nosec B404 - The ICMP probe runs the OS ping binary, and the call below uses shell=False.
-from dataclasses import dataclass, field
-from http.client import HTTPConnection, HTTPResponse, HTTPSConnection
-from typing import Any
+from dataclasses import dataclass, field  # WHY: ProbeResult is a structured record, not a dict.
+from http.client import HTTPConnection, HTTPResponse, HTTPSConnection  # WHY: stdlib HTTP probe.
+from typing import Any  # WHY: the catalogue documents are duck-typed JSON.
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)  # WHY: module logger keeps records attributable to this file.
 
 DEFAULT_TIMEOUT = 3.0
 """Per-probe wall-clock timeout in seconds (DNS/ICMP/TCP/HTTP/TLS)."""
@@ -310,6 +310,51 @@ def _udp_check(host: str, port: int, timeout: float) -> str:
     return state
 
 
+_PROBE_HEADERS = {"User-Agent": "MistHelper-probe/1.0"}  # Identify the probe to the far end.
+
+
+def _open_probe_connection(host: str, port: int, timeout: float, *, tls: bool) -> HTTPConnection:
+    """Return a connection to ``host`` on ``port``, over TLS when asked.
+
+    Why:
+        The 405 fallback has to build a second connection with the same
+        settings, so the factory lives in one place rather than twice.
+    """
+    if tls:  # HTTPS uses the system default trust store.
+        return HTTPSConnection(host, port, timeout=timeout, context=ssl.create_default_context())
+    return HTTPConnection(host, port, timeout=timeout)  # Plain HTTP for port 80 probes.
+
+
+def _close_quietly(conn: HTTPConnection) -> None:
+    """Close a connection without letting a cleanup error mask the result."""
+    try:
+        conn.close()  # Release the socket as soon as the response is read.
+    except Exception:  # pragma: no cover - best-effort cleanup
+        pass  # nosec B110 - The block is a best-effort cleanup that must not mask the original result.
+
+
+def _request_head_or_get(host: str, port: int, timeout: float, *, tls: bool) -> HTTPResponse:
+    """Issue ``HEAD /``, retrying as ``GET /`` when the endpoint answers 405.
+
+    Why:
+        A handful of Zscaler endpoints, notably PAC delivery, reject HEAD with
+        405 Method Not Allowed. The retry needs a fresh connection because the
+        first one is already consumed.
+    """
+    conn = _open_probe_connection(host, port, timeout, tls=tls)  # First attempt.
+    try:
+        conn.request("HEAD", "/", headers=_PROBE_HEADERS)  # Small, quick request.
+        resp = conn.getresponse()
+        if resp.status != 405:  # The endpoint accepted HEAD, so we are done.
+            return resp
+        conn.close()  # The 405 response consumed this connection.
+        conn = _open_probe_connection(host, port, timeout, tls=tls)  # Fresh connection for the retry.
+        conn.request("GET", "/", headers=_PROBE_HEADERS)  # Same path, method the endpoint accepts.
+        return conn.getresponse()
+    finally:
+        _close_quietly(conn)  # Caller reads headers off the returned response, per the contract.
+
+
 def _do_http(
     host: str,
     port: int,
@@ -338,43 +383,12 @@ def _do_http(
         connection is garbage-collected.
     """
     try:
-        if tls:
-            ctx = ssl.create_default_context()
-            conn: HTTPConnection = HTTPSConnection(
-                host,
-                port,
-                timeout=timeout,
-                context=ctx,
-            )
-        else:
-            conn = HTTPConnection(host, port, timeout=timeout)
-        try:
-            conn.request("HEAD", "/", headers={"User-Agent": "MistHelper-probe/1.0"})
-            resp = conn.getresponse()
-            if resp.status == 405:  # Method Not Allowed -- retry with GET.
-                conn.close()
-                if tls:
-                    conn = HTTPSConnection(
-                        host,
-                        port,
-                        timeout=timeout,
-                        context=ssl.create_default_context(),
-                    )
-                else:
-                    conn = HTTPConnection(host, port, timeout=timeout)
-                conn.request("GET", "/", headers={"User-Agent": "MistHelper-probe/1.0"})
-                resp = conn.getresponse()
-            return resp, None
-        finally:
-            try:
-                conn.close()
-            except Exception:  # pragma: no cover - best-effort cleanup
-                pass  # nosec B110 - The block is a best-effort cleanup that must not mask the original result.
-    except TimeoutError as exc:
+        return _request_head_or_get(host, port, timeout, tls=tls), None  # Success path.
+    except TimeoutError as exc:  # A stalled edge is reported distinctly from a refused one.
         return None, f"timeout: {exc}"
-    except ssl.SSLError as exc:
+    except ssl.SSLError as exc:  # Certificate rotations surface here rather than as a generic error.
         return None, f"ssl:{exc}"
-    except OSError as exc:
+    except OSError as exc:  # Connection refused, DNS failure, and similar transport faults.
         return None, f"{type(exc).__name__}: {exc}"
     except Exception as exc:  # pragma: no cover - defensive
         return None, f"{type(exc).__name__}: {exc}"
@@ -878,10 +892,21 @@ def run_full_validation(
         workers,
     )
     results = _run_probes(entries, timeout, workers)
+    _log_validation_summary(results)  # One INFO line, then per-endpoint failures at DEBUG.
+    return results
 
-    ok = sum(1 for r in results if r.responding_protocols)
-    dns_fail = sum(1 for r in results if r.ip is None)
-    tls_fail = sum(1 for r in results if r.tls_error)
+
+def _log_validation_summary(results: list[ProbeResult]) -> None:
+    """Emit the single INFO summary line, then the per-endpoint failures.
+
+    Why:
+        Extracted from :func:`run_full_validation` so the orchestrator reads as
+        collect, probe, report. The counts are derived here rather than passed
+        in, because they are only used for this message.
+    """
+    ok = sum(1 for r in results if r.responding_protocols)  # Endpoints answering on any protocol.
+    dns_fail = sum(1 for r in results if r.ip is None)  # Names that never resolved.
+    tls_fail = sum(1 for r in results if r.tls_error)  # Names that resolved but failed TLS.
     logger.info(
         "zscaler_probe: %d/%d endpoints responded on at least one protocol " "(dns_fail=%d, tls_fail=%d)",
         ok,
@@ -889,5 +914,4 @@ def run_full_validation(
         dns_fail,
         tls_fail,
     )
-    _log_probe_failures(results)
-    return results
+    _log_probe_failures(results)  # DEBUG detail so a transient batch does not spam INFO.
