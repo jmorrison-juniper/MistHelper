@@ -19,31 +19,32 @@ Why:
     the TTL or shard the file without re-opening that discussion.
 """
 
-from __future__ import annotations
+from __future__ import annotations  # WHY: PEP 604 unions on the project toolchain.
 
-import json
-import logging
-import os
-import tempfile
-import urllib.error
-import urllib.request
-from datetime import UTC, datetime, timedelta
-from pathlib import Path
-from typing import Any
+import json  # WHY: the catalogue is written and re-read as JSON.
+import logging  # WHY: structured trace for refresh and merge lifecycle events.
+import os  # WHY: atomic replace and environment overrides for the cache path.
+import tempfile  # WHY: write to a temp file first so a crash cannot truncate the catalogue.
+import urllib.error  # WHY: distinguish a transport failure from a bad payload.
+import urllib.request  # WHY: fetch the cloud config without adding a dependency.
+from dataclasses import dataclass, field  # WHY: bundle the merge accumulators into one parameter.
+from datetime import UTC, datetime, timedelta  # WHY: TTL math runs in UTC to stay host-independent.
+from pathlib import Path  # WHY: path handling without hardcoded separators.
+from typing import Any  # WHY: the upstream JSON payload is duck-typed.
 
 # Local repo imports. ``attach_city_metadata`` lives in scripts/ so the
 # CLI variant can keep its strict SystemExit. The library form here always
 # returns warnings instead of raising, which is what the auto-refresh path
 # needs to stay non-fatal.
-from scripts.build_zen_city_metadata import attach_city_metadata
-from src.utils.zscaler_probe import (
+from scripts.build_zen_city_metadata import attach_city_metadata  # WHY: non-fatal city enrichment.
+from src.utils.zscaler_probe import (  # WHY: reachability validation shares the probe defaults.
     DEFAULT_TIMEOUT,
     DEFAULT_WORKERS,
     ProbeResult,
     run_full_validation,
 )
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)  # WHY: module logger keeps records attributable to this file.
 
 # Canonical Zscaler cloud slugs served by ``config.zscaler.com``. Order is
 # stable so ``source_urls`` in the written file is reproducible across runs.
@@ -451,6 +452,77 @@ def _pick_observation_from_probe_result(
     return None, None
 
 
+def _stamp_observation_bag(
+    bag: Any,
+    observations: dict[str, tuple[str | None, int | None, str]],
+) -> int:
+    """Stamp observations onto one host bag and return how many entries changed.
+
+    Why:
+        Extracted from :func:`_merge_observations_into_cenr` so the four bags
+        share one implementation without a closure over a ``nonlocal`` total.
+
+    Args:
+        bag: A list of host dicts, or any other value, which is ignored.
+        observations: Map of ``fqdn`` -> ``(protocol, port, iso8601_utc)``.
+
+    Returns:
+        The number of host entries mutated in this bag.
+    """
+    if not isinstance(bag, list):  # A missing or malformed bag contributes nothing.
+        return 0
+    stamped = 0  # Count of entries mutated in this bag.
+    for entry in bag:  # Walk every host record in the bag.
+        if not isinstance(entry, dict):  # Skip malformed rows rather than failing the merge.
+            continue
+        host = entry.get("host")  # The FQDN keys the observation map.
+        if not isinstance(host, str):  # A row without a usable host cannot be matched.
+            continue
+        obs = observations.get(host)  # Hosts absent from the map keep their on-disk values.
+        if obs is None:
+            continue
+        protocol, port, ts = obs  # Unpack the observation triplet.
+        # Always write all three observation keys together so a stale
+        # value never survives next to a fresh one. Matches contract
+        # cenr_cache_schema_v3.md §"Observation triplet". When the host
+        # was silent (no responding protocol), the whole triplet is None
+        # so the "no observation" branch stays distinguishable on disk.
+        entry["observed_protocol"] = protocol
+        entry["observed_port"] = port
+        entry["last_probed"] = ts if protocol is not None else None
+        stamped += 1
+    return stamped
+
+
+def _stamp_city_bags(
+    by_city: Any,
+    observations: dict[str, tuple[str | None, int | None, str]],
+) -> int:
+    """Stamp observations onto both host bags of every city slot.
+
+    Why:
+        Keeps the per-city walk out of :func:`_merge_observations_into_cenr`,
+        which otherwise carries two nested loops for one idea.
+
+    Args:
+        by_city: The ``by_city`` mapping from the CENR document, or any other
+            value, which is ignored.
+        observations: Map of ``fqdn`` -> ``(protocol, port, iso8601_utc)``.
+
+    Returns:
+        The number of host entries mutated across every city slot.
+    """
+    if not isinstance(by_city, dict):  # A missing by_city section contributes nothing.
+        return 0
+    stamped = 0  # Running total across all city slots.
+    for city_slot in by_city.values():  # Each slot mirrors the top-level bag pair.
+        if not isinstance(city_slot, dict):  # Skip malformed slots rather than failing.
+            continue
+        stamped += _stamp_observation_bag(city_slot.get("proxy_hostnames"), observations)
+        stamped += _stamp_observation_bag(city_slot.get("vpn_hostnames"), observations)
+    return stamped
+
+
 def _merge_observations_into_cenr(
     doc: dict[str, Any],
     observations: dict[str, tuple[str | None, int | None, str]],
@@ -480,43 +552,9 @@ def _merge_observations_into_cenr(
         the caller's ``logger.debug`` line so operators can eyeball how much
         of the fleet actually reported back.
     """
-    stamped = 0
-
-    def _apply(bag: Any) -> None:
-        nonlocal stamped
-        # Local closure so we do not duplicate the promotion+stamp logic for
-        # each of the four bags. `stamped` is nonlocal so the total survives.
-        if not isinstance(bag, list):
-            return
-        for entry in bag:
-            if not isinstance(entry, dict):
-                continue
-            host = entry.get("host")
-            if not isinstance(host, str):
-                continue
-            obs = observations.get(host)
-            if obs is None:
-                continue
-            protocol, port, ts = obs
-            # Always write all three observation keys together so a stale
-            # value never survives next to a fresh one. Matches contract
-            # cenr_cache_schema_v3.md §"Observation triplet". When the host
-            # was silent (no responding protocol), the whole triplet is None
-            # so the "no observation" branch stays distinguishable on disk.
-            entry["observed_protocol"] = protocol
-            entry["observed_port"] = port
-            entry["last_probed"] = ts if protocol is not None else None
-            stamped += 1
-
-    _apply(doc.get("proxy_hostnames"))
-    _apply(doc.get("vpn_hostnames"))
-    by_city = doc.get("by_city")
-    if isinstance(by_city, dict):
-        for city_slot in by_city.values():
-            if not isinstance(city_slot, dict):
-                continue
-            _apply(city_slot.get("proxy_hostnames"))
-            _apply(city_slot.get("vpn_hostnames"))
+    stamped = _stamp_observation_bag(doc.get("proxy_hostnames"), observations)  # Top-level proxy bag.
+    stamped += _stamp_observation_bag(doc.get("vpn_hostnames"), observations)  # Top-level VPN bag.
+    stamped += _stamp_city_bags(doc.get("by_city"), observations)  # Both bags of every city slot.
     return stamped
 
 
@@ -868,13 +906,26 @@ def _finalize_slot(
     slot["seen_in_clouds"] = sorted(seen_clouds)
 
 
+@dataclass
+class _MergeAccumulators:
+    """The three collections that the cloud walk fills in place.
+
+    Why:
+        ``_absorb_city_records`` and ``_walk_city_map`` both threaded the same
+        proxy set, VPN set, and by-city map. Bundling them keeps each function
+        inside the five-parameter limit and makes the shared ownership obvious.
+    """
+
+    proxies: set[str] = field(default_factory=set)  # Global proxy-hostname dedup set.
+    vpns: set[str] = field(default_factory=set)  # Global VPN-hostname dedup set.
+    by_city: dict[str, dict[str, Any]] = field(default_factory=dict)  # Merged per-city slots.
+
+
 def _absorb_city_records(
     city: str,
     records: list[Any],
     cloud: str,
-    proxies: set[str],
-    vpns: set[str],
-    by_city: dict[str, dict[str, Any]],
+    accumulators: _MergeAccumulators,
 ) -> None:
     """Fold ``records`` into the per-city slot and the global proxy/vpn sets.
 
@@ -889,23 +940,19 @@ def _absorb_city_records(
         records: Raw record list from the city bucket.
         cloud: Cloud slug that supplied these records (recorded under
             ``seen_in_clouds`` on the slot).
-        proxies: Global proxy-hostname dedup set. Mutated in place.
-        vpns: Global vpn-hostname dedup set. Mutated in place.
-        by_city: Merged-by-city map. The target slot is mutated in place.
+        accumulators: Shared proxy set, VPN set, and by-city map. Mutated in place.
     """
-    slot = by_city.setdefault(city, {"proxy_hostnames": [], "vpn_hostnames": []})
+    slot = accumulators.by_city.setdefault(city, {"proxy_hostnames": [], "vpn_hostnames": []})
     slot_proxies, slot_vpns = _seed_slot_host_sets(slot)
     for record in records:
-        _ingest_record(record, proxies, vpns, slot_proxies, slot_vpns)
+        _ingest_record(record, accumulators.proxies, accumulators.vpns, slot_proxies, slot_vpns)
     _finalize_slot(slot, slot_proxies, slot_vpns, cloud)
 
 
 def _walk_city_map(
     city_map: dict[str, Any],
     cloud: str,
-    proxies: set[str],
-    vpns: set[str],
-    by_city: dict[str, dict[str, Any]],
+    accumulators: _MergeAccumulators,
 ) -> None:
     """Fold every ``city : X`` bucket in a continent tree into the merged view.
 
@@ -918,9 +965,7 @@ def _walk_city_map(
     Args:
         city_map: One continent's dict of city buckets.
         cloud: Cloud slug supplying these buckets.
-        proxies: Global proxy-hostname dedup set. Mutated in place.
-        vpns: Global vpn-hostname dedup set. Mutated in place.
-        by_city: Merged-by-city map. Mutated in place.
+        accumulators: Shared proxy set, VPN set, and by-city map. Mutated in place.
     """
     for city_key, records in city_map.items():
         if not isinstance(records, list):
@@ -928,7 +973,7 @@ def _walk_city_map(
         city = _strip_prefix(city_key, "city")
         if not city:
             continue
-        _absorb_city_records(city, records, cloud, proxies, vpns, by_city)
+        _absorb_city_records(city, records, cloud, accumulators)
 
 
 def merge_clouds(per_cloud: dict[str, dict[str, Any]]) -> dict[str, Any]:
@@ -960,9 +1005,7 @@ def merge_clouds(per_cloud: dict[str, dict[str, Any]]) -> dict[str, Any]:
         ``description``, and ``probe_default``. Ready to hand to
         :func:`scripts.build_zen_city_metadata.attach_city_metadata`.
     """
-    proxies: set[str] = set()
-    vpns: set[str] = set()
-    by_city: dict[str, dict[str, Any]] = {}
+    accumulators = _MergeAccumulators()  # One bundle carries the three shared collections.
 
     for cloud, doc in per_cloud.items():
         if not isinstance(doc, dict):
@@ -972,10 +1015,32 @@ def merge_clouds(per_cloud: dict[str, dict[str, Any]]) -> dict[str, Any]:
                 if not isinstance(city_map, dict):
                     continue
                 _ = _strip_prefix(continent_key, "continent")  # future: expose continent
-                _walk_city_map(city_map, cloud, proxies, vpns, by_city)
+                _walk_city_map(city_map, cloud, accumulators)
 
-    source_urls = sorted(_CENR_URL_TEMPLATE.format(cloud=c) for c in per_cloud)
-    now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return _build_cenr_document(per_cloud, accumulators)
+
+
+def _build_cenr_document(
+    per_cloud: dict[str, dict[str, Any]],
+    accumulators: _MergeAccumulators,
+) -> dict[str, Any]:
+    """Assemble the merged CENR document from the walked accumulators.
+
+    Why:
+        Split out of :func:`merge_clouds` so the walk and the document shape
+        are separate concerns. The literal below is the on-disk contract, and
+        keeping it alone makes a schema change easy to review.
+
+    Args:
+        per_cloud: The same mapping the caller walked, used only for the
+            reproducible ``source_urls`` list.
+        accumulators: The filled proxy set, VPN set, and by-city map.
+
+    Returns:
+        The merged CENR document, ready for ``attach_city_metadata``.
+    """
+    source_urls = sorted(_CENR_URL_TEMPLATE.format(cloud=c) for c in per_cloud)  # Stable across runs.
+    now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")  # UTC keeps the stamp host-independent.
 
     return {
         "schema_version": _SCHEMA_VERSION,
@@ -995,9 +1060,9 @@ def merge_clouds(per_cloud: dict[str, dict[str, Any]]) -> dict[str, Any]:
                 "certificate rotations at Zscaler surface as probe failures."
             ),
         },
-        "proxy_hostnames": [_promote_host_entry(h) for h in sorted(proxies)],
-        "vpn_hostnames": [_promote_host_entry(h) for h in sorted(vpns)],
-        "by_city": {city: by_city[city] for city in sorted(by_city)},
+        "proxy_hostnames": [_promote_host_entry(h) for h in sorted(accumulators.proxies)],
+        "vpn_hostnames": [_promote_host_entry(h) for h in sorted(accumulators.vpns)],
+        "by_city": {city: accumulators.by_city[city] for city in sorted(accumulators.by_city)},
     }
 
 
