@@ -1,0 +1,41 @@
+feat(export): add CountExporter covering all 70 Mist count endpoints
+
+67 open issues each asked for one Mist count endpoint. None was implemented.
+Delivered as those specs describe, that is 67 operations, 67 primary key
+strategies, 67 menu entries, and 67 pull requests, taking menu_actions from
+235 entries to 302.
+
+Every count operation shares one shape. It takes a session plus one
+identifier, accepts an optional distinct field, and returns a count
+distribution rather than a record list. That is one export path with a
+parameter.
+
+CountExporter holds three tables of _CountOp rows, each naming an operationId
+and the SDK module that defines it, grouped by the identifier the operation
+needs:
+
+  org    35 operations   menu 235
+  site   32 operations   menu 236
+  msp     3 operations   menu 237
+
+The module paths were resolved against the installed SDK rather than the spec
+text, because issue #1757 records that 245 endpoint specs name a module path
+that does not exist.
+
+A count response carries no natural identifier, so all 70 use the
+auto_increment_with_unique strategy. 32 were already registered that way. This
+adds the missing 38.
+
+Verified:
+
+  table covers all 70 SDK count operations   none missing, none extra
+  every row resolves to a real function      70 of 70
+  every callable takes session + identifier  70 of 70
+  primary key strategies registered          70 of 70
+  menus 235-237 resolve                      menu_actions now 238
+  registry marks all three interactive_safe  registry now 238
+
+Gates: ruff, black, mypy, radon, and vulture all clean. 9191 unit tests pass,
+150 of them new. Menu reference documentation regenerated.
+
+Closes #1802
