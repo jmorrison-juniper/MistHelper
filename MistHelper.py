@@ -4954,6 +4954,11 @@ def _add_output_format_arguments(parser: argparse.ArgumentParser) -> None:
             "Output format: 'csv' for CSV files (default) or 'sqlite' for hybrid database with natural primary keys"
         ),  # Output backend selector
     )
+    _add_systematic_test_flags(parser)  # The two --test variants share one concern.
+
+
+def _add_systematic_test_flags(parser: argparse.ArgumentParser) -> None:
+    """Register the systematic-test flags that drive the automated menu sweeps."""
     parser.add_argument(
         "--test",
         action="store_true",
@@ -4975,6 +4980,12 @@ def _add_output_format_arguments(parser: argparse.ArgumentParser) -> None:
 def _add_safety_arguments(parser: argparse.ArgumentParser) -> None:
     """Register the dry-run/address-check/SSL/no-env safety flags on the parser."""
     logging.debug("_add_safety_arguments: registering safety and validation flags")  # Log before adding
+    _add_destructive_safety_flags(parser)  # Flags that change what a destructive run does.
+    _add_external_call_flags(parser)  # Flags that change how outbound calls behave.
+
+
+def _add_destructive_safety_flags(parser: argparse.ArgumentParser) -> None:
+    """Register the flags that govern destructive and address-checking behavior."""
     parser.add_argument(
         "--dry-run",
         action="store_true",
@@ -4989,6 +5000,10 @@ def _add_safety_arguments(parser: argparse.ArgumentParser) -> None:
             "Enable external address validation using Nominatim API for address comparison operations"
         ),  # Nominatim toggle
     )
+
+
+def _add_external_call_flags(parser: argparse.ArgumentParser) -> None:
+    """Register the flags that govern SSL verification and .env loading."""
     parser.add_argument(
         "--skip-ssl-verify",
         action="store_true",
@@ -5008,6 +5023,12 @@ def _add_safety_arguments(parser: argparse.ArgumentParser) -> None:
 def _add_interface_arguments(parser: argparse.ArgumentParser) -> None:
     """Register the TUI/login/web-portal/standalone interface flags on the parser."""
     logging.debug("_add_interface_arguments: registering interface and auth flags")  # Log before adding
+    _add_interface_mode_flags(parser)  # Flags that choose which front end runs.
+    _add_auth_and_backend_flags(parser)  # Flags that choose the auth path and the storage backend.
+
+
+def _add_interface_mode_flags(parser: argparse.ArgumentParser) -> None:
+    """Register the flags that select an alternative front end."""
     parser.add_argument(
         "--tui",
         action="store_true",
@@ -5016,18 +5037,22 @@ def _add_interface_arguments(parser: argparse.ArgumentParser) -> None:
         ),  # Rich TUI mode
     )
     parser.add_argument(
-        "--login",
-        action="store_true",
-        help=(
-            "Use interactive login (email/password) instead of API token - enables MSP-level API access"
-        ),  # Interactive auth
-    )
-    parser.add_argument(
         "--web-portal",
         action="store_true",
         help=(
             "Launch the web portal interface on port 8055 (or WEB_PORT env var) instead of the CLI menu"
         ),  # Gunicorn web portal
+    )
+
+
+def _add_auth_and_backend_flags(parser: argparse.ArgumentParser) -> None:
+    """Register the flags that select the authentication path and the storage backend."""
+    parser.add_argument(
+        "--login",
+        action="store_true",
+        help=(
+            "Use interactive login (email/password) instead of API token - enables MSP-level API access"
+        ),  # Interactive auth
     )
     parser.add_argument(
         "--standalone",
@@ -5071,15 +5096,24 @@ def _reject_unsupported_flag_variants(argv: list[str]) -> None:
     for token in argv:  # Scan every raw token in argv. Order-independent match.
         head = token.split("=", 1)[0]  # Strip any `=value` suffix so `--flag=1` is comparable.
         if head in _UNSUPPORTED_FLAG_VARIANTS:  # Only gate the explicitly-listed bad spellings.
-            supported = _UNSUPPORTED_FLAG_VARIANTS[head]  # Look up the canonical replacement.
-            message = (
-                f"error: unsupported flag '{head}'. "
-                f"Did you mean '{supported}'? "
-                "This CLI uses collapsed flag names without internal hyphens."
-            )
-            logging.error("Rejecting unsupported flag variant %r; suggest %r", head, supported)
-            print(message, file=sys.stderr)  # Surface guidance directly to the user.
-            sys.exit(2)  # argparse convention for CLI usage errors.
+            _exit_on_unsupported_flag(head, _UNSUPPORTED_FLAG_VARIANTS[head])  # Names the canonical flag.
+
+
+def _exit_on_unsupported_flag(head: str, supported: str) -> NoReturn:
+    """Report an unsupported flag spelling and exit with the argparse usage code.
+
+    Why:
+        Split from the scan loop so the caller stays inside the length budget.
+        The message must never reroute the user silently, per issue #1640.
+    """
+    message = (
+        f"error: unsupported flag '{head}'. "
+        f"Did you mean '{supported}'? "
+        "This CLI uses collapsed flag names without internal hyphens."
+    )
+    logging.error("Rejecting unsupported flag variant %r; suggest %r", head, supported)
+    print(message, file=sys.stderr)  # Surface guidance directly to the user.
+    sys.exit(2)  # argparse convention for CLI usage errors.
 
 
 def _build_argument_parser() -> argparse.ArgumentParser:
