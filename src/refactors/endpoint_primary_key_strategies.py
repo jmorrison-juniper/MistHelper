@@ -2649,4 +2649,24 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "unique_constraints": [],
         "description": "Combined HA gateway stats and cluster node membership for all HA gateways at a site",
     },
+    # ==============================
+    # UPGRADE CAPTURE PORTAL (menu 238, issue #1823)
+    # Both entries MUST stay natural_pk. src/db/redis_writer.py:598 puts a 7-day
+    # time to live on every composite_pk document, and the portal keeps a capture
+    # and a run forever.
+    # ==============================
+    "upgradeCaptureWrite": {
+        "type": "natural_pk",
+        "primary_key": ["capture_id"],  # Value is cap-{run_hex}-{ordinal}. No slash and no colon
+        "indexes": ["run_id", "ordinal", "site_id", "org_id", "actor_email", "started_at"],
+        "unique_constraints": [],
+        "description": "Site state capture written before and after a firmware upgrade",
+    },
+    "upgradeRunWrite": {
+        "type": "natural_pk",
+        "primary_key": ["run_id"],  # Value is run-{uuid4hex}. A retry replaces the record
+        "indexes": ["site_id", "state", "actor_email", "created_at"],
+        "unique_constraints": [],
+        "description": "Upgrade run record that joins the pre-check capture to the post-check capture",
+    },
 }

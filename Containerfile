@@ -75,7 +75,8 @@ RUN pip install --no-cache-dir -r requirements.txt \
         --trusted-host files.pythonhosted.org
 
 # Copy application files
-COPY MistHelper.py __init__.py wsgi.py ./
+# wsgi_capture.py is the entry point of the upgrade capture portal on port 8056.
+COPY MistHelper.py __init__.py wsgi.py wsgi_capture.py ./
 COPY src/ ./src/
 COPY web_portal/ ./web_portal/
 
@@ -103,12 +104,15 @@ ENV AUTO_UPGRADE_UV=false
 ENV AUTO_UPGRADE_DEPENDENCIES=false
 # Web portal port (must match EXPOSE)
 ENV WEB_PORT=8055
+# Upgrade capture portal port (must match EXPOSE). A second Gunicorn process
+# serves this port, so a fault in one portal cannot stop the other.
+ENV CAPTURE_PORT=8056
 
 # Volume for data persistence
 VOLUME ["/app/data"]
 
-# Expose SSH port 2200 and web portal port 8055
-EXPOSE 2200 8055
+# Expose SSH port 2200, web portal port 8055, and capture portal port 8056
+EXPOSE 2200 8055 8056
 
 # Note: HEALTHCHECK removed for OCI/Podman compatibility
 # For health monitoring, use external tools or docker format

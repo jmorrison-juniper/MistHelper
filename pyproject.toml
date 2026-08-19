@@ -76,6 +76,7 @@ dev = [
     "hypothesis>=6.151.12",
     "libcst>=1.5",              # AST-based codemod for #429 logging f-string sweep
     "playwright>=1.40.0",
+    "pytest-playwright>=0.4.0",  # supplies the `page` fixture; playwright alone has no pytest plugin
     "pre-commit>=3.0.0",
 ]
 container = [
@@ -388,7 +389,7 @@ disable_error_code = [
 ]
 
 [tool.bandit]
-targets = ["MistHelper.py", "maps_manager.py", "wsgi.py", "web_portal", "mist-ops-platform", "ops-portal", "src"]
+targets = ["MistHelper.py", "maps_manager.py", "wsgi.py", "wsgi_capture.py", "web_portal", "mist-ops-platform", "ops-portal", "src"]
 # tools/test_quality_analyzer/fixtures: deliberately-bad code used as test
 # material by the analyzer — mirrors the ruff per-file-ignore for the same tree
 # (see [tool.ruff.lint.per-file-ignores] at "tools/test_quality_analyzer/fixtures/bad/**").
@@ -396,7 +397,14 @@ exclude_dirs = ["tests", ".venv", "node_modules", "scripts", "specs", "tools/tes
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
-testpaths = ["tests"]
+# The three upgrade_portal entries name the new suites, so a reader sees them
+# without a directory walk. Each one already sits under "tests".
+testpaths = [
+    "tests",
+    "tests/unit/upgrade_portal",
+    "tests/contract/upgrade_portal",
+    "tests/e2e/upgrade_portal",
+]
 python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
@@ -406,7 +414,9 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["."]
+# src/upgrade_portal is named on its own, so a run that measures only the new
+# package still reports it. The "." entry already covers the repository.
+source = [".", "src/upgrade_portal"]
 omit = [
     "tests/*",
     "venv/*",

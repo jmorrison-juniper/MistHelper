@@ -11,6 +11,8 @@ services:
       - "2200:2200"
       # Web portal for data browsing and operations
       - "8055:8055"
+      # Upgrade capture portal for pre-check and post-check work
+      - "8056:8056"
     volumes:
       # Mount local data directory to persist SQLite database and logs
       # The container writes to /app/data, this maps it to ./data on host
@@ -24,6 +26,8 @@ services:
       - PYTHONUNBUFFERED=1
       # Web portal port (must match exposed port)
       - WEB_PORT=8055
+      # Upgrade capture portal port (must match exposed port)
+      - CAPTURE_PORT=8056
       # Database connection (container names resolve via compose network)
       - ARANGO_HOST=http://arangodb:8529
       - REDIS_HOST=redis-stack

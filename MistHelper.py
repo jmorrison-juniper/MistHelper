@@ -3734,6 +3734,12 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
         CountExporter.msp_counts,
         "Run any MSP-scoped Mist count endpoint (3 operations, issue #1802)",
     ),
+    "238": (
+        # A lambda defers the name lookup, because _launch_capture_portal is defined
+        # further down this module and this dict is built the moment the module loads.
+        lambda: _launch_capture_portal(),
+        "Launch the upgrade capture portal on port 8056 (pre-check, upgrade, post-check)",
+    ),
     "44": (OrgConfigExporter.psks, "Export PSK (Pre-Shared Key) information for the organization"),
     "45": (OrgConfigExporter.webhooks, "Export webhook configuration for the organization"),
     "46": (OrgConfigExporter.wlans, "Export WLAN configuration for the organization"),
@@ -4870,6 +4876,68 @@ def _launch_web_portal(args: argparse.Namespace) -> None:
     _run_web_portal_server(app, host, port, args.debug)  # Dispatch to container/local runner
 
 
+def _capture_portal_port() -> int:
+    """Return the listen port for the upgrade capture portal.
+
+    Why:
+        The container and a workstation both set CAPTURE_PORT. A bad value must not stop
+        the launch, so the reader falls back to the documented default of 8056.
+
+    Returns:
+        The port from CAPTURE_PORT, or 8056 when the value is absent or is not a number.
+    """
+    raw_port = os.environ.get("CAPTURE_PORT", "8056")  # The container sets this; 8056 matches the plan
+    if raw_port.isdigit():  # Accept only a plain number, so startup never raises on a typo
+        return int(raw_port)
+    logging.warning("CAPTURE_PORTAL: CAPTURE_PORT value %s is not a number - using 8056", raw_port)  # Warn on a typo
+    return 8056  # Documented default port for the capture portal
+
+
+def _run_capture_portal_server(app: Any, host: str, port: int, dev_debug: bool) -> None:
+    """Start the capture portal in container mode (Gunicorn-aware) or local Flask dev server mode.
+
+    Why:
+        Gunicorn serves the portal in the container through wsgi_capture.py. A developer on a
+        workstation needs the Flask development server instead. The port 8055 portal splits the
+        two paths the same way, so both portals behave alike.
+
+    Args:
+        app: The Flask application that create_app built.
+        host: The bind address for the listener.
+        port: The listen port, 8056 by default.
+        dev_debug: True to start the local development server with the debugger.
+    """
+    if EnvironmentUtils.is_running_in_container():  # Container path -- Gunicorn owns the socket
+        logging.info("CAPTURE_PORTAL: Container detected - use wsgi_capture.py with Gunicorn on port %s", port)
+        echo(">> For production, use: gunicorn wsgi_capture:app -w 1 -k gthread --threads 4")
+        app.run(host=host, port=port, debug=False)  # Force debug=False inside the container
+        return  # Container path is complete
+    logging.info("CAPTURE_PORTAL: Local mode - Flask dev server on %s:%s", host, port)  # Log the local dev path
+    echo(">> Upgrade capture portal starting at http://127.0.0.1:%s", port)  # Clickable URL for the operator
+    app.run(host=host, port=port, debug=dev_debug)  # Honor the caller's debug flag locally
+
+
+def _launch_capture_portal(dev_debug: bool = False) -> None:
+    """Launch the upgrade capture portal on port 8056.
+
+    Why:
+        Menu 238 and the --capture-portal flag need one shared start path. The portal runs in
+        its own process on its own port, because the port 8055 portal holds process-level state
+        that a second application would corrupt.
+
+    Args:
+        dev_debug: True to start the local development server with the debugger.
+    """
+    from src.upgrade_portal.app.factory import create_app  # Deferred import keeps CLI startup fast
+
+    port = _capture_portal_port()  # CAPTURE_PORT with the documented default of 8056
+    host = os.environ.get("CAPTURE_HOST") or ".".join(("0",) * 4)  # All-interfaces bind (env override wins)
+    logging.info("CAPTURE_PORTAL: Building the application for %s:%s", host, port)  # Log before the build
+    app = create_app()  # The factory reads every setting from the environment and holds no credential value
+    logging.debug("CAPTURE_PORTAL: Application built - starting the server")  # Log after the build
+    _run_capture_portal_server(app, host, port, dev_debug)  # Dispatch to the container or local runner
+
+
 def _report_tqdm_status() -> None:
     """Log whether the real tqdm landed in the global namespace after deferred imports."""
     logging.debug("_report_tqdm_status: checking tqdm namespace availability")  # Trace tqdm status check
@@ -5042,6 +5110,13 @@ def _add_interface_mode_flags(parser: argparse.ArgumentParser) -> None:
         help=(
             "Launch the web portal interface on port 8055 (or WEB_PORT env var) instead of the CLI menu"
         ),  # Gunicorn web portal
+    )
+    parser.add_argument(
+        "--capture-portal",
+        action="store_true",
+        help=(
+            "Launch the upgrade capture portal on port 8056 (or CAPTURE_PORT env var) instead of the CLI menu"
+        ),  # Gunicorn upgrade capture portal, menu 238
     )
 
 
@@ -5695,6 +5770,21 @@ def _run_web_portal_mode(args: argparse.Namespace) -> None:
     sys.exit(0)
 
 
+def _run_capture_portal_mode(args: argparse.Namespace) -> None:
+    """Launch the upgrade capture portal on port 8056 and exit cleanly on shutdown.
+
+    Why:
+        _dispatch_main_mode needs one handler for each front end. This handler keeps the
+        --capture-portal flag beside the --web-portal flag in the same dispatch table.
+
+    Args:
+        args: The parsed command-line namespace. The handler reads only the debug flag.
+    """
+    logging.info("CAPTURE_PORTAL: Starting upgrade capture portal mode")  # Trace before launch
+    _launch_capture_portal(args.debug)  # Blocks until shutdown
+    sys.exit(0)
+
+
 def _dispatch_main_mode(args: argparse.Namespace) -> None:
     """Dispatch to the appropriate mode entry point based on parsed CLI flags."""
     mode_table = (  # Ordered (predicate, handler) pairs — first match wins
@@ -5702,6 +5792,7 @@ def _dispatch_main_mode(args: argparse.Namespace) -> None:
         (lambda a: bool(a.testinteractive), _run_interactive_test_mode),
         (lambda a: bool(a.tui), _run_tui_mode_and_exit),
         (lambda a: bool(getattr(a, "web_portal", False)), _run_web_portal_mode),
+        (lambda a: bool(getattr(a, "capture_portal", False)), _run_capture_portal_mode),
         (_has_meaningful_cli_args, _run_cli_mode),
     )
     for predicate, handler in mode_table:  # Stop on first predicate that matches

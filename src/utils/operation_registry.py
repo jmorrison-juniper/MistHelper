@@ -300,6 +300,16 @@ class OperationRegistry:
         "235": {"category": "interactive_safe", "skip_reason": "Requires a count operation choice"},
         "236": {"category": "interactive_safe", "skip_reason": "Requires a count operation and site"},
         "237": {"category": "interactive_safe", "skip_reason": "Requires a count operation and MSP ID"},
+        # WHY: menu 238 starts a local web server and drives a firmware upgrade, so it writes
+        # device state. The fail-closed guardrail needs this row or the build breaks.
+        "238": {
+            "category": "destructive",
+            "skip_reason": (
+                "DESTRUCTIVE: Menu 238 starts the upgrade capture portal on port 8056 and "
+                "drives a firmware upgrade for the selected site. The menu needs a browser "
+                "and a live Mist test tenant."
+            ),
+        },
         "186": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Deletes all generated cache CSV files"},
         "58": {"category": "safe"},
         "187": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Creates config objects in destination org"},

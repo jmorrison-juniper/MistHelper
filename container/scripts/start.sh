@@ -63,12 +63,31 @@ su - misthelper -c "cd /app && gunicorn wsgi:app \
     --error-logfile /app/data/portal_error.log" &
 GUNICORN_PID=$!
 
-# Trap signals to stop both processes
+# Determine upgrade capture portal port (default 8056)
+CAPTURE_PORT="${CAPTURE_PORT:-8056}"
+
+# Start the capture portal in a second Gunicorn process.
+# A separate process keeps a long upgrade run away from the data browsing
+# portal, so a fault in one portal cannot stop the other.
+echo "[CAPTURE] Starting upgrade capture portal on port $CAPTURE_PORT..." >> /app/data/ssh.log
+su - misthelper -c "cd /app && gunicorn wsgi_capture:app \
+    --bind 0.0.0.0:${CAPTURE_PORT} \
+    --workers 1 \
+    --worker-class gthread \
+    --threads 4 \
+    --timeout 120 \
+    --access-logfile /app/data/capture_access.log \
+    --error-logfile /app/data/capture_error.log" &
+CAPTURE_PID=$!
+
+# Trap signals to stop every process
 cleanup() {
     echo "[CONTAINER] Shutting down..." >> /app/data/ssh.log
     kill "$GUNICORN_PID" 2>/dev/null || true
+    kill "$CAPTURE_PID" 2>/dev/null || true
     kill "$SSHD_PID" 2>/dev/null || true
     wait "$GUNICORN_PID" 2>/dev/null || true
+    wait "$CAPTURE_PID" 2>/dev/null || true
     wait "$SSHD_PID" 2>/dev/null || true
     exit 0
 }
@@ -78,7 +97,7 @@ trap cleanup SIGTERM SIGINT
 /usr/sbin/sshd -D &
 SSHD_PID=$!
 
-# Wait for either process to exit
-wait -n "$GUNICORN_PID" "$SSHD_PID" 2>/dev/null || true
+# Wait for any process to exit
+wait -n "$GUNICORN_PID" "$CAPTURE_PID" "$SSHD_PID" 2>/dev/null || true
 echo "[CONTAINER] A service exited unexpectedly" >> /app/data/ssh.log
 cleanup
