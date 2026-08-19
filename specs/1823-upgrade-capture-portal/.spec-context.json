@@ -2,8 +2,8 @@
   "workflow": "speckit",
   "specName": "Upgrade Pre-Check and Post-Check Portal",
   "branch": "feat/1823-upgrade-capture-portal",
-  "currentStep": "specify",
-  "status": "specified",
+  "currentStep": "plan",
+  "status": "planned",
   "history": [
     {
       "step": "specify",
@@ -11,6 +11,13 @@
       "kind": "start",
       "by": "extension",
       "at": "2026-08-19T07:01:40.994Z"
+    },
+    {
+      "step": "plan",
+      "substep": null,
+      "kind": "complete",
+      "by": "extension",
+      "at": "2026-08-19T07:40:43.654Z"
     }
   ]
 }
