@@ -34,6 +34,15 @@ FAKE_SITE_ID = "00000000-0000-0000-0000-0000000000bb"
 
 # WHY: The smallest payload that still holds each field a route reads. A
 # contract test checks the response shape, so a large payload adds no value.
+#
+# WHY `listOrgSiteStats` is absent and must stay absent: the three device
+# count tests in `test_select.py` divide the work. Two tests set their own
+# statistics payload. The third test reads the empty answer that this map
+# gives for an absent name. An entry here makes that third test fail. If a
+# test needs a statistics record, set the record inside that one test.
+# The real read pages by offset with `limit` and `page`. It answers a plain
+# array, so any such payload stays a plain list. The read carries no
+# `results` envelope and no `search_after` cursor.
 DEFAULT_PAYLOADS: dict[str, Any] = {
     "listOrgSites": [{"id": FAKE_SITE_ID, "name": "Test Site", "org_id": FAKE_ORG_ID}],
     "listSiteDevices": [{"mac": "5c5b350e0001", "type": "ap", "model": "AP45", "site_id": FAKE_SITE_ID}],

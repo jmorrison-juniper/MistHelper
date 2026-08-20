@@ -1,0 +1,636 @@
+"""Budget tests for the capture time target and the comparison render target.
+
+Why:
+    Task T219 asks for a guard on two performance promises of the upgrade
+    capture portal. A tier 2 capture of a 250-device site finishes in 90 seconds
+    or less. A comparison page renders in 3 seconds or less.
+
+    Correction to the task text. Task T219 names SC-002 for the capture target
+    and SC-005 for the render target. Neither criterion states either number.
+    On disk, `spec.md` SC-002 asks an operator to read the full comparison in
+    under 30 seconds, and `spec.md` SC-005 asks that two operators on two sites
+    never block each other. Both numbers are real, but they come from
+    `plan.md` lines 64 to 67, which `quickstart.md` repeats and which
+    `data-model.md` line 76 ties to the digest short circuit. The repository
+    already records the wrong citation as finding I4 of `analysis.md` and the
+    missing criterion as finding U1. This file therefore tests the two numbers
+    and does not repeat the two wrong labels.
+
+    Method. Both targets are promises about a live site, and a unit test cannot
+    reach a live site. A timed run against fakes measures the speed of the
+    fakes, so it would pass whatever the portal did. Each test below counts the
+    work instead: call groups, read calls, and comparison deltas. A count is
+    exact on every machine, and it fails when the work starts to grow with the
+    size of the site. Growth with site size is the one way either target is
+    lost.
+
+    One test does measure time. It uses the real 3-second budget for work that
+    takes a few milliseconds in memory, and its docstring states the margin. No
+    test asserts a lower bound on speed.
+
+    No test here opens a socket, reads the `.env` file, or names a real
+    credential.
+"""
+
+from __future__ import annotations  # Keeps every annotation as text, per the repository style.
+
+import threading  # The fake executor hands each worker a real semaphore, as the pool does.
+import time  # The one timed test reads the monotonic clock.
+from collections import Counter  # One tally for each read name of a fake site.
+from collections.abc import Callable, Mapping  # The worker shape of the pool, and the store write shape.
+from dataclasses import dataclass, field  # The fakes of this module.
+from typing import Any  # A session, a store result, and a document are all free-form.
+
+from src.upgrade_portal.capture import assembly, collector, devices, extras  # The capture lane under test.
+from src.upgrade_portal.capture import clients as capture_clients  # The client records that a site read answers with.
+from src.upgrade_portal.compare import clients as compare_clients  # The client half of a comparison.
+from src.upgrade_portal.compare import diff, render  # The device half and the page builder.
+from src.upgrade_portal.compare import statistics as compare_statistics  # The roll-up that the page shows.
+
+LARGE_SITE_DEVICES = 250  # The site size that plan.md line 64 names for the 90 second capture target.
+SMALL_SITE_DEVICES = 50  # The site size that spec.md SC-001 names for the first capture of a site.
+TIER_TWO_GROUPS = 4  # The four call groups of wave one.
+TIER_THREE_GROUPS = 5  # Wave one, and the one extra group of wave two.
+RENDER_BUDGET_SECONDS = 3.0  # The comparison render target of plan.md line 66.
+OLD_VERSION = "21.4R3.15"  # The firmware before the upgrade.
+NEW_VERSION = "23.4R2.13"  # The firmware after the upgrade.
+QUIET_DIGEST = "b1946ac92492d2347c6235b4d2611184"  # One digest that both captures of a quiet site carry.
+RUN_ID = "run-0123456789abcdef"  # The owning run of every fake capture.
+ORG_ID = "11111111-1111-1111-1111-111111111111"  # The fake organization.
+SITE_ID = "22222222-2222-2222-2222-222222222222"  # The fake site.
+
+
+def fake_device_mac(ordinal: int) -> str:
+    """Return the address of one fake device.
+
+    Why:
+        Both lanes of this file need the same address for the same ordinal, so
+        a capture test and a comparison test describe one fake site. The prefix
+        is obviously invented, so a reader sees at once that no test reaches
+        real hardware.
+
+    Args:
+        ordinal: The position of the device in the fake site.
+
+    Returns:
+        One twelve character address.
+    """
+    return f"0011220{ordinal:05x}"  # Seven fixed characters and five that carry the ordinal.
+
+
+def fake_client_mac(ordinal: int) -> str:
+    """Return the address of one fake client.
+
+    Args:
+        ordinal: The position of the client in the fake site.
+
+    Returns:
+        One twelve character address.
+    """
+    return f"aabbcc{ordinal:06x}"  # Six fixed characters and six that carry the ordinal.
+
+
+# ---------------------------------------------------------------------------
+# The capture lane fakes
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class FakeStoreResult:
+    """Stands in for ``store.StoreResult`` with a verified write.
+
+    Attributes:
+        verified: True when the store wrote the record and read it back.
+        reason: Names the refusal. Empty after a verified write.
+        stored_size_bytes: The measured size of the stored record.
+    """
+
+    verified: bool = True  # Every capture of this file writes cleanly.
+    reason: str = ""  # No refusal to report.
+    stored_size_bytes: int = 4096  # A plausible stored size.
+
+
+@dataclass(frozen=True, slots=True)
+class FakeCaptureLoad:
+    """Stands in for ``store.CaptureLoad`` with a comparable record.
+
+    Attributes:
+        comparable: True when the stored record is fit for a comparison.
+        reason: Names the refusal. Empty after a matching read-back.
+        capture: The stored record.
+    """
+
+    comparable: bool = True  # Every read-back of this file succeeds.
+    reason: str = ""  # No refusal to report.
+    capture: dict[str, Any] | None = None  # No test here reads the record back.
+
+
+@dataclass
+class FakeStore:
+    """Keeps every document that a fake capture writes.
+
+    Why:
+        The capture tests read the stored document to prove that the reads
+        really happened. A store that threw the document away would let a
+        broken capture pass a call count test.
+
+    Attributes:
+        written: Each document that the collector wrote.
+    """
+
+    written: list[dict[str, Any]] = field(default_factory=list)  # In write order.
+
+    def write(self, document: Mapping[str, Any]) -> FakeStoreResult:
+        """Keep one document and answer with a verified result.
+
+        Args:
+            document: The capture document.
+
+        Returns:
+            The fixed store result.
+        """
+        self.written.append(dict(document))  # A copy, so a later change cannot reach the test.
+        return FakeStoreResult()  # The write always verifies here.
+
+    def read_back(self, capture_id: str) -> FakeCaptureLoad:
+        """Answer one read-back with a comparable load.
+
+        Args:
+            capture_id: The identifier of the capture.
+
+        Returns:
+            The fixed load result.
+        """
+        del capture_id  # The fake store holds one document, so the key never selects.
+        return FakeCaptureLoad()  # The read-back always succeeds here.
+
+    def holder(self) -> collector.CaptureStore:
+        """Return this fake in the shape that the collector expects.
+
+        Returns:
+            The store holder.
+        """
+        return collector.CaptureStore(write=self.write, read_back=self.read_back)  # The two call seams.
+
+
+@dataclass
+class FakeSite:
+    """A fake site of a chosen size that counts every read of one capture.
+
+    Why:
+        The 90 second capture target holds only while the cost of a capture
+        stays flat as the site grows. A tally on each read turns that promise
+        into a number that a test can compare between two site sizes. The five
+        methods match the five reads of ``collector.SiteReads``, so a change to
+        that holder breaks this fake instead of hiding behind it.
+
+    Attributes:
+        device_count: The number of devices the fake site holds.
+        calls: One tally for each read name.
+    """
+
+    device_count: int  # Every read answers with this many rows.
+    calls: Counter[str] = field(default_factory=Counter)  # Starts empty and grows one read at a time.
+
+    def inventory_rows(self) -> list[dict[str, Any]]:
+        """Build one inventory row for each device of the fake site.
+
+        Returns:
+            The inventory rows.
+        """
+        return [
+            {
+                "mac": fake_device_mac(number),  # The address that both lanes share.
+                "type": "switch",  # One device type keeps the fixture readable.
+                "model": "EX4400-48P",  # A plausible model.
+                "status": "connected",  # Every device answers before the upgrade.
+                "name": f"switch-{number:03d}",  # A readable name for the page.
+                "version": OLD_VERSION,  # The firmware before the upgrade.
+            }
+            for number in range(self.device_count)  # One row for each device.
+        ]
+
+    def statistics_rows(self) -> list[dict[str, Any]]:
+        """Build one statistics row for each device of the fake site.
+
+        Returns:
+            The statistics rows.
+        """
+        return [
+            {"mac": fake_device_mac(number), "type": "switch", "status": "connected", "uptime": 900000}
+            for number in range(self.device_count)  # One row for each device, so no device type is lost.
+        ]
+
+    def read_devices(self, session: Any, org_id: str, site_id: str) -> tuple[devices.DeviceRead, devices.DeviceRead]:
+        """Answer the device group with the inventory read and the statistics read.
+
+        Args:
+            session: Unused.
+            org_id: Unused.
+            site_id: Unused.
+
+        Returns:
+            Both device reads.
+        """
+        del session, org_id, site_id  # A fake site needs no session and no identifier.
+        self.calls["devices"] += 1  # One call group, whatever the size of the site.
+        inventory = devices.DeviceRead(devices.SECTION_INVENTORY, self.inventory_rows(), [])  # The inventory read.
+        return inventory, devices.DeviceRead(devices.SECTION_STATISTICS, self.statistics_rows(), [])  # Both reads.
+
+    def read_clients(self, session: Any, site_id: str) -> tuple[list[Any], list[Any]]:
+        """Answer the wired group with one wired client for each device.
+
+        Args:
+            session: Unused.
+            site_id: Unused.
+
+        Returns:
+            The wired records and the guest records.
+        """
+        del session, site_id  # A fake site needs no session and no identifier.
+        self.calls["wired"] += 1  # One call group, whatever the size of the site.
+        wired = [
+            capture_clients.ClientRecord(
+                mac=fake_client_mac(number),  # The client address.
+                attachment=capture_clients.ClientAttachment(device_mac=fake_device_mac(number), port_id="ge-0/0/1"),
+            )
+            for number in range(self.device_count)  # One wired client on each device.
+        ]
+        return wired, []  # This fake site holds no guest client.
+
+    def read_wireless_stats(self, session: Any, site_id: str) -> list[dict[str, Any]]:
+        """Answer the wireless statistics group with one row for each device.
+
+        Args:
+            session: Unused.
+            site_id: Unused.
+
+        Returns:
+            The wireless statistics rows.
+        """
+        del session, site_id  # A fake site needs no session and no identifier.
+        self.calls["wireless_stats"] += 1  # One call group, whatever the size of the site.
+        return [
+            {"mac": fake_client_mac(number), "ap_mac": fake_device_mac(number), "rssi": -55, "ssid": "corp"}
+            for number in range(self.device_count)  # One wireless client on each device.
+        ]
+
+    def read_wireless_search(self, session: Any, site_id: str) -> list[dict[str, Any]]:
+        """Answer the wireless search group with one row for each device.
+
+        Args:
+            session: Unused.
+            site_id: Unused.
+
+        Returns:
+            The wireless search rows.
+        """
+        del session, site_id  # A fake site needs no session and no identifier.
+        self.calls["wireless_search"] += 1  # One call group, whatever the size of the site.
+        return [
+            {"mac": fake_client_mac(number), "random_mac": False, "last_hostname": f"laptop-{number:03d}"}
+            for number in range(self.device_count)  # One search row for each wireless client.
+        ]
+
+    def read_extras(self, session: Any, scope: extras.SiteScope, device_stats: Any) -> dict[str, extras.ExtraSection]:
+        """Answer the tier 3 group with one empty section for each extra name.
+
+        Why:
+            Only tier 3 reads this group. The tally proves that tier 2 leaves it
+            alone, which is what keeps the tier 2 capture at four call groups.
+
+        Args:
+            session: Unused.
+            scope: Unused.
+            device_stats: Unused.
+
+        Returns:
+            One section for each tier 3 name.
+        """
+        del session, scope, device_stats  # A fake site needs no session and no statistics.
+        self.calls["extras"] += 1  # The fifth call group, which only tier 3 runs.
+        return {name: extras.ExtraSection(name, (), "", 200) for name in extras.SECTION_NAMES}  # Empty but present.
+
+    def reads(self) -> collector.SiteReads:
+        """Return the five reads in the holder that the collector expects.
+
+        Returns:
+            The read holder.
+        """
+        return collector.SiteReads(
+            devices=self.read_devices,  # The device group.
+            wired=self.read_clients,  # The wired client group.
+            wireless_stats=self.read_wireless_stats,  # The wireless statistics group.
+            wireless_search=self.read_wireless_search,  # The wireless search group.
+            extras=self.read_extras,  # The tier 3 group.
+        )
+
+
+def sequential_executor(
+    work_items: list[Any], worker_function: Callable[[Any, threading.Semaphore], Any], batch_description: str
+) -> tuple[list[Any], list[Any]]:
+    """Run every call group in this thread, in order.
+
+    Why:
+        A unit test must not depend on a thread pool that reads the settings of
+        the whole program. This stands in for ``CapturePool.execute`` and keeps
+        the same contract: a falsy worker result counts as lost. The signature
+        repeats the ``assembly.GroupExecutor`` type exactly, because a looser
+        stand-in would accept a worker that the real pool refuses.
+
+    Args:
+        work_items: The call groups.
+        worker_function: The worker that runs one call group.
+        batch_description: Unused. The real pool logs it.
+
+    Returns:
+        The finished results and the lost work items.
+    """
+    del batch_description  # The real pool logs this, and a test does not read the log.
+    finished: list[Any] = []  # The result of each group that the worker finished.
+    lost: list[Any] = []  # The work item of each group that the worker lost.
+    for item in work_items:
+        result = worker_function(item, threading.Semaphore(1))  # The real pool hands over a semaphore too.
+        finished.append(result) if result else lost.append(item)  # A falsy result counts as lost.
+    return finished, lost
+
+
+def capture_job(tier: int) -> dict[str, Any]:
+    """Build the job that the start route hands to a capture worker.
+
+    Args:
+        tier: The data tier of the capture.
+
+    Returns:
+        The fields of one capture job.
+    """
+    return {
+        "capture_id": assembly.capture_key(RUN_ID, assembly.FIRST_ORDINAL),  # The identifier of this capture.
+        "run_id": RUN_ID,  # The owning run.
+        "ordinal": assembly.FIRST_ORDINAL,  # The first capture of the run.
+        "role": "pre",  # The pre-check capture.
+        "org_id": ORG_ID,  # The fake organization.
+        "site_id": SITE_ID,  # The fake site.
+        "tier": tier,  # The data tier under test.
+        "actor_email": "operator@example.com",  # An obviously invented address.
+    }
+
+
+def run_capture_for(site: FakeSite, tier: int = collector.TIER_STANDARD) -> dict[str, Any]:
+    """Run one whole capture against a fake site and return the stored document.
+
+    Why:
+        Three tests need the same run with a different site size or tier. One
+        helper keeps each test to the one line that names its difference.
+
+    Args:
+        site: The fake site to read.
+        tier: The data tier of the capture.
+
+    Returns:
+        The document that the collector stored.
+    """
+    store = FakeStore()  # Keeps the one document that this capture writes.
+    resources = collector.CaptureResources(
+        session=object(),  # Any object stands in for a cloud session, because no read uses it.
+        reads=site.reads(),  # The five counted reads.
+        store=store.holder(),  # The store that keeps the document.
+        report=lambda capture_id, changes: None,  # No test here reads the progress record.
+        executor=sequential_executor,  # No thread pool, so the run is repeatable.
+    )
+    collector.run_capture(capture_job(tier), resources)  # Opens no socket and reaches no database.
+    return store.written[-1]  # The stored document of this capture.
+
+
+# ---------------------------------------------------------------------------
+# The comparison lane fixtures
+# ---------------------------------------------------------------------------
+
+
+def device_index(count: int, version: str) -> dict[str, dict[str, Any]]:
+    """Build a device index of a chosen size, all on one firmware version.
+
+    Args:
+        count: The number of devices.
+        version: The firmware version of every device.
+
+    Returns:
+        One index row for each device, by address.
+    """
+    return {
+        fake_device_mac(number): {
+            "name": f"switch-{number:03d}",  # A readable name for the page.
+            "model": "EX4400-48P",  # A plausible model.
+            "version": version,  # The field that an upgrade changes.
+            "status": "connected",  # Every device answers.
+            "ip": f"10.10.{number // 256}.{number % 256}",  # A distinct address for each device.
+            "uptime": 900000,  # A reboot resets this, so no comparison reads it.
+            "vc_role": "master",  # A single member chassis.
+            "num_members": 1,  # A single member chassis.
+        }
+        for number in range(count)  # One row for each device.
+    }
+
+
+def client_rows(count: int) -> dict[str, list[dict[str, Any]]]:
+    """Build the three client sections of a fake site.
+
+    Args:
+        count: The number of clients in each section.
+
+    Returns:
+        One row list for each client kind.
+    """
+    rows = [
+        {"mac": fake_client_mac(number), "hostname": f"laptop-{number:03d}", "device_mac": fake_device_mac(number)}
+        for number in range(count)  # One client for each device.
+    ]
+    return {kind: [dict(row) for row in rows] for kind in compare_clients.CLIENT_KINDS}  # A copy for each kind.
+
+
+def quiet_digests() -> dict[str, str]:
+    """Build the digest map of a site that did not change.
+
+    Why:
+        Both captures of a quiet site carry the same digest for every section,
+        which is what lets a comparison skip the whole section. Building the map
+        here keeps the skip tests to the difference each one names.
+
+    Returns:
+        One matching digest for the device section and for all three client sections.
+    """
+    names = (diff.SECTION_DEVICES, *compare_clients.CLIENT_SECTIONS)  # The four comparison sections.
+    return dict.fromkeys(names, QUIET_DIGEST)  # The same digest under every name.
+
+
+def comparison_capture(count: int, version: str, digests: dict[str, str] | None = None) -> dict[str, Any]:
+    """Build one capture document for the comparison lane.
+
+    Args:
+        count: The number of devices, and the number of clients in each section.
+        version: The firmware version of every device.
+        digests: The digest map, when the test needs one.
+
+    Returns:
+        One capture document.
+    """
+    capture: dict[str, Any] = {
+        "device_index": device_index(count, version),  # The rows that the device comparison reads.
+        "clients": client_rows(count),  # The rows that the client comparison reads.
+        "site_name": "Fake Campus",  # The header of the page shows this.
+        "org_name": "Fake Organization",  # The header of the page shows this.
+    }
+    if digests is not None:  # A test that drives the short circuit supplies the map.
+        capture["digests"] = digests
+    return capture
+
+
+# ---------------------------------------------------------------------------
+# The capture time target of plan.md line 64
+# ---------------------------------------------------------------------------
+
+
+def test_a_tier_two_capture_runs_four_call_groups() -> None:
+    """A tier 2 capture runs four call groups, and tier 3 adds one more.
+
+    Why:
+        The 90 second target rests on a fixed, small number of cloud calls that
+        run at the same time. Four groups match the four capture workers of the
+        pool, so one wave fills the pool exactly one time. A fifth group at
+        tier 2 would add a second wave and put the target at risk.
+    """
+    tier_two = collector.wave_names(collector.TIER_STANDARD)  # The group names of a tier 2 capture.
+    tier_three = collector.wave_names(collector.TIER_EXTRA)  # The group names of a tier 3 capture.
+    assert len(tier_two) == TIER_TWO_GROUPS  # Wave one holds four groups.
+    assert len(tier_three) == TIER_THREE_GROUPS  # Tier 3 adds the one group of wave two.
+    assert tier_three[:TIER_TWO_GROUPS] == tier_two  # Tier 3 adds a group and replaces none.
+    assert len(set(tier_two)) == TIER_TWO_GROUPS  # Four distinct names, so no group is counted twice.
+
+
+def test_the_capture_cost_stays_flat_as_the_site_grows() -> None:
+    """A 250-device site costs the same number of cloud calls as a 50-device site.
+
+    Why:
+        This is the whole basis of the 90 second target. Every read of the
+        capture is a paged list call for the site, not a call for each device.
+        A per-device call would make a 250-device site five times the work of a
+        50-device site, and no wall-clock test on a fake would ever notice. The
+        tally below notices at once.
+    """
+    small = FakeSite(SMALL_SITE_DEVICES)  # The site of spec.md SC-001.
+    large = FakeSite(LARGE_SITE_DEVICES)  # The site of the 90 second target.
+    small_document = run_capture_for(small)  # One whole tier 2 capture.
+    large_document = run_capture_for(large)  # One whole tier 2 capture, five times the devices.
+    assert small.calls == large.calls  # Five times the devices, and the same call count.
+    assert sum(large.calls.values()) == TIER_TWO_GROUPS  # Four calls, one for each group of wave one.
+    assert len(small_document["device_index"]) == SMALL_SITE_DEVICES  # The small capture really read 50 devices.
+    assert len(large_document["device_index"]) == LARGE_SITE_DEVICES  # The large capture really read 250 devices.
+
+
+def test_a_tier_two_capture_never_reads_the_tier_three_group() -> None:
+    """Tier 2 leaves the extra section group alone, and tier 3 reads it once.
+
+    Why:
+        The tier 3 group waits for the device statistics of wave one, so it
+        starts a second wave and adds its whole round trip to the elapsed time.
+        The 90 second target belongs to tier 2, so tier 2 must never pay for it.
+    """
+    tier_two_site = FakeSite(SMALL_SITE_DEVICES)  # A site that runs at tier 2.
+    tier_three_site = FakeSite(SMALL_SITE_DEVICES)  # The same site that runs at tier 3.
+    run_capture_for(tier_two_site, collector.TIER_STANDARD)  # One tier 2 capture.
+    run_capture_for(tier_three_site, collector.TIER_EXTRA)  # One tier 3 capture.
+    assert tier_two_site.calls["extras"] == 0  # Tier 2 never runs the second wave.
+    assert tier_three_site.calls["extras"] == 1  # Tier 3 runs it exactly one time.
+    assert sum(tier_two_site.calls.values()) == TIER_TWO_GROUPS  # Four calls at tier 2.
+    assert sum(tier_three_site.calls.values()) == TIER_THREE_GROUPS  # Five calls at tier 3.
+
+
+# ---------------------------------------------------------------------------
+# The comparison render target of plan.md line 66
+# ---------------------------------------------------------------------------
+
+
+def test_matching_digests_skip_every_comparison_section() -> None:
+    """A quiet 250-device site skips all four comparison sections.
+
+    Why:
+        `data-model.md` line 76 names the digest short circuit as the reason the
+        page renders in 3 seconds. A comparison that ignored the digests would
+        walk 250 device rows and 750 client rows for a site where nothing moved.
+        This test states the skip as a count of sections and a count of deltas.
+    """
+    before = comparison_capture(LARGE_SITE_DEVICES, OLD_VERSION, quiet_digests())  # The pre-check capture.
+    after = comparison_capture(LARGE_SITE_DEVICES, OLD_VERSION, quiet_digests())  # The post-check capture.
+    device_result = diff.compare_devices(before, after)  # The device half.
+    client_result = compare_clients.compare_clients(before, after)  # The client half.
+    assert device_result.deltas == ()  # No device row reached the page.
+    assert client_result.deltas == ()  # No client row reached the page.
+    assert device_result.skipped_sections == (diff.SECTION_DEVICES,)  # The device section is named as skipped.
+    assert client_result.skipped_sections == compare_clients.CLIENT_SECTIONS  # All three client sections are skipped.
+
+
+def test_the_skip_reads_no_device_row_at_all() -> None:
+    """A skipped section never reads its rows, and the same pair without digests does.
+
+    Why:
+        An empty delta list alone does not prove a short circuit, because an
+        empty fixture gives the same answer. This test empties the index of the
+        post-check capture and keeps the digest matching. A comparison that read
+        the rows would report 250 removed devices. It reports none. The second
+        half runs the identical pair with the digests removed and gets the 250
+        deltas back, which proves the fixture holds real work to skip.
+    """
+    before = comparison_capture(LARGE_SITE_DEVICES, OLD_VERSION, quiet_digests())  # A full pre-check capture.
+    after = comparison_capture(LARGE_SITE_DEVICES, OLD_VERSION, quiet_digests())  # A post-check capture.
+    after["device_index"] = {}  # An empty index that the matching digest must hide.
+    quiet = diff.compare_devices(before, after)  # The comparison with the digests in place.
+    assert quiet.deltas == ()  # The short circuit answered before it read one row.
+    assert quiet.skipped_sections == (diff.SECTION_DEVICES,)  # The page reports the skip to the operator.
+    loud = diff.compare_devices({"device_index": before["device_index"]}, {"device_index": {}})  # No digests.
+    assert len(loud.deltas) == LARGE_SITE_DEVICES  # The same rows, read in full, give 250 deltas.
+
+
+def test_the_comparison_work_stays_linear_with_the_site() -> None:
+    """The delta count of a changed site equals the device count, at both sizes.
+
+    Why:
+        A comparison that matched every device against every other device would
+        answer 62500 deltas for a 250-device site and would miss the 3 second
+        target on a real page. One delta for each address proves the comparison
+        joins on the address instead. Two sizes prove the count follows the
+        site rather than a constant in the fixture.
+    """
+    counts = []  # The delta count at each site size.
+    for size in (SMALL_SITE_DEVICES, LARGE_SITE_DEVICES):
+        before = comparison_capture(size, OLD_VERSION)  # Every device on the old firmware.
+        after = comparison_capture(size, NEW_VERSION)  # Every device on the new firmware.
+        counts.append(len(diff.compare_devices(before, after).deltas))  # One comparison at this size.
+    assert counts == [SMALL_SITE_DEVICES, LARGE_SITE_DEVICES]  # One delta for each device, never one for each pair.
+    assert counts[1] == counts[0] * 5  # Five times the devices gives five times the work, not twenty five times.
+
+
+def test_the_whole_comparison_renders_inside_the_three_second_budget() -> None:
+    """A changed 250-device site builds its whole comparison page well inside 3 seconds.
+
+    Why:
+        `plan.md` line 66 promises a 3 second render. This is the one timed test
+        of the file, and it measures the busiest case: every device changed, so
+        no digest skip helps, and all four sections are read in full. The
+        measured work takes about 6 milliseconds in memory on a development
+        machine, so the 3 second budget leaves a margin of more than 500 times.
+        That margin is wide enough that a loaded build agent cannot fail the
+        test at random, and the test still fails if a change turns the render
+        into per-device work of a different order. The test asserts no lower
+        bound, because a fast render is never a fault.
+    """
+    before = comparison_capture(LARGE_SITE_DEVICES, OLD_VERSION)  # Every device on the old firmware.
+    after = comparison_capture(LARGE_SITE_DEVICES, NEW_VERSION)  # Every device on the new firmware.
+    started = time.perf_counter()  # The monotonic clock, which no clock change can move.
+    device_result = diff.compare_devices(before, after)  # The device half.
+    client_result = compare_clients.compare_clients(before, after)  # The client half.
+    totals = compare_statistics.build_statistics(device_result, client_result)  # The roll-up.
+    view = render.build_view((before, after), device_result, client_result, totals)  # The whole page record.
+    elapsed = time.perf_counter() - started  # The measured render time.
+    assert elapsed < RENDER_BUDGET_SECONDS  # The render stays inside the documented budget.
+    assert len(view.devices.rows) == LARGE_SITE_DEVICES  # The page really holds 250 device rows.
+    assert view.header.skipped_sections == ()  # No section was skipped, so the timing covers the full read.

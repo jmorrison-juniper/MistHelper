@@ -1,0 +1,736 @@
+"""Contract tests for the run create call and the upgrade options call.
+
+Why:
+    `tests/contract/upgrade_portal/test_upgrade_routes.py` proves the happy path
+    of both calls and the two headline refusals. It does not prove the edge of
+    either one: the tier default, the option defaults, a target list of the
+    wrong shape, a repeated save, and the guard that sits in front of each path.
+    A body shape that drifts breaks the browser with no server error at all, so
+    these tests read the body key by key.
+
+Scope:
+    `POST /api/sites/<site_id>/runs`, `POST /api/runs`, and
+    `POST /api/runs/<run_id>/options`. `contracts/http-api.md` section 5 fixes
+    every status and every machine code below.
+
+Fixtures:
+    Every fixture lives in this file on purpose. `conftest.py` is shared with
+    other test modules, and a run store belongs to these tests alone.
+"""
+
+from __future__ import annotations  # Postponed annotations keep every hint a plain string.
+
+from collections.abc import Iterator  # The signed-in fixtures yield and then clean up.
+from typing import Any  # A run record and a request body are both free-form.
+
+import pytest  # The test framework of the project.
+from flask import Flask  # The application type of the portal.
+from flask.testing import FlaskClient  # The client type that drives every request.
+from werkzeug.test import TestResponse  # The answer type that every assertion reads.
+
+from src.upgrade_portal.runtime import identity  # The real session guard, so the tests sign in for real.
+from src.upgrade_portal.runtime.runs import RunRecordBuilder, RunSpec  # The record layer owns every field.
+
+# --------------------------------------------------------------------------
+# The contract values. Each one repeats a line of the specification.
+# --------------------------------------------------------------------------
+
+RUN_STORE_KEY = "RUN_STORE"  # The seam that holds the run record store.
+LOCK_READER_KEY = "SITE_LOCK_READER"  # The seam that reads the site lock, named by `select.py`.
+OPTIONS_BUILDER_KEY = "UPGRADE_OPTIONS_BUILDER"  # The seam that `upgrade/options.py` fills.
+
+PROBE_EMAIL = "probe.operator@example.invalid"  # A reserved domain, so no real address appears.
+ORG_ID = "00000000-0000-0000-0000-0000000000aa"  # Matches the shared organization of the other tests.
+SITE_ID = "00000000-0000-0000-0000-0000000000bb"  # Matches the shared site of the other tests.
+PROBE_MAC = "5c5b350e0001"  # The device of the shared inventory payload.
+
+SELECTED_ORG_SESSION_KEY = "selected_org_id"  # The organization pick inside the signed session.
+SELECTED_SITE_SESSION_KEY = "selected_site_id"  # The site pick inside the same signed session.
+
+CREATE_PATH = f"/api/sites/{SITE_ID}/runs"  # The path that `contracts/http-api.md` section 5 names.
+CREATE_ALT_PATH = "/api/runs"  # The path that `tasks.md` T151 names, which reads the session instead.
+CREATE_ENDPOINT = "upgrade.create_run"  # The endpoint that answers both paths above.
+OPTIONS_PATH_TEMPLATE = "/api/runs/{run_id}/options"  # The save call of the options page.
+START_PATH_TEMPLATE = "/api/runs/{run_id}/start"  # The begin action that stands after the options save.
+
+OK_STATUS = 200  # The save succeeded.
+CREATED_STATUS = 201  # The portal created one run record.
+BAD_REQUEST_STATUS = 400  # The portal could not read the request.
+NOT_AUTHENTICATED_STATUS = 401  # No signed-in session.
+METHOD_NOT_ALLOWED_STATUS = 405  # The path accepts a post only.
+CONFLICT_STATUS = 409  # The run exists and its state refuses the call.
+
+NOT_AUTHENTICATED_CODE = "not_authenticated"  # `identity.require_session` answers this code.
+CSRF_MISSING_CODE = "csrf_missing"  # `security.py` answers this code for a post with no token.
+ORG_NOT_CHOSEN_CODE = "org_not_chosen"  # The session holds no organization at all.
+SITE_NOT_CHOSEN_CODE = "site_not_chosen"  # The task path carries no site and the session holds none.
+BAD_OPTION_CODE = "bad_option"  # `contracts/http-api.md` fixes this code for the options call.
+PRE_CAPTURE_MISSING_CODE = "pre_capture_missing"  # FR-035 refuses a start with no saved pre-check.
+
+CONFIRM_WORD = "CONFIRM"  # FR-034 fixes this exact word, in these exact letters.
+
+TIER_STANDARD = 2  # `contracts/http-api.md` states that the tier defaults to 2.
+TIER_DEEP = 3  # The second tier the run record accepts.
+UNKNOWN_TIER = 9  # A whole number outside the two tiers the record layer accepts.
+
+# WHY: `contracts/http-api.md` section 5 fixes exactly these two answer fields
+# for a created run. A third field would tell the browser something the contract
+# never promised, and a reader of the contract would never look for it.
+CREATE_ANSWER_FIELDS = {"run_id", "state"}
+
+# WHY: The default of each option control, as `contracts/http-api.md` names it.
+DEFAULT_OPTIONS = {"reboot": True, "junos_file_action": False, "strategy": "big_bang"}
+
+
+class RecordingRunStore:
+    """Holds every run record of one test in one dictionary.
+
+    Why:
+        The routes ask for a `read_run` and a `write_run` pair. This stand-in
+        gives both and reaches no database server, so a contract test runs with
+        no ArangoDB server and no comma-separated value fallback file.
+    """
+
+    def __init__(self) -> None:
+        """Start with no run record at all."""
+        self.runs: dict[str, dict[str, Any]] = {}  # One entry for each run the test seeds or creates.
+
+    def read_run(self, run_id: str) -> dict[str, Any] | None:
+        """Return one run record, or None when no run holds the identifier.
+
+        Args:
+            run_id: The run key.
+
+        Returns:
+            A copy of the record, or None.
+        """
+        held = self.runs.get(run_id)  # An absent key reads as None, never a fault.
+        return dict(held) if held is not None else None  # A copy stops a caller edit of the stored record.
+
+    def write_run(self, run: dict[str, Any]) -> bool:
+        """Write one run record and report the true result.
+
+        Args:
+            run: The whole record, with the changed fields already in place.
+
+        Returns:
+            True, because this stand-in never refuses a write.
+        """
+        self.runs[str(run["run_id"])] = dict(run)  # A copy stops a later edit of the caller dictionary.
+        return True  # The route then answers the operator.
+
+
+class RefusingOptionsBuilder:
+    """Refuses every option set with one plain sentence.
+
+    Why:
+        `contracts/http-api.md` fixes 400 `bad_option` for the options call, and
+        the route reaches that answer only when the injected builder raises. No
+        builder ships yet, so this stand-in supplies the refusal the contract
+        names and proves that the route maps it to the documented code.
+    """
+
+    def __init__(self, reason: str) -> None:
+        """Build the stand-in with the sentence it raises.
+
+        Args:
+            reason: The sentence the refusal carries.
+        """
+        self.reason = reason  # The route copies this text into the error envelope.
+
+    def __call__(self, record: dict[str, Any], body: dict[str, Any]) -> dict[str, Any]:
+        """Refuse the option set of one run.
+
+        Args:
+            record: The run record the options belong to.
+            body: The request body of the options call.
+
+        Returns:
+            Nothing, because this stand-in always raises.
+
+        Raises:
+            ValueError: Always, because the whole point is the refusal path.
+        """
+        raise ValueError(self.reason)  # `options.BadOptionError` is a `ValueError`, so the route catches this.
+
+
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def run_store() -> RecordingRunStore:
+    """Return a fresh run record store.
+
+    Returns:
+        An empty recording store.
+    """
+    return RecordingRunStore()  # Each test starts with no run at all.
+
+
+@pytest.fixture
+def upgrade_app(portal_app: Flask, run_store: RecordingRunStore) -> Flask:
+    """Return the portal application with the run store injected.
+
+    Why:
+        The create call and the options call both write a run record. The store
+        sits behind a seam, so a contract test replaces it and reaches no
+        database server. The lock reader answers no holder, because a held site
+        already has its own test in `test_upgrade_routes.py`.
+
+    Args:
+        portal_app: The real application from the shared fixture.
+        run_store: The stand-in run record store.
+
+    Returns:
+        The application with the seams in place.
+    """
+    portal_app.config[RUN_STORE_KEY] = run_store  # No ArangoDB server runs in a contract test.
+    portal_app.config[LOCK_READER_KEY] = lambda org_id, site_ids: {}  # No Redis server runs in a contract test.
+    portal_app.config["WTF_CSRF_ENABLED"] = False  # One test below reads the untouched application instead.
+    return portal_app  # Every test below drives this application.
+
+
+@pytest.fixture
+def registered_owner() -> Iterator[identity.SessionOwner]:
+    """Register one operator and drop the record when the test ends.
+
+    Why:
+        The guard admits a request only when the signed session and the browser
+        cookie both name a registered owner. The registry is a process global,
+        so the fixture clears it again.
+
+    Yields:
+        The identity pair of the registered operator.
+    """
+    owner = identity.build_owner(PROBE_EMAIL, identity.issue_browser_id())  # The pair the guard checks.
+    record = identity.OperatorSession(
+        owner=owner,
+        cloud_session=object(),  # A plain object states no scope, so every organization passes.
+        credential_mode=identity.CredentialMode.ENVIRONMENT_TOKEN,
+    )
+    identity.SESSION_REGISTRY.register(record)  # The guard reads the registry on every request.
+    try:  # The test body runs with the owner in place.
+        yield owner  # Every signed-in test reads this pair.
+    finally:  # A leaked record would sign in a later test by accident.
+        identity.SESSION_REGISTRY.drop(owner.key)  # The registry outlives the test, so clear it here.
+
+
+def sign_in_client(client: FlaskClient, owner: identity.SessionOwner, org_id: str | None, site_id: str | None) -> None:
+    """Give one client a signed session, an organization pick, and a site pick.
+
+    Why:
+        Two refusal tests below need a session that holds no organization or no
+        site. A fixture that always writes both could never reach either code.
+
+    Args:
+        client: The Flask test client.
+        owner: The registered operator.
+        org_id: The chosen organization, or None to store none.
+        site_id: The chosen site, or None to store none.
+    """
+    client.set_cookie(identity.BROWSER_ID_COOKIE, owner.browser_id)  # Half of the guard.
+    with client.session_transaction() as browser_session:  # The other half of the guard.
+        browser_session[identity.SESSION_OWNER_KEY] = owner.key  # Names the registered owner.
+        if org_id is not None:  # A test of `org_not_chosen` stores no organization at all.
+            browser_session[SELECTED_ORG_SESSION_KEY] = org_id
+        if site_id is not None:  # A test of `site_not_chosen` stores no site at all.
+            browser_session[SELECTED_SITE_SESSION_KEY] = site_id
+
+
+@pytest.fixture
+def upgrade_client(upgrade_app: Flask, registered_owner: identity.SessionOwner) -> Iterator[FlaskClient]:
+    """Return a signed-in client that already picked the organization and the site.
+
+    Args:
+        upgrade_app: The application with the seams injected.
+        registered_owner: The identity pair of the registered operator.
+
+    Yields:
+        The Flask test client, with the session held open.
+    """
+    with upgrade_app.test_client() as client:  # The context manager holds the session across requests.
+        sign_in_client(client, registered_owner, ORG_ID, SITE_ID)  # The state that every passing test needs.
+        yield client  # Every test below drives this client.
+
+
+@pytest.fixture
+def signed_out_client(upgrade_app: Flask) -> Iterator[FlaskClient]:
+    """Return a client that never signed in.
+
+    Args:
+        upgrade_app: The application with the seams injected.
+
+    Yields:
+        The Flask test client, with no session owner at all.
+    """
+    with upgrade_app.test_client() as client:  # The guard must refuse every request from this client.
+        yield client
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def seed_run(store: RecordingRunStore, state: str, **fields: Any) -> str:
+    """Write one run record straight into the store and return its key.
+
+    Why:
+        A test of the options call needs a run that already exists. Driving the
+        create route first would test that route twice and would hide the rule
+        under test behind an unrelated failure.
+
+    Args:
+        store: The stand-in run record store.
+        state: The state the seeded run holds.
+        **fields: Any further record field the test needs.
+
+    Returns:
+        The key of the seeded run.
+    """
+    spec = RunSpec(ORG_ID, "Probe organization", SITE_ID, "Probe site", PROBE_EMAIL, "browser-probe")
+    record = RunRecordBuilder().build(spec)  # The record layer owns every field and every default.
+    record["state"] = state  # The test names the stage the run already reached.
+    record.update(fields)  # The saved target list arrives here.
+    store.write_run(record)  # The route reads this record through the seam.
+    return str(record["run_id"])  # Every path below carries this key.
+
+
+def read_error_code(response: TestResponse) -> str:
+    """Return the `code` field of an error envelope.
+
+    Why:
+        `contracts/README.md` states that a test asserts on `code` and never on
+        the message text, because the message may change with no contract change.
+
+    Args:
+        response: The answer of one refused request.
+
+    Returns:
+        The machine code, or an empty string when the body carries none.
+    """
+    body: Any = response.get_json()  # Every refusal of this portal answers JSON.
+    return str(body.get("error", {}).get("code", "")) if isinstance(body, dict) else ""
+
+
+def save_options(client: FlaskClient, run_id: str, body: dict[str, Any]) -> TestResponse:
+    """Post one option set for one run.
+
+    Args:
+        client: The Flask test client.
+        run_id: The run key.
+        body: The request body of the options call.
+
+    Returns:
+        The portal answer.
+    """
+    return client.post(OPTIONS_PATH_TEMPLATE.format(run_id=run_id), json=body)
+
+
+# ---------------------------------------------------------------------------
+# The registration and the guard of the create path
+# ---------------------------------------------------------------------------
+
+
+def test_the_create_endpoint_answers_both_documented_paths(upgrade_app: Flask) -> None:
+    """One endpoint binds the contract path and the task path.
+
+    Why:
+        `contracts/http-api.md` section 5 names `/api/sites/<site_id>/runs` and
+        `tasks.md` T151 names `/api/runs`. Two endpoints would drift apart, so
+        the portal answers both paths from one handler.
+
+    Args:
+        upgrade_app: The application with the seams injected.
+    """
+    bound = {rule.rule for rule in upgrade_app.url_map.iter_rules() if rule.endpoint == CREATE_ENDPOINT}
+    assert "/api/sites/<site_id>/runs" in bound  # The path of the contract.
+    assert CREATE_ALT_PATH in bound  # The path of the task list.
+
+
+def test_the_create_path_refuses_a_read(upgrade_client: FlaskClient) -> None:
+    """A get on the create path answers 405, because the contract names a post only.
+
+    Args:
+        upgrade_client: The signed-in client.
+    """
+    assert upgrade_client.get(CREATE_PATH).status_code == METHOD_NOT_ALLOWED_STATUS
+
+
+def test_a_create_with_no_session_is_refused(signed_out_client: FlaskClient) -> None:
+    """A create call with no signed-in session answers 401 `not_authenticated`.
+
+    Args:
+        signed_out_client: A client that never signed in.
+    """
+    answer = signed_out_client.post(CREATE_PATH, json={"tier": TIER_STANDARD})
+    assert answer.status_code == NOT_AUTHENTICATED_STATUS  # The guard refused before the handler ran.
+    assert read_error_code(answer) == NOT_AUTHENTICATED_CODE  # One code for every unsigned request.
+
+
+def test_a_create_with_no_token_is_refused(portal_app: Flask, registered_owner: identity.SessionOwner) -> None:
+    """A create post with no token answers 400 `csrf_missing`.
+
+    Why:
+        `security.py` registers the token check for every post, and `TESTING`
+        does not switch it off. This test runs against the untouched portal, so
+        it proves that the create route sits behind the check.
+
+    Args:
+        portal_app: The portal application, with the token check still on.
+        registered_owner: The identity pair of the registered operator.
+    """
+    with portal_app.test_client() as client:  # This application never saw the fixture that clears the check.
+        sign_in_client(client, registered_owner, ORG_ID, SITE_ID)
+        answer = client.post(CREATE_PATH, json={"tier": TIER_STANDARD})
+    assert answer.status_code == BAD_REQUEST_STATUS  # The check refuses before the handler runs.
+    assert read_error_code(answer) == CSRF_MISSING_CODE  # The browser reads this code and fetches a token.
+
+
+# ---------------------------------------------------------------------------
+# T128: the body of the create call
+# ---------------------------------------------------------------------------
+
+
+def test_a_create_with_no_body_takes_the_standard_tier(
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """A create call with no body at all answers 201 and reads tier 2.
+
+    Why:
+        `contracts/http-api.md` states that the tier defaults to 2. A default of
+        3 would read the whole client list of a site that never asked for it.
+
+    Args:
+        upgrade_client: The signed-in client.
+        run_store: The stand-in run record store.
+    """
+    answer = upgrade_client.post(CREATE_PATH)  # No JSON body and no form field.
+    assert answer.status_code == CREATED_STATUS  # An absent body is not a caller defect.
+    run_id = str(answer.get_json()["run_id"])  # The key the record store now holds.
+    assert run_store.runs[run_id]["tier"] == TIER_STANDARD  # The documented default reached the record.
+
+
+def test_a_create_takes_the_deep_tier_when_the_body_asks_for_it(
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """A create call with tier 3 writes tier 3 into the run record.
+
+    Args:
+        upgrade_client: The signed-in client.
+        run_store: The stand-in run record store.
+    """
+    answer = upgrade_client.post(CREATE_PATH, json={"tier": TIER_DEEP})  # The second tier of the contract.
+    run_id = str(answer.get_json()["run_id"])  # The key the record store now holds.
+    assert run_store.runs[run_id]["tier"] == TIER_DEEP  # The pre-check capture reads this field.
+
+
+def test_a_create_with_an_unknown_tier_falls_back_to_the_standard_tier(
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """A create call with an unknown tier answers 201 and reads tier 2.
+
+    Why:
+        `contracts/http-api.md` section 5 names no `bad_tier` code for this path,
+        unlike the capture start path. The route therefore falls back instead of
+        refusing. This test pins that difference, so a later reader sees that the
+        silence is a decision and not an omission.
+
+    Args:
+        upgrade_client: The signed-in client.
+        run_store: The stand-in run record store.
+    """
+    answer = upgrade_client.post(CREATE_PATH, json={"tier": UNKNOWN_TIER})  # A number outside the two tiers.
+    assert answer.status_code == CREATED_STATUS  # No refusal, because the contract names no refusal code.
+    run_id = str(answer.get_json()["run_id"])  # The key the record store now holds.
+    assert run_store.runs[run_id]["tier"] == TIER_STANDARD  # The safe default of the contract.
+
+
+def test_a_create_answers_only_the_two_contract_fields(upgrade_client: FlaskClient) -> None:
+    """The created run answers the run key and the state, and nothing else.
+
+    Why:
+        The browser reads both fields at once. A third field would promise the
+        reader something the contract never fixed, and a later removal would
+        then read as a breaking change.
+
+    Args:
+        upgrade_client: The signed-in client.
+    """
+    body: Any = upgrade_client.post(CREATE_PATH, json={"tier": TIER_STANDARD}).get_json()
+    assert set(body) == CREATE_ANSWER_FIELDS  # Exactly the two fields of the contract.
+
+
+def test_two_creates_answer_two_different_run_keys(upgrade_client: FlaskClient) -> None:
+    """Two create calls build two separate runs.
+
+    Why:
+        FR-014 binds one run to one site, and it does not bind one site to one
+        run over time. A repeated key would let a second pre-check overwrite the
+        record of the first upgrade.
+
+    Args:
+        upgrade_client: The signed-in client.
+    """
+    first = str(upgrade_client.post(CREATE_PATH, json={"tier": TIER_STANDARD}).get_json()["run_id"])
+    second = str(upgrade_client.post(CREATE_PATH, json={"tier": TIER_STANDARD}).get_json()["run_id"])
+    assert first != second  # Each create call owns its own record.
+
+
+def test_a_create_keeps_the_readable_names_the_body_carries(
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """A create call stores the readable organization name and site name.
+
+    Why:
+        The picker stores neither name in the session, and every later page
+        shows both. The record keeps what the create call carried, so no page
+        reads the cloud again to print a heading.
+
+    Args:
+        upgrade_client: The signed-in client.
+        run_store: The stand-in run record store.
+    """
+    body = {"tier": TIER_STANDARD, "org_name": "Probe organization", "site_name": "Probe site"}
+    run_id = str(upgrade_client.post(CREATE_PATH, json=body).get_json()["run_id"])
+    assert run_store.runs[run_id]["org_name"] == "Probe organization"  # The heading of every run page.
+    assert run_store.runs[run_id]["site_name"] == "Probe site"  # The second half of the same heading.
+
+
+def test_a_create_with_no_chosen_organization_is_refused(
+    upgrade_app: Flask,
+    registered_owner: identity.SessionOwner,
+) -> None:
+    """A create call from a session with no organization answers 400 `org_not_chosen`.
+
+    Why:
+        Every read of a run stays inside one organization. A run with no
+        organization would carry no scope at all, so the portal refuses it
+        before it writes a record.
+
+    Args:
+        upgrade_app: The application with the seams injected.
+        registered_owner: The identity pair of the registered operator.
+    """
+    with upgrade_app.test_client() as client:  # A signed session that never picked an organization.
+        sign_in_client(client, registered_owner, None, SITE_ID)
+        answer = client.post(CREATE_PATH, json={"tier": TIER_STANDARD})
+    assert answer.status_code == BAD_REQUEST_STATUS  # The scope is missing, so the caller must pick one.
+    assert read_error_code(answer) == ORG_NOT_CHOSEN_CODE  # The browser sends the operator back to the picker.
+
+
+def test_a_create_on_the_task_path_with_no_chosen_site_is_refused(
+    upgrade_app: Flask,
+    registered_owner: identity.SessionOwner,
+) -> None:
+    """A create call on `/api/runs` with no chosen site answers 400 `site_not_chosen`.
+
+    Why:
+        The task path carries no site in the path, so it reads the pick of the
+        session. An empty pick would bind the run to no site at all, and FR-014
+        binds every run to exactly one.
+
+    Args:
+        upgrade_app: The application with the seams injected.
+        registered_owner: The identity pair of the registered operator.
+    """
+    with upgrade_app.test_client() as client:  # A signed session that never picked a site.
+        sign_in_client(client, registered_owner, ORG_ID, None)
+        answer = client.post(CREATE_ALT_PATH, json={"tier": TIER_STANDARD})
+    assert answer.status_code == BAD_REQUEST_STATUS  # The site is missing, so the caller must pick one.
+    assert read_error_code(answer) == SITE_NOT_CHOSEN_CODE  # A distinct word from `org_not_chosen`.
+
+
+# ---------------------------------------------------------------------------
+# T128: the body of the options call
+# ---------------------------------------------------------------------------
+
+
+def test_the_options_path_refuses_a_read(upgrade_client: FlaskClient, run_store: RecordingRunStore) -> None:
+    """A get on the options path answers 405, because the contract names a post only.
+
+    Args:
+        upgrade_client: The signed-in client.
+        run_store: The stand-in run record store.
+    """
+    run_id = seed_run(run_store, "pre_capture_done")  # A run that a save call could change.
+    assert upgrade_client.get(OPTIONS_PATH_TEMPLATE.format(run_id=run_id)).status_code == METHOD_NOT_ALLOWED_STATUS
+
+
+def test_an_options_call_with_no_session_is_refused(
+    signed_out_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """An options call with no signed-in session answers 401 `not_authenticated`.
+
+    Args:
+        signed_out_client: A client that never signed in.
+        run_store: The stand-in run record store.
+    """
+    run_id = seed_run(run_store, "pre_capture_done")  # The run exists, so only the guard can refuse.
+    answer = save_options(signed_out_client, run_id, {"targets": []})
+    assert answer.status_code == NOT_AUTHENTICATED_STATUS  # The guard refused before the handler ran.
+    assert read_error_code(answer) == NOT_AUTHENTICATED_CODE  # One code for every unsigned request.
+
+
+def test_the_options_call_writes_the_documented_defaults(
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """An options call that names no control writes the default of each one.
+
+    Why:
+        `contracts/http-api.md` section 5 fixes a default for every option
+        control. A silent body must therefore reach the same record as a body
+        that names each default by hand.
+
+    Args:
+        upgrade_client: The signed-in client.
+        run_store: The stand-in run record store.
+    """
+    run_id = seed_run(run_store, "pre_capture_done")  # The stage at which an operator picks a version.
+    assert save_options(upgrade_client, run_id, {"targets": []}).status_code == OK_STATUS
+    assert run_store.runs[run_id]["options"] == DEFAULT_OPTIONS  # Every documented default reached the record.
+
+
+def test_the_options_call_keeps_a_cleared_reboot_and_a_chosen_strategy(
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """An options call keeps the exact choice of the operator.
+
+    Why:
+        The confirmation page shows what the operator picked. A record that held
+        a default instead would show a promise the run never keeps.
+
+    Args:
+        upgrade_client: The signed-in client.
+        run_store: The stand-in run record store.
+    """
+    run_id = seed_run(run_store, "pre_capture_done")  # The stage at which an operator picks a version.
+    body = {"targets": [], "reboot": False, "junos_file_action": True, "strategy": "canary"}
+    assert save_options(upgrade_client, run_id, body).status_code == OK_STATUS
+    saved = run_store.runs[run_id]["options"]  # The record the confirmation page reads back.
+    assert saved["reboot"] is False  # The operator cleared the control, so nothing reboots on its own.
+    assert saved["strategy"] == "canary"  # The chosen strategy, and never the documented default.
+
+
+def test_the_options_call_drops_a_target_list_of_the_wrong_shape(
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """An options call with a target field that is not a list saves no target.
+
+    Why:
+        A hand-typed body reaches this route. An empty target list is safe,
+        because a run with no target upgrades nothing. A fault page would tell
+        the operator nothing at all.
+
+    Args:
+        upgrade_client: The signed-in client.
+        run_store: The stand-in run record store.
+    """
+    run_id = seed_run(run_store, "pre_capture_done")  # The stage at which an operator picks a version.
+    answer = save_options(upgrade_client, run_id, {"targets": "every device"})  # Text, where a list belongs.
+    assert answer.status_code == OK_STATUS  # A safe fallback, and never a fault page.
+    assert answer.get_json()["targets"] == []  # No target at all, so the run upgrades nothing.
+
+
+def test_the_options_call_drops_a_target_row_of_the_wrong_shape(
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """An options call keeps every record row and drops every other row.
+
+    Args:
+        upgrade_client: The signed-in client.
+        run_store: The stand-in run record store.
+    """
+    run_id = seed_run(run_store, "pre_capture_done")  # The stage at which an operator picks a version.
+    rows = [{"mac": PROBE_MAC, "version_target": "0.14.29216"}, PROBE_MAC]  # One record and one bare address.
+    saved: Any = save_options(upgrade_client, run_id, {"targets": rows}).get_json()
+    assert [row["mac"] for row in saved["targets"]] == [PROBE_MAC]  # The record row survived, and the text did not.
+
+
+def test_a_second_options_call_replaces_the_first_choice(
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """A repeated options call replaces the saved targets instead of adding to them.
+
+    Why:
+        An operator often edits a version and saves the page again. A record
+        that appended the second list would upgrade a device twice, once to each
+        version, and the confirmation page would show a list nobody picked.
+
+    Args:
+        upgrade_client: The signed-in client.
+        run_store: The stand-in run record store.
+    """
+    run_id = seed_run(run_store, "pre_capture_done")  # The stage at which an operator picks a version.
+    save_options(upgrade_client, run_id, {"targets": [{"mac": PROBE_MAC, "version_target": "0.14.29216"}]})
+    second: Any = save_options(upgrade_client, run_id, {"targets": [{"mac": PROBE_MAC, "version_target": "0.15.1"}]})
+    assert len(second.get_json()["targets"]) == 1  # One row for one device, and never two.
+    assert run_store.runs[run_id]["targets"][0]["version_target"] == "0.15.1"  # The later choice wins.
+
+
+def test_a_refused_option_answers_the_documented_code(
+    upgrade_app: Flask,
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """An option the portal refuses answers 400 `bad_option`.
+
+    Why:
+        `contracts/http-api.md` section 5 fixes this code, and the route reaches
+        it only when the injected options builder refuses. The stand-in supplies
+        that refusal, so the code is proved before the real builder lands.
+
+    Args:
+        upgrade_app: The application with the seams injected.
+        upgrade_client: The signed-in client.
+        run_store: The stand-in run record store.
+    """
+    upgrade_app.config[OPTIONS_BUILDER_KEY] = RefusingOptionsBuilder("No such version for this model.")
+    run_id = seed_run(run_store, "pre_capture_done", targets=[{"mac": PROBE_MAC}])  # A run with a saved target.
+    answer = save_options(upgrade_client, run_id, {"targets": [{"mac": PROBE_MAC, "version_target": "9.9.9"}]})
+    assert answer.status_code == BAD_REQUEST_STATUS  # The contract fixes 400 for a refused option.
+    assert read_error_code(answer) == BAD_OPTION_CODE  # A distinct word from `run_not_found`.
+    assert run_store.runs[run_id]["targets"] == [{"mac": PROBE_MAC}]  # The refused call kept the saved choice.
+
+
+# ---------------------------------------------------------------------------
+# T128: the pre-check guard that stands behind the options save
+# ---------------------------------------------------------------------------
+
+
+def test_a_start_with_no_saved_pre_check_answers_the_documented_code(
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """A start of a run with no saved pre-check answers 409 `pre_capture_missing`.
+
+    Why:
+        The options page hands the operator straight on to the confirmation page,
+        so a saved option set reaches this guard next. `contracts/http-api.md`
+        section 5 fixes 409 here, because a missing pre-check is a state conflict
+        and never a defect of the request body. FR-035 makes the saved pre-check
+        the one record that a later post-check compares against, so a start
+        without it would leave the operator no way to read the result.
+
+    Args:
+        upgrade_client: The signed-in client.
+        run_store: The stand-in run record store.
+    """
+    saved_row = {"mac": PROBE_MAC, "version_target": "0.14.29216"}  # The row the options call saved.
+    run_id = seed_run(run_store, "awaiting_confirmation", targets=[saved_row])  # No pre-check at all.
+    path = START_PATH_TEMPLATE.format(run_id=run_id)
+    answer = upgrade_client.post(path, json={"confirm": CONFIRM_WORD})  # The right word, so only FR-035 refuses.
+    assert answer.status_code == CONFLICT_STATUS  # A state conflict, and never a caller defect.
+    assert read_error_code(answer) == PRE_CAPTURE_MISSING_CODE  # The page then sends the operator to the pre-check.

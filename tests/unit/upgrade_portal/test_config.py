@@ -40,6 +40,7 @@ from src.upgrade_portal.app.config import (
     read_network,
     read_poll_interval,
     read_port,
+    read_post_check_mode,
     read_proxy_hops,
     read_secret_key,
     read_themes,
@@ -54,6 +55,7 @@ PORTAL_VARIABLES = (
     "CAPTURE_POLL_SECONDS",
     "CAPTURE_ALLOWED_IPS",
     "CAPTURE_PROXY_HOPS",
+    "CAPTURE_POST_CHECK_MODE",
     "ARANGO_HOST",
     "ARANGO_DATABASE",
     "ARANGO_USERNAME",
@@ -1057,3 +1059,92 @@ def test_a_bad_proxy_hop_warning_names_the_variable(
         assert read_proxy_hops() == 0
     assert "CAPTURE_PROXY_HOPS" in caplog.text  # WHY: The operator needs the name to fix the setup.
     assert "99" in caplog.text  # WHY: The refused value tells the operator what to correct.
+
+
+def test_the_post_check_mode_default_is_automatic(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The portal starts the second capture itself when the operator sets nothing.
+
+    Why:
+        The customer chose the automatic capture. This test fails on the day
+        somebody changes that default, which is exactly the alarm this seam
+        needs.
+
+    Args:
+        monkeypatch: The pytest patch helper.
+    """
+    monkeypatch.delenv("CAPTURE_POST_CHECK_MODE", raising=False)  # WHY: The default path needs an absent variable.
+    assert read_post_check_mode() == "automatic"
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("", "automatic"),
+        ("   ", "automatic"),
+        ("automatic", "automatic"),
+        ("manual", "manual"),
+        ("Manual", "manual"),
+        ("  manual  ", "manual"),
+        ("atuomatic", "automatic"),
+        ("off", "automatic"),
+        ("true", "automatic"),
+    ],
+)
+def test_the_post_check_mode_reader_maps_each_value(monkeypatch: pytest.MonkeyPatch, raw: str, expected: str) -> None:
+    """Each value maps to one mode, and every unknown value maps to automatic.
+
+    Why:
+        The entries cover a blank value, spaces, the two known modes, a case
+        the operator often writes, a padded value, a typo, and two words that
+        look like a switch. Only ``manual`` turns the capture off, so a typo
+        keeps the evidence that the upgrade worked.
+
+    Args:
+        monkeypatch: The pytest patch helper.
+        raw: The value the operator set.
+        expected: The mode the reader must return.
+    """
+    monkeypatch.setenv("CAPTURE_POST_CHECK_MODE", raw)
+    assert read_post_check_mode() == expected
+
+
+def test_an_unknown_post_check_mode_warns_with_the_value(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The warning for an unknown mode names the value and the variable.
+
+    Why:
+        A silent fallback would leave the operator waiting for a manual capture
+        that the portal already took. The warning carries enough detail to fix
+        the setting.
+
+    Args:
+        monkeypatch: The pytest patch helper.
+        caplog: The pytest log capture helper.
+    """
+    monkeypatch.setenv("CAPTURE_POST_CHECK_MODE", "atuomatic")
+    with caplog.at_level(logging.WARNING):
+        assert read_post_check_mode() == "automatic"
+    assert "CAPTURE_POST_CHECK_MODE" in caplog.text  # WHY: The operator needs the name to fix the setting.
+    assert "atuomatic" in caplog.text  # WHY: The refused value tells the operator what to correct.
+
+
+@pytest.mark.parametrize("raw", ["", "   ", "manual", "automatic"])
+def test_a_known_post_check_mode_writes_no_warning(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, raw: str
+) -> None:
+    """A blank value and a known mode both pass without a warning.
+
+    Why:
+        A warning on a normal setting trains the operator to skip the log. The
+        reader warns for a value it refuses, and for nothing else.
+
+    Args:
+        monkeypatch: The pytest patch helper.
+        caplog: The pytest log capture helper.
+        raw: A value the reader accepts.
+    """
+    monkeypatch.setenv("CAPTURE_POST_CHECK_MODE", raw)
+    with caplog.at_level(logging.WARNING):
+        read_post_check_mode()
+    assert "CAPTURE_POST_CHECK_MODE" not in caplog.text
