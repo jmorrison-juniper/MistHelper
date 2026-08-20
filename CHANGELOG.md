@@ -56,7 +56,7 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 - **Storage (Added)**: ArangoDB is the primary store, with collections
   `upgrade_captures` and `upgrade_runs` and the edge `capture_for_run`. Redis
   holds the site lock alone. CSV files under `data/` are the fallback.
-- **Tests (Added)**: 2545 unit and contract tests under
+- **Tests (Added)**: 2548 unit and contract tests under
   `tests/unit/upgrade_portal/` and `tests/contract/upgrade_portal/`. Statement
   coverage of the package is 94.67 percent.
 
