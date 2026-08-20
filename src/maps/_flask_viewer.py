@@ -42,7 +42,6 @@ _ERR_MAP_IMAGE_FAILED = (
 _TOKEN_ATTR = "_api_token"  # nosec B105 - The value is the mistapi attribute name, not a token value.
 _AUTHORIZATION_HEADER = "Authorization"  # WHY: exposes header key so proxies + tests do not repeat the literal.
 _CONTENT_TYPE_HEADER = "Content-Type"  # WHY: response-header key reused between fetch + proxy paths.
-_JSON_SORT_KEYS_CONFIG = "JSON_SORT_KEYS"  # WHY: Flask config key kept as constant to avoid typos on re-mount.
 _ROUTE_INDEX = "/"  # WHY: canonical index route so dispatch table matches the mounted Flask endpoints.
 _ROUTE_SITE_MAPS = "/api/site/<site_id>/maps"  # WHY: keep the maps-list URL definition close to the handler.
 _ROUTE_MAP_IMAGE = "/api/map-image/<site_id>/<map_id>"  # WHY: image proxy path used by the front-end <img> tag.
@@ -1312,7 +1311,7 @@ def _build_flask_app(ctx: FlaskViewerContext):
     from flask import Flask, jsonify, render_template_string  # WHY: local so import cost is deferred to launch time.
 
     flask_app = Flask(__name__)  # WHY: Flask needs the module __name__ to locate static/template folders.
-    flask_app.config[_JSON_SORT_KEYS_CONFIG] = False  # WHY: preserve key order so the browser matches server payload.
+    flask_app.json.sort_keys = False  # WHY: preserve key order so the browser matches server payload.
     _register_flask_routes(flask_app, ctx, json_module, render_template_string, jsonify)  # WHY: mount all endpoints.
     return flask_app  # WHY: caller runs the returned app after banner + browser-open steps.
 

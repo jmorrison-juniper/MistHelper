@@ -67,7 +67,7 @@ env:
   PYDOCSTYLE_PATHS: 'src/ wsgi.py web_portal'
   # interrogate: every target clears the 90 percent floor, so this gate covers the
   # whole project. Lowest measured value is web_portal at 97.5 percent.
-  INTERROGATE_PATHS: 'src/ MistHelper.py wsgi.py starlink_dashboard.py web_portal tools'
+  INTERROGATE_PATHS: 'src/ MistHelper.py wsgi.py wsgi_capture.py starlink_dashboard.py web_portal tools'
   COVERAGE_THRESHOLD: ${{ inputs.coverage-threshold || '80' }}
   PYLINT_THRESHOLD: ${{ inputs.pylint-threshold || '9.5' }}
   INTERROGATE_THRESHOLD: ${{ inputs.interrogate-threshold || '90' }}

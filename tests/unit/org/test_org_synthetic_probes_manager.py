@@ -3487,6 +3487,12 @@ def test_regression_runtime_under_budget(pytestconfig: pytest.Config) -> None:  
                 "--no-header",  # skip pytest header
                 "-p",  # disable plugin
                 "no:cacheprovider",  # skip .pytest_cache writes
+                # The playwright plugin cannot re-enter a nested run. Each
+                # nested node dies with "nested soft assertion scopes are not
+                # supported", which fails this test for a reason that has
+                # nothing to do with the runtime budget it measures.
+                "-p",  # disable plugin
+                "no:playwright",  # skip the browser plugin
                 *subset,  # the curated subset
             ]
         )

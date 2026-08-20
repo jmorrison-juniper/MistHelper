@@ -40,7 +40,7 @@ class TestComposeDeployment:
             decode_responses=True,
         )
         assert client.ping() is True
-        modules = client.module_list()
+        modules = client.execute_command('MODULE', 'LIST')
         module_names = [
             m["name"].lower() if isinstance(m["name"], str) else m["name"].decode().lower() for m in modules
         ]

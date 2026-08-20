@@ -52,8 +52,11 @@ echo "[SSH] Use option 0 in MistHelper to disconnect." >> /app/data/ssh.log
 WEB_PORT="${WEB_PORT:-8055}"
 
 # Start Gunicorn web portal in the background
+# Warning: do not add a dash to `su`. A dash starts a login shell, which clears
+# the environment. Every runtime variable that `compose.yml` supplies is then
+# lost, and the portal starts with no database address and no allow list.
 echo "[PORTAL] Starting web portal on port $WEB_PORT..." >> /app/data/ssh.log
-su - misthelper -c "cd /app && gunicorn wsgi:app \
+su misthelper -c "cd /app && gunicorn wsgi:app \
     --bind 0.0.0.0:${WEB_PORT} \
     --workers 1 \
     --worker-class gthread \
@@ -69,8 +72,10 @@ CAPTURE_PORT="${CAPTURE_PORT:-8056}"
 # Start the capture portal in a second Gunicorn process.
 # A separate process keeps a long upgrade run away from the data browsing
 # portal, so a fault in one portal cannot stop the other.
+# Warning: `su` carries no dash here for the reason given above. With a dash,
+# CAPTURE_ALLOWED_IPS never reaches the portal and every client address passes.
 echo "[CAPTURE] Starting upgrade capture portal on port $CAPTURE_PORT..." >> /app/data/ssh.log
-su - misthelper -c "cd /app && gunicorn wsgi_capture:app \
+su misthelper -c "cd /app && gunicorn wsgi_capture:app \
     --bind 0.0.0.0:${CAPTURE_PORT} \
     --workers 1 \
     --worker-class gthread \
