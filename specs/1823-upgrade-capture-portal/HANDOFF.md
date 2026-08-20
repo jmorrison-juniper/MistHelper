@@ -2,7 +2,6 @@
 
 **Last updated**: 2026-08-20.
 **Branch**: `feat/1823-upgrade-capture-portal`.
-**Head commit**: `1c15089`.
 **Pull request**: [#1825](https://github.com/jmorrison-juniper/MistHelper/pull/1825).
 
 Read this file first if you take over this feature. It states what is complete,
@@ -22,7 +21,7 @@ the design. This file states the position.
 | Uncommitted work | None from this feature |
 | Portal tests | 2548, all pass |
 | Statement coverage of the package | 94.67 percent |
-| Blocking defects | None known |
+| Blocking defects | None. One safety defect waits, issue #1827 |
 
 The feature is code complete. It waits for a human review and a merge.
 
@@ -97,7 +96,7 @@ existing bulk firmware tools through that seam and never calls them directly.
 
 ## 4. What waits
 
-Nothing in this feature is half built. Two items sit outside it.
+Nothing in this feature is half built. Three items sit outside it.
 
 ### 4.1 Merge the pull request
 
@@ -119,6 +118,27 @@ Issue [#1824](https://github.com/jmorrison-juniper/MistHelper/issues/1824) is
 open and tracks the real fix. Do not fix it inside this feature. The change
 touches every caller of `DatabaseRouter`, and a change that wide belongs in its
 own pull request with its own review.
+
+### 4.3 Two issues that this feature raised
+
+Both came out of a source review during the handoff. Neither blocks the merge.
+
+| Issue | Subject | Kind |
+| --- | --- | --- |
+| [#1827](https://github.com/jmorrison-juniper/MistHelper/issues/1827) | An unreachable lock store lets a second operator start an upgrade on a held site | Safety defect |
+| [#1828](https://github.com/jmorrison-juniper/MistHelper/issues/1828) | Two comments cite the wrong line of the HTTP contract | Documentation |
+
+Issue #1827 is the one to read. The write path in `app/routes/upgrade.py` reads
+the lock as two states, free or held. The read-only path in `app/routes/select.py`
+reads the same index as three states, and names the third one `unknown`. A store
+that does not answer therefore reads as free on the path that sends firmware.
+`contracts/site-lock.md:136` already fixes the rule. The issue holds the whole
+trace.
+
+Warning: do not answer #1827 by making every read fail closed, because that
+change can stop the capture start and both read-only pages. No operator can then
+see the state of any site while the lock store is down. Those three paths are
+correct today, and issue #1827 names each one.
 
 ---
 
@@ -159,11 +179,21 @@ These need a product decision. None of them blocks the merge.
 
 | Question | Where | Note |
 | --- | --- | --- |
-| A Redis outage makes a held site read as free | `app/routes/upgrade.py`, `held_by_other` | The comment states the risk: "None means free, and None also means unknown." A second operator could then start a run on a held site. Decide whether an unreachable lock store must refuse the start |
-| The refusal payload has more than one shape | `app/routes/select.py` `holder_details` sends the address and the cooldown. `app/routes/upgrade.py` `site_locked_refusal` sends the address alone | The page reads both. Decide on one shape |
 | The capture start reads the tier before the lock | `app/routes/capture.py` | A refused operator still spends the read. Harmless today |
 | A run record does not survive a restart | `runtime/runs.py` | The captures survive. The in-flight run state does not |
 | The refusal body carries a plain email address | `app/routes/select.py`, `holder_details` | This is deliberate. The waiting operator needs to know who to ask. The address is never written to a log. A log always uses `identity.email_digest` |
+
+An earlier version of this file listed two more questions. A source review
+answered both, so neither needs a person.
+
+- **The lock read of the write path.** This is a defect, not a question. The
+  contract already fixes the rule. Issue #1827 holds it.
+- **The shape of the `site_locked` refusal.** The portal sends three bodies, and
+  the contract asks for all three. The capture start sends no details, the three
+  run routes send the address, and the lock acquire sends the address and the
+  cooldown. The cooldown belongs to the acquire alone, because only the acquire
+  offers a takeover after the wait. Do not make the three bodies one body. Issue
+  #1828 corrects the comments that made this look wrong.
 
 ---
 
@@ -236,7 +266,7 @@ $env:APPDATA = "C:\Users\jmorrison\AppData\Roaming"
 gh pr checks 1825
 ```
 
-`gh pr checks` exits with a non-zero code while a check is pending. That is not
+`gh pr checks` exits with a non-zero code while a check still runs. That is not
 a failure.
 
 ---
