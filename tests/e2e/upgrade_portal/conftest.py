@@ -5,10 +5,11 @@ Why:
     finds the defects that a unit test and a contract test cannot find, such
     as a broken template or a script that fails in the browser.
 
-    The server fixture reuses a portal that already listens, starts one when
-    no portal answers, and reports a skip when it can start none. A missing
-    local server describes the workstation and never the page under test, so
-    the fixture must never raise.
+    The server fixture starts its own portal and never joins one it finds.
+    Only a portal that the fixture started carries the sign-in seam and the
+    cookie key of this run, so a portal from another window makes every page
+    answer 401. The fixture reports a skip only when the workstation can run
+    no WSGI server at all.
 
     ``src/upgrade_portal/runtime/server.py`` picks the server for the platform.
     Gunicorn stays the server for the Linux target and for the container.
@@ -87,6 +88,27 @@ STOP_TIMEOUT_SECONDS = 5  # The same 5-second budget as tests/e2e/conftest.py:99
 # file never blocks the writer, and the skip message reads the same file back.
 SERVER_LOG_PATH = Path(tempfile.gettempdir()) / f"upgrade_portal_e2e_{CAPTURE_PORT}.log"
 
+# WHY: Only a portal that this fixture started carries the sign-in seam and the
+# cookie key of this run. A portal left running in another window carries
+# neither, so every page below the sign-in form answers 401 and every test
+# skips. A whole run then reports success while it opened no page. A stray
+# listener is a fault of the workstation, and the fixture names it.
+STRAY_LISTENER_MESSAGE = (
+    f"Another process already listens on port {CAPTURE_PORT}. "
+    "The browser tests must start their own portal, because only that portal holds the sign-in seam. "
+    f"Stop the process that holds port {CAPTURE_PORT}, then run the tests again."
+)
+
+# WHY: A workstation that can run no WSGI server describes the workstation and
+# never the page under test, so this one state stays a skip.
+NO_SERVER_MESSAGE = "No WSGI server can run on this workstation, so no browser test can open a page."
+
+# WHY: A portal that started and never answered is a real fault, such as a
+# failed import or a bound port. A skip would hide it behind a green run.
+START_FAILED_MESSAGE = (
+    f"The capture portal did not answer on port {CAPTURE_PORT}. Read {SERVER_LOG_PATH} for the cause."
+)
+
 # WHY: The sign-in seam at the foot of this module builds a signed-in session.
 # That seam must never run in a production start, so it reads one variable that
 # only `_child_environment` writes, and it writes that variable into the child
@@ -160,9 +182,9 @@ def _probe_port(port: int) -> bool:
     """Report whether a server answers on one port right now.
 
     Why:
-        A developer often leaves the portal running in another window. The
-        probe finds that server, so the fixture reuses it instead of binding
-        a port that another process already holds.
+        The fixture must start its own portal, so it tests the port first. A
+        listener that this fixture did not start holds no sign-in seam, and the
+        fixture reports that listener as a fault.
 
     Args:
         port: The port to test.
@@ -313,24 +335,25 @@ def _start_server() -> subprocess.Popen[bytes] | None:
 
 @pytest.fixture(scope="session")
 def capture_portal_server() -> Iterator[str]:
-    """Give every browser test the address of a running capture portal.
+    """Give every browser test the address of a portal this fixture started.
 
     Why:
-        The fixture reuses a portal that already listens, because a developer
-        often leaves one running. It starts a portal only when none answers.
-        It reports a skip when it can start none, because a missing local
-        server describes the workstation and never the page under test.
+        Only a portal that this fixture started holds the sign-in seam and the
+        cookie key of this run. The fixture therefore starts its own portal and
+        never joins one it finds. A stray listener and a portal that never
+        answers are both faults, and the fixture names them. A workstation that
+        can run no WSGI server is not a fault, so that one state reports a skip.
 
     Yields:
         The base address of the running portal.
     """
-    if _probe_port(CAPTURE_PORT):  # A portal already listens, so this run must not start a second one.
-        logger.info("Reuse the capture portal that already answers on port %s", CAPTURE_PORT)
-        yield BASE_URL
-        return
+    if _probe_port(CAPTURE_PORT):  # A portal this fixture did not start holds no sign-in seam.
+        pytest.fail(STRAY_LISTENER_MESSAGE, pytrace=False)
+    if _build_command() is None:  # No WSGI server runs here, which describes the workstation.
+        pytest.skip(NO_SERVER_MESSAGE)
     process = _start_server()
-    if process is None:  # A skip states the real cause. A raise would read as a broken test.
-        pytest.skip(f"No capture portal answers on port {CAPTURE_PORT} and this workstation cannot start one.")
+    if process is None:  # The command exists, so a portal that never answered is a real fault.
+        pytest.fail(START_FAILED_MESSAGE, pytrace=False)
     yield BASE_URL
     _stop_server(process)
 

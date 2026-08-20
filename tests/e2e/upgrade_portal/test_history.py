@@ -92,30 +92,35 @@ NOT_FOUND_STATUS = 404  # The route is not registered yet.
 
 GATE_TIMEOUT_MS = 5000  # The page is server rendered, so every control is present at once.
 
-# The two fixtures below reach the network and the file system, so a failure in
-# either one describes the environment and never the page under test.
-ENVIRONMENT_FIXTURES = ("capture_portal_server", "page")
+# WHY: The server fixture states its own fault and its own skip, so this module
+# must not translate either one. The browser fixture is different: a workstation
+# without a browser binary describes the workstation and never the page.
+SERVER_FIXTURE = "capture_portal_server"
+BROWSER_FIXTURE = "page"
 
 
-def _lazy_fixture(request: pytest.FixtureRequest, name: str) -> Any:
-    """Build one environment fixture, and turn a setup failure into a skip.
+def _browser_page(request: pytest.FixtureRequest, name: str) -> Any:
+    """Build one browser page, and report a missing browser binary as a skip.
 
     Why:
-        The server fixture needs a server for this platform and the page fixture
-        needs a browser binary. Neither part exists on every workstation. A plain
+        Playwright needs a browser binary that no source tree carries. A plain
         request would report an error, which reads in a report as a broken test.
+        A missing binary is the one environment fault this module still hides,
+        because it stops every browser test for a reason outside the portal.
+        The server fixture states its own fault and its own skip, so this
+        function never wraps it.
 
     Args:
         request: The pytest request object of the calling fixture.
-        name: The fixture to build.
+        name: The browser fixture to build.
 
     Returns:
-        The fixture value.
+        The Playwright page object.
     """
-    try:  # The failure below describes the environment, never the page.
+    try:  # A missing browser binary describes the workstation, never the page.
         return request.getfixturevalue(name)
     except Exception as failure:  # A skip states the real cause, so nothing hides.
-        pytest.skip(f"The fixture {name} could not start, so no browser test can run. Cause: {failure}")
+        pytest.skip(f"Playwright could not open a browser, so no browser test can run. Cause: {failure}")
 
 
 @pytest.fixture
@@ -128,9 +133,8 @@ def portal_page(request: pytest.FixtureRequest) -> Any:
     Returns:
         The Playwright page object.
     """
-    for name in ENVIRONMENT_FIXTURES:  # The server must answer before the browser opens a page.
-        value = _lazy_fixture(request, name)
-    return value
+    request.getfixturevalue(SERVER_FIXTURE)  # A fault here is a fault of the portal, so it must not become a skip.
+    return _browser_page(request, BROWSER_FIXTURE)
 
 
 def _page_status(page: Any, path: str) -> int:
@@ -151,7 +155,7 @@ def _page_status(page: Any, path: str) -> int:
 
 
 def _require_built_route(status: int, path: str) -> None:
-    """Skip when a route is absent, and fail when a built route answers wrongly.
+    """Fail when the portal answers a status that the contract does not fix.
 
     Args:
         status: The status code the portal answered.
@@ -162,9 +166,9 @@ def _require_built_route(status: int, path: str) -> None:
             not fix for a page.
     """
     if status == UNAUTHORIZED_STATUS:  # `identity.require_session` refused the request.
-        pytest.skip(f"{path} answered 401. The portal holds no session, so no browser test reaches this page.")
+        raise AssertionError(f"{path} answered 401. The portal this run started holds no sign-in seam.")
     if status == NOT_FOUND_STATUS:  # The blueprint that owns this path is not registered.
-        pytest.skip(f"{path} answered 404. The route is not built yet.")
+        raise AssertionError(f"{path} answered 404. The blueprint that owns this path is not registered.")
     assert status == OK_STATUS, f"{path} answered {status}. `contracts/http-api.md` fixes 200 for this page."
 
 
@@ -219,12 +223,14 @@ def _read_json(page: Any, path: str) -> dict[str, Any]:
         AssertionError: If a built endpoint answers a status the contract does
             not fix.
     """
-    try:  # A portal that holds no such route reaches this clause.
+    try:  # The fixture started this portal, so a call that fails names a fault of it.
         answer = page.request.get(path)
-    except Exception as failure:  # The call never reached the portal at all.
-        pytest.skip(f"The read of {path} did not complete. Cause: {failure}")
-    if answer.status in (UNAUTHORIZED_STATUS, NOT_FOUND_STATUS):  # No session, or no route yet.
-        pytest.skip(f"{path} answered {answer.status}, so no history body exists to read.")
+    except Exception as failure:  # The portal died, or it never bound the port.
+        raise AssertionError(f"The read of {path} did not complete. Cause: {failure}") from failure
+    if answer.status == UNAUTHORIZED_STATUS:  # `identity.require_session` refused the request.
+        raise AssertionError(f"{path} answered 401. The portal this run started holds no sign-in seam.")
+    if answer.status == NOT_FOUND_STATUS:  # The blueprint that owns this path is not registered.
+        raise AssertionError(f"{path} answered 404. The blueprint that owns this path is not registered.")
     assert answer.status == OK_STATUS, f"{path} answered {answer.status}. `contracts/http-api.md` fixes 200."
     return dict(json.loads(answer.text()))
 

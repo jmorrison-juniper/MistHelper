@@ -88,31 +88,36 @@ STORE_DOWN_STATUS = 503  # `lock_store_unreachable`, which a workstation with no
 
 GATE_TIMEOUT_MS = 5000  # The pages are server rendered, so every control is present at once.
 
-# These fixtures reach the network and the file system, so a failure in one of
-# them describes the environment and never the page under test.
-FIRST_FIXTURES = ("capture_portal_server", "page")
-SECOND_FIXTURES = ("capture_portal_server", "second_operator_page")
+# WHY: The server fixture states its own fault and its own skip, so this module
+# must not translate either one. A browser fixture is different: a workstation
+# without a browser binary describes the workstation and never the page.
+SERVER_FIXTURE = "capture_portal_server"
+FIRST_BROWSER_FIXTURE = "page"
+SECOND_BROWSER_FIXTURE = "second_operator_page"
 
 
-def _lazy_fixture(request: pytest.FixtureRequest, name: str) -> Any:
-    """Build one environment fixture, and turn a setup failure into a skip.
+def _browser_page(request: pytest.FixtureRequest, name: str) -> Any:
+    """Build one browser page, and report a missing browser binary as a skip.
 
     Why:
-        The server fixture needs a server for this platform and the page fixture
-        needs a browser binary. Neither part exists on every workstation. A plain
+        Playwright needs a browser binary that no source tree carries. A plain
         request would report an error, which reads in a report as a broken test.
+        A missing binary is the one environment fault this module still hides,
+        because it stops every browser test for a reason outside the portal.
+        The server fixture states its own fault and its own skip, so this
+        function never wraps it.
 
     Args:
         request: The pytest request object of the calling fixture.
-        name: The fixture to build.
+        name: The browser fixture to build.
 
     Returns:
-        The fixture value.
+        The Playwright page object.
     """
-    try:  # The failure below describes the environment, never the page.
+    try:  # A missing browser binary describes the workstation, never the page.
         return request.getfixturevalue(name)
     except Exception as failure:  # A skip states the real cause, so nothing hides.
-        pytest.skip(f"The fixture {name} could not start, so no browser test can run. Cause: {failure}")
+        pytest.skip(f"Playwright could not open a browser, so no browser test can run. Cause: {failure}")
 
 
 @pytest.fixture
@@ -125,9 +130,8 @@ def first_page(request: pytest.FixtureRequest) -> Any:
     Returns:
         The Playwright page object.
     """
-    for name in FIRST_FIXTURES:  # The server must answer before the browser opens a page.
-        value = _lazy_fixture(request, name)
-    return value
+    request.getfixturevalue(SERVER_FIXTURE)  # A fault here is a fault of the portal, so it must not become a skip.
+    return _browser_page(request, FIRST_BROWSER_FIXTURE)
 
 
 @pytest.fixture
@@ -140,9 +144,8 @@ def second_page(request: pytest.FixtureRequest) -> Any:
     Returns:
         The Playwright page object of the second browser context.
     """
-    for name in SECOND_FIXTURES:  # The server must answer before the second context opens.
-        value = _lazy_fixture(request, name)
-    return value
+    request.getfixturevalue(SERVER_FIXTURE)  # A fault here is a fault of the portal, so it must not become a skip.
+    return _browser_page(request, SECOND_BROWSER_FIXTURE)
 
 
 def _page_status(page: Any, path: str) -> int:
@@ -163,7 +166,7 @@ def _page_status(page: Any, path: str) -> int:
 
 
 def _require_built_route(status: int, path: str) -> None:
-    """Skip when a route is absent, and fail when a built route answers wrongly.
+    """Fail when the portal answers a status that the contract does not fix.
 
     Args:
         status: The status code the portal answered.
@@ -174,9 +177,9 @@ def _require_built_route(status: int, path: str) -> None:
             not fix for a page.
     """
     if status == UNAUTHORIZED_STATUS:  # `identity.require_session` refused the request.
-        pytest.skip(f"{path} answered 401. The portal holds no session, so no browser test reaches this page.")
+        raise AssertionError(f"{path} answered 401. The portal this run started holds no sign-in seam.")
     if status == NOT_FOUND_STATUS:  # The blueprint that owns this path is not registered.
-        pytest.skip(f"{path} answered 404. The route is not built yet.")
+        raise AssertionError(f"{path} answered 404. The blueprint that owns this path is not registered.")
     assert status == OK_STATUS, f"{path} answered {status}. `contracts/http-api.md` fixes 200 for this page."
 
 
@@ -239,12 +242,17 @@ def _write(page: Any, method: str, path: str, body: dict[str, Any]) -> Any:
 
     Returns:
         The Playwright response object.
+
+    Raises:
+        AssertionError: If the call never reached the portal. The server fixture
+            starts the portal, so a call that cannot complete names a fault of
+            that portal and never a gap in the workstation.
     """
     headers = {CSRF_HEADER: _csrf_token(page), "Content-Type": JSON_TYPE}
-    try:  # A portal that holds no such route reaches this clause.
+    try:  # The fixture started this portal, so a call that fails names a fault of it.
         return page.request.fetch(path, method=method, headers=headers, data=json.dumps(body))
-    except Exception as failure:  # The call never reached the portal at all.
-        pytest.skip(f"The {method} call to {path} did not complete. Cause: {failure}")
+    except Exception as failure:  # The portal died, or it never bound the port.
+        raise AssertionError(f"The {method} call to {path} did not complete. Cause: {failure}") from failure
 
 
 def _error_code(answer: Any) -> str:
@@ -274,10 +282,16 @@ def held_site(first_page: Any) -> Iterator[str]:
 
     Yields:
         The site key that the first operator now holds.
+
+    Raises:
+        AssertionError: If the lock endpoint answers 401 or 404. Both name a
+            fault of the portal, so neither may report a skip.
     """
     site = _open_site_picker(first_page)
     path = LOCK_API_TEMPLATE.format(site_id=site)
     answer = _write(first_page, "post", path, {})
+    if answer.status in (UNAUTHORIZED_STATUS, NOT_FOUND_STATUS):  # The portal itself is broken.
+        raise AssertionError(f"{path} answered {answer.status}, so the portal serves no lock route.")
     if answer.status != OK_STATUS:  # A workstation with no lock store answers 503 here.
         pytest.skip(f"{path} answered {answer.status}, so the first operator holds no lock.")
     token = str(json.loads(answer.text())[TOKEN_FIELD])
@@ -336,6 +350,8 @@ class TestTheSecondOperatorIsRefused:
         """
         _open_site_picker(second_page)
         answer = _write(second_page, "post", LOCK_API_TEMPLATE.format(site_id=held_site), {})
+        if answer.status in (UNAUTHORIZED_STATUS, NOT_FOUND_STATUS):  # The portal itself is broken.
+            raise AssertionError(f"The second lock call answered {answer.status}, so the portal is not serving it.")
         if answer.status != CONFLICT_STATUS:  # The refusal test above states this fault already.
             pytest.skip(f"The second lock call answered {answer.status}, so it carries no refusal body.")
         details = json.loads(answer.text())[ERROR_FIELD].get(DETAILS_FIELD) or {}
@@ -355,6 +371,8 @@ class TestTheSecondOperatorIsRefused:
         """
         _open_site_picker(second_page)
         answer = _write(second_page, "post", LOCK_API_TEMPLATE.format(site_id=held_site), {})
+        if answer.status in (UNAUTHORIZED_STATUS, NOT_FOUND_STATUS):  # The portal itself is broken.
+            raise AssertionError(f"The second lock call answered {answer.status}, so the portal is not serving it.")
         if answer.status != CONFLICT_STATUS:  # The refusal test above states this fault already.
             pytest.skip(f"The second lock call answered {answer.status}, so it carries no refusal body.")
         assert TOKEN_FIELD not in answer.text(), "The refusal body holds a lock token."
@@ -390,7 +408,9 @@ class TestTheSecondOperatorIsRefused:
         """
         _open_site_picker(second_page)
         answer = _write(second_page, "post", RUN_CREATE_TEMPLATE.format(site_id=held_site), {})
-        if answer.status in (NOT_FOUND_STATUS, BAD_REQUEST_STATUS, STORE_DOWN_STATUS):
+        if answer.status == NOT_FOUND_STATUS:  # The blueprint that owns this path is not registered.
+            raise AssertionError("The run create answered 404, so the portal serves no run route.")
+        if answer.status in (BAD_REQUEST_STATUS, STORE_DOWN_STATUS):
             pytest.skip(f"The run create answered {answer.status}, which names a cause outside the lock.")
         assert answer.status == CONFLICT_STATUS, f"The run create answered {answer.status}, not 409."
         assert _error_code(answer) == SITE_LOCKED_CODE, "The refusal carries another code."
@@ -444,7 +464,7 @@ class TestReadingIsAlwaysFree:
         path = template.format(site_id=held_site)
         answer = second_page.request.get(path)
         if answer.status == NOT_FOUND_STATUS:  # The route is not registered yet.
-            pytest.skip(f"{path} answered 404. The route is not built yet.")
+            raise AssertionError(f"{path} answered 404. The blueprint that owns this path is not registered.")
         assert answer.status == OK_STATUS, f"{path} answered {answer.status} while another operator held the site."
 
     def test_the_second_operator_reads_the_site_list(self, second_page: Any, held_site: str) -> None:
@@ -462,7 +482,7 @@ class TestReadingIsAlwaysFree:
         del held_site  # Requested so the first operator holds the lock during this read.
         answer = second_page.request.get(SITE_API_PATH)
         if answer.status == NOT_FOUND_STATUS:  # The route is not registered yet.
-            pytest.skip(f"{SITE_API_PATH} answered 404. The route is not built yet.")
+            raise AssertionError(f"{SITE_API_PATH} answered 404. The blueprint that owns this path is not registered.")
         assert answer.status == OK_STATUS, f"{SITE_API_PATH} answered {answer.status} while the site was held."
 
     @pytest.mark.parametrize("path", (HISTORY_PAGE_PATH, SITE_PAGE_PATH))
