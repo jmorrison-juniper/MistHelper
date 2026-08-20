@@ -251,10 +251,30 @@ class RunRecordBuilder:
             raise ValueError(f"The run record misses these fields: {', '.join(missing)}.")
         if not cls.KEY_PATTERN.fullmatch(str(record["_key"])) or record["run_id"] != record["_key"]:
             raise ValueError("The key must read run- and 32 hexadecimal characters, and run_id must match it.")
-        if record["schema_version"] != SCHEMA_VERSION:
+        if not cls._is_plain_int(record["schema_version"]) or record["schema_version"] != SCHEMA_VERSION:
             raise ValueError(f"The schema_version must be the integer {SCHEMA_VERSION}.")
-        if record["tier"] not in (2, 3):
+        if not cls._is_plain_int(record["tier"]) or record["tier"] not in (2, 3):
             raise ValueError("The tier must be the integer 2 or the integer 3.")
+
+    @staticmethod
+    def _is_plain_int(value: Any) -> bool:
+        """Return true when one value is an integer and is not a boolean.
+
+        Why:
+            Python holds bool as a subclass of int, so `True == 1` reads as
+            true. A stored `True` would pass an equality check against the
+            schema version 1, and the store would then hold a record that no
+            later reader can trust. A float carries the same risk, because
+            `2.0 == 2` also reads as true. This check names the exact type and
+            closes both holes.
+
+        Args:
+            value: The value to check.
+
+        Returns:
+            True when the value is an int and is not a bool.
+        """
+        return isinstance(value, int) and not isinstance(value, bool)  # Bool is an int subclass.
 
     @staticmethod
     def _site_fields(spec: RunSpec) -> dict[str, Any]:
@@ -492,6 +512,13 @@ class RunStatusView:
         "version_after",
     )
 
+    # WHY: `upgrade/driver.py` writes the key `lock` onto the record when the
+    # run loses the site lock, and writes these three sub-keys inside it. The
+    # view names the same three, so a value a later writer adds to that entry,
+    # such as a lock token, can never reach the browser.
+    LOCK_KEY: ClassVar[str] = "lock"
+    LOCK_FIELDS: ClassVar[tuple[str, ...]] = ("state", "message", "at")
+
     # WHY: A count of 1 needs the singular word. Plain words beat a phase
     # identifier in a sentence an operator reads.
     PHASE_NOUNS: ClassVar[Mapping[str, tuple[str, str]]] = {
@@ -531,13 +558,15 @@ class RunStatusView:
 
         Returns:
             The body that the run status endpoint answers, with the keys in
-            the order the contract shows.
+            the order the contract shows. A run that lost its site lock adds
+            the key `lock` after them.
         """
         phases = self.phases(record)
         body = self._identity(record)
         body.update({"phase_order": list(PHASE_ORDER), "phases": phases, "targets": self.targets(record)})
         body.update(self._outcome(record))
         body["message"] = message or self.message(record, phases)
+        body.update(self._lock(record))  # The last key reports a fault, so it never hides a key of the contract.
         return body
 
     @classmethod
@@ -587,11 +616,39 @@ class RunStatusView:
         """
         waiting = [phase for phase in phases if phase.get("state") == PhaseState.WAITING]
         if not waiting:
-            return cls.STATE_MESSAGES.get(str(record.get("state", "")), "The run is in progress.")
+            return cls._resting_message(record, phases)
         phase = waiting[0]
         remaining = int(phase.get("total", 0)) - int(phase.get("settled", 0))
         singular, plural = cls.PHASE_NOUNS.get(str(phase.get("name", "")), ("device", "devices"))
         return f"The portal waits for {remaining} {singular if remaining == 1 else plural} to return."
+
+    @classmethod
+    def _resting_message(cls, record: Mapping[str, Any], phases: Sequence[Mapping[str, Any]]) -> str:
+        """Return the sentence for a run that holds no phase in the waiting state.
+
+        Why:
+            FR-058 lets the portal pass over a family that the site does not
+            hold. The run state still names that family, so the state sentence
+            alone tells the operator that the portal waits for a gateway at a
+            site that holds no gateway. This step reads the phase state first
+            and reports the real reason.
+
+        Args:
+            record: The stored run record.
+            phases: The phase entries this view built.
+
+        Returns:
+            One sentence in plain words.
+        """
+        state = str(record.get("state", ""))
+        # WHY: Only a settling state names a family. Every other state leaves the
+        # prefix in place, finds no phase of that name, and falls to the map.
+        family = state.removeprefix("settling_")
+        current = next((entry for entry in phases if entry.get("name") == family), None)
+        if current is not None and current.get("state") == PhaseState.SKIPPED:
+            plural = cls.PHASE_NOUNS.get(family, ("device", "devices"))[1]
+            return f"The site holds no {plural}, so the portal does not wait for this group."
+        return cls.STATE_MESSAGES.get(state, "The run is in progress.")
 
     @staticmethod
     def _identity(record: Mapping[str, Any]) -> dict[str, Any]:
@@ -623,6 +680,31 @@ class RunStatusView:
             "pre_capture_id": record.get("pre_capture_id"),
             "post_capture_id": record.get("post_capture_id"),
         }
+
+    @classmethod
+    def _lock(cls, record: Mapping[str, Any]) -> dict[str, Any]:
+        """Return the lock report of the run, or no key at all.
+
+        Why:
+            The driver writes this note when another operator takes the site
+            lock, or when the lock expires during an upgrade. No answer
+            carried the note, so an operator whose site was taken read a run
+            that looked healthy. The key stays absent on a healthy run,
+            because the contract fixes the other keys and this one reports a
+            fault only.
+
+        Args:
+            record: The stored run record.
+
+        Returns:
+            A mapping with the one key `lock`, or an empty mapping when the
+            run still holds its site lock.
+        """
+        stored = record.get(cls.LOCK_KEY)  # The driver writes this key only after the run loses the site lock.
+        if not isinstance(stored, Mapping):  # A run that still holds its lock adds no key to the body.
+            return {}
+        report = {name: stored.get(name) for name in cls.LOCK_FIELDS}  # Copy the three named keys and no other.
+        return {cls.LOCK_KEY: report}
 
     @staticmethod
     def _phase_entry(name: str, stored: Mapping[str, Any] | None) -> dict[str, Any]:

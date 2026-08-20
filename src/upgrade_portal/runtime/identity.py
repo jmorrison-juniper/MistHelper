@@ -33,6 +33,17 @@ Credential values:
     whether a variable is set, and never binds the value to a name. Both
     `SessionOwner` and `OperatorSession` define their own text form, so a
     record that reaches a log line shows the digest and nothing more.
+
+    `redact_credentials` copies a body and replaces each credential field with
+    the name of that field. The guard decides by field name alone, so no line
+    of this module reads a credential value to build a redaction.
+
+Organization scope:
+    A cloud session carries the organizations that the credential may reach.
+    `org_scope_refusal` and the `require_org_scope` guard answer
+    `403 org_not_permitted` for an organization outside that list. A session
+    that lists no privilege passes the check, because an environment token
+    session names none and a closed answer there would refuse every request.
 """
 
 import functools  # Keeps the name and the docstring of a guarded route function
@@ -42,7 +53,7 @@ import os  # Reads the presence of a token variable, never its value
 import re  # Validates the shape of an address and of a browser identifier
 import secrets  # Generates an unpredictable browser identifier
 import threading  # Guards the registry, because several request threads share it
-from collections.abc import Callable  # Types the route function the guard wraps
+from collections.abc import Callable, Mapping  # Types the guarded route function and the body the guard redacts
 from dataclasses import dataclass, field  # Builds the two records without hand-written methods
 from datetime import UTC, datetime  # Stamps every sign-in in one time zone
 from enum import StrEnum  # Names the credential modes as text that a page can show
@@ -59,16 +70,45 @@ BROWSER_ID_MAX_AGE_SECONDS: Final[int] = 31_536_000  # 365 days keeps the value 
 ENVIRONMENT_TOKEN_VARIABLES: Final[tuple[str, ...]] = ("MIST_APITOKEN", "MIST_API_TOKEN")  # Names only
 ERROR_NOT_AUTHENTICATED: Final[str] = "not_authenticated"  # The fixed code a test asserts on
 SESSION_OWNER_KEY: Final[str] = "owner_key"  # The field inside the signed browser session
+ERROR_ORG_NOT_PERMITTED: Final[str] = "org_not_permitted"  # The fixed code of the organization refusal
+ORG_NOT_PERMITTED_MESSAGE: Final[str] = "This session may not act on that organization."  # One sentence, one place
+ORG_PRIVILEGE_FIELD: Final[str] = "org_id"  # The field that names one organization inside a privilege record
+
+# Why:
+#     FR-009 asks the portal to name a stored credential by its variable name
+#     only. This set holds field names, so no line of this module reads a
+#     credential value to build a redaction.
+# Caution: this set can remove the refusal code from a JSON error envelope.
+#     `code` sits in this set because the second factor body names its field
+#     `code`. The JSON error envelope also names a field `code`. A caller that
+#     redacts an error envelope must pass a set of its own.
+CREDENTIAL_FIELD_NAMES: Final[frozenset[str]] = frozenset(
+    {
+        "password",  # The sign-in body field of FR-007
+        "passwd",  # A second spelling that a client library sends
+        "secret",  # A shared secret of any kind
+        "token",  # A bearer token of any kind
+        "apitoken",  # The Mist spelling, as in `MIST_APITOKEN`
+        "api_token",  # The second Mist spelling, as in `MIST_API_TOKEN`
+        "apikey",  # A key that acts as a token
+        "api_key",  # The second spelling of that key
+        "authorization",  # The header that carries a token
+        "code",  # The second factor body field of FR-008
+        "otp",  # A one-time password
+        "totp",  # A time-based one-time password
+    }
+)
 
 _EMAIL_DIGEST_BYTES: Final[int] = 8  # 8 bytes give a 16 character digest
+_FORBIDDEN_STATUS: Final[int] = 403  # The status that `contracts/http-api.md` fixes for a scope refusal
 _MAX_EMAIL_LENGTH: Final[int] = 254  # The longest address a mail server accepts
 _EMAIL_PATTERN: Final[re.Pattern[str]] = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")  # One at sign, one dot
 _BROWSER_ID_PATTERN: Final[re.Pattern[str]] = re.compile(r"^[A-Za-z0-9_-]{16,128}$")  # The URL-safe shape
 
 # The guard below needs a generic signature. It declares the two type variables
 # here, in the form of `typing`, and not in the form of PEP 695.
-# Caution: two CI gates disagree about this signature, and one form must break.
-# pydocstyle 6.3.0 cannot parse a PEP 695 type parameter list. It reads
+# Caution: two CI gates disagree about this signature, so one form will break
+# the build. pydocstyle 6.3.0 cannot parse a PEP 695 type parameter list. It reads
 # `def name[T](...)` as a function with no docstring and reports D103, even when
 # the docstring is present. CI runs pydocstyle over `src/`, so the PEP 695 form
 # fails the build. Ruff asks for the opposite form through UP047, so the line
@@ -106,9 +146,17 @@ def email_digest(actor_email: str) -> str:  # The only form of an address that a
 
     Returns:
         A 16 character lower-case hexadecimal digest.
+
+    Raises:
+        ValueError: If the address holds no visible character. A blank address
+            would still give a normal-looking digest, and that digest would
+            read in an audit as a real person. An audit trail that names a
+            person who does not exist is worse than no digest at all.
     """
-    normalized = actor_email.strip().casefold().encode("utf-8")  # One spelling for one person
-    return hashlib.blake2s(normalized, digest_size=_EMAIL_DIGEST_BYTES).hexdigest()  # One way, never back
+    candidate = actor_email.strip().casefold()  # One spelling for one person
+    if not candidate:  # A blank address must never reach the hash function
+        raise ValueError("The work email address holds no visible character.")  # No value in the text
+    return hashlib.blake2s(candidate.encode("utf-8"), digest_size=_EMAIL_DIGEST_BYTES).hexdigest()  # One way
 
 
 def normalize_email(raw_email: str) -> str:  # Runs before any identity reaches a lock record
@@ -153,6 +201,106 @@ def environment_token_present() -> bool:  # A presence check, and never a read o
     return any(os.environ.get(name, "").strip() for name in ENVIRONMENT_TOKEN_VARIABLES)  # Presence alone
 
 
+def credential_reference(variable_name: str) -> str:
+    """Build the safe text that stands in for one stored credential.
+
+    Why:
+        FR-009 asks the portal to refer to a stored credential by its variable
+        name only. Every part of the portal that must mention a credential calls
+        this function, so one shape reaches every log record, every answer body,
+        and every page. The function reads no credential value.
+
+    Args:
+        variable_name: The name of the field or the environment variable that
+            holds the credential. The name alone, and never the value.
+
+    Returns:
+        The variable name inside angle brackets, such as `<password>`.
+    """
+    return f"<{variable_name.strip()}>"  # The brackets mark a name, so no reader mistakes it for a value
+
+
+def environment_token_reference() -> str:
+    """Name the environment variable that holds the cloud API token.
+
+    Why:
+        A message that asks an operator to set a token must name the variable.
+        FR-009 forbids the value in that message. This function reads presence
+        alone, exactly as `environment_token_present` does, and returns a name.
+
+    Returns:
+        The name of the first token variable that holds text. When no variable
+        holds text, both names joined by `or`, so the message stays useful.
+    """
+    for name in ENVIRONMENT_TOKEN_VARIABLES:  # The order fixes which name wins when both hold text
+        if os.environ.get(name, "").strip():  # Presence alone, and never the value
+            return name  # A name is the only safe reference to the value the variable holds
+    return " or ".join(ENVIRONMENT_TOKEN_VARIABLES)  # No variable holds text, so name every candidate
+
+
+def is_credential_field(field_name: str, fields: frozenset[str] = CREDENTIAL_FIELD_NAMES) -> bool:
+    """Report whether one field name names a credential.
+
+    Why:
+        A body arrives with several spellings of one field name, such as
+        `API-Token` and `api_token`. The guard must treat those as one field, so
+        this function folds the case and the separator before it compares.
+
+    Args:
+        field_name: The name of one field in a body, a header, or a log context.
+        fields: The names to treat as credentials. Pass a set of your own when a
+            field named `code` is not a credential, such as an error envelope.
+
+    Returns:
+        True when the folded name sits in the set.
+    """
+    return field_name.strip().casefold().replace("-", "_") in fields  # One spelling for one field name
+
+
+def _redacted_value(field_name: str, value: Any, fields: frozenset[str]) -> Any:
+    """Return the safe stand-in for one field, or the value when it is safe.
+
+    Why:
+        `redact_credentials` stays inside the Five-Item Rule when the per-field
+        choice sits in its own function. The choice reads the field name, and
+        reads the value only to ask whether the value is a nested mapping.
+
+    Args:
+        field_name: The name of the field under test.
+        value: The value that arrived with that field name.
+        fields: The names to treat as credentials.
+
+    Returns:
+        The credential reference, a redacted copy of a nested mapping, or the
+        value itself.
+    """
+    if is_credential_field(field_name, fields):  # The name decides, so the value is never read
+        return credential_reference(field_name)  # FR-009: the variable name, and never the value
+    if isinstance(value, Mapping):  # A nested body hides a credential one level down
+        return redact_credentials(value, fields)  # The same rule applies at every depth
+    return value  # A field that names no credential passes through unchanged
+
+
+def redact_credentials(payload: Mapping[str, Any], fields: frozenset[str] = CREDENTIAL_FIELD_NAMES) -> dict[str, Any]:
+    """Copy a body with every credential field replaced by its own name.
+
+    Why:
+        FR-009 forbids a password value or a token value in a log record, in an
+        answer body, and in a store. A caller that must record a body calls this
+        function first. The result names each credential field, so a reader
+        learns which field arrived without learning what it held.
+
+    Args:
+        payload: The body, the header map, or the log context to copy.
+        fields: The names to treat as credentials. Pass a set of your own when a
+            field named `code` is not a credential, such as an error envelope.
+
+    Returns:
+        A new dictionary. The input is never changed.
+    """
+    return {str(name): _redacted_value(str(name), value, fields) for name, value in payload.items()}  # A fresh copy
+
+
 class CredentialMode(StrEnum):  # A StrEnum, so a page and a record hold the same text
     """The way the portal obtained the cloud session of one operator.
 
@@ -164,7 +312,7 @@ class CredentialMode(StrEnum):  # A StrEnum, so a page and a record hold the sam
         changes no line of this enumeration.
     """
 
-    ENVIRONMENT_TOKEN = "environment_token"  # The process environment already holds a cloud token
+    ENVIRONMENT_TOKEN = "environment_token"  # nosec B105  # WHY: this names a mode. The environment holds the token
     PROVIDER_LOGIN = "provider_login"  # The operator supplies an address and a password in User Story 5
 
 
@@ -196,6 +344,28 @@ class SessionOwner:  # Frozen, so a stored owner cannot change while the site lo
 
     actor_email: str  # The normalized address, held for the lock record and for nothing else
     browser_id: str  # The cookie value that separates one computer from another
+
+    def __post_init__(self) -> None:
+        """Refuse a pair when either half fails its check.
+
+        Why:
+            The site lock grants a site to this pair, so an unchecked pair
+            would let a blank address or a forged cookie value hold a lock.
+            The check lives here and not in the builder alone, because every
+            construction path reaches this method. A builder-only check leaves
+            direct construction open, and a frozen record carries the fault
+            for its whole life.
+
+        Raises:
+            ValueError: If the address is empty, oversize, holds no domain
+                part, or is not already normalized. Also if the browser
+                identifier has the wrong shape. No message holds any part of
+                either value, because a message may reach a log record.
+        """
+        if normalize_email(self.actor_email) != self.actor_email:  # Raises first on an empty or malformed value
+            raise ValueError("The work email address is not in its normalized form.")  # No value in the text
+        if _BROWSER_ID_PATTERN.match(self.browser_id) is None:  # The cookie half needs the same guarantee
+            raise ValueError("The browser identifier has the wrong shape.")  # The value stays out of the text
 
     @property
     def email_digest(self) -> str:
@@ -542,10 +712,21 @@ def sign_out() -> bool:
         cleared browser session alone would leave the object in memory for the
         life of the worker.
 
+        The function clears the whole browser session and not the owner key
+        alone. The session also carries the chosen organization, the chosen
+        site, and any lock token. Dropping one key would leave that state
+        behind for the next person at a shared workstation, who would then
+        sign in and inherit the site selection of the person before them.
+
+        The browser identifier lives in its own first-party cookie and not in
+        the session, so a sign-out leaves the browser identity in place. That
+        is correct: the same computer must stay the same computer.
+
     Returns:
         True when a record existed and the registry dropped it.
     """
-    owner_key = flask.session.pop(SESSION_OWNER_KEY, None)  # Clear the browser half first
+    owner_key = flask.session.pop(SESSION_OWNER_KEY, None)  # Read the owner half before the session goes
+    flask.session.clear()  # Leave no organization, no site, and no lock token for the next person
     if not isinstance(owner_key, str):  # A request with no session has nothing to drop
         return False  # The route still answers with the sign-in page
     _LOGGER.info("identity: sign-out start for operator %s", owner_key.split(":", 1)[0])  # Digest half only
@@ -609,6 +790,165 @@ def require_session(  # noqa: UP047  # WHY: pydocstyle 6.3.0 fails on PEP 695, a
     def guarded(*args: ViewArgs.args, **kwargs: ViewArgs.kwargs) -> ViewResult | tuple[Response, int]:
         """Answer the request when a session exists, and refuse it otherwise."""
         refusal = _refusal_for_request()  # Ask once, before the route function runs
+        return view(*args, **kwargs) if refusal is None else refusal  # The route never sees a refused request
+
+    return guarded  # `functools.wraps` keeps the name, so Flask registers the original endpoint
+
+
+def session_privileges() -> list[Any] | None:
+    """Read the privilege list of the cloud session of the current request.
+
+    Why:
+        The Mist cloud session carries the organizations that the credential may
+        reach. The portal must not ask the cloud again on every request, so the
+        scope check reads the list the sign-in already stored.
+
+    Returns:
+        The privilege list, or None when the request carries no session or when
+        the cloud session names no list. None means unknown, and never empty.
+    """
+    record = current_session()  # The registry holds the cloud session of this pair
+    if record is None:  # No session means no answer, and `require_session` owns that refusal
+        return None  # Unknown, so the caller decides
+    found: Any = getattr(record.cloud_session, "privileges", None)  # A stand-in session may name no list
+    return list(found) if isinstance(found, list) else None  # A copy, so a caller cannot change the session
+
+
+def permitted_org_ids() -> frozenset[str] | None:
+    """Collect the organization identifiers that the current session may reach.
+
+    Why:
+        FR-009 and the organization contract ask the portal to refuse an
+        organization outside the scope of the credential. One function builds
+        that set, so the refusal and the picker read the same source.
+
+    Returns:
+        The set of identifiers, or None when the scope is unknown. An empty set
+        means the cloud session lists privileges and names no organization, so
+        the portal refuses every organization.
+    """
+    privileges = session_privileges()  # One read, one shape
+    if privileges is None:  # Unknown stays unknown, and never becomes an empty set
+        return None  # The caller decides what unknown means
+    named = (privilege_org_id(entry) for entry in privileges)  # One identifier for each privilege record
+    return frozenset(found for found in named if found)  # An entry with no identifier names no organization
+
+
+def privilege_org_id(entry: Any) -> str:
+    """Read the organization identifier out of one privilege record.
+
+    Why:
+        The cloud returns a list of dictionaries, and a stand-in session in a
+        test returns whatever the test builds. This function accepts both and
+        never raises, so one malformed entry cannot refuse a whole session.
+
+        The name carries no leading underscore, because the organization picker
+        in `app/routes/select.py` reads the same field. One reader keeps the
+        picker and the scope check on one spelling of one identifier.
+
+    Args:
+        entry: One privilege record from the cloud session.
+
+    Returns:
+        The identifier, or an empty string when the record names none.
+    """
+    if not isinstance(entry, dict):  # A list of strings or of objects names no field
+        return ""  # An empty string drops out of the set
+    return str(entry.get(ORG_PRIVILEGE_FIELD, "")).strip()  # One spelling for one identifier
+
+
+def org_is_permitted(org_id: str) -> bool:
+    """Report whether the current session may act on one organization.
+
+    Why:
+        A session whose cloud session lists no privilege passes the check. That
+        is deliberate. An environment token session and a stand-in session in a
+        test both name no privilege, and a closed answer there would refuse
+        every request and hide the real refusal that this function exists for.
+
+    Args:
+        org_id: The organization the request names.
+
+    Returns:
+        True when the scope is unknown or when the identifier sits in the scope.
+    """
+    permitted = permitted_org_ids()  # None means unknown, and a set means known
+    if permitted is None:  # An unknown scope cannot refuse, so the request continues
+        _LOGGER.info("identity: the cloud session lists no privilege, so the scope check passed")
+        return True  # Fail open, and the same rule that `select` applies
+    return org_id.strip() in permitted  # A known scope decides by membership alone
+
+
+def org_not_permitted_response() -> tuple[Response, int]:
+    """Build the `org_not_permitted` error envelope.
+
+    Why:
+        `contracts/http-api.md` fixes the code `org_not_permitted` and the
+        status 403 for an organization outside the scope of the session. This
+        function builds the envelope here and imports no application module,
+        because the application factory imports the route modules that apply the
+        guard.
+
+    Returns:
+        The JSON response and the status code 403.
+    """
+    payload = {"error": {"code": ERROR_ORG_NOT_PERMITTED, "message": ORG_NOT_PERMITTED_MESSAGE}}  # One shape
+    return flask.jsonify(payload), _FORBIDDEN_STATUS  # The status and the code always travel together
+
+
+def org_scope_refusal(org_id: str) -> tuple[Response, int] | None:
+    """Return the refusal envelope when one organization is outside the scope.
+
+    Why:
+        A route reads the organization from a path, from a body, or from the
+        browser session. One decision function serves all three, so every route
+        refuses with the same code and the same status.
+
+    Args:
+        org_id: The organization the request names.
+
+    Returns:
+        The `org_not_permitted` envelope, or None when the request may continue.
+    """
+    if org_is_permitted(org_id):  # Ask once, before the route function runs
+        return None  # The route function may run
+    # An organization identifier is not personal data, so the record may name it.
+    _LOGGER.info("identity: refused the organization %s for endpoint %s", org_id, flask.request.endpoint)
+    return org_not_permitted_response()  # The one envelope that every scope refusal answers with
+
+
+def require_org_scope(  # noqa: UP047  # WHY: pydocstyle 6.3.0 fails on PEP 695, and CI runs it.
+    view: Callable[ViewArgs, ViewResult],
+) -> Callable[ViewArgs, ViewResult | tuple[Response, int]]:
+    """Refuse a request for an organization outside the scope of the session.
+
+    Why:
+        A route whose path names an organization must apply the scope check
+        before it reads anything. One decorator keeps that rule in one place, so
+        a new route cannot forget it.
+
+        Apply this guard under `require_session`. This guard answers 403 alone,
+        and a request with no session must answer 401 first.
+
+        The guard reads the path argument named `org_id`. A route that reads the
+        organization from a body or from the browser session calls
+        `org_scope_refusal` instead, because a decorator cannot see a body.
+
+    Args:
+        view: The route function to guard.
+
+    Returns:
+        A function that answers `403 org_not_permitted` when the path names an
+        organization outside the scope, and that calls the route function
+        otherwise.
+    """
+
+    @functools.wraps(view)
+    def guarded(*args: ViewArgs.args, **kwargs: ViewArgs.kwargs) -> ViewResult | tuple[Response, int]:
+        """Answer the request when the organization is in scope, and refuse it otherwise."""
+        named = kwargs.get(ORG_PRIVILEGE_FIELD)  # Flask passes a path converter as a keyword argument
+        wanted = named.strip() if isinstance(named, str) else ""  # A path with no organization names none
+        refusal = org_scope_refusal(wanted) if wanted else None  # Nothing to check means nothing to refuse
         return view(*args, **kwargs) if refusal is None else refusal  # The route never sees a refused request
 
     return guarded  # `functools.wraps` keeps the name, so Flask registers the original endpoint

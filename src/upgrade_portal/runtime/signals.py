@@ -19,6 +19,8 @@ from dataclasses import dataclass, replace  # Immutable request and outcome valu
 from datetime import UTC, datetime  # ISO 8601 timestamps in UTC
 from typing import Any, ClassVar, Final, Protocol  # Record typing, error codes, and the store shape
 
+from src.upgrade_portal.runtime.identity import email_digest  # The one address form a log record may hold
+
 # WHAT: the exact text the operator types to confirm a stop.
 # WHY: FR-038b accepts this text and this letter case only. A lower-case word or
 #      a different word must leave the run untouched.
@@ -338,7 +340,8 @@ class StopRequestStore:
         run["updated_at"] = datetime.now(UTC).isoformat()  # data-model.md asks for a fresh time on a change
         if not self._store.write_run(run):  # The store reports the true result
             raise StopRequestError("The portal could not write the stop request to the run record.")
-        logging.debug("[STOP] Run %s holds a stop request from %s", run.get("run_id", ""), request.requested_by)
+        digest = email_digest(request.requested_by)  # An address never reaches a log record
+        logging.debug("[STOP] Run %s holds a stop request from %s", run.get("run_id", ""), digest)
         return request  # The caller reports this value to the operator
 
     def request(self, run_id: str, actor_email: str, confirmation_text: str) -> StopRequest:
@@ -355,13 +358,13 @@ class StopRequestStore:
         Raises:
             ConfirmationRequiredError: When the typed text is not `STOP`.
         """
-        logging.info("[STOP] Operator %s asks to stop run %s", actor_email, run_id)  # BEFORE the change
+        logging.info("[STOP] Operator %s asks to stop run %s", email_digest(actor_email), run_id)  # BEFORE
         if not StopRequestStore.confirmation_matches(confirmation_text):  # FR-038b guards the whole action
             raise ConfirmationRequiredError("The stop control needs the exact text STOP.")
         run = self._load_stoppable_run(run_id)  # Raises when the run is absent or already final
         held = StopRequestStore._read_from_run(run)  # A second click must not replace the first owner
         if held is not None:  # An earlier request already stands
-            logging.info("* Run %s already holds a stop request from %s", run_id, held.requested_by)
+            logging.info("* Run %s already holds a stop request from %s", run_id, email_digest(held.requested_by))
             return held  # Report the first request, so the record keeps one owner
         return self._write_request(run, StopRequest.for_operator(actor_email))  # Store the fresh request
 

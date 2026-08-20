@@ -123,8 +123,9 @@ class CapturePool:
         ``ConnectionPoolExecutor`` sizes its own threads from the connection
         cap, which is larger than the portal needs. The portal wraps that
         executor with a smaller budget, so a capture keeps its share of the
-        5000 call hourly quota at ``src/utils/rate_limiting.py:56``, and with a
-        drain gate, so a worker exit finishes the work in flight.
+        5000 call hourly quota at ``src/utils/rate_limiting.py:56``. It also
+        wraps the executor with a drain gate, so a worker exit finishes the
+        work in flight.
     """
 
     GATE: ClassVar[DrainGate] = DrainGate()  # One gate for each process. Assign a new gate to reset the state
