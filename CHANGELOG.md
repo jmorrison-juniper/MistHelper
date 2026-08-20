@@ -43,13 +43,20 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 - **Lost lock (Added)**: a lost lock never fails a run. The portal submits the
   upgrade to the cloud, and the cloud then owns the work. The banner states that
   the upgrade continues in the cloud and that the devices still reboot.
+- **Theme (Added)**: the navigation holds a theme picker, and the portal now
+  reads the choice. The picker is a GET form, because the content security
+  policy blocks an inline script, so the page reloads with `?theme=<name>`. One
+  context processor reads that argument for every page. Before this the picker
+  rendered, accepted a choice, reloaded the page, and changed nothing, so the
+  brand theme was unreachable. A name the portal does not ship reads as the
+  neutral theme, so no operator input reaches a file path.
 - **History (Added)**: the portal keeps every capture without an expiry, and it
   records the stored size of each one. An operator can return a week later and
   read the same comparison.
 - **Storage (Added)**: ArangoDB is the primary store, with collections
   `upgrade_captures` and `upgrade_runs` and the edge `capture_for_run`. Redis
   holds the site lock alone. CSV files under `data/` are the fallback.
-- **Tests (Added)**: 2534 unit and contract tests under
+- **Tests (Added)**: 2545 unit and contract tests under
   `tests/unit/upgrade_portal/` and `tests/contract/upgrade_portal/`. Statement
   coverage of the package is 94.67 percent.
 

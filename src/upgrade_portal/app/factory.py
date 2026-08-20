@@ -26,7 +26,7 @@ from time import monotonic_ns  # Builds a fresh value for each readiness write.
 from types import ModuleType  # The return type of a late import.
 from typing import Any  # The error envelope holds free-form details.
 
-from flask import Blueprint, Flask, Response, g, jsonify  # The web framework surface the factory needs.
+from flask import Blueprint, Flask, Response, g, has_request_context, jsonify, request  # The web framework surface.
 
 from .config import PortalSettings, load_settings  # The settings record and the environment reader.
 from .security import PortalSecurity  # The guards that arm the application.
@@ -105,6 +105,10 @@ PROBE_KEY = "readyz"  # One fixed key, so the probe never grows the collection.
 PROBE_FIELD = "checked_at"  # The field that carries the fresh value of one probe.
 PROBE_LOCK_KEY = "misthelper:readyz:probe"  # The scratch key inside the lock store namespace.
 PROBE_LOCK_TTL_SECONDS = 60  # The lock store drops the scratch key when no probe renews it.
+
+THEME_ARGUMENT = "theme"  # The GET form of `partials/nav.html` sends the choice under this name.
+THEME_DEFAULT = "default"  # The neutral theme, and the answer for a name the portal does not ship.
+THEME_NAMES = ("default", "magenta")  # One name for each file under `static/css/themes`.
 
 
 def read_version() -> str:
@@ -637,6 +641,51 @@ def build_application(settings: PortalSettings) -> Flask:
     return app  # The caller arms the object next.
 
 
+def chosen_theme() -> str:
+    """Return the theme name of the current request.
+
+    Why:
+        The theme picker in `partials/nav.html` is a GET form, because the
+        content security policy blocks an inline script. The form reloads the
+        page with `?theme=<name>`, so something must read that argument back.
+        Without this read the picker changes nothing and the brand theme stays
+        unreachable.
+
+    Returns:
+        The name the operator picked, or the neutral name for any other value.
+    """
+    if not has_request_context():  # A render outside a request carries no argument at all.
+        return THEME_DEFAULT
+    asked = request.args.get(THEME_ARGUMENT, "")  # Operator input, so no path may come from it.
+    if asked in THEME_NAMES:  # A known name only. `layout.html` repeats this guard.
+        return asked
+    return THEME_DEFAULT  # An unknown name reads as the neutral theme, never as a file path.
+
+
+def register_theme_context(app: Flask) -> None:
+    """Give every template the theme name and the list of theme names.
+
+    Why:
+        One processor serves every page, so no route can forget the pair and
+        render a picker that does nothing. A route that passes its own `theme`
+        still wins, because Flask applies the explicit context last.
+
+    Args:
+        app: The application to add the processor to.
+    """
+
+    @app.context_processor
+    def theme_context() -> dict[str, Any]:
+        """Answer the two names that `layout.html` and `partials/nav.html` read.
+
+        Returns:
+            The chosen theme name and the fixed list of allowed names.
+        """
+        # The list is a constant. Operator input never reaches `themes`, because
+        # the templates test the chosen name against this list.
+        return {THEME_ARGUMENT: chosen_theme(), "themes": list(THEME_NAMES)}
+
+
 def arm_application(app: Flask, settings: PortalSettings) -> None:
     """Add the guards, the error handlers, the routes, and the seams.
 
@@ -653,6 +702,7 @@ def arm_application(app: Flask, settings: PortalSettings) -> None:
     register_health(app)  # The container probe needs this route from the first day.
     register_readiness(app)  # The orchestrator readiness probe needs the store reading.
     register_teardown(app)  # Every request must release its sockets.
+    register_theme_context(app)  # Without this the theme picker of the navigation changes nothing.
     register_blueprints(app)  # A route module that does not exist yet writes one warning.
     install_seams(app)  # Without this the confirmed run reads no launcher and sends nothing.
 
