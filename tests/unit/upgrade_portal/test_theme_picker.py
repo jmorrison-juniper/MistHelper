@@ -20,7 +20,7 @@ from typing import Any  # The context processor answers a free-form mapping.
 import pytest  # The test framework of the project.
 from flask import Flask  # The application type of the portal.
 
-from src.upgrade_portal.app import factory  # The unit under test.
+from src.upgrade_portal.app import config, factory  # The units under test.
 
 THEME_LINK_ID = 'id="theme-css"'  # `layout.html` marks the one theme link with this identifier.
 NEUTRAL_FILE = "themes/default.css"  # The file that the neutral name reaches.
@@ -178,8 +178,8 @@ def test_an_unknown_name_falls_back_to_the_neutral_theme(portal_app: Flask, name
 # ---------------------------------------------------------------------------
 
 
-def test_the_processor_answers_the_fixed_list_of_names(portal_app: Flask) -> None:
-    """The `themes` value is the fixed list, and never operator input.
+def test_the_processor_answers_the_configured_list_of_names(portal_app: Flask) -> None:
+    """The `themes` value is the configured list, and never operator input.
 
     Why:
         `layout.html` tests the chosen name against `themes`. A `themes` value
@@ -192,8 +192,52 @@ def test_the_processor_answers_the_fixed_list_of_names(portal_app: Flask) -> Non
     with portal_app.test_request_context(SIGNIN_PATH + "?theme=magenta&themes=magenta"):
         context: dict[str, Any] = {}
         portal_app.update_template_context(context)  # Runs every processor of the application.
-    assert context["themes"] == list(factory.THEME_NAMES)  # The constant list, untouched by the request.
+    assert context["themes"] == list(portal_app.config["THEMES"])  # The configured list, not the request.
     assert context["theme"] == "magenta"  # The chosen name still rides beside it.
+
+
+def test_the_read_follows_the_configured_list(portal_app: Flask) -> None:
+    """A name the operator added through `CAPTURE_THEMES` reaches the page.
+
+    Why:
+        `read_themes` lets the operator name the themes, and `apply_web_config`
+        writes the checked names to the application. A second hard coded list
+        in the read would ignore that setting, so a theme the operator added
+        would show in the picker and then refuse to load.
+
+    Args:
+        portal_app: The real portal application.
+    """
+    portal_app.config["THEMES"] = ["default", "contrast"]  # The operator ships a third stylesheet.
+    with portal_app.test_request_context(SIGNIN_PATH + "?theme=contrast"):
+        assert factory.chosen_theme() == "contrast"  # The added name now passes the guard.
+    with portal_app.test_request_context(SIGNIN_PATH + "?theme=magenta"):
+        assert factory.chosen_theme() == factory.THEME_DEFAULT  # A name the operator dropped does not.
+
+
+def test_the_allowed_list_falls_back_outside_an_application() -> None:
+    """The read answers the shipped names when no application is in flight.
+
+    Why:
+        `current_app` raises outside an application context, and a template
+        render can happen there. The read must answer a list instead of a fault.
+    """
+    assert factory.allowed_themes() == config.DEFAULT_THEMES  # The two shipped names, and no fault.
+
+
+def test_an_empty_configured_list_falls_back_to_the_shipped_names(portal_app: Flask) -> None:
+    """An empty configured list must never leave the page with no theme.
+
+    Why:
+        An empty list would make every name unknown, and `layout.html` would
+        then have no name to test at all. The shipped names keep the page whole.
+
+    Args:
+        portal_app: The real portal application.
+    """
+    portal_app.config["THEMES"] = []  # A configuration that names no theme.
+    with portal_app.app_context():
+        assert factory.allowed_themes() == config.DEFAULT_THEMES  # The shipped names answer instead.
 
 
 def test_a_render_outside_a_request_reads_the_neutral_theme() -> None:
@@ -216,7 +260,7 @@ def test_every_shipped_theme_name_has_a_stylesheet(portal_app: Flask) -> None:
     Args:
         portal_app: The real portal application.
     """
-    for name in factory.THEME_NAMES:
+    for name in portal_app.config["THEMES"]:
         link = read_theme_link(portal_app, "theme=" + name)  # The page that this name renders.
         assert "themes/" + name + ".css" in link  # The link names the file of this theme.
         with portal_app.test_client() as client:

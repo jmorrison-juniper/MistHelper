@@ -26,9 +26,19 @@ from time import monotonic_ns  # Builds a fresh value for each readiness write.
 from types import ModuleType  # The return type of a late import.
 from typing import Any  # The error envelope holds free-form details.
 
-from flask import Blueprint, Flask, Response, g, has_request_context, jsonify, request  # The web framework surface.
+from flask import (  # The web framework surface.
+    Blueprint,
+    Flask,
+    Response,
+    current_app,
+    g,
+    has_app_context,
+    has_request_context,
+    jsonify,
+    request,
+)
 
-from .config import PortalSettings, load_settings  # The settings record and the environment reader.
+from .config import DEFAULT_THEMES, PortalSettings, load_settings  # The settings record and the environment reader.
 from .security import PortalSecurity  # The guards that arm the application.
 from .wiring import install_seams  # Joins the upgrade parts into the seams the routes read.
 
@@ -108,7 +118,7 @@ PROBE_LOCK_TTL_SECONDS = 60  # The lock store drops the scratch key when no prob
 
 THEME_ARGUMENT = "theme"  # The GET form of `partials/nav.html` sends the choice under this name.
 THEME_DEFAULT = "default"  # The neutral theme, and the answer for a name the portal does not ship.
-THEME_NAMES = ("default", "magenta")  # One name for each file under `static/css/themes`.
+THEMES_KEY = "THEMES"  # `apply_web_config` writes the configured names under this key.
 
 
 def read_version() -> str:
@@ -641,6 +651,26 @@ def build_application(settings: PortalSettings) -> Flask:
     return app  # The caller arms the object next.
 
 
+def allowed_themes() -> tuple[str, ...]:
+    """Return the theme names that this portal offers.
+
+    Why:
+        The operator names the themes with `CAPTURE_THEMES`, and `read_themes`
+        drops any name that a file path must not carry. `apply_web_config` then
+        writes the checked names to the application. A second hard coded list
+        here would ignore the setting, so a theme the operator added would show
+        in the picker and then refuse to load.
+
+    Returns:
+        The configured names, or the shipped names outside an application.
+    """
+    if has_app_context():  # A render outside an application reaches no configuration.
+        names = current_app.config.get(THEMES_KEY)  # Written by `apply_web_config`, already checked.
+        if names:  # An empty list would leave the operator with no theme at all.
+            return tuple(names)
+    return DEFAULT_THEMES  # The two stylesheets that the portal ships.
+
+
 def chosen_theme() -> str:
     """Return the theme name of the current request.
 
@@ -657,7 +687,7 @@ def chosen_theme() -> str:
     if not has_request_context():  # A render outside a request carries no argument at all.
         return THEME_DEFAULT
     asked = request.args.get(THEME_ARGUMENT, "")  # Operator input, so no path may come from it.
-    if asked in THEME_NAMES:  # A known name only. `layout.html` repeats this guard.
+    if asked in allowed_themes():  # A configured name only. `layout.html` repeats this guard.
         return asked
     return THEME_DEFAULT  # An unknown name reads as the neutral theme, never as a file path.
 
@@ -679,11 +709,12 @@ def register_theme_context(app: Flask) -> None:
         """Answer the two names that `layout.html` and `partials/nav.html` read.
 
         Returns:
-            The chosen theme name and the fixed list of allowed names.
+            The chosen theme name and the list of allowed names.
         """
-        # The list is a constant. Operator input never reaches `themes`, because
-        # the templates test the chosen name against this list.
-        return {THEME_ARGUMENT: chosen_theme(), "themes": list(THEME_NAMES)}
+        # The list comes from the configuration, which `read_themes` already
+        # checked. Operator request input never reaches `themes`, because the
+        # templates test the chosen name against this list.
+        return {THEME_ARGUMENT: chosen_theme(), "themes": list(allowed_themes())}
 
 
 def arm_application(app: Flask, settings: PortalSettings) -> None:
