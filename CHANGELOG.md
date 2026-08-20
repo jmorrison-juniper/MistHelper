@@ -7,6 +7,52 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Add the upgrade capture portal, menu 238 (issue #1823)
+
+- **Menu 238 (Added)**: `Upgrade Capture Portal` starts a web server and prints a
+  clickable link. The flag `--capture-portal` starts the same server without the
+  menu. Spec 1823.
+- **New package (Added)**: `src/upgrade_portal/`. It sits outside `web_portal/`,
+  which ruff and mypy exclude, so every gate covers the new code.
+- **Port (Added)**: `CAPTURE_PORT`, default 8056. The portal takes its own port,
+  so it never fights the other portal in a container or on a shared desktop.
+- **Server (Added)**: Gunicorn on Linux and Waitress on Windows. Windows ships no
+  `fcntl`, and `gunicorn.util` imports `fcntl`, so Gunicorn cannot start there.
+- **Bind address (Added)**: the portal binds the loopback address on a desktop.
+  It binds every address only inside a container, where the port map is the only
+  way in.
+- **Capture (Added)**: one capture records the firmware, the device state, and
+  the client counts of one site. The operator picks a standard tier or a full
+  tier. Every capture writes to ArangoDB, to a CSV file under `data/`, and to the
+  browser as a table. The page offers the CSV as a download.
+- **Upgrade (Added)**: the portal reuses the bulk firmware tools through a new
+  seam, `src/firmware/upgrade_service.py`. The operator types `CONFIRM` to unlock
+  the start control, and types `STOP` to cancel the devices not yet started.
+- **Settle logic (Added)**: the portal watches the device events of the site
+  every 20 seconds. It waits for the reconnect message, then waits one more
+  minute before the post-upgrade capture. Access points and clients wait for the
+  switches, and everything waits for the gateways.
+- **Comparison (Added)**: the compare page shows the two captures side by side
+  and adds a statistics summary. The page offers that summary as a CSV download.
+- **Site lock (Added)**: Redis holds one lock for each site, so two operators
+  never work one site at the same time. An operator signs in with a work email
+  address, and the lock pairs that address with the browser. One operator can
+  therefore hold several sites in several tabs. An abandoned session frees the
+  site after a five minute cooldown. Any operator can read a site and download
+  its data without a lock.
+- **Lost lock (Added)**: a lost lock never fails a run. The portal submits the
+  upgrade to the cloud, and the cloud then owns the work. The banner states that
+  the upgrade continues in the cloud and that the devices still reboot.
+- **History (Added)**: the portal keeps every capture without an expiry, and it
+  records the stored size of each one. An operator can return a week later and
+  read the same comparison.
+- **Storage (Added)**: ArangoDB is the primary store, with collections
+  `upgrade_captures` and `upgrade_runs` and the edge `capture_for_run`. Redis
+  holds the site lock alone. CSV files under `data/` are the fallback.
+- **Tests (Added)**: 2534 unit and contract tests under
+  `tests/unit/upgrade_portal/` and `tests/contract/upgrade_portal/`. Statement
+  coverage of the package is 94.67 percent.
+
 ### Add five organization-scoped search operations, menus 230 to 234 (issues #1386, #1385, #1383, #1382, #1379)
 
 - **Menu 230 (Added)**: `searchOrgWirelessClientSessions`. Spec 878, issue #1386.
