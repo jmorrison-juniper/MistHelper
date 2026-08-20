@@ -48,6 +48,7 @@ __all__ = [
     "plan_macs",
     "read_last_status",
     "require_confirmation",
+    "status_is_known",
     "stop_message",
     "stop_run",
     "stop_run_and_record",
@@ -181,6 +182,28 @@ def read_last_status(session: Any, target: StopTarget) -> Mapping[str, object] |
         return None
 
 
+def status_is_known(status: Mapping[str, object] | None) -> bool:
+    """Report whether one status read told the portal which devices write firmware.
+
+    Why:
+        A read can answer and still tell the portal nothing. The
+        organization-scope read of a session smart router answers device
+        statistics, not an upgrade job. The seam marks that answer with
+        `status_known` set to false. A test for `None` alone would call that
+        answer a good read, and the operator would then see the word stopped
+        for a device that is still writing firmware.
+
+    Args:
+        status: The status mapping that the seam returned, or None.
+
+    Returns:
+        True only when the seam stated that the answer was an upgrade job.
+    """
+    if status is None:
+        return False
+    return status.get("status_known") is True
+
+
 def cancel_target(session: Any, target: StopTarget) -> TargetResult:
     """Cancel one plan and report which devices stopped.
 
@@ -201,7 +224,7 @@ def cancel_target(session: Any, target: StopTarget) -> TargetResult:
     except Exception as error:  # noqa: BLE001  # WHY: One failed plan must not end the stop of the other plans.
         logger.warning("The cancel call for upgrade %s failed: %s", target.upgrade_id, error)
         return TargetResult(CancelOutcome((), plan_macs(target.plan), (), _MESSAGE_CALL_FAILED), status_known=False)
-    return TargetResult(outcome, status_known=last_status is not None)
+    return TargetResult(outcome, status_known=status_is_known(last_status))
 
 
 def _device_count(count: int) -> str:

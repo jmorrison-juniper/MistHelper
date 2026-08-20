@@ -598,15 +598,59 @@ class TestCancelUpgrade:
         assert recorder.calls[0][1][1:] == (SITE_ID, "run-7")
 
     def test_reports_a_stopped_device(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """A device that was not writing firmware stops.
+        """A device that the upgrade job leaves out of the reboot list stops.
+
+        Args:
+            monkeypatch: The pytest patch helper.
+        """
+        install(monkeypatch, Recorder())
+        status = {"status": "inprogress", "targets": {"reboot_in_progress": []}}
+        outcome = upgrade_service.cancel_upgrade(object(), make_plan(), "run-1", status)
+        assert outcome.cancelled == (MAC_SWITCH,)
+        assert outcome.already_writing == ()
+
+    def test_reports_an_unread_status_as_unknown(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A cancel with no status must never report a stopped device.
+
+        Why:
+            The portal cannot tell which devices write firmware. An operator who
+            reads the word stopped can cut power to a switch in mid-write.
 
         Args:
             monkeypatch: The pytest patch helper.
         """
         install(monkeypatch, Recorder())
         outcome = upgrade_service.cancel_upgrade(object(), make_plan(), "run-1")
-        assert outcome.cancelled == (MAC_SWITCH,)
-        assert outcome.already_writing == ()
+        assert outcome.cancelled == ()
+        assert outcome.already_writing == (MAC_SWITCH,)
+        assert "could not read which devices were writing firmware" in outcome.message
+
+    def test_reports_a_device_statistics_answer_as_unknown(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The organization-scope read of a session smart router tells nothing.
+
+        Why:
+            That read calls ``listOrgDevicesStats`` and the seam wraps the list
+            as ``{"devices": [...]}``. The mapping holds no upgrade job.
+
+        Args:
+            monkeypatch: The pytest patch helper.
+        """
+        install(monkeypatch, Recorder())
+        status = {"devices": [{"mac": MAC_SWITCH, "status": "connected"}]}
+        outcome = upgrade_service.cancel_upgrade(object(), make_plan(), "run-1", status)
+        assert outcome.cancelled == ()
+        assert outcome.already_writing == (MAC_SWITCH,)
+
+    def test_honors_an_explicit_unknown_status(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A normalized status that states ``status_known`` false reads as unknown.
+
+        Args:
+            monkeypatch: The pytest patch helper.
+        """
+        install(monkeypatch, Recorder())
+        status = {"status": "", "targets": {}, "reboot_in_progress": (), "status_known": False}
+        outcome = upgrade_service.cancel_upgrade(object(), make_plan(), "run-1", status)
+        assert outcome.already_writing == (MAC_SWITCH,)
 
     def test_sorts_a_rebooting_mac_into_already_writing(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """The field ``reboot_in_progress`` holds MAC addresses, not a boolean.
@@ -621,6 +665,24 @@ class TestCancelUpgrade:
         assert outcome.cancelled == ()
         assert "may still finish the write" in outcome.message
 
+    def test_matches_a_plan_mac_written_with_dashes(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """One address with dashes matches the same address with colons.
+
+        Why:
+            The reader once stripped the dash on one side of the comparison
+            alone, so a dash address never matched and always read as stopped.
+
+        Args:
+            monkeypatch: The pytest patch helper.
+        """
+        install(monkeypatch, Recorder())
+        dashed = "5c-5b-35-0e-00-01"
+        plan = make_plan(targets=(make_target(mac=dashed),))
+        status = {"targets": {"reboot_in_progress": ["5c:5b:35:0e:00:01"]}}
+        outcome = upgrade_service.cancel_upgrade(object(), plan, "run-1", status)
+        assert outcome.already_writing == (dashed,)
+        assert outcome.cancelled == ()
+
     def test_reads_a_top_level_reboot_list(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """The reader also accepts the flattened status of ``read_upgrade_status``.
 
@@ -632,15 +694,21 @@ class TestCancelUpgrade:
         outcome = upgrade_service.cancel_upgrade(object(), make_plan(), "run-1", status)
         assert outcome.already_writing == (MAC_SWITCH,)
 
-    def test_ignores_a_boolean_reboot_value(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """A boolean value marks no device, because the field holds a list.
+    def test_reads_a_boolean_reboot_value_as_unknown(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A boolean is a shape the reader does not understand, so it reads unknown.
+
+        Why:
+            The field holds a list of addresses. A boolean marks no device and
+            it also proves that the reader cannot trust the answer, so every
+            device joins the group that may still finish the write.
 
         Args:
             monkeypatch: The pytest patch helper.
         """
         install(monkeypatch, Recorder())
         outcome = upgrade_service.cancel_upgrade(object(), make_plan(), "run-1", {"reboot_in_progress": True})
-        assert outcome.cancelled == (MAC_SWITCH,)
+        assert outcome.cancelled == ()
+        assert outcome.already_writing == (MAC_SWITCH,)
 
     def test_reports_a_refused_cancel(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A refused cancel leaves every device running.

@@ -148,7 +148,9 @@ def calls(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
         "cancel_answer": CancelOutcome((MAC_ONE,), (), (), "cancelled"),
         "cancel_error": None,
         "status_error": None,
-        "status_answer": {"upgrade_id": "up-1", "devices": []},
+        # The seam answers the normalized status. The field `status_known` states
+        # that the answer was an upgrade job and not a device statistics list.
+        "status_answer": {"upgrade_id": "up-1", "reboot_in_progress": (), "targets": {}, "status_known": True},
     }
 
     def fake_status(session: Any, scope: str, identifier: str, upgrade_id: str, family: Any) -> Any:
@@ -323,6 +325,32 @@ class TestCancelOnePlan:
         answer = stop.cancel_target(object(), make_stop_target((MAC_ONE,)))
         assert calls["cancel"][0][1] is None
         assert answer.status_known is False
+
+    def test_a_read_that_answers_no_upgrade_job_counts_as_unknown(self, calls: dict[str, Any]) -> None:
+        """A read that answered still leaves the device state unknown.
+
+        Why:
+            The organization-scope read of a session smart router answers
+            device statistics, and the seam marks that answer with
+            `status_known` set to false. A test for `None` alone would call
+            that answer a good read, and the operator would then see the word
+            stopped for a device that may still write firmware.
+
+        Args:
+            calls: The call log of the two cloud doubles.
+        """
+        calls["status_answer"] = {"upgrade_id": "up-1", "devices": [], "status_known": False}
+        answer = stop.cancel_target(object(), make_stop_target((MAC_ONE,)))
+        assert answer.status_known is False
+
+    def test_a_read_of_a_real_upgrade_job_counts_as_known(self, calls: dict[str, Any]) -> None:
+        """A read that named an upgrade job is a good read.
+
+        Args:
+            calls: The call log of the two cloud doubles.
+        """
+        answer = stop.cancel_target(object(), make_stop_target((MAC_ONE,)))
+        assert answer.status_known is True
 
     def test_a_failed_status_read_adds_the_doubt_to_the_message(self, calls: dict[str, Any]) -> None:
         """The run message admits that the portal read no device state.

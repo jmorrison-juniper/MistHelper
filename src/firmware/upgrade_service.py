@@ -53,6 +53,12 @@ _SSR_STRATEGIES = (STRATEGY_DEFAULT, STRATEGY_SERIAL)
 # The cloud accepts an upgrade with 200 or with 202 (bulk_switch_upgrader.py:967).
 ACCEPTED_STATUS = (200, 202)
 
+# A field that only an upgrade job carries. The organization-scope read of a
+# session smart router calls ``listOrgDevicesStats`` and answers device
+# statistics, which carry none of these names. A payload with none of them is
+# not an upgrade job, so the portal cannot tell which device writes firmware.
+_UPGRADE_JOB_KEYS = ("status", "current_phase", "targets", "reboot_in_progress", "upgrade_id")
+
 # The cloud reboots an access point on its own, so only a switch and a gateway
 # read the reboot field and the Junos file action field.
 _JUNOS_DEVICE_TYPES = ("switch", "gateway")
@@ -775,7 +781,46 @@ def _cancel_endpoint_name(plan: UpgradePlan) -> str:
     return ""
 
 
-def _reboot_macs(status: Mapping[str, object] | None) -> frozenset[str]:
+def _normalize_mac(value: object) -> str:
+    """Return one MAC address in lower case with no separator.
+
+    Why:
+        The cloud writes a MAC address with colons, with dashes, or with no
+        separator at all, and in either letter case. Two spellings of one
+        address must compare equal. Three call sites once held three different
+        rules, and a MAC address written with dashes matched none of them.
+
+    Args:
+        value: One MAC address in any spelling.
+
+    Returns:
+        The address in lower case with no separator.
+    """
+    return str(value).replace(":", "").replace("-", "").lower()
+
+
+def _holds_upgrade_job(status: Mapping[str, object] | None) -> bool:
+    """Report whether one payload is an upgrade job that the portal can read.
+
+    Why:
+        A payload that is not an upgrade job holds no reboot list, and an
+        absent list must never read as an empty list. The reader also honors an
+        explicit ``status_known`` of false, because a status that already
+        passed through ``_normalize_status`` carries the answer in that field
+        instead of in the shape of the payload.
+
+    Args:
+        status: The payload of a status read, or ``None``.
+
+    Returns:
+        True when the payload is an upgrade job.
+    """
+    if status is None or status.get("status_known") is False:
+        return False
+    return any(key in status for key in _UPGRADE_JOB_KEYS)
+
+
+def _reboot_macs(status: Mapping[str, object] | None) -> frozenset[str] | None:
     """Return the MAC addresses that the last status marked as rebooting.
 
     Why:
@@ -784,21 +829,29 @@ def _reboot_macs(status: Mapping[str, object] | None) -> frozenset[str]:
         firmware. The cloud writes the list at the top level or inside
         ``targets``, so the reader looks at both places.
 
+        An answer of ``None`` means that the portal cannot tell. An empty set
+        would claim that no device writes firmware, and the caller would then
+        report every device as stopped. An operator who reads the word stopped
+        can cut power to a switch that is still writing firmware.
+
     Args:
         status: The last status that the portal read, or ``None``.
 
     Returns:
-        The MAC addresses in lower case with no separator.
+        The MAC addresses in lower case with no separator, or ``None`` when the
+        portal cannot tell which devices write firmware.
     """
-    if not status:
-        return frozenset()
+    if not _holds_upgrade_job(status) or status is None:
+        return None
     values = status.get("reboot_in_progress")
     if values is None:
         targets = status.get("targets")
         values = targets.get("reboot_in_progress") if isinstance(targets, Mapping) else None
+    if values is None:
+        return frozenset()  # The job exists and it names no device, so no device writes firmware.
     if isinstance(values, str) or not isinstance(values, Sequence):
-        return frozenset()
-    return frozenset(str(value).replace(":", "").replace("-", "").lower() for value in values)
+        return None  # The field holds a shape the portal does not understand.
+    return frozenset(_normalize_mac(value) for value in values)
 
 
 def _cancel_message(stopped: int, already: int) -> str:
@@ -820,12 +873,36 @@ def _cancel_message(stopped: int, already: int) -> str:
     return f"The cloud stopped {stopped} device(s), and no device was writing firmware."
 
 
+def _unknown_state_message(count: int) -> str:
+    """Return the sentence for a cancel that read no device state.
+
+    Why:
+        The cloud accepted the cancel, but the portal could not read which
+        devices were writing firmware. The operator must not read the word
+        stopped here. A switch that loses power in mid-write does not start
+        again, so the sentence names the doubt and names the safe action.
+
+    Args:
+        count: The number of devices in the plan.
+
+    Returns:
+        Three short sentences.
+    """
+    return (
+        f"The cloud accepted the cancel for {count} device(s). "
+        "The portal could not read which devices were writing firmware. "
+        "Treat every one of them as a device that may still finish the write."
+    )
+
+
 def _sort_cancel(macs: tuple[str, ...], last_status: Mapping[str, object] | None, status: int) -> CancelOutcome:
     """Sort the MAC addresses of one cancel into the three groups.
 
     Why:
         A refused cancel leaves every device running, so the portal must not
-        report a stop that never happened.
+        report a stop that never happened. An unreadable device state is the
+        same case. Every device then joins ``already_writing``, which the
+        contract defines as the devices that may still finish the write.
 
     Args:
         macs: The MAC addresses of the plan.
@@ -839,8 +916,10 @@ def _sort_cancel(macs: tuple[str, ...], last_status: Mapping[str, object] | None
         refused = f"The cloud refused the cancel with status {status}, so every device continues the upgrade."
         return CancelOutcome((), macs, (), refused)
     writing = _reboot_macs(last_status)
-    already = tuple(mac for mac in macs if mac.replace(":", "").lower() in writing)
-    stopped = tuple(mac for mac in macs if mac.replace(":", "").lower() not in writing)
+    if writing is None:
+        return CancelOutcome((), macs, (), _unknown_state_message(len(macs)))
+    already = tuple(mac for mac in macs if _normalize_mac(mac) in writing)
+    stopped = tuple(mac for mac in macs if _normalize_mac(mac) not in writing)
     return CancelOutcome(stopped, already, (), _cancel_message(len(stopped), len(already)))
 
 
@@ -949,6 +1028,12 @@ def _normalize_status(payload: Mapping[str, object], upgrade_id: str, raw_status
         The ``start_time`` field is the absolute anchor of the run. The vendor
         calls it the epoch moment when the firmware download started.
 
+        The ``status_known`` field states whether the answer was an upgrade job
+        at all. The organization-scope read of a session smart router answers
+        device statistics, which name no device that writes firmware. Without
+        this field a later reader would see an empty list and would report every
+        device as stopped.
+
     Args:
         payload: The mapping body of the cloud answer.
         upgrade_id: The cloud identifier of the run.
@@ -959,12 +1044,14 @@ def _normalize_status(payload: Mapping[str, object], upgrade_id: str, raw_status
     """
     raw_targets = payload.get("targets")
     targets = raw_targets if isinstance(raw_targets, Mapping) else {}
+    reboot = _reboot_macs(payload)
     return {
         "upgrade_id": upgrade_id,
         "raw_status": raw_status,
         "status": str(payload.get("status", "")),
         "current_phase": payload.get("current_phase"),
-        "reboot_in_progress": tuple(sorted(_reboot_macs(payload))),
+        "reboot_in_progress": tuple(sorted(reboot or ())),
+        "status_known": reboot is not None,
         "start_time": payload.get("start_time"),  # The epoch moment that anchors every later reading.
         "targets": targets,
     }

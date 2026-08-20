@@ -32,9 +32,20 @@ UPGRADE_ID = "33333333-3333-3333-3333-333333333333"
 # name or a missing name breaks the poll. The field ``start_time`` is the
 # absolute anchor of the run. The vendor calls it the epoch moment when the
 # firmware download started, so a caller can date a later device reading
-# against the run itself.
+# against the run itself. The field ``status_known`` states whether the answer
+# was an upgrade job at all, so a later reader never treats an unknown state as
+# a known safe state.
 STATUS_FIELDS = frozenset(
-    {"upgrade_id", "raw_status", "status", "current_phase", "reboot_in_progress", "start_time", "targets"}
+    {
+        "upgrade_id",
+        "raw_status",
+        "status",
+        "current_phase",
+        "reboot_in_progress",
+        "start_time",
+        "targets",
+        "status_known",
+    }
 )
 
 
@@ -329,6 +340,76 @@ class TestStatusFields:
             monkeypatch: The pytest patch helper.
         """
         assert read_status(monkeypatch, {"targets": [MAC_FIRST]})["targets"] == {}
+
+
+class TestStatusKnown:
+    """Tests for the field that states whether the answer was an upgrade job.
+
+    Why:
+        A read can answer and still name no device that writes firmware. The
+        stop control reads this field. Without it the stop would treat an
+        unknown state as a known safe state and would report the word stopped
+        for a device that may still write firmware.
+    """
+
+    def test_an_upgrade_job_reads_as_known(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """An answer that names an upgrade field is an upgrade job.
+
+        Args:
+            monkeypatch: The pytest patch helper.
+        """
+        payload = {"status": "inprogress", "targets": {"reboot_in_progress": [MAC_FIRST]}}
+        assert read_status(monkeypatch, payload)["status_known"] is True
+
+    def test_an_empty_reboot_list_still_reads_as_known(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """An upgrade job with no rebooting device is a good read.
+
+        Why:
+            The empty list is the answer, not the absence of an answer. A
+            device of that job really is not writing firmware.
+
+        Args:
+            monkeypatch: The pytest patch helper.
+        """
+        payload = {"status": "inprogress", "targets": {"reboot_in_progress": []}}
+        assert read_status(monkeypatch, payload)["status_known"] is True
+
+    def test_a_device_statistics_answer_reads_as_unknown(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The organization-scope read of a session smart router names no upgrade job.
+
+        Why:
+            That read calls ``listOrgDevicesStats`` and the seam wraps the list
+            as ``{"devices": [...]}``. The mapping holds no upgrade field, so
+            the portal cannot tell which devices write firmware.
+
+        Args:
+            monkeypatch: The pytest patch helper.
+        """
+        payload = {"devices": [{"mac": MAC_FIRST, "status": "connected"}]}
+        status = read_status(monkeypatch, payload)
+        assert status["status_known"] is False
+        assert status["reboot_in_progress"] == ()
+
+    def test_a_refused_read_reads_as_unknown(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A read that carried no body tells the portal nothing.
+
+        Args:
+            monkeypatch: The pytest patch helper.
+        """
+        assert read_status(monkeypatch, None, status_code=404)["status_known"] is False
+
+    def test_a_boolean_reboot_value_reads_as_unknown(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A shape the reader does not understand is not a good read.
+
+        Why:
+            The field holds a list of addresses. A boolean proves that the
+            reader cannot trust the answer, so the field states the doubt.
+
+        Args:
+            monkeypatch: The pytest patch helper.
+        """
+        payload = {"status": "inprogress", "targets": {"reboot_in_progress": True}}
+        assert read_status(monkeypatch, payload)["status_known"] is False
 
 
 class TestReadRoute:
