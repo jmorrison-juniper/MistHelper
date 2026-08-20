@@ -307,9 +307,7 @@ class TestAssetsAreVendored:
         far = [address for address in _asset_addresses(loaded_page) if not address.startswith(f"{origin}/")]
         assert not far, f"These assets come from another host: {far}"
 
-    @pytest.mark.parametrize(
-        "asset", (BOOTSTRAP_STYLESHEET, BOOTSTRAP_SCRIPT, PORTAL_STYLESHEET, PORTAL_SCRIPT)
-    )
+    @pytest.mark.parametrize("asset", (BOOTSTRAP_STYLESHEET, BOOTSTRAP_SCRIPT, PORTAL_STYLESHEET, PORTAL_SCRIPT))
     def test_the_page_names_each_expected_asset(self, loaded_page: Any, asset: str) -> None:
         """The page loads each of the four files that `layout.html` names.
 
