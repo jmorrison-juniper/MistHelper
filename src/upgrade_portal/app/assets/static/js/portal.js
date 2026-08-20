@@ -160,8 +160,11 @@
     var RUN_LOCK_BANNER_TESTID = "upgrade-lock-banner";
 
     /* The sentence for a lock report that carries no sentence of its own. The
-     * banner always needs words, because color is never the only signal. */
-    var RUN_LOCK_LOST_TEXT = "This run no longer holds the site lock.";
+     * banner always needs words, because color is never the only signal. The
+     * second half states that the work continues. A lost lock stops the portal
+     * from writing to the site, and it never stops the upgrade. */
+    var RUN_LOCK_LOST_TEXT =
+        "This run no longer holds the site lock. The upgrade continues in the cloud, and the devices still reboot.";
 
     /* Decision D3 fixes 30 seconds. A page may name another value in the
      * attribute data-poll-seconds, which carries the deployment setting. */
@@ -1500,7 +1503,12 @@
         /* The role alert makes a reader announce the banner at once. The region
          * itself is polite, which would hold the note until the reader rests. */
         banner.setAttribute("role", "alert");
-        banner.className = "flash-item flash-danger";
+        /* The banner warns, and it never reports a failure. A lost lock stops
+         * the portal from writing to the site. It does not stop the upgrade,
+         * because the cloud already holds the order. A red banner reads as a
+         * failed upgrade, and the operator then walks away from devices that
+         * still reboot. */
+        banner.className = "flash-item flash-warning";
         region.insertBefore(banner, region.firstChild);
         return banner;
     }
@@ -1513,6 +1521,10 @@
      * of the server, so the two never disagree. A report with no sentence still
      * needs words, so a fallback sentence covers it.
      *
+     * The time rides in a sentence that names no second loss. Both server
+     * sentences already state that the run lost the lock, and a repeat of that
+     * fact would read as a second fault.
+     *
      * @param {Object} lock The lock report of the status body.
      * @returns {string} One sentence for the operator.
      */
@@ -1522,7 +1534,7 @@
         if (!at) {
             return text;
         }
-        return text + " The portal lost the site lock at " + at + ".";
+        return text + " The portal recorded the loss at " + at + ".";
     }
 
     /**

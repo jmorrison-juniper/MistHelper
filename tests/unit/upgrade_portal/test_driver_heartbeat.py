@@ -574,6 +574,73 @@ class TestLostLock:
         assert parts["beat"].stopped is True
 
 
+class TestALostLockIsNeverAFailedRun:
+    """A lost lock reports a lost lock, and it never reports a failed upgrade.
+
+    Why:
+        The portal submits the upgrade to the cloud, and the cloud then owns the
+        work. A lost lock stops the portal from writing to the site. It stops no
+        download and no reboot.
+
+        An operator who reads `failed` walks away. The devices then reboot hours
+        later, and nothing on the page explains the reboot. These tests hold the
+        three fields an operator reads to the truth: the run state, the run
+        error, and the sentence of the lock report.
+    """
+
+    def test_a_lost_lock_never_writes_the_failed_state(self, parts: dict[str, Any]) -> None:
+        """The run state is the first word an operator reads.
+
+        Args:
+            parts: The doubles and the driver.
+        """
+        parts["refresher"].errors = [lock.LockLostError(lock.LOCK_LOST_MESSAGE)]
+        record = parts["driver"].run(make_record())
+        assert record["state"] != RunState.FAILED.value
+        assert (parts["store"].record or {}).get("state") != RunState.FAILED.value
+
+    def test_a_lost_lock_writes_no_error_on_the_run(self, parts: dict[str, Any]) -> None:
+        """The error field feeds a failure banner, so a lost lock leaves it empty.
+
+        Args:
+            parts: The doubles and the driver.
+        """
+        parts["refresher"].errors = [lock.LockLostError(lock.LOCK_LOST_MESSAGE)]
+        record = parts["driver"].run(make_record())
+        assert not record["error"]
+
+    def test_a_quiet_lock_store_never_fails_the_run(self, parts: dict[str, Any]) -> None:
+        """A dead lock store says nothing about the upgrade in the cloud.
+
+        Args:
+            parts: The doubles and the driver.
+        """
+        parts["refresher"].errors = [lock.LockStoreUnreachableError(lock.LOCK_STORE_DOWN_MESSAGE) for _ in range(20)]
+        record = parts["driver"].run(make_record())
+        assert record["state"] == RunState.COMPLETE.value
+        assert not record["error"]
+
+    def test_the_lost_lock_state_word_is_no_run_state(self) -> None:
+        """One word must never mean a lost lock in one field and a run in another.
+
+        Why:
+            The status body carries `state` twice: once for the run and once
+            inside the lock report. A word shared by the two sets would let a
+            reader of either field draw the wrong conclusion.
+        """
+        assert driver.LOCK_STATE_LOST not in {item.value for item in RunState}
+
+    def test_the_post_check_still_runs_after_a_lost_lock(self, parts: dict[str, Any]) -> None:
+        """The operator still needs the after picture of a site they lost.
+
+        Args:
+            parts: The doubles and the driver.
+        """
+        parts["refresher"].errors = [lock.LockLostError(lock.LOCK_LOST_MESSAGE)]
+        record = parts["driver"].run(make_record())
+        assert record["post_capture_id"] == "cap-abc-02"
+
+
 class TestQuietStore:
     """A lock store that does not answer gets a retry window and no more."""
 

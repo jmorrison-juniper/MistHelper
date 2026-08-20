@@ -166,19 +166,32 @@ _PHASE_DEVICE_TYPES: Final[Mapping[str, str]] = {
 # gives up after it, so a dead store never holds the run thread for ever.
 LOCK_RETRY_WINDOW_SECONDS: Final[int] = 60
 
-# WHY: The run record names the state of the site lock, so a reader of the run
+# WHY: The run record names the state of the site lock. A reader of the run then
 # learns that the site changed hands while the upgrade ran. The run itself
-# continues, because a takeover never cancels a running upgrade and firmware
-# already in flight cannot be recalled.
+# continues. A takeover never cancels a running upgrade, and firmware already in
+# flight cannot be recalled.
 LOCK_FIELD: Final[str] = "lock"
 LOCK_STATE_LOST: Final[str] = "lost"
 
 # WHY: Two sentences name the two ways a beat fails. Neither sentence holds the
 # lock token or a work email address, so both are safe in a log record and in
 # the run record that the progress page reads.
-LOCK_LOST_REASON: Final[str] = "The site lock changed hands or expired, so this run no longer holds the site."
+#
+# Both sentences state twice that the work continues. A lost lock stops the
+# portal from writing to the site. It does not stop the upgrade, because the
+# cloud already holds the order and firmware already in flight cannot be
+# recalled. An operator who reads the loss alone walks away, and the devices
+# then reboot hours later with nothing to explain the reboot. The second
+# sentence of each pair prevents that outcome.
+#
+# Neither sentence names a cause. A beat learns that the lock is gone, and it
+# cannot tell a takeover from an expiry, so a named cause could be false.
+LOCK_LOST_REASON: Final[str] = (
+    "This run no longer holds the site lock. The upgrade continues in the cloud, and the devices still reboot."
+)
 LOCK_STORE_QUIET_REASON: Final[str] = (
-    "The lock store did not answer inside the retry window, so this run no longer holds the site."
+    "The portal cannot reach the lock store, so this run no longer holds the site lock. "
+    "The upgrade continues in the cloud, and the devices still reboot."
 )
 
 
