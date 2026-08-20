@@ -178,7 +178,8 @@ def upgrade_app(portal_app: Flask, run_store: RecordingRunStore) -> Flask:
     """Return the portal application with the run store injected.
 
     Why:
-        The `STOP_RUNNER` seam stays unset here on purpose. FR-038f forbids a
+        The `STOP_RUNNER` seam stays empty. The shared `portal_app` fixture
+        empties the seam that `wiring.install_seams` fills. FR-038f forbids a
         claim of a cancel that never happened, so the tests must be able to
         drive the portal with no cancel work wired at all.
 

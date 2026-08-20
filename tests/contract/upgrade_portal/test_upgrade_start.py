@@ -158,9 +158,10 @@ def upgrade_app(portal_app: Flask, run_store: RecordingRunStore) -> Flask:
     """Return the portal application with the run store injected and no launcher.
 
     Why:
-        The launcher stays unset on purpose. One test below proves that the
-        portal still answers when the driver wiring is absent, and every other
-        test asks for the `launcher` fixture, which fills the seam.
+        The launcher seam stays empty. The shared `portal_app` fixture empties
+        the seam that `wiring.install_seams` fills. One test below proves that
+        the portal still answers when the driver wiring is absent, and every
+        other test asks for the `launcher` fixture, which fills the seam.
 
     Args:
         portal_app: The real application from the shared fixture.

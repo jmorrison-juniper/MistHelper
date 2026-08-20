@@ -32,6 +32,11 @@ FAKE_API_TOKEN = "fake-api-token-for-tests-only"
 FAKE_ORG_ID = "00000000-0000-0000-0000-0000000000aa"
 FAKE_SITE_ID = "00000000-0000-0000-0000-0000000000bb"
 
+# WHY: `wiring.install_seams` fills both seams, because a real deployment needs
+# them. A contract test drives the routes alone, so `portal_app` empties both.
+LAUNCHER_KEY = "RUN_LAUNCHER"  # Hands one prepared record to the run driver.
+STOP_RUNNER_KEY = "STOP_RUNNER"  # Performs the cancel work of one stop.
+
 # WHY: The smallest payload that still holds each field a route reads. A
 # contract test checks the response shape, so a large payload adds no value.
 #
@@ -206,6 +211,12 @@ def portal_app() -> Any:
         work. The guarded import skips the test instead of a collection
         error, so the whole suite still collects.
 
+        The fixture empties the run driver seam and the cancel seam.
+        `wiring.install_seams` fills both, because a real deployment needs
+        both. `start_upgrade_run` starts a real thread that outlives the test
+        and reaches for the Mist cloud. A test that wants either seam injects
+        its own recorder, and the injected object then wins.
+
     Returns:
         The Flask application with the test settings applied.
     """
@@ -216,6 +227,8 @@ def portal_app() -> Any:
     logger.info("Build the capture portal application for a contract test")  # WHY: ASCII, %s style, no credential.
     app = factory.create_app()
     app.config.update(TESTING=True)  # WHY: Test mode reports the real exception instead of a 500 page.
+    app.config[LAUNCHER_KEY] = None  # WHY: No contract test may start a real run driver thread.
+    app.config[STOP_RUNNER_KEY] = None  # WHY: No contract test may send a real cancel to the cloud.
     return app
 
 
