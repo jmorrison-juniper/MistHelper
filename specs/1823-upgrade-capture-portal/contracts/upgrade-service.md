@@ -154,7 +154,7 @@ Performs one cloud call for one plan. Returns the submission record.
 - Never raises for a cloud error status. It records the status in `raw_status`.
 - Raises `ValueError` when the plan is malformed.
 
-### `cancel_upgrade(session, plan, upgrade_id) -> CancelOutcome`
+### `cancel_upgrade(session, plan, upgrade_id, last_status=None) -> CancelOutcome`
 
 Performs the cancel call that matches the plan scope and family.
 
@@ -166,22 +166,29 @@ Performs the cancel call that matches the plan scope and family.
 
 The cloud describes the behavior as best effort. A device that already upgraded
 stays untouched. A device in mid-flash may still complete. The function sorts each
-MAC address into `cancelled` or `already_writing` from the upgrade status the
-portal read last, and it writes one plain sentence into `message`.
+MAC address into `cancelled` or `already_writing` from `last_status`, the upgrade
+status the portal read last, and it writes one plain sentence into `message`.
+`last_status` has a default, so every three-argument call still works.
 
 If a future family offers no cancel function, the function places every MAC
 address into `no_cancel_available` and writes a message that says so plainly.
 FR-038f covers that case.
 
-### `read_upgrade_status(session, scope, identifier, upgrade_id) -> Mapping[str, object]`
+### `read_upgrade_status(session, scope, identifier, upgrade_id, family=GatewayFamily.JUNOS) -> Mapping[str, object]`
 
 Reads the status of one upgrade.
+
+The scope alone does not name the cloud function for a session smart router, so
+`family` names it. `family` has a default, so every four-argument call still
+works.
 
 Two rules protect correctness.
 
 1. The response names the phase field `current_phase`, not `phase`.
-2. The response holds `reboot_in_progress` inside `targets` as a list of MAC
-   addresses, not as a boolean.
+2. The response holds `reboot_in_progress` as a list of MAC addresses, not as a
+   boolean. The cloud may return the list at the top level of the answer, or
+   inside the `targets` mapping. Read the top level first, then fall back to
+   `targets`.
 
 **Never call `getOrgSsrUpgrade`.** The installed SDK builds the cancel path inside
 that function at `mistapi/api/v1/orgs/ssr.py:167`, so the status read would post

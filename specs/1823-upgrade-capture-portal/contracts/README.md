@@ -53,6 +53,12 @@ without a session receives `401` with the code `not_authenticated`. The portal
 refers to a stored credential by its variable name only. The portal never shows,
 logs, or stores a password value or a token value (FR-009).
 
+### Organization selection
+
+Every organization-scoped endpoint needs a chosen organization. The session
+supplies the organization when the request names none. A request without an
+organization receives `400` with the code `org_not_chosen`.
+
 ### Content type
 
 Every JSON endpoint accepts and returns `application/json`. Every page endpoint

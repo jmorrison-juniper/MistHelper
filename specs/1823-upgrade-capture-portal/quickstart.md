@@ -129,7 +129,7 @@ site only. The action cannot be undone.
 | 3 | Take a pre-check capture | A verified pre-check exists |
 | 4 | Choose target versions | The target table lists each device with its target |
 | 5 | Try to start without typing | The portal refuses with `confirmation_required` |
-| 6 | Type `UPGRADE` and start | The run state moves to `upgrade_submitting` |
+| 6 | Type `CONFIRM` and start | The run state moves to `upgrade_submitting` |
 | 7 | Watch the phase list | Phases settle in order: gateways, switches, access points, clients |
 | 8 | Wait for the post-check | The post-check runs on its own |
 | 9 | Read the comparison | The comparison opens with the two captures already chosen |

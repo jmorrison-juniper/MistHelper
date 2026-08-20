@@ -100,6 +100,23 @@ current phase.
 - Option B, adopt `UPGRADE`: edit FR-033, FR-034, and the assertion at `spec.md:671`, plus
   the five user-story lines. Eight edits in one file. Honors one word for one job.
 
+### I1 resolution, 2026-08-19: Option A
+
+The word is `CONFIRM`. The requester asked for `CONFIRM` in their own words, and the spec
+records that request in nine places. The contracts and the tasks derive from the spec, so
+the contracts and the tasks carried the drift.
+
+The six edits of Option A are applied. `contracts/site-lock.md:129` now states that one
+word serves both acts, because the two acts never share a screen. The template holds the
+word on one line, `upgrade/confirm.html:71`, and `portal.js` reads it from the
+`data-confirm-word` attribute, so no script change was needed.
+
+One consequence stays open for the user to overturn. `CONFIRM` now carries two destructive
+jobs, the lock takeover and the upgrade start. The habit risk is real but small, because an
+operator types the takeover word before any target is chosen and types the begin word after
+reading the target table.
+
+
 Phase 5 holds every task that reads the word. Work may continue through Phase 4 before the
 decision is needed.
 
@@ -288,6 +305,11 @@ control. That breaks rule 1 at `contracts/ui-testids.md:17`, which requires a `d
 on every control that a test drives.
 
 **Recommendation**: Add a `run-refresh-button` identifier and a task under Phase 5.
+
+The code now answers this finding with two identifiers instead of one.
+`upgrade-refresh-button` sits on the progress page, and `capture-refresh-button`
+sits on the capture page. Both names differ from the `run-refresh-button` above.
+`contracts/ui-testids.md` lists both.
 
 ### T2 (MEDIUM). The reserved word defines the feature's own record twice
 
@@ -537,8 +559,8 @@ count is correct and none has been resolved in another artifact.
 | Capture | FR-021 to FR-028 | T070 to T084 | Covered except the FR-025 device type |
 | Storage and retention | FR-029 to FR-032b | T081, T084, T211 | Covered |
 | Confirmation and start | FR-033 to FR-038 | T151, T152 | Covered, word conflict. See I1 |
-| Stop control | FR-038a to FR-038i | T149, T150, T154 | Covered |
-| Progress and settle | FR-039 to FR-051 | T137 to T144, T153, T159 | Covered except FR-040 |
+| Stop control | FR-038a to FR-038i | T149, T150, T154, and `test_a_stop_from_a_second_operator_is_refused_with_site_locked` | Covered. No task states the FR-038i lock check on the stop route |
+| Progress and settle | FR-039 to FR-051 | T137 to T144, T153, T159 | Covered. FR-040 now ships two refresh controls. The FR-051 badge repaints on a page load only |
 | Cascade | FR-052 to FR-058 | T145, T146 | Covered except FR-055 |
 | Post-check | FR-059 to FR-063 | T147 | Covered |
 | Comparison | FR-064 to FR-071 | T104, T105, T110 | Covered except four FR-069 statistics |

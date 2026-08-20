@@ -34,6 +34,11 @@ The portal never logs the body. The portal never stores the password. The portal
 holds the resulting cloud session in a per-user registry keyed by the session
 owner.
 
+### `GET /auth/twofactor` — second factor page
+
+Returns the second factor form. Requires no session, because the sign-in is not
+complete and the registry holds nothing yet.
+
 ### `POST /auth/twofactor` — second factor
 
 | Item | Value |
@@ -49,8 +54,15 @@ with `{ "next": "/auth/signin" }`.
 
 ### `GET /select/org` — organization list
 
-Returns the organization picker. A managed service provider account sees every
-organization it may reach. The picker paginates and filters in the portal itself.
+| Item | Value |
+| --- | --- |
+| Query | `q` optional text filter, `offset` default 0 |
+| 200 | The organization picker page |
+
+A managed service provider account sees every organization it may reach. The
+picker filters the list and divides it into pages inside the portal itself. One
+page holds 25 rows. `q` carries the same name as the site list filter. `offset`
+carries the same name as the history page.
 
 ### `POST /select/org` — choose an organization
 
@@ -69,15 +81,30 @@ organization it may reach. The picker paginates and filters in the portal itself
 Returns the site picker for the chosen organization. Each row shows the site name,
 the device count, and the lock state.
 
+### `GET /select/site/<site_id>` — site inventory page
+
+Returns the device list of one site as a page. Answers `404` and an empty picker
+when the chosen organization holds no such site.
+
 ### `GET /api/sites` — site list as JSON
 
 | Item | Value |
 | --- | --- |
 | Query | `q` optional text filter |
-| 200 | `{ "sites": [ { "site_id", "name", "device_count", "locked_by" } ] }` |
+| 200 | `{ "sites": [ { "site_id", "name", "device_count", "locked_by", "lock_state" } ] }` |
+| 400 | `org_not_chosen` when neither the path nor the session names an organization |
+| 403 | `org_not_permitted` |
 
-`locked_by` is `null` when no lock exists. `locked_by` holds an email address when
-a lock exists. Reading this endpoint never needs the lock.
+`GET /api/orgs/<org_id>/sites` reaches the same handler and answers the same body.
+The two paths are one endpoint, not two. `/api/sites` reads the organization from
+the session. `/api/orgs/<org_id>/sites` reads it from the path, and the path value
+wins.
+
+The row carries five names, not four. The field `locked_by` is `null` when no lock
+exists. It holds an email address when a lock exists. The field `lock_state` holds
+`free`, `locked`, or `unknown`. The word `unknown` means the lock store did not
+answer, which `contracts/site-lock.md` asks a read to survive. Reading this
+endpoint never needs the lock.
 
 ### `GET /api/sites/<site_id>/inventory` — inventory for the capture view
 
@@ -99,14 +126,23 @@ points only.
 | Item | Value |
 | --- | --- |
 | Body | `{ "confirm": "<string or absent>" }` |
-| 200 | `{ "lock_token": "<opaque>", "expires_in": 300 }` |
+| 200 | `{ "lock_token": "<opaque>", "expires_in": 300, "state": "acquired" }` |
+| 400 | `org_not_chosen` when the session names no organization |
+| 400 | `confirmation_required` with `details.needed_text` when a takeover needs the word `CONFIRM` |
 | 409 | `site_locked` with `details.actor_email` and `details.cooldown_remaining` |
-| 400 | `confirmation_required` when a takeover needs the word `CONFIRM` |
+| 503 | `lock_store_unreachable` |
+
+`state` holds `acquired`, `resume`, or `takeover`. `resume` means the same
+operator and the same browser returned to a lock they already hold.
 
 The first attempt sends no `confirm` value. If the lock is free, the portal grants
 it. If the lock is held and the cooldown has passed, the portal answers `400` with
 `confirmation_required`. The browser then asks the operator to type `CONFIRM` and
 repeats the call with that value.
+
+This endpoint is the only one that names the lock holder and the cooldown. The
+capture refusal in section 4 and the run refusals in section 5 carry less. Each of
+those two sections states what its own refusal carries.
 
 ### `POST /api/sites/<site_id>/lock/heartbeat` — extend the lock
 
@@ -124,6 +160,14 @@ repeats the call with that value.
 | 200 | `{ "released": true }` |
 | 409 | `lock_lost` |
 
+The browser sends the token alone, and both bodies hold that one field. The lock
+module needs the whole lock record. The signed session holds that record under the
+key `site_lock_records`, indexed by site. Each route reads the stored record,
+compares the token the browser sent, and passes the whole record to the lock
+module. A token that differs answers `lock_lost` before the store is read. The
+browser therefore never holds the record, and no operator address reaches the page
+from these two routes.
+
 ---
 
 ## 4. Capture
@@ -135,10 +179,25 @@ repeats the call with that value.
 | Body | `{ "tier": 2, "run_id": "<string or null>", "role": "pre" }` |
 | 202 | `{ "capture_id": "<string>", "status_url": "/api/captures/<id>/status" }` |
 | 400 | `bad_tier` when `tier` is not 2 or 3 |
-| 409 | `site_locked` |
+| 404 | `site_not_found` when the chosen organization holds no such site |
+| 409 | `site_locked` when a different operator holds the site lock |
 
 The portal starts the work in the background and answers at once. `tier` defaults
 to 2.
+
+The lock gates this endpoint for a second operator only. The operator who holds
+the lock still starts their own capture. The documented journey takes the lock
+first and the pre-check second, so a presence-only test would refuse that operator
+their own capture.
+
+This refusal carries no `details` object, so it names no holder. The lock endpoint
+in section 3 does name the holder. The difference between the two answers is real
+and has no stated reason.
+
+An unreachable lock store does not stop a capture. `contracts/site-lock.md`
+reserves the fail-closed `503` for the lock acquire, because that path leads to a
+firmware write. The same document asks a read to continue when the store is
+unreachable, and it states that a capture reads only.
 
 ### `GET /api/captures/<capture_id>/status` — capture progress
 
@@ -174,6 +233,7 @@ server-sent events.
 | 200 | The capture document, as `data-model.md` section 3 defines it |
 | 404 | `capture_not_found` |
 | 409 | `capture_not_verified` when the portal has not read the key back |
+| 409 | `schema_version_too_new` when a later version of the portal wrote the capture |
 
 ### `GET /captures/<capture_id>` — the capture page
 
@@ -189,7 +249,15 @@ Returns the human view of one capture.
 | --- | --- |
 | Body | `{ "tier": 2 }` |
 | 201 | `{ "run_id": "run-<hex>", "state": "created" }` |
-| 409 | `site_locked` |
+| 400 | `org_not_chosen` when the session names no organization |
+| 400 | `site_not_chosen` when neither the path nor the session names a site |
+| 409 | `site_locked` with `details.actor_email` when a different operator holds the site lock |
+| 409 | `upgrade_already_running` with `details.run_id` when a run of this site has not finished |
+| 500 | `run_write_failed` when the run store refused the write |
+
+`POST /api/runs` reaches the same handler and answers the same body. The two paths
+are one endpoint, not two. The path above names the site. `POST /api/runs` reads
+the site from the signed session.
 
 ### `GET /api/runs/<run_id>/versions` — available versions
 
@@ -223,13 +291,23 @@ reboots an access point on its own.
 
 | Item | Value |
 | --- | --- |
-| Body | `{ "confirm": "UPGRADE" }` |
+| Body | `{ "confirm": "CONFIRM" }` |
 | 202 | `{ "state": "upgrade_submitting" }` |
 | 400 | `confirmation_required` when `confirm` is wrong |
+| 404 | `run_not_found` |
 | 409 | `pre_capture_missing` when no verified pre-check exists |
-| 409 | `lock_lost` |
+| 409 | `site_locked` with `details.actor_email` when a different operator holds the site lock |
+| 500 | `run_write_failed` when the run store refused the write |
 
 The portal refuses to start unless a verified pre-check capture exists.
+
+An earlier version of this table named `lock_lost` here. The route raises
+`site_locked` instead. That is the same code that section 3 and section 4 use for
+this class of refusal. The code `lock_lost` belongs to the heartbeat and to the
+release, where a token stops matching a stored lock.
+
+A repeat start answers `202` with the state the run already holds. FR-038 accepts
+one begin action for each run, so the second call sends nothing.
 
 ### `GET /api/runs/<run_id>/status` — run progress
 
@@ -259,6 +337,20 @@ The portal refuses to start unless a verified pre-check capture exists.
 }
 ```
 
+The body carries a tenth key, `lock`, only when the run record holds a lock entry.
+A healthy run carries no such key, and the key reports a fault alone.
+
+```json
+{
+  "lock": { "state": "lost", "message": "<sentence>", "at": "<iso>" }
+}
+```
+
+The field list of `lock` is a whitelist. The view copies `state`, `message`, and
+`at`, and copies no other name. A later writer can add a lock token or an operator
+address to that entry on the run record, and neither value reaches the browser.
+The key sits last in the body, so it never hides a key that this contract fixes.
+
 The browser polls this endpoint every 30 seconds.
 
 ### `POST /api/runs/<run_id>/stop` — stop the run
@@ -269,6 +361,7 @@ The browser polls this endpoint every 30 seconds.
 | 200 | See the body below |
 | 400 | `confirmation_required` when `confirm` is not exactly `STOP` |
 | 404 | `run_not_found` |
+| 409 | `site_locked` with `details.actor_email` when a different operator holds the site lock |
 | 409 | `run_not_stoppable` when the run already finished |
 
 ```json
@@ -287,6 +380,21 @@ The stop never interrupts a device that is writing firmware. The cloud states th
 the cancel is best effort and that a device in mid-flash may still complete. The
 `message` field says that plainly to the operator.
 
+FR-038i binds this control to the operator who holds the site lock. The lock check
+runs before every other check of this route, so a second operator reads
+`site_locked` even when the run already finished.
+
+### `GET /runs/<run_id>/options` — the options page
+
+Returns the page that picks a target version for each device. Requires a session.
+A run that the store does not hold renders an empty page instead of a `404`.
+
+### `GET /runs/<run_id>/confirm` — the confirm page
+
+Returns the page that reads the typed word `CONFIRM`. Requires a session. A run
+that the store does not hold renders a locked page instead of a `404`. FR-035
+unlocks the start control only when the record names a verified pre-check.
+
 ### `GET /runs/<run_id>` — the run page
 
 Returns the live run view with the phase list and the device table.
@@ -303,23 +411,38 @@ Returns the live run view with the phase list and the device table.
 | 200 | The comparison body |
 | 400 | `capture_site_mismatch` when the two captures name different sites |
 | 409 | `capture_not_verified` |
+| 409 | `schema_version_too_new` when a later version of the portal wrote either capture |
 
 ```json
 {
   "before": { "capture_id": "...", "started_at": "..." },
   "after":  { "capture_id": "...", "started_at": "..." },
+  "site_name": "...",
+  "org_name": "...",
   "statistics": {
     "devices_unchanged": 120, "devices_changed": 8,
     "devices_added": 0, "devices_removed": 0,
+    "devices_version_changed": 8,
     "clients_present": 1840, "clients_moved": 96,
     "clients_added": 12, "clients_missing": 30,
-    "client_return_rate": 0.984
+    "client_return_rate": 0.985,
+    "elapsed_seconds": 2280.0
   },
   "device_deltas": [ ... ],
   "client_deltas": [ ... ],
   "skipped_sections": ["extras"]
 }
 ```
+
+The `statistics` object holds 11 names, as data-model.md section 7.4 requires.
+An earlier version of this example listed 9 and omitted
+`devices_version_changed` and `elapsed_seconds`. Read the object as a superset,
+because a later release can add a name.
+
+The return rate is `(clients_present + clients_moved) / (clients_present +
+clients_moved + clients_missing)`, rounded to 3 places. For the numbers above
+that is `1936 / 1966`, which is `0.985`. An earlier version of this example
+printed `0.984`, because it cut the digits instead of rounding them.
 
 `skipped_sections` lists each section whose digest matched, so the comparison did
 no further work there.
@@ -335,6 +458,11 @@ Takes the same two query values and renders the human view.
 | Query | `before`, `after`, `format=csv` or `format=json` |
 | 200 | A file attachment |
 | 400 | `bad_format` |
+| 409 | `schema_version_too_new` |
+
+This route shares its reader with `GET /api/comparisons`, so it refuses a
+capture that a later release wrote. An export of a capture the portal cannot
+read would write a wrong file.
 
 ### `GET /api/sites/<site_id>/history` — capture history
 
@@ -343,9 +471,32 @@ Takes the same two query values and renders the human view.
 | Query | `limit` default 25, `offset` default 0 |
 | 200 | `{ "captures": [ ... ], "total": 0 }` |
 
-Each row carries `capture_id`, `role`, `started_at`, `capture_status`,
-`actor_email`, and `stored_size_bytes`. The size satisfies FR-032b, which asks the
-portal to record the stored size because retention is unlimited.
+Each row carries eight names: `capture_id`, `role`, `started_at`,
+`capture_status`, `actor_email`, `stored_size_bytes`, `device_count`, and
+`client_count`. The size satisfies FR-032b, which asks the portal to record the
+stored size because retention is unlimited. The first six names come from this
+contract. The portal adds the two counts from the stored `counts` map, because a
+history without them says little about the site.
+
+The route holds `limit` between 1 and 200, and `offset` between 0 and 1000000.
+This contract sets no bound, and an unbounded limit lets one request read the
+whole unlimited store.
+
+### `GET /api/sites/<site_id>/runs/history` — run history
+
+| Item | Value |
+| --- | --- |
+| Query | `limit` default 25, `offset` default 0 |
+| 200 | `{ "runs": [ ... ], "total": 0 }` |
+
+The path sits below the site and below `runs`. `POST /api/sites/<site_id>/runs`
+in section 5 already means "create a run", and one path with two meanings would
+confuse a reader.
+
+This endpoint shapes no row. It answers each stored run row as the store holds
+it, which the capture history above does not do. Reading this endpoint never
+needs the lock. No history route reads the lock, because a read that waited for a
+lock would hide the record from the operator who watches another upgrade.
 
 ### `GET /history` — the history page
 

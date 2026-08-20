@@ -1184,11 +1184,28 @@ are counted. A gateway carries about 12.
 | `searchSiteSwOrGwPorts` | (50 x 52) + (2 x 12) = 2624 | ceil(2624 / 1000) = 3 | **3** |
 | Radio channel and power, Route A | Read from the tier 2 response | 0 | **0** |
 | `searchOrgTunnelsStats(site_id=...)` | Small | 1 | **1** |
-| `searchOrgPeerPathStats(site_id=...)` | Small | 1 | **1** |
 | `searchSiteBgpStats` | Small | 1 | **1** |
 | `searchSiteAlarms(acked=False)` | Small | 1 | **1** |
 
-**Tier 3 total: 7 requests.**
+**Tier 3 total: 6 requests.**
+
+#### Peer path statistics are out of scope
+
+`searchOrgPeerPathStats` costs 1 more request, and section 5.4 above records
+its shape. The capture does not call it. The reason is the section contract in
+`data-model.md` section 3.5, which defines exactly six section keys and gives
+each key one `reason` field and one `http_status` field.
+
+A peer path record and a tunnel record do not share a shape. The peer path
+primary key is `["from_device", "to_device", "timestamp"]`, and the tunnel
+primary key is `["id", "device_id", "timestamp"]`. Putting both under the one
+`tunnels` key would put two shapes under one status pair. If one of the two
+calls then failed, the section could report neither a clean success nor a clean
+failure, and the operator would read a half-empty table as a complete one.
+
+A seventh section key would fix that. It is deliberate future work, not an
+oversight. The tunnel data already answers the gateway question that the
+upgrade comparison asks, so the capture ships with six sections.
 
 ### 9.4 The virtual chassis multiplier
 

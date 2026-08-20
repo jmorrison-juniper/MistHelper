@@ -57,8 +57,10 @@ A Capture holds everything the portal read from one site at one moment.
 | `finished_at` | string | yes | ISO 8601 in UTC. |
 | `duration_seconds` | number | yes | Measured, not estimated. |
 | `actor_email` | string | yes | The signed-in operator. Never a credential. |
-| `capture_status` | string | yes | `complete`, `partial`, or `failed`. |
+| `capture_status` | string | yes | `complete`, `partial`, or `failed`. Reports how much data the capture holds. This is not the lifecycle state. |
 | `partial_reasons` | array of object | yes | Empty when `capture_status` is `complete`. |
+| `state` | string | yes | The lifecycle state. See section 3.8. Reports how far the capture moved, not how much data it holds. |
+| `verified` | boolean | yes | `true` only after the store read the key back and matched the digest. FR-031 requires this proof, because a successful write is not proof. Section 7.1 admits a capture into a comparison only when this field is `true`. |
 | `stored_size_bytes` | integer | yes | The measured size of the stored document. Satisfies FR-032b. |
 | `digests` | object | yes | See section 3.2. |
 | `device_index` | object | yes | See section 3.3. |
@@ -202,8 +204,18 @@ pending -> collecting -> assembling -> writing -> verified
                                           |
                                           +-> write_failed
 collecting -> partial -> assembling
-collecting -> failed
+any state that is not final -> failed
 ```
+
+The final states are `verified`, `write_failed`, and `failed`. A capture in a
+final state moves nowhere. A repeat capture takes a higher ordinal and becomes a
+new document.
+
+Every state that is not final reaches `failed`, which matches the run diagram of
+section 4.1. An earlier version of this diagram allowed `failed` from
+`collecting` alone. A capture that then failed while it assembled had nowhere to
+move, so it stayed in `assembling` for ever and appeared as a live capture in the
+index of section 9 that finds every run still active after a restart.
 
 `verified` means the portal read the key back and matched the digest. Only a
 `verified` capture may take part in a comparison. FR-031 requires this step,
@@ -268,9 +280,13 @@ wireless clients. A phase starts only after the phase before it reports settled.
 | `upgrade_id` | string or null | Returned by the cloud. Needed by the cancel call. |
 | `scope` | string | `site` or `org`. A session smart router always uses `org`. |
 | `state` | string | `pending`, `submitted`, `rebooting`, `settled`, `cancelled`, or `failed`. |
-| `uptime_before` | integer | The gate compares against this value. |
+| `uptime_before` | integer or null | The gate compares against this value. Null means the portal read no uptime. |
 | `reboot_seen_at` | string or null | Set when the uptime decreases. |
 | `settled_at` | string or null | |
+
+If the portal read no uptime, `uptime_before` is null, never zero. A stored zero
+would make every later reading look larger. The settle gate would then never see
+the reboot, and the run would wait forever.
 
 The `scope` field exists because the cancel path differs by family. A session
 smart router has an organization-scope cancel only, so the run submits every

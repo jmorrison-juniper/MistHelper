@@ -124,6 +124,15 @@ they hold the lock, which is the exact failure the lock prevents.
 
 | Not covered | Reason |
 | --- | --- |
-| It does not gate a capture on its own | A capture reads only. Two captures do no harm. |
+| It does not gate a capture for the operator who holds it | The documented journey takes the lock first and the pre-check capture second. A presence-only test would refuse that operator their own capture. |
 | It does not gate a comparison or a history page | Reading needs no lock. |
-| It does not replace the confirmation words | `CONFIRM` takes the lock. `UPGRADE` starts the upgrade. `STOP` stops it. Each word has one job. |
+| It does not replace the confirmation words | `CONFIRM` takes the lock and starts the upgrade. `STOP` stops the run. The two acts never share a page, so one word serves both. |
+
+An earlier version of this table said that the lock does not gate a capture at
+all. `POST /api/sites/<site_id>/captures` refuses a second operator with `409`
+`site_locked`, and section 4 of `contracts/http-api.md` agrees with the code. The
+lock gates a capture for every operator except the holder.
+
+An unreachable lock store still lets a capture start. The read above marks the
+lock state unknown, and an unknown state names no holder. The fail-closed `503`
+stays with the acquire, because only that path leads to a firmware write.

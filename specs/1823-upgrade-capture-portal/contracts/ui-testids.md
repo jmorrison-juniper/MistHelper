@@ -53,8 +53,11 @@ for port 8056.
 | `twofactor-code` | Second factor field |
 | `twofactor-submit` | Second factor button |
 | `org-search` | Organization filter field |
+| `org-search-submit` | The submit control of the filter form |
 | `org-row-{org_id}` | One organization row |
 | `org-select-{org_id}` | The choose button in that row |
+| `org-page-next` | Next page |
+| `org-page-previous` | Previous page |
 | `signout-button` | Sign-out control |
 
 ### Site selection
@@ -68,17 +71,29 @@ for port 8056.
 | `inventory-table` | The device table |
 | `inventory-row-{mac}` | One device row |
 | `inventory-count-total` | Total device count |
+| `site-capture-link` | The link from the inventory view to the capture page |
 
 ### Lock
 
 | Identifier | Control |
 | --- | --- |
 | `lock-banner` | The lock state banner |
+| `lock-state-message` | The sentence that names the lock state |
+| `lock-cooldown` | The remaining wait before a takeover |
 | `lock-take-button` | Take the lock |
+| `lock-confirm-warning` | The warning above the field |
 | `lock-confirm-input` | The field for the word `CONFIRM` |
 | `lock-confirm-submit` | The takeover button |
 | `lock-release-button` | Release the lock |
 | `lock-error` | The lock error region |
+
+`lock-state-message` holds one sentence for each of the three lock states. WCAG
+1.4.1 refuses color as the only signal, so the sentence names the state and a test
+reads the sentence.
+
+`lock-cooldown` stays hidden while the site is free. The script opens it on the
+first refusal and writes the remaining seconds into a `data-lock-cooldown-value`
+element inside it. That inner attribute is a script hook, not a test hook.
 
 ### Capture
 
@@ -86,6 +101,7 @@ for port 8056.
 | --- | --- |
 | `capture-tier-select` | Tier 2 or tier 3 choice |
 | `capture-start-button` | Start a capture |
+| `capture-refresh-button` | The manual refresh control on the capture page |
 | `capture-progress` | The progress region |
 | `capture-progress-percent` | The percent value |
 | `capture-section-{name}` | One section state, such as `capture-section-devices` |
@@ -101,16 +117,49 @@ for port 8056.
 | `upgrade-version-select-{mac}` | Target version for one device |
 | `upgrade-version-select-all` | Apply one version to every matching model |
 | `upgrade-reboot-toggle` | The reboot option |
+| `upgrade-junos-file-action-toggle` | The Junos file action option |
 | `upgrade-strategy-select` | The strategy option |
-| `upgrade-target-table` | The target table |
+| `upgrade-options-save-button` | Save the chosen options |
+| `upgrade-target-table` | The target table on the options page |
 | `upgrade-target-row-{mac}` | One target row |
 | `upgrade-warning-list` | The warning list from the plan |
-| `upgrade-confirm-input` | The field for the word `UPGRADE` |
+| `upgrade-confirm-input` | The field for the word `CONFIRM` |
 | `upgrade-start-button` | Start the upgrade |
+| `upgrade-lock-banner` | The lost lock warning on the progress page |
 | `upgrade-state` | The run state value |
+| `upgrade-run-table` | The device table on the progress page |
+| `upgrade-refresh-button` | The manual refresh control on the progress page |
 | `upgrade-phase-{name}` | One cascade phase, such as `upgrade-phase-switches` |
 | `upgrade-phase-progress-{name}` | The settled count for that phase |
 | `upgrade-device-state-{mac}` | The state cell for one device |
+| `upgrade-device-version-check-{mac}` | The version check badge for one device (FR-051) |
+
+`upgrade-target-table` and `upgrade-run-table` are two different tables. The
+target table lists what the run will do. The run table lists what the run has
+done. A test that watches progress selects the run table.
+
+The target table belongs to the options page alone. An earlier version of this
+row named the confirm page too. The confirm page holds the warning list, the
+confirm field, and the start button, and it holds no table.
+
+`upgrade-lock-banner` carries no element in any template. The script builds it and
+inserts it as the first child of the run region, because the progress page holds
+no banner for a lost lock and the content security policy blocks an inline script.
+The banner also carries a `data-run-lock-banner` attribute. That attribute is a
+script hook, and it stops a second poll from adding a second banner. A test
+selects `upgrade-lock-banner` instead.
+
+A device row in the run table also carries a `data-run-device-row` attribute. That
+attribute is a script hook for the 30-second poll, not a test hook. A test selects
+`upgrade-device-state-{mac}` instead.
+
+The version check badge inside `upgrade-device-version-check-{mac}` carries a
+`data-run-version-check` attribute with the same MAC address. That attribute is a
+script hook, not a test hook. The badge holds no `data-run-field`, because the
+poll replaces the whole text of every field cell and would drop the badge. The
+badge shows one of three words: `Version matches`, `Version mismatch`, or
+`Awaiting version`. WCAG 1.4.1 refuses color as the only signal, so a test reads
+the word and never the class.
 
 ### Stop
 
@@ -122,6 +171,7 @@ for port 8056.
 | `stop-outcome` | The outcome region |
 | `stop-outcome-cancelled` | The cancelled device list |
 | `stop-outcome-writing` | The list of devices that will finish |
+| `stop-outcome-no-cancel` | The list of devices with no cancel path |
 | `stop-outcome-message` | The plain sentence for the operator |
 
 ### Comparison

@@ -59,7 +59,6 @@ statistics call as the authoritative confirmation.
 | `model` | string | — | Device model |
 | `device_type` | string | **`ap`** | Device family filter |
 | `text` | string | — | Event message |
-| `timestamp` | string | — | Event time |
 | `type` | string | — | Event type filter |
 | `last_by` | string | — | Return last or recent event for the passed field |
 | `includes` | string | — | Include events from additional indices |
@@ -77,6 +76,13 @@ would then never observe a `SW_CONNECTED` or `GW_CONNECTED` event and would hang
 until timeout. This is the single largest correctness risk in the event path.
 The default appears at
 `documentation/api/orgs/GET_orgs_org_id_devices_events_search.md:31`.
+
+**Documentation defect.** The vendored document lists a `timestamp` parameter
+that does not exist. The vendored table names it at
+`documentation/api/orgs/GET_orgs_org_id_devices_events_search.md:33`. The
+installed `mistapi` 0.63.3 signature at `mistapi/api/v1/orgs/devices.py:254`
+holds no `timestamp` parameter, so the table above drops the row. Bound the time
+range with `start` and `end`.
 
 **`type` accepts a comma-separated list.** Live code proves this at
 `src/firmware/firmware_manager.py:3825`, which passes
@@ -146,6 +152,11 @@ site document contradicts it correctly at
 `documentation/api/sites/GET_sites_site_id_devices_events_search.md:258`, which
 says "Uses cursor-based pagination".
 
+**The installed SDK confirms the defect.** `searchOrgDeviceEvents` at
+`mistapi/api/v1/orgs/devices.py:254` in `mistapi` 0.63.3 accepts no `page`
+parameter. A call that passes `page` raises a `TypeError`. Page the event
+search with `search_after` only.
+
 MistHelper pages with `mistapi.get_all(response=..., mist_session=...)`. See
 `src/firmware/firmware_manager.py:3830`.
 
@@ -166,6 +177,13 @@ mistapi.api.v1.sites.devices.searchSiteDeviceEvents(
 The documented SDK paths agree with the runtime for these two calls
 (`documentation/api/orgs/GET_orgs_org_id_devices_events_search.md:251`,
 `documentation/api/sites/GET_sites_site_id_devices_events_search.md:250`).
+
+**Caution — `start` and `end` are typed `str | None`.** Both signatures declare
+a string, although the values are epoch seconds. A type check rejects an
+integer. A caller must pass `str(window.start)` and `str(window.end)`.
+
+**Neither signature holds a `page` parameter.** The cursor is `search_after`.
+See section 3.4.
 
 ---
 
@@ -256,8 +274,11 @@ record the full result:
 
 - **HTTP**: `GET /api/v1/const/device_events`
   (`documentation/api/constants/GET_const_device_events.md:7`)
-- **SDK**: `mistapi.api.v1.constants.events.listDeviceEventsDefinitions()`
-  (`documentation/api/constants/GET_const_device_events.md:100`)
+- **SDK**: `mistapi.api.v1.const.device_events.listDeviceEventsDefinitions()`
+  (`mistapi/api/v1/const/device_events.py:17`). It takes `mist_session` alone.
+  The vendored document names `mistapi.api.v1.constants.events`
+  (`documentation/api/constants/GET_const_device_events.md:100`). No module of
+  that name exists in the installed package. Use the runtime path.
 
 Each returned item uses the `const_event` schema with fields `description`,
 `display`, `example`, `group`, and `key`. Required fields are `display` and
@@ -301,7 +322,8 @@ mistapi.api.v1.sites.stats.getSiteDeviceStats(
 
 **Key asymmetry.** `listOrgDevicesStats` accepts `mac`, `site_id`, and `fields`.
 `listSiteDevicesStats` accepts none of those. The organization call is the only
-list call that can narrow the payload. Section 8 explains why that matters.
+list call that can narrow the row set, and it narrows with `mac` or `site_id`.
+The `fields` parameter narrows nothing. Section 8 explains why that matters.
 
 **Gotcha.** The site call returns access point statistics only unless the caller
 passes `type="all"`
@@ -615,15 +637,25 @@ The table above counts one call per poll. Pagination breaks that assumption.
 `type` so the search returns only connect and restart events. Both controls cut
 the page count directly.
 
+**Caution — never add a `page` parameter to the event search.** The installed
+signature at `mistapi/api/v1/orgs/devices.py:254` holds none, so the call raises
+a `TypeError`. Page the event search with `search_after` only.
+
 ### 8.5 Batching options, ranked
 
 1. **Poll once at organization scope, not per device.** Use
    `searchOrgDeviceEvents` with a `type` filter and an explicit `device_type`,
    then fan the results out to per-device state in memory. Cost stays flat as
    the fleet grows. This is the recommended design.
-2. **Use `listOrgDevicesStats` with the `fields` parameter.** Only the
-   organization statistics call accepts `fields`. Requesting a narrow field set
-   shrinks the payload sharply. The site call cannot do this.
+2. **Narrow the row set on `listOrgDevicesStats`.** Only the organization
+   statistics call accepts `mac` and `site_id`, so only that call can ask for
+   fewer device rows. The site call cannot do this. **The `fields` parameter
+   does not shrink the answer.** The SDK calls it a "List of additional fields
+   requests" (`mistapi/api/v1/orgs/stats.py:440`), and the vendored document
+   repeats the same words
+   (`documentation/api/orgs/GET_orgs_org_id_stats_devices.md:36`). The parameter
+   adds fields and never removes any. Pass it only when the gate needs a field
+   that the default answer leaves out.
 3. **Read `targets.reboot_in_progress` from the upgrade job.** One
    `getSiteDeviceUpgrade` call returns the reboot state of every device in the
    job. This can replace a whole class of per-device probes. See section 6.4.
@@ -721,9 +753,10 @@ else:
 return mistapi.get_all(response=stats_resp, mist_session=self.apisession)
 ```
 
-Note `fields="*"` on the organization branch. That requests every field and
-gives up the payload saving described in section 8.5. The portal should pass a
-narrow field list instead.
+Note `fields="*"` on the organization branch. The `fields` parameter adds
+fields, so `fields="*"` asks for every additional field and makes the answer as
+large as the cloud can make it. See section 8.5. The portal should omit
+`fields` unless the gate needs a field that the default answer leaves out.
 
 `FirmwareUpgradeStatusChecker` repeats the same two calls in
 `_fetch_site_stats` (`src/firmware/firmware_manager.py:3227-3238`) and
@@ -894,8 +927,9 @@ Poll `searchOrgDeviceEvents` once every 20 seconds at organization scope. Set
 `listDeviceEventsDefinitions` at start. Set `start` and `end` to a narrow window
 and raise `limit` so each poll fits one page. When a device's connected or
 restarted event arrives, switch that device to statistics confirmation. Call
-`listOrgDevicesStats` once every 20 seconds for the whole fleet with a narrow
-`fields` list, and confirm the device when its `uptime` reading falls below the
+`listOrgDevicesStats` once every 20 seconds for the whole fleet, and omit
+`fields` unless the gate needs a field that the default answer leaves out.
+Confirm the device when its `uptime` reading falls below the
 previous reading and its `version` differs from the pre-upgrade reading. Then
 wait 60 seconds, plus another 60 seconds for access points, and capture. Keep
 total polling under 360 calls per hour so the gate uses under 8 percent of the
