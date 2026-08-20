@@ -293,4 +293,12 @@
 </section>
 
 {% include 'upgrade/stop.html' %}
+
+{#
+  FR-072 gives one site to one operator. The banner sits below the run state,
+  because this page answers one question first: what is the run doing now. The
+  site lock is a second question, and it never gates the content above.
+  `select.lock_banner_context` supplies the six values.
+#}
+{% include 'partials/lock_banner.html' %}
 {% endblock %}

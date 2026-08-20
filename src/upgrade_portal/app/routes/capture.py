@@ -45,6 +45,7 @@ from .select import (  # The sibling module owns these rules, so no copy of them
     find_site,
     injected_seam,
     load_optional_module,
+    lock_banner_context,
     org_display_name,
     read_site_locks,
     render_page,
@@ -888,6 +889,10 @@ def page_context(capture_id: str) -> dict[str, Any]:
         The page paints the fields that the poll paints, so the first render and
         the first poll never disagree.
 
+        The page also includes the site lock banner. FR-072 gives one site to
+        one operator, so the operator must read the lock state before the start
+        control. `select.lock_banner_context` owns every rule of that banner.
+
     Args:
         capture_id: The capture the path named.
 
@@ -896,7 +901,7 @@ def page_context(capture_id: str) -> dict[str, Any]:
     """
     status = page_status(capture_id)  # An empty record before the first start.
     site_id = status.get("site_id") or request.args.get("site_id", "")  # A start page names its site in the query.
-    return {
+    context: dict[str, Any] = {
         "capture_id": status["capture_id"],  # An empty value stops the poll before it starts.
         "status": status_body(status),  # The same filter that the poll answers with.
         "tier": status.get(TIER_FIELD, TIER_STANDARD),  # The tier list opens on this value.
@@ -905,3 +910,5 @@ def page_context(capture_id: str) -> dict[str, Any]:
         "role": status.get(ROLE_FIELD, DEFAULT_ROLE),  # The half of the run that this capture covers.
         "poll_interval_seconds": POLL_SECONDS,  # Decision D3 of the plan fixes this period.
     }
+    context.update(lock_banner_context(resolve_org(None) or "", site_id))  # The included banner reads these six.
+    return context

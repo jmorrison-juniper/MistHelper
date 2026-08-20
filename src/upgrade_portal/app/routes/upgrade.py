@@ -74,6 +74,7 @@ from .select import (  # The sibling module owns these rules, so no copy of them
     SELECTED_SITE_KEY,
     find_attribute,
     load_optional_module,
+    lock_banner_context,
     read_site_locks,
     render_page,
     resolve_org,
@@ -1029,10 +1030,41 @@ def stop_control_state(record: dict[str, Any]) -> dict[str, Any]:
     return {"stop_outcome": held, "stop_available": run_is_live(record)}
 
 
+def run_lock_banner(record: dict[str, Any]) -> dict[str, Any]:
+    """Build the six values that the site lock banner of a run page reads.
+
+    Why:
+        `select.lock_banner_context` owns every rule of the banner, and it needs
+        an organization and a site. A run page names a run alone, so this
+        function reads the two values from the run record. The session cannot
+        answer instead, because an operator may open a run of one site while the
+        session names another site.
+
+        An absent run leaves both values empty, which renders the banner in the
+        `unknown` state. That is the answer `contracts/site-lock.md:118` asks a
+        page to show, so a missing run still renders.
+
+    Args:
+        record: The run record the page shows. May be empty.
+
+    Returns:
+        The template context of the banner.
+    """
+    org_id = str(record.get("org_id", ""))  # The run record carries its own scope, as the status route does.
+    site_id = str(record.get("site_id", ""))  # FR-014 binds one run to one site.
+    return lock_banner_context(org_id, site_id)
+
+
 @upgrade_bp.get(RUN_PAGE_PATH)
 @identity.require_session
 def run_page(run_id: str) -> str:
     """Render the live run view of one run.
+
+    Why:
+        The page includes the site lock banner. FR-072 gives one site to one
+        operator, so the operator must read who holds the site. The run record
+        names its own organization and site, and the session names neither once
+        the operator opens a run in a second tab.
 
     Args:
         run_id: The run key.
@@ -1050,6 +1082,7 @@ def run_page(run_id: str) -> str:
         site_name=str(record.get("site_name", "")),  # The heading of the page.
         poll_interval_seconds=poll_seconds,  # The script reads this through `data-poll-seconds`.
         **stop_control_state(record),  # The two values that the included stop partial reads.
+        **run_lock_banner(record),  # The six values that the included lock banner reads.
     )
 
 
@@ -1057,6 +1090,11 @@ def run_page(run_id: str) -> str:
 @identity.require_session
 def options_page(run_id: str) -> str:
     """Render the version picker and the three option controls of one run.
+
+    Why:
+        The page includes the site lock banner, because a saved option writes to
+        the site. FR-072 gives one site to one operator, so the operator must
+        read who holds the site before the save call.
 
     Args:
         run_id: The run key.
@@ -1075,6 +1113,7 @@ def options_page(run_id: str) -> str:
         versions_by_model=versions,  # The picker refills itself from `GET /api/runs/<run_id>/versions`.
         options=record.get("options", {}),  # The three controls show the saved choice.
         warnings=[],  # The save call answers the warnings, so the first read of the page shows none.
+        **run_lock_banner(record),  # The six values that the included lock banner reads.
     )
 
 

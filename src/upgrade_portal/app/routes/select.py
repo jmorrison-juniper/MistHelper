@@ -141,6 +141,12 @@ LOCK_STATE_FREE = "free"  # The lock store answered and named no holder.
 LOCK_STATE_LOCKED = "locked"  # The lock store answered and named a holder.
 LOCK_STATE_UNKNOWN = "unknown"  # The lock store did not answer, so the portal cannot tell.
 
+# `partials/lock_banner.html` names a fourth word that the site list cannot
+# reach. The lock store answers one address for each site, and several browsers
+# of one operator share that address. Only the signed session of this browser
+# holds the token, so only a page of this browser can report the fourth state.
+LOCK_STATE_HELD = "held"  # This browser holds the lock, and the banner shows the release control.
+
 # Warning: a second spelling of the organization scope rule can become a
 # security defect. `runtime/identity.py` owns that rule, the
 # `org_not_permitted` code, the refusal sentence, and the 403 status. This
@@ -1433,6 +1439,160 @@ def held_record(site_id: str) -> lock.LockRecord | None:
         return None  # The caller answers `lock_lost`.
     token = str(lock_body().get(TOKEN_FIELD, ""))  # The token the caller sent back.
     return record if token == record.lock_token else None  # A token that differs matches no lock this session holds.
+
+
+def session_lock_record(site_id: str) -> lock.LockRecord | None:
+    """Return the lock record that this browser stored for one site.
+
+    Why:
+        `held_record` answers the same question for a write, and it also
+        compares the token in the request body. A page render carries no body,
+        so a page needs this reader instead. The read never raises, because a
+        damaged session field must cost the page nothing.
+
+    Args:
+        site_id: The site the page acts on.
+
+    Returns:
+        The stored record, or None when this browser holds no usable record.
+    """
+    try:  # The session read needs a request, and a damaged field must not hide a page.
+        stored = stored_lock_records().get(site_id)  # None means this browser took no lock on that site.
+    except Exception:  # A page render must survive every fault of the session layer.
+        logger.warning("select: the session held no readable lock index, so site %s reads as unknown", site_id)
+        return None  # The banner then falls back to the state that the lock store reports.
+    if not isinstance(stored, str):  # A value of another type states that this browser holds no lock.
+        return None  # The banner then falls back to the state that the lock store reports.
+    return lock.LockRecord.from_json(stored)  # Damaged text reads as None and raises nothing.
+
+
+def lock_cooldown_seconds(org_id: str, site_id: str) -> int:
+    """Return the seconds left before a takeover of one site becomes possible.
+
+    Why:
+        FR-078 gives an abandoned session a 5 minute cooldown, and the waiting
+        operator needs to watch that wait shrink. `holder_details` answers the
+        same number inside a refusal body, so the banner and the refusal never
+        disagree about one site.
+
+    Args:
+        org_id: The organization that owns the site.
+        site_id: The site the page acts on.
+
+    Returns:
+        The whole seconds that remain, and zero when the portal knows no holder.
+    """
+    try:  # `contracts/site-lock.md:118` says a read never needs the lock store.
+        held = lock.read_lock(org_id, site_id, client=lock_client())  # None for a free site or a dead store.
+    except Exception:  # A page render must survive a store that answers nothing.
+        logger.warning("select: the lock store did not answer the cooldown of site %s", site_id)  # No trace.
+        return 0  # A wait the portal cannot measure reads as no wait at all.
+    if held is None:  # No holder, so no operator waits for anything.
+        return 0  # The banner hides the cooldown line on this value.
+    return max(0, round(lock.COOLDOWN_SECONDS - held.age_seconds()))  # The value never falls below zero.
+
+
+def takeover_word(holder: str) -> str:
+    """Name the word that a takeover of one site needs first.
+
+    Why:
+        FR-079 asks a different operator to type `CONFIRM`, because a takeover
+        erases the in-flight data of the operator that left. FR-080 asks the
+        same operator, who returns to an abandoned session of their own, to type
+        `continue` instead. This answer is the first guess alone. The server
+        names the needed word again on a `confirmation_required` refusal.
+
+    Args:
+        holder: The work email address of the operator that holds the site.
+
+    Returns:
+        The resume word for the current operator, and the takeover word for
+        every other operator.
+    """
+    try:  # The identity read needs a request, and a page must render without one.
+        owner = identity.current_owner()  # None when the request carries no valid session.
+    except Exception:  # A fault of the session layer means no match, which is the safe answer.
+        owner = None  # The page then shows the word that FR-079 fixes.
+    address = owner.actor_email if owner is not None else ""  # An empty address matches no holder.
+    if not address or not holder:  # One empty half cannot prove that the two operators are one person.
+        return lock.TAKEOVER_CONFIRMATION_TEXT  # FR-079 fixes this word for every other operator.
+    try:  # `normalize_email` refuses a malformed address, and the lock store may hold one.
+        same_person = identity.normalize_email(address) == identity.normalize_email(holder)  # One spelling.
+    except ValueError:  # A malformed address proves no match, so the stricter word stands.
+        return lock.TAKEOVER_CONFIRMATION_TEXT  # FR-079 fixes this word for every other operator.
+    if same_person:  # The operator returns to a quiet session of their own.
+        return lock.RESUME_CONFIRMATION_TEXT  # FR-080 asks the returning operator for the lighter word.
+    return lock.TAKEOVER_CONFIRMATION_TEXT  # FR-079 fixes this word for every other operator.
+
+
+def lock_banner_context(org_id: str, site_id: str) -> dict[str, Any]:
+    """Build the six values that the site lock banner of one page reads.
+
+    Why:
+        Three pages write to a site: the capture page, the options page, and the
+        run page. All three show one banner, so one builder must answer for all
+        three. A second copy of these rules inside a route would let two pages
+        disagree about who holds one site.
+
+        `site_lock_state` reports `free`, `locked`, and `unknown` alone. It reads
+        the lock store, and the store names one address for each site. It cannot
+        report `held`, because several browsers of one operator share that
+        address. The signed session of this browser holds the token, so this
+        builder reads the session first and the store second.
+
+        `contracts/site-lock.md:118` states that a read never needs the lock
+        store. Every store read below therefore fails open, and a store that
+        answers nothing renders the banner in the `unknown` state.
+
+    Args:
+        org_id: The organization that owns the site. An empty value reads as
+            `unknown`, because the lock key needs both halves.
+        site_id: The site the page acts on.
+
+    Returns:
+        The six values that `partials/lock_banner.html` names in its header.
+    """
+    held = session_lock_record(site_id)  # None means this browser stored no lock for the site.
+    if held is not None and held.lock_token:  # A stored token is the one proof that this browser holds the site.
+        holder = held.owner.actor_email  # The banner may show this address, and no log line may hold it.
+        return build_lock_banner(site_id, LOCK_STATE_HELD, holder, 0, held.lock_token)  # No wait for the holder.
+    try:  # `read_site_locks` absorbs a dead store, and the seam lookup itself may still fail.
+        locks = read_site_locks(org_id, [site_id]) if org_id else {}  # No organization means no readable key.
+    except Exception:  # A page render must survive every fault of the lock seam.
+        logger.warning("select: the lock seam did not answer, so site %s reads as unknown", site_id)  # No trace.
+        locks = {}  # An empty index marks the state unknown, which is what the contract asks for.
+    state = site_lock_state(site_id, locks)  # One of `free`, `locked`, or `unknown`.
+    holder = str(locks.get(site_id) or "")  # Empty for a free site and for a site the portal cannot read.
+    wait = lock_cooldown_seconds(org_id, site_id) if state == LOCK_STATE_LOCKED else 0  # Only a holder makes a wait.
+    return build_lock_banner(site_id, state, holder, wait, "")  # This browser holds no token on this path.
+
+
+def build_lock_banner(site_id: str, state: str, holder: str, cooldown: int, token: str) -> dict[str, Any]:
+    """Shape the six banner values into the names that the partial reads.
+
+    Why:
+        `partials/lock_banner.html` fixes six variable names in its own header.
+        One builder holds those names, so `lock_banner_context` states each rule
+        once and no route spells a name a second way.
+
+    Args:
+        site_id: The site the banner covers.
+        state: One of `free`, `locked`, `held`, or `unknown`.
+        holder: The work email address of the holder. Empty when none is known.
+        cooldown: The seconds left before a takeover becomes possible.
+        token: The lock token this browser holds. Empty when it holds none.
+
+    Returns:
+        The template context of the banner.
+    """
+    return {
+        "site_id": site_id,  # The three lock calls of `portal.js` build their path from this value.
+        "lock_state": state,  # The banner writes one sentence for each state.
+        "lock_holder": holder,  # The waiting operator reads this address and knows whom to ask.
+        "lock_cooldown": cooldown,  # Zero hides the cooldown line of the banner.
+        "lock_token": token,  # An empty value stops the heartbeat before it starts.
+        "lock_confirm_word": takeover_word(holder),  # The first guess, which a refusal may replace.
+    }
 
 
 def lock_grant_body(grant: lock.LockGrant) -> dict[str, Any]:

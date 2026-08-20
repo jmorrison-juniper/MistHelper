@@ -99,6 +99,13 @@
 {% set chosen_tier = tier | default(2, true) | int %}
 {% set site_label = site_name | default('', true) %}
 
+{#
+  FR-072 gives one site to one operator. The banner sits above the start
+  control, so the operator reads who holds the site before the start button
+  comes into view. `select.lock_banner_context` supplies the six values.
+#}
+{% include 'partials/lock_banner.html' %}
+
 <div class="portal-card">
   <h2 class="portal-card-title">Start a capture</h2>
 

@@ -89,6 +89,13 @@
 {% block heading %}<h1>{{ page_title | default('Upgrade options', true) }}</h1>{% endblock %}
 
 {% block content %}
+{#
+  FR-072 gives one site to one operator. A saved option writes to the site, so
+  the banner sits above the option controls. `select.lock_banner_context`
+  supplies the six values.
+#}
+{% include 'partials/lock_banner.html' %}
+
 <div class="portal-card">
   <h2 class="portal-card-title">Choose the upgrade options</h2>
 
