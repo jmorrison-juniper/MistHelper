@@ -14,16 +14,21 @@ the design. This file states the position.
 
 | Item | State |
 | --- | --- |
-| Tasks in `tasks.md` | 233 of 233 complete |
+| Tasks in `tasks.md` | 220 of 233 complete. An audit removed 13 checks |
 | Continuous integration on the pull request | 18 checks pass, 2 skip |
 | Pull request | Open, mergeable, not a draft, no review yet |
 | Local commits not pushed | None |
 | Uncommitted work | None from this feature |
 | Portal tests | 2548, all pass |
-| Statement coverage of the package | 94.67 percent |
-| Blocking defects | None. One safety defect waits, issue #1827 |
+| Statement coverage of the package | 94.18 percent |
+| Blocking defects | Two safety defects. See `audit-2026-08-20.md` section 2.1 |
 
-The feature is code complete. It waits for a human review and a merge.
+The code is written and the code tests pass. The feature was never run end to
+end, and an audit on 2026-08-20 found two defects that can tell an operator that
+a device stopped while that device writes firmware.
+
+Read `audit-2026-08-20.md` before you merge. It holds the 13 tasks that lost a
+check, 21 defects inside tasks that keep a check, and the order to fix them in.
 
 ---
 
@@ -96,12 +101,29 @@ existing bulk firmware tools through that seam and never calls them directly.
 
 ## 4. What waits
 
-Nothing in this feature is half built. Three items sit outside it.
+### 4.0 The audit of 2026-08-20
+
+`audit-2026-08-20.md` holds the whole result. The short form:
+
+| Group | Count | Where |
+| --- | --- | --- |
+| Tasks that lost a check | 13 | Audit section 1.1 |
+| Defects that can hurt a device | 2 | Audit section 2.1 |
+| Defects of high severity | 2 | Audit section 2.2 |
+| Other defects | 17 | Audit sections 2.3 to 2.7 |
+
+Warning: fix the two defects in audit section 2.1 before any real upgrade. Both
+tell an operator that the cloud stopped a device, when the code cannot know
+that. An operator who reads that word can cut power to a switch that is writing
+firmware, and that switch does not start again.
+
+The 13 tasks that lost a check are mostly the browser tests and the quickstart
+run. The code exists. Nobody ever drove it.
 
 ### 4.1 Merge the pull request
 
-Pull request #1825 is open and mergeable. Every gate passes. It waits for a
-human review. This is the next action.
+Pull request #1825 is open and mergeable. Every gate passes. Do not merge it
+until the two safety defects are fixed.
 
 ### 4.2 Issue #1824, which is separate work
 
@@ -244,7 +266,7 @@ Each of these cost real time. Read them before you debug.
 | The lint tools live in the virtual environment | `python -m ruff` fails | Call `.\.venv\Scripts\python.exe` by path |
 | Playwright cannot re-enter a nested run | A pytest run inside a pytest run fails | Pass `-p no:playwright` |
 | Gunicorn cannot start on Windows | An import fault on `fcntl` | The portal picks Waitress on Windows already |
-| A stray listener holds port 8056 | The portal will not start | Kill the listener before an end-to-end run |
+| A stray listener holds port 8056 | An end-to-end run skips almost every test | Kill the listener first. The fixture attaches to any listener and that listener holds no test record, so every test refuses with 401 and skips |
 
 ---
 
@@ -280,7 +302,8 @@ a failure.
 | `research.md` | The findings that shaped the design |
 | `data-model.md` | The collections, the fields, and the schema version |
 | `contracts/` | The HTTP interface and the site lock interface |
-| `tasks.md` | All 233 tasks, every one complete |
+| `tasks.md` | All 233 tasks. 220 carry a check |
+| `audit-2026-08-20.md` | The task audit and the defect list. Read this before a merge |
 | `analysis.md` | The cross-artifact review, findings `G1` to `G6` |
 | `quickstart.md` | How to run the portal |
 | `quickstart-results.md` | What a real run produced |

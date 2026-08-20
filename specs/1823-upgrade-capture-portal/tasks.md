@@ -39,12 +39,12 @@ task description.
 | Rule | Detail |
 | --- | --- |
 | Five-Item Rule | At most 5 parameters, 5 blocks, 5 operations for each block, and 25 lines for each function. A request context object carries wider input. |
-| Docstrings | Every module, class, function, and method carries a Google-style docstring with a "Why" section after the summary. `interrogate` enforces 90 percent. `pydoclint` enforces content. |
+| Docstrings | Every module, class, function, and method carries a Google-style docstring with a "Why" section after the summary. `interrogate` enforces 90 percent. `pydocstyle --convention=google` enforces content. The repository carries no `pydoclint`, and `pyproject.toml:493` records the two tools that do run. |
 | Inline comments | Constitution Principle VI asks for a comment on each generated line that states why the line exists. |
 | Logging | Use stdlib `logging` with `%s` placeholders. Never use an f-string. Use ASCII characters only. Log at info before an action and at debug after it. Carry a run identifier and a site identifier on every record. `structlog` stays inside `src/db`. |
 | Credentials | Never show, log, or store a password value or a token value (FR-009). Name the variable, never the value. |
 | Writing style | Every docstring, comment, message, and page string follows Simplified Technical English. See `documentation/ASD-STE100_writing-guide.md`. |
-| Coverage | The floor for the new package is 90 percent. `pyproject.toml:419-420` sets 90. |
+| Coverage | The floor for the new package is 90 percent. `pyproject.toml:446` sets 90. |
 | Forbidden import | The portal never imports `src/firmware/firmware_manager.py`. That module holds four globals at `:34-37`. The save-and-restore blocks at `:1736` and `:1797` are not thread safe. |
 | Forbidden call | Never call `getOrgSsrUpgrade`. The installed SDK builds the cancel path inside that function at `mistapi/api/v1/orgs/ssr.py:167`. |
 | Concurrency | Use threads. Never use asyncio. Use `ConnectionPoolExecutor` with about 4 workers at the call-group level. Never fan out per device. |
@@ -187,7 +187,8 @@ as its own row.
 - [X] T064 [US1] Add the device statistics read to `src/upgrade_portal/capture/devices.py`. Pass `type="all"` to `listSiteDevicesStats`. The default returns access points only. A capture with only access points means the code missed this parameter.
 - [X] T065 [US1] Add the `device_index` builder to `src/upgrade_portal/capture/devices.py`. Build the flat map at `data-model.md:100-115` with `name`, `type`, `model`, `serial`, `version`, `status`, `uptime`, `site_id`, `vc_role`, `vc_mac`, `num_members`, and `ip`. Set `vc_role` to `standalone` when the device is not a chassis member. Store no timestamp.
 - [X] T066 [US1] Add the page-count guard to `src/upgrade_portal/capture/devices.py`. `mistapi.get_all` returns an empty list without an error on an unexpected shape, so compare the returned length against the reported `total` and record a partial reason on a mismatch.
-- [X] T067 [P] [US1] Implement the wired client read in `src/upgrade_portal/capture/clients.py`. Build a `ClientRecord` with `mac`, `hostname`, `ip`, `device_mac`, `device_name`, `port_id`, `vlan`, and `username`.
+- [ ] T067 [P] [US1] Implement the wired client read in `src/upgrade_portal/capture/clients.py`. Build a `ClientRecord` with `mac`, `hostname`, `ip`, `device_mac`, `device_name`, `port_id`, `vlan`, and `username`.
+  - Audit 2026-08-20: seven of the eight fields arrive. `_wired_record` at `clients.py:457` builds `ClientIdentity(hostname=..., ip=...)` and never sets `username`. The two wireless readers set it at `clients.py:522` and `clients.py:555`, and the guest reader sets it at `clients.py:587`, so a wired 802.1X identity is the one identity the capture drops.
 - [X] T068 [US1] Add the wireless client read to `src/upgrade_portal/capture/clients.py`. Call `listSiteWirelessClientsStats` for the signal strength and `searchSiteWirelessClients` for the random media access control flag, then join the two results on `mac`. A client in one source only still enters the list, with the missing fields absent.
 - [X] T069 [US1] Add the guest client read to `src/upgrade_portal/capture/clients.py`
 - [X] T070 [US1] Normalize every media access control address to lower case with no separator in `src/upgrade_portal/capture/clients.py` and `src/upgrade_portal/capture/devices.py`. The comparison matches on `mac` alone. `clients.normalize_mac` holds the one rule, and `devices.normalize_device_mac` delegates to it, so the two modules cannot drift.
@@ -200,7 +201,8 @@ as its own row.
 - [X] T077 [US1] Add the `stored_size_bytes` measurement to `src/upgrade_portal/capture/store.py` (FR-032b). Measure the stored document. The value is greater than zero after a successful write.
 - [X] T078 [US1] Add the capture list and load functions to `src/upgrade_portal/capture/store.py`. Only a `verified` capture may take part in a comparison.
 - [X] T079 [US1] Add the `CaptureForRun` edge write with the key `edge-{capture_key}` to `src/upgrade_portal/capture/store.py`
-- [X] T080 [US1] Wire the six capture call groups through `src/upgrade_portal/runtime/pools.py` inside `src/upgrade_portal/capture/assembly.py`. The groups are devices, wireless statistics, wireless search, wired clients, ports, and the small tier 3 calls. Keep the pages inside one group sequential, because the cloud paginates with a cursor.
+- [ ] T080 [US1] Wire the six capture call groups through `src/upgrade_portal/runtime/pools.py` inside `src/upgrade_portal/capture/assembly.py`. The groups are devices, wireless statistics, wireless search, wired clients, ports, and the small tier 3 calls. Keep the pages inside one group sequential, because the cloud paginates with a cursor.
+  - Audit 2026-08-20: five of the six groups run. `wave_names` at `collector.py:581-596` names devices, wired clients, wireless statistics, wireless search, and tier 3. `wave_one` at `collector.py:615-619` builds four groups and `wave_two` at `collector.py:640` builds one. `GROUP_PORTS` exists at `assembly.py:140` and reaches only the failure map at `collector.py:89`, so no wave ever schedules it. The port data rides inside the tier 3 group instead, which means a tier 2 capture reads no ports at all.
 - [X] T081 [US1] Implement the capture state machine `pending -> collecting -> assembling -> writing -> verified` with the `write_failed`, `partial`, and `failed` branches in `src/upgrade_portal/capture/store.py`
 - [X] T082 [P] [US1] Implement the organization list route and the site list route in `src/upgrade_portal/app/routes/select.py` (FR-012 to FR-015). Return a device count for each site.
 - [X] T083 [US1] Implement the inventory route in `src/upgrade_portal/app/routes/select.py`. Do not pass `type="all"` to `searchOrgDevices`. The value is not legal on that endpoint.
@@ -236,7 +238,7 @@ changes. The skipped section list names any section whose digest matched.
 - [X] T095 [P] [US2] Contract test `GET /api/comparisons` for the statistics keys, `device_deltas`, `client_deltas`, and `skipped_sections` in `tests/contract/upgrade_portal/test_comparison.py`
 - [X] T096 [P] [US2] Contract test the `capture_site_mismatch` and `capture_not_verified` refusals in `tests/contract/upgrade_portal/test_comparison_errors.py`
 - [X] T097 [P] [US2] Contract test the comma-separated value download and the JSON download, including the `bad_format` error code, in `tests/contract/upgrade_portal/test_comparison_export.py`
-- [X] T098 [P] [US2] Browser test the comparison journey in `tests/e2e/upgrade_portal/test_comparison.py`. Drive `compare-before-select`, `compare-after-select`, `compare-run-button`, `compare-statistics`, `compare-stat-{name}`, `compare-device-table`, `compare-device-row-{mac}`, `compare-client-table`, `compare-client-row-{mac}`, `compare-filter-{outcome}`, `compare-export-csv`, and `compare-export-json`.
+- [ ] T098 [P] [US2] Browser test the comparison journey in `tests/e2e/upgrade_portal/test_comparison.py`. Drive `compare-before-select`, `compare-after-select`, `compare-run-button`, `compare-statistics`, `compare-stat-{name}`, `compare-device-table`, `compare-device-row-{mac}`, `compare-client-table`, `compare-client-row-{mac}`, `compare-filter-{outcome}`, `compare-export-csv`, and `compare-export-json`.
 
 ### Implementation for User Story 2
 
@@ -296,8 +298,8 @@ under 1 second.
 - [X] T129 [P] [US3] Contract test `POST /api/runs/<id>/start` with `{"confirm": "CONFIRM"}`, and the `confirmation_required` refusal for any other word, in `tests/contract/upgrade_portal/test_upgrade_start.py`
 - [X] T130 [P] [US3] Contract test `GET /api/runs/<id>/status` for `phase_order`, `phases`, `targets`, `stop_request`, `pre_capture_id`, `post_capture_id`, and `message` in `tests/contract/upgrade_portal/test_run_status.py`
 - [X] T131 [P] [US3] Contract test `POST /api/runs/<id>/stop` with `{"confirm": "STOP"}`, and the `run_not_stoppable` and `confirmation_required` refusals, in `tests/contract/upgrade_portal/test_upgrade_stop.py`
-- [X] T132 [P] [US3] Browser test the upgrade journey in `tests/e2e/upgrade_portal/test_upgrade.py`. Drive `upgrade-version-select-{mac}`, `upgrade-version-select-all`, `upgrade-reboot-toggle`, `upgrade-strategy-select`, `upgrade-target-table`, `upgrade-target-row-{mac}`, `upgrade-warning-list`, `upgrade-confirm-input`, `upgrade-start-button`, `upgrade-state`, `upgrade-phase-{name}`, `upgrade-phase-progress-{name}`, and `upgrade-device-state-{mac}`.
-- [X] T133 [P] [US3] Browser test the stop control in `tests/e2e/upgrade_portal/test_stop.py`. Drive `stop-button`, `stop-confirm-input`, `stop-confirm-submit`, `stop-outcome`, `stop-outcome-cancelled`, `stop-outcome-writing`, and `stop-outcome-message`.
+- [ ] T132 [P] [US3] Browser test the upgrade journey in `tests/e2e/upgrade_portal/test_upgrade.py`. Drive `upgrade-version-select-{mac}`, `upgrade-version-select-all`, `upgrade-reboot-toggle`, `upgrade-strategy-select`, `upgrade-target-table`, `upgrade-target-row-{mac}`, `upgrade-warning-list`, `upgrade-confirm-input`, `upgrade-start-button`, `upgrade-state`, `upgrade-phase-{name}`, `upgrade-phase-progress-{name}`, and `upgrade-device-state-{mac}`.
+- [ ] T133 [P] [US3] Browser test the stop control in `tests/e2e/upgrade_portal/test_stop.py`. Drive `stop-button`, `stop-confirm-input`, `stop-confirm-submit`, `stop-outcome`, `stop-outcome-cancelled`, `stop-outcome-writing`, and `stop-outcome-message`.
 
 ### Implementation for User Story 3
 
@@ -320,7 +322,8 @@ under 1 second.
 - [X] T150 [US3] Add the mid-flash rule to `src/upgrade_portal/upgrade/stop.py` (FR-038c, FR-038d). Never interrupt a device that is writing firmware. Say plainly in the message that such a device will finish.
 - [X] T151 [US3] Implement `POST /api/runs` and `POST /api/runs/<id>/options` in `src/upgrade_portal/app/routes/upgrade.py` (FR-033 to FR-037). Accept the body `{targets:[{mac, version_target}], reboot, junos_file_action, strategy}`.
 - [X] T152 [US3] Implement `POST /api/runs/<id>/start` in `src/upgrade_portal/app/routes/upgrade.py` (FR-038). Require `{"confirm": "CONFIRM"}`. Refuse any other word with `confirmation_required`. Refuse a run with no verified pre-check with `pre_capture_missing`.
-- [X] T153 [US3] Implement `GET /api/runs/<id>/status` and the run page route in `src/upgrade_portal/app/routes/upgrade.py` (FR-039 to FR-051). Answer in under 1 second while an upgrade runs.
+- [ ] T153 [US3] Implement `GET /api/runs/<id>/status` and the run page route in `src/upgrade_portal/app/routes/upgrade.py` (FR-039 to FR-051). Answer in under 1 second while an upgrade runs.
+  - Audit 2026-08-20: the route is built and its contract tests pass. The one-second target carries no measurement anywhere in the repository, so the second half of the task is unverified.
 - [X] T154 [US3] Implement `POST /api/runs/<id>/stop` in `src/upgrade_portal/app/routes/upgrade.py`. Require `{"confirm": "STOP"}`. Refuse a run in a state that cannot stop with `run_not_stoppable`.
 - [X] T155 [P] [US3] Create the upgrade options template `src/upgrade_portal/app/assets/templates/upgrade/options.html` with the `upgrade-version-select-{mac}`, `upgrade-version-select-all`, `upgrade-reboot-toggle`, `upgrade-strategy-select`, `upgrade-target-table`, `upgrade-target-row-{mac}`, and `upgrade-warning-list` test identifiers
 - [X] T156 [P] [US3] Create the confirmation template `src/upgrade_portal/app/assets/templates/upgrade/confirm.html` with the `upgrade-confirm-input` and `upgrade-start-button` test identifiers
@@ -358,7 +361,8 @@ answer.
 
 - [X] T170 [P] [US4] Contract test the lock acquire, refresh, release, and takeover endpoints, plus the `site_locked`, `lock_lost`, and `confirmation_required` error codes, in `tests/contract/upgrade_portal/test_lock.py`
 - [X] T171 [P] [US4] Contract test that a comparison page and a history page work with no lock in `tests/contract/upgrade_portal/test_lock_free_reads.py`
-- [X] T172 [P] [US4] Browser test the two-operator journey in `tests/e2e/upgrade_portal/test_two_operators.py`. Drive `lock-banner`, `lock-take-button`, `lock-confirm-input`, `lock-confirm-submit`, `lock-release-button`, `lock-error`, and `site-lock-state-{site_id}`.
+- [ ] T172 [P] [US4] Browser test the two-operator journey in `tests/e2e/upgrade_portal/test_two_operators.py`. Drive `lock-banner`, `lock-take-button`, `lock-confirm-input`, `lock-confirm-submit`, `lock-release-button`, `lock-error`, and `site-lock-state-{site_id}`.
+  - Audit 2026-08-20: all 13 tests pass, but six of the seven identifiers never appear in the file. The file drives `site-lock-state-{site_id}` at `test_two_operators.py:375` alone and reaches every lock action over raw HTTP at `:321`, `:338`, `:357`, and `:418`. The takeover controls of the page are therefore untested.
 
 ### Implementation for User Story 4
 
@@ -432,7 +436,8 @@ too new to render.
 
 - [X] T201 [P] [US6] Contract test the capture history endpoint and the run history endpoint, including the page parameters, in `tests/contract/upgrade_portal/test_history_routes.py`
 - [X] T202 [P] [US6] Contract test the schema version refusal for a capture written by a newer version in `tests/contract/upgrade_portal/test_schema_version.py`
-- [X] T203 [P] [US6] Browser test the history journey in `tests/e2e/upgrade_portal/test_history.py`. Drive `history-table`, `history-row-{capture_id}`, `history-open-{capture_id}`, `history-page-next`, and `history-page-previous`.
+- [ ] T203 [P] [US6] Browser test the history journey in `tests/e2e/upgrade_portal/test_history.py`. Drive `history-table`, `history-row-{capture_id}`, `history-open-{capture_id}`, `history-page-next`, and `history-page-previous`.
+  - Audit 2026-08-20: 12 of the 15 tests pass. The helper `_stored_rows` at `test_history.py:232-251` skips when the store holds no capture, and its three call sites at `:337`, `:354`, and `:519` are the three skips. The row identifiers `history-row-{capture_id}` and `history-open-{capture_id}` have therefore never run. The test code is correct. The fixture seeds no stored capture.
 
 ### Implementation for User Story 6
 
@@ -461,7 +466,8 @@ work that touches more than one story.
 - [X] T216 [P] Add the guardrail test that proves the portal imports no name from `src/firmware/firmware_manager.py` to `tests/unit/upgrade_portal/test_guardrails.py`
 - [X] T217 [P] Add the guardrail test that proves the portal calls no `getOrgSsrUpgrade` to `tests/unit/upgrade_portal/test_guardrails.py`
 - [X] T218 [P] Add the guardrail test that proves the word `snapshot` appears in no identifier and in no page string under `src/upgrade_portal/` to `tests/unit/upgrade_portal/test_guardrails.py`
-- [X] T219 [P] Add the performance test for the 90-second Tier 2 capture target (SC-002) and the 3-second comparison render target (SC-005) to `tests/unit/upgrade_portal/test_performance.py`
+- [ ] T219 [P] Add the performance test for the 90-second Tier 2 capture target (SC-002) and the 3-second comparison render target (SC-005) to `tests/unit/upgrade_portal/test_performance.py`
+  - Audit 2026-08-20: seven tests pass, and only the 3-second target is timed, at `test_performance.py:612-634`. No test asserts 90 seconds. `test_performance.py:493` and `:510` count call groups as a stand-in for the elapsed time, which measures the shape of the plan and not its duration. The task also miscites the criteria: both numbers come from `plan.md:64-66`. In `spec.md`, SC-002 is a 30-second read target and SC-005 is the two-operator target.
 - [X] T220 [P] Add the rate-limit budget test to `tests/unit/upgrade_portal/test_rate_budget.py`. Prove that one upgrade run consumes at most 7.2 percent of the hourly quota.
 - [X] T221 [P] Add the browser test that proves every asset loads from the portal itself and no request reaches an outside host to `tests/e2e/upgrade_portal/test_assets.py`
 - [X] T222 Run `bandit -r src/upgrade_portal src/firmware/upgrade_service.py` and clear every finding
@@ -469,13 +475,17 @@ work that touches more than one story.
 - [X] T224 Run `pydocstyle --convention=google src/upgrade_portal` and clear every finding. The repository does not carry pydoclint. `pyproject.toml` line 493 records pydocstyle and interrogate as the docstring gate.
 - [X] T225 Run `ruff check`, `black --check`, and `mypy` over `src/upgrade_portal` and `src/firmware/upgrade_service.py` and clear every finding
 - [X] T226 Run `pytest tests/unit/upgrade_portal tests/contract/upgrade_portal --cov=src/upgrade_portal` and reach 90 percent coverage or above
-- [X] T227 Audit every function in `src/upgrade_portal/` and `src/firmware/upgrade_service.py` against the Five-Item Rule. Result: 981 functions, 0 breach the 5-parameter limit, 0 breach the 5-block limit, 127 breach the 25-line limit. No function still passes 25 lines after the removal of its docstring, so every breach is documentation span that `DOCS.md` requires. `tools/compliance_analyzer/analyzers.py:17` calls 25 a soft maximum, and no continuous integration job enforces the rule. A split of 127 functions adds no enforcement and risks the passing test suite in `runtime/lock.py`, `capture/store.py`, and `upgrade/gate.py`. The split is declined. The analyzer also reports 22 STRUCT-COMPLEXITY findings, which fall outside the three limits of this rule and remain open.
-- [X] T228 Audit every docstring, comment, message, and page string against `documentation/ASD-STE100_writing-guide.md` and correct any breach
+- [ ] T227 Audit every function in `src/upgrade_portal/` and `src/firmware/upgrade_service.py` against the Five-Item Rule. Result: 981 functions, 0 breach the 5-parameter limit, 0 breach the 5-block limit, 127 breach the 25-line limit. No function still passes 25 lines after the removal of its docstring, so every breach is documentation span that `DOCS.md` requires. `tools/compliance_analyzer/analyzers.py:17` calls 25 a soft maximum, and no continuous integration job enforces the rule. A split of 127 functions adds no enforcement and risks the passing test suite in `runtime/lock.py`, `capture/store.py`, and `upgrade/gate.py`. The split is declined. The analyzer also reports 22 STRUCT-COMPLEXITY findings, which fall outside the three limits of this rule and remain open.
+  - Audit 2026-08-20: the conclusion holds and the counts do not. A rerun of the analyzer reports 994 functions, not 981. It reports 136 findings over the 25-line limit, not 127, and 24 STRUCT-COMPLEXITY findings, not 22. The two claims that carry the decision still reproduce: no function passes 25 lines once its docstring is removed, and nothing in continuous integration enforces the rule. Rerun the analyzer and record the current numbers.
+- [ ] T228 Audit every docstring, comment, message, and page string against `documentation/ASD-STE100_writing-guide.md` and correct any breach
+  - Audit 2026-08-20: no audit record exists on disk. The linter passes over all 39 portal modules with scores of 97 to 99, but `tools/ste_linter/cli.py` grades `.md` and `.py` files alone. The task names page strings, and every page string lives in a Jinja template, so nothing graded them.
 - [X] T229 [P] Add the portal section to `README.md` with the launch command, the menu number 238, and the port 8056
 - [X] T230 [P] Add the operator guide to `documentation/upgrade_capture_portal.md` with the five views, the three confirmation words, and the two out-of-scope defects
 - [X] T231 Update `CLAUDE.md` with the new package, the new menu number, and the new port
-- [X] T232 Run every scenario in `quickstart.md` and record the result
-- [X] T233 Run the container build and prove that the theme file is inside the image and that both ports answer
+- [ ] T232 Run every scenario in `quickstart.md` and record the result
+  - Audit 2026-08-20: the recording happened. The running did not. `quickstart-results.md:79` records 26 scenarios as 13 pass, 0 fail, and 13 blocked, and every scenario that exercises the feature end to end sits in the blocked half. The file states the rule itself at line 10: a scenario that did not run never counts as a pass.
+- [ ] T233 Run the container build and prove that the theme file is inside the image and that both ports answer
+  - Audit 2026-08-20: the build ran. The image `localhost/misthelper-t233:latest` exists at 652 MB, and `magenta.css` sits inside it at 8093 bytes. Neither proof was recorded, and no run showed both ports answering. `quickstart-results.md:72` records the scenario as blocked.
 
 ---
 
@@ -620,7 +630,7 @@ start handler.
 - Stop at any checkpoint to validate a story on its own.
 - Two contradictions in the source documents are already resolved. First,
   `contracts/upgrade-service.md:35-195` wins over `research/upgrade-reuse.md:624-707`
-  for the seam signatures. Second, `pyproject.toml:419-420` wins over
+  for the seam signatures. Second, `pyproject.toml:446` wins over
   `.github/workflows/ci.yml:71` for the coverage floor, so the target is 90.
 - Five items need a decision during User Story 3. Record each decision in a code
   comment when the task lands.
@@ -654,25 +664,24 @@ list below holds only the work that the code does not satisfy.
 
 ### Missing
 
-- **T172. The two-operator browser test does not exist.**
-  `tests/e2e/upgrade_portal/` holds six test files: `test_capture.py`,
-  `test_comparison.py`, `test_signin.py`, `test_site_selection.py`,
-  `test_stop.py`, and `test_upgrade.py`. The folder holds no
-  `test_two_operators.py` file. User Story 4 and FR-072 through FR-083 have no
-  browser test. The lock module at `src/upgrade_portal/runtime/lock.py` and the
-  three lock routes are built, so this task needs the test alone. Size: one file.
+Audit 2026-08-20: this whole section is stale. All three files below exist and
+all three run. Lane 66 read the folder before the three files landed. The audit
+of 2026-08-20 replaced this section with the table in
+`audit-2026-08-20.md`. Keep the text for the record. Do not act on it.
 
-- **T203. The history browser test does not exist.**
-  The folder holds no `tests/e2e/upgrade_portal/test_history.py` file. The three
-  history routes appear in the URL map, and
-  `tests/unit/upgrade_portal/test_history_view.py` covers the view. User Story 6
-  has no browser test. Size: one file.
+- **T172. STALE. The two-operator browser test exists.**
+  `tests/e2e/upgrade_portal/test_two_operators.py` holds 13 tests and all 13
+  pass. The task stays unchecked for a different reason: six of the seven
+  identifiers that the task names never appear in the file.
 
-- **T221. The asset browser test does not exist.**
-  The folder holds no `tests/e2e/upgrade_portal/test_assets.py` file. No test
-  proves that every style sheet, script, and font loads from the portal itself.
-  FR-094 and FR-095 ask for that proof, because the content security policy
-  permits `'self'` alone. Size: one file.
+- **T203. STALE. The history browser test exists.**
+  `tests/e2e/upgrade_portal/test_history.py` holds 15 tests. Twelve pass and
+  three skip. The task stays unchecked because the three skips block the two row
+  identifiers.
+
+- **T221. STALE. The asset browser test exists.**
+  `tests/e2e/upgrade_portal/test_assets.py` holds 28 tests and all 28 pass. The
+  task keeps its check.
 
 ### Partial
 
@@ -698,12 +707,12 @@ list below holds only the work that the code does not satisfy.
   three comment lines above, because the flagged sentence is 97 characters and
   the inline house form would reach the 120 character limit with no room left.
 
-- **T224. The docstring style gate cannot run.**
+- **T224. RESOLVED. The docstring style gate runs and passes.**
   The virtual environment holds no `pydoclint` tool, and `pyproject.toml` names
-  it nowhere. The gate that runs today is `interrogate`, which reports 100
-  percent over 1131 symbols. The rule that T224 names has no tool behind it.
-  Decide whether to add the tool or to close the task against `interrogate`.
-  Size: one decision.
+  it nowhere. The gate that runs is `pydocstyle --convention=google`, which
+  reports no finding over `src/upgrade_portal` and exits 0, beside `interrogate`,
+  which reports 100 percent over 1154 symbols. `pyproject.toml:493` records both
+  tools. The decision is closed against those two tools.
 
 - **T227. The Five-Item Rule audit is incomplete.**
   A scan of `src/upgrade_portal` and `src/firmware/upgrade_service.py` finds 125
@@ -713,6 +722,8 @@ list below holds only the work that the code does not satisfy.
   `src/upgrade_portal/upgrade/gate.py`, `src/upgrade_portal/capture/store.py`,
   and `src/upgrade_portal/capture/devices.py`. No workflow gates this rule, so
   the work is a refactor and not a build failure. Size: large, and safe to defer.
+  Audit 2026-08-20: the count is stale. A rerun reports 136 functions over the
+  limit, not 125.
 
 - **T232. The quickstart run records no result.**
   The file `specs/1823-upgrade-capture-portal/quickstart.md` states the expected
