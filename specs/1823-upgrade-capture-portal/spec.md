@@ -555,8 +555,10 @@ with the same rows and the same statistics.
 
 #### The second capture
 
-- **FR-059**: After every device settles, the portal MUST prompt for the second
-  capture.
+- **FR-059**: After every device settles, the portal MUST start the second
+  capture without a prompt. The portal MUST also hold the setting
+  `CAPTURE_POST_CHECK_MODE`, which changes this behavior to a prompt and holds
+  the default value `automatic`.
 - **FR-060**: The second capture MUST use the same data options and the same
   retention as the first capture.
 - **FR-061**: The portal MUST let the operator repeat the second capture as many

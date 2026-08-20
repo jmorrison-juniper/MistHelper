@@ -244,8 +244,8 @@ black --check src/upgrade_portal src/firmware/upgrade_service.py
 # Docstring coverage. The floor is 90.
 interrogate -v src/upgrade_portal src/firmware/upgrade_service.py
 
-# Docstring content
-pydoclint --style=google src/upgrade_portal
+# Docstring style. This project installs pydocstyle, and it installs no pydoclint.
+pydocstyle --convention=google src/upgrade_portal
 
 # Security
 bandit -r src/upgrade_portal src/firmware/upgrade_service.py
