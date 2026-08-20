@@ -1,0 +1,1285 @@
+"""The upgrade routes: the run, the options, the start, the poll, and the stop.
+
+Why:
+    Stage three of the operator journey sends the upgrade. FR-033 to FR-038 guard
+    the start behind typed text and behind a saved pre-check. FR-038a to FR-038i
+    guard the stop behind a second typed word. FR-039 to FR-041 ask the run page
+    to refresh itself every 30 seconds and to show each device on its own. Every
+    rule of those three groups reaches the operator through one of the handlers
+    below.
+
+Route names:
+    The templates and the browser script render against these endpoint names, so
+    the names are a contract and no rename is safe: `upgrade.create_run`,
+    `upgrade.save_options`, `upgrade.start_run`, `upgrade.run_status`,
+    `upgrade.run_page`, `upgrade.options_page`, `upgrade.confirm_page`, and
+    `upgrade.stop_run`.
+
+Two paths, one new run:
+    `contracts/http-api.md` section 5 names `POST /api/sites/<site_id>/runs` and
+    carries the site in the path. `tasks.md` T151 names `POST /api/runs` and
+    carries no site at all. The contract wins, because the browser code and the
+    contract tests both read the contract, and because the site lock check of
+    T182 and the `RunSpec` record both need a site identifier. The task path
+    still binds to the same handler, which reads the site out of the signed
+    session instead. `select.list_sites` already settles this exact class of
+    conflict the same way, so the two documents agree and neither path repeats a
+    line of logic.
+
+Seams:
+    Three parts of this feature arrive beside this module: the run record store,
+    the run driver, and the cancel work of a stop. Each one travels through a
+    seam, which is an injected object in the application configuration. Nothing
+    here imports either module while this module loads, so the portal starts
+    today and picks up each module on the day its wiring lands. A contract test
+    injects a stand-in and reaches no cloud, no ArangoDB server, and no Redis
+    server.
+
+Where a run record lives:
+    In the injected store when the configuration holds one, and in one guarded
+    dictionary in this process when it does not. `capture/store.py` publishes
+    `write_run` and publishes no run reader, so it does not satisfy the two
+    method shape that `runtime/signals.RunRecordStore` asks for. The memory store
+    keeps every route working until that reader lands.
+"""
+
+from __future__ import annotations  # Postponed annotations keep every hint a plain string.
+
+import logging  # The portal logs with the standard library only.
+import threading  # One guard for the memory run store, which a driver thread also writes.
+from collections.abc import Iterable, Mapping  # The version answer arrives in more than one shape.
+from typing import Any  # A run record and an injected seam are both free-form.
+
+from flask import Blueprint, Response, current_app, jsonify, request, session  # The framework of the portal.
+
+from ...runtime import identity  # The real session guard. No copy of it lives here.
+from ...runtime.runs import (  # The record layer owns every rule below, so no copy of one lives here.
+    RunRecordBuilder,
+    RunSpec,
+    RunState,
+    RunStateMachine,
+    RunStatusView,
+    RunTransitionError,
+)
+from ...runtime.signals import (  # The stop request rides inside the run record, visible to every worker.
+    ConfirmationRequiredError,
+    RunNotFoundError,
+    RunNotStoppableError,
+    StopOutcome,
+    StopRequestError,
+    StopRequestStore,
+)
+from ..factory import build_error_envelope, json_error  # The one error envelope that the contract allows.
+from .select import (  # The sibling module owns these rules, so no copy of them lives here.
+    SELECTED_SITE_KEY,
+    find_attribute,
+    load_optional_module,
+    read_site_locks,
+    render_page,
+    resolve_org,
+)
+
+logger = logging.getLogger(__name__)  # One logger for each module keeps the source visible in the log.
+
+upgrade_bp = Blueprint("upgrade", __name__)  # No URL prefix, because the paths span `/runs` and `/api`.
+
+# Each route declares a full path, so a reader finds the whole path in one place.
+CREATE_PATH = "/api/sites/<site_id>/runs"  # `contracts/http-api.md` section 5 names this path.
+CREATE_ALT_PATH = "/api/runs"  # `tasks.md` T151 names this path, and it reads the site from the session.
+OPTIONS_API_PATH = "/api/runs/<run_id>/options"  # The saved target list and the three upgrade options.
+VERSIONS_PATH = "/api/runs/<run_id>/versions"  # `contracts/http-api.md` section 5 names this path.
+START_PATH = "/api/runs/<run_id>/start"  # The one begin action of a run.
+STATUS_PATH = "/api/runs/<run_id>/status"  # The poll target of the browser.
+STOP_PATH = "/api/runs/<run_id>/stop"  # The one stop action of a run.
+RUN_PAGE_PATH = "/runs/<run_id>"  # The live run view with the phase list and the device table.
+OPTIONS_PAGE_PATH = "/runs/<run_id>/options"  # The page that picks a version for each device.
+CONFIRM_PAGE_PATH = "/runs/<run_id>/confirm"  # The page that reads the typed word `CONFIRM`.
+
+OPTIONS_TEMPLATE = "upgrade/options.html"  # The version picker and the three option controls.
+CONFIRM_TEMPLATE = "upgrade/confirm.html"  # The last page before the portal sends anything.
+PROGRESS_TEMPLATE = "upgrade/progress.html"  # The live run view, which includes the stop partial.
+
+RUN_STORE_KEY = "RUN_STORE"  # The seam for the run record store.
+LAUNCHER_KEY = "RUN_LAUNCHER"  # The seam that hands one prepared record to the run driver.
+STOP_RUNNER_KEY = "STOP_RUNNER"  # The seam for the cancel work of a stop.
+OPTIONS_BUILDER_KEY = "UPGRADE_OPTIONS_BUILDER"  # The seam for `upgrade/options.py`.
+VERSIONS_KEY = "UPGRADE_VERSIONS"  # The version list of each model, for the options page.
+VERSIONS_MODULE = "upgrade.options"  # The module that reads the version list of each model.
+VERSIONS_ATTRIBUTES = ("read_model_versions",)  # The reader name that the module above publishes.
+BY_MODEL_FIELD = "by_model"  # `contracts/http-api.md` section 5 fixes this answer field.
+
+STORE_READ = "read_run"  # The reader that `runtime/signals.RunRecordStore` asks for.
+STORE_WRITE = "write_run"  # The writer of the same shape.
+STORE_SITE_RUNS = "runs_for_site"  # The site scan that FR-037 asks for. A store may publish none.
+
+CONFIRM_FIELD = "confirm"  # The body field that carries the typed word, for both the start and the stop.
+CONFIRM_TEXT = "CONFIRM"  # FR-033 fixes this exact text and this exact letter case for the start.
+TIER_FIELD = "tier"  # The body field that names the data tier of the pre-check capture.
+TIER_STANDARD = 2  # The device state and the client lists.
+TIER_EXTRA = 3  # Tier 2, the port state, the radio state, and the alarms.
+KNOWN_TIERS = (TIER_STANDARD, TIER_EXTRA)  # Any other value falls back to the standard tier.
+
+TARGETS_FIELD = "targets"  # The body field that carries one row for each device.
+WARNINGS_FIELD = "warnings"  # The answer field that carries one sentence for each warning.
+PRE_CAPTURE_FIELD = "pre_capture_id"  # The run record field that names the saved pre-check.
+
+SITE_LOCKED_CODE = "site_locked"  # Another operator holds the site, so this run may not act on it.
+SITE_NOT_CHOSEN_CODE = "site_not_chosen"  # The request named no site and the session holds none.
+ORG_NOT_CHOSEN_CODE = "org_not_chosen"  # The session holds no organization, so no run may start.
+RUN_NOT_FOUND_CODE = "run_not_found"  # `contracts/http-api.md` fixes this code for every run path.
+BAD_OPTION_CODE = "bad_option"  # `contracts/http-api.md` fixes this code for the options call.
+CONFIRMATION_REQUIRED_CODE = "confirmation_required"  # The operator typed the wrong word.
+PRE_CAPTURE_MISSING_CODE = "pre_capture_missing"  # No verified pre-check exists, so no start may run.
+RUN_NOT_STOPPABLE_CODE = "run_not_stoppable"  # The run already reached a state that a stop cannot change.
+RUN_WRITE_FAILED_CODE = "run_write_failed"  # The store refused the write, so the operator must retry.
+UPGRADE_RUNNING_CODE = "upgrade_already_running"  # FR-037: one run of this site has not reached a final state.
+
+SITE_LOCKED_MESSAGE = "Another operator holds this site. Ask that operator before you try again."  # The cure.
+SITE_NOT_CHOSEN_MESSAGE = "Choose a site before you start a run."  # Names the missing step.
+ORG_NOT_CHOSEN_MESSAGE = "Choose an organization before you start a run."  # Names the missing step.
+RUN_NOT_FOUND_MESSAGE = "The portal holds no run with that identifier."  # No cure exists.
+CONFIRM_REQUIRED_MESSAGE = "The start control needs the exact text CONFIRM."  # Names the word and the case.
+STOP_REQUIRED_MESSAGE = "The stop control needs the exact text STOP."  # Names the word and the case.
+PRE_CAPTURE_MISSING_MESSAGE = "Save a verified pre-check capture before you start the upgrade."  # The cure.
+RUN_WRITE_FAILED_MESSAGE = "The portal could not write the run record. Try again."  # The cure.
+UPGRADE_RUNNING_MESSAGE = "An upgrade already runs at this site. Open that run before you start a new one."  # Cure.
+NO_LAUNCHER_MESSAGE = "The portal cannot send an upgrade yet, because the run driver is not wired."  # The gap.
+STOP_RECORDED_MESSAGE = "The portal recorded the stop and starts no further device."  # Claims no cancel.
+
+OK_STATUS = 200  # The read or the write succeeded.
+CREATED_STATUS = 201  # The portal created one run record.
+ACCEPTED_STATUS = 202  # The portal took the work and answered before it ended.
+BAD_REQUEST_STATUS = 400  # The portal could not read the request.
+NOT_FOUND_STATUS = 404  # No such run.
+CONFLICT_STATUS = 409  # The site is held, the pre-check is missing, or the run cannot stop.
+SERVER_ERROR_STATUS = 500  # A part of the portal is missing, so the write cannot run.
+
+# The run record of a live run lives here while no store is injected. The driver
+# thread writes and the poll reads, so both take the guard.
+_RUNS: dict[str, dict[str, Any]] = {}  # One entry for each run this process created.
+_RUN_GUARD = threading.Lock()  # Held for the whole of one read and one write.
+
+
+class MemoryRunStore:
+    """Holds every run record of this process in one guarded dictionary.
+
+    Why:
+        `runtime/signals.RunRecordStore` asks for a reader and a writer.
+        `capture/store.py` publishes `write_run` and publishes no reader, so it
+        does not satisfy that shape today. This store keeps the start route, the
+        poll route, and the stop route working until the reader lands, and the
+        `RUN_STORE` seam replaces it with no change to any handler below.
+    """
+
+    def read_run(self, run_id: str) -> dict[str, Any] | None:
+        """Return one run record, or None when no run holds the identifier.
+
+        Args:
+            run_id: The run key.
+
+        Returns:
+            A copy of the record, or None.
+        """
+        with _RUN_GUARD:  # The driver thread may write while this read runs.
+            held = _RUNS.get(run_id)  # An absent key reads as None, never a fault.
+            return dict(held) if held is not None else None  # A copy stops a caller edit of the stored record.
+
+    def write_run(self, run: dict[str, Any]) -> bool:
+        """Write one run record and report the true result.
+
+        Args:
+            run: The whole record, with the changed fields already in place.
+
+        Returns:
+            True when the store holds the record, False when the record names no run.
+        """
+        key = str(run.get("run_id", ""))  # The record names its own key, so no caller repeats it.
+        if not key:  # A record with no key cannot be read back, so the write is a defect.
+            logger.error("upgrade: a run record carries no run_id, so the portal wrote nothing")  # Names the gap.
+            return False  # The caller answers the write failure to the operator.
+        with _RUN_GUARD:  # The poll may read while this write runs.
+            _RUNS[key] = dict(run)  # A copy stops a later edit of the caller dictionary.
+        return True  # The record is readable from this moment.
+
+    def runs_for_site(self, site_id: str) -> list[dict[str, Any]]:
+        """Return every run record that this process holds for one site.
+
+        Why:
+            FR-037 asks the portal to find a run that already acts on the site.
+            The two method shape of `runtime/signals.RunRecordStore` answers one
+            run at a time, so it cannot answer that question. This third method
+            is optional, and `site_run_records` reads it through the same seam,
+            so the store that lands later publishes the same name and no handler
+            changes.
+
+        Args:
+            site_id: The site that the new run wants to act on.
+
+        Returns:
+            A copy of each record of that site, in no fixed order.
+        """
+        with _RUN_GUARD:  # The driver thread may write while this scan runs.
+            held = list(_RUNS.values())  # One list copy, so the scan drops the guard before it filters.
+        return [dict(record) for record in held if record.get("site_id") == site_id]  # A copy for each row.
+
+
+_MEMORY_STORE = MemoryRunStore()  # One store for the whole process, built once at load.
+
+
+# --------------------------------------------------------------------------
+# The seams.
+# --------------------------------------------------------------------------
+
+
+def injected_object(config_key: str) -> Any | None:
+    """Return the object that the application configuration holds for one seam.
+
+    Why:
+        `select.injected_seam` accepts a callable only, and the run store is an
+        object with two methods. This function keeps the same rule for a seam of
+        that shape, so a contract test injects a stand-in and reaches no server.
+
+    Args:
+        config_key: The configuration key of the seam.
+
+    Returns:
+        The injected object, or None when the configuration holds none.
+    """
+    return current_app.config.get(config_key)  # An unset key reads as None, which every caller expects.
+
+
+def run_store() -> Any:
+    """Return the store that reads and writes one run record.
+
+    Returns:
+        The injected store when it carries both methods, or the memory store.
+    """
+    injected = injected_object(RUN_STORE_KEY)  # A contract test injects the store and reaches no database.
+    if injected is None:  # No wiring yet, which is the normal state of an early portal.
+        return _MEMORY_STORE  # Every route still works inside this process.
+    if not all(callable(getattr(injected, name, None)) for name in (STORE_READ, STORE_WRITE)):  # Wrong shape.
+        logger.error("upgrade: the injected run store holds no %s and no %s pair", STORE_READ, STORE_WRITE)
+        return _MEMORY_STORE  # A wrong shape must not break a run, so the memory store answers instead.
+    return injected  # The real store, which every worker of the portal shares.
+
+
+def run_launcher() -> Any | None:
+    """Return the callable that hands one prepared run record to the run driver.
+
+    Why:
+        `upgrade/driver.py` needs a store, a phase gate, a capture starter, and
+        an upgrade submitter. The wiring of those four belongs to the driver
+        work, not to a route. One seam keeps that wiring in one place and lets
+        this module answer the start today.
+
+    Returns:
+        The injected launcher, or None while the driver is not wired.
+    """
+    candidate = injected_object(LAUNCHER_KEY)  # The driver work injects one callable here.
+    return candidate if callable(candidate) else None  # A value that is not callable counts as unset.
+
+
+def stop_runner() -> Any | None:
+    """Return the callable that performs the cancel work of one stop.
+
+    Returns:
+        The injected runner, or None while the cancel work is not wired.
+    """
+    candidate = injected_object(STOP_RUNNER_KEY)  # The stop work injects one callable here.
+    return candidate if callable(candidate) else None  # A value that is not callable counts as unset.
+
+
+def options_builder() -> Any | None:
+    """Return the callable that turns one request body into a target list.
+
+    Why:
+        `upgrade/options.py` reads the site inventory before it builds a target,
+        so it needs a cloud session that no route layer holds. The seam keeps
+        that read with the module that owns it.
+
+    Returns:
+        The injected builder, or None while that wiring is not in place.
+    """
+    candidate = injected_object(OPTIONS_BUILDER_KEY)  # The options work injects one callable here.
+    return candidate if callable(candidate) else None  # A value that is not callable counts as unset.
+
+
+# --------------------------------------------------------------------------
+# The request body and the current operator.
+# --------------------------------------------------------------------------
+
+
+def request_body() -> dict[str, Any]:
+    """Read the body of the current request as a dictionary.
+
+    Why:
+        The portal script posts JSON, and a plain form post carries the same
+        fields. A body of another shape reads as an empty body, so a route
+        answers its own refusal and never a fault page.
+
+    Returns:
+        The body fields, or an empty dictionary.
+    """
+    payload: Any = request.get_json(silent=True)  # A body that is not JSON reads as None, never a fault.
+    if isinstance(payload, dict):  # The browser script path.
+        return payload  # The fields arrive as the script sent them.
+    return dict(request.form)  # The plain form path, and an empty dictionary for an empty body.
+
+
+def confirmation_text() -> str:
+    """Return the word that the operator typed into a confirmation control.
+
+    Returns:
+        The typed text, without a trim and without a case change.
+    """
+    return str(request_body().get(CONFIRM_FIELD, ""))  # FR-034 names the letter case, so nothing changes here.
+
+
+def chosen_tier() -> int:
+    """Return the data tier that the new run reads.
+
+    Returns:
+        The tier from the body when the body names a known tier, or tier 2.
+    """
+    raw = request_body().get(TIER_FIELD, TIER_STANDARD)  # An absent field means the standard tier.
+    try:  # A browser may send the tier as text, and a hand-typed body may send anything.
+        number = int(raw)  # The record holds a number, so the text form converts here.
+    except (TypeError, ValueError):  # A value of another shape is a caller defect, not a fault.
+        return TIER_STANDARD  # The standard tier is the safe default of the contract.
+    return number if number in KNOWN_TIERS else TIER_STANDARD  # An unknown number falls back the same way.
+
+
+def actor_address() -> str:
+    """Return the address of the signed-in operator.
+
+    Returns:
+        The address, or an empty string when no session owner exists.
+    """
+    owner = identity.current_owner()  # The session guard already refused an unsigned request.
+    return owner.actor_email if owner is not None else ""  # An empty address never reaches a log record.
+
+
+def browser_key() -> str:
+    """Return the browser identifier of the signed-in operator.
+
+    Why:
+        FR-038 accepts one begin action for each run, even across several tabs.
+        The record holds the browser that created the run, so a later read names
+        the tab group that owns it.
+
+    Returns:
+        The browser identifier, or an empty string when no session owner exists.
+    """
+    owner = identity.current_owner()  # The same owner that `actor_address` reads.
+    return owner.browser_id if owner is not None else ""  # An empty value still writes a valid record.
+
+
+# --------------------------------------------------------------------------
+# The run record.
+# --------------------------------------------------------------------------
+
+
+def load_run(run_id: str) -> dict[str, Any] | None:
+    """Read one run record through the store seam.
+
+    Args:
+        run_id: The run key.
+
+    Returns:
+        The record, or None when the store holds no run with that key.
+    """
+    record: Any = run_store().read_run(run_id)  # The seam answers None for an absent key.
+    return record if isinstance(record, dict) else None  # A damaged record reads as no record at all.
+
+
+def save_run(record: dict[str, Any]) -> bool:
+    """Write one run record through the store seam.
+
+    Args:
+        record: The whole record, with the changed fields already in place.
+
+    Returns:
+        True when the store holds the record.
+    """
+    written = bool(run_store().write_run(record))  # The store reports the true result, never a guess.
+    if not written:  # The operator must learn that the portal kept nothing.
+        logger.error("upgrade: the store refused the run record %s", record.get("run_id", ""))  # Names the run.
+    return written  # The caller answers 500 when this value is False.
+
+
+def run_not_found() -> tuple[Response, int]:
+    """Answer the one refusal that every run path shares.
+
+    Returns:
+        The 404 answer with the contract code.
+    """
+    return json_error(NOT_FOUND_STATUS, RUN_NOT_FOUND_CODE, RUN_NOT_FOUND_MESSAGE)  # One code for every run path.
+
+
+def write_failed() -> tuple[Response, int]:
+    """Answer a store that refused a write.
+
+    Returns:
+        The 500 answer with a code that names the cure.
+    """
+    return json_error(SERVER_ERROR_STATUS, RUN_WRITE_FAILED_CODE, RUN_WRITE_FAILED_MESSAGE)  # Retry is the cure.
+
+
+# --------------------------------------------------------------------------
+# The site lock.
+# --------------------------------------------------------------------------
+
+
+def lock_holder(org_id: str, site_id: str) -> str | None:
+    """Return the address of the operator that holds the site lock.
+
+    Why:
+        `contracts/site-lock.md` states that an unreachable lock store must not
+        stop a read. `select.read_site_locks` already keeps that rule and raises
+        nothing, so a dead store names no holder and the run continues.
+
+    Args:
+        org_id: The organization that holds the site.
+        site_id: The site the run acts on.
+
+    Returns:
+        The holder address, or None when no holder exists and when none is known.
+    """
+    return read_site_locks(org_id, [site_id]).get(site_id)  # An unreachable store answers an empty index.
+
+
+def site_locked_refusal(holder: str) -> tuple[Response, int]:
+    """Answer a site that another operator holds, and name that operator.
+
+    Why:
+        T182 asks the refusal to name the holder, so the second operator knows
+        whom to ask. `json_error` carries no `details` key, so the answer takes
+        the envelope builder instead. `contracts/http-api.md` section 3 fixes
+        `details.actor_email` for the same refusal on the lock path.
+
+    Args:
+        holder: The address of the operator that holds the lock.
+
+    Returns:
+        The 409 answer with the contract code and the holder address.
+    """
+    body = build_error_envelope(SITE_LOCKED_CODE, SITE_LOCKED_MESSAGE, {"actor_email": holder})  # Names the holder.
+    return jsonify(body), CONFLICT_STATUS  # The browser reads the code and shows the address.
+
+
+def held_by_other(org_id: str, site_id: str) -> str | None:
+    """Return the address of a lock holder that is not the current operator.
+
+    Why:
+        The operator that already holds the lock must pass every check of this
+        module. Without this rule the start route would refuse the one operator
+        that the lock exists to protect.
+
+    Args:
+        org_id: The organization that holds the site.
+        site_id: The site the run acts on.
+
+    Returns:
+        The address of the other operator, or None when the site is free to use.
+    """
+    holder = lock_holder(org_id, site_id)  # None means free, and None also means unknown.
+    if not holder or holder == actor_address():  # The current operator may always continue.
+        return None  # The caller runs the action.
+    logger.info("upgrade: the site %s is held by %s", site_id, identity.email_digest(holder))  # Digest only.
+    return holder  # The caller answers 409 and names this address to the operator.
+
+
+# --------------------------------------------------------------------------
+# The run that a site already holds (FR-037).
+# --------------------------------------------------------------------------
+
+
+def site_run_records(site_id: str) -> list[dict[str, Any]]:
+    """Return every run record that the store holds for one site.
+
+    Why:
+        `runtime/signals.RunRecordStore` asks for a reader and a writer only, so
+        a store of that shape can hold no site scan. FR-037 must not break such
+        a store and must not guess, so an absent scan answers an empty list and
+        the create call continues.
+
+    Args:
+        site_id: The site that the new run wants to act on.
+
+    Returns:
+        One record for each run of that site, or an empty list.
+    """
+    scan = getattr(run_store(), STORE_SITE_RUNS, None)  # An absent method reads as None, never a fault.
+    if not callable(scan):  # The store holds the two method shape and nothing more.
+        logger.info("upgrade: the run store publishes no %s, so no site scan runs", STORE_SITE_RUNS)  # The gap.
+        return []  # No scan means no refusal, because a guess would stop honest work.
+    try:  # The store sits on a network and may not answer.
+        found: Any = scan(site_id)  # The store owns the query and the order of the rows.
+    except Exception:  # A create call must survive an unreachable store.
+        logger.warning("upgrade: the run store did not answer the site scan of %s", site_id)  # No trace.
+        return []  # Continue, because the lock check below still guards a second operator.
+    return [record for record in found if isinstance(record, dict)]  # A damaged row reads as no row.
+
+
+def live_run_at_site(site_id: str) -> str | None:
+    """Return the key of a run that already acts on one site.
+
+    Why:
+        FR-037 asks the portal to warn before it sends a second upgrade to the
+        same site. The site lock answers a different question. The operator that
+        started the first run still holds that lock, so that same operator
+        passes every lock check and starts a second upgrade over the first.
+        `run_is_live` reads `RunStateMachine.TERMINAL`, so no state name is
+        written twice and a finished run leaves the site free.
+
+    Args:
+        site_id: The site that the new run wants to act on.
+
+    Returns:
+        The key of the first unfinished run, or None when every run finished.
+    """
+    for record in site_run_records(site_id):  # One row for each run that the store holds for this site.
+        if run_is_live(record):  # A final run blocks nothing, so switches today and access points tomorrow work.
+            return str(record.get("run_id", ""))  # The refusal names this run to the operator.
+    return None  # Every run of this site reached a final state.
+
+
+def already_running_refusal(run_id: str) -> tuple[Response, int]:
+    """Answer a site that already runs an upgrade, and name that run.
+
+    Why:
+        `site_locked` names a second operator, which is a different fact and the
+        exact confusion that FR-037 repairs, so this refusal carries its own
+        code. `json_error` holds no `details` key, so the answer takes the
+        envelope builder, as `site_locked_refusal` already does.
+
+    Args:
+        run_id: The key of the run that has not reached a final state.
+
+    Returns:
+        The 409 answer with the FR-037 code and the key of the live run.
+    """
+    body = build_error_envelope(UPGRADE_RUNNING_CODE, UPGRADE_RUNNING_MESSAGE, {"run_id": run_id})  # Names the run.
+    return jsonify(body), CONFLICT_STATUS  # The browser reads the code and opens that run.
+
+
+def site_refusal(org_id: str, site_id: str) -> tuple[Response, int] | None:
+    """Return the refusal that stops a new run on one site, or None.
+
+    Why:
+        A create call passes two separate checks. A held site belongs to a
+        second operator. A live run belongs to the current operator as often as
+        not, so the lock check alone lets that operator open a second run from a
+        second tab. One function holds both checks and keeps the handler inside
+        the Five-Item Rule.
+
+    Args:
+        org_id: The organization that holds the site.
+        site_id: The site that the new run wants to act on.
+
+    Returns:
+        The refusal answer, or None when the site accepts a new run.
+    """
+    holder = held_by_other(org_id, site_id)  # `contracts/http-api.md` lists 409 site_locked on this path.
+    if holder:  # Another operator already acts on this site.
+        return site_locked_refusal(holder)  # The refusal names that operator.
+    live = live_run_at_site(site_id)  # FR-037: the check above never sees the run of the current operator.
+    if live:  # One upgrade of this site has not reached a final state.
+        logger.info("upgrade: the site %s already runs the upgrade %s", site_id, live)  # Names the live run.
+        return already_running_refusal(live)  # The refusal names that run.
+    return None  # The site accepts a new run.
+
+
+# --------------------------------------------------------------------------
+# The new run.
+# --------------------------------------------------------------------------
+
+
+def chosen_site(site_id: str | None) -> str | None:
+    """Return the site that the new run acts on.
+
+    Why:
+        Two paths reach this handler. One carries the site in the path and one
+        holds it in the signed session. This function is the single point where
+        that difference ends, so the handler below repeats no rule.
+
+    Args:
+        site_id: The identifier from the path, or None.
+
+    Returns:
+        The site identifier, or None when neither source holds one.
+    """
+    if site_id:  # The path named the site, so the path wins.
+        return site_id  # An explicit value always beats a stored one.
+    stored: Any = session.get(SELECTED_SITE_KEY)  # The pick that `select.store_chosen_site` wrote.
+    return stored if isinstance(stored, str) and stored else None  # A damaged field reads as no pick.
+
+
+def new_run_spec(org_id: str, site_id: str) -> RunSpec:
+    """Build the record request for one new run.
+
+    Why:
+        The record holds a readable name for the organization and for the site,
+        and the picker stores neither name in the session. The body may carry
+        both, and the identifier stands in when it does not, so the page always
+        shows a value and the record never holds an empty name.
+
+    Args:
+        org_id: The organization of the current session.
+        site_id: The site the run acts on.
+
+    Returns:
+        The finished record request.
+    """
+    body = request_body()  # The picker may send the two readable names with the create call.
+    return RunSpec(
+        org_id=org_id,  # Every read of this run stays inside this organization.
+        org_name=str(body.get("org_name") or org_id),  # The identifier reads better than an empty name.
+        site_id=site_id,  # FR-014 binds one run to one site.
+        site_name=str(body.get("site_name") or site_id),  # The same rule for the site.
+        actor_email=actor_address(),  # FR-038h asks the record to name the operator.
+        browser_id=browser_key(),  # Names the tab group that created the run.
+        tier=chosen_tier(),  # The pre-check capture reads this tier.
+    )
+
+
+@upgrade_bp.post(CREATE_PATH)
+@upgrade_bp.post(CREATE_ALT_PATH)
+@identity.require_session
+def create_run(site_id: str | None = None) -> tuple[Response, int]:
+    """Create one upgrade run for one site.
+
+    Why:
+        FR-014 binds one run to one site. The site lock stops a second operator
+        from opening a competing run, and FR-037 stops the current operator from
+        sending a second upgrade over a run that still runs.
+
+    Args:
+        site_id: The site from the contract path, or None on the task path.
+
+    Returns:
+        The new run identifier and its first state, or a refusal.
+    """
+    org_id = resolve_org(None)  # The session holds the organization, because no path carries one.
+    if not org_id:  # No organization means no scope, so no run may exist.
+        return json_error(BAD_REQUEST_STATUS, ORG_NOT_CHOSEN_CODE, ORG_NOT_CHOSEN_MESSAGE)
+    chosen = chosen_site(site_id)  # The path first, then the signed session.
+    if not chosen:  # The task path reached this handler with no stored pick.
+        return json_error(BAD_REQUEST_STATUS, SITE_NOT_CHOSEN_CODE, SITE_NOT_CHOSEN_MESSAGE)
+    refusal = site_refusal(org_id, chosen)  # The held site check, then the FR-037 live run check.
+    if refusal is not None:  # One of the two checks stopped the call.
+        return refusal  # The body already names the holder or the live run.
+    record = RunRecordBuilder().build(new_run_spec(org_id, chosen))  # The record layer owns every field.
+    logger.info("upgrade: create the run %s for the site %s", record["run_id"], chosen)  # BEFORE the write.
+    if not save_run(record):  # The store reports the true result.
+        return write_failed()  # The operator retries instead of reading a run that does not exist.
+    logger.info("upgrade: the run %s holds the state %s", record["run_id"], record["state"])  # AFTER the write.
+    return jsonify({"run_id": record["run_id"], "state": record["state"]}), CREATED_STATUS
+
+
+# --------------------------------------------------------------------------
+# The options.
+# --------------------------------------------------------------------------
+
+
+def built_options(record: dict[str, Any], body: dict[str, Any]) -> dict[str, Any]:
+    """Build the target list and the option record for one run.
+
+    Why:
+        `upgrade/options.py` reads the site inventory before it names a family
+        and a scope, so the builder needs a cloud session. Until that wiring
+        lands, the body itself carries every field the page already showed, so
+        the operator still saves a choice and the record still holds it.
+
+    Args:
+        record: The run record the options belong to.
+        body: The request body of the options call.
+
+    Returns:
+        The `targets` list, the `options` record, and the `warnings` list.
+
+    Raises:
+        ValueError: When one option holds a value that the portal refuses.
+    """
+    builder = options_builder()  # The options work injects one callable here.
+    if builder is not None:  # The real path, which reads the site inventory.
+        answer: Any = builder(record, body)  # The module owns every rule of the mapping.
+        return dict(answer)  # The handler reads three keys out of this record.
+    rows = body.get(TARGETS_FIELD)  # The page already holds one row for each device.
+    targets = [dict(row) for row in rows if isinstance(row, dict)] if isinstance(rows, list) else []
+    return {TARGETS_FIELD: targets, "options": plain_options(body), WARNINGS_FIELD: []}  # No inventory read.
+
+
+def plain_options(body: dict[str, Any]) -> dict[str, Any]:
+    """Read the three upgrade option fields out of one request body.
+
+    Why:
+        `contracts/http-api.md` section 5 fixes the options body. That body holds
+        four fields, and `targets` is the fourth one. `built_options` reads
+        `targets` on its own, so this function reads the three option fields
+        only. The record holds them unchanged, so the confirmation page shows
+        what the operator picked.
+
+    Args:
+        body: The request body of the options call.
+
+    Returns:
+        The three option fields, with the documented default of each one.
+    """
+    return {
+        "reboot": bool(body.get("reboot", True)),  # The cloud reboots an access point on its own.
+        "junos_file_action": bool(body.get("junos_file_action", False)),  # A copy only, until the operator asks.
+        "strategy": str(body.get("strategy") or "big_bang"),  # The contract names this value as the default.
+    }
+
+
+@upgrade_bp.post(OPTIONS_API_PATH)
+@identity.require_session
+def save_options(run_id: str) -> tuple[Response, int]:
+    """Save the target versions and the three upgrade options of one run.
+
+    Args:
+        run_id: The run key.
+
+    Returns:
+        The saved target list and the warning list, or a refusal.
+    """
+    record = load_run(run_id)  # The run must exist before it holds an option.
+    if record is None:  # A stale link and a hand-typed path both reach this route.
+        return run_not_found()  # One code for every run path.
+    logger.info("upgrade: save the options of the run %s", run_id)  # BEFORE the change.
+    try:  # A refused option is a caller defect, not a fault of the portal.
+        built = built_options(record, request_body())  # The options module owns every rule when it is wired.
+    except ValueError as failure:  # `options.BadOptionError` is a `ValueError`, so one clause catches both.
+        logger.info("upgrade: the run %s refused an option: %s", run_id, failure)  # No value reaches the log.
+        return json_error(BAD_REQUEST_STATUS, BAD_OPTION_CODE, str(failure))
+    record[TARGETS_FIELD] = built.get(TARGETS_FIELD, [])  # The run record holds one entry for each device.
+    record["options"] = built.get("options", {})  # The three fields the cloud reads.
+    if not save_run(record):  # The store reports the true result.
+        return write_failed()  # The operator retries instead of reading a choice that was never kept.
+    logger.info("upgrade: the run %s holds %s targets", run_id, len(record[TARGETS_FIELD]))  # AFTER the change.
+    warnings = list(built.get(WARNINGS_FIELD, []))  # One sentence for each device the operator must look at.
+    return jsonify({TARGETS_FIELD: record[TARGETS_FIELD], WARNINGS_FIELD: warnings}), OK_STATUS
+
+
+# --------------------------------------------------------------------------
+# The available versions.
+# --------------------------------------------------------------------------
+
+
+def version_list(versions: Any) -> list[str]:
+    """Turn the version value of one model into a plain list of text.
+
+    Why:
+        `upgrade/options.py` answers a tuple, a test injects a list, and a
+        damaged record holds a single word. The picker draws one control for
+        each entry, so a value that is not a list must never reach the template
+        as one.
+
+    Args:
+        versions: The version value of one model, of any type.
+
+    Returns:
+        The version list, with every entry a plain string.
+    """
+    if isinstance(versions, str) or not isinstance(versions, Iterable):  # One word is not a list of words.
+        return [str(versions)] if versions else []  # A single value still gives the operator one choice.
+    return [str(one) for one in versions]  # A tuple, a list, and a set all pass through this line.
+
+
+def version_index(answer: Any) -> dict[str, list[str]]:
+    """Turn one version answer into the map that the contract fixes.
+
+    Why:
+        Two sources answer this read. The configuration holds a ready map, and
+        the options module holds a reader that builds one. Both arrive here, so
+        the body of this route and the picker of the page hold the same shape. A
+        value of any other shape reads as no version, because a picker with no
+        option is safer than a picker that shows a version the cloud never named.
+
+    Args:
+        answer: The value that the seam gave, of any type.
+
+    Returns:
+        The version list of each model, with every name and every value text.
+    """
+    if not isinstance(answer, Mapping):  # A callable, a None, and a list all reach this line.
+        return {}  # The route answers an empty map and the page shows an empty picker.
+    return {str(model): version_list(versions) for model, versions in answer.items()}  # One entry for each model.
+
+
+def cloud_session() -> Any:
+    """Return the Mist session of the signed-in operator.
+
+    Why:
+        `upgrade/options.py` reads the cloud, so it needs the session that the
+        sign-in built. The registry holds that session against the browser pair,
+        so no route and no run record ever carries a credential.
+
+    Returns:
+        The cloud session, or None when the registry holds no record.
+    """
+    owner = identity.current_session()  # The guard already admitted this request, so a record exists.
+    return getattr(owner, "cloud_session", None)  # A missing record answers None, and the read then fails.
+
+
+def read_versions(record: dict[str, Any]) -> dict[str, list[str]]:
+    """Return the version list of each model that one run may install.
+
+    Why:
+        The injected value wins over the late import, so a contract test reaches
+        no cloud. `upgrade/options.py` may not be loadable in every stage of the
+        build, so the import happens inside this call and never at load time.
+
+    Args:
+        record: The run record that names the site and the target devices.
+
+    Returns:
+        The version list of each model, empty when no source answers.
+    """
+    seam: Any = injected_object(VERSIONS_KEY)  # A ready map and a callable both arrive here.
+    if seam is None:  # No stand-in is injected, so ask the module that owns the read.
+        seam = find_attribute(load_optional_module(VERSIONS_MODULE), VERSIONS_ATTRIBUTES)
+    if not callable(seam):  # A ready map and a missing module both stop on this line.
+        return version_index(seam)  # None reads as an empty map, and a map passes through.
+    site_id = str(record.get("site_id", ""))  # FR-014 binds one run to one site, so one site scopes the read.
+    targets = record.get(TARGETS_FIELD, [])  # Each row names the model that the reader groups the answer by.
+    try:  # The reader reaches the cloud, and the cloud refuses and times out.
+        return version_index(seam(cloud_session(), site_id, targets))  # The module owns every call parameter.
+    except Exception:  # A picker with no version beats a page that shows a fault to the operator.
+        logger.warning("upgrade: the version read of the site %s did not answer", site_id)  # No stack trace.
+        return {}  # The operator retries the page, and the run record keeps every earlier choice.
+
+
+@upgrade_bp.get(VERSIONS_PATH)
+@identity.require_session
+def run_versions(run_id: str) -> tuple[Response, int]:
+    """Answer the version list of each model that one run may install.
+
+    Why:
+        `contracts/http-api.md` section 5 fixes this path, and
+        `upgrade/options.html` states that this body fills the picker. The page
+        renders before the cloud answers, so the picker needs a second read that
+        it can repeat.
+
+    Args:
+        run_id: The run key.
+
+    Returns:
+        The version list of each model, or the refusal that names the missing run.
+    """
+    record = load_run(run_id)  # The run must exist before the portal reads a version for it.
+    if record is None:  # A stale link and a hand-typed path both reach this route.
+        return run_not_found()  # `contracts/http-api.md` fixes this one code for every run path.
+    by_model = read_versions(record)  # Empty while no seam is injected and the module is absent.
+    logger.info("upgrade: the run %s may install a version of %s model(s)", run_id, len(by_model))  # AFTER.
+    return jsonify({BY_MODEL_FIELD: by_model}), OK_STATUS  # The picker reads one list for each model.
+
+
+# --------------------------------------------------------------------------
+# The start.
+# --------------------------------------------------------------------------
+
+
+def start_refusal(record: dict[str, Any]) -> tuple[Response, int] | None:
+    """Report the first rule that refuses the start of one run.
+
+    Why:
+        FR-033 to FR-035 guard the start with three separate rules. One function
+        holds all three in their documented order, so the handler below stays
+        inside the size limit and a reader finds every refusal in one place.
+
+    Args:
+        record: The run record the operator asks to start.
+
+    Returns:
+        The refusal answer, or None when every rule passes.
+    """
+    if confirmation_text() != CONFIRM_TEXT:  # FR-034 refuses any other text and any other letter case.
+        return json_error(BAD_REQUEST_STATUS, CONFIRMATION_REQUIRED_CODE, CONFIRM_REQUIRED_MESSAGE)
+    if not record.get(PRE_CAPTURE_FIELD):  # FR-035 refuses a start with no saved pre-check.
+        return json_error(CONFLICT_STATUS, PRE_CAPTURE_MISSING_CODE, PRE_CAPTURE_MISSING_MESSAGE)
+    holder = held_by_other(str(record.get("org_id", "")), str(record.get("site_id", "")))  # T182 asks for this.
+    if holder:  # Another operator holds the site, so this run may not send anything.
+        return site_locked_refusal(holder)  # The refusal names that operator.
+    return None  # Every rule passed, so the handler sends the upgrade.
+
+
+def launch_run(record: dict[str, Any]) -> None:
+    """Hand one prepared run record to the run driver.
+
+    Why:
+        The driver needs a store, a phase gate, a capture starter, and an upgrade
+        submitter. That wiring belongs to the driver work, so this function only
+        calls the seam and names the gap while the seam is unset. FR-038 needs no
+        guard here, because `RunDriver.start` answers with the live thread when
+        one already owns the run.
+
+    Args:
+        record: The run record, already in the state `upgrade_submitting`.
+    """
+    launcher = run_launcher()  # None while the driver wiring is not in place.
+    if launcher is None:  # The portal must still answer, and the operator must still learn the truth.
+        logger.error("upgrade: %s so the run %s sent nothing", NO_LAUNCHER_MESSAGE, record["run_id"])  # The gap.
+        return  # The poll then shows the run held at `upgrade_submitting`.
+    launcher(record)  # The driver owns every phase from this moment.
+
+
+@upgrade_bp.post(START_PATH)
+@identity.require_session
+def start_run(run_id: str) -> tuple[Response, int]:
+    """Send the upgrade of one run after the operator types the word `CONFIRM`.
+
+    Why:
+        FR-038 accepts one begin action for each run, even across several browser
+        tabs. A second call therefore reports the state that the run already
+        holds and sends nothing.
+
+    Args:
+        run_id: The run key.
+
+    Returns:
+        The state the run now holds, or a refusal.
+    """
+    record = load_run(run_id)  # The run must exist before it starts.
+    if record is None:  # A stale link and a hand-typed path both reach this route.
+        return run_not_found()  # One code for every run path.
+    refusal = start_refusal(record)  # The three rules of FR-033 to FR-035, plus the lock check of T182.
+    if refusal is not None:  # One rule refused, and the answer already names which one.
+        return refusal  # The operator reads the code and the cure.
+    logger.info("upgrade: start the run %s", run_id)  # BEFORE the state change.
+    try:  # A second tab reaches this line while the run already sends, which is not a fault.
+        RunStateMachine().advance(record, RunState.UPGRADE_SUBMITTING)
+    except RunTransitionError:  # FR-038 accepts one begin action, so the second one changes nothing.
+        logger.info("upgrade: the run %s already started, so this call sent nothing", run_id)  # AFTER the read.
+        return jsonify({"state": str(record.get("state", ""))}), ACCEPTED_STATUS
+    if not save_run(record):  # The store reports the true result.
+        return write_failed()  # No upgrade goes out while the record says the run never started.
+    logger.info("upgrade: the run %s holds the state %s", run_id, record["state"])  # AFTER the state change.
+    launch_run(record)  # The driver owns every phase from this moment.
+    return jsonify({"state": record["state"]}), ACCEPTED_STATUS
+
+
+# --------------------------------------------------------------------------
+# The status poll and the pages.
+# --------------------------------------------------------------------------
+
+
+@upgrade_bp.get(STATUS_PATH)
+@identity.require_session
+def run_status(run_id: str) -> tuple[Response, int]:
+    """Answer the state of one run for the browser poll.
+
+    Why:
+        FR-039 asks the page to refresh every 30 seconds with no operator
+        action, so this route answers from the run record alone and reads no
+        cloud. `RunStatusView` owns the whole body shape, so no field of the
+        contract is built twice.
+
+    Args:
+        run_id: The run key.
+
+    Returns:
+        The status body, or the run refusal.
+    """
+    record = load_run(run_id)  # One read of the shared record, and no cloud call at all.
+    if record is None:  # A poll may outlive the run it watches.
+        return run_not_found()  # One code for every run path.
+    return jsonify(RunStatusView().build(record)), OK_STATUS  # The view owns every field of the body.
+
+
+def run_is_live(record: dict[str, Any]) -> bool:
+    """Report whether a stop can still change one run.
+
+    Why:
+        `RunStateMachine.read_state` refuses a name outside the model, which is
+        the correct rule at the edge of a write. A page read must not fault on
+        the same name, so an unknown state counts as a run that no stop reaches.
+
+    Args:
+        record: The run record the page shows.
+
+    Returns:
+        True while the run still accepts a stop.
+    """
+    try:  # An absent run and a damaged record both reach this line.
+        state = RunStateMachine.read_state(record)  # Refuses any name outside the model.
+    except RunTransitionError:  # No state at all, so the page offers no stop control.
+        return False  # The safe answer, because a stop would reach nothing.
+    return state not in RunStateMachine.TERMINAL  # A final run accepts no stop.
+
+
+def stop_control_state(record: dict[str, Any]) -> dict[str, Any]:
+    """Build the two values that the stop partial reads.
+
+    Why:
+        `upgrade/progress.html` includes `upgrade/stop.html`, so the run page
+        must carry the partial values as well as its own. FR-038a shows the stop
+        control while an upgrade runs and hides it once the run is final.
+
+    Args:
+        record: The run record the page shows.
+
+    Returns:
+        The stop outcome record and the availability of the stop control.
+    """
+    request_record = StopRequestStore(run_store()).read(str(record.get("run_id", "")))  # None until a stop.
+    outcome = request_record.outcome if request_record is not None else None  # None until the cancels report.
+    held = outcome.to_record() if outcome is not None else None  # The template holds a default for None.
+    return {"stop_outcome": held, "stop_available": run_is_live(record)}
+
+
+@upgrade_bp.get(RUN_PAGE_PATH)
+@identity.require_session
+def run_page(run_id: str) -> str:
+    """Render the live run view of one run.
+
+    Args:
+        run_id: The run key.
+
+    Returns:
+        The rendered page.
+    """
+    record = load_run(run_id) or {}  # An absent run still renders, so the operator reads a page and not a fault.
+    poll_seconds = current_app.config.get("POLL_INTERVAL_SECONDS", 30)  # Decision D3 fixes this period.
+    logger.info("upgrade: show the run page of %s", run_id)  # One line for each page read.
+    return render_page(
+        PROGRESS_TEMPLATE,
+        run_id=run_id,  # The page builds every control identifier from this value.
+        status=RunStatusView().build(record),  # The same body that the poll answers.
+        site_name=str(record.get("site_name", "")),  # The heading of the page.
+        poll_interval_seconds=poll_seconds,  # The script reads this through `data-poll-seconds`.
+        **stop_control_state(record),  # The two values that the included stop partial reads.
+    )
+
+
+@upgrade_bp.get(OPTIONS_PAGE_PATH)
+@identity.require_session
+def options_page(run_id: str) -> str:
+    """Render the version picker and the three option controls of one run.
+
+    Args:
+        run_id: The run key.
+
+    Returns:
+        The rendered page.
+    """
+    record = load_run(run_id) or {}  # An absent run still renders an empty picker.
+    versions = version_index(injected_object(VERSIONS_KEY))  # A ready map renders, and no cloud read starts here.
+    logger.info("upgrade: show the options page of %s", run_id)  # One line for each page read.
+    return render_page(
+        OPTIONS_TEMPLATE,
+        run_id=run_id,  # The page builds every control identifier from this value.
+        site_name=str(record.get("site_name", "")),  # The heading of the page.
+        targets=record.get(TARGETS_FIELD, []),  # One row for each device of the site.
+        versions_by_model=versions,  # The picker refills itself from `GET /api/runs/<run_id>/versions`.
+        options=record.get("options", {}),  # The three controls show the saved choice.
+        warnings=[],  # The save call answers the warnings, so the first read of the page shows none.
+    )
+
+
+@upgrade_bp.get(CONFIRM_PAGE_PATH)
+@identity.require_session
+def confirm_page(run_id: str) -> str:
+    """Render the last page before the portal sends any upgrade.
+
+    Why:
+        FR-035 keeps the begin control locked until a verified pre-check exists.
+        The template defaults `pre_capture_verified` to false, so this route
+        names the value and the page never unlocks by accident.
+
+    Args:
+        run_id: The run key.
+
+    Returns:
+        The rendered page.
+    """
+    record = load_run(run_id) or {}  # An absent run renders a locked page, which is the safe answer.
+    logger.info("upgrade: show the confirmation page of %s", run_id)  # One line for each page read.
+    return render_page(
+        CONFIRM_TEMPLATE,
+        run_id=run_id,  # The page builds every control identifier from this value.
+        site_name=str(record.get("site_name", "")),  # The heading of the page.
+        targets=record.get(TARGETS_FIELD, []),  # The operator reads the whole list one last time.
+        options=record.get("options", {}),  # The three controls show the saved choice.
+        pre_capture_id=record.get(PRE_CAPTURE_FIELD),  # Names the saved pre-check, or None.
+        pre_capture_verified=bool(record.get(PRE_CAPTURE_FIELD)),  # FR-035 unlocks the control on this value.
+    )
+
+
+# --------------------------------------------------------------------------
+# The stop.
+# --------------------------------------------------------------------------
+
+
+def stop_refusal(failure: StopRequestError) -> tuple[Response, int]:
+    """Map one stop request failure onto the documented answer.
+
+    Why:
+        `runtime/signals.py` already carries the machine code on each error
+        class, so this function maps the class to a status and repeats no code.
+        The 409 of a run that cannot stop reads `run_not_stoppable`, which is a
+        different word from the 409 `site_locked` of a held site, so the browser
+        tells the two apart.
+
+    Args:
+        failure: The error that the stop store raised.
+
+    Returns:
+        The refusal answer.
+    """
+    if isinstance(failure, ConfirmationRequiredError):  # FR-038b refuses any other word and any other case.
+        return json_error(BAD_REQUEST_STATUS, CONFIRMATION_REQUIRED_CODE, STOP_REQUIRED_MESSAGE)
+    if isinstance(failure, RunNotFoundError):  # The run never existed, or it left the store.
+        return run_not_found()  # One code for every run path.
+    if isinstance(failure, RunNotStoppableError):  # The run already reached a final state.
+        return json_error(CONFLICT_STATUS, RUN_NOT_STOPPABLE_CODE, str(failure))
+    return json_error(SERVER_ERROR_STATUS, failure.code, str(failure))  # The store refused the write itself.
+
+
+def stop_lock_refusal(record: dict[str, Any]) -> tuple[Response, int] | None:
+    """Refuse a stop when a different operator holds the site of the run.
+
+    Why:
+        FR-038i binds the stop control to the operator that holds the site lock.
+        Without this check any signed-in operator cancels the upgrade of any
+        other operator. The run record names its own organization and its own
+        site, so this check reads no value out of the session and no value out
+        of the request body.
+
+    Args:
+        record: The run record that the stop acts on.
+
+    Returns:
+        The 409 answer that names the holder, or None when the stop may run.
+    """
+    org_id = str(record.get("org_id", ""))  # The run record carries its own scope.
+    site_id = str(record.get("site_id", ""))  # FR-014 binds one run to one site.
+    if not org_id or not site_id:  # An absent run and a damaged record both reach here.
+        return None  # The stop store still answers `run_not_found` for a run it does not hold.
+    holder = held_by_other(org_id, site_id)  # The operator that holds the lock always passes.
+    return site_locked_refusal(holder) if holder else None  # The refusal names the operator to ask.
+
+
+def cancel_outcome(run_id: str) -> StopOutcome:
+    """Run the cancel work of one stop and return what it achieved.
+
+    Why:
+        FR-038f forbids a claim of a cancel that never happened. While the cancel
+        work is not wired, the three lists therefore stay empty and the message
+        states only what the portal did do, which is to stop starting devices.
+
+    Args:
+        run_id: The run key.
+
+    Returns:
+        The cancelled list, the continuing list, the gap list, and one sentence.
+    """
+    runner = stop_runner()  # The stop work injects one callable here.
+    if runner is None:  # No cancel call went out, so the answer must claim none.
+        return StopOutcome(message=STOP_RECORDED_MESSAGE)  # Three empty lists and one true sentence.
+    answer: Any = runner(run_id)  # The module owns every cancel call and every device name.
+    return answer if isinstance(answer, StopOutcome) else StopOutcome(message=STOP_RECORDED_MESSAGE)
+
+
+def move_to_stopping(record: dict[str, Any]) -> str:
+    """Move one run into the state `stopping` and write the record.
+
+    Why:
+        `StopRequestStore.request` writes the request and the change time only,
+        and it leaves `state` to the state machine on purpose. The contract
+        answers `{"state": "stopping"}`, so this function performs that move.
+
+    Args:
+        record: The run record that now holds the stop request.
+
+    Returns:
+        The state the run holds after the move.
+    """
+    try:  # A run that reached a final state between the two reads must not raise a fault page.
+        RunStateMachine().advance(record, RunState.STOPPING)
+    except RunTransitionError:  # The run already stops, or it already finished.
+        return str(record.get("state", ""))  # The operator reads the true state, whatever it is.
+    save_run(record)  # A failed write leaves the request in place, and the driver still reads it.
+    return str(record.get("state", ""))  # The contract answers this value to the browser.
+
+
+def outcome_is_recorded(record: Mapping[str, Any]) -> bool:
+    """Report whether the run record already names the outcome of its stop.
+
+    Why:
+        Two layers can write this one value. `stop.stop_run_and_record` writes
+        it whenever a cancel call reaches the cloud, and the stop route writes
+        it on every other path. This reader lets the route see the earlier
+        write and skip a second write of the same value.
+
+    Args:
+        record: The run record, read after the cancel work finished.
+
+    Returns:
+        True when the stop request of the record names an outcome.
+    """
+    request = record.get("stop_request")  # `StopRequest.to_record` holds a null here until a cancel reports.
+    return isinstance(request, Mapping) and request.get("outcome") is not None  # A null means no write yet.
+
+
+def record_stop_outcome(store: Any, run_id: str, outcome: StopOutcome) -> dict[str, Any]:
+    """Write the outcome of one stop unless the cancel layer already wrote it.
+
+    Why:
+        FR-038h asks the record to hold the whole stop. `stop.stop_run_and_record`
+        owns that write, but it runs only when the run holds an accepted upgrade
+        call and a cloud session. An operator who stops a run before the first
+        accepted call reaches neither, so this route keeps its own write for that
+        path. The route reads the record here in any case, because the state move
+        below needs the record that the cancel layer may have changed.
+
+    Args:
+        store: The run record store of this request.
+        run_id: The run key.
+        outcome: The three device lists and the message of this stop.
+
+    Returns:
+        The run record as it stands after the write.
+    """
+    written = load_run(run_id) or {}  # The cancel layer writes through a store of its own, so read the record.
+    if outcome_is_recorded(written):  # `stop.stop_run_and_record` already wrote this same value.
+        return written  # One write saved, and the record already answers FR-038h.
+    StopRequestStore(store).record_outcome(run_id, outcome)  # FR-038h records the whole stop.
+    return load_run(run_id) or {}  # Read again, because this write changed the record.
+
+
+@upgrade_bp.post(STOP_PATH)
+@identity.require_session
+def stop_run(run_id: str) -> tuple[Response, int]:
+    """Stop one running upgrade after the operator types the word `STOP`.
+
+    Why:
+        FR-038c cancels every device that has not started, and FR-038d never
+        interrupts a device that already writes firmware. FR-038i lets only the
+        operator that holds the site lock reach this control. The record read
+        therefore runs first, because the record names the site of the run. The
+        stop store records the request next, so the driver reads it even when
+        the cancel calls take time.
+
+    Args:
+        run_id: The run key.
+
+    Returns:
+        The state of the run and the outcome of the cancel work, or a refusal.
+    """
+    record = load_run(run_id) or {}  # Read first, because the record names the site the lock guards.
+    refusal = stop_lock_refusal(record)  # FR-038i binds this control to the operator that holds the site.
+    if refusal is not None:  # Another operator holds the site, so this stop writes nothing at all.
+        return refusal  # The 409 answer names that operator.
+    store = run_store()  # One store serves the request, the outcome, and the state move.
+    logger.info("upgrade: stop the run %s", run_id)  # BEFORE the change.
+    try:  # Every refusal of the stop store carries its own machine code.
+        StopRequestStore(store).request(run_id, actor_address(), confirmation_text())
+    except StopRequestError as failure:  # One clause catches all four documented failures.
+        return stop_refusal(failure)  # The answer names the code and the cure.
+    outcome = cancel_outcome(run_id)  # FR-038e names each cancelled and each continuing device.
+    written = record_stop_outcome(store, run_id, outcome)  # The cancel layer may have written the outcome.
+    state = move_to_stopping(written)  # The contract answers `stopping`, so the state moves here.
+    logger.info("upgrade: the run %s holds the state %s", run_id, state)  # AFTER the change.
+    return jsonify({"state": state, "outcome": outcome.to_record()}), OK_STATUS

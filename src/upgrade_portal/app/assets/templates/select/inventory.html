@@ -1,0 +1,151 @@
+{#
+  select/inventory.html - the device inventory of one site.
+
+  Why this file exists:
+    The operator must see what a capture will read before the capture starts.
+    contracts/http-api.md:82-91 fixes the source: GET /api/sites/<site_id>/
+    inventory reads the physical view with vc=True, so every chassis member of a
+    virtual chassis appears as its own row. This page shows that same list, so
+    the device count on the page and the device count in a capture agree.
+
+  Why the links hold a literal path:
+    contracts/http-api.md fixes every public path of this portal. The blueprint
+    endpoint names are not fixed in the template layer, so every link and every
+    form action follows the contract paths. url_for stays for a static asset.
+
+  Variables a route may supply:
+    site_name    - the name of the site. Shows in the heading.
+    site_id      - the site identifier. Shows in the card note.
+    devices      - the list of device records. Each record holds mac, and may
+                   hold name, type, model, serial, version, status, and ip. The
+                   mac value is lower case with no separator, which matches the
+                   device_index key at data-model.md.
+    counts       - the count map. contracts/http-api.md:86 leaves the key set
+                   open, so this page renders the keys the route supplies and
+                   passes over the rest. devices_total drives the
+                   inventory-count-total value.
+    capture_url  - the path of the capture page for this site. The link appears
+                   only when the route supplies this value, because
+                   contracts/http-api.md fixes no page path for it.
+    page_title   - the heading text and the tab text.
+    theme        - the name of the current theme. See layout.html.
+    themes       - the theme names the operator may pick.
+#}
+{% extends 'layout.html' %}
+
+{#
+  This list holds every count key the portal names, in the order data-model.md:
+  182-184 fixes for a capture record. The inventory route supplies four of them
+  today. A key the route leaves out drops from the list, so this page also suits
+  a later route that reads the client counts as well.
+#}
+{% set count_labels = [
+  ('devices_total', 'Devices in total'),
+  ('devices_connected', 'Devices connected'),
+  ('devices_disconnected', 'Devices disconnected'),
+  ('gateways', 'Gateways'),
+  ('switches', 'Switches'),
+  ('access_points', 'Access points'),
+  ('clients_wired', 'Wired clients'),
+  ('clients_wireless', 'Wireless clients'),
+  ('clients_guest', 'Guest clients')
+] %}
+
+{#
+  Every value passes through a default filter first. The portal runs Jinja with
+  the standard undefined type, and this step also holds if a later setting turns
+  on the strict undefined type.
+#}
+{% set device_rows = devices | default([], true) %}
+{% set count_map = counts | default({}, true) %}
+{% set site_key = site_id | default('', true) %}
+{% set capture_link = capture_url | default('', true) %}
+{% set heading = page_title | default(site_name | default('Site inventory', true), true) %}
+
+{% block title %}{{ heading }}{% endblock %}
+
+{% block heading %}<h1>{{ heading }}</h1>{% endblock %}
+
+{% block content %}
+<div class="portal-card">
+  <h2 class="portal-card-title">Inventory</h2>
+
+  <dl class="row mb-0">
+    <dt class="col-sm-4">Devices in total</dt>
+    {#
+      The total carries the test identifier and holds the number alone. A test
+      reads this value and compares it against the device count of a capture.
+    #}
+    <dd class="col-sm-8 cell-number"
+        data-testid="inventory-count-total">{{ count_map.get('devices_total', device_rows | length) }}</dd>
+
+    {% for key, label in count_labels %}
+      {% if key != 'devices_total' and key in count_map %}
+        <dt class="col-sm-4">{{ label }}</dt>
+        <dd class="col-sm-8 cell-number">{{ count_map.get(key) }}</dd>
+      {% endif %}
+    {% endfor %}
+
+    {% if site_key %}
+      <dt class="col-sm-4">Site identifier</dt>
+      <dd class="col-sm-8 font-monospace">{{ site_key }}</dd>
+    {% endif %}
+  </dl>
+
+  {% if capture_link %}
+    <p class="mt-3 mb-0">
+      <a class="portal-button portal-button-primary"
+         data-testid="site-capture-link"
+         href="{{ capture_link }}">Go to the capture page</a>
+    </p>
+  {% endif %}
+</div>
+
+<div class="portal-table-scroll">
+  <table class="portal-table" data-testid="inventory-table">
+    <caption class="visually-hidden">
+      Every device of this site. A chassis member appears as its own row.
+    </caption>
+
+    <thead>
+      <tr>
+        <th scope="col">Name</th>
+        <th scope="col">MAC address</th>
+        <th scope="col">Type</th>
+        <th scope="col">Model</th>
+        <th scope="col">Serial number</th>
+        <th scope="col">Version</th>
+        <th scope="col">Status</th>
+        <th scope="col">IP address</th>
+      </tr>
+    </thead>
+
+    <tbody>
+      {% for device in device_rows %}
+        {% set mac = device.mac | default('', true) %}
+
+        <tr data-testid="inventory-row-{{ mac }}">
+          <th scope="row">{{ device.name | default('Unnamed device', true) }}</th>
+          <td class="cell-mono">{{ mac }}</td>
+          <td>{{ device.type | default('unknown', true) }}</td>
+          <td>{{ device.model | default('unknown', true) }}</td>
+          <td class="cell-mono">{{ device.serial | default('unknown', true) }}</td>
+          <td class="cell-mono">{{ device.version | default('unknown', true) }}</td>
+          {#
+            The status reads as a word. The table adds no color, so the status
+            needs no second signal. WCAG 1.4.1 forbids color as the only signal.
+          #}
+          <td>{{ device.status | default('unknown', true) }}</td>
+          <td class="cell-mono">{{ device.ip | default('', true) }}</td>
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="8" class="portal-table-empty">
+            The portal found no device at this site.
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

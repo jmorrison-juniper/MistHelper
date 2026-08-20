@@ -1,0 +1,219 @@
+{#
+  upgrade/confirm.html - the upgrade confirmation page of the upgrade capture
+  portal.
+
+  Why this file exists:
+    An upgrade writes firmware and reboots a device. The operator must not reach
+    that action with one press. FR-033 and FR-034 ask for a typed word, and the
+    customer asked for "a box the operator must type a word into before a
+    shaded-out begin button unlocks". This page holds that box and that button,
+    and it holds nothing else that can start work. The last read of the plan
+    sits on the same page, so the operator reads the count of devices and the
+    warnings before the word unlocks the button.
+
+  Why the begin button starts disabled:
+    The disabled attribute sits in the markup, not in a script. A browser that
+    fails to load portal.js therefore leaves the button locked. A page that
+    started unlocked and relied on a script to lock it would start an upgrade
+    after a script error.
+
+  Why one variable holds the word:
+    contracts/ui-testids.md line 111, contracts/http-api.md line 226, FR-033,
+    and task T152 all name the word CONFIRM. The word sits in one Jinja
+    variable and reaches the visible text and the data-confirm-word attribute
+    from there, so a change of the word costs one line. portal.js reads the
+    attribute and never holds the word itself.
+
+  Why the page holds no script:
+    The content security policy is 'self' only. The policy blocks an inline
+    script and blocks the style attribute. Every behavior lives in portal.js.
+
+  Why the links hold a literal path:
+    contracts/http-api.md fixes every public path of this portal. The blueprint
+    endpoint names are not fixed, so a url_for call against an endpoint name
+    would raise while this page renders.
+
+  The contract with portal.js:
+    The input carries data-confirm-word and data-confirm-target. portal.js
+    enables the named button only when the typed text equals the word exactly.
+    The button carries data-run-id and data-progress-url. portal.js sends
+    POST /api/runs/<run_id>/start with the typed text in the confirm field, then
+    moves the browser to the progress path.
+
+  Variables a route may supply:
+    run_id               - the run identifier. The start call needs it.
+    site_name            - the site name for the summary.
+    targets              - the device records the run upgrades. The page counts
+                           them and lists the first few.
+    options              - the chosen options. Holds reboot, junos_file_action,
+                           and strategy.
+    warnings             - the plain sentences that plan_upgrade returned.
+    pre_capture_id       - the identifier of the pre-check capture.
+    pre_capture_verified - true only after the store read the capture back.
+                           The default is false, so a route that does not send
+                           this value renders a locked page. FR-035 asks the
+                           portal to refuse an upgrade until a saved pre-check
+                           exists, so the safe default is the locked one.
+    progress_url         - the run page. contracts/http-api.md line 290 fixes
+                           this path as /runs/<run_id>.
+    options_url          - the options page. The page shows a back link only
+                           when the route sends this value.
+    page_title           - the heading text and the tab text.
+    theme, themes        - see layout.html.
+#}
+{% extends 'layout.html' %}
+
+{#
+  The one place that holds the confirmation word. Change this line to change the
+  word, and both the visible text and the gate follow.
+#}
+{% set upgrade_confirm_word = 'CONFIRM' %}
+
+{#
+  Every value passes through a default filter first. The portal runs Jinja with
+  the strict undefined type, so a missing key raises instead of rendering an
+  empty string.
+#}
+{% set run_key = run_id | default('', true) %}
+{% set target_rows = targets | default([], true) %}
+{% set warning_lines = warnings | default([], true) %}
+{% set option_values = options | default({}, true) %}
+{% set site_label = site_name | default('', true) %}
+{% set capture_key = pre_capture_id | default('', true) %}
+
+{#
+  A boolean uses the default filter with one argument only. The second argument
+  turns the filter into a truth test, and a false value then reads as a missing
+  value. The page would then report a reboot that never happens, and the gate
+  would unlock without a verified pre-check capture.
+#}
+{% set pre_check_ready = pre_capture_verified | default(false) %}
+{% set reboot_chosen = option_values.reboot | default(true) %}
+
+{% set run_url = progress_url | default('/runs/' ~ run_key, true) %}
+{% set back_url = options_url | default('', true) %}
+{% set device_count = target_rows | length %}
+{% set chosen_strategy = option_values.strategy | default('big_bang', true) %}
+
+{% block title %}{{ page_title | default('Confirm the upgrade', true) }}{% endblock %}
+
+{% block heading %}<h1>{{ page_title | default('Confirm the upgrade', true) }}</h1>{% endblock %}
+
+{% block content %}
+<div class="portal-card">
+  <h2 class="portal-card-title">Read the plan</h2>
+
+  <dl class="row mb-0">
+    <dt class="col-sm-4">Site</dt>
+    <dd class="col-sm-8">{{ site_label | default('Unknown site', true) }}</dd>
+
+    <dt class="col-sm-4">Devices to upgrade</dt>
+    <dd class="col-sm-8">{{ device_count }}</dd>
+
+    <dt class="col-sm-4">Strategy</dt>
+    <dd class="col-sm-8">
+      {% if chosen_strategy == 'canary' %}
+        A few devices first, then the rest
+      {% else %}
+        All devices at the same time
+      {% endif %}
+    </dd>
+
+    <dt class="col-sm-4">Reboot after the write</dt>
+    <dd class="col-sm-8">
+      {% if reboot_chosen %}
+        Yes, for each switch and each gateway
+      {% else %}
+        No
+      {% endif %}
+    </dd>
+
+    <dt class="col-sm-4">Pre-check capture</dt>
+    <dd class="col-sm-8 cell-mono">{{ capture_key | default('None saved', true) }}</dd>
+  </dl>
+</div>
+
+<div class="portal-card">
+  <h2 class="portal-card-title">Plan warnings</h2>
+
+  <ul class="mb-0" data-testid="upgrade-warning-list">
+    {% for line in warning_lines %}
+      <li>{{ line }}</li>
+    {% else %}
+      <li>The plan found no warning.</li>
+    {% endfor %}
+  </ul>
+</div>
+
+<div class="confirm-box">
+  <h2 class="confirm-box-title">Confirm the upgrade</h2>
+
+  {#
+    The consequence sits in the markup. A signal word from a stylesheet rule is
+    generated content, and no browser test can read generated content.
+  #}
+  <p class="confirm-box-text">
+    Warning: the upgrade writes new firmware to {{ device_count }} devices and
+    reboots each one. A device is offline while it reboots. The portal cannot
+    undo a write.
+  </p>
+
+  <p class="confirm-box-text">
+    To unlock the begin button, type the word
+    <span class="confirm-box-word">{{ upgrade_confirm_word }}</span>
+    in capital letters.
+  </p>
+
+  <label class="form-label" for="upgrade-confirm-input">Confirmation word</label>
+
+  {#
+    The input holds the word for the gate. portal.js compares the typed text
+    against data-confirm-word, so the script never holds the word itself.
+    The input is disabled while no verified pre-check exists. A disabled input
+    fires no event, so the gate can never unlock the button in that state.
+  #}
+  <input type="text"
+         class="confirm-box-input"
+         id="upgrade-confirm-input"
+         data-testid="upgrade-confirm-input"
+         data-confirm-word="{{ upgrade_confirm_word }}"
+         data-confirm-target="upgrade-start-button"
+         data-confirm-hint-for="upgrade-confirm-hint"
+         autocomplete="off"
+         autocapitalize="off"
+         spellcheck="false"
+         aria-describedby="upgrade-confirm-hint"
+         {{ 'disabled' if not pre_check_ready else '' }}>
+
+  {#
+    The hint carries two messages. The server writes the locked reason when no
+    pre-check exists. portal.js writes the letter case message when the typed
+    text matches the word only after a case change. The stylesheet shows the
+    typed text in capital letters, so an operator who types lower case sees
+    capital letters and needs this message to learn why the button stays locked.
+  #}
+  <p class="portal-card-note" id="upgrade-confirm-hint" aria-live="polite">
+    {% if not pre_check_ready %}
+      The portal needs a saved pre-check capture before an upgrade starts. Run
+      the pre-check first.
+    {% endif %}
+  </p>
+
+  <div class="confirm-box-actions">
+    {#
+      The button starts disabled in the markup. The gate in portal.js removes
+      the attribute only after the typed text matches the word exactly.
+    #}
+    <button type="button"
+            class="portal-button portal-button-primary"
+            data-testid="upgrade-start-button"
+            data-run-id="{{ run_key }}"
+            data-progress-url="{{ run_url }}"
+            disabled>Begin the upgrade</button>
+
+    {% if back_url %}
+      <a class="portal-button" href="{{ back_url }}">Return to the options</a>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -321,9 +321,14 @@
     letter-spacing: 0.05em;
 }
 
+/*
+ * This field shows exactly the letters the operator typed. Do not add
+ * text-transform here. The gate compares the letter case, so a display rule that
+ * shows capitals for lower-case input would leave the operator reading CONFIRM
+ * while the button stays locked, with nothing on the page to explain why.
+ */
 .confirm-box-input {
     font-family: "Consolas", "Courier New", monospace;
-    text-transform: uppercase;
     letter-spacing: 0.08em;
     max-width: 16rem;
     background-color: var(--portal-surface);
@@ -525,6 +530,16 @@
 .badge-failed {
     background-color: var(--portal-badge-failed-bg);
     color: var(--portal-badge-failed-text);
+}
+
+/* An unknown state is not a failure. The site list reads `unknown` when the
+ * lock store does not answer, so this badge stays neutral and never paints a
+ * healthy site red. The markup prints the word beside the color, because WCAG
+ * 1.4.1 forbids color as the only signal.
+ */
+.badge-unknown {
+    background-color: var(--portal-badge-unknown-bg);
+    color: var(--portal-badge-unknown-text);
 }
 
 /* ==========================================================================

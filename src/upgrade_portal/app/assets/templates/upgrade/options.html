@@ -1,0 +1,273 @@
+{#
+  upgrade/options.html - the upgrade options page of the upgrade capture portal.
+
+  Why this file exists:
+    The operator must choose a target version for each device before the
+    upgrade starts. contracts/http-api.md:201-216 fixes the body of
+    POST /api/runs/<run_id>/options. This page builds that exact body. One page
+    holds the four option controls and the target table, so the operator reads
+    every choice in one view and the plan warnings sit next to the choice that
+    caused them.
+
+  Why the page holds no script:
+    The content security policy is 'self' only. See src/upgrade_portal/app/
+    security.py. The policy blocks an inline script and blocks the style
+    attribute. Every behavior of this page therefore lives in portal.js, and
+    every color lives in a stylesheet.
+
+  Why the links hold a literal path:
+    contracts/http-api.md fixes every public path of this portal. The blueprint
+    endpoint names are not fixed, and the route modules do not exist yet. A
+    url_for call against an endpoint name would raise while this page renders,
+    so every path follows the contract. url_for stays for a static asset.
+
+  The contract with portal.js:
+    Each device select carries data-version-for with the MAC address. The
+    apply-to-every-device select carries data-version-all. The save button
+    carries data-run-id and data-next-url. portal.js reads those four hooks,
+    builds the option body, and sends POST /api/runs/<run_id>/options.
+
+  Variables a route may supply:
+    run_id            - the run identifier. The save call needs it.
+    site_name         - the site name for the card note.
+    targets           - the list of device records. Each record may hold mac,
+                        name, device_type, model, version_before, and
+                        version_target. The mac value is lower case with no
+                        separator, which matches data-model.md section 4.2.
+    versions_by_model - the map of model to version list. The body of
+                        GET /api/runs/<run_id>/versions carries this map.
+    options           - the chosen options. Holds reboot, junos_file_action,
+                        and strategy. data-model.md section 4 stores the same
+                        three names.
+    warnings          - the plain sentences that plan_upgrade returned.
+    confirm_url       - the page that follows this one. contracts/http-api.md
+                        fixes no page path for it, so the route lane owns the
+                        value. The default follows the shape of the run path.
+    page_title        - the heading text and the tab text.
+    theme, themes     - see layout.html.
+#}
+{% extends 'layout.html' %}
+
+{#
+  Every value passes through a default filter first. The portal runs Jinja with
+  the strict undefined type, so a missing key raises instead of rendering an
+  empty string. The default filter tests for the undefined value before it
+  reads it, so this step holds for every key the route does not supply.
+#}
+{% set run_key = run_id | default('', true) %}
+{% set target_rows = targets | default([], true) %}
+{% set versions_map = versions_by_model | default({}, true) %}
+{% set warning_lines = warnings | default([], true) %}
+{% set option_values = options | default({}, true) %}
+{% set site_label = site_name | default('', true) %}
+{% set next_url = confirm_url | default('/runs/' ~ run_key ~ '/confirm', true) %}
+
+{#
+  The two strategy values come from src/firmware/upgrade_service.py:43-44. The
+  cloud reads the value, so the option value never changes for a wording change.
+#}
+{% set chosen_strategy = option_values.strategy | default('big_bang', true) %}
+
+{#
+  A boolean uses the default filter with one argument only. The second argument
+  turns the filter into a truth test, and a false value then reads as a missing
+  value. An operator who cleared the reboot box would see the box checked again
+  on the next visit.
+#}
+{% set reboot_chosen = option_values.reboot | default(true) %}
+{% set junos_action_chosen = option_values.junos_file_action | default(false) %}
+
+{#
+  The apply-to-every-device control needs one list that holds every version of
+  every model. A model that does not offer the chosen version keeps its own
+  value, so this list never forces a version onto a device that cannot take it.
+#}
+{% set every_version = versions_map.values() | map('list') | sum(start=[]) | unique | sort %}
+
+{% block title %}{{ page_title | default('Upgrade options', true) }}{% endblock %}
+
+{% block heading %}<h1>{{ page_title | default('Upgrade options', true) }}</h1>{% endblock %}
+
+{% block content %}
+<div class="portal-card">
+  <h2 class="portal-card-title">Choose the upgrade options</h2>
+
+  {% if site_label %}
+    <p class="portal-card-note">The upgrade runs at the site {{ site_label }}.</p>
+  {% endif %}
+
+  <div class="mb-3">
+    <label class="form-label" for="upgrade-version-select-all">
+      Apply one version to every device that offers it
+    </label>
+
+    {#
+      The control writes into each device select. A device whose model does not
+      offer the chosen version keeps the version the operator picked for it.
+    #}
+    <select class="form-select"
+            id="upgrade-version-select-all"
+            data-testid="upgrade-version-select-all"
+            data-version-all
+            aria-describedby="upgrade-version-select-all-note">
+      <option value="">Choose a version for each device below</option>
+      {% for version in every_version %}
+        <option value="{{ version }}">{{ version }}</option>
+      {% endfor %}
+    </select>
+
+    <p class="portal-card-note" id="upgrade-version-select-all-note">
+      The portal writes this version into every device that offers it. A device
+      that does not offer this version keeps its own value.
+    </p>
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label" for="upgrade-strategy-select">Upgrade strategy</label>
+
+    <select class="form-select"
+            id="upgrade-strategy-select"
+            data-testid="upgrade-strategy-select"
+            aria-describedby="upgrade-strategy-note">
+      <option value="big_bang" {{ 'selected' if chosen_strategy != 'canary' else '' }}>
+        All devices at the same time
+      </option>
+      <option value="canary" {{ 'selected' if chosen_strategy == 'canary' else '' }}>
+        A few devices first, then the rest
+      </option>
+    </select>
+
+    <p class="portal-card-note" id="upgrade-strategy-note">
+      The second strategy upgrades 1 percent, then 10 percent, then 50 percent,
+      then the rest.
+    </p>
+  </div>
+
+  <div class="form-check mb-3">
+    {#
+      The cloud reboots an access point on its own, so this option reaches a
+      switch and a gateway only. See src/firmware/upgrade_service.py:49-51.
+    #}
+    <input class="form-check-input"
+           type="checkbox"
+           id="upgrade-reboot-toggle"
+           data-testid="upgrade-reboot-toggle"
+           aria-describedby="upgrade-reboot-note"
+           {{ 'checked' if reboot_chosen else '' }}>
+    <label class="form-check-label" for="upgrade-reboot-toggle">
+      Reboot each switch and each gateway after the write
+    </label>
+    <p class="portal-card-note" id="upgrade-reboot-note">
+      An access point reboots on its own, so this option does not reach it. A
+      device that does not reboot keeps the old firmware until the next reboot.
+    </p>
+  </div>
+
+  <div class="form-check mb-3">
+    <input class="form-check-input"
+           type="checkbox"
+           id="upgrade-junos-file-action-toggle"
+           data-testid="upgrade-junos-file-action-toggle"
+           aria-describedby="upgrade-junos-file-action-note"
+           {{ 'checked' if junos_action_chosen else '' }}>
+    <label class="form-check-label" for="upgrade-junos-file-action-toggle">
+      Complete the Junos file action after the reboot
+    </label>
+    <p class="portal-card-note" id="upgrade-junos-file-action-note">
+      A Junos device reads this option. The action adds time to the upgrade of
+      each device.
+    </p>
+  </div>
+
+  {#
+    The button sends JSON and reads the answer, so it is a button and not a
+    form. A form would move the browser to a new page and would lose the body
+    that holds the plan warnings. portal.js adds the token header.
+  #}
+  <button type="button"
+          class="portal-button portal-button-primary"
+          data-testid="upgrade-options-save-button"
+          data-run-id="{{ run_key }}"
+          data-next-url="{{ next_url }}">Save the options and continue</button>
+</div>
+
+<div class="portal-card">
+  <h2 class="portal-card-title">Plan warnings</h2>
+
+  {#
+    The list always renders, so a test finds it before a plan exists and after
+    a plan exists. Each sentence sits in the markup, because a signal word from
+    a stylesheet rule is generated content and no test can read it.
+  #}
+  <ul class="mb-0" data-testid="upgrade-warning-list">
+    {% for line in warning_lines %}
+      <li>{{ line }}</li>
+    {% else %}
+      <li>The plan found no warning.</li>
+    {% endfor %}
+  </ul>
+</div>
+
+<div class="portal-table-scroll">
+  <table class="portal-table" data-testid="upgrade-target-table">
+    <caption class="visually-hidden">
+      Every device the upgrade writes to, with the version before the upgrade
+      and the target version.
+    </caption>
+
+    <thead>
+      <tr>
+        <th scope="col">Name</th>
+        <th scope="col">MAC address</th>
+        <th scope="col">Type</th>
+        <th scope="col">Model</th>
+        <th scope="col">Version now</th>
+        <th scope="col">Target version</th>
+      </tr>
+    </thead>
+
+    <tbody>
+      {% for device in target_rows %}
+        {% set mac = device.mac | default('', true) %}
+        {% set device_name = device.name | default('Unnamed device', true) %}
+        {% set model = device.model | default('', true) %}
+        {% set chosen_version = device.version_target | default('', true) %}
+        {% set model_versions = versions_map.get(model, []) %}
+
+        <tr data-testid="upgrade-target-row-{{ mac }}">
+          <th scope="row">{{ device_name }}</th>
+          <td class="cell-mono">{{ mac }}</td>
+          <td>{{ device.device_type | default('unknown', true) }}</td>
+          <td>{{ model | default('unknown', true) }}</td>
+          <td class="cell-mono">{{ device.version_before | default('unknown', true) }}</td>
+
+          <td>
+            {#
+              The select carries its own label through aria-label. A table
+              header names a column, and a browser gives no accessible name to
+              a control from a column header.
+            #}
+            <select class="form-select form-select-sm"
+                    id="upgrade-version-select-{{ mac }}"
+                    data-testid="upgrade-version-select-{{ mac }}"
+                    data-version-for="{{ mac }}"
+                    aria-label="Target version for {{ device_name }}">
+              <option value="">Do not upgrade this device</option>
+              {% for version in model_versions %}
+                <option value="{{ version }}"
+                        {{ 'selected' if version == chosen_version else '' }}>{{ version }}</option>
+              {% endfor %}
+            </select>
+          </td>
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="6" class="portal-table-empty">
+            The run holds no device. Return and choose a site with a device.
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

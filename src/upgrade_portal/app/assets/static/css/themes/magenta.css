@@ -126,11 +126,12 @@
     --portal-progress-bar: #E20074;
 
     /* --- Badges -----------------------------------------------------------
-     * A badge states a result, so it keeps green, amber, and red. The brand
-     * color never states a result.
+     * A badge states a result, so it keeps green, amber, red, and gray. The
+     * brand color never states a result.
      * #0f5132 on #e8f5ee ...........  8.35:1  (verified)
      * #664d03 on #fdf6e3 ...........  7.41:1  (partial)
      * #842029 on #fdeaec ...........  8.18:1  (failed)
+     * #41464b on #f0f1f3 ...........  8.44:1  (unknown)
      */
     --portal-badge-verified-bg: #e8f5ee;
     --portal-badge-verified-text: #0f5132;
@@ -138,6 +139,8 @@
     --portal-badge-partial-text: #664d03;
     --portal-badge-failed-bg: #fdeaec;
     --portal-badge-failed-text: #842029;
+    --portal-badge-unknown-bg: #f0f1f3;
+    --portal-badge-unknown-text: #41464b;
 
     /* --- Flash region and lock banner -------------------------------------
      * Each border repeats its own text color, so one ratio covers both.

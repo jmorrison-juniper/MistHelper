@@ -107,6 +107,7 @@
      * #0f5132 on #d1e7dd ...........  7.22:1  (verified)
      * #664d03 on #fff3cd ...........  7.21:1  (partial)
      * #842029 on #f8d7da ...........  7.08:1  (failed)
+     * #41464b on #e2e3e5 ...........  7.43:1  (unknown)
      */
     --portal-badge-verified-bg: #d1e7dd;
     --portal-badge-verified-text: #0f5132;
@@ -114,6 +115,8 @@
     --portal-badge-partial-text: #664d03;
     --portal-badge-failed-bg: #f8d7da;
     --portal-badge-failed-text: #842029;
+    --portal-badge-unknown-bg: #e2e3e5;
+    --portal-badge-unknown-text: #41464b;
 
     /* --- Flash region and lock banner -------------------------------------
      * Each border repeats its own text color, so one ratio covers both.

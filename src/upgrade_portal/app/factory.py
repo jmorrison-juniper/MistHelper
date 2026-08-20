@@ -9,8 +9,12 @@ Why:
     The factory imports each route module late, inside `create_app`, and treats
     an `ImportError` as survivable. The portal is built in stages, so a route
     module can arrive after the shell. A missing module writes one warning and
-    the portal starts with the routes that exist. `GET /healthz` answers from
-    the first day, because the container health check needs it.
+    the portal starts with the routes that exist.
+
+    Two probe routes answer from the first day. `GET /healthz` reports that the
+    process is alive and reads no store. `GET /readyz` reports that the two
+    stores answer. The container health check needs the first route and the
+    orchestrator readiness probe needs the second one.
 """
 
 import logging  # The portal logs with the standard library only.
@@ -18,6 +22,7 @@ from functools import partial  # Binds one status code to the shared error handl
 from importlib import import_module  # Imports each route module late.
 from importlib.metadata import PackageNotFoundError, version  # Reads the version for the health answer.
 from pathlib import Path  # Builds the asset paths from the module location.
+from time import monotonic_ns  # Builds a fresh value for each readiness write.
 from types import ModuleType  # The return type of a late import.
 from typing import Any  # The error envelope holds free-form details.
 
@@ -25,6 +30,7 @@ from flask import Blueprint, Flask, Response, g, jsonify  # The web framework su
 
 from .config import PortalSettings, load_settings  # The settings record and the environment reader.
 from .security import PortalSecurity  # The guards that arm the application.
+from .wiring import install_seams  # Joins the upgrade parts into the seams the routes read.
 
 logger = logging.getLogger(__name__)  # One logger for each module keeps the source visible in the log.
 
@@ -51,7 +57,7 @@ REQUEST_HANDLES = ("mist_session", "database_router", "redis_client")  # The tea
 ERROR_CODES = {
     400: "bad_request",  # The portal could not read the request.
     401: "not_authenticated",  # The contract names this code, not `unauthorized`.
-    403: "forbidden",  # The session may not act on that organization or site.
+    403: "forbidden",  # A guard refused the request. `security.py` holds the one caller today.
     404: "not_found",  # No such record.
     405: "method_not_allowed",  # The path exists and refuses this method.
     409: "conflict",  # Another operator holds the site lock.
@@ -62,7 +68,7 @@ ERROR_CODES = {
 ERROR_MESSAGES = {
     400: "The portal could not read the request.",  # A test asserts on the code, never on this text.
     401: "Sign in to continue.",  # The sign-in page is the next step.
-    403: "This session may not act on that organization or site.",  # The scope check refused the call.
+    403: "The portal refused this request.",  # Generic. `identity.py` holds the organization sentence.
     404: "The portal found no such record.",  # A stale link or a removed record.
     405: "That path does not accept this method.",  # The `Allow` header names the methods it accepts.
     409: "Another operator holds this site.",  # The site lock is busy.
@@ -82,6 +88,23 @@ LOG_FORMAT = (
 DISTRIBUTION_NAME = "misthelper"  # The installed distribution that carries the version.
 UNKNOWN_VERSION = "unknown"  # The answer when no distribution is installed.
 HEALTH_STATUS = 200  # The health endpoint always answers with this status.
+
+READY_STATUS = 200  # Every store accepted a write and returned it.
+NOT_READY_STATUS = 503  # At least one store did not answer.
+STATUS_FIELD = "status"  # The readiness key that carries the summary word.
+DATABASE_FIELD = "database"  # The readiness key that carries the document store reading.
+REDIS_FIELD = "redis"  # The readiness key that carries the lock store reading.
+READY_WORD = "ready"  # The summary word when every store answered.
+NOT_READY_WORD = "not_ready"  # The summary word when a store did not answer.
+STORE_OK = "ok"  # The reading of a store that accepted a write and returned it.
+STORE_DOWN = "unreachable"  # The reading of a store that failed for any reason.
+STORE_MODULE = f"{PACKAGE_NAME}.capture.store"  # The module that owns `connect_database`.
+LOCK_MODULE = f"{PACKAGE_NAME}.runtime.lock"  # The module that owns `connect_lock_store`.
+PROBE_COLLECTION = "upgrade_readiness"  # A scratch collection, apart from the three record collections.
+PROBE_KEY = "readyz"  # One fixed key, so the probe never grows the collection.
+PROBE_FIELD = "checked_at"  # The field that carries the fresh value of one probe.
+PROBE_LOCK_KEY = "misthelper:readyz:probe"  # The scratch key inside the lock store namespace.
+PROBE_LOCK_TTL_SECONDS = 60  # The lock store drops the scratch key when no probe renews it.
 
 
 def read_version() -> str:
@@ -274,6 +297,170 @@ def register_health(app: Flask) -> None:
         return jsonify({"status": "ok", "version": PORTAL_VERSION}), HEALTH_STATUS  # No database call.
 
 
+def probe_stamp() -> str:
+    """Build one fresh value for a scratch write.
+
+    Why:
+        A read-back proves a write only when the written value differs from the
+        value of the last probe. A fixed value would match a stale document and
+        would report the store ready after every write had failed.
+
+    Returns:
+        The monotonic clock reading as text.
+    """
+    return str(monotonic_ns())  # The monotonic clock never repeats and never steps backward.
+
+
+def verify_document_write(database: Any) -> bool:
+    """Write one scratch document and read the same key back.
+
+    Why:
+        A check that only opens a connection reports ready while every write
+        fails. See `specs/1823-upgrade-capture-portal/quickstart.md` section 12
+        and issue #1824. The probe therefore writes a value and reads it back.
+
+        The probe uses one scratch collection and one fixed key, so the
+        readiness traffic never grows the stored data and never mixes with the
+        capture records or the run records.
+
+    Args:
+        database: The open document store handle from `connect_database`.
+
+    Returns:
+        True when the read-back returned the value that the probe wrote.
+    """
+    if not database.has_collection(PROBE_COLLECTION):  # The first probe against a fresh database.
+        database.create_collection(PROBE_COLLECTION)  # A scratch collection of its own.
+    collection = database.collection(PROBE_COLLECTION)  # The handle for the write and the read.
+    stamp = probe_stamp()  # A fresh value, so a stale document cannot pass the check.
+    document = {"_key": PROBE_KEY, PROBE_FIELD: stamp}  # One key, written again by each probe.
+    collection.insert(document, overwrite_mode="replace")  # The write the check must prove.
+    found = collection.get(PROBE_KEY)  # The read-back that proves the write landed.
+    return bool(found is not None and found.get(PROBE_FIELD) == stamp)  # A stale value reads as a failure.
+
+
+def verify_lock_write(client: Any) -> bool:
+    """Write one scratch key into the lock store and read it back.
+
+    Why:
+        A ping proves that the socket answers. The portal writes the site lock
+        into this store, so the probe writes a key as well. A read-only replica
+        answers a ping and refuses every write, and the site lock would then
+        fail for every operator while the probe reported the store ready.
+
+    Args:
+        client: The open lock store client from `connect_lock_store`.
+
+    Returns:
+        True when the read-back returned the value that the probe wrote.
+    """
+    stamp = probe_stamp()  # A fresh value, so a stale key cannot pass the check.
+    client.set(PROBE_LOCK_KEY, stamp, ex=PROBE_LOCK_TTL_SECONDS)  # The expiry clears the key on its own.
+    return bool(client.get(PROBE_LOCK_KEY) == stamp)  # The client decodes the answer, so compare text.
+
+
+def probe_document_store() -> str:
+    """Report whether the document store accepts a write and returns it.
+
+    Why:
+        This function catches every fault, because a probe that raises turns a
+        readiness check into a 500 answer. The connection helper owns the socket
+        and sets a ten-second request bound, so this function opens no socket of
+        its own and no probe holds a worker thread longer than that bound.
+
+    Returns:
+        The word `ok`, or the word `unreachable` for any failure.
+    """
+    try:  # No fault may leave this function.
+        store = import_module(STORE_MODULE)  # Late, so a missing dependency cannot stop the portal starting.
+        database = store.connect_database()  # The helper answers None for a store that did not open.
+        if database is None:  # Standalone mode, or the server did not answer.
+            return STORE_DOWN  # Name the store, never the host.
+        return STORE_OK if verify_document_write(database) else STORE_DOWN  # The write must land.
+    except Exception as fault:  # A readiness check must answer, whatever the store did.
+        logger.warning(
+            "The readiness probe could not verify the document store: %s.",  # The class name only.
+            type(fault).__name__,
+        )
+        return STORE_DOWN  # The body names this store, so the operator knows where to look.
+
+
+def probe_lock_store() -> str:
+    """Report whether the lock store accepts a write and returns it.
+
+    Why:
+        This function catches every fault, for the same reason as the document
+        store probe. The connection helper sets a one-second connect timeout
+        and a two-second command timeout, so this probe opens no socket itself.
+
+    Returns:
+        The word `ok`, or the word `unreachable` for any failure.
+    """
+    try:  # No fault may leave this function.
+        lock = import_module(LOCK_MODULE)  # Late, so a missing dependency cannot stop the portal starting.
+        client = lock.connect_lock_store()  # The helper answers None for a store that did not open.
+        if client is None:  # The lock store did not answer, or the last failure is still inside the cooldown.
+            return STORE_DOWN  # Name the store, never the host.
+        return STORE_OK if verify_lock_write(client) else STORE_DOWN  # The write must land.
+    except Exception as fault:  # A readiness check must answer, whatever the store did.
+        logger.warning(
+            "The readiness probe could not verify the lock store: %s.",  # The class name only.
+            type(fault).__name__,
+        )
+        return STORE_DOWN  # The body names this store, so the operator knows where to look.
+
+
+def read_readiness() -> tuple[dict[str, str], int]:
+    """Probe both stores and build the readiness answer.
+
+    Why:
+        An operator who reads the words `not_ready` with no further detail
+        learns nothing. The body therefore carries one reading for each store,
+        so the operator knows which store to repair.
+
+    Returns:
+        The readiness body and the HTTP status code.
+    """
+    database_state = probe_document_store()  # The document store holds every capture and every run.
+    lock_state = probe_lock_store()  # The lock store holds the site lock.
+    ready = database_state == STORE_OK and lock_state == STORE_OK  # Ready means every store answered.
+    body = {
+        STATUS_FIELD: READY_WORD if ready else NOT_READY_WORD,  # The summary word the contract names.
+        DATABASE_FIELD: database_state,  # The reading of the document store.
+        REDIS_FIELD: lock_state,  # The reading of the lock store.
+    }
+    return body, READY_STATUS if ready else NOT_READY_STATUS  # One failed store answers 503.
+
+
+def register_readiness(app: Flask) -> None:
+    """Register the readiness endpoint.
+
+    Why:
+        `GET /healthz` reports that the process is alive. `GET /readyz` reports
+        that the dependencies answer. An orchestrator needs both, because a
+        process that lives but cannot reach its stores must leave the load
+        balancer without a restart.
+
+        The body carries no host name, no password, and no connection string.
+        `store._safe_host` exists because a connection string holds a password,
+        and the safest body is the one that names no host at all. The two fixed
+        words `ok` and `unreachable` name the store, never the address.
+
+    Args:
+        app: The application to add the route to.
+    """
+
+    @app.get("/readyz")  # The orchestrator readiness probe calls this path.
+    def readyz() -> tuple[Response, int]:
+        """Report whether both stores accept a write and return it.
+
+        Returns:
+            The readiness body and the status code.
+        """
+        body, status = read_readiness()  # Neither probe raises, so this view never answers a 500.
+        return jsonify(body), status  # A flat object, never the error envelope.
+
+
 def register_teardown(app: Flask) -> None:
     """Register the handler that closes the per-request handles.
 
@@ -408,19 +595,31 @@ def apply_portal_config(app: Flask, settings: PortalSettings) -> None:
     app.config["THEMES"] = list(settings.web.themes)  # A list, because a template iterates it.
 
 
-def apply_cookie_config(app: Flask) -> None:
+def apply_cookie_config(app: Flask, settings: PortalSettings) -> None:
     """Set the session cookie rules.
 
     Why:
-        The portal runs on plain HTTP inside the lab network, so the secure flag
-        stays off. A secure cookie would never reach the browser and every
-        operator would lose the session at the first page.
+        A session cookie carries the identity that the site lock grants a site
+        to, so a cookie that leaves the browser in clear text hands a site to
+        whoever reads the wire.
+
+        The `Secure` flag follows the trusted proxy count and nothing else.
+        That count already decides whether the portal reads the forwarded
+        scheme, so one setting drives both and the two can never disagree. A
+        portal behind a terminating proxy answers on HTTPS and marks the
+        cookie. A direct listener on plain HTTP inside the lab network leaves
+        the flag off, because a marked cookie would never reach the browser
+        and every operator would lose the session at the first page.
 
     Args:
         app: The application to configure.
+        settings: The settings that carry the trusted proxy count.
     """
+    behind_proxy = settings.proxy.trusted_hops > 0  # The same count that drives `ProxyFix(x_proto=...)`.
     app.config["SESSION_COOKIE_HTTPONLY"] = True  # A script cannot read the session cookie.
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"  # A cross-site post carries no session cookie.
+    app.config["SESSION_COOKIE_SECURE"] = behind_proxy  # A terminating proxy answers on HTTPS.
+    logger.info("The session cookie carries the secure flag: %s.", behind_proxy)  # State the reading once.
 
 
 def build_application(settings: PortalSettings) -> Flask:
@@ -434,12 +633,16 @@ def build_application(settings: PortalSettings) -> Flask:
     """
     app = Flask(__name__, template_folder=TEMPLATE_FOLDER, static_folder=STATIC_FOLDER)  # Package assets.
     apply_portal_config(app, settings)  # The settings must land before any guard reads them.
-    apply_cookie_config(app)  # The cookie rules travel with the session key.
+    apply_cookie_config(app, settings)  # The cookie rules travel with the session key.
     return app  # The caller arms the object next.
 
 
 def arm_application(app: Flask, settings: PortalSettings) -> None:
-    """Add the guards, the error handlers, and the routes.
+    """Add the guards, the error handlers, the routes, and the seams.
+
+    Why:
+        The seams register last, because `install_seams` fills a gap with
+        `setdefault` and must never replace a value that an earlier caller chose.
 
     Args:
         app: The application to arm.
@@ -448,8 +651,10 @@ def arm_application(app: Flask, settings: PortalSettings) -> None:
     PortalSecurity().apply(app, settings)  # The guards register first, so they run before any view.
     register_error_handlers(app)  # The JSON envelope must cover a fault the guards raise.
     register_health(app)  # The container probe needs this route from the first day.
+    register_readiness(app)  # The orchestrator readiness probe needs the store reading.
     register_teardown(app)  # Every request must release its sockets.
     register_blueprints(app)  # A route module that does not exist yet writes one warning.
+    install_seams(app)  # Without this the confirmed run reads no launcher and sends nothing.
 
 
 def create_app() -> Flask:

@@ -1,0 +1,213 @@
+{#
+  review/history.html - the capture history page of the upgrade capture portal.
+
+  Why this file exists:
+    contracts/http-api.md line 364 fixes GET /history. The operator opens this
+    page to find an earlier capture, to read its size, and to open it. The page
+    lists one row for each stored capture of the site, and it offers a next
+    page and a previous page.
+
+  Why the page holds no rule:
+    A template must never hold a rule. Every label, every number, every link,
+    and every test identifier arrives ready in history_view. The page holds no
+    arithmetic, no numeric comparison, no sum, and no filter that changes a
+    value. It prints what build_history_view in
+    src/upgrade_portal/compare/render.py decided, and nothing else.
+
+    The paging is the clearest case. The page never compares the offset with
+    the total. It reads history_view.has_next and history_view.has_previous.
+
+    The state badge is the second case. The class name carries the stored word,
+    so the page picks no color and holds no list of states. portal.css already
+    holds badge-verified, badge-partial, badge-failed, and badge-unknown. Any
+    other word reaches a class that no rule matches, and the badge then shows
+    the word with the neutral border of .portal-badge. A page that cannot prove
+    a state therefore never shows that state as verified.
+
+  Why the page holds no script:
+    The content security policy is 'self' only. The policy blocks an inline
+    script and blocks the style attribute. Every behavior lives in portal.js.
+
+  Why a locked paging control is a button, not a link:
+    A link with no target still takes a press. The first page and the last page
+    therefore show a disabled button in the markup. A disabled button takes no
+    press, and portal.css already styles .portal-button:disabled. The test
+    identifier stays on the control in both states, so a browser test finds the
+    control on every page.
+
+  Why the paging row reuses confirm-box-actions:
+    That class is a plain flex row with a gap. It carries no border and no
+    color of the confirm box, and it is the one button row class portal.css
+    holds. This page does not own the stylesheet, so it reuses the class
+    instead of adding a rule.
+
+  Why the links hold a literal path:
+    contracts/http-api.md fixes every public path of this portal. The blueprint
+    endpoint names are not fixed, so a url_for call against an endpoint name
+    would raise while this page renders. url_for stays for a static asset.
+
+  The fixed test identifiers of contracts/ui-testids.md lines 162 to 166:
+    history-table              - the history table
+    history-row-{capture_id}   - one history row
+    history-open-{capture_id}  - the open control of that row
+    history-page-next          - the next page control
+    history-page-previous      - the previous page control
+    nav-history                - lives in partials/nav.html, not here
+
+  Variables a route supplies:
+    page_title   - the heading text and the tab text.
+    site_name    - the name of the site the rows belong to.
+    history_view - the view model. Holds rows, total, page_size, offset,
+                   has_next, has_previous, next_url, and previous_url.
+                   Each row holds capture_id, started_at, role, capture_status,
+                   device_count, client_count, stored_size_bytes,
+                   stored_size_text, row_test_id, open_test_id, and open_url.
+    theme, themes, signed_in - see layout.html.
+#}
+{% extends 'layout.html' %}
+
+{#
+  Every value passes through a default filter first. A missing history_view
+  therefore renders an empty table instead of raising, and the page still shows
+  the two locked paging controls.
+
+  A boolean uses the default filter with one argument only. The second argument
+  turns the filter into a truth test, and a false value then reads as a missing
+  value. A next control would then appear on the last page.
+#}
+{% set view = history_view | default(none, true) %}
+{% set capture_rows = view.rows | default([], true) %}
+{% set row_total = view.total | default(0, true) %}
+{% set page_size = view.page_size | default(0, true) %}
+{% set row_offset = view.offset | default(0, true) %}
+{% set has_next = view.has_next | default(false) %}
+{% set has_previous = view.has_previous | default(false) %}
+{% set next_url = view.next_url | default('', true) %}
+{% set previous_url = view.previous_url | default('', true) %}
+{% set site_label = site_name | default('', true) %}
+
+{% block title %}{{ page_title | default('Capture history', true) }}{% endblock %}
+
+{% block heading %}<h1>{{ page_title | default('Capture history', true) }}</h1>{% endblock %}
+
+{% block content %}
+<div class="portal-card">
+  <h2 class="portal-card-title">Stored captures</h2>
+
+  <p class="portal-card-note">
+    {% if site_label %}
+      The list shows the stored captures of {{ site_label }}.
+    {% else %}
+      The list shows the stored captures.
+    {% endif %}
+    The site holds {{ row_total }} captures. This page starts after
+    {{ row_offset }} of them, and one page holds {{ page_size }} rows.
+  </p>
+</div>
+
+<div class="portal-table-scroll">
+  <table class="portal-table" id="history-table" data-testid="history-table">
+    <caption class="visually-hidden">
+      The stored captures of the site, with the moment, the role, the state,
+      the device count, the client count, and the stored size of each capture.
+    </caption>
+
+    <thead>
+      <tr>
+        <th scope="col">Capture</th>
+        <th scope="col">Started</th>
+        <th scope="col">Role</th>
+        <th scope="col">State</th>
+        <th scope="col">Devices</th>
+        <th scope="col">Clients</th>
+        <th scope="col">Stored size</th>
+        <th scope="col">Action</th>
+      </tr>
+    </thead>
+
+    <tbody>
+      {% for row in capture_rows %}
+        {#
+          The state word reaches the badge class and the visible text. WCAG
+          1.4.1 forbids color as the only signal, so the word stays visible
+          next to the color.
+        #}
+        {% set status_word = row.capture_status | default('unknown', true) %}
+
+        <tr data-testid="{{ row.row_test_id }}">
+
+          <th scope="row" class="cell-mono">{{ row.capture_id }}</th>
+
+          <td>{{ row.started_at }}</td>
+
+          {#
+            The role reads pre or post in the store. The page prints the stored
+            word, because a browser test and an operator must read the same
+            value, and a translation here would be a rule.
+          #}
+          <td>{{ row.role }}</td>
+
+          <td><span class="portal-badge badge-{{ status_word }}">{{ status_word }}</span></td>
+
+          <td class="cell-number">{{ row.device_count }}</td>
+
+          <td class="cell-number">{{ row.client_count }}</td>
+
+          {#
+            FR-032b asks the portal to record the stored size. The cell prints
+            the readable text, and the byte count sits in a data attribute for
+            a test and for a later sort. render.py settles both values, so the
+            page never divides a byte count.
+          #}
+          <td class="cell-number" data-size-bytes="{{ row.stored_size_bytes }}">{{ row.stored_size_text }}</td>
+
+          <td>
+            <a class="portal-button portal-button-primary"
+               data-testid="{{ row.open_test_id }}"
+               href="{{ row.open_url }}">Open</a>
+          </td>
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="8" class="portal-table-empty">
+            The portal found no stored capture. Run a pre-check capture first.
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="portal-card">
+  <h2 class="portal-card-title">More captures</h2>
+
+  {#
+    The two controls carry the same test identifier in both states, so a
+    browser test finds the control on the first page and on the last page.
+    render.py decided has_previous and has_next, and the page only obeys.
+  #}
+  <div class="confirm-box-actions">
+    {% if has_previous %}
+      <a class="portal-button"
+         data-testid="history-page-previous"
+         href="{{ previous_url }}">Show the earlier captures</a>
+    {% else %}
+      <button type="button"
+              class="portal-button"
+              data-testid="history-page-previous"
+              disabled>Show the earlier captures</button>
+    {% endif %}
+
+    {% if has_next %}
+      <a class="portal-button"
+         data-testid="history-page-next"
+         href="{{ next_url }}">Show the later captures</a>
+    {% else %}
+      <button type="button"
+              class="portal-button"
+              data-testid="history-page-next"
+              disabled>Show the later captures</button>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -14,6 +14,7 @@ Why:
 
 import logging  # The portal logs with the standard library only.
 import os  # The environment is the only source of a setting.
+import re  # Checks that a theme name holds safe characters only.
 import secrets  # Builds a session key when the operator sets none.
 from dataclasses import dataclass  # Builds the frozen settings records.
 from ipaddress import IPv4Network, IPv6Network, ip_network  # Parses the address allow list.
@@ -37,20 +38,21 @@ class SettingsError(RuntimeError):
 
 
 PORT_VARIABLE = "CAPTURE_PORT"  # The listen port of this portal.
-SECRET_KEY_VARIABLE = "CAPTURE_SECRET_KEY"  # The key that signs the session cookie.
+SECRET_KEY_VARIABLE = "CAPTURE_SECRET_KEY"  # nosec B105  # WHY: this names an environment variable, not a key.
 THEMES_VARIABLE = "CAPTURE_THEMES"  # A comma list of stylesheet names.
 POLL_VARIABLE = "CAPTURE_POLL_SECONDS"  # The wait between two browser status calls.
 ALLOWED_ADDRESSES_VARIABLE = "CAPTURE_ALLOWED_IPS"  # A comma list of networks.
 PROXY_HOPS_VARIABLE = "CAPTURE_PROXY_HOPS"  # The count of trusted reverse proxies in front of the portal.
+POST_CHECK_MODE_VARIABLE = "CAPTURE_POST_CHECK_MODE"  # Names who starts the second capture of a run.
 
 ARANGO_HOST_VARIABLE = "ARANGO_HOST"  # The full URL of the primary store.
 ARANGO_DATABASE_VARIABLE = "ARANGO_DATABASE"  # The database name inside that store.
 ARANGO_USERNAME_VARIABLE = "ARANGO_USERNAME"  # The account name for the store.
-ARANGO_PASSWORD_VARIABLE = "ARANGO_ROOT_PASSWORD"  # The name only. The portal never reads the value here.
+ARANGO_PASSWORD_VARIABLE = "ARANGO_ROOT_PASSWORD"  # nosec B105  # WHY: this names a variable. No password sits here.
 
 REDIS_HOST_VARIABLE = "REDIS_HOST"  # The host that holds the site lock.
 REDIS_PORT_VARIABLE = "REDIS_PORT"  # The port of that host.
-REDIS_PASSWORD_VARIABLE = "REDIS_PASSWORD"  # The name only. The portal never reads the value here.
+REDIS_PASSWORD_VARIABLE = "REDIS_PASSWORD"  # nosec B105  # WHY: this names an environment variable, not a password.
 
 DEFAULT_PORT = 8056  # Port 8055 already serves the data browsing portal.
 DEFAULT_POLL_INTERVAL_SECONDS = 30  # The contract sets the browser poll rate.
@@ -62,12 +64,28 @@ DEFAULT_REDIS_HOST = "redis-stack"  # The service name inside the container netw
 DEFAULT_REDIS_PORT = 6379  # The standard Redis port.
 DEFAULT_PROXY_HOPS = 0  # No proxy. The socket address is the client address.
 
-LOWEST_ALLOWED_PORT = 1024  # A port below this needs a privileged process.
+# WHY: The customer chose the automatic post-check capture. The two names below
+# are the switch that hands that capture to the operator later. The driver holds
+# the same two names at `upgrade/driver.py`, and this module names them again,
+# because the settings module imports the standard library only.
+POST_CHECK_AUTOMATIC = "automatic"  # The portal starts the second capture itself.
+POST_CHECK_MANUAL = "manual"  # An operator starts the second capture.
+POST_CHECK_MODES = (POST_CHECK_AUTOMATIC, POST_CHECK_MANUAL)  # Every mode the portal knows.
+DEFAULT_POST_CHECK_MODE = POST_CHECK_AUTOMATIC  # The behavior of today, and the only safe fallback.
+
+LOWEST_ALLOWED_PORT = 1024  # A port below this needs a privileged process to listen.
+LOWEST_CONNECT_PORT = 1  # An outbound call needs no privilege, so every port is legal.
 HIGHEST_ALLOWED_PORT = 65535  # The highest port number a socket accepts.
 LOWEST_POLL_INTERVAL_SECONDS = 5  # A faster poll would flood the status endpoints.
+HIGHEST_POLL_INTERVAL_SECONDS = 3600  # One hour. A larger number is a typo, not a rate an operator wants.
 SECRET_KEY_BYTES = 32  # A 32-byte key matches the strength of the signing algorithm.
 HIGHEST_PROXY_HOPS = 8  # No real deployment chains more proxies than this.
 LOWEST_PROXY_HOPS = 0  # A negative count has no meaning.
+
+# WHY: A theme name reaches a file path in layout.html. The template refuses a
+# name that this list does not hold, so this pattern is the real guard. A name
+# with a path separator, a dot, or a drive letter never enters the list.
+THEME_NAME_PATTERN = re.compile(r"\A[A-Za-z0-9_-]{1,32}\Z")  # Letters, digits, hyphen, and underscore only.
 
 
 @dataclass(frozen=True, slots=True)  # Frozen stops a request handler from changing a setting.
@@ -239,7 +257,7 @@ def load_redis_settings() -> RedisSettings:
     """
     return RedisSettings(
         host=os.environ.get(REDIS_HOST_VARIABLE, DEFAULT_REDIS_HOST),  # The container service by default.
-        port=read_port(REDIS_PORT_VARIABLE, DEFAULT_REDIS_PORT),  # The same range check as the listen port.
+        port=read_port(REDIS_PORT_VARIABLE, DEFAULT_REDIS_PORT, LOWEST_CONNECT_PORT),  # Outbound needs no privilege.
         password_variable=REDIS_PASSWORD_VARIABLE,  # The name travels, never the value.
     )
 
@@ -286,16 +304,25 @@ def read_proxy_hops() -> int:
     return DEFAULT_PROXY_HOPS  # Fall back to the safe end, never to a guess.
 
 
-def read_port(variable: str, default: int) -> int:
+def read_port(variable: str, default: int, lowest: int = LOWEST_ALLOWED_PORT) -> int:
     """Read one port number and keep it inside the legal range.
 
     Why:
         A bad value must not stop the portal. The portal reports the bad value
         and continues with the documented default.
 
+        The lowest legal port differs by direction. A process needs privilege to
+        listen below 1024, so the listen port keeps that floor. A process needs
+        no privilege to call out to a low port, so an outbound port such as the
+        Redis port passes the floor 1. A shared floor of 1024 would refuse a
+        real Redis on a low port and would then connect to the default port
+        instead, which is a different host service.
+
     Args:
         variable: The name of the environment variable.
         default: The port to use when the variable is empty or wrong.
+        lowest: The lowest legal port. Pass LOWEST_CONNECT_PORT for an outbound
+            port.
 
     Returns:
         The port number.
@@ -304,7 +331,7 @@ def read_port(variable: str, default: int) -> int:
     if not raw:  # The operator set nothing.
         return default  # Use the documented default.
     port = read_integer(raw, default, variable)  # Text that is not a number falls back here.
-    if LOWEST_ALLOWED_PORT <= port <= HIGHEST_ALLOWED_PORT:  # A privileged or impossible port is a mistake.
+    if lowest <= port <= HIGHEST_ALLOWED_PORT:  # A privileged or impossible port is a mistake.
         return port  # The value sits inside the legal range.
     logger.warning("The port %s in %s is out of range. The portal uses %s.", raw, variable, default)  # Then fall back.
     return default  # Continue, because a bad port must not stop the portal.
@@ -312,6 +339,13 @@ def read_port(variable: str, default: int) -> int:
 
 def read_integer(raw: str, default: int, variable: str) -> int:
     """Turn one environment value into a whole number.
+
+    Why:
+        The `int` builtin accepts an underscore as a digit separator, so the
+        text `8_056` reads as the number 8056. An operator who types that
+        underscore by mistake would get a port that the log line agrees with,
+        and the mistake would stay hidden. This step refuses the separator and
+        reports the raw text instead.
 
     Args:
         raw: The text from the environment.
@@ -322,6 +356,8 @@ def read_integer(raw: str, default: int, variable: str) -> int:
         The whole number.
     """
     try:  # An environment value is free text and may hold anything.
+        if "_" in raw:  # The builtin reads an underscore as a digit separator.
+            raise ValueError("A digit separator is not a number.")  # Treat it as bad text.
         return int(raw)  # The normal path for a value the operator set well.
     except ValueError:  # The text was not a number.
         logger.warning(
@@ -370,28 +406,73 @@ def read_poll_interval() -> int:
     if not raw:  # The operator set nothing.
         return DEFAULT_POLL_INTERVAL_SECONDS  # The contract value.
     seconds = read_integer(raw, DEFAULT_POLL_INTERVAL_SECONDS, POLL_VARIABLE)  # Bad text falls back here.
-    if seconds >= LOWEST_POLL_INTERVAL_SECONDS:  # A faster poll would flood the status endpoints.
+    if LOWEST_POLL_INTERVAL_SECONDS <= seconds <= HIGHEST_POLL_INTERVAL_SECONDS:  # Both ends are wrong.
         return seconds  # The operator chose a rate the endpoints can carry.
     logger.warning(
-        "The wait %s in %s is too short. The portal uses %s.",  # The `%s` form keeps the record cheap.
+        "The wait %s in %s is outside the range %s to %s. The portal uses %s.",  # The `%s` form keeps the record cheap.
         raw,
         POLL_VARIABLE,
+        LOWEST_POLL_INTERVAL_SECONDS,
+        HIGHEST_POLL_INTERVAL_SECONDS,
         DEFAULT_POLL_INTERVAL_SECONDS,
     )
     return DEFAULT_POLL_INTERVAL_SECONDS  # Continue with the contract value.
 
 
+def read_post_check_mode() -> str:
+    """Read who starts the post-check capture of a run.
+
+    Why:
+        The customer chose the automatic capture. A later change may hand that
+        capture to the operator, and this variable is the switch. The default
+        keeps the automatic capture, so a portal with no setting behaves as it
+        behaves today.
+
+        Warning: an unknown value falls back to the automatic capture. A typo
+        that turned the capture off would leave the operator without the
+        evidence that the upgrade worked.
+
+    Returns:
+        The mode ``automatic``, or the mode ``manual``.
+    """
+    raw = os.environ.get(POST_CHECK_MODE_VARIABLE, "").strip()  # An unset variable and a blank one are the same.
+    if not raw:  # The operator set nothing.
+        return DEFAULT_POST_CHECK_MODE  # The behavior of today.
+    mode = raw.lower()  # An operator writes Manual as often as manual.
+    if mode in POST_CHECK_MODES:  # The operator named a mode the portal knows.
+        return mode  # The operator chose the mode of this portal.
+    logger.warning(
+        "The mode %s in %s is not a mode the portal knows. The portal uses %s.",  # The bad value reaches the log.
+        raw,
+        POST_CHECK_MODE_VARIABLE,
+        DEFAULT_POST_CHECK_MODE,
+    )
+    return DEFAULT_POST_CHECK_MODE  # Continue with the capture that proves the upgrade worked.
+
+
 def read_themes() -> tuple[str, ...]:
     """Read the name of each stylesheet the operator may choose.
 
+    Why:
+        A theme name reaches a file path in layout.html. That template refuses a
+        name this list does not hold, so this list is the real guard. A name
+        with a path separator or a dot would let a crafted value point the
+        stylesheet link outside the theme folder, so this step drops such a
+        name. The step also drops a repeated name, because a repeated name
+        would show the same choice twice in the theme picker.
+
     Returns:
         The theme names. The tuple holds the two shipped themes when the
-        operator sets none.
+        operator sets none and when no name passes the check.
     """
     raw = os.environ.get(THEMES_VARIABLE, "")  # A comma list, or an empty string.
     names = tuple(name.strip() for name in raw.split(",") if name.strip())  # Drop a blank entry.
-    if names:  # The operator named at least one theme.
-        return names  # The operator named the themes.
+    safe = tuple(dict.fromkeys(name for name in names if THEME_NAME_PATTERN.fullmatch(name)))  # Keep the first order.
+    for name in names:  # Report each name the check dropped, so the operator sees the cause.
+        if name not in safe:  # The name held a character that a file path must not carry.
+            logger.warning("The theme name %s in %s is not a safe name. The portal drops it.", name, THEMES_VARIABLE)
+    if safe:  # At least one name passed the check.
+        return safe  # The operator named the themes.
     return DEFAULT_THEMES  # Fall back to the two stylesheets the portal ships.
 
 
