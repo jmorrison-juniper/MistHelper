@@ -1,0 +1,112 @@
+{#
+  layout.html - the base page of the upgrade capture portal.
+
+  Why this file exists:
+    Every page of the portal needs the same four things. It needs the token meta
+    tag that portal.js reads, one theme stylesheet, the shared navigation, and
+    the shared message region. One base page keeps those four things identical,
+    so a page author cannot forget the token tag and cannot link a second theme.
+
+  The content security policy is 'self' only. That policy blocks an inline
+  script and an inline style attribute. Every style and every script therefore
+  comes from the static folder through url_for.
+
+  A page extends this file and fills three blocks.
+    title    - the text of the browser tab. Defaults to the page heading.
+    heading  - the single h1 of the page. Defaults to page_title.
+    content  - the body of the page.
+
+  Variables a route may supply:
+    page_title  - the heading text and the tab text.
+    theme       - the name of one theme file, without the .css suffix.
+    themes      - the list of theme names the operator may pick.
+    signed_in   - false on the sign-in pages. Hides the navigation links.
+#}
+{% set portal_name = 'Upgrade capture portal' %}
+{% set heading_text = page_title | default(portal_name, true) %}
+
+{#
+  The theme name reaches a file path, so the template accepts a known name only.
+  An unknown name falls back to the neutral theme. Without this guard a crafted
+  value could point the link at a path outside the theme folder.
+#}
+{% set theme_choices = themes | default(['default', 'magenta'], true) %}
+{% set theme_name = theme | default('default', true) %}
+{% if theme_name not in theme_choices %}
+  {% set theme_name = 'default' %}
+{% endif %}
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  {#
+    portal.js reads this tag by the name csrf-token and sends the value in the
+    X-CSRFToken header. A missing tag produces a 400 response with the code
+    csrf_missing and no other clue, so the tag stays first in the head.
+
+    The guard keeps the page renderable before the security layer registers the
+    csrf_token global. The value is then empty, and the server still refuses the
+    request, so the fault stays visible.
+  #}
+  <meta name="csrf-token"
+        data-testid="csrf-meta"
+        content="{{ csrf_token() if csrf_token is defined else '' }}">
+
+  <title>{% block title %}{{ heading_text }}{% endblock %}</title>
+
+  <link rel="stylesheet"
+        href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}">
+
+  {#
+    The theme file sets every custom property that portal.css reads. Exactly one
+    theme loads for each request.
+  #}
+  <link rel="stylesheet"
+        id="theme-css"
+        href="{{ url_for('static', filename='css/themes/' ~ theme_name ~ '.css') }}">
+
+  {# portal.css comes last, so a portal rule wins a tie against a Bootstrap rule. #}
+  <link rel="stylesheet"
+        href="{{ url_for('static', filename='css/portal.css') }}">
+
+  {% block head_extra %}{% endblock %}
+</head>
+<body class="portal-shell">
+  {#
+    The skip link lets a keyboard operator jump past the navigation. The
+    Bootstrap class visually-hidden-focusable shows the link on focus only.
+    The main element carries tabindex="-1" so the jump moves focus in every
+    browser.
+  #}
+  <a class="visually-hidden-focusable" href="#portal-main">Skip to the main content</a>
+
+  {% include 'partials/nav.html' %}
+
+  <main class="portal-main" id="portal-main" tabindex="-1">
+    {% include 'partials/flash.html' %}
+
+    {# Each page holds one h1. A page that needs other wording overrides this block. #}
+    {% block heading %}<h1>{{ heading_text }}</h1>{% endblock %}
+
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="portal-footer">
+    <span>{{ portal_name }}</span>
+  </footer>
+
+  {# Bootstrap loads first, because portal.js may use a Bootstrap component. #}
+  <script src="{{ url_for('static', filename='vendor/bootstrap/bootstrap.bundle.min.js') }}"></script>
+
+  {#
+    portal.js is not a module. It attaches every helper to window.upgradePortal.
+    A type="module" attribute would defer it and hide the global from a later
+    script, so the tag stays plain.
+  #}
+  <script src="{{ url_for('static', filename='js/portal.js') }}"></script>
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>
