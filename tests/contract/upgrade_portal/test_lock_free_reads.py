@@ -137,7 +137,7 @@ class CountingLockStore:
             ConnectionError: When the test set the failure flag.
         """
         self.calls.append(name)  # Every command lands here first, so the count misses nothing.
-        if self.fail:  # `contracts/site-lock.md:118` asks a read to answer anyway.
+        if self.fail:  # `contracts/site-lock.md:130` asks a read to answer anyway.
             raise ConnectionError("The stand-in lock store is down for this test.")
 
     def set(self, key: str, value: str, nx: bool = False, ex: int | None = None) -> bool | None:
@@ -475,7 +475,7 @@ def test_no_read_touches_the_lock_store(read_client: FlaskClient, lock_store: Co
 
 
 # ---------------------------------------------------------------------------
-# A read while a different operator holds the site. `contracts/site-lock.md:128`.
+# A read while a different operator holds the site. `contracts/site-lock.md:140`.
 # ---------------------------------------------------------------------------
 
 
@@ -549,7 +549,7 @@ def test_a_held_site_names_no_lock_control_on_a_read_page(
 
 
 # ---------------------------------------------------------------------------
-# A read while the lock store is down. `contracts/site-lock.md:118`.
+# A read while the lock store is down. `contracts/site-lock.md:130`.
 # ---------------------------------------------------------------------------
 
 
@@ -560,7 +560,7 @@ def test_a_down_lock_store_still_lets_a_read_answer(
     """Every comparison surface answers while the lock store is unreachable.
 
     Why:
-        `contracts/site-lock.md:118` asks a read-only page to show the page and
+        `contracts/site-lock.md:130` asks a read-only page to show the page and
         mark the lock state unknown. A write fails closed and a read fails open,
         so an outage of Redis must never hide a finished comparison.
 
@@ -648,4 +648,4 @@ def test_the_history_page_reads_while_another_operator_holds_the_site(
 
     response = read_client.get(HISTORY_PAGE_PATH)  # The human view of the stored captures.
 
-    assert response.status_code == OK_STATUS  # `contracts/site-lock.md:128` names this page by hand.
+    assert response.status_code == OK_STATUS  # `contracts/site-lock.md:140` names this page by hand.

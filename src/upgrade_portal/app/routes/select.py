@@ -132,7 +132,7 @@ TOTAL_FIELD = "devices_total"  # `data-model.md` section 3.6 fixes this name.
 DEVICE_COUNT_FIELD = "num_devices"  # The site statistics record names the whole count here.
 DEVICE_COUNT_PARTS = ("num_ap", "num_switch", "num_gateway")  # The fallback, summed when the whole count is absent.
 
-# `contracts/site-lock.md:118` asks a read-only page to mark the lock state
+# `contracts/site-lock.md:130` asks a read-only page to mark the lock state
 # unknown when the lock store does not answer. A row that carries only a holder
 # address cannot say that, because a free site and an unreadable site both hold
 # None. These three words give the row a third state, and `locked_by` keeps the
@@ -576,7 +576,7 @@ def site_lock_state(site_id: str, locks: dict[str, str | None]) -> str:
         A free site and a site that the portal could not read both answer None
         from the holder index, so the holder alone cannot tell them apart. An
         operator who reads free on an unreadable site may walk into a site that
-        another operator holds. `contracts/site-lock.md:118` asks the page to
+        another operator holds. `contracts/site-lock.md:130` asks the page to
         mark that state unknown, so this function names three states, not two.
 
     Args:
@@ -652,7 +652,7 @@ def build_site_row(site: dict[str, Any], counts: dict[str, int], locks: dict[str
     Returns:
         The five fields of one row. `contracts/http-api.md:77` names the first
         four. `lock_state` adds the third lock state that
-        `contracts/site-lock.md:118` asks a read-only page to show.
+        `contracts/site-lock.md:130` asks a read-only page to show.
     """
     site_id = str(site.get("id", ""))  # The row key, used by the count index and the lock index.
     return {
@@ -1212,9 +1212,9 @@ RUN_FIELD = "run_id"  # The run the lock protects. An empty value means the oper
 
 LOCK_FAILED_CODE = "site_lock_failed"  # The base code, used when a later error class carries no code of its own.
 SITE_LOCKED_CODE = "site_locked"  # `contracts/site-lock.md:58` fixes this code and the 409 status.
-LOCK_LOST_CODE = "lock_lost"  # `contracts/site-lock.md:82` and line 95 fix this code and the 409 status.
+LOCK_LOST_CODE = "lock_lost"  # `contracts/site-lock.md:90` and line 103 fix this code and the 409 status.
 CONFIRMATION_REQUIRED_CODE = "confirmation_required"  # `contracts/site-lock.md:59` fixes this code and the 400.
-LOCK_STORE_DOWN_CODE = "lock_store_unreachable"  # `contracts/site-lock.md:116` answers 503 and forbids a fallback.
+LOCK_STORE_DOWN_CODE = "lock_store_unreachable"  # `contracts/site-lock.md:128` answers 503 and forbids a fallback.
 
 LOCK_LOST_MESSAGE = "This session no longer holds the site. Take the site again before you continue."  # The cure.
 
@@ -1371,7 +1371,7 @@ def lock_lost_answer() -> tuple[Response, int]:
         The refusal envelope and the 409 status.
     """
     body = build_error_envelope(LOCK_LOST_CODE, LOCK_LOST_MESSAGE)  # No detail block, because no cure needs one.
-    return jsonify(body), CONFLICT_STATUS  # `contracts/site-lock.md:82` and line 95 fix this status.
+    return jsonify(body), CONFLICT_STATUS  # `contracts/site-lock.md:90` and line 103 fix this status.
 
 
 def stored_lock_records() -> dict[str, Any]:
@@ -1482,7 +1482,7 @@ def lock_cooldown_seconds(org_id: str, site_id: str) -> int:
     Returns:
         The whole seconds that remain, and zero when the portal knows no holder.
     """
-    try:  # `contracts/site-lock.md:118` says a read never needs the lock store.
+    try:  # `contracts/site-lock.md:130` says a read never needs the lock store.
         held = lock.read_lock(org_id, site_id, client=lock_client())  # None for a free site or a dead store.
     except Exception:  # A page render must survive a store that answers nothing.
         logger.warning("select: the lock store did not answer the cooldown of site %s", site_id)  # No trace.
@@ -1540,7 +1540,7 @@ def lock_banner_context(org_id: str, site_id: str) -> dict[str, Any]:
         address. The signed session of this browser holds the token, so this
         builder reads the session first and the store second.
 
-        `contracts/site-lock.md:118` states that a read never needs the lock
+        `contracts/site-lock.md:130` states that a read never needs the lock
         store. Every store read below therefore fails open, and a store that
         answers nothing renders the banner in the `unknown` state.
 
@@ -1669,7 +1669,7 @@ def beat_site_lock(site_id: str) -> tuple[Response, int]:
     org_id = resolve_org(None)  # The beat path carries no organization, so the session answers.
     record = held_record(site_id) if org_id is not None else None  # None means this session holds no matching lock.
     if org_id is None or record is None:  # Nothing to extend, so the page must take the site again.
-        return lock_lost_answer()  # `contracts/site-lock.md:82` fixes this code and this status.
+        return lock_lost_answer()  # `contracts/site-lock.md:90` fixes this code and this status.
     try:  # A beat fails closed, because a portal that assumes a lock is worse than one that refuses.
         remaining = lock.refresh_site_lock(lock.build_key(org_id, site_id), record, client=lock_client())
     except lock.SiteLockError as error:  # The store refused, or the token no longer matches the stored one.
@@ -1684,7 +1684,7 @@ def free_site_lock(site_id: str) -> tuple[Response, int]:
     """Give up a lock this session still holds.
 
     Why:
-        `contracts/site-lock.md:97` releases the lock when a run reaches
+        `contracts/site-lock.md:105` releases the lock when a run reaches
         `complete`, `stopped`, or `failed`. A closed browser releases nothing,
         because the run continues without the browser.
 
@@ -1697,7 +1697,7 @@ def free_site_lock(site_id: str) -> tuple[Response, int]:
     org_id = resolve_org(None)  # The release path carries no organization, so the session answers.
     record = held_record(site_id) if org_id is not None else None  # None means this session holds no matching lock.
     if org_id is None or record is None:  # Nothing to release, so the caller already lost the site.
-        return lock_lost_answer()  # `contracts/site-lock.md:95` fixes this code and this status.
+        return lock_lost_answer()  # `contracts/site-lock.md:103` fixes this code and this status.
     try:  # The compare and the delete run as one step, so a release cannot free another operator.
         lock.release_site_lock(lock.build_key(org_id, site_id), record, client=lock_client())
     except lock.SiteLockError as error:  # The store refused, or the token no longer matches the stored one.

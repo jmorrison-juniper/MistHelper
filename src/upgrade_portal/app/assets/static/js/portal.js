@@ -98,7 +98,7 @@
     var LOCK_RELEASE_TESTID = "lock-release-button";
     var LOCK_ERROR_TESTID = "lock-error";
 
-    /* contracts/site-lock.md line 84 fixes 60 seconds for the browser beat. The
+    /* contracts/site-lock.md line 92 fixes 60 seconds for the browser beat. The
      * lock lives 300 seconds, so four beats may fail before the lock expires. */
     var HEARTBEAT_SECONDS = 60;
 
@@ -2082,7 +2082,7 @@
     /**
      * Gives the site back at once.
      *
-     * Why: contracts/site-lock.md line 97 releases the lock when a run finishes.
+     * Why: contracts/site-lock.md line 105 releases the lock when a run finishes.
      * A release also serves an operator who stops early, because the next
      * operator then waits no cooldown at all.
      *
@@ -2114,7 +2114,7 @@
     /**
      * Sends one heartbeat for the lock this browser holds.
      *
-     * Why: contracts/site-lock.md line 84 asks the browser for a beat every 60
+     * Why: contracts/site-lock.md line 92 asks the browser for a beat every 60
      * seconds. The beat is what tells the portal that the session is alive, and
      * FR-078 treats a silent session as abandoned after 5 minutes.
      *

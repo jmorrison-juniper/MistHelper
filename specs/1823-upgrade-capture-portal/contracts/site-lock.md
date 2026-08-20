@@ -20,7 +20,7 @@ comparison, or a history page with no lock and with no typed text.
 | --- | --- |
 | Key | `misthelper:lock:site:{org_id}:{site_id}` |
 | Type | Redis string that holds JSON |
-| Expiry | 300 seconds, refreshed by a heartbeat |
+| Expiry | 3600 seconds, refreshed by a heartbeat |
 
 ```json
 {
@@ -48,7 +48,7 @@ run without typing anything.
 One atomic command.
 
 ```text
-SET misthelper:lock:site:{org}:{site} <json> NX EX 300
+SET misthelper:lock:site:{org}:{site} <json> NX EX 3600
 ```
 
 | Result | Meaning | Portal answer |
@@ -57,6 +57,14 @@ SET misthelper:lock:site:{org}:{site} <json> NX EX 300
 | `nil`, same `actor_email` and same `browser_id` | The same operator returns | `200` with the stored token, state `resume` |
 | `nil`, different holder, age under 300 seconds | Another operator is active | `409` `site_locked` |
 | `nil`, different holder, age at or over 300 seconds | The holder went quiet | `400` `confirmation_required` |
+
+The expiry and the cooldown are two different numbers on purpose. The lock
+record must outlive the cooldown, or the quiet state in the last row can never
+happen. A lease of 300 seconds would delete the key at the same second the
+holder turns quiet. The portal would then find no holder to name and no
+operator to prompt. The lease of 3600 seconds leaves 55 minutes for the
+takeover. An operator who returns can read who held the site and can type the
+word.
 
 The portal never uses a read followed by a write to acquire the lock. A read then
 a write is not atomic and two operators would both win.
@@ -104,6 +112,10 @@ A takeover needs two conditions.
 
 1. The current lock has been quiet for the full 300-second cooldown.
 2. The new operator types the exact word `CONFIRM`.
+
+The lock record must still exist when both conditions are true. The expiry of
+3600 seconds keeps the record for 55 minutes past the cooldown. The portal can
+then name the old holder in the audit record.
 
 The portal writes an audit record for every takeover. The record holds the old
 `actor_email`, the new `actor_email`, and the time. A takeover never cancels a

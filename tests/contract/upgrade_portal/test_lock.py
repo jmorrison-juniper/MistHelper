@@ -43,8 +43,8 @@ SITE_ID = "00000000-0000-0000-0000-0000000000bb"  # Matches the shared site of t
 SELECTED_ORG_SESSION_KEY = "selected_org_id"  # The organization pick inside the signed session.
 SELECTED_SITE_SESSION_KEY = "selected_site_id"  # The site pick inside the same signed session.
 
-LOCK_PATH = f"/api/sites/{SITE_ID}/lock"  # `contracts/http-api.md:98` names this path for the take and the release.
-BEAT_PATH = f"{LOCK_PATH}/heartbeat"  # `contracts/http-api.md:107` names this path for the beat.
+LOCK_PATH = f"/api/sites/{SITE_ID}/lock"  # `contracts/http-api.md:124` names this path for the take and the release.
+BEAT_PATH = f"{LOCK_PATH}/heartbeat"  # `contracts/http-api.md:147` names this path for the beat.
 SITE_KEY = f"misthelper:lock:site:{ORG_ID}:{SITE_ID}"  # The key `build_key` writes for this organization and site.
 
 OK_STATUS = 200  # The take, the beat, or the release succeeded.
@@ -52,12 +52,12 @@ BAD_REQUEST_STATUS = 400  # The operator must type a word first.
 CONFLICT_STATUS = 409  # The site is held, or this session lost the lock it named.
 UNAVAILABLE_STATUS = 503  # The lock store did not answer a write, and no fallback is allowed.
 
-LOCK_TTL_SECONDS = 300  # `contracts/site-lock.md:24` fixes the life of one lock.
-COOLDOWN_SECONDS = 300  # `contracts/site-lock.md:105` fixes the quiet window before a takeover.
+LOCK_TTL_SECONDS = 3600  # `contracts/site-lock.md:23` fixes the life of one lock.
+COOLDOWN_SECONDS = 300  # `contracts/site-lock.md:113` fixes the quiet window before a takeover.
 QUIET_AGE_SECONDS = 400  # Past the cooldown, so the seeded holder counts as quiet.
 ACTIVE_AGE_SECONDS = 10  # Well inside the cooldown, so the seeded holder counts as active.
 
-TAKEOVER_WORD = "CONFIRM"  # `contracts/site-lock.md:106` fixes this word for a different operator.
+TAKEOVER_WORD = "CONFIRM"  # `contracts/site-lock.md:114` fixes this word for a different operator.
 RESUME_WORD = "continue"  # FR-080 fixes this word for the same operator returning to a quiet session.
 
 
@@ -86,7 +86,7 @@ class FakeLockStore:
         Raises:
             ConnectionError: When the test set the failure flag.
         """
-        if self.fail:  # `contracts/site-lock.md:116` asks the portal to fail closed here.
+        if self.fail:  # `contracts/site-lock.md:128` asks the portal to fail closed here.
             raise ConnectionError("The stand-in lock store is down for this test.")
 
     def set(self, key: str, value: str, nx: bool = False, ex: int | None = None) -> bool | None:
@@ -403,7 +403,7 @@ def take_lock(client: FlaskClient, confirm: str = "") -> TestResponse:
 
 
 # ---------------------------------------------------------------------------
-# The acquire. `contracts/http-api.md:98` and `contracts/site-lock.md:55`.
+# The acquire. `contracts/http-api.md:124` and `contracts/site-lock.md:55`.
 # ---------------------------------------------------------------------------
 
 
@@ -415,10 +415,10 @@ def test_take_a_free_site(lock_client: FlaskClient) -> None:
     """
     response = take_lock(lock_client)  # The site is free, so the store decides the race and this caller wins.
 
-    assert response.status_code == OK_STATUS  # `contracts/http-api.md:99` fixes this status.
+    assert response.status_code == OK_STATUS  # `contracts/http-api.md:129` fixes this status.
     body = response.get_json()
     assert body["lock_token"]  # The contract names this field and fixes no shape for the value.
-    assert body["expires_in"] == LOCK_TTL_SECONDS  # `contracts/site-lock.md:24` fixes 300 seconds.
+    assert body["expires_in"] == LOCK_TTL_SECONDS  # `contracts/site-lock.md:23` fixes 3600 seconds.
 
 
 def test_take_names_the_state_acquired(lock_client: FlaskClient) -> None:
@@ -468,7 +468,7 @@ def test_another_operator_is_refused_while_the_holder_is_active(
 
     response = take_lock(lock_client)  # The second operator asks for the same site.
 
-    assert response.status_code == CONFLICT_STATUS  # `contracts/http-api.md:103` fixes this status.
+    assert response.status_code == CONFLICT_STATUS  # `contracts/http-api.md:132` fixes this status.
     assert read_error_code(response) == "site_locked"  # The contract fixes this code.
 
 
@@ -480,7 +480,7 @@ def test_the_refusal_names_the_holder_and_the_wait(
     """A `site_locked` refusal carries `actor_email` and `cooldown_remaining`.
 
     Why:
-        `contracts/http-api.md:103` names both fields. The waiting operator reads
+        `contracts/http-api.md:132` names both fields. The waiting operator reads
         who holds the site and how long the wait lasts, so the page needs no
         second call to answer either question.
 
@@ -513,7 +513,7 @@ def test_a_quiet_holder_asks_a_different_operator_for_a_word(
 
     response = take_lock(lock_client)  # The second operator asks with no typed word.
 
-    assert response.status_code == BAD_REQUEST_STATUS  # `contracts/http-api.md:104` fixes this status.
+    assert response.status_code == BAD_REQUEST_STATUS  # `contracts/http-api.md:131` fixes this status.
     assert read_error_code(response) == "confirmation_required"  # The contract fixes this code.
 
 
@@ -538,7 +538,7 @@ def test_the_word_for_a_different_operator_is_confirm(
 
     details = read_error_details(take_lock(lock_client))  # The refusal body names the needed word.
 
-    assert details["needed_text"] == TAKEOVER_WORD  # `contracts/site-lock.md:106` fixes this word.
+    assert details["needed_text"] == TAKEOVER_WORD  # `contracts/site-lock.md:114` fixes this word.
 
 
 def test_the_word_for_the_same_operator_is_continue(
@@ -636,7 +636,7 @@ def test_a_down_store_refuses_the_take(lock_client: FlaskClient, lock_store: Fak
     """A lock store that does not answer refuses the take with 503.
 
     Why:
-        `contracts/site-lock.md:116` forbids an in-memory fallback. A fallback
+        `contracts/site-lock.md:128` forbids an in-memory fallback. A fallback
         would let two workers each believe they hold the lock, which is the exact
         failure the lock prevents.
 
@@ -653,7 +653,7 @@ def test_a_down_store_refuses_the_take(lock_client: FlaskClient, lock_store: Fak
 
 
 # ---------------------------------------------------------------------------
-# The heartbeat. `contracts/http-api.md:107` and `contracts/site-lock.md:65`.
+# The heartbeat. `contracts/http-api.md:147` and `contracts/site-lock.md:73`.
 # ---------------------------------------------------------------------------
 
 
@@ -667,8 +667,8 @@ def test_a_beat_extends_the_lock(lock_client: FlaskClient) -> None:
 
     response = lock_client.post(BEAT_PATH, json={"lock_token": token})  # The beat the browser sends every 60 seconds.
 
-    assert response.status_code == OK_STATUS  # `contracts/http-api.md:109` fixes this status.
-    assert response.get_json()["expires_in"] == LOCK_TTL_SECONDS  # The lock lives another 300 seconds.
+    assert response.status_code == OK_STATUS  # `contracts/http-api.md:152` fixes this status.
+    assert response.get_json()["expires_in"] == LOCK_TTL_SECONDS  # The lock lives another 3600 seconds.
 
 
 def test_a_beat_with_a_wrong_token_is_refused(lock_client: FlaskClient) -> None:
@@ -681,7 +681,7 @@ def test_a_beat_with_a_wrong_token_is_refused(lock_client: FlaskClient) -> None:
 
     response = lock_client.post(BEAT_PATH, json={"lock_token": "not-the-stored-token"})
 
-    assert response.status_code == CONFLICT_STATUS  # `contracts/http-api.md:110` fixes this status.
+    assert response.status_code == CONFLICT_STATUS  # `contracts/http-api.md:153` fixes this status.
     assert read_error_code(response) == "lock_lost"  # The contract fixes this code.
 
 
@@ -741,7 +741,7 @@ def test_a_down_store_refuses_the_beat(lock_client: FlaskClient, lock_store: Fak
 
 
 # ---------------------------------------------------------------------------
-# The release. `contracts/http-api.md:112` and `contracts/site-lock.md:88`.
+# The release. `contracts/http-api.md:155` and `contracts/site-lock.md:96`.
 # ---------------------------------------------------------------------------
 
 
@@ -756,7 +756,7 @@ def test_a_release_frees_the_site(lock_client: FlaskClient, lock_store: FakeLock
 
     response = lock_client.delete(LOCK_PATH, json={"lock_token": token})
 
-    assert response.status_code == OK_STATUS  # `contracts/http-api.md:114` fixes this status.
+    assert response.status_code == OK_STATUS  # `contracts/http-api.md:160` fixes this status.
     assert response.get_json()["released"] is True  # The contract fixes this field and this value.
     assert SITE_KEY not in lock_store.values  # The site is free, so the next operator waits no cooldown.
 
@@ -772,7 +772,7 @@ def test_a_release_with_a_wrong_token_is_refused(lock_client: FlaskClient, lock_
 
     response = lock_client.delete(LOCK_PATH, json={"lock_token": "not-the-stored-token"})
 
-    assert response.status_code == CONFLICT_STATUS  # `contracts/http-api.md:115` fixes this status.
+    assert response.status_code == CONFLICT_STATUS  # `contracts/http-api.md:161` fixes this status.
     assert read_error_code(response) == "lock_lost"  # The contract fixes this code.
     assert SITE_KEY in lock_store.values  # A wrong token never frees a lock that another caller holds.
 

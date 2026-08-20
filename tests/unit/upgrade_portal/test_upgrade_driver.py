@@ -1004,7 +1004,7 @@ class TestSiteLockRelease:
         """The site returns to the pool when the run completes.
 
         Why:
-            contracts/site-lock.md line 97 names `complete` as a release point.
+            contracts/site-lock.md line 105 names `complete` as a release point.
             A lock left to expire holds the site for the rest of its
             300-second life, and the next operator waits for nothing.
 
@@ -1023,7 +1023,7 @@ class TestSiteLockRelease:
         """The site returns to the pool when the operator stops the run.
 
         Why:
-            contracts/site-lock.md line 97 names `stopped` as a release point.
+            contracts/site-lock.md line 105 names `stopped` as a release point.
 
         Args:
             parts: The doubles and the driver.
@@ -1040,7 +1040,7 @@ class TestSiteLockRelease:
         """The site returns to the pool when the run fails.
 
         Why:
-            contracts/site-lock.md line 97 names `failed` as a release point. A
+            contracts/site-lock.md line 105 names `failed` as a release point. A
             run that died still holds the site until something gives it back.
 
         Args:
@@ -1058,7 +1058,7 @@ class TestSiteLockRelease:
         """A run that is still working never gives the site back.
 
         Why:
-            contracts/site-lock.md line 98 keeps the lock when a browser
+            contracts/site-lock.md line 106 keeps the lock when a browser
             closes, because the run continues. A release at any other state
             would hand a site to a second operator while the first run still
             writes firmware to a switch.

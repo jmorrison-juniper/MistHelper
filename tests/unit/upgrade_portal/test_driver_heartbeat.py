@@ -1,13 +1,13 @@
 """Unit tests for the site lock heartbeat of the upgrade run driver.
 
 Why:
-    The site lock lives 300 seconds and the browser alone renewed it before
-    the driver took a heartbeat. An operator who closed the page during a
-    40-minute cascade lost the site after five minutes, and a second operator
-    could take a site that was still writing firmware to a switch. These tests
-    hold the run thread to its own renewal.
+    The site lock lives 3600 seconds and the browser alone renewed it before
+    the driver took a heartbeat. An operator who closed the page during a long
+    cascade lost the site while a switch still wrote firmware, and a second
+    operator could then take that site. These tests hold the run thread to its
+    own renewal.
 
-    No test sleeps. A fake ticker moves the seconds by hand, so a run of 1600
+    No test sleeps. A fake ticker moves the seconds by hand, so a run of 4000
     simulated seconds finishes in milliseconds.
 """
 
@@ -31,7 +31,7 @@ LOCK_TOKEN = "token-that-no-log-line-may-hold"  # A value a test can search ever
 ACTOR_EMAIL = "sam@example.com"  # A plain address that no log record may hold either
 BROWSER_ID = "browser-0123456789"  # 18 URL-safe characters, inside the 16 to 128 the identity module asks for
 POLL_SECONDS = 20.0  # The poll round of src/upgrade_portal/upgrade/phase_gate.py
-ROUNDS_PER_PHASE = 20  # 400 simulated seconds for one phase, which passes the 300-second life of the lock
+ROUNDS_PER_PHASE = 50  # 1000 simulated seconds for one phase, so the four phases pass the 3600-second lock life
 
 
 class FakeTicker:
@@ -413,8 +413,9 @@ class TestLongRun:
         """The headline defect: one beat per run is not enough.
 
         Why:
-            The lock lives 300 seconds and a cascade runs for 40 minutes. A
-            run that beat once would lose the site while it wrote firmware.
+            The lock lives 3600 seconds and a long cascade runs for more than
+            an hour. A run that beat once would lose the site while it wrote
+            firmware.
 
         Args:
             parts: The doubles and the driver.
@@ -424,7 +425,7 @@ class TestLongRun:
         assert len(parts["refresher"].times) > 1  # More than one beat reached the lock store
 
     def test_no_gap_between_two_beats_reaches_the_life_of_the_lock(self, parts: dict[str, Any]) -> None:
-        """Every gap between two beats stays under the 300-second life.
+        """Every gap between two beats stays under the 3600-second life.
 
         Why:
             A count of beats alone would pass even if every beat arrived at
@@ -437,7 +438,7 @@ class TestLongRun:
         assert max(parts["refresher"].gaps) < lock.LOCK_TTL_SECONDS
 
     def test_the_beat_rides_the_poll_loop_of_the_settle_gate(self, parts: dict[str, Any]) -> None:
-        """One phase of 400 seconds holds more than one beat.
+        """One phase of 1000 seconds holds more than one beat.
 
         Why:
             The driver blocks inside one settle gate for up to half an hour.
@@ -645,7 +646,7 @@ class TestQuietStore:
     """A lock store that does not answer gets a retry window and no more."""
 
     def test_the_beat_retries_while_the_window_is_open(self) -> None:
-        """contracts/site-lock.md line 117 gives the store 60 seconds."""
+        """contracts/site-lock.md line 129 gives the store 60 seconds."""
         ticker = FakeTicker()
         refresher = RecordingRefresher(ticker)
         refresher.errors = [lock.LockStoreUnreachableError(lock.LOCK_STORE_DOWN_MESSAGE)]

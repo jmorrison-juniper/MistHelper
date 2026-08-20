@@ -161,7 +161,7 @@ _PHASE_DEVICE_TYPES: Final[Mapping[str, str]] = {
     "aps": "ap",
 }
 
-# WHY: contracts/site-lock.md line 117 gives a heartbeat 60 seconds to reach a
+# WHY: contracts/site-lock.md line 129 gives a heartbeat 60 seconds to reach a
 # lock store that does not answer. The driver retries inside that window and
 # gives up after it, so a dead store never holds the run thread for ever.
 LOCK_RETRY_WINDOW_SECONDS: Final[int] = 60
@@ -513,7 +513,7 @@ class LockHeartbeat:
         """Give the site back at the end of one run.
 
         Why:
-            contracts/site-lock.md line 97 releases the lock when a run reaches
+            contracts/site-lock.md line 105 releases the lock when a run reaches
             `complete`, `stopped`, or `failed`. Without the release the next
             operator waits the whole 300-second life of the lock for a site
             that nobody upgrades. This object holds the key and the token, so
@@ -585,7 +585,7 @@ class LockHeartbeat:
         try:
             left = self._plan.refresh(self._plan.key, self._plan.record)
         except LockStoreUnreachableError:
-            return self._quiet()  # contracts/site-lock.md line 117 gives the store a retry window
+            return self._quiet()  # contracts/site-lock.md line 129 gives the store a retry window
         except SiteLockError:
             return self._lost(LOCK_LOST_REASON)  # A takeover or an expiry moved the lock
         except Exception as error:  # noqa: BLE001  # WHY: A beat must never end a live upgrade.
@@ -617,7 +617,7 @@ class LockHeartbeat:
         """Retry a beat that the lock store did not answer.
 
         Why:
-            contracts/site-lock.md line 117 gives the store 60 seconds. The
+            contracts/site-lock.md line 129 gives the store 60 seconds. The
             next call of the caller is the retry, so the wait costs the run
             thread nothing and needs no sleep.
 
@@ -1134,7 +1134,7 @@ class RunDriver:
         """Give the site back when this run reached a final state.
 
         Why:
-            contracts/site-lock.md line 97 releases the lock at `complete`,
+            contracts/site-lock.md line 105 releases the lock at `complete`,
             `stopped`, or `failed`. A lock left to expire holds the site for
             the rest of its 300-second life, and the next operator waits five
             minutes for a site that nobody upgrades.

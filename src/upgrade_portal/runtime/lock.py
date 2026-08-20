@@ -109,22 +109,26 @@ _LOGGER: Final[logging.Logger] = logging.getLogger(__name__)  # One logger for t
 KEY_TEMPLATE: Final[str] = "misthelper:lock:site:{org_id}:{site_id}"
 
 # WHAT: how long a lock lives without a heartbeat.
-# WHY: contracts/site-lock.md line 23 sets 300 seconds. A heartbeat every 60
-#      seconds gives four missed beats before the lock expires.
-LOCK_TTL_SECONDS: Final[int] = 300
+# WHY: contracts/site-lock.md line 23 sets 3600 seconds. The lease must outlive
+#      the cooldown. A lease equal to the cooldown deletes the key at the same
+#      second the holder turns quiet, so the quiet state that the typed word
+#      CONFIRM needs can never exist. A heartbeat every 60 seconds gives 60
+#      missed beats before the lock dies.
+LOCK_TTL_SECONDS: Final[int] = 3600
 
 # WHAT: how long a quiet holder keeps the site before another operator may take it.
-# WHY: the contract calls this the full 300-second cooldown at line 105. The
-#      value equals the lock life, so a lock that survives is never quiet.
+# WHY: contracts/site-lock.md line 113 calls this the full 300-second cooldown.
+#      The value stays under the lock life, so a quiet holder still holds a key
+#      that another operator can read and can take with the typed word.
 COOLDOWN_SECONDS: Final[int] = 300
 
 # WHAT: the gap between two heartbeats.
-# WHY: contracts/site-lock.md line 84 sets 60 seconds for the browser and for
+# WHY: contracts/site-lock.md line 92 sets 60 seconds for the browser and for
 #      the run driver thread, so a closed browser does not drop a live upgrade.
 HEARTBEAT_SECONDS: Final[int] = 60
 
 # WHAT: the exact text that takes a quiet site from another operator.
-# WHY: contracts/site-lock.md line 106 names this word and this letter case.
+# WHY: contracts/site-lock.md line 114 names this word and this letter case.
 TAKEOVER_CONFIRMATION_TEXT: Final[str] = "CONFIRM"
 
 # WHAT: the exact text that takes a quiet site back for its own operator.
@@ -143,7 +147,7 @@ LOCK_TOKEN_BYTES: Final[int] = 16
 ACQUIRE_ATTEMPTS: Final[int] = 2
 
 # WHAT: how long a connection attempt and a command may take.
-# WHY: contracts/site-lock.md line 118 says viewing must not need Redis. Without
+# WHY: contracts/site-lock.md line 130 says viewing must not need Redis. Without
 #      these limits the client waits on the operating system, and a site list
 #      that reads the lock state then hangs behind a dead store.
 CONNECT_TIMEOUT_SECONDS: Final[float] = 1.0
@@ -178,7 +182,7 @@ RESUME_MESSAGE: Final[str] = "Your earlier session on this site went quiet. Type
 LOCK_LOST_MESSAGE: Final[str] = "The portal no longer holds the lock on this site."
 SITE_BUSY_MESSAGE: Final[str] = "The lock on this site changed hands during the request. Try again."
 
-# WHAT: the compare and extend script of contracts/site-lock.md lines 69 to 77.
+# WHAT: the compare and extend script of contracts/site-lock.md lines 77 to 85.
 # WHY: the compare and the extend run as one step, so a heartbeat cannot extend
 #      a lock that a different operator now holds. An absent key returns 0,
 #      because a heartbeat must never bring a dead lock back.
@@ -192,7 +196,7 @@ return 1
 """
 
 # WHAT: the same compare, followed by a delete.
-# WHY: contracts/site-lock.md line 90 asks for this pair. A plain delete would
+# WHY: contracts/site-lock.md line 98 asks for this pair. A plain delete would
 #      drop a lock that a later operator acquired after a takeover. The compare
 #      and the delete run as one step, so no second command can land between
 #      them. The script answers 1 for a delete, 0 for a token that does not
@@ -242,11 +246,11 @@ class LockStoreUnreachableError(SiteLockError):
     """The lock store did not answer a write.
 
     Why:
-        contracts/site-lock.md line 116 answers 503 and forbids a fallback to a
+        contracts/site-lock.md line 128 answers 503 and forbids a fallback to a
         lock in process memory.
     """
 
-    code: ClassVar[str] = "lock_store_unreachable"  # Matches contracts/site-lock.md line 116
+    code: ClassVar[str] = "lock_store_unreachable"  # Matches contracts/site-lock.md line 128
 
 
 class SiteLockedError(SiteLockError):
@@ -263,14 +267,14 @@ class LockLostError(SiteLockError):
     """The caller no longer holds the lock it named.
 
     Why:
-        contracts/site-lock.md lines 82 and 95 answer 409 with this code when a
+        contracts/site-lock.md lines 90 and 103 answer 409 with this code when a
         refresh or a release compares a token that the store no longer holds.
 
     Attributes:
         outcome: How one release lost the lock, or None when a refresh raised.
     """
 
-    code: ClassVar[str] = "lock_lost"  # Matches contracts/site-lock.md lines 82 and 95
+    code: ClassVar[str] = "lock_lost"  # Matches contracts/site-lock.md lines 90 and 103
 
     def __init__(self, message: str, outcome: ReleaseOutcome | None = None) -> None:
         """Hold the plain sentence and how a release lost the lock.
@@ -331,7 +335,7 @@ class ReleaseOutcome(StrEnum):
     """What one compare-and-delete did to the site lock.
 
     Why:
-        contracts/site-lock.md line 95 answers `lock_lost` for every release
+        contracts/site-lock.md line 103 answers `lock_lost` for every release
         that deletes nothing, and two very different events share that answer.
         A lock that expired left the site free, and the run merely ended late.
         A lock that another operator holds means a takeover moved the site
@@ -375,7 +379,7 @@ class TakeoverAudit:
     """The record of one takeover.
 
     Why:
-        contracts/site-lock.md line 108 asks the portal to write an audit
+        contracts/site-lock.md line 120 asks the portal to write an audit
         record for every takeover, holding the old address, the new address,
         and the time. This module builds the record, stores it, and hands it to
         the caller in the grant. The record holds the two plain addresses,
@@ -886,7 +890,7 @@ def _write_new_lock(handle: Any, key: str, record: LockRecord) -> bool:
     """Try the one atomic command that takes a free lock.
 
     Why:
-        contracts/site-lock.md line 61 forbids a read followed by a write. The
+        contracts/site-lock.md line 69 forbids a read followed by a write. The
         `NX` flag makes the store decide the race, so exactly one operator wins.
 
     Args:
@@ -1087,7 +1091,7 @@ def release_site_lock(key: str, record: LockRecord, client: Any = None) -> Relea
     """Give up a lock the caller still holds.
 
     Why:
-        contracts/site-lock.md line 97 releases the lock when a run reaches
+        contracts/site-lock.md line 105 releases the lock when a run reaches
         `complete`, `stopped`, or `failed`. A closed browser releases nothing,
         because the run continues. The compare and the delete run as one step,
         so a release cannot drop the lock of an operator who took the site

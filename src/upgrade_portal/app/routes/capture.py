@@ -562,8 +562,8 @@ def held_by_other(org_id: str, site_id: str) -> str | None:
         `read_site_locks` answers an empty index when the lock store is
         unreachable, so an unknown state reads as free and the capture starts.
         That choice is correct for a capture and stays.
-        `contracts/site-lock.md:118` asks a read to continue when the store is
-        unreachable. `contracts/site-lock.md:127` states that the lock does not
+        `contracts/site-lock.md:130` asks a read to continue when the store is
+        unreachable. `contracts/site-lock.md:139` states that the lock does not
         gate a capture on its own, because a capture reads only and two captures
         do no harm. A capture that refused on an unreachable store would break
         both lines. The upgrade start makes the opposite choice, because it

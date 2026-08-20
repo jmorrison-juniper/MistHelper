@@ -126,7 +126,7 @@ points only.
 | Item | Value |
 | --- | --- |
 | Body | `{ "confirm": "<string or absent>" }` |
-| 200 | `{ "lock_token": "<opaque>", "expires_in": 300, "state": "acquired" }` |
+| 200 | `{ "lock_token": "<opaque>", "expires_in": 3600, "state": "acquired" }` |
 | 400 | `org_not_chosen` when the session names no organization |
 | 400 | `confirmation_required` with `details.needed_text` when a takeover needs the word `CONFIRM` |
 | 409 | `site_locked` with `details.actor_email` and `details.cooldown_remaining` |
@@ -149,7 +149,7 @@ those two sections states what its own refusal carries.
 | Item | Value |
 | --- | --- |
 | Body | `{ "lock_token": "<opaque>" }` |
-| 200 | `{ "expires_in": 300 }` |
+| 200 | `{ "expires_in": 3600 }` |
 | 409 | `lock_lost` when the token no longer matches |
 
 ### `DELETE /api/sites/<site_id>/lock` — release the lock

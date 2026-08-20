@@ -9,7 +9,7 @@
     all show one banner and no route repeats the markup.
 
   Why the banner never blocks a read:
-    contracts/site-lock.md line 128 states that a comparison page and a history
+    contracts/site-lock.md line 140 states that a comparison page and a history
     page need no lock. This file is included by a page that writes, never by a
     page that reads. A read-only page that includes it anyway still renders,
     because every control below is a button and no control gates the content of
@@ -42,7 +42,7 @@
   Variables a route may supply:
     site_id       - the site the banner covers. The three calls need it.
     lock_state    - one of free, locked, held, or unknown. The default is
-                    unknown, which is what contracts/site-lock.md line 118 asks
+                    unknown, which is what contracts/site-lock.md line 130 asks
                     a page to show when the lock store does not answer.
     lock_holder   - the work email address of the holder. Empty when free.
     lock_cooldown - the seconds left before a takeover becomes possible. Zero

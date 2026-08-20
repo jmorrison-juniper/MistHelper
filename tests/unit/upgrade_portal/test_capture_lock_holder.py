@@ -9,8 +9,8 @@ Why:
     second half and fails the first, so it blocks the primary journey.
 
 The unreachable lock store:
-    `contracts/site-lock.md:118` asks a read to continue when the lock store is
-    unreachable. `contracts/site-lock.md:127` states that the lock does not gate
+    `contracts/site-lock.md:130` asks a read to continue when the lock store is
+    unreachable. `contracts/site-lock.md:139` states that the lock does not gate
     a capture on its own, because a capture reads only. The tests below pin that
     choice, so a later change cannot make a capture need Redis by accident.
 
@@ -385,7 +385,7 @@ def test_a_free_site_starts_the_capture(client: FlaskClient, capture_runner: Rec
 
 
 # --------------------------------------------------------------------------
-# The unreachable lock store. `contracts/site-lock.md:118` and `:127`.
+# The unreachable lock store. `contracts/site-lock.md:130` and `:139`.
 # --------------------------------------------------------------------------
 
 
@@ -395,8 +395,8 @@ def test_an_unreachable_lock_store_still_starts_the_capture(
     """A lock store that cannot answer does not stop a capture.
 
     Why:
-        `contracts/site-lock.md:118` asks a read to continue when the store is
-        unreachable, and `contracts/site-lock.md:127` states that the lock does
+        `contracts/site-lock.md:130` asks a read to continue when the store is
+        unreachable, and `contracts/site-lock.md:139` states that the lock does
         not gate a capture on its own. A capture reads only. This test records
         that choice, so a later change cannot make a capture need Redis without
         first failing here and reading the reason.

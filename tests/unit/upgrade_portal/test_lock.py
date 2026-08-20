@@ -89,7 +89,7 @@ class ScriptedLockStore:
     """An in-memory stand-in for the Redis client the lock module uses.
 
     Why:
-        The lock needs one atomic ``SET key value NX EX 300`` and three Lua
+        The lock needs one atomic ``SET key value NX EX <life>`` and three Lua
         scripts. A unit test must prove that a second operator loses each race
         without a Redis server and without a socket.
 
@@ -97,6 +97,10 @@ class ScriptedLockStore:
         the module under test. A substring match would pick the wrong branch in
         silence if a script changed, and a silent wrong branch is worse than a
         loud failure.
+
+        The double also drops a key that outlived its expiry. A store that keeps
+        every key for ever answers with a state the real server cannot produce,
+        and a test against an impossible state proves nothing.
     """
 
     def __init__(self) -> None:
@@ -116,6 +120,33 @@ class ScriptedLockStore:
         if self.fail:
             raise ConnectionError("The test double models a lock store that does not answer.")
 
+    def _drop_when_expired(self, key: str) -> None:
+        """Delete one key when the real server would already have dropped it.
+
+        Why:
+            Real Redis deletes a key when the time to live runs out. Every write
+            of the lock module sets `refreshed_at` and the expiry in the same
+            operation, so the age past `refreshed_at` is the age of the key.
+
+            A double that keeps a key for ever lets a test seed a lock that is
+            both alive and quiet. The real server never holds that state when
+            the expiry equals the cooldown, so a takeover test against that
+            state would pass while the branch stays unreachable in production.
+
+        Args:
+            key: The lock key.
+        """
+        life = self.expiries.get(key)
+        value = self.values.get(key)
+        if life is None or value is None:  # A write with no expiry, or no key at all
+            return
+        held = LockRecord.from_json(value)
+        if held is None:  # A value the lock module did not write carries no age
+            return
+        if held.age_seconds() >= life:  # The real server would already have dropped it
+            self.values.pop(key, None)
+            self.expiries.pop(key, None)
+
     def set(self, key: str, value: str, nx: bool = False, ex: int | None = None) -> bool | None:
         """Write one key, and honor the `nx` flag the way the real client does.
 
@@ -130,6 +161,7 @@ class ScriptedLockStore:
         """
         self._refuse_when_down()
         self.set_calls.append((key, nx, ex))
+        self._drop_when_expired(key)  # An expired key never blocks a write
         if nx and key in self.values:  # The real client returns None when the key exists
             return None
         self.values[key] = value
@@ -144,9 +176,10 @@ class ScriptedLockStore:
             key: The lock key.
 
         Returns:
-            The JSON text, or None when the key is absent.
+            The JSON text, or None when the key is absent or expired.
         """
         self._refuse_when_down()
+        self._drop_when_expired(key)  # An expired key reads as absent
         value = self.values.get(key)
         if self.after_get is not None:  # A racing operator changes the store between the read and the write
             self.after_get()
@@ -170,6 +203,7 @@ class ScriptedLockStore:
         """
         self._refuse_when_down()
         assert numkeys == 1  # Every lock script names exactly one key
+        self._drop_when_expired(key)  # Each script starts with a GET, which never sees an expired key
         token = str(arguments[0])
         if script == _RELEASE_SCRIPT:
             return self._release(key, token)
@@ -321,9 +355,13 @@ def seed_lock(store: ScriptedLockStore, owner: SessionOwner, age_seconds: float)
     """Put one lock of a chosen age into the store.
 
     Why:
-        The cooldown depends on the stored heartbeat time and not on the key
-        expiry, so a test controls the age by writing the time it wants. No
-        test needs a clock patch and no test needs to wait.
+        The cooldown depends on the stored heartbeat time and not on a clock
+        patch, so a test controls the age by writing the time it wants. No test
+        needs to wait.
+
+        The seed also records the lease that a real acquire would have set. A
+        seed without the lease would keep a key that the real server drops. A
+        takeover test would then prove a state that production never reaches.
 
     Args:
         store: The lock store double.
@@ -342,6 +380,7 @@ def seed_lock(store: ScriptedLockStore, owner: SessionOwner, age_seconds: float)
         refreshed_at=moment,
     )
     store.values[SITE_KEY] = record.to_json()
+    store.expiries[SITE_KEY] = LOCK_TTL_SECONDS  # The lease a real acquire writes with the same operation
     return record
 
 
@@ -375,11 +414,17 @@ def test_the_settings_repeat_the_contract_numbers() -> None:
     Why:
         The browser and the run driver both read these values. A quiet change
         to one of them would break the cooldown that guards a takeover.
+
+        The life must stay above the cooldown. A life equal to the cooldown
+        drops the key at the same second the holder turns quiet. The portal
+        would then find no holder to name, and the typed word CONFIRM would
+        reach no branch.
     """
-    assert LOCK_TTL_SECONDS == 300
+    assert LOCK_TTL_SECONDS == 3600
     assert COOLDOWN_SECONDS == 300
     assert HEARTBEAT_SECONDS == 60
     assert TAKEOVER_CONFIRMATION_TEXT == "CONFIRM"
+    assert LOCK_TTL_SECONDS > COOLDOWN_SECONDS  # A quiet holder must still hold a readable key
 
 
 def test_a_free_site_grants_the_lock(store: ScriptedLockStore) -> None:
@@ -401,10 +446,10 @@ def test_a_free_site_grants_the_lock(store: ScriptedLockStore) -> None:
 
 
 def test_the_acquisition_uses_one_atomic_write(store: ScriptedLockStore) -> None:
-    """The acquisition writes with the `nx` flag and the 300 second life.
+    """The acquisition writes with the `nx` flag and the contract life.
 
     Why:
-        contracts/site-lock.md line 61 forbids a read followed by a write. The
+        contracts/site-lock.md line 69 forbids a read followed by a write. The
         `nx` flag makes the store decide the race, so exactly one operator wins.
 
     Args:
@@ -543,6 +588,79 @@ def test_a_different_operator_after_the_cooldown_must_type_confirm(store: Script
     assert stored_record(store).owner == FIRST_OWNER
 
 
+def test_the_typed_word_still_works_one_second_before_the_lease_ends(store: ScriptedLockStore) -> None:
+    """A holder that stayed quiet for almost the whole lease still yields to the word.
+
+    Why:
+        The takeover needs a lock record that still exists and that already
+        turned quiet. That window runs from the cooldown to the lease. An
+        earlier release set the lease and the cooldown to the same 300 seconds,
+        which closed the window to nothing and left the word CONFIRM
+        unreachable in production.
+
+        This test holds the far edge of the window. It fails if a later change
+        lowers the lease toward the cooldown again.
+
+    Args:
+        store: The lock store double.
+    """
+    seed_lock(store, FIRST_OWNER, LOCK_TTL_SECONDS - 1)
+
+    grant = acquire_site_lock(build_request(SECOND_OWNER, TAKEOVER_CONFIRMATION_TEXT), client=store)
+
+    assert grant.state is LockState.TAKEN_OVER
+    assert grant.audit is not None
+    assert stored_record(store).owner == SECOND_OWNER
+
+
+def test_a_holder_past_the_lease_leaves_no_record_and_needs_no_typed_word(store: ScriptedLockStore) -> None:
+    """A lock that outlived the lease is gone, so the next operator just wins.
+
+    Why:
+        The real server deletes the key when the lease runs out. The next
+        operator then meets a free site, and the atomic write grants the lock
+        with no word to type and no audit record to write.
+
+        The portal names no old holder here, because the store holds none. That
+        is the reason the lease sits far above the cooldown. A short lease would
+        make this the common path and would erase an abandoned session in
+        silence.
+
+    Args:
+        store: The lock store double.
+    """
+    seed_lock(store, FIRST_OWNER, LOCK_TTL_SECONDS + 1)
+
+    grant = acquire_site_lock(build_request(SECOND_OWNER), client=store)
+
+    assert grant.state is LockState.ACQUIRED
+    assert grant.audit is None
+    assert grant.record.lock_token != SEEDED_TOKEN
+    assert stored_record(store).owner == SECOND_OWNER
+
+
+def test_the_store_double_drops_a_key_the_real_server_would_have_dropped(store: ScriptedLockStore) -> None:
+    """The double answers a read of an expired key with nothing.
+
+    Why:
+        Every takeover test seeds a quiet lock and then reads it back. A double
+        that keeps each key for ever would answer a state that the real server
+        cannot reach, and each of those tests would prove nothing.
+
+        This test guards the double itself. It holds both sides of the lease
+        boundary, so a double that stops honoring the expiry fails here first
+        and names the cause.
+
+    Args:
+        store: The lock store double.
+    """
+    seed_lock(store, FIRST_OWNER, LOCK_TTL_SECONDS - 1)
+    assert store.get(SITE_KEY) is not None  # Inside the lease, so the real server keeps it
+
+    seed_lock(store, FIRST_OWNER, LOCK_TTL_SECONDS + 1)
+    assert store.get(SITE_KEY) is None  # Past the lease, so the real server dropped it
+
+
 @pytest.mark.parametrize("typed", ["confirm", "Confirm", "CONFIRM ", " CONFIRM", "YES", ""])
 def test_a_wrong_confirmation_word_leaves_the_holder_in_place(store: ScriptedLockStore, typed: str) -> None:
     """Only the exact word in the exact letter case moves the lock.
@@ -569,7 +687,7 @@ def test_the_confirmed_takeover_moves_the_site_and_writes_an_audit(store: Script
     """The word CONFIRM moves the lock and reports the audit record.
 
     Why:
-        contracts/site-lock.md line 108 asks for an audit record that holds the
+        contracts/site-lock.md line 120 asks for an audit record that holds the
         old address, the new address, and the time.
 
     Args:
@@ -615,7 +733,7 @@ def test_the_confirmed_takeover_writes_one_record_to_the_audit_trail(
     """A takeover adds exactly one record to the trail.
 
     Why:
-        contracts/site-lock.md line 108 asks the portal to write an audit
+        contracts/site-lock.md line 120 asks the portal to write an audit
         record for every takeover. The module built the record and dropped it,
         so a takeover left no trace at all.
 
@@ -637,7 +755,7 @@ def test_the_stored_audit_names_both_addresses_and_the_time(
     """The stored record holds the old address, the new address, and the time.
 
     Why:
-        contracts/site-lock.md line 108 fixes these three fields. The record
+        contracts/site-lock.md line 120 fixes these three fields. The record
         carries the organization and the site as well, because a reader cannot
         place a row that names no site.
 
@@ -754,6 +872,29 @@ def test_the_typed_continue_returns_the_quiet_session(store: ScriptedLockStore) 
     assert stored_record(store).owner == FIRST_OWNER
 
 
+def test_the_word_continue_still_works_one_second_before_the_lease_ends(store: ScriptedLockStore) -> None:
+    """An operator who returns late in the lease still gets the lighter word.
+
+    Why:
+        The resume guard needs the same live and quiet record that a takeover
+        needs. A lease equal to the cooldown broke both branches at once, so the
+        far edge of the window needs a test on each side.
+
+        An operator who steps away for an hour and returns must read the word
+        `continue` and not lose their own in-flight decisions in silence.
+
+    Args:
+        store: The lock store double.
+    """
+    seed_lock(store, FIRST_OWNER, LOCK_TTL_SECONDS - 1)
+
+    grant = acquire_site_lock(build_request(FIRST_OWNER, RESUME_CONFIRMATION_TEXT), client=store)
+
+    assert grant.state is LockState.RESUMED
+    assert grant.audit is None
+    assert stored_record(store).owner == FIRST_OWNER
+
+
 def test_a_racing_takeover_loses_to_the_operator_that_wrote_first(store: ScriptedLockStore) -> None:
     """Two operators who both type the word do not both win.
 
@@ -786,7 +927,7 @@ def test_a_heartbeat_extends_the_lock_the_caller_holds(store: ScriptedLockStore)
     """A beat moves the heartbeat time and leaves the first time alone.
 
     Why:
-        contracts/site-lock.md line 81 answers 200 with the remaining life. The
+        contracts/site-lock.md line 89 answers 200 with the remaining life. The
         page still shows when the operator first took the site, so the beat
         must not move `acquired_at`.
 
@@ -807,7 +948,7 @@ def test_a_heartbeat_after_a_takeover_reports_the_lock_lost(store: ScriptedLockS
     """A beat cannot extend a lock that changed hands.
 
     Why:
-        contracts/site-lock.md line 82 answers 409 `lock_lost`. The compare and
+        contracts/site-lock.md line 90 answers 409 `lock_lost`. The compare and
         the extend run as one step for exactly this case.
 
     Args:
@@ -847,7 +988,7 @@ def test_a_release_frees_the_site(store: ScriptedLockStore) -> None:
     """A release deletes the key the caller holds.
 
     Why:
-        contracts/site-lock.md line 97 releases the lock when a run reaches
+        contracts/site-lock.md line 105 releases the lock when a run reaches
         `complete`, `stopped`, or `failed`.
 
     Args:
@@ -865,7 +1006,7 @@ def test_a_release_with_an_old_token_reports_the_lock_lost(store: ScriptedLockSt
     """A release never deletes a lock that a later operator holds.
 
     Why:
-        contracts/site-lock.md line 95 answers 409 `lock_lost`. A plain delete
+        contracts/site-lock.md line 103 answers 409 `lock_lost`. A plain delete
         would drop the lock of the operator who took the site.
 
     Args:
@@ -926,7 +1067,7 @@ def test_an_unreachable_store_refuses_an_acquisition(store: ScriptedLockStore) -
     """A dead lock store refuses the upgrade start and writes nothing.
 
     Why:
-        contracts/site-lock.md line 116 answers 503 and line 120 forbids a
+        contracts/site-lock.md line 128 answers 503 and line 132 forbids a
         fallback to a lock in process memory. A fallback would let two workers
         each believe they hold the site.
 
@@ -965,7 +1106,7 @@ def test_an_unreachable_store_still_answers_the_site_list(store: ScriptedLockSto
     """A read never raises, even when every command fails.
 
     Why:
-        contracts/site-lock.md line 118 says viewing must not need Redis. A
+        contracts/site-lock.md line 130 says viewing must not need Redis. A
         page that refused to render would punish a reader for a lock fault.
 
     Args:
@@ -1311,7 +1452,7 @@ def test_the_audit_record_still_holds_both_addresses(store: ScriptedLockStore) -
 
     Why:
         The text form hides the addresses, and a careless edit could hide them
-        from the audit itself. contracts/site-lock.md line 108 asks the store to
+        from the audit itself. contracts/site-lock.md line 120 asks the store to
         keep both, so a reviewer can name who took the site from whom.
 
     Args:
