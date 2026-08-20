@@ -4929,9 +4929,13 @@ def _launch_capture_portal(dev_debug: bool = False) -> None:
         dev_debug: True to start the local development server with the debugger.
     """
     from src.upgrade_portal.app.factory import create_app  # Deferred import keeps CLI startup fast
+    from src.upgrade_portal.runtime.server import resolve_host  # Deferred for the same reason
 
     port = _capture_portal_port()  # CAPTURE_PORT with the documented default of 8056
-    host = os.environ.get("CAPTURE_HOST") or ".".join(("0",) * 4)  # All-interfaces bind (env override wins)
+    # A container needs every address, because a published port cannot reach a loopback bind. A
+    # workstation must not take that bind: this portal has no password, so any computer that reaches
+    # it could start a firmware upgrade. A CAPTURE_HOST value from the operator wins over both.
+    host = resolve_host(os.environ.get("CAPTURE_HOST"), in_container=EnvironmentUtils.is_running_in_container())
     logging.info("CAPTURE_PORTAL: Building the application for %s:%s", host, port)  # Log before the build
     app = create_app()  # The factory reads every setting from the environment and holds no credential value
     logging.debug("CAPTURE_PORTAL: Application built - starting the server")  # Log after the build

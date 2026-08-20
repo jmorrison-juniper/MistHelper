@@ -3,9 +3,9 @@
 This page is generated. Run `python scripts/generate_menu_wiki.py` after any
 change to `menu_actions` in `MistHelper.py` or to `src/utils/operation_registry.py`.
 
-MistHelper defines **237 actionable menu entries**, numbered
-1 to 237 with no gaps.
-Menu 0 is Exit, so the registry holds 238 entries in total.
+MistHelper defines **238 actionable menu entries**, numbered
+1 to 238 with no gaps.
+Menu 0 is Exit, so the registry holds 239 entries in total.
 
 The Safety column reads from `src/utils/operation_registry.py`, which is the
 single source of truth. The classifier fails closed, so an unregistered option
@@ -14,7 +14,7 @@ never runs in an automated test pass.
 ## Important Notes
 
 - Options 14, 18-19, 59, 97-101, 153 are resource intensive. They can run for a long time on a large org.
-- Options 154-187, 189-191, 194, 206-208 are destructive. They change the Mist cloud configuration.
+- Options 154-187, 189-191, 194, 206-208, 238 are destructive. They change the Mist cloud configuration.
 - Warning: Do not script a destructive option unattended. Each one needs a typed
   confirmation from a human operator.
 
@@ -24,7 +24,7 @@ never runs in an automated test pass.
 |---|---|---|
 | 60-96, 195-203, 209-229, 235-237 | Interactive safe | 70 operations. Read-only, but they prompt for a site or a device. The --testinteractive run includes them. |
 | 1-13, 15-17, 20-58, 188, 193, 204-205, 230-234 | Safe org exports | 64 operations. Read-only org exports. The --test run includes them. |
-| 154-187, 189-191, 194, 206-208 | Destructive | 41 operations. They change the Mist cloud configuration. Each one needs a typed confirmation. |
+| 154-187, 189-191, 194, 206-208, 238 | Destructive | 42 operations. They change the Mist cloud configuration. Each one needs a typed confirmation. |
 | 0, 124-150, 192 | Interactive | 29 operations. They prompt the operator, so no automated run includes them. |
 | 102-123 | WebSocket | 22 operations. They open a WebSocket stream to a device. |
 | 14, 18-19, 59, 97-101, 153 | Resource intensive | 10 operations. They run long or fetch a large payload. |
@@ -272,6 +272,7 @@ never runs in an automated test pass.
 | 235 | Run any org-scoped Mist count endpoint (35 operations, issue #1802) | Interactive safe | `CountExporter.org_counts` |
 | 236 | Run any site-scoped Mist count endpoint (32 operations, issue #1802) | Interactive safe | `CountExporter.site_counts` |
 | 237 | Run any MSP-scoped Mist count endpoint (3 operations, issue #1802) | Interactive safe | `CountExporter.msp_counts` |
+| 238 | Launch the upgrade capture portal on port 8056 (pre-check, upgrade, post-check) | Destructive | `lambda: _launch_capture_portal()` |
 
 This page should be regenerated whenever `menu_actions` or the operation registry
 changes, so the wiki stays aligned with the code.
