@@ -1,6 +1,6 @@
 # Handoff: upgrade capture portal (issue #1823)
 
-**Last updated**: 2026-08-20.
+**Last updated**: 2026-08-21.
 **Branch**: `feat/1823-upgrade-capture-portal`.
 **Pull request**: [#1825](https://github.com/jmorrison-juniper/MistHelper/pull/1825).
 
@@ -14,21 +14,32 @@ the design. This file states the position.
 
 | Item | State |
 | --- | --- |
-| Tasks in `tasks.md` | 220 of 233 complete. An audit removed 13 checks |
+| Tasks in `tasks.md` | 224 of 233 complete. An audit removed 13 checks, and 4 are back |
 | Continuous integration on the pull request | 18 checks pass, 2 skip |
 | Pull request | Open, mergeable, not a draft, no review yet |
 | Local commits not pushed | None |
 | Uncommitted work | None from this feature |
-| Portal tests | 2548, all pass |
+| Portal tests | 2591 unit and contract, all pass. 129 browser tests, all pass, 0 skip |
 | Statement coverage of the package | 94.18 percent |
-| Blocking defects | Two safety defects. See `audit-2026-08-20.md` section 2.1 |
+| Blocking defects | None. The six defects of `audit-2026-08-20.md` sections 2.1, 6, 7, 8, and 9 are fixed |
 
-The code is written and the code tests pass. The feature was never run end to
-end, and an audit on 2026-08-20 found two defects that can tell an operator that
-a device stopped while that device writes firmware.
+The code is written, the code tests pass, and the browser suite drives every
+journey with no skip. An audit on 2026-08-20 found 25 defects. The 6 that could
+mislead an operator are fixed. The rest are recorded and open.
+
+Four defects hid behind the browser skips, and each one broke the feature for a
+real operator:
+
+| Defect | The harm | Commit |
+| --- | --- | --- |
+| 22 | The options page showed no device, so an upgrade reached no device | `9ddbe13` |
+| 23 | Nothing wrote `pre_capture_id`, so no upgrade could start | `b2bd098` |
+| 24 | With no database, the portal forgot every run and still reported success | `506250b` |
+| 25 | A start that named no device reported a complete run | `cc92b79` |
 
 Read `audit-2026-08-20.md` before you merge. It holds the 13 tasks that lost a
-check, 21 defects inside tasks that keep a check, and the order to fix them in.
+check, the 4 that earned it back, the defects inside tasks that keep a check,
+and the order to fix them in.
 
 ---
 
@@ -81,7 +92,9 @@ existing bulk firmware tools through that seam and never calls them directly.
 - A searchable site list, then a device type, then the firmware options.
 - A capture at a standard tier or a full tier. The capture writes to ArangoDB,
   to a CSV file under `data/`, and to the page as a table.
-- The typed word `CONFIRM` unlocks the start control.
+- The typed word `CONFIRM` unlocks the start control. The control stays locked
+  until the run also holds a verified pre-check capture and a plan that names at
+  least one device. The start route refuses the same three states.
 - A status page that refreshes every 30 seconds, with a manual refresh.
 - The typed word `STOP` cancels every device that waits to start. A device that
   writes firmware always finishes.
@@ -105,25 +118,28 @@ existing bulk firmware tools through that seam and never calls them directly.
 
 `audit-2026-08-20.md` holds the whole result. The short form:
 
-| Group | Count | Where |
-| --- | --- | --- |
-| Tasks that lost a check | 13 | Audit section 1.1 |
-| Defects that can hurt a device | 2 | Audit section 2.1 |
-| Defects of high severity | 2 | Audit section 2.2 |
-| Other defects | 17 | Audit sections 2.3 to 2.7 |
+| Group | Count | Where | State |
+| --- | --- | --- | --- |
+| Tasks that lost a check | 13 | Audit section 1.1 | 4 are back |
+| Defects that can hurt a device | 2 | Audit section 2.1 | Both fixed |
+| Defects of high severity | 2 | Audit section 2.2 | Both fixed |
+| Other defects | 17 | Audit sections 2.3 to 2.7 | Open |
+| Defects the browser tests found | 4 | Audit sections 6 to 9 | All fixed |
 
-Warning: fix the two defects in audit section 2.1 before any real upgrade. Both
-tell an operator that the cloud stopped a device, when the code cannot know
-that. An operator who reads that word can cut power to a switch that is writing
-firmware, and that switch does not start again.
+The two defects of audit section 2.1 told an operator that the cloud stopped a
+device, when the code cannot know that. An operator who reads that word can cut
+power to a switch that is writing firmware, and that switch does not start
+again. Commit `4a9d028` fixed both.
 
-The 13 tasks that lost a check are mostly the browser tests and the quickstart
-run. The code exists. Nobody ever drove it.
+Nine tasks still carry no check. They are the remaining browser identifiers of
+T172, the two measurement tasks T153 and T219, the two field tasks T067 and
+T080, the three audit tasks T227, T228, and T233, and the quickstart run T232.
 
 ### 4.1 Merge the pull request
 
-Pull request #1825 is open and mergeable. Every gate passes. Do not merge it
-until the two safety defects are fixed.
+Pull request #1825 is open and mergeable. Every gate passes, and no blocking
+defect remains. Run every scenario of `quickstart.md` against a real site first,
+which is task T232, because no run of this feature has ever reached a real site.
 
 ### 4.2 Issue #1824, which is separate work
 
@@ -266,7 +282,8 @@ Each of these cost real time. Read them before you debug.
 | The lint tools live in the virtual environment | `python -m ruff` fails | Call `.\.venv\Scripts\python.exe` by path |
 | Playwright cannot re-enter a nested run | A pytest run inside a pytest run fails | Pass `-p no:playwright` |
 | Gunicorn cannot start on Windows | An import fault on `fcntl` | The portal picks Waitress on Windows already |
-| A stray listener holds port 8056 | An end-to-end run skips almost every test | Kill the listener first. The fixture attaches to any listener and that listener holds no test record, so every test refuses with 401 and skips |
+| A stray listener holds port 8056 | An end-to-end run fails almost every test with 401 | Kill the listener first. The fixture attaches to any listener, and a listener from another run holds no test record. Commit `6ce6fb4` turned this skip into a failure, so a broken portal can no longer read as a pass |
+| ArangoDB and Redis do not answer from this shell | The portal writes the CSV backup alone | Set `MISTHELPER_STANDALONE=true` and `REDIS_HOST=127.0.0.1`. Commit `506250b` added a process-local mirror, so a run still reads back |
 
 ---
 
@@ -279,7 +296,20 @@ $env:PATHEXT = ".COM;.EXE;.BAT;.CMD;.VBS;.JS;.WS;.MSC;.PS1"
 .\.venv\Scripts\python.exe -m pytest tests/unit/upgrade_portal tests/contract/upgrade_portal -q -p no:playwright
 ```
 
-Expect 2548 passes.
+Expect 2591 passes.
+
+Run the browser suite. It starts a portal of its own, so free port 8056 first:
+
+```powershell
+$env:PATHEXT = ".COM;.EXE;.BAT;.CMD;.VBS;.JS;.WS;.MSC;.PS1"
+$env:MISTHELPER_STANDALONE = "true"
+$env:REDIS_HOST = "127.0.0.1"
+.\.venv\Scripts\python.exe -m pytest tests/e2e/upgrade_portal -q
+```
+
+Expect 129 passes and no skip. A skip means the harness hid a broken portal.
+The portal writes its own log to `$env:TEMP\upgrade_portal_e2e_8056.log`, which
+states what the server did during the run.
 
 Read the state of the pull request:
 

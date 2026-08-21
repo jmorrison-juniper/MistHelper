@@ -238,7 +238,8 @@ changes. The skipped section list names any section whose digest matched.
 - [X] T095 [P] [US2] Contract test `GET /api/comparisons` for the statistics keys, `device_deltas`, `client_deltas`, and `skipped_sections` in `tests/contract/upgrade_portal/test_comparison.py`
 - [X] T096 [P] [US2] Contract test the `capture_site_mismatch` and `capture_not_verified` refusals in `tests/contract/upgrade_portal/test_comparison_errors.py`
 - [X] T097 [P] [US2] Contract test the comma-separated value download and the JSON download, including the `bad_format` error code, in `tests/contract/upgrade_portal/test_comparison_export.py`
-- [ ] T098 [P] [US2] Browser test the comparison journey in `tests/e2e/upgrade_portal/test_comparison.py`. Drive `compare-before-select`, `compare-after-select`, `compare-run-button`, `compare-statistics`, `compare-stat-{name}`, `compare-device-table`, `compare-device-row-{mac}`, `compare-client-table`, `compare-client-row-{mac}`, `compare-filter-{outcome}`, `compare-export-csv`, and `compare-export-json`.
+- [X] T098 [P] [US2] Browser test the comparison journey in `tests/e2e/upgrade_portal/test_comparison.py`. Drive `compare-before-select`, `compare-after-select`, `compare-run-button`, `compare-statistics`, `compare-stat-{name}`, `compare-device-table`, `compare-device-row-{mac}`, `compare-client-table`, `compare-client-row-{mac}`, `compare-filter-{outcome}`, `compare-export-csv`, and `compare-export-json`.
+  - Audit 2026-08-21: closed by commit `952d83f`. The fixture seeds the two stored captures the comparison needs, so all 12 tests pass and none skips. All 12 named identifiers are defined at `test_comparison.py:42-51`, `:57-58`, `:76`, and `:82`, and each one is read at least twice.
 
 ### Implementation for User Story 2
 
@@ -298,8 +299,10 @@ under 1 second.
 - [X] T129 [P] [US3] Contract test `POST /api/runs/<id>/start` with `{"confirm": "CONFIRM"}`, and the `confirmation_required` refusal for any other word, in `tests/contract/upgrade_portal/test_upgrade_start.py`
 - [X] T130 [P] [US3] Contract test `GET /api/runs/<id>/status` for `phase_order`, `phases`, `targets`, `stop_request`, `pre_capture_id`, `post_capture_id`, and `message` in `tests/contract/upgrade_portal/test_run_status.py`
 - [X] T131 [P] [US3] Contract test `POST /api/runs/<id>/stop` with `{"confirm": "STOP"}`, and the `run_not_stoppable` and `confirmation_required` refusals, in `tests/contract/upgrade_portal/test_upgrade_stop.py`
-- [ ] T132 [P] [US3] Browser test the upgrade journey in `tests/e2e/upgrade_portal/test_upgrade.py`. Drive `upgrade-version-select-{mac}`, `upgrade-version-select-all`, `upgrade-reboot-toggle`, `upgrade-strategy-select`, `upgrade-target-table`, `upgrade-target-row-{mac}`, `upgrade-warning-list`, `upgrade-confirm-input`, `upgrade-start-button`, `upgrade-state`, `upgrade-phase-{name}`, `upgrade-phase-progress-{name}`, and `upgrade-device-state-{mac}`.
-- [ ] T133 [P] [US3] Browser test the stop control in `tests/e2e/upgrade_portal/test_stop.py`. Drive `stop-button`, `stop-confirm-input`, `stop-confirm-submit`, `stop-outcome`, `stop-outcome-cancelled`, `stop-outcome-writing`, and `stop-outcome-message`.
+- [X] T132 [P] [US3] Browser test the upgrade journey in `tests/e2e/upgrade_portal/test_upgrade.py`. Drive `upgrade-version-select-{mac}`, `upgrade-version-select-all`, `upgrade-reboot-toggle`, `upgrade-strategy-select`, `upgrade-target-table`, `upgrade-target-row-{mac}`, `upgrade-warning-list`, `upgrade-confirm-input`, `upgrade-start-button`, `upgrade-state`, `upgrade-phase-{name}`, `upgrade-phase-progress-{name}`, and `upgrade-device-state-{mac}`.
+  - Audit 2026-08-21: closed by commits `83b5c9e` and `cc92b79`. All 10 tests pass and none skips. All 13 named identifiers are defined at `test_upgrade.py:56-74`, and each one is read at least twice. Driving this journey in a browser found defect 25, which let a start that named no device report a complete run.
+- [X] T133 [P] [US3] Browser test the stop control in `tests/e2e/upgrade_portal/test_stop.py`. Drive `stop-button`, `stop-confirm-input`, `stop-confirm-submit`, `stop-outcome`, `stop-outcome-cancelled`, `stop-outcome-writing`, and `stop-outcome-message`.
+  - Audit 2026-08-21: closed by commit `83b5c9e`. All 19 tests pass and none skips. All 7 named identifiers are defined at `test_stop.py:49-56`, and each one is read at least twice.
 
 ### Implementation for User Story 3
 
@@ -436,8 +439,8 @@ too new to render.
 
 - [X] T201 [P] [US6] Contract test the capture history endpoint and the run history endpoint, including the page parameters, in `tests/contract/upgrade_portal/test_history_routes.py`
 - [X] T202 [P] [US6] Contract test the schema version refusal for a capture written by a newer version in `tests/contract/upgrade_portal/test_schema_version.py`
-- [ ] T203 [P] [US6] Browser test the history journey in `tests/e2e/upgrade_portal/test_history.py`. Drive `history-table`, `history-row-{capture_id}`, `history-open-{capture_id}`, `history-page-next`, and `history-page-previous`.
-  - Audit 2026-08-20: 12 of the 15 tests pass. The helper `_stored_rows` at `test_history.py:232-251` skips when the store holds no capture, and its three call sites at `:337`, `:354`, and `:519` are the three skips. The row identifiers `history-row-{capture_id}` and `history-open-{capture_id}` have therefore never run. The test code is correct. The fixture seeds no stored capture.
+- [X] T203 [P] [US6] Browser test the history journey in `tests/e2e/upgrade_portal/test_history.py`. Drive `history-table`, `history-row-{capture_id}`, `history-open-{capture_id}`, `history-page-next`, and `history-page-previous`.
+  - Audit 2026-08-21: closed by commit `952d83f`. The fixture now seeds the stored captures the history page reads, so the helper `_stored_rows` at `test_history.py:232-251` no longer skips at its three call sites. All 15 tests pass and none skips. All 5 named identifiers are defined at `test_history.py:55-59`, and each one is read at least twice.
 
 ### Implementation for User Story 6
 
