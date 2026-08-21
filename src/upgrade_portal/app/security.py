@@ -23,11 +23,19 @@ logger = logging.getLogger(__name__)  # One logger for each module keeps the sou
 
 # Every asset loads from the portal itself, so the policy names 'self' only and
 # names no external origin. The vendored Bootstrap files satisfy that rule.
+#
+# The image rule also names the `data:` scheme. Bootstrap draws the caret of a
+# selection list, the dot of a radio control, the tick of a checkbox, and the
+# knob of a switch as an inline SVG image, and each one arrives as a `data:` URI
+# inside `bootstrap.min.css`. Without the scheme the browser blocks all 23 of
+# them, and every one of those controls renders as an empty box. The scheme is
+# safe here because a `data:` image runs no code. It stays out of `script-src`,
+# where it would be an attack path.
 CSP_POLICY = (
     "default-src 'self'; "  # The fallback rule for every directive that follows.
     "script-src 'self'; "  # No inline script and no external script.
     "style-src 'self'; "  # No inline style, so every rule lives in a stylesheet.
-    "img-src 'self'; "  # No tracking pixel from another origin.
+    "img-src 'self' data:; "  # The vendored stylesheet draws its controls inline. No other origin may supply one.
     "connect-src 'self'; "  # The status poll reaches the portal only.
     "font-src 'self'; "  # The vendored font files load from the portal.
     "form-action 'self'; "  # A form cannot post a credential to another origin.

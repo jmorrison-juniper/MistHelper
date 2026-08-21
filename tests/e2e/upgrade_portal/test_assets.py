@@ -49,12 +49,14 @@ CSRF_META_ID = "csrf-meta"
 
 CSP_HEADER = "content-security-policy"  # Playwright lower cases every header name.
 
-# `app/security.py` fixes each of these parts of the policy.
+# `app/security.py` fixes each of these parts of the policy. The image rule
+# names the `data:` scheme, because the vendored Bootstrap stylesheet draws
+# every control graphic as an inline SVG image.
 REQUIRED_POLICY_PARTS = (
     "default-src 'self'",
     "script-src 'self'",
     "style-src 'self'",
-    "img-src 'self'",
+    "img-src 'self' data:",
     "connect-src 'self'",
     "font-src 'self'",
     "form-action 'self'",
@@ -65,6 +67,24 @@ REQUIRED_POLICY_PARTS = (
 
 # A policy that held either word would let an inline script or an inline style run.
 FORBIDDEN_POLICY_WORDS = ("unsafe-inline", "unsafe-eval")
+
+# The browser fires `securitypolicyviolation` on the document for each resource
+# that the policy blocks, and it fires the event for a stylesheet resource as
+# well as for an element. The listener below therefore catches a blocked `data:`
+# image that Bootstrap draws through a `url()` rule, which no header test finds.
+#
+# Playwright injects an init script before any script of the page runs and
+# outside the policy, so `script-src 'self'` neither blocks this listener nor
+# hides a violation from it.
+BLOCKED_RESOURCE_STORE = "portalBlockedResources"
+BLOCKED_RESOURCE_LISTENER = f"""
+    window.{BLOCKED_RESOURCE_STORE} = [];
+    document.addEventListener('securitypolicyviolation', (event) => {{
+        window.{BLOCKED_RESOURCE_STORE}.push(
+            event.violatedDirective + ' blocked ' + String(event.blockedURI).slice(0, 60)
+        );
+    }});
+"""
 
 # `layout.html` loads these two files from the static folder, never from a network.
 BOOTSTRAP_STYLESHEET = "vendor/bootstrap/bootstrap.min.css"
@@ -300,6 +320,33 @@ class TestContentSecurityPolicy:
         """
         count = loaded_page.evaluate("() => document.querySelectorAll('[style], style').length")
         assert count == 0, f"The page holds {count} inline styles, and the policy blocks each one."
+
+    def test_the_browser_blocked_no_resource_of_the_page(self, portal_page: Any) -> None:
+        """The browser loaded every resource of the page and blocked none.
+
+        Why:
+            Every other test of this class reads the policy text. A correct text
+            still proves nothing about the paint, because a policy that omits
+            one scheme blocks a resource while the header itself reads well.
+
+            That is not a guess. The image rule once read `img-src 'self'`, and
+            the vendored Bootstrap stylesheet draws the caret of a selection
+            list, the dot of a radio control, the tick of a checkbox, and the
+            knob of a switch as an inline SVG image. The browser blocked all 23
+            of them, so every one of those controls painted as an empty box. The
+            header test passed for the whole time that defect stood.
+
+            This test reads the browser instead of the header. The listener
+            below records the event that the browser fires for each blocked
+            resource, so a policy that blocks anything at all fails here.
+
+        Args:
+            portal_page: The browser page that points at the portal.
+        """
+        portal_page.add_init_script(BLOCKED_RESOURCE_LISTENER)  # Runs before any stylesheet of the page loads.
+        _open(portal_page, HISTORY_PAGE_PATH)
+        blocked = portal_page.evaluate(f"() => window.{BLOCKED_RESOURCE_STORE} || []")
+        assert not blocked, f"The policy blocked these resources of the page: {blocked}"
 
 
 class TestAssetsAreVendored:

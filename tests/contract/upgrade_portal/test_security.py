@@ -41,13 +41,16 @@ from src.upgrade_portal.runtime import identity
 # The contract values. Every value below is literal, never imported.
 # ---------------------------------------------------------------------------
 
-# WHY: The policy names 'self' only. A reader compares this block against the
-# response one directive at a time, so a single added source stands out.
+# WHY: The policy names 'self' for every resource that carries code. The image
+# rule also names the `data:` scheme, because Bootstrap draws the caret, the
+# radio dot, the checkbox tick, and the switch knob as an inline SVG image. A
+# reader compares this block against the response one directive at a time, so a
+# single added source stands out.
 EXPECTED_CONTENT_SECURITY_POLICY = (
     "default-src 'self'; "
     "script-src 'self'; "
     "style-src 'self'; "
-    "img-src 'self'; "
+    "img-src 'self' data:; "
     "connect-src 'self'; "
     "font-src 'self'; "
     "form-action 'self'; "
@@ -66,19 +69,29 @@ EXPECTED_HEADERS: dict[str, str] = {
     "Cache-Control": "no-store",
 }
 
-# WHY: Each entry below defeats the policy. A future change that adds one of
-# these sources must fail loudly, even when the rest of the policy still reads
-# well.
+# WHY: Each entry below defeats the policy wherever it appears. A future change
+# that adds one of these sources must fail loudly, even when the rest of the
+# policy still reads well.
+#
+# The `data:` scheme is not on this list, because it is safe for an image and
+# unsafe for a script. `IMAGE_ONLY_SCHEME` below holds it to the one directive
+# that may carry it.
 FORBIDDEN_POLICY_SOURCES = (
     "'unsafe-inline'",
     "'unsafe-eval'",
     "'unsafe-hashes'",
     "*",
-    "data:",
     "blob:",
     "http:",
     "https:",
 )
+
+# WHY: A `data:` source in `script-src` or `object-src` lets an injected string
+# run as code, which is the attack this whole policy exists to stop. The same
+# scheme in `img-src` runs nothing. The pair below names the scheme and the one
+# directive that may hold it, and a test walks every other directive.
+IMAGE_ONLY_SCHEME = "data:"
+IMAGE_DIRECTIVE = "img-src"
 
 # WHY: A directive that disappears leaves the browser on its default, which is
 # wide open for that resource type. Each pair below must survive on its own.
@@ -86,7 +99,7 @@ REQUIRED_POLICY_DIRECTIVES = (
     "default-src 'self'",
     "script-src 'self'",
     "style-src 'self'",
-    "img-src 'self'",
+    "img-src 'self' data:",
     "connect-src 'self'",
     "font-src 'self'",
     "form-action 'self'",
@@ -423,6 +436,27 @@ def test_content_security_policy_holds_no_unsafe_source(probe_client: FlaskClien
     """
     policy = probe_client.get(PROBE_STATE_PATH).headers["Content-Security-Policy"]
     assert forbidden not in policy
+
+
+def test_the_data_scheme_reaches_the_image_directive_alone(probe_client: FlaskClient) -> None:
+    """Only `img-src` carries the `data:` scheme.
+
+    Why:
+        Bootstrap draws the caret of a selection list, the dot of a radio
+        control, the tick of a checkbox, and the knob of a switch as an inline
+        SVG image, so the image rule must name `data:` or every one of those
+        controls renders as an empty box.
+
+        The same scheme in `script-src` or `object-src` lets an injected string
+        run as code. This test therefore walks every other directive and fails
+        if the scheme spreads past the images.
+
+    Args:
+        probe_client: The test client.
+    """
+    policy = probe_client.get(PROBE_STATE_PATH).headers["Content-Security-Policy"]
+    carriers = [rule.strip() for rule in policy.split(";") if IMAGE_ONLY_SCHEME in rule]
+    assert carriers == [f"{IMAGE_DIRECTIVE} 'self' {IMAGE_ONLY_SCHEME}"]
 
 
 @pytest.mark.parametrize("directive", REQUIRED_POLICY_DIRECTIVES)
