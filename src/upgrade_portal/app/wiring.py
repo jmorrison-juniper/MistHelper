@@ -22,6 +22,7 @@ Why:
 """
 
 import logging  # The portal logs with the standard library only.
+import threading  # The run mirror below is read by the poll while the driver writes.
 import time  # The event window of the settle gate reads the wall clock.
 from collections.abc import Callable, Mapping, MutableMapping  # The shapes the driver and the store declare.
 from importlib import import_module  # Imports each collaborator late, at the first call.
@@ -75,6 +76,66 @@ RUNNER_FIELD = "runner"  # The bindings key that carries the bound capture runne
 LOCK_FIELD = "lock"  # The bindings key that carries the decoded site lock record.
 STORE_FIELD = "store"  # The bindings key that carries the run store of the seam.
 
+# WHY: `capture/store.connect_database` answers None whenever ArangoDB is
+# unreachable, and `capture/store.write_run` still reports success because it
+# wrote the CSV backup. The run then reads back as absent. The progress page
+# shows no run, the confirm page holds the begin button shaded, and FR-035
+# refuses every start, while each write reports that it landed. This mirror
+# holds the runs of the present process, so a portal with no database still
+# drives a whole upgrade. The database answers first on every read, so a
+# mirrored copy can never hide a newer stored row.
+_MIRROR: dict[str, dict[str, Any]] = {}  # The runs of this process, oldest first.
+_MIRROR_GUARD = threading.Lock()  # The driver thread writes while the poll reads.
+MIRROR_LIMIT = 200  # A portal that runs for weeks must not grow without bound.
+
+
+def mirror_run(run: dict[str, Any]) -> None:
+    """Hold one run record in the memory of the present process.
+
+    Why:
+        The mirror answers the read that an unreachable database cannot. Only a
+        record that already landed reaches this table, so the mirror never
+        claims a run that no store holds.
+
+    Args:
+        run: The whole record, with the changed fields already in place.
+    """
+    key = str(run.get("run_id", ""))  # The record names its own key, as the store rows do.
+    if not key:  # A record with no key can never be read back, so it belongs in no table.
+        return  # The caller already reported the write result of the store itself.
+    with _MIRROR_GUARD:  # The poll thread reads this table while the driver writes.
+        _MIRROR[key] = dict(run)  # A copy stops a later edit of the caller dictionary.
+        while len(_MIRROR) > MIRROR_LIMIT:  # The oldest run leaves first, as a queue does.
+            _MIRROR.pop(next(iter(_MIRROR)))  # A dictionary holds its keys in write order.
+
+
+def mirrored_run(run_id: str) -> dict[str, Any] | None:
+    """Return one run record from the memory of the present process.
+
+    Args:
+        run_id: The run key.
+
+    Returns:
+        A copy of the record, or None when this process holds no such run.
+    """
+    with _MIRROR_GUARD:  # The driver thread may write while this read runs.
+        held = _MIRROR.get(run_id)  # An absent key reads as None, never a fault.
+    return dict(held) if held is not None else None  # A copy stops a caller edit of the held record.
+
+
+def mirrored_site_runs(site_id: str) -> list[dict[str, Any]]:
+    """Return every run of one site from the memory of the present process.
+
+    Args:
+        site_id: The site that a new run wants to act on.
+
+    Returns:
+        A copy of each record of that site, in write order.
+    """
+    with _MIRROR_GUARD:  # One list copy, so the scan drops the guard before it filters.
+        held = list(_MIRROR.values())
+    return [dict(row) for row in held if row.get("site_id") == site_id]  # A copy for each row.
+
 
 def load_module(name: str) -> ModuleType | None:
     """Import one module late and report a failure as None.
@@ -113,7 +174,13 @@ class DocumentRunStore:
     """
 
     def read_run(self, run_id: str) -> dict[str, Any] | None:
-        """Return one run record, or None when the store holds no such run.
+        """Return one run record, or None when no store and no mirror holds it.
+
+        Why:
+            The database answers first, so a mirrored copy can never hide a
+            newer stored row. A database that is absent or silent then falls
+            back to the mirror, because a run that reads as absent stops the
+            whole upgrade journey while every write reports that it landed.
 
         Args:
             run_id: The run key, which is also the document key.
@@ -122,18 +189,24 @@ class DocumentRunStore:
             A copy of the record, or None.
         """
         store = load_module(STORE_MODULE)  # Late, so the import of this module opens no socket.
-        if store is None:  # The store module is absent, so no run is readable.
-            return None  # The caller reads this as an unknown run.
+        if store is None:  # The store module is absent, so only this process can answer.
+            return mirrored_run(run_id)  # The runs of this process still read back.
         try:  # The store sits on a network and may not answer.
             handle: Any = store.connect_database()  # None in standalone mode, or when the server is silent.
             found: Any = None if handle is None else handle.collection(store.RUN_COLLECTION).get(run_id)
         except Exception as fault:  # A poll must answer, whatever the store did.
             logger.warning("wiring: the read of the run %s failed with %s", run_id, type(fault).__name__)
-            return None  # Name the run, never the host.
-        return dict(found) if isinstance(found, Mapping) else None  # A damaged row reads as no row.
+            return mirrored_run(run_id)  # Name the run, never the host.
+        return dict(found) if isinstance(found, Mapping) else mirrored_run(run_id)  # A damaged row reads as no row.
 
     def write_run(self, run: dict[str, Any]) -> bool:
         """Write one whole run record and report the true result.
+
+        Why:
+            A record that landed also reaches the mirror, so this process can
+            read the run back while the database is unreachable. A write that
+            landed nowhere reaches no table, so the mirror never holds a run
+            that the operator was told the portal did not keep.
 
         Args:
             run: The whole record, with the changed fields already in place.
@@ -150,7 +223,10 @@ class DocumentRunStore:
         except Exception as fault:  # A driver thread must never die on a store fault.
             logger.warning("wiring: the write of the run %s failed with %s", run_id, type(fault).__name__)
             return False  # The driver writes the reason into the record it still holds.
-        return bool(getattr(answer, "verified", False) or getattr(answer, "backup_written", False))
+        landed = bool(getattr(answer, "verified", False) or getattr(answer, "backup_written", False))
+        if landed:  # The record is durable, so this process may also answer it from memory.
+            mirror_run(run)  # The poll then reads the run back with no database at all.
+        return landed
 
     def runs_for_site(self, site_id: str) -> list[dict[str, Any]]:
         """Return one small row for each run that the store holds for one site.
@@ -169,13 +245,14 @@ class DocumentRunStore:
         """
         store = load_module(STORE_MODULE)  # Late, for the same reason as the two calls above.
         if store is None:  # No store module means no scan, and the route continues without one.
-            return []  # An empty list refuses nothing, because a guess would stop honest work.
+            return mirrored_site_runs(site_id)  # The runs of this process still guard FR-037.
         try:  # The scan is one query on a network store.
             page: Any = store.list_runs(store.RunQuery(site_id=site_id, limit=SITE_SCAN_LIMIT))
         except Exception as fault:  # A create call must survive an unreachable store.
             logger.warning("wiring: the site scan of %s failed with %s", site_id, type(fault).__name__)
-            return []  # The lock check of the route still guards a second operator.
-        return [dict(row) for row in getattr(page, "rows", ())]  # The row holds the run key and the state.
+            return mirrored_site_runs(site_id)  # The lock check of the route still guards a second operator.
+        rows = [dict(row) for row in getattr(page, "rows", ())]  # The row holds the run key and the state.
+        return rows or mirrored_site_runs(site_id)  # An empty answer may mean a database with nothing in it.
 
 
 class CaptureBridge:

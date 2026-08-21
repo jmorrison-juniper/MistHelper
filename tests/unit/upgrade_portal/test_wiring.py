@@ -13,6 +13,7 @@ Why:
 """
 
 import logging  # The tests read the warning lines that the wiring writes.
+from collections.abc import Iterator  # The shape of the fixture that empties the run mirror.
 from typing import Any  # The stand-ins hold free-form records.
 
 import pytest  # The test framework of the project.
@@ -24,6 +25,88 @@ SITE_ID = "site-a"  # One site name for every test of this module.
 ORG_ID = "org-a"  # One organization name for every test of this module.
 RUN_ID = "run-1"  # One run key for every test of this module.
 BROWSER_ID = "browser000000001"  # The URL-safe shape of 16 to 128 characters that the identity guard demands.
+
+RUN_COLLECTION_NAME = "upgrade_runs"  # The collection that `capture/store.py` names for a run record.
+
+
+class StoreAnswer:
+    """Stand for the result record that `capture/store.write_run` answers.
+
+    Why:
+        The wiring reads two names off that record and reads nothing else, so a
+        two field stand-in states exactly the contract the wiring depends on.
+    """
+
+    def __init__(self, verified: bool = False, backup_written: bool = False) -> None:
+        """Hold the two results of one write.
+
+        Args:
+            verified: True when the database read the record back unchanged.
+            backup_written: True when the CSV backup holds the record.
+        """
+        self.verified = verified  # The durable result of the document store.
+        self.backup_written = backup_written  # The result of the fallback file.
+
+
+class StoreHandle:
+    """Stand for a database handle that answers one run record.
+
+    Why:
+        `DocumentRunStore.read_run` walks a handle, a collection, and a get
+        call. A test of the read order needs all three, and none of them may
+        open a socket.
+    """
+
+    def __init__(self, row: dict[str, Any] | None) -> None:
+        """Hold the one row that every read answers.
+
+        Args:
+            row: The record the get call answers, or None for an absent run.
+        """
+        self.row = row  # The whole answer of this stand-in database.
+
+    def collection(self, name: str) -> Any:
+        """Answer this same object for any collection name.
+
+        Args:
+            name: The collection name. One row answers every name.
+
+        Returns:
+            This object, which also carries the get call.
+        """
+        del name  # One row answers every collection of this stand-in.
+        return self
+
+    def get(self, run_id: str) -> dict[str, Any] | None:
+        """Answer the held row for any run key.
+
+        Args:
+            run_id: The run key. One row answers every key.
+
+        Returns:
+            The held row, which may be None.
+        """
+        del run_id  # One row answers every key of this stand-in.
+        return self.row
+
+
+@pytest.fixture(autouse=True)
+def empty_run_mirror() -> Iterator[None]:
+    """Empty the run mirror of the wiring around every test of this module.
+
+    Why:
+        The mirror is one table for the whole process. A record that one test
+        writes would answer the read of the next test, and two tests below prove
+        that an unreachable store reads as an unknown run. A leaked record would
+        turn both of them green for the wrong reason. The table is private on
+        purpose, because no shipped caller may empty it.
+
+    Yields:
+        Nothing. The test runs between the two clearing steps.
+    """
+    wiring._MIRROR.clear()  # The table is private, because no shipped caller may empty it.
+    yield
+    wiring._MIRROR.clear()  # The next test of any module then starts with an empty table.
 
 
 class StubRunner:
@@ -334,6 +417,113 @@ def test_the_site_scan_answers_an_empty_list_when_the_store_is_silent(monkeypatc
 
     monkeypatch.setattr(store, "list_runs", lambda *args, **kwargs: _boom())  # The query does not answer.
     assert wiring.DocumentRunStore().runs_for_site(SITE_ID) == []  # The create route then continues.
+
+
+def _standalone_store(monkeypatch: pytest.MonkeyPatch, answer: StoreAnswer) -> Any:
+    """Point the wiring at a store that opens no database and answers one write.
+
+    Why:
+        Every mirror test below needs the same two changes, and a copy in each
+        test would hide the one state under test.
+
+    Args:
+        monkeypatch: The pytest patching fixture.
+        answer: The result record that the write answers.
+
+    Returns:
+        The run store adapter under test.
+    """
+    from src.upgrade_portal.capture import store  # Late, to match the import rule of the wiring module.
+
+    monkeypatch.setattr(store, "connect_database", lambda *args, **kwargs: None)  # Standalone mode.
+    monkeypatch.setattr(store, "write_run", lambda *args, **kwargs: answer)  # One fixed write result.
+    return wiring.DocumentRunStore()
+
+
+def test_a_landed_run_reads_back_with_no_database(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A run that reached the CSV backup must still read back in this process.
+
+    Why:
+        This is the whole defect. `connect_database` answers None whenever
+        ArangoDB is unreachable, while the write reports success because the
+        backup file holds the record. The run then read back as absent, so the
+        progress page showed no run and FR-035 refused every start forever.
+    """
+    adapter = _standalone_store(monkeypatch, StoreAnswer(backup_written=True))  # The CSV fallback held it.
+    assert adapter.write_run({"run_id": RUN_ID, "site_id": SITE_ID, "state": "created"}) is True
+    held = adapter.read_run(RUN_ID)  # The read that the poll route and the three pages all make.
+    assert held is not None and held["state"] == "created"  # The operator reads a real run, never a blank page.
+
+
+def test_a_write_that_landed_nowhere_reaches_no_mirror(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A failed write must leave the run unreadable, exactly as the caller was told.
+
+    Why:
+        The route answers a write failure to the operator. A mirror that held
+        the record anyway would show a run that no store keeps, so a restart of
+        the portal would lose work that the screen reported as saved.
+    """
+    adapter = _standalone_store(monkeypatch, StoreAnswer())  # Neither the database nor the backup held it.
+    assert adapter.write_run({"run_id": RUN_ID, "site_id": SITE_ID}) is False  # The caller learns the truth.
+    assert adapter.read_run(RUN_ID) is None  # No later read may claim the run exists.
+
+
+def test_the_stored_row_wins_over_the_mirrored_copy(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A database that answers must beat the copy that this process holds.
+
+    Why:
+        A second portal worker may advance the run. A mirror that won the read
+        would pin the page at the state this process last wrote, so the operator
+        would watch a run that never moves.
+    """
+    from src.upgrade_portal.capture import store  # Late, to match the import rule of the wiring module.
+
+    adapter = _standalone_store(monkeypatch, StoreAnswer(backup_written=True))  # Fill the mirror first.
+    adapter.write_run({"run_id": RUN_ID, "site_id": SITE_ID, "state": "created"})
+    newer = {"run_id": RUN_ID, "site_id": SITE_ID, "state": "upgrade_running"}  # What a second worker wrote.
+    monkeypatch.setattr(store, "connect_database", lambda *args, **kwargs: StoreHandle(newer))  # It answers now.
+    monkeypatch.setattr(store, "RUN_COLLECTION", RUN_COLLECTION_NAME, raising=False)
+    held = adapter.read_run(RUN_ID)
+    assert held is not None and held["state"] == "upgrade_running"  # The stored row wins every time.
+
+
+def test_the_site_scan_falls_back_to_the_mirrored_runs(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A site scan with no database must still find the run this process holds.
+
+    Why:
+        FR-037 asks the portal to find a run that already acts on the site. A
+        scan that answered empty would let one operator open a second run
+        against a site that is already upgrading.
+    """
+    adapter = _standalone_store(monkeypatch, StoreAnswer(backup_written=True))
+    adapter.write_run({"run_id": RUN_ID, "site_id": SITE_ID, "state": "created"})
+    rows = adapter.runs_for_site(SITE_ID)  # The scan that the create route makes.
+    assert [row["run_id"] for row in rows] == [RUN_ID]  # The site already holds a run.
+    assert adapter.runs_for_site("site-b") == []  # A second site still holds none.
+
+
+def test_the_run_mirror_holds_a_bounded_number_of_runs() -> None:
+    """The mirror must drop its oldest run once it reaches the limit.
+
+    Why:
+        A portal that runs for weeks writes a record for every state change of
+        every run. An unbounded table would grow until the process died.
+    """
+    for number in range(wiring.MIRROR_LIMIT + 5):  # Five more runs than the table may hold.
+        wiring.mirror_run({"run_id": f"run-{number}", "site_id": SITE_ID})
+    assert wiring.mirrored_run("run-0") is None  # The oldest run left first.
+    assert wiring.mirrored_run(f"run-{wiring.MIRROR_LIMIT + 4}") is not None  # The newest run stayed.
+
+
+def test_a_record_with_no_run_key_reaches_no_mirror() -> None:
+    """A record that names no run must reach no table.
+
+    Why:
+        A record with no key can never be read back, so a table entry for it
+        would only take the place of a run that an operator still watches.
+    """
+    wiring.mirror_run({"site_id": SITE_ID})  # The one record shape that carries no key.
+    assert wiring.mirrored_site_runs(SITE_ID) == []  # The table stayed empty.
 
 
 def test_the_document_store_matches_the_shape_the_driver_declares() -> None:
