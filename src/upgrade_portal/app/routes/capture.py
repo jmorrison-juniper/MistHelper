@@ -36,7 +36,7 @@ import uuid  # Names a run that the operator started without one.
 from collections.abc import Callable  # Types each injected seam.
 from typing import Any  # A capture document and an injected seam are both free-form.
 
-from flask import Blueprint, Response, jsonify, request  # The web framework of the portal.
+from flask import Blueprint, Response, current_app, has_app_context, jsonify, request  # The framework.
 
 from ...runtime import identity  # The real session guard. No copy of it lives here.
 from ..factory import json_error  # The one error envelope that the contract allows.
@@ -51,6 +51,7 @@ from .select import (  # The sibling module owns these rules, so no copy of them
     render_page,
     resolve_org,
 )
+from .upgrade import run_store  # The sibling module owns the run record store, so no copy of it lives here.
 
 logger = logging.getLogger(__name__)  # One logger for each module keeps the source visible in the log.
 
@@ -78,11 +79,13 @@ COLLECTOR_ATTRIBUTES = ("run_capture", "collect_capture", "capture_site")  # The
 TIER_FIELD = "tier"  # The body field that names the data tier.
 RUN_FIELD = "run_id"  # The body field that names the owning run.
 ROLE_FIELD = "role"  # The body field that names the half of the run.
+PRE_CAPTURE_FIELD = "pre_capture_id"  # The run record field that names the saved pre-check.
 
 TIER_STANDARD = 2  # The device state and the client lists.
 TIER_EXTRA = 3  # Tier 2, the port state, the radio state, and the alarms.
 KNOWN_TIERS = (TIER_STANDARD, TIER_EXTRA)  # Any other value is a refusal.
-DEFAULT_ROLE = "pre"  # `contracts/http-api.md` names the pre-check half as the default.
+ROLE_PRE = "pre"  # The half that runs before the upgrade.
+DEFAULT_ROLE = ROLE_PRE  # `contracts/http-api.md` names the pre-check half as the default.
 FIRST_ORDINAL = 1  # The first capture of a run.
 RUN_PREFIX = "run-"  # `runtime/runs.py` builds a run key with this prefix.
 KEY_PREFIX = "cap-"  # `data-model.md:45` names this prefix for a capture key.
@@ -262,7 +265,9 @@ def record_status(capture_id: str, **changes: Any) -> None:
 
     Why:
         The worker reports its progress from another thread. One guarded writer
-        keeps the poll and the worker from reading a half-written record.
+        keeps the poll and the worker from reading a half-written record. This
+        writer also sees every state change, so it is the one place that learns
+        when a capture is verified and may open the start of its run.
 
     Args:
         capture_id: The identifier of the capture.
@@ -272,6 +277,54 @@ def record_status(capture_id: str, **changes: Any) -> None:
         record = _PROGRESS.get(capture_id)  # A trimmed record reads as None.
         if record is not None:  # A capture the store dropped needs no update.
             record.update(changes)  # The poll then answers the new values.
+        owner = dict(record) if record is not None else {}  # A copy, so the attach holds no guard.
+    if changes.get("state") == STATE_VERIFIED:  # A verified pre-check belongs to the run that owns it.
+        attach_pre_capture(capture_id, owner)  # Outside the guard, because this write reaches a store.
+
+
+def pre_check_run(record: dict[str, Any]) -> str:
+    """Name the run that one verified pre-check belongs to.
+
+    Why:
+        Only the pre-check half reaches the run record from this module. The run
+        driver writes `post_capture_id` when the upgrade ends, so a post-check
+        that also wrote from here would race that writer.
+
+    Args:
+        record: A copy of the progress record of the capture.
+
+    Returns:
+        The run key, or an empty value when this capture opens no start.
+    """
+    if str(record.get(ROLE_FIELD, "")) != ROLE_PRE:  # The run driver owns the post half.
+        return ""  # An empty value stops the attach.
+    return str(record.get(RUN_FIELD, ""))  # A capture outside a run answers an empty value too.
+
+
+def attach_pre_capture(capture_id: str, record: dict[str, Any]) -> None:
+    """Write one verified pre-check onto the run record that owns it.
+
+    Why:
+        FR-035 refuses a start until the run names a saved pre-check, and the
+        confirm page keeps its begin button shaded until then. This module is
+        the only one that learns when a capture is verified, so the attach
+        belongs here. Without it no operator can ever start an upgrade.
+
+    Args:
+        capture_id: The capture that the portal read back unchanged.
+        record: A copy of the progress record, which names the run and the role.
+    """
+    run_id = pre_check_run(record)  # An empty value means this capture opens no start.
+    if not run_id or not has_app_context():  # A stand-in runner may report from a plain thread.
+        return  # A capture outside a run and a report outside the portal both stop here.
+    store = run_store()  # The same store that every run route reads.
+    run = store.read_run(run_id)  # None means no start ever created this run.
+    if not isinstance(run, dict):  # A capture may name a run that this process never held.
+        logger.info("capture: the capture %s names a run that no store holds", capture_id)  # Names the gap.
+        return  # The operator then meets the start refusal, which is the truthful answer.
+    run[PRE_CAPTURE_FIELD] = capture_id  # FR-035 reads this field before it allows a start.
+    store.write_run(run)  # The confirm page then opens its begin button.
+    logger.info("capture: the run %s now names the verified pre-check %s", run_id, capture_id)  # Audit.
 
 
 def read_progress(capture_id: str) -> dict[str, Any] | None:
@@ -381,20 +434,39 @@ def default_runner(job: dict[str, Any]) -> None:
         record_status(capture_id, state=STATE_FAILED, message=FAILED_MESSAGE)  # The page shows the short text.
 
 
+def worker_body(context: Any, runner: Callable[..., Any], job: dict[str, Any]) -> None:
+    """Read one site inside an application context.
+
+    Why:
+        A verified pre-check must reach the run record, and the run store lives
+        in the application configuration. A plain thread holds no context, so
+        `current_app` would raise there. The request builds the context and this
+        wrapper holds it open for the whole read.
+
+    Args:
+        context: The application context that the request thread built.
+        runner: The capture runner that the request thread bound.
+        job: The capture job that the start route built.
+    """
+    with context:  # The worker then reads every seam that a route reads.
+        runner(job)  # The whole read of one site runs inside this context.
+
+
 def start_worker(job: dict[str, Any]) -> None:
     """Hand one capture job to a worker thread.
 
     Why:
         FR-021 to FR-028 describe a read of a whole site, which takes minutes.
-        The runner binds here, inside the request, so the worker needs no
-        application context and no second lookup of the seam.
+        The runner and the application context both bind here, inside the
+        request, so the worker needs no second lookup of either one.
 
     Args:
         job: The capture job that the start route built.
     """
     runner = capture_runner()  # Bound now, because the worker sees no request.
+    context = current_app.app_context()  # Built now, and pushed by the worker thread.
     worker = threading.Thread(  # A daemon thread never holds the portal open at shutdown.
-        target=runner, args=(job,), name=f"capture-{job['capture_id']}", daemon=True
+        target=worker_body, args=(context, runner, job), name=f"capture-{job['capture_id']}", daemon=True
     )
     worker.start()  # The route answers 202 on the next line of its own body.
 
