@@ -19,7 +19,7 @@ the design. This file states the position.
 | Pull request | Open, mergeable, not a draft, no review yet |
 | Local commits not pushed | None |
 | Uncommitted work | None from this feature |
-| Portal tests | 2591 unit and contract, all pass. 132 browser tests, all pass, 0 skip |
+| Portal tests | 2591 unit and contract, all pass. 134 browser tests, all pass, 0 skip |
 | Statement coverage of the package | 94.18 percent |
 | Blocking defects | None. The eight defects of `audit-2026-08-20.md` sections 2.1, 6, 7, 8, 9, and 10 are fixed |
 
@@ -49,6 +49,13 @@ the portal and looking at it. Section 10 of the audit holds the detail:
 Defect 26 was held in place by a contract test. That test banned the `data:`
 scheme across the whole policy, so the correct fix read as a regression. The ban
 now names the code-bearing directives alone.
+
+A third by-eye drive found defect 28, in section 11 of the audit. It is a defect
+of the browser harness, not of the shipped portal, and it matters anyway:
+
+| Defect | The harm |
+| --- | --- |
+| 28 | The browser stand-in answered the wrong shape, so `GET /api/captures/<capture_id>` returned 500 for a capture the portal called verified. Every by-eye drive showed a red console message and a stored size of 0, and no browser test called that endpoint at all |
 
 Read `audit-2026-08-20.md` before you merge. It holds the 13 tasks that lost a
 check, the 4 that earned it back, the defects inside tasks that keep a check,
@@ -138,7 +145,7 @@ existing bulk firmware tools through that seam and never calls them directly.
 | Defects of high severity | 2 | Audit section 2.2 | Both fixed |
 | Other defects | 17 | Audit sections 2.3 to 2.7 | Open |
 | Defects the browser tests found | 4 | Audit sections 6 to 9 | All fixed |
-| Defects a person found by eye | 2 | Audit section 10 | Both fixed |
+| Defects a person found by eye | 3 | Audit sections 10 and 11 | All fixed |
 
 The two defects of audit section 2.1 told an operator that the cloud stopped a
 device, when the code cannot know that. An operator who reads that word can cut
@@ -321,14 +328,14 @@ $env:REDIS_HOST = "127.0.0.1"
 .\.venv\Scripts\python.exe -m pytest tests/e2e/upgrade_portal -q
 ```
 
-Expect 132 passes and no skip. A skip means the harness hid a broken portal.
+Expect 134 passes and no skip. A skip means the harness hid a broken portal.
 The portal writes its own log to `$env:TEMP\upgrade_portal_e2e_8056.log`, which
 states what the server did during the run.
 
 Then open the portal and look at it. Do not skip this step. Rule 4 of
 `contracts/ui-testids.md` states that a test selects by `data-testid` only, so no
-test in this repository reads what an operator sees. Defects 26 and 27 both
-passed the whole browser suite, and a person found both in a few minutes.
+test in this repository reads what an operator sees. Defects 26, 27, and 28 all
+passed the whole browser suite, and a person found each one in a few minutes.
 
 Start the production portal:
 
@@ -353,7 +360,8 @@ stand-in needs. The session cookie carries the `HttpOnly` flag, so a browser
 script cannot write it. A test tool must set it through a response header.
 
 Read the browser console on each page. An empty console is part of the result.
-Defect 26 wrote 23 blocked-resource messages there while every test passed.
+Defect 26 wrote 23 blocked-resource messages there while every test passed, and
+defect 28 wrote a 500 there for every capture that finished.
 
 Read the state of the pull request:
 

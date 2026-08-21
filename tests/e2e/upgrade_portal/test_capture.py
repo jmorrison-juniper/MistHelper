@@ -64,6 +64,14 @@ CAPTURE_VERIFIED_ID = "capture-verified-badge"
 CAPTURE_SIZE_ID = "capture-size-bytes"
 CAPTURE_ERROR_ID = "capture-error"
 
+# The history page lists every stored capture, and each row carries an open
+# control whose identifier ends with the capture key. That key is the only
+# address of a stored capture that a browser can find without a fixture import,
+# so the read test below reads it from the page.
+HISTORY_PAGE_PATH = "/history"
+HISTORY_OPEN_PREFIX = "history-open-"
+CAPTURE_READ_PATH = "/api/captures/{capture_id}"  # `contracts/http-api.md:238` fixes this path.
+
 DEFAULT_TIER = "2"  # `contracts/http-api.md` states that the tier defaults to 2.
 HIGH_TIER = "3"  # The endpoint refuses any value other than 2 or 3 with `bad_tier`.
 
@@ -397,3 +405,73 @@ class TestCaptureResult:
             capture_page: The page that shows the capture view.
         """
         sync_api.expect(capture_page.get_by_test_id(CAPTURE_ERROR_ID)).to_be_hidden()
+
+
+def _first_stored_capture_id(page: Any) -> str:
+    """Return the key of the first capture that the history page lists.
+
+    Why:
+        A stored capture is the only capture that the read endpoint answers
+        for, and the history page is the one page that names one. Reading the
+        key from the page keeps this module free of a fixture import, so the
+        test reads what an operator reads.
+
+    Args:
+        page: The Playwright page object.
+
+    Returns:
+        The capture key of the first history row.
+    """
+    _require_built_route(_page_status(page, HISTORY_PAGE_PATH), HISTORY_PAGE_PATH)
+    controls = page.locator(f'[data-testid^="{HISTORY_OPEN_PREFIX}"]')
+    if controls.count() == 0:  # A history with no row gives this test nothing to read back.
+        raise AssertionError(f"{HISTORY_PAGE_PATH} listed no stored capture, so no capture key exists to read.")
+    marker = controls.first.get_attribute("data-testid") or ""
+    return marker[len(HISTORY_OPEN_PREFIX) :]
+
+
+class TestStoredCaptureRead:
+    """The read endpoint hands back a capture that the portal stored."""
+
+    def test_a_stored_capture_reads_back_through_the_api(self, portal_page: Any) -> None:
+        """`GET /api/captures/<capture_id>` answers 200 for a stored capture.
+
+        Why:
+            The capture page reads the stored size through this endpoint, and
+            the comparison reads both documents through it. No other browser
+            test called it, so the whole suite passed while the endpoint
+            answered 500 for a capture that the status route called verified.
+
+            The fault was one shape. Two route modules read the one
+            `CAPTURE_LOADER` seam. `app/routes/review.py` accepts a bare
+            document as well as the record of the store, and
+            `app/routes/capture.py` accepts the record alone. The stand-in
+            answered a bare document, so the comparison worked and this read
+            did not.
+
+        Args:
+            portal_page: The page that points at the running portal.
+        """
+        capture_id = _first_stored_capture_id(portal_page)
+        path = CAPTURE_READ_PATH.format(capture_id=capture_id)
+        status = _page_status(portal_page, path)
+        _require_session(status, path)
+        assert status == OK_STATUS, f"{path} answered {status}. The contract fixes 200 for a stored capture."
+
+    def test_the_read_answers_the_stored_document(self, portal_page: Any) -> None:
+        """The body of the read carries the key of the capture it names.
+
+        Why:
+            A 200 with an empty body would still pass the test above. The
+            comparison reads every field of this body, so the body must be the
+            document itself and must name the capture that the caller asked
+            for.
+
+        Args:
+            portal_page: The page that points at the running portal.
+        """
+        capture_id = _first_stored_capture_id(portal_page)
+        path = CAPTURE_READ_PATH.format(capture_id=capture_id)
+        _require_built_route(_page_status(portal_page, path), path)
+        body = portal_page.evaluate("() => JSON.parse(document.body.innerText || '{}')")
+        assert body.get("capture_id") == capture_id, f"{path} answered a body for {body.get('capture_id')!r}."

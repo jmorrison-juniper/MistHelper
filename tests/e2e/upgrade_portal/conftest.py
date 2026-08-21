@@ -39,7 +39,7 @@ import subprocess
 import tempfile
 import time
 from collections.abc import Iterator
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
@@ -153,6 +153,9 @@ PRE_CAPTURE_ID = "e2e-capture-pre-0001"  # The pre-check that the picker offers 
 POST_CAPTURE_ID = "e2e-capture-post-0001"  # The post-check that the picker offers second.
 PRE_CAPTURE_STAMP = "2026-08-19T10:00:00+00:00"  # ISO 8601 in UTC, which is the stored form.
 POST_CAPTURE_STAMP = "2026-08-19T10:30:00+00:00"  # Thirty minutes later, so the window is measurable.
+# `capture/store.py` names this reason for a key that the database does not hold,
+# and `app/routes/capture.py` turns it into the 404 of the contract.
+CAPTURE_NOT_FOUND_REASON = "capture_not_found"  # The refusal for a key that the stand-in never published.
 
 # WHY: The panel of the capture page shows this sentence. It states that a
 # stand-in reported the capture, so a person who reads a browser recording of a
@@ -751,21 +754,53 @@ def stand_in_capture_lister(site_id: str = "", limit: int = 0, offset: int = 0) 
     return [{name: one[name] for name in HISTORY_ROW_NAMES} for one in stored][::-1]
 
 
-def stand_in_capture_loader(capture_id: str) -> Any:
-    """Answer one stored capture for a comparison, and reach no database.
+@dataclass(frozen=True, slots=True)
+class StandInCaptureLoad:
+    """One stored capture read, in the shape that the real store answers with.
 
     Why:
-        `load_capture_for_comparison` reads ArangoDB and refuses a capture that
-        is not verified. Both stand-in captures are verified, so this seam
-        answers the document itself, which `read_capture` accepts.
+        `capture/store.py` answers every read with a record that holds the
+        document, a flag that reports whether the document may join a
+        comparison, and a refusal reason. Two route modules read the one
+        `CAPTURE_LOADER` seam. `app/routes/review.py` also accepts a bare
+        document, but `app/routes/capture.py` reads the three names below and
+        refuses every other shape.
+
+        A stand-in that answers a bare document therefore makes
+        `GET /api/captures/<capture_id>` answer 500 for a capture that the
+        status route calls verified. This record carries the three names, so
+        both route modules read the stand-in the way they read the store.
+
+    Attributes:
+        capture: The stored document, or None when no document carries the key.
+        comparable: True when the capture may join a comparison.
+        reason: The refusal code, or an empty string after a clean read.
+    """
+
+    capture: dict[str, Any] | None
+    comparable: bool
+    reason: str
+
+
+def stand_in_capture_loader(capture_id: str) -> StandInCaptureLoad:
+    """Answer one stored capture, and reach no database.
+
+    Why:
+        `load_capture_for_comparison` reads ArangoDB, so a workstation with no
+        database can compare nothing and can read no capture back. This seam
+        answers the record shape of the store, so the comparison route and the
+        capture read route both accept it.
 
     Args:
         capture_id: The business key that the picker published.
 
     Returns:
-        The stored capture, or None when no capture carries that key.
+        The stored capture, or a refusal when no capture carries that key.
     """
-    return stand_in_capture_index().get(capture_id)
+    document = stand_in_capture_index().get(capture_id)  # None for every key the stand-in never published.
+    if document is None:  # The store answers the same reason, and the route turns it into a 404.
+        return StandInCaptureLoad(None, False, CAPTURE_NOT_FOUND_REASON)
+    return StandInCaptureLoad(document, True, "")  # Both stand-in captures carry the verified state.
 
 
 def signed_session_cookie(payload: dict[str, str]) -> str:
