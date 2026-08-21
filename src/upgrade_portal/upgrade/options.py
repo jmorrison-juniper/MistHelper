@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from functools import partial
 from typing import Any
 
@@ -649,6 +649,77 @@ def to_device_targets(entries: Sequence[Mapping[str, Any]], site_id: str) -> tup
     )
 
 
+def build_options_view(session: Any, org_id: str, site_id: str) -> dict[str, Any]:
+    """Build the device rows and the version map that the options page draws.
+
+    Why:
+        The options page drew only the rows that the run record already held,
+        and a fresh run holds none. The page therefore stayed empty, the browser
+        found no version control to read, and the saved target list stayed
+        empty. This function reads the site once and answers both halves that
+        the page needs, so the operator sees a device on the first view.
+
+    Args:
+        session: The cloud session of the signed-in operator.
+        org_id: The organization that holds the site.
+        site_id: The site under upgrade.
+
+    Returns:
+        A mapping with a ``targets`` list of device rows and a
+        ``versions_by_model`` map of the versions of each model.
+    """
+    inventory = read_upgrade_inventory(session, org_id, site_id)
+    if not inventory.records:  # A failed read must never spend a second call for no gain.
+        logger.warning("Upgrade portal read no device of site %s for the options page", site_id)
+        return {"targets": [], "versions_by_model": {}}
+    by_model = read_model_versions(session, site_id, inventory.records)
+    rows = build_version_options(inventory.records, by_model)
+    logger.info("Upgrade portal offers %s device(s) on the options page of site %s", len(rows), site_id)
+    return {
+        "targets": rows,
+        "versions_by_model": {name: list(items) for name, items in by_model.items()},
+    }
+
+
+def build_options_record(session: Any, org_id: str, site_id: str, body: Mapping[str, Any]) -> dict[str, Any]:
+    """Build the stored target list and option record from the browser choices.
+
+    Why:
+        The browser sends only a MAC address and a target version for each
+        device, but ``to_device_targets`` reads ``device_type`` and the run
+        driver reads the family, the scope, and the first uptime. This function
+        reads the site inventory once and fills every field, so the record that
+        reaches the driver names a real device.
+
+    Args:
+        session: The cloud session of the signed-in operator.
+        org_id: The organization that holds the site.
+        site_id: The site under upgrade.
+        body: The request body of the save call.
+
+    Returns:
+        A mapping with the ``targets`` entries, the ``options`` record, and the
+        ``warnings`` list. An empty mapping when the site read named no device,
+        which lets the caller keep the answer that the page already showed.
+
+    Raises:
+        BadOptionError: If one choice names an unknown device, an empty version,
+            or an option value that no rule maps.
+    """
+    inventory = read_upgrade_inventory(session, org_id, site_id)
+    if not inventory.records:  # A failed read must never look like a bad choice by the operator.
+        logger.warning("Upgrade portal read no device of site %s, so the body carries the targets", site_id)
+        return {}
+    choices = body.get("targets")
+    rows = [one for one in choices if isinstance(one, Mapping)] if isinstance(choices, list) else []
+    entries = build_targets(inventory.records, rows)
+    return {
+        "targets": entries,
+        "options": asdict(build_options(body)),
+        "warnings": list(target_warnings(entries)),
+    }
+
+
 __all__ = [
     "DEFAULT_OPTIONS",
     "DEVICE_TYPE_AP",
@@ -663,6 +734,8 @@ __all__ = [
     "BadOptionError",
     "InventoryRead",
     "build_options",
+    "build_options_record",
+    "build_options_view",
     "build_target_entry",
     "build_targets",
     "build_version_options",

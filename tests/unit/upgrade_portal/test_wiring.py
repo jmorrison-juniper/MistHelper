@@ -146,7 +146,7 @@ def test_install_seams_fills_the_stop_runner() -> None:
     """
     app = factory.create_app()  # The armed application, with the seams in place.
     assert app.config.get("STOP_RUNNER") is wiring.cancel_run  # The route then cancels at the cloud.
-    assert app.config.get("UPGRADE_OPTIONS_BUILDER") is None  # The route already holds a working answer.
+    assert app.config.get("UPGRADE_OPTIONS_BUILDER") is None  # The route resolves the builder from the module.
 
 
 def test_the_same_heartbeat_reaches_both_seats() -> None:

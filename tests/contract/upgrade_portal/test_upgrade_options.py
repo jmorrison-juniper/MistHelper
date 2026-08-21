@@ -30,6 +30,7 @@ from werkzeug.test import TestResponse  # The answer type that every assertion r
 
 from src.upgrade_portal.runtime import identity  # The real session guard, so the tests sign in for real.
 from src.upgrade_portal.runtime.runs import RunRecordBuilder, RunSpec  # The record layer owns every field.
+from src.upgrade_portal.upgrade import options as options_module  # The module that the options route resolves.
 
 # --------------------------------------------------------------------------
 # The contract values. Each one repeats a line of the specification.
@@ -38,6 +39,7 @@ from src.upgrade_portal.runtime.runs import RunRecordBuilder, RunSpec  # The rec
 RUN_STORE_KEY = "RUN_STORE"  # The seam that holds the run record store.
 LOCK_READER_KEY = "SITE_LOCK_READER"  # The seam that reads the site lock, named by `select.py`.
 OPTIONS_BUILDER_KEY = "UPGRADE_OPTIONS_BUILDER"  # The seam that `upgrade/options.py` fills.
+OPTIONS_VIEW_KEY = "UPGRADE_OPTIONS_VIEW"  # The seam that builds the device rows of the options page.
 
 PROBE_EMAIL = "probe.operator@example.invalid"  # A reserved domain, so no real address appears.
 ORG_ID = "00000000-0000-0000-0000-0000000000aa"  # Matches the shared organization of the other tests.
@@ -51,6 +53,7 @@ CREATE_PATH = f"/api/sites/{SITE_ID}/runs"  # The path that `contracts/http-api.
 CREATE_ALT_PATH = "/api/runs"  # The path that `tasks.md` T151 names, which reads the session instead.
 CREATE_ENDPOINT = "upgrade.create_run"  # The endpoint that answers both paths above.
 OPTIONS_PATH_TEMPLATE = "/api/runs/{run_id}/options"  # The save call of the options page.
+OPTIONS_PAGE_TEMPLATE = "/runs/{run_id}/options"  # The page itself, which carries no `/api` prefix.
 START_PATH_TEMPLATE = "/api/runs/{run_id}/start"  # The begin action that stands after the options save.
 
 OK_STATUS = 200  # The save succeeded.
@@ -80,6 +83,39 @@ CREATE_ANSWER_FIELDS = {"run_id", "state"}
 
 # WHY: The default of each option control, as `contracts/http-api.md` names it.
 DEFAULT_OPTIONS = {"reboot": True, "junos_file_action": False, "strategy": "big_bang"}
+
+PROBE_MODEL = "EX4400-48P"  # The model of the one device of the stand-in site.
+PROBE_VERSIONS = ["23.4R2-S4.11", "24.2R1.17"]  # The versions that the cloud names for that model.
+PROBE_VERSION_TARGET = "24.2R1.17"  # The version that the operator picks in both tests below.
+
+# WHY: `options.html` reads exactly these six names for each row of the target
+# table. A row with a missing name draws a control with no version and no label,
+# which is the defect that the two tests at the end of this file guard against.
+PROBE_DEVICE_ROW: dict[str, Any] = {
+    "mac": PROBE_MAC,
+    "name": "Probe switch",
+    "device_type": "switch",
+    "model": PROBE_MODEL,
+    "version_before": "23.4R2-S3.9",
+    "version_target": "",
+}
+
+# WHY: The site inventory names a device type under `type` and a running version
+# under `version`. `build_target_entry` performs that translation, so a stand-in
+# inventory row must carry the cloud names and never the stored names.
+PROBE_INVENTORY_ROW: dict[str, Any] = {
+    "mac": PROBE_MAC,
+    "name": "Probe switch",
+    "type": "switch",
+    "model": PROBE_MODEL,
+    "version": "23.4R2-S3.9",
+    "uptime": 1832140,
+}
+
+# WHY: The browser sends a mac and a version only, because `collectUpgradeTargets`
+# reads those two values from each version control. The save call must widen this
+# row into the whole target record that the run driver reads.
+THIN_BODY: dict[str, Any] = {"targets": [{"mac": PROBE_MAC, "version_target": PROBE_VERSION_TARGET}]}
 
 
 class RecordingRunStore:
@@ -152,6 +188,35 @@ class RefusingOptionsBuilder:
             ValueError: Always, because the whole point is the refusal path.
         """
         raise ValueError(self.reason)  # `options.BadOptionError` is a `ValueError`, so the route catches this.
+
+
+class StandInOptionsView:
+    """Answer one device row and one version list, and reach no cloud.
+
+    Why:
+        The options page drew only the rows that the run record already held,
+        and a new run holds none. The page therefore drew no version control,
+        the browser read none, and the save call stored an empty target list.
+        This stand-in stands for the site inventory read that closes that loop.
+    """
+
+    def __init__(self) -> None:
+        """Start with no recorded call."""
+        self.calls: list[tuple[str, str]] = []  # The organization and the site of each call.
+
+    def __call__(self, session: Any, org_id: str, site_id: str) -> dict[str, Any]:
+        """Answer the two halves that the options page draws.
+
+        Args:
+            session: The cloud session. This stand-in reads none of it.
+            org_id: The organization that holds the site.
+            site_id: The site under upgrade.
+
+        Returns:
+            One device row and the version list of the model of that row.
+        """
+        self.calls.append((org_id, site_id))  # The test reads this list to prove the site scoped the read.
+        return {"targets": [dict(PROBE_DEVICE_ROW)], "versions_by_model": {PROBE_MODEL: list(PROBE_VERSIONS)}}
 
 
 # ---------------------------------------------------------------------------
@@ -327,6 +392,25 @@ def save_options(client: FlaskClient, run_id: str, body: dict[str, Any]) -> Test
         The portal answer.
     """
     return client.post(OPTIONS_PATH_TEMPLATE.format(run_id=run_id), json=body)
+
+
+def stand_in_inventory(session: Any, org_id: str, site_id: str) -> Any:
+    """Answer one site inventory that holds the one probe device.
+
+    Why:
+        The save call reads the site inventory to widen the two fields that the
+        browser sends. This stand-in gives that read, so a contract test proves
+        the widening and still reaches no cloud.
+
+    Args:
+        session: The cloud session. This stand-in reads none of it.
+        org_id: The organization that holds the site.
+        site_id: The site under upgrade.
+
+    Returns:
+        One inventory read with one record and no partial reason.
+    """
+    return options_module.InventoryRead([dict(PROBE_INVENTORY_ROW)], [])
 
 
 # ---------------------------------------------------------------------------
@@ -734,3 +818,67 @@ def test_a_start_with_no_saved_pre_check_answers_the_documented_code(
     answer = upgrade_client.post(path, json={"confirm": CONFIRM_WORD})  # The right word, so only FR-035 refuses.
     assert answer.status_code == CONFLICT_STATUS  # A state conflict, and never a caller defect.
     assert read_error_code(answer) == PRE_CAPTURE_MISSING_CODE  # The page then sends the operator to the pre-check.
+
+
+# ---------------------------------------------------------------------------
+# T128: the device rows that the options page draws and then saves
+# ---------------------------------------------------------------------------
+
+
+def test_the_options_page_draws_a_version_control_for_every_device(
+    upgrade_app: Flask,
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """The options page draws one version control for each device of the site.
+
+    Why:
+        A new run record holds no target row, and the page drew only the rows
+        that the record already held. The page therefore drew no version
+        control, the browser read none, and the save call stored an empty
+        target list. The run then reached no device at all. This test holds
+        that loop shut.
+
+    Args:
+        upgrade_app: The application with the seams injected.
+        upgrade_client: The signed-in client.
+        run_store: The stand-in run record store.
+    """
+    view = StandInOptionsView()  # The test reads the call list of this object below.
+    upgrade_app.config[OPTIONS_VIEW_KEY] = view  # The seam stands for the site inventory read.
+    run_id = seed_run(run_store, "pre_capture_done")  # A fresh run, which holds no target row.
+    answer = upgrade_client.get(OPTIONS_PAGE_TEMPLATE.format(run_id=run_id))
+    assert answer.status_code == OK_STATUS  # A page read never refuses a run that exists.
+    page = answer.get_data(as_text=True)
+    assert f'data-version-for="{PROBE_MAC}"' in page  # The one control that the browser reads.
+    assert PROBE_VERSION_TARGET in page  # The version list of the model reached that control.
+    assert "The run holds no device" not in page  # The empty table is the defect this test guards.
+    assert view.calls == [(ORG_ID, SITE_ID)]  # One read, scoped to the site of the run.
+
+
+def test_a_thin_saved_row_widens_into_the_record_the_run_driver_reads(
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A save call widens the two browser fields into the whole target record.
+
+    Why:
+        The browser sends a mac and a version only. `to_device_targets` reads
+        `device_type` and `version_target` as plain subscripts, so a stored row
+        of two fields raises and the run then builds no upgrade plan. The save
+        call must read the site inventory and store the whole record.
+
+    Args:
+        upgrade_client: The signed-in client.
+        run_store: The stand-in run record store.
+        monkeypatch: The fixture that points the module read at the stand-in.
+    """
+    monkeypatch.setattr(options_module, "read_upgrade_inventory", stand_in_inventory)
+    run_id = seed_run(run_store, "pre_capture_done")  # A fresh run, which holds no target row.
+    answer = save_options(upgrade_client, run_id, THIN_BODY)
+    assert answer.status_code == OK_STATUS  # A good option set never refuses.
+    saved = run_store.runs[run_id]["targets"][0]  # The one row that the run driver reads.
+    assert saved["device_type"] == "switch"  # The inventory named the type, and the browser never does.
+    assert saved["version_target"] == PROBE_VERSION_TARGET  # The choice of the operator stands.
+    assert saved["state"] == options_module.STATE_PENDING  # The driver reads this field on every device.

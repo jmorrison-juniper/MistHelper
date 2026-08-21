@@ -773,8 +773,9 @@ def install_seams(app: Flask) -> None:
         `cancel_run` then answers None.
 
         One seam stays empty on purpose. `UPGRADE_OPTIONS_BUILDER` must stay
-        empty, because the route already holds a working answer that reads no
-        site inventory.
+        empty, because the route resolves that builder from `upgrade/options.py`
+        on its own, exactly as the version seam does. A test that names its own
+        builder still wins, because the route reads the seam first.
 
     Args:
         app: The application to fill the seams on.

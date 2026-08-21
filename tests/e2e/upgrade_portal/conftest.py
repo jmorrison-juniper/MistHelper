@@ -39,6 +39,7 @@ import subprocess
 import tempfile
 import time
 from collections.abc import Iterator
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
@@ -145,6 +146,7 @@ STAND_IN_ORG_NAME = "E2E Stand-In Organization"  # The text of the one organizat
 STAND_IN_SITE_ID = "e2e-site-0001"  # The site that the site picker shows and the inventory page reads.
 STAND_IN_SITE_NAME = "E2E Stand-In Site"  # The text of the one site row.
 STAND_IN_DEVICE_TYPES = ("ap", "gateway", "switch")  # Mirrors `select.DEVICE_TYPES`, which FR-013 fixes.
+STAND_IN_VERSIONS = ("0.14.29216", "0.15.1")  # The version that runs now, then one newer version to pick.
 
 # WHY: `select.SELECTED_ORG_KEY` names this field inside the signed session.
 # The parent test process must not import the route module, because that import
@@ -491,6 +493,74 @@ def stand_in_device_read(**parameters: Any) -> list[dict[str, Any]]:
     return [stand_in_device(number, kind) for number, kind in enumerate(STAND_IN_DEVICE_TYPES, start=1)]
 
 
+def stand_in_version_map() -> dict[str, tuple[str, ...]]:
+    """Return the version list that the cloud names for each stand-in model.
+
+    Why:
+        `read_model_versions` calls the Mist software development kit, so the
+        options page of a signed-in run would reach a live tenant. A fixed map
+        gives every model one newer version to pick and one version that already
+        runs, so the picker holds a real choice.
+
+    Returns:
+        The version list of each model of the stand-in site.
+    """
+    return {str(device["model"]): STAND_IN_VERSIONS for device in stand_in_device_read()}
+
+
+def stand_in_options_view(session: Any, org_id: str, site_id: str) -> dict[str, Any]:
+    """Answer the device rows and the version map that the options page draws.
+
+    Why:
+        `build_options_view` reads the site inventory from the cloud. This seam
+        joins the stand-in inventory to the fixed version map with the shipped
+        `build_version_options`, so the browser reads the rows that ship and the
+        test never proves a shape that only this file builds.
+
+    Args:
+        session: The cloud session. This stand-in reads none of it.
+        org_id: The organization that holds the site.
+        site_id: The site under upgrade.
+
+    Returns:
+        One row for each stand-in device and the version list of each model.
+    """
+    del session, org_id, site_id  # One site answers every call, so no argument changes the result.
+    from src.upgrade_portal.upgrade import options  # Late, so a plain collection never loads the portal.
+
+    by_model = stand_in_version_map()
+    return {"targets": options.build_version_options(stand_in_device_read(), by_model), "versions_by_model": by_model}
+
+
+def stand_in_options_builder(record: dict[str, Any], body: dict[str, Any]) -> dict[str, Any]:
+    """Widen the two fields of each browser choice into the whole target record.
+
+    Why:
+        The browser sends a device address and a version only, and the run
+        driver reads a record of fifteen fields. `build_options_record` reads
+        the site inventory from the cloud to fill the rest. This seam gives that
+        read from the stand-in inventory and then calls the shipped builders.
+
+    Args:
+        record: The run record. The site of every stand-in run is the same one.
+        body: The request body of the options call.
+
+    Returns:
+        The target list, the chosen options, and the warning sentences.
+    """
+    del record  # One site answers every call, so the run record changes nothing.
+    from src.upgrade_portal.upgrade import options  # Late, so a plain collection never loads the portal.
+
+    choices = body.get("targets")
+    rows = [one for one in choices if isinstance(one, dict)] if isinstance(choices, list) else []
+    entries = options.build_targets(stand_in_device_read(), rows)
+    return {
+        "targets": entries,
+        "options": asdict(options.build_options(body)),
+        "warnings": list(options.target_warnings(entries)),
+    }
+
+
 def signed_session_cookie(payload: dict[str, str]) -> str:
     """Sign a browser session payload the way the portal signs one.
 
@@ -616,11 +686,16 @@ def build_stand_in_app() -> Any:
         The Flask application that the server process serves.
     """
     from src.upgrade_portal.app.factory import create_app  # Late, so a plain collection never builds an app.
-    from src.upgrade_portal.app.routes import select  # Late as well. It owns the two cloud seams.
+    from src.upgrade_portal.app.routes import (
+        select,  # Late as well. It owns the two cloud seams.
+        upgrade,  # Late as well. It owns the two options seams.
+    )
 
     built = create_app()  # The production application, with no change to any shipped line.
     built.config[select.MIST_READER_KEY] = stand_in_cloud_read  # The site picker then reads no network.
     built.config[select.DEVICE_READER_KEY] = stand_in_device_read  # The inventory page reads no network.
+    built.config[upgrade.OPTIONS_VIEW_KEY] = stand_in_options_view  # The options page then draws every device.
+    built.config[upgrade.OPTIONS_BUILDER_KEY] = stand_in_options_builder  # The save call stores a whole row.
     _register_operator(STAND_IN_EMAIL, STAND_IN_BROWSER_ID)  # The operator that every test drives.
     _register_operator(SECOND_EMAIL, SECOND_BROWSER_ID)  # The operator that meets the lock refusal.
     return built  # Waitress and Gunicorn both load this object by name.

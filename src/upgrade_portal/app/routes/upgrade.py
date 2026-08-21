@@ -104,9 +104,13 @@ RUN_STORE_KEY = "RUN_STORE"  # The seam for the run record store.
 LAUNCHER_KEY = "RUN_LAUNCHER"  # The seam that hands one prepared record to the run driver.
 STOP_RUNNER_KEY = "STOP_RUNNER"  # The seam for the cancel work of a stop.
 OPTIONS_BUILDER_KEY = "UPGRADE_OPTIONS_BUILDER"  # The seam for `upgrade/options.py`.
+OPTIONS_VIEW_KEY = "UPGRADE_OPTIONS_VIEW"  # The seam for the device rows of the options page.
 VERSIONS_KEY = "UPGRADE_VERSIONS"  # The version list of each model, for the options page.
 VERSIONS_MODULE = "upgrade.options"  # The module that reads the version list of each model.
 VERSIONS_ATTRIBUTES = ("read_model_versions",)  # The reader name that the module above publishes.
+VIEW_ATTRIBUTES = ("build_options_view",)  # The builder of the device rows of the options page.
+RECORD_ATTRIBUTES = ("build_options_record",)  # The builder of the stored target list.
+VIEW_VERSIONS_FIELD = "versions_by_model"  # The render keyword that `options.html` reads.
 BY_MODEL_FIELD = "by_model"  # `contracts/http-api.md` section 5 fixes this answer field.
 
 STORE_READ = "read_run"  # The reader that `runtime/signals.RunRecordStore` asks for.
@@ -687,28 +691,33 @@ def built_options(record: dict[str, Any], body: dict[str, Any]) -> dict[str, Any
     """Build the target list and the option record for one run.
 
     Why:
-        `upgrade/options.py` reads the site inventory before it names a family
-        and a scope, so the builder needs a cloud session. Until that wiring
-        lands, the body itself carries every field the page already showed, so
-        the operator still saves a choice and the record still holds it.
+        The browser sends only a MAC address and a target version for each
+        device, but the run driver reads the device type, the gateway family,
+        and the scope. `upgrade/options.py` fills those fields from the site
+        inventory, so this function reaches that module first. The body itself
+        remains the answer when no cloud session or no inventory answers, which
+        keeps a test and an offline view working.
 
     Args:
-        record: The run record the options belong to.
-        body: The request body of the options call.
+        record: The stored run record.
+        body: The request body of the save call.
 
     Returns:
-        The `targets` list, the `options` record, and the `warnings` list.
+        A mapping with the target list, the option record, and the warnings.
 
     Raises:
         ValueError: When one option holds a value that the portal refuses.
     """
-    builder = options_builder()  # The options work injects one callable here.
-    if builder is not None:  # The real path, which reads the site inventory.
-        answer: Any = builder(record, body)  # The module owns every rule of the mapping.
-        return dict(answer)  # The handler reads three keys out of this record.
-    rows = body.get(TARGETS_FIELD)  # The page already holds one row for each device.
+    builder = options_builder()  # A test injects one callable here.
+    if builder is not None:
+        answer: Any = builder(record, body)
+        return dict(answer)
+    composed = composed_options(record, body)  # The module owns the inventory read and the family.
+    if composed is not None:
+        return composed
+    rows = body.get(TARGETS_FIELD)  # No inventory answered, so the body carries what the page showed.
     targets = [dict(row) for row in rows if isinstance(row, dict)] if isinstance(rows, list) else []
-    return {TARGETS_FIELD: targets, "options": plain_options(body), WARNINGS_FIELD: []}  # No inventory read.
+    return {TARGETS_FIELD: targets, "options": plain_options(body), WARNINGS_FIELD: []}
 
 
 def plain_options(body: dict[str, Any]) -> dict[str, Any]:
@@ -850,6 +859,94 @@ def read_versions(record: dict[str, Any]) -> dict[str, list[str]]:
     except Exception:  # A picker with no version beats a page that shows a fault to the operator.
         logger.warning("upgrade: the version read of the site %s did not answer", site_id)  # No stack trace.
         return {}  # The operator retries the page, and the run record keeps every earlier choice.
+
+
+def module_attribute(names: tuple[str, ...]) -> Any:
+    """Return the first named attribute of the options module, or None.
+
+    Why:
+        Three seams of this route reach `upgrade/options.py`, and each one must
+        survive a build stage in which that module does not import. One helper
+        holds the late import, so each caller reads one line instead of three.
+
+    Args:
+        names: The attribute names to look for, in order of preference.
+
+    Returns:
+        The attribute, or None when the module or the name is absent.
+    """
+    return find_attribute(load_optional_module(VERSIONS_MODULE), names)  # A missing module answers None.
+
+
+def options_view(record: dict[str, Any]) -> dict[str, Any]:
+    """Build the device rows and the version map that the options page draws.
+
+    Why:
+        The page drew only the rows that the run record already held, and a new
+        run holds none. The page therefore showed no device, the browser found
+        no version control to read, and the saved target list stayed empty. This
+        function reads the site inventory once, so the operator sees a device on
+        the first view and sees the same version list on every later view. A
+        ready map, a missing module, and a signed-out session each keep the
+        earlier answer, so no test and no offline view reaches the cloud.
+
+    Args:
+        record: The stored run record.
+
+    Returns:
+        The `targets` rows and the `versions_by_model` map that the page reads.
+    """
+    stored = list(record.get(TARGETS_FIELD) or [])  # A second view holds the choice of the first one.
+    ready = version_index(injected_object(VERSIONS_KEY))  # A test injects the map, so no cloud read runs.
+    session = cloud_session()  # The sign-in built this session, and the record never carries one.
+    builder = injected_object(OPTIONS_VIEW_KEY) or module_attribute(VIEW_ATTRIBUTES)  # The seam, then the module.
+    if ready or session is None or not callable(builder):  # Any one of the three already answers the page.
+        return {TARGETS_FIELD: stored, VIEW_VERSIONS_FIELD: ready}
+    site_id = str(record.get("site_id", ""))  # FR-014 binds one run to one site, so one site scopes the read.
+    try:  # The builder reaches the cloud, and the cloud refuses and times out.
+        answer = dict(builder(session, str(record.get("org_id", "")), site_id))
+    except Exception:  # A page with no row beats a page that shows a fault to the operator.
+        logger.warning("upgrade: the inventory read of the site %s did not answer", site_id)  # No stack trace.
+        return {TARGETS_FIELD: stored, VIEW_VERSIONS_FIELD: ready}
+    return {
+        TARGETS_FIELD: stored or list(answer.get(TARGETS_FIELD, [])),  # A saved choice outranks a fresh read.
+        VIEW_VERSIONS_FIELD: version_index(answer.get(VIEW_VERSIONS_FIELD)),  # One version list for each model.
+    }
+
+
+def composed_options(record: dict[str, Any], body: dict[str, Any]) -> dict[str, Any] | None:
+    """Build the stored target list from the browser choices and the site read.
+
+    Why:
+        The browser sends only a MAC address and a target version for each
+        device, but `to_device_targets` reads the device type and the run driver
+        reads the gateway family, the scope, and the first uptime. Only a site
+        read fills those fields. A thin row would reach the driver, raise a key
+        fault inside the plan builder, and send no device to the cloud.
+
+    Args:
+        record: The stored run record.
+        body: The request body of the save call.
+
+    Returns:
+        The full record, or None when no session and no site read answers.
+
+    Raises:
+        ValueError: When one choice names an unknown device or a refused option.
+    """
+    session = cloud_session()  # The sign-in built this session, and the record never carries one.
+    builder = module_attribute(RECORD_ATTRIBUTES)  # The module owns every rule of the mapping.
+    if session is None or not callable(builder):  # No session and no module both fall back to the body.
+        return None
+    site_id = str(record.get("site_id", ""))  # FR-014 binds one run to one site, so one site scopes the read.
+    try:  # The builder reaches the cloud, and the cloud refuses and times out.
+        answer: Any = builder(session, str(record.get("org_id", "")), site_id, body)
+    except ValueError:  # A refused option must reach the operator as a named field, not as a silent echo.
+        raise
+    except Exception:  # A cloud fault falls back to the body, which the page already showed.
+        logger.warning("upgrade: the inventory read of the site %s did not answer", site_id)  # No stack trace.
+        return None
+    return dict(answer) if answer else None  # An empty answer means the read named no device.
 
 
 @upgrade_bp.get(VERSIONS_PATH)
@@ -1094,7 +1191,9 @@ def options_page(run_id: str) -> str:
     Why:
         The page includes the site lock banner, because a saved option writes to
         the site. FR-072 gives one site to one operator, so the operator must
-        read who holds the site before the save call.
+        read who holds the site before the save call. The rows come from
+        `options_view`, because a new run holds no row of its own and the
+        operator must still see every device of the site.
 
     Args:
         run_id: The run key.
@@ -1103,14 +1202,14 @@ def options_page(run_id: str) -> str:
         The rendered page.
     """
     record = load_run(run_id) or {}  # An absent run still renders an empty picker.
-    versions = version_index(injected_object(VERSIONS_KEY))  # A ready map renders, and no cloud read starts here.
-    logger.info("upgrade: show the options page of %s", run_id)  # One line for each page read.
+    view = options_view(record)  # The site inventory fills a new run, and a saved choice outranks it.
+    logger.info("upgrade: show the options page of %s with %s device(s)", run_id, len(view[TARGETS_FIELD]))
     return render_page(
         OPTIONS_TEMPLATE,
         run_id=run_id,  # The page builds every control identifier from this value.
         site_name=str(record.get("site_name", "")),  # The heading of the page.
-        targets=record.get(TARGETS_FIELD, []),  # One row for each device of the site.
-        versions_by_model=versions,  # The picker refills itself from `GET /api/runs/<run_id>/versions`.
+        targets=view[TARGETS_FIELD],  # One row for each device of the site.
+        versions_by_model=view[VIEW_VERSIONS_FIELD],  # One version list for each model of those rows.
         options=record.get("options", {}),  # The three controls show the saved choice.
         warnings=[],  # The save call answers the warnings, so the first read of the page shows none.
         **run_lock_banner(record),  # The six values that the included lock banner reads.

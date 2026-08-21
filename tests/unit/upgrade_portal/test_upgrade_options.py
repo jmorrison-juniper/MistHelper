@@ -62,6 +62,14 @@ AP_ROW: dict[str, Any] = {
     "version": "0.14.29076",
 }
 
+ORG_ID = "org-1"  # The organization that the two composition builders read.
+SITE_ID = "site-1"  # The site that the two composition builders read.
+VERSION_MAP: dict[str, tuple[str, ...]] = {
+    "EX4400-48P": ("23.4R2-S4.11", "24.2R1.17"),
+    "AP45": ("0.14.29216",),
+}
+THIN_BODY: dict[str, Any] = {"targets": [{"mac": "5c5b350e0001", "version_target": "24.2R1.17"}]}
+
 
 class FakeResponse:
     """A stand-in for the answer object that the SDK builds.
@@ -467,6 +475,142 @@ class TestToDeviceTargets:
         target = module.to_device_targets(entries, "site-1")[0]
         assert not hasattr(target, "state")
         assert not hasattr(target, "uptime_before")
+
+
+class TestBuildOptionsView:
+    """The two halves that the options page draws for one run."""
+
+    def test_a_good_read_answers_one_row_for_each_device(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        fake_mist_session: Any,
+    ) -> None:
+        """The page drew only the rows the run record held, and a new run holds none."""
+        record_inventory_call(monkeypatch, [SWITCH_ROW, AP_ROW])
+        monkeypatch.setattr(module, "list_available_versions", lambda *args: VERSION_MAP)
+        answer = module.build_options_view(fake_mist_session, ORG_ID, SITE_ID)
+        assert [row["mac"] for row in answer["targets"]] == ["5c5b350e0001", "5c5b350e0004"]
+
+    def test_the_version_map_carries_a_plain_list_for_each_model(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        fake_mist_session: Any,
+    ) -> None:
+        """The page reads ``versions_map.get(model)``, and a tuple renders no option."""
+        record_inventory_call(monkeypatch, [SWITCH_ROW])
+        monkeypatch.setattr(module, "list_available_versions", lambda *args: VERSION_MAP)
+        answer = module.build_options_view(fake_mist_session, ORG_ID, SITE_ID)
+        assert answer["versions_by_model"]["EX4400-48P"] == ["23.4R2-S4.11", "24.2R1.17"]
+
+    def test_an_empty_read_spends_no_second_call(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        fake_mist_session: Any,
+    ) -> None:
+        """A failed read must never spend the version call for no gain."""
+        record_inventory_call(monkeypatch, [])
+        calls: list[Any] = []
+
+        def fake_list(*args: Any) -> dict[str, tuple[str, ...]]:
+            calls.append(args)
+            return {}
+
+        monkeypatch.setattr(module, "list_available_versions", fake_list)
+        answer = module.build_options_view(fake_mist_session, ORG_ID, SITE_ID)
+        assert answer == {"targets": [], "versions_by_model": {}}
+        assert calls == []
+
+
+class TestBuildOptionsRecord:
+    """The stored run record built from the thin browser choices."""
+
+    def test_a_thin_choice_becomes_a_full_target_row(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        fake_mist_session: Any,
+    ) -> None:
+        """``to_device_targets`` reads ``device_type``, which the browser never sends."""
+        record_inventory_call(monkeypatch, [SWITCH_ROW])
+        answer = module.build_options_record(fake_mist_session, ORG_ID, SITE_ID, THIN_BODY)
+        entry = answer["targets"][0]
+        assert entry["device_type"] == "switch"
+        assert entry["uptime_before"] == 1832140
+        assert entry["state"] == module.STATE_PENDING
+
+    def test_the_stored_row_reaches_the_seam_record(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        fake_mist_session: Any,
+    ) -> None:
+        """``app/wiring.py`` maps the stored rows, and a thin row raises there instead."""
+        record_inventory_call(monkeypatch, [SWITCH_ROW])
+        answer = module.build_options_record(fake_mist_session, ORG_ID, SITE_ID, THIN_BODY)
+        targets = module.to_device_targets(answer["targets"], SITE_ID)
+        assert targets[0].version_target == "24.2R1.17"
+
+    def test_the_option_record_reads_back_as_the_seam_record(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        fake_mist_session: Any,
+    ) -> None:
+        """``app/wiring.py`` parses the stored options again, so the shape must survive."""
+        record_inventory_call(monkeypatch, [SWITCH_ROW])
+        answer = module.build_options_record(fake_mist_session, ORG_ID, SITE_ID, THIN_BODY)
+        assert module.build_options(answer["options"]) == UpgradeOptions()
+
+    def test_a_matching_version_reaches_the_warning_list(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        fake_mist_session: Any,
+    ) -> None:
+        """The operator may have picked the row above the one they meant."""
+        record_inventory_call(monkeypatch, [SWITCH_ROW])
+        body = {"targets": [{"mac": "5c5b350e0001", "version_target": "23.4R2-S3.9"}]}
+        answer = module.build_options_record(fake_mist_session, ORG_ID, SITE_ID, body)
+        assert answer["warnings"] == [module.WARNING_SAME_VERSION]
+
+    def test_an_empty_read_answers_an_empty_mapping(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        fake_mist_session: Any,
+    ) -> None:
+        """A cloud fault must read as no answer, never as a refused choice."""
+        record_inventory_call(monkeypatch, [])
+        assert module.build_options_record(fake_mist_session, ORG_ID, SITE_ID, THIN_BODY) == {}
+
+    def test_an_unknown_device_is_refused(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        fake_mist_session: Any,
+    ) -> None:
+        """An upgrade of an unknown device would reach the wrong site."""
+        record_inventory_call(monkeypatch, [AP_ROW])
+        with pytest.raises(module.BadOptionError) as caught:
+            module.build_options_record(fake_mist_session, ORG_ID, SITE_ID, THIN_BODY)
+        assert caught.value.field == "mac"
+
+    def test_a_refused_strategy_reaches_the_caller(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        fake_mist_session: Any,
+    ) -> None:
+        """The route answers 400 for a refused option, so the fault must not be held."""
+        record_inventory_call(monkeypatch, [SWITCH_ROW])
+        body = dict(THIN_BODY, strategy="fastest")
+        with pytest.raises(module.BadOptionError) as caught:
+            module.build_options_record(fake_mist_session, ORG_ID, SITE_ID, body)
+        assert caught.value.field == "strategy"
+
+    def test_a_body_with_no_target_list_stores_no_row(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        fake_mist_session: Any,
+    ) -> None:
+        """A save of the three controls alone must never raise."""
+        record_inventory_call(monkeypatch, [SWITCH_ROW])
+        answer = module.build_options_record(fake_mist_session, ORG_ID, SITE_ID, {"reboot": False})
+        assert answer["targets"] == []
+        assert answer["options"]["reboot"] is False
 
 
 class TestModuleProhibitions:
