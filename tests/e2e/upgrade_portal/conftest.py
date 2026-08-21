@@ -148,6 +148,27 @@ STAND_IN_SITE_NAME = "E2E Stand-In Site"  # The text of the one site row.
 STAND_IN_DEVICE_TYPES = ("ap", "gateway", "switch")  # Mirrors `select.DEVICE_TYPES`, which FR-013 fixes.
 STAND_IN_VERSIONS = ("0.14.29216", "0.15.1")  # The version that runs now, then one newer version to pick.
 
+STAND_IN_RUN_ID = "e2e-run-0001"  # The run that owns both stored captures below.
+PRE_CAPTURE_ID = "e2e-capture-pre-0001"  # The pre-check that the picker offers first.
+POST_CAPTURE_ID = "e2e-capture-post-0001"  # The post-check that the picker offers second.
+PRE_CAPTURE_STAMP = "2026-08-19T10:00:00+00:00"  # ISO 8601 in UTC, which is the stored form.
+POST_CAPTURE_STAMP = "2026-08-19T10:30:00+00:00"  # Thirty minutes later, so the window is measurable.
+
+# WHY: `review.HISTORY_ROW_DEFAULTS` fixes the eight names of a history row, and
+# the page heading reads the site beside them. A stored capture holds far more,
+# so the lister below copies these names alone and never the whole document.
+HISTORY_ROW_NAMES = (
+    "capture_id",
+    "role",
+    "started_at",
+    "capture_status",
+    "actor_email",
+    "stored_size_bytes",
+    "counts",
+    "site_id",
+    "site_name",
+)
+
 # WHY: `select.SELECTED_ORG_KEY` names this field inside the signed session.
 # The parent test process must not import the route module, because that import
 # pulls the whole application into every collection. One short copy is the cost.
@@ -561,6 +582,128 @@ def stand_in_options_builder(record: dict[str, Any], body: dict[str, Any]) -> di
     }
 
 
+def stand_in_client(index: int, device_mac: str) -> dict[str, Any]:
+    """Build one wireless client record that hangs off one device.
+
+    Why:
+        The comparison reports a client return rate, and a rate needs a client
+        on each side of the pair. The client names its device, because the
+        comparison also reports the clients that moved to another device.
+
+    Args:
+        index: The number of this client. It fills the address and the name.
+        device_mac: The address of the device that holds this client.
+
+    Returns:
+        One client record, in the shape that the capture stores.
+    """
+    return {"mac": f"aabbcc00000{index}", "hostname": f"e2e-client-{index}", "device_mac": device_mac}
+
+
+def stand_in_capture(capture_id: str, role: str, version: str, started_at: str) -> dict[str, Any]:
+    """Build one stored capture of the stand-in site.
+
+    Why:
+        The comparison journey and the history journey both need a stored
+        capture, and no browser test can write one. The device map comes from
+        the shipped `build_device_index`, so the test proves the stored shape
+        and never a shape that this file alone builds.
+
+    Args:
+        capture_id: The business key that the picker publishes.
+        role: `pre` for the first capture. `post` for the second.
+        version: The firmware version that every device reports.
+        started_at: The start stamp, in ISO 8601 with a UTC offset.
+
+    Returns:
+        One capture document, ready for the comparison and for the history.
+    """
+    from src.upgrade_portal.capture import devices  # Late, so a plain collection never loads the portal.
+
+    records = [{**device, "version": version} for device in stand_in_device_read()]
+    index = devices.build_device_index(records, [])
+    clients = [stand_in_client(number, str(one["mac"])) for number, one in enumerate(records, start=1)]
+    return {
+        "capture_id": capture_id,
+        "run_id": STAND_IN_RUN_ID,
+        "org_id": STAND_IN_ORG_ID,
+        "org_name": STAND_IN_ORG_NAME,
+        "site_id": STAND_IN_SITE_ID,
+        "site_name": STAND_IN_SITE_NAME,
+        "role": role,
+        "ordinal": 1 if role == "pre" else 2,
+        "capture_status": "verified",
+        "actor_email": STAND_IN_EMAIL,
+        "schema_version": 1,
+        "tier": 2,
+        "started_at": started_at,
+        "finished_at": started_at,
+        "duration_seconds": 1.0,
+        "stored_size_bytes": 4096,
+        "device_index": index,
+        "devices": records,
+        "clients": {"wired": [], "wireless": clients, "guest": []},
+        "counts": {"devices_total": len(records), "clients_wired": 0, "clients_wireless": len(clients)},
+        "partial_reasons": [],
+    }
+
+
+def stand_in_capture_index() -> dict[str, dict[str, Any]]:
+    """Build the two stored captures of the stand-in site, keyed by identifier.
+
+    Why:
+        The picker offers one choice for each stored capture, and a comparison
+        needs two that differ. The pair below differs in the firmware version
+        of every device, so the comparison reports a real version change.
+
+    Returns:
+        One capture document for each identifier that the picker publishes.
+    """
+    before = stand_in_capture(PRE_CAPTURE_ID, "pre", STAND_IN_VERSIONS[0], PRE_CAPTURE_STAMP)
+    after = stand_in_capture(POST_CAPTURE_ID, "post", STAND_IN_VERSIONS[1], POST_CAPTURE_STAMP)
+    return {PRE_CAPTURE_ID: before, POST_CAPTURE_ID: after}
+
+
+def stand_in_capture_lister(site_id: str = "", limit: int = 0, offset: int = 0) -> list[dict[str, Any]]:
+    """Answer the history rows of the stand-in site, and reach no database.
+
+    Why:
+        `list_captures` reads ArangoDB, so the history page and both capture
+        pickers stay empty on a workstation with no database. This seam answers
+        the small row that the contract fixes, which is never the whole capture.
+
+    Args:
+        site_id: The site to narrow to. An empty value reads every site.
+        limit: The page size. One page holds both rows, so this changes nothing.
+        offset: The page start. One page holds both rows, so this changes nothing.
+
+    Returns:
+        One row for each stored capture, newest first.
+    """
+    del limit, offset  # Two rows fit in every page size the routes ask for.
+    if site_id and site_id != STAND_IN_SITE_ID:  # A second site holds no stored capture.
+        return []
+    stored = stand_in_capture_index().values()
+    return [{name: one[name] for name in HISTORY_ROW_NAMES} for one in stored][::-1]
+
+
+def stand_in_capture_loader(capture_id: str) -> Any:
+    """Answer one stored capture for a comparison, and reach no database.
+
+    Why:
+        `load_capture_for_comparison` reads ArangoDB and refuses a capture that
+        is not verified. Both stand-in captures are verified, so this seam
+        answers the document itself, which `read_capture` accepts.
+
+    Args:
+        capture_id: The business key that the picker published.
+
+    Returns:
+        The stored capture, or None when no capture carries that key.
+    """
+    return stand_in_capture_index().get(capture_id)
+
+
 def signed_session_cookie(payload: dict[str, str]) -> str:
     """Sign a browser session payload the way the portal signs one.
 
@@ -687,6 +830,7 @@ def build_stand_in_app() -> Any:
     """
     from src.upgrade_portal.app.factory import create_app  # Late, so a plain collection never builds an app.
     from src.upgrade_portal.app.routes import (
+        review,  # Late as well. It owns the two capture seams.
         select,  # Late as well. It owns the two cloud seams.
         upgrade,  # Late as well. It owns the two options seams.
     )
@@ -696,6 +840,8 @@ def build_stand_in_app() -> Any:
     built.config[select.DEVICE_READER_KEY] = stand_in_device_read  # The inventory page reads no network.
     built.config[upgrade.OPTIONS_VIEW_KEY] = stand_in_options_view  # The options page then draws every device.
     built.config[upgrade.OPTIONS_BUILDER_KEY] = stand_in_options_builder  # The save call stores a whole row.
+    built.config[review.CAPTURE_LISTER_KEY] = stand_in_capture_lister  # The history and both pickers hold rows.
+    built.config[review.CAPTURE_LOADER_KEY] = stand_in_capture_loader  # The comparison then reads two captures.
     _register_operator(STAND_IN_EMAIL, STAND_IN_BROWSER_ID)  # The operator that every test drives.
     _register_operator(SECOND_EMAIL, SECOND_BROWSER_ID)  # The operator that meets the lock refusal.
     return built  # Waitress and Gunicorn both load this object by name.
