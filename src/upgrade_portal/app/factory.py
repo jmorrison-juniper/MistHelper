@@ -18,11 +18,12 @@ Why:
 """
 
 import logging  # The portal logs with the standard library only.
+import threading  # Guards the readiness cache against the worker threads.
 from functools import partial  # Binds one status code to the shared error handler.
 from importlib import import_module  # Imports each route module late.
 from importlib.metadata import PackageNotFoundError, version  # Reads the version for the health answer.
 from pathlib import Path  # Builds the asset paths from the module location.
-from time import monotonic_ns  # Builds a fresh value for each readiness write.
+from time import monotonic, monotonic_ns  # Ages the readiness cache, and builds a fresh value for each write.
 from types import ModuleType  # The return type of a late import.
 from typing import Any  # The error envelope holds free-form details.
 
@@ -115,6 +116,8 @@ PROBE_KEY = "readyz"  # One fixed key, so the probe never grows the collection.
 PROBE_FIELD = "checked_at"  # The field that carries the fresh value of one probe.
 PROBE_LOCK_KEY = "misthelper:readyz:probe"  # The scratch key inside the lock store namespace.
 PROBE_LOCK_TTL_SECONDS = 60  # The lock store drops the scratch key when no probe renews it.
+READINESS_CACHE_SECONDS = 5  # How long one readiness answer serves every caller. See `read_readiness`.
+READINESS_CACHE_KEY = "answer"  # The one key of the cache below. The process holds one answer, never a set.
 
 THEME_ARGUMENT = "theme"  # The GET form of `partials/nav.html` sends the choice under this name.
 THEME_DEFAULT = "magenta"  # The dark brand theme. An operator with no choice sees this one.
@@ -427,13 +430,17 @@ def probe_lock_store() -> str:
         return STORE_DOWN  # The body names this store, so the operator knows where to look.
 
 
-def read_readiness() -> tuple[dict[str, str], int]:
+def probe_readiness() -> tuple[dict[str, str], int]:
     """Probe both stores and build the readiness answer.
 
     Why:
         An operator who reads the words `not_ready` with no further detail
         learns nothing. The body therefore carries one reading for each store,
         so the operator knows which store to repair.
+
+        This is the uncached form. It writes to both stores on every call, so
+        no route may call it directly. `read_readiness` is the entry point that
+        the endpoint uses, and it bounds how often this function runs.
 
     Returns:
         The readiness body and the HTTP status code.
@@ -447,6 +454,69 @@ def read_readiness() -> tuple[dict[str, str], int]:
         REDIS_FIELD: lock_state,  # The reading of the lock store.
     }
     return body, READY_STATUS if ready else NOT_READY_STATUS  # One failed store answers 503.
+
+
+# WHAT: the one readiness answer of this process, and the monotonic second the
+#       portal obtained it.
+# WHY:  a dict, not two module names, because a function that rebinds a module
+#       name needs the `global` statement and a function that mutates a
+#       container needs nothing. The lock guards the pair below, so two threads
+#       cannot probe the stores at the same moment.
+_readiness_cache: dict[str, tuple[float, dict[str, str], int]] = {}
+_readiness_lock = threading.Lock()
+
+
+def reset_readiness_cache() -> None:
+    """Drop the cached readiness answer.
+
+    Why:
+        The cache lives for the life of the process, so a test that installs a
+        stand-in store would otherwise read the answer that an earlier test
+        obtained. `register_readiness` calls this for each new application, and
+        a test calls it to force a fresh probe.
+    """
+    with _readiness_lock:  # A caller may reset while another thread reads.
+        _readiness_cache.clear()  # The next call probes both stores again.
+
+
+def read_readiness() -> tuple[dict[str, str], int]:
+    """Answer from the cache, or probe both stores and cache the answer.
+
+    Why:
+        `GET /readyz` carries no session guard, because an orchestrator probe
+        cannot sign in. Without a bound, every request that reaches the port
+        drives one document store write and one lock store write, so a caller
+        can load both stores at the rate it can open sockets.
+
+        The bound is a short cache, not an address list and not the removal of
+        the write probe. The write probe must stay: a read-only replica answers
+        a ping and refuses every write, and the site lock would then fail for
+        every operator while the probe reported the store ready.
+
+        The window is shorter than the interval an orchestrator uses, so a
+        genuine probe always finds the entry expired and always does real work.
+        The container ships no health check of its own, and the two store
+        containers in `compose.yml` probe every 10 seconds, so 5 seconds sits
+        below the shortest interval this repository states. A flood collapses
+        to one probe pair for each window.
+
+        The lock also removes a thundering herd. While one thread probes, the
+        others wait and then read the value it wrote, so four worker threads
+        drive one probe pair instead of four.
+
+    Returns:
+        The readiness body and the HTTP status code.
+    """
+    with _readiness_lock:  # One probe at a time, for the herd as much as for the entry.
+        cached = _readiness_cache.get(READINESS_CACHE_KEY)  # None before the first probe.
+        if cached is not None and monotonic() - cached[0] < READINESS_CACHE_SECONDS:
+            return dict(cached[1]), cached[2]  # A copy, so no caller can edit the stored answer.
+        body, status = probe_readiness()  # The stores answer, or the probe reports them down.
+        # The stamp comes after the probe, never before. A thread that waited
+        # behind a slow probe would otherwise read a stamp older than its own
+        # wait and probe again, which is the herd this lock removes.
+        _readiness_cache[READINESS_CACHE_KEY] = (monotonic(), body, status)
+        return dict(body), status  # A copy, for the same reason as above.
 
 
 def register_readiness(app: Flask) -> None:
@@ -463,9 +533,15 @@ def register_readiness(app: Flask) -> None:
         and the safest body is the one that names no host at all. The two fixed
         words `ok` and `unreachable` name the store, never the address.
 
+        The readiness cache lives for the life of the process, so a new
+        application must not inherit the answer of an earlier one. A new
+        application means new settings and possibly new store addresses, and an
+        answer obtained under the old settings would describe the wrong stores.
+
     Args:
         app: The application to add the route to.
     """
+    reset_readiness_cache()  # A new application starts with no answer of its own.
 
     @app.get("/readyz")  # The orchestrator readiness probe calls this path.
     def readyz() -> tuple[Response, int]:

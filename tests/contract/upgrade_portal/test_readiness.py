@@ -24,6 +24,7 @@ from types import ModuleType
 from typing import Any
 
 import pytest
+from flask import Flask
 from flask.testing import FlaskClient
 
 from src.upgrade_portal.app import factory
@@ -60,6 +61,10 @@ METHOD_REFUSED_STATUS = 405
 # WHY: An invented fault. A real fault class would agree with a store fault by
 # accident and would prove nothing about the guard inside the probe.
 SAMPLE_FAULT = RuntimeError("The stand-in store refused the call.")
+
+# WHY: More calls than one probe pair may serve inside one cache window. The
+# count only has to pass one. Five reads as a burst and keeps the test quick.
+BURST_CALLS = 5
 
 
 class FakeArangoCollection:
@@ -449,6 +454,7 @@ def test_repeat_probes_write_a_fresh_value(
     install_stores(monkeypatch, (store_module, lock_module), (database, FakeLockStore()))
     call_readiness(portal_client)  # WHY: The first probe writes the first value.
     first = database.collections[factory.PROBE_COLLECTION].documents[factory.PROBE_KEY][factory.PROBE_FIELD]
+    factory.reset_readiness_cache()  # WHY: The subject is the probe, not the cache that bounds it.
     call_readiness(portal_client)  # WHY: The second probe must overwrite that value.
     second = database.collections[factory.PROBE_COLLECTION].documents[factory.PROBE_KEY][factory.PROBE_FIELD]
     assert first != second, f"Two probes wrote the same value {first}, so a stale document would pass."
@@ -490,3 +496,52 @@ def test_readiness_refuses_a_state_changing_method(portal_client: FlaskClient, m
     """
     response = portal_client.open(READY_PATH, method=method)  # WHY: No store stand-in is needed here.
     assert response.status_code == METHOD_REFUSED_STATUS, f"{method} must answer {METHOD_REFUSED_STATUS}."
+
+
+def test_a_burst_of_calls_drives_one_probe_pair(
+    portal_client: FlaskClient,
+    store_module: ModuleType,
+    lock_module: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Many calls inside one cache window write to each store once."""
+    database = FakeArangoDatabase()  # WHY: The document store counts every write it received.
+    client = FakeLockStore()  # WHY: The lock store counts its own writes through the expiries.
+    install_stores(monkeypatch, (store_module, lock_module), (database, client))
+    answers = [call_readiness(portal_client) for _ in range(BURST_CALLS)]  # WHY: Faster than the window.
+    writes = database.collections[factory.PROBE_COLLECTION].writes  # WHY: One document write for each probe.
+    assert writes == 1, f"{BURST_CALLS} calls inside one window drove {writes} document writes, not 1."
+    assert len(client.expiries) == 1, f"The same burst drove {len(client.expiries)} lock writes, not 1."
+    assert all(answer == answers[0] for answer in answers), f"The burst gave more than one answer: {answers}."
+
+
+def test_a_reset_drops_the_cached_answer(
+    portal_client: FlaskClient,
+    store_module: ModuleType,
+    lock_module: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A reset sends the next call back to both stores."""
+    database = FakeArangoDatabase()  # WHY: The test counts the writes the store received.
+    install_stores(monkeypatch, (store_module, lock_module), (database, FakeLockStore()))
+    call_readiness(portal_client)  # WHY: The first call fills the cache.
+    factory.reset_readiness_cache()  # WHY: Stands for the window that expires in production.
+    call_readiness(portal_client)  # WHY: An empty cache must reach both stores again.
+    writes = database.collections[factory.PROBE_COLLECTION].writes  # WHY: One document write for each probe.
+    assert writes == 2, f"The call after the reset read the cache. The stores saw {writes} writes, not 2."
+
+
+def test_a_new_application_starts_with_no_cached_answer(
+    portal_client: FlaskClient,
+    store_module: ModuleType,
+    lock_module: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Registering the endpoint on a new application drops the earlier answer."""
+    database = FakeArangoDatabase()  # WHY: The test counts the writes the store received.
+    install_stores(monkeypatch, (store_module, lock_module), (database, FakeLockStore()))
+    call_readiness(portal_client)  # WHY: The first call fills the cache of this process.
+    factory.register_readiness(Flask(__name__))  # WHY: Every test above depends on this reset.
+    call_readiness(portal_client)  # WHY: The registration must have dropped that answer.
+    writes = database.collections[factory.PROBE_COLLECTION].writes  # WHY: One document write for each probe.
+    assert writes == 2, f"A new application inherited the cached answer. The stores saw {writes} writes."

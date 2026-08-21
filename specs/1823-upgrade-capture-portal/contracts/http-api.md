@@ -530,3 +530,14 @@ Requires no session. Reports no credential and no organization name.
 The database check performs a real write and a real read-back against a scratch
 key. A check that only opens a connection would report ready while every write
 silently failed.
+
+One answer serves every caller for 5 seconds. The endpoint needs no session,
+because an orchestrator probe cannot sign in, so any client that reaches the
+port can call it. Without the cache each call drives one document store write
+and one lock store write.
+
+The window is shorter than the interval an orchestrator uses, so a genuine probe
+always finds the answer expired and always reaches both stores. Two calls inside
+the same window read one probe and report the same body. A caller that needs a
+fresh reading must wait out the window. The window must stay shorter than the
+shortest probe interval in use.

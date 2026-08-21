@@ -19,13 +19,13 @@ the design. This file states the position.
 | Pull request | Open, mergeable, not a draft, no review yet |
 | Local commits not pushed | None |
 | Uncommitted work | None from this feature |
-| Portal tests | 2599 unit and contract, all pass. 148 browser tests, all pass, 0 skip |
+| Portal tests | 2602 unit and contract, all pass. 148 browser tests, all pass, 0 skip |
 | Statement coverage of the package | 94.18 percent |
-| Blocking defects | None. The twelve defects of `audit-2026-08-20.md` sections 2.1, 6, 7, 8, 9, 10, 11, 12, and 13 are fixed |
+| Blocking defects | None. The fourteen defects of `audit-2026-08-20.md` sections 2.1, 2.2, 6, 7, 8, 9, 10, 11, 12, and 13 are fixed |
 
 The code is written, the code tests pass, and the browser suite drives every
 journey with no skip. An audit on 2026-08-20 found 25 defects, and by-eye drives
-of the portal found six more. The 12 that could mislead or stop an operator are
+of the portal found six more. The 14 that could mislead or stop an operator are
 fixed. The rest are recorded and open.
 
 Four defects hid behind the browser skips, and each one broke the feature for a
@@ -303,6 +303,11 @@ Break one of these and a gate turns red, or worse, a secret leaks.
 - A test opens no socket, binds no port, reaches no cloud, and reads no `.env`.
 - `create_app` wires a real run driver. A test that starts a run spawns a real
   thread that races the assertion. Empty that seam in the test.
+- `register_readiness` drops the cached readiness answer. Do not delete that
+  call. It reads as a no-op, because production registers one application for
+  each process. Every contract fixture is function-scoped, so without it a stale
+  answer leaks from one test to the next and 9 older tests fail. A test that
+  needs a fresh probe from one application calls `reset_readiness_cache`.
 
 ### Style
 
