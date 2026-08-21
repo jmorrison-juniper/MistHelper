@@ -42,6 +42,12 @@ SITE_SEARCH_ID = "site-search"
 INVENTORY_TABLE_ID = "inventory-table"
 INVENTORY_TOTAL_ID = "inventory-count-total"
 
+# The forward step out of the inventory page, and the control that waits on the
+# far side of it. `contracts/ui-testids.md` line 74 names the link and line 103
+# names the start control.
+CAPTURE_LINK_ID = "site-capture-link"
+CAPTURE_START_ID = "capture-start-button"
+
 # The text below matches no site name and no site identifier, so the browser
 # filter must hide every row. A short word could match a real site by accident.
 UNMATCHED_FILTER_TEXT = "zzz-no-such-site-zzz"
@@ -323,3 +329,33 @@ class TestSiteInventory:
         wrong = [key for key in keys if not MAC_PATTERN.match(key)]
         assert not wrong, f"These inventory rows hold a MAC address in the wrong spelling: {wrong}."
         assert len(set(keys)) == len(keys), "Two inventory rows share one MAC address in their test identifiers."
+
+    def test_the_inventory_page_offers_the_forward_step(self, inventory_page: Any) -> None:
+        """The inventory page shows the link that opens the capture page.
+
+        Why:
+            The inventory page is the last read-only step of the journey, and
+            the capture page is the first write step. Without this link the
+            operator picks a site, reads the device table, and reaches a dead
+            end. `contracts/ui-testids.md:74` names the link for that reason.
+
+            An earlier version held the link inside a test on a value that no
+            route supplied, so the link never rendered and no test noticed.
+
+        Args:
+            inventory_page: The page that shows the inventory of one site.
+        """
+        sync_api.expect(inventory_page.get_by_test_id(CAPTURE_LINK_ID)).to_be_visible()
+
+    def test_the_forward_step_opens_the_capture_page(self, inventory_page: Any) -> None:
+        """The link from the inventory page reaches a capture page that starts a capture.
+
+        Why:
+            A link that renders still proves nothing. This test follows it and
+            reads the start control on the far side, so the whole step holds.
+
+        Args:
+            inventory_page: The page that shows the inventory of one site.
+        """
+        inventory_page.get_by_test_id(CAPTURE_LINK_ID).click()
+        sync_api.expect(inventory_page.get_by_test_id(CAPTURE_START_ID)).to_be_visible()

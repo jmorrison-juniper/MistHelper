@@ -7,12 +7,12 @@ Why:
     proves that the page shows a real percent and a real section state.
 
 What this module skips and what it fails:
-    The module reports a skip when no browser binary exists, when no candidate
-    capture path answers, and when another operator holds the site lock. It
-    reports a failure when a page answers 401 or 404, and when a page answers
-    200 and the identifier contract does not hold. The fixture starts its own
-    portal, so a 401 and a 404 are both faults of that portal. A portal that a
-    browser test cannot reach never reports a pass.
+    The module reports a skip when no browser binary exists, and when another
+    operator holds the site lock. It reports a failure when a page answers 401
+    or 404, and when a page answers 200 and the identifier contract does not
+    hold. The fixture starts its own portal, so a 401 and a 404 are both faults
+    of that portal. A portal that a browser test cannot reach never reports a
+    pass.
 
 Identifier contract:
     `contracts/ui-testids.md` fixes every identifier below. Rule 4 states that a
@@ -42,15 +42,15 @@ SITE_PAGE_PATH = "/select/site"
 SITE_ROW_PREFIX = "site-row-"
 
 # `contracts/http-api.md` fixes `GET /captures/<capture_id>` for a capture that
-# already exists. It fixes no path for the page that starts a capture. The three
-# candidates below follow the shape of the paths the contract does fix. The tests
-# skip with a clear reason when none of them answers, so no candidate hides a
-# defect. Add the real path here once the capture route lands.
-CAPTURE_PAGE_CANDIDATES = (
-    "/captures/new?site_id={site_id}",
-    "/select/site/{site_id}/capture",
-    "/sites/{site_id}/capture",
-)
+# already exists. It fixes no path for the page that starts one, so the portal
+# reads the identifier segment `new` as "no capture yet" and reads the site from
+# the query argument. `app/routes/select.py` builds this same address for the
+# link that carries an operator out of the inventory page, so the two agree.
+#
+# An earlier version held three guessed paths and reported a skip when none of
+# them answered. That skip could hide a broken capture page behind a green run,
+# so the fixture below now fails on any answer other than 200.
+CAPTURE_PAGE_PATH = "/captures/new?site_id={site_id}"
 
 # The six section keys of `GET /api/captures/<capture_id>/status`. The identifier
 # appends the JSON key without any change, so the page and the body agree.
@@ -223,9 +223,9 @@ def capture_page(portal_page: Any) -> Any:
     """Return a page that shows the capture view of the first site.
 
     Why:
-        The contract fixes no path for the page that starts a capture, so this
-        fixture tries each candidate path in turn. The skip below names every
-        path it tried, so a reader knows which path to add.
+        This page is the first write step of the journey, so every test below
+        needs it. The portal reaches it from the inventory page, and a failure
+        here means the operator has no way to start any capture at all.
 
     Args:
         portal_page: The browser page that points at the portal.
@@ -234,15 +234,9 @@ def capture_page(portal_page: Any) -> Any:
         The Playwright page object, on the capture view.
     """
     site_id = _first_site_id(portal_page)
-    tried = []
-    for template in CAPTURE_PAGE_CANDIDATES:
-        path = template.format(site_id=site_id)
-        status = _page_status(portal_page, path)
-        _require_session(status, path)
-        if status == OK_STATUS:
-            return portal_page
-        tried.append(f"{path} answered {status}")
-    pytest.skip(f"No candidate capture path answered 200, so the capture route is not built yet. Tried: {tried}.")
+    path = CAPTURE_PAGE_PATH.format(site_id=site_id)
+    _require_built_route(_page_status(portal_page, path), path)  # A skip here would hide a broken capture page.
+    return portal_page
 
 
 def _read_percent(page: Any) -> int:

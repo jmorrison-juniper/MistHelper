@@ -59,6 +59,17 @@ select_bp = Blueprint("select", __name__)  # No URL prefix, because the paths sp
 ORG_PAGE_PATH = "/select/org"  # The organization picker, and the post that stores the pick.
 SITE_PAGE_PATH = "/select/site"  # The site picker for the chosen organization.
 SITE_INVENTORY_PAGE_PATH = "/select/site/<site_id>"  # The device list of one site, as a page.
+
+# The forward step out of the inventory page. `contracts/http-api.md:238` fixes
+# `GET /captures/<capture_id>` for a capture that already exists, and it fixes no
+# path for the page that starts one. That page reads the site from the query
+# argument, so the word below fills the identifier segment and names no stored
+# capture. `capture.page_status` finds no record for it and paints an empty
+# panel, which leaves the browser poll quiet until the operator starts a capture.
+NEW_CAPTURE_SEGMENT = "new"  # The identifier segment of a capture that does not exist yet.
+CAPTURE_PAGE_PATH = f"/captures/{NEW_CAPTURE_SEGMENT}"  # The page that starts the first capture of a site.
+SITE_ARGUMENT = "site_id"  # The query argument that names the site on that page.
+
 SITES_API_PATH = "/api/sites"  # The site list, with the organization in the session.
 ORG_SITES_API_PATH = "/api/orgs/<org_id>/sites"  # The same list, with the organization in the path.
 INVENTORY_API_PATH = "/api/sites/<site_id>/inventory"  # The device list of one site.
@@ -809,6 +820,29 @@ def inventory_parts(org_id: str, site_id: str) -> tuple[list[dict[str, Any]], di
     return devices, counts  # The page reads both by name.
 
 
+def capture_page_url(site_id: str) -> str:
+    """Return the address of the page that starts the first capture of one site.
+
+    Why:
+        The inventory page is the last read-only step, and the capture page is
+        the first write step. Without this address the inventory page holds no
+        forward control, so an operator who picks a site reaches a dead end and
+        cannot start the work. `contracts/ui-testids.md:74` names the link that
+        this address fills.
+
+        The address carries the site as a query argument, because the capture
+        page names no site of its own until a capture exists.
+
+    Args:
+        site_id: The site the capture will read.
+
+    Returns:
+        The address of the capture page, with the site escaped inside it.
+    """
+    query = urlencode({SITE_ARGUMENT: site_id})  # A site identifier from the cloud still passes through the escape.
+    return f"{CAPTURE_PAGE_PATH}?{query}"  # The page reads the argument and posts the start to that site.
+
+
 def find_site(site_id: str, org_id: str) -> dict[str, Any] | None:
     """Return the record of one site of one organization.
 
@@ -1138,7 +1172,14 @@ def site_inventory_page(site_id: str) -> tuple[str, int]:
     devices, counts = inventory_parts(org_id, site_id)  # An empty pair means the device module is missing.
     name = str(site.get("name", site_id))  # The identifier fills the heading when the record carries no name.
     return (  # The device table of one site, with its own status.
-        render_page(INVENTORY_TEMPLATE, site_id=site_id, site_name=name, devices=devices, counts=counts),
+        render_page(
+            INVENTORY_TEMPLATE,
+            site_id=site_id,
+            site_name=name,
+            devices=devices,
+            counts=counts,
+            capture_url=capture_page_url(site_id),  # The only forward step out of this page.
+        ),
         OK_STATUS,
     )
 
