@@ -91,6 +91,9 @@ OK_STATUS = 200  # The contract fixes this status for the run page and for the s
 CREATED_STATUS = 201  # `POST /api/sites/<site_id>/runs` answers 201.
 UNAUTHORIZED_STATUS = 401  # `runtime/identity.py` answers this code with no session.
 NOT_FOUND_STATUS = 404  # The route is not registered yet.
+CONFLICT_STATUS = 409  # FR-037 holds one live run for each site, and the refusal names that run.
+
+UPGRADE_RUNNING_CODE = "upgrade_already_running"  # The code that FR-037 answers on a second create call.
 
 GATE_TIMEOUT_MS = 5000  # The script reads one key press, so the gate settles quickly.
 
@@ -217,6 +220,37 @@ def _csrf_token(page: Any) -> str:
     return str(page.get_by_test_id(CSRF_META_ID).get_attribute("content") or "")
 
 
+def _named_live_run(answer: Any, path: str) -> str:
+    """Return the key of the live run that a create refusal names.
+
+    Why:
+        FR-037 allows one live run for each site. The second create call of a
+        session therefore meets 409, and the refusal names the run and tells the
+        operator to open it. This helper follows that instruction, so the tests
+        below drive the journey that the portal itself describes.
+
+    Args:
+        answer: The 409 answer of the create call.
+        path: The endpoint, which the failure text names.
+
+    Returns:
+        The key of the run that already runs at this site.
+
+    Raises:
+        AssertionError: If the refusal carries another code, or names no run.
+            Both describe a portal that departs from the contract, so neither
+            may report a skip.
+    """
+    body = json.loads(answer.text()).get("error", {})
+    code = str(body.get("code", ""))
+    if code != UPGRADE_RUNNING_CODE:  # Any other 409 names a fault that this suite must show.
+        raise AssertionError(f"{path} answered 409 with the code {code!r}, which this journey does not expect.")
+    named = str(body.get("details", {}).get("run_id", ""))
+    if not named:  # The refusal must name the live run, or the operator cannot open it.
+        raise AssertionError(f"{path} answered 409 {UPGRADE_RUNNING_CODE} and named no run to open.")
+    return named
+
+
 @pytest.fixture
 def run_id(portal_page: Any) -> str:
     """Create one upgrade run for the first site and return its key.
@@ -248,6 +282,8 @@ def run_id(portal_page: Any) -> str:
         raise AssertionError(f"{path} answered 401. The portal this run started holds no sign-in seam.")
     if answer.status == NOT_FOUND_STATUS:  # The blueprint that owns this path is not registered.
         raise AssertionError(f"{path} answered 404. The blueprint that owns this path is not registered.")
+    if answer.status == CONFLICT_STATUS:  # One live run already holds this site, and the refusal names it.
+        return _named_live_run(answer, path)  # The journey opens that run, as the refusal instructs.
     if answer.status != CREATED_STATUS:  # No run exists, so the run page cannot open.
         pytest.skip(f"{path} answered {answer.status}. The contract fixes 201, so no run key exists.")
     return str(json.loads(answer.text())["run_id"])

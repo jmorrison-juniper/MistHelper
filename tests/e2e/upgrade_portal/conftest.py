@@ -154,6 +154,11 @@ POST_CAPTURE_ID = "e2e-capture-post-0001"  # The post-check that the picker offe
 PRE_CAPTURE_STAMP = "2026-08-19T10:00:00+00:00"  # ISO 8601 in UTC, which is the stored form.
 POST_CAPTURE_STAMP = "2026-08-19T10:30:00+00:00"  # Thirty minutes later, so the window is measurable.
 
+# WHY: The panel of the capture page shows this sentence. It states that a
+# stand-in reported the capture, so a person who reads a browser recording of a
+# failed run never mistakes this record for the answer of a live site read.
+STAND_IN_CAPTURE_MESSAGE = "The stand-in collector reported this capture and read no site."
+
 # WHY: `review.HISTORY_ROW_DEFAULTS` fixes the eight names of a history row, and
 # the page heading reads the site beside them. A stored capture holds far more,
 # so the lister below copies these names alone and never the whole document.
@@ -582,6 +587,65 @@ def stand_in_options_builder(record: dict[str, Any], body: dict[str, Any]) -> di
     }
 
 
+def stand_in_capture_runner(job: dict[str, Any]) -> None:
+    """Report one capture as read and verified, and reach no cloud.
+
+    Why:
+        The shipped collector reads a live tenant, which no browser test may do.
+        The confirm page opens its gate only after a pre-check capture verifies,
+        and `capture.record_status` is the one writer that learns of that event.
+        This seam reports through that same writer, so the run record gains its
+        pre-check field by the shipped path and never by a test shortcut.
+
+    Args:
+        job: The capture job. This seam reads the key and the tier alone.
+    """
+    from src.upgrade_portal.app.routes import capture  # Late, so a plain collection never loads the portal.
+
+    opened = capture.section_map(int(job.get("tier", capture.TIER_STANDARD)))  # One state for each section name.
+    read = {name: capture.SECTION_DONE if state != capture.SECTION_SKIPPED else state for name, state in opened.items()}
+    capture.record_status(
+        str(job["capture_id"]),
+        state=capture.STATE_VERIFIED,
+        percent=capture.WHOLE_PERCENT,
+        sections=read,  # A skipped section stays skipped, because this seam read no section at all.
+        verified=True,
+        message=STAND_IN_CAPTURE_MESSAGE,
+    )
+
+
+def stand_in_run_launcher(record: dict[str, Any]) -> None:
+    """Take one started run and drive no device at all.
+
+    Why:
+        `install_seams` binds the shipped driver, which opens threads, reads the
+        Mist cloud, and writes firmware to hardware. A browser test may do none
+        of those. The start route writes the state `upgrade_submitting` and
+        stores the record before it calls this seam, so the run still reads as
+        started and the progress poll still answers.
+
+    Args:
+        record: The run record, already in the state `upgrade_submitting`.
+    """
+    logger.info("The stand-in launcher took the run %s and sent nothing", record.get("run_id", ""))
+
+
+def stand_in_stop_runner(run_id: str) -> None:
+    """Take one stop request and cancel nothing at any cloud.
+
+    Why:
+        The shipped cancel work calls the Mist cloud once for each device that
+        has not started, and a browser test may send no such call. FR-038f
+        forbids a claim of a cancel that never happened, and the route builds
+        three empty lists when this seam answers None, so the operator reads
+        only what the portal did do.
+
+    Args:
+        run_id: The run key.
+    """
+    logger.info("The stand-in stop runner took the run %s and cancelled nothing", run_id)
+
+
 def stand_in_client(index: int, device_mac: str) -> dict[str, Any]:
     """Build one wireless client record that hangs off one device.
 
@@ -830,6 +894,7 @@ def build_stand_in_app() -> Any:
     """
     from src.upgrade_portal.app.factory import create_app  # Late, so a plain collection never builds an app.
     from src.upgrade_portal.app.routes import (
+        capture,  # Late as well. It owns the collection seam.
         review,  # Late as well. It owns the two capture seams.
         select,  # Late as well. It owns the two cloud seams.
         upgrade,  # Late as well. It owns the two options seams.
@@ -842,6 +907,9 @@ def build_stand_in_app() -> Any:
     built.config[upgrade.OPTIONS_BUILDER_KEY] = stand_in_options_builder  # The save call stores a whole row.
     built.config[review.CAPTURE_LISTER_KEY] = stand_in_capture_lister  # The history and both pickers hold rows.
     built.config[review.CAPTURE_LOADER_KEY] = stand_in_capture_loader  # The comparison then reads two captures.
+    built.config[capture.RUNNER_KEY] = stand_in_capture_runner  # A capture then verifies and reads no cloud.
+    built.config[upgrade.LAUNCHER_KEY] = stand_in_run_launcher  # A start then writes firmware to no device.
+    built.config[upgrade.STOP_RUNNER_KEY] = stand_in_stop_runner  # A stop then cancels nothing at the cloud.
     _register_operator(STAND_IN_EMAIL, STAND_IN_BROWSER_ID)  # The operator that every test drives.
     _register_operator(SECOND_EMAIL, SECOND_BROWSER_ID)  # The operator that meets the lock refusal.
     return built  # Waitress and Gunicorn both load this object by name.

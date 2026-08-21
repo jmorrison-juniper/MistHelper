@@ -42,9 +42,12 @@ SITE_ROW_PREFIX = "site-row-"
 
 # `contracts/http-api.md` section 5 fixes the create path and the three pages.
 RUNS_API_TEMPLATE = "/api/sites/{site_id}/runs"
+CAPTURES_API_TEMPLATE = "/api/sites/{site_id}/captures"
+CAPTURE_STATUS_TEMPLATE = "/api/captures/{capture_id}/status"
 OPTIONS_PAGE_TEMPLATE = "/runs/{run_id}/options"
 CONFIRM_PAGE_TEMPLATE = "/runs/{run_id}/confirm"
 PROGRESS_PAGE_TEMPLATE = "/runs/{run_id}"
+OPTIONS_API_SUFFIX = "/options"  # `POST /api/runs/<run_id>/options` is the one writer of the device plan.
 
 CSRF_META_ID = "csrf-meta"  # `layout.html` publishes the token under this identifier.
 CSRF_HEADER = "X-CSRFToken"  # `portal.js` sends the token under this header name.
@@ -78,10 +81,22 @@ NEAR_MISS_WORD = "confirm"  # The same word in lower case, which must not unlock
 
 OK_STATUS = 200  # The contract fixes this status for every page below.
 CREATED_STATUS = 201  # `POST /api/sites/<site_id>/runs` answers 201.
+ACCEPTED_STATUS = 202  # `POST /api/sites/<site_id>/captures` answers 202 and reads on in its own thread.
 UNAUTHORIZED_STATUS = 401  # `runtime/identity.py` answers this code with no session.
 NOT_FOUND_STATUS = 404  # The route is not registered yet.
+CONFLICT_STATUS = 409  # FR-037 holds one live run for each site, and the refusal names that run.
 
+UPGRADE_RUNNING_CODE = "upgrade_already_running"  # The code that FR-037 answers on a second create call.
+
+OFFERED_VERSION_INDEX = 1  # The entry at 0 is the empty prompt, so the first offered version sits at 1.
 GATE_TIMEOUT_MS = 5000  # The script reads one key press, so the gate settles quickly.
+SAVE_TIMEOUT_MS = 10000  # The save call writes the plan through the store, which may sit on a network.
+
+STANDARD_TIER = 2  # `contracts/http-api.md` names tier 2 as the device state and the client lists.
+PRE_ROLE = "pre"  # The half of the run that runs before the upgrade.
+VERIFIED_STATE = "verified"  # The state that FR-035 reads before it allows a start.
+VERIFY_TRIES = 40  # Twenty seconds in all, which covers a slow workstation.
+VERIFY_PAUSE_MS = 500  # The collection thread holds the progress guard for a moment only.
 
 # WHY: The server fixture states its own fault and its own skip, so this module
 # must not translate either one. The browser fixture is different: a workstation
@@ -211,6 +226,37 @@ def _csrf_token(page: Any) -> str:
     return str(page.get_by_test_id(CSRF_META_ID).get_attribute("content") or "")
 
 
+def _named_live_run(answer: Any, path: str) -> str:
+    """Return the key of the live run that a create refusal names.
+
+    Why:
+        FR-037 allows one live run for each site. The second create call of a
+        session therefore meets 409, and the refusal names the run and tells the
+        operator to open it. This helper follows that instruction, so the tests
+        below drive the journey that the portal itself describes.
+
+    Args:
+        answer: The 409 answer of the create call.
+        path: The endpoint, which the failure text names.
+
+    Returns:
+        The key of the run that already runs at this site.
+
+    Raises:
+        AssertionError: If the refusal carries another code, or names no run.
+            Both describe a portal that departs from the contract, so neither
+            may report a skip.
+    """
+    body = json.loads(answer.text()).get("error", {})
+    code = str(body.get("code", ""))
+    if code != UPGRADE_RUNNING_CODE:  # Any other 409 names a fault that this suite must show.
+        raise AssertionError(f"{path} answered 409 with the code {code!r}, which this journey does not expect.")
+    named = str(body.get("details", {}).get("run_id", ""))
+    if not named:  # The refusal must name the live run, or the operator cannot open it.
+        raise AssertionError(f"{path} answered 409 {UPGRADE_RUNNING_CODE} and named no run to open.")
+    return named
+
+
 @pytest.fixture
 def run_id(portal_page: Any) -> str:
     """Create one upgrade run for the first site and return its key.
@@ -242,6 +288,8 @@ def run_id(portal_page: Any) -> str:
         raise AssertionError(f"{path} answered 401. The portal this run started holds no sign-in seam.")
     if answer.status == NOT_FOUND_STATUS:  # The blueprint that owns this path is not registered.
         raise AssertionError(f"{path} answered 404. The blueprint that owns this path is not registered.")
+    if answer.status == CONFLICT_STATUS:  # One live run already holds this site, and the refusal names it.
+        return _named_live_run(answer, path)  # The journey opens that run, as the refusal instructs.
     if answer.status != CREATED_STATUS:  # No run exists, so no page of this journey can open.
         pytest.skip(f"{path} answered {answer.status}. The contract fixes 201, so no run key exists.")
     return str(json.loads(answer.text())["run_id"])
@@ -263,9 +311,65 @@ def options_page(portal_page: Any, run_id: str) -> Any:
     return portal_page
 
 
+def _verified_pre_capture(page: Any, run_id: str) -> str:
+    """Take the pre-check capture of one run and wait for it to verify.
+
+    Why:
+        FR-035 refuses a start until the run names a verified pre-check, and the
+        confirm page holds its own field locked until then. The operator reaches
+        that state by taking the pre-check, so this helper takes it through the
+        documented endpoint rather than write the field by hand.
+
+    Args:
+        page: The browser page that points at the portal.
+        run_id: The key of the run that owns the capture.
+
+    Returns:
+        The capture key, which is empty when the capture never verified.
+    """
+    site_id = _first_site_id(page)
+    headers = {CSRF_HEADER: _csrf_token(page), "Content-Type": "application/json"}
+    body = json.dumps({"tier": STANDARD_TIER, "run_id": run_id, "role": PRE_ROLE})
+    answer = page.request.post(CAPTURES_API_TEMPLATE.format(site_id=site_id), headers=headers, data=body)
+    if answer.status != ACCEPTED_STATUS:  # The capture never started, so no pre-check can verify.
+        return ""
+    capture_id = str(json.loads(answer.text())["capture_id"])
+    return capture_id if _capture_verified(page, capture_id) else ""
+
+
+def _capture_verified(page: Any, capture_id: str) -> bool:
+    """Poll one capture until it verifies, or until the wait runs out.
+
+    Why:
+        The start route answers 202 and the collection runs in its own thread,
+        so the field of the confirm page opens a moment after the call returns.
+        A test that read the page at once would meet the locked field and would
+        report a fault that the portal does not hold.
+
+    Args:
+        page: The browser page that points at the portal.
+        capture_id: The key of the capture to watch.
+
+    Returns:
+        True when the capture reported the verified state inside the wait.
+    """
+    path = CAPTURE_STATUS_TEMPLATE.format(capture_id=capture_id)
+    for _ in range(VERIFY_TRIES):  # A bounded wait, so a stuck capture never holds the suite open.
+        answer = page.request.get(path)
+        if answer.status == OK_STATUS and json.loads(answer.text()).get("state") == VERIFIED_STATE:
+            return True  # The run now names this capture, so the confirm field opens.
+        page.wait_for_timeout(VERIFY_PAUSE_MS)  # The collection thread holds the guard for a moment.
+    return False  # The caller then leaves the skip in place and names the true cause.
+
+
 @pytest.fixture
 def confirm_page(portal_page: Any, run_id: str) -> Any:
     """Return a page that shows the last step before the portal sends anything.
+
+    Why:
+        The page holds its confirm field locked until the run names a verified
+        pre-check capture, so the fixture takes that capture first. The visit
+        follows the capture, because the page reads the field once at render.
 
     Args:
         portal_page: The browser page that points at the portal.
@@ -274,14 +378,85 @@ def confirm_page(portal_page: Any, run_id: str) -> Any:
     Returns:
         The Playwright page object, on the confirm page.
     """
+    _verified_pre_capture(portal_page, run_id)  # An empty answer leaves the skip in place below.
     path = CONFIRM_PAGE_TEMPLATE.format(run_id=run_id)
     _require_built_route(_page_status(portal_page, path), path)
     return portal_page
 
 
+def _is_options_save(answer: Any) -> bool:
+    """Answer whether one response came from the option save call.
+
+    Args:
+        answer: The Playwright response object.
+
+    Returns:
+        True when the response answers a POST to the option save endpoint.
+    """
+    return str(answer.request.method) == "POST" and str(answer.url).endswith(OPTIONS_API_SUFFIX)
+
+
+def _chose_one_version_for_every_device(page: Any) -> bool:
+    """Pick the first offered version in the bulk control of the options page.
+
+    Why:
+        Each device control starts empty, because an empty version means that
+        the operator does not want to upgrade that device. The bulk control is
+        the shipped way to fill every control at once, so this helper drives
+        that control rather than write a value into each row by hand.
+
+    Args:
+        page: The Playwright page object, on the options page.
+
+    Returns:
+        True when the page offered a version and the bulk control took it.
+    """
+    picker = page.get_by_test_id(VERSION_SELECT_ALL_ID)
+    if picker.locator("option").count() <= OFFERED_VERSION_INDEX:
+        return False  # The entry at 0 is the empty prompt, so the site offers no version at all.
+    picker.select_option(index=OFFERED_VERSION_INDEX)  # `portal.js` copies it into every device that offers it.
+    return True
+
+
+def _saved_options(page: Any, run_id: str) -> bool:
+    """Plan the devices of one run by clicking the save control of the options page.
+
+    Why:
+        The run table draws one row for each planned device, and the save call is
+        the one writer of that plan. A test that wrote the plan straight into the
+        store would leave the save control unproven, so this helper clicks the
+        control that the operator clicks.
+
+    Args:
+        page: The browser page that points at the portal.
+        run_id: The key of the run that holds the plan.
+
+    Returns:
+        True when the save call answered 200, so the run now names its devices.
+    """
+    if _page_status(page, OPTIONS_PAGE_TEMPLATE.format(run_id=run_id)) != OK_STATUS:
+        return False  # The options page never opened, so the caller keeps its own skip.
+    if not _chose_one_version_for_every_device(page):
+        return False  # No version exists to plan, so the save call would keep an empty plan.
+    with page.expect_response(_is_options_save, timeout=SAVE_TIMEOUT_MS) as event:
+        page.get_by_test_id(OPTIONS_SAVE_ID).click()
+    if event.value.status != OK_STATUS:
+        return False  # The save was refused, so the caller names the true cause.
+    # The button carries the confirm page in `data-next-url`, so the browser
+    # moves there. The wait lets that move finish before the caller opens
+    # another page, because two navigations at once cancel each other.
+    page.wait_for_url(f"**{CONFIRM_PAGE_TEMPLATE.format(run_id=run_id)}", timeout=SAVE_TIMEOUT_MS)
+    return True
+
+
 @pytest.fixture
 def progress_page(portal_page: Any, run_id: str) -> Any:
     """Return a page that shows the live view of one run.
+
+    Why:
+        The run table holds one row for each device that the run plans, and the
+        options page is where the operator picks those devices. The fixture
+        therefore saves the options first, so the live view has a device to show.
 
     Args:
         portal_page: The browser page that points at the portal.
@@ -290,6 +465,7 @@ def progress_page(portal_page: Any, run_id: str) -> Any:
     Returns:
         The Playwright page object, on the progress page.
     """
+    _saved_options(portal_page, run_id)  # A false answer leaves the skip of each test in place.
     path = PROGRESS_PAGE_TEMPLATE.format(run_id=run_id)
     _require_built_route(_page_status(portal_page, path), path)
     return portal_page
