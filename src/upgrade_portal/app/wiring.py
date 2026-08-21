@@ -47,6 +47,7 @@ EVENTS_MODULE = f"{PACKAGE_NAME}.upgrade.events"  # Owns the reconnect event cat
 OPTIONS_MODULE = f"{PACKAGE_NAME}.upgrade.options"  # Maps the stored rows onto the upgrade seam records.
 STOP_MODULE = f"{PACKAGE_NAME}.upgrade.stop"  # Owns every cancel call and the outcome record of a stop.
 LOCK_MODULE = f"{PACKAGE_NAME}.runtime.lock"  # Owns `LockRecord`, which decodes the session text.
+RUNS_MODULE = f"{PACKAGE_NAME}.runtime.runs"  # Owns `RunStateMachine`, the only legal path into `failed`.
 IDENTITY_MODULE = f"{PACKAGE_NAME}.runtime.identity"  # Owns the operator record of the present request.
 STORE_MODULE = f"{PACKAGE_NAME}.capture.store"  # Owns the document store calls.
 ASSEMBLY_MODULE = f"{PACKAGE_NAME}.capture.assembly"  # Owns the one true form of a capture key.
@@ -69,6 +70,7 @@ POST_CHECK_ORDINAL = 2  # The second capture of a run. `driver.post_check_reques
 POST_CHECK_ROLE = "post"  # The role of that second capture.
 DEFAULT_TIER = 2  # The standard data tier, which the run record carries.
 SITE_SCAN_LIMIT = 200  # The largest number of runs that one site scan reads back.
+RUN_FAILED_STAGE = "upgrade"  # The stage name that `upgrade/driver.STAGE_UPGRADE` writes for the same step.
 
 SESSION_FIELD = "session"  # The bindings key that carries the cloud session.
 EMAIL_FIELD = "actor_email"  # The bindings key that carries the operator address.
@@ -707,6 +709,82 @@ def build_driver_deps(driver: ModuleType, record: Mapping[str, Any], bindings: M
     )
 
 
+def free_site_lock(record: Mapping[str, Any]) -> None:
+    """Give the site back after a run ended before it sent any firmware.
+
+    Why:
+        `upgrade/driver.py` frees the lock in the `finally` of a run that
+        reached its thread. A run that never reached that thread passes
+        through none of it, so without this call the site stays held for the
+        whole 3600-second lease while nothing upgrades it.
+
+    Args:
+        record: The prepared run record, which names the organization and the
+            site.
+    """
+    site_id = str(record.get("site_id", ""))
+    lock = load_module(LOCK_MODULE)  # Owns the key builder and the release.
+    held = read_lock_record(site_id)  # None when the session holds no readable lock text.
+    if lock is None or held is None:  # Nothing to release, or no way to release it.
+        return  # The lease then expires on its own, which is the behavior of a portal with no session.
+    key = lock.build_key(str(record.get("org_id", "")), site_id)  # The key the heartbeat would have renewed.
+    released = read_safely(lambda: lock.release_site_lock(key, held), "the release of the site lock")
+    if released is None:  # A takeover already moved the lock, or the lock store did not answer.
+        return  # `read_safely` already named the fault type, and no run holds the site.
+    logger.info("wiring: the portal gave the lock of the site %s back", site_id)
+
+
+def write_failed_state(runs: ModuleType, record: dict[str, Any], reason: str) -> None:
+    """Move one run record to the failed state and store it.
+
+    Why:
+        The state and the store must agree. A record that reads `failed` in
+        this process alone still blocks every later run of the same site,
+        because the start route reads the store and not this memory.
+
+    Args:
+        runs: The `runtime.runs` module, already imported.
+        record: The prepared run record. The call edits it in place.
+        reason: One plain sentence for the operator. Never a credential.
+    """
+    run_id = str(record.get("run_id", ""))
+    try:  # A run that already holds a final state accepts no second failure.
+        runs.RunStateMachine().fail(record, RUN_FAILED_STAGE, reason)
+    except runs.RunTransitionError:  # A final state already, or a state name outside the model.
+        logger.warning("wiring: the run %s accepts no failed state, so the wiring wrote none", run_id)
+        return  # The state that the record already holds is the one that stands.
+    if not bound_store(DocumentRunStore()).write_run(record):  # The same store the start route reads.
+        logger.error("wiring: the failed state of the run %s reached no store", run_id)
+
+
+def abandon_run(record: dict[str, Any], reason: str) -> None:
+    """Fail one run that never reached its driver, and give the site back.
+
+    Why:
+        `routes/upgrade.launch_run` writes the run record before it calls this
+        launcher, and the operator already holds the site lock. A launcher that
+        returns without both of these calls leaves the record at
+        `upgrade_submitting` for good. `contracts/http-api.md` line 255 then
+        answers `upgrade_already_running` to every later start of that site, so
+        the site accepts no upgrade again.
+
+        The failed state is honest here. `upgrade/driver.py` sends the firmware
+        from its own thread, which this path never reaches, so no device
+        received anything.
+
+    Args:
+        record: The prepared run record, already written to the store.
+        reason: One plain sentence for the operator. Never a credential.
+    """
+    run_id = str(record.get("run_id", ""))
+    runs = load_module(RUNS_MODULE)  # Reachable even when the driver module is not.
+    if runs is None:  # Without the state machine the record keeps the state the route wrote.
+        logger.error("wiring: no run state module, so the run %s keeps its present state", run_id)
+    else:
+        write_failed_state(runs, record, reason)
+    free_site_lock(record)  # The site goes back even when the state write did not land.
+
+
 def start_upgrade_run(record: dict[str, Any]) -> None:
     """Start the one thread that owns one prepared run.
 
@@ -723,11 +801,13 @@ def start_upgrade_run(record: dict[str, Any]) -> None:
     driver = load_module(DRIVER_MODULE)  # Late, so the factory imports no driver at load.
     if driver is None:  # The driver module is absent, so nothing can carry the run.
         logger.error("wiring: no driver module, so the run %s sent nothing", run_id)  # Name the gap.
-        return  # The poll then holds the run at its present state.
+        abandon_run(record, "The portal found no upgrade driver, so it sent no firmware.")
+        return  # The poll then reads a failed run, and the site accepts a new one.
     deps = build_driver_deps(driver, record, request_bindings(record))  # Reads the request while it exists.
     if deps is None:  # A collaborator is missing, and a half built driver would upgrade nothing.
         logger.error("wiring: the run %s could not build its driver, so it sent nothing", run_id)  # Name the gap.
-        return  # The poll then holds the run at its present state.
+        abandon_run(record, "The portal could not build the upgrade driver, so it sent no firmware.")
+        return  # The poll then reads a failed run, and the site accepts a new one.
     driver.RunDriver(deps).start(record)  # A second start of the same run finds the first thread.
     logger.info("wiring: the run %s owns a driver thread", run_id)  # The first line of a healthy run.
 

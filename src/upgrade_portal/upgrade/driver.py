@@ -515,7 +515,7 @@ class LockHeartbeat:
         Why:
             contracts/site-lock.md line 105 releases the lock when a run reaches
             `complete`, `stopped`, or `failed`. Without the release the next
-            operator waits the whole 300-second life of the lock for a site
+            operator waits the whole 3600-second life of the lock for a site
             that nobody upgrades. This object holds the key and the token, so
             the release belongs here and the driver never sees the token.
 
@@ -1136,8 +1136,8 @@ class RunDriver:
         Why:
             contracts/site-lock.md line 105 releases the lock at `complete`,
             `stopped`, or `failed`. A lock left to expire holds the site for
-            the rest of its 300-second life, and the next operator waits five
-            minutes for a site that nobody upgrades.
+            the rest of its 3600-second life, and the next operator waits an
+            hour for a site that nobody upgrades.
 
             Every other state keeps the lock. A closed browser leaves the run
             alive, and the contract at line 98 keeps the site held through it.
@@ -1145,14 +1145,20 @@ class RunDriver:
             state reaches, and the guard below proves the state before the
             release runs.
 
+            The heartbeat holds the key and the token, so a run that built no
+            heartbeat can release nothing. That run names the held site in the
+            log, because no other line reports the wait that follows.
+
         Args:
             record: The run record.
         """
-        beat = self._deps.heartbeat
-        if beat is None:
-            return  # A caller that passed no heartbeat holds no key and no token
         if self._final_state(record) is None:
             return  # The run stopped short of a final state, so the site stays held
+        beat = self._deps.heartbeat
+        if beat is None:
+            run_id = record.get("run_id", "")
+            logger.warning("Run %s holds no lock token, so the site stays held until the lease ends", run_id)
+            return  # A caller that passed no heartbeat holds no key and no token
         beat.release()  # Never raises, so a quiet lock store cannot fail a run that already ended
 
     @staticmethod

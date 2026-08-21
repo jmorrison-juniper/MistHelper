@@ -1006,7 +1006,8 @@ class TestSiteLockRelease:
         Why:
             contracts/site-lock.md line 105 names `complete` as a release point.
             A lock left to expire holds the site for the rest of its
-            300-second life, and the next operator waits for nothing.
+            3600-second life, and the next operator waits an hour for a site
+            that nobody upgrades.
 
         Args:
             parts: The doubles and the driver.
@@ -1122,6 +1123,56 @@ class TestSiteLockRelease:
         assert "ConnectionError" in caplog.text
         assert "hunter2" not in caplog.text
         assert LOCK_TOKEN not in caplog.text
+
+    def test_a_run_with_no_lock_token_names_the_site_it_still_holds(
+        self,
+        parts: dict[str, Any],
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """A run that holds no lock token must report the site that stays held.
+
+        Why:
+            The heartbeat carries the key and the token, so a run built without
+            one can release nothing. No other line reports that wait, so an
+            operator would otherwise read a finished run beside a locked site
+            with no stated cause.
+
+        Args:
+            parts: The doubles and the driver, which carry no heartbeat.
+            caplog: The pytest log recorder.
+        """
+        record = make_record()
+        record["state"] = RunState.COMPLETE.value
+
+        with caplog.at_level(logging.WARNING, logger="src.upgrade_portal.upgrade.driver"):
+            parts["driver"]._free_lock(record)
+
+        assert RUN_ID in caplog.text
+        assert LOCK_TOKEN not in caplog.text
+
+    def test_a_live_run_with_no_lock_token_writes_no_warning(
+        self,
+        parts: dict[str, Any],
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """A run that is still working reports no held site.
+
+        Why:
+            Every live run holds its site on purpose. A warning at each phase
+            would fill the log with a fault that is not one, and would bury the
+            single line that reports a real strand.
+
+        Args:
+            parts: The doubles and the driver, which carry no heartbeat.
+            caplog: The pytest log recorder.
+        """
+        record = make_record()
+        record["state"] = RunState.UPGRADE_SUBMITTING.value
+
+        with caplog.at_level(logging.WARNING, logger="src.upgrade_portal.upgrade.driver"):
+            parts["driver"]._free_lock(record)
+
+        assert caplog.text == ""
 
 
 # WHY: A typo that an operator could write for the automatic mode. The seam must

@@ -597,6 +597,177 @@ class _Recorder:
         self._sink.append(dict(record))  # A copy, because the caller may edit its own record.
 
 
+class _CollectingStore:
+    """Record each run record that the wiring writes, and reach no database.
+
+    Why:
+        The failed state of an abandoned run must reach the same store that the
+        start route reads. A test against the real store would need ArangoDB, so
+        this stand-in answers the one call that the wiring makes.
+    """
+
+    def __init__(self, sink: list[dict[str, Any]]) -> None:
+        """Hold the list that receives each written record.
+
+        Args:
+            sink: The list to append to.
+        """
+        self._sink = sink  # The test reads this list after the call.
+
+    def write_run(self, record: dict[str, Any]) -> bool:
+        """Record one run and write nothing.
+
+        Args:
+            record: The run record that the wiring wrote.
+
+        Returns:
+            True, because a refused write has its own test above.
+        """
+        self._sink.append(dict(record))  # A copy, because the caller may edit its own record.
+        return True
+
+
+class _ReleaseRecorder:
+    """Record each site lock release that the wiring asks for.
+
+    Why:
+        A real release needs the lock store. The wiring reads the answer for
+        None alone, so this stand-in records the pair and reports a plain result.
+    """
+
+    def __init__(self) -> None:
+        """Start with no recorded release."""
+        self.calls: list[tuple[str, Any]] = []  # Every key and record pair that the wiring passed.
+
+    def __call__(self, key: str, record: Any) -> str:
+        """Record one release and answer a result that is not None.
+
+        Args:
+            key: The lock key that the heartbeat would have renewed.
+            record: The whole lock record, because the release checks the token.
+
+        Returns:
+            A stand-in outcome. The wiring treats None alone as a fault.
+        """
+        self.calls.append((key, record))  # The test reads this list after the call.
+        return "freed"  # Any value that is not None stands for a completed release.
+
+
+def abandoned_run(monkeypatch: pytest.MonkeyPatch, sink: list[dict[str, Any]], state: str) -> dict[str, Any]:
+    """Refuse the launcher a driver, and point its store at one list.
+
+    Why:
+        Two tests below need the same four changes, and a copy in each test
+        would hide the one state under test.
+
+    Args:
+        monkeypatch: The pytest patching fixture.
+        sink: The list that receives each written record.
+        state: The state that the run record holds before the launch.
+
+    Returns:
+        The prepared run record, in the given state.
+    """
+    monkeypatch.setattr(wiring, "request_bindings", lambda record: {})  # No request runs in this test.
+    monkeypatch.setattr(wiring, "build_driver_deps", lambda *args: None)  # A collaborator is missing.
+    monkeypatch.setattr(wiring, "bound_store", lambda default: _CollectingStore(sink))  # No database opens.
+    monkeypatch.setattr(wiring, "free_site_lock", lambda record: None)  # Three tests below prove this call.
+    record = sample_record()  # The record that `routes/upgrade.launch_run` already wrote.
+    record["state"] = state  # The state that the start route left behind.
+    return record
+
+
+def test_the_launcher_fails_a_run_that_reached_no_driver(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A run that reached no driver must read `failed`, not `upgrade_submitting`.
+
+    Why:
+        `contracts/http-api.md` line 255 answers `upgrade_already_running` while
+        a run of the site has not finished. A record left in a live state
+        therefore refuses every later start of that site, for good. The failed
+        state is honest here, because the driver thread sends the firmware and
+        this path never reaches that thread.
+    """
+    written: list[dict[str, Any]] = []  # Every record that reached the store.
+    record = abandoned_run(monkeypatch, written, "upgrade_submitting")  # The state the start route writes.
+    wiring.start_upgrade_run(record)  # The call that `routes/upgrade.launch_run` makes.
+    assert written[0]["state"] == "failed"  # The state that the poll route reads next.
+    assert written[0]["error"]["stage"] == "upgrade"  # The step that the operator reads on the page.
+
+
+def test_the_launcher_writes_no_state_over_a_run_that_already_finished(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A run that a stop already ended keeps the final state that it holds.
+
+    Why:
+        The stop route and this launcher can reach one record in either order. A
+        second write would report `failed` for a run that the operator stopped
+        on purpose.
+    """
+    written: list[dict[str, Any]] = []  # Every record that reached the store.
+    record = abandoned_run(monkeypatch, written, "stopped")  # A final state, which accepts no failure.
+    with caplog.at_level(logging.WARNING):  # The reader must find the refusal, not a quiet return.
+        wiring.start_upgrade_run(record)  # The call that `routes/upgrade.launch_run` makes.
+    assert written == []  # No write, so the stored record keeps `stopped`.
+    assert RUN_ID in caplog.text  # The line names the run that kept its own state.
+
+
+def test_the_launcher_gives_the_site_lock_back(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A run that sent no firmware must free the site at once.
+
+    Why:
+        `upgrade/driver.py` frees the lock in the `finally` of its own thread. A
+        run that never reached that thread passes through none of it, and the
+        lease then holds the site for a full hour while nothing upgrades it.
+    """
+    from src.upgrade_portal.runtime import lock  # Late, to match the import rule of the wiring module.
+
+    recorder = _ReleaseRecorder()  # Records the release that this path must ask for.
+    held = sample_lock()  # The record that the signed session would hold.
+    monkeypatch.setattr(wiring, "read_lock_record", lambda site_id: held)  # No signed session runs here.
+    monkeypatch.setattr(lock, "release_site_lock", recorder)  # No lock store opens in this test.
+    wiring.free_site_lock(sample_record())  # The call that both abandoned paths make.
+    assert recorder.calls[0][0] == lock.build_key(ORG_ID, SITE_ID)  # The key the heartbeat would renew.
+    assert recorder.calls[0][1] is held  # The whole record, because the release checks the token.
+
+
+def test_the_launcher_frees_nothing_when_the_session_holds_no_lock(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A run with no readable lock record must ask for no release.
+
+    Why:
+        A release needs the token that the record carries. A call with no record
+        could only force the lock open, which would take a site from the
+        operator who holds it.
+    """
+    from src.upgrade_portal.runtime import lock  # Late, to match the import rule of the wiring module.
+
+    recorder = _ReleaseRecorder()  # Records a release that must never happen.
+    monkeypatch.setattr(wiring, "read_lock_record", lambda site_id: None)  # The session holds no lock text.
+    monkeypatch.setattr(lock, "release_site_lock", recorder)  # The call under test must never reach this.
+    wiring.free_site_lock(sample_record())  # The call that both abandoned paths make.
+    assert recorder.calls == []  # No release, so no other operator loses a site.
+
+
+def test_the_launcher_survives_a_lock_store_that_refuses_the_release(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A release that raises must never stop the launcher.
+
+    Why:
+        `release_site_lock` raises when a takeover already moved the lock, and
+        again when the store does not answer. Neither fault leaves a run holding
+        the site, so neither may reach the operator as a page fault.
+    """
+    from src.upgrade_portal.runtime import lock  # Late, to match the import rule of the wiring module.
+
+    monkeypatch.setattr(wiring, "read_lock_record", lambda site_id: sample_lock())  # No signed session here.
+    monkeypatch.setattr(lock, "release_site_lock", lambda *args: _boom())  # The store does not answer.
+    with caplog.at_level(logging.WARNING):  # The reader must find the fault type, and no token.
+        wiring.free_site_lock(sample_record())  # The call that both abandoned paths make.
+    assert "RuntimeError" in caplog.text  # The type alone, as the security rule demands.
+    assert "token-a" not in caplog.text  # The token of `sample_lock` reaches no log line.
+
+
 def test_the_driver_deps_carry_the_post_check_mode(monkeypatch: pytest.MonkeyPatch) -> None:
     """The wiring reads the post-check mode and hands it to the driver.
 
