@@ -19,13 +19,14 @@ the design. This file states the position.
 | Pull request | Open, mergeable, not a draft, no review yet |
 | Local commits not pushed | None |
 | Uncommitted work | None from this feature |
-| Portal tests | 2591 unit and contract, all pass. 134 browser tests, all pass, 0 skip |
+| Portal tests | 2599 unit and contract, all pass. 144 browser tests, all pass, 0 skip |
 | Statement coverage of the package | 94.18 percent |
-| Blocking defects | None. The eight defects of `audit-2026-08-20.md` sections 2.1, 6, 7, 8, 9, and 10 are fixed |
+| Blocking defects | None. The eleven defects of `audit-2026-08-20.md` sections 2.1, 6, 7, 8, 9, 10, 11, and 12 are fixed |
 
 The code is written, the code tests pass, and the browser suite drives every
-journey with no skip. An audit on 2026-08-20 found 25 defects. The 8 that could
-mislead or stop an operator are fixed. The rest are recorded and open.
+journey with no skip. An audit on 2026-08-20 found 25 defects, and five by-eye
+drives of the portal found five more. The 11 that could mislead or stop an
+operator are fixed. The rest are recorded and open.
 
 Four defects hid behind the browser skips, and each one broke the feature for a
 real operator:
@@ -56,6 +57,22 @@ of the browser harness, not of the shipped portal, and it matters anyway:
 | Defect | The harm |
 | --- | --- |
 | 28 | The browser stand-in answered the wrong shape, so `GET /api/captures/<capture_id>` returned 500 for a capture the portal called verified. Every by-eye drive showed a red console message and a stored size of 0, and no browser test called that endpoint at all |
+
+A request to make the brand theme dark uncovered two more, in section 12 of the
+audit. Both are older than that request, and both are one defect in two places.
+The stylesheet reads correctly in each case. The browser paints a different
+color, because a rule that names one class loses to `.portal-shell a`, which
+names one class and one element:
+
+| Defect | The harm |
+| --- | --- |
+| 29 | The brand text and every navigation link took the page link color and ignored the header tokens. On a brand fill that is pale pink text on magenta |
+| 30 | A link drawn as a button took the page link color and kept the underline of a link, so a magenta pill carried pale pink underlined text. Five pages carry such a link |
+
+No test in this repository read a painted color, which is why 2733 tests passed
+while the header looked wrong. `tests/e2e/upgrade_portal/test_assets.py` now
+holds `TestThemeColorsReachThePaint`, which reads `getComputedStyle` under both
+shipped themes. Eight of its ten cases fail against the reverted stylesheet.
 
 Read `audit-2026-08-20.md` before you merge. It holds the 13 tasks that lost a
 check, the 4 that earned it back, the defects inside tasks that keep a check,
@@ -219,6 +236,7 @@ question, not a priority.
 | 9 | Retention | Keep every capture. No expiry. Record the stored size |
 | 10 | The stop control | Cancel every device not yet started, behind the typed word `STOP` |
 | 11 | The post-upgrade capture | Automatic for now. The seam to switch to manual exists |
+| 12 | The theme | The brand theme is dark, and it is the default. The neutral theme stays light |
 
 Two later decisions carry the same weight.
 
@@ -286,6 +304,23 @@ Break one of these and a gate turns red, or worse, a secret leaks.
 - Every module, class, and function needs a docstring with a `Why` section.
   `interrogate` holds the floor at 90 percent.
 - Line length is 120.
+
+### Themes
+
+- `portal.css` holds no color value. Every color comes from a custom property
+  that a theme file sets. Two unit tests hold this, so a literal color in that
+  file fails the suite.
+- Both shipped themes set exactly the same 70 property names. A property that
+  only one theme sets makes the page change shape as well as color.
+- Do not rename `themes/magenta.css`. The brand name stays inside the file
+  content. The repository ignore rules exclude a path that carries the brand
+  name, so a file named for the brand would never reach a commit.
+  `tests/unit/upgrade_portal/test_guardrails.py` proves this.
+- Section 5 of `portal.css` colors a link with `.portal-shell a`. A new rule that
+  names one class alone loses to it. Read the painted color of the element, not
+  the stylesheet, whenever a color looks wrong.
+- The theme name drives `data-bs-theme` on the `html` element. Bootstrap draws
+  its own fields and its 23 vendored control graphics from that attribute.
 
 ---
 
