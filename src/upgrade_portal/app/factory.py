@@ -117,8 +117,11 @@ PROBE_LOCK_KEY = "misthelper:readyz:probe"  # The scratch key inside the lock st
 PROBE_LOCK_TTL_SECONDS = 60  # The lock store drops the scratch key when no probe renews it.
 
 THEME_ARGUMENT = "theme"  # The GET form of `partials/nav.html` sends the choice under this name.
-THEME_DEFAULT = "default"  # The neutral theme, and the answer for a name the portal does not ship.
+THEME_DEFAULT = "magenta"  # The dark brand theme. An operator with no choice sees this one.
 THEMES_KEY = "THEMES"  # `apply_web_config` writes the configured names under this key.
+DARK_THEMES = frozenset({"magenta"})  # Every shipped theme that paints a dark page.
+DARK_SCHEME = "dark"  # The `data-bs-theme` value that switches Bootstrap to its dark set.
+LIGHT_SCHEME = "light"  # The `data-bs-theme` value of every other theme.
 
 
 def read_version() -> str:
@@ -671,6 +674,46 @@ def allowed_themes() -> tuple[str, ...]:
     return DEFAULT_THEMES  # The two stylesheets that the portal ships.
 
 
+def default_theme() -> str:
+    """Return the theme name that a request with no choice reads.
+
+    Why:
+        An operator names the themes with `CAPTURE_THEMES` and may leave the
+        brand theme out. `THEME_DEFAULT` would then name a stylesheet that this
+        portal refuses to serve, and every page would fall back inside the
+        template instead. This read stays inside the configured list, so the
+        Python answer and the template answer always agree.
+
+    Returns:
+        The brand theme when the portal offers it, or the first offered name.
+    """
+    names = allowed_themes()  # Already checked by `read_themes`, and never empty.
+    if THEME_DEFAULT in names:  # The normal deployment ships the brand theme.
+        return THEME_DEFAULT
+    return names[0]  # An operator dropped the brand theme, so the first name wins.
+
+
+def theme_scheme(name: str) -> str:
+    """Return the Bootstrap color scheme of one theme.
+
+    Why:
+        Bootstrap draws its own controls, its form fields, and its vendored
+        control graphics from the `data-bs-theme` attribute. A theme file
+        changes the portal colors alone, so a Bootstrap selection list would
+        stay white on a near black page. `layout.html` writes this answer onto
+        the html element, which switches those controls with the theme.
+
+    Args:
+        name: The theme name that the request resolved to.
+
+    Returns:
+        The word `dark` for a dark theme, or the word `light`.
+    """
+    if name in DARK_THEMES:  # A dark theme needs the dark control set as well.
+        return DARK_SCHEME
+    return LIGHT_SCHEME  # Every other theme keeps the light control set.
+
+
 def chosen_theme() -> str:
     """Return the theme name of the current request.
 
@@ -678,25 +721,25 @@ def chosen_theme() -> str:
         The theme picker in `partials/nav.html` is a GET form, because the
         content security policy blocks an inline script. The form reloads the
         page with `?theme=<name>`, so something must read that argument back.
-        Without this read the picker changes nothing and the brand theme stays
+        Without this read the picker changes nothing and a second theme stays
         unreachable.
 
     Returns:
-        The name the operator picked, or the neutral name for any other value.
+        The name the operator picked, or the default name for any other value.
     """
     if not has_request_context():  # A render outside a request carries no argument at all.
-        return THEME_DEFAULT
+        return default_theme()
     asked = request.args.get(THEME_ARGUMENT, "")  # Operator input, so no path may come from it.
     if asked in allowed_themes():  # A configured name only. `layout.html` repeats this guard.
         return asked
-    return THEME_DEFAULT  # An unknown name reads as the neutral theme, never as a file path.
+    return default_theme()  # An unknown name reads as the default, never as a file path.
 
 
 def register_theme_context(app: Flask) -> None:
-    """Give every template the theme name and the list of theme names.
+    """Give every template the theme name, the theme list, and the color scheme.
 
     Why:
-        One processor serves every page, so no route can forget the pair and
+        One processor serves every page, so no route can forget the group and
         render a picker that does nothing. A route that passes its own `theme`
         still wins, because Flask applies the explicit context last.
 
@@ -706,15 +749,17 @@ def register_theme_context(app: Flask) -> None:
 
     @app.context_processor
     def theme_context() -> dict[str, Any]:
-        """Answer the two names that `layout.html` and `partials/nav.html` read.
+        """Answer the three names that `layout.html` and `partials/nav.html` read.
 
         Returns:
-            The chosen theme name and the list of allowed names.
+            The chosen theme name, the list of allowed names, and the Bootstrap
+            color scheme of the chosen theme.
         """
         # The list comes from the configuration, which `read_themes` already
         # checked. Operator request input never reaches `themes`, because the
         # templates test the chosen name against this list.
-        return {THEME_ARGUMENT: chosen_theme(), "themes": list(allowed_themes())}
+        name = chosen_theme()
+        return {THEME_ARGUMENT: name, "themes": list(allowed_themes()), "theme_scheme": theme_scheme(name)}
 
 
 def arm_application(app: Flask, settings: PortalSettings) -> None:

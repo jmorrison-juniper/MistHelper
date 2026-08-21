@@ -15,6 +15,8 @@ Why:
     reach no cloud, and they read no `.env` file.
 """
 
+import re  # The property reads and the attribute read work on the file text.
+from pathlib import Path  # The shipped stylesheets sit beside the package.
 from typing import Any  # The context processor answers a free-form mapping.
 
 import pytest  # The test framework of the project.
@@ -70,6 +72,21 @@ def theme_link(body: str) -> str:
     return body[start : body.find('"', start)]  # The text between the two quotation marks.
 
 
+def read_page(app: Flask, query: str) -> str:
+    """Fetch one page and return the whole rendered body.
+
+    Args:
+        app: The portal application.
+        query: The whole query string, with no leading question mark.
+
+    Returns:
+        The rendered page text.
+    """
+    path = SIGNIN_PATH + ("?" + query if query else "")  # An empty query sends a bare path.
+    with app.test_client() as client:
+        return client.get(path).get_data(as_text=True)  # A read needs no session and no token.
+
+
 def read_theme_link(app: Flask, query: str) -> str:
     """Fetch one page and return the address of its theme stylesheet.
 
@@ -80,10 +97,7 @@ def read_theme_link(app: Flask, query: str) -> str:
     Returns:
         The address inside the `href` of the theme link.
     """
-    path = SIGNIN_PATH + ("?" + query if query else "")  # An empty query sends a bare path.
-    with app.test_client() as client:
-        answer = client.get(path)  # A read needs no session and no token.
-    return theme_link(answer.get_data(as_text=True))
+    return theme_link(read_page(app, query))
 
 
 # ---------------------------------------------------------------------------
@@ -91,18 +105,20 @@ def read_theme_link(app: Flask, query: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-def test_a_page_with_no_choice_loads_the_neutral_theme(portal_app: Flask) -> None:
-    """A page that carries no theme argument loads the neutral theme.
+def test_a_page_with_no_choice_loads_the_brand_theme(portal_app: Flask) -> None:
+    """A page that carries no theme argument loads the brand theme.
 
     Why:
-        The portal must open in a known state. An operator who never touched the
-        picker sees the neutral theme.
+        The portal must open in a known state. The brand theme is the first name
+        in the shipped list, so an operator who never touched the picker sees the
+        dark brand page rather than the neutral one.
 
     Args:
         portal_app: The real portal application.
     """
     link = read_theme_link(portal_app, "")  # No argument at all.
-    assert NEUTRAL_FILE in link  # The neutral theme, and the brand theme stays off.
+    assert BRAND_FILE in link  # The brand theme, and the neutral theme stays off.
+    assert NEUTRAL_FILE not in link  # Exactly one theme loads for each request.
 
 
 def test_the_brand_choice_loads_the_brand_theme(portal_app: Flask) -> None:
@@ -156,12 +172,12 @@ def test_the_choice_survives_beside_another_argument(portal_app: Flask) -> None:
 
 
 @pytest.mark.parametrize("name", TRAVERSAL_NAMES)
-def test_an_unknown_name_falls_back_to_the_neutral_theme(portal_app: Flask, name: str) -> None:
-    """Any name the portal does not ship loads the neutral theme.
+def test_an_unknown_name_falls_back_to_the_default_theme(portal_app: Flask, name: str) -> None:
+    """Any name the portal does not ship loads the default theme.
 
     Why:
         The theme name reaches a file path. A name that the portal does not ship
-        must never reach that path, so the read answers the neutral name for
+        must never reach that path, so the read answers the default name for
         every other value.
 
     Args:
@@ -169,7 +185,7 @@ def test_an_unknown_name_falls_back_to_the_neutral_theme(portal_app: Flask, name
         name: One value that the portal does not ship.
     """
     link = read_theme_link(portal_app, "theme=" + name)  # Operator input, straight from the query string.
-    assert NEUTRAL_FILE in link  # The neutral theme answered instead.
+    assert BRAND_FILE in link  # The default theme answered instead.
     assert ".." not in link  # No part of the input reached the path.
 
 
@@ -212,7 +228,28 @@ def test_the_read_follows_the_configured_list(portal_app: Flask) -> None:
     with portal_app.test_request_context(SIGNIN_PATH + "?theme=contrast"):
         assert factory.chosen_theme() == "contrast"  # The added name now passes the guard.
     with portal_app.test_request_context(SIGNIN_PATH + "?theme=magenta"):
-        assert factory.chosen_theme() == factory.THEME_DEFAULT  # A name the operator dropped does not.
+        assert factory.chosen_theme() == "default"  # A name the operator dropped does not.
+
+
+def test_the_fallback_stays_inside_the_configured_list(portal_app: Flask) -> None:
+    """The fallback names a theme that the portal will actually serve.
+
+    Why:
+        `THEME_DEFAULT` names the brand theme, and an operator may leave that
+        name out of `CAPTURE_THEMES`. A fallback fixed at `THEME_DEFAULT` would
+        then answer a name that the portal refuses, `layout.html` would reject it
+        a second time, and the Python answer and the template answer would
+        disagree. The fallback therefore reads the configured list.
+
+    Args:
+        portal_app: The real portal application.
+    """
+    portal_app.config["THEMES"] = ["contrast", "default"]  # The brand theme is not on offer here.
+    with portal_app.app_context():
+        assert factory.default_theme() == "contrast"  # The first offered name, not the missing brand name.
+    portal_app.config["THEMES"] = ["default", "magenta"]  # The brand theme is on offer, in second place.
+    with portal_app.app_context():
+        assert factory.default_theme() == factory.THEME_DEFAULT  # The brand theme wins wherever it sits.
 
 
 def test_the_allowed_list_falls_back_outside_an_application() -> None:
@@ -240,8 +277,8 @@ def test_an_empty_configured_list_falls_back_to_the_shipped_names(portal_app: Fl
         assert factory.allowed_themes() == config.DEFAULT_THEMES  # The shipped names answer instead.
 
 
-def test_a_render_outside_a_request_reads_the_neutral_theme() -> None:
-    """The read answers the neutral name when no request is in flight.
+def test_a_render_outside_a_request_reads_the_default_theme() -> None:
+    """The read answers the default name when no request is in flight.
 
     Why:
         A template render can happen outside a request, and `request.args` raises
@@ -266,3 +303,150 @@ def test_every_shipped_theme_name_has_a_stylesheet(portal_app: Flask) -> None:
         with portal_app.test_client() as client:
             answer = client.get("/static/css/themes/" + name + ".css")  # The portal serves its own file.
         assert answer.status_code == 200  # The file exists and the portal returns it.
+
+
+# ---------------------------------------------------------------------------
+# Every theme answers every property that the base stylesheet reads
+# ---------------------------------------------------------------------------
+
+
+def theme_folder() -> Path:
+    """Return the folder that holds the base stylesheet and the theme files.
+
+    Why:
+        The test must read the shipped files, not a copy. The path follows the
+        package itself, so the read works from any working directory.
+
+    Returns:
+        The `static/css` folder of the portal package.
+    """
+    return Path(factory.__file__).parent / "assets" / "static" / "css"
+
+
+def properties_read() -> set[str]:
+    """Return every custom property that `portal.css` reads.
+
+    Returns:
+        The name inside each `var(...)` call of the base stylesheet.
+    """
+    base = (theme_folder() / "portal.css").read_text(encoding="utf-8")
+    return set(re.findall(r"var\((--portal-[a-z0-9-]+)\)", base))
+
+
+def properties_set(name: str) -> set[str]:
+    """Return every custom property that one theme file sets.
+
+    Args:
+        name: The theme name, without the `.css` suffix.
+
+    Returns:
+        The name on the left of each custom property declaration.
+    """
+    text = (theme_folder() / "themes" / f"{name}.css").read_text(encoding="utf-8")
+    return set(re.findall(r"^\s*(--portal-[a-z0-9-]+)\s*:", text, re.M))
+
+
+@pytest.mark.parametrize("name", config.DEFAULT_THEMES)
+def test_a_theme_sets_every_property_the_base_stylesheet_reads(name: str) -> None:
+    """Each shipped theme answers every property that `portal.css` reads.
+
+    Why:
+        `portal.css` holds no color value. It reads every color from a custom
+        property that a theme sets. A property that no theme sets resolves to
+        nothing, and the element then falls back to the browser default. A button
+        loses its fill and a card loses its border, with no error and no log
+        line. Only a person looking at the page would find it.
+
+    Args:
+        name: One shipped theme name.
+    """
+    missing = properties_read() - properties_set(name)
+    assert not missing, f"{name}.css sets no value for: {sorted(missing)}"
+
+
+def test_the_two_themes_answer_the_same_properties() -> None:
+    """The shipped themes set exactly the same property names.
+
+    Why:
+        A property that only one theme sets makes the page change shape as well
+        as color when the operator moves the picker. A property that no rule
+        reads is dead weight that every later theme must still carry.
+    """
+    brand = properties_set("magenta")
+    neutral = properties_set("default")
+    assert brand == neutral  # The picker changes color alone, never shape.
+    assert not brand - properties_read()  # No theme carries a property that nothing reads.
+
+
+def test_the_base_stylesheet_holds_no_color_value() -> None:
+    """`portal.css` names no color of its own.
+
+    Why:
+        The file header promises that a new theme needs no change in this file.
+        One literal color would break that promise silently, because the rule
+        would keep the same color under every theme and only a person looking at
+        the page would find it.
+    """
+    base = (theme_folder() / "portal.css").read_text(encoding="utf-8")
+    assert not re.findall(r"#[0-9a-fA-F]{3,8}\b", base)  # No hexadecimal color anywhere.
+
+
+# ---------------------------------------------------------------------------
+# The theme drives the Bootstrap color scheme
+# ---------------------------------------------------------------------------
+
+
+def bootstrap_scheme(body: str) -> str:
+    """Return the `data-bs-theme` word that the page writes on its html element.
+
+    Args:
+        body: The whole rendered page.
+
+    Returns:
+        The word inside the attribute, or an empty string.
+    """
+    found = re.search(r'data-bs-theme="([a-z]+)"', body)
+    return found.group(1) if found else ""  # An empty answer fails the caller assertion.
+
+
+def test_the_brand_theme_asks_bootstrap_for_the_dark_control_set(portal_app: Flask) -> None:
+    """The dark brand theme writes ``dark`` into `data-bs-theme`.
+
+    Why:
+        Bootstrap draws its own form fields, its selection lists, and its
+        vendored control graphics from this attribute. A theme file changes the
+        portal colors alone. Without this word a selection list would stay white
+        on a near black page, and its arrow graphic would stay black on black.
+
+    Args:
+        portal_app: The real portal application.
+    """
+    assert bootstrap_scheme(read_page(portal_app, "theme=magenta")) == "dark"
+
+
+def test_the_neutral_theme_keeps_the_light_control_set(portal_app: Flask) -> None:
+    """The light neutral theme writes ``light`` into `data-bs-theme`.
+
+    Why:
+        The attribute must follow the theme in both directions. A page fixed at
+        ``dark`` would put the dark Bootstrap controls on the white neutral page.
+
+    Args:
+        portal_app: The real portal application.
+    """
+    assert bootstrap_scheme(read_page(portal_app, "theme=default")) == "light"
+
+
+def test_a_page_with_no_choice_asks_for_the_dark_control_set(portal_app: Flask) -> None:
+    """The page that an operator opens with no choice is dark in both halves.
+
+    Why:
+        The brand theme is the default and it paints a near black page. A
+        Bootstrap control set left on ``light`` would put a white selection list
+        and a black arrow graphic on that page. The default must be dark in the
+        Bootstrap half as well as the portal half.
+
+    Args:
+        portal_app: The real portal application.
+    """
+    assert bootstrap_scheme(read_page(portal_app, "")) == "dark"

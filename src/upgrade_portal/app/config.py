@@ -56,7 +56,7 @@ REDIS_PASSWORD_VARIABLE = "REDIS_PASSWORD"  # nosec B105  # WHY: this names an e
 
 DEFAULT_PORT = 8056  # Port 8055 already serves the data browsing portal.
 DEFAULT_POLL_INTERVAL_SECONDS = 30  # The contract sets the browser poll rate.
-DEFAULT_THEMES = ("default", "magenta")  # The two stylesheets the portal ships.
+DEFAULT_THEMES = ("magenta", "default")  # The two stylesheets the portal ships. The first one is the default.
 DEFAULT_ARANGO_HOST = "http://arangodb:8529"  # The service name inside the container network.
 DEFAULT_ARANGO_DATABASE = "misthelper"  # The database the other tools already use.
 DEFAULT_ARANGO_USERNAME = "root"  # The account the container image creates.

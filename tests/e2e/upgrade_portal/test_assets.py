@@ -113,6 +113,49 @@ PORTAL_BUTTON_JUSTIFY = "center"
 # The theme file sets every custom property that `portal.css` reads.
 THEME_PROPERTY = "--portal-text"
 
+# Both shipped themes, so a rule that wins under one theme cannot hide under the
+# other. The brand theme paints a dark page and is the default.
+THEME_NAMES = ("magenta", "default")
+
+# `contracts/ui-testids.md` lines 209 and 210 fix these two names. The history
+# tab is the active tab of the history page and the site tab is not, so one page
+# reads the resting header link and the active header link together.
+NAV_SITES_ID = "nav-sites"
+NAV_HISTORY_ID = "nav-history"
+
+# Each pair names one element of the header beside the custom property that must
+# paint it. `portal.css` section 5 styles a link with `.portal-shell a`, which
+# names one class and one element name. A rule that names one bare class loses
+# that comparison, so each rule below once painted the page link color and
+# ignored its own token. Only a computed color finds that.
+HEADER_INK_CASES = (
+    (".portal-brand", "--portal-header-text"),
+    (f'[data-testid="{NAV_SITES_ID}"]', "--portal-header-link"),
+    (f'[data-testid="{NAV_HISTORY_ID}"]', "--portal-header-link-active"),
+)
+
+# A link that carries a button class. This selector names the class on purpose,
+# because the class itself is the subject of the test.
+LINK_BUTTON_SELECTOR = "a.portal-button-primary"
+LINK_BUTTON_INK = "--portal-on-accent"
+NO_UNDERLINE = "none"  # A button carries no underline, whichever element draws it.
+
+# The probe sets `style.color` through the CSSOM. The policy blocks the `style`
+# attribute of the markup, which is a different thing, so this assignment stands.
+# The probe turns a token such as `#ffffff` into the `rgb(255, 255, 255)` form
+# that a computed color always reads, so the two values compare directly.
+PAINTED_AND_EXPECTED = """
+    (node, token) => {
+        const raw = getComputedStyle(document.documentElement).getPropertyValue(token).trim();
+        const probe = document.createElement('span');
+        probe.style.color = raw;
+        document.body.appendChild(probe);
+        const expected = getComputedStyle(probe).color;
+        probe.remove();
+        return { painted: getComputedStyle(node).color, expected: expected, raw: raw };
+    }
+"""
+
 OK_STATUS = 200  # The contract fixes this status for the page and for a static file.
 UNAUTHORIZED_STATUS = 401  # `runtime/identity.py` answers this code with no session.
 NOT_FOUND_STATUS = 404  # The route is not registered yet.
@@ -498,3 +541,102 @@ class TestScriptsApplied:
         """
         written = loaded_page.get_by_test_id(CSRF_META_ID).get_attribute("content")
         assert loaded_page.evaluate("() => window.upgradePortal.getCsrfToken()") == written
+
+
+class TestThemeColorsReachThePaint:
+    """Each theme token reaches the element it names, not the stylesheet alone.
+
+    Why:
+        A token that a rule sets is not a color that the browser paints. Section
+        5 of `portal.css` styles a link with `.portal-shell a`, which names one
+        class and one element name. A rule that names one bare class, such as
+        `.portal-brand` or `.portal-button-primary`, loses that comparison. The
+        brand text, every navigation link, and every link styled as a button
+        therefore took the page link color and ignored their own tokens, which
+        put pale pink text on the brand fill and left a button underlined.
+
+        Every other test of this suite passed while the header looked wrong,
+        because no test in this repository read a painted color. These tests read
+        one, under both shipped themes.
+    """
+
+    @staticmethod
+    def _ink(page: Any, selector: str, token: str) -> dict[str, str]:
+        """Return the painted color of one element beside the color of one token.
+
+        Args:
+            page: The browser page, already opened on the history page.
+            selector: The element to read.
+            token: The custom property that must paint that element.
+
+        Returns:
+            The painted color, the color the token names, and the raw token text.
+        """
+        element = page.locator(selector).first
+        sync_api.expect(element).to_be_visible(timeout=GATE_TIMEOUT_MS)
+        answer: dict[str, str] = element.evaluate(PAINTED_AND_EXPECTED, token)
+        assert answer["raw"], f"No theme sets {token}, so this comparison would pass on two empty values."
+        return answer
+
+    @pytest.mark.parametrize("theme", THEME_NAMES)
+    @pytest.mark.parametrize(("selector", "token"), HEADER_INK_CASES)
+    def test_a_header_link_paints_its_own_token(self, portal_page: Any, theme: str, selector: str, token: str) -> None:
+        """Each link of the header paints the header token, never the page link.
+
+        Why:
+            The header may carry a brand fill, and the page link color is tuned
+            for the page surface. A header link that falls back to the page link
+            color loses contrast against that fill, and no stylesheet test finds
+            it, because the rule and the token are both present and correct.
+
+        Args:
+            portal_page: The browser page that points at the portal.
+            theme: One shipped theme name.
+            selector: The header element to read.
+            token: The custom property that must paint it.
+        """
+        _open(portal_page, f"{HISTORY_PAGE_PATH}?theme={theme}")
+        answer = self._ink(portal_page, selector, token)
+        assert answer["painted"] == answer["expected"], (
+            f"Under the {theme} theme {selector} paints {answer['painted']}, "
+            f"and {token} names {answer['expected']}. A more specific rule won."
+        )
+
+    @pytest.mark.parametrize("theme", THEME_NAMES)
+    def test_a_link_styled_as_a_button_paints_the_button_ink(self, portal_page: Any, theme: str) -> None:
+        """A link that carries a button class paints the button text color.
+
+        Why:
+            The portal draws some buttons as a link, because the control moves
+            the operator to another page. Such a link took the page link color on
+            top of the button fill, which put pale pink text on a magenta pill.
+
+        Args:
+            portal_page: The browser page that points at the portal.
+            theme: One shipped theme name.
+        """
+        _open(portal_page, f"{HISTORY_PAGE_PATH}?theme={theme}")
+        answer = self._ink(portal_page, LINK_BUTTON_SELECTOR, LINK_BUTTON_INK)
+        assert answer["painted"] == answer["expected"], (
+            f"Under the {theme} theme the link button paints {answer['painted']}, "
+            f"and {LINK_BUTTON_INK} names {answer['expected']}. A more specific rule won."
+        )
+
+    @pytest.mark.parametrize("theme", THEME_NAMES)
+    def test_a_link_styled_as_a_button_carries_no_underline(self, portal_page: Any, theme: str) -> None:
+        """A link that carries a button class draws no underline.
+
+        Why:
+            A button carries no underline, and the browser underlines a link by
+            default. The rule that removes it names one bare class and lost to
+            the section 5 rule, so the pill kept the underline of a link.
+
+        Args:
+            portal_page: The browser page that points at the portal.
+            theme: One shipped theme name.
+        """
+        _open(portal_page, f"{HISTORY_PAGE_PATH}?theme={theme}")
+        element = portal_page.locator(LINK_BUTTON_SELECTOR).first
+        sync_api.expect(element).to_be_visible(timeout=GATE_TIMEOUT_MS)
+        found = element.evaluate("node => getComputedStyle(node).textDecorationLine")
+        assert found == NO_UNDERLINE, f"Under the {theme} theme the link button reads text-decoration {found}."

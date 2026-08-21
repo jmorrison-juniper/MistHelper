@@ -31,17 +31,51 @@
      * #ffffff on #0b5ed7 ...........  5.84:1  (primary button)
      * #0b5ed7 on #ffffff ...........  5.84:1  (header rule, focus ring)
      * #ffffff on #0a58ca ...........  6.44:1  (primary button hover)
-     * #0a58ca on #ffffff ...........  6.44:1  (link, active tab)
+     * #0a58ca on #ffffff ...........  6.44:1  (link)
      * #0a58ca on #f1f3f5 ...........  5.79:1  (status panel heading)
      * #084298 on #ffffff ...........  9.36:1  (link hover)
      */
     --portal-accent: #0b5ed7;
     --portal-accent-hover: #0a58ca;
-    --portal-accent-ink: #0a58ca;
     --portal-on-accent: #ffffff;
     --portal-link: #0a58ca;
     --portal-link-hover: #084298;
     --portal-focus-ring: #0b5ed7;
+
+    /* --- Header -----------------------------------------------------------
+     * The header carries its own tokens, so a theme may fill it with a brand
+     * color. This theme keeps the header on the page surface, so these values
+     * repeat the page values.
+     * #212529 on #ffffff .......... 15.43:1  (brand text)
+     * #5c636a on #ffffff ...........  6.09:1  (navigation link)
+     * #084298 on #ffffff ...........  9.36:1  (navigation link hover)
+     * #0a58ca on #ffffff ...........  6.44:1  (active tab and its underline)
+     * #0b5ed7 on #ffffff ...........  5.84:1  (rule under the header)
+     */
+    --portal-header-bg: #ffffff;
+    --portal-header-text: #212529;
+    --portal-header-link: #5c636a;
+    --portal-header-link-hover: #084298;
+    --portal-header-link-active: #0a58ca;
+    --portal-header-border: #0b5ed7;
+
+    /* The button and the selection list in the header sit on the page surface
+     * here, so the page boundary color already works. This value repeats
+     * --portal-border-strong. It also lifts the header selection list off the
+     * Bootstrap default #dee2e6, which gives 1.30:1 and fails WCAG 1.4.11.
+     * #6c757d on #ffffff ...........  4.69:1  (control boundary, needs 3:1)
+     */
+    --portal-header-control-border: #6c757d;
+
+    /* --- Text fields ------------------------------------------------------
+     * A field carries its own tokens, so a dark theme may sink it below the
+     * card. This theme keeps the field on the page surface.
+     * #212529 on #ffffff .......... 15.43:1  (typed text)
+     * #6c757d on #ffffff ...........  4.69:1  (field boundary, needs 3:1)
+     */
+    --portal-input-bg: #ffffff;
+    --portal-input-text: #212529;
+    --portal-input-border: #6c757d;
 
     /* --- Shadows ---------------------------------------------------------- */
     --portal-shadow-card: 0 1px 3px rgba(0, 0, 0, 0.08);

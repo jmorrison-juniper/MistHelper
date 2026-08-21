@@ -20,10 +20,10 @@
                  control. Defaults to true, because almost every page of this
                  portal sits behind a session.
 #}
-{% set theme_choices = themes | default(['default', 'magenta'], true) %}
-{% set current_theme = theme | default('default', true) %}
+{% set theme_choices = themes | default(['magenta', 'default'], true) %}
+{% set current_theme = theme | default(theme_choices[0], true) %}
 {% if current_theme not in theme_choices %}
-  {% set current_theme = 'default' %}
+  {% set current_theme = theme_choices[0] %}
 {% endif %}
 
 {#

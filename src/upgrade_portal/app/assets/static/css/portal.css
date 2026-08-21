@@ -26,16 +26,29 @@
     color: var(--portal-text);
 }
 
+/*
+ * The header carries its own color tokens, not the page tokens. A theme may
+ * fill the header with a brand color, and the page text tokens then give too
+ * little contrast on that fill. The property is `background`, not
+ * `background-color`, so a theme may hand it a gradient.
+ */
 .portal-header {
-    background-color: var(--portal-surface);
-    border-bottom: 2px solid var(--portal-accent);
+    background: var(--portal-header-bg);
+    border-bottom: 2px solid var(--portal-header-border);
     padding: 0.5rem 1rem;
 }
 
-.portal-brand {
+/*
+ * Every link rule of the header carries the .portal-header class as well as its
+ * own class. Section 5 styles a link with `.portal-shell a`, which holds one
+ * class and one element name. A bare `.portal-brand` holds one class alone and
+ * therefore loses, so the brand and the navigation links took the page link
+ * color and ignored these tokens. The extra class wins that comparison.
+ */
+.portal-header .portal-brand {
     font-weight: 700;
     font-size: 1.1rem;
-    color: var(--portal-text);
+    color: var(--portal-header-text);
     text-decoration: none;
 }
 
@@ -45,22 +58,34 @@
     gap: 1rem;
 }
 
-.portal-nav a {
-    color: var(--portal-text-muted);
+.portal-header .portal-nav a {
+    color: var(--portal-header-link);
     text-decoration: none;
     padding: 0.25rem 0;
 }
 
-.portal-nav a:hover {
-    color: var(--portal-link-hover);
+.portal-header .portal-nav a:hover {
+    color: var(--portal-header-link-hover);
 }
 
 /* The active tab carries an underline as well as a color, so color is not the
- * only signal. WCAG 1.4.1 forbids color as the only signal. */
-.portal-nav a.is-active {
-    color: var(--portal-accent-ink);
-    border-bottom: 2px solid var(--portal-accent);
+ * only signal. WCAG 1.4.1 forbids color as the only signal. The underline
+ * repeats the active color, so one token covers both. */
+.portal-header .portal-nav a.is-active {
+    color: var(--portal-header-link-active);
+    border-bottom: 2px solid var(--portal-header-link-active);
     font-weight: 600;
+}
+
+/*
+ * A control inside the header sits on the header fill, not on the page. A theme
+ * may fill the header with a brand color, and the page boundary color then
+ * gives too little contrast against that fill. WCAG 1.4.11 asks for 3:1 on the
+ * boundary of a control, so a control here takes the header boundary color.
+ */
+.portal-header .portal-button,
+.portal-header .form-select {
+    border-color: var(--portal-header-control-border);
 }
 
 /* The main region grows, so the footer sinks to the bottom of a short page. */
@@ -399,6 +424,28 @@
     cursor: not-allowed;
 }
 
+/*
+ * A link may carry a button class. Section 5 styles a link with `.portal-shell
+ * a`, which holds one class and one element name, and that outranks a bare
+ * button class. A link button therefore took the page link color and kept the
+ * browser underline, which put pale pink text on the brand fill. Each rule below
+ * repeats the button color with one more class, so the button color wins.
+ */
+.portal-shell a.portal-button {
+    color: var(--portal-text);
+    text-decoration: none;
+}
+
+.portal-shell a.portal-button-primary,
+.portal-shell a.portal-button-primary:hover {
+    color: var(--portal-on-accent);
+}
+
+.portal-shell a.portal-button-danger,
+.portal-shell a.portal-button-danger:hover {
+    color: var(--portal-on-danger);
+}
+
 /* ==========================================================================
  * 8. Status panel
  *
@@ -699,12 +746,16 @@
  * 13. Search field
  * ========================================================================== */
 
+/*
+ * A text field carries its own tokens, not the card tokens. A dark theme sinks
+ * a field below the card it sits on, so the operator sees where to type.
+ */
 .portal-search {
     max-width: 22rem;
     margin-bottom: 1rem;
-    background-color: var(--portal-surface);
-    color: var(--portal-text);
-    border: 1px solid var(--portal-border-strong);
+    background-color: var(--portal-input-bg);
+    color: var(--portal-input-text);
+    border: 1px solid var(--portal-input-border);
     border-radius: 0.375rem;
     padding: 0.45rem 0.75rem;
 }

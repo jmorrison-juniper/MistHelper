@@ -17,26 +17,36 @@
     content  - the body of the page.
 
   Variables a route may supply:
-    page_title  - the heading text and the tab text.
-    theme       - the name of one theme file, without the .css suffix.
-    themes      - the list of theme names the operator may pick.
-    signed_in   - false on the sign-in pages. Hides the navigation links.
+    page_title    - the heading text and the tab text.
+    theme         - the name of one theme file, without the .css suffix.
+    themes        - the list of theme names the operator may pick.
+    theme_scheme  - the word dark or the word light, for data-bs-theme.
+    signed_in     - false on the sign-in pages. Hides the navigation links.
 #}
 {% set portal_name = 'Upgrade capture portal' %}
 {% set heading_text = page_title | default(portal_name, true) %}
 
 {#
   The theme name reaches a file path, so the template accepts a known name only.
-  An unknown name falls back to the neutral theme. Without this guard a crafted
-  value could point the link at a path outside the theme folder.
+  An unknown name falls back to the first offered theme, which the portal always
+  ships. Without this guard a crafted value could point the link at a path
+  outside the theme folder.
 #}
-{% set theme_choices = themes | default(['default', 'magenta'], true) %}
-{% set theme_name = theme | default('default', true) %}
+{% set theme_choices = themes | default(['magenta', 'default'], true) %}
+{% set theme_name = theme | default(theme_choices[0], true) %}
 {% if theme_name not in theme_choices %}
-  {% set theme_name = 'default' %}
+  {% set theme_name = theme_choices[0] %}
 {% endif %}
+
+{#
+  Bootstrap draws its own controls, its form fields, and its vendored control
+  graphics from this attribute. A dark theme file changes the portal colors
+  alone, so a selection list would stay white on a near black page without this
+  word. factory.theme_scheme answers it.
+#}
+{% set scheme_name = theme_scheme | default('light', true) %}
 <!DOCTYPE html>
-<html lang="en" data-bs-theme="light">
+<html lang="en" data-bs-theme="{{ 'dark' if scheme_name == 'dark' else 'light' }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">

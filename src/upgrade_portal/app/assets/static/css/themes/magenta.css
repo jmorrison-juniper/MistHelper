@@ -1,5 +1,5 @@
 /*
- * magenta.css - Upgrade Capture Portal brand theme
+ * magenta.css - Upgrade Capture Portal brand theme, dark
  *
  * This is the T-Mobile brand theme. The brand name stays inside this comment.
  * The file name, every class name, and every custom property name hold no brand
@@ -9,13 +9,19 @@
  * The primary brand color is #E20074. This file sets the value of every custom
  * property that portal.css reads. It adds no layout rule.
  *
+ * This theme is dark. The page is near black, a card is dark gray, and the
+ * header is a solid brand fill. layout.html reads the theme name and sets
+ * data-bs-theme="dark", so Bootstrap draws its own controls and its own control
+ * graphics in the dark set.
+ *
  * ACCESSIBILITY NOTE ON #E20074
- * #E20074 gives 4.68:1 against white. That passes the 4.5:1 floor for normal
- * text, but the margin is small. #E20074 on the light tint #fdf2f8 gives only
- * 4.29:1 and fails that floor. This theme therefore keeps #E20074 for a fill, a
- * border, a focus ring, and the progress bar, where the floor is 3:1. For brand
- * colored TEXT on a light surface the theme uses the darker ink #b3005c, which
- * gives 6.84:1 on white and 6.26:1 on the tint.
+ * The rule of the light theme inverts here. #E20074 gives only 4.15:1 against
+ * the page #0d0d0d and 3.02:1 against a card #2b2b2b. Both numbers pass the 3:1
+ * floor for a fill, a border, and a graphic. Both fail the 4.5:1 floor for
+ * normal text. This theme therefore keeps #E20074 for a fill and a border, and
+ * uses the lighter ink #ff5fae for brand colored TEXT. The light theme uses the
+ * darker ink #b3005c for the same job, because a light surface reverses which
+ * direction adds contrast.
  *
  * Every foreground and background pair below carries its computed contrast
  * ratio. The floor is 4.5:1 for normal text, 3:1 for large text, and 3:1 for a
@@ -25,155 +31,209 @@
 
 :root {
     /* --- Surfaces and text ------------------------------------------------
-     * #1a1a1a on #ffffff .......... 17.40:1  (page text)
-     * #1a1a1a on #fdf2f8 .......... 15.94:1  (table head, status panel)
-     * #5c5c5c on #ffffff ...........  6.69:1  (muted text)
-     * #5c5c5c on #fdf2f8 ...........  6.13:1  (muted text on the tint)
-     * #767676 on #ffffff ...........  4.54:1  (control boundary, needs 3:1)
-     * #767676 on #fdf2f8 ...........  4.16:1  (control boundary on the tint)
-     * #f0e0e9 is a decorative hairline. It carries no meaning and no text.
+     * #ffffff on #0d0d0d .......... 19.44:1  (page text)
+     * #ffffff on #2b2b2b .......... 14.16:1  (card text)
+     * #ffffff on #262626 .......... 15.13:1  (table head, status panel)
+     * #a8a8a8 on #0d0d0d ...........  8.17:1  (muted text)
+     * #a8a8a8 on #2b2b2b ...........  5.95:1  (muted text on a card)
+     * #a8a8a8 on #262626 ...........  6.36:1  (muted text on the tint)
+     * #8a8a8a on #2b2b2b ...........  4.10:1  (control boundary, needs 3:1)
+     * #8a8a8a on #0d0d0d ...........  5.63:1  (control boundary on the page)
+     * #3d3d3d is a decorative hairline. It carries no meaning and no text.
      */
-    --portal-bg: #ffffff;
-    --portal-surface: #ffffff;
-    --portal-text: #1a1a1a;
-    --portal-text-muted: #5c5c5c;
-    --portal-border: #f0e0e9;
-    --portal-border-strong: #767676;
+    --portal-bg: #0d0d0d;
+    --portal-surface: #2b2b2b;
+    --portal-text: #ffffff;
+    --portal-text-muted: #a8a8a8;
+    --portal-border: #3d3d3d;
+    --portal-border-strong: #8a8a8a;
 
     /* --- Brand and links --------------------------------------------------
      * #ffffff on #E20074 ...........  4.68:1  (primary button, chosen bubble)
-     * #E20074 on #ffffff ...........  4.68:1  (header rule, focus ring)
-     * #ffffff on #b3005c ...........  6.84:1  (primary button hover)
-     * #b3005c on #ffffff ...........  6.84:1  (link, active tab)
-     * #b3005c on #fdf2f8 ...........  6.26:1  (status panel heading)
-     * #8c0048 on #ffffff ...........  9.51:1  (link hover)
+     * #E20074 on #0d0d0d ...........  4.15:1  (border, needs 3:1)
+     * #E20074 on #2b2b2b ...........  3.02:1  (border on a card, needs 3:1)
+     * #ff2d95 on #2b2b2b ...........  4.09:1  (focus ring, needs 3:1)
+     * #ff2d95 on #0d0d0d ...........  5.61:1  (focus ring on the page)
+     * #ff5fae on #2b2b2b ...........  5.06:1  (brand text on a card)
+     * #ff8ac4 on #2b2b2b ...........  6.53:1  (link)
+     * #ffb3d9 on #2b2b2b ...........  8.56:1  (link hover)
      *
-     * The link token is the darker ink, not #E20074, because a link is normal
-     * text on a light surface.
+     * The link token is the lighter tint, not #E20074, because a link is normal
+     * text on a dark surface.
      */
     --portal-accent: #E20074;
-    --portal-accent-hover: #b3005c;
-    --portal-accent-ink: #b3005c;
+    --portal-accent-hover: #ff2d95;
     --portal-on-accent: #ffffff;
-    --portal-link: #b3005c;
-    --portal-link-hover: #8c0048;
-    --portal-focus-ring: #E20074;
+    --portal-link: #ff8ac4;
+    --portal-link-hover: #ffb3d9;
+    --portal-focus-ring: #ff2d95;
 
-    /* --- Shadows ---------------------------------------------------------- */
-    --portal-shadow-card: 0 1px 3px rgba(0, 0, 0, 0.08);
+    /* --- Header -----------------------------------------------------------
+     * The header is a solid brand fill, so it needs its own tokens. The page
+     * text tokens are tuned for a dark surface and give too little contrast on
+     * magenta. The fill lightens from left to right.
+     * #ffffff on #a3005a ...........  7.76:1  (brand text, dark end)
+     * #ffffff on #c4006a ...........  5.91:1  (brand text, light end)
+     * #ffe6f2 on #a3005a ...........  6.60:1  (navigation link, dark end)
+     * #ffe6f2 on #c4006a ...........  5.02:1  (navigation link, light end)
+     * #8c0048 is the rule under the header. It carries no text.
+     */
+    --portal-header-bg: linear-gradient(90deg, #a3005a 0%, #c4006a 100%);
+    --portal-header-text: #ffffff;
+    --portal-header-link: #ffe6f2;
+    --portal-header-link-hover: #ffffff;
+    --portal-header-link-active: #ffffff;
+    --portal-header-border: #8c0048;
+
+    /* The button and the selection list in the header sit on the brand fill.
+     * The page boundary color #8a8a8a gives only 2.25:1 on the dark end and
+     * 1.71:1 on the light end, and the Bootstrap dark field fill #212529 gives
+     * 1.99:1 and 2.61:1. All four numbers fail the 3:1 floor of WCAG 1.4.11, so
+     * a control here takes a white boundary.
+     * #ffffff on #a3005a ...........  7.76:1  (control boundary, dark end)
+     * #ffffff on #c4006a ...........  5.91:1  (control boundary, light end)
+     */
+    --portal-header-control-border: #ffffff;
+
+    /* --- Text fields ------------------------------------------------------
+     * A field sinks below the card, so the operator sees where to type.
+     * #ffffff on #1a1a1a .......... 17.40:1  (typed text)
+     * #8a8a8a on #1a1a1a ...........  5.04:1  (field boundary, needs 3:1)
+     */
+    --portal-input-bg: #1a1a1a;
+    --portal-input-text: #ffffff;
+    --portal-input-border: #8a8a8a;
+
+    /* --- Shadows ----------------------------------------------------------
+     * A dark page needs a darker shadow than a light page, because a faint
+     * shadow disappears against near black.
+     */
+    --portal-shadow-card: 0 1px 3px rgba(0, 0, 0, 0.5);
 
     /* --- Destructive button ----------------------------------------------
      * The destructive button stays red, not brand magenta. Magenta is the
      * normal action color here, so a magenta stop button would read as safe.
-     * #ffffff on #b02a37 ...........  6.50:1
-     * #ffffff on #842029 ...........  9.46:1  (hover)
+     * The dark theme lifts the red from #b02a37 to #dc3545. #b02a37 gives only
+     * 2.18:1 against a card and would almost disappear.
+     * #ffffff on #dc3545 ...........  4.53:1  (button text)
+     * #dc3545 on #2b2b2b ...........  3.13:1  (button boundary, needs 3:1)
+     * #ffffff on #b02a37 ...........  6.50:1  (hover text)
+     *
+     * The hover fill darkens, which raises the text ratio to 6.50:1 and drops
+     * the boundary ratio to 2.18:1. WCAG 1.4.11 measures the resting state, and
+     * the resting state passes. The pointer already marks the control on hover.
      */
-    --portal-danger-bg: #b02a37;
-    --portal-danger-hover: #842029;
+    --portal-danger-bg: #dc3545;
+    --portal-danger-hover: #b02a37;
     --portal-on-danger: #ffffff;
 
     /* --- Tables -----------------------------------------------------------
-     * The head fill and the hover fill both carry #1a1a1a text at 15.94:1.
-     * The head rule #767676 on #fdf2f8 gives 4.16:1 and needs 3:1.
-     * #f0e0e9 is a decorative row rule.
+     * #ffffff on #262626 .......... 15.13:1  (head text)
+     * #ffffff on #333333 .......... 12.63:1  (row hover text)
+     * #a8a8a8 on #333333 ...........  5.31:1  (muted text on a hovered row)
+     * #8a8a8a on #262626 ...........  4.38:1  (head rule, needs 3:1)
+     * #3d3d3d is a decorative row rule.
      */
-    --portal-table-head-bg: #fdf2f8;
-    --portal-table-row-hover: #fdf2f8;
-    --portal-table-border: #f0e0e9;
+    --portal-table-head-bg: #262626;
+    --portal-table-row-hover: #333333;
+    --portal-table-border: #3d3d3d;
 
     /* --- Option bubbles ---------------------------------------------------
-     * #1a1a1a on #ffffff ........... 17.40:1  (bubble not chosen)
-     * #767676 on #ffffff ...........  4.54:1  (bubble boundary, needs 3:1)
+     * #ffffff on #2b2b2b .......... 14.16:1  (bubble not chosen)
+     * #8a8a8a on #2b2b2b ...........  4.10:1  (bubble boundary, needs 3:1)
      * #ffffff on #E20074 ...........  4.68:1  (bubble chosen)
-     * #4a4a4a on #eeeeee ...........  7.64:1  (bubble disabled)
+     * #9a9a9a on #1f1f1f ...........  5.86:1  (bubble disabled)
      */
-    --portal-bubble-bg: #ffffff;
-    --portal-bubble-border: #767676;
-    --portal-bubble-text: #1a1a1a;
+    --portal-bubble-bg: #2b2b2b;
+    --portal-bubble-border: #8a8a8a;
+    --portal-bubble-text: #ffffff;
     --portal-bubble-selected-bg: #E20074;
     --portal-bubble-selected-border: #E20074;
     --portal-bubble-selected-text: #ffffff;
-    --portal-bubble-disabled-bg: #eeeeee;
-    --portal-bubble-disabled-text: #4a4a4a;
+    --portal-bubble-disabled-bg: #1f1f1f;
+    --portal-bubble-disabled-text: #9a9a9a;
 
     /* --- Confirm box ------------------------------------------------------
      * The confirm box uses the danger tint, because the operator types a word
      * for an action that is hard to undo.
-     * #842029 on #fdeaec ...........  8.18:1  (text and left rule)
-     * #b02a37 on #fdeaec ...........  5.62:1  (border, needs 3:1)
+     * #ea868f on #2c0b0e ...........  7.15:1  (text and left rule)
+     * #ea868f on #0d0d0d ...........  7.69:1  (border, needs 3:1)
      */
-    --portal-confirm-bg: #fdeaec;
-    --portal-confirm-border: #b02a37;
-    --portal-confirm-text: #842029;
+    --portal-confirm-bg: #2c0b0e;
+    --portal-confirm-border: #ea868f;
+    --portal-confirm-text: #ea868f;
 
     /* --- Status panel -----------------------------------------------------
-     * #b3005c on #fdf2f8 ...........  6.26:1  (title)
-     * #1a1a1a on #fdf2f8 ........... 15.94:1  (state and message)
-     * #5c5c5c on #fdf2f8 ...........  6.13:1  (phase count)
-     * #E20074 on #fdf2f8 ...........  4.29:1  (border, needs 3:1)
+     * #ff5fae on #262626 ...........  5.40:1  (title)
+     * #ffffff on #262626 .......... 15.13:1  (state and message)
+     * #a8a8a8 on #262626 ...........  6.36:1  (phase count)
+     * #ff2d95 on #262626 ...........  4.37:1  (border, needs 3:1)
      *
-     * The border may use #E20074 because a border is not text. The title uses
-     * the darker ink, because 4.29:1 would fail for text.
+     * The border uses the lighter tint, not #E20074, because #E20074 gives only
+     * 3.23:1 on this fill. The title uses the lighter ink, because a title is
+     * text and needs 4.5:1.
      */
-    --portal-status-bg: #fdf2f8;
-    --portal-status-border: #E20074;
-    --portal-status-heading: #b3005c;
+    --portal-status-bg: #262626;
+    --portal-status-border: #ff2d95;
+    --portal-status-heading: #ff5fae;
 
     /* --- Progress bar -----------------------------------------------------
-     * #E20074 on #f0e0e9 ...........  3.69:1  (bar against track, needs 3:1)
+     * The bar uses the lighter tint, not #E20074. A visible track needs a light
+     * enough gray, and #E20074 gives only 2.32:1 against that gray.
+     * #ff5fae on #3d3d3d ...........  3.88:1  (bar against track, needs 3:1)
      */
-    --portal-progress-track: #f0e0e9;
-    --portal-progress-bar: #E20074;
+    --portal-progress-track: #3d3d3d;
+    --portal-progress-bar: #ff5fae;
 
     /* --- Badges -----------------------------------------------------------
      * A badge states a result, so it keeps green, amber, red, and gray. The
      * brand color never states a result.
-     * #0f5132 on #e8f5ee ...........  8.35:1  (verified)
-     * #664d03 on #fdf6e3 ...........  7.41:1  (partial)
-     * #842029 on #fdeaec ...........  8.18:1  (failed)
-     * #41464b on #f0f1f3 ...........  8.44:1  (unknown)
+     * #75b798 on #051b11 ...........  7.67:1  (verified)
+     * #ffda6a on #332701 .......... 10.82:1  (partial)
+     * #ea868f on #2c0b0e ...........  7.15:1  (failed)
+     * #ced4da on #2b3035 ...........  8.91:1  (unknown)
      */
-    --portal-badge-verified-bg: #e8f5ee;
-    --portal-badge-verified-text: #0f5132;
-    --portal-badge-partial-bg: #fdf6e3;
-    --portal-badge-partial-text: #664d03;
-    --portal-badge-failed-bg: #fdeaec;
-    --portal-badge-failed-text: #842029;
-    --portal-badge-unknown-bg: #f0f1f3;
-    --portal-badge-unknown-text: #41464b;
+    --portal-badge-verified-bg: #051b11;
+    --portal-badge-verified-text: #75b798;
+    --portal-badge-partial-bg: #332701;
+    --portal-badge-partial-text: #ffda6a;
+    --portal-badge-failed-bg: #2c0b0e;
+    --portal-badge-failed-text: #ea868f;
+    --portal-badge-unknown-bg: #2b3035;
+    --portal-badge-unknown-text: #ced4da;
 
     /* --- Flash region and lock banner -------------------------------------
      * Each border repeats its own text color, so one ratio covers both.
-     * #055160 on #e7f6f8 ...........  8.05:1  (note)
-     * #0f5132 on #e8f5ee ...........  8.35:1  (done)
-     * #664d03 on #fdf6e3 ...........  7.41:1  (caution, lock banner)
-     * #842029 on #fdeaec ...........  8.18:1  (warning)
+     * #6edff6 on #032830 .......... 10.04:1  (note)
+     * #75b798 on #051b11 ...........  7.67:1  (done)
+     * #ffda6a on #332701 .......... 10.82:1  (caution, lock banner)
+     * #ea868f on #2c0b0e ...........  7.15:1  (warning)
      */
-    --portal-flash-info-bg: #e7f6f8;
-    --portal-flash-info-border: #055160;
-    --portal-flash-info-text: #055160;
-    --portal-flash-success-bg: #e8f5ee;
-    --portal-flash-success-border: #0f5132;
-    --portal-flash-success-text: #0f5132;
-    --portal-flash-warning-bg: #fdf6e3;
-    --portal-flash-warning-border: #664d03;
-    --portal-flash-warning-text: #664d03;
-    --portal-flash-danger-bg: #fdeaec;
-    --portal-flash-danger-border: #842029;
-    --portal-flash-danger-text: #842029;
+    --portal-flash-info-bg: #032830;
+    --portal-flash-info-border: #6edff6;
+    --portal-flash-info-text: #6edff6;
+    --portal-flash-success-bg: #051b11;
+    --portal-flash-success-border: #75b798;
+    --portal-flash-success-text: #75b798;
+    --portal-flash-warning-bg: #332701;
+    --portal-flash-warning-border: #ffda6a;
+    --portal-flash-warning-text: #ffda6a;
+    --portal-flash-danger-bg: #2c0b0e;
+    --portal-flash-danger-border: #ea868f;
+    --portal-flash-danger-text: #ea868f;
 
     /* --- Comparison outcomes ----------------------------------------------
-     * An outcome cell sits on #ffffff and on the hover fill #fdf2f8. Both
+     * An outcome cell sits on #2b2b2b and on the hover fill #333333. Both
      * ratios appear below. The lower number governs.
-     * #5c5c5c  6.69:1 / 6.13:1 .... unchanged
-     * #664d03  7.99:1 / 7.32:1 .... changed
-     * #0f5132  9.36:1 / 8.57:1 .... added
-     * #842029  9.46:1 / 8.66:1 .... removed
-     * #055160  8.93:1 / 8.18:1 .... moved
+     * #a8a8a8  5.95:1 / 5.31:1 .... unchanged
+     * #ffda6a 10.44:1 / 9.32:1 .... changed
+     * #75b798  6.06:1 / 5.40:1 .... added
+     * #ea868f  5.60:1 / 5.00:1 .... removed
+     * #6edff6  9.14:1 / 8.15:1 .... moved
      */
-    --portal-outcome-unchanged: #5c5c5c;
-    --portal-outcome-changed: #664d03;
-    --portal-outcome-added: #0f5132;
-    --portal-outcome-removed: #842029;
-    --portal-outcome-moved: #055160;
+    --portal-outcome-unchanged: #a8a8a8;
+    --portal-outcome-changed: #ffda6a;
+    --portal-outcome-added: #75b798;
+    --portal-outcome-removed: #ea868f;
+    --portal-outcome-moved: #6edff6;
 }

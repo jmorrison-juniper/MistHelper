@@ -207,13 +207,15 @@ def test_poll_interval_default_is_30_seconds() -> None:
 
 
 def test_themes_default_holds_the_two_shipped_stylesheets() -> None:
-    """The theme list holds ``default`` and ``magenta`` in that order.
+    """The theme list holds ``magenta`` and ``default`` in that order.
 
     Why:
         The page template builds the stylesheet link from a theme name. A name
-        with no matching file would leave the page without a stylesheet.
+        with no matching file would leave the page without a stylesheet. The
+        order matters as well, because the first name is the theme that an
+        operator with no choice sees.
     """
-    assert load_settings().web.themes == ("default", "magenta")
+    assert load_settings().web.themes == ("magenta", "default")
 
 
 def test_allow_list_default_is_empty() -> None:
@@ -260,7 +262,7 @@ def test_module_constants_hold_the_documented_literals() -> None:
     """
     assert config.DEFAULT_PORT == 8056
     assert config.DEFAULT_POLL_INTERVAL_SECONDS == 30
-    assert config.DEFAULT_THEMES == ("default", "magenta")
+    assert config.DEFAULT_THEMES == ("magenta", "default")
     assert config.DEFAULT_ARANGO_HOST == "http://arangodb:8529"
     assert config.DEFAULT_ARANGO_DATABASE == "misthelper"
     assert config.DEFAULT_ARANGO_USERNAME == "root"
@@ -495,7 +497,7 @@ def test_capture_themes_falls_back_when_the_list_is_empty(monkeypatch: pytest.Mo
         raw: A list that holds no name.
     """
     monkeypatch.setenv("CAPTURE_THEMES", raw)
-    assert read_themes() == ("default", "magenta")
+    assert read_themes() == ("magenta", "default")
 
 
 def test_theme_list_is_a_tuple_of_plain_names(monkeypatch: pytest.MonkeyPatch) -> None:
