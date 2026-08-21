@@ -19,13 +19,13 @@ the design. This file states the position.
 | Pull request | Open, mergeable, not a draft, no review yet |
 | Local commits not pushed | None |
 | Uncommitted work | None from this feature |
-| Portal tests | 2591 unit and contract, all pass. 129 browser tests, all pass, 0 skip |
+| Portal tests | 2591 unit and contract, all pass. 132 browser tests, all pass, 0 skip |
 | Statement coverage of the package | 94.18 percent |
-| Blocking defects | None. The six defects of `audit-2026-08-20.md` sections 2.1, 6, 7, 8, and 9 are fixed |
+| Blocking defects | None. The eight defects of `audit-2026-08-20.md` sections 2.1, 6, 7, 8, 9, and 10 are fixed |
 
 The code is written, the code tests pass, and the browser suite drives every
-journey with no skip. An audit on 2026-08-20 found 25 defects. The 6 that could
-mislead an operator are fixed. The rest are recorded and open.
+journey with no skip. An audit on 2026-08-20 found 25 defects. The 8 that could
+mislead or stop an operator are fixed. The rest are recorded and open.
 
 Four defects hid behind the browser skips, and each one broke the feature for a
 real operator:
@@ -36,6 +36,19 @@ real operator:
 | 23 | Nothing wrote `pre_capture_id`, so no upgrade could start | `b2bd098` |
 | 24 | With no database, the portal forgot every run and still reported success | `506250b` |
 | 25 | A start that named no device reported a complete run | `cc92b79` |
+
+Two more defects passed all 129 browser tests, because a test selects by
+`data-testid` and never reads what an operator sees. Both were found by opening
+the portal and looking at it. Section 10 of the audit holds the detail:
+
+| Defect | The harm |
+| --- | --- |
+| 26 | The security policy blocked all 23 Bootstrap control graphics, so every radio, checkbox, switch, and selection list painted as an empty box |
+| 27 | The site page rendered no link to the capture page, so the journey stopped at the device table |
+
+Defect 26 was held in place by a contract test. That test banned the `data:`
+scheme across the whole policy, so the correct fix read as a regression. The ban
+now names the code-bearing directives alone.
 
 Read `audit-2026-08-20.md` before you merge. It holds the 13 tasks that lost a
 check, the 4 that earned it back, the defects inside tasks that keep a check,
@@ -125,6 +138,7 @@ existing bulk firmware tools through that seam and never calls them directly.
 | Defects of high severity | 2 | Audit section 2.2 | Both fixed |
 | Other defects | 17 | Audit sections 2.3 to 2.7 | Open |
 | Defects the browser tests found | 4 | Audit sections 6 to 9 | All fixed |
+| Defects a person found by eye | 2 | Audit section 10 | Both fixed |
 
 The two defects of audit section 2.1 told an operator that the cloud stopped a
 device, when the code cannot know that. An operator who reads that word can cut
@@ -307,9 +321,39 @@ $env:REDIS_HOST = "127.0.0.1"
 .\.venv\Scripts\python.exe -m pytest tests/e2e/upgrade_portal -q
 ```
 
-Expect 129 passes and no skip. A skip means the harness hid a broken portal.
+Expect 132 passes and no skip. A skip means the harness hid a broken portal.
 The portal writes its own log to `$env:TEMP\upgrade_portal_e2e_8056.log`, which
 states what the server did during the run.
+
+Then open the portal and look at it. Do not skip this step. Rule 4 of
+`contracts/ui-testids.md` states that a test selects by `data-testid` only, so no
+test in this repository reads what an operator sees. Defects 26 and 27 both
+passed the whole browser suite, and a person found both in a few minutes.
+
+Start the production portal:
+
+```powershell
+$env:PATHEXT = ".COM;.EXE;.BAT;.CMD;.VBS;.JS;.WS;.MSC;.PS1"
+$env:MISTHELPER_STANDALONE = "true"
+$env:REDIS_HOST = "127.0.0.1"
+.\.venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8056 --threads=4 wsgi_capture:app
+```
+
+That portal reaches the sign-in page alone, because the next page needs a live
+Mist cloud. To read the inner pages with no cloud, start the stand-in
+application of the browser fixture instead:
+
+```powershell
+$env:UPGRADE_PORTAL_E2E_SESSION = "1"
+.\.venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8056 --threads=4 "tests.e2e.upgrade_portal.conftest:app"
+```
+
+`tests/e2e/upgrade_portal/conftest.py` states the cookie settings that the
+stand-in needs. The session cookie carries the `HttpOnly` flag, so a browser
+script cannot write it. A test tool must set it through a response header.
+
+Read the browser console on each page. An empty console is part of the result.
+Defect 26 wrote 23 blocked-resource messages there while every test passed.
 
 Read the state of the pull request:
 
