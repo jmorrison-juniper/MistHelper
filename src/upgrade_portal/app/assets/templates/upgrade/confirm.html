@@ -93,6 +93,15 @@
 {% set run_url = progress_url | default('/runs/' ~ run_key, true) %}
 {% set back_url = options_url | default('', true) %}
 {% set device_count = target_rows | length %}
+
+{#
+  The gate opens on two facts. FR-035 asks for a verified pre-check. The plan
+  must also name at least one device, because a start that sends nothing still
+  reports a complete run and an operator would read that run as an upgrade of
+  the whole site. `POST /api/runs/<run_id>/start` refuses the same two states,
+  so the page and the server agree.
+#}
+{% set start_ready = pre_check_ready and device_count > 0 %}
 {% set chosen_strategy = option_values.strategy | default('big_bang', true) %}
 
 {% block title %}{{ page_title | default('Confirm the upgrade', true) }}{% endblock %}
@@ -169,7 +178,8 @@
   {#
     The input holds the word for the gate. portal.js compares the typed text
     against data-confirm-word, so the script never holds the word itself.
-    The input is disabled while no verified pre-check exists. A disabled input
+    The input is disabled while the gate holds, either because no verified
+    pre-check exists or because the plan names no device. A disabled input
     fires no event, so the gate can never unlock the button in that state.
   #}
   <input type="text"
@@ -183,11 +193,12 @@
          autocapitalize="off"
          spellcheck="false"
          aria-describedby="upgrade-confirm-hint"
-         {{ 'disabled' if not pre_check_ready else '' }}>
+         {{ 'disabled' if not start_ready else '' }}>
 
   {#
-    The hint carries two messages. The server writes the locked reason when no
-    pre-check exists. portal.js writes the letter case message when the typed
+    The hint carries three messages. The server writes the locked reason when no
+    pre-check exists, and the second locked reason when the plan names no
+    device. portal.js writes the letter case message when the typed
     text matches the word only after a case change. The stylesheet shows the
     typed text in capital letters, so an operator who types lower case sees
     capital letters and needs this message to learn why the button stays locked.
@@ -196,6 +207,9 @@
     {% if not pre_check_ready %}
       The portal needs a saved pre-check capture before an upgrade starts. Run
       the pre-check first.
+    {% elif device_count == 0 %}
+      The saved plan names no device. Return to the options, choose a version,
+      and save the plan again.
     {% endif %}
   </p>
 

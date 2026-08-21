@@ -368,8 +368,9 @@ def confirm_page(portal_page: Any, run_id: str) -> Any:
 
     Why:
         The page holds its confirm field locked until the run names a verified
-        pre-check capture, so the fixture takes that capture first. The visit
-        follows the capture, because the page reads the field once at render.
+        pre-check capture and a plan with at least one device. The fixture
+        therefore saves the plan and takes that capture first. The visit follows
+        both, because the page reads the two values once at render.
 
     Args:
         portal_page: The browser page that points at the portal.
@@ -378,6 +379,7 @@ def confirm_page(portal_page: Any, run_id: str) -> Any:
     Returns:
         The Playwright page object, on the confirm page.
     """
+    _saved_options(portal_page, run_id)  # A false answer leaves the field locked, which each test reports.
     _verified_pre_capture(portal_page, run_id)  # An empty answer leaves the skip in place below.
     path = CONFIRM_PAGE_TEMPLATE.format(run_id=run_id)
     _require_built_route(_page_status(portal_page, path), path)

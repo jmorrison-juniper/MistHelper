@@ -43,6 +43,19 @@ ORG_ID = "00000000-0000-0000-0000-0000000000aa"  # Matches the shared organizati
 SITE_ID = "00000000-0000-0000-0000-0000000000bb"  # Matches the shared site of the other tests.
 PROBE_CAPTURE_ID = "cap-probe-pre-check"  # Stands for a saved pre-check, which FR-035 demands.
 
+# WHY: The start refuses a plan that names no device, so every run that expects
+# a 202 carries one planned device. The seven names match the target row that
+# `contracts/http-api.md` section 5 fixes.
+PROBE_TARGET = {
+    "mac": "00000000aabb",
+    "name": "Probe switch",
+    "device_type": "switch",
+    "state": "pending",
+    "version_before": "21.4R3-S5",
+    "version_target": "23.4R2-S3",
+    "version_after": None,
+}
+
 SELECTED_ORG_SESSION_KEY = "selected_org_id"  # The organization pick inside the signed session.
 SELECTED_SITE_SESSION_KEY = "selected_site_id"  # The site pick inside the same signed session.
 
@@ -67,6 +80,7 @@ CSRF_MISSING_CODE = "csrf_missing"  # `security.py` answers this code for a post
 RUN_NOT_FOUND_CODE = "run_not_found"  # One code for every run path with an unknown key.
 CONFIRMATION_REQUIRED_CODE = "confirmation_required"  # FR-034 refuses any word but `CONFIRM`.
 PRE_CAPTURE_MISSING_CODE = "pre_capture_missing"  # FR-035 refuses a start with no saved pre-check.
+TARGETS_MISSING_CODE = "upgrade_targets_missing"  # The start refuses a saved plan that names no device.
 
 # WHY: `contracts/http-api.md` section 5 fixes exactly this one answer field for
 # a start. The browser reads the state and then polls, so a second field would
@@ -289,7 +303,9 @@ def seed_ready_run(store: RecordingRunStore) -> str:
 
     Why:
         Most tests below change one thing only: the word the operator types. A
-        shared starting point keeps each test about that one word.
+        shared starting point keeps each test about that one word. The run holds
+        a saved pre-check and one planned device, because the start refuses both
+        a missing pre-check and an empty plan.
 
     Args:
         store: The stand-in run record store.
@@ -297,7 +313,8 @@ def seed_ready_run(store: RecordingRunStore) -> str:
     Returns:
         The key of the seeded run.
     """
-    return seed_run(store, READY_STATE, pre_capture_id=PROBE_CAPTURE_ID)  # FR-035 needs the saved pre-check.
+    # FR-035 asks for the saved pre-check, and the plan must name a device.
+    return seed_run(store, READY_STATE, pre_capture_id=PROBE_CAPTURE_ID, targets=[dict(PROBE_TARGET)])
 
 
 def read_error_code(response: TestResponse) -> str:
@@ -529,6 +546,32 @@ def test_a_start_with_no_pre_check_names_a_state_conflict(
     assert read_error_code(answer) == PRE_CAPTURE_MISSING_CODE  # The page then sends the operator to the pre-check.
 
 
+def test_a_start_of_an_empty_plan_names_a_state_conflict(
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+    launcher: RecordingLauncher,
+) -> None:
+    """A run whose plan names no device answers 409 and sends nothing.
+
+    Why:
+        An operator can open the options page and save it with no chosen
+        version, which saves an empty plan. A start of that plan would send
+        nothing and would still report a complete run, so the operator would
+        read a site that never changed as an upgraded site.
+
+    Args:
+        upgrade_client: The signed-in client.
+        run_store: The stand-in run record store.
+        launcher: The recorder that counts every launched run.
+    """
+    # A saved pre-check, so only the empty plan can refuse this start.
+    run_id = seed_run(run_store, READY_STATE, pre_capture_id=PROBE_CAPTURE_ID, targets=[])
+    answer = start_run(upgrade_client, run_id, CONFIRM_WORD)  # The right word, and nothing else to refuse it.
+    assert answer.status_code == CONFLICT_STATUS  # A state conflict, which the options page fixes.
+    assert read_error_code(answer) == TARGETS_MISSING_CODE  # The page then sends the operator to the options.
+    assert launcher.launched == []  # No upgrade left the portal.
+
+
 # ---------------------------------------------------------------------------
 # T129: the accepted start
 # ---------------------------------------------------------------------------
@@ -615,7 +658,8 @@ def test_a_start_of_a_run_already_in_flight_sends_nothing(
         run_store: The stand-in run record store.
         launcher: The recorder that counts every launched run.
     """
-    run_id = seed_run(run_store, RUNNING_STATE, pre_capture_id=PROBE_CAPTURE_ID)  # The driver already owns this run.
+    # The driver already owns this run, so the record holds the plan it started.
+    run_id = seed_run(run_store, RUNNING_STATE, pre_capture_id=PROBE_CAPTURE_ID, targets=[dict(PROBE_TARGET)])
     answer = start_run(upgrade_client, run_id, CONFIRM_WORD)  # A second tab typed the word again.
     assert answer.status_code == ACCEPTED_STATUS  # A repeat is not a fault, so the portal answers plainly.
     assert answer.get_json()["state"] == RUNNING_STATE  # The live state, and never the state of a new start.
@@ -639,7 +683,8 @@ def test_a_start_of_a_finished_run_sends_nothing(
         run_store: The stand-in run record store.
         launcher: The recorder that counts every launched run.
     """
-    run_id = seed_run(run_store, COMPLETE_STATE, pre_capture_id=PROBE_CAPTURE_ID)  # A run that already finished.
+    # A run that already finished, so the record still holds the plan it ran.
+    run_id = seed_run(run_store, COMPLETE_STATE, pre_capture_id=PROBE_CAPTURE_ID, targets=[dict(PROBE_TARGET)])
     answer = start_run(upgrade_client, run_id, CONFIRM_WORD)  # A stale tab typed the word again.
     assert answer.get_json()["state"] == COMPLETE_STATE  # The finished state, and never a new start.
     assert run_store.runs[run_id]["state"] == COMPLETE_STATE  # The record of the finished run stands.

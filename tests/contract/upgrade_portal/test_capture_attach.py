@@ -53,6 +53,10 @@ CONFIRM_WORD = "CONFIRM"  # FR-034 fixes this exact word, in these exact letters
 READY_STATE = "awaiting_confirmation"  # The state a run holds while it waits for the typed word.
 VERIFIED_STATE = "verified"  # The state a capture holds once the portal read it back unchanged.
 
+# WHY: The start refuses a plan that names no device, so every seeded run holds
+# one row here and the pre-check stays the only rule under test.
+PLANNED_ROW = {"mac": "5c5b350e0001", "version_target": "0.14.30075"}
+
 ROLE_PRE = "pre"  # The half that runs before the upgrade.
 ROLE_POST = "post"  # The half that the run driver owns.
 TIER_STANDARD = 2  # The device state and the client lists.
@@ -301,7 +305,9 @@ def seed_run(store: RecordingRunStore, org_id: str, site_id: str) -> str:
 
     Why:
         Every test below starts from a run that passes each start rule but the
-        saved pre-check, so the pre-check is the only thing under test.
+        saved pre-check, so the pre-check is the only thing under test. The run
+        therefore names one planned device, because the start also refuses a
+        plan that names no device.
 
     Args:
         store: The stand-in run record store.
@@ -314,6 +320,7 @@ def seed_run(store: RecordingRunStore, org_id: str, site_id: str) -> str:
     spec = RunSpec(org_id, "Probe organization", site_id, "Probe site", PROBE_EMAIL, "browser-probe")
     record = RunRecordBuilder().build(spec)  # The record layer owns every field and every default.
     record["state"] = READY_STATE  # The run waits for the word that FR-034 fixes.
+    record["targets"] = [dict(PLANNED_ROW)]  # A copy, so no test can edit the shared row.
     store.write_run(record)  # Both route modules read this record through the seam.
     return str(record["run_id"])  # Every path below carries this key.
 

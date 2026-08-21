@@ -52,6 +52,10 @@ TARGETS_FIELD = "targets"  # The run record field that carries one row for each 
 PROBE_MODEL = "AP45"  # One access point model, which the version answer groups by.
 PROBE_VERSION = "0.14.30075"  # One firmware version of the model above.
 
+# WHY: The start refuses a plan that names no device, so a run that expects a
+# 202 carries one row here.
+PLANNED_ROW = {"mac": "5c5b350e0001", "version_target": PROBE_VERSION}
+
 OK_STATUS = 200  # The read or the write succeeded.
 CREATED_STATUS = 201  # The portal created one run record.
 ACCEPTED_STATUS = 202  # The portal took the work and answered before it ended.
@@ -514,7 +518,8 @@ def test_start_sends_the_upgrade_after_the_typed_word(
         run_store: The stand-in run record store.
         launcher: The stand-in run driver.
     """
-    run_id = seed_run(run_store, "awaiting_confirmation", pre_capture_id="capture-1")  # Every rule passes.
+    # Every start rule passes: the saved pre-check, the free site, and one planned device.
+    run_id = seed_run(run_store, "awaiting_confirmation", pre_capture_id="capture-1", targets=[PLANNED_ROW])
     answer = upgrade_client.post(f"/api/runs/{run_id}/start", json={"confirm": "CONFIRM"})  # The exact word.
     assert answer.status_code == ACCEPTED_STATUS  # The contract fixes 202, because the work outlives the call.
     assert answer.get_json()["state"] == "upgrade_submitting"  # The contract fixes this state name.
@@ -537,7 +542,8 @@ def test_start_twice_sends_one_upgrade_only(
         run_store: The stand-in run record store.
         launcher: The stand-in run driver.
     """
-    run_id = seed_run(run_store, "awaiting_confirmation", pre_capture_id="capture-1")  # Every rule passes.
+    # Every start rule passes: the saved pre-check, the free site, and one planned device.
+    run_id = seed_run(run_store, "awaiting_confirmation", pre_capture_id="capture-1", targets=[PLANNED_ROW])
     upgrade_client.post(f"/api/runs/{run_id}/start", json={"confirm": "CONFIRM"})  # The first tab.
     answer = upgrade_client.post(f"/api/runs/{run_id}/start", json={"confirm": "CONFIRM"})  # The second tab.
     assert answer.status_code == ACCEPTED_STATUS  # The second call is not an error, because nothing went wrong.

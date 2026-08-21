@@ -135,6 +135,7 @@ RUN_NOT_FOUND_CODE = "run_not_found"  # `contracts/http-api.md` fixes this code 
 BAD_OPTION_CODE = "bad_option"  # `contracts/http-api.md` fixes this code for the options call.
 CONFIRMATION_REQUIRED_CODE = "confirmation_required"  # The operator typed the wrong word.
 PRE_CAPTURE_MISSING_CODE = "pre_capture_missing"  # No verified pre-check exists, so no start may run.
+TARGETS_MISSING_CODE = "upgrade_targets_missing"  # The saved plan names no device, so the start would send nothing.
 RUN_NOT_STOPPABLE_CODE = "run_not_stoppable"  # The run already reached a state that a stop cannot change.
 RUN_WRITE_FAILED_CODE = "run_write_failed"  # The store refused the write, so the operator must retry.
 UPGRADE_RUNNING_CODE = "upgrade_already_running"  # FR-037: one run of this site has not reached a final state.
@@ -146,6 +147,7 @@ RUN_NOT_FOUND_MESSAGE = "The portal holds no run with that identifier."  # No cu
 CONFIRM_REQUIRED_MESSAGE = "The start control needs the exact text CONFIRM."  # Names the word and the case.
 STOP_REQUIRED_MESSAGE = "The stop control needs the exact text STOP."  # Names the word and the case.
 PRE_CAPTURE_MISSING_MESSAGE = "Save a verified pre-check capture before you start the upgrade."  # The cure.
+TARGETS_MISSING_MESSAGE = "The saved plan names no device. Choose a version on the options page and save it."  # Cure.
 RUN_WRITE_FAILED_MESSAGE = "The portal could not write the run record. Try again."  # The cure.
 UPGRADE_RUNNING_MESSAGE = "An upgrade already runs at this site. Open that run before you start a new one."  # Cure.
 NO_LAUNCHER_MESSAGE = "The portal cannot send an upgrade yet, because the run driver is not wired."  # The gap.
@@ -985,7 +987,10 @@ def start_refusal(record: dict[str, Any]) -> tuple[Response, int] | None:
     Why:
         FR-033 to FR-035 guard the start with three separate rules. One function
         holds all three in their documented order, so the handler below stays
-        inside the size limit and a reader finds every refusal in one place.
+        inside the size limit and a reader finds every refusal in one place. A
+        fourth rule guards the plan itself, because a start that sends nothing
+        would still report a complete run and the operator would read that run
+        as an upgrade of the whole site.
 
     Args:
         record: The run record the operator asks to start.
@@ -1000,6 +1005,8 @@ def start_refusal(record: dict[str, Any]) -> tuple[Response, int] | None:
     holder = held_by_other(str(record.get("org_id", "")), str(record.get("site_id", "")))  # T182 asks for this.
     if holder:  # Another operator holds the site, so this run may not send anything.
         return site_locked_refusal(holder)  # The refusal names that operator.
+    if not record.get(TARGETS_FIELD):  # An operator who saved no version reaches this line.
+        return json_error(CONFLICT_STATUS, TARGETS_MISSING_CODE, TARGETS_MISSING_MESSAGE)
     return None  # Every rule passed, so the handler sends the upgrade.
 
 

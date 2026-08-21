@@ -297,9 +297,15 @@ reboots an access point on its own.
 | 404 | `run_not_found` |
 | 409 | `pre_capture_missing` when no verified pre-check exists |
 | 409 | `site_locked` with `details.actor_email` when a different operator holds the site lock |
+| 409 | `upgrade_targets_missing` when the saved plan names no device |
 | 500 | `run_write_failed` when the run store refused the write |
 
 The portal refuses to start unless a verified pre-check capture exists.
+
+The portal also refuses to start a plan that names no device. An operator who
+opens the options page and saves it without a chosen version saves an empty
+plan. A start of that plan would send nothing and would still report a complete
+run, so the operator would read a site that never changed as an upgraded site.
 
 An earlier version of this table named `lock_lost` here. The route raises
 `site_locked` instead. That is the same code that section 3 and section 4 use for
