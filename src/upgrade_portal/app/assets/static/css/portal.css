@@ -15,6 +15,22 @@
  * ========================================================================== */
 
 /*
+ * The scrollbar rule sits on the root element, not on the shell. Two reasons.
+ * The browser reads the root element to paint the scrollbar of the window, and
+ * the shell is the `body` element, which is a child of the root. `body` is
+ * therefore too late to reach the window scrollbar. `scrollbar-color` also
+ * inherits, so this one rule reaches every box that scrolls inside the page,
+ * such as `.portal-table-scroll`.
+ *
+ * Without this rule the browser paints a light scrollbar on the dark theme. The
+ * `color-scheme` value that `data-bs-theme` brings does not reach the scrollbar
+ * in every browser, so the colors are named here instead of inferred.
+ */
+:root {
+    scrollbar-color: var(--portal-scrollbar);
+}
+
+/*
  * The shell is a column. The header stays at the top and the footer stays at
  * the bottom, so a short page still fills the window.
  */

@@ -104,6 +104,20 @@
     --portal-input-text: #ffffff;
     --portal-input-border: #8a8a8a;
 
+    /* --- Scrollbar --------------------------------------------------------
+     * The browser draws a light scrollbar on a dark page unless a rule names
+     * the two colors. The token holds the pair that `scrollbar-color` wants,
+     * in its order: the thumb first, then the track.
+     * #8a8a8a on #1f1f1f ...........  4.77:1  (thumb on track, needs 3:1)
+     * #8a8a8a on #0d0d0d ...........  5.63:1  (thumb where the track is thin)
+     * #8a8a8a on #2b2b2b ...........  4.10:1  (thumb beside a card)
+     *
+     * The track is a decorative surface, like the hairline #3d3d3d. It carries
+     * no text and needs no ratio of its own. The thumb is the control, so the
+     * thumb carries the ratio.
+     */
+    --portal-scrollbar: #8a8a8a #1f1f1f;
+
     /* --- Shadows ----------------------------------------------------------
      * A dark page needs a darker shadow than a light page, because a faint
      * shadow disappears against near black.

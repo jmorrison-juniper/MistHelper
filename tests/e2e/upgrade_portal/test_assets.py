@@ -156,6 +156,41 @@ PAINTED_AND_EXPECTED = """
     }
 """
 
+# The token that names the two scrollbar colors, thumb first and track second.
+SCROLLBAR_TOKEN = "--portal-scrollbar"
+
+# The value the browser computes when no rule names the colors. The browser then
+# picks its own pair, which is light on every theme.
+SCROLLBAR_AUTO = "auto"
+
+# `portal.css` names the pair on the root element, because the browser reads the
+# root element to paint the scrollbar of the window. The shell is the `body`
+# element, which is a child of the root, so a rule on the shell arrives too late.
+SCROLLBAR_ROOT_SELECTOR = "html"
+
+# The box that a wide table scrolls inside. `scrollbar-color` inherits, so the one
+# rule on the root element must reach this box as well. `review/history.html` line
+# 108 puts this box on the history page.
+TABLE_SCROLL_SELECTOR = ".portal-table-scroll"
+
+# The same idea as the probe above, for a pair of colors instead of one. The probe
+# turns a token such as `#8a8a8a #1f1f1f` into the `rgb(138, 138, 138) rgb(31, 31,
+# 31)` form that a computed value always reads, so the two values compare
+# directly. `scrollbar-color` inherits, so a probe that could not take the
+# assignment would read the value of the page. The caller therefore refuses the
+# `auto` value, which is what such a probe would read while no rule paints.
+SCROLLBAR_PAINTED_AND_EXPECTED = """
+    (node, token) => {
+        const raw = getComputedStyle(document.documentElement).getPropertyValue(token).trim();
+        const probe = document.createElement('span');
+        probe.style.scrollbarColor = raw;
+        document.body.appendChild(probe);
+        const expected = getComputedStyle(probe).scrollbarColor;
+        probe.remove();
+        return { painted: getComputedStyle(node).scrollbarColor, expected: expected, raw: raw };
+    }
+"""
+
 OK_STATUS = 200  # The contract fixes this status for the page and for a static file.
 UNAUTHORIZED_STATUS = 401  # `runtime/identity.py` answers this code with no session.
 NOT_FOUND_STATUS = 404  # The route is not registered yet.
@@ -640,3 +675,63 @@ class TestThemeColorsReachThePaint:
         sync_api.expect(element).to_be_visible(timeout=GATE_TIMEOUT_MS)
         found = element.evaluate("node => getComputedStyle(node).textDecorationLine")
         assert found == NO_UNDERLINE, f"Under the {theme} theme the link button reads text-decoration {found}."
+
+
+class TestTheScrollbarTakesTheThemeColors:
+    """The scrollbar of the window and of a table box paints the theme pair.
+
+    Why:
+        The browser paints its own scrollbar, and it picks a light pair unless a
+        rule names the colors. The dark theme therefore shipped with a light gray
+        scrollbar down the right edge of a near black page, and a second one
+        under every wide table. The `color-scheme` value that `data-bs-theme`
+        brings does not reach the scrollbar in every browser, so `portal.css`
+        names the colors and this test reads what the browser painted.
+
+        The rule sits on the root element, and `scrollbar-color` inherits, so one
+        rule covers the window and every box that scrolls inside the page. A rule
+        moved to `.portal-shell` would still paint the table box, because the
+        shell is the parent of that box, and would leave the window scrollbar
+        light. The two elements are therefore read apart.
+    """
+
+    @staticmethod
+    def _pair(page: Any, selector: str) -> dict[str, str]:
+        """Return the painted scrollbar pair beside the pair that the token names.
+
+        Args:
+            page: The browser page, already opened on the history page.
+            selector: The element to read.
+
+        Returns:
+            The painted pair, the pair the token names, and the raw token text.
+        """
+        answer: dict[str, str] = page.locator(selector).first.evaluate(SCROLLBAR_PAINTED_AND_EXPECTED, SCROLLBAR_TOKEN)
+        assert answer["raw"], f"No theme sets {SCROLLBAR_TOKEN}, so this comparison would read two empty values."
+        assert (
+            answer["expected"] != SCROLLBAR_AUTO
+        ), f"{SCROLLBAR_TOKEN} reads {answer['raw']}, which the browser did not accept as a scrollbar pair."
+        return answer
+
+    @pytest.mark.parametrize("theme", THEME_NAMES)
+    @pytest.mark.parametrize("selector", (SCROLLBAR_ROOT_SELECTOR, TABLE_SCROLL_SELECTOR))
+    def test_a_scrolling_box_paints_the_scrollbar_token(self, portal_page: Any, theme: str, selector: str) -> None:
+        """The window and the table box both paint the scrollbar pair of the theme.
+
+        Why:
+            A theme that sets the token while no rule reads it paints nothing,
+            and a rule that reads the token from the wrong element paints only
+            the inner box. Both faults leave a light scrollbar on a dark page,
+            and neither one shows in a stylesheet test.
+
+        Args:
+            portal_page: The browser page that points at the portal.
+            theme: One shipped theme name.
+            selector: The element whose scrollbar must carry the theme pair.
+        """
+        _open(portal_page, f"{HISTORY_PAGE_PATH}?theme={theme}")
+        answer = self._pair(portal_page, selector)
+        assert answer["painted"] == answer["expected"], (
+            f"Under the {theme} theme {selector} paints scrollbar-color {answer['painted']}, "
+            f"and {SCROLLBAR_TOKEN} names {answer['expected']}."
+        )

@@ -77,6 +77,19 @@
     --portal-input-text: #212529;
     --portal-input-border: #6c757d;
 
+    /* --- Scrollbar --------------------------------------------------------
+     * The token holds the pair that `scrollbar-color` wants, in its order: the
+     * thumb first, then the track. Both values repeat a color this theme
+     * already sets, so the scrollbar matches the boundary of a control and the
+     * fill of a progress track.
+     * #6c757d on #e9ecef ...........  3.95:1  (thumb on track, needs 3:1)
+     * #6c757d on #ffffff ...........  4.69:1  (thumb where the track is thin)
+     *
+     * The track is a decorative surface. It carries no text and needs no ratio
+     * of its own. The thumb is the control, so the thumb carries the ratio.
+     */
+    --portal-scrollbar: #6c757d #e9ecef;
+
     /* --- Shadows ---------------------------------------------------------- */
     --portal-shadow-card: 0 1px 3px rgba(0, 0, 0, 0.08);
 

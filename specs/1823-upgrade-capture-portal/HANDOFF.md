@@ -19,14 +19,14 @@ the design. This file states the position.
 | Pull request | Open, mergeable, not a draft, no review yet |
 | Local commits not pushed | None |
 | Uncommitted work | None from this feature |
-| Portal tests | 2599 unit and contract, all pass. 144 browser tests, all pass, 0 skip |
+| Portal tests | 2599 unit and contract, all pass. 148 browser tests, all pass, 0 skip |
 | Statement coverage of the package | 94.18 percent |
-| Blocking defects | None. The eleven defects of `audit-2026-08-20.md` sections 2.1, 6, 7, 8, 9, 10, 11, and 12 are fixed |
+| Blocking defects | None. The twelve defects of `audit-2026-08-20.md` sections 2.1, 6, 7, 8, 9, 10, 11, 12, and 13 are fixed |
 
 The code is written, the code tests pass, and the browser suite drives every
-journey with no skip. An audit on 2026-08-20 found 25 defects, and five by-eye
-drives of the portal found five more. The 11 that could mislead or stop an
-operator are fixed. The rest are recorded and open.
+journey with no skip. An audit on 2026-08-20 found 25 defects, and by-eye drives
+of the portal found six more. The 12 that could mislead or stop an operator are
+fixed. The rest are recorded and open.
 
 Four defects hid behind the browser skips, and each one broke the feature for a
 real operator:
@@ -73,6 +73,13 @@ No test in this repository read a painted color, which is why 2733 tests passed
 while the header looked wrong. `tests/e2e/upgrade_portal/test_assets.py` now
 holds `TestThemeColorsReachThePaint`, which reads `getComputedStyle` under both
 shipped themes. Eight of its ten cases fail against the reverted stylesheet.
+
+A look at the same page after that fix found one more, in section 13 of the
+audit. The scrollbar of the window and of every table box stayed light gray on
+the near black page, because no stylesheet named its colors and the browser then
+chose its own pair. Each theme now sets a thumb color and a track color, and
+`TestTheScrollbarTakesTheThemeColors` reads what the browser painted on two
+elements under both themes.
 
 Read `audit-2026-08-20.md` before you merge. It holds the 13 tasks that lost a
 check, the 4 that earned it back, the defects inside tasks that keep a check,
@@ -310,7 +317,7 @@ Break one of these and a gate turns red, or worse, a secret leaks.
 - `portal.css` holds no color value. Every color comes from a custom property
   that a theme file sets. Two unit tests hold this, so a literal color in that
   file fails the suite.
-- Both shipped themes set exactly the same 70 property names. A property that
+- Both shipped themes set exactly the same 71 property names. A property that
   only one theme sets makes the page change shape as well as color.
 - Do not rename `themes/magenta.css`. The brand name stays inside the file
   content. The repository ignore rules exclude a path that carries the brand
@@ -320,7 +327,14 @@ Break one of these and a gate turns red, or worse, a secret leaks.
   names one class alone loses to it. Read the painted color of the element, not
   the stylesheet, whenever a color looks wrong.
 - The theme name drives `data-bs-theme` on the `html` element. Bootstrap draws
-  its own fields and its 23 vendored control graphics from that attribute.
+  its own fields and its 23 vendored control graphics from that attribute. It
+  does not draw the scrollbar from it.
+- `portal.css` names `scrollbar-color` on `:root`. Do not move that rule to
+  `.portal-shell`. The browser reads the root element to paint the scrollbar of
+  the window, and the shell sits on `body`, which is a child of the root. The
+  property also inherits, so the one rule on `:root` reaches every box that
+  scrolls inside the page. A rule on the shell still paints the table box and
+  still leaves the window scrollbar light, and only a browser test catches that.
 
 ---
 
