@@ -2,6 +2,7 @@
 
 Issue #1721 moved the logging configuration above the dependency bootstrap.
 Issue #1737 reduced the default precision of a printed GPS coordinate.
+Issue #1838 routed the status line through the same precision control.
 
 The module runs its dependency bootstrap at import time. That bootstrap can install
 packages and can call sys.exit, so these tests never import the module. They read the
@@ -29,8 +30,13 @@ GPS_SYMBOLS = frozenset(
         "_exact_gps_enabled",
         "_format_gps_coordinate",
         "_dump_diagnostics_location",
+        "_status_part_location",
     }
 )
+
+# Names that hold a GPS coordinate. The guard test below rejects a hardcoded format
+# specifier on any one of them, because such a specifier bypasses the precision control.
+COORDINATE_NAMES = frozenset({"lat", "latitude", "lon", "lng", "longitude"})
 
 # A latitude and a longitude with more digits than the default output keeps.
 EXACT_LATITUDE = 37.7749295
@@ -52,6 +58,20 @@ class FakeLocation:
         self.altitude_meters = 12.5  # The dump prints the altitude with no change.
         self.uncertainty_meters_valid = False  # Keep the optional branch out of the output.
         self.uncertainty_meters = 0.0  # Present so the optional branch cannot raise.
+        self.enabled = True  # The status builder returns None when the terminal disables location.
+
+
+class FakeDiagnostics:
+    """Minimal stand-in for the diagnostics object the status builder reads."""
+
+    def __init__(self, location: "FakeLocation | None") -> None:
+        """Store the location sub-message the status builder reads.
+
+        Args:
+            location: The location sub-message, or None to drop the attribute.
+        """
+        if location is not None:  # A terminal without a location holds no attribute at all.
+            self.location = location  # The status builder reads this sub-message.
 
 
 def _module_source() -> str:
@@ -260,6 +280,79 @@ def test_opt_in_variable_ignores_an_unrelated_value(monkeypatch: pytest.MonkeyPa
     assert namespace["_exact_gps_enabled"]() is False, "The value 0 must keep the safe default"
     monkeypatch.setenv(namespace["GPS_EXACT_ENV_VAR"], " YES ")  # An opt-in with extra spaces.
     assert namespace["_exact_gps_enabled"]() is True, "The value yes must turn on the exact output"
+
+
+def _referenced_names(node: ast.expr) -> set[str]:
+    """Return the names and the attributes the expression reads, in lower case.
+
+    Args:
+        node: The expression inside one f-string replacement field.
+
+    Returns:
+        set[str]: Every name and every attribute the expression reads.
+    """
+    names: set[str] = set()  # Collects one entry for each name the expression reads.
+    for inner in ast.walk(node):  # Walk the expression, because a call can hide the name.
+        if isinstance(inner, ast.Name):  # A bare name, such as latitude.
+            names.add(inner.id.lower())  # Store the lower case form, so the match ignores case.
+        elif isinstance(inner, ast.Attribute):  # An attribute, such as loc.latitude.
+            names.add(inner.attr.lower())  # Store the attribute name on its own.
+    return names  # The caller compares this set against COORDINATE_NAMES.
+
+
+def _hardcoded_coordinate_formats() -> list[int]:
+    """Return the module lines that format a coordinate with a hardcoded precision.
+
+    Returns:
+        list[int]: One line number for each replacement field that carries a format
+        specifier on a coordinate name. An empty list means every path calls the helper.
+    """
+    offenders: list[int] = []  # Collects one line number for each offending field.
+    for node in ast.walk(ast.parse(_module_source(), filename=str(MODULE_PATH))):
+        if not isinstance(node, ast.FormattedValue):  # Only a replacement field can pin a precision.
+            continue
+        if node.format_spec is None:  # No specifier means the field cannot pin a decimal count.
+            continue
+        if _referenced_names(node.value) & COORDINATE_NAMES:  # The field formats a coordinate.
+            offenders.append(node.lineno)  # Report the line, so a reader can find it.
+    return offenders  # The guard test fails when this list holds any line.
+
+
+def test_status_line_rounds_both_coordinates_on_a_default_run() -> None:
+    """The status line must hold the rounded pair on a default run (issue #1838)."""
+    namespace = _load_gps_namespace()  # Load the GPS symbols with no module import.
+    diag = FakeDiagnostics(FakeLocation(EXACT_LATITUDE, EXACT_LONGITUDE))  # A terminal that reports a position.
+    line = namespace["_status_part_location"](diag)  # Build the status line under the default settings.
+    assert line == "Location: 37.775, -122.419", "The status line must round both coordinates"
+    assert str(EXACT_LATITUDE) not in line, "The status line must not hold the exact latitude"
+    assert str(EXACT_LONGITUDE) not in line, "The status line must not hold the exact longitude"
+    assert "37.7749" not in line, "The status line must not keep the four decimal places of the old code"
+
+
+def test_status_line_returns_the_exact_pair_after_the_opt_in(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An operator who sets the opt-in variable gets the exact pair (issue #1838)."""
+    namespace = _load_gps_namespace()  # Load the GPS symbols with no module import.
+    monkeypatch.setenv(namespace["GPS_EXACT_ENV_VAR"], "1")  # Opt in for this test only.
+    diag = FakeDiagnostics(FakeLocation(EXACT_LATITUDE, EXACT_LONGITUDE))  # A terminal that reports a position.
+    line = namespace["_status_part_location"](diag)  # Build the status line under the opt-in.
+    assert str(EXACT_LATITUDE) in line, "The opt-in must return the exact latitude"
+    assert str(EXACT_LONGITUDE) in line, "The opt-in must return the exact longitude"
+
+
+def test_status_line_stays_empty_when_the_terminal_reports_no_location() -> None:
+    """A terminal that reports no location produces no status line (issue #1838)."""
+    namespace = _load_gps_namespace()  # Load the GPS symbols with no module import.
+    build = namespace["_status_part_location"]  # One name keeps the two checks below short.
+    assert build(FakeDiagnostics(None)) is None, "A missing location sub-message must return None"
+    disabled = FakeLocation(EXACT_LATITUDE, EXACT_LONGITUDE)  # A terminal that turns location reporting off.
+    disabled.enabled = False  # The status builder must skip a disabled sub-message.
+    assert build(FakeDiagnostics(disabled)) is None, "A disabled location sub-message must return None"
+
+
+def test_no_coordinate_format_string_hardcodes_a_decimal_count() -> None:
+    """One helper must govern every coordinate the module prints (issue #1838)."""
+    offenders = _hardcoded_coordinate_formats()  # Line numbers that pin a decimal count.
+    assert not offenders, f"These lines must call _format_gps_coordinate: {offenders}"
 
 
 def test_both_codeql_alerts_carry_a_recorded_verdict() -> None:
