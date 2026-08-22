@@ -19,6 +19,7 @@ Why:
 
 from __future__ import annotations
 
+import logging
 from types import SimpleNamespace
 from typing import Any
 
@@ -27,6 +28,7 @@ import pytest
 from src.upgrade_portal.capture import extras
 
 _SCOPE = extras.SiteScope("org-0001", "site-0001")  # WHY: One scope serves every test in this module.
+_FAULT_MESSAGE = "The page walk failed."  # WHY: No log record may repeat this, so one test asserts its absence.
 
 _SWITCH_MAC = "5c5b350e0001"
 _AP_MAC = "5c5b350e0002"
@@ -98,11 +100,11 @@ class _FakeCall:
         return self.response
 
 
-def _response(rows: list[dict[str, Any]], status_code: int = 200) -> SimpleNamespace:
+def _response(rows: list[dict[str, Any]] | dict[str, Any], status_code: int = 200) -> SimpleNamespace:
     """Return one cloud answer that a test builds in memory.
 
     Args:
-        rows: The rows of the answer.
+        rows: The rows of the answer, either as a list or under a ``results`` key.
         status_code: The HTTP status of the answer.
 
     Returns:
@@ -392,30 +394,44 @@ def test_the_payload_reader_covers_the_search_shape_and_the_list_shape() -> None
     assert extras._records_of({"error": "no results key"}) == ()
 
 
-def test_the_page_walk_keeps_the_first_page_when_the_walk_returns_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_the_page_walk_keeps_the_first_page_when_the_walk_returns_nothing(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
     """A silent empty answer from the page walk never drops the first page.
 
     Why:
         ``mistapi.get_all`` returns an empty list with no error and no log when
         the payload shape surprises it. Without this floor a whole section
-        would vanish and nobody would know.
+        would vanish and nobody would know. The floor writes a warning that
+        names the site, because a short section with no warning reads as whole.
     """
     monkeypatch.setattr(extras, "mistapi", SimpleNamespace(get_all=lambda response, mist_session: []))
-    walked = extras._paged(object(), _response({"results": [_PORT_ROW]}))
+    with caplog.at_level(logging.WARNING, logger=extras.logger.name):
+        walked = extras._paged(object(), _response({"results": [_PORT_ROW]}), _SCOPE)
     assert walked.data == [_PORT_ROW]
     assert walked.status_code == 200
+    assert [record for record in caplog.records if record.levelno == logging.WARNING]
+    assert _SCOPE.site_id in caplog.text  # The logging rule wants a site identifier on every record.
 
 
 def test_the_page_walk_keeps_every_row_of_every_page(monkeypatch: pytest.MonkeyPatch) -> None:
     """The page walk replaces the first page when it returns more rows."""
     pages = [_PORT_ROW, dict(_PORT_ROW, port_id="ge-0/0/2")]
     monkeypatch.setattr(extras, "mistapi", SimpleNamespace(get_all=lambda response, mist_session: pages))
-    walked = extras._paged(object(), _response({"results": [_PORT_ROW]}))
+    walked = extras._paged(object(), _response({"results": [_PORT_ROW]}), _SCOPE)
     assert walked.data == pages
 
 
-def test_the_page_walk_keeps_the_first_page_when_the_walk_raises(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A failed page walk keeps the rows that already arrived."""
+def test_the_page_walk_keeps_the_first_page_when_the_walk_raises(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A failed page walk keeps the rows that already arrived.
+
+    Why:
+        The log record of the fault must carry the class name alone. A driver
+        message can hold a connection string, and a connection string can hold
+        a credential, so no log record may repeat one.
+    """
 
     def _raise(response: Any, mist_session: Any) -> list[dict[str, Any]]:
         """Fail the page walk.
@@ -430,8 +446,11 @@ def test_the_page_walk_keeps_the_first_page_when_the_walk_raises(monkeypatch: py
         Raises:
             RuntimeError: Always, because the walk must fail.
         """
-        raise RuntimeError("The page walk failed.")
+        raise RuntimeError(_FAULT_MESSAGE)
 
     monkeypatch.setattr(extras, "mistapi", SimpleNamespace(get_all=_raise))
-    walked = extras._paged(object(), _response({"results": [_PORT_ROW]}))
+    with caplog.at_level(logging.WARNING, logger=extras.logger.name):
+        walked = extras._paged(object(), _response({"results": [_PORT_ROW]}), _SCOPE)
     assert walked.data == [_PORT_ROW]
+    assert "RuntimeError" in caplog.text
+    assert _FAULT_MESSAGE not in caplog.text

@@ -23,8 +23,10 @@ Why:
 
 from __future__ import annotations
 
+import logging
 import re
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -628,3 +630,50 @@ def test_the_page_holds_no_script() -> None:
     assert "<script" not in source
     assert "{% block scripts %}" not in source
     assert "style=" not in source
+
+
+def _page(rows: list[dict[str, str]]) -> SimpleNamespace:
+    """Build one stand-in cloud response that carries the given rows.
+
+    Why:
+        The page walk reads the ``data`` field off the response object. A
+        namespace holds that one field, opens no socket, and reaches no cloud.
+
+    Args:
+        rows: The records of the first page.
+
+    Returns:
+        A stand-in response.
+    """
+    return SimpleNamespace(data={"results": rows})
+
+
+def test_the_page_walk_keeps_the_first_page_when_the_walk_returns_less(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A shrunken page walk keeps the first page and writes a warning.
+
+    Why:
+        ``mistapi.get_all`` answers with an empty list, no error, and no log
+        when the payload shape surprises it. A silent fall back would show a
+        short organization list that reads as whole, and an operator would then
+        pick from a list that lost rows.
+    """
+    first = [_org("aaa", "Alpha Networks")]
+    monkeypatch.setattr("mistapi.get_all", lambda mist_session, response: [])
+    with caplog.at_level(logging.WARNING, logger=select.logger.name):
+        walked = select.collect_pages(object(), _page(first), "listOrgSites")
+    assert walked == first
+    assert [record for record in caplog.records if record.levelno == logging.WARNING]
+    assert "listOrgSites" in caplog.text  # The record names the read, never a token.
+
+
+def test_the_page_walk_keeps_every_row_of_every_page(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The page walk replaces the first page when it returns more rows.
+
+    Why:
+        The floor must never cost a row. A walk that grows the answer wins.
+    """
+    pages = [_org("aaa", "Alpha Networks"), _org("bbb", "Beta Networks")]
+    monkeypatch.setattr("mistapi.get_all", lambda mist_session, response: pages)
+    assert select.collect_pages(object(), _page(pages[:1]), "listOrgSites") == pages

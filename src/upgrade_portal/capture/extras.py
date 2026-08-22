@@ -248,18 +248,21 @@ def _records_of(payload: Any) -> tuple[dict[str, Any], ...]:
     return tuple(dict(row) for row in rows if isinstance(row, Mapping))
 
 
-def _paged(session: Any, response: Any) -> _PagedResponse:
+def _paged(session: Any, response: Any, scope: SiteScope) -> _PagedResponse:
     """Walk every page of one search call.
 
     Why:
         A large site holds more ports than one page. ``mistapi.get_all``
         answers with an empty list, no error, and no log when the payload shape
         surprises it, which would drop a whole section without a word. The
-        first page is therefore the floor, so a surprise loses no row.
+        first page is therefore the floor, so a surprise loses no row. A silent
+        floor would show a short section that reads as whole, so the floor
+        writes a log record that names the site and both counts.
 
     Args:
         session: The mistapi session that made the call.
         response: The response of the first page.
+        scope: The organization and the site to read. The log record names the site.
 
     Returns:
         The status of the first page beside the rows of every page.
@@ -269,9 +272,17 @@ def _paged(session: Any, response: Any) -> _PagedResponse:
     try:
         rows = _records_of(mistapi.get_all(response=response, mist_session=session))
     except Exception as error:  # A failed page walk must not lose the rows that already arrived
-        logger.warning("Upgrade portal could not walk every page: %s", error)
+        logger.warning("Upgrade portal could not walk every page of site %s: %s", scope.site_id, type(error).__name__)
         rows = ()
-    return _PagedResponse(status, list(rows if len(rows) >= len(first) else first))
+    if len(rows) < len(first):  # The walk gave up, so the first page holds every row that this call can report.
+        logger.warning(
+            "Upgrade portal kept the first page of %s row(s) for site %s because the page walk returned %s",
+            len(first),
+            scope.site_id,
+            len(rows),
+        )
+        return _PagedResponse(status, list(first))
+    return _PagedResponse(status, list(rows))
 
 
 def _fetch_ports(session: Any, scope: SiteScope) -> _PagedResponse:
@@ -291,7 +302,7 @@ def _fetch_ports(session: Any, scope: SiteScope) -> _PagedResponse:
     response = mistapi.api.v1.sites.stats.searchSiteSwOrGwPorts(
         session, scope.site_id, device_type=PORT_DEVICE_TYPE, limit=_page_limit()
     )
-    return _paged(session, response)
+    return _paged(session, response, scope)
 
 
 def _fetch_tunnels(session: Any, scope: SiteScope) -> _PagedResponse:
@@ -311,7 +322,7 @@ def _fetch_tunnels(session: Any, scope: SiteScope) -> _PagedResponse:
     response = mistapi.api.v1.orgs.stats.searchOrgTunnelsStats(
         session, scope.org_id, site_id=scope.site_id, limit=_page_limit()
     )
-    return _paged(session, response)
+    return _paged(session, response, scope)
 
 
 def _fetch_bgp_peers(session: Any, scope: SiteScope) -> _PagedResponse:
@@ -325,7 +336,7 @@ def _fetch_bgp_peers(session: Any, scope: SiteScope) -> _PagedResponse:
         Every BGP peer record of the site.
     """
     response = mistapi.api.v1.sites.stats.searchSiteBgpStats(session, scope.site_id, limit=_page_limit())
-    return _paged(session, response)
+    return _paged(session, response, scope)
 
 
 def _fetch_alarms(session: Any, scope: SiteScope) -> _PagedResponse:
@@ -345,7 +356,7 @@ def _fetch_alarms(session: Any, scope: SiteScope) -> _PagedResponse:
     response = mistapi.api.v1.sites.alarms.searchSiteAlarms(
         session, scope.site_id, acked=ALARM_ACKED, limit=_page_limit()
     )
-    return _paged(session, response)
+    return _paged(session, response, scope)
 
 
 # The four cloud calls of tier 3. A test replaces any entry, so no test opens a

@@ -287,10 +287,10 @@ def default_cloud_read(name: str, **parameters: Any) -> list[dict[str, Any]]:
     call: Any = getattr(import_module(target[0]), target[1])  # The software development kit owns the call.
     org_id = str(parameters.get(ORG_FIELD, ""))  # Every read of this module is organization-scoped.
     page = call(record.cloud_session, org_id=org_id, limit=SITE_LIST_LIMIT)  # The first page of the read.
-    return collect_pages(record.cloud_session, page)  # Every later page travels through the same helper.
+    return collect_pages(record.cloud_session, page, name)  # Every later page travels through the same helper.
 
 
-def collect_pages(cloud_session: Any, response: Any) -> list[dict[str, Any]]:
+def collect_pages(cloud_session: Any, response: Any, name: str) -> list[dict[str, Any]]:
     """Gather every page of one cloud list response.
 
     Why:
@@ -298,10 +298,13 @@ def collect_pages(cloud_session: Any, response: Any) -> list[dict[str, Any]]:
         pagination helper of the software development kit returns an empty list
         when the answer holds an unexpected shape. This function therefore keeps
         the first page whenever the helper returns less than the first page did.
+        A silent fall back would show a short site list that reads as whole, so
+        the fall back writes a log record that names the read and both counts.
 
     Args:
         cloud_session: The Mist session that made the call.
         response: The response object of the first page.
+        name: The name of the cloud read. The log record names it.
 
     Returns:
         Every record of every page.
@@ -311,7 +314,15 @@ def collect_pages(cloud_session: Any, response: Any) -> list[dict[str, Any]]:
     if pagination is None:  # An older software development kit holds no helper.
         return first  # One page is still a correct answer for a small organization.
     gathered = as_records(pagination(mist_session=cloud_session, response=response))  # Every page, in one call.
-    return gathered if len(gathered) >= len(first) else first  # A shrunken answer means the helper gave up.
+    if len(gathered) < len(first):  # A shrunken answer means the helper gave up.
+        logger.warning(
+            "select: the page walk of %s returned %s record(s) against a first page of %s",
+            name,
+            len(gathered),
+            len(first),
+        )
+        return first  # The first page holds every record that this call can report.
+    return gathered
 
 
 def as_records(payload: Any) -> list[dict[str, Any]]:
