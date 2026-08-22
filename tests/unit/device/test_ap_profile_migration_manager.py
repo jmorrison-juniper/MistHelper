@@ -2135,3 +2135,44 @@ def test_check_reassign_response_ignores_an_unreadable_status() -> None:
     """
     APProfileMigrationManager._check_reassign_response(None, "dev-4")
     APProfileMigrationManager._check_reassign_response(object(), "dev-5")
+
+
+def test_interrupted_migration_still_writes_the_audit_row(fake_mh: Any, tmp_path: Path) -> None:
+    """Ctrl+C during the loop MUST still append one migrate audit row.
+
+    Why:
+        Issue #1700 -- the operator stopped a run after 4030 APs and
+        ``ap_profile_migration_migrate.jsonl`` held no row for it. The audit
+        emission sat after the loop, so the interrupt skipped it.
+    """
+    src_id = "aaaa1111-2222-3333-4444-555566667777"
+    tgt_id = "bbbb1111-2222-3333-4444-555566667777"
+    src = (src_id, "src-name", _profile(src_id, "src-name"))
+    tgt = (tgt_id, "tgt-name", _profile(tgt_id, "tgt-name"))
+    aps = [_ap_record(f"d{i}", "site-1", f"5c5b350e{i:04x}") for i in range(4)]
+
+    fake_mh.InputUtils.safe_input.return_value = "MIGRATE"
+
+    audit_rows: list[dict[str, Any]] = []
+
+    def _stop_after_two(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        """Reassign two APs, then raise the operator interrupt."""
+        # WHY: the real loop mutates the payload in place before it stops.
+        payload = _args[4]
+        payload["aps_reassigned"].extend(["d0", "d1"])
+        raise KeyboardInterrupt
+
+    with (
+        patch.object(APProfileMigrationManager, "_pick_ap_device_profile", side_effect=[src, tgt]),
+        patch.object(APProfileMigrationManager, "_discover_aps_on_source_profile", return_value=aps),
+        patch.object(APProfileMigrationManager, "_write_backup_file", return_value=str(tmp_path / "backup.json")),
+        patch.object(APProfileMigrationManager, "_run_reassignment_loop", side_effect=_stop_after_two),
+        patch.object(APProfileMigrationManager, "_emit_migrate_audit", side_effect=audit_rows.append),
+        pytest.raises(KeyboardInterrupt),
+    ):
+        APProfileMigrationManager.migrate_aps_between_device_profiles(session=MagicMock())
+
+    assert len(audit_rows) == 1, "an interrupted run MUST still write exactly one audit row"
+    assert audit_rows[0]["outcome"] == "interrupted", "the row MUST record the interrupted outcome"
+    assert audit_rows[0]["reassigned_count"] == 2, "the row MUST record the partial reassigned count"
+    assert audit_rows[0]["planned_count"] == 4, "the row MUST record the planned count"

@@ -256,14 +256,30 @@ class APProfileMigrationManager:
         # interrupted run leaves the file in a consistent partial state. The
         # in-memory ``payload`` dict is mutated in place; the returned value
         # is the same object -- kept explicit for readability.
-        final_payload = APProfileMigrationManager._run_reassignment_loop(
-            mist_session,
-            ap_records,
-            target_id,
-            backup_path,
-            payload,
-            progress_stride=_PROGRESS_STRIDE,
-        )
+        # WHY: issue #1700 -- Ctrl+C used to skip the audit emission below, so
+        # a stopped run left no JSONL row at all. Catch the interrupt, record
+        # the partial result, then re-raise after the audit row is written.
+        interrupted = False
+        try:
+            final_payload = APProfileMigrationManager._run_reassignment_loop(
+                mist_session,
+                ap_records,
+                target_id,
+                backup_path,
+                payload,
+                progress_stride=_PROGRESS_STRIDE,
+            )
+        except KeyboardInterrupt:
+            # WHY: the loop mutates ``payload`` in place, so it already holds
+            # every AP that was reassigned before the operator stopped the run.
+            final_payload = payload
+            final_payload["outcome"] = "interrupted"
+            interrupted = True
+            _LOGGER.warning(
+                "Migration interrupted by the operator after %d of %d APs. Writing the audit row.",
+                len(final_payload.get("aps_reassigned", [])),
+                len(ap_records),
+            )
 
         # WHY: use the in-memory final payload for the summary print so we
         # never re-read a file that may have been left in a partial state by
@@ -300,6 +316,11 @@ class APProfileMigrationManager:
                 },
             }
         )
+
+        # WHY: the audit row is on disk now, so the operator's Ctrl+C may travel
+        # on to the menu loop that reports the interruption.
+        if interrupted:
+            raise KeyboardInterrupt
 
     @staticmethod
     def revert_ap_profile_migration(session: Any | None = None) -> None:
