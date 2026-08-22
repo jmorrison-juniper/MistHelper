@@ -44,9 +44,16 @@ REASON_READ_FAILED = "read_failed"
 REASON_SHORT_READ = "page_count_mismatch"
 REASON_UNKNOWN_SHAPE = "unexpected_response_shape"
 REASON_TYPE_GAP = "device_type_gap"
+# The SDK catches every HTTP fault and answers with a response object, so a
+# refusal arrives here as a readable answer and never as a raised fault.
+REASON_ERROR_STATUS = "cloud_error_status"
 
 # A fault outside an HTTP answer carries no status, so the entry reports zero.
 HTTP_STATUS_NONE = 0
+
+# The HTTP range that counts as a read.
+_STATUS_FLOOR = 200
+_STATUS_CEILING = 300
 
 MIN_PAGE_LIMIT = 1
 MAX_PAGE_LIMIT = 1000
@@ -238,14 +245,40 @@ def _reported_total(response: Any) -> int | None:
     return total if isinstance(total, int) else None
 
 
+def _status_reason(status: int) -> str | None:
+    """Return the reason that one HTTP status carries, or None after a read.
+
+    Why:
+        The SDK catches every HTTP fault and answers with a response object
+        (``.venv/Lib/site-packages/mistapi/__api_request.py:228-258``). A
+        refusal therefore never reaches an ``except`` block. It arrives here
+        with an error body that the page helper cannot read, and the shape
+        test alone would name it an unexpected shape. That word tells an
+        operator the SDK contract changed, when the true cause is a refused
+        call or a lost connection.
+
+    Args:
+        status: The HTTP status of the answer, or zero when it holds none.
+
+    Returns:
+        The reason word, or None when the status counts as a read.
+    """
+    if status == HTTP_STATUS_NONE:  # The SDK swallowed a connection fault and built an answer with no status.
+        return REASON_READ_FAILED
+    if not _STATUS_FLOOR <= status < _STATUS_CEILING:
+        return REASON_ERROR_STATUS
+    return None
+
+
 def guard_page_count(section: str, collected: int, response: Any) -> list[dict[str, Any]]:
     """Compare the collected count against the count that the cloud reported.
 
     Why:
         ``mistapi.get_all`` returns an empty list for an answer shape that it
         does not know, and it raises nothing. A capture would then store zero
-        devices and look complete. This guard reads the answer shape and the
-        reported total, so a short read becomes a partial reason.
+        devices and look complete. This guard reads the status, the answer
+        shape, and the reported total, so a refusal and a short read each
+        become a partial reason that names its own cause.
 
     Args:
         section: The section name for a partial reason entry.
@@ -256,6 +289,10 @@ def guard_page_count(section: str, collected: int, response: Any) -> list[dict[s
         One partial reason entry, or an empty list after a whole read.
     """
     status = _status_code(response)
+    status_reason = _status_reason(status)
+    if status_reason is not None:
+        logger.warning("Upgrade portal read no records for section %s. The cloud answered %s", section, status)
+        return [_partial_reason(section, status_reason, status)]
     if not _known_shape(response):
         logger.warning("Upgrade portal read an unknown shape for section %s, status %s", section, status)
         return [_partial_reason(section, REASON_UNKNOWN_SHAPE, status)]
@@ -591,6 +628,7 @@ __all__ = [
     "HTTP_STATUS_NONE",
     "MAX_PAGE_LIMIT",
     "MIN_PAGE_LIMIT",
+    "REASON_ERROR_STATUS",
     "REASON_READ_FAILED",
     "REASON_SHORT_READ",
     "REASON_TYPE_GAP",

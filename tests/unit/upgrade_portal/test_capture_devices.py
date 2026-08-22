@@ -52,6 +52,7 @@ ACCESS_POINT_UPTIME = 4200
 MEMBER_COUNT = 2
 
 HTTP_OK = 200
+HTTP_FORBIDDEN = 403
 
 # WHY: The twelve fields of the data model. A comparison of two captures is a
 #      shallow map comparison over this entry, so an extra field breaks it.
@@ -516,6 +517,42 @@ class TestGuardPageCount:
         """
         reasons = devices.guard_page_count(devices.SECTION_STATISTICS, 0, _response({"devices": []}))
         assert reasons[0]["reason"] == devices.REASON_UNKNOWN_SHAPE
+
+    def test_a_refused_call_reports_the_cloud_error_status(self) -> None:
+        """A refused call reports the error status reason, not an unknown shape.
+
+        Why:
+            The SDK catches every HTTP fault and answers with a response
+            object, so a refusal reaches this guard and never an ``except``
+            block. Its error body holds no ``results``. The shape test alone
+            would blame the SDK contract and hide an expired token from the
+            operator.
+        """
+        response = _response({"detail": "forbidden"}, status_code=HTTP_FORBIDDEN)
+        reasons = devices.guard_page_count(devices.SECTION_INVENTORY, 0, response)
+        expected = {
+            "section": devices.SECTION_INVENTORY,
+            "reason": devices.REASON_ERROR_STATUS,
+            "http_status": HTTP_FORBIDDEN,
+        }
+        assert reasons == [expected]
+
+    def test_an_answer_without_a_status_reports_a_read_failure(self) -> None:
+        """An answer that carries no status reports the read failure reason.
+
+        Why:
+            The SDK swallows a connection fault and builds an answer that holds
+            no status. A lost connection is not a contract change, so the guard
+            must name the lost call.
+        """
+        response = SimpleNamespace(data={}, status_code=None)
+        reasons = devices.guard_page_count(devices.SECTION_STATISTICS, 0, response)
+        expected = {
+            "section": devices.SECTION_STATISTICS,
+            "reason": devices.REASON_READ_FAILED,
+            "http_status": devices.HTTP_STATUS_NONE,
+        }
+        assert reasons == [expected]
 
     def test_a_plain_list_answer_reports_nothing(self) -> None:
         """A list body carries no total, so the guard stays quiet.
