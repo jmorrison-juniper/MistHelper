@@ -64,6 +64,7 @@ TIER_STANDARD = 2  # The device state and the client lists.
 ACCEPTED_STATUS = 202  # The portal took the work and answered before it ended.
 CONFLICT_STATUS = 409  # The run exists and its state refuses the call.
 PRE_CAPTURE_MISSING_CODE = "pre_capture_missing"  # FR-035 refuses a start with no saved pre-check.
+PRE_CHECK_LOCKED_CODE = "pre_check_locked"  # A run that sent firmware keeps the reading it holds.
 
 PROBE_EMAIL = "probe.operator@example.invalid"  # A reserved domain, so no real address appears.
 UNKNOWN_RUN_ID = "run-00000000000000000000000000000000"  # A well-shaped key that no store holds.
@@ -151,18 +152,20 @@ class RecordingLauncher:
 
 
 class VerifyingRunner:
-    """A stand-in collector that reports one verified capture and stops.
+    """A stand-in collector that reports one verified capture for each job.
 
     Why:
         The real collector reads a whole site. These tests prove what happens
         when a capture turns verified, so this stand-in reports that one state
         change through the same reporter the collector uses, and reads nothing.
+        The counter holds one permit for each report, so a test that starts two
+        captures waits for each one in turn and never reads a stale list.
     """
 
     def __init__(self) -> None:
-        """Start with no job and with the event unset."""
+        """Start with no job and with no report counted."""
         self.capture_ids: list[str] = []  # One entry for each job this runner received.
-        self.finished = threading.Event()  # The test waits on this event, never on a sleep.
+        self.reports = threading.Semaphore(0)  # One permit for each report, so no test ever sleeps.
 
     def __call__(self, job: dict[str, Any]) -> None:
         """Report one verified capture, then release the waiting test.
@@ -171,9 +174,9 @@ class VerifyingRunner:
             job: The capture job that the start route built.
         """
         capture_id = str(job["capture_id"])  # The identifier that the run must end up naming.
-        self.capture_ids.append(capture_id)  # The test reads this list after the event.
+        self.capture_ids.append(capture_id)  # The test reads this list after it takes a permit.
         capture_routes.record_status(capture_id, state=VERIFIED_STATE, verified=True)  # The one change.
-        self.finished.set()  # Every write of this thread is done, so the test may continue.
+        self.reports.release()  # Every write of this thread is done, so the test may continue.
 
 
 # ---------------------------------------------------------------------------
@@ -341,22 +344,24 @@ def take_capture(client: FlaskClient, site_id: str, run_id: str, role: str = ROL
     return client.post(CAPTURE_PATH_TEMPLATE.format(site_id=site_id), json=body)
 
 
-def await_capture(runner: VerifyingRunner) -> str:
-    """Wait for the worker to report and return the capture it reported on.
+def await_capture(runner: VerifyingRunner, ordinal: int = 1) -> str:
+    """Wait for the next worker report and return the capture it reported on.
 
     Why:
         The reading runs on another thread, so an assertion that ran at once
-        would read the store before the worker wrote it. The event makes the
-        wait exact, and no test ever sleeps for a fixed time.
+        would read the store before the worker wrote it. The counter makes the
+        wait exact for each report in turn, and no test ever sleeps for a fixed
+        time. A test that starts two captures therefore waits twice.
 
     Args:
-        runner: The stand-in that reports one verified capture.
+        runner: The stand-in that reports one verified capture for each job.
+        ordinal: The report to wait for, counting from one.
 
     Returns:
         The identifier of the capture the worker reported on.
     """
-    assert runner.finished.wait(WORKER_WAIT_SECONDS), "The capture worker never reported."
-    return runner.capture_ids[0]  # One start means one job, so the first entry is the only entry.
+    assert runner.reports.acquire(timeout=WORKER_WAIT_SECONDS), "The capture worker never reported."
+    return runner.capture_ids[ordinal - 1]  # The reports arrive in the order the tests start them.
 
 
 def send_start(client: FlaskClient, run_id: str) -> TestResponse:
@@ -534,3 +539,114 @@ def test_a_start_after_the_pre_check_reaches_the_run_driver(
     answer = send_start(joined_client, run_id)
     assert answer.status_code == ACCEPTED_STATUS
     assert launcher.launched == [run_id]
+
+
+# ---------------------------------------------------------------------------
+# The repeat pre-check.
+# ---------------------------------------------------------------------------
+
+
+def test_a_repeat_pre_check_would_carry_the_identifier_of_the_first() -> None:
+    """The capture key derives from the run alone, so a repeat names the first.
+
+    Why:
+        This one property is the reason the route refuses a repeat. The capture
+        collection keys on the identifier, so a second reading of the same run
+        does not join the first one. It replaces that stored document in place.
+    """
+    first = capture_routes.build_capture_id("run-abc")  # The identifier the first pre-check carries.
+    assert capture_routes.build_capture_id("run-abc") == first
+
+
+def test_a_repeat_pre_check_before_the_start_is_accepted(
+    joined_client: FlaskClient,
+    run_store: RecordingRunStore,
+    runner: VerifyingRunner,
+    fake_org_id: str,
+    fake_site_id: str,
+) -> None:
+    """An operator who wants a different tier may take the pre-check again.
+
+    Why:
+        The run has sent no firmware, so the site still holds the versions the
+        first reading described. The replacement is what the operator asked for,
+        and the newer reading is the better one.
+
+    Args:
+        joined_client: The signed-in test browser.
+        run_store: The stand-in run record store.
+        runner: The stand-in that reports one verified capture.
+        fake_org_id: The organization that holds the site.
+        fake_site_id: The site the run acts on.
+    """
+    run_id = seed_run(run_store, fake_org_id, fake_site_id)
+    take_capture(joined_client, fake_site_id, run_id)
+    first = await_capture(runner)
+    answer = take_capture(joined_client, fake_site_id, run_id)
+    assert answer.status_code == ACCEPTED_STATUS
+    assert await_capture(runner, ordinal=2) == first
+    assert (run_store.read_run(run_id) or {}).get(PRE_CAPTURE_FIELD) == first
+
+
+def test_a_repeat_pre_check_after_the_start_is_refused(
+    joined_client: FlaskClient,
+    run_store: RecordingRunStore,
+    runner: VerifyingRunner,
+    fake_org_id: str,
+    fake_site_id: str,
+) -> None:
+    """A run that sent firmware keeps the only reading of the site before it.
+
+    Why:
+        The brief asks the portal to lock the first capture, so that no later
+        capture corrupts the reading the comparison depends on. A reading taken
+        after the start describes upgraded devices, so the comparison would
+        measure the upgraded site against itself and report no change. The route
+        refuses, so no worker starts and no store write ever opens.
+
+    Args:
+        joined_client: The signed-in test browser.
+        run_store: The stand-in run record store.
+        runner: The stand-in that reports one verified capture.
+        fake_org_id: The organization that holds the site.
+        fake_site_id: The site the run acts on.
+    """
+    run_id = seed_run(run_store, fake_org_id, fake_site_id)
+    take_capture(joined_client, fake_site_id, run_id)
+    first = await_capture(runner)
+    assert send_start(joined_client, run_id).status_code == ACCEPTED_STATUS
+    answer = take_capture(joined_client, fake_site_id, run_id)
+    assert answer.status_code == CONFLICT_STATUS
+    assert (answer.get_json() or {}).get("error", {}).get("code") == PRE_CHECK_LOCKED_CODE
+    assert runner.capture_ids == [first]  # The refusal ran before the route built any job.
+    assert (run_store.read_run(run_id) or {}).get(PRE_CAPTURE_FIELD) == first
+
+
+def test_a_post_check_after_the_start_is_never_refused(
+    joined_client: FlaskClient,
+    run_store: RecordingRunStore,
+    runner: VerifyingRunner,
+    fake_org_id: str,
+    fake_site_id: str,
+) -> None:
+    """The rule guards the pre-check half alone.
+
+    Why:
+        The run driver owns the post half and gives it the second ordinal, so a
+        post-check writes its own document and collides with nothing. A refusal
+        there would stop every upgrade from ever reading the site afterwards.
+
+    Args:
+        joined_client: The signed-in test browser.
+        run_store: The stand-in run record store.
+        runner: The stand-in that reports one verified capture.
+        fake_org_id: The organization that holds the site.
+        fake_site_id: The site the run acts on.
+    """
+    run_id = seed_run(run_store, fake_org_id, fake_site_id)
+    take_capture(joined_client, fake_site_id, run_id)
+    await_capture(runner)
+    assert send_start(joined_client, run_id).status_code == ACCEPTED_STATUS
+    answer = take_capture(joined_client, fake_site_id, run_id, role=ROLE_POST)
+    assert answer.status_code == ACCEPTED_STATUS
+    assert await_capture(runner, ordinal=2)  # The worker really ran, and it finished before the test ends.

@@ -182,9 +182,24 @@ from these two routes.
 | 400 | `bad_tier` when `tier` is not 2 or 3 |
 | 404 | `site_not_found` when the chosen organization holds no such site |
 | 409 | `site_locked` when a different operator holds the site lock |
+| 409 | `pre_check_locked` when the named run already sent firmware |
 
 The portal starts the work in the background and answers at once. `tier` defaults
 to 2.
+
+The `pre_check_locked` refusal protects the one reading of a site before its
+upgrade. The capture identifier derives from the run alone, so a repeat pre-check
+of the same run carries the identifier of the first one and replaces that stored
+document in place. Before the run sends firmware, that replacement is what the
+operator asked for, and the portal accepts it. After the run sends firmware, the
+new reading describes upgraded devices, and the comparison would then measure the
+upgraded site against itself. The route refuses there, so no worker starts and no
+store write ever opens. The rule reads the run state, so a stopped run and a
+failed run both keep the pre-check they hold.
+
+The rule guards the pre-check half alone. The run driver owns the post half and
+gives it the second ordinal, so a post-check writes its own document and collides
+with nothing.
 
 The lock gates this endpoint for a second operator only. The operator who holds
 the lock still starts their own capture. The documented journey takes the lock

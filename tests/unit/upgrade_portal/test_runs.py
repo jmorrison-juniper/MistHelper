@@ -88,6 +88,35 @@ OFF_CHAIN_STATES: Final[tuple[str, ...]] = ("stopping", "stopped", "failed")
 # WHY: A finished run moves nowhere. The stop route reads this refusal.
 TERMINAL_NAMES: Final[tuple[str, ...]] = ("complete", "stopped", "failed")
 
+# WHY: The four states before firmware submission. A run in one of these has
+# touched no device, so a fresh pre-check still describes the site before the
+# upgrade. The test carries its own copy, so a slice that moves in the module
+# fails here.
+PRE_CHECK_OPEN_NAMES: Final[tuple[str, ...]] = (
+    "created",
+    "pre_capture_running",
+    "pre_capture_done",
+    "awaiting_confirmation",
+)
+
+# WHY: Every other state. A capture taken in one of these reads devices that the
+# upgrade already touched, and a stopped or failed run must keep the reading it
+# holds. No state here may replace a pre-check.
+PRE_CHECK_CLOSED_NAMES: Final[tuple[str, ...]] = (
+    "upgrade_submitting",
+    "upgrade_running",
+    "settling_gateways",
+    "settling_switches",
+    "settling_aps",
+    "settling_clients",
+    "post_capture_running",
+    "post_capture_done",
+    "complete",
+    "stopping",
+    "stopped",
+    "failed",
+)
+
 # WHY: The two moves out of stopping.
 STOPPING_MOVES: Final[tuple[tuple[str, str], ...]] = (
     ("stopping", "stopped"),
@@ -820,6 +849,81 @@ def test_read_state_rejects_a_record_with_no_state() -> None:
     """
     with pytest.raises(RunTransitionError, match="not a run state"):
         RunStateMachine.read_state({})
+
+
+def test_the_open_set_holds_only_the_states_before_submission() -> None:
+    """The open set names the four states that precede firmware submission.
+
+    Why:
+        The module derives this set by slicing the chain. A slice that moved by
+        one would let a capture taken after submission replace the pre-check,
+        and the comparison would then measure the upgraded site against itself.
+    """
+    names = {state.value for state in RunStateMachine.PRE_CHECK_OPEN}
+    assert names == set(PRE_CHECK_OPEN_NAMES)
+
+
+def test_the_two_name_groups_cover_every_state() -> None:
+    """Every state of the model sits in exactly one of the two test groups.
+
+    Why:
+        A state added to the model without a place here would go untested, and
+        the untested answer is the one that destroys the pre-check.
+    """
+    open_names = set(PRE_CHECK_OPEN_NAMES)
+    closed_names = set(PRE_CHECK_CLOSED_NAMES)
+    assert open_names & closed_names == set()
+    assert open_names | closed_names == {state.value for state in RunState}
+
+
+@pytest.mark.parametrize("state_name", PRE_CHECK_OPEN_NAMES)
+def test_pre_check_replaceable_allows_a_run_before_submission(state_name: str) -> None:
+    """A run that sent no firmware may still name a different pre-check.
+
+    Why:
+        An operator who reviews a capture and wants the extra tier may take the
+        pre-check again. The newer reading is the better one, because no device
+        has changed.
+
+    Args:
+        state_name: The state the run record holds.
+    """
+    assert RunStateMachine.pre_check_replaceable(_record_in(state_name)) is True
+
+
+@pytest.mark.parametrize("state_name", PRE_CHECK_CLOSED_NAMES)
+def test_pre_check_replaceable_refuses_a_run_from_submission_onward(state_name: str) -> None:
+    """A run that reached firmware submission keeps the pre-check it named.
+
+    Why:
+        A capture read after submission reads upgraded devices. It would replace
+        the only reading of the site before the upgrade, and the comparison
+        would then report no change at all.
+
+    Args:
+        state_name: The state the run record holds.
+    """
+    assert RunStateMachine.pre_check_replaceable(_record_in(state_name)) is False
+
+
+def test_pre_check_replaceable_refuses_a_record_with_no_state() -> None:
+    """A record that names no state answers False rather than raising.
+
+    Why:
+        The caller runs inside a capture worker thread. An unreadable stage
+        cannot prove a replacement is safe, so the stored pre-check stays.
+    """
+    assert RunStateMachine.pre_check_replaceable({}) is False
+
+
+def test_pre_check_replaceable_refuses_a_state_outside_the_model() -> None:
+    """A state name the model never held answers False.
+
+    Why:
+        A record written by a newer version of the portal may name a stage this
+        one cannot read. The safe answer keeps the reading that exists.
+    """
+    assert RunStateMachine.pre_check_replaceable({"state": "settling_printers"}) is False
 
 
 def test_fail_writes_the_error_object() -> None:

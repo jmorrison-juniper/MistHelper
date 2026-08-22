@@ -33,12 +33,13 @@ from __future__ import annotations  # Every annotation stays text, so a name may
 import logging  # The portal logs with the standard library only.
 import threading  # One worker thread for each capture, and one guard for the progress store.
 import uuid  # Names a run that the operator started without one.
-from collections.abc import Callable  # Types each injected seam.
+from collections.abc import Callable, Mapping  # Types each injected seam and each read-only record.
 from typing import Any  # A capture document and an injected seam are both free-form.
 
 from flask import Blueprint, Response, current_app, has_app_context, jsonify, request  # The framework.
 
 from ...runtime import identity  # The real session guard. No copy of it lives here.
+from ...runtime.runs import RunStateMachine  # The run states belong to that module, so no copy of them lives here.
 from ..factory import json_error  # The one error envelope that the contract allows.
 from .select import (  # The sibling module owns these rules, so no copy of them lives here.
     find_attribute,
@@ -130,6 +131,7 @@ PROGRESS_LIMIT = 200  # Two hundred records cover a whole day of work at a small
 BAD_TIER_CODE = "bad_tier"  # `contracts/http-api.md` fixes this code for an unknown tier.
 SITE_NOT_FOUND_CODE = "site_not_found"  # The same code that the inventory route answers.
 SITE_LOCKED_CODE = "site_locked"  # Another operator holds the site.
+PRE_CHECK_LOCKED_CODE = "pre_check_locked"  # A run that sent firmware keeps the reading it holds.
 CAPTURE_NOT_FOUND_CODE = "capture_not_found"  # No such capture.
 CAPTURE_NOT_VERIFIED_CODE = "capture_not_verified"  # `contracts/http-api.md:176` fixes this code.
 CAPTURE_TOO_NEW_CODE = "schema_version_too_new"  # `capture.store.REASON_SCHEMA_TOO_NEW` names this refusal.
@@ -137,6 +139,7 @@ CAPTURE_TOO_NEW_CODE = "schema_version_too_new"  # `capture.store.REASON_SCHEMA_
 BAD_TIER_MESSAGE = "Choose the data tier 2 or the data tier 3."  # Names both legal values.
 SITE_NOT_FOUND_MESSAGE = "The portal found no such site in this organization."  # Names the scope.
 SITE_LOCKED_MESSAGE = "Another operator holds this site. Wait for that run to end."  # Names the cure.
+PRE_CHECK_LOCKED_MESSAGE = "This upgrade started, so its first capture stays. Open a new run instead."  # Cure.
 CAPTURE_NOT_FOUND_MESSAGE = "The portal holds no capture with that identifier."  # No cure.
 CAPTURE_NOT_VERIFIED_MESSAGE = "The portal did not read this capture back, so it may not be compared."  # Why.
 CAPTURE_TOO_NEW_MESSAGE = "A later version of the portal wrote this capture. Upgrade the portal to read it."  # Cure.
@@ -301,14 +304,40 @@ def pre_check_run(record: dict[str, Any]) -> str:
     return str(record.get(RUN_FIELD, ""))  # A capture outside a run answers an empty value too.
 
 
+def pre_check_open(run_id: str, run: Mapping[str, Any], capture_id: str) -> bool:
+    """Answer whether one verified capture may become the pre-check of a run.
+
+    Why:
+        A capture taken after the upgrade started reads upgraded devices. It
+        must never replace the pre-check, because the comparison would then
+        measure the upgraded site against itself and report no change. A run
+        that names no pre-check yet accepts any, because it holds none to lose.
+
+    Args:
+        run_id: The run that owns the capture.
+        run: The stored run record.
+        capture_id: The capture that the portal read back unchanged.
+
+    Returns:
+        True when the attach may write. False when the stored pre-check stays.
+    """
+    held = str(run.get(PRE_CAPTURE_FIELD) or "")  # An absent field and a null both read as empty.
+    if not held or held == capture_id:  # No reading to lose, or the same capture reported twice.
+        return True  # The first attach of a run always writes.
+    if RunStateMachine.pre_check_replaceable(run):  # The operator may still retake a pre-check.
+        logger.info("capture: the run %s replaces the pre-check %s with %s", run_id, held, capture_id)  # Audit.
+        return True  # The newer reading of an unstarted run is the better one.
+    logger.warning("capture: the run %s keeps the pre-check %s and refuses %s", run_id, held, capture_id)  # Audit.
+    return False
+
+
 def attach_pre_capture(capture_id: str, record: dict[str, Any]) -> None:
     """Write one verified pre-check onto the run record that owns it.
 
     Why:
-        FR-035 refuses a start until the run names a saved pre-check, and the
-        confirm page keeps its begin button shaded until then. This module is
-        the only one that learns when a capture is verified, so the attach
-        belongs here. Without it no operator can ever start an upgrade.
+        FR-035 refuses a start until the run names a saved pre-check, and the confirm page keeps its
+        begin button shaded until then. This module is the only one that learns when a capture is
+        verified, so the attach belongs here. Without it no operator can ever start an upgrade.
 
     Args:
         capture_id: The capture that the portal read back unchanged.
@@ -322,6 +351,8 @@ def attach_pre_capture(capture_id: str, record: dict[str, Any]) -> None:
     if not isinstance(run, dict):  # A capture may name a run that this process never held.
         logger.info("capture: the capture %s names a run that no store holds", capture_id)  # Names the gap.
         return  # The operator then meets the start refusal, which is the truthful answer.
+    if not pre_check_open(run_id, run, capture_id):  # A started run keeps the pre-check it named.
+        return  # The refusal already reached the log with both identifiers.
     run[PRE_CAPTURE_FIELD] = capture_id  # FR-035 reads this field before it allows a start.
     store.write_run(run)  # The confirm page then opens its begin button.
     logger.info("capture: the run %s now names the verified pre-check %s", run_id, capture_id)  # Audit.
@@ -654,6 +685,53 @@ def held_by_other(org_id: str, site_id: str) -> str | None:
     return holder  # The caller answers 409 and names no address in the log.
 
 
+def pre_check_locked(body: dict[str, Any]) -> bool:
+    """Answer whether one request repeats a pre-check that its run has locked.
+
+    Why:
+        `build_capture_id` names the capture from the run alone, so a repeat pre-check carries the identifier of
+        the first one and would replace that stored document in place. Before firmware submission the operator
+        asked for that replacement. After it the reading describes upgraded devices, and the comparison would
+        measure the upgraded site against itself. The route refuses there, so no worker ever opens the write.
+
+    Args:
+        body: The request body, which may name the run and the role.
+
+    Returns:
+        True when the run keeps the pre-check it holds. False otherwise.
+    """
+    run_id = str(body.get(RUN_FIELD) or "")  # A capture with no run names no reading to protect.
+    if not run_id or str(body.get(ROLE_FIELD) or DEFAULT_ROLE) != ROLE_PRE:  # The driver owns the post half.
+        return False  # A post-check writes its own document at the second ordinal.
+    run = run_store().read_run(run_id)  # None means no start ever created this run.
+    if not isinstance(run, dict) or not run.get(PRE_CAPTURE_FIELD) or RunStateMachine.pre_check_replaceable(run):
+        return False  # No run, no reading to lose, or a run that may still retake its pre-check.
+    logger.warning("capture: the run %s keeps its pre-check and refuses a repeat", run_id)  # Audit.
+    return True
+
+
+def capture_conflict(org_id: str, site_id: str, body: dict[str, Any]) -> tuple[Response, int] | None:
+    """Answer the refusal that stops one capture, or None when it may start.
+
+    Why:
+        Two rules answer 409 for a capture start: another operator holds the site, and the run already locked the
+        pre-check it holds. One reader holds both, so the route keeps one line for the pair that shares an answer.
+
+    Args:
+        org_id: The organization that holds the site.
+        site_id: The site the capture reads.
+        body: The request body, which may name the run and the role.
+
+    Returns:
+        The refusal envelope, or None when the capture may start.
+    """
+    if held_by_other(org_id, site_id):  # The operator that holds the lock still takes their own capture.
+        return json_error(CONFLICT_STATUS, SITE_LOCKED_CODE, SITE_LOCKED_MESSAGE)  # The holder must end first.
+    if pre_check_locked(body):  # A started run keeps the only reading of the site before the upgrade.
+        return json_error(CONFLICT_STATUS, PRE_CHECK_LOCKED_CODE, PRE_CHECK_LOCKED_MESSAGE)  # The reading stays.
+    return None  # Every rule that answers 409 passed, so the reading may start.
+
+
 # --------------------------------------------------------------------------
 # The stored capture.
 # --------------------------------------------------------------------------
@@ -861,8 +939,8 @@ def start_capture(site_id: str) -> tuple[Response, int]:
     tier = read_tier(body)  # None means the body named a tier the portal does not read.
     if tier is None:  # FR-021 refuses every tier other than 2 and 3.
         return json_error(BAD_REQUEST_STATUS, BAD_TIER_CODE, BAD_TIER_MESSAGE)  # T058 fixes this code too.
-    if held_by_other(org_id, site_id):  # The operator that holds the lock still takes their own capture.
-        return json_error(CONFLICT_STATUS, SITE_LOCKED_CODE, SITE_LOCKED_MESSAGE)  # The holder must end first.
+    if (refusal := capture_conflict(org_id, site_id, body)) is not None:  # Both 409 rules live in one reader.
+        return refusal  # The reader already named the cause in the log.
     return launch_capture(site, org_id, tier, body)  # Every check passed, so the reading starts.
 
 

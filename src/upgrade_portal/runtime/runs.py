@@ -386,6 +386,16 @@ class RunStateMachine:
         {RunState.COMPLETE, RunState.STOPPED, RunState.FAILED},
     )
 
+    # WHY: The states before firmware submission. A run that reached submission
+    # can never take a new pre-check, because a capture read after that moment
+    # reads upgraded devices. It would replace the only reading of the site
+    # before the upgrade, and the comparison would then measure the upgraded
+    # site against itself. The set derives from the chain, so a stage added
+    # before submission joins it without a second edit.
+    PRE_CHECK_OPEN: ClassVar[frozenset[RunState]] = frozenset(
+        CHAIN[: CHAIN.index(RunState.UPGRADE_SUBMITTING)],
+    )
+
     def advance(self, record: MutableMapping[str, Any], target: RunState | str) -> MutableMapping[str, Any]:
         """Move one run record to a new state and stamp the update time.
 
@@ -467,6 +477,31 @@ class RunStateMachine:
             RunTransitionError: When the record holds no known state name.
         """
         return cls.coerce(str(record.get("state", "")))
+
+    @classmethod
+    def pre_check_replaceable(cls, record: Mapping[str, Any]) -> bool:
+        """Answer whether one run may still name a different pre-check.
+
+        Why:
+            The brief asks the portal to lock the first capture once the second
+            one exists, so that no later capture corrupts the reading the
+            comparison depends on. This method locks it earlier, at firmware
+            submission, because that is the first moment a capture stops
+            describing the site before the upgrade. Until then an operator who
+            wants a different tier may take the pre-check again, and the newer
+            reading is the better one.
+
+        Args:
+            record: The stored run record.
+
+        Returns:
+            True while the run has not submitted firmware. False once it has,
+            and False when the record names no state this module knows.
+        """
+        try:
+            return cls.read_state(record) in cls.PRE_CHECK_OPEN
+        except RunTransitionError:  # An unreadable stage cannot prove a replacement is safe.
+            return False
 
     @staticmethod
     def coerce(value: RunState | str) -> RunState:
