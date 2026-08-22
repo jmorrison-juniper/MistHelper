@@ -17,7 +17,8 @@ Why:
 from __future__ import annotations
 
 import logging
-from collections.abc import Mapping, Sequence
+import time
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass
 from functools import partial
 from typing import Any
@@ -64,6 +65,17 @@ STRATEGY_CHOICES = ("big_bang", "canary", "rrm", "serial")
 # The seam already carries those defaults, so this module reads them instead of
 # repeating them. One term, one meaning.
 DEFAULT_OPTIONS = UpgradeOptions()
+
+# The clock of the browser and the clock of the portal rarely agree to the
+# second, and an operator who chooses "now" sends a moment that may already be a
+# few seconds old. This window keeps that ordinary difference out of the refusal.
+START_TIME_GRACE_SECONDS = 120
+
+# A millisecond epoch pasted into the field reads as a moment tens of thousands
+# of years ahead. The cloud accepts it and the upgrade never runs, so the
+# operator waits for work that can never start. One year of lead time covers
+# every real maintenance window and still refuses that mistake.
+START_TIME_HORIZON_SECONDS = 365 * 24 * 60 * 60
 
 WARNING_MIXED_FAMILY = "The site holds two gateway families. The portal reports the result of each family on its own."
 WARNING_SAME_VERSION = "One device already runs the version that you chose. The portal still sends the upgrade."
@@ -338,7 +350,51 @@ def _read_strategy(payload: Mapping[str, Any]) -> str:
     return word
 
 
-def _read_start_time(payload: Mapping[str, Any]) -> int | None:
+def _now_epoch() -> int:
+    """Read the current moment as whole epoch seconds.
+
+    Why:
+        The start time window compares the chosen moment against now. A named
+        function is the seam that a test replaces, so no test depends on the
+        clock of the machine that runs it.
+
+    Returns:
+        The current moment in epoch seconds.
+    """
+    return int(time.time())
+
+
+def _guard_start_time(moment: int, now: int) -> int:
+    """Refuse a chosen moment that sits outside the window a run can use.
+
+    Why:
+        The cloud starts the upgrade at once when the moment is already past, so
+        a stale value writes firmware immediately while the operator believes
+        they scheduled it for later. A moment far ahead never runs at all, and
+        the operator waits for work that can never start. Both readings look
+        valid to every earlier check, so the window is the only guard.
+
+    Args:
+        moment: The chosen moment in epoch seconds.
+        now: The current moment in epoch seconds.
+
+    Returns:
+        The chosen moment, unchanged.
+
+    Raises:
+        BadOptionError: If the moment is already past, or more than one year
+            ahead.
+    """
+    if moment < now - START_TIME_GRACE_SECONDS:
+        logger.warning("Upgrade portal refused a start time that is already past")
+        raise BadOptionError("start_time")
+    if moment > now + START_TIME_HORIZON_SECONDS:
+        logger.warning("Upgrade portal refused a start time more than one year ahead")
+        raise BadOptionError("start_time")
+    return moment
+
+
+def _read_start_time(payload: Mapping[str, Any], now: Callable[[], int] | None) -> int | None:
     """Map the start time control onto epoch seconds.
 
     Why:
@@ -348,12 +404,15 @@ def _read_start_time(payload: Mapping[str, Any]) -> int | None:
 
     Args:
         payload: The request body.
+        now: The clock that reads the current moment, or None to keep a stored
+            choice exactly as the operator made it.
 
     Returns:
         The chosen moment in epoch seconds, or None for an immediate start.
 
     Raises:
-        BadOptionError: If the value is not a whole number of seconds.
+        BadOptionError: If the value is not a whole number of seconds, or names
+            a moment outside the window that a run can use.
     """
     value = payload.get("start_time")
     if value is None or not str(value).strip():
@@ -361,10 +420,11 @@ def _read_start_time(payload: Mapping[str, Any]) -> int | None:
     word = str(value).strip()
     if isinstance(value, bool) or not word.isdigit():
         raise BadOptionError("start_time")
-    return int(word)
+    moment = int(word)  # ``isdigit`` already refused a sign, so the value is whole and not negative.
+    return moment if now is None else _guard_start_time(moment, now())
 
 
-def build_options(payload: Mapping[str, Any]) -> UpgradeOptions:
+def build_options(payload: Mapping[str, Any], now: Callable[[], int] | None = _now_epoch) -> UpgradeOptions:
     """Map the interface controls onto the seam option record.
 
     Why:
@@ -374,6 +434,8 @@ def build_options(payload: Mapping[str, Any]) -> UpgradeOptions:
 
     Args:
         payload: The request body of ``POST /api/runs/<run_id>/options``.
+        now: The clock that bounds the start time. Pass None to replay a stored
+            choice, which the operator already made against an earlier clock.
 
     Returns:
         The finished option record.
@@ -386,7 +448,7 @@ def build_options(payload: Mapping[str, Any]) -> UpgradeOptions:
         reboot=_read_boolean(payload, "reboot", DEFAULT_OPTIONS.reboot),
         junos_file_action=_read_boolean(payload, "junos_file_action", DEFAULT_OPTIONS.junos_file_action),
         strategy=_read_strategy(payload),
-        start_time=_read_start_time(payload),
+        start_time=_read_start_time(payload, now),
     )
     logger.debug("Upgrade portal chose the strategy %s with reboot %s", options.strategy, options.reboot)
     return options

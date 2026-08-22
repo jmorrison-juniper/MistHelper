@@ -432,7 +432,9 @@ def build_plans(record: Mapping[str, Any]) -> tuple[Any, ...]:
     site_id = str(record.get("site_id", ""))  # Every device of one run belongs to one site.
     try:  # A stored row may hold a value that no rule maps.
         targets: Any = options.to_device_targets(record.get("targets", ()), site_id)  # The seam record shape.
-        choices: Any = options.build_options(record.get("options", {}))  # The four fields the cloud reads.
+        # The operator chose this moment when they saved the options, and the save call bounded it then. A run
+        # that waits for confirmation past its own start time must still upgrade, so no clock reaches this call.
+        choices: Any = options.build_options(record.get("options", {}), now=None)  # The four fields the cloud reads.
         plans: Any = service.plan_upgrade(targets, choices, str(record.get("org_id", "")), site_id)
     except Exception as fault:  # A bad option must fail the run and never send a partial upgrade.
         logger.warning("wiring: the run plan failed with %s", type(fault).__name__)  # The class name only.

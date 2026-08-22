@@ -311,13 +311,23 @@ the site from the signed session.
   "targets": [ { "mac": "<string>", "version_target": "<string>" } ],
   "reboot": true,
   "junos_file_action": false,
-  "strategy": "big_bang"
+  "strategy": "big_bang",
+  "start_time": null
 }
 ```
 
 `junos_file_action` maps to the cloud field that this feature never names in its
 own model. `reboot` applies to switches and gateways only, because the cloud
 reboots an access point on its own.
+
+`start_time` is optional and holds whole epoch seconds. An empty value starts the
+upgrade at once. The portal answers `400 bad_option` for a moment that is already
+past by more than 120 seconds, because the cloud would write firmware immediately
+while the operator believes the work waits. The portal answers `400 bad_option`
+for a moment more than one year ahead, because the cloud accepts that value and
+the upgrade never runs. The start call replays the stored moment without these
+two checks, so a run that waits for confirmation past its own start time still
+upgrades.
 
 ### `POST /api/runs/<run_id>/start` — start the upgrade
 

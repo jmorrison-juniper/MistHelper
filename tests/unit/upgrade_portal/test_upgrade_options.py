@@ -32,6 +32,26 @@ from src.upgrade_portal.upgrade import options as module
 
 PAGE_LIMIT = 100
 
+# A fixed moment, so no test of the start time window reads the clock of the
+# machine that runs it. An epoch written into a test ages into the past, and the
+# window check would then fail on a day that nobody chose.
+FIXED_NOW = 1_780_000_000
+ONE_WEEK_SECONDS = 7 * 24 * 60 * 60
+
+
+def fixed_clock() -> int:
+    """Report the fixed moment that the start time tests measure against.
+
+    Why:
+        ``build_options`` takes the clock as an argument, so a test supplies this
+        function and the window check reads a moment that never moves.
+
+    Returns:
+        The fixed moment in epoch seconds.
+    """
+    return FIXED_NOW
+
+
 SWITCH_ROW: dict[str, Any] = {
     "mac": "5C:5B:35:0E:00:01",
     "name": "bld1-idf2-sw01",
@@ -300,7 +320,8 @@ class TestBuildOptions:
 
     def test_a_start_time_of_digits_becomes_epoch_seconds(self) -> None:
         """The cloud reads ``start_time`` as epoch seconds."""
-        assert module.build_options({"start_time": "1770000000"}).start_time == 1770000000
+        chosen = FIXED_NOW + ONE_WEEK_SECONDS
+        assert module.build_options({"start_time": str(chosen)}, now=fixed_clock).start_time == chosen
 
     @pytest.mark.parametrize("posted", ["", "   ", None])
     def test_an_empty_start_time_means_an_immediate_start(self, posted: Any) -> None:
@@ -313,6 +334,46 @@ class TestBuildOptions:
         with pytest.raises(module.BadOptionError) as caught:
             module.build_options({"start_time": posted})
         assert caught.value.field == "start_time"
+
+    def test_a_start_time_that_is_already_past_is_refused(self) -> None:
+        """The cloud starts the upgrade at once when the moment is already past.
+
+        Why:
+            The operator believes they scheduled the work for later, so nobody
+            watches the site while the firmware writes. Every earlier check
+            passes, because a stale epoch is a whole number of seconds.
+        """
+        stale = FIXED_NOW - module.START_TIME_GRACE_SECONDS - 1
+        with pytest.raises(module.BadOptionError) as caught:
+            module.build_options({"start_time": str(stale)}, now=fixed_clock)
+        assert caught.value.field == "start_time"
+
+    def test_a_moment_a_few_seconds_past_is_accepted(self) -> None:
+        """The clock of the browser and the clock of the portal rarely agree."""
+        near = FIXED_NOW - 30
+        assert module.build_options({"start_time": str(near)}, now=fixed_clock).start_time == near
+
+    def test_a_millisecond_epoch_is_refused(self) -> None:
+        """A millisecond value names a moment tens of thousands of years ahead.
+
+        Why:
+            The cloud accepts the value and the upgrade never runs, so the
+            operator waits for work that can never start.
+        """
+        with pytest.raises(module.BadOptionError) as caught:
+            module.build_options({"start_time": str(FIXED_NOW * 1000)}, now=fixed_clock)
+        assert caught.value.field == "start_time"
+
+    def test_a_stored_choice_replays_without_the_window(self) -> None:
+        """``app/wiring.py`` rebuilds the options of a run that already waited.
+
+        Why:
+            The operator chose the moment at the save call, and that call bounded
+            it. A run that waits for confirmation past its own start time must
+            still upgrade. A refusal here would fail the whole run instead.
+        """
+        stale = FIXED_NOW - ONE_WEEK_SECONDS
+        assert module.build_options({"start_time": str(stale)}, now=None).start_time == stale
 
 
 class TestResolveFamilyScope:
