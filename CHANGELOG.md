@@ -7,6 +7,23 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Replace the assert runtime guards in the SSH package (issue #1720)
+
+- **Defect (Fixed)**: four runtime guards used `assert`. The interpreter removes
+  every `assert` when it runs with `-O`, so each guard disappeared in an
+  optimized run and the code continued past a condition that must stop it.
+- **Guards (Changed)**: `ShellExecutor.execute`, `EnhancedSSHRunner._execute_direct`,
+  `_exec_with_pty`, and `_exec_without_pty` now raise `ValueError` from an
+  explicit `if` check. This copies the pattern that issue #889 established.
+- **Suppressions (Removed)**: the `# nosec B101` comments are gone, because the
+  rule no longer fires. Those comments had hidden the guards from the triage
+  scan of issue #889.
+- **Message (Added)**: `_NO_ACTIVE_CONNECTION_MSG` holds one message per module,
+  so the two packages report the same words.
+- **Tests (Changed)**: the two cases that expected `AssertionError` now expect
+  `ValueError` and match the message. All 180 SSH tests pass under `python` and
+  under `python -O`.
+
 ### Re-probe a database backend that recovered after boot (issue #1830)
 
 - **Defect (Fixed)**: `DatabaseRouter` latched the ArangoDB, Redis TimeSeries,

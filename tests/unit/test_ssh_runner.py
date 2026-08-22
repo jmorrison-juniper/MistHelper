@@ -1081,9 +1081,9 @@ class TestExecuteDirectStartTime:
     """Tests for _execute_direct with start_time parameter."""
 
     def test_no_client_raises(self):
-        """Calling without connection raises AssertionError."""
+        """Calling without a connection raises ValueError, also under python -O."""
         runner = EnhancedSSHRunner(timeout=10)
-        with pytest.raises(AssertionError):
+        with pytest.raises(ValueError, match="No active SSH connection"):
             runner._execute_direct("show version", start_time=time.time())
 
     @patch("src.ssh.connection.connector.SSHClient")
