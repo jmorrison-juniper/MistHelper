@@ -24,6 +24,7 @@ from __future__ import annotations  # Postponed annotations keep every hint a pl
 import json  # The stored lock value is JSON text, so a seeded record is built the same way.
 from collections.abc import Iterator  # The signed-in fixtures yield and then clean up.
 from datetime import UTC, datetime, timedelta  # A quiet lock needs a timestamp in the past.
+from pathlib import Path  # The audit trail of a takeover needs a directory of its own.
 from typing import Any  # A stored value and a request body are both free-form.
 
 import pytest  # The test framework of the project.
@@ -188,6 +189,28 @@ class FakeLockStore:
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def audit_trail(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Send the takeover audit records of this file to a directory of the test.
+
+    Why:
+        Three tests below run a real takeover, and every takeover writes one
+        audit record. Without this fixture the record lands in `data/` inside
+        the checkout, so one run leaves a file behind and the next run adds to
+        it. The directory here is absolute, which `_audit_path` leaves as
+        written.
+
+    Args:
+        tmp_path: The directory pytest builds for one test.
+        monkeypatch: Redirects the module constant for one test.
+
+    Returns:
+        The path of the audit file of this test.
+    """
+    monkeypatch.setattr(lock, "AUDIT_DIRECTORY", str(tmp_path))  # An absolute directory needs no anchor.
+    return tmp_path / lock.AUDIT_FILE_NAME  # A test that reads the trail names this path.
 
 
 @pytest.fixture
@@ -400,6 +423,23 @@ def take_lock(client: FlaskClient, confirm: str = "") -> TestResponse:
         The answer of the take.
     """
     return client.post(LOCK_PATH, json={"confirm": confirm})  # The one body field the contract names.
+
+
+def refuse_audit_line(document: dict[str, str]) -> None:
+    """Refuse one audit write, the way an unwritable directory refuses it.
+
+    Why:
+        A contract test cannot make a real directory unwritable on every
+        platform. Replacing the sink is the one portable way to reach the
+        refusal that `contracts/site-lock.md:124` describes.
+
+    Args:
+        document: The record the module tried to store.
+
+    Raises:
+        OSError: Always. An unwritable directory raises this class.
+    """
+    raise OSError("The stand-in audit sink refuses every record.")
 
 
 # ---------------------------------------------------------------------------
@@ -650,6 +690,36 @@ def test_a_down_store_refuses_the_take(lock_client: FlaskClient, lock_store: Fak
 
     assert response.status_code == UNAVAILABLE_STATUS  # The contract fixes this status.
     assert read_error_code(response) == "lock_store_unreachable"  # The code names the cause plainly.
+
+
+def test_a_refused_audit_sink_refuses_the_takeover(
+    lock_client: FlaskClient,
+    other_owner: identity.SessionOwner,
+    lock_store: FakeLockStore,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A takeover the trail cannot record answers 503 and leaves the site alone.
+
+    Why:
+        `contracts/site-lock.md:124` writes the audit record before the lock
+        moves, and `contracts/http-api.md:134` answers `503` when the sink
+        refuses that record. A takeover with no record removes the one trail
+        that names who took a site from whom.
+
+    Args:
+        lock_client: The signed-in client of the operator who wants the site.
+        other_owner: The operator that went quiet.
+        lock_store: The stand-in lock store.
+        monkeypatch: Replaces the audit sink with one that always refuses.
+    """
+    token = seed_lock(lock_store, other_owner, QUIET_AGE_SECONDS)  # A quiet holder, ready to be taken over.
+    monkeypatch.setattr(lock, "_append_audit_line", refuse_audit_line)  # The sink refuses every record.
+
+    response = take_lock(lock_client, TAKEOVER_WORD)  # The exact word, so only the sink can stop this take.
+
+    assert response.status_code == UNAVAILABLE_STATUS  # `contracts/http-api.md:134` fixes this status.
+    assert read_error_code(response) == "takeover_audit_failed"  # The code names the cause plainly.
+    assert json.loads(lock_store.values[SITE_KEY])["lock_token"] == token  # The site never changed hands.
 
 
 # ---------------------------------------------------------------------------

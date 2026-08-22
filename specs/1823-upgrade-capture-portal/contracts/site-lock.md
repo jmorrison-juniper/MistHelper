@@ -121,6 +121,14 @@ The portal writes an audit record for every takeover. The record holds the old
 `actor_email`, the new `actor_email`, and the time. A takeover never cancels a
 running upgrade. It transfers who may drive the portal.
 
+The portal writes the audit record before it moves the lock. If the audit sink
+refuses the record, the portal refuses the takeover. The refusal answers `503`
+with the code `takeover_audit_failed`, and the current holder keeps the site. A
+takeover with no record removes the one trail that names who took a site from
+whom. A lost race for the lock can leave one record for a takeover that did not
+happen. An account that over-reports is the safe direction, because a reader can
+rule out an extra record and cannot recover an absent one.
+
 ## Failure behavior
 
 | Condition | Behavior |

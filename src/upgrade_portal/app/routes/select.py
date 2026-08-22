@@ -1256,6 +1256,7 @@ SITE_LOCKED_CODE = "site_locked"  # `contracts/site-lock.md:58` fixes this code 
 LOCK_LOST_CODE = "lock_lost"  # `contracts/site-lock.md:90` and line 103 fix this code and the 409 status.
 CONFIRMATION_REQUIRED_CODE = "confirmation_required"  # `contracts/site-lock.md:59` fixes this code and the 400.
 LOCK_STORE_DOWN_CODE = "lock_store_unreachable"  # `contracts/site-lock.md:128` answers 503 and forbids a fallback.
+TAKEOVER_AUDIT_CODE = "takeover_audit_failed"  # `contracts/site-lock.md:125` refuses a takeover the sink cannot record.
 
 LOCK_LOST_MESSAGE = "This session no longer holds the site. Take the site again before you continue."  # The cure.
 
@@ -1266,6 +1267,7 @@ LOCK_ERROR_STATUS = {
     LOCK_LOST_CODE: CONFLICT_STATUS,  # The token this caller named is no longer the stored one.
     CONFIRMATION_REQUIRED_CODE: BAD_REQUEST_STATUS,  # The operator must type a word first.
     LOCK_STORE_DOWN_CODE: UNAVAILABLE_STATUS,  # The store did not answer, and a write fails closed.
+    TAKEOVER_AUDIT_CODE: UNAVAILABLE_STATUS,  # The trail refused the record, and the site did not move.
     LOCK_FAILED_CODE: CONFLICT_STATUS,  # An unnamed lock failure still refuses the write.
 }
 

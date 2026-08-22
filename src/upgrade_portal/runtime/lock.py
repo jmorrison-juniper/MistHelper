@@ -91,6 +91,7 @@ __all__ = [
     "SiteLockError",
     "SiteLockedError",
     "TakeoverAudit",
+    "TakeoverAuditError",
     "acquire_site_lock",
     "build_key",
     "connect_lock_store",
@@ -181,6 +182,9 @@ TAKEOVER_MESSAGE: Final[str] = "The operator who holds this site went quiet. Typ
 RESUME_MESSAGE: Final[str] = "Your earlier session on this site went quiet. Type continue to take it back."
 LOCK_LOST_MESSAGE: Final[str] = "The portal no longer holds the lock on this site."
 SITE_BUSY_MESSAGE: Final[str] = "The lock on this site changed hands during the request. Try again."
+AUDIT_SINK_MESSAGE: Final[str] = (
+    "The portal cannot record the takeover of this site, so it did not take the site. Tell an administrator."
+)
 
 # WHAT: the compare and extend script of contracts/site-lock.md lines 77 to 85.
 # WHY: the compare and the extend run as one step, so a heartbeat cannot extend
@@ -251,6 +255,20 @@ class LockStoreUnreachableError(SiteLockError):
     """
 
     code: ClassVar[str] = "lock_store_unreachable"  # Matches contracts/site-lock.md line 128
+
+
+class TakeoverAuditError(SiteLockError):
+    """The portal could not record a takeover, so it did not take the site.
+
+    Why:
+        contracts/site-lock.md line 120 asks for an audit record of every
+        takeover. A takeover with no record removes the one trail that names
+        who took a site from whom, so the portal refuses the takeover instead
+        of moving the site with no account of it. This repeats the write policy
+        of the module header: a write fails closed.
+    """
+
+    code: ClassVar[str] = "takeover_audit_failed"  # The portal took no site, so no code of the contract fits
 
 
 class SiteLockedError(SiteLockError):
@@ -446,17 +464,41 @@ AUDIT_DIRECTORY: Final[str] = "data"  # The directory every local artifact of th
 AUDIT_FILE_NAME: Final[str] = "upgrade_takeover_audit.jsonl"  # One JSON object for each takeover
 
 
+def _checkout_root() -> Path:
+    """Return the directory that holds this checkout.
+
+    Why:
+        The path comes from the location of this module, so every process
+        reaches the same directory. This repeats the rule that
+        `upgrade/driver.py` states at `data_root`, and this module states it a
+        second time because `runtime` sits below `upgrade` and must not import
+        it.
+
+    Returns:
+        The absolute path of the repository root.
+    """
+    return Path(__file__).resolve().parents[3]
+
+
 def _audit_path() -> Path:
     """Return the file that holds the takeover trail.
 
     Why:
         The function reads the two constants at call time, so a test points the
-        trail at its own directory without a reload of this module.
+        trail at its own directory without a reload of this module. A relative
+        directory is anchored against the checkout, because a bare name follows
+        the process working directory. A portal started from a service manager,
+        a container, or another directory would otherwise leave the trail
+        somewhere no reader looks, and two starts from two directories would
+        split one site history across two files.
 
     Returns:
-        The path of the append-only audit file.
+        The absolute path of the append-only audit file.
     """
-    return Path(AUDIT_DIRECTORY) / AUDIT_FILE_NAME
+    directory = Path(AUDIT_DIRECTORY)
+    if not directory.is_absolute():  # A test may set an absolute directory, which stands as written
+        directory = _checkout_root() / directory
+    return directory / AUDIT_FILE_NAME
 
 
 def _append_audit_line(document: dict[str, str]) -> None:
@@ -476,29 +518,34 @@ def _append_audit_line(document: dict[str, str]) -> None:
 
 
 def _write_takeover_audit(org_id: str, site_id: str, audit: TakeoverAudit) -> None:
-    """Store the record of one takeover, and never raise.
+    """Store the record of one takeover, and stop the takeover if it cannot.
 
     Why:
-        The lock store already moved the site when this function runs, so a
-        failure here must not cancel the takeover. The operator holds the site,
-        and a lost audit line is the smaller fault.
+        `contracts/site-lock.md` line 120 asks for a record of every takeover.
+        A caller runs this function before it moves the lock, so a refusal here
+        leaves the site with the operator who holds it. This repeats the write
+        policy of the module header: a write fails closed.
 
     Args:
         org_id: The organization of the site.
-        site_id: The site the operator took.
+        site_id: The site the operator asked for.
         audit: The record of the takeover.
+
+    Raises:
+        TakeoverAuditError: The sink refused the record, so no takeover happens.
     """
     document = audit.to_record()  # The two addresses and the time
     document["org_id"] = org_id  # Without this pair, no reader can place the row
     document["site_id"] = site_id
     try:
         _append_audit_line(document)
-    except Exception as fault:  # A sink fault must never cancel a takeover the lock store already granted.
+    except Exception as fault:  # A site that no reader can account for is worse than a refused takeover.
         _LOGGER.warning(
             "lock: the portal could not store the takeover audit of site %s (%s)",
             site_id,
             type(fault).__name__,  # The message may name a path or a connection string
         )
+        raise TakeoverAuditError(AUDIT_SINK_MESSAGE) from fault
 
 
 @dataclass(frozen=True, slots=True, repr=False)
@@ -973,7 +1020,10 @@ def _grant_to_new_owner(request: LockRequest, held: LockRecord, handle: Any) -> 
 
     Why:
         contracts/site-lock.md lines 58 and 59 refuse an active holder outright
-        and ask for the word `CONFIRM` once the holder passed the cooldown.
+        and ask for the word `CONFIRM` once the holder passed the cooldown. The
+        audit record goes to the sink before the lock moves, because line 120
+        asks for a record of every takeover, and a record written after the
+        move is absent for any takeover the sink refuses.
 
     Args:
         request: The operator, the site, and the run.
@@ -986,14 +1036,18 @@ def _grant_to_new_owner(request: LockRequest, held: LockRecord, handle: Any) -> 
     Raises:
         SiteLockedError: When the holder is still active.
         ConfirmationRequiredError: When the operator typed the wrong word.
+        TakeoverAuditError: When the sink cannot store the record.
     """
     if not held.is_quiet():  # Another operator is driving this site right now
         raise SiteLockedError(SITE_LOCKED_MESSAGE)
     if request.confirmation_text != TAKEOVER_CONFIRMATION_TEXT:  # Exact text and exact letter case
         raise ConfirmationRequiredError(TAKEOVER_MESSAGE, TAKEOVER_CONFIRMATION_TEXT)
-    grant = _replace_holder(request, held, handle, LockState.TAKEN_OVER)
     audit = TakeoverAudit.build(held.owner.actor_email, request.owner.actor_email)
-    _write_takeover_audit(request.org_id, request.site_id, audit)  # Never raises, so the takeover stands
+    # A second operator can win the compare-and-set below, which leaves one row for a
+    # takeover that did not happen. An account that over-reports is the safe direction,
+    # because a reader can rule out the extra row and cannot recover an absent one.
+    _write_takeover_audit(request.org_id, request.site_id, audit)
+    grant = _replace_holder(request, held, handle, LockState.TAKEN_OVER)
     _LOGGER.info(
         "lock: operator %s took site %s from operator %s",
         request.owner.email_digest,  # A log record holds the digest and never the address
@@ -1022,6 +1076,7 @@ def acquire_site_lock(request: LockRequest, client: Any = None) -> LockGrant:
     Raises:
         SiteLockedError: When another operator is active on the site.
         ConfirmationRequiredError: When a quiet holder needs a typed word.
+        TakeoverAuditError: When the sink cannot record a takeover.
         LockStoreUnreachableError: When the lock store does not answer.
     """
     handle = _require_client(client)
@@ -1050,6 +1105,7 @@ def _resolve_conflict(request: LockRequest, held: LockRecord, handle: Any) -> Lo
     Raises:
         SiteLockedError: When another operator is active on the site.
         ConfirmationRequiredError: When a quiet holder needs a typed word.
+        TakeoverAuditError: When the sink cannot record a takeover.
     """
     if held.held_by(request.owner):  # Same address and same browser
         return _grant_to_same_owner(request, held, handle)

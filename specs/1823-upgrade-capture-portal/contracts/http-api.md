@@ -131,6 +131,7 @@ points only.
 | 400 | `confirmation_required` with `details.needed_text` when a takeover needs the word `CONFIRM` |
 | 409 | `site_locked` with `details.actor_email` and `details.cooldown_remaining` |
 | 503 | `lock_store_unreachable` |
+| 503 | `takeover_audit_failed` when the portal cannot record a takeover, which leaves the site with the current holder |
 
 `state` holds `acquired`, `resume`, or `takeover`. `resume` means the same
 operator and the same browser returned to a lock they already hold.

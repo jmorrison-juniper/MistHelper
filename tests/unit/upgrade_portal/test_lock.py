@@ -50,6 +50,7 @@ from src.upgrade_portal.runtime.lock import (
     LockStoreUnreachableError,
     ReleaseOutcome,
     SiteLockedError,
+    TakeoverAuditError,
     acquire_site_lock,
     build_key,
     connect_lock_store,
@@ -777,16 +778,16 @@ def test_the_stored_audit_names_both_addresses_and_the_time(
     assert abs(datetime.now(UTC) - written_at) < timedelta(minutes=1)
 
 
-def test_a_failed_audit_write_still_lets_the_takeover_succeed(
+def test_a_failed_audit_write_stops_the_takeover(
     store: ScriptedLockStore,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A sink that refuses never cancels a takeover the lock store granted.
+    """A sink that refuses the record leaves the site with the current holder.
 
     Why:
-        The lock store already moved the site when the audit write runs. A
-        refusal by the sink must not send an error to an operator who now
-        holds that site.
+        `contracts/site-lock.md` line 120 asks for a record of every takeover.
+        A takeover with no record removes the one trail that names who took a
+        site from whom, so the portal refuses the takeover instead.
 
     Args:
         store: The lock store double.
@@ -795,11 +796,10 @@ def test_a_failed_audit_write_still_lets_the_takeover_succeed(
     seed_lock(store, FIRST_OWNER, COOLDOWN_SECONDS + 1)
     monkeypatch.setattr(lock_module, "_append_audit_line", raise_audit_fault)
 
-    grant = acquire_site_lock(build_request(SECOND_OWNER, TAKEOVER_CONFIRMATION_TEXT), client=store)
+    with pytest.raises(TakeoverAuditError):
+        acquire_site_lock(build_request(SECOND_OWNER, TAKEOVER_CONFIRMATION_TEXT), client=store)
 
-    assert grant.state is LockState.TAKEN_OVER
-    assert grant.audit is not None
-    assert stored_record(store).owner == SECOND_OWNER
+    assert stored_record(store).owner == FIRST_OWNER  # The lock never moved
 
 
 def test_the_failed_audit_write_logs_the_class_and_never_the_message(
@@ -823,13 +823,80 @@ def test_the_failed_audit_write_logs_the_class_and_never_the_message(
     monkeypatch.setattr(lock_module, "_append_audit_line", raise_audit_fault)
     caplog.set_level(logging.WARNING)
 
-    acquire_site_lock(build_request(SECOND_OWNER, TAKEOVER_CONFIRMATION_TEXT), client=store)
+    with pytest.raises(TakeoverAuditError):
+        acquire_site_lock(build_request(SECOND_OWNER, TAKEOVER_CONFIRMATION_TEXT), client=store)
 
     written = caplog.text
     assert "AuditSinkFault" in written
     assert AUDIT_FAULT_MESSAGE not in written
     assert FIRST_OWNER.actor_email not in written
     assert SECOND_OWNER.actor_email not in written
+
+
+def test_the_refused_takeover_names_no_address_in_its_sentence(
+    store: ScriptedLockStore,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The sentence the operator reads holds no address and no path.
+
+    Why:
+        The page prints the sentence of the failure. A sink fault can name a
+        directory of the host, and the audit record holds two work email
+        addresses. Neither belongs on a page an operator reads.
+
+    Args:
+        store: The lock store double.
+        monkeypatch: Replaces the sink with one that always raises.
+    """
+    seed_lock(store, FIRST_OWNER, COOLDOWN_SECONDS + 1)
+    monkeypatch.setattr(lock_module, "_append_audit_line", raise_audit_fault)
+
+    with pytest.raises(TakeoverAuditError) as caught:
+        acquire_site_lock(build_request(SECOND_OWNER, TAKEOVER_CONFIRMATION_TEXT), client=store)
+
+    sentence = str(caught.value)
+    assert caught.value.code == "takeover_audit_failed"  # The route maps this code to 503
+    assert AUDIT_FAULT_MESSAGE not in sentence
+    assert FIRST_OWNER.actor_email not in sentence
+    assert SECOND_OWNER.actor_email not in sentence
+
+
+def test_a_relative_audit_directory_lands_beside_the_checkout(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A bare directory name anchors against the repository, not the shell.
+
+    Why:
+        A portal started by a service manager, by a container, or from another
+        directory would otherwise leave the trail where no reader looks. Two
+        starts from two directories would then split one site history across
+        two files.
+
+    Args:
+        monkeypatch: Sets the directory to a bare name.
+    """
+    monkeypatch.setattr(lock_module, "AUDIT_DIRECTORY", "data")
+
+    path = lock_module._audit_path()
+
+    checkout = Path(__file__).resolve().parents[3]  # This file sits at the same depth as the module under test
+    assert path == checkout / "data" / lock_module.AUDIT_FILE_NAME
+
+
+def test_an_absolute_audit_directory_stands_as_written(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A directory a caller names in full reaches the sink unchanged.
+
+    Why:
+        A test points the trail at a directory it owns, and a deployment can
+        name a volume outside the checkout. The portal re-anchors neither.
+
+    Args:
+        tmp_path: The directory this test owns.
+        monkeypatch: Sets the directory to that absolute path.
+    """
+    monkeypatch.setattr(lock_module, "AUDIT_DIRECTORY", str(tmp_path))
+
+    path = lock_module._audit_path()
+
+    assert path == tmp_path / lock_module.AUDIT_FILE_NAME
 
 
 def test_the_same_operator_after_the_cooldown_types_continue(store: ScriptedLockStore) -> None:
