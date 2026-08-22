@@ -60,6 +60,8 @@ git checkout main && git pull origin main
 - **File paths**: Use `os.path.join()` or `pathlib.Path()`, never hardcoded separators
 - **Container**: Podman primary, port 2200 (SSH), port 8055 (web UI)
 - **Zscaler**: Use GitHub Actions for container builds, never local `podman push`
+- **Automated sweep**: An automated sweep runs four checks before a commit. See
+  the "Automated Sweep Safety" section in `.github/copilot-instructions.md`.
 - **Inline comments on EVERY line** (NON-NEGOTIABLE): Every executable line of AI-generated
   code must have an inline comment explaining *why*, not just *what*. Code without comments
   is incomplete. When editing existing code, add comments to the entire block being touched.

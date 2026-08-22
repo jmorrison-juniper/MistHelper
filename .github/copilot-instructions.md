@@ -137,6 +137,42 @@ podman ps  # Confirm container is running
 
 **Note**: Every changelog update triggers this pipeline - no standalone git operations.
 
+### Automated Sweep Safety
+
+An automated sweep is a code change. It carries more risk than a hand edit,
+because it changes many lines at once and because a reviewer reads it as a
+comment-only diff. Pull request #1791 deleted a live declaration and a comment
+marker inside a 515-line "delete comments" diff. Issue #1796 records the case.
+
+Run these four checks on every changed file before you commit a sweep.
+
+| Check | Command | Expected result |
+| - | - | - |
+| Compile | `python -m py_compile <file>` | No output |
+| Lint | `python -m ruff check .` | `All checks passed` |
+| Types | `python -m mypy $MYPY_PATHS --config-file pyproject.toml` | `Success` |
+| Symbols | `python -m tools.symbol_diff --base <base> <file>` | `no module-level name changed`, exit code 0 |
+
+Read the type check scope from the `MYPY_PATHS` value in
+`.github/workflows/ci.yml`. Do not repeat the value here, because a repeated
+value drifts when the scope moves.
+
+The symbol check exists because the other three checks miss a lost declaration.
+A deleted module global still compiles, and no test read that global. The tool
+compares the module-level names of the base revision against the work tree and
+reports every lost name and every added name. An added name can shadow an
+import, so the tool reports both directions.
+
+Obey these four rules for a sweep.
+
+1. A comment sweep deletes comment lines only.
+2. The pull request body states the count of deleted lines that are not
+   comments. The expected count is zero.
+3. A rebase repeats all four checks, because a rebase can reintroduce a loss.
+4. The pull request title names the sweep. A title such as "delete comments"
+   sets the wrong expectation, and a reviewer then reads a 515-line difference
+   as safe.
+
 ### Data Directory Permissions (CRITICAL)
 The container runs MistHelper as a non-root user (`misthelper`) for security. The mounted `data/` directory must be writable:
 ```bash
