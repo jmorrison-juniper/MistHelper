@@ -23,6 +23,7 @@ import pytest
 
 from src.ssh import cli_shell_manager as csm_module
 from src.ssh.cli_shell_manager import CLIShellManager
+from tests.support.thread_scoped_sleep import ThreadScopedSleepSpy
 
 
 @pytest.fixture(autouse=True)
@@ -457,9 +458,10 @@ class TestRunInteractive:
         monkeypatch.setattr(csm_module, "pyte", fake_pyte)
 
         m_ws_conn = MagicMock()
+        m_sleep = ThreadScopedSleepSpy()  # Thread-scoped, so a leaked thread cannot break the exact count.
         with (
             patch("src.ssh.cli_shell_manager.websocket") as m_ws_mod,
-            patch("src.ssh.cli_shell_manager.time.sleep") as m_sleep,
+            patch("src.ssh.cli_shell_manager.time.sleep", new=m_sleep),
             patch.object(CLIShellManager, "_shell_resize_terminal") as m_resize,
             patch.object(CLIShellManager, "_shell_start_receiver") as m_start,
         ):

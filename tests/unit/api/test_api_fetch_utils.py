@@ -23,6 +23,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from src.api.api_fetch_utils import APIFetchUtils
+from tests.support.thread_scoped_sleep import ThreadScopedSleepSpy
 
 
 def _make_mh(**extra):
@@ -306,9 +307,10 @@ def test_gw_retry_one_item_succeeds_on_second_attempt() -> None:
     """Returns the recovered config once a retry produces a non-None result."""
     sem = threading.Semaphore(1)
     results = [None, {"foo": "bar", "site_id": "s1"}]
+    sleep = ThreadScopedSleepSpy()  # Thread-scoped, so a leaked thread cannot break the exact count.
     with (
         patch.object(APIFetchUtils, "_gw_fetch_one_config", side_effect=results) as fetch,
-        patch("src.api.api_fetch_utils.time.sleep") as sleep,
+        patch("src.api.api_fetch_utils.time.sleep", new=sleep),
     ):
         out = APIFetchUtils._gw_retry_one_item(MagicMock(), ("s1", "d1", "SiteOne"), sem, max_retries=2)
     assert out == {"foo": "bar", "site_id": "s1"}
@@ -319,9 +321,10 @@ def test_gw_retry_one_item_succeeds_on_second_attempt() -> None:
 def test_gw_retry_one_item_returns_none_after_exhausting_attempts() -> None:
     """All attempts return None -> function returns None after max_retries+1 tries."""
     sem = threading.Semaphore(1)
+    sleep = ThreadScopedSleepSpy()  # Thread-scoped, so a leaked thread cannot break the exact count.
     with (
         patch.object(APIFetchUtils, "_gw_fetch_one_config", return_value=None) as fetch,
-        patch("src.api.api_fetch_utils.time.sleep") as sleep,
+        patch("src.api.api_fetch_utils.time.sleep", new=sleep),
     ):
         out = APIFetchUtils._gw_retry_one_item(MagicMock(), ("s1", "d1", "SiteOne"), sem, max_retries=2)
     assert out is None

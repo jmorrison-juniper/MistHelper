@@ -21,6 +21,7 @@ from unittest.mock import MagicMock, call, patch
 import pytest
 
 from src.analytics.data_collection_manager import DataCollectionManager
+from tests.support.thread_scoped_sleep import ThreadScopedSleepSpy
 
 # WHY: caplog must target the module logger so INFO/WARNING/ERROR records surface (issue #886).
 _LOGGER_NAME = "src.analytics.data_collection_manager"
@@ -149,9 +150,10 @@ def test_execute_collection_cycle_runs_all_steps_and_paces(caplog: pytest.LogCap
     caplog.set_level(logging.INFO, logger=_LOGGER_NAME)
     step_a, step_b = MagicMock(name="a"), MagicMock(name="b")
     steps = [("  step A", step_a), ("  step B", step_b)]
+    sleep = ThreadScopedSleepSpy()  # Thread-scoped, so a leaked thread cannot shift this record.
     with (
         patch.object(DataCollectionManager, "_collection_cycle_steps", return_value=steps),
-        patch("src.analytics.data_collection_manager.time.sleep") as sleep,
+        patch("src.analytics.data_collection_manager.time.sleep", new=sleep),
     ):
         DataCollectionManager._execute_collection_cycle(loop_count=3)
     step_a.assert_called_once_with()
@@ -177,9 +179,10 @@ def test_execute_collection_cycle_logs_and_backs_off_on_exception(caplog: pytest
     caplog.set_level(logging.WARNING, logger=_LOGGER_NAME)
     step = MagicMock(side_effect=RuntimeError("nope"))
     steps = [("  step", step)]
+    sleep = ThreadScopedSleepSpy()  # Thread-scoped, so a leaked thread cannot add a false back-off.
     with (
         patch.object(DataCollectionManager, "_collection_cycle_steps", return_value=steps),
-        patch("src.analytics.data_collection_manager.time.sleep") as sleep,
+        patch("src.analytics.data_collection_manager.time.sleep", new=sleep),
     ):
         DataCollectionManager._execute_collection_cycle(loop_count=7)
     out = "\n".join(r.getMessage() for r in caplog.records)
