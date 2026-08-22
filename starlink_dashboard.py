@@ -1384,15 +1384,20 @@ class StarlinkDashboard(QMainWindow):
         """Pretty-print the location sub-message for DEBUG diagnostics."""
         logger.debug("Dumping the location sub-message for the diagnostics report")  # Log before the dump.
         print("\nLOCATION:")
-        # CodeQL py/clear-text-logging-sensitive-data alert 190 (latitude) and alert 191
-        # (longitude). Verdict: fixed. Review date: 2026-08-22. Reason: the two prints
-        # sent an exact coordinate pair to stdout, and a redirect or a recorded SSH
-        # session can capture that pair into a support bundle. The pair locates a
-        # customer site or a vehicle to within meters. The default output now rounds to
-        # GPS_PRECISION_DECIMALS, which locates the site to about 100 meters and still
-        # confirms the right terminal. An operator who needs the exact value sets
-        # GPS_EXACT_ENV_VAR. Next review trigger: a change to _format_gps_coordinate, a
-        # change to GPS_PRECISION_DECIMALS, or a new CodeQL alert on either print below.
+        # CodeQL py/clear-text-logging-sensitive-data reported these two lines as alert 190
+        # (latitude) and as alert 191 (longitude), because they printed the exact values.
+        # Verdict: fixed.
+        # Review date: 2026-08-22. Reason: the two prints sent an exact coordinate pair to
+        # stdout, and a redirect or a recorded SSH session can capture that pair into a
+        # support bundle. The pair locates a customer site or a vehicle to within meters.
+        # The default output now rounds to GPS_PRECISION_DECIMALS, which locates the site to
+        # about 100 meters and still confirms the right terminal. An operator who needs the
+        # exact value sets GPS_EXACT_ENV_VAR.
+        # The rounded value still reaches print, so CodeQL raised alert 193 and alert 194 on
+        # the same two lines. Verdict for that pair: accepted_with_rationale, dismissed in the
+        # security tab on 2026-08-22, because the value that reaches stdout is no longer an
+        # exact position. Next review trigger: a change to _format_gps_coordinate, a change to
+        # GPS_PRECISION_DECIMALS, or a new CodeQL alert on either print below.
         print(f"  - Latitude: {_format_gps_coordinate(loc.latitude)}")
         print(f"  - Longitude: {_format_gps_coordinate(loc.longitude)}")
         print(f"  - Altitude: {loc.altitude_meters}m")

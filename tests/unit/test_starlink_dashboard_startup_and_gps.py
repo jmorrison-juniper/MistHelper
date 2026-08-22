@@ -263,13 +263,16 @@ def test_opt_in_variable_ignores_an_unrelated_value(monkeypatch: pytest.MonkeyPa
 
 
 def test_both_codeql_alerts_carry_a_recorded_verdict() -> None:
-    """Both GPS alerts must keep a verdict, a review date, and a review trigger (issue #1737)."""
+    """Every GPS alert must keep a verdict, a review date, and a review trigger (issue #1737)."""
     source = _module_source()  # The full module text holds the verdict comment.
     required = (
         "py/clear-text-logging-sensitive-data",  # The rule the verdict answers.
-        "alert 190",  # The latitude alert.
-        "alert 191",  # The longitude alert.
-        "Verdict: fixed",  # The recorded verdict.
+        "alert 190",  # The original latitude alert.
+        "alert 191",  # The original longitude alert.
+        "alert 193",  # The residual latitude alert on the rounded value.
+        "alert 194",  # The residual longitude alert on the rounded value.
+        "Verdict: fixed",  # The verdict for the exact coordinate pair.
+        "accepted_with_rationale",  # The verdict for the residual rounded flow.
         "Review date: 2026-08-22",  # The date of the review.
         "Next review trigger:",  # The condition that reopens the review.
     )
