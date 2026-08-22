@@ -419,7 +419,10 @@ class _ViewerLauncher:  # WHY: Class boundary that owns the extracted launch wor
         dash_host, dash_port = self._viewer._resolve_dash_binding(os)  # WHY: Container-aware host/port.
         self._viewer._print_dash_startup_banner(dash_host, dash_port)  # WHY: User-facing banner.
         self._viewer._schedule_browser_open(dash_port)  # WHY: Background browser open (no-op in containers).
-        self._viewer._run_dash_server(app, dash_host, dash_port)  # WHY: Blocking run + KeyboardInterrupt handler.
+        try:
+            self._viewer._run_dash_server(app, dash_host, dash_port)  # WHY: Blocking run + KeyboardInterrupt handler.
+        finally:
+            self._viewer.stop()  # WHY: The join runs on every exit path, so no browser thread outlives the server.
 
 
 def _pack_session_ctx(
