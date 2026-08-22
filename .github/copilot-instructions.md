@@ -574,12 +574,18 @@ All tools run in `.github/workflows/ci.yml` as a parallel matrix. A PR cannot au
 | Docstring Coverage | **interrogate** | Coverage >= 90 percent |
 | Diagram References | **`scripts/lint_diagram_refs.py`** | Every diagram reference resolves |
 | E2E Browser | **Playwright** (CI `playwright` job) | Gunicorn web UI functional tests |
+| Ops Portal | **npm** (CI `ops_portal` job) | `npm audit --audit-level=high` for `ops-portal/`. `typecheck`, `lint`, and `test` report but do not block yet (issue #1852). |
 | Static Analysis | **CodeQL** (`.github/workflows/codeql.yml`) | Deep code and workflow vulnerability scanning |
 | Dependency Updates | **Dependabot** (`.github/dependabot.yml`) | Weekly pip update PRs |
 
-The workflow runs 13 jobs. CodeQL runs in a separate workflow, and Dependabot is
-not a gate. A caller can override each threshold through a `workflow_call`
-input. The table lists the default.
+The workflow defines 15 gate jobs and two issue-management jobs. Read the job
+list from `.github/workflows/ci.yml` before you trust this count. CodeQL runs in
+a separate workflow, and Dependabot is not a gate. A caller can override each
+threshold through a `workflow_call` input. The table lists the default.
+
+Every gate above `Ops Portal` reads Python only. The `ops_portal` job is the one
+gate that reads the npm dependency tree, so it is the only check that can report
+an advisory in `ops-portal/package-lock.json` (issue #1847).
 
 **Pre-commit hooks** (`.pre-commit-config.yaml`) run Ruff, mypy, and Bandit locally to catch issues before push.
 

@@ -476,6 +476,71 @@ jobs:
         run: pytest tests/e2e/ -v --timeout=60
 
   # ──────────────────────────────────────────────────────────────
+  # OPS PORTAL (TypeScript + React)
+  # ──────────────────────────────────────────────────────────────
+  ops_portal:
+    name: "ops-portal (npm audit, types, lint, tests)"
+    # Issue #1847: every gate above reads Python only, so no check covered the
+    # TypeScript and React application in ops-portal/. pip-audit parses
+    # requirements.txt, so it can never read an npm lockfile. Two HIGH advisories
+    # therefore sat on main, and a dependency bump to this directory could break
+    # the build while CI stayed green. This job closes both gaps.
+    #
+    # The job runs on every event rather than behind an ops-portal/** path filter.
+    # A filtered job reports "skipped", and a skipped result is ambiguous both to
+    # branch protection and to the two summary jobs below, which read
+    # needs.ops_portal.result. The whole job costs well under a minute with the
+    # npm cache warm, so an unconditional run buys a clear signal cheaply.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: ops-portal
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: ops-portal/package-lock.json
+      - name: Install from the lockfile
+        # npm ci fails when package.json and package-lock.json disagree, so this
+        # step also proves the lockfile is in sync.
+        #
+        # --legacy-peer-deps is required today. eslint-plugin-jsx-a11y 6.10.0
+        # declares a peer range of eslint <=9, and this project runs eslint 10.7.0,
+        # so a strict resolve fails with ERESOLVE. Issue #1852 tracks the eslint
+        # flat-config migration that removes the need for this flag.
+        run: npm ci --legacy-peer-deps
+      - name: Audit the npm dependency tree
+        # This is the blocking security check and the reason issue #1847 exists.
+        # It fails on a HIGH or a CRITICAL advisory. Dependabot reports a MODERATE
+        # or a LOW finding as a pull request, so those do not block a merge here.
+        run: npm audit --audit-level=high
+      # The three steps below report but do not block yet. Each one fails today on
+      # a configuration defect that is older than this job, so a blocking step
+      # would stop every unrelated pull request on the first run. Issue #1852
+      # tracks all three. Delete continue-on-error from a step as soon as its
+      # defect is fixed, one step at a time.
+      - name: Type check
+        # Fails on "Option 'baseUrl' is deprecated". tsconfig.json needs
+        # "ignoreDeprecations": "6.0", or it needs the baseUrl removal (#1852).
+        continue-on-error: true
+        run: npm run typecheck
+      - name: Lint
+        # Fails because .eslintrc.cjs uses the old format, and eslint 10 reads
+        # eslint.config.js only (#1852).
+        continue-on-error: true
+        run: npm run lint
+      - name: Unit tests
+        # Fails because the project ships no vitest file yet, and vitest exits
+        # non-zero when it finds no test (#1852).
+        continue-on-error: true
+        run: npm run test
+
+  # ──────────────────────────────────────────────────────────────
   # FAILURE → GITHUB ISSUES (auto-create issues for each failure)
   # ──────────────────────────────────────────────────────────────
   create_failure_issues:
@@ -492,6 +557,7 @@ jobs:
       - vulture
       - pydocstyle
       - interrogate
+      - ops_portal
     if: ${{ always() && contains(needs.*.result, 'failure') }}
     runs-on: ubuntu-latest
     permissions:
@@ -530,6 +596,7 @@ jobs:
           RESULTS[vulture]="${{ needs.vulture.result }}"
           RESULTS[pydocstyle]="${{ needs.pydocstyle.result }}"
           RESULTS[interrogate]="${{ needs.interrogate.result }}"
+          RESULTS[ops_portal]="${{ needs.ops_portal.result }}"
 
           # Scope: PR failures get scoped title (per-PR), push failures use gate-only title (dedup across pushes).
           if [ "$EVENT_NAME" = "pull_request" ] && [ -n "$PR_NUMBER" ]; then
@@ -593,6 +660,7 @@ jobs:
       - vulture
       - pydocstyle
       - interrogate
+      - ops_portal
     if: ${{ always() }}
     runs-on: ubuntu-latest
     permissions:
@@ -623,6 +691,7 @@ jobs:
           RESULTS[vulture]="${{ needs.vulture.result }}"
           RESULTS[pydocstyle]="${{ needs.pydocstyle.result }}"
           RESULTS[interrogate]="${{ needs.interrogate.result }}"
+          RESULTS[ops_portal]="${{ needs.ops_portal.result }}"
 
           for gate in "${!RESULTS[@]}"; do
             result="${RESULTS[$gate]}"
