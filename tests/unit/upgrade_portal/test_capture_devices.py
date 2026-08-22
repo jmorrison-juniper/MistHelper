@@ -172,7 +172,7 @@ def chassis_statistics() -> list[dict[str, Any]]:
         {"mac": MASTER_MAC, "vc_role": "master", "version": MASTER_VERSION, "uptime": CHASSIS_UPTIME},
         {"mac": MEMBER_MAC, "vc_role": "backup", "version": MEMBER_VERSION, "uptime": MEMBER_UPTIME},
     ]
-    chassis = {"mac": MASTER_MAC, "type": "switch", "status": "connected", "ip": CHASSIS_IP}
+    chassis: dict[str, Any] = {"mac": MASTER_MAC, "type": "switch", "status": "connected", "ip": CHASSIS_IP}
     chassis.update({"version": MASTER_VERSION, "uptime": CHASSIS_UPTIME, "num_members": MEMBER_COUNT})
     chassis["module_stat"] = modules
     return [chassis]
@@ -193,7 +193,7 @@ def standalone_records() -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     inventory = [
         {"mac": STANDALONE_MAC, "name": "ap-lobby", "type": "ap", "model": "AP45", "serial": "BB0001"},
     ]
-    statistics = [
+    statistics: list[dict[str, Any]] = [
         {"mac": STANDALONE_MAC, "type": "ap", "status": "connected", "version": ACCESS_POINT_VERSION},
     ]
     statistics[0].update({"ip": "10.10.10.20", "uptime": ACCESS_POINT_UPTIME})
@@ -767,3 +767,44 @@ class TestBuildDeviceIndex:
         assert entry["uptime"] == 0
         assert entry["version"] == ""
         assert entry["vc_role"] == devices.VC_ROLE_STANDALONE
+
+    def test_a_member_that_just_rebooted_keeps_its_zero_uptime(
+        self, chassis_inventory: list[dict[str, Any]], chassis_statistics: list[dict[str, Any]]
+    ) -> None:
+        """A member uptime of zero stays zero.
+
+        Why:
+            A member reports an uptime of zero in the seconds after a restart.
+            A choice written with ``or`` reads that zero as absent and answers
+            with the uptime of the whole stack. The member that just rebooted
+            would then report the long uptime of the stack and look settled,
+            which is the fault this index exists to catch.
+
+        Args:
+            chassis_inventory: The inventory records of one stack.
+            chassis_statistics: The statistics record of one stack.
+        """
+        chassis_statistics[0]["module_stat"][1]["uptime"] = 0
+        index = devices.build_device_index(chassis_inventory, chassis_statistics)
+        assert index[MEMBER_MAC]["uptime"] == 0
+
+    def test_a_member_that_reported_nothing_reads_the_chassis_reading(
+        self, chassis_inventory: list[dict[str, Any]], chassis_statistics: list[dict[str, Any]]
+    ) -> None:
+        """A member with no uptime and no version reads the chassis values.
+
+        Why:
+            The cloud sends no reading at all for a member that never answered.
+            The chassis reading is the closest true value, so the entry keeps
+            the same shape as every other entry.
+
+        Args:
+            chassis_inventory: The inventory records of one stack.
+            chassis_statistics: The statistics record of one stack.
+        """
+        member = chassis_statistics[0]["module_stat"][1]
+        member.pop("uptime")
+        member.pop("version")
+        index = devices.build_device_index(chassis_inventory, chassis_statistics)
+        assert index[MEMBER_MAC]["uptime"] == CHASSIS_UPTIME
+        assert index[MEMBER_MAC]["version"] == MASTER_VERSION

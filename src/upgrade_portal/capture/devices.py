@@ -454,6 +454,34 @@ def _identity_of(record: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _member_reading(module: Mapping[str, Any], chassis: Mapping[str, Any], field: str) -> Any:
+    """Return one reading of a chassis member, or the reading of the whole device.
+
+    Why:
+        A member that just restarted reports an uptime of zero, and a member
+        that never answered reports no version at all. A choice written with
+        ``or`` reads both of those as absent and answers with the reading of
+        the whole device. A fresh member would then show the uptime of the
+        stack, and a silent member would show the version of the stack. Both
+        hide a member that missed the upgrade, which is the fault this index
+        exists to catch. The choice therefore tests for the reading, not for
+        the truth of the reading.
+
+    Args:
+        module: The module statistics of one chassis member.
+        chassis: The statistics record of the whole device.
+        field: The name of the field to read.
+
+    Returns:
+        The reading of the member when the member holds one, else the reading
+        of the whole device.
+    """
+    reading = module.get(field)
+    if reading is not None:  # The cloud sends a null value for a member that never reported.
+        return reading
+    return chassis.get(field)
+
+
 def _state_of(chassis: Mapping[str, Any], module: Mapping[str, Any]) -> dict[str, Any]:
     """Return the four index fields that the statistics own.
 
@@ -471,9 +499,9 @@ def _state_of(chassis: Mapping[str, Any], module: Mapping[str, Any]) -> dict[str
         The state part of one index entry.
     """
     return {
-        "version": _text(module.get("version") or chassis.get("version")),
+        "version": _text(_member_reading(module, chassis, "version")),
         "status": _text(chassis.get("status")),
-        "uptime": _whole_number(module.get("uptime") or chassis.get("uptime")),
+        "uptime": _whole_number(_member_reading(module, chassis, "uptime")),
         "ip": _text(chassis.get("ip")),
     }
 
