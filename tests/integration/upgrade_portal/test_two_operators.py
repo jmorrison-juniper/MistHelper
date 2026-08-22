@@ -110,7 +110,7 @@ class FakeLockStore:
         Raises:
             ConnectionError: When the test set the failure flag.
         """
-        if self.fail:  # `contracts/site-lock.md:128` asks a write to fail closed here.
+        if self.fail:  # `contracts/site-lock.md:136` asks a write to fail closed here.
             raise ConnectionError("The stand-in lock store is down for this test.")
 
     def set(self, key: str, value: str, nx: bool = False, ex: int | None = None) -> bool | None:

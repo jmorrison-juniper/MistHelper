@@ -238,7 +238,23 @@ server-sent events.
 
 ### `GET /captures/<capture_id>` — the capture page
 
-Returns the human view of one capture.
+| Item | Value |
+| --- | --- |
+| Query | `site_id`, which the page needs when the capture does not exist yet |
+| 200 | The human view of one capture |
+
+The page renders for a capture the portal does not know. It renders an empty
+panel in that case, and the browser polls nothing.
+
+The literal segment `new` names a capture that does not exist yet. The inventory
+page links to `/captures/new?site_id=<site_id>`, which is the first write step of
+the journey. The page reads the site from the query, because a capture that does
+not exist names no site. A known capture names its own site, and the page then
+ignores the query value.
+
+The query value fills two fields. It fills the target of the start control, and
+it fills the site of the lock banner. Without it the page renders with no site,
+and the start control posts to no site.
 
 ---
 

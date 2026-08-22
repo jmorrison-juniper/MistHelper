@@ -134,11 +134,22 @@ rule out an extra record and cannot recover an absent one.
 | Condition | Behavior |
 | --- | --- |
 | Redis is unreachable at acquire | Refuse the upgrade start with `503` and a plain message. Never fall back to an in-memory lock. |
-| Redis is unreachable at heartbeat | Retry for 60 seconds. If the retry fails, move the run to `failed` and say so plainly. |
+| Redis is unreachable at heartbeat | Retry for 60 seconds. If the retry fails, mark the lock lost and say so plainly. Never move the run to `failed`. |
 | Redis is unreachable for a read-only page | Show the page and mark the lock state unknown. Viewing must not need Redis. |
 
 An in-memory fallback is forbidden. A fallback would let two workers each believe
 they hold the lock, which is the exact failure the lock prevents.
+
+An earlier version of this table asked a failed heartbeat to move the run to
+`failed`. A later decision reversed that answer, and the code follows the
+decision. A lost lock stops the portal from writing to the site. It does not stop
+the upgrade, because the cloud already holds the order, and firmware in flight
+cannot be recalled. A run marked `failed` tells the operator that nothing
+happened. The devices then reboot hours later, and the record explains none of it.
+
+The run therefore keeps the state it holds. The run record carries a `lock` entry
+that names the loss, and section 5 of `contracts/http-api.md` shows that entry.
+`upgrade/driver.py:189` holds the sentence the operator reads.
 
 ## What the lock does not do
 

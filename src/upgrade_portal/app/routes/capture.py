@@ -634,12 +634,11 @@ def held_by_other(org_id: str, site_id: str) -> str | None:
         `read_site_locks` answers an empty index when the lock store is
         unreachable, so an unknown state reads as free and the capture starts.
         That choice is correct for a capture and stays.
-        `contracts/site-lock.md:130` asks a read to continue when the store is
-        unreachable. `contracts/site-lock.md:139` states that the lock does not
-        gate a capture on its own, because a capture reads only and two captures
-        do no harm. A capture that refused on an unreachable store would break
-        both lines. The upgrade start makes the opposite choice, because it
-        writes firmware to a device.
+        `contracts/site-lock.md:138` asks a read to continue when the store is
+        unreachable, and `contracts/site-lock.md:167` states that an unreachable
+        store still lets a capture start. An unknown state names no holder, so
+        this function has no address to refuse. The upgrade start makes the
+        opposite choice, because only that path writes firmware to a device.
 
     Args:
         org_id: The organization that holds the site.

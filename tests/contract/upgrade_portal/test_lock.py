@@ -87,7 +87,7 @@ class FakeLockStore:
         Raises:
             ConnectionError: When the test set the failure flag.
         """
-        if self.fail:  # `contracts/site-lock.md:128` asks the portal to fail closed here.
+        if self.fail:  # `contracts/site-lock.md:136` asks the portal to fail closed here.
             raise ConnectionError("The stand-in lock store is down for this test.")
 
     def set(self, key: str, value: str, nx: bool = False, ex: int | None = None) -> bool | None:
@@ -676,7 +676,7 @@ def test_a_down_store_refuses_the_take(lock_client: FlaskClient, lock_store: Fak
     """A lock store that does not answer refuses the take with 503.
 
     Why:
-        `contracts/site-lock.md:128` forbids an in-memory fallback. A fallback
+        `contracts/site-lock.md:136` forbids an in-memory fallback. A fallback
         would let two workers each believe they hold the lock, which is the exact
         failure the lock prevents.
 

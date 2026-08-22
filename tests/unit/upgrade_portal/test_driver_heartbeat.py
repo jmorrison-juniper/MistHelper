@@ -646,7 +646,7 @@ class TestQuietStore:
     """A lock store that does not answer gets a retry window and no more."""
 
     def test_the_beat_retries_while_the_window_is_open(self) -> None:
-        """contracts/site-lock.md line 129 gives the store 60 seconds."""
+        """contracts/site-lock.md line 137 gives the store 60 seconds."""
         ticker = FakeTicker()
         refresher = RecordingRefresher(ticker)
         refresher.errors = [lock.LockStoreUnreachableError(lock.LOCK_STORE_DOWN_MESSAGE)]

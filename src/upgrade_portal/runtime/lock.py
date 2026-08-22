@@ -15,14 +15,14 @@ Failure policy:
     does not answer, and the route reports 503. No path falls back to a lock in
     process memory. A memory fallback would let two workers each believe they
     hold the site, which is the exact failure this module prevents. The
-    contract states this refusal at ``contracts/site-lock.md`` lines 116 and
-    120.
+    contract states this refusal at ``contracts/site-lock.md`` lines 136 and
+    140.
 
     A read fails open. ``read_site_locks`` and ``read_lock`` never raise. An
     unreachable store answers with no holder, and the page still renders. An
     operator may view a site, a capture, a comparison, or a history page with
     no lock and with no typed word, so a dead lock store must not hide a page.
-    The contract states this at ``contracts/site-lock.md`` line 118.
+    The contract states this at ``contracts/site-lock.md`` line 138.
 
     Both halves need a bounded wait. A client with no limits waits on the
     operating system, and a page that reads the lock state then hangs behind a
@@ -148,7 +148,7 @@ LOCK_TOKEN_BYTES: Final[int] = 16
 ACQUIRE_ATTEMPTS: Final[int] = 2
 
 # WHAT: how long a connection attempt and a command may take.
-# WHY: contracts/site-lock.md line 130 says viewing must not need Redis. Without
+# WHY: contracts/site-lock.md line 138 says viewing must not need Redis. Without
 #      these limits the client waits on the operating system, and a site list
 #      that reads the lock state then hangs behind a dead store.
 CONNECT_TIMEOUT_SECONDS: Final[float] = 1.0
@@ -250,11 +250,11 @@ class LockStoreUnreachableError(SiteLockError):
     """The lock store did not answer a write.
 
     Why:
-        contracts/site-lock.md line 128 answers 503 and forbids a fallback to a
+        contracts/site-lock.md line 136 answers 503 and forbids a fallback to a
         lock in process memory.
     """
 
-    code: ClassVar[str] = "lock_store_unreachable"  # Matches contracts/site-lock.md line 128
+    code: ClassVar[str] = "lock_store_unreachable"  # Matches contracts/site-lock.md line 136
 
 
 class TakeoverAuditError(SiteLockError):

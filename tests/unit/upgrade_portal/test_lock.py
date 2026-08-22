@@ -1134,7 +1134,7 @@ def test_an_unreachable_store_refuses_an_acquisition(store: ScriptedLockStore) -
     """A dead lock store refuses the upgrade start and writes nothing.
 
     Why:
-        contracts/site-lock.md line 128 answers 503 and line 132 forbids a
+        contracts/site-lock.md line 136 answers 503 and line 140 forbids a
         fallback to a lock in process memory. A fallback would let two workers
         each believe they hold the site.
 
@@ -1173,7 +1173,7 @@ def test_an_unreachable_store_still_answers_the_site_list(store: ScriptedLockSto
     """A read never raises, even when every command fails.
 
     Why:
-        contracts/site-lock.md line 130 says viewing must not need Redis. A
+        contracts/site-lock.md line 138 says viewing must not need Redis. A
         page that refused to render would punish a reader for a lock fault.
 
     Args:

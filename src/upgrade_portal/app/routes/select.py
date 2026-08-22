@@ -143,7 +143,7 @@ TOTAL_FIELD = "devices_total"  # `data-model.md` section 3.6 fixes this name.
 DEVICE_COUNT_FIELD = "num_devices"  # The site statistics record names the whole count here.
 DEVICE_COUNT_PARTS = ("num_ap", "num_switch", "num_gateway")  # The fallback, summed when the whole count is absent.
 
-# `contracts/site-lock.md:130` asks a read-only page to mark the lock state
+# `contracts/site-lock.md:138` asks a read-only page to mark the lock state
 # unknown when the lock store does not answer. A row that carries only a holder
 # address cannot say that, because a free site and an unreadable site both hold
 # None. These three words give the row a third state, and `locked_by` keeps the
@@ -587,7 +587,7 @@ def site_lock_state(site_id: str, locks: dict[str, str | None]) -> str:
         A free site and a site that the portal could not read both answer None
         from the holder index, so the holder alone cannot tell them apart. An
         operator who reads free on an unreadable site may walk into a site that
-        another operator holds. `contracts/site-lock.md:130` asks the page to
+        another operator holds. `contracts/site-lock.md:138` asks the page to
         mark that state unknown, so this function names three states, not two.
 
     Args:
@@ -663,7 +663,7 @@ def build_site_row(site: dict[str, Any], counts: dict[str, int], locks: dict[str
     Returns:
         The five fields of one row. `contracts/http-api.md:77` names the first
         four. `lock_state` adds the third lock state that
-        `contracts/site-lock.md:130` asks a read-only page to show.
+        `contracts/site-lock.md:138` asks a read-only page to show.
     """
     site_id = str(site.get("id", ""))  # The row key, used by the count index and the lock index.
     return {
@@ -1255,7 +1255,7 @@ LOCK_FAILED_CODE = "site_lock_failed"  # The base code, used when a later error 
 SITE_LOCKED_CODE = "site_locked"  # `contracts/site-lock.md:58` fixes this code and the 409 status.
 LOCK_LOST_CODE = "lock_lost"  # `contracts/site-lock.md:90` and line 103 fix this code and the 409 status.
 CONFIRMATION_REQUIRED_CODE = "confirmation_required"  # `contracts/site-lock.md:59` fixes this code and the 400.
-LOCK_STORE_DOWN_CODE = "lock_store_unreachable"  # `contracts/site-lock.md:128` answers 503 and forbids a fallback.
+LOCK_STORE_DOWN_CODE = "lock_store_unreachable"  # `contracts/site-lock.md:136` answers 503 and forbids a fallback.
 TAKEOVER_AUDIT_CODE = "takeover_audit_failed"  # `contracts/site-lock.md:125` refuses a takeover the sink cannot record.
 
 LOCK_LOST_MESSAGE = "This session no longer holds the site. Take the site again before you continue."  # The cure.
@@ -1525,7 +1525,7 @@ def lock_cooldown_seconds(org_id: str, site_id: str) -> int:
     Returns:
         The whole seconds that remain, and zero when the portal knows no holder.
     """
-    try:  # `contracts/site-lock.md:130` says a read never needs the lock store.
+    try:  # `contracts/site-lock.md:138` says a read never needs the lock store.
         held = lock.read_lock(org_id, site_id, client=lock_client())  # None for a free site or a dead store.
     except Exception:  # A page render must survive a store that answers nothing.
         logger.warning("select: the lock store did not answer the cooldown of site %s", site_id)  # No trace.
@@ -1583,7 +1583,7 @@ def lock_banner_context(org_id: str, site_id: str) -> dict[str, Any]:
         address. The signed session of this browser holds the token, so this
         builder reads the session first and the store second.
 
-        `contracts/site-lock.md:130` states that a read never needs the lock
+        `contracts/site-lock.md:138` states that a read never needs the lock
         store. Every store read below therefore fails open, and a store that
         answers nothing renders the banner in the `unknown` state.
 

@@ -55,7 +55,7 @@ INVENTORY_ENDPOINT = "select.site_inventory"
 # the search. FR-015 asks for the count. `locked_by` names the operator that
 # holds a site. `lock_state` names the state in one word, because a free site
 # and a site the portal could not read both carry a null `locked_by`.
-# `contracts/site-lock.md:130` asks a read-only page to mark that second case
+# `contracts/site-lock.md:138` asks a read-only page to mark that second case
 # unknown, and `contracts/http-api.md:77` lists the first four names only.
 SITE_ROW_FIELDS = {"site_id", "name", "device_count", "locked_by", "lock_state"}
 
@@ -786,7 +786,7 @@ def test_an_unreachable_lock_store_still_answers_the_site_list(
     """The site list answers even when the lock read raises.
 
     Why:
-        ``contracts/site-lock.md:130`` states that an unreachable lock store must
+        ``contracts/site-lock.md:138`` states that an unreachable lock store must
         not stop a read-only page. The page still answers, and every row states
         the unknown state rather than the free state.
 
