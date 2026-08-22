@@ -5,7 +5,6 @@ OperationExecutor publishes events, SSE handler threads consume
 via per-subscriber bounded queues.
 """
 
-import json
 import logging
 import threading
 import time
@@ -23,29 +22,67 @@ class PortalEventBus:
 
     MAX_SUBSCRIBERS = 10
     QUEUE_MAX_SIZE = 100
+    # WHY: the heartbeat cadence in seconds. Named so a reader does not have to
+    # match a bare literal against the poll timeout at line 78.
+    HEARTBEAT_INTERVAL_S = 30
+    # WHY: how long stop() waits for the heartbeat thread to leave the loop.
+    # The wait is interruptible, so the thread normally returns at once.
+    STOP_JOIN_TIMEOUT_S = 5.0
 
     def __init__(self):
         """Initialize the event bus with empty subscriber registry."""
         self._subscribers = {}
         self._lock = threading.Lock()
         self._heartbeat_thread = None
-        self._running = False
+        # WHY: an Event replaces a plain bool flag so the heartbeat loop can
+        # wake the moment stop() runs. A bool forces the loop to finish a full
+        # time.sleep(30) before it re-reads the flag.
+        self._stop_event = threading.Event()
 
     def start(self) -> None:
-        """Start the heartbeat timer thread."""
-        self._running = True
+        """Start the heartbeat timer thread.
+
+        Calling this twice is safe. The second call returns without starting a
+        second thread, because two heartbeat threads would double every
+        heartbeat event and leave the first thread untracked by stop().
+        """
+        # WHY: guard against a duplicate thread when a caller builds the app twice.
+        if self._heartbeat_thread is not None and self._heartbeat_thread.is_alive():
+            logging.debug("Event bus heartbeat already running; start() ignored")
+            return
+        logging.info("Starting event bus heartbeat thread")
+        self._stop_event.clear()  # WHY: allow a restart after a previous stop().
         self._heartbeat_thread = threading.Thread(
             target=self._heartbeat_loop,
             daemon=True,
             name="portal-heartbeat",
         )
         self._heartbeat_thread.start()
+        logging.debug("Event bus heartbeat thread started")
 
     def stop(self) -> None:
-        """Stop the heartbeat timer and clean up."""
-        self._running = False
+        """Stop the heartbeat timer, wait for the thread, and clean up.
+
+        The method returns only after the heartbeat thread has left its loop,
+        so a caller that stops the bus can trust that no further heartbeat
+        event will publish.
+        """
+        logging.info("Stopping event bus heartbeat thread")
+        self._stop_event.set()  # WHY: wakes the loop out of its wait at once.
+        thread = self._heartbeat_thread
+        if thread is not None:
+            # WHY: join so stop() does not return while the thread still runs.
+            thread.join(timeout=self.STOP_JOIN_TIMEOUT_S)
+            if thread.is_alive():
+                logging.warning(
+                    "Event bus heartbeat thread did not stop within %.1f s",
+                    self.STOP_JOIN_TIMEOUT_S,
+                )
+            self._heartbeat_thread = None
         with self._lock:
+            subscriber_count = len(self._subscribers)
             self._subscribers.clear()
+        logging.debug("Event bus stopped and dropped %d subscriber(s)", subscriber_count)
 
     def subscribe(self, run_id: str = None) -> str:
         """Create a new subscriber and return its unique ID."""
@@ -108,12 +145,14 @@ class PortalEventBus:
                 pass
 
     def _heartbeat_loop(self) -> None:
-        """Send heartbeat events every 30 seconds."""
-        while self._running:
-            time.sleep(30)
-            if not self._running:
-                break
-            active_count = self._count_active()
+        """Send heartbeat events every ``HEARTBEAT_INTERVAL_S`` seconds.
+
+        ``Event.wait`` returns ``True`` as soon as stop() sets the event, and
+        ``False`` when the interval expires. The loop therefore paces on the
+        interval and exits immediately on a stop request.
+        """
+        while not self._stop_event.wait(self.HEARTBEAT_INTERVAL_S):
+            active_count = self._count_active()  # WHY: report the live subscriber total.
             self.publish(
                 "heartbeat",
                 {
@@ -121,7 +160,8 @@ class PortalEventBus:
                     "active_operations": active_count,
                 },
             )
-            self._cleanup_stale_subscribers()
+            self._cleanup_stale_subscribers()  # WHY: drop subscribers older than one hour.
+        logging.debug("Event bus heartbeat loop exited on stop request")
 
     def _count_active(self) -> int:
         """Count currently active subscribers."""
