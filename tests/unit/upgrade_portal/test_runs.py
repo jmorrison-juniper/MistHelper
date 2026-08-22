@@ -432,15 +432,16 @@ def test_each_initial_phase_is_pending_with_empty_counts() -> None:
         assert entry["settled"] == 0
         assert entry["total"] == 0
         assert entry["settled_at"] is None
+        assert entry["note"] == ""  # Empty text, never null. The page prints this value.
 
 
-def test_each_initial_phase_holds_the_five_contract_keys() -> None:
-    """Every phase entry carries the same five keys.
+def test_each_initial_phase_holds_the_six_contract_keys() -> None:
+    """Every phase entry carries the same six keys.
 
     Why:
         The page reads one shape only. A missing key would break the render.
     """
-    expected = {"name", "state", "settled", "total", "settled_at"}
+    expected = {"name", "state", "settled", "total", "settled_at", "note"}
     for entry in RunRecordBuilder.initial_phases():
         assert set(entry) == expected
 

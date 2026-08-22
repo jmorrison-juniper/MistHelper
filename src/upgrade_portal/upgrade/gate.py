@@ -626,11 +626,11 @@ def _anchor_proves_reboot(target: GateTarget, reading: GateReading) -> bool:
     """Report whether the cloud moment proves the reboot of one device.
 
     Why:
-        The uptime of this reading is null, so the fall test can prove
-        nothing, and the device would wait to the phase deadline. The cloud
-        raises ``last_seen`` each time it hears from the device, so a moment
-        later than the pre-check moment proves that the device returned. The
-        log line names the device, because an operator must know which proof
+        The fall test proved nothing here, because one of the two uptime
+        readings is missing, and the device would wait to the phase deadline.
+        The cloud raises ``last_seen`` each time it hears from the device, so a
+        moment later than the pre-check moment proves that the device returned.
+        The log line names the device, because an operator must know which proof
         the run used.
 
     Args:
@@ -651,10 +651,19 @@ def _reboot_is_proven(target: GateTarget, reading: GateReading) -> bool:
 
     Why:
         The firmware version half already holds here, so this rule answers the
-        uptime half alone. Three paths can prove it, and each path needs a
-        real value. The absolute anchor is the last path, and it runs only
-        when the current reading carries no uptime. A real uptime that did not
-        fall is evidence against a reboot, and it keeps its verdict.
+        uptime half alone. Three paths can prove it, and the rule tries them
+        from the strongest to the weakest.
+
+        The fall of two real uptime readings is the strongest. The cloud moment
+        is next, and it runs whenever the fall test lacked a reading on either
+        side. The version change alone is the weakest, and it runs last, so a
+        device with no earlier uptime still gets the cloud moment first. T141
+        forbids a settle on a version change that no other signal supports, and
+        this order keeps that path as the final resort of a device that the
+        pre-check never measured.
+
+        A real pair of uptime readings that did not fall is evidence against a
+        reboot, and it keeps its verdict against both weaker paths.
 
     Args:
         target: The state of the device before the upgrade.
@@ -663,14 +672,16 @@ def _reboot_is_proven(target: GateTarget, reading: GateReading) -> bool:
     Returns:
         True when one of the three paths proves the reboot.
     """
-    if target.uptime_before is None:  # No earlier uptime, so the version change is the only proof available.
-        _warn_version_only(target.mac)  # Name the device that uses the weakest signal.
-        return True  # The version-only path, which this gate held before the anchor arrived.
     if uptime_decreased(target.uptime_before, reading.uptime):  # Two real readings show the fall.
         return True  # The strongest path, and the one that every healthy device meets first.
-    if reading.uptime is not None:  # A real uptime that did not fall is evidence against a reboot.
-        return False  # The anchor adds a path, and it never overrules a real reading.
-    return _anchor_proves_reboot(target, reading)  # The uptime is null, so try the absolute anchor.
+    if target.uptime_before is not None and reading.uptime is not None:  # A real pair that did not fall.
+        return False  # Neither weaker path may overrule two real readings.
+    if _anchor_proves_reboot(target, reading):  # One uptime is missing, so try the absolute anchor.
+        return True  # The cloud heard from the device after the pre-check moment.
+    if target.uptime_before is None:  # No earlier uptime and no later moment, so nothing else can prove it.
+        _warn_version_only(target.mac)  # Name the device that uses the weakest signal.
+        return True  # The version-only path, which this gate held before the anchor arrived.
+    return False  # A real earlier uptime and no current one, so wait for a reading that carries it.
 
 
 def _note_reboot(target: GateTarget, progress: GateProgress, reading: GateReading | None, now: float) -> GateProgress:
@@ -844,7 +855,7 @@ def read_fleet_statistics(
         response = call()
         records = mistapi.get_all(mist_session=session, response=response)
     except Exception as error:  # A failed poll marks the round partial and never stops the run.
-        logger.warning("Upgrade gate failed the fleet statistics read: %s", error)
+        logger.warning("Upgrade gate failed the fleet statistics read: %s", type(error).__name__)
         return FleetRead({}, [_partial_reason(REASON_READ_FAILED, HTTP_STATUS_NONE)])
     rows = [dict(record) for record in records]
     logger.debug("Upgrade gate read %s device statistics records", len(rows))

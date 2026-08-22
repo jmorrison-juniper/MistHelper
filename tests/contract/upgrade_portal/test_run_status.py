@@ -80,8 +80,9 @@ STATUS_FIELDS = {
 PHASE_ORDER = ["gateways", "switches", "aps", "clients"]
 
 # WHY: The contract shows a settled phase with a settle time and a waiting phase
-# with two counts. Every phase carries all five keys, so the page reads one shape.
-PHASE_FIELDS = {"name", "state", "settled", "total", "settled_at"}
+# with two counts. Every phase carries all six keys, so the page reads one shape.
+# The sixth key names what the gate could not read, and it holds text, never null.
+PHASE_FIELDS = {"name", "state", "settled", "total", "settled_at", "note"}
 
 # WHY: The contract shows these seven keys on a target row. A row that dropped a
 # key would leave a blank column with no reason a reader could see.
@@ -391,7 +392,9 @@ def test_the_status_fills_every_phase_the_record_never_wrote(
     run_id = seed_run(run_store, SETTLING_STATE, phases=stored)  # One stored phase, and three that never started.
     entries = status_body(upgrade_client, run_id)["phases"]
     assert len(entries) == len(PHASE_ORDER)  # Four rows, whatever the record holds.
-    assert all(set(entry) == PHASE_FIELDS for entry in entries)  # Every row carries all five keys.
+    assert all(set(entry) == PHASE_FIELDS for entry in entries)  # Every row carries all six keys.
+    # A record written before the note existed still answers text. The page prints the value as it stands.
+    assert all(entry["note"] == "" for entry in entries)
 
 
 def test_every_target_row_carries_the_seven_contract_keys(

@@ -29,7 +29,7 @@ from __future__ import annotations
 import logging
 import threading
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
@@ -51,6 +51,13 @@ DEFAULT_EVENT_LIMIT = 1000
 MIN_EVENT_LIMIT = 1
 MAX_EVENT_LIMIT = 1000
 DEFAULT_MAX_PAGES = 10
+
+# A full page with no cursor hides the rest of the window. The reader then halves
+# the window and reads both halves. Three splits turn one window into at most
+# eight parts and cost at most 15 calls, which one 20-second round can afford. A
+# window narrower than the floor holds too few seconds to divide again.
+MAX_WINDOW_SPLITS = 3
+MIN_WINDOW_SECONDS = 2
 
 SUFFIX_CONNECTED = "_CONNECTED"
 SUFFIX_RESTARTED = "_RESTARTED"
@@ -227,7 +234,7 @@ def read_event_definitions(session: Any) -> tuple[Mapping[str, Any], ...]:
     try:
         response = mistapi.api.v1.const.device_events.listDeviceEventsDefinitions(session)
     except Exception as error:  # A failed catalogue read must not stop the run.
-        logger.warning("Upgrade portal failed the device event catalogue read: %s", error)
+        logger.warning("Upgrade portal failed the device event catalogue read: %s", type(error).__name__)
         return ()
     return _rows(response)
 
@@ -397,6 +404,10 @@ def poll_device_events(
         The call passes ``start`` and ``end`` as text. The installed SDK types
         both as ``str | None`` even though the values are epoch seconds.
 
+        A cloud fault ends this one poll and never the watch. The settle gate
+        polls every 20 seconds for up to half an hour, so the next round retries.
+        An exception here would instead end the watch of a live upgrade.
+
     Args:
         session: The cloud session. The caller owns it.
         org_id: The organization to read.
@@ -406,22 +417,28 @@ def poll_device_events(
             first page.
 
     Returns:
-        One page of events, with the cursor of the next page.
+        One page of events, with the cursor of the next page. An empty page with
+        no cursor after a cloud fault. That page reports no truncation, because a
+        fault is no reason to narrow the window.
 
     Raises:
         ValueError: If the device type names no known family.
     """
     family = _validate_device_type(device_type)
     logger.info("Upgrade portal reads %s events of organization %s", family, org_id)
-    response = mistapi.api.v1.orgs.devices.searchOrgDeviceEvents(
-        session,
-        org_id,
-        device_type=family,
-        start=str(window.start),
-        end=str(window.end),
-        limit=window.limit,
-        search_after=cursor,
-    )
+    try:
+        response = mistapi.api.v1.orgs.devices.searchOrgDeviceEvents(
+            session,
+            org_id,
+            device_type=family,
+            start=str(window.start),
+            end=str(window.end),
+            limit=window.limit,
+            search_after=cursor,
+        )
+    except Exception as error:  # One cloud fault must not end the settle watch.
+        logger.warning("Upgrade portal failed the %s event read: %s", family, type(error).__name__)
+        return EventPage((), None, False)
     return _read_page(response, family, window.limit)
 
 
@@ -457,38 +474,114 @@ def drain_device_events(
     window: EventWindow,
     max_pages: int = DEFAULT_MAX_PAGES,
 ) -> tuple[Mapping[str, Any], ...]:
-    """Read every page of one event window.
+    """Read every event of one window, and narrow the window when a page fills.
 
     Why:
         One poll usually fits one page, because the window is narrow and the page
-        size is high. The loop covers the busy site that does not fit. The page
-        count has a ceiling, so a cloud that always returns a cursor cannot hold
-        the gate thread for ever.
+        size is high. Two answers mean that a page hid the rest of the window.
+
+        A page that fills and carries no cursor is the silent one. The cloud
+        reports no error, and the gate would miss the very reconnect it waits
+        for. This reader therefore halves such a window and reads both halves.
+        The two halves meet at the middle second, so an event on the boundary is
+        read twice rather than lost. The caller builds a set of addresses, so a
+        repeated event costs nothing.
+
+        A cloud that always returns a cursor meets the page ceiling instead. That
+        case keeps its warning and no split, because ten full pages of one family
+        inside one window is a load that no narrowing can bring under the poll
+        budget.
 
     Args:
         session: The cloud session. The caller owns it.
         org_id: The organization to read.
         device_type: The family to read.
         window: The time window and the page size.
-        max_pages: The largest number of pages to read in one poll.
+        max_pages: The largest number of pages to read from one window part.
 
     Returns:
-        Every event of the window, in the order that the cloud returned.
+        Every event that the window parts returned. The order follows the cloud
+        answer inside one part, and parts can interleave after a split.
 
     Raises:
         ValueError: If the device type names no known family.
     """
     collected: list[Mapping[str, Any]] = []
+    pending: list[tuple[EventWindow, int]] = [(window, 0)]
+    while pending:
+        current, depth = pending.pop(0)  # A list keeps the parts in a near chronological order
+        rows, truncated = _drain_pages(session, org_id, device_type, current, max_pages)
+        collected.extend(rows)
+        if truncated:
+            pending.extend(_split_window(current, depth, device_type))
+    return tuple(collected)
+
+
+def _drain_pages(
+    session: Any,
+    org_id: str,
+    device_type: str,
+    window: EventWindow,
+    max_pages: int,
+) -> tuple[list[Mapping[str, Any]], bool]:
+    """Read the pages of one window part.
+
+    Why:
+        The page walk and the window split are separate rules. This reader owns
+        the walk alone, so the split rule above it stays short enough to read.
+
+    Args:
+        session: The cloud session. The caller owns it.
+        org_id: The organization to read.
+        device_type: The family to read.
+        window: The window part and the page size.
+        max_pages: The largest number of pages to read from this part.
+
+    Returns:
+        The events of this part, and True when the last page filled with no
+        cursor. True means the caller must narrow this part.
+    """
+    collected: list[Mapping[str, Any]] = []
     cursor: str | None = None
+    truncated = False
     for _ in range(max(1, max_pages)):
         page = poll_device_events(session, org_id, device_type, window, cursor)
         collected.extend(page.events)
-        cursor = page.cursor
+        truncated, cursor = page.truncated, page.cursor
         if cursor is None:
             break
     else:
         logger.warning("Upgrade portal stopped the %s event read at the page ceiling", device_type)
-    return tuple(collected)
+    return collected, truncated
+
+
+def _split_window(window: EventWindow, depth: int, device_type: str) -> tuple[tuple[EventWindow, int], ...]:
+    """Halve one window part that hid events behind a full page.
+
+    Why:
+        The split has two floors, because a window that always fills would
+        otherwise divide without end. Three splits make at most eight parts and
+        cost at most 15 calls, which one 20-second round can afford.
+
+    Args:
+        window: The window part that filled its page.
+        depth: The number of splits that already made this part.
+        device_type: The family, named in the log record.
+
+    Returns:
+        The two halves with their new depth. An empty answer at either floor,
+        which leaves the rest of this part unread.
+    """
+    span = window.end - window.start
+    if depth >= MAX_WINDOW_SPLITS or span < MIN_WINDOW_SECONDS:
+        logger.warning(
+            "Upgrade portal cannot narrow the %s event window again, so some events of it stay unread",
+            device_type,
+        )
+        return ()
+    middle = window.start + span // 2  # The halves share this second, so no event falls between them
+    logger.info("Upgrade portal halves the %s event window after a full page with no cursor", device_type)
+    return ((replace(window, end=middle), depth + 1), (replace(window, start=middle), depth + 1))
 
 
 def select_reconnect_events(
@@ -560,7 +653,9 @@ __all__ = [
     "DEVICE_TYPE_GATEWAY",
     "DEVICE_TYPE_SWITCH",
     "MAX_EVENT_LIMIT",
+    "MAX_WINDOW_SPLITS",
     "MIN_EVENT_LIMIT",
+    "MIN_WINDOW_SECONDS",
     "POLL_INTERVAL_SECONDS",
     "SUFFIX_CONNECTED",
     "SUFFIX_RESTARTED",

@@ -257,6 +257,8 @@ class PhaseOutcome:
         total: How many members the phase holds.
         not_returned: The address of each member that never came back. Empty
             when the gate reports the counts alone.
+        note: One sentence naming what the gate could not read. Empty when
+            every read of the last round answered.
     """
 
     name: str
@@ -264,6 +266,7 @@ class PhaseOutcome:
     settled: int = 0
     total: int = 0
     not_returned: tuple[str, ...] = ()  # Empty by default, so a gate that reports counts alone still builds one
+    note: str = ""  # Empty by default, so a phase that never met a fault names no cause
 
 
 class PhaseGate(Protocol):
@@ -1273,6 +1276,12 @@ class RunDriver:
     def _write_phase(self, record: MutableMapping[str, Any], outcome: PhaseOutcome) -> None:
         """Replace one phase entry of the record and save the record.
 
+        Why:
+            The entry carries the note of the gate as well as the counts. A
+            phase that waited on a cloud that would not answer shows the
+            operator how many devices returned and never why the rest did not,
+            so the page would name a failure with no cause.
+
         Args:
             record: The run record.
             outcome: What the gate reported.
@@ -1284,6 +1293,7 @@ class RunDriver:
             "settled": outcome.settled,
             "total": outcome.total,
             "settled_at": settled_at,
+            "note": outcome.note,
         }
         phases = [dict(item) for item in record.get("phases", [])]
         record["phases"] = [entry if str(item.get("name", "")) == outcome.name else item for item in phases]

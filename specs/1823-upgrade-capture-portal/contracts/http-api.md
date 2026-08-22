@@ -346,7 +346,8 @@ one begin action for each run, so the second call sends nothing.
   "phase_order": ["gateways", "switches", "aps", "clients"],
   "phases": [
     { "name": "gateways", "state": "settled", "settled_at": "<iso>" },
-    { "name": "switches", "state": "waiting", "settled": 4, "total": 9 }
+    { "name": "switches", "state": "waiting", "settled": 4, "total": 9,
+      "note": "The portal could not read the device statistics." }
   ],
   "targets": [
     { "mac": "<string>", "name": "<string>", "device_type": "switch",
@@ -362,6 +363,12 @@ one begin action for each run, so the second call sends nothing.
 
 The body carries a tenth key, `lock`, only when the run record holds a lock entry.
 A healthy run carries no such key, and the key reports a fault alone.
+
+Each phase entry carries six keys, whatever the example above shows. The view
+fills `name`, `state`, `settled`, `total`, `settled_at`, and `note` on every
+phase, so the page reads one shape. The key `note` names the source that the
+last poll round could not read. It holds empty text when every read answered,
+and it never holds null.
 
 ```json
 {

@@ -516,6 +516,21 @@
     color: var(--portal-text-muted);
 }
 
+/*
+ * The note explains a phase, so it sits on its own row under that phase and
+ * spans every column of the grid. A note that holds no text matches `:empty`
+ * and leaves the grid, so a healthy run shows four rows and no blank ones.
+ */
+.status-phase-note {
+    grid-column: 1 / -1;
+    font-size: 0.85rem;
+    color: var(--portal-text-muted);
+}
+
+.status-phase-note:empty {
+    display: none;
+}
+
 .status-section-list {
     display: flex;
     flex-wrap: wrap;

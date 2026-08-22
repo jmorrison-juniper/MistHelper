@@ -463,12 +463,20 @@ def test_a_statistics_read_that_raises_costs_one_round() -> None:
 
 
 def test_a_statistics_read_that_always_raises_reaches_the_deadline() -> None:
-    """A statistics source that never answers ends at the limit, not in a hang."""
+    """A statistics source that never answers ends at the limit, not in a hang.
+
+    Why:
+        The outcome names the source that the portal could not read. An operator
+        who sees a failed phase with no cause has no next step.
+    """
     events = FakeReconnectReader([[SWITCH_MAC]])
     statistics = FakeStatisticsReader(fail_rounds=range(1, phase_gate.polls_per_phase() + 1))
     harness = Harness(events, statistics)
     outcome = harness.adapter.settle(RUN_ID, "switches", [target_entry(SWITCH_MAC)])
-    assert outcome == PhaseOutcome("switches", PhaseState.FAILED.value, 0, 1, (SWITCH_MAC,))
+    expected = PhaseOutcome(
+        "switches", PhaseState.FAILED.value, 0, 1, (SWITCH_MAC,), phase_gate.NOTE_STATISTICS_READ_FAILED
+    )
+    assert outcome == expected
     assert harness.statistics.calls == phase_gate.polls_per_phase()
 
 
@@ -481,6 +489,33 @@ def test_an_event_read_that_raises_costs_one_round() -> None:
     assert harness.events.calls == ROUNDS_AFTER_ONE_FAILED_READ
 
 
+def test_an_event_source_that_never_answers_names_the_events() -> None:
+    """A phase that lost every event read reports the event source.
+
+    Why:
+        The two sources fail apart. The note must name the one that went quiet,
+        so the operator looks at the right place.
+    """
+    events = FakeReconnectReader([], fail_rounds=range(1, phase_gate.polls_per_phase() + 1))
+    harness = Harness(events, FakeStatisticsReader(rebooted_readings(SWITCH_MAC)))
+    outcome = harness.adapter.settle(RUN_ID, "switches", [target_entry(SWITCH_MAC)])
+    assert outcome.state == PhaseState.FAILED.value
+    assert outcome.note == phase_gate.NOTE_EVENT_READ_FAILED
+
+
+def test_both_sources_that_fail_name_both_sources() -> None:
+    """A round that lost both reads reports both of them.
+
+    Why:
+        A cloud that answers nothing at all is a different fault from one
+        endpoint that went quiet, and the note must show the difference.
+    """
+    rounds = range(1, phase_gate.polls_per_phase() + 1)
+    harness = Harness(FakeReconnectReader([], fail_rounds=rounds), FakeStatisticsReader(fail_rounds=rounds))
+    outcome = harness.adapter.settle(RUN_ID, "switches", [target_entry(SWITCH_MAC)])
+    assert outcome.note == f"{phase_gate.NOTE_EVENT_READ_FAILED} {phase_gate.NOTE_STATISTICS_READ_FAILED}"
+
+
 def test_partial_statistics_never_stop_the_run() -> None:
     """A partial read still carries the readings that it holds."""
     reasons = [{"section": gate.SECTION_GATE_STATISTICS, "reason": "page_count_mismatch", "http_status": 200}]
@@ -488,6 +523,23 @@ def test_partial_statistics_never_stop_the_run() -> None:
     harness = Harness(FakeReconnectReader([[SWITCH_MAC]]), statistics)
     outcome = harness.adapter.settle(RUN_ID, "switches", [target_entry(SWITCH_MAC)])
     assert outcome.state == PhaseState.SETTLED.value
+    assert outcome.note == ""  # A phase that settled needs no cause.
+
+
+def test_a_phase_that_timed_out_on_partial_reads_says_so() -> None:
+    """A read that answered in part reports a part, never a whole fault.
+
+    Why:
+        The two words lead to different work. A partial read means some devices
+        answered, so the operator looks at the named devices first.
+    """
+    reasons = [{"section": gate.SECTION_GATE_STATISTICS, "reason": "page_count_mismatch", "http_status": 200}]
+    # WHY: The version and the uptime both hold, so the gate proves no reboot and waits to the limit.
+    stale = {SWITCH_MAC: gate.GateReading(mac=SWITCH_MAC, version=VERSION_BEFORE, uptime=UPTIME_BEFORE)}
+    harness = Harness(FakeReconnectReader([[SWITCH_MAC]]), FakeStatisticsReader(stale, partial_reasons=reasons))
+    outcome = harness.adapter.settle(RUN_ID, "switches", [target_entry(SWITCH_MAC)])
+    assert outcome.state == PhaseState.FAILED.value
+    assert outcome.note == phase_gate.NOTE_STATISTICS_PARTIAL
 
 
 # --- The call budget ------------------------------------------------------

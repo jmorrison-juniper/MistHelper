@@ -143,6 +143,7 @@
       {% set phase_state = phase.state | default('waiting', true) %}
       {% set settled_count = phase.settled | default(0, true) %}
       {% set total_count = phase.total | default(0, true) %}
+      {% set phase_note = phase.note | default('', true) %}
 
       <span class="status-phase-name">{{ phase_labels.get(name, name) }}</span>
 
@@ -168,6 +169,18 @@
           Not started
         {%- endif -%}
       </span>
+
+      {#
+        The note names what the gate could not read, so a phase that waited on a
+        silent cloud states a cause. The cell always exists, because the poll
+        finds it by selector and fills it without rebuilding the row. The tag
+        holds no space around the value, so an empty note leaves an empty
+        element and the rule `.status-phase-note:empty` drops the whole row.
+      #}
+      <span class="status-phase-note"
+            data-testid="upgrade-phase-note-{{ name }}"
+            data-run-phase="{{ name }}"
+            data-run-field="note">{{- phase_note -}}</span>
     {% endfor %}
   </div>
 

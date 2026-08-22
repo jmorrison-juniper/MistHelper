@@ -67,6 +67,15 @@ PHASE_DEADLINE_SECONDS: Final[int] = 1800
 # to the round breaks the budget, and this constant makes a test say so.
 CALLS_PER_ROUND: Final[int] = 2
 
+# WHY: A phase that reaches its limit tells the operator how many devices came
+# back and never why the wait was blind. These sentences name the source that
+# the portal could not read, so the phase entry carries a cause. They avoid the
+# word "check", because this feature already uses "pre-check" and "post-check"
+# for the two captures.
+NOTE_EVENT_READ_FAILED: Final[str] = "The portal could not read the device events."
+NOTE_STATISTICS_READ_FAILED: Final[str] = "The portal could not read the device statistics."
+NOTE_STATISTICS_PARTIAL: Final[str] = "The portal read part of the device statistics."
+
 
 class PhaseGateError(RuntimeError):
     """One phase cannot be watched as it stands.
@@ -619,22 +628,27 @@ class PhaseSettleGate:
             ``calls_per_phase`` reports. A test that read the clock first would
             add one round and pass the documented call budget.
 
+            The loop keeps the cause of the last round alone. An earlier round
+            that failed and a later round that answered describe a cloud that
+            recovered, and the page must show the state of the last look.
+
         Args:
             watch: The moving state of the wait.
 
         Returns:
             The outcome of the phase.
         """
+        note = ""
         for _ in range(self._ceiling):
-            self._round(watch)
+            note = self._round(watch)
             if watch.is_complete:
                 return self._outcome(watch, PhaseState.SETTLED)
             self._deps.sleep(float(gate.POLL_INTERVAL_SECONDS))
             if self._deps.settle_gate.now() >= watch.deadline:
                 break
-        return self._timeout(watch)
+        return self._timeout(watch, note)
 
-    def _round(self, watch: _PhaseWatch) -> None:
+    def _round(self, watch: _PhaseWatch) -> str:
         """Run one poll round and report how far the phase moved.
 
         Why:
@@ -645,12 +659,17 @@ class PhaseSettleGate:
 
         Args:
             watch: The moving state of the wait.
+
+        Returns:
+            One sentence for each source that this round could not read, joined
+            by a space. Empty text after a whole round.
         """
-        reconnected = self._read_reconnects(watch.family)
-        readings = self._read_statistics()
+        reconnected, event_note = self._read_reconnects(watch.family)
+        readings, statistics_note = self._read_statistics()
         for target in watch.targets:
             self._observe(watch, target, gate.GateSignals(target.mac in reconnected, readings.get(target.mac)))
         self._deps.progress.report(PhaseProgress(watch.run_id, watch.phase, watch.settled, len(watch.targets)))
+        return " ".join(note for note in (event_note, statistics_note) if note)
 
     def _observe(self, watch: _PhaseWatch, target: gate.GateTarget, signals: gate.GateSignals) -> None:
         """Apply one round of observations to one device.
@@ -670,7 +689,7 @@ class PhaseSettleGate:
             return
         watch.progress[target.mac] = self._deps.settle_gate.observe(target, current, signals)
 
-    def _read_reconnects(self, family: str) -> frozenset[str]:
+    def _read_reconnects(self, family: str) -> tuple[frozenset[str], str]:
         """Read the reconnect signal of one round.
 
         Why:
@@ -678,19 +697,24 @@ class PhaseSettleGate:
             300 seconds back and the round repeats after 20 seconds, so the next
             round reads the same event again and the signal is not lost.
 
+            The answer carries the cause as well as the addresses. An empty set
+            alone reads exactly like a round in which no device came back, so
+            the operator would see a wait with no stated reason.
+
         Args:
             family: The device family to read.
 
         Returns:
-            The addresses that reconnected. Empty after a failed read.
+            The addresses that reconnected, and the cause of a failed read. The
+            cause is empty text after a whole read.
         """
         try:
-            return self._deps.event_reader.read(family)
+            return self._deps.event_reader.read(family), ""
         except Exception as error:  # A failed read costs one round and never stops the run.
-            logger.warning("Upgrade phase gate failed the %s event read: %s", family, error)
-            return frozenset()
+            logger.warning("Upgrade phase gate failed the %s event read: %s", family, type(error).__name__)
+            return frozenset(), NOTE_EVENT_READ_FAILED
 
-    def _read_statistics(self) -> Mapping[str, gate.GateReading]:
+    def _read_statistics(self) -> tuple[Mapping[str, gate.GateReading], str]:
         """Read the uptime and the version of the whole fleet for one round.
 
         Why:
@@ -700,19 +724,34 @@ class PhaseSettleGate:
             the run. The gate keeps the progress it already holds, so a lost
             round costs 20 seconds and nothing else.
 
+            The cause travels back with the readings. The reason entries name a
+            machine fault and reach the log alone, so this reader turns them
+            into one sentence that an operator can read. An answer that holds no
+            reading at all reports a failed read, because a partial read that
+            returned nothing helps the operator no more than a fault does.
+
         Returns:
-            One reading for each device. Empty after a failed read.
+            One reading for each device, and the cause of a failed or partial
+            read. The cause is empty text after a whole read.
         """
         try:
             result = self._deps.statistics_reader.read()
         except Exception as error:  # A failed read costs one round and never stops the run.
-            logger.warning("Upgrade phase gate failed the fleet statistics read: %s", error)
-            return {}
-        if result.partial_reasons:
-            logger.warning("Upgrade phase gate read partial statistics: %s", result.partial_reasons)
-        return result.readings
+            logger.warning("Upgrade phase gate failed the fleet statistics read: %s", type(error).__name__)
+            return {}, NOTE_STATISTICS_READ_FAILED
+        if not result.partial_reasons:
+            return result.readings, ""
+        logger.warning("Upgrade phase gate read partial statistics: %s", result.partial_reasons)
+        note = NOTE_STATISTICS_PARTIAL if result.readings else NOTE_STATISTICS_READ_FAILED
+        return result.readings, note
 
-    def _outcome(self, watch: _PhaseWatch, state: PhaseState, not_returned: tuple[str, ...] = ()) -> PhaseOutcome:
+    def _outcome(
+        self,
+        watch: _PhaseWatch,
+        state: PhaseState,
+        not_returned: tuple[str, ...] = (),
+        note: str = "",
+    ) -> PhaseOutcome:
         """Build the answer that the driver writes into the run record.
 
         Why:
@@ -721,17 +760,22 @@ class PhaseSettleGate:
             so the addresses travel in the outcome rather than in a log line
             that no later reader can act on.
 
+            The note travels the same way and for the same reason. A phase that
+            waited on a cloud that would not answer must say so on the page, and
+            the log of the run thread is not a page.
+
         Args:
             watch: The moving state of the wait.
             state: The phase state to report.
             not_returned: The address of each device that never came back.
+            note: One sentence naming what the last round could not read.
 
         Returns:
             The outcome of the phase.
         """
-        return PhaseOutcome(watch.phase, state.value, watch.settled, len(watch.targets), not_returned)
+        return PhaseOutcome(watch.phase, state.value, watch.settled, len(watch.targets), not_returned, note)
 
-    def _timeout(self, watch: _PhaseWatch) -> PhaseOutcome:
+    def _timeout(self, watch: _PhaseWatch, note: str = "") -> PhaseOutcome:
         """Report a phase that reached its time limit.
 
         Why:
@@ -743,6 +787,7 @@ class PhaseSettleGate:
 
         Args:
             watch: The moving state of the wait.
+            note: One sentence naming what the last round could not read.
 
         Returns:
             The outcome of the phase.
@@ -755,7 +800,7 @@ class PhaseSettleGate:
             len(missing),
             ", ".join(missing),
         )
-        return self._outcome(watch, PhaseState.FAILED, missing)  # FR-047: the driver marks each named device
+        return self._outcome(watch, PhaseState.FAILED, missing, note)  # FR-047: the driver marks each named device
 
 
 def as_phase_gate(adapter: PhaseSettleGate) -> PhaseGate:
@@ -778,6 +823,9 @@ def as_phase_gate(adapter: PhaseSettleGate) -> PhaseGate:
 
 __all__ = [
     "CALLS_PER_ROUND",
+    "NOTE_EVENT_READ_FAILED",
+    "NOTE_STATISTICS_PARTIAL",
+    "NOTE_STATISTICS_READ_FAILED",
     "PHASE_DEADLINE_SECONDS",
     "CloudReconnectReader",
     "CloudStatisticsReader",

@@ -58,7 +58,7 @@ credentials. Neither result is a product defect.
 | 7 | Scenario D, the stop control (section 6) | BLOCKED | The scenario needs a running upgrade, which needs live hardware. |
 | 8 | Scenario E, two operators and one site (section 7) | BLOCKED | The site lock lives in Redis. The local Redis demands a password that lives in `.env`. The lock request answers 503 and the log names an authentication error. |
 | 9 | Scenario F, the history view (section 8) | BLOCKED | The history page reads stored captures. No capture exists without the database credential. |
-| 10 | pytest unit and contract (section 9) | PASS | `pytest tests/unit/upgrade_portal tests/contract/upgrade_portal -p no:playwright` reported 2461 passed and 0 failed. |
+| 10 | pytest unit and contract (section 9) | PASS | `pytest tests/unit/upgrade_portal tests/contract/upgrade_portal -p no:playwright` reported 2616 passed and 0 failed. |
 | 11 | pytest browser journeys (section 9) | BLOCKED | The task requires `-p no:playwright`. That flag removes the `context` and `page` fixtures, so all 129 tests skipped with cause `('context', <SubRequest 'page' ...>)`. Playwright and its Chromium build are installed, so the browsers are not the blocker. |
 | 12 | ruff (section 9) | PASS | `ruff check src/upgrade_portal src/firmware/upgrade_service.py` exited zero with no finding. |
 | 13 | mypy (section 9) | PASS | `Success: no issues found in 40 source files`. |

@@ -1339,12 +1339,16 @@
     }
 
     /**
-     * Paints the state and the count of each cascade phase.
+     * Paints the state, the count, and the note of each cascade phase.
      *
      * Why: The cascade order is fixed and the page already holds one row for
      * each phase. A paint that rebuilt the rows would move the focus of an
      * operator who is reading the list. The phase name reaches a selector, so
      * the name passes the safe pattern first.
+     *
+     * The note writes empty text when the phase carries none. An empty element
+     * matches the `:empty` rule and leaves the grid, so a phase that met no
+     * fault shows no note row.
      *
      * @param {Element} region The run status region.
      * @param {Object} status The status body.
@@ -1363,6 +1367,7 @@
             var prefix = '[data-run-phase="' + name + '"]';
             setText(region.querySelector(prefix + '[data-run-field="state"]'), phase.state || "waiting");
             setText(region.querySelector(prefix + '[data-run-field="progress"]'), phaseProgressText(phase));
+            setText(region.querySelector(prefix + '[data-run-field="note"]'), phase.note || "");
         });
     }
 

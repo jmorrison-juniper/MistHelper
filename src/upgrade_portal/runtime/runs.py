@@ -344,7 +344,7 @@ class RunRecordBuilder:
             Four phase entries in the order gateways, switches, aps, clients.
         """
         return [
-            {"name": name, "state": PhaseState.PENDING.value, "settled": 0, "total": 0, "settled_at": None}
+            {"name": name, "state": PhaseState.PENDING.value, "settled": 0, "total": 0, "settled_at": None, "note": ""}
             for name in PHASE_ORDER
         ]
 
@@ -712,16 +712,20 @@ class RunStatusView:
 
         Why:
             The contract shows a settled phase with a settle time and a
-            waiting phase with two counts. The view writes all five keys on
+            waiting phase with two counts. The view writes all six keys on
             every phase, so the page reads one shape only.
+
+            The note is the last key and it holds text rather than null. The
+            page prints it, and an empty string prints as nothing while a null
+            would print the word "None".
 
         Args:
             name: The cascade phase name.
             stored: The stored entry for that phase, or None when absent.
 
         Returns:
-            One phase entry with the name, the state, the counts, and the
-            settle time.
+            One phase entry with the name, the state, the counts, the settle
+            time, and the note.
         """
         source: Mapping[str, Any] = stored or {}
         return {
@@ -730,6 +734,7 @@ class RunStatusView:
             "settled": int(source.get("settled", 0)),
             "total": int(source.get("total", 0)),
             "settled_at": source.get("settled_at"),
+            "note": str(source.get("note") or ""),
         }
 
     @classmethod
