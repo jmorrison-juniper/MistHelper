@@ -32,6 +32,7 @@ from src.ssh.config.validators import (  # Shared input validators
     validate_username,
 )
 from src.ssh.runtime.interactive_mode import InteractiveMode  # Concrete REPL implementation
+from src.utils.console import echo  # WHY: spec 1031 console echo keeps stdout text and drops the WARNING level.
 from src.utils.input_utils import InputUtils  # EOF-safe input wrapper (issue #452)
 
 logger = logging.getLogger(__name__)  # WHY: module-scoped logger for #886 print-to-logger migration.
@@ -297,8 +298,8 @@ class AppRunner:  # WHY: decomposed orchestrator preserving legacy CLI entrypoin
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.error("X  No valid commands remaining")
             return []
-        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logger.warning("!? Proceeding with %d valid commands", len(validated))  # Soft failure path
+        # WHY: spec 1031 console echo. The stdout text stays the same and the record drops to INFO.
+        echo("!? Proceeding with %d valid commands", len(validated))  # WHY: tell the operator the run continues.
         return validated
 
     @staticmethod
@@ -337,8 +338,8 @@ class AppRunner:  # WHY: decomposed orchestrator preserving legacy CLI entrypoin
         requested = request.args.max_threads or multiprocessing.cpu_count()  # CLI override or CPU count
         max_threads = _validate_thread_count(requested, len(request.hosts))  # Apply safety caps
         if max_threads != requested:  # Tell the user if we clamped their request
-            # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-            logger.warning("!? Adjusted thread count from %d to %d", requested, max_threads)
+            # WHY: spec 1031 console echo. The stdout text stays the same and the record drops to INFO.
+            echo("!? Adjusted thread count from %d to %d", requested, max_threads)  # WHY: report the clamp.
         logging.info(
             "Dispatching to MultiHostRunner.run (%d hosts / %d cmds)", len(request.hosts), len(request.commands)
         )

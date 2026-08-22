@@ -26,6 +26,8 @@ import time  # WHY: Timing for output loops, cleanup, total duration
 from dataclasses import dataclass  # WHY: Frozen slotted state bundle keeps _collect_output CC low
 from typing import Any  # WHY: paramiko Channel type is dynamic across paramiko versions
 
+from src.utils.console import echo  # WHY: spec 1031 console echo keeps stdout text and drops the WARNING level.
+
 logger = logging.getLogger(__name__)  # WHY: Module-scoped logger for the drain-progress staticmethod
 
 # Module-level constants - extracted so each method's CC stays low (no magic numbers in branches)
@@ -395,8 +397,8 @@ class ShellExecutor:
         state.output += (
             f"\n\n[OUTPUT TRUNCATED - Size limit of {cap_mb}MB reached]\n"  # WHY: Verbatim truncation marker
         )
-        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        self.logger.warning("!? [%s] Output truncated at %dMB, draining remaining data...", hostname, cap_mb)
+        # WHY: spec 1031 console echo. The genuine truncation warning stays above at WARNING.
+        echo("!? [%s] Output truncated at %dMB, draining remaining data...", hostname, cap_mb)  # WHY: notify operator.
         state.truncated = True  # WHY: Loop will drain the tail and exit
 
     def _log_chunk_progress(
