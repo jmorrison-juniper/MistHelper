@@ -21,6 +21,50 @@ import sys
 from datetime import datetime
 from typing import Any
 
+# Configure logging first, because the bootstrap below writes DEBUG and INFO records.
+# The root logger holds no handler until basicConfig runs, so Python falls back to the
+# lastResort handler and drops every record below WARNING. The bootstrap resolves an
+# executable on PATH, downloads about 50 MB, and installs two large packages, so the
+# operator needs those records when the startup fails. See issue #1721.
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+logger = logging.getLogger("starlink_dashboard")  # Named logger the whole module shares.
+
+# Default precision for a GPS coordinate the dashboard prints. Three decimal places
+# locate a site to about 100 meters, which confirms the right terminal without
+# publishing an exact position. See issue #1737.
+GPS_PRECISION_DECIMALS = 3
+# Environment variable an operator sets to opt in to the exact coordinate.
+GPS_EXACT_ENV_VAR = "STARLINK_DASHBOARD_EXACT_GPS"
+# Values that count as an opt-in. The set keeps the check to one term per concept.
+GPS_EXACT_OPT_IN_VALUES = frozenset({"1", "true", "yes", "on"})
+
+
+def _exact_gps_enabled() -> bool:
+    """Return True when the operator opted in to the exact GPS coordinate.
+
+    Returns:
+        bool: True when the opt-in environment variable holds an opt-in value.
+        False otherwise, which keeps the reduced precision default.
+    """
+    raw_value = os.environ.get(GPS_EXACT_ENV_VAR, "")  # An absent variable keeps the safe default.
+    enabled = raw_value.strip().lower() in GPS_EXACT_OPT_IN_VALUES  # Accept the common opt-in spellings.
+    logging.debug("Exact GPS output opt-in is %s", enabled)  # Record which mode the dump used.
+    return enabled
+
+
+def _format_gps_coordinate(value: Any) -> str:
+    """Return the coordinate as text, rounded unless the operator opted in.
+
+    Args:
+        value: The latitude or the longitude the Starlink terminal reported.
+
+    Returns:
+        str: The exact value when the operator opted in. The rounded value otherwise.
+    """
+    if _exact_gps_enabled():  # The operator asked for the exact position on purpose.
+        return str(value)  # Return the reported value with no change.
+    return f"{float(value):.{GPS_PRECISION_DECIMALS}f}"  # Round to about 100 meters.
+
 
 def _resolve_executable(name: str) -> str:
     """Return the absolute path of *name*, or *name* itself when PATH holds no match.
@@ -307,9 +351,8 @@ except ImportError as import_error:
     print("  pip install PyQt6")
     sys.exit(1)
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-logger = logging.getLogger("starlink_dashboard")
+# Logging configuration moved to the top of this module under issue #1721, so the
+# bootstrap records above reach a handler.
 
 
 class MetricWidget(QFrame):
@@ -1339,12 +1382,28 @@ class StarlinkDashboard(QMainWindow):
     @staticmethod
     def _dump_diagnostics_location(loc) -> None:
         """Pretty-print the location sub-message for DEBUG diagnostics."""
+        logger.debug("Dumping the location sub-message for the diagnostics report")  # Log before the dump.
         print("\nLOCATION:")
-        print(f"  - Latitude: {loc.latitude}")
-        print(f"  - Longitude: {loc.longitude}")
+        # CodeQL py/clear-text-logging-sensitive-data reported these two lines as alert 190
+        # (latitude) and as alert 191 (longitude), because they printed the exact values.
+        # Verdict: fixed.
+        # Review date: 2026-08-22. Reason: the two prints sent an exact coordinate pair to
+        # stdout, and a redirect or a recorded SSH session can capture that pair into a
+        # support bundle. The pair locates a customer site or a vehicle to within meters.
+        # The default output now rounds to GPS_PRECISION_DECIMALS, which locates the site to
+        # about 100 meters and still confirms the right terminal. An operator who needs the
+        # exact value sets GPS_EXACT_ENV_VAR.
+        # The rounded value still reaches print, so CodeQL raised alert 193 and alert 194 on
+        # the same two lines. Verdict for that pair: accepted_with_rationale, dismissed in the
+        # security tab on 2026-08-22, because the value that reaches stdout is no longer an
+        # exact position. Next review trigger: a change to _format_gps_coordinate, a change to
+        # GPS_PRECISION_DECIMALS, or a new CodeQL alert on either print below.
+        print(f"  - Latitude: {_format_gps_coordinate(loc.latitude)}")
+        print(f"  - Longitude: {_format_gps_coordinate(loc.longitude)}")
         print(f"  - Altitude: {loc.altitude_meters}m")
-        if loc.uncertainty_meters_valid:
+        if loc.uncertainty_meters_valid:  # The terminal reports the uncertainty only when it is valid.
             print(f"  - Uncertainty: {loc.uncertainty_meters}m")
+        logger.debug("Dumped the location sub-message")  # Log after the dump.
 
     @staticmethod
     def _dump_diagnostics_alignment(align) -> None:
