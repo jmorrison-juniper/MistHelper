@@ -39,6 +39,7 @@ _UNKNOWN_SANITIZED: str = "unknown"  # WHY: used when the caller passes an empty
 _UNKNOWN_HOSTNAME: str = "unknown"  # WHY: default hostname sentinel for exec logging
 _LOG_INIT_MSG: str = "Enhanced SSH Runner v2 logging initialized (root handlers)"  # WHY: consistent init log line
 _RESERVED_INDEX_RANGE = range(1, 10)  # WHY: Windows COM/LPT device names are COM1..COM9 and LPT1..LPT9
+_NO_ACTIVE_CONNECTION_MSG = "No active SSH connection"  # WHY: shared guard message, issue #1720
 _WINDOWS_RESERVED: frozenset[str] = frozenset(  # WHY: precompute reserved device set to remove branching from function
     ["CON", "PRN", "AUX", "NUL"]  # WHY: single-word Windows reserved device names
     + [f"COM{index}" for index in _RESERVED_INDEX_RANGE]  # WHY: COM1..COM9 serial device names
@@ -364,9 +365,10 @@ class EnhancedSSHRunner:
         command: str,
         start_time: float,
         hostname: str = _UNKNOWN_HOSTNAME,
-    ) -> tuple[bool, str, str]:  # nosec B101
+    ) -> tuple[bool, str, str]:
         """Execute command using exec_command with PTY support."""
-        assert self.client is not None, "No active SSH connection"  # nosec B101  # WHY: guarded by _execute_command
+        if self.client is None:  # WHY: a runtime guard must survive python -O, issue #1720
+            raise ValueError(_NO_ACTIVE_CONNECTION_MSG)  # WHY: reject a call made without a live client
         try:
             return self._exec_with_pty(command, start_time, hostname)  # WHY: try PTY first for network devices
         except Exception as pty_exc:  # WHY: many devices refuse PTY - fall back to non-PTY exec_command
@@ -375,7 +377,8 @@ class EnhancedSSHRunner:
 
     def _exec_with_pty(self, command: str, start_time: float, hostname: str) -> tuple[bool, str, str]:
         """Run the command with get_pty=True and collect the result."""
-        assert self.client is not None  # nosec B101  # WHY: caller guarantees an active client
+        if self.client is None:  # WHY: a runtime guard must survive python -O, issue #1720
+            raise ValueError(_NO_ACTIVE_CONNECTION_MSG)  # WHY: reject a call made without a live client
         self.logger.debug("Attempting exec_command with get_pty=True")  # WHY: mark the branch in logs
         _, stdout, stderr = self.client.exec_command(  # WHY: paramiko returns (stdin, stdout, stderr)
             command, timeout=self.timeout, get_pty=True  # nosec B601  # WHY: caller-supplied command by design
@@ -384,7 +387,8 @@ class EnhancedSSHRunner:
 
     def _exec_without_pty(self, command: str, start_time: float, hostname: str) -> tuple[bool, str, str]:
         """Run the command without PTY - the fallback path if PTY allocation fails."""
-        assert self.client is not None  # nosec B101  # WHY: caller guarantees an active client
+        if self.client is None:  # WHY: a runtime guard must survive python -O, issue #1720
+            raise ValueError(_NO_ACTIVE_CONNECTION_MSG)  # WHY: reject a call made without a live client
         try:
             _, stdout, stderr = self.client.exec_command(command, timeout=self.timeout)  # nosec B601  # WHY: no-PTY
             return self._collect_and_log(stdout, stderr, start_time, hostname, with_pty=False)  # WHY: shared reader

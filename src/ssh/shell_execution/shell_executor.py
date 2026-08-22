@@ -54,6 +54,7 @@ _LARGE_OUTPUT_PRINT_MB = 5.0  # WHY: Only print "receiving large output" for out
 _INITIAL_DRAIN_BUFFER = 4096  # WHY: Buffer size for initial-prompt / cleanup-tail drains
 _CLEANUP_TAIL_SLEEP_S = 0.1  # WHY: Cleanup-tail poll cadence and post-drain pause
 _MB_DIVISOR = 1024 * 1024  # WHY: Bytes-to-megabytes conversion factor
+_NO_ACTIVE_CONNECTION_MSG = "No active SSH connection"  # WHY: shared guard message, issue #1720
 _SHELL_ARTIFACTS: tuple[str, ...] = (  # WHY: Substrings (case-insensitive) that mark filterable shell noise
     "exit",
     "logout",
@@ -154,9 +155,8 @@ class ShellExecutor:
         self, command: str, start_time: float, hostname: str = "unknown"
     ) -> tuple[bool, str, str]:  # WHY: Public entry orchestrates every phase of shell execution
         """Execute ``command`` over an interactive shell and return ``(success, stdout, stderr)``."""
-        assert (
-            self.client is not None
-        ), "No active SSH connection"  # nosec B101 - precondition  # WHY: Precondition invariant for callers holding a live client
+        if self.client is None:  # WHY: a runtime guard must survive python -O, issue #1720
+            raise ValueError(_NO_ACTIVE_CONNECTION_MSG)  # WHY: reject a call made without a live client
         self.logger.info(
             "ShellExecutor: starting interactive shell command on %s", hostname
         )  # WHY: Diagnostic breadcrumb for host-scoped log filtering

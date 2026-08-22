@@ -7,6 +7,50 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Replace the assert runtime guards in the SSH package (issue #1720)
+
+- **Defect (Fixed)**: four runtime guards used `assert`. The interpreter removes
+  every `assert` when it runs with `-O`, so each guard disappeared in an
+  optimized run and the code continued past a condition that must stop it.
+- **Guards (Changed)**: `ShellExecutor.execute`, `EnhancedSSHRunner._execute_direct`,
+  `_exec_with_pty`, and `_exec_without_pty` now raise `ValueError` from an
+  explicit `if` check. This copies the pattern that issue #889 established.
+- **Suppressions (Removed)**: the `# nosec B101` comments are gone, because the
+  rule no longer fires. Those comments had hidden the guards from the triage
+  scan of issue #889.
+- **Message (Added)**: `_NO_ACTIVE_CONNECTION_MSG` holds one message per module,
+  so the two packages report the same words.
+- **Tests (Changed)**: the two cases that expected `AssertionError` now expect
+  `ValueError` and match the message. All 180 SSH tests pass under `python` and
+  under `python -O`.
+
+### Re-probe a database backend that recovered after boot (issue #1830)
+
+- **Defect (Fixed)**: `DatabaseRouter` latched the ArangoDB, Redis TimeSeries,
+  and Redis JSON availability flags in `__init__` and never probed again. A
+  backend that recovered after boot stayed unused for the life of the process,
+  and a backend that died after boot was still reported as healthy.
+- **Re-probe (Added)**: `DatabaseRouter._reprobe` answers the live state of one
+  backend. It reconnects when the backend is marked down and the back-off window
+  expired. `RECONNECT_WINDOW_SECONDS` holds that window at 30 seconds, so one
+  dead backend costs at most one connect attempt per window.
+- **health_check (Changed)**: it now returns the re-probed state instead of the
+  boot-time flags. A `/health` endpoint therefore reports a recovered backend as
+  available without a restart.
+- **Write path (Changed)**: `_write_arango`, `_write_redis`, `_write_redis_json`,
+  and `ingest_stats_batch` re-probe before they fall back to CSV. An export that
+  starts before the database container finishes its start sequence now reaches
+  the database once it answers.
+- **Write failure (Changed)**: a write that raises marks its backend as
+  unavailable and logs `backend_lost`. The health report then matches what the
+  write path observes.
+- **Resource leak (Fixed)**: `close()` never closed the Redis JSON writer, and a
+  reconnect never closed the writer it replaced. Both paths now release the
+  handle first.
+- **Tests (Added)**: `TestRouterReprobe` and `TestRouterCloseRedisJson` in
+  `tests/unit/test_router.py`. All seven new cases fail against the pre-fix
+  router.
+
 ### Add five organization-scoped search operations, menus 230 to 234 (issues #1386, #1385, #1383, #1382, #1379)
 
 - **Menu 230 (Added)**: `searchOrgWirelessClientSessions`. Spec 878, issue #1386.

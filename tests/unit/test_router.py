@@ -404,6 +404,7 @@ class TestRouterClose:
 
         mock_backends["arango_writer"].close.assert_called_once()
         mock_backends["redis_writer"].close.assert_called_once()
+        mock_backends["redis_json_writer"].close.assert_called_once()
 
     def test_close_handles_errors(self, config, mock_backends, strategies):
         router = _make_router(config, mock_backends, strategies)
@@ -496,3 +497,101 @@ class TestRouterRedisWriteError:
         assert result.success is False
         assert result.backend == "csv_only"
         assert "TS write err" in result.error_message
+
+
+class TestRouterReprobe:
+    """Test that the router reports live backend state, not boot state.
+
+    Regression cover for issue #1830. The router latched the availability
+    flags at boot and never probed again, so a backend that recovered was
+    never used and a backend that died was still reported as healthy.
+    """
+
+    def test_health_check_reports_a_recovered_backend(self, config, mock_backends, strategies):
+        mock_backends["arango_cls"].side_effect = Exception("Connection refused")
+        from src.db.router import DatabaseRouter
+
+        router = DatabaseRouter(config, strategies=strategies)
+        assert router.health_check()["arangodb"] is False
+
+        mock_backends["arango_cls"].side_effect = None
+        mock_backends["arango_cls"].return_value = mock_backends["arango_writer"]
+        with patch("src.db.router.RECONNECT_WINDOW_SECONDS", 0.0):
+            health = router.health_check()
+
+        assert health["arangodb"] is True
+
+    def test_write_uses_a_backend_that_recovered(self, config, mock_backends, strategies):
+        mock_backends["arango_cls"].side_effect = Exception("Connection refused")
+        from src.db.router import DatabaseRouter
+
+        router = DatabaseRouter(config, strategies=strategies)
+        assert router.write([{"id": "1"}], "listOrgSites").backend == "csv_only"
+
+        mock_backends["arango_cls"].side_effect = None
+        mock_backends["arango_cls"].return_value = mock_backends["arango_writer"]
+        mock_backends["arango_writer"].write.return_value = WriteResult(
+            success=True,
+            backend="arangodb",
+            records_written=1,
+            records_failed=0,
+        )
+        with patch("src.db.router.RECONNECT_WINDOW_SECONDS", 0.0):
+            result = router.write([{"id": "1"}], "listOrgSites")
+
+        assert result.backend == "arangodb"
+        assert result.records_written == 1
+
+    def test_backoff_window_blocks_a_second_connect(self, config, mock_backends, strategies):
+        mock_backends["arango_cls"].side_effect = Exception("Connection refused")
+        from src.db.router import DatabaseRouter
+
+        with patch("src.db.router.RECONNECT_WINDOW_SECONDS", 3600.0):
+            router = DatabaseRouter(config, strategies=strategies)
+            attempts_at_boot = mock_backends["arango_cls"].call_count
+            for _ in range(5):
+                router.health_check()
+
+        assert mock_backends["arango_cls"].call_count == attempts_at_boot
+
+    def test_write_failure_marks_the_backend_unavailable(self, config, mock_backends, strategies):
+        router = _make_router(config, mock_backends, strategies)
+        mock_backends["arango_writer"].write.side_effect = Exception("Write failed")
+
+        with patch("src.db.router.RECONNECT_WINDOW_SECONDS", 3600.0):
+            router.write([{"id": "1"}], "listOrgSites")
+            health = router.health_check()
+
+        assert health["arangodb"] is False
+
+    def test_standalone_never_probes_a_backend(self, standalone_config, mock_backends):
+        from src.db.router import DatabaseRouter
+
+        router = DatabaseRouter(standalone_config)
+        with patch("src.db.router.RECONNECT_WINDOW_SECONDS", 0.0):
+            health = router.health_check()
+
+        assert health["standalone"] is True
+        assert health["arangodb"] is False
+        assert mock_backends["arango_cls"].call_count == 0
+
+    def test_reconnect_closes_the_stale_writer(self, config, mock_backends, strategies):
+        router = _make_router(config, mock_backends, strategies)
+        mock_backends["arango_writer"].write.side_effect = Exception("Write failed")
+        router.write([{"id": "1"}], "listOrgSites")
+
+        with patch("src.db.router.RECONNECT_WINDOW_SECONDS", 0.0):
+            router.health_check()
+
+        mock_backends["arango_writer"].close.assert_called()
+
+
+class TestRouterCloseRedisJson:
+    """Test that close() also releases the Redis JSON writer."""
+
+    def test_close_releases_the_redis_json_writer(self, config, mock_backends, strategies):
+        router = _make_router(config, mock_backends, strategies)
+        mock_backends["arango_writer"].close.side_effect = Exception("arango close err")
+        router.close()
+
+        mock_backends["redis_json_writer"].close.assert_called_once()

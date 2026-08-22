@@ -13,9 +13,9 @@ from src.ssh.shell_execution.shell_executor import ShellExecutor  # T013b: extra
 class TestPreconditions:
     """ShellExecutor refuses to run without a client."""
 
-    def test_no_client_raises_assertion(self) -> None:
+    def test_no_client_raises_value_error(self) -> None:
         executor = ShellExecutor(client=None, timeout=5)
-        with pytest.raises(AssertionError):
+        with pytest.raises(ValueError, match="No active SSH connection"):
             executor.execute("show version", start_time=time.time(), hostname="10.0.0.1")
 
 
