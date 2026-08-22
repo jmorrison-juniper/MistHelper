@@ -128,6 +128,22 @@ DATA_DIRECTORY_NAME: Final[str] = "data"
 STAGE_UPGRADE: Final[str] = "upgrade"
 STAGE_POST_CAPTURE: Final[str] = "post_capture"
 
+# WHY: The run record reaches ArangoDB, the CSV backup, and the browser. A
+# fault of the cloud library, of Redis, or of ArangoDB carries the connection
+# string of its own client. The message of such a fault must never reach that
+# record. The portal writes the message of every fault it defines itself.
+FOREIGN_FAULT_REASON: Final[str] = "The run stopped after the fault {name}."
+
+# WHY: A fault class that this package defines carries a message that the
+# portal wrote by hand. No module of this package builds a message from the
+# text of a caught fault. A class of the standard library gives no such
+# promise, because a foreign library raises the same classes.
+PORTAL_PACKAGE: Final[str] = "src.upgrade_portal."
+
+# WHY: A fault of this package names its own step in plain words. The driver
+# reads that text to pick the stage, and it reads no other message.
+POST_CHECK_MARK: Final[str] = "post-check"
+
 # WHY: A run that counted no wireless client must end failed, because the site
 # never reported the clients. The sentence carries no "post-check" text, so
 # `_fail` names the upgrade stage. The upgrade lost the access points, and the
@@ -989,6 +1005,68 @@ def post_check_request(run_id: str) -> dict[str, Any]:
     return {"run_id": run_id, "ordinal": POST_CHECK_ORDINAL, "role": POST_CHECK_ROLE}
 
 
+def portal_wrote(error: BaseException) -> bool:
+    """Report whether this package defined the class of one fault.
+
+    Why:
+        The portal writes the message of every fault class it defines. No
+        module builds such a message from the text of a caught fault. The
+        class of a foreign fault comes from another package, or it comes from
+        the standard library, which a foreign library also raises.
+
+    Args:
+        error: The fault to test.
+
+    Returns:
+        True when this package defines the class of the fault.
+    """
+    return type(error).__module__.startswith(PORTAL_PACKAGE)
+
+
+def operator_reason(error: BaseException) -> str:
+    """Return one safe sentence for a fault that stopped a run.
+
+    Why:
+        `RunStateMachine.fail` writes this sentence into the run record, and
+        that record reaches ArangoDB, the CSV backup, and the browser. The
+        driver meets faults from the cloud library, from Redis, and from
+        ArangoDB. Such a fault carries the connection string of its own
+        client, so its message must never leave this function.
+
+        A fault of this package carries a sentence that the portal wrote for
+        the operator, so that text passes through whole.
+
+    Args:
+        error: The fault that stopped the run.
+
+    Returns:
+        The sentence for the operator, which never holds a credential.
+    """
+    if portal_wrote(error):
+        return str(error) or type(error).__name__
+    return FOREIGN_FAULT_REASON.format(name=type(error).__name__)
+
+
+def failed_stage(error: BaseException) -> str:
+    """Name the step where a run stopped.
+
+    Why:
+        The operator reads the step to know where to look. A fault of this
+        package names its own step in its text, so the driver reads that
+        text. A foreign fault carries no such text, and the driver reads no
+        foreign message, so a foreign fault reads as the upgrade step.
+
+    Args:
+        error: The fault that stopped the run.
+
+    Returns:
+        The post-capture step or the upgrade step.
+    """
+    if portal_wrote(error) and POST_CHECK_MARK in str(error):
+        return STAGE_POST_CAPTURE
+    return STAGE_UPGRADE
+
+
 class RunDriver:
     """Carry one upgrade run from the submission to the post-check capture.
 
@@ -1452,14 +1530,21 @@ class RunDriver:
     def _fail(self, record: MutableMapping[str, Any], error: BaseException) -> None:
         """Write the reason one run failed.
 
+        Why:
+            `run` catches every fault of the whole journey, so this method
+            meets faults from the cloud library, from Redis, and from
+            ArangoDB. The helper `operator_reason` drops the text of such a
+            fault. It keeps the class name alone, because a reader sees both
+            the record and the log line.
+
         Args:
             record: The run record.
             error: The error the run met.
         """
-        message = str(error) or error.__class__.__name__
+        message = operator_reason(error)  # Safe by construction, so the log line below may hold it
         run_id = record.get("run_id", "")
         logger.warning("Run %s failed: %s", run_id, message)
-        stage = STAGE_POST_CAPTURE if "post-check" in message else STAGE_UPGRADE
+        stage = failed_stage(error)
         try:
             self._machine.fail(record, stage, message)
         except RunTransitionError:

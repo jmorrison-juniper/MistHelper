@@ -23,13 +23,16 @@ from src.upgrade_portal.app import config
 from src.upgrade_portal.runtime.identity import SessionOwner
 from src.upgrade_portal.runtime.lock import LockRecord, ReleaseOutcome
 from src.upgrade_portal.runtime.runs import PHASE_ORDER, PhaseState, RunRecordBuilder, RunState
-from src.upgrade_portal.upgrade import driver
+from src.upgrade_portal.upgrade import driver, phase_gate
 
 RUN_ID = "run-" + "a" * 32
 LOCK_KEY = "misthelper:lock:site:org-1:site-1"
 LOCK_TOKEN = "token-that-no-log-line-may-hold"  # A value a test can search every log record for
 ACTOR_EMAIL = "sam@example.com"  # A plain address that no log record may hold either
 BROWSER_ID = "browser-0123456789"  # 18 URL-safe characters, inside the 16 to 128 the identity module asks for
+# The shape of a redis-py connection fault. The driver meets this text, and no
+# part of it may reach the run record, the CSV backup, the browser, or a log.
+CREDENTIAL_FAULT_TEXT = "Error 111 connecting to redis://:s3cret-password@10.0.0.9:6379. Connection refused."
 
 
 class FixedClock:
@@ -142,14 +145,17 @@ class RecordingGate:
             The outcome the test asked for. Settled by default.
 
         Raises:
-            RuntimeError: When the test asked this phase to fail.
+            PhaseGateError: When the test asked this phase to fail.
         """
         self.calls.append(phase)
         self.seen_before.append(self.store.phase_states())
         if self.hold is not None:
             self.hold.wait(timeout=10)
         if self.raise_on == phase:
-            raise RuntimeError("The gate lost the cloud connection.")
+            # The real gate raises this class, and the portal wrote the text.
+            # A bare RuntimeError would model no fault the real gate raises,
+            # and the driver would drop the sentence as a foreign message.
+            raise phase_gate.PhaseGateError("The gate lost the cloud connection.")
         total = len(list(targets))
         state = self.state_for.get(phase, PhaseState.SETTLED.value)
         return driver.PhaseOutcome(phase, state, settled=total, total=total)
@@ -706,6 +712,148 @@ class TestStopAndFailure:
         final = parts["driver"].run(make_record())
         assert final["state"] == RunState.FAILED.value
         assert parts["gate"].calls == []
+
+
+class FaultingCapture:
+    """Raise one foreign fault when the driver starts the post-check capture.
+
+    Why:
+        `_start_post_check` calls the capture path directly, so a fault of the
+        ArangoDB client or of the Redis client reaches the driver whole. The
+        message of such a fault carries the connection string of its own
+        client. This double reproduces that shape and opens no socket.
+    """
+
+    def __init__(self, fault: BaseException) -> None:
+        """Hold the fault this capture path raises.
+
+        Args:
+            fault: The fault that the start call raises.
+        """
+        self.fault = fault
+
+    def start(self, request: Any) -> str | None:
+        """Raise the fault this double holds.
+
+        Args:
+            request: The run key, the ordinal, and the role.
+
+        Raises:
+            BaseException: The fault this double holds.
+        """
+        del request  # The double reads nothing and answers nothing
+        raise self.fault
+
+
+def with_capture(parts: dict[str, Any], capture: Any) -> driver.RunDriver:
+    """Return a driver that reaches one other capture path.
+
+    Why:
+        The shared fixture builds a capture path that always answers. A fault
+        test needs one that raises. It keeps the same store and the same gate,
+        so the run still reaches the post-check step.
+
+    Args:
+        parts: The doubles of the shared fixture.
+        capture: The capture path the driver calls.
+
+    Returns:
+        The driver under test.
+    """
+    deps = driver.RunDriverDeps(
+        store=parts["store"],
+        gate=parts["gate"],
+        capture=capture,
+        submit=parts["submitter"],
+        clock=FixedClock(),
+    )
+    return driver.RunDriver(deps)
+
+
+class TestForeignFaultMessage:
+    """A fault the portal did not write never reaches the run record.
+
+    Why:
+        `RunStateMachine.fail` writes the reason into the run record, and that
+        record reaches ArangoDB, the CSV backup, and the browser. The driver
+        meets faults from the cloud library, from Redis, and from ArangoDB.
+        Such a fault carries the connection string of its own client.
+    """
+
+    def test_a_foreign_message_never_reaches_the_record(self, parts: dict[str, Any]) -> None:
+        """The record holds the class name and no part of the fault text.
+
+        Args:
+            parts: The doubles and the driver.
+        """
+        run_driver = with_capture(parts, FaultingCapture(ConnectionError(CREDENTIAL_FAULT_TEXT)))
+        final = run_driver.run(make_record())
+        assert final["state"] == RunState.FAILED.value
+        assert final["error"]["message"] == "The run stopped after the fault ConnectionError."
+
+    def test_a_foreign_fault_leaks_no_password_to_the_log(
+        self, parts: dict[str, Any], caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """No log record of the run holds the connection string of the fault.
+
+        Args:
+            parts: The doubles and the driver.
+            caplog: The pytest log capture helper.
+        """
+        run_driver = with_capture(parts, FaultingCapture(ConnectionError(CREDENTIAL_FAULT_TEXT)))
+        with caplog.at_level(logging.DEBUG):
+            run_driver.run(make_record())
+        assert "s3cret-password" not in caplog.text
+
+    def test_a_foreign_fault_names_the_upgrade_stage(self, parts: dict[str, Any]) -> None:
+        """A fault the portal did not write sends the operator to the upgrade step.
+
+        Why:
+            The driver reads the stage from a sentence the portal wrote. A
+            foreign fault carries no such sentence, so it reads as the upgrade
+            step and never as the post-check step.
+
+        Args:
+            parts: The doubles and the driver.
+        """
+        run_driver = with_capture(parts, FaultingCapture(ConnectionError(CREDENTIAL_FAULT_TEXT)))
+        final = run_driver.run(make_record())
+        assert final["error"]["stage"] == "upgrade"
+
+    def test_a_portal_sentence_passes_through_whole(self) -> None:
+        """A RunDriverError keeps the words the portal wrote for the operator."""
+        error = driver.RunDriverError("The cloud refused the upgrade, so the run stops here.")
+        assert driver.operator_reason(error) == "The cloud refused the upgrade, so the run stops here."
+
+    def test_a_sentence_of_another_portal_module_passes_through(self) -> None:
+        """A fault class of a second portal module keeps its words too.
+
+        Why:
+            The gate, the lock, and the capture store each define their own
+            fault class, and each writes its own message. The driver trusts
+            the package that defined the class, and it trusts no single class.
+        """
+        error = phase_gate.PhaseGateError("One phase polls one device family.")
+        assert driver.operator_reason(error) == "One phase polls one device family."
+
+    def test_a_standard_library_class_never_passes_through(self) -> None:
+        """A portal module that raises a standard library class gets no trust.
+
+        Why:
+            A foreign library raises ValueError and ConnectionError too, so
+            the class alone cannot prove who wrote the message.
+        """
+        reason = driver.operator_reason(ValueError(CREDENTIAL_FAULT_TEXT))
+        assert reason == "The run stopped after the fault ValueError."
+
+    def test_an_empty_portal_sentence_still_names_the_class(self) -> None:
+        """A reason with no words reads as the class name and never as empty text."""
+        assert driver.operator_reason(driver.RunDriverError("")) == "RunDriverError"
+
+    def test_a_portal_sentence_can_name_the_post_check_stage(self) -> None:
+        """The post-check sentence still sends the operator to the capture step."""
+        error = driver.RunDriverError("The portal could not start the post-check capture.")
+        assert driver.failed_stage(error) == "post_capture"
 
 
 class ScriptedGate:

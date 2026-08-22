@@ -160,7 +160,7 @@ def resolve_page_limit() -> int:
         module = importlib.import_module("MistHelper")
         limit = int(module.DEFAULT_API_PAGE_LIMIT)
     except Exception as error:  # A missing constant must not stop a capture.
-        logger.debug("Upgrade portal uses the fallback page size: %s", error)
+        logger.debug("Upgrade portal uses the fallback page size: %s", type(error).__name__)
         return FALLBACK_PAGE_LIMIT
     return max(MIN_PAGE_LIMIT, min(limit, MAX_PAGE_LIMIT))
 
@@ -323,7 +323,7 @@ def _read_group(session: Any, section: str, response_factory: Any) -> DeviceRead
         response = response_factory()
         records = mistapi.get_all(mist_session=session, response=response)
     except Exception as error:  # A cloud fault marks one section partial and never stops the capture.
-        logger.warning("Upgrade portal failed the %s read: %s", section, error)
+        logger.warning("Upgrade portal failed the %s read: %s", section, type(error).__name__)
         return DeviceRead(section, [], [_partial_reason(section, REASON_READ_FAILED, HTTP_STATUS_NONE)])
     logger.debug("Upgrade portal read %s records for section %s", len(records), section)
     rows = [dict(record) for record in records]

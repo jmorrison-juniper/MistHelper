@@ -697,7 +697,7 @@ def guarded_call(section: str, work: Callable[[], Any]) -> tuple[Any, list[dict[
     try:
         return work(), []
     except Exception as error:  # A failed section must never abort the whole capture
-        logger.warning("Upgrade portal could not read the section %s: %s", section, error)
+        logger.warning("Upgrade portal could not read the section %s: %s", section, type(error).__name__)
         return None, [partial_reason(section, REASON_READ_FAILED, http_status_of(error))]
 
 

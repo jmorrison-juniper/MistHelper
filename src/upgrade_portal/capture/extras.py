@@ -224,7 +224,7 @@ def _page_limit() -> int:
 
         return int(MistHelper.DEFAULT_API_PAGE_LIMIT)
     except Exception as error:  # A page size is a tuning value, never a reason to lose a section
-        logger.debug("Upgrade portal uses the fallback page limit: %s", error)
+        logger.debug("Upgrade portal uses the fallback page limit: %s", type(error).__name__)
         return _FALLBACK_PAGE_LIMIT
 
 
@@ -406,7 +406,7 @@ def _read_section(name: str, session: Any, scope: SiteScope, fetch: CloudFetch) 
     try:
         response = fetch(session, scope)
     except Exception as error:  # One optional section must never fail the whole capture
-        logger.warning("Upgrade portal could not read %s for site %s: %s", name, scope.site_id, error)
+        logger.warning("Upgrade portal could not read %s for site %s: %s", name, scope.site_id, type(error).__name__)
         return ExtraSection(name, (), REASON_CALL_FAILED, 0)
     return _section_from_response(name, response)
 

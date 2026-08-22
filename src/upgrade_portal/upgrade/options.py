@@ -174,7 +174,7 @@ def _read_paged(session: Any, call: Any) -> InventoryRead:
         response = call()
         records = mistapi.get_all(mist_session=session, response=response)
     except Exception as error:  # A cloud fault marks the read partial and never stops the run.
-        logger.warning("Upgrade portal failed the upgrade inventory read: %s", error)
+        logger.warning("Upgrade portal failed the upgrade inventory read: %s", type(error).__name__)
         return InventoryRead([], [_partial_reason(REASON_READ_FAILED, HTTP_STATUS_NONE)])
     rows = [dict(record) for record in records]
     logger.debug("Upgrade portal read %s logical device(s) for the upgrade view", len(rows))

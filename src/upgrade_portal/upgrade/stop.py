@@ -178,7 +178,9 @@ def read_last_status(session: Any, target: StopTarget) -> Mapping[str, object] |
             target.family,
         )
     except Exception as error:  # noqa: BLE001  # WHY: A failed read must never block the cancel call.
-        logger.warning("The portal could not read the status of upgrade %s: %s", target.upgrade_id, error)
+        logger.warning(
+            "The portal could not read the status of upgrade %s: %s", target.upgrade_id, type(error).__name__
+        )
         return None
 
 
@@ -222,7 +224,7 @@ def cancel_target(session: Any, target: StopTarget) -> TargetResult:
     try:
         outcome = cancel_upgrade(session, target.plan, target.upgrade_id, last_status)
     except Exception as error:  # noqa: BLE001  # WHY: One failed plan must not end the stop of the other plans.
-        logger.warning("The cancel call for upgrade %s failed: %s", target.upgrade_id, error)
+        logger.warning("The cancel call for upgrade %s failed: %s", target.upgrade_id, type(error).__name__)
         return TargetResult(CancelOutcome((), plan_macs(target.plan), (), _MESSAGE_CALL_FAILED), status_known=False)
     return TargetResult(outcome, status_known=status_is_known(last_status))
 
