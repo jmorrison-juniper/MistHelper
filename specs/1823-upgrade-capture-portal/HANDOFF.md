@@ -19,14 +19,19 @@ the design. This file states the position.
 | Pull request | Open, mergeable, not a draft, no review yet |
 | Local commits not pushed | None |
 | Uncommitted work | None from this feature |
-| Portal tests | 2602 unit and contract, all pass. 148 browser tests, all pass, 0 skip |
+| Portal tests | 2613 unit and contract, all pass. 148 browser tests, all pass, 0 skip |
 | Statement coverage of the package | 94.18 percent |
-| Blocking defects | None. The fourteen defects of `audit-2026-08-20.md` sections 2.1, 2.2, 6, 7, 8, 9, 10, 11, 12, and 13 are fixed |
+| Blocking defects | None. The twenty defects of `audit-2026-08-20.md` sections 2.1, 2.2, 2.3, 2.5, 6, 7, 8, 9, 10, 11, 12, and 13 are fixed |
 
 The code is written, the code tests pass, and the browser suite drives every
-journey with no skip. An audit on 2026-08-20 found 25 defects, and by-eye drives
-of the portal found six more. The 14 that could mislead or stop an operator are
-fixed. The rest are recorded and open.
+journey with no skip. An audit on 2026-08-20 found 25 defects. By-eye drives of
+the portal found six more, and the bug scrub of section 2.5 found one more. The
+20 that could mislead or stop an operator are fixed. The audit refuted two more.
+The rest are recorded and open.
+
+Warning: no part of this feature has upgraded a real device. Task T232 and task
+T233 need a live organization and real switches. This workstation reaches
+neither, so both tasks stay open.
 
 Four defects hid behind the browser skips, and each one broke the feature for a
 real operator:
