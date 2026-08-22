@@ -598,16 +598,19 @@ jobs:
           RESULTS[interrogate]="${{ needs.interrogate.result }}"
           RESULTS[ops_portal]="${{ needs.ops_portal.result }}"
 
-          # Scope: PR failures get scoped title (per-PR), push failures use gate-only title (dedup across pushes).
+          # Scope: a PR failure gets a scoped title (per-PR). A branch failure uses a
+          # gate-only title, so repeated runs on the same branch reuse one issue.
           if [ "$EVENT_NAME" = "pull_request" ] && [ -n "$PR_NUMBER" ]; then
             SCOPE="PR #${PR_NUMBER}"
             SEARCH_PREFIX="CI: quality-gate"
             TITLE_SUFFIX=" (PR #${PR_NUMBER})"
             PR_LINK="**PR**: #${PR_NUMBER} — ${PR_TITLE}"
           else
-            SCOPE="push to ${HEAD_REF}"
+            # A run on main now arrives by dispatch as well as by push, so the
+            # wording names the branch instead of the trigger. See issue #1851.
+            SCOPE="run on ${HEAD_REF}"
             TITLE_SUFFIX=""
-            PR_LINK="**Push**: \`${HEAD_REF}\`"
+            PR_LINK="**Run scope**: \`${HEAD_REF}\`"
           fi
 
           for gate in "${!RESULTS[@]}"; do
@@ -677,7 +680,10 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           HEAD_REF: ${{ github.head_ref || github.ref_name }}
-          IS_MAIN_PUSH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          # A run on main is authoritative for the issue state. A merge that
+          # GITHUB_TOKEN performs starts no push run, so the Auto-merge
+          # workflow dispatches this workflow instead. See issue #1851.
+          IS_MAIN_RUN: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' }}
         run: |
           declare -A RESULTS
           RESULTS[ruff]="${{ needs.ruff.result }}"
@@ -697,11 +703,11 @@ jobs:
             result="${RESULTS[$gate]}"
             if [ "$result" = "success" ]; then
               # On PR events: close only the PR-scoped issue for this gate.
-              # On main push: close all open issues for this gate (main is authoritative).
+              # On a run on main: close all open issues for this gate (main is authoritative).
               if [ "$EVENT_NAME" = "pull_request" ] && [ -n "$PR_NUMBER" ]; then
                 EXACT_TITLE="CI: quality-gate \`${gate}\` failed (PR #${PR_NUMBER})"
                 SEARCH_QUERY="in:title \"${EXACT_TITLE}\""
-              elif [ "$IS_MAIN_PUSH" = "true" ]; then
+              elif [ "$IS_MAIN_RUN" = "true" ]; then
                 SEARCH_QUERY="in:title \"CI: quality-gate \`${gate}\` failed\""
               else
                 continue

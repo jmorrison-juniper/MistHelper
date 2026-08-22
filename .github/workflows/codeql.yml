@@ -7,6 +7,11 @@ on:
     branches: [main]
   schedule:
     - cron: '0 6 * * 1'
+  # GitHub starts no push run for a merge that GITHUB_TOKEN performs, so the
+  # scan on main went stale. Issue #1851 records the effect. An explicit
+  # dispatch is the exception that GitHub honors, and the Auto-merge workflow
+  # calls this trigger after every merge into main.
+  workflow_dispatch:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
