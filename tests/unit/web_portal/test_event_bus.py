@@ -22,6 +22,37 @@ import pytest
 
 from web_portal.services.event_bus import PortalEventBus
 
+# WHY: the thread name that ``PortalEventBus.start`` assigns. Named here so the
+# scans below do not repeat a bare literal.
+_HEARTBEAT_THREAD_NAME = "portal-heartbeat"
+
+
+def _live_heartbeat_threads() -> set[threading.Thread]:
+    """Return every live thread that carries the heartbeat name.
+
+    Why:
+        A set of the thread objects, rather than a count, lets a caller
+        subtract the threads that already ran before a test started.
+    """
+    return {t for t in threading.enumerate() if t.name == _HEARTBEAT_THREAD_NAME}
+
+
+@pytest.fixture
+def foreign_heartbeats() -> set[threading.Thread]:
+    """Return the heartbeat threads that were alive before this test began.
+
+    Why:
+        ``threading.enumerate()`` reports every thread in the process, so a
+        bare scan also counts a bus that another test built. The session-scoped
+        ``flask_app`` fixture in ``tests/e2e/conftest.py`` calls
+        ``WebPortalApp.create_app``, which starts a bus. That fixture tears
+        down only at the end of the whole session, so its heartbeat thread is
+        still alive while this module runs. Subtracting the threads seen here
+        keeps each assertion about the bus that the test itself started, which
+        is the leak these tests exist to catch.
+    """
+    return _live_heartbeat_threads()
+
 
 @pytest.fixture
 def bus() -> Iterator[PortalEventBus]:
@@ -59,27 +90,37 @@ def test_stop_ends_the_heartbeat_thread_before_it_returns(bus: PortalEventBus) -
     assert elapsed < 5.0, f"stop() took {elapsed:.2f} s; the heartbeat wait is not interruptible"
 
 
-def test_stop_leaves_no_named_heartbeat_thread(bus: PortalEventBus) -> None:
-    """No ``portal-heartbeat`` thread MUST survive a stop.
+def test_stop_leaves_no_named_heartbeat_thread(
+    bus: PortalEventBus,
+    foreign_heartbeats: set[threading.Thread],
+) -> None:
+    """No ``portal-heartbeat`` thread that this test started MUST survive a stop.
 
     Why:
         This is the leak that reached an unrelated test suite. Reading the
         live thread list catches an orphan that a stale handle would hide.
+        The scan subtracts the threads that another fixture already started,
+        so an unrelated bus cannot fail this assertion.
     """
     bus.start()
     bus.stop()
 
-    survivors = [t.name for t in threading.enumerate() if t.name == "portal-heartbeat"]
+    survivors = [t.name for t in _live_heartbeat_threads() - foreign_heartbeats]
     assert survivors == [], f"a heartbeat thread survived stop(): {survivors!r}"
 
 
-def test_start_twice_does_not_create_a_second_thread(bus: PortalEventBus) -> None:
+def test_start_twice_does_not_create_a_second_thread(
+    bus: PortalEventBus,
+    foreign_heartbeats: set[threading.Thread],
+) -> None:
     """A second ``start`` MUST NOT add another heartbeat thread.
 
     Why:
         The old ``start`` overwrote the thread handle unconditionally. Two
         threads then published every heartbeat twice, and ``stop`` could only
-        track the newer one, so the older one leaked.
+        track the newer one, so the older one leaked. The scan subtracts the
+        threads that another fixture already started, so the count stays about
+        this bus alone.
     """
     bus.start()
     first_thread = bus._heartbeat_thread
@@ -87,7 +128,7 @@ def test_start_twice_does_not_create_a_second_thread(bus: PortalEventBus) -> Non
     bus.start()
 
     assert bus._heartbeat_thread is first_thread, "start() MUST be idempotent while running"
-    running = [t for t in threading.enumerate() if t.name == "portal-heartbeat"]
+    running = _live_heartbeat_threads() - foreign_heartbeats
     assert len(running) == 1, f"expected exactly one heartbeat thread, found {len(running)}"
 
 
