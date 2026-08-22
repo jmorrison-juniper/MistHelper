@@ -226,7 +226,8 @@ cleanup() {
     log_container_event "[CONTAINER] Shutdown complete. The container exits with status $final_status."  # Report the result after the shutdown, so the operator can match the status to the cause.
     exit "$final_status"  # Report the real status, because a fixed 0 hides a crash from every restart policy.
 }
-trap cleanup SIGTERM SIGINT
+# An operator stop is a success, so report 0 and let the orchestrator leave the container down.
+trap 'cleanup 0' SIGTERM SIGINT
 
 # Start SSH daemon in the background
 /usr/sbin/sshd -D &
