@@ -130,6 +130,28 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 - **Tests (Added)**: `TestRouterReprobe` and `TestRouterCloseRedisJson` in
   `tests/unit/test_router.py`. All seven new cases fail against the pre-fix
   router.
+### Route polyglot writes by host reachability, not by the container boundary (issue #1824)
+
+- **Fixed**: `DataExporter._is_standalone_mode` returned true whenever
+  MistHelper ran outside a container. Every ArangoDB and Redis write was
+  dropped on a workstation. `DatabaseRouter._csv_fallback` answered
+  `success=True`, so the loss left no trace in the log.
+- **Changed**: the decision now follows a TCP reachability probe against the
+  configured `ARANGO_HOST` and `REDIS_HOST`. MistHelper writes to the polyglot
+  backend whenever one of the two answers, inside or outside a container.
+- **Added**: `src.db.polyglot_hosts_unreachable` runs the probe and records
+  both verdicts through the `polyglot_host_probe` structured log event. The
+  probe uses a TCP connect, not a DNS lookup, because a hostname can resolve
+  while no service listens. The timeout is 0.5 seconds for each host.
+- **Added**: `DataExporter._standalone_probe` caches the verdict for the life
+  of the process, so an export pays the probe cost one time.
+- **Added**: one `WARNING` at the fallback point names the dropped polyglot
+  write and the two environment variables that fix it.
+- **Unchanged**: `MISTHELPER_STANDALONE` still forces the mode. The
+  `--standalone` flag still sets that variable.
+- **Tests (Added)**: `TestPolyglotHostProbe` in `tests/unit/test_standalone.py`
+  and the rewritten `TestIsStandaloneMode` in
+  `tests/unit/export/test_data_exporter.py`.
 
 ### Add five organization-scoped search operations, menus 230 to 234 (issues #1386, #1385, #1383, #1382, #1379)
 
