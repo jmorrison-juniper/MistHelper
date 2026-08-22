@@ -392,7 +392,19 @@ targets = ["MistHelper.py", "maps_manager.py", "wsgi.py", "web_portal", "mist-op
 # tools/test_quality_analyzer/fixtures: deliberately-bad code used as test
 # material by the analyzer — mirrors the ruff per-file-ignore for the same tree
 # (see [tool.ruff.lint.per-file-ignores] at "tools/test_quality_analyzer/fixtures/bad/**").
-exclude_dirs = ["tests", ".venv", "node_modules", "scripts", "specs", "tools/test_quality_analyzer/fixtures"]
+# WHY both separator forms: bandit compares each entry against the scanned path
+# with a plain substring test and never normalizes the separator. The forward
+# slash matches a Linux path only, so a Windows run reported 42 phantom
+# findings from this tree (issue #1722). Keep both spellings.
+exclude_dirs = [
+    "tests",
+    ".venv",
+    "node_modules",
+    "scripts",
+    "specs",
+    "tools/test_quality_analyzer/fixtures",
+    "tools\\test_quality_analyzer\\fixtures",
+]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
