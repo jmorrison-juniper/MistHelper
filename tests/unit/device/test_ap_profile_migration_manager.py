@@ -2065,3 +2065,73 @@ def test_migrate_integration_real_limiter_seeded_cache(
     # WHY: real PID math produced a non-zero delay for at least one call
     # since the seeded cache reports 4000/5000 used (limiter should throttle).
     assert any(s > 0 for s in sleep_args), f"expected real limiter to produce a non-zero delay; got {sleep_args[:10]!r}"
+
+
+# ---------------------------------------------------------------------------
+# Issue #1700 -- a PUT that answers an error status must not count as a success
+# ---------------------------------------------------------------------------
+
+
+class _StubResponse:
+    """Stand in for a mistapi APIResponse that carries only a status code."""
+
+    def __init__(self, status_code: int) -> None:
+        """Record the status code the SDK would report.
+
+        Args:
+            status_code: The HTTP status to expose to the code under test.
+        """
+        self.status_code = status_code
+
+
+def test_reassign_raises_on_error_status() -> None:
+    """An error status MUST raise instead of counting as a reassigned AP.
+
+    Why:
+        Issue #1700 -- the SDK answers 4xx with an object and never raises.
+        The old code discarded that object, so a refused PUT looked like a
+        success. This test pins the corrected behavior.
+    """
+    ap_record = _ap_record("dev-1", "site-1", "5c5b350e0001")
+
+    with (
+        patch("mistapi.api.v1.sites.devices.updateSiteDevice", return_value=_StubResponse(400)),
+        patch("src.device.ap_profile_migration_manager.time.sleep", return_value=None),
+        pytest.raises(apm_mod.APProfileReassignmentError) as excinfo,
+    ):
+        APProfileMigrationManager._reassign_one_ap(MagicMock(), ap_record, "tgt-profile-id")
+
+    assert excinfo.value.status_code == 400, "the exception MUST carry the status the SDK reported"
+    assert "dev-1" in str(excinfo.value), "the message MUST name the AP that failed"
+
+
+def test_reassign_accepts_success_status() -> None:
+    """A 2xx status MUST still count as a reassigned AP."""
+    ap_record = _ap_record("dev-2", "site-1", "5c5b350e0002")
+
+    with patch("mistapi.api.v1.sites.devices.updateSiteDevice", return_value=_StubResponse(200)):
+        APProfileMigrationManager._reassign_one_ap(MagicMock(), ap_record, "tgt-profile-id")
+
+
+def test_error_status_response_reaches_the_429_pacing_check() -> None:
+    """A 429 answered as an object MUST satisfy ``_is_429``.
+
+    Why:
+        The rate-limit pacing reads ``err.response.status_code``. A 429 that
+        arrives as a return value, not as a raised error, used to bypass that
+        pacing completely.
+    """
+    err = apm_mod.APProfileReassignmentError(_StubResponse(429), "dev-3")
+
+    assert APProfileMigrationManager._is_429(err) is True, "a 429 response MUST pace the run"
+
+
+def test_check_reassign_response_ignores_an_unreadable_status() -> None:
+    """A response without an integer status MUST NOT raise.
+
+    Why:
+        A caller may hand back ``None`` or a stub. The check reports a failure
+        only when it reads a real error status, so it never invents one.
+    """
+    APProfileMigrationManager._check_reassign_response(None, "dev-4")
+    APProfileMigrationManager._check_reassign_response(object(), "dev-5")
