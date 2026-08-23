@@ -14,6 +14,8 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Optional
 
+from src.utils.operation_registry import OperationRegistry
+
 CATEGORY_RANGES = [
     (1, 4, "Core Organization"),
     (5, 8, "WebSocket Device Commands"),
@@ -30,6 +32,16 @@ CATEGORY_RANGES = [
 ]
 
 DESTRUCTIVE_THRESHOLD = 90
+
+# The safety categories that the portal may run. `OperationRegistry` in
+# src/utils/operation_registry.py is the single source of truth for the safety
+# category of every operation. The portal used to compare the menu number
+# against DESTRUCTIVE_THRESHOLD alone. That comparison let five operations
+# through that the registry does not call safe, and it let a key that int()
+# cannot parse through as well. The registry check below closes both gaps.
+# DESTRUCTIVE_THRESHOLD stays as a second, narrower bound. Removing it would
+# widen the portal by 49 operations, which is a separate change.
+PORTAL_RUNNABLE_CATEGORIES = frozenset({"safe", "interactive_safe"})
 
 # --- Run registry memory caps ----------------------------------------------
 # The portal runs as one long-lived Gunicorn worker. Issue #1860 showed that an
@@ -437,9 +449,9 @@ class OperationExecutor:
         """Build categorized operation list for the UI."""
         categories = {}
         for key, value in menu_actions.items():
-            num = self._parse_menu_number(key)
-            if num is None or num >= DESTRUCTIVE_THRESHOLD:
+            if not self._is_portal_runnable(key):  # One rule for the page and the run gate.
                 continue
+            num = self._parse_menu_number(key)  # Safe here, because the gate proved the key parses.
             category = self._get_category(num)
             desc = value[1] if isinstance(value, tuple) and len(value) > 1 else str(value)
             reg_entry = PARAMETER_REGISTRY.get(key)
@@ -480,17 +492,44 @@ class OperationExecutor:
         }
 
     def _validate_operation(self, menu_number: str) -> Optional[dict]:
-        """Check if the operation is valid and non-destructive."""
+        """Check that the operation exists and that the portal may run it."""
         if menu_number not in self._menu_actions:
             return {"error": f"Operation {menu_number} not found"}
-        num = self._parse_menu_number(menu_number)
-        if num is not None and num >= DESTRUCTIVE_THRESHOLD:
-            return {"error": f"Menu number {menu_number} is a destructive operation and cannot be run from the portal"}
+        if not self._is_portal_runnable(menu_number):  # One rule for the page and the run gate.
+            return {"error": self._refusal_message(menu_number)}
         value = self._menu_actions[menu_number]
         func = value[0] if isinstance(value, tuple) else value
         if func is None:
             return {"error": "API not authenticated. Connect via SSH to run operations."}
         return None
+
+    def _is_portal_runnable(self, menu_number: str) -> bool:
+        """Report whether the portal may run one operation.
+
+        The check reads `OperationRegistry`, which the project documents as the
+        single source of truth for the safety category. The check fails closed.
+        An unregistered key, an unparseable key, and any category outside
+        `PORTAL_RUNNABLE_CATEGORIES` all return False.
+        """
+        logging.info("Portal checks whether it may run operation %s", menu_number)
+        category = OperationRegistry.skip_category(menu_number)  # Authoritative safety verdict.
+        num = self._parse_menu_number(menu_number)  # None when int() cannot read the key.
+        allowed = (
+            category in PORTAL_RUNNABLE_CATEGORIES  # The registry must call the operation safe.
+            and num is not None  # A key the page cannot place must never run.
+            and num < DESTRUCTIVE_THRESHOLD  # Keep the existing narrower bound, so no operation is added.
+        )
+        logging.debug("Portal verdict for operation %s: category=%s allowed=%s", menu_number, category, allowed)
+        return allowed
+
+    @staticmethod
+    def _refusal_message(menu_number: str) -> str:
+        """Build the message that tells the operator why the portal refused."""
+        category = OperationRegistry.skip_category(menu_number)  # Name the reason for the refusal.
+        return (
+            f"Menu number {menu_number} is not a safe operation, so the portal cannot run it. "
+            f"The safety category is '{category}'. Connect over SSH to run this operation."
+        )
 
     def _check_conflict(self, menu_number: str) -> Optional[dict]:
         """Check if the same operation is already running."""

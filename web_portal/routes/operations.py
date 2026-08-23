@@ -49,7 +49,10 @@ def run_operation():
     executor = _get_executor()
     result = executor.start_operation(menu_number, parameters)
     if "error" in result:
-        status = 400 if "destructive" in result["error"].lower() else 409
+        # Only a second run of the same operation is a conflict. Every other
+        # refusal is a bad request, which covers an unknown menu number and an
+        # operation whose safety category keeps it off the portal.
+        status = 409 if "already running" in result["error"].lower() else 400
         return jsonify(result), status
     return jsonify(result), 202
 
