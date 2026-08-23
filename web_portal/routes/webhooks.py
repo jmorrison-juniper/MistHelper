@@ -71,9 +71,8 @@ def _reject_unverified_request() -> tuple | None:
     secret = _get_configured_secret()
     if not secret:
         logging.error(
-            "Webhook rejected: %s is not configured, so the portal cannot identify the sender",
-            WEBHOOK_SECRET_CONFIG_KEY,
-        )  # WHY: an operator needs a clear cause for every 503 reply.
+            "Webhook rejected: WEBHOOK_SECRET is not configured, so the portal cannot identify the sender"
+        )  # WHY: a static message names the cause without passing a secret-named value into the log.
         return jsonify({"error": "webhook receiver is not configured"}), 503
     body = request.get_data()  # WHY: the digest covers the raw bytes, not the parsed JSON.
     logging.info("Verifying the webhook signature for a body of %d bytes", len(body))
