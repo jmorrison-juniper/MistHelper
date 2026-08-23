@@ -27,7 +27,7 @@ from src.api.deps import (
 )
 from src.api.middleware.auth import CurrentUser
 from src.api.schemas.common import ResponseEnvelope
-from src.shared.config.settings import get_settings
+from src.shared.sync_db import sync_engine
 from src.api.schemas.deploy import (
     CheckpointDetail,
     DryRunRequest,
@@ -513,17 +513,15 @@ async def rollback_wave(
         raise HTTPException(status_code=400, detail="confirm required")
 
     from src.worker.deploy.rollout import RolloutOrchestrator
-    from sqlalchemy import create_engine as _ce
     from sqlalchemy.orm import Session as _Sess
 
-    settings = get_settings()
-    sync_url = settings.database_url.replace("+asyncpg", "+psycopg2")
-    engine = _ce(sync_url)
-    with _Sess(engine) as sync_db:
-        orch = RolloutOrchestrator(sync_db)
-        result = orch.rollback_wave(plan_id, wave_number, body.comment)
-    engine.dispose()
+    logger.info("Rolling back wave %d of rollout plan %s", wave_number, plan_id)
+    # The scope disposes the pool on the success path and on the error path.
+    with sync_engine() as engine, _Sess(engine) as sync_db:
+        orch = RolloutOrchestrator(sync_db)  # Own the wave state machine.
+        result = orch.rollback_wave(plan_id, wave_number, body.comment)  # Undo the wave.
 
+    logger.debug("Rollback of plan %s returned %s", plan_id, result)
     return ResponseEnvelope(data=result)
 
 
@@ -730,16 +728,15 @@ async def instantiate_template(
     tmpl = await _load_template(db, template_id)
 
     from src.shared.services.template import TemplateService
-    from sqlalchemy import create_engine as _ce
     from sqlalchemy.orm import Session as _Sess
 
-    settings = get_settings()
-    sync_url = settings.database_url.replace("+asyncpg", "+psycopg2")
-    engine = _ce(sync_url)
-    with _Sess(engine) as sync_db:
-        svc = TemplateService(sync_db)
-        payload = svc.instantiate(tmpl, body.parameters)
-    engine.dispose()
+    logger.info("Instantiating template %s", template_id)
+    # The scope disposes the pool on the success path and on the error path.
+    with sync_engine() as engine, _Sess(engine) as sync_db:
+        svc = TemplateService(sync_db)  # Own the template expansion rules.
+        payload = svc.instantiate(tmpl, body.parameters)  # Build the config body.
+
+    logger.debug("Template %s produced %d config keys", template_id, len(payload))
 
     job = ScheduledJob(
         org_id=body.org_id,

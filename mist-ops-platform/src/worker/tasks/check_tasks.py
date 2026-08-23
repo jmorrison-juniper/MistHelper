@@ -10,13 +10,13 @@ import logging
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import create_engine, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from src.shared.config.settings import get_settings
 from src.shared.mist.endpoints import MistEndpointService
 from src.shared.mist.session import get_session_factory
 from src.shared.models.operations import JobCheckpoint, ScheduledJob
+from src.shared.sync_db import sync_engine
 from src.worker.celeryconfig import app
 
 logger = logging.getLogger(__name__)
@@ -25,28 +25,24 @@ logger = logging.getLogger(__name__)
 @app.task(name="src.worker.tasks.check_tasks.run_pre_checks")
 def run_pre_checks(job_id: str, org_id: str, target_ids: list[str]) -> dict:
     """Execute pre-deployment checks and store results as checkpoint."""
-    settings = get_settings()
-    sync_url = settings.database_url.replace("+asyncpg", "+psycopg2")
-    engine = create_engine(sync_url)
+    logger.info("Running the pre-deployment checks for job %s", job_id)
+    # The scope disposes the pool on the success path and on the error path.
+    with sync_engine() as engine, Session(engine) as db:
+        result = _execute_pre_checks(db, job_id, org_id, target_ids)  # Run the checks.
 
-    with Session(engine) as db:
-        result = _execute_pre_checks(db, job_id, org_id, target_ids)
-
-    engine.dispose()
+    logger.debug("Pre-checks for job %s returned %s", job_id, result.get("status"))
     return result
 
 
 @app.task(name="src.worker.tasks.check_tasks.run_post_checks")
 def run_post_checks(job_id: str, org_id: str, target_ids: list[str]) -> dict:
     """Execute post-deployment checks and store results as checkpoint."""
-    settings = get_settings()
-    sync_url = settings.database_url.replace("+asyncpg", "+psycopg2")
-    engine = create_engine(sync_url)
+    logger.info("Running the post-deployment checks for job %s", job_id)
+    # The scope disposes the pool on the success path and on the error path.
+    with sync_engine() as engine, Session(engine) as db:
+        result = _execute_post_checks(db, job_id, org_id, target_ids)  # Run the checks.
 
-    with Session(engine) as db:
-        result = _execute_post_checks(db, job_id, org_id, target_ids)
-
-    engine.dispose()
+    logger.debug("Post-checks for job %s returned %s", job_id, result.get("status"))
     return result
 
 
