@@ -86,6 +86,42 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
   holds 11 tests. They cover the registry cap, the per-run log cap, the
   protection of an active run, the retention period, the dropped count in the
   response, and the fallback for an unusable setting.
+### Store an opaque session id and unblock the auth event loop (issues #1859, #1858)
+
+- **Cookie (Fixed)**: the `mist_session` cookie held the raw Mist API token. A
+  reader of that cookie gained the full Mist privileges of the operator, outside
+  this application and outside its audit log. The cookie now holds an opaque
+  identifier that `secrets.token_urlsafe(32)` produces.
+- **Token storage (Added)**: `SessionStore` in
+  `mist-ops-platform/src/shared/services/session_store.py` keeps the Mist token in
+  a server-side record. The record uses Redis when Redis answers, and a
+  process-local map when Redis does not answer. `_extract_token` reads the token
+  from that record, so no route reads a token from a client.
+- **Secure flag (Added)**: the cookie now sets `Secure` and `HttpOnly`. The new
+  `SESSION_COOKIE_SECURE` setting defaults to a true value. Set the value to
+  `false` only for local work over plain HTTP.
+- **Logout (Fixed)**: `DELETE /api/v1/auth/session` now deletes the server-side
+  record. A logout therefore ends the session, which the old code could not do.
+- **Event loop (Fixed)**: the Mist `/api/v1/self` lookup ran inside an `async def`
+  dependency and blocked the event loop for one round trip to `api.mist.com`. The
+  lookup now runs in a worker thread through `anyio.to_thread.run_sync`.
+- **Verification cache (Fixed)**: the privilege cache was never active, because
+  both call sites passed `redis=None`. The auth middleware now caches the
+  verification result on the session record for 5 minutes, so a repeat request
+  makes no second call to Mist.
+- **Cache key (Changed)**: the Redis privilege key derived from `hash(token)`,
+  which Python randomizes for each process. The key now derives from a SHA-256
+  digest, so it stays stable across every worker and across a restart.
+- **Status codes (Changed)**: an unreachable Mist API now returns 503 through the
+  new `MistApiUnavailableError`. Only a token that Mist rejects returns 401. A
+  transient upstream fault no longer logs every operator out.
+- **Settings (Added)**: `mist-ops-platform/src/shared/config/settings.py` supplies
+  the `AppSettings` object that six modules already imported.
+- **Tests (Added)**:
+  `mist-ops-platform/tests/unit/api/test_session_security.py` holds 15 tests. They
+  prove the cookie differs from the token, the cookie carries `Secure`, a deleted
+  identifier returns 401, the lookup runs off the event loop, and a second request
+  inside the cache period makes no second upstream call.
 
 ### Replace the assert runtime guards in the SSH package (issue #1720)
 
