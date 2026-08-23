@@ -5,6 +5,7 @@ registers blueprints, injects shared dependencies, and applies
 security middleware.
 """
 
+import atexit
 import logging
 import os
 from typing import Any, Optional
@@ -110,6 +111,10 @@ class WebPortalApp:
         event_bus = PortalEventBus()
         event_bus.start()
         app.config["EVENT_BUS"] = event_bus
+        # WHY: nothing else calls stop(), so the heartbeat thread outlived the
+        # process without this hook. A leaked thread keeps sleeping and, under
+        # a patched time.sleep, leaks its interval into a test's recording.
+        atexit.register(event_bus.stop)
         logging.info("Event bus started for SSE streaming")
 
     @staticmethod

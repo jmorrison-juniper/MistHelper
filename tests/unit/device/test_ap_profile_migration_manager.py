@@ -18,8 +18,10 @@ from __future__ import annotations
 import json
 import logging
 import sys
+import threading
 import time
 import types
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -146,6 +148,43 @@ def _ap_record(device_id: str, site_id: str, mac: str, hostname: str | None = No
         "mac": mac,
         "hostname": hostname,
     }
+
+
+def _sleep_recorder() -> tuple[list[float], Callable[[float], None]]:
+    """Return a recording list and a sleep spy scoped to the calling thread.
+
+    Why:
+        ``src/device/ap_profile_migration_manager.py`` binds the standard
+        module with ``import time``, so ``apm_mod.time`` *is* the one shared
+        ``time`` module. Both ``patch("time.sleep", ...)`` and
+        ``patch("src.device.ap_profile_migration_manager.time.sleep", ...)``
+        therefore set the attribute process-wide, and every thread that sleeps
+        inside the ``with`` block reaches the spy. A daemon thread that an
+        earlier test left running (the web portal heartbeat at
+        ``web_portal/services/event_bus.py:113`` sleeps 30 seconds in a loop)
+        then appends a value the manager never asked for and shifts every
+        index the assertions read. That shift failed
+        ``test_migrate_limiter_exception_falls_back_and_continues`` in CI with
+        ``5th sleep arg expected 0.75, got 30`` (issue #1822).
+
+        Binding the owning thread at build time and dropping every foreign
+        call keeps the list equal to the pacing the test under test asked for.
+        The patch target stays unchanged, because FR-A07 names it.
+
+    Returns:
+        The list that receives the calling thread's sleep arguments, and the
+        spy to pass as a ``side_effect``.
+    """
+    owner_thread_id = threading.get_ident()  # WHY: the manager runs inline on the test thread.
+    recorded: list[float] = []
+
+    def _record(seconds: float) -> None:
+        """Append ``seconds`` only when the owning thread asked for the sleep."""
+        if threading.get_ident() != owner_thread_id:  # WHY: drop a foreign daemon thread's interval.
+            return
+        recorded.append(seconds)
+
+    return recorded, _record
 
 
 # ---------------------------------------------------------------------------
@@ -373,11 +412,8 @@ def test_migrate_retries_transient_put_failure_then_succeeds(
     tgt = ("tgt-id", "Tgt", _profile("tgt-id", "Tgt"))
     aps = [_ap_record("d1", "site-1", "5c5b350e0001", "ap-1")]
     put_side = [OSError("boom"), OSError("boom-2"), MagicMock(status_code=200)]
-    sleep_calls: list[float] = []
-
-    def _sleep_spy(seconds: float) -> None:
-        """Record every backoff interval requested by the retry loop."""
-        sleep_calls.append(seconds)
+    # WHY: a thread-scoped spy; a global patch would also catch foreign threads.
+    sleep_calls, _sleep_spy = _sleep_recorder()
 
     fake_mh.InputUtils.safe_input.return_value = "MIGRATE"
     with (
@@ -1516,11 +1552,8 @@ def test_migrate_hermetic_no_wall_clock_sleep(
     _seed_rate_limiter(fake_mh, delay=0.25)
     fake_mh.InputUtils.safe_input.return_value = "MIGRATE"
 
-    sleep_args: list[float] = []
-
-    def _record_sleep(secs: float) -> None:
-        """Record every pacing sleep argument so the test can sum them."""
-        sleep_args.append(secs)
+    # WHY: a thread-scoped spy; a global patch would also catch foreign threads.
+    sleep_args, _record_sleep = _sleep_recorder()
 
     with (
         patch.object(APProfileMigrationManager, "_pick_ap_device_profile", side_effect=[src, tgt]),
@@ -1632,11 +1665,9 @@ def test_migrate_limiter_exception_falls_back_and_continues(
 
     get_delay_mock.side_effect = _delay_or_raise
 
-    sleep_args: list[float] = []
-
-    def _record_sleep(secs: float) -> None:
-        """Record every pacing sleep argument so the test can inspect them."""
-        sleep_args.append(secs)
+    # WHY: a thread-scoped spy. A foreign thread's sleep once shifted index 4
+    # of this list from 0.75 to 30 and failed the gate. See issue #1822.
+    sleep_args, _record_sleep = _sleep_recorder()
 
     caplog.set_level(logging.WARNING, logger=_LOGGER_NAME)
     with (
@@ -1772,11 +1803,8 @@ def test_revert_hermetic_no_wall_clock_sleep(
     _seed_rate_limiter(fake_mh, delay=0.25)
     fake_mh.InputUtils.safe_input.return_value = "REVERT"
 
-    sleep_args: list[float] = []
-
-    def _record_sleep(secs: float) -> None:
-        """Record every pacing sleep argument so the test can sum them."""
-        sleep_args.append(secs)
+    # WHY: a thread-scoped spy; a global patch would also catch foreign threads.
+    sleep_args, _record_sleep = _sleep_recorder()
 
     start = time.perf_counter()
     with (
@@ -2046,11 +2074,9 @@ def test_migrate_integration_real_limiter_seeded_cache(
 
     fake_mh.InputUtils.safe_input.return_value = "MIGRATE"
 
-    sleep_args: list[float] = []
-
-    def _record_sleep(secs: float) -> None:
-        """Record every pacing sleep argument so the test can inspect them."""
-        sleep_args.append(secs)
+    # WHY: a thread-scoped spy; this test asserts an exact count of 50, which
+    # a single foreign thread's sleep would break.
+    sleep_args, _record_sleep = _sleep_recorder()
 
     with (
         patch.object(APProfileMigrationManager, "_pick_ap_device_profile", side_effect=[src, tgt]),
@@ -2176,3 +2202,104 @@ def test_interrupted_migration_still_writes_the_audit_row(fake_mh: Any, tmp_path
     assert audit_rows[0]["outcome"] == "interrupted", "the row MUST record the interrupted outcome"
     assert audit_rows[0]["reassigned_count"] == 2, "the row MUST record the partial reassigned count"
     assert audit_rows[0]["planned_count"] == 4, "the row MUST record the planned count"
+
+
+# ---------------------------------------------------------------------------
+# TR019 -- a foreign thread's sleep stays out of the pacing record (issue #1822)
+# ---------------------------------------------------------------------------
+
+
+def test_sleep_recorder_drops_a_foreign_thread_interval() -> None:
+    """The shared recorder MUST ignore a sleep that another thread issues.
+
+    Why:
+        The pacing patch reaches the shared ``time`` module, so every thread
+        in the process calls the spy. This test pins the guard that keeps the
+        record equal to the owning thread's calls.
+    """
+    recorded, spy = _sleep_recorder()  # WHY: binds this thread as the owner.
+
+    spy(0.5)  # WHY: an owning-thread call is kept.
+
+    def _other_thread() -> None:
+        """Call the spy from a thread that does not own the record."""
+        spy(30)  # WHY: mirrors the heartbeat cadence that broke the gate.
+
+    worker = threading.Thread(target=_other_thread)
+    worker.start()
+    worker.join(timeout=5)
+
+    spy(0.75)  # WHY: a later owning-thread call still lands at the next index.
+
+    assert recorded == [0.5, 0.75], f"a foreign interval leaked into the record: {recorded!r}"
+
+
+def test_migrate_pacing_ignores_a_foreign_thread_sleep(
+    fake_mh: types.ModuleType,
+    data_dir: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A live foreign thread MUST NOT shift the pacing indices (issue #1822).
+
+    Why:
+        ``patch("src.device.ap_profile_migration_manager.time.sleep", ...)``
+        sets the attribute on the shared ``time`` module, so a daemon thread
+        left running by an earlier test reaches the spy too. CI recorded a
+        foreign ``30`` at index 4 and failed with
+        ``5th sleep arg expected 0.75, got 30``. This test runs a real second
+        thread inside the patched block and proves the record holds only the
+        ten pacing calls the manager made.
+    """
+    del data_dir  # WHY: the fixture redirects the backup write to a tmp path.
+    src_id = "aaaa1111-2222-3333-4444-555566667777"
+    tgt_id = "bbbb1111-2222-3333-4444-555566667777"
+    src = (src_id, "src-name", _profile(src_id, "src-name"))
+    tgt = (tgt_id, "tgt-name", _profile(tgt_id, "tgt-name"))
+    aps = [_ap_record(f"d{i}", "site-1", f"5c5b350e{i:04x}") for i in range(10)]
+
+    get_delay_mock = _seed_rate_limiter(fake_mh)
+    fake_mh.InputUtils.safe_input.return_value = "MIGRATE"
+
+    sleep_args, _record_sleep = _sleep_recorder()
+    foreign_done: list[float] = []
+
+    def _foreign_heartbeat() -> None:
+        """Sleep 30 s the way ``event_bus._heartbeat_loop`` does."""
+        time.sleep(30)  # WHY: the patched spy returns at once, so this is hermetic.
+        foreign_done.append(30)  # WHY: proves the patch intercepted the foreign call.
+
+    call_counter = {"n": 0}
+
+    def _delay_or_raise(*args: Any, **kwargs: Any) -> Any:
+        """Run a foreign thread on the 2nd consult and raise on the 5th."""
+        del args, kwargs
+        call_counter["n"] += 1
+        if call_counter["n"] == 2:
+            # WHY: land the foreign sleep between two pacing sleeps, which is
+            # where CI recorded it. Joining keeps the ordering deterministic.
+            worker = threading.Thread(target=_foreign_heartbeat, daemon=True)
+            worker.start()
+            worker.join(timeout=5)
+        if call_counter["n"] == 5:
+            raise RuntimeError("PID corrupt")
+        return (None, 0.1)
+
+    get_delay_mock.side_effect = _delay_or_raise
+
+    caplog.set_level(logging.WARNING, logger=_LOGGER_NAME)
+    with (
+        patch.object(APProfileMigrationManager, "_pick_ap_device_profile", side_effect=[src, tgt]),
+        patch.object(APProfileMigrationManager, "_discover_aps_on_source_profile", return_value=aps),
+        patch.object(APProfileMigrationManager, "_reassign_one_ap", return_value=None),
+        patch("src.device.ap_profile_migration_manager.time.sleep", side_effect=_record_sleep),
+    ):
+        APProfileMigrationManager.migrate_aps_between_device_profiles(session=MagicMock())
+
+    # WHY: without an intercepted sleep the worker would still be blocked, so
+    # this also proves the patch really is process-wide.
+    assert foreign_done == [30], "the foreign thread MUST have completed inside the patched block"
+    # WHY: the record holds the manager's calls only.
+    assert 30 not in sleep_args, f"a foreign thread's sleep entered the pacing record: {sleep_args!r}"
+    assert len(sleep_args) == 10, f"expected exactly 10 pacing sleeps, got {len(sleep_args)}"
+    # WHY: the index the CI failure reported now reads the fallback constant.
+    assert sleep_args[4] == pytest.approx(0.75), f"5th sleep arg expected 0.75, got {sleep_args[4]!r}"
