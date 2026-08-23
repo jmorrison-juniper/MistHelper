@@ -90,7 +90,7 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
   entry, because an environment value can hold a secret.
 - **Documentation (Added)**: `deploy/.env.example` documents
   `PORTAL_ALLOWED_IPS` and `PORTAL_TRUSTED_PROXIES` in one section.
-- **Tests (Added)**: `tests/unit/web_portal/test_config_ip_allowlist.py` holds 14
+- **Tests (Added)**: `tests/unit/web_portal/test_config_ip_allowlist.py` holds 15
   cases. A forged header from a blocked peer returns 403. The same header from a
   trusted proxy peer sets the client address.
 

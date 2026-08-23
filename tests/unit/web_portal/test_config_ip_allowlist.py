@@ -195,3 +195,18 @@ def test_loader_drops_an_invalid_trusted_proxy_entry(monkeypatch):
     monkeypatch.setenv("PORTAL_TRUSTED_PROXIES", "not-an-address")
     config = PortalConfigLoader().load_config()
     assert config["trusted_proxies"] == []
+
+
+def test_loader_reports_the_position_of_an_invalid_entry(monkeypatch, caplog):
+    """The warning names the position, so no setting text reaches the log.
+
+    CodeQL rule `py/clear-text-logging-sensitive-data` reported the old message,
+    because an environment value can hold a secret. The message must therefore
+    hold the position of the bad entry and the name of the setting only.
+    """
+    monkeypatch.setenv("PORTAL_TRUSTED_PROXIES", "127.0.0.1,super-secret-value")
+    with caplog.at_level(logging.WARNING):
+        config = PortalConfigLoader().load_config()
+    assert [str(network) for network in config["trusted_proxies"]] == ["127.0.0.1/32"]
+    assert "super-secret-value" not in caplog.text
+    assert "Entry 2 of the PORTAL_TRUSTED_PROXIES setting" in caplog.text
