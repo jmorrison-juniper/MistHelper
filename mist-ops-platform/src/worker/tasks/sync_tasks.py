@@ -69,9 +69,13 @@ def _sync_single_org(engine, mist_org_id: str) -> dict:  # noqa: ANN001
     subsequent stages.
     """
     result: dict[str, object] = {}
-    factory = get_session_factory()
+    factory = get_session_factory()  # WHY: reuse the cached session and token factory.
+    # WHY: build the org-scoped Mist SDK session.
     api_session = factory.create_session(mist_org_id)
-    mist = MistEndpointService(api_session)
+    # WHY: enforce the org API budget on every call. Fixes #1886.
+    limiter = factory.create_rate_limiter(mist_org_id)
+    # WHY: wire the limiter into the shared client.
+    mist = MistEndpointService(api_session, rate_limiter=limiter)
 
     result["inventory"] = _run_inventory_sync(engine, mist, mist_org_id)
     result["config"] = _run_config_sync(engine, mist, mist_org_id)

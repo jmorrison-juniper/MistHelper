@@ -7,20 +7,34 @@ All methods are synchronous — designed to run inside Celery workers.
 
 from __future__ import annotations
 
+import asyncio
 import importlib
 import logging
+import time
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import mistapi
 
 from src.shared.mist.types import MistEndpoint, MistEntityRegistry
+
+if TYPE_CHECKING:
+    from src.shared.mist.rate_limit import OrgRateLimiter
 
 logger = logging.getLogger(__name__)
 
 # WHY: bound the pagination loop so one endpoint cannot exhaust the worker heap.
 # A sync of a large organization stays well under this count. Issue #1903.
 MAX_PAGINATION_PAGES = 500
+
+# WHY: name the status code so a reader does not have to recall it. Issue #1886.
+HTTP_TOO_MANY_REQUESTS = 429
+# WHY: cap outbound 429 retries so throttling cannot hang a worker forever.
+MAX_429_RETRIES = 3
+# WHY: the first backoff wait after a 429, before it doubles.
+BASE_BACKOFF_SECONDS = 1.0
+# WHY: never wait longer than this for one retry, even with a large Retry-After.
+MAX_BACKOFF_SECONDS = 30.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,8 +62,13 @@ class ApiResult:
 class MistEndpointService:
     """Read and write Mist configuration via the SDK."""
 
-    def __init__(self, session: mistapi.APISession) -> None:
-        self._session = session
+    def __init__(
+        self,
+        session: mistapi.APISession,
+        rate_limiter: OrgRateLimiter | None = None,
+    ) -> None:
+        self._session = session  # WHY: the authenticated per-org Mist SDK session.
+        self._rate_limiter = rate_limiter  # WHY: optional org budget; None means none is enforced.
 
     # -- public read/write (max 25 lines) --------------------------------
 
@@ -59,14 +78,23 @@ class MistEndpointService:
         ids: dict[str, str],
     ) -> ApiResult:
         """Fetch a single entity's current configuration from Mist."""
+        # WHY: log before the outbound call.
+        logger.info("Reading entity %s from Mist", entity_type)
         endpoint = MistEntityRegistry.get(entity_type)
         if endpoint.read_method is None:
             msg = f"No read_method for entity type: {entity_type!r}"
             raise AttributeError(msg)
         func = self._resolve_func(endpoint, endpoint.read_method)
         args = self._build_args(endpoint, ids)
-        response = func(self._session, **args)
-        return self._wrap(response)
+        # WHY: apply rate limiting and 429 retry.
+        response = self._invoke_with_protection(func, args)
+        result = self._wrap(response)
+        logger.debug(
+            "Read %s returned status %d",
+            entity_type,
+            result.status_code,
+        )  # WHY: summarize the outcome after the call.
+        return result
 
     def write_entity(
         self,
@@ -75,14 +103,22 @@ class MistEndpointService:
         body: dict[str, Any],
     ) -> ApiResult:
         """Push a full config payload to a single Mist entity."""
+        logger.info("Writing entity %s to Mist", entity_type)  # WHY: log before the outbound call.
         endpoint = MistEntityRegistry.get(entity_type)
         if endpoint.write_method is None:
             msg = f"No write_method for entity type: {entity_type!r}"
             raise AttributeError(msg)
         func = self._resolve_func(endpoint, endpoint.write_method)
         args = self._build_args(endpoint, ids)
-        response = func(self._session, **args, body=body)
-        return self._wrap(response)
+        # WHY: same protected call path.
+        response = self._invoke_with_protection(func, {**args, "body": body})
+        result = self._wrap(response)
+        logger.debug(
+            "Write %s returned status %d",
+            entity_type,
+            result.status_code,
+        )  # WHY: summarize the outcome after the call.
+        return result
 
     def list_all_entities(
         self,
@@ -90,6 +126,8 @@ class MistEndpointService:
         ids: dict[str, str],
     ) -> ApiResult:
         """Fetch all pages of a list operation via the registry."""
+        # WHY: log before the outbound calls.
+        logger.info("Listing entity %s from Mist", entity_type)
         endpoint = MistEntityRegistry.get(entity_type)
         if not endpoint.list_method:
             msg = f"No list_method for entity type: {entity_type!r}"
@@ -97,6 +135,11 @@ class MistEndpointService:
         func = self._resolve_func(endpoint, endpoint.list_method)
         args = self._build_args(endpoint, ids)
         all_data = self._paginate(func, args)
+        logger.debug(
+            "List %s returned %d records",
+            entity_type,
+            len(all_data),
+        )  # WHY: summarize the outcome after all pages.
         return ApiResult(status_code=200, data=all_data)
 
     # -- internal helpers ------------------------------------------------
@@ -138,17 +181,74 @@ class MistEndpointService:
     def _paginate(self, func: Any, args: dict[str, str]) -> list:
         """Follow SDK pagination until the last page, the page limit, or a repeat."""
         all_data: list = []
-        response = func(self._session, **args)
+        response = self._invoke_with_protection(func, args)  # WHY: protect the first page too.
         all_data.extend(self._extract_list(response))
         seen_cursors: set[str] = set()  # WHY: a repeated cursor means the API is looping.
         pages = 1  # WHY: the first page is already in all_data.
         while cursor := getattr(response, "next", None):
             if not self._accept_cursor(cursor, seen_cursors, pages, func):
                 break  # WHY: the guard already logged the reason.
-            response = func(self._session, **args, next=cursor)
+            # WHY: protect every later page too.
+            response = self._invoke_with_protection(func, {**args, "next": cursor})
             all_data.extend(self._extract_list(response))
             pages += 1  # WHY: count the page against MAX_PAGINATION_PAGES.
         return all_data
+
+    def _invoke_with_protection(
+        self,
+        func: Any,
+        kwargs: dict[str, Any],
+    ) -> Any:
+        """Call an SDK function with rate limiting and 429 retry applied."""
+        attempt = 0  # WHY: count attempts so the retry limit is enforced.
+        while True:
+            # WHY: respect the org budget before every attempt, including retries.
+            self._acquire_rate_limit_slot()
+            response = func(self._session, **kwargs)  # WHY: the real outbound Mist SDK call.
+            # WHY: read the status the same way _wrap does.
+            status = getattr(response, "status_code", 200)
+            if status != HTTP_TOO_MANY_REQUESTS or attempt >= MAX_429_RETRIES:
+                return response  # WHY: success, a non-429 error, or retries used up: stop here.
+            # WHY: honor Retry-After or fall back to exponential backoff.
+            delay = self._backoff_delay(response, attempt)
+            logger.warning(
+                "Mist API returned 429. Retry %d of %d in %.1fs.",
+                attempt + 1,
+                MAX_429_RETRIES,
+                delay,
+            )  # WHY: make the retry visible to operators, per issue #1886.
+            time.sleep(delay)  # WHY: back off before the next attempt.
+            attempt += 1  # WHY: count this attempt against the retry limit.
+
+    def _acquire_rate_limit_slot(self) -> None:
+        """Block on the org rate limiter before an outbound call, if configured."""
+        if self._rate_limiter is None:
+            return  # WHY: no limiter configured, for example a pre-org bootstrap call.
+        try:
+            # WHY: bridge the async limiter into this sync path.
+            asyncio.run(self._rate_limiter.wait_and_acquire())
+        except Exception as exc:
+            logger.warning(
+                "Rate limiter unavailable: %s. Proceeding without a slot.",
+                exc,
+            )  # WHY: fail open so a Redis outage does not block real Mist calls.
+
+    @staticmethod
+    def _backoff_delay(response: Any, attempt: int) -> float:
+        """Compute the wait before the next 429 retry."""
+        # WHY: default bounded backoff.
+        exponential = min(BASE_BACKOFF_SECONDS * (2**attempt), MAX_BACKOFF_SECONDS)
+        # WHY: some responses omit a headers attribute.
+        headers = getattr(response, "headers", None)
+        # WHY: honor the API hint when present.
+        retry_after = headers.get("Retry-After") if headers else None
+        if retry_after is None:
+            return exponential  # WHY: no header, so use the default backoff.
+        try:
+            # WHY: cap even a large Retry-After value.
+            return min(float(retry_after), MAX_BACKOFF_SECONDS)
+        except (TypeError, ValueError):
+            return exponential  # WHY: a malformed header falls back to the default backoff.
 
     @staticmethod
     def _accept_cursor(cursor: Any, seen: set[str], pages: int, func: Any) -> bool:
