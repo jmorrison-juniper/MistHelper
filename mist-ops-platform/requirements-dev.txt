@@ -33,6 +33,13 @@ httpx2>=0.28
 # error in tests/unit/shared/test_diff.py.
 deepdiff>=8.0
 
+# celery and redis back the worker and the health route. src/api/routes/health.py
+# imports redis inside the readiness handler, so every TestClient call to that
+# route raised ModuleNotFoundError until this pin. celery[redis] carries redis,
+# and both names stay here, because the health route imports redis on its own.
+celery[redis]>=5.4
+redis>=5.2
+
 # mistapi backs src/shared/mist/. Its absence caused the collection errors in
 # the whole tests/unit/mist/ directory.
 mistapi>=0.63.1
