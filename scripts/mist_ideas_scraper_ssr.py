@@ -15,14 +15,12 @@ Usage:
 import csv
 import json
 import logging
-import os
 import re
 import ssl
 import sys
 import time
 from pathlib import Path
 from urllib.request import Request, urlopen
-from urllib.error import HTTPError, URLError
 
 try:
     from bs4 import BeautifulSoup
@@ -61,10 +59,11 @@ HEADERS = [
     "comments_json",
 ]
 
-# ── SSL context for Zscaler corporate proxy ───────────────────
+# ── SSL context for the public ideas host ─────────────────────
+# The default context verifies the certificate and the host name. Do not
+# weaken it. Behind a proxy that inspects TLS, mount the corporate
+# certificate authority bundle and set SSL_CERT_FILE instead. See issue #1914.
 SSL_CTX = ssl.create_default_context()
-SSL_CTX.check_hostname = False
-SSL_CTX.verify_mode = ssl.CERT_NONE  # nosec B323 — required for Zscaler SSL inspection proxy
 
 # ── Boilerplate lines to strip from descriptions ──────────────
 BOILERPLATE_LINES = frozenset(

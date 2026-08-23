@@ -105,7 +105,7 @@ class ComparatorFlags:
     fast: bool = False  # WHY: enables cached data generation.
     address_check: bool = False  # WHY: opts into Nominatim validation.
     debug: bool = False  # WHY: verbose logging + traceback capture.
-    skip_ssl_verify: bool = True  # WHY: default relaxed for internal APIs.
+    skip_ssl_verify: bool = False  # WHY: verify by default. Issue #1914 inverted this.
 
 
 @dataclass

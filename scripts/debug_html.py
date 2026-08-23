@@ -1,15 +1,12 @@
 """Dump the raw HTML of a single idea page to diagnose what we're getting."""
 
 import ssl
-import sys
 from pathlib import Path
 from urllib.request import Request, urlopen
 
 url = "https://ideas.mist.com/forums/912934-product-features/suggestions/50598263-modify-port-configuration-button"
 
-ctx = ssl.create_default_context()
-ctx.check_hostname = False
-ctx.verify_mode = ssl.CERT_NONE
+ctx = ssl.create_default_context()  # Verify the certificate and the host name. See issue #1914.
 
 req = Request(
     url,
