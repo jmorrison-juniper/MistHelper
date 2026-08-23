@@ -134,3 +134,71 @@ jobs:
             exit 1
           fi
           echo "Every main workflow now covers the tip of main."
+
+  close-linked-issues:
+    name: "Close the linked issues"
+    # Run only after a real merge, because a rejected pull request must close
+    # nothing. The event_name test stops the schedule run, which carries no
+    # pull request.
+    if: >-
+      github.event_name == 'pull_request'
+      && github.event.action == 'closed'
+      && github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      # The job closes an issue, so it needs write access to the issues API.
+      issues: write
+      # The lookup of the linked issues reads one pull request.
+      pull-requests: read
+      # The gh CLI needs this scope to resolve the repository.
+      contents: read
+    steps:
+      - name: Close the issues that the pull request links
+        env:
+          # The gh CLI reads the token and the repository from the environment.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+
+          # Read the issues that GitHub parsed from the closing keyword in the body.
+          linked=$(gh pr view "$PR_NUMBER" \
+            --json closingIssuesReferences \
+            --jq '.closingIssuesReferences[].number')
+
+          # An empty list is normal, because a pull request may close no issue.
+          if [ -z "$linked" ]; then
+            echo "Pull request $PR_NUMBER links no issue. Nothing to close."
+            exit 0
+          fi
+
+          # Track a failure so one bad issue does not hide the rest of the work.
+          failed=0
+
+          for issue in $linked; do
+            # Read the state first, because a second close call reports an error.
+            state=$(gh issue view "$issue" --json state --jq '.state')
+
+            if [ "$state" = "CLOSED" ]; then
+              echo "Issue $issue is already closed. Skipping."
+              continue
+            fi
+
+            echo "Closing issue $issue for merged pull request $PR_NUMBER."
+
+            # Leave a comment, because the reader needs the reason for the close.
+            if gh issue close "$issue" \
+              --reason completed \
+              --comment "Closed by the merge of pull request #${PR_NUMBER}."; then
+              echo "Closed issue $issue."
+            else
+              # Report the failure instead of hiding it, so the miss stays visible.
+              echo "::error::Failed to close issue $issue for pull request $PR_NUMBER."
+              failed=1
+            fi
+          done
+
+          # A non-zero exit makes the missed close visible in the checks list.
+          exit "$failed"
