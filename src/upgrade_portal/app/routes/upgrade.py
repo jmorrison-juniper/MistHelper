@@ -48,7 +48,7 @@ from __future__ import annotations  # Postponed annotations keep every hint a pl
 import logging  # The portal logs with the standard library only.
 import threading  # One guard for the memory run store, which a driver thread also writes.
 from collections.abc import Iterable, Mapping  # The version answer arrives in more than one shape.
-from typing import Any  # A run record and an injected seam are both free-form.
+from typing import Any, NamedTuple  # A run record is free-form, and the lock read carries two fixed fields.
 
 from flask import Blueprint, Response, current_app, jsonify, request, session  # The framework of the portal.
 
@@ -71,6 +71,9 @@ from ...runtime.signals import (  # The stop request rides inside the run record
 )
 from ..factory import build_error_envelope, json_error  # The one error envelope that the contract allows.
 from .select import (  # The sibling module owns these rules, so no copy of them lives here.
+    LOCK_STATE_FREE,
+    LOCK_STATE_LOCKED,
+    LOCK_STATE_UNKNOWN,
     SELECTED_SITE_KEY,
     find_attribute,
     load_optional_module,
@@ -139,6 +142,7 @@ TARGETS_MISSING_CODE = "upgrade_targets_missing"  # The saved plan names no devi
 RUN_NOT_STOPPABLE_CODE = "run_not_stoppable"  # The run already reached a state that a stop cannot change.
 RUN_WRITE_FAILED_CODE = "run_write_failed"  # The store refused the write, so the operator must retry.
 UPGRADE_RUNNING_CODE = "upgrade_already_running"  # FR-037: one run of this site has not reached a final state.
+LOCK_STORE_DOWN_CODE = "lock_store_unreachable"  # `contracts/site-lock.md:116` refuses a write the lock cannot guard.
 
 SITE_LOCKED_MESSAGE = "Another operator holds this site. Ask that operator before you try again."  # The cure.
 SITE_NOT_CHOSEN_MESSAGE = "Choose a site before you start a run."  # Names the missing step.
@@ -150,6 +154,10 @@ PRE_CAPTURE_MISSING_MESSAGE = "Save a verified pre-check capture before you star
 TARGETS_MISSING_MESSAGE = "The saved plan names no device. Choose a version on the options page and save it."  # Cure.
 RUN_WRITE_FAILED_MESSAGE = "The portal could not write the run record. Try again."  # The cure.
 UPGRADE_RUNNING_MESSAGE = "An upgrade already runs at this site. Open that run before you start a new one."  # Cure.
+LOCK_STORE_DOWN_MESSAGE = (  # Warning: a guess here can start a second upgrade on a live site.
+    "The portal cannot reach the site lock store, so it cannot tell whether "
+    "another operator holds this site. Wait, then try again."
+)
 NO_LAUNCHER_MESSAGE = "The portal cannot send an upgrade yet, because the run driver is not wired."  # The gap.
 STOP_RECORDED_MESSAGE = "The portal recorded the stop and starts no further device."  # Claims no cancel.
 
@@ -160,6 +168,7 @@ BAD_REQUEST_STATUS = 400  # The portal could not read the request.
 NOT_FOUND_STATUS = 404  # No such run.
 CONFLICT_STATUS = 409  # The site is held, the pre-check is missing, or the run cannot stop.
 SERVER_ERROR_STATUS = 500  # A part of the portal is missing, so the write cannot run.
+UNAVAILABLE_STATUS = 503  # `contracts/http-api.md:133` fixes this status for an unreadable lock store.
 
 # The run record of a live run lives here while no store is injected. The driver
 # thread writes and the poll reads, so both take the guard.
@@ -437,22 +446,47 @@ def write_failed() -> tuple[Response, int]:
 # --------------------------------------------------------------------------
 
 
-def lock_holder(org_id: str, site_id: str) -> str | None:
-    """Return the address of the operator that holds the site lock.
+class SiteLockRead(NamedTuple):
+    """Holds what the portal learned about one site lock.
 
     Why:
-        `contracts/site-lock.md` states that an unreachable lock store must not
-        stop a read. `select.read_site_locks` already keeps that rule and raises
-        nothing, so a dead store names no holder and the run continues.
+        A holder address alone answers two states. A free site and a site the
+        portal could not read both answer None, so a write path that reads only
+        an address treats a dead lock store as a free site. Issue #1827 reports
+        that exact failure. These two fields carry the third state, so every
+        write path can refuse what it cannot read.
+    """
+
+    state: str  # One of `free`, `locked`, or `unknown`, as `select.site_lock_state` names them.
+    holder: str  # The address of the holder, and an empty string for the other two states.
+
+
+LOCK_FREE = SiteLockRead(LOCK_STATE_FREE, "")  # The store answered and named no holder.
+LOCK_UNKNOWN = SiteLockRead(LOCK_STATE_UNKNOWN, "")  # The store did not answer, so the portal cannot tell.
+
+
+def lock_holder(org_id: str, site_id: str) -> SiteLockRead:
+    """Return what the lock store knows about one site.
+
+    Why:
+        `contracts/site-lock.md:116` refuses an upgrade start that the lock
+        cannot guard, and `select.read_site_locks` answers an empty index when
+        the store does not answer. This function tests membership, as
+        `select.site_lock_state` already does, so an absent entry reads
+        `unknown` and never `free`.
 
     Args:
         org_id: The organization that holds the site.
         site_id: The site the run acts on.
 
     Returns:
-        The holder address, or None when no holder exists and when none is known.
+        The lock state and the holder address of that site.
     """
-    return read_site_locks(org_id, [site_id]).get(site_id)  # An unreachable store answers an empty index.
+    locks = read_site_locks(org_id, [site_id])  # An unreachable store answers an empty index and raises nothing.
+    if site_id not in locks:  # The lock store named no state for this site.
+        return LOCK_UNKNOWN  # The portal cannot tell, so it must not report free.
+    holder = locks[site_id]  # A None value means the store answered and found no lock.
+    return SiteLockRead(LOCK_STATE_LOCKED, holder) if holder else LOCK_FREE  # An address names the holder.
 
 
 def site_locked_refusal(holder: str) -> tuple[Response, int]:
@@ -461,7 +495,7 @@ def site_locked_refusal(holder: str) -> tuple[Response, int]:
     Why:
         T182 asks the refusal to name the holder, so the second operator knows
         whom to ask. `json_error` carries no `details` key, so the answer takes
-        the envelope builder instead. `contracts/http-api.md` section 3 fixes
+        the envelope builder instead. `contracts/http-api.md:132` fixes
         `details.actor_email` for the same refusal on the lock path.
 
     Args:
@@ -474,26 +508,67 @@ def site_locked_refusal(holder: str) -> tuple[Response, int]:
     return jsonify(body), CONFLICT_STATUS  # The browser reads the code and shows the address.
 
 
-def held_by_other(org_id: str, site_id: str) -> str | None:
-    """Return the address of a lock holder that is not the current operator.
+def lock_store_down_refusal() -> tuple[Response, int]:
+    """Answer a lock store that the portal cannot read.
+
+    Why:
+        `contracts/site-lock.md:116` refuses the upgrade with 503 and forbids a
+        fallback lock. The answer names no operator, because the portal read
+        nothing and any address here would be a guess.
+
+    Returns:
+        The 503 answer with the contract code and the cure.
+    """
+    return json_error(UNAVAILABLE_STATUS, LOCK_STORE_DOWN_CODE, LOCK_STORE_DOWN_MESSAGE)  # Waiting is the cure.
+
+
+def held_by_other(org_id: str, site_id: str) -> SiteLockRead:
+    """Return the lock state that stops the current operator.
 
     Why:
         The operator that already holds the lock must pass every check of this
         module. Without this rule the start route would refuse the one operator
-        that the lock exists to protect.
+        that the lock exists to protect. An unknown state passes no operator,
+        because the portal cannot name who holds the site.
 
     Args:
         org_id: The organization that holds the site.
         site_id: The site the run acts on.
 
     Returns:
-        The address of the other operator, or None when the site is free to use.
+        The free state when the caller may continue, and the blocking state
+        otherwise.
     """
-    holder = lock_holder(org_id, site_id)  # None means free, and None also means unknown.
-    if not holder or holder == actor_address():  # The current operator may always continue.
-        return None  # The caller runs the action.
-    logger.info("upgrade: the site %s is held by %s", site_id, identity.email_digest(holder))  # Digest only.
-    return holder  # The caller answers 409 and names this address to the operator.
+    found = lock_holder(org_id, site_id)  # Three states, so a dead store never reads as a free site.
+    if found.holder and found.holder == actor_address():  # The current operator may always continue.
+        return LOCK_FREE  # The caller runs the action.
+    if found.state == LOCK_STATE_LOCKED:  # Another operator holds this site right now.
+        logger.info("upgrade: the site %s is held by %s", site_id, identity.email_digest(found.holder))  # Digest.
+    return found  # The caller turns this state into the documented refusal.
+
+
+def lock_refusal(org_id: str, site_id: str) -> tuple[Response, int] | None:
+    """Return the refusal that the site lock puts on one write, or None.
+
+    Why:
+        Three write routes share one rule. One function holds that rule, so no
+        route can read an unknown state as a free site. Warning: a write that
+        skips this check can start a second upgrade on a live site.
+
+    Args:
+        org_id: The organization that holds the site.
+        site_id: The site the write acts on.
+
+    Returns:
+        The 409 answer, the 503 answer, or None when the write may run.
+    """
+    found = held_by_other(org_id, site_id)  # One read for both refusals below.
+    if found.state == LOCK_STATE_UNKNOWN:  # The lock store did not answer about this site.
+        logger.warning("upgrade: the lock store did not answer about the site %s, so the write stops", site_id)
+        return lock_store_down_refusal()  # `contracts/site-lock.md:116` refuses the write and adds no fallback.
+    if found.state == LOCK_STATE_LOCKED:  # A second operator holds the site.
+        return site_locked_refusal(found.holder)  # The refusal names that operator.
+    return None  # The store answered, and the site is free for this operator.
 
 
 # --------------------------------------------------------------------------
@@ -587,9 +662,9 @@ def site_refusal(org_id: str, site_id: str) -> tuple[Response, int] | None:
     Returns:
         The refusal answer, or None when the site accepts a new run.
     """
-    holder = held_by_other(org_id, site_id)  # `contracts/http-api.md` lists 409 site_locked on this path.
-    if holder:  # Another operator already acts on this site.
-        return site_locked_refusal(holder)  # The refusal names that operator.
+    refusal = lock_refusal(org_id, site_id)  # `contracts/http-api.md` lists 409 site_locked and 503 on this path.
+    if refusal is not None:  # Another operator holds the site, or the portal cannot read the lock.
+        return refusal  # The answer names the operator to ask, or names the unreadable store.
     live = live_run_at_site(site_id)  # FR-037: the check above never sees the run of the current operator.
     if live:  # One upgrade of this site has not reached a final state.
         logger.info("upgrade: the site %s already runs the upgrade %s", site_id, live)  # Names the live run.
@@ -1002,9 +1077,9 @@ def start_refusal(record: dict[str, Any]) -> tuple[Response, int] | None:
         return json_error(BAD_REQUEST_STATUS, CONFIRMATION_REQUIRED_CODE, CONFIRM_REQUIRED_MESSAGE)
     if not record.get(PRE_CAPTURE_FIELD):  # FR-035 refuses a start with no saved pre-check.
         return json_error(CONFLICT_STATUS, PRE_CAPTURE_MISSING_CODE, PRE_CAPTURE_MISSING_MESSAGE)
-    holder = held_by_other(str(record.get("org_id", "")), str(record.get("site_id", "")))  # T182 asks for this.
-    if holder:  # Another operator holds the site, so this run may not send anything.
-        return site_locked_refusal(holder)  # The refusal names that operator.
+    refusal = lock_refusal(str(record.get("org_id", "")), str(record.get("site_id", "")))  # T182 asks for this.
+    if refusal is not None:  # Another operator holds the site, or the portal cannot read the lock.
+        return refusal  # Warning: without this line a second upgrade can reach a live site.
     if not record.get(TARGETS_FIELD):  # An operator who saved no version reaches this line.
         return json_error(CONFLICT_STATUS, TARGETS_MISSING_CODE, TARGETS_MISSING_MESSAGE)
     return None  # Every rule passed, so the handler sends the upgrade.
@@ -1296,14 +1371,14 @@ def stop_lock_refusal(record: dict[str, Any]) -> tuple[Response, int] | None:
         record: The run record that the stop acts on.
 
     Returns:
-        The 409 answer that names the holder, or None when the stop may run.
+        The 409 answer that names the holder, the 503 answer for an unreadable
+        lock store, or None when the stop may run.
     """
     org_id = str(record.get("org_id", ""))  # The run record carries its own scope.
     site_id = str(record.get("site_id", ""))  # FR-014 binds one run to one site.
     if not org_id or not site_id:  # An absent run and a damaged record both reach here.
         return None  # The stop store still answers `run_not_found` for a run it does not hold.
-    holder = held_by_other(org_id, site_id)  # The operator that holds the lock always passes.
-    return site_locked_refusal(holder) if holder else None  # The refusal names the operator to ask.
+    return lock_refusal(org_id, site_id)  # The refusal names the operator to ask, or names the unreadable store.
 
 
 def cancel_outcome(run_id: str) -> StopOutcome:

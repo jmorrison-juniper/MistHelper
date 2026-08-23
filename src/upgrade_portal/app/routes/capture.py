@@ -658,8 +658,8 @@ def held_by_other(org_id: str, site_id: str) -> str | None:
         take the pre-check capture. A presence-only test refuses that operator
         their own capture, so the primary journey cannot finish. The holder
         therefore passes every check here, and a second operator still reads
-        409 `site_locked`. `upgrade.held_by_other` keeps this same rule, so the
-        two routes answer one question one way.
+        409 `site_locked`. `upgrade.held_by_other` keeps a different rule for the
+        unknown state, because only the upgrade route writes firmware.
 
     The unreachable store:
         `read_site_locks` answers an empty index when the lock store is
@@ -669,7 +669,8 @@ def held_by_other(org_id: str, site_id: str) -> str | None:
         unreachable, and `contracts/site-lock.md:167` states that an unreachable
         store still lets a capture start. An unknown state names no holder, so
         this function has no address to refuse. The upgrade start makes the
-        opposite choice, because only that path writes firmware to a device.
+        opposite choice and answers 503 `lock_store_unreachable`, because only
+        that path writes firmware to a device. Issue #1827 records that repair.
 
     Args:
         org_id: The organization that holds the site.

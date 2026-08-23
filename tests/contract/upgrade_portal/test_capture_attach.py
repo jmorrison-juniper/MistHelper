@@ -239,7 +239,7 @@ def joined_app(
         The wired application.
     """
     portal_app.config[MIST_READER_KEY] = fake_mist_api.read  # No socket, no cloud account.
-    portal_app.config[LOCK_READER_KEY] = lambda org_id, site_ids: {}  # Every site reads as free.
+    portal_app.config[LOCK_READER_KEY] = lambda org, sites: dict.fromkeys(sites)  # Every site reads free.
     portal_app.config[RUN_STORE_KEY] = run_store  # Both route modules read this one store.
     portal_app.config[RUNNER_KEY] = runner  # The capture route hands the job here.
     portal_app.config[LAUNCHER_KEY] = launcher  # The start route hands the run here.

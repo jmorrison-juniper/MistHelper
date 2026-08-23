@@ -185,7 +185,7 @@ def upgrade_app(portal_app: Flask, run_store: RecordingRunStore) -> Flask:
         The application with the seams in place.
     """
     portal_app.config[RUN_STORE_KEY] = run_store  # No ArangoDB server runs in a contract test.
-    portal_app.config[LOCK_READER_KEY] = lambda org_id, site_ids: {}  # No Redis server runs in a contract test.
+    portal_app.config[LOCK_READER_KEY] = lambda org, sites: dict.fromkeys(sites)  # Every site reads free.
     portal_app.config["WTF_CSRF_ENABLED"] = False  # One test below reads the untouched application instead.
     return portal_app  # Every test below drives this application.
 

@@ -223,6 +223,7 @@ def portal_app(run_store: SiteAwareStore) -> Flask:
     app = Flask(__name__)  # The smallest application that can hold the blueprint.
     app.config.update(TESTING=True, SECRET_KEY=FAKE_SECRET, WTF_CSRF_ENABLED=False)  # Test settings alone.
     app.config[upgrade.RUN_STORE_KEY] = run_store  # The seam the route already reads.
+    app.config[LOCK_READER_KEY] = lambda org, sites: dict.fromkeys(sites)  # A reachable store, and no holder.
     app.register_blueprint(upgrade.upgrade_bp)  # The routes under test.
     return app  # Each test drives this application through a client.
 

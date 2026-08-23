@@ -131,9 +131,11 @@ class RecordingLockReader:
             site_ids: The sites to ask about.
 
         Returns:
-            One entry for each site that the canned index names.
+            One entry for each site asked about, because `runtime/lock.py`
+            answers one entry for each site it can reach. A site the canned
+            index does not name reads as a free site, never as an unknown one.
         """
-        return {site: self.holders[site] for site in site_ids if site in self.holders}
+        return {site: self.holders.get(site) for site in site_ids}  # A reachable store names every asked site.
 
 
 class RecordingLauncher:
