@@ -8,6 +8,17 @@
 #   MISTHELPER_SSH_PASSWORD  (defaults to build-time password if omitted)
 
 set -e
+# Fail a pipeline when any stage fails, because the last stage can hide an
+# earlier failure and report success. See issue #1925.
+set -o pipefail
+
+# Write one line to stderr and to the log file.
+# The container log reads stderr only. The log file lives in the data volume and
+# survives the container. An operator needs both sources to find a crash cause.
+log_container_event() {
+    echo "$1" >&2  # Send the line to stderr, so "podman logs" reports the event.
+    { echo "$1" >> /app/data/ssh.log; } 2>/dev/null || true  # Keep a copy in the log file, and never stop the container on a log write error.
+}
 
 USERNAME="${MISTHELPER_SSH_USERNAME:-misthelper}"
 PASSWORD="${MISTHELPER_SSH_PASSWORD:-}"
@@ -118,7 +129,7 @@ SHUTDOWN_GRACE_SECONDS="${PORTAL_OPERATION_SHUTDOWN_GRACE_SECONDS:-30}"
 CONTAINER_KILL_MARGIN_SECONDS=10
 
 # Start Gunicorn web portal in the background
-echo "[PORTAL] Starting web portal on port $WEB_PORT..." >> /app/data/ssh.log
+log_container_event "[PORTAL] Starting the web portal on port $WEB_PORT."  # Report the start before the launch, so a failed launch has a start point in the log.
 su - misthelper -c "cd /app && gunicorn wsgi:app \
     --bind 0.0.0.0:${WEB_PORT} \
     --workers 1 \
@@ -129,6 +140,8 @@ su - misthelper -c "cd /app && gunicorn wsgi:app \
     --access-logfile /app/data/portal_access.log \
     --error-logfile /app/data/portal_error.log" &
 GUNICORN_PID=$!
+SSHD_PID=""  # Clear the sshd PID, because a signal can start the cleanup before the daemon starts.
+log_container_event "[PORTAL] Started the web portal with PID $GUNICORN_PID."  # Name the PID, so the operator can match a later crash line to this service.
 
 # Wait for one PID to exit on its own, then force it, so cleanup never hangs forever.
 _wait_for_pid_or_kill() {
@@ -138,7 +151,7 @@ _wait_for_pid_or_kill() {
     while kill -0 "$pid" 2>/dev/null; do
         if [ "$waited" -ge "$grace_seconds" ]; then
             # Log the forced kill, so an operator can see the grace period ran out.
-            echo "[CONTAINER] PID $pid did not exit in ${grace_seconds}s, sending SIGKILL" >> /app/data/ssh.log
+            log_container_event "[CONTAINER] PID $pid did not exit in ${grace_seconds}s, sending SIGKILL"
             kill -9 "$pid" 2>/dev/null || true
             break
         fi
@@ -150,7 +163,8 @@ _wait_for_pid_or_kill() {
 
 # Trap signals to stop both processes
 cleanup() {
-    echo "[CONTAINER] Shutting down..." >> /app/data/ssh.log
+    local final_status="${1:-0}"  # Default to 0, because an operator stop is a success and needs no restart.
+    log_container_event "[CONTAINER] Shutting down. The exit status will be $final_status."  # Report the plan before the shutdown, so the operator sees the cause order.
     # Match the bash-side deadline to Gunicorn's own --graceful-timeout, plus a margin.
     local kill_wait
     kill_wait=$((SHUTDOWN_GRACE_SECONDS + CONTAINER_KILL_MARGIN_SECONDS))
@@ -159,15 +173,43 @@ cleanup() {
     # Wait for a clean exit within the bound, so an in-flight operation can finish first.
     _wait_for_pid_or_kill "$GUNICORN_PID" "$kill_wait"
     _wait_for_pid_or_kill "$SSHD_PID" "$kill_wait"
-    exit 0
+    log_container_event "[CONTAINER] Shutdown complete. The container exits with status $final_status."  # Report the result after the shutdown, so the operator can match the status to the cause.
+    exit "$final_status"  # Report the real status, because a fixed 0 hides a crash from every restart policy.
 }
 trap cleanup SIGTERM SIGINT
 
 # Start SSH daemon in the background
 /usr/sbin/sshd -D &
 SSHD_PID=$!
+log_container_event "[CONTAINER] Started sshd with PID $SSHD_PID."  # Name the PID, so the operator can match a later crash line to this service.
 
-# Wait for either process to exit
-wait -n "$GUNICORN_PID" "$SSHD_PID" 2>/dev/null || true
-echo "[CONTAINER] A service exited unexpectedly" >> /app/data/ssh.log
-cleanup
+# Wait for the first service to exit, then report the exit as a fault.
+# Warning: "wait -n" returns the status of the service that ended. A discarded
+# status makes a crash look like a clean stop, and no restart policy fires.
+# See issue #1925.
+log_container_event "[CONTAINER] Supervising the web portal (PID $GUNICORN_PID) and sshd (PID $SSHD_PID)."  # Record the start of the supervision, so a later crash line has a start point.
+set +e  # Turn off the exit-on-error option, so a crash reaches the report below instead of ending the script in silence.
+wait -n "$GUNICORN_PID" "$SSHD_PID" 2>/dev/null
+SERVICE_EXIT_STATUS=$?  # Keep the status of the service that ended, because the container must report that status.
+set -e  # Restore the exit-on-error option for the rest of the script.
+
+# Name the service that ended.
+# The shell reaps the process that "wait -n" returned, so that process no longer
+# answers a signal test. The other process still answers.
+CRASHED_SERVICE="an unknown service"  # Hold a safe default, because a race can end both services together.
+if ! kill -0 "$GUNICORN_PID" 2>/dev/null; then
+    CRASHED_SERVICE="the gunicorn web portal"  # The portal no longer answers, so the portal ended first.
+elif ! kill -0 "$SSHD_PID" 2>/dev/null; then
+    CRASHED_SERVICE="the sshd daemon"  # The daemon no longer answers, so the daemon ended first.
+fi
+
+# Turn a status of 0 into a failure status.
+# A supervised service must run for the life of the container. An exit is a
+# fault even when the service itself reports success.
+if [ "$SERVICE_EXIT_STATUS" -eq 0 ]; then
+    SERVICE_EXIT_STATUS=1  # Report a failure, because a status of 0 tells the restart policy that the work is complete.
+fi
+
+log_container_event "[CONTAINER] ERROR: $CRASHED_SERVICE exited with status $SERVICE_EXIT_STATUS."  # Name the service and the status, because the operator needs both to find the cause.
+log_container_event "[CONTAINER] ERROR: The container stops the other service and exits with a failure status."  # State the next step, so the operator knows that a restart policy can act.
+cleanup "$SERVICE_EXIT_STATUS"  # Stop the other service, then exit with the captured status.
