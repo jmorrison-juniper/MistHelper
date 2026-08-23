@@ -4,6 +4,16 @@ PublishPort=2200:2200
 PublishPort=8055:8055
 Volume=./data:/app/data:rw
 EnvironmentFile=./.env
+# The container image sets no HEALTHCHECK instruction, because the OCI image
+# format rejects it. Quadlet supplies the probe instead. The probe calls the
+# readiness endpoint, because that endpoint tests write access to the data
+# directory. A read-only data mount then marks the container unhealthy.
+HealthCmd=curl --fail --silent --show-error http://localhost:8055/ready
+HealthInterval=30s
+HealthTimeout=5s
+HealthRetries=3
+HealthStartPeriod=20s
+HealthOnFailure=restart
 
 [Service]
 Restart=always
