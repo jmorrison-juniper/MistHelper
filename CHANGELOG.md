@@ -119,6 +119,35 @@ Version 26.08.23.01.26
   follows the cursor until it returns to 0, accepts a cursor that arrives as
   bytes, and stops at the upper bound against an endless keyspace.
 
+### Run the real rollback when a post-check fails (issue #1887)
+
+- **Defect (Fixed)**: `_execute_scheduled_job` set the job status to
+  `ROLLED_BACK` after a failed post-check, but no restore ran. The new
+  configuration stayed on the live network devices. The operator read the status,
+  believed the network held the previous configuration, and started no manual
+  repair. The audit trail recorded a rollback that never happened.
+- **Configuration backup (Added)**: the workflow now reads the live configuration
+  of every target before the push and keeps the snapshots for the whole job.
+- **Restore on a failed post-check (Added)**: a failed post-check now pushes the
+  captured snapshot back to each device through `RollbackService`.
+- **Install result (Fixed)**: the workflow now reads the install result. A failed
+  install stops the workflow and starts the restore. The post-check no longer
+  runs after a failed install.
+- **Honest job status (Changed)**: the status comes from the real restore
+  outcome. `rolled_back` means that every device holds the previous
+  configuration again. The new value `rollback_failed` means that one or more
+  devices did not restore.
+- **`auto_rollback_on_failure` (Fixed)**: the workflow now reads this payload
+  field. If the value is false, the status is `failed` and no restore runs. The
+  workflow never reports `rolled_back` when no restore ran.
+- **Tests (Added)**: `mist-ops-platform/tests/unit/worker/test_deploy_rollback.py`
+  covers the post-check failure, the failed install, the disabled rollback
+  switch, an incomplete restore, the happy path, and the pre-check failure.
+- **Test setup (Added)**: `mist-ops-platform/tests/conftest.py` supplies a
+  stand-in for `src.shared.config`, because the root `.gitignore` pattern
+  `config/` keeps that package out of git and every clean checkout fails to
+  import the worker modules.
+
 ### Add a real readiness probe and keep the health endpoint cheap (issue #1863)
 
 - **Defect (Fixed)**: the `/health` endpoint returned the fixed text `healthy` on
