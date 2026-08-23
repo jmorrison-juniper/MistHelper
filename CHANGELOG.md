@@ -148,6 +148,46 @@ Version 26.08.23.01.26
   `config/` keeps that package out of git and every clean checkout fails to
   import the worker modules.
 
+### Add a graceful shutdown path to the web portal (issue #1861)
+
+- **Defect (Fixed)**: nothing called `PortalEventBus.stop()` or shut down the
+  `OperationExecutor` thread pool. A restart sent `SIGTERM`, Gunicorn killed the
+  worker, an in-flight operation aborted mid-run, and the heartbeat thread
+  leaked past the worker exit.
+- **Heartbeat thread (Changed)**: `PortalEventBus._heartbeat_loop` now waits on
+  a `threading.Event` instead of `time.sleep(30)`. `stop()` sets the event, so
+  the thread exits within a bounded join instead of up to 30 seconds later.
+  A second `stop()` call is a no-op, so a duplicate shutdown signal is safe.
+- **Operation pool (Added)**: `OperationExecutor.shutdown()` waits for every
+  in-flight run's future, up to a bounded grace period, then closes the thread
+  pool. A second `shutdown()` call is a no-op.
+- **Shutdown wiring (Added)**: `WebPortalApp.create_app` registers one
+  `atexit` hook through `WebPortalApp._register_shutdown_hook`. Gunicorn never
+  runs `if __name__ == "__main__"`, so the hook calls the new
+  `WebPortalApp.shutdown_app` function, which stops the event bus and drains
+  the operation pool. `shutdown_app` is idempotent, so a duplicate call at
+  process exit does not raise.
+- **Grace period (Added)**: `PORTAL_OPERATION_SHUTDOWN_GRACE_SECONDS` defaults
+  to 30 seconds. `deploy/.env.example` documents it.
+  `container/scripts/start.sh` reads the same value for the Gunicorn
+  `--graceful-timeout` flag, so Python and Gunicorn agree on the drain time.
+- **Container cleanup (Changed)**: `container/scripts/start.sh` `cleanup()` now
+  waits for Gunicorn and sshd to exit, bounded by the grace period plus a
+  10-second margin, then sends `SIGKILL` if a process still runs. The old code
+  sent one `kill` signal and returned right away, so it never confirmed a
+  drain.
+- **Quadlet timeout (Changed)**: `deploy/misthelper.container` sets
+  `TimeoutStopSec=60`, so systemd waits long enough for the bounded shutdown
+  chain to finish before it forces a kill.
+- **Tests (Added)**: `tests/unit/web_portal/test_portal_graceful_shutdown.py`
+  holds 9 tests. They prove the heartbeat thread ends after `stop()`, that
+  `OperationExecutor.shutdown()` closes the pool and waits for a short
+  in-flight run, that `WebPortalApp.shutdown_app` stops both the event bus and
+  the operation executor for a real app, and that every shutdown path is safe
+  to call twice. `tests/e2e/conftest.py` now tears its session-scoped Flask app
+  down through `shutdown_app`, so the long-lived test fixture no longer leaks
+  its own heartbeat thread.
+
 ### Add a real readiness probe and keep the health endpoint cheap (issue #1863)
 
 - **Defect (Fixed)**: the `/health` endpoint returned the fixed text `healthy` on

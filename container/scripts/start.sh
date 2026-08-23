@@ -112,6 +112,11 @@ echo "[SSH] Use option 0 in MistHelper to disconnect." >> /app/data/ssh.log
 # Determine web portal port (default 8055)
 WEB_PORT="${WEB_PORT:-8055}"
 
+# Read the grace period, so bash and the Python shutdown path share one value.
+SHUTDOWN_GRACE_SECONDS="${PORTAL_OPERATION_SHUTDOWN_GRACE_SECONDS:-30}"
+# Add a margin past the grace period, so bash waits longer than Gunicorn before it forces a kill.
+CONTAINER_KILL_MARGIN_SECONDS=10
+
 # Start Gunicorn web portal in the background
 echo "[PORTAL] Starting web portal on port $WEB_PORT..." >> /app/data/ssh.log
 su - misthelper -c "cd /app && gunicorn wsgi:app \
@@ -120,17 +125,40 @@ su - misthelper -c "cd /app && gunicorn wsgi:app \
     --worker-class gthread \
     --threads 4 \
     --timeout 120 \
+    --graceful-timeout ${SHUTDOWN_GRACE_SECONDS} \
     --access-logfile /app/data/portal_access.log \
     --error-logfile /app/data/portal_error.log" &
 GUNICORN_PID=$!
 
+# Wait for one PID to exit on its own, then force it, so cleanup never hangs forever.
+_wait_for_pid_or_kill() {
+    local pid="$1"  # Process to wait for before a forced kill.
+    local grace_seconds="$2"  # Seconds to wait before SIGKILL.
+    local waited=0  # Counts the seconds already spent waiting.
+    while kill -0 "$pid" 2>/dev/null; do
+        if [ "$waited" -ge "$grace_seconds" ]; then
+            # Log the forced kill, so an operator can see the grace period ran out.
+            echo "[CONTAINER] PID $pid did not exit in ${grace_seconds}s, sending SIGKILL" >> /app/data/ssh.log
+            kill -9 "$pid" 2>/dev/null || true
+            break
+        fi
+        sleep 1  # Poll once a second, so the check stays cheap and still responsive.
+        waited=$((waited + 1))
+    done
+    wait "$pid" 2>/dev/null || true
+}
+
 # Trap signals to stop both processes
 cleanup() {
     echo "[CONTAINER] Shutting down..." >> /app/data/ssh.log
+    # Match the bash-side deadline to Gunicorn's own --graceful-timeout, plus a margin.
+    local kill_wait
+    kill_wait=$((SHUTDOWN_GRACE_SECONDS + CONTAINER_KILL_MARGIN_SECONDS))
     kill "$GUNICORN_PID" 2>/dev/null || true
     kill "$SSHD_PID" 2>/dev/null || true
-    wait "$GUNICORN_PID" 2>/dev/null || true
-    wait "$SSHD_PID" 2>/dev/null || true
+    # Wait for a clean exit within the bound, so an in-flight operation can finish first.
+    _wait_for_pid_or_kill "$GUNICORN_PID" "$kill_wait"
+    _wait_for_pid_or_kill "$SSHD_PID" "$kill_wait"
     exit 0
 }
 trap cleanup SIGTERM SIGINT

@@ -11,7 +11,8 @@ import threading
 import time
 import uuid
 from collections import deque
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import wait as wait_for_futures
 from typing import Any, Optional
 
 from src.utils.operation_registry import OperationRegistry
@@ -65,6 +66,10 @@ DEFAULT_RUN_OUTPUT_FILES_MAX = 500
 
 # The two states that mark work the portal must never evict.
 ACTIVE_RUN_STATUSES = ("pending", "running")
+
+# Seconds shutdown() waits for in-flight runs before it drops the pool.
+# Issue #1861: without a bound, a stuck run could hang a restart forever.
+DEFAULT_OPERATION_SHUTDOWN_GRACE_SECONDS = 30
 
 
 def _read_positive_int_env(name: str, default: int) -> int:
@@ -368,6 +373,7 @@ class OperationExecutor:
         self._runs = {}
         self._lock = threading.Lock()
         self._sequence = 0  # A rising number orders the runs when the clock repeats a value.
+        self._shutdown_done = False  # Guards shutdown(), so a repeat call is a safe no-op.
         self._configure_limits()  # Read the caps once, so every run shares one setting.
         cpu_count = os.cpu_count() or 2
         max_workers = max(1, cpu_count - 1)
@@ -382,13 +388,19 @@ class OperationExecutor:
         self._history_max = _read_positive_int_env("PORTAL_RUN_HISTORY_MAX", DEFAULT_RUN_HISTORY_MAX)
         self._retention_seconds = _read_positive_int_env("PORTAL_RUN_RETENTION_SECONDS", DEFAULT_RUN_RETENTION_SECONDS)
         self._output_files_max = _read_positive_int_env("PORTAL_RUN_OUTPUT_FILES_MAX", DEFAULT_RUN_OUTPUT_FILES_MAX)
+        # Read the shutdown grace period, so shutdown() honors an operator override.
+        self._shutdown_grace_seconds = _read_positive_int_env(
+            "PORTAL_OPERATION_SHUTDOWN_GRACE_SECONDS", DEFAULT_OPERATION_SHUTDOWN_GRACE_SECONDS
+        )
         # Record the result, so an operator can confirm the caps the portal applied.
         logging.debug(
-            "Run caps: %d log entries, %d finished runs, %d seconds of retention, %d output files",
+            "Run caps: %d log entries, %d finished runs, %d seconds of retention, %d output files, "
+            "%d second shutdown grace period",
             self._log_max_entries,
             self._history_max,
             self._retention_seconds,
             self._output_files_max,
+            self._shutdown_grace_seconds,
         )
 
     def start_operation(self, menu_number: str, parameters: dict) -> dict:
@@ -400,7 +412,8 @@ class OperationExecutor:
         if conflict:
             return conflict
         run = self._create_run(menu_number)
-        self._pool.submit(self._execute_operation, run, parameters)
+        # Keep the future, so shutdown() can wait for this run before it closes the pool.
+        run["_future"] = self._pool.submit(self._execute_operation, run, parameters)
         return self._run_to_dict(run)
 
     def get_run_status(self, run_id: str) -> Optional[dict]:
@@ -444,6 +457,36 @@ class OperationExecutor:
         except OSError as exc:
             logging.warning("Could not create stop_loop.txt: %s", exc)
         return {"status": "stop_requested", "run_id": run_id}
+
+    def shutdown(self, grace_seconds: float | None = None) -> None:
+        """Wait for in-flight runs, then shut down the worker pool.
+
+        A second call is a no-op. A duplicate shutdown signal, or a
+        duplicate call from a test, must not raise or repeat the work.
+        """
+        with self._lock:
+            if self._shutdown_done:  # A prior call already drained the pool, so skip the repeat work.
+                logging.debug("Operation pool already shut down, skipping repeat call")
+                return
+            self._shutdown_done = True  # Mark shutdown first, so a second call returns above.
+            # Collect only the futures still in flight, so a finished run is not awaited again.
+            pending: list[Future] = [
+                run["_future"]
+                for run in self._runs.values()
+                if run.get("_future") is not None and not run["_future"].done()
+            ]
+        # Fall back to the configured default, so a caller need not pass a value.
+        wait_seconds = self._shutdown_grace_seconds if grace_seconds is None else grace_seconds
+        logging.info(
+            "Stopping the operation pool: %d run(s) in flight, %s second grace period", len(pending), wait_seconds
+        )
+        # Bound the wait, so one stuck run cannot hang the whole shutdown path.
+        done, not_done = wait_for_futures(pending, timeout=wait_seconds)
+        if not_done:
+            # Warn, because an operator must know a run did not finish before the pool closed.
+            logging.warning("Operation pool shutdown: %d run(s) still in flight after the grace period", len(not_done))
+        self._pool.shutdown(wait=False)  # Release the worker threads now, the wait above already bounded the delay.
+        logging.info("Operation pool stopped: %d of %d run(s) finished cleanly", len(done), len(pending))
 
     def build_category_list(self, menu_actions: dict) -> list:
         """Build categorized operation list for the UI."""

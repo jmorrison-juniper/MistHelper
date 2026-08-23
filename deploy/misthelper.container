@@ -20,6 +20,12 @@ HealthOnFailure=restart
 [Service]
 Restart=always
 RestartSec=5
+# Give the shutdown chain time to finish before systemd forces a stop.
+# PORTAL_OPERATION_SHUTDOWN_GRACE_SECONDS (default 30) sets the Python grace
+# period and the Gunicorn --graceful-timeout value. container/scripts/start.sh
+# then waits that period plus a 10 second margin before it sends SIGKILL.
+# This value stays above the bash-side wait, so systemd never cuts the drain short.
+TimeoutStopSec=60
 
 [Install]
 WantedBy=default.target
