@@ -34,7 +34,7 @@ ssh -p 2200 misthelper@localhost
 Once connected via SSH, MistHelper starts automatically:
 - **Automatic Launch**: MistHelper menu appears immediately upon SSH connection
 - **Session Persistence**: Each SSH connection gets its own isolated session
-- **Auto-Restart**: After completing an operation, MistHelper automatically restarts
+- **Bounded Auto-Restart**: After an operation, MistHelper restarts. After a crash, the session restarts MistHelper up to five times, and then closes with a message that names the exit code and the log paths
 - **Clean Exit**: Use option "0" to properly exit and close SSH session
 - **No Shell Access**: You cannot access the container's command line for security
 
@@ -83,7 +83,7 @@ podman rm misthelper-ssh
 - **Authentication:** Password-based
 - **Forced Command:** Automatic MistHelper session launcher
 - **User:** misthelper (restricted to MistHelper only)
-- **Session Management:** Each connection gets isolated session with auto-restart
+- **Session Management:** Each connection gets an isolated session with a bounded auto-restart
 
 ### Security Notes
 - SSH server only accepts connections for user `misthelper`
