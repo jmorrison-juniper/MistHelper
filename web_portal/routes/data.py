@@ -41,7 +41,6 @@ def preview_file(filepath):
     service = DataBrowserService(data_dir)
     page = request.args.get("page", 1, type=int)
     per_page = request.args.get("per_page", 50, type=int)
-    per_page = min(per_page, 200)
     search = request.args.get("search", "")
     result = service.preview_file(filepath, page, per_page, search)
     if "error" in result:
@@ -59,7 +58,6 @@ def preview_table(filepath, table_name):
     service = DataBrowserService(data_dir)
     page = request.args.get("page", 1, type=int)
     per_page = request.args.get("per_page", 50, type=int)
-    per_page = min(per_page, 200)
     search = request.args.get("search", "")
     result = service.preview_sqlite_table(filepath, table_name, page, per_page, search)
     if "error" in result:

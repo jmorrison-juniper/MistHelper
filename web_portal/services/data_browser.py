@@ -13,6 +13,14 @@ from contextlib import closing
 
 ALLOWED_EXTENSIONS = {".csv", ".db", ".sqlite", ".log", ".json"}
 
+# The smallest page the preview returns. A zero page size divided by zero and
+# returned 500 with a stack trace. See issue #1946.
+MIN_PAGE_SIZE = 1
+
+# The largest page the preview returns. SQLite reads a negative `LIMIT` as no
+# limit, so a caller who sent -1 read the whole table in one response.
+MAX_PAGE_SIZE = 200
+
 
 class DataBrowserService:
     """Browse, preview, and download files from the data directory.
@@ -45,6 +53,7 @@ class DataBrowserService:
         resolved = self.resolve_safe_path(rel_path)
         if resolved is None:
             return {"error": "File not found"}
+        page, per_page = self._clamp_page_args(page, per_page)  # Bound the request on both ends.
         ext = os.path.splitext(resolved)[1].lower()
         if ext == ".csv":
             return self._preview_csv(resolved, page, per_page, search)
@@ -63,7 +72,22 @@ class DataBrowserService:
             return {"error": "File not found"}
         if not self._is_valid_table_name(resolved, table_name):
             return {"error": "Table not found"}
+        page, per_page = self._clamp_page_args(page, per_page)  # Bound the request on both ends.
         return self._preview_sqlite(resolved, table_name, page, per_page, search)
+
+    @staticmethod
+    def _clamp_page_args(page: int, per_page: int) -> tuple[int, int]:
+        """Return a page number and a page size that both sit inside the bounds.
+
+        The service owns this rule so that a new route cannot skip it.
+        """
+        # Clamp the size on both ends. A negative size reached SQLite as a
+        # negative `LIMIT`, which SQLite reads as no limit at all.
+        safe_per_page = max(MIN_PAGE_SIZE, min(per_page, MAX_PAGE_SIZE))
+        # Clamp the page number to the first page. A page below one produced a
+        # negative offset, which reads rows from the end of the list.
+        safe_page = max(1, page)
+        return safe_page, safe_per_page
 
     def resolve_safe_path(self, rel_path: str) -> str | None:
         """Resolve a request path to a real file inside the data directory.
