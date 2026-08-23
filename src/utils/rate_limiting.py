@@ -131,7 +131,7 @@ class RateLimitingUtils:  # WHY: static-method facade groups rate-limit helpers 
             return None  # WHY: signal cold-start to caller.
         try:  # WHY: any decode/read failure falls back to defaults.
             logging.debug("File I/O: Attempting to read PID tuning data from %s", tuning_data_file)  # WHY: entry log.
-            with open(tuning_data_file) as file_handle:  # WHY: text-mode read is fine for JSON payload.
+            with open(tuning_data_file, encoding="utf-8") as file_handle:  # WHY: UTF-8 keeps the JSON portable.
                 parsed: dict[str, Any] = json.load(file_handle)  # WHY: annotate result for downstream narrowing.
                 return parsed  # WHY: surface the decoded tuning-data dict.
         except (json.JSONDecodeError, OSError) as load_error:  # WHY: narrow to expected failure classes.
@@ -160,7 +160,7 @@ class RateLimitingUtils:  # WHY: static-method facade groups rate-limit helpers 
         keys = list(data.keys()) if data else []  # WHY: log summary avoids leaking full payload.
         logging.debug("ENTRY: RateLimitingUtils._save_pid_tuning_data(data_keys=%s)", keys)  # WHY: entry trace.
         try:  # WHY: caller expects OSError on unwritable paths. Keep raise.
-            with open(tuning_data_file, "w") as file_handle:  # WHY: overwrite prior tuning snapshot atomically.
+            with open(tuning_data_file, "w", encoding="utf-8") as file_handle:  # WHY: overwrite the prior snapshot.
                 json.dump(data, file_handle, indent=2)  # WHY: indent keeps file diff-friendly.
             logging.debug("File I/O: Successfully wrote PID tuning data to %s", tuning_data_file)  # WHY: success log.
         except OSError as write_error:  # WHY: narrow catch. Upstream re-raise preserved.

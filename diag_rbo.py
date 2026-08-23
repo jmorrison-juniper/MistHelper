@@ -4,7 +4,7 @@ import json
 
 from src.audit.renderer import AuditReportRenderer
 
-with open("data/orgaudit-filtered.json") as f:
+with open("data/orgaudit-filtered.json", encoding="utf-8") as f:
     raw = json.load(f)
 
 data = raw.get("results", raw) if isinstance(raw, dict) else raw

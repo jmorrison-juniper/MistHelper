@@ -100,7 +100,7 @@ class TestLoadPidTuningData:
 
         filepath = os.path.join("data", "tuning_data.json")
         test_data = {"k_p": 0.2, "k_i": 0.001, "error": [1.0, 2.0], "integral": 0.5}
-        with open(filepath, "w") as fh:
+        with open(filepath, "w", encoding="utf-8") as fh:
             json.dump(test_data, fh)
 
         original = rl.tuning_data_file
@@ -117,7 +117,7 @@ class TestLoadPidTuningData:
         import src.utils.rate_limiting as rl
 
         filepath = os.path.join("data", "tuning_data.json")
-        with open(filepath, "w") as fh:
+        with open(filepath, "w", encoding="utf-8") as fh:
             fh.write("{corrupt")
 
         original = rl.tuning_data_file
@@ -134,7 +134,7 @@ class TestLoadPidTuningData:
 
         filepath = os.path.join("data", "tuning_data.json")
         test_data = {"k_p": 0.1, "k_i": 0.001, "error": [1.0, None, 3.0], "integral": 0.0}
-        with open(filepath, "w") as fh:
+        with open(filepath, "w", encoding="utf-8") as fh:
             json.dump(test_data, fh)
 
         original = rl.tuning_data_file
@@ -162,7 +162,7 @@ class TestSavePidTuningData:
         try:
             test_data = {"k_p": 0.15, "k_i": 0.002, "error": [1.0], "integral": 0.3}
             RateLimitingUtils._save_pid_tuning_data(test_data)
-            with open(filepath) as fh:
+            with open(filepath, encoding="utf-8") as fh:
                 loaded = json.load(fh)
             assert loaded["k_p"] == 0.15
         finally:
@@ -277,7 +277,7 @@ class TestReadExistingEntries:
     def test_reads_jsonl_entries(self):
         """Reads JSONL entries correctly."""
         filepath = os.path.join("data", "test.jsonl")
-        with open(filepath, "w") as fh:
+        with open(filepath, "w", encoding="utf-8") as fh:
             fh.write('{"a": 1}\n{"b": 2}\n')
         result = RateLimitingUtils._read_existing_entries(filepath)
         assert len(result) == 2
@@ -286,7 +286,7 @@ class TestReadExistingEntries:
     def test_handles_corrupt_jsonl(self):
         """Returns empty list on corrupt JSONL."""
         filepath = os.path.join("data", "bad.jsonl")
-        with open(filepath, "w") as fh:
+        with open(filepath, "w", encoding="utf-8") as fh:
             fh.write("{corrupt\n")
         result = RateLimitingUtils._read_existing_entries(filepath)
         assert result == []
@@ -303,7 +303,7 @@ class TestAppendDelayMetricsLog:
         RateLimitingUtils._append_delay_metrics_log({"delay": 0.5}, {"used": 100}, {"k_p": 0.1})
         filepath = os.path.join("data", "delay_metrics.json")
         assert os.path.exists(filepath)
-        with open(filepath) as fh:
+        with open(filepath, encoding="utf-8") as fh:
             lines = [line.strip() for line in fh if line.strip()]
         assert len(lines) == 1
         entry = json.loads(lines[0])
@@ -315,7 +315,7 @@ class TestAppendDelayMetricsLog:
         filepath = os.path.join("data", "delay_metrics.json")
         for i in range(5):
             RateLimitingUtils._append_delay_metrics_log({"i": i}, {}, {}, max_entries=3)
-        with open(filepath) as fh:
+        with open(filepath, encoding="utf-8") as fh:
             lines = [line.strip() for line in fh if line.strip()]
         assert len(lines) == 3
 
@@ -551,7 +551,7 @@ class TestEdgeCases:
         import src.utils.rate_limiting as rl
 
         filepath = os.path.join("data", "tuning_data.json")
-        with open(filepath, "w") as fh:
+        with open(filepath, "w", encoding="utf-8") as fh:
             json.dump({"k_p": 0.1, "k_i": 0.001}, fh)
 
         original = rl.tuning_data_file
@@ -567,7 +567,7 @@ class TestEdgeCases:
         import src.utils.rate_limiting as rl
 
         filepath = os.path.join("data", "tuning_data.json")
-        with open(filepath, "w") as fh:
+        with open(filepath, "w", encoding="utf-8") as fh:
             json.dump({"k_p": 0.1, "k_i": 0.001, "error": "bad"}, fh)
 
         original = rl.tuning_data_file
