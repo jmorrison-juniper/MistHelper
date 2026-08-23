@@ -17,6 +17,12 @@ on:
     # The closed type carries the merge result. The dispatch job below reads
     # that result and repairs main in seconds.
     types: [labeled, synchronize, opened, reopened, closed]
+  push:
+    # A push to a feature branch can arrive after the merge closed the pull
+    # request. The orphan job below reads that push and reports the loss.
+    # Issue #1960 records the effect.
+    branches-ignore:
+      - main
   schedule:
     # The backstop. GitHub can suppress the closed event above, because
     # GITHUB_TOKEN performs the merge. The hourly run repairs main even when
@@ -51,23 +57,193 @@ jobs:
       # The action sets the auto-merge state on the pull request.
       pull-requests: write
     steps:
+      # GITHUB_TOKEN carries no workflow scope, so GitHub refuses a merge that
+      # writes a file under .github/workflows/. The refusal happens inside the
+      # merge call, so the pull request keeps a green check list and states no
+      # reason. This step moves the reason onto the pull request. Issue #1954
+      # records the silent failure.
+      - name: Check whether the pull request edits a workflow file
+        id: workflow_guard
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+
+          # Read the file list one time, because the merge decision needs it now.
+          if ! files="$(gh pr view "${PR_NUMBER}" --json files --jq '.files[].path')"; then
+            echo "::error::The file list of pull request ${PR_NUMBER} did not load."
+            exit 1
+          fi
+
+          # A grep hit means the merge call would fail, so the job must stop.
+          if printf '%s\n' "${files}" | grep -q '^\.github/workflows/'; then
+            echo "Pull request ${PR_NUMBER} edits a workflow file."
+            echo "blocked=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "Pull request ${PR_NUMBER} edits no workflow file."
+            echo "blocked=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+      # The comment gives the reader the reason on the page that they watch.
+      - name: Ask for a manual merge when a workflow file changed
+        if: steps.workflow_guard.outputs.blocked == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          # The marker keeps the comment unique. This job runs again on each
+          # label event and on each push, so a repeat comment is the default.
+          MARKER: '<!-- auto-merge:workflow-scope-block -->'
+        run: |
+          set -euo pipefail
+
+          # Read the existing comments, because a repeat comment adds noise.
+          if ! bodies="$(gh pr view "${PR_NUMBER}" --json comments --jq '.comments[].body')"; then
+            echo "::error::The comment list of pull request ${PR_NUMBER} did not load."
+            exit 1
+          fi
+
+          # A marker hit proves the reader already has the reason.
+          if printf '%s\n' "${bodies}" | grep -qF "${MARKER}"; then
+            echo "The pull request already carries the notice. Nothing to add."
+            exit 0
+          fi
+
+          # The body names the constraint and the one action that clears it. The
+          # heredoc keeps every line flush left, because Markdown reads an
+          # indented line as a code block.
+          cat > "${RUNNER_TEMP}/workflow-block.md" <<EOF
+          ${MARKER}
+          **Auto-merge stopped. This pull request needs a manual merge.**
+
+          This pull request edits a file under \`.github/workflows/\`. The
+          auto-merge job merges with \`GITHUB_TOKEN\`. GitHub refuses to let that
+          token write a workflow file, so the merge call fails.
+
+          The refusal is a GitHub platform rule. It stops a workflow from
+          rewriting itself. No change to the \`permissions:\` block can clear it,
+          because \`workflow\` is not a key that the block accepts.
+
+          To merge this pull request, run the command below from an account that
+          holds the \`workflow\` scope.
+
+          \`\`\`
+          gh pr merge -R ${GH_REPO} --squash ${PR_NUMBER}
+          \`\`\`
+
+          Issue #1954 records this constraint.
+          EOF
+
+          # The heredoc keeps every line flush left after YAML strips the block
+          # indent, so Markdown reads the body as prose and not as a code block.
+          gh pr comment "${PR_NUMBER}" --body-file "${RUNNER_TEMP}/workflow-block.md"
+
+          echo "Added the manual merge notice to pull request ${PR_NUMBER}."
+
       - name: Enable auto-merge
+        # A blocked pull request must skip the merge call. The call would fail
+        # and would report the reason only inside this run log.
+        if: steps.workflow_guard.outputs.blocked == 'false'
         uses: peter-evans/enable-pull-request-automerge@v3
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           pull-request-number: ${{ github.event.pull_request.number }}
           merge-method: squash
 
+  report-orphaned-push:
+    name: "Report a push that arrived after the merge"
+    # A push to a feature branch is the only event that can orphan a commit.
+    # Every other event reaches this job with no branch to read.
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      # The job writes one comment on the closed pull request.
+      pull-requests: write
+      # The gh CLI needs this scope to resolve the repository.
+      contents: read
+    steps:
+      - name: Comment on a merged pull request that a later push orphaned
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          BRANCH: ${{ github.ref_name }}
+          PUSHED_SHA: ${{ github.sha }}
+          # The marker keeps one notice for each orphaned commit.
+          MARKER_PREFIX: '<!-- auto-merge:orphaned-push:'
+        run: |
+          set -euo pipefail
+
+          # Read the newest merged pull request for this branch. An open pull
+          # request needs no notice, because the push reaches the review.
+          merged="$(gh pr list \
+            --head "${BRANCH}" \
+            --state merged \
+            --limit 1 \
+            --json number,mergeCommit \
+            --jq '.[0].number // empty')"
+
+          # No merged pull request means the branch never closed, so stop here.
+          if [ -z "${merged}" ]; then
+            echo "Branch ${BRANCH} has no merged pull request. Nothing to report."
+            exit 0
+          fi
+
+          # A commit that main already holds is not an orphan. The merge carried
+          # it, so the branch tip and main agree.
+          if gh api "repos/${GH_REPO}/compare/main...${PUSHED_SHA}" \
+            --jq '.status' 2>/dev/null | grep -qx 'identical\|behind'; then
+            echo "Commit ${PUSHED_SHA} is already on main. Nothing to report."
+            exit 0
+          fi
+
+          marker="${MARKER_PREFIX}${PUSHED_SHA} -->"
+
+          # Read the existing comments, because a rerun must add no repeat.
+          bodies="$(gh pr view "${merged}" --json comments --jq '.comments[].body')"
+          if printf '%s\n' "${bodies}" | grep -qF "${marker}"; then
+            echo "Pull request ${merged} already reports commit ${PUSHED_SHA}."
+            exit 0
+          fi
+
+          # The notice names the lost commit and the one action that recovers it.
+          gh pr comment "${merged}" --body "${marker}
+          **Warning: this push arrived after the merge, so the commit carries no pull request.**
+
+          Commit \`${PUSHED_SHA}\` reached branch \`${BRANCH}\` after pull request
+          #${merged} merged and closed. A closed pull request stops tracking its
+          branch, so this commit reaches no reviewer and reaches no gate.
+
+          The commit is safe on the remote. It is not on \`main\`.
+
+          To deliver the work, open a fresh branch from \`main\` and cherry-pick
+          the commit onto it.
+
+          \`\`\`
+          git fetch origin
+          git checkout -b recover-${BRANCH} origin/main
+          git cherry-pick ${PUSHED_SHA}
+          \`\`\`
+
+          Do not push follow-up work to a branch that carries the \`auto-merge\`
+          label. Issue #1960 records this defect."
+
+          echo "Reported commit ${PUSHED_SHA} on pull request ${merged}."
+
   dispatch-main-workflows:
     name: "Start the main workflows that missed the tip"
     # Two paths reach this job. Path one is a merge into main, and that path
     # repairs main in seconds. Path two is the hourly schedule or a manual
-    # start, and that path repairs main when no merge event arrives.
+    # start, and that path repairs main when no merge event arrives. A push to
+    # a feature branch reaches neither path, so the push event stops here.
     if: >-
-      github.event_name != 'pull_request'
+      github.event_name != 'push'
+      && (github.event_name != 'pull_request'
       || (github.event.action == 'closed'
       && github.event.pull_request.merged == true
-      && github.event.pull_request.base.ref == 'main')
+      && github.event.pull_request.base.ref == 'main'))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
