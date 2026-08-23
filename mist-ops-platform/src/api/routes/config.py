@@ -18,7 +18,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.deps import get_authenticated_user, get_db_session
+from src.api.deps import (
+    get_authenticated_user,
+    get_db_session,
+    get_scoped_org_id,
+)
 from src.api.middleware.auth import CurrentUser
 from src.api.schemas.common import PaginationMeta, ResponseEnvelope
 from src.api.schemas.config import (
@@ -54,7 +58,7 @@ router = APIRouter(prefix="/config", tags=["config"])
 
 @router.get("/revisions", summary="List config revisions")
 async def list_revisions(
-    org_id: UUID = Query(...),
+    org_id: UUID = Depends(get_scoped_org_id),
     entity_id: UUID = Query(...),
     entity_type: str | None = Query(None),
     page: int = Query(1, ge=1),
@@ -96,7 +100,7 @@ async def list_revisions(
 @router.get("/revisions/{revision_id}", summary="Get revision detail")
 async def get_revision(
     revision_id: int,
-    org_id: UUID = Query(...),
+    org_id: UUID = Depends(get_scoped_org_id),
     db: AsyncSession = Depends(get_db_session),
 ) -> ResponseEnvelope[RevisionDetailResponse]:
     """Return a full config revision including its JSON payload."""
@@ -122,7 +126,7 @@ async def get_revision(
 
 @router.get("/time-travel", summary="Point-in-time config lookup")
 async def time_travel(
-    org_id: UUID = Query(...),
+    org_id: UUID = Depends(get_scoped_org_id),
     entity_id: UUID = Query(...),
     entity_type: str = Query(...),
     timestamp: datetime = Query(...),
@@ -367,7 +371,7 @@ async def _find_status_at(
 
 @router.get("/baselines")
 async def list_baselines(
-    org_id: UUID = Query(...),
+    org_id: UUID = Depends(get_scoped_org_id),
     entity_type: str | None = Query(None),
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=200),

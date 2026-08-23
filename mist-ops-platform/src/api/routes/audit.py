@@ -19,7 +19,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.deps import get_authenticated_user, get_db_session
+from src.api.deps import (
+    get_authenticated_user,
+    get_db_session,
+    get_scoped_org_id,
+)
 from src.api.middleware.auth import CurrentUser
 from src.api.schemas.audit import (
     AuditRecordResponse,
@@ -46,7 +50,7 @@ router = APIRouter(prefix="/audit", tags=["audit"])
 
 @router.get("/records")
 async def list_audit_records(
-    org_id: UUID = Query(...),
+    org_id: UUID = Depends(get_scoped_org_id),
     entity_type: str | None = Query(None),
     entity_id: UUID | None = Query(None),
     actor: str | None = Query(None),
@@ -81,7 +85,7 @@ async def list_audit_records(
 @router.get("/records/{record_id}")
 async def get_audit_record(
     record_id: int,
-    org_id: UUID = Query(...),
+    org_id: UUID = Depends(get_scoped_org_id),
     db: AsyncSession = Depends(get_db_session),
     _user: CurrentUser = Depends(get_authenticated_user),
 ) -> ResponseEnvelope[AuditRecordResponse]:
@@ -135,7 +139,7 @@ async def export_records(
 
 @router.get("/correlations")
 async def list_correlations(
-    org_id: UUID = Query(...),
+    org_id: UUID = Depends(get_scoped_org_id),
     incident_type: str | None = Query(None),
     min_confidence: float = Query(0.0, ge=0.0, le=1.0),
     page: int = Query(1, ge=1),

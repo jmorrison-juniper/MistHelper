@@ -20,7 +20,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.deps import get_authenticated_user, get_db_session
+from src.api.deps import (
+    get_authenticated_user,
+    get_db_session,
+    get_scoped_org_id,
+)
 from src.api.middleware.auth import CurrentUser
 from src.api.schemas.common import ResponseEnvelope
 from src.shared.config.settings import get_settings
@@ -87,7 +91,7 @@ def _target_count(job: ScheduledJob) -> int:
 
 @router.get("/jobs")
 async def list_jobs(
-    org_id: UUID = Query(...),
+    org_id: UUID = Depends(get_scoped_org_id),
     status: str | None = Query(None),
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=200),
@@ -366,7 +370,7 @@ def _to_summary(job: ScheduledJob) -> JobSummary:
 
 @router.get("/rollouts")
 async def list_rollouts(
-    org_id: UUID = Query(...),
+    org_id: UUID = Depends(get_scoped_org_id),
     status: str | None = Query(None),
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=200),
@@ -530,7 +534,7 @@ async def rollback_wave(
 
 @router.get("/golden-images")
 async def list_golden_images(
-    org_id: UUID = Query(...),
+    org_id: UUID = Depends(get_scoped_org_id),
     image_type: str | None = Query(None),
     device_model: str | None = Query(None),
     lifecycle_state: str | None = Query(None),
@@ -675,7 +679,7 @@ def _plan_to_summary(
 
 @router.get("/templates")
 async def list_templates(
-    org_id: UUID = Query(...),
+    org_id: UUID = Depends(get_scoped_org_id),
     category: str | None = Query(None),
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=200),

@@ -24,7 +24,12 @@ from uuid import UUID  # Used in route signatures and DB filters
 from fastapi import APIRouter, Depends, HTTPException, Query  # FastAPI route plumbing
 from sqlalchemy import select  # Build typed SQLAlchemy SELECTs
 
-from src.api.deps import get_authenticated_user, get_db_session  # DI for auth + DB session
+from src.api.deps import (  # DI for auth, DB session, and the org scope check
+    get_authenticated_user,
+    get_db_session,
+    get_scoped_org_id,
+)
+from src.api.middleware.auth import require_org_access  # Org membership check
 from src.api.schemas.common import ResponseEnvelope  # Uniform response wrapper
 from src.api.schemas.sync import (  # Public response/request models
     DeviceResponse,
@@ -61,8 +66,13 @@ def _resolve_org_ids(
     explicit: UUID | None,
     user: CurrentUser,
 ) -> list[UUID]:
-    """Return org_ids to query — explicit param or user's orgs."""
+    """Return org_ids to query — explicit param or user's orgs.
+
+    An explicit organization must pass the membership check. Without the
+    check, any caller reads the data of any organization.
+    """
     if explicit:  # Caller supplied a specific org filter
+        require_org_access(str(explicit), user)  # Raise 403 when the caller is outside that org
         return [explicit]
     return [UUID(oid) for oid in user.org_ids] if user.org_ids else []  # User's accessible orgs
 
@@ -193,7 +203,7 @@ def _orgs_query_for_user(user: CurrentUser):
 
 @inv_router.get("/sites")
 async def list_sites(
-    org_id: UUID = Query(...),
+    org_id: UUID = Depends(get_scoped_org_id),
     db: AsyncSession = Depends(get_db_session),
 ) -> ResponseEnvelope[list[SiteResponse]]:
     """List sites for an organization."""
@@ -249,9 +259,12 @@ async def list_devices(
     site_id: UUID | None = Query(None),
     search: str | None = Query(None),
     db: AsyncSession = Depends(get_db_session),
+    user: CurrentUser = Depends(get_authenticated_user),
 ) -> ResponseEnvelope[list[DeviceResponse]]:
     """List devices (filtered by org, site, and/or name/MAC search)."""
+    org_ids = _resolve_org_ids(org_id, user)  # Check membership and compute the org scope
     stmt = _device_search_query(org_id, site_id, search)  # Build SELECT with filters
+    stmt = stmt.where(Device.org_id.in_(org_ids))  # Never return a device outside the caller scope
     rows = (await db.execute(stmt)).scalars().all()  # Materialize device rows
     items = [_device_to_response(d) for d in rows]  # Project rows to response shape
     return ResponseEnvelope(data=items)
@@ -294,8 +307,11 @@ def _drift_alert_filters(
     status: str | None = Query(None),
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=200),
+    user: CurrentUser = Depends(get_authenticated_user),
 ) -> DriftAlertFilters:
     """FastAPI dependency that groups drift-alert filter query params into one object."""
+    if org_id is not None:  # Only an explicit organization needs the membership check
+        require_org_access(str(org_id), user)  # Raise 403 when the caller is outside that org
     return DriftAlertFilters(
         org_id=org_id,
         acknowledged=acknowledged,
@@ -383,7 +399,7 @@ class PolicyListFilters:
 
 
 def _policy_list_filters(
-    org_id: UUID = Query(...),
+    org_id: UUID = Depends(get_scoped_org_id),
     lifecycle_state: str | None = Query(None),
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=200),
