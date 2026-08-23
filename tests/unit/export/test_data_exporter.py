@@ -14,6 +14,7 @@ Why:
 from __future__ import annotations
 
 import importlib
+import logging
 import sys
 import types
 from unittest.mock import MagicMock, mock_open, patch
@@ -31,18 +32,20 @@ def _reset_class_state():
 
     Why:
         The DataExporter class caches ``_router``, ``_router_initialized``,
-        ``_last_snapshot_times``, and ``_standalone_logged`` at class scope.
-        Without a reset, ordering-sensitive tests would leak state.
+        ``_last_snapshot_times``, ``_standalone_logged``, and ``_standalone_probe``
+        at class scope. Without a reset, ordering-sensitive tests would leak state.
     """
     DataExporter._router = None
     DataExporter._router_initialized = False
     DataExporter._last_snapshot_times = {}
     DataExporter._standalone_logged = False
+    DataExporter._standalone_probe = None
     yield
     DataExporter._router = None
     DataExporter._router_initialized = False
     DataExporter._last_snapshot_times = {}
     DataExporter._standalone_logged = False
+    DataExporter._standalone_probe = None
 
 
 @pytest.fixture
@@ -238,24 +241,51 @@ class TestIsStandaloneMode:
         monkeypatch.setenv("MISTHELPER_STANDALONE", "false")
         assert DataExporter._is_standalone_mode() is False
 
-    def test_autodetect_not_in_container_logs_once(self, monkeypatch):
+    def test_silent_hosts_warn_once(self, monkeypatch, caplog):
+        """Issue #1824: an unreachable pair must warn one time, not drop the write in silence."""
         monkeypatch.delenv("MISTHELPER_STANDALONE", raising=False)
-        with patch(
-            "src.export.data_exporter.EnvironmentUtils.is_running_in_container",
-            return_value=False,
+        with (
+            patch.object(DataExporter, "_polyglot_db_layer_available", return_value=True),
+            patch("src.export.data_exporter.polyglot_hosts_unreachable", return_value=True) as probe,
+            caplog.at_level(logging.WARNING),
         ):
             assert DataExporter._is_standalone_mode() is True
             assert DataExporter._standalone_logged is True
-            # Second call reuses the latched log guard.
             assert DataExporter._is_standalone_mode() is True
+            probe.assert_called_once()  # The verdict is cached for the life of the process.
+        assert sum("do not answer" in record.message for record in caplog.records) == 1
 
-    def test_autodetect_in_container_returns_false(self, monkeypatch):
+    def test_reachable_hosts_outside_container_keep_polyglot(self, monkeypatch):
+        """Issue #1824: a workstation that reaches the databases must still write to them."""
         monkeypatch.delenv("MISTHELPER_STANDALONE", raising=False)
-        with patch(
-            "src.export.data_exporter.EnvironmentUtils.is_running_in_container",
-            return_value=True,
+        with (
+            patch.object(DataExporter, "_polyglot_db_layer_available", return_value=True),
+            patch("src.export.data_exporter.polyglot_hosts_unreachable", return_value=False),
+            patch(
+                "src.utils.environment_utils.EnvironmentUtils.is_running_in_container",
+                return_value=False,
+            ),
         ):
             assert DataExporter._is_standalone_mode() is False
+
+    def test_missing_db_layer_is_standalone(self, monkeypatch):
+        monkeypatch.delenv("MISTHELPER_STANDALONE", raising=False)
+        with patch.object(DataExporter, "_polyglot_db_layer_available", return_value=False):
+            assert DataExporter._is_standalone_mode() is True
+
+    def test_probe_result_is_cached(self, monkeypatch):
+        monkeypatch.delenv("MISTHELPER_STANDALONE", raising=False)
+        with (
+            patch.object(DataExporter, "_polyglot_db_layer_available", return_value=True),
+            patch("src.export.data_exporter.polyglot_hosts_unreachable", return_value=False) as probe,
+        ):
+            assert DataExporter._polyglot_hosts_silent() is False
+            assert DataExporter._polyglot_hosts_silent() is False
+            probe.assert_called_once()
+
+    def test_override_returns_none_when_unset(self, monkeypatch):
+        monkeypatch.delenv("MISTHELPER_STANDALONE", raising=False)
+        assert DataExporter._standalone_override() is None
 
 
 class TestShouldSkipPolyglot:
