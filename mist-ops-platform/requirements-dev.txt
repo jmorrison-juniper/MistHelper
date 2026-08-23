@@ -20,16 +20,14 @@ pydantic>=2.10
 pydantic-settings>=2.7
 
 # httpx serves both the application client and the FastAPI test client.
-# The task brief named "httpx2". The correct name follows the starlette version,
-# so do not copy either name without a check.
-#   - The sub-project pyproject.toml declares "httpx>=0.28", and the CI run for
-#     issue #1895 installed httpx on a clean runner without an error.
-#   - A newer starlette raises StarletteDeprecationWarning and asks for httpx2.
-#     pyproject.toml sets filterwarnings = ["error", ...], so that warning stops
-#     the suite. A local machine with a newer starlette therefore needs httpx2.
-# This file pins httpx to match the pyproject declaration and the CI result.
-# Issue #1897 must pin starlette as well, so both environments agree.
+# The CI run for issue #1895 proved which name each layer needs.
+#   - src/ imports httpx directly for the application client.
+#   - starlette 0.49 and newer import httpx2 inside TestClient. The runner
+#     installs that starlette through fastapi, so the TestClient tests raise
+#     "ModuleNotFoundError: No module named 'httpx2'" without this pin.
+# Both names ship, because both layers load on the same runner.
 httpx>=0.28
+httpx2>=0.28
 
 # deepdiff backs src/shared/services/diff.py. Its absence caused the collection
 # error in tests/unit/shared/test_diff.py.
