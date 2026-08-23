@@ -37,7 +37,11 @@ def flask_app():
         org_id="test-org-id",
     )
     app.config["TESTING"] = True
-    return app
+    yield app  # Hand the app to every test in the session.
+    # Stop the heartbeat thread and drain the pool now, while streams are still open.
+    # Without this, the atexit hook still runs, but only after pytest closes its
+    # own capture streams, so its shutdown log lines fail with a closed-file error.
+    WebPortalApp.shutdown_app(app)
 
 
 @pytest.fixture(scope="session")
