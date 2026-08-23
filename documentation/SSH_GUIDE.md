@@ -34,7 +34,7 @@ ssh -p 2200 misthelper@localhost
 Once connected via SSH, MistHelper starts automatically:
 - **Automatic Launch**: MistHelper menu appears immediately upon SSH connection
 - **Session Persistence**: Each SSH connection gets its own isolated session
-- **Bounded Auto-Restart**: After an operation, MistHelper restarts. After a crash, the session restarts MistHelper up to five times, and then closes with a message that names the exit code and the log paths
+- **Bounded Auto-Restart**: MistHelper restarts after each operation. After five crashes in a row, the session closes and names the cause.
 - **Clean Exit**: Use option "0" to properly exit and close SSH session
 - **No Shell Access**: You cannot access the container's command line for security
 
@@ -74,7 +74,46 @@ podman stop misthelper-ssh
 podman rm misthelper-ssh
 ```
 
-## SSH Configuration Details
+## Session Restart Behavior
+
+The script `container/scripts/misthelper-session.sh` restarts MistHelper after a
+failed run. The restart stops at a limit, so a permanent fault cannot hold the
+SSH session open and fill the log file.
+
+| Control | Default | Purpose |
+|---------|---------|---------|
+| `MISTHELPER_MAX_START_ATTEMPTS` | 5 | Largest number of failed starts in a row before the session closes |
+| `MISTHELPER_MIN_HEALTHY_SECONDS` | 30 | Smallest run time that counts as a real session and clears the crash count |
+| `MISTHELPER_RESTART_DELAY_SECONDS` | 2 | First delay before a restart. The delay doubles after each failed start |
+| `MISTHELPER_MAX_RESTART_DELAY_SECONDS` | 60 | Largest delay between two restarts |
+
+With the default values, the delays run 2, 4, 8, and 16 seconds. Five failed
+starts therefore take about 30 seconds. The session then closes with a failure
+status and prints the last exit code, the attempt count, and the two log paths
+to read.
+
+### How to Change a Control Value
+
+**Caution:** A `podman run -e` value will not reach the session script, and the
+script will keep the default value. The SSH daemon does not pass the container
+environment to a session. The same limit applies to `docker run -e` and to an
+`Environment=` line in a Quadlet unit file.
+
+Use one of these two methods instead.
+
+1. Edit the assignment at the top of `container/scripts/misthelper-session.sh`
+   and rebuild the image. Use this method for a permanent change.
+2. Add the name and the value to `/etc/environment` inside the container. The
+   SSH daemon reads that file at each login through PAM. Use this method for a
+   test on a running container.
+
+```bash
+# Method 2: raise the attempt limit to 8 on a running container
+podman exec -u root misthelper sh -c 'echo "MISTHELPER_MAX_START_ATTEMPTS=8" >> /etc/environment'
+```
+
+The new value applies to the next SSH login. An open session keeps the old
+value.
 
 ## SSH Configuration Details
 
@@ -119,6 +158,22 @@ All MistHelper data files and logs persist on the host system.
 - Check Podman/Docker installation
 - Verify Containerfile syntax
 - Review build logs for errors
+
+### The SSH Session Closes Right After the Connection
+MistHelper failed to start five times in a row. The session prints a message
+before it closes. The message names the last exit code, the attempt count, and
+the two log paths. Read that message first.
+
+```text
+[SESSION] MistHelper failed 5 times in a row. The last exit code was 1.
+[SESSION] The session is closed. To find the cause, read /app/data/script.log and /app/data/ssh.log.
+```
+
+The same two lines go to `/app/data/ssh.log`, so the message stays after the
+terminal closes. Read `/app/data/script.log` for the MistHelper error. A missing
+dependency, a bad `.env` file, and a data directory without write permission are
+the common causes. To fix a permission error, run `chmod -R 777 data/` on the
+host.
 
 ## Advanced Usage
 
