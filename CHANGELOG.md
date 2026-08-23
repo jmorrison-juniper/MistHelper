@@ -40,6 +40,27 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 - **Deferred**: the `Containerfile`, the `Dockerfile`, and `compose.yml` still
   need a probe. Open pull request #1825 owns those three files today.
 
+### Cap the output file list in a web portal run record (issue #1870)
+
+- **Gap (Fixed)**: issue #1860 bounded `log_messages` and `debug_messages`, and
+  it left `run["output_files"]` without a cap. One per-site export appends one
+  distinct name for each site, so deduplication does not bound that list.
+- **Output files (Changed)**: `output_files` is now a `collections.deque` with a
+  `maxlen`. The deque drops the oldest name, so the operator still sees the most
+  recent output.
+- **Dropped count (Added)**: `dropped_output_file_count` counts every name the
+  cap discarded. `_run_to_dict` and `_run_to_summary` report the count next to
+  `dropped_log_count`.
+- **Setting (Added)**: `PORTAL_RUN_OUTPUT_FILES_MAX` defaults to 500. An
+  unusable value falls back to the default and logs a warning, which matches the
+  three settings issue #1860 added. `deploy/.env.example` documents it.
+- **Read boundary (Changed)**: `_run_to_dict` and `_publish_complete` copy the
+  deque into a list, so the JSON response and the SSE event still encode.
+- **Tests (Added)**: `tests/unit/web_portal/test_operation_output_files_cap.py`
+  holds 11 tests. They cover the cap, the newest-name order, the duplicate name
+  rule, the dropped count in the response, the two read boundaries, the default
+  cap, and the warning for an unusable setting.
+
 ### Bound the web portal operation run registry (issue #1860)
 
 - **Defect (Fixed)**: `OperationExecutor` kept every run in memory forever, and

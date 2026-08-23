@@ -47,6 +47,10 @@ DEFAULT_RUN_HISTORY_MAX = 50
 # Seconds the registry keeps a finished run. One hour matches the event bus.
 DEFAULT_RUN_RETENTION_SECONDS = 3600
 
+# Maximum output file names one run keeps. A per-site export writes one name
+# for each site, so a large organization can report thousands of names.
+DEFAULT_RUN_OUTPUT_FILES_MAX = 500
+
 # The two states that mark work the portal must never evict.
 ACTIVE_RUN_STATUSES = ("pending", "running")
 
@@ -365,12 +369,14 @@ class OperationExecutor:
         self._log_max_entries = _read_positive_int_env("PORTAL_RUN_LOG_MAX_ENTRIES", DEFAULT_RUN_LOG_MAX_ENTRIES)
         self._history_max = _read_positive_int_env("PORTAL_RUN_HISTORY_MAX", DEFAULT_RUN_HISTORY_MAX)
         self._retention_seconds = _read_positive_int_env("PORTAL_RUN_RETENTION_SECONDS", DEFAULT_RUN_RETENTION_SECONDS)
+        self._output_files_max = _read_positive_int_env("PORTAL_RUN_OUTPUT_FILES_MAX", DEFAULT_RUN_OUTPUT_FILES_MAX)
         # Record the result, so an operator can confirm the caps the portal applied.
         logging.debug(
-            "Run caps: %d log entries per run, %d finished runs, %d seconds of retention",
+            "Run caps: %d log entries, %d finished runs, %d seconds of retention, %d output files",
             self._log_max_entries,
             self._history_max,
             self._retention_seconds,
+            self._output_files_max,
         )
 
     def start_operation(self, menu_number: str, parameters: dict) -> dict:
@@ -525,7 +531,10 @@ class OperationExecutor:
             # The counter covers both stores, so the operator sees the total loss.
             "dropped_log_count": 0,
             "error_message": None,
-            "output_files": [],
+            # A bounded deque keeps the newest name, so a per-site export cannot grow the record.
+            "output_files": deque(maxlen=self._output_files_max),
+            # The counter reports the output file names the cap discarded.
+            "dropped_output_file_count": 0,
         }
 
     def _prune_runs(self) -> None:
@@ -634,7 +643,8 @@ class OperationExecutor:
                 "run_id": run["run_id"],
                 "status": "completed",
                 "message": "Operation completed",
-                "output_files": run["output_files"],
+                # Copy the bounded deque into a list, so the SSE stream can encode the event.
+                "output_files": list(run["output_files"]),
                 "duration_seconds": round(duration, 1),
             },
         )
@@ -670,12 +680,14 @@ class OperationExecutor:
             "completed_at": run["completed_at"],
             "progress_pct": run["progress_pct"],
             "error_message": run["error_message"],
-            "output_files": run["output_files"],
+            "output_files": list(run.get("output_files", [])),
             # The read boundary copies each bounded deque into a list, so JSON encoding still works.
             "log_messages": list(run.get("log_messages", [])),
             "debug_messages": list(run.get("debug_messages", [])),
             # Report the loss, so the operator knows the cap truncated the run log.
             "dropped_log_count": run.get("dropped_log_count", 0),
+            # Report the same loss for the output file names the cap discarded.
+            "dropped_output_file_count": run.get("dropped_output_file_count", 0),
         }
 
     def _run_to_summary(self, run: dict) -> dict:
@@ -688,6 +700,8 @@ class OperationExecutor:
             "progress_pct": run["progress_pct"],
             # Show the loss in the active list, so a long run reports the truncation early.
             "dropped_log_count": run.get("dropped_log_count", 0),
+            # Show the same loss for the output file names the cap discarded.
+            "dropped_output_file_count": run.get("dropped_output_file_count", 0),
         }
 
     def _parse_menu_number(self, key: str) -> Optional[int]:
@@ -822,6 +836,20 @@ class _RunLogHandler(logging.Handler):
         """Extract output filenames from log messages."""
         match = self._OUTPUT_FILE_RE.search(message)
         if match:
-            filename = match.group(1)
+            filename = match.group(1)  # The first group holds the file name without the data prefix.
             if filename not in self._run["output_files"]:
-                self._run["output_files"].append(filename)
+                self._store_output_file(filename)  # The bounded store counts a name the cap drops.
+
+    def _store_output_file(self, filename: str) -> None:
+        """Append one output file name and count a discarded name.
+
+        This method writes no log record, for the reason `_store_message`
+        states. The logging framework holds the handler lock during a call,
+        so the counter needs no lock.
+        """
+        target = self._run["output_files"]  # The store is the bounded deque the run record created.
+        maxlen = getattr(target, "maxlen", None)  # A plain list reports no cap, so the count stays at zero.
+        if maxlen is not None and len(target) >= maxlen:
+            # Count the name the deque is about to discard, so the response can report the loss.
+            self._run["dropped_output_file_count"] = self._run.get("dropped_output_file_count", 0) + 1
+        target.append(filename)  # The deque drops the oldest name, so the newest output stays visible.
