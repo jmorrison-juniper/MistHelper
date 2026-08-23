@@ -8,6 +8,8 @@ pipeline: inventory -> config -> status -> events.
 from __future__ import annotations
 
 import logging
+from contextlib import contextmanager
+from typing import TYPE_CHECKING
 
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
@@ -17,41 +19,65 @@ from src.shared.mist.endpoints import MistEndpointService
 from src.shared.mist.session import get_session_factory
 from src.shared.models.inventory import Organization
 from src.worker.celeryconfig import app
+from src.worker.checks.drift import DriftScanner
 from src.worker.sync.config import ConfigSyncService
 from src.worker.sync.events import EventSyncService
 from src.worker.sync.inventory import InventorySyncService
 from src.worker.sync.status import StatusSyncService
-from src.worker.checks.drift import DriftScanner
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+    from sqlalchemy import Engine
 
 logger = logging.getLogger(__name__)
+
+
+@contextmanager
+def _sync_engine() -> Iterator[Engine]:
+    """Yield a task-scoped engine and dispose it on every exit path.
+
+    An engine owns a connection pool. A pool that no code disposes keeps
+    its PostgreSQL sockets open until the database reaches
+    ``max_connections``, and then every service on that database fails.
+    The ``finally`` clause runs after a return and after an exception, so
+    no path can skip the release.
+    """
+    settings = get_settings()
+    sync_url = settings.database_url.replace("+asyncpg", "+psycopg2")
+    logger.info("Opening a task engine for the sync database")
+    engine = create_engine(sync_url)  # WHY: Celery tasks run sync code, not async code.
+    try:
+        yield engine  # WHY: the caller runs its whole body inside this scope.
+    finally:
+        engine.dispose()  # WHY: this line runs on the success path and on the error path.
+        logger.debug("Disposed the task engine and closed its connection pool")
 
 
 @app.task(name="src.worker.tasks.sync_tasks.sync_all_inventory")
 def sync_all_inventory() -> dict:
     """Sync inventory for every registered organization."""
-    settings = get_settings()
-    sync_url = settings.database_url.replace("+asyncpg", "+psycopg2")
-    engine = create_engine(sync_url)
+    logger.info("Starting the inventory sync for every organization")
+    with _sync_engine() as engine:  # WHY: the scope disposes the engine for us.
+        with Session(engine) as db:
+            org_ids = _load_org_mist_ids(db)
 
-    with Session(engine) as db:
-        org_ids = _load_org_mist_ids(db)
+        results: dict[str, dict] = {}
+        for mist_org_id in org_ids:
+            results[mist_org_id] = _sync_single_org(engine, mist_org_id)
 
-    results: dict[str, dict] = {}
-    for mist_org_id in org_ids:
-        results[mist_org_id] = _sync_single_org(engine, mist_org_id)
-
-    engine.dispose()
+    logger.debug("Inventory sync finished for %d organizations", len(results))
     return results
 
 
 @app.task(name="src.worker.tasks.sync_tasks.sync_org_inventory")
 def sync_org_inventory(mist_org_id: str) -> dict:
     """Sync inventory for a single organization (on-demand)."""
-    settings = get_settings()
-    sync_url = settings.database_url.replace("+asyncpg", "+psycopg2")
-    engine = create_engine(sync_url)
-    result = _sync_single_org(engine, mist_org_id)
-    engine.dispose()
+    logger.info("Starting the inventory sync for organization %s", mist_org_id)
+    with _sync_engine() as engine:  # WHY: an exception in the sync must not leak a pool.
+        result = _sync_single_org(engine, mist_org_id)
+
+    logger.debug("Inventory sync finished for organization %s", mist_org_id)
     return result
 
 
@@ -159,22 +185,18 @@ def _run_drift_scan(engine, org_id: str) -> dict:  # noqa: ANN001
 @app.task(name="src.worker.tasks.sync_tasks.run_daily_backup")
 def run_daily_backup() -> dict:
     """Export config revisions and audit records to MinIO daily."""
-    import json
     from datetime import UTC, datetime
-
-    settings = get_settings()
-    sync_url = settings.database_url.replace("+asyncpg", "+psycopg2")
-    engine = create_engine(sync_url)
 
     timestamp = datetime.now(tz=UTC).strftime("%Y%m%d_%H%M%S")
     tables = ("config_revisions", "audit_records", "baselines")
     counts: dict[str, int] = {}
 
-    for table_name in tables:
-        count = _export_table_backup(engine, table_name, timestamp)
-        counts[table_name] = count
+    logger.info("Starting the daily backup at %s", timestamp)
+    with _sync_engine() as engine:  # WHY: Beat runs this task daily, so a leak grows every day.
+        for table_name in tables:
+            counts[table_name] = _export_table_backup(engine, table_name, timestamp)
 
-    logger.info("Daily backup complete: %s", counts)
+    logger.debug("Daily backup complete: %s", counts)
     return {"timestamp": timestamp, "rows": counts}
 
 
