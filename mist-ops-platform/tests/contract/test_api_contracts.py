@@ -12,8 +12,10 @@ from datetime import UTC, datetime
 import pytest
 
 from src.api.schemas.common import ErrorDetail, PaginationMeta, ResponseEnvelope
+# Issue #1895: this module imported InventoryStatsResponse, and that name does not
+# exist in src.api.schemas.sync. The dead import raised an ImportError and stopped
+# pytest from collecting the whole contract module. No test used the name.
 from src.api.schemas.sync import (
-    InventoryStatsResponse,
     SyncStatusResponse,
     SyncTriggerRequest,
 )
