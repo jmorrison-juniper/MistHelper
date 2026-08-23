@@ -7,6 +7,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+# A wedged radon run holds the gate with no bound of its own. This cap turns
+# that stall into a clear message instead of a six-hour CI job.
+_RADON_TIMEOUT_SECONDS = 300
+
 TARGETS = {
     "MistHelper.py": [
         "_early_dependency_check",
@@ -21,7 +25,12 @@ TARGETS = {
 def _run_radon(path: str) -> list[dict[str, object]]:
     """Run radon CC in JSON mode and return function records."""
     command = [sys.executable, "-m", "radon", "cc", path, "-j"]
-    result = subprocess.run(command, capture_output=True, text=True, check=False)
+    try:
+        # The bound stops a wedged radon run from hanging the whole gate.
+        result = subprocess.run(command, capture_output=True, text=True, check=False, timeout=_RADON_TIMEOUT_SECONDS)
+    except subprocess.TimeoutExpired:
+        # Name the bound, so the operator can tell a stall from a crash.
+        raise RuntimeError(f"radon passed the {_RADON_TIMEOUT_SECONDS}s bound for {path}") from None
     if result.returncode != 0:
         raise RuntimeError(f"radon failed for {path}: {result.stderr.strip()}")
     payload = json.loads(result.stdout or "{}")

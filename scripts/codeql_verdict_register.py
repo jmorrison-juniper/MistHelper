@@ -36,6 +36,10 @@ DEFAULT_REGISTER_PATH = Path("documentation") / "security" / "codeql-verdict-reg
 # The number of days between a dismissal and the review that the register forces.
 REVIEW_INTERVAL_DAYS = 180
 
+# The gh call reaches the GitHub API over the network. A stalled read has no
+# bound of its own, so this cap stops it from hanging the whole gate.
+_GH_TIMEOUT_SECONDS = 120
+
 # The map from an API dismissal reason to a register verdict. The API accepts
 # three reasons, so the register holds one verdict for each reason.
 API_REASON_TO_VERDICT = {
@@ -126,12 +130,19 @@ class AlertSource:
         path = f"repos/{self.repository}/code-scanning/alerts?state=dismissed&per_page=100"
         logger.info("Reading dismissed CodeQL alerts for rule %s", self.rule_id)
         # Call the GitHub CLI, because it carries the credentials the user holds.
-        raw = subprocess.run(
-            ["gh", "api", "--paginate", path],
-            capture_output=True,
-            text=True,
-            check=True,
-        ).stdout
+        try:
+            raw = subprocess.run(
+                ["gh", "api", "--paginate", path],
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=_GH_TIMEOUT_SECONDS,  # A stalled network read must not hang the gate.
+            ).stdout
+        except subprocess.TimeoutExpired:
+            # Name the bound, so the operator can tell a stall from a crash.
+            logger.error("The gh api call passed the %ds bound and was stopped", _GH_TIMEOUT_SECONDS)
+            msg = f"The GitHub API read passed the {_GH_TIMEOUT_SECONDS}s bound"
+            raise RuntimeError(msg) from None  # Fail loudly instead of returning an empty register.
         # Parse the response into Python objects.
         alerts = json.loads(raw)
         # Keep only the alerts that the register governs.

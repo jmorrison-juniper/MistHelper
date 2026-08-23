@@ -11,15 +11,15 @@ import logging
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import create_engine, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from src.shared.config.constants import JobStatus
-from src.shared.config.settings import get_settings
 from src.shared.mist.endpoints import MistEndpointService
 from src.shared.mist.session import get_session_factory
 from src.shared.models.config import ConfigRevision
 from src.shared.models.operations import ScheduledJob
+from src.shared.sync_db import sync_engine
 from src.worker.celeryconfig import app
 from src.worker.deploy.rollback import RollbackService, RollbackState
 
@@ -46,11 +46,9 @@ def install_from_revision(
         3. Push via RollbackService (saga pattern)
         4. Update job status
     """
-    settings = get_settings()
-    sync_url = settings.database_url.replace("+asyncpg", "+psycopg2")
-    engine = create_engine(sync_url)
-
-    with Session(engine) as db:
+    logger.info("Installing revision %s for job %s", revision_id, job_id)
+    # The scope disposes the pool on the success path and on the error path.
+    with sync_engine() as engine, Session(engine) as db:
         result = _execute_install(
             db,
             job_id,
@@ -59,7 +57,7 @@ def install_from_revision(
             org_id,
         )
 
-    engine.dispose()
+    logger.debug("Install for job %s returned status %s", job_id, result.get("status"))
     return result
 
 
@@ -173,17 +171,15 @@ def poll_scheduled_jobs() -> dict:
     Polls for jobs with status APPROVED and scheduled_at <= now(),
     then executes each with pre-checks, push, and post-checks.
     """
-    settings = get_settings()
-    sync_url = settings.database_url.replace("+asyncpg", "+psycopg2")
-    engine = create_engine(sync_url)
-
-    with Session(engine) as db:
-        due_jobs = _find_due_jobs(db)
+    logger.info("Polling for scheduled jobs that are due")
+    # The scope disposes the pool on the success path and on the error path.
+    with sync_engine() as engine, Session(engine) as db:
+        due_jobs = _find_due_jobs(db)  # Read the approved jobs whose time arrived.
         results = {}
         for job in due_jobs:
-            results[str(job.job_id)] = _execute_scheduled_job(db, job)
+            results[str(job.job_id)] = _execute_scheduled_job(db, job)  # Run each job.
 
-    engine.dispose()
+    logger.debug("Polled and ran %d scheduled jobs", len(results))
     return {"polled": len(results), "results": results}
 
 
@@ -247,15 +243,13 @@ def execute_rollout_wave(plan_id: str) -> dict:
     """
     from src.worker.deploy.rollout import RolloutOrchestrator
 
-    settings = get_settings()
-    sync_url = settings.database_url.replace("+asyncpg", "+psycopg2")
-    engine = create_engine(sync_url)
+    logger.info("Executing the next wave of rollout plan %s", plan_id)
+    # The scope disposes the pool on the success path and on the error path.
+    with sync_engine() as engine, Session(engine) as db:
+        orchestrator = RolloutOrchestrator(db)  # Own the wave state machine.
+        result = orchestrator.execute_next_wave(UUID(plan_id))  # Push one wave.
 
-    with Session(engine) as db:
-        orchestrator = RolloutOrchestrator(db)
-        result = orchestrator.execute_next_wave(UUID(plan_id))
-
-    engine.dispose()
+    logger.debug("Wave execution for plan %s returned %s", plan_id, result)
 
     if result.get("auto_promote"):
         execute_rollout_wave.delay(plan_id)
@@ -271,13 +265,11 @@ def promote_rollout_wave(
     """Manually promote to the next wave."""
     from src.worker.deploy.rollout import RolloutOrchestrator
 
-    settings = get_settings()
-    sync_url = settings.database_url.replace("+asyncpg", "+psycopg2")
-    engine = create_engine(sync_url)
+    logger.info("Promoting rollout plan %s to wave %d", plan_id, wave_number)
+    # The scope disposes the pool on the success path and on the error path.
+    with sync_engine() as engine, Session(engine) as db:
+        orchestrator = RolloutOrchestrator(db)  # Own the wave state machine.
+        result = orchestrator.promote_wave(UUID(plan_id), wave_number)  # Advance it.
 
-    with Session(engine) as db:
-        orchestrator = RolloutOrchestrator(db)
-        result = orchestrator.promote_wave(UUID(plan_id), wave_number)
-
-    engine.dispose()
+    logger.debug("Promotion of plan %s returned %s", plan_id, result)
     return result
