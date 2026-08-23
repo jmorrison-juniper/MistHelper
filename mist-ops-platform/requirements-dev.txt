@@ -1,0 +1,34 @@
+# Pinned test dependencies for the mist-ops-platform sub-project (issue #1895).
+#
+# The root requirements-dev.txt serves the root test suite. It does not carry the
+# packages that mist-ops-platform/tests imports, so the CI job "pytest (ops
+# platform)" installs this file instead.
+#
+# Every pin is a floor, not an exact version. The root files use the same style,
+# so a security update still reaches this sub-project.
+
+# Test runner and plugins. pyproject.toml sets asyncio_mode = "auto", so
+# pytest-asyncio must be present or collection stops on the first async test.
+pytest>=8.3
+pytest-asyncio>=0.24
+pytest-cov>=6.0
+
+# Application packages that the tests import at module scope.
+fastapi>=0.115
+sqlalchemy>=2.0
+pydantic>=2.10
+pydantic-settings>=2.7
+
+# httpx serves both the application client and the FastAPI test client.
+# The task brief named "httpx2". No package with that name exists on PyPI, and
+# the sub-project pyproject.toml declares "httpx>=0.28". This file follows the
+# pyproject declaration.
+httpx>=0.28
+
+# deepdiff backs src/shared/services/diff.py. Its absence caused the collection
+# error in tests/unit/shared/test_diff.py.
+deepdiff>=8.0
+
+# mistapi backs src/shared/mist/. Its absence caused the collection errors in
+# the whole tests/unit/mist/ directory.
+mistapi>=0.63.1

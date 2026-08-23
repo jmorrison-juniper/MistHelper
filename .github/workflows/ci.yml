@@ -69,6 +69,10 @@ env:
   # whole project. Lowest measured value is web_portal at 97.5 percent.
   INTERROGATE_PATHS: 'src/ MistHelper.py wsgi.py starlink_dashboard.py web_portal tools'
   COVERAGE_THRESHOLD: ${{ inputs.coverage-threshold || '80' }}
+  # Issue #1895: the ops platform suite keeps its own denominator and its own
+  # floor, so it can never move the root percentage. The floor is 0 while the
+  # suite still reports collection errors. Issue #1897 raises it.
+  OPS_PLATFORM_COVERAGE_THRESHOLD: '0'
   PYLINT_THRESHOLD: ${{ inputs.pylint-threshold || '9.5' }}
   INTERROGATE_THRESHOLD: ${{ inputs.interrogate-threshold || '90' }}
   # Vulture reports 0 findings at 90, at 80, and at 70. The cliff sits at 60, which
@@ -539,6 +543,50 @@ jobs:
         # non-zero when it finds no test (#1852).
         continue-on-error: true
         run: npm run test
+
+  # ──────────────────────────────────────────────────────────────
+  # OPS PLATFORM (FastAPI + Celery sub-project)
+  # ──────────────────────────────────────────────────────────────
+  ops_platform_pytest:
+    name: "pytest (ops platform)"
+    # Issue #1895: no gate read mist-ops-platform/tests. The root
+    # pyproject.toml sets testpaths = ["tests"], and the "pytest (coverage
+    # gate)" job runs pytest from the repository root with no path argument.
+    # pytest therefore collected the root tests/ directory only, so every ops
+    # platform pull request reported green while nothing ran the changed code.
+    #
+    # The job runs from mist-ops-platform, so the sub-project pyproject.toml
+    # supplies testpaths, asyncio_mode, and the marker list. The job runs on
+    # every event rather than behind a path filter, because a skipped result is
+    # ambiguous to a reviewer and to a branch protection rule.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # The suite is red on main today, so this job reports and never blocks.
+    # Issue #1897 tracks the flip to blocking. Delete this line there.
+    continue-on-error: true
+    defaults:
+      run:
+        working-directory: mist-ops-platform
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - name: Install dependencies
+        # The root requirements files do not carry deepdiff or mistapi, so the
+        # sub-project keeps its own pinned file (issue #1895).
+        run: pip install -r requirements-dev.txt
+      - name: Run tests with coverage
+        # Issue #888: the root gate keeps its own SRC_PATH denominator. This job
+        # measures mist-ops-platform/src only, so neither percentage moves the
+        # other. The floor stays at OPS_PLATFORM_COVERAGE_THRESHOLD, which is 0
+        # until the suite collects. Issue #1897 raises it with the flip.
+        run: |
+          pytest --cov=src \
+            --cov-fail-under=${{ env.OPS_PLATFORM_COVERAGE_THRESHOLD }}
 
   # ──────────────────────────────────────────────────────────────
   # FAILURE → GITHUB ISSUES (auto-create issues for each failure)
