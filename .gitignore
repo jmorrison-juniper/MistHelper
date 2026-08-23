@@ -241,12 +241,11 @@ backups/
 # System files
 *.ini
 *.cfg
-config/
-configs/
-!src/ssh/config/
-!src/ssh/config/*.py
-!src/config/
-!src/config/*.py
+# WHY: anchor each rule to the repository root. An unanchored "config/" rule matches
+# every nested directory of that name, so it hid the source package
+# mist-ops-platform/src/shared/config/ from git and from the scanners (issue #1778).
+/config/
+/configs/
 
 # Archives
 *.zip
