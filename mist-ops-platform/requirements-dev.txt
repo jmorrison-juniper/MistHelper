@@ -1,0 +1,45 @@
+# Pinned test dependencies for the mist-ops-platform sub-project (issue #1895).
+#
+# The root requirements-dev.txt serves the root test suite. It does not carry the
+# packages that mist-ops-platform/tests imports, so the CI job "pytest (ops
+# platform)" installs this file instead.
+#
+# Every pin is a floor, not an exact version. The root files use the same style,
+# so a security update still reaches this sub-project.
+
+# Test runner and plugins. pyproject.toml sets asyncio_mode = "auto", so
+# pytest-asyncio must be present or collection stops on the first async test.
+pytest>=8.3
+pytest-asyncio>=0.24
+pytest-cov>=6.0
+
+# Application packages that the tests import at module scope.
+fastapi>=0.115
+sqlalchemy>=2.0
+pydantic>=2.10
+pydantic-settings>=2.7
+
+# httpx serves both the application client and the FastAPI test client.
+# The CI run for issue #1895 proved which name each layer needs.
+#   - src/ imports httpx directly for the application client.
+#   - starlette 0.49 and newer import httpx2 inside TestClient. The runner
+#     installs that starlette through fastapi, so the TestClient tests raise
+#     "ModuleNotFoundError: No module named 'httpx2'" without this pin.
+# Both names ship, because both layers load on the same runner.
+httpx>=0.28
+httpx2>=0.28
+
+# deepdiff backs src/shared/services/diff.py. Its absence caused the collection
+# error in tests/unit/shared/test_diff.py.
+deepdiff>=8.0
+
+# celery and redis back the worker and the health route. src/api/routes/health.py
+# imports redis inside the readiness handler, so every TestClient call to that
+# route raised ModuleNotFoundError until this pin. celery[redis] carries redis,
+# and both names stay here, because the health route imports redis on its own.
+celery[redis]>=5.4
+redis>=5.2
+
+# mistapi backs src/shared/mist/. Its absence caused the collection errors in
+# the whole tests/unit/mist/ directory.
+mistapi>=0.63.1

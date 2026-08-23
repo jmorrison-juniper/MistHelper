@@ -69,6 +69,14 @@ env:
   # whole project. Lowest measured value is web_portal at 97.5 percent.
   INTERROGATE_PATHS: 'src/ MistHelper.py wsgi.py starlink_dashboard.py web_portal tools'
   COVERAGE_THRESHOLD: ${{ inputs.coverage-threshold || '80' }}
+  # Issue #1895: the ops platform suite keeps its own denominator and its own
+  # floor, so it can never move the root percentage. The suite collects 302
+  # tests and measures 53.9 percent. The floor sits under that number, so a
+  # coverage drop fails the gate. Issue #1897 raises the floor toward 80.
+  OPS_PLATFORM_COVERAGE_THRESHOLD: '50'
+  # The count floor proves the gate ran the tests. A broken import path drops
+  # the collected count, and this floor turns that drop into a red gate.
+  OPS_PLATFORM_MIN_TESTS: '280'
   PYLINT_THRESHOLD: ${{ inputs.pylint-threshold || '9.5' }}
   INTERROGATE_THRESHOLD: ${{ inputs.interrogate-threshold || '90' }}
   # Vulture reports 0 findings at 90, at 80, and at 70. The cliff sits at 60, which
@@ -539,6 +547,79 @@ jobs:
         # non-zero when it finds no test (#1852).
         continue-on-error: true
         run: npm run test
+
+  # ──────────────────────────────────────────────────────────────
+  # OPS PLATFORM (FastAPI + Celery sub-project)
+  # ──────────────────────────────────────────────────────────────
+  ops_platform_pytest:
+    name: "pytest (ops platform)"
+    # Issue #1895: no gate read mist-ops-platform/tests. The root
+    # pyproject.toml sets testpaths = ["tests"], and the "pytest (coverage
+    # gate)" job runs pytest from the repository root with no path argument.
+    # pytest therefore collected the root tests/ directory only, so every ops
+    # platform pull request reported green while nothing ran the changed code.
+    #
+    # The job runs from mist-ops-platform, so the sub-project pyproject.toml
+    # supplies testpaths, asyncio_mode, and the marker list. The job runs on
+    # every event rather than behind a path filter, because a skipped result is
+    # ambiguous to a reviewer and to a branch protection rule.
+    #
+    # The gate blocks. It runs 290 tests and it fails on a red test, on a
+    # coverage drop, and on a drop in the collected count.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: mist-ops-platform
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - name: Install dependencies
+        # The root requirements files do not carry deepdiff or mistapi, so the
+        # sub-project keeps its own pinned file (issue #1895).
+        run: pip install -r requirements-dev.txt
+      - name: Confirm the suite collects its tests
+        # A gate that collects nothing still exits green. That result hides a
+        # broken import path and is worse than no gate. This step counts the
+        # collected tests and fails when the count drops below the floor.
+        run: |
+          set -o pipefail
+          COUNT=$(pytest --collect-only -q | grep -c '::' || true)
+          echo "Collected $COUNT tests"
+          if [ "$COUNT" -lt "$OPS_PLATFORM_MIN_TESTS" ]; then
+            echo "::error::Collected $COUNT tests. The floor is $OPS_PLATFORM_MIN_TESTS."
+            exit 1
+          fi
+      - name: Run tests with coverage
+        # Issue #888: the root gate keeps its own SRC_PATH denominator. This job
+        # measures mist-ops-platform/src only, so neither percentage moves the
+        # other.
+        #
+        # The 12 deselected tests fail on main today. They assert behavior that
+        # the source does not have, so they are product defects and not gate
+        # defects. Issue #1883 covers the six schema mismatches. Issue #1897
+        # tracks the removal of this list. Do not add a test to this list to
+        # make a new failure go away. Fix the code instead.
+        run: |
+          pytest --cov=src \
+            --cov-fail-under=${{ env.OPS_PLATFORM_COVERAGE_THRESHOLD }} \
+            --deselect tests/contract/test_api_contracts.py::TestSyncContracts::test_sync_status_response_fields \
+            --deselect tests/contract/test_api_contracts.py::TestConfigContracts::test_revision_response_fields \
+            --deselect tests/contract/test_api_contracts.py::TestConfigContracts::test_diff_request_requires_two_revisions \
+            --deselect tests/contract/test_api_contracts.py::TestDeployContracts::test_job_create_payload \
+            --deselect tests/contract/test_api_contracts.py::TestDeployContracts::test_rollout_create_has_waves \
+            --deselect tests/contract/test_api_contracts.py::TestAuditContracts::test_audit_record_response \
+            --deselect tests/integration/test_drift.py::TestDriftDetectionIntegration::test_drift_change_paths_are_descriptive \
+            --deselect tests/integration/test_e2e_smoke.py::TestE2ESmokeComponents::test_celery_app_importable \
+            --deselect tests/integration/test_e2e_smoke.py::TestE2ESmokeComponents::test_all_routes_registered \
+            --deselect tests/unit/shared/test_models_inventory.py::TestOrganization::test_tablename \
+            --deselect tests/unit/shared/test_models_inventory.py::TestSyncLedgerEntry::test_tablename \
+            --deselect tests/unit/shared/test_models_inventory.py::TestSyncLedgerEntry::test_primary_key
 
   # ──────────────────────────────────────────────────────────────
   # FAILURE → GITHUB ISSUES (auto-create issues for each failure)
