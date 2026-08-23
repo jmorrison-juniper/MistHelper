@@ -5,6 +5,7 @@ with pagination, and enforces path traversal guards.
 """
 
 import csv
+import logging
 import math
 import os
 import sqlite3
@@ -22,7 +23,8 @@ class DataBrowserService:
 
     def __init__(self, data_dir: str):
         """Initialize with the absolute path to the data directory."""
-        self._data_dir = os.path.abspath(data_dir)
+        self._data_dir = os.path.abspath(data_dir)  # Listing code compares names against this path.
+        self._real_data_dir = os.path.realpath(self._data_dir)  # Link-free root for the path guard.
 
     def list_files(self) -> list:
         """List all browsable files and directories in data dir."""
@@ -63,16 +65,39 @@ class DataBrowserService:
             return {"error": "Table not found"}
         return self._preview_sqlite(resolved, table_name, page, per_page, search)
 
-    def resolve_safe_path(self, rel_path: str) -> str:
-        """Resolve a relative path safely within the data directory."""
-        if ".." in rel_path.split("/") or ".." in rel_path.split("\\"):
+    def resolve_safe_path(self, rel_path: str) -> str | None:
+        """Resolve a request path to a real file inside the data directory.
+
+        The method resolves every symbolic link before it compares the paths.
+        A text prefix match cannot do that, because a link points anywhere.
+        Return `None` when the request leaves the data directory, names a
+        directory, or names a file type that the listing does not show.
+        """
+        logging.info("Data browser resolves a path request: %s", rel_path)
+        candidate = os.path.realpath(os.path.join(self._data_dir, rel_path))  # Follow every link.
+        if not self._is_inside_data_dir(candidate):  # Refuse a target outside the data directory.
+            logging.debug("Data browser refused a path outside the data directory: %s", rel_path)
             return None
-        full = os.path.normpath(os.path.join(self._data_dir, rel_path))
-        if not full.startswith(self._data_dir):
+        if not self._is_browsable_file(candidate):  # Refuse a directory or a hidden file type.
+            logging.debug("Data browser refused a path that is not a browsable file: %s", rel_path)
             return None
-        if not os.path.exists(full):
-            return None
-        return full
+        logging.debug("Data browser accepted the path request: %s", rel_path)
+        return candidate
+
+    def _is_inside_data_dir(self, candidate: str) -> bool:
+        """Report whether a resolved path sits inside the data directory."""
+        try:
+            common = os.path.commonpath([self._real_data_dir, candidate])  # Respects the separator.
+        except ValueError:
+            return False  # The two paths sit on different Windows drives, so the target is outside.
+        return os.path.normcase(common) == os.path.normcase(self._real_data_dir)  # Case-safe match.
+
+    @staticmethod
+    def _is_browsable_file(candidate: str) -> bool:
+        """Report whether a resolved path names a file the portal may serve."""
+        if not os.path.isfile(candidate):  # A directory breaks `send_file` and leaks a stack trace.
+            return False
+        return os.path.splitext(candidate)[1].lower() in ALLOWED_EXTENSIONS  # Same rule as listing.
 
     def _build_file_entry(self, entry) -> dict:
         """Build metadata dict for a directory entry."""
