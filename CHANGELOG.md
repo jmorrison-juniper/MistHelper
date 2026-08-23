@@ -7,6 +7,32 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Bound the web portal operation run registry (issue #1860)
+
+- **Defect (Fixed)**: `OperationExecutor` kept every run in memory forever, and
+  each run appended one dictionary for every log record the operation emitted.
+  The portal runs as one long-lived Gunicorn worker, so the memory only rose
+  until an out-of-memory kill interrupted a write to the data directory.
+- **Run log (Changed)**: `log_messages` and `debug_messages` are now a
+  `collections.deque` with a `maxlen`. The deque drops the oldest entry, so one
+  high-volume run cannot fill the worker memory.
+- **Dropped count (Added)**: `dropped_log_count` counts every entry the cap
+  discarded. `_run_to_dict` and `_run_to_summary` report the count, so the
+  operator sees that the portal truncated the run log.
+- **Registry cap (Added)**: `OperationExecutor._prune_runs` keeps the most
+  recent finished runs and drops the rest. It also drops a finished run that
+  passed the retention period. It never evicts a pending or a running
+  operation, and it follows the `PortalEventBus._cleanup_stale_subscribers`
+  pattern.
+- **Settings (Added)**: `PORTAL_RUN_LOG_MAX_ENTRIES` defaults to 2000,
+  `PORTAL_RUN_HISTORY_MAX` defaults to 50, and `PORTAL_RUN_RETENTION_SECONDS`
+  defaults to 3600. An unusable value falls back to the default and logs a
+  warning. `deploy/.env.example` documents all three.
+- **Tests (Added)**: `tests/unit/web_portal/test_operation_run_registry_caps.py`
+  holds 11 tests. They cover the registry cap, the per-run log cap, the
+  protection of an active run, the retention period, the dropped count in the
+  response, and the fallback for an unusable setting.
+
 ### Replace the assert runtime guards in the SSH package (issue #1720)
 
 - **Defect (Fixed)**: four runtime guards used `assert`. The interpreter removes

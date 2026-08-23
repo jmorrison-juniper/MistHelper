@@ -10,6 +10,7 @@ import re
 import threading
 import time
 import uuid
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Optional
 
@@ -29,6 +30,44 @@ CATEGORY_RANGES = [
 ]
 
 DESTRUCTIVE_THRESHOLD = 90
+
+# --- Run registry memory caps ----------------------------------------------
+# The portal runs as one long-lived Gunicorn worker. Issue #1860 showed that an
+# unbounded run registry drives that worker into an out-of-memory kill, and the
+# kill can interrupt a write to the data directory. Every cap below is a
+# default. An operator raises or lowers a cap with the matching environment
+# variable, which deploy/.env.example documents.
+
+# Maximum log entries one run keeps in each of its two log stores.
+DEFAULT_RUN_LOG_MAX_ENTRIES = 2000
+
+# Maximum finished runs the registry keeps. An active run never counts here.
+DEFAULT_RUN_HISTORY_MAX = 50
+
+# Seconds the registry keeps a finished run. One hour matches the event bus.
+DEFAULT_RUN_RETENTION_SECONDS = 3600
+
+# The two states that mark work the portal must never evict.
+ACTIVE_RUN_STATUSES = ("pending", "running")
+
+
+def _read_positive_int_env(name: str, default: int) -> int:
+    """Read a positive whole number cap from the environment."""
+    raw = os.environ.get(name)  # An unset variable keeps the documented default.
+    if raw is None:
+        return default  # Return early, because the operator set no override.
+    try:
+        value = int(raw)  # The operator supplies the cap as a decimal string.
+    except ValueError:
+        # Report the bad value, because a silent fallback hides an operator mistake.
+        logging.warning("Ignoring %s: the value %r is not a whole number", name, raw)
+        return default  # Keep the default, because an unusable value must not remove the cap.
+    if value < 1:
+        # Report the bad value, because a cap below one would discard every record.
+        logging.warning("Ignoring %s: the value %d is below the minimum of 1", name, value)
+        return default  # Keep the default, because the cap must hold at least one item.
+    return value  # Accept the override, because the value is usable.
+
 
 # --- Parameter Definitions -------------------------------------------------
 # Each entry maps a menu number to its category and ordered parameter list.
@@ -312,10 +351,27 @@ class OperationExecutor:
         self._event_bus = event_bus
         self._runs = {}
         self._lock = threading.Lock()
+        self._sequence = 0  # A rising number orders the runs when the clock repeats a value.
+        self._configure_limits()  # Read the caps once, so every run shares one setting.
         cpu_count = os.cpu_count() or 2
         max_workers = max(1, cpu_count - 1)
         logging.info("Operation pool: %d workers (CPUs detected: %d)", max_workers, cpu_count)
         self._pool = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="op")
+
+    def _configure_limits(self) -> None:
+        """Read the run registry memory caps from the environment."""
+        logging.info("Reading the web portal run registry memory caps")  # Log before the read.
+        # Each cap reads one variable and falls back to the documented default.
+        self._log_max_entries = _read_positive_int_env("PORTAL_RUN_LOG_MAX_ENTRIES", DEFAULT_RUN_LOG_MAX_ENTRIES)
+        self._history_max = _read_positive_int_env("PORTAL_RUN_HISTORY_MAX", DEFAULT_RUN_HISTORY_MAX)
+        self._retention_seconds = _read_positive_int_env("PORTAL_RUN_RETENTION_SECONDS", DEFAULT_RUN_RETENTION_SECONDS)
+        # Record the result, so an operator can confirm the caps the portal applied.
+        logging.debug(
+            "Run caps: %d log entries per run, %d finished runs, %d seconds of retention",
+            self._log_max_entries,
+            self._history_max,
+            self._retention_seconds,
+        )
 
     def start_operation(self, menu_number: str, parameters: dict) -> dict:
         """Validate and start an operation in a background thread."""
@@ -340,7 +396,7 @@ class OperationExecutor:
     def get_active_runs(self) -> list:
         """Return list of currently running operations."""
         with self._lock:
-            return [self._run_to_summary(run) for run in self._runs.values() if run["status"] in ("pending", "running")]
+            return [self._run_to_summary(run) for run in self._runs.values() if run["status"] in ACTIVE_RUN_STATUSES]
 
     def stop_operation(self, run_id: str) -> dict:
         """Request graceful stop of a running operation.
@@ -357,7 +413,7 @@ class OperationExecutor:
             run = self._runs.get(run_id)
         if run is None:
             return {"error": "Run not found"}
-        if run["status"] not in ("pending", "running"):
+        if run["status"] not in ACTIVE_RUN_STATUSES:
             return {"error": "Operation is not running"}
         run["_stop_requested"] = True
         self._update_status(run, "failed", 100)
@@ -434,7 +490,7 @@ class OperationExecutor:
         """Check if the same operation is already running."""
         with self._lock:
             for run in self._runs.values():
-                if run["menu_number"] == menu_number and run["status"] in ("pending", "running"):
+                if run["menu_number"] == menu_number and run["status"] in ACTIVE_RUN_STATUSES:
                     return {
                         "error": f"Operation {menu_number} is already running",
                         "run_id": run["run_id"],
@@ -442,10 +498,20 @@ class OperationExecutor:
         return None
 
     def _create_run(self, menu_number: str) -> dict:
-        """Create a new OperationRun record."""
+        """Create a new OperationRun record and bound the registry."""
+        run = self._build_run_record(menu_number)  # Build the record apart, so this method stays short.
+        with self._lock:
+            self._sequence += 1  # Give the run an order that does not depend on the clock resolution.
+            run["sequence"] = self._sequence  # Store the order, because two runs can share one timestamp.
+            self._runs[run["run_id"]] = run  # Publish the run, so the status endpoints can find it.
+        self._prune_runs()  # Prune after the insert, so the registry cannot grow past the cap.
+        return run
+
+    def _build_run_record(self, menu_number: str) -> dict:
+        """Return one run record that holds bounded log stores."""
         value = self._menu_actions[menu_number]
         desc = value[1] if isinstance(value, tuple) and len(value) > 1 else str(value)
-        run = {
+        return {
             "run_id": str(uuid.uuid4()),
             "menu_number": menu_number,
             "description": desc,
@@ -453,14 +519,50 @@ class OperationExecutor:
             "started_at": time.time(),
             "completed_at": None,
             "progress_pct": 0,
-            "log_messages": [],
-            "debug_messages": [],
+            # A bounded deque drops the oldest entry, so one long run cannot fill the worker memory.
+            "log_messages": deque(maxlen=self._log_max_entries),
+            "debug_messages": deque(maxlen=self._log_max_entries),
+            # The counter covers both stores, so the operator sees the total loss.
+            "dropped_log_count": 0,
             "error_message": None,
             "output_files": [],
         }
+
+    def _prune_runs(self) -> None:
+        """Remove the finished runs that pass the cap or the retention period."""
         with self._lock:
-            self._runs[run["run_id"]] = run
-        return run
+            # Select the finished runs only, because an active run must survive every prune.
+            finished = [(rid, run) for rid, run in self._runs.items() if run["status"] not in ACTIVE_RUN_STATUSES]
+            stale = self._select_stale_runs(finished)  # Decide inside the lock, so the registry cannot change.
+            for run_id in stale:
+                del self._runs[run_id]  # Drop the record, so the worker gets the memory back.
+            remaining = len(self._runs)  # Read the size inside the lock, because another thread can add a run.
+        if stale:
+            # Log the removal, so an operator can explain a run record that left the portal.
+            logging.info("Removed %d finished operation runs, %d runs remain", len(stale), remaining)
+
+    def _select_stale_runs(self, finished: list) -> list:
+        """Return the identifiers of the finished runs the portal may drop.
+
+        The caller holds the registry lock. Only finished runs reach this
+        method, so the portal never evicts a pending or a running operation.
+        """
+        cutoff = time.time() - self._retention_seconds  # A run that ended before this time is past retention.
+        ordered = sorted(finished, key=self._sort_key, reverse=True)  # Put the newest finished run first.
+        stale = [run_id for run_id, _ in ordered[self._history_max :]]  # Every run past the cap leaves.
+        kept = ordered[: self._history_max]  # The cap keeps the most recent finished runs.
+        stale.extend(run_id for run_id, run in kept if self._finished_at(run) < cutoff)  # Retention drops old work.
+        return stale
+
+    def _sort_key(self, item: tuple) -> tuple:
+        """Return the key that orders the finished runs from oldest to newest."""
+        run = item[1]  # A registry item pairs the identifier with the record.
+        return (self._finished_at(run), run.get("sequence", 0))  # The sequence breaks a clock tie.
+
+    @staticmethod
+    def _finished_at(run: dict) -> float:
+        """Return the time the run finished, or the start time as the fallback."""
+        return run["completed_at"] or run["started_at"]
 
     def _execute_operation(self, run: dict, parameters: dict) -> None:
         """Execute the operation function in a background thread."""
@@ -518,6 +620,8 @@ class OperationExecutor:
                     "description": run["description"],
                 },
             )
+        if status not in ACTIVE_RUN_STATUSES:
+            self._prune_runs()  # Free an old finished run as soon as this run finishes.
 
     def _publish_complete(self, run: dict) -> None:
         """Publish completion SSE event."""
@@ -553,6 +657,7 @@ class OperationExecutor:
                     "duration_seconds": round(duration, 1),
                 },
             )
+        self._prune_runs()  # A failed run is finished, so free an old record now.
 
     def _run_to_dict(self, run: dict) -> dict:
         """Convert run record to API response format."""
@@ -566,8 +671,11 @@ class OperationExecutor:
             "progress_pct": run["progress_pct"],
             "error_message": run["error_message"],
             "output_files": run["output_files"],
+            # The read boundary copies each bounded deque into a list, so JSON encoding still works.
             "log_messages": list(run.get("log_messages", [])),
             "debug_messages": list(run.get("debug_messages", [])),
+            # Report the loss, so the operator knows the cap truncated the run log.
+            "dropped_log_count": run.get("dropped_log_count", 0),
         }
 
     def _run_to_summary(self, run: dict) -> dict:
@@ -578,6 +686,8 @@ class OperationExecutor:
             "description": run["description"],
             "status": run["status"],
             "progress_pct": run["progress_pct"],
+            # Show the loss in the active list, so a long run reports the truncation early.
+            "dropped_log_count": run.get("dropped_log_count", 0),
         }
 
     def _parse_menu_number(self, key: str) -> Optional[int]:
@@ -660,7 +770,7 @@ class _RunLogHandler(logging.Handler):
         is_main = self._is_user_facing(record, message)
         event_type = "log" if is_main else "debug_log"
         storage = "log_messages" if is_main else "debug_messages"
-        self._run[storage].append({"message": message, "level": level})
+        self._store_message(storage, message, level)  # The bounded store counts an entry the cap drops.
         if is_main:
             self._check_output_file(message)
         if self._event_bus:
@@ -673,6 +783,20 @@ class _RunLogHandler(logging.Handler):
                     "timestamp": timestamp,
                 },
             )
+
+    def _store_message(self, storage: str, message: str, level: str) -> None:
+        """Append one entry to a bounded run log and count a discarded entry.
+
+        This method writes no log record. The handler sits on the root logger,
+        so a log call here would capture its own output. The logging framework
+        holds the handler lock during a call, so the counter needs no lock.
+        """
+        target = self._run[storage]  # The store is the bounded deque the run record created.
+        maxlen = getattr(target, "maxlen", None)  # A plain list reports no cap, so the count stays at zero.
+        if maxlen is not None and len(target) >= maxlen:
+            # Count the entry the deque is about to discard, so the response can report the loss.
+            self._run["dropped_log_count"] = self._run.get("dropped_log_count", 0) + 1
+        target.append({"message": message, "level": level})  # The deque drops the oldest entry when it is full.
 
     def _is_user_facing(self, record: logging.LogRecord, message: str) -> bool:
         """Decide if a message belongs in the main execution log."""
