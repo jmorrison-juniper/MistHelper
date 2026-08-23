@@ -103,6 +103,7 @@ class SshConnector:
         if client is None:  # WHY: build failure already logged + printed.
             return None, None  # WHY: propagate the sentinel to the caller.
         if not self._attempt_authenticated_connect(client, hostname, port, username, password):
+            self._release_client(client, hostname, port)  # WHY: a failed login leaves the transport thread alive.
             return None, None  # WHY: connect failure already logged + printed.
         self.logger.debug("SshConnector.connect succeeded for %s:%s", hostname, port)  # WHY: audit trail.
         return client, self.managed_known_hosts_path  # WHY: caller wires client into its runner state.
@@ -178,8 +179,25 @@ class SshConnector:
             self.logger.exception("TOFU enrollment failed for %s:%s: %s", hostname, port, enroll_error)  # WHY: audit.
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             self.logger.error("[ERROR] Host key enrollment failed: %s", enroll_error)
+            self._release_client(client, hostname, port)  # WHY: the client holds a socket that nothing else closes.
             return None  # WHY: caller treats None as a hard connection failure.
         return client  # WHY: client is ready to attempt authentication.
+
+    def _release_client(self, client: SSHClient, hostname: str, port: int) -> None:
+        """Close a paramiko client that the connect flow abandons after a failure.
+
+        Paramiko starts a transport thread and holds a socket inside
+        ``SSHClient.connect``. An authentication failure leaves both alive. Only
+        ``close()`` stops the thread and releases the socket. Without this call a
+        batch run against many hosts leaks one socket for each failed login.
+        """
+        self.logger.info("Releasing the abandoned SSH client for %s:%s", hostname, port)  # WHY: audit the cleanup.
+        try:  # WHY: close() raises when the transport never started, and that must not mask the real failure.
+            client.close()  # WHY: stop the paramiko transport thread and release the socket.
+        except Exception as close_error:  # noqa: BLE001 - cleanup must never replace the original connect failure.
+            self.logger.debug("SSH client close failed for %s:%s: %s", hostname, port, close_error)  # WHY: trace only.
+            return  # WHY: the client is unusable either way, so the caller needs no further signal.
+        self.logger.debug("SSH client closed for %s:%s", hostname, port)  # WHY: post-action result summary.
 
     # ------------------------------------------------------------------
     # Known-hosts management (all moved out of EnhancedSSHRunner)

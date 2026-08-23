@@ -129,10 +129,12 @@ def test_download_one_writes_file_on_200(tmp_path: Path) -> None:
     response = MagicMock()
     response.status_code = 200
     response.iter_content.return_value = [b"AB", b"CD"]
+    response.__enter__.return_value = response  # WHY: the downloader now closes the body through a with block.
     with patch.object(mod.requests, "get", return_value=response):
         ok = ClientPacketCaptureDownloader._download_one(row, tmp_path)
     assert ok is True
     assert (tmp_path / "cap.pcap").read_bytes() == b"ABCD"
+    response.__exit__.assert_called_once()  # WHY: the streamed body must close on the success path too.
 
 
 def test_download_one_returns_false_on_non_200(tmp_path: Path) -> None:
@@ -140,10 +142,12 @@ def test_download_one_returns_false_on_non_200(tmp_path: Path) -> None:
     row = _CaptureRow("cap-1", "https://x/cap.pcap", "10", "cap.pcap")
     response = MagicMock()
     response.status_code = 404
+    response.__enter__.return_value = response  # WHY: the downloader now closes the body through a with block.
     with patch.object(mod.requests, "get", return_value=response):
         ok = ClientPacketCaptureDownloader._download_one(row, tmp_path)
     assert ok is False
     assert not (tmp_path / "cap.pcap").exists()
+    response.__exit__.assert_called_once()  # WHY: a non-200 reply must not leave the socket checked out.
 
 
 def test_download_one_returns_false_on_exception(tmp_path: Path) -> None:
