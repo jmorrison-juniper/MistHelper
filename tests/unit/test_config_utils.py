@@ -135,13 +135,13 @@ class TestCheckStopSignal:
         assert ConfigUtils.check_stop_signal() is False
 
     def test_file_present_returns_true_and_deletes(self):
-        with open("stop_loop.txt", "w") as handle:
+        with open("stop_loop.txt", "w", encoding="utf-8") as handle:
             handle.write("")
         assert ConfigUtils.check_stop_signal() is True
         assert not os.path.exists("stop_loop.txt")
 
     def test_consumed_signal_returns_false_next_call(self):
-        with open("stop_loop.txt", "w") as handle:
+        with open("stop_loop.txt", "w", encoding="utf-8") as handle:
             handle.write("")
         ConfigUtils.check_stop_signal()
         assert ConfigUtils.check_stop_signal() is False
@@ -149,7 +149,7 @@ class TestCheckStopSignal:
     def test_loop_breaks_on_signal(self):
         sites = ["site_a", "site_b", "site_c"]
         processed = []
-        with open("stop_loop.txt", "w") as handle:
+        with open("stop_loop.txt", "w", encoding="utf-8") as handle:
             handle.write("")
         for site in sites:
             if ConfigUtils.check_stop_signal():

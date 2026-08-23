@@ -777,7 +777,7 @@ try:  # Try to load environment variables from a .env file before any dependency
 except Exception:  # If python-dotenv is not installed yet, fall back to a manual parser
     # Inline fallback: read .env manually so env vars are available
     try:  # Try a best-effort manual parse of the .env file
-        with open(".env") as _ef:  # Open .env in the current working directory
+        with open(".env", encoding="utf-8") as _ef:  # Open .env in the current working directory
             for _line in _ef:  # Process the file one line at a time
                 _line = _line.strip()  # Remove surrounding whitespace and the trailing newline
                 if (
@@ -1154,7 +1154,7 @@ def _apply_dotenv_line(line: str) -> None:  # Set one KEY=VALUE pair from a .env
 def _fallback_load_dotenv() -> None:  # Minimal .env parser used when python-dotenv is not installed
     """Fallback .env loader when python-dotenv package is not installed."""
     try:  # The .env file is optional. Handle its absence/errors gracefully
-        with open(".env") as dotenv_file:  # Open .env in the current working directory
+        with open(".env", encoding="utf-8") as dotenv_file:  # Open .env in the current working directory
             for line in dotenv_file:  # Process the file one line at a time
                 _apply_dotenv_line(line)  # Set this KEY=VALUE pair (skips blanks/comments internally)
     except FileNotFoundError:  # No .env file present

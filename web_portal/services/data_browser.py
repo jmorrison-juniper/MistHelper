@@ -8,6 +8,7 @@ import csv
 import math
 import os
 import sqlite3
+from contextlib import closing
 
 ALLOWED_EXTENSIONS = {".csv", ".db", ".sqlite", ".log", ".json"}
 
@@ -188,15 +189,15 @@ class DataBrowserService:
     def _list_sqlite_tables(self, filepath: str) -> dict:
         """List tables and metadata in a SQLite database."""
         try:
-            conn = sqlite3.connect(f"file:{filepath}?mode=ro", uri=True)
-            cursor = conn.cursor()
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
-            tables = []
-            for (name,) in cursor.fetchall():
-                info = self._get_table_info(conn, name)
-                tables.append(info)
-            conn.close()
-            return {"tables": tables}
+            # WHY: closing() releases the handle on the error path too (issue #1900).
+            with closing(sqlite3.connect(f"file:{filepath}?mode=ro", uri=True)) as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+                tables = []
+                for (name,) in cursor.fetchall():
+                    info = self._get_table_info(conn, name)
+                    tables.append(info)
+                return {"tables": tables}
         except Exception as exc:
             return {"error": f"Failed to read SQLite: {exc}"}
 
@@ -220,32 +221,29 @@ class DataBrowserService:
     def _is_valid_table_name(self, filepath: str, table_name: str) -> bool:
         """Validate table_name exists in the database to prevent SQL injection."""
         try:
-            conn = sqlite3.connect(f"file:{filepath}?mode=ro", uri=True)
-            cursor = conn.cursor()
-            cursor.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
-                (table_name,),
-            )
-            exists = cursor.fetchone() is not None
-            conn.close()
-            return exists
+            # WHY: closing() releases the handle on the error path too (issue #1900).
+            with closing(sqlite3.connect(f"file:{filepath}?mode=ro", uri=True)) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                    (table_name,),
+                )
+                return cursor.fetchone() is not None
         except Exception:
             return False
 
     def _preview_sqlite(self, filepath: str, table_name: str, page: int, per_page: int, search: str) -> dict:
         """Read and paginate rows from a SQLite table."""
         try:
-            conn = sqlite3.connect(f"file:{filepath}?mode=ro", uri=True)
-            cursor = conn.cursor()
-            cursor.execute(f'PRAGMA table_info("{table_name}")')  # nosec B608 — validated
-            col_info = cursor.fetchall()
-            if not col_info:
-                conn.close()
-                return {"error": "Table not found"}
-            columns = [row[1] for row in col_info]
-            result = self._query_sqlite_page(conn, table_name, columns, page, per_page, search)
-            conn.close()
-            return result
+            # WHY: closing() releases the handle on the error path too (issue #1900).
+            with closing(sqlite3.connect(f"file:{filepath}?mode=ro", uri=True)) as conn:
+                cursor = conn.cursor()
+                cursor.execute(f'PRAGMA table_info("{table_name}")')  # nosec B608 — validated
+                col_info = cursor.fetchall()
+                if not col_info:
+                    return {"error": "Table not found"}
+                columns = [row[1] for row in col_info]
+                return self._query_sqlite_page(conn, table_name, columns, page, per_page, search)
         except Exception as exc:
             return {"error": f"Failed to read SQLite table: {exc}"}
 

@@ -364,7 +364,7 @@ class TestTelemetryEmitterRetention:
         data_dir = str(tmp_path / "data")
         os.makedirs(data_dir)
         for i in range(15):
-            with open(os.path.join(data_dir, f"test_events_{i:04d}.jsonl"), "w") as handle:
+            with open(os.path.join(data_dir, f"test_events_{i:04d}.jsonl"), "w", encoding="utf-8") as handle:
                 handle.write("{}\n")
         emitter = TelemetryEmitter(os.path.join(data_dir, "current.jsonl"))
         emitter.enforce_retention(directory=data_dir, limit=10)
@@ -385,7 +385,7 @@ class TestTelemetryEmitterRetention:
         data_dir = str(tmp_path / "data")
         os.makedirs(data_dir)
         for i in range(3):
-            with open(os.path.join(data_dir, f"test_events_{i:04d}.jsonl"), "w") as handle:
+            with open(os.path.join(data_dir, f"test_events_{i:04d}.jsonl"), "w", encoding="utf-8") as handle:
                 handle.write("{}\n")
         emitter = TelemetryEmitter(os.path.join(data_dir, "current.jsonl"))
         emitter.enforce_retention(directory=data_dir, limit=10)

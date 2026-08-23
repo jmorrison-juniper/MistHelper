@@ -10,7 +10,7 @@ from src.audit.analyzer import AuditLogAnalyzer
 from src.audit.filter import AuditLogFilter
 from src.audit.renderer import AuditReportRenderer
 
-with open("data/orgaudit-filtered.json") as f:
+with open("data/orgaudit-filtered.json", encoding="utf-8") as f:
     data = json.load(f)
 
 entries = data["results"]

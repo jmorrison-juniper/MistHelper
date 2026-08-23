@@ -161,7 +161,16 @@ target-version = "py313"
 extend-exclude = ["mist-ops-platform", "web_portal", "scripts", "src/maps"]
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "UP", "B", "G"]
+select = ["E", "F", "W", "I", "UP", "B", "G", "PLW1514"]
+# Issue #1795: PLW1514 (unspecified-encoding) is a preview rule. `preview` turns
+# preview rules on and `explicit-preview-rules` limits them to the codes named in
+# `select`, so no other preview rule reaches this gate. An `open()` call in text
+# mode without an explicit encoding uses the platform default. Windows returns
+# cp1252 and Linux returns utf-8. MistHelper writes state files on a Windows
+# workstation and reads them inside a Linux container, so a missing encoding
+# corrupts every character above code point 127.
+preview = true
+explicit-preview-rules = true
 # Phase 1 ignores (2026-03-12) -- tighten these incrementally:
 #   RESOLVED (2026-07-19, #886 slice): E402 moved from repo-wide ignore to
 #     scoped per-file-ignores; see the E402 block in [tool.ruff.lint.per-file-ignores]
