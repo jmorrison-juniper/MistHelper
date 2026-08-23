@@ -4845,6 +4845,31 @@ def _run_web_portal_server(app: Any, host: str, port: int, dev_debug: bool) -> N
         app.run(host=host, port=port, debug=dev_debug)  # Honor caller's debug flag locally
 
 
+def _resolve_web_portal_host() -> str:
+    """Return the address the web portal binds to.
+
+    The operator override wins. Inside a container the portal binds to every
+    interface, because the port mapping reaches the container from outside.
+    On a workstation the portal binds to the loopback address, so a shared or
+    untrusted network cannot reach a portal that holds a live Mist session.
+    """
+    logging.info("Resolving the web portal bind address")  # Log before the decision.
+    override = os.environ.get("WEB_HOST")  # The operator states an explicit address.
+    if override:  # An explicit value wins over both defaults.
+        logging.debug("Web portal bind address comes from WEB_HOST: %s", override)
+        return override
+    if EnvironmentUtils.is_running_in_container():  # The container needs every interface.
+        # The published port forwards to this address, so a narrower bind would
+        # refuse every request that arrives from the host. Bandit rule B104
+        # reports this bind, and the container condition above is the reason it
+        # is correct here. A workstation takes the loopback branch below.
+        host = "0.0.0.0"  # nosec B104
+        logging.debug("Web portal binds to all interfaces inside a container")
+        return host
+    logging.debug("Web portal binds to the loopback address on a workstation")
+    return "127.0.0.1"  # A workstation keeps the portal off the local network.
+
+
 def _launch_web_portal(args: argparse.Namespace) -> None:
     """Launch the Flask web portal.
 
@@ -4859,7 +4884,7 @@ def _launch_web_portal(args: argparse.Namespace) -> None:
     loader = PortalConfigLoader()  # Read web_port + other portal settings from env/.env
     config = loader.load_config()
     port = config["web_port"]
-    host = os.environ.get("WEB_HOST") or ".".join(("0",) * 4)  # All-interfaces bind (env override wins) for containers.
+    host = _resolve_web_portal_host()  # Loopback locally, all interfaces in a container.
 
     app = WebPortalApp.create_app(  # Construct Flask app with shared API session + menu registry
         apisession=apisession,

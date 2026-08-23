@@ -7,6 +7,28 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### State the web portal bind address and narrow it on a workstation (issue #1711)
+
+- **Defect (Fixed)**: `_launch_web_portal()` built the all-interfaces address
+  with `".".join(("0",) * 4)`. The expression produces `0.0.0.0`, and its only
+  purpose was to hide the literal from bandit rule B104. The project standard
+  allows a fix, a refactor, or a justified `# nosec`. It does not allow a
+  shortcut that silences a legitimate finding, because the expression records
+  no decision and no reason.
+- **Bind address (Changed)**: `_resolve_web_portal_host()` now states the
+  literal `"0.0.0.0"` and returns it only inside a container, where the
+  published port forwards to that address. A workstation binds to `127.0.0.1`,
+  so a shared or untrusted network cannot reach a portal that holds a live Mist
+  session. Before this change a workstation run exposed the portal on every
+  interface.
+- **Override (Kept)**: `WEB_HOST` still wins over both defaults.
+- **Suppression (Added)**: the bind carries `# nosec B104` with a comment that
+  states the container condition and the reason, so the decision is on record.
+- **Tests (Added)**: `tests/unit/test_web_portal_bind_address.py` holds 7 tests.
+  They cover the loopback default, the container bind, both override paths, the
+  absence of any address building expression, the justified suppression, and
+  the launcher call.
+
 ### Add a real readiness probe and keep the health endpoint cheap (issue #1863)
 
 - **Defect (Fixed)**: the `/health` endpoint returned the fixed text `healthy` on
