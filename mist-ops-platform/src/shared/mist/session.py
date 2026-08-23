@@ -137,8 +137,16 @@ class MistSessionFactory:
         try:
             import redis as redis_lib
 
-            client = redis_lib.Redis.from_url(self._settings.redis_url)
+            from src.shared.redis_timeouts import redis_timeout_kwargs
+
+            logger.info("Redis token cache client build starts.")  # Announce the connect attempt.
+            # WHY: a client with no socket limit holds this worker forever on a silent host.
+            client = redis_lib.Redis.from_url(
+                self._settings.redis_url,
+                **redis_timeout_kwargs(),
+            )
             client.ping()
+            logger.debug("Redis token cache client build done.")  # Confirm the live connection.
             return client
         except Exception:
             logger.debug("Redis not available for token cache")
@@ -152,8 +160,15 @@ class MistSessionFactory:
             # WHY: lazy import, matches the sync client pattern.
             import redis.asyncio as redis_async_lib
 
-            # WHY: connects lazily.
-            self._rate_redis = redis_async_lib.Redis.from_url(self._settings.redis_url)
+            from src.shared.redis_timeouts import redis_timeout_kwargs
+
+            logger.info("Async Redis rate limit client build starts.")  # Announce the connect.
+            # WHY: the same socket limits stop a silent host from holding the rate limiter.
+            self._rate_redis = redis_async_lib.Redis.from_url(
+                self._settings.redis_url,
+                **redis_timeout_kwargs(),
+            )
+            logger.debug("Async Redis rate limit client build done.")  # Confirm the client exists.
             return self._rate_redis
         except Exception:
             # WHY: fail open, like the token cache.

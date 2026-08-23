@@ -234,12 +234,19 @@ def _cache_worker_token(org_ids: list[str], token: str) -> None:
     import redis as redis_lib
 
     from src.shared.config.settings import get_settings
+    from src.shared.redis_timeouts import redis_timeout_kwargs
 
     try:
-        client = redis_lib.Redis.from_url(get_settings().redis_url)  # Address the shared Redis.
+        logger.info("Worker token cache write starts for %d orgs.", len(org_ids))  # Announce it.
+        # WHY: a client with no socket limit holds this uvicorn worker on a silent Redis host.
+        client = redis_lib.Redis.from_url(
+            get_settings().redis_url,
+            **redis_timeout_kwargs(),
+        )  # Address the shared Redis.
         for oid in org_ids:  # Each org key lets a worker find the token for that org.
             client.setex(f"mist_token:{oid}", 8 * 3600, token)
         client.close()  # Release the socket, because this route holds no long-lived client.
+        logger.debug("Worker token cache write done for %d orgs.", len(org_ids))  # Confirm it.
     except (redis_lib.RedisError, OSError, ValueError) as error:  # Redis, socket, and URL faults.
         # WHY: the worker falls back to the environment token. A cache miss must not fail login.
         logger.debug("Redis token cache unavailable: %s", error)  # Make the cache miss visible.
