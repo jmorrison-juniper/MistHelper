@@ -583,6 +583,36 @@ Version 26.08.23.01.26
   to call twice. `tests/e2e/conftest.py` now tears its session-scoped Flask app
   down through `shutdown_app`, so the long-lived test fixture no longer leaks
   its own heartbeat thread.
+### Report the real Mist status from list_all_entities (issue #1884)
+
+- **Defect (Fixed)**: `MistEndpointService.list_all_entities` built its result
+  with the hardcoded status `200`. A Mist API failure therefore reached the
+  caller as a success. `_extract_list` then turned the error body into one data
+  record, so the inventory sync wrote a site row with a random identifier and an
+  empty name. The sync ledger recorded that run as a success of one site. The
+  drift check compared the live configuration against that row, so every real
+  site looked like a drift.
+- **Status code (Changed)**: `_paginate` now returns the rows and the last
+  response. `list_all_entities` reads the real status from that response through
+  `_wrap`. On a failure the result holds the Mist error body and no data records.
+- **Error body (Changed)**: `_extract_list` returns an empty list for a body that
+  is not a list. The old `[data] if data else []` fallback is gone, so an error
+  body can never become a data record.
+- **Page cap (Kept)**: `main` already caps the page loop at `MAX_PAGINATION_PAGES`
+  and already stops a repeated cursor through `_accept_cursor` (issue #1903). This
+  branch therefore adds no second cap and no second repeat guard. `_paginate` keeps
+  the rate limiting and the 429 retry of `_invoke_with_protection` (issue #1886)
+  and only changes its return value to carry the last response.
+- **Inventory sync (Changed)**: `_sync_sites` and `_sync_devices` now call
+  `_read_records`, which reads `result.success` before it reads `result.data`. A
+  failure raises the new `MistSyncError`, so the service writes no row and the
+  sync ledger records the run as a failure with the Mist error text.
+- **Tests (Added)**: `mist-ops-platform/tests/unit/mist/test_list_status.py`
+  holds 11 cases. They prove a failed page reports a failure, that an error body
+  never becomes a data record, that a repeated cursor stops the loop, that the
+  page cap stops the loop, that a page which stays at 429 reports the failure
+  once the retries run out, and that a failed list writes no site row and no
+  device row.
 
 ### Add a real readiness probe and keep the health endpoint cheap (issue #1863)
 

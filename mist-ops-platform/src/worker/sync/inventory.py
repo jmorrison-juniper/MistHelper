@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
@@ -25,7 +25,14 @@ from src.shared.models.inventory import (
     SyncLedgerEntry,
 )
 
+if TYPE_CHECKING:  # the sync code reads ApiResult as a type only
+    from src.shared.mist.endpoints import ApiResult
+
 logger = logging.getLogger(__name__)
+
+
+class MistSyncError(RuntimeError):
+    """Raised when the Mist API reports a failure during a sync run."""
 
 
 class InventorySyncService:
@@ -44,7 +51,11 @@ class InventorySyncService:
     # -- public entry point ----------------------------------------------
 
     def sync_full_inventory(self) -> dict[str, int]:
-        """Run a complete org-tree sync; return item counts."""
+        """Run a complete org-tree sync and return the item counts.
+
+        A Mist API failure raises ``MistSyncError``. The ledger then records
+        the run as a failure, and the service writes no inventory row.
+        """
         ledger = self._create_ledger_entry()
         try:
             counts = self._do_sync()
@@ -58,27 +69,43 @@ class InventorySyncService:
 
     def _sync_sites(self, org_uuid: UUID) -> int:
         """Fetch and upsert sites for the org."""
+        logger.info("Fetch the site list of org %s from Mist", self._org_id)  # log the start
         result = self._mist.list_all_entities(
             "org_site_list",
             ids={"org_id": self._org_id},
         )
-        sites = result.data if isinstance(result.data, list) else []
-        for site_data in sites:
+        sites = self._read_records(result, "site")  # a failure raises and writes no row
+        for site_data in sites:  # write one row for each real site
             self._upsert_site(org_uuid, site_data)
-        self._db.flush()
+        self._db.flush()  # push the rows into the open transaction
+        logger.debug("Upsert of %d site rows is complete", len(sites))  # log the result
         return len(sites)
 
     def _sync_devices(self, org_uuid: UUID) -> int:
         """Fetch and upsert devices for all sites in the org."""
+        logger.info("Fetch the device list of org %s from Mist", self._org_id)  # log the start
         result = self._mist.list_all_entities(
             "org_inventory",
             ids={"org_id": self._org_id},
         )
-        devices = result.data if isinstance(result.data, list) else []
-        for device_data in devices:
+        devices = self._read_records(result, "device")  # a failure raises and writes no row
+        for device_data in devices:  # write one row for each real device
             self._upsert_device(org_uuid, device_data)
-        self._db.flush()
+        self._db.flush()  # push the rows into the open transaction
+        logger.debug("Upsert of %d device rows is complete", len(devices))  # log the result
         return len(devices)
+
+    @staticmethod
+    def _read_records(result: ApiResult, label: str) -> list[dict[str, Any]]:
+        """Return the Mist records, or raise when the Mist call failed."""
+        if not result.success:  # a failed call must never write an inventory row
+            msg = f"Mist {label} list failed with status {result.status_code}: {result.error}"
+            logger.error("%s", msg)  # report the failure before the raise
+            raise MistSyncError(msg)  # the ledger records this run as a failure
+        if not isinstance(result.data, list):  # a non-list body holds no records
+            logger.warning("Mist %s list body is not a list, so read no records", label)
+            return []
+        return result.data  # only a successful list body reaches the upsert helpers
 
     # -- upsert helpers --------------------------------------------------
 
