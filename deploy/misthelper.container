@@ -18,6 +18,9 @@ HealthStartPeriod=60s
 HealthOnFailure=restart
 
 [Service]
+# Restart the container after every exit, including a crash of a supervised
+# service. container/scripts/start.sh exits with a non-zero status when the web
+# portal or sshd dies, so an on-failure policy also acts. See issue #1925.
 Restart=always
 RestartSec=5
 # Give the shutdown chain time to finish before systemd forces a stop.
