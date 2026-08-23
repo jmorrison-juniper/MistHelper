@@ -1,4 +1,4 @@
-import { Fragment, useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Dialog, DialogPanel, DialogTitle } from '@headlessui/react';
 
 interface ConfirmationDialogProps {
@@ -30,7 +30,10 @@ export default function ConfirmationDialog({
   }, [confirmKeyword]);
 
   return (
-    <Dialog open onClose={onCancel} as={Fragment}>
+    // Headless UI must render a real element here. A Fragment cannot carry the
+    // ref and the aria attributes that the dialog sets, so `as={Fragment}`
+    // threw "Passing props on Fragment" and the dialog never appeared.
+    <Dialog open onClose={onCancel}>
       <div className="fixed inset-0 bg-black/50 z-40" aria-hidden="true" />
       <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
         <DialogPanel className="bg-surface-primary rounded-lg shadow-xl max-w-md w-full p-6" aria-describedby="confirm-description confirm-impact">

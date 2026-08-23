@@ -12,7 +12,8 @@ interface TelemetryEvent {
 const BATCH_INTERVAL_MS = 30_000;
 const MAX_BATCH_SIZE = 50;
 
-let buffer: TelemetryEvent[] = [];
+// The array is mutated through push and splice, and never reassigned.
+const buffer: TelemetryEvent[] = [];
 
 function push(event: TelemetryEvent) {
   buffer.push(event);

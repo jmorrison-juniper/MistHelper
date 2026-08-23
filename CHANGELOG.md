@@ -30,6 +30,55 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
   verified red first. They report 2 failures against the old workflow and 5
   passes against the new one.
 
+### The ops-portal CI gate now blocks a merge (issue #1852)
+
+- **Defect (Fixed)**: the `ops_portal` job ran `typecheck`, `lint`, and `test`
+  with `continue-on-error: true`. Each step failed on a configuration defect,
+  so each step reported a result and blocked nothing. The `ops_portal` job is
+  the only gate that reads the TypeScript source and the npm dependency tree.
+  The whole `ops-portal/` application therefore had no enforcing check.
+- **Type check (Fixed)**: `tsconfig.json` set the deprecated `baseUrl` option,
+  and TypeScript 6 refuses it. The option is deleted. The `paths` map resolves
+  relative to the config file, so the `@/*` alias still works. `vite.config.ts`
+  carries its own alias, so the build is unchanged.
+- **Broken imports (Fixed)**: the `baseUrl` error stopped TypeScript before it
+  read any file, so three broken imports in `src/router.tsx` stayed hidden.
+  The router loaded `@/pages/config/TimeTravelPage`, `RevisionsPage`, and
+  `BaselinesPage`, and none of the three files existed. Three `/config` routes
+  and the `time-travel` route pointed at nothing. The three pages are added.
+  Each one reads the existing `configQueries` API layer.
+- **Lint (Fixed)**: the project shipped `.eslintrc.cjs`, and eslint 10 reads
+  `eslint.config.js` only, so eslint found no configuration and exited
+  non-zero. A flat `eslint.config.js` replaces it. Each plugin supplies its own
+  flat configuration, so the file needs no `FlatCompat` shim.
+- **Lint findings (Fixed)**: the working lint step found four errors that had
+  reached `main`. `src/hooks/useTelemetry.ts` declared a never reassigned
+  binding with `let`. `src/pages/deploy/TemplatesPage.tsx` held three labels
+  with no associated control, which a screen reader cannot read. Each label now
+  wraps its control.
+- **Tests (Added)**: the project shipped no test, and vitest exits non-zero
+  when it finds no test. `vitest.config.ts` and
+  `src/components/ConfirmationDialog.test.tsx` add 12 tests. The suite covers
+  the confirmation dialog, which is the safety gate for every destructive
+  action in the portal.
+- **Dialog crash (Fixed)**: the first test run proved that
+  `ConfirmationDialog` threw "Passing props on Fragment" and never rendered.
+  The component passed `as={Fragment}` to the Headless UI dialog, and a
+  Fragment cannot carry the ref and the aria attributes that the dialog sets.
+  Seven call sites guard a destructive action with this dialog. The prop is
+  removed.
+- **Dependencies (Added)**: `@eslint/js`, `globals`, `jsdom`, and
+  `@testing-library/dom` are added as dev dependencies. The lint configuration
+  and the test environment need them. `npm audit` still reports zero
+  vulnerabilities.
+- **Gate (Changed)**: `.github/workflows/ci.yml` drops `continue-on-error` from
+  all three steps. A type error, a lint error, and a failing test now each stop
+  a merge.
+- **Flag (Unchanged)**: `npm ci` keeps `--legacy-peer-deps`. Both
+  `eslint-plugin-jsx-a11y` 6.10.2 and `eslint-plugin-react` 7.37.5 cap their
+  eslint peer range below the installed eslint 10.7.0, and both are the newest
+  published releases. The workflow comment records the measurement.
+
 ### Stop the ZTP password from reaching a stored stream (issue #1735)
 
 - **Defect (Fixed)**: `src/device/_utility_commands_action.py` printed the live
