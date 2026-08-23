@@ -18,6 +18,10 @@ from src.shared.mist.types import MistEndpoint, MistEntityRegistry
 
 logger = logging.getLogger(__name__)
 
+# WHY: bound the pagination loop so one endpoint cannot exhaust the worker heap.
+# A sync of a large organization stays well under this count. Issue #1903.
+MAX_PAGINATION_PAGES = 500
+
 
 @dataclass(frozen=True, slots=True)
 class ApiResult:
@@ -132,14 +136,40 @@ class MistEndpointService:
         return ApiResult(status_code=status, data=data)
 
     def _paginate(self, func: Any, args: dict[str, str]) -> list:
-        """Follow SDK pagination until all pages retrieved."""
+        """Follow SDK pagination until the last page, the page limit, or a repeat."""
         all_data: list = []
         response = func(self._session, **args)
         all_data.extend(self._extract_list(response))
-        while getattr(response, "next", None):
-            response = func(self._session, **args, next=response.next)
+        seen_cursors: set[str] = set()  # WHY: a repeated cursor means the API is looping.
+        pages = 1  # WHY: the first page is already in all_data.
+        while cursor := getattr(response, "next", None):
+            if not self._accept_cursor(cursor, seen_cursors, pages, func):
+                break  # WHY: the guard already logged the reason.
+            response = func(self._session, **args, next=cursor)
             all_data.extend(self._extract_list(response))
+            pages += 1  # WHY: count the page against MAX_PAGINATION_PAGES.
         return all_data
+
+    @staticmethod
+    def _accept_cursor(cursor: Any, seen: set[str], pages: int, func: Any) -> bool:
+        """Return True when the loop may fetch one more page."""
+        name = getattr(func, "__name__", "unknown")  # WHY: name the endpoint in the log.
+        if pages >= MAX_PAGINATION_PAGES:  # WHY: bound the heap and the run time.
+            logger.warning(
+                "Pagination for %s stopped at the %d page limit. The result is incomplete.",
+                name,
+                MAX_PAGINATION_PAGES,
+            )
+            return False
+        key = str(cursor)  # WHY: the cursor may be any type the SDK returns.
+        if key in seen:  # WHY: a repeat means the loop would never end.
+            logger.error(
+                "Pagination for %s repeated a cursor. Stopping to avoid an endless loop.",
+                name,
+            )
+            return False
+        seen.add(key)  # WHY: record the cursor before the next call.
+        return True
 
     @staticmethod
     def _extract_list(response: Any) -> list:
