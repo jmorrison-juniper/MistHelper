@@ -345,6 +345,35 @@ that runs without a proxy needs no action.
   an unanchored rule returns, if the package leaves the checkout, if a field
   default binds to every interface, or if an inert `# noqa: S` note returns.
 
+### Route the Starlink status line through the GPS precision control (issue #1838)
+
+- **Defect (Fixed)**: `StarlinkStatusWidget._status_part_location` built its
+  status line with a hardcoded `:.4f` format on the latitude and on the
+  longitude. That path never called `_format_gps_coordinate`, so it ignored both
+  the `GPS_PRECISION_DECIMALS` default and the operator opt-in that issue #1737
+  added. Four decimal places locate a driveway, and the line reaches stdout,
+  where a redirect or a recorded SSH session can capture it into a support
+  bundle.
+- **Cause (Recorded)**: pull request #1834 fixed the two paths that CodeQL
+  reported as alert 190 and alert 191. Both sat in `_dump_diagnostics_location`.
+  CodeQL never flagged the status line, so the alert-scoped triage never reached
+  it. The module then held two different rules for one value.
+- **Status line (Changed)**: the method now calls `_format_gps_coordinate` for
+  each coordinate. One rule governs every coordinate the module prints. The
+  default rounds to about 100 meters, and `STARLINK_DASHBOARD_EXACT_GPS` returns
+  the exact value through this path too.
+- **Delivery (Recorded)**: pull request #1849 landed the code change and the
+  test cases first. This entry records the fix in the changelog, because #1849
+  merged without one. The source and the tests here match the merged version.
+- **Tests (Added)**: four cases in
+  `tests/unit/test_starlink_dashboard_startup_and_gps.py`. Three prove the
+  behavior of the status line: it rounds on a default run, it returns the exact
+  pair after the opt-in, and it returns `None` when the terminal reports no
+  location. The fourth scans the module source and fails when any coordinate
+  format field states a literal decimal count, so a new caller cannot reopen the
+  same gap. All three behavior tests fail against the unfixed source. All 11
+  tests in the file pass against the fix.
+
 ### Replace the assert runtime guards in the SSH package (issue #1720)
 
 - **Defect (Fixed)**: four runtime guards used `assert`. The interpreter removes
