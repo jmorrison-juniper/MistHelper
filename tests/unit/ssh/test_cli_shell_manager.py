@@ -63,10 +63,25 @@ class TestModuleLevelPyteImport:
     """Cover the module-level ``try/except ImportError`` around pyte."""
 
     def test_has_pyte_flag_reflects_import_state(self):
-        """The ``_has_pyte`` flag mirrors whether the ``pyte`` import succeeded."""
-        # Under the normal test environment pyte is installed and _has_pyte is True.
-        assert csm_module._has_pyte is True
-        assert csm_module.pyte is not None
+        """The ``_has_pyte`` flag mirrors whether the ``pyte`` import succeeded.
+
+        Why:
+            The ``pyte`` package is an optional dependency. The module wraps the
+            import in ``try/except ImportError`` and degrades to a warning. A
+            fixed ``assert _has_pyte is True`` asserts the machine, not the code,
+            so it fails on any checkout without the package. This asserts the
+            invariant between the flag and the real import state instead.
+        """
+        try:  # WHY: reproduce the exact import the module performs at load time.
+            import pyte as real_pyte  # noqa: F401  # WHY: presence is the fact under test.
+
+            pyte_is_importable = True  # WHY: the import succeeded, so the flag must be True.
+        except ImportError:  # WHY: the optional package is absent on this machine.
+            pyte_is_importable = False  # WHY: the flag must be False and the alias must be None.
+        # WHY: the flag must agree with the real import state in both directions.
+        assert csm_module._has_pyte is pyte_is_importable
+        # WHY: the module sets the alias to None only on the ImportError path.
+        assert (csm_module.pyte is not None) is pyte_is_importable
 
     def test_import_falls_back_when_pyte_missing(self, monkeypatch):
         """Load the module into an isolated namespace with ``pyte`` blocked to exercise the ImportError branch."""
