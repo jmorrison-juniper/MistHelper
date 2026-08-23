@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 import pytest
 
 from src.shared.config.constants import AlertSeverity, AlertType
-from src.shared.services.diff import DiffService
+from src.shared.services.diff import DIFF_CHANGE_TYPES, DiffService
 
 
 class TestDriftDetectionIntegration:
@@ -62,7 +62,12 @@ class TestDriftDetectionIntegration:
         result = svc.compute_diff(baseline_config, drifted_config)
         for change in result.changes:
             assert len(change.path) > 0
-            assert change.change_type in ("changed", "added", "removed")
+            # This test asserted ("changed", "added", "removed"). DiffService never
+            # emitted those three labels, so the test always failed. The narrower
+            # set also loses the split between a value change and a type change.
+            # The assertion now reads the exported vocabulary, so a new label must
+            # join DIFF_CHANGE_TYPES before it can reach a drift alert.
+            assert change.change_type in DIFF_CHANGE_TYPES
 
     def test_drift_summary_counts(
         self,

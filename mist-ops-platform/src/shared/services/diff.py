@@ -14,6 +14,22 @@ from deepdiff import DeepDiff
 
 logger = logging.getLogger(__name__)
 
+# The four labels below are the whole public vocabulary of DiffChange.change_type.
+# A drift alert, a config diff response, and the ops portal all read this field,
+# so the value must stay stable. deepdiff uses its own longer key names, such as
+# "dictionary_item_added". _collect_additions and its siblings map those keys onto
+# this set, which keeps the deepdiff vocabulary out of the API.
+# ScheduledJob.change_type is a String(20) column, so every label must fit in 20
+# characters. The longest label here is "value_changed" at 13 characters.
+DIFF_CHANGE_TYPES: frozenset[str] = frozenset(
+    {
+        "value_changed",
+        "item_added",
+        "item_removed",
+        "type_changed",
+    }
+)
+
 
 class DiffChange:
     """Single field-level change record."""
