@@ -21,6 +21,7 @@ via its own ``__getattr__`` to sibling clusters when needed.
 from __future__ import annotations  # WHY: postponed evaluation for forward-ref type hints
 
 import logging  # WHY: exception-level logging when API calls fail
+import sys  # WHY: the terminal check keeps the ZTP credential off a stored stream
 from typing import Any  # WHY: Any narrows the SDK response type
 
 import mistapi  # WHY: direct SDK access mirrors parent module's usage
@@ -264,24 +265,80 @@ class _UtilityCommandsAction(_ClusterBase):  # WHY: cluster wrapper mirroring ea
                 site_id,
                 device_id,
             )  # WHY: fetch one-time ZTP credential
-            self._render_ztp_response(response)  # WHY: display on console only
+            self._render_ztp_response(response)  # WHY: show the value on a live terminal only
         except Exception as error:  # WHY: log-and-continue on SDK/transport failure
             error_msg = f"{type(error).__name__}: {str(error)}"  # WHY: qualify error type
             logging.error("ZTP password request failed: %s", error_msg)  # WHY: audit failure
             print(f"! ZTP password request failed: {error_msg}")  # WHY: surface error
 
     @staticmethod
-    def _render_ztp_response(response: Any) -> None:
-        """Render the ZTP password to the console, never to logs."""
+    def _stdout_is_terminal() -> bool:
+        """Report whether stdout is a live terminal.
+
+        A shell redirect, a pipe, and a recorded SSH session are not
+        terminals. Each one stores the bytes that the tool writes. Menu 144
+        uses this answer to decide whether the ZTP credential is safe to
+        print. Issue #1735 states the reason.
+        """
+        isatty = getattr(sys.stdout, "isatty", None)  # WHY: a replaced stdout can lack the method
+        if not callable(isatty):  # WHY: an unknown stream type is not a proven terminal
+            return False  # WHY: withhold the credential when the stream type is unclear
+        try:
+            return bool(isatty())  # WHY: True only for a live terminal
+        except (OSError, ValueError):  # WHY: a closed or detached stream raises here
+            return False  # WHY: withhold the credential when the check fails
+
+    @staticmethod
+    def _print_ztp_credential(ztp_credential: str) -> None:
+        """Print the ZTP credential on a live terminal.
+
+        Security review 2026-08-22. Issue #1735. CodeQL alert 173.
+
+        Reason: menu 144 exists so an operator can read the one-time ZTP
+        credential on screen. The caller prints the value only when stdout
+        is a live terminal. A shell redirect, a pipe, and a recorded SSH
+        session receive the withheld notice.
+
+        Rule: this function must never call the ``logging`` module, and no
+        caller may pass ``ztp_credential`` to a log record. Issue #886
+        migrates each ``print()`` call to a logger. This function is out of
+        scope for that migration. The test
+        ``TestZtpCredentialMigrationRule`` enforces the rule.
+
+        Next review: when issue #886 lands, when menu 144 changes how it
+        delivers the credential, or when CodeQL reopens alert 173.
+        """
+        print(f"\n-> ZTP Password: {ztp_credential}")  # noqa: T201
+        print("-> The value appears on this terminal only. Copy it now.")  # WHY: one-time value
+
+    @staticmethod
+    def _print_ztp_withheld() -> None:
+        """Print the withheld notice when stdout is not a live terminal.
+
+        The notice does not hold the value, because the stream that reads
+        the notice can store it. The notice tells the operator how to get
+        the value.
+        """
+        print("\n-> ZTP Password withheld. This output is not a live terminal.")  # WHY: state the decision
+        print("-> A redirect, a pipe, or a recorded SSH session would store the value.")  # WHY: state the reason
+        print("-> Run menu 144 again from an interactive terminal to read the value.")  # WHY: first alternate source
+        print("-> The Mist portal also shows the value on the device Utilities page.")  # WHY: second alternate source
+
+    @classmethod
+    def _render_ztp_response(cls, response: Any) -> None:
+        """Render the ZTP password result for the operator."""
         if not hasattr(response, "data"):  # WHY: no payload -> nothing to show
             print("! No password data returned.")  # WHY: signal empty payload
             return
         data = response.data if isinstance(response.data, dict) else {}  # WHY: guard shape
         ztp_credential = data.get("password", str(response.data))  # WHY: prefer dict field
-        # Intentional: user-requested display of ZTP credential to console
-        # only. Not sent to logging framework.
-        print(f"\n-> ZTP Password: {ztp_credential}")  # noqa: T201
-        print("-> (Password displayed on console only - not logged or saved)")  # WHY: reassure operator
+        on_terminal = cls._stdout_is_terminal()  # WHY: a stored stream must not receive the value
+        logging.info("Rendering the ZTP password result, terminal=%s", on_terminal)  # WHY: audit, value excluded
+        if on_terminal:  # WHY: only a live terminal receives the credential
+            cls._print_ztp_credential(ztp_credential)  # WHY: operator reads the value on screen
+        else:  # WHY: a redirect, a pipe, or a recorded session must not store the value
+            cls._print_ztp_withheld()  # WHY: name the alternate sources instead
+        logging.debug("ZTP password render finished, terminal=%s", on_terminal)  # WHY: audit, value excluded
 
     def get_config_commands(self) -> None:
         """Menu 145: Get configuration CLI commands for switch."""

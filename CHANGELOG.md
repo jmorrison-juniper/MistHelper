@@ -7,6 +7,34 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Stop the ZTP password from reaching a stored stream (issue #1735)
+
+- **Defect (Fixed)**: `src/device/_utility_commands_action.py` printed the live
+  ZTP password to stdout on every call of menu 144. CodeQL alert 173 reported
+  clear-text logging of sensitive data. Three paths stored the value. The first
+  path is an SSH session transcript on container port 2200. The second path is a
+  shell redirect such as `MistHelper.py > run.txt`. The third path is a planned
+  print-to-logging migration under issue #886.
+- **Terminal gate (Added)**: `_stdout_is_terminal()` calls `sys.stdout.isatty()`
+  before the print. The value now reaches a live terminal only. A stream that
+  lacks `isatty`, and a stream that raises on the call, both count as unsafe.
+- **Withheld notice (Added)**: a redirect, a pipe, and a recorded session now
+  receive a four-line notice. The notice states the decision and the reason. The
+  notice also gives two other sources for the value. The notice never holds the
+  value.
+- **Comment (Changed)**: the old comment claimed the value could not reach a
+  file, and the code did not enforce that claim. The new docstring states the
+  review date 2026-08-22, the reason, the migration rule, and the next review
+  trigger.
+- **Migration rule (Added)**: `TestZtpCredentialMigrationRule` parses the source
+  of the three helpers. The test fails when a `logging` call appears next to the
+  credential. The rule now lives in a test, so a lost comment cannot drop it.
+- **Tests (Added)**: `tests/unit/test_device_utility_commands.py` gains 13 cases.
+  They prove that a terminal stdout prints the value. They prove that a pipe
+  stdout prints the value nowhere. They prove that no log record holds the value
+  in either mode. They also prove that the empty-payload path and the error path
+  keep their old behavior.
+
 ### Add a real readiness probe and keep the health endpoint cheap (issue #1863)
 
 - **Defect (Fixed)**: the `/health` endpoint returned the fixed text `healthy` on
