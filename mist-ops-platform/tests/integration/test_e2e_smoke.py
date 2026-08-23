@@ -35,7 +35,15 @@ class TestE2ESmokeComponents:
         from src.api.main import create_app
 
         app = create_app()
-        paths = [route.path for route in app.routes]
+        # FastAPI 0.141 defers an included router into an _IncludedRouter marker,
+        # so app.routes holds markers rather than the mounted paths. The old list
+        # comprehension read route.path on those markers and raised AttributeError,
+        # so this test never checked a single route. The OpenAPI schema resolves
+        # every included router, and it is the same surface a client reads.
+        paths = list(app.openapi().get("paths", {}))
+        # An empty mapping would satisfy the any() check below by accident, so this
+        # floor proves the routers mounted. create_app publishes 48 paths today.
+        assert len(paths) >= 40, f"create_app published only {len(paths)} paths"
         # Core endpoints exist
         assert any("/healthz" in p for p in paths)
 
