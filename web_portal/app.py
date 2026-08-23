@@ -79,15 +79,17 @@ class WebPortalApp:
         raw_enabled = os.environ.get(WEBHOOK_ENABLED_CONFIG_KEY, "true")  # WHY: match the src/db default.
         enabled = raw_enabled.strip().lower() == "true"  # WHY: only the exact word "true" turns the route on.
         app.config[WEBHOOK_ENABLED_CONFIG_KEY] = enabled
-        secret = os.environ.get(WEBHOOK_SECRET_CONFIG_KEY, "").strip()  # WHY: whitespace is not a secret.
-        app.config[WEBHOOK_SECRET_CONFIG_KEY] = secret
-        has_secret = bool(secret)  # WHY: log only whether a secret exists, never the value itself.
-        if enabled and not has_secret:
+        app.config[WEBHOOK_SECRET_CONFIG_KEY] = os.environ.get(WEBHOOK_SECRET_CONFIG_KEY, "").strip()
+        logging.info("Webhook receiver enabled=%s", enabled)  # WHY: log the setting, never the secret.
+        if app.config[WEBHOOK_SECRET_CONFIG_KEY]:  # WHY: a branch reports the state without logging the value.
+            logging.debug("Webhook receiver found a configured secret")
+        elif enabled:
             logging.error(
                 "Webhook receiver is enabled, but WEBHOOK_SECRET is empty. "
                 "The portal rejects every webhook with code 503 until you set the secret."
             )  # WHY: an operator must see the cause before the first 503 reply arrives.
-        logging.debug("Webhook receiver enabled=%s, secret configured=%s", enabled, has_secret)
+        else:
+            logging.debug("Webhook receiver is off and holds no secret")
 
     @staticmethod
     def _inject_dependencies(
