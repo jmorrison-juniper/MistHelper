@@ -117,10 +117,15 @@ class TestReadinessSqliteDatabase:
         assert payload["checks"]["sqlite_database"]["ok"] is True
 
     def test_ready_returns_503_when_the_database_file_is_corrupt(self, writable_data_dir: str) -> None:
-        """A file that SQLite cannot read must produce code 503."""
+        """A file that SQLite cannot read must produce code 503.
+
+        The check must read a real database page. A query such as
+        ``SELECT 1`` answers from memory, so SQLite never validates the
+        file header and a corrupt file passes.
+        """
         db_path = os.path.join(writable_data_dir, dashboard_module.SQLITE_DATABASE_FILENAME)
-        with open(db_path, "w", encoding="utf-8") as handle:  # WHY: plain text is not a SQLite file.
-            handle.write("this is not a database")
+        with open(db_path, "wb") as handle:  # WHY: a wrong header makes SQLite reject the file.
+            handle.write(b"this is not a database" + b"\x00" * 4096)
         client = _build_test_app(writable_data_dir).test_client()
 
         response = client.get("/ready")

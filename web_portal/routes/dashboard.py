@@ -133,11 +133,13 @@ def _check_sqlite_database(data_dir: str) -> dict:
 
 
 def _query_sqlite_database(db_path: str) -> None:
-    """Open the database read-only and run one cheap query."""
+    """Open the database read-only and read the schema table."""
     uri = "file:%s?mode=ro" % db_path.replace("\\", "/")  # WHY: a SQLite URI accepts forward slashes only.
     connection = sqlite3.connect(uri, uri=True, timeout=READINESS_QUERY_TIMEOUT_SECONDS)  # WHY: read-only is safe.
     try:
-        connection.execute("SELECT 1")  # WHY: a trivial query proves the connection works.
+        # WHY: this query reads a real page, so SQLite validates the file header.
+        # A query such as "SELECT 1" answers from memory and passes on a corrupt file.
+        connection.execute("SELECT count(*) FROM sqlite_master").fetchone()
     finally:
         connection.close()  # WHY: always close so the probe leaks no file handle.
 

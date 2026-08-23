@@ -32,6 +32,11 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
   cases. They prove `/ready` returns 503 for a read-only data directory, that the
   body names the failed check, that `/ready` returns 200 when the directory is
   writable, and that `/health` answers while every disk call raises.
+- **SQLite query (Changed)**: the database check runs
+  `SELECT count(*) FROM sqlite_master`. That query reads a real page, so SQLite
+  validates the file header. The first version ran `SELECT 1`, which answers from
+  memory. A corrupt database therefore passed the check on the Linux build of
+  SQLite, and the test caught the miss only in CI.
 - **Deferred**: the `Containerfile`, the `Dockerfile`, and `compose.yml` still
   need a probe. Open pull request #1825 owns those three files today.
 
