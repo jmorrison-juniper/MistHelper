@@ -66,6 +66,30 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
   protection of an active run, the retention period, the dropped count in the
   response, and the fallback for an unusable setting.
 
+### Bind the web portal IP allowlist to the peer address (issue #1857)
+
+- **Defect (Fixed)**: `SecurityMiddleware._get_client_ip` read the
+  client-supplied `X-Forwarded-For` header and fed that value into the
+  `PORTAL_ALLOWED_IPS` check. No reverse proxy sits in front of the portal, so a
+  blocked caller reached every portal operation with one extra header.
+- **Peer address (Changed)**: `SecurityMiddleware._get_peer_ip` returns
+  `request.remote_addr`, and the allowlist judges that address. A caller cannot
+  forge the socket peer address.
+- **PORTAL_TRUSTED_PROXIES (Added)**: this new setting names the reverse proxy
+  addresses that the portal trusts. The default value is empty. The portal reads
+  the forwarded header only when the peer address matches an entry. An entry is
+  a plain address or a CIDR range.
+- **Forwarded entry (Changed)**: `SecurityMiddleware._resolve_client_ip` reads
+  the rightmost entry of the header, because that entry is the address the
+  trusted proxy observed. A caller controls every entry to its left.
+- **Audit trail (Changed)**: the block message now names the client address and
+  the peer address, so the record always holds the real source.
+- **Documentation (Added)**: `deploy/.env.example` documents
+  `PORTAL_ALLOWED_IPS` and `PORTAL_TRUSTED_PROXIES` in one section.
+- **Tests (Added)**: `tests/unit/web_portal/test_config_ip_allowlist.py` holds 14
+  cases. A forged header from a blocked peer returns 403. The same header from a
+  trusted proxy peer sets the client address.
+
 ### Replace the assert runtime guards in the SSH package (issue #1720)
 
 - **Defect (Fixed)**: four runtime guards used `assert`. The interpreter removes
