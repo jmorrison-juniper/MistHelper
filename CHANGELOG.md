@@ -116,12 +116,15 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
   new `MistApiUnavailableError`. Only a token that Mist rejects returns 401. A
   transient upstream fault no longer logs every operator out.
 - **Settings (Added)**: `mist-ops-platform/src/shared/config/settings.py` supplies
-  the `AppSettings` object that six modules already imported.
+  the `AppSettings` object that six modules already imported. Every default value
+  lives in a module constant, because a `slots` dataclass turns a class attribute
+  into a descriptor instead of the default value.
 - **Tests (Added)**:
-  `mist-ops-platform/tests/unit/api/test_session_security.py` holds 15 tests. They
+  `mist-ops-platform/tests/unit/api/test_session_security.py` holds 18 tests. They
   prove the cookie differs from the token, the cookie carries `Secure`, a deleted
   identifier returns 401, the lookup runs off the event loop, and a second request
-  inside the cache period makes no second upstream call.
+  inside the cache period makes no second upstream call. The suite reports
+  18 passed, and the wider `tests/unit` run reports no new failure.
 
 ### Replace the assert runtime guards in the SSH package (issue #1720)
 
