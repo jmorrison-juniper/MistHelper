@@ -1,6 +1,6 @@
 """Regression tests for the SQLite handle release in the data browser service.
 
-Issue #1900. Each helper opened a SQLite connection and closed it on the success
+issue #1901. Each helper opened a SQLite connection and closed it on the success
 path only. An exception between the open call and the close call leaked the
 handle. A long-lived Gunicorn worker then reached the per-process descriptor
 limit and every later preview failed.

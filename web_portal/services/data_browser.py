@@ -189,7 +189,7 @@ class DataBrowserService:
     def _list_sqlite_tables(self, filepath: str) -> dict:
         """List tables and metadata in a SQLite database."""
         try:
-            # WHY: closing() releases the handle on the error path too (issue #1900).
+            # WHY: closing() releases the handle on the error path too (issue #1901).
             with closing(sqlite3.connect(f"file:{filepath}?mode=ro", uri=True)) as conn:
                 cursor = conn.cursor()
                 cursor.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
@@ -221,7 +221,7 @@ class DataBrowserService:
     def _is_valid_table_name(self, filepath: str, table_name: str) -> bool:
         """Validate table_name exists in the database to prevent SQL injection."""
         try:
-            # WHY: closing() releases the handle on the error path too (issue #1900).
+            # WHY: closing() releases the handle on the error path too (issue #1901).
             with closing(sqlite3.connect(f"file:{filepath}?mode=ro", uri=True)) as conn:
                 cursor = conn.cursor()
                 cursor.execute(
@@ -235,7 +235,7 @@ class DataBrowserService:
     def _preview_sqlite(self, filepath: str, table_name: str, page: int, per_page: int, search: str) -> dict:
         """Read and paginate rows from a SQLite table."""
         try:
-            # WHY: closing() releases the handle on the error path too (issue #1900).
+            # WHY: closing() releases the handle on the error path too (issue #1901).
             with closing(sqlite3.connect(f"file:{filepath}?mode=ro", uri=True)) as conn:
                 cursor = conn.cursor()
                 cursor.execute(f'PRAGMA table_info("{table_name}")')  # nosec B608 — validated
