@@ -89,6 +89,40 @@ _MIGRATE_TELEMETRY_FILENAME = "ap_profile_migration_migrate.jsonl"
 # deleted from Mist since the migration (data-model 2.2 -- ``missing_count``).
 _REVERT_MISSING = "missing"
 
+# WHY: the mistapi SDK returns an APIResponse for an error status. It does not
+# raise. Any status at or above this floor means the PUT changed nothing.
+_HTTP_ERROR_FLOOR = 400
+
+
+class APProfileReassignmentError(RuntimeError):
+    """Raised when a reassignment PUT reports an error status.
+
+    Why:
+        Issue #1700 recorded 4030 PUT calls that changed no device profile.
+        The SDK answers an error status with an object, so the old code read
+        that object as a success. This exception makes the failure visible to
+        the retry loop, to the failure counters, and to the operator.
+
+    Attributes:
+        response: The SDK response object. ``_is_429`` reads ``status_code``
+            from this attribute, so a rate-limit answer still paces the run.
+        status_code: The HTTP status the SDK reported.
+    """
+
+    def __init__(self, response: Any, device_id: str) -> None:
+        """Build the error from the SDK response and the AP that failed.
+
+        Args:
+            response: The object ``updateSiteDevice`` returned.
+            device_id: The AP the PUT targeted, for the operator-facing text.
+        """
+        # WHY: _is_429 reads err.response.status_code. Keeping the original
+        # object here lets the existing pacing path see a 429 answer.
+        self.response = response
+        # WHY: cached so a caller reads the status without a second getattr.
+        self.status_code = getattr(response, "status_code", None)
+        super().__init__(f"updateSiteDevice reported HTTP {self.status_code} for device {device_id}")
+
 
 def _utc_iso_timestamp() -> str:
     """Return the current wall-clock time as an ISO 8601 extended UTC string.
@@ -222,14 +256,30 @@ class APProfileMigrationManager:
         # interrupted run leaves the file in a consistent partial state. The
         # in-memory ``payload`` dict is mutated in place; the returned value
         # is the same object -- kept explicit for readability.
-        final_payload = APProfileMigrationManager._run_reassignment_loop(
-            mist_session,
-            ap_records,
-            target_id,
-            backup_path,
-            payload,
-            progress_stride=_PROGRESS_STRIDE,
-        )
+        # WHY: issue #1700 -- Ctrl+C used to skip the audit emission below, so
+        # a stopped run left no JSONL row at all. Catch the interrupt, record
+        # the partial result, then re-raise after the audit row is written.
+        interrupted = False
+        try:
+            final_payload = APProfileMigrationManager._run_reassignment_loop(
+                mist_session,
+                ap_records,
+                target_id,
+                backup_path,
+                payload,
+                progress_stride=_PROGRESS_STRIDE,
+            )
+        except KeyboardInterrupt:
+            # WHY: the loop mutates ``payload`` in place, so it already holds
+            # every AP that was reassigned before the operator stopped the run.
+            final_payload = payload
+            final_payload["outcome"] = "interrupted"
+            interrupted = True
+            _LOGGER.warning(
+                "Migration interrupted by the operator after %d of %d APs. Writing the audit row.",
+                len(final_payload.get("aps_reassigned", [])),
+                len(ap_records),
+            )
 
         # WHY: use the in-memory final payload for the summary print so we
         # never re-read a file that may have been left in a partial state by
@@ -266,6 +316,11 @@ class APProfileMigrationManager:
                 },
             }
         )
+
+        # WHY: the audit row is on disk now, so the operator's Ctrl+C may travel
+        # on to the menu loop that reports the interruption.
+        if interrupted:
+            raise KeyboardInterrupt
 
     @staticmethod
     def revert_ap_profile_migration(session: Any | None = None) -> None:
@@ -1196,7 +1251,13 @@ class APProfileMigrationManager:
         # WHY: attempt indices 0, 1, 2. Sleep AFTER attempts 0 and 1 only.
         for attempt in range(len(_RETRY_BACKOFF_SECONDS) + 1):
             try:
-                _mist_site_devices.updateSiteDevice(session, ap_record["site_id"], ap_record["device_id"], body)
+                response = _mist_site_devices.updateSiteDevice(
+                    session, ap_record["site_id"], ap_record["device_id"], body
+                )
+                # WHY: issue #1700 -- the SDK answers an error status with an
+                # object instead of raising. Read that status before the call
+                # counts as a success.
+                APProfileMigrationManager._check_reassign_response(response, ap_record["device_id"])
                 return
             except Exception as exc:  # noqa: BLE001  # WHY: broad catch for retry policy.
                 last_exc = exc
@@ -1212,6 +1273,39 @@ class APProfileMigrationManager:
         # WHY: unreachable; guard against typing lint anyway.
         if last_exc is not None:
             raise last_exc
+
+    @staticmethod
+    def _check_reassign_response(response: Any, device_id: str) -> None:
+        """Raise when the SDK response reports an HTTP error status.
+
+        Why:
+            Issue #1700 -- ``updateSiteDevice`` answers an error status with an
+            ``APIResponse`` object. The old code discarded that object, so a
+            refused PUT counted as a reassigned AP. The operator saw a success
+            line for every one of 4030 calls that changed nothing.
+
+        Args:
+            response: The object ``updateSiteDevice`` returned.
+            device_id: The AP the PUT targeted, for the message text.
+
+        Raises:
+            APProfileReassignmentError: The response reports a status at or
+                above ``_HTTP_ERROR_FLOOR``.
+        """
+        # WHY: a stub or a mock carries no integer status. Treat an unreadable
+        # status as "cannot judge" so this check never invents a failure.
+        status_code = getattr(response, "status_code", None)
+        if not isinstance(status_code, int):
+            return
+        # WHY: 1xx, 2xx, and 3xx leave the reassignment claim intact.
+        if status_code < _HTTP_ERROR_FLOOR:
+            return
+        _LOGGER.warning(
+            "Reassignment PUT for device %s reported HTTP %s. The device profile did not change.",
+            device_id,
+            status_code,
+        )
+        raise APProfileReassignmentError(response, device_id)
 
     @staticmethod
     def _run_reassignment_loop(
