@@ -103,10 +103,13 @@ def _execute_post_checks(
 
 
 def _build_mist_service(org_id: str) -> MistEndpointService:
-    """Create Mist API service for the given org."""
-    factory = get_session_factory()
-    api_session = factory.create_session(org_id)
-    return MistEndpointService(api_session)
+    """Create Mist API service for the given org, with rate limiting applied."""
+    factory = get_session_factory()  # WHY: reuse the cached session and token factory.
+    api_session = factory.create_session(org_id)  # WHY: build the org-scoped Mist SDK session.
+    # WHY: enforce the org API budget on every call. Fixes #1886.
+    limiter = factory.create_rate_limiter(org_id)
+    # WHY: wire the limiter into the shared client.
+    return MistEndpointService(api_session, rate_limiter=limiter)
 
 
 def _save_checkpoint(

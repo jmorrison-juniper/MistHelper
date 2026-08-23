@@ -136,9 +136,12 @@ def _push_with_rollback(
     targets: list[dict[str, str]],
 ) -> RollbackState:
     """Execute push with saga-pattern rollback."""
-    factory = get_session_factory()
-    api_session = factory.create_session(org_id)
-    mist = MistEndpointService(api_session)
+    factory = get_session_factory()  # WHY: reuse the cached session and token factory.
+    api_session = factory.create_session(org_id)  # WHY: build the org-scoped Mist SDK session.
+    # WHY: enforce the org API budget on every call. Fixes #1886.
+    limiter = factory.create_rate_limiter(org_id)
+    # WHY: wire the limiter into the shared client.
+    mist = MistEndpointService(api_session, rate_limiter=limiter)
 
     service = RollbackService(db, mist)
     config_payload = revision.config_blob or {}
