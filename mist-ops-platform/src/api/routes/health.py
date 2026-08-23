@@ -16,7 +16,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.deps import get_db_session
+from src.api.deps import get_db_session, get_scoped_org_id
 from src.api.schemas.common import ResponseEnvelope
 from src.shared.models.operations import NotificationChannel
 
@@ -85,7 +85,7 @@ class ChannelResponse(BaseModel):
 
 @router.get("/notifications/channels")
 async def list_channels(
-    org_id: UUID = Query(...),
+    org_id: UUID = Depends(get_scoped_org_id),
     db: AsyncSession = Depends(get_db_session),
 ) -> ResponseEnvelope[list[ChannelResponse]]:
     """List notification channels for an org."""
