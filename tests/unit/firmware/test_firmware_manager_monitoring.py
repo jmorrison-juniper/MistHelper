@@ -44,6 +44,57 @@ def _make_manager(**overrides: Any) -> FirmwareManager:
     return FirmwareManager(FirmwareManagerConfig(**defaults))
 
 
+_CHECK_CALL_CEILING = 40  # WHY: far above the retry limit. A regression trips this instead of hanging.
+
+
+class _ScriptedCheck:
+    """Return a scripted list of status-check results and refuse to run forever.
+
+    Why:
+        Before issue #1910 the monitoring loop retried a failed check
+        forever. A plain endless fake would hang the whole test suite, so
+        this helper raises after a hard call ceiling. A regression then
+        fails fast with a readable message instead of blocking CI.
+    """
+
+    def __init__(self, results: list[int | None]) -> None:
+        """Store the scripted results and reset the call counter.
+
+        Args:
+            results: One result per call. The last result repeats forever.
+        """
+        self.results = results  # WHY: drive one loop iteration per entry
+        self.calls = 0  # WHY: the tests assert how many checks the loop ran
+
+    def __call__(self, _site_filter: str | None) -> int | None:
+        """Return the next scripted result and count the call."""
+        self.calls += 1  # WHY: record this iteration before any early exit
+        if self.calls > _CHECK_CALL_CEILING:  # WHY: the loop must stop long before this point
+            raise AssertionError(f"the monitoring loop ran {self.calls} checks and did not stop")
+        if self.calls <= len(self.results):  # WHY: still inside the scripted part
+            return self.results[self.calls - 1]  # WHY: scripts are 0-indexed, calls start at 1
+        return self.results[-1]  # WHY: hold the final state so a broken loop keeps failing
+
+
+def _wire_monitoring_loop(mgr: FirmwareManager, monkeypatch: pytest.MonkeyPatch, check: _ScriptedCheck) -> list[int]:
+    """Silence the screen work, inject the scripted check, and capture the sleeps.
+
+    Args:
+        mgr: The manager under test.
+        monkeypatch: The pytest patching fixture.
+        check: The scripted status check to inject.
+
+    Returns:
+        A list that collects every delay the loop passes to ``time.sleep``.
+    """
+    delays: list[int] = []  # WHY: the backoff assertions read the recorded delays
+    monkeypatch.setattr(mgr, "_clear_monitoring_screen", lambda: None)  # WHY: no terminal reset in a test
+    monkeypatch.setattr(mgr, "_present_monitoring_iteration_header", lambda _i: None)  # WHY: quiet banner
+    monkeypatch.setattr(mgr, "_execute_monitoring_check", check)  # WHY: control every check result
+    monkeypatch.setattr(fm_mod.time, "sleep", lambda seconds: delays.append(seconds))  # WHY: run fast
+    return delays  # WHY: hand the recorder to the caller
+
+
 class TestPresentMonitoringHeader:
     """``_present_monitoring_header`` banner block.
 
@@ -120,13 +171,13 @@ class TestHandleMonitoringResult:
         the monitoring loop or exits it early.
     """
 
-    def test_none_result_prints_retry_and_continues(
+    def test_none_result_prints_error_and_continues(
         self, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture
     ) -> None:
         caplog.set_level(logging.WARNING, logger="root")
         assert _make_manager()._handle_monitoring_result(None, 3) is False
         out = capsys.readouterr().out
-        assert "Error fetching upgrade status. Retrying..." in out
+        assert "Error fetching upgrade status." in out
         assert any("Monitoring iteration 3 failed" in r.message for r in caplog.records)
 
     def test_zero_result_signals_completion(
@@ -198,8 +249,137 @@ class TestContinuousMonitoringMode:
             raise KeyboardInterrupt
 
         monkeypatch.setattr(mgr, "_run_monitoring_loop", raise_kb)
-        mgr._continuous_monitoring_mode(None)
+        assert mgr._continuous_monitoring_mode(None) == fm_mod.MONITOR_EXIT_CANCELLED
         assert "Monitoring mode cancelled by user." in capsys.readouterr().out
+
+    def test_returns_the_loop_exit_code(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        mgr = _make_manager()
+        monkeypatch.setattr(mgr, "_present_monitoring_header", lambda: None)
+        monkeypatch.setattr(mgr, "_run_monitoring_loop", lambda _sf: fm_mod.MONITOR_EXIT_FAILED)
+        assert mgr._continuous_monitoring_mode("site-a") == fm_mod.MONITOR_EXIT_FAILED
+
+
+class TestMonitoringRetryPolicy:
+    """``MonitoringRetryPolicy`` failure counting and backoff growth.
+
+    Why:
+        The policy is the only guard that stops an endless retry loop when
+        the Mist API stays down (issue #1910). A wrong counter ends a
+        healthy watch too early. A missing cap keeps a request going to an
+        unhealthy API every few seconds.
+    """
+
+    def test_healthy_delay_matches_the_documented_cadence(self) -> None:
+        policy = fm_mod.MonitoringRetryPolicy()
+        assert policy.consecutive_failures == 0
+        assert policy.next_delay_seconds() == fm_mod.MONITOR_REFRESH_SECONDS
+
+    def test_delay_grows_and_stops_at_the_cap(self) -> None:
+        policy = fm_mod.MonitoringRetryPolicy()
+        delays: list[int] = []
+        for _ in range(8):  # WHY: more failures than the cap needs, so the ceiling is visible
+            policy.record_failure()
+            delays.append(policy.next_delay_seconds())
+        assert delays[0] == fm_mod.MONITOR_BACKOFF_BASE_SECONDS
+        assert delays[1] == fm_mod.MONITOR_BACKOFF_BASE_SECONDS * fm_mod.MONITOR_BACKOFF_MULTIPLIER
+        assert delays == sorted(delays)  # WHY: the wait never shrinks while the failures continue
+        assert max(delays) == fm_mod.MONITOR_BACKOFF_MAX_SECONDS
+
+    def test_success_clears_the_failure_streak(self) -> None:
+        policy = fm_mod.MonitoringRetryPolicy()
+        policy.record_failure()
+        policy.record_failure()
+        policy.record_success()
+        assert policy.consecutive_failures == 0
+        assert policy.exhausted is False
+        assert policy.next_delay_seconds() == fm_mod.MONITOR_REFRESH_SECONDS
+
+    def test_exhausted_reports_true_at_the_limit(self) -> None:
+        policy = fm_mod.MonitoringRetryPolicy()
+        for _ in range(fm_mod.MONITOR_MAX_CONSECUTIVE_FAILURES - 1):
+            assert policy.record_failure() < fm_mod.MONITOR_MAX_CONSECUTIVE_FAILURES
+            assert policy.exhausted is False
+        assert policy.record_failure() == fm_mod.MONITOR_MAX_CONSECUTIVE_FAILURES
+        assert policy.exhausted is True
+
+
+class TestRunMonitoringLoopRetryBound:
+    """``_run_monitoring_loop`` bounded retry behavior (issue #1910).
+
+    Why:
+        An expired token or a Mist cloud outage made every status check
+        fail. The loop retried forever and the operator saw no final
+        error. These tests pin the attempt limit, the backoff, the reset
+        after one good check, and the non-zero result.
+    """
+
+    @pytest.mark.timeout(15)
+    def test_stops_after_the_consecutive_failure_limit(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        caplog.set_level(logging.ERROR, logger="root")
+        mgr = _make_manager()
+        check = _ScriptedCheck([None])  # WHY: every check fails, like a revoked token
+        delays = _wire_monitoring_loop(mgr, monkeypatch, check)
+        exit_code = mgr._run_monitoring_loop("site-down")
+        assert exit_code == fm_mod.MONITOR_EXIT_FAILED
+        assert check.calls == fm_mod.MONITOR_MAX_CONSECUTIVE_FAILURES
+        assert len(delays) == fm_mod.MONITOR_MAX_CONSECUTIVE_FAILURES - 1  # WHY: no sleep after the last check
+        assert delays == sorted(delays)  # WHY: the backoff grows between the failed attempts
+        assert max(delays) <= fm_mod.MONITOR_BACKOFF_MAX_SECONDS
+        out = capsys.readouterr().out
+        assert "MONITORING STOPPED" in out
+        assert "Mist API token" in out  # WHY: the operator needs the next action, not only the error
+        assert any("consecutive failed status checks" in r.message for r in caplog.records)
+
+    @pytest.mark.timeout(15)
+    def test_one_failure_then_success_keeps_watching(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        mgr = _make_manager()
+        # Four failures, one good check, four more failures, then the upgrade completes.
+        # Without a reset the ninth check would exceed the limit and end the watch.
+        check = _ScriptedCheck([None, None, None, None, 2, None, None, None, None, 0])
+        delays = _wire_monitoring_loop(mgr, monkeypatch, check)
+        exit_code = mgr._run_monitoring_loop(None)
+        assert exit_code == fm_mod.MONITOR_EXIT_COMPLETE
+        assert check.calls == 10
+        assert delays[4] == fm_mod.MONITOR_REFRESH_SECONDS  # WHY: the good check restores the cadence
+        assert delays[5] == fm_mod.MONITOR_BACKOFF_BASE_SECONDS  # WHY: the backoff restarts at the base
+        assert "MONITORING STOPPED" not in capsys.readouterr().out
+
+    @pytest.mark.timeout(15)
+    def test_healthy_loop_keeps_the_seven_second_cadence(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        mgr = _make_manager()
+        check = _ScriptedCheck([3, 2, 1, 0])  # WHY: a normal upgrade that drains to zero
+        delays = _wire_monitoring_loop(mgr, monkeypatch, check)
+        assert mgr._run_monitoring_loop(None) == fm_mod.MONITOR_EXIT_COMPLETE
+        assert delays == [fm_mod.MONITOR_REFRESH_SECONDS] * 3
+
+
+class TestRecordMonitoringAttempt:
+    """``_record_monitoring_attempt`` counter updates and the stop signal."""
+
+    def test_success_resets_the_counter_and_continues(self) -> None:
+        mgr = _make_manager()
+        policy = fm_mod.MonitoringRetryPolicy()
+        policy.record_failure()
+        assert mgr._record_monitoring_attempt(4, policy, 2) is False
+        assert policy.consecutive_failures == 0
+
+    def test_failure_below_the_limit_continues(
+        self, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture
+    ) -> None:
+        caplog.set_level(logging.WARNING, logger="root")
+        mgr = _make_manager()
+        policy = fm_mod.MonitoringRetryPolicy()
+        assert mgr._record_monitoring_attempt(None, policy, 1) is False
+        assert policy.consecutive_failures == 1
+        assert "Retry 1 of" in capsys.readouterr().out
+        assert any("status check failed" in r.message for r in caplog.records)
 
 
 class TestPrintUpgradeJobTimingInfo:
