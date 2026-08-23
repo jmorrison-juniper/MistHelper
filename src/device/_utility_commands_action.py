@@ -39,6 +39,9 @@ _SUPPORT_FILE_TYPES: tuple[str, ...] = (
     "jma-logs",  # WHY: Juniper Mist Agent logs
 )
 
+# WHY: clause C-4 of the spec 1034 console contract puts the risk before the value.
+_ZTP_REVEAL_WARNING = "Warning: a session recording captures this screen. The next line holds a live credential."
+
 
 class _UtilityCommandsAction(_ClusterBase):  # WHY: cluster wrapper mirroring earlier phase clusters
     """Wrapper class holding the 10 device-management commands."""
@@ -294,6 +297,12 @@ class _UtilityCommandsAction(_ClusterBase):  # WHY: cluster wrapper mirroring ea
 
         Security review 2026-08-22. Issue #1735. CodeQL alert 173.
 
+        Order: the warning comes first, the label and the value come second,
+        and the copy guidance comes last. The operator reads the risk before
+        the screen holds the value. Clause C-4 of
+        ``specs/1034-codeql-cleartext-logging/contracts/credential_console.md``
+        states that rule.
+
         Reason: menu 144 exists so an operator can read the one-time ZTP
         credential on screen. The caller prints the value only when stdout
         is a live terminal. A shell redirect, a pipe, and a recorded SSH
@@ -308,8 +317,9 @@ class _UtilityCommandsAction(_ClusterBase):  # WHY: cluster wrapper mirroring ea
         Next review: when issue #886 lands, when menu 144 changes how it
         delivers the credential, or when CodeQL reopens alert 173.
         """
-        print(f"\n-> ZTP Password: {ztp_credential}")  # noqa: T201
-        print("-> The value appears on this terminal only. Copy it now.")  # WHY: one-time value
+        print(f"\n{_ZTP_REVEAL_WARNING}")  # WHY: the risk reaches the screen before the value
+        print(f"-> ZTP Password: {ztp_credential}")  # noqa: T201
+        print("-> Copy the value now. The value is a one-time credential.")  # WHY: guidance after the risk
 
     @staticmethod
     def _print_ztp_withheld() -> None:

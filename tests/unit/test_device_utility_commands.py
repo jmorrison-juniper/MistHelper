@@ -2146,6 +2146,37 @@ class TestGetZtpPassword:
         assert _ZTP_SECRET in output
         assert "ZTP Password:" in output
 
+    def test_terminal_warns_before_it_shows_the_value(
+        self,
+        duc: DeviceUtilityCommands,
+        mock_api: MagicMock,
+    ) -> None:
+        output = self._run_with_stdout(duc, mock_api, _FakeTerminalStdout())
+        warning_index = output.index("Warning:")
+        value_index = output.index(_ZTP_SECRET)
+        assert warning_index < value_index
+        assert "session recording" in output[:value_index]
+        assert "live credential" in output[:value_index]
+
+    def test_terminal_prints_the_copy_guidance_after_the_value(
+        self,
+        duc: DeviceUtilityCommands,
+        mock_api: MagicMock,
+    ) -> None:
+        output = self._run_with_stdout(duc, mock_api, _FakeTerminalStdout())
+        assert output.index("Copy the value now") > output.index(_ZTP_SECRET)
+
+    def test_terminal_output_keeps_the_contract_line_order(
+        self,
+        duc: DeviceUtilityCommands,
+        mock_api: MagicMock,
+    ) -> None:
+        lines = [line for line in self._run_with_stdout(duc, mock_api, _FakeTerminalStdout()).splitlines() if line]
+        assert lines[0].startswith("Warning:")
+        assert lines[1] == f"-> ZTP Password: {_ZTP_SECRET}"
+        assert lines[2].startswith("-> Copy the value now")
+        assert len(lines) == 3
+
     def test_non_terminal_withholds_value(
         self,
         duc: DeviceUtilityCommands,
@@ -2274,6 +2305,11 @@ class TestZtpCredentialMigrationRule:
         assert "2026-08-22" in doc
         assert "#1735" in doc
         assert "#886" in doc
+
+    def test_source_puts_the_warning_before_the_credential(self) -> None:
+        source = inspect.getsource(_UtilityCommandsAction._print_ztp_credential)
+        body = source.split('"""')[-1]
+        assert body.index("_ZTP_REVEAL_WARNING") < body.index("ztp_credential")
 
 
 class TestGetConfigCommands:

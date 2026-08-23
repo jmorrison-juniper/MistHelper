@@ -18,6 +18,11 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 - **Terminal gate (Added)**: `_stdout_is_terminal()` calls `sys.stdout.isatty()`
   before the print. The value now reaches a live terminal only. A stream that
   lacks `isatty`, and a stream that raises on the call, both count as unsafe.
+- **Warning order (Added)**: the reveal path writes the warning first, the label
+  and the value second, and the copy guidance last. The operator reads the risk
+  before the screen holds the value. Clause C-4 of
+  `specs/1034-codeql-cleartext-logging/contracts/credential_console.md` states
+  that rule.
 - **Withheld notice (Added)**: a redirect, a pipe, and a recorded session now
   receive a four-line notice. The notice states the decision and the reason. The
   notice also gives two other sources for the value. The notice never holds the
@@ -29,11 +34,16 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 - **Migration rule (Added)**: `TestZtpCredentialMigrationRule` parses the source
   of the three helpers. The test fails when a `logging` call appears next to the
   credential. The rule now lives in a test, so a lost comment cannot drop it.
-- **Tests (Added)**: `tests/unit/test_device_utility_commands.py` gains 13 cases.
-  They prove that a terminal stdout prints the value. They prove that a pipe
-  stdout prints the value nowhere. They prove that no log record holds the value
-  in either mode. They also prove that the empty-payload path and the error path
+- **Tests (Added)**: `tests/unit/test_device_utility_commands.py` gains 17 cases.
+  They prove that a terminal stdout prints the value. They prove that the
+  warning reaches the screen before the value. They prove that a pipe stdout
+  prints the value nowhere. They prove that no log record holds the value in
+  either mode. They also prove that the empty-payload path and the error path
   keep their old behavior.
+- **Divergence from spec 1034 (Noted)**: clause C-2 of the console contract asks
+  for `sys.stdout.write()` instead of `print()`. This change keeps `print()` and
+  blocks the issue #886 migration with an `ast` guard test. Spec 1034 is unbuilt
+  at 0 of 67 tasks, and `CredentialConsole` does not exist yet.
 
 ### Add a real readiness probe and keep the health endpoint cheap (issue #1863)
 
