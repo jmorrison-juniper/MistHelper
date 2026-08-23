@@ -339,6 +339,17 @@ class TestUpstreamFailureSeparation:
 class TestSessionStoreBehavior:
     """Cover the store itself, without an application."""
 
+    def test_every_default_setting_is_a_real_value(self) -> None:
+        """Guard the slots dataclass defect that a class attribute reintroduces."""
+        from src.shared.config.settings import AppSettings, build_settings
+
+        settings = build_settings()
+        assert isinstance(settings.redis_url, str)
+        assert settings.redis_url.startswith("redis://")
+        assert isinstance(settings.database_url, str)
+        assert settings.database_url.startswith("postgresql")
+        assert isinstance(AppSettings().redis_url, str)
+
     def test_a_new_identifier_is_opaque(self, store: SessionStore) -> None:
         session_id = store.create(TEST_TOKEN)
         assert session_id != TEST_TOKEN
