@@ -7,6 +7,29 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Run the quality gates on every pull request (issue #1952)
+
+- **Defect (Fixed)**: `.github/workflows/ci.yml` started on a pull request that
+  targeted `main` only. A pull request against any other base ran no gate. Ruff,
+  Black, mypy, pytest, the coverage gate, Bandit, pip-audit, Pylint, Radon,
+  Vulture, and both docstring gates all stayed silent.
+- **Evidence (Measured)**: pull request #1890 targets
+  `feat/1823-upgrade-capture-portal`. It reported 0 successful checks and 0
+  failed checks, while every pull request against `main` reported 17 to 19. The
+  pull request was closed and reopened to force a new run. The count stayed at
+  zero, which rules out a missed event.
+- **Reader risk (Explained)**: the pull request also reported a `CLEAN` merge
+  state. `CLEAN` means no required check is failing. A reviewer reads an empty
+  check list as safe, and the correct reading is unmeasured.
+- **Trigger (Changed)**: the `pull_request` trigger now carries no branch
+  filter, so a pull request against any base runs every gate.
+- **Cost control (Kept)**: the `push` trigger stays pinned to `main`. A push run
+  on every branch would repeat the pull request run and add no signal.
+- **Tests (Added)**: `tests/guardrails/test_ci_gate_triggers.py` holds 5 tests.
+  They pin the absent branch filter and the narrow push trigger. The tests were
+  verified red first. They report 2 failures against the old workflow and 5
+  passes against the new one.
+
 ### Stop the ZTP password from reaching a stored stream (issue #1735)
 
 - **Defect (Fixed)**: `src/device/_utility_commands_action.py` printed the live

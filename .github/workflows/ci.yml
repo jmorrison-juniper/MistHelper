@@ -8,9 +8,14 @@
 name: Quality Gates
 
 on:
+  # No branch filter here. A pull request against any base runs every gate.
+  # A filter that named main alone let a stacked pull request merge with zero
+  # checks, which a reviewer reads as clean rather than unmeasured. Issue #1952
+  # records that gap.
   pull_request:
-    branches: [main]
   push:
+    # The push trigger stays pinned to main. A push run on every branch would
+    # repeat the pull request run and add cost with no added signal.
     branches: [main]
   workflow_dispatch:
   workflow_call:
