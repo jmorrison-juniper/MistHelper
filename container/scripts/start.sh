@@ -25,8 +25,39 @@ chmod 664 /app/data/ssh.log
 CUSTOM_CA_DIR="/usr/local/share/ca-certificates"
 if ls -A "$CUSTOM_CA_DIR"/*.crt >/dev/null 2>&1; then
     echo "[TLS] Installing operator-supplied root certificates from $CUSTOM_CA_DIR" >> /app/data/ssh.log
+    # Check each file before the install.
+    # Warning: update-ca-certificates exits 0 and appends the raw bytes even when
+    # the file is not a certificate, so neither the exit status nor the bundle
+    # content can report a bad file. Parse each file instead.
+    CA_INSTALL_FAILURES=0
+    for CA_FILE in "$CUSTOM_CA_DIR"/*.crt; do
+        CA_NAME=$(basename "$CA_FILE")  # Name the file in every message, so the operator knows which one failed.
+        # Test for the PEM header first. update-ca-certificates reads PEM only,
+        # and it reports "1 added" for a DER file that it cannot use. OpenSSL 3
+        # auto-detects the encoding, so a parse test alone accepts a DER file.
+        if grep -q -- "-----BEGIN CERTIFICATE-----" "$CA_FILE" && openssl x509 -in "$CA_FILE" -noout >/dev/null 2>&1; then
+            echo "[TLS] Read $CA_NAME as a PEM certificate." >> /app/data/ssh.log
+        elif openssl x509 -in "$CA_FILE" -noout >/dev/null 2>&1; then
+            # The file holds a real certificate in an encoding the trust store cannot read.
+            CA_INSTALL_FAILURES=$((CA_INSTALL_FAILURES + 1))
+            echo "[TLS] WARNING: $CA_NAME is not PEM. The trust store cannot use it." >> /app/data/ssh.log
+            echo "[TLS] WARNING: Convert it with: openssl x509 -inform DER -in $CA_NAME -out $CA_NAME.pem" >> /app/data/ssh.log
+        else
+            # Count the failure, because the summary line below must not claim success.
+            CA_INSTALL_FAILURES=$((CA_INSTALL_FAILURES + 1))
+            echo "[TLS] WARNING: $CA_NAME is not a certificate that the trust store can read." >> /app/data/ssh.log
+            echo "[TLS] WARNING: Check that $CA_NAME holds one PEM certificate." >> /app/data/ssh.log
+        fi
+    done
+    # Keep the container alive if the command fails. The count above decides the result.
     update-ca-certificates >> /app/data/ssh.log 2>&1 || true
-    echo "[TLS] Trust store updated. Certificate verification stays on." >> /app/data/ssh.log
+    if [ "$CA_INSTALL_FAILURES" -eq 0 ]; then
+        # Print the success line only when every file parsed as a certificate.
+        echo "[TLS] Trust store updated. Certificate verification stays on." >> /app/data/ssh.log
+    else
+        echo "[TLS] WARNING: $CA_INSTALL_FAILURES certificate file(s) failed to install." >> /app/data/ssh.log
+        echo "[TLS] WARNING: A connection through the proxy will fail until you repair them." >> /app/data/ssh.log
+    fi
 else
     echo "[TLS] No operator-supplied root certificate found. The default trust store applies." >> /app/data/ssh.log
 fi
