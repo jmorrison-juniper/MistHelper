@@ -183,10 +183,18 @@ chmod -R 777 data/   # Required before first container run
 ### Running Tests
 ```powershell
 # Local development (Windows 11 + venv required - standard environment)
+# A new worktree holds no .venv, so create the environment one time first.
+python scripts/bootstrap_worktree.py   # Creates .venv and installs the requirements
 .venv\Scripts\Activate.ps1
 python MistHelper.py --test
 ```
 **Skip List**: `OperationRegistry` decides. `--test` runs only `safe`, and `--testinteractive` adds `interactive_safe`. Every other category is skipped, which covers `resource_intensive` (14, 18-19, 59, 97-101, 153), `destructive` (154-187, 189-191, 194, 206-208), `interactive`, `websocket`, and `continuous_loop`.
+
+**Warning**: `git worktree add` copies the tracked files only. `.venv` is not tracked, so a new
+worktree has no virtual environment. The activation line then fails, and the tests run against the
+global interpreter. `python -m pytest` stops with one message that names the bootstrap command,
+instead of one import error for each test module. Run `python scripts/bootstrap_worktree.py` in the
+new worktree, activate the environment, then run the tests again. See issue #1866.
 
 ---
 
@@ -413,6 +421,16 @@ See `git-workflow.instructions.md` § Agent Coordination for general rules. Mist
 MistHelper/                    # main checkout (human or merge agent only)
 ../MistHelper-agent-1/         # worktree for Agent 1 (feat/101-new-menu)
 ../MistHelper-agent-2/         # worktree for Agent 2 (fix/102-rate-limit)
+```
+
+Each worktree needs its own virtual environment. Run the bootstrap one time after
+`git worktree add`:
+
+```powershell
+git worktree add ../MistHelper-agent-1 -b feat/101-new-menu main
+cd ../MistHelper-agent-1
+python scripts/bootstrap_worktree.py   # Creates .venv and installs the requirements
+.venv\Scripts\Activate.ps1
 ```
 
 ### Copilot Coding Agent, Spaces & Scratchpads

@@ -387,6 +387,18 @@ python -m venv .venv
 .venv\Scripts\Activate.ps1
 ```
 
+**Note for a git worktree**: `git worktree add` copies the tracked files only, so a new
+worktree holds no `.venv` directory. Run the bootstrap one time in the new worktree. The
+script creates `.venv` and installs `requirements.txt` and `requirements-dev.txt`:
+
+```powershell
+python scripts/bootstrap_worktree.py   # Windows or Linux
+.\scripts\bootstrap_worktree.ps1       # Windows entry point
+```
+
+If the environment is absent, `python -m pytest` stops with one message that names this
+command. See issue #1866.
+
 ### Step 3: Install Dependencies
 
 **Option A: Using UV (Faster, Recommended)**
