@@ -75,14 +75,10 @@ class DataBrowserService:
         """
         logging.info("Data browser resolves a path request: %s", rel_path)
         candidate = os.path.realpath(os.path.join(self._data_dir, rel_path))  # Follow every link.
-        # Normalize the case and the separator. On Windows the two names
-        # "C:\Data" and "c:/data" point at one directory, so a raw comparison
-        # of the two strings reports a false mismatch.
-        normalized = os.path.normcase(candidate)
         # Append the separator to the root. Without the separator the path
         # "/app/data_backup" passes a bare check for the prefix "/app/data".
-        root = os.path.normcase(os.path.join(self._real_data_dir, ""))
-        if not normalized.startswith(root):  # Refuse a target outside the data directory.
+        root = os.path.join(self._real_data_dir, "")
+        if not candidate.startswith(root):  # Refuse a target outside the data directory.
             logging.debug("Data browser refused a path outside the data directory: %s", rel_path)
             return None
         if not self._is_browsable_file(candidate):  # Refuse a directory or a hidden file type.
