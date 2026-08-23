@@ -71,6 +71,31 @@ Version 26.08.23.01.26
   `WEB_HOST` override in both states, the fallback for an empty `WEB_HOST` value,
   and that the join expression is gone from the script.
 
+### Scan the Redis keyspace in batches instead of blocking it (issue #1882)
+
+- **Defect (Fixed)**: `RetentionManager.check_redis_retention` ran the Redis
+  `KEYS` command with the pattern `*.avg_1h`. The pattern starts with a
+  wildcard, so Redis compared every key in the keyspace. Redis serves commands
+  on one thread, so the whole server stalled for the length of each scan. The
+  background sweep thread repeated the stall every 6 hours by default.
+- **`SCAN` loop (Added)**: the check now drives a cursor loop. Each round trip
+  sends `SCAN <cursor> MATCH *.avg_1h COUNT 500`. Redis returns one bounded
+  batch and then serves other clients, so no single command holds the thread.
+- **Memory (Changed)**: the loop adds the length of each batch to a running
+  total and drops the batch. The process never holds the whole key set. The old
+  code returned a list of every matching key only to read its length.
+- **Upper bound (Added)**: `REDIS_SCAN_MAX_KEYS` stops the loop after 100000
+  scanned keys. The sweep then logs the new `redis_retention_scan_capped`
+  warning with the partial count and returns it. The cost of one sweep stays
+  fixed as the keyspace grows.
+- **Contract (Unchanged)**: the method still returns an `int` key count. It
+  still logs a warning and returns 0 when the Redis call raises.
+- **Tests (Added)**: `tests/unit/db/test_retention_redis_scan.py` holds 10
+  cases. A fake client records every command it receives. The cases prove the
+  code issues `SCAN`, never issues `KEYS`, sends `MATCH` and a bounded `COUNT`,
+  follows the cursor until it returns to 0, accepts a cursor that arrives as
+  bytes, and stops at the upper bound against an endless keyspace.
+
 ### Add a real readiness probe and keep the health endpoint cheap (issue #1863)
 
 - **Defect (Fixed)**: the `/health` endpoint returned the fixed text `healthy` on
