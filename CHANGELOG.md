@@ -44,6 +44,32 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
   for `sys.stdout.write()` instead of `print()`. This change keeps `print()` and
   blocks the issue #886 migration with an `ast` guard test. Spec 1034 is unbuilt
   at 0 of 67 tasks, and `CredentialConsole` does not exist yet.
+### Replace the obfuscated all-interfaces bind in the web portal launcher (issue #1711)
+
+Version 26.08.23.01.26
+
+- **Defect (Fixed)**: `_launch_web_portal()` built the bind address with
+  `".".join(("0",) * 4)`. The expression produced the string `0.0.0.0`, and the
+  only purpose of the expression was to hide that literal from bandit rule B104.
+  The project standard forbids a shortcut that silences a real finding. A
+  suppression comment records the decision and the reason. A join expression
+  records nothing.
+- **Bind address (Changed)**: the new function `_resolve_web_portal_host()` holds
+  the decision. It returns the value of `WEB_HOST` when the operator sets that
+  variable. Without that variable it returns `0.0.0.0` inside a container and
+  `127.0.0.1` on a workstation. The old code bound to all interfaces on every
+  platform, so a workstation run exposed the portal to the local network.
+- **Container test (Changed)**: the all-interfaces bind now depends on
+  `EnvironmentUtils.is_running_in_container()`. A container needs the external
+  bind, because the container network maps the port from outside. The container
+  port map controls the exposure.
+- **Suppression (Added)**: the assignment carries `# nosec B104`, and the three
+  comment lines above it state the container condition and the reason. Bandit
+  reports no issue and no warning for the file.
+- **Tests (Added)**: `tests/unit/test_web_portal_bind_address.py` holds 8 cases.
+  They prove the loopback default, the container all-interfaces bind, the
+  `WEB_HOST` override in both states, the fallback for an empty `WEB_HOST` value,
+  and that the join expression is gone from the script.
 
 ### Add a real readiness probe and keep the health endpoint cheap (issue #1863)
 
