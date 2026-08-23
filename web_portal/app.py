@@ -36,6 +36,7 @@ class WebPortalApp:
             static_folder=WebPortalApp._get_static_dir(),
         )
         config = WebPortalApp._load_portal_config(app)
+        WebPortalApp._load_webhook_config(app)
         WebPortalApp._inject_dependencies(app, apisession, menu_actions, org_id)
         WebPortalApp._setup_theme_manager(app, config)
         WebPortalApp._apply_security(app, config)
@@ -64,6 +65,28 @@ class WebPortalApp:
         app.config["PORTAL"] = config
         app.secret_key = config["secret_key"]
         return config
+
+    @staticmethod
+    def _load_webhook_config(app: Flask) -> None:
+        """Load the webhook receiver settings from the environment.
+
+        Issue #1907: the route read WEBHOOK_SECRET, but no code wrote
+        the key. The secret was always empty, so the signature check
+        never ran. This method is the single writer of that key.
+        """
+        from web_portal.routes.webhooks import WEBHOOK_ENABLED_CONFIG_KEY, WEBHOOK_SECRET_CONFIG_KEY
+
+        raw_enabled = os.environ.get(WEBHOOK_ENABLED_CONFIG_KEY, "true")  # WHY: match the src/db default.
+        enabled = raw_enabled.strip().lower() == "true"  # WHY: only the exact word "true" turns the route on.
+        app.config[WEBHOOK_ENABLED_CONFIG_KEY] = enabled
+        secret = os.environ.get(WEBHOOK_SECRET_CONFIG_KEY, "").strip()  # WHY: whitespace is not a secret.
+        app.config[WEBHOOK_SECRET_CONFIG_KEY] = secret
+        if enabled and not secret:
+            logging.error(
+                "Webhook receiver is enabled, but WEBHOOK_SECRET is empty. "
+                "The portal rejects every webhook with code 503 until you set the secret."
+            )  # WHY: an operator must see the cause before the first 503 reply arrives.
+        logging.debug("Webhook receiver enabled=%s, secret configured=%s", enabled, bool(secret))
 
     @staticmethod
     def _inject_dependencies(
@@ -115,6 +138,26 @@ class WebPortalApp:
         app.register_blueprint(operations_bp)
         app.register_blueprint(maps_bp)
         app.register_blueprint(settings_bp)
+        WebPortalApp._register_webhook_blueprint(app)
+
+    @staticmethod
+    def _register_webhook_blueprint(app: Flask) -> None:
+        """Register the Mist webhook receiver when the operator enables it.
+
+        A disabled receiver serves no route, so an unwanted endpoint
+        never reaches the dispatch path.
+        """
+        from web_portal.routes.webhooks import WEBHOOK_ENABLED_CONFIG_KEY, webhook_bp
+
+        if not app.config.get(WEBHOOK_ENABLED_CONFIG_KEY, False):
+            logging.info("Webhook receiver is disabled, so the portal does not serve /api/webhook")
+            return
+
+        app.register_blueprint(webhook_bp)
+        csrf = app.config.get("csrf")  # WHY: SecurityMiddleware stores the CSRFProtect instance here.
+        if csrf is not None:
+            csrf.exempt(webhook_bp)  # WHY: an HMAC signature authenticates Mist Cloud, not a browser session.
+        logging.debug("Webhook receiver registered at POST /api/webhook")
 
     @staticmethod
     def _register_context_processor(app: Flask) -> None:
