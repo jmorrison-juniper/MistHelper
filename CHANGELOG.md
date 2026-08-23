@@ -245,6 +245,33 @@ that runs without a proxy needs no action.
 - **Tests (Added)**: `tests/unit/site/address_audit/test_ui_geocoder_profile_cleanup.py`
   holds nine cases that use a fake process object, so no test starts a browser.
 
+### Stop the gitignore rule that hid a source package and a security finding (issue #1778)
+
+- **Defect (Fixed)**: line 244 of `.gitignore` held an unanchored `config/` rule.
+  That rule matched every nested directory of that name, so it hid the source
+  package `mist-ops-platform/src/shared/config/` from git and from every
+  scanner. Eight tracked modules import that package, and none of it was
+  tracked.
+- **Ignore rules (Changed)**: `/config/` and `/configs/` now carry a leading
+  slash, so each rule matches the repository root only. The four negation lines
+  that undid the over-broad rule are gone, because they became inert.
+- **Source package (Added)**: `__init__.py`, `constants.py`, and `settings.py`
+  of `mist-ops-platform/src/shared/config/` now enter git. Pull request #1905
+  force-added the same three modules, so this change keeps that version of each
+  module and removes the ignore rule that made the force-add necessary.
+- **B104 (Fixed)**: the `api_host` default was `0.0.0.0`, which binds the API to
+  every interface. Bandit reported it as a MEDIUM `hardcoded_bind_all_interfaces`
+  finding that no gate could see. The current settings module defines no bind
+  address, so the finding is gone. A guard test fails again if a bind-all default
+  returns.
+- **Suppression (Removed)**: the inert `# noqa: S104` note is gone. The root
+  ruff configuration does not select the `S` family, and bandit reads `# nosec`
+  only, so that note suppressed nothing and misled a reader.
+- **Tests (Added)**: `tests/unit/test_config_package_tracked.py` holds six cases.
+  They read text only, so they need no optional dependency. They fail again if
+  an unanchored rule returns, if the package leaves the checkout, if a field
+  default binds to every interface, or if an inert `# noqa: S` note returns.
+
 ### Replace the assert runtime guards in the SSH package (issue #1720)
 
 - **Defect (Fixed)**: four runtime guards used `assert`. The interpreter removes
