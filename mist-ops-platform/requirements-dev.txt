@@ -10,7 +10,7 @@
 # Test runner and plugins. pyproject.toml sets asyncio_mode = "auto", so
 # pytest-asyncio must be present or collection stops on the first async test.
 pytest>=8.3
-pytest-asyncio>=0.24
+pytest-asyncio>=1.4.0
 pytest-cov>=6.0
 
 # Application packages that the tests import at module scope.
