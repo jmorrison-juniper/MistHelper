@@ -177,7 +177,13 @@ function renderMap(data) {
 
 function deviceColor(type) {
     var map = { ap: '#0dcaf0', switch: '#ffc107', gateway: '#198754' };
-    return map[type] || '#6c757d';
+    // Read an own property only. A device type such as "constructor" would
+    // otherwise return a built-in function instead of a color string.
+    if (Object.prototype.hasOwnProperty.call(map, type)) {
+        return map[type];
+    }
+    // Fall back to the neutral gray for an unknown device type.
+    return '#6c757d';
 }
 
 function renderDeviceList(devices) {
@@ -195,9 +201,25 @@ function renderDeviceList(devices) {
     devices.forEach(function(d) {
         var li = document.createElement('li');
         li.className = 'list-group-item py-1';
-        var dot = '<span style="color:' + deviceColor(d.type) + '">&#9679;</span> ';
-        li.innerHTML = dot + (d.name || d.mac || 'Unknown') +
-            ' <small class="text-muted">(' + d.type + ')</small>';
+        // Build the colored dot as a node. A style property is a safe sink,
+        // and deviceColor returns a value from a fixed set.
+        var dot = document.createElement('span');
+        dot.style.color = deviceColor(d.type);
+        // Use the escape form of the black circle so that the file stays ASCII.
+        dot.textContent = '\u25CF';
+        // Render the device label with textContent. The browser escapes the
+        // value, so a crafted device name cannot run as script. See #1939.
+        var label = document.createElement('span');
+        label.textContent = ' ' + (d.name || d.mac || 'Unknown') + ' ';
+        // Render the device type through the same safe sink, because the type
+        // arrives in the same untrusted API record as the name.
+        var type = document.createElement('small');
+        type.className = 'text-muted';
+        type.textContent = '(' + (d.type || 'unknown') + ')';
+        // Append the three nodes in reading order to rebuild the old layout.
+        li.appendChild(dot);
+        li.appendChild(label);
+        li.appendChild(type);
         list.appendChild(li);
     });
 }
