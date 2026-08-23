@@ -100,6 +100,7 @@ def _build_probe_app(org_ids: list[str], *, is_msp: bool = False):
     """Return a small app whose single route uses the scope dependency."""
     fastapi = pytest.importorskip("fastapi")  # Skip when the web framework is absent
     pytest.importorskip("httpx")  # The test client needs httpx
+    pytest.importorskip("sqlalchemy")  # deps.py imports sqlalchemy at module load
     from uuid import UUID  # Match the type the real routes declare
 
     from src.api.deps import get_authenticated_user, get_scoped_org_id
@@ -155,6 +156,7 @@ def test_caller_without_a_token_is_refused() -> None:
     """An unauthenticated caller never reaches the data."""
     fastapi = pytest.importorskip("fastapi")  # Skip when the web framework is absent
     pytest.importorskip("httpx")  # The test client needs httpx
+    pytest.importorskip("sqlalchemy")  # deps.py imports sqlalchemy at module load
     from uuid import UUID  # Match the type the real routes declare
 
     from fastapi.testclient import TestClient
