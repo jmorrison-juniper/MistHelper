@@ -7,7 +7,13 @@ handler. Stats payloads reach the Redis TimeSeries ingestion handler.
 The route fails closed. If the shared secret is absent, the route
 rejects every request with code 503, and no payload reaches the
 dispatch path. An unset secret never means "accept every caller".
-See issue #1907.
+
+Issue #1907 records the defect. Two faults sat on top of each other.
+No code wrote the WEBHOOK_SECRET config key, so the secret was always
+empty and the signature check never ran. No code registered this
+blueprint either, so POST /api/webhook returned 404. The 404 held the
+hole shut, so the vulnerability was latent rather than reachable. A
+later commit that only registered the blueprint would have opened it.
 """
 
 from __future__ import annotations

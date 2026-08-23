@@ -147,6 +147,11 @@ class WebPortalApp:
     def _register_webhook_blueprint(app: Flask) -> None:
         """Register the Mist webhook receiver when the operator enables it.
 
+        Issue #1907: no code registered this blueprint, so POST
+        /api/webhook returned 404 and the receiver never worked. That
+        broken state hid a latent hole, because the signature check
+        behind the route also never ran.
+
         A disabled receiver serves no route, so an unwanted endpoint
         never reaches the dispatch path.
         """
@@ -159,7 +164,14 @@ class WebPortalApp:
         app.register_blueprint(webhook_bp)
         csrf = app.config.get("csrf")  # WHY: SecurityMiddleware stores the CSRFProtect instance here.
         if csrf is not None:
-            csrf.exempt(webhook_bp)  # WHY: an HMAC signature authenticates Mist Cloud, not a browser session.
+            # Warning: Do not remove this exemption. It is not a weakness.
+            # SecurityMiddleware protects every browser form with a CSRF
+            # token. Mist Cloud is a machine caller and holds no token, so
+            # an unexempt route answers 400 for every real webhook and the
+            # signature check never runs. The HMAC signature authenticates
+            # the sender here, and it is the stronger control, because it
+            # covers the raw body as well as the sender.
+            csrf.exempt(webhook_bp)
         logging.debug("Webhook receiver registered at POST /api/webhook")
 
     @staticmethod
