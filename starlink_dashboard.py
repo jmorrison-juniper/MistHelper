@@ -1576,11 +1576,31 @@ class StarlinkDashboard(QMainWindow):
 
     @staticmethod
     def _status_part_location(diag) -> str | None:
-        """Return the location status line or None if disabled/unavailable."""
+        """Return the location status line, or None when the terminal disables location.
+
+        Args:
+            diag: The diagnostics object the Starlink terminal returned.
+
+        Returns:
+            str | None: The status line at the configured GPS precision. None when the
+            terminal reports no location.
+        """
+        logger.info("Building the location status line from the diagnostics object")  # Log before the build.
         if not (hasattr(diag, "location") and diag.location.enabled):  # Location reporting off
+            logger.debug("The terminal reports no location, so the status line stays empty")  # Log the skip.
             return None
         loc = diag.location  # Location sub-object
-        return f"Location: {loc.latitude:.4f}, {loc.longitude:.4f}"
+        # This line reached stdout at four decimal places and skipped the precision control
+        # that pull request #1834 added. Four decimal places locate a site to about 11 meters,
+        # and a redirect or a recorded SSH session can capture that value into a support
+        # bundle. Both coordinates now run through _format_gps_coordinate, so one rule governs
+        # every coordinate this module prints. The default rounds to GPS_PRECISION_DECIMALS,
+        # and an operator who needs the exact value sets GPS_EXACT_ENV_VAR. See issue #1838.
+        latitude = _format_gps_coordinate(loc.latitude)  # Apply the one precision rule to the latitude.
+        longitude = _format_gps_coordinate(loc.longitude)  # Apply the same rule to the longitude.
+        line = f"Location: {latitude}, {longitude}"  # Assemble the line from the two formatted values.
+        logger.debug("Built the location status line at the configured GPS precision")  # Log after the build.
+        return line
 
     @classmethod
     def _collect_status_parts(cls, diag) -> list[str]:
