@@ -17,6 +17,36 @@ touch /app/data/ssh.log
 chown misthelper:misthelper /app/data/ssh.log
 chmod 664 /app/data/ssh.log
 
+# Corporate TLS trust store.
+# The image verifies every TLS certificate. An operator behind a
+# TLS-inspecting proxy mounts the proxy root certificate into
+# /usr/local/share/ca-certificates. This step adds the mounted certificate to
+# the system trust store, so the check stays on. See issue #1906.
+CUSTOM_CA_DIR="/usr/local/share/ca-certificates"
+if ls -A "$CUSTOM_CA_DIR"/*.crt >/dev/null 2>&1; then
+    echo "[TLS] Installing operator-supplied root certificates from $CUSTOM_CA_DIR" >> /app/data/ssh.log
+    update-ca-certificates >> /app/data/ssh.log 2>&1 || true
+    echo "[TLS] Trust store updated. Certificate verification stays on." >> /app/data/ssh.log
+else
+    echo "[TLS] No operator-supplied root certificate found. The default trust store applies." >> /app/data/ssh.log
+fi
+
+# Report a run-time bypass of certificate verification.
+# A bypass is never the default. An operator must pass the variable at run
+# time. The container records a warning, so the operator sees the exposure.
+if [ "${PYTHONHTTPSVERIFY:-1}" = "0" ]; then
+    echo "[TLS] WARNING: PYTHONHTTPSVERIFY=0 turns off certificate verification." >> /app/data/ssh.log
+    echo "[TLS] WARNING: An attacker on the network path can read the Mist API token." >> /app/data/ssh.log
+fi
+for CA_VARIABLE in REQUESTS_CA_BUNDLE CURL_CA_BUNDLE SSL_CERT_FILE; do
+    # An empty value removes the trust store. An unset value keeps the default.
+    CA_VALUE="${!CA_VARIABLE-unset}"
+    if [ -z "$CA_VALUE" ]; then
+        echo "[TLS] WARNING: $CA_VARIABLE is empty, which removes the trust store." >> /app/data/ssh.log
+        echo "[TLS] WARNING: Point $CA_VARIABLE at a mounted root certificate." >> /app/data/ssh.log
+    fi
+done
+
 # If a different username is requested, create it (idempotent).
 if ! id "$USERNAME" >/dev/null 2>&1; then
     echo "[SSH] Creating user $USERNAME" >> /app/data/ssh.log
