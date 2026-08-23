@@ -25,7 +25,7 @@
 # these pins do not change any gate result.
 
 # Lint and format
-ruff==0.16.1
+ruff==0.16.3
 black==26.5.1
 
 # Type checking
