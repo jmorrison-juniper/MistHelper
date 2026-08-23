@@ -1,17 +1,14 @@
 """Quick test: does ideas.mist.com do SSR?"""
 
-import urllib.request
 import ssl
-import re
+import urllib.request
 
 url = "https://ideas.mist.com/forums/912934-product-features/suggestions/50598263-modify-port-configuration-button"
 req = urllib.request.Request(
     url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 )
-ctx = ssl.create_default_context()
-ctx.check_hostname = False
-ctx.verify_mode = ssl.CERT_NONE
-resp = urllib.request.urlopen(req, context=ctx)
+ctx = ssl.create_default_context()  # Verify the certificate and the host name. See issue #1914.
+resp = urllib.request.urlopen(req, context=ctx, timeout=30)  # nosec B310 -- fixed https URL above.
 html = resp.read().decode("utf-8")
 print(f"HTML length: {len(html)}")
 

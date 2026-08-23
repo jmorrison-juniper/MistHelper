@@ -398,14 +398,19 @@ class TestEnvConfig:
         assert config.per_lookup_timeout_s == 30.0
         assert config.max_lookups == 10
 
-    def test_skip_ssl_verify_defaults_true(self, monkeypatch):
-        """SSL verification is skipped by default (corporate Zscaler environment)."""
+    def test_skip_ssl_verify_defaults_false(self, monkeypatch):
+        """Certificate verification stays on by default. See issue #1914."""
         monkeypatch.delenv("MIST_SKIP_SSL_VERIFY", raising=False)
+        assert AddressAuditEngine._skip_ssl_verify() is False
+
+    def test_skip_ssl_verify_env_opt_out(self, monkeypatch):
+        """Setting MIST_SKIP_SSL_VERIFY=true turns the check off, and only then."""
+        monkeypatch.setenv("MIST_SKIP_SSL_VERIFY", "true")
         assert AddressAuditEngine._skip_ssl_verify() is True
 
-    def test_skip_ssl_verify_env_disable(self, monkeypatch):
-        """Setting MIST_SKIP_SSL_VERIFY=false re-enables certificate verification."""
-        monkeypatch.setenv("MIST_SKIP_SSL_VERIFY", "false")
+    def test_skip_ssl_verify_unknown_value_stays_secure(self, monkeypatch):
+        """An unrecognized value keeps the check on, so a typo fails secure."""
+        monkeypatch.setenv("MIST_SKIP_SSL_VERIFY", "flase")
         assert AddressAuditEngine._skip_ssl_verify() is False
 
     def test_ui_geocode_enabled_defaults_true(self, monkeypatch):
