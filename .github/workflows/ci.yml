@@ -524,35 +524,28 @@ jobs:
         # npm ci fails when package.json and package-lock.json disagree, so this
         # step also proves the lockfile is in sync.
         #
-        # --legacy-peer-deps is required today. eslint-plugin-jsx-a11y 6.10.0
-        # declares a peer range of eslint <=9, and this project runs eslint 10.7.0,
-        # so a strict resolve fails with ERESOLVE. Issue #1852 tracks the eslint
-        # flat-config migration that removes the need for this flag.
+        # --legacy-peer-deps is required today, and it must stay. Two plugins
+        # cap their eslint peer range below the installed eslint 10.7.0.
+        # eslint-plugin-jsx-a11y 6.10.2 declares "<=^9", and
+        # eslint-plugin-react 7.37.5 declares "<=^9.7". Both are the newest
+        # published releases, so no upgrade clears the conflict yet. A strict
+        # resolve fails with ERESOLVE. Issue #1852 records the measurement.
+        # Delete this flag when both plugins publish an eslint 10 peer range.
         run: npm ci --legacy-peer-deps
       - name: Audit the npm dependency tree
         # This is the blocking security check and the reason issue #1847 exists.
         # It fails on a HIGH or a CRITICAL advisory. Dependabot reports a MODERATE
         # or a LOW finding as a pull request, so those do not block a merge here.
         run: npm audit --audit-level=high
-      # The three steps below report but do not block yet. Each one fails today on
-      # a configuration defect that is older than this job, so a blocking step
-      # would stop every unrelated pull request on the first run. Issue #1852
-      # tracks all three. Delete continue-on-error from a step as soon as its
-      # defect is fixed, one step at a time.
+      # The three steps below block a merge. Issue #1852 fixed the three
+      # configuration defects that kept them advisory. tsconfig.json no longer
+      # sets the deprecated baseUrl, eslint reads a flat eslint.config.js, and
+      # the project ships a vitest suite for the confirmation dialog.
       - name: Type check
-        # Fails on "Option 'baseUrl' is deprecated". tsconfig.json needs
-        # "ignoreDeprecations": "6.0", or it needs the baseUrl removal (#1852).
-        continue-on-error: true
         run: npm run typecheck
       - name: Lint
-        # Fails because .eslintrc.cjs uses the old format, and eslint 10 reads
-        # eslint.config.js only (#1852).
-        continue-on-error: true
         run: npm run lint
       - name: Unit tests
-        # Fails because the project ships no vitest file yet, and vitest exits
-        # non-zero when it finds no test (#1852).
-        continue-on-error: true
         run: npm run test
 
   # ──────────────────────────────────────────────────────────────

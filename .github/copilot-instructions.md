@@ -592,7 +592,7 @@ All tools run in `.github/workflows/ci.yml` as a parallel matrix. A PR cannot au
 | Docstring Coverage | **interrogate** | Coverage >= 90 percent |
 | Diagram References | **`scripts/lint_diagram_refs.py`** | Every diagram reference resolves |
 | E2E Browser | **Playwright** (CI `playwright` job) | Gunicorn web UI functional tests |
-| Ops Portal | **npm** (CI `ops_portal` job) | `npm audit --audit-level=high` for `ops-portal/`. `typecheck`, `lint`, and `test` report but do not block yet (issue #1852). |
+| Ops Portal | **npm** (CI `ops_portal` job) | `npm audit --audit-level=high`, `typecheck`, `lint`, and `test` for `ops-portal/`. All four block a merge. |
 | Static Analysis | **CodeQL** (`.github/workflows/codeql.yml`) | Deep code and workflow vulnerability scanning |
 | Dependency Updates | **Dependabot** (`.github/dependabot.yml`) | Weekly pip update PRs |
 
