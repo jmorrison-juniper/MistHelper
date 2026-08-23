@@ -68,6 +68,13 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ### Bind the web portal IP allowlist to the peer address (issue #1857)
 
+**Warning:** This entry contains a breaking change. If you run the portal behind
+a reverse proxy and you set `PORTAL_ALLOWED_IPS`, the portal answers 403 to every
+client after this upgrade. The allowlist now reads the socket peer address, which
+is the address of the proxy. Set `PORTAL_TRUSTED_PROXIES` to the address of the
+proxy, or to the CIDR range that holds the proxy, before you upgrade. A portal
+that runs without a proxy needs no action.
+
 - **Defect (Fixed)**: `SecurityMiddleware._get_client_ip` read the
   client-supplied `X-Forwarded-For` header and fed that value into the
   `PORTAL_ALLOWED_IPS` check. No reverse proxy sits in front of the portal, so a
