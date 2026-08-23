@@ -4,15 +4,17 @@ PublishPort=2200:2200
 PublishPort=8055:8055
 Volume=./data:/app/data:rw
 EnvironmentFile=./.env
-# The container image sets no HEALTHCHECK instruction, because the OCI image
-# format rejects it. Quadlet supplies the probe instead. The probe calls the
-# readiness endpoint, because that endpoint tests write access to the data
-# directory. A read-only data mount then marks the container unhealthy.
-HealthCmd=curl --fail --silent --show-error http://localhost:8055/ready
+# Health probe for the web portal readiness endpoint (issue #1863).
+# A Quadlet build can drop the Containerfile HEALTHCHECK instruction when the
+# image uses the OCI format, so the unit states the command itself.
+# The image installs no curl, so the probe runs the Python interpreter.
+HealthCmd=python -c "import os,urllib.request;urllib.request.urlopen('http://127.0.0.1:'+os.environ.get('WEB_PORT','8055')+'/ready',timeout=8)"
 HealthInterval=30s
-HealthTimeout=5s
+HealthTimeout=10s
 HealthRetries=3
-HealthStartPeriod=20s
+HealthStartPeriod=60s
+# Restart the container when the probe reports an unhealthy state. Restart=always
+# alone cannot recover a wedged portal, because the process stays alive.
 HealthOnFailure=restart
 
 [Service]

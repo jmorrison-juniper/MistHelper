@@ -150,6 +150,31 @@ Version 26.08.23.01.26
   rule, the dropped count in the response, the two read boundaries, the default
   cap, and the warning for an unusable setting.
 
+### Repair the container health probe command and add the compose probe (issues #1863, #1881)
+
+- **Defect (Fixed)**: `deploy/misthelper.container` ran the probe with
+  `curl --fail --silent --show-error`. The image installs `ca-certificates`,
+  `openssh-server`, and `sudo` only, so the image holds no curl binary. The
+  probe therefore failed on every call, and `HealthOnFailure=restart` restarted
+  a healthy container in a loop.
+- **Quadlet probe (Changed)**: `HealthCmd` now runs the Python interpreter that
+  already runs the application. The command reads `WEB_PORT` and calls `/ready`.
+  A non-200 response raises `HTTPError`, the command exits non-zero, and the
+  runtime marks the container unhealthy.
+- **Container probe (Added)**: `Containerfile` and `Dockerfile` define a
+  `HEALTHCHECK` that calls `/ready` with the same Python command. A Quadlet
+  build can drop the instruction when the image uses the OCI format, so the
+  unit states the command as well.
+- **Compose probe (Added)**: the `misthelper` service in `compose.yml` now
+  carries a `healthcheck` block. It matches the pattern the ArangoDB service
+  and the Redis service already use.
+- **Readiness endpoint (Superseded)**: pull request #1893 landed the `/health`
+  and `/ready` split for issue #1863 first. This change keeps that version of
+  `web_portal/routes/dashboard.py` and supplies the container probe only.
+- **Tests (Added)**: `tests/unit/test_container_health_probe.py` holds 12 tests.
+  They prove that no probe command calls curl, that every probe targets
+  `/ready`, and that the Quadlet unit keeps its timing keys and its restart key.
+
 ### Bound the web portal operation run registry (issue #1860)
 
 - **Defect (Fixed)**: `OperationExecutor` kept every run in memory forever, and

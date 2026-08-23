@@ -131,8 +131,12 @@ VOLUME ["/app/data"]
 # Expose SSH port 2200 and Dash web viewer port 8050
 EXPOSE 2200 8050
 
-# Note: HEALTHCHECK removed for OCI/Podman compatibility
-# For health monitoring, use external tools or docker format
+# Health probe for the web portal readiness endpoint (issue #1863).
+# The image installs no curl, so the probe uses the Python interpreter that
+# already runs the application. A non-200 response raises HTTPError, the
+# command exits non-zero, and the runtime marks the container unhealthy.
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD ["python", "-c", "import os,urllib.request;urllib.request.urlopen('http://127.0.0.1:'+os.environ.get('WEB_PORT','8055')+'/ready',timeout=8)"]
 
 # Start both SSH server and MistHelper
 USER root
