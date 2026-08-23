@@ -198,6 +198,26 @@ that runs without a proxy needs no action.
 - **Tests (Added)**: `tests/unit/web_portal/test_config_ip_allowlist.py` holds 15
   cases. A forged header from a blocked peer returns 403. The same header from a
   trusted proxy peer sets the client address.
+### Remove the spawned Edge profile directory on teardown (issue #1862)
+
+- **Defect (Fixed)**: the address audit spawned a debuggable Edge into a new
+  temporary profile directory on every run in auto mode. The teardown path
+  stopped the process and left the directory on disk. The path was a local
+  variable, so no later code could find it. An Edge profile that completed a
+  Mist login holds the cache, the cookies, and the local storage of that
+  session, so every run leaked one directory of session material.
+- **SpawnedBrowser (Added)**: `src/site/address_audit/ui_geocoder.py` holds a
+  frozen dataclass with a `process` field and a `profile_dir` field.
+  `spawn_debuggable_browser` returns it, so the caller owns both.
+- **Teardown (Changed)**: `MistUIGeocoder._terminate_spawned` stops the browser,
+  waits for the exit, then removes the profile directory. Edge holds a file lock
+  on the profile until the process exits. A stop that passes the 10-second
+  budget leads to a kill, and the removal then runs.
+- **Safety (Added)**: a failed removal logs a WARNING and never raises, and
+  `close()` stays idempotent. One DEBUG line names the removed path, so an
+  operator can confirm the cleanup.
+- **Tests (Added)**: `tests/unit/site/address_audit/test_ui_geocoder_profile_cleanup.py`
+  holds nine cases that use a fake process object, so no test starts a browser.
 
 ### Replace the assert runtime guards in the SSH package (issue #1720)
 
