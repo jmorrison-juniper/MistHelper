@@ -7,6 +7,39 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Add a real readiness probe and keep the health endpoint cheap (issue #1863)
+
+- **Defect (Fixed)**: the `/health` endpoint returned the fixed text `healthy` on
+  every call. It never tested write access to the data directory, which is the
+  one resource with a documented failure. A portal that could not write a single
+  output file still reported a good state, so no monitor saw the fault.
+- **`/health` (Changed)**: the route is now a liveness probe. It reports the
+  process state and the uptime. It reads no disk and it opens no network
+  connection, so a blocked resource cannot slow the reply down. The response
+  keeps the word `healthy`, so an existing monitor still matches.
+- **`/ready` (Added)**: the route tests every resource the portal needs. It
+  writes and deletes one temporary file in the data directory, it opens the
+  SQLite database read-only when the file exists, and it reads the Mist API
+  session state without a network call.
+- **Failure report (Added)**: `/ready` returns code 503 when a check fails, and
+  the body names each failed check under `failed_checks`. The body also carries
+  a detail line for each check, so the operator learns how to repair it.
+- **Quadlet probe (Added)**: `deploy/misthelper.container` now sets `HealthCmd=`
+  against `/ready`, with an interval of 30 seconds, a timeout of 5 seconds,
+  3 retries, a start period of 20 seconds, and `HealthOnFailure=restart`. A
+  wedged portal now restarts, because `Restart=always` alone could not see it.
+- **Tests (Added)**: `tests/unit/web_portal/test_dashboard_readiness.py` holds 14
+  cases. They prove `/ready` returns 503 for a read-only data directory, that the
+  body names the failed check, that `/ready` returns 200 when the directory is
+  writable, and that `/health` answers while every disk call raises.
+- **SQLite query (Changed)**: the database check runs
+  `SELECT count(*) FROM sqlite_master`. That query reads a real page, so SQLite
+  validates the file header. The first version ran `SELECT 1`, which answers from
+  memory. A corrupt database therefore passed the check on the Linux build of
+  SQLite, and the test caught the miss only in CI.
+- **Deferred**: the `Containerfile`, the `Dockerfile`, and `compose.yml` still
+  need a probe. Open pull request #1825 owns those three files today.
+
 ### Bound the web portal operation run registry (issue #1860)
 
 - **Defect (Fixed)**: `OperationExecutor` kept every run in memory forever, and
