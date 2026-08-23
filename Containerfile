@@ -135,8 +135,15 @@ VOLUME ["/app/data"]
 # Expose SSH port 2200 and web portal port 8055
 EXPOSE 2200 8055
 
-# Note: HEALTHCHECK removed for OCI/Podman compatibility
-# For health monitoring, use external tools or docker format
+# Health probe for the web portal readiness endpoint (issue #1863).
+# The image installs no curl, so the probe uses the Python interpreter that
+# already runs the application. A non-200 response raises HTTPError, the
+# command exits non-zero, and the runtime marks the container unhealthy.
+# Podman honours this instruction when it builds in the Docker format. A build
+# that uses the OCI format drops the instruction instead of failing, so
+# deploy/misthelper.container also defines HealthCmd for the Quadlet unit.
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD ["python", "-c", "import os,urllib.request;urllib.request.urlopen('http://127.0.0.1:'+os.environ.get('WEB_PORT','8055')+'/ready',timeout=8)"]
 
 # Start both SSH server and MistHelper
 USER root
