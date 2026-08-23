@@ -1,20 +1,55 @@
+# ================================================================
+# Auto-merge — merge a labeled pull request, then start the main gates
+# ================================================================
+# GitHub starts no workflow run from an event that GITHUB_TOKEN creates. The
+# rule stops a recursive loop. This workflow merges with GITHUB_TOKEN, so a
+# merge commit lands on main and starts no push run. Issue #1851 records the
+# effect. The security tab, the container image, and the post-merge gate
+# result all went stale.
+#
+# A workflow_dispatch call is the one exception that GitHub honors. The second
+# job below therefore starts each main workflow with an explicit dispatch call.
+# ================================================================
 name: Auto-merge
 
 on:
   pull_request:
-    types: [labeled, synchronize, opened, reopened]
+    # The closed type carries the merge result. The dispatch job below reads
+    # that result and repairs main in seconds.
+    types: [labeled, synchronize, opened, reopened, closed]
+  schedule:
+    # The backstop. GitHub can suppress the closed event above, because
+    # GITHUB_TOKEN performs the merge. The hourly run repairs main even when
+    # no merge event arrives.
+    - cron: '37 * * * *'
+  # A maintainer can start the dispatch job by hand after an outage.
+  workflow_dispatch:
 
-permissions:
-  contents: write
-  pull-requests: write
+# Each job below states the permissions that the job needs. The empty map here
+# removes every other permission from every job.
+permissions: {}
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+  # The workflows that a push to main starts. The dispatch job reads this one
+  # list, so a new main workflow needs one edit only.
+  MAIN_WORKFLOWS: 'ci.yml codeql.yml container-build.yml'
 
 jobs:
   auto-merge:
-    if: contains(github.event.pull_request.labels.*.name, 'auto-merge')
+    name: "Enable auto-merge"
+    # A closed pull request cannot accept auto-merge, so the closed type stops
+    # here.
+    if: >-
+      github.event_name == 'pull_request'
+      && github.event.action != 'closed'
+      && contains(github.event.pull_request.labels.*.name, 'auto-merge')
     runs-on: ubuntu-latest
+    permissions:
+      # The merge writes to the base branch.
+      contents: write
+      # The action sets the auto-merge state on the pull request.
+      pull-requests: write
     steps:
       - name: Enable auto-merge
         uses: peter-evans/enable-pull-request-automerge@v3
@@ -22,3 +57,80 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           pull-request-number: ${{ github.event.pull_request.number }}
           merge-method: squash
+
+  dispatch-main-workflows:
+    name: "Start the main workflows that missed the tip"
+    # Two paths reach this job. Path one is a merge into main, and that path
+    # repairs main in seconds. Path two is the hourly schedule or a manual
+    # start, and that path repairs main when no merge event arrives.
+    if: >-
+      github.event_name != 'pull_request'
+      || (github.event.action == 'closed'
+      && github.event.pull_request.merged == true
+      && github.event.pull_request.base.ref == 'main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      # A dispatch call creates a workflow run, so the job needs write access
+      # to the Actions API. This scope is the only added permission.
+      actions: write
+      # The tip lookup reads one commit from the main branch.
+      contents: read
+    steps:
+      - name: Start each main workflow that missed the tip of main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          # Read the tip first. A comparison against the tip stops a duplicate
+          # run when a human merge already started the push workflows.
+          if ! tip="$(gh api "repos/${GH_REPO}/commits/main" --jq '.sha')"; then
+            echo "::error::The lookup of the tip of main failed. No workflow started."
+            exit 1
+          fi
+          echo "The tip of main is ${tip}."
+
+          started=''
+          current=''
+          failed=''
+          # MAIN_WORKFLOWS stays unquoted, because the loop needs the split on
+          # each space.
+          for workflow in ${MAIN_WORKFLOWS}; do
+            # The list holds a queued run too, so a dispatch from a moment ago
+            # already counts as coverage of the tip.
+            newest="$(gh run list --workflow "${workflow}" --branch main --limit 1 --json headSha --jq '.[0].headSha // "none"')" || newest='unknown'
+            if [ "${newest}" = "${tip}" ]; then
+              echo "${workflow} already covers the tip."
+              current="${current}${workflow} "
+              continue
+            fi
+            echo "${workflow} reports ${newest}, so the workflow missed the tip."
+            # One failed call must not stop the remaining calls, so the loop
+            # records the name and continues.
+            if gh workflow run "${workflow}" --ref main; then
+              echo "Started ${workflow} on main."
+              started="${started}${workflow} "
+            else
+              echo "::error::The dispatch call for ${workflow} on main failed."
+              failed="${failed}${workflow} "
+            fi
+          done
+
+          # The summary gives the maintainer one place to read the result.
+          {
+            echo "## Post-merge dispatch"
+            echo ""
+            echo "**Tip of main:** \`${tip}\`"
+            echo ""
+            echo "- **Started:** ${started:-none}"
+            echo "- **Already current:** ${current:-none}"
+            echo "- **Failed:** ${failed:-none}"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+          # The merge is complete and correct. Report a dispatch failure as a
+          # separate fault, so no reader treats a red job as a bad merge.
+          if [ -n "${failed}" ]; then
+            echo "::error::The merge is complete. These workflows did not start: ${failed}"
+            exit 1
+          fi
+          echo "Every main workflow now covers the tip of main."
