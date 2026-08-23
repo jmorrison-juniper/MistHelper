@@ -282,13 +282,23 @@ class TestDownloadAll:
         assert downloader._download_all([], tmp_path) == 0  # WHY: the loop body never runs.
 
 
+def _streaming_response(status_code: int) -> MagicMock:
+    """Build a response mock that works as a plain object and as a context manager."""
+    response = MagicMock()  # WHY: stand in for the requests response object.
+    # WHY: the downloader wraps the request in a with block to release the connection.
+    # WHY: binding __enter__ to the same object keeps one place to set the attributes.
+    response.__enter__.return_value = response
+    response.__exit__.return_value = False  # WHY: a False result never swallows an exception.
+    response.status_code = status_code  # WHY: the caller chooses the branch under test.
+    return response  # WHY: each test then sets its own body behavior.
+
+
 class TestDownloadOneResourceHandling:
     """Cover the streaming write, which owns a file handle and an HTTP response."""
 
     def test_the_request_streams_with_a_timeout(self, tmp_path: Path) -> None:
         """A download without a timeout can hang the menu forever."""
-        response = MagicMock()  # WHY: stand in for the requests response object.
-        response.status_code = 200  # WHY: drive the success path to reach the write.
+        response = _streaming_response(200)  # WHY: drive the success path to reach the write.
         response.iter_content.return_value = [b"payload"]  # WHY: one chunk is enough.
         row = _CaptureRow("c1", "https://host/c1.pcap", "10", "c1.pcap")  # WHY: one row.
         with patch.object(cpd.requests, "get", return_value=response) as get_spy:
@@ -299,8 +309,7 @@ class TestDownloadOneResourceHandling:
 
     def test_a_non_200_response_leaves_no_partial_file(self, tmp_path: Path) -> None:
         """A rejected download must not leave a zero-byte file that looks like a capture."""
-        response = MagicMock()  # WHY: stand in for the requests response object.
-        response.status_code = 403  # WHY: an expired pre-signed URL returns a client error.
+        response = _streaming_response(403)  # WHY: an expired pre-signed URL returns a client error.
         row = _CaptureRow("c1", "https://host/c1.pcap", "10", "c1.pcap")  # WHY: one row.
         with patch.object(cpd.requests, "get", return_value=response):
             assert ClientPacketCaptureDownloader._download_one(row, tmp_path) is False
@@ -309,8 +318,7 @@ class TestDownloadOneResourceHandling:
 
     def test_every_chunk_reaches_the_file(self, tmp_path: Path) -> None:
         """A dropped chunk would produce a truncated capture that looks valid."""
-        response = MagicMock()  # WHY: stand in for the requests response object.
-        response.status_code = 200  # WHY: drive the success path to reach the write.
+        response = _streaming_response(200)  # WHY: drive the success path to reach the write.
         response.iter_content.return_value = [b"aaa", b"bbb", b"ccc"]  # WHY: three chunks.
         row = _CaptureRow("c1", "https://host/c1.pcap", "10", "c1.pcap")  # WHY: one row.
         with patch.object(cpd.requests, "get", return_value=response):
@@ -321,14 +329,33 @@ class TestDownloadOneResourceHandling:
     def test_a_mid_stream_failure_is_reported_as_a_failure(self, tmp_path: Path, caplog: Any) -> None:
         """A connection reset partway through must return False, not raise."""
         caplog.set_level("ERROR")  # WHY: the handler reports the failure at ERROR level.
-        response = MagicMock()  # WHY: stand in for the requests response object.
-        response.status_code = 200  # WHY: the transfer starts before it fails.
+        response = _streaming_response(200)  # WHY: the transfer starts before it fails.
         # WHY: raising from the chunk iterator reproduces a reset partway through the body.
         response.iter_content.side_effect = OSError("connection reset")
         row = _CaptureRow("c1", "https://host/c1.pcap", "10", "c1.pcap")  # WHY: one row.
         with patch.object(cpd.requests, "get", return_value=response):
             assert ClientPacketCaptureDownloader._download_one(row, tmp_path) is False
         assert "connection reset" in caplog.text  # WHY: the operator needs the cause to triage.
+
+    def test_a_mid_stream_failure_still_releases_the_connection(self, tmp_path: Path) -> None:
+        """A leaked connection exhausts the pool and stalls a large batch."""
+        response = _streaming_response(200)  # WHY: the transfer starts before it fails.
+        response.iter_content.side_effect = OSError("connection reset")  # WHY: reset mid body.
+        row = _CaptureRow("c1", "https://host/c1.pcap", "10", "c1.pcap")  # WHY: one row.
+        with patch.object(cpd.requests, "get", return_value=response):
+            ClientPacketCaptureDownloader._download_one(row, tmp_path)  # WHY: drive the failure.
+        # WHY: the with block must call __exit__ so the socket returns to the pool.
+        assert response.__exit__.called
+
+    def test_a_successful_download_releases_the_connection(self, tmp_path: Path) -> None:
+        """A connection held after a clean transfer still exhausts the pool."""
+        response = _streaming_response(200)  # WHY: drive the success path to reach the write.
+        response.iter_content.return_value = [b"payload"]  # WHY: one chunk is enough.
+        row = _CaptureRow("c1", "https://host/c1.pcap", "10", "c1.pcap")  # WHY: one row.
+        with patch.object(cpd.requests, "get", return_value=response):
+            assert ClientPacketCaptureDownloader._download_one(row, tmp_path) is True
+        assert response.__exit__.called  # WHY: the socket must return to the pool.
+        assert (tmp_path / "c1.pcap").read_bytes() == b"payload"  # WHY: prove the write ran.
 
 
 class TestLazyFactories:
