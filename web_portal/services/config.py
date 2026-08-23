@@ -89,7 +89,7 @@ class PortalConfigLoader:
             return []  # An empty setting yields an empty list, which the caller reads as "not configured".
         logging.info("Parsing the %s setting", setting_name)
         networks = []
-        for entry in ip_string.split(","):
+        for position, entry in enumerate(ip_string.split(","), start=1):
             entry = entry.strip()  # Trim the spaces that an operator leaves around a comma.
             if not entry:
                 continue  # Skip an empty field, because a trailing comma is a common typing slip.
@@ -97,7 +97,12 @@ class PortalConfigLoader:
                 # strict=False accepts a plain address, which becomes a single-host network.
                 networks.append(ipaddress.ip_network(entry, strict=False))
             except ValueError:
-                logging.warning("Invalid CIDR in %s: '%s'", setting_name, entry)
+                # The message names the position, not the text. An environment value can hold a secret.
+                logging.warning(
+                    "Entry %d of the %s setting is not an address or a CIDR range",
+                    position,
+                    setting_name,
+                )
         logging.debug("Parsed %d networks from the %s setting", len(networks), setting_name)
         return networks
 

@@ -84,6 +84,10 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
   trusted proxy observed. A caller controls every entry to its left.
 - **Audit trail (Changed)**: the block message now names the client address and
   the peer address, so the record always holds the real source.
+- **PortalConfigLoader.parse_networks (Added)**: this shared parser replaces
+  `_parse_allowed_ips`. It reads both settings and names the setting in every
+  log message. It reports the position of an invalid entry, not the text of that
+  entry, because an environment value can hold a secret.
 - **Documentation (Added)**: `deploy/.env.example` documents
   `PORTAL_ALLOWED_IPS` and `PORTAL_TRUSTED_PROXIES` in one section.
 - **Tests (Added)**: `tests/unit/web_portal/test_config_ip_allowlist.py` holds 14
