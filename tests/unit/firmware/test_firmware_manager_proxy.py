@@ -46,9 +46,7 @@ class TestMistHelperProxyPartialImport:
         assert "bootstrap_worktree.py" in message  # The repair step must appear.
         assert error_info.value.__cause__ is cause  # The chain must keep the original exception.
 
-    def test_keeps_the_original_error_when_the_module_loaded(
-        self, stub_misthelper_module: types.ModuleType
-    ) -> None:
+    def test_keeps_the_original_error_when_the_module_loaded(self, stub_misthelper_module: types.ModuleType) -> None:
         """With no recorded failure the proxy reports the plain missing name."""
         proxy = _MistHelperProxy()  # Build the proxy under test.
 
