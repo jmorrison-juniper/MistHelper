@@ -8,6 +8,13 @@ The IP allowlist judges the socket peer address from `request.remote_addr`.
 The portal reads the `X-Forwarded-For` header only when the peer address
 matches an entry in `PORTAL_TRUSTED_PROXIES`. That setting is empty by
 default, so a client-supplied header never changes the decision.
+
+The portal has no user authentication. The address allowlist is therefore the
+only access control. `PORTAL_ALLOWED_IPS` is empty by default, so the portal
+falls back to a closed set of networks. A workstation serves the loopback
+address only. A container serves the private ranges only, because a container
+that serves loopback only cannot answer a published port. An operator opens the
+portal to every address with `PORTAL_ALLOW_PUBLIC_ACCESS`. See issue #1933.
 """
 
 import ipaddress
@@ -17,6 +24,36 @@ import re
 import uuid
 
 from flask import Flask, abort, request
+
+from src.utils.environment_utils import EnvironmentUtils
+
+# The networks that a workstation serves when the operator sets no allowlist.
+# A browser on the same machine uses one of these two addresses.
+LOOPBACK_FALLBACK_NETWORKS = ("127.0.0.0/8", "::1/128")
+
+# The networks that a container serves when the operator sets no allowlist.
+# The list holds the loopback ranges for the health probe, the three RFC 1918
+# ranges for an office network, the link-local ranges, and the IPv6 private
+# range. A container reaches a published port through a private address.
+PRIVATE_FALLBACK_NETWORKS = (
+    "127.0.0.0/8",
+    "::1/128",
+    "10.0.0.0/8",
+    "172.16.0.0/12",
+    "192.168.0.0/16",
+    "169.254.0.0/16",
+    "fe80::/10",
+    "fc00::/7",
+)
+
+# The setting that an operator sets to serve every source address on purpose.
+PUBLIC_ACCESS_SETTING = "PORTAL_ALLOW_PUBLIC_ACCESS"
+
+# The values that count as a clear yes. Every other value keeps the portal shut.
+AFFIRMATIVE_VALUES = frozenset({"1", "true", "yes", "on"})
+
+# An example value for the startup message. A junior engineer copies this shape.
+ALLOWLIST_EXAMPLE = "10.20.30.0/24,192.168.1.5"
 
 
 class PortalConfigLoader:
@@ -34,6 +71,7 @@ class PortalConfigLoader:
         "WEB_PORT": "8055",
         "PORTAL_ALLOWED_IPS": "",
         "PORTAL_TRUSTED_PROXIES": "",
+        PUBLIC_ACCESS_SETTING: "",
     }
 
     def load_config(self) -> dict:
@@ -131,14 +169,64 @@ class SecurityMiddleware:
         logging.info("Applying the portal security controls to the Flask application")
         # Resolve the trusted proxies first, because the allowlist hook reads them.
         self._trusted_proxies = self._resolve_trusted_proxies(trusted_proxies)
+        # Resolve the allowlist next, because an empty setting needs a safe fallback.
+        effective_ips = self._resolve_effective_allowlist(allowed_ips)
         self._register_csp_headers(app)
-        self._register_ip_allowlist(app, allowed_ips)
+        self._register_ip_allowlist(app, effective_ips)
         self._configure_csrf(app)
         logging.debug(
             "Applied the portal security controls with %d allowed networks and %d trusted proxies",
-            len(allowed_ips),
+            len(effective_ips),
             len(self._trusted_proxies),
         )
+
+    def _resolve_effective_allowlist(self, allowed_ips: list) -> list:
+        """Return the networks that the portal serves after the fallback runs."""
+        if allowed_ips:
+            # The operator named the networks, so the portal obeys the setting.
+            logging.debug("Using the %d networks that the operator configured", len(allowed_ips))
+            return allowed_ips
+        if self._public_access_is_allowed():
+            # The operator chose an open portal, so the log records the choice.
+            logging.warning(
+                "Warning: the portal serves every source address, because %s is set. "
+                "The portal has no user authentication. Any caller who reaches the port "
+                "gets every page. Set PORTAL_ALLOWED_IPS instead, for example %s.",
+                PUBLIC_ACCESS_SETTING,
+                ALLOWLIST_EXAMPLE,
+            )
+            return []  # An empty list turns the address check off on purpose.
+        return self._build_fallback_allowlist()
+
+    @staticmethod
+    def _public_access_is_allowed() -> bool:
+        """Return True when the operator opts out of the address check."""
+        # An unset value reads as an empty string, which is not a clear yes.
+        raw = os.environ.get(PUBLIC_ACCESS_SETTING, "").strip().lower()
+        # Only a value from the affirmative set opens the portal, so a typing
+        # slip such as "maybe" leaves the portal shut.
+        return raw in AFFIRMATIVE_VALUES
+
+    def _build_fallback_allowlist(self) -> list:
+        """Return the closed network set that fits the current run mode."""
+        in_container = EnvironmentUtils.is_running_in_container()
+        # A container answers a published port from a private address, so a
+        # loopback only rule would make every existing deployment unreachable.
+        sources = PRIVATE_FALLBACK_NETWORKS if in_container else LOOPBACK_FALLBACK_NETWORKS
+        scope = "the private network ranges" if in_container else "the loopback address"
+        logging.warning(
+            "Warning: the portal has no user authentication and no configured allowlist. "
+            "The portal now serves %s only. Set PORTAL_ALLOWED_IPS to the networks that "
+            "need access, for example %s. To serve every source address on purpose, set "
+            "%s to true.",
+            scope,
+            ALLOWLIST_EXAMPLE,
+            PUBLIC_ACCESS_SETTING,
+        )
+        # Every entry is a fixed constant, so the parser cannot raise an error.
+        networks = [ipaddress.ip_network(entry) for entry in sources]
+        logging.debug("Built a fallback allowlist of %d networks", len(networks))
+        return networks
 
     def _resolve_trusted_proxies(self, trusted_proxies: list | None) -> list:
         """Return the proxy networks that may set the forwarded header."""
@@ -163,7 +251,9 @@ class SecurityMiddleware:
     def _register_ip_allowlist(self, app: Flask, allowed_ips: list) -> None:
         """Block requests from IPs not in the allowlist."""
         if not allowed_ips:
-            return  # An empty allowlist means the operator accepts every source address.
+            # The caller reaches this line only after a deliberate opt-out.
+            # `_resolve_effective_allowlist` already logged that choice.
+            return
 
         logging.info("Registering the portal IP allowlist with %d networks", len(allowed_ips))
 

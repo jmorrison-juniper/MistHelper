@@ -79,6 +79,49 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
   eslint peer range below the installed eslint 10.7.0, and both are the newest
   published releases. The workflow comment records the measurement.
 
+### Warning: the web portal now refuses a remote client by default (issue #1933)
+
+- **Warning: read this before you upgrade.** This entry changes a shipped
+  default. A running portal can stop answering a remote browser after the
+  upgrade. Set `PORTAL_ALLOWED_IPS` before you upgrade, and no operator loses
+  access. The startup log names the setting and gives an example value.
+- **Defect (Fixed)**: the web portal has no user authentication. The address
+  allowlist is the only access control it has. `PORTAL_ALLOWED_IPS` shipped
+  empty, and `SecurityMiddleware._register_ip_allowlist` read an empty value as
+  "accept every source address". A portal that reached a network therefore
+  served every page, every data browser table, and every operation to any
+  caller who reached the port. No credential was needed.
+- **Fallback (Added)**: an empty `PORTAL_ALLOWED_IPS` value no longer opens the
+  portal. `SecurityMiddleware._build_fallback_allowlist` picks a closed set of
+  networks that fits the run mode. Outside a container the portal serves the
+  loopback ranges `127.0.0.0/8` and `::1/128` only. The operator who starts the
+  portal keeps access.
+- **Container case (Added)**: inside a container the portal serves the private
+  ranges only. These are the two loopback ranges, `10.0.0.0/8`,
+  `172.16.0.0/12`, `192.168.0.0/16`, `169.254.0.0/16`, `fe80::/10`, and
+  `fc00::/7`. A container must bind every interface to answer a published port,
+  so a loopback rule would make every container unreachable. This fallback
+  blocks a direct path from the public internet. It does not replace a real
+  allowlist. Set `PORTAL_ALLOWED_IPS` on a container that faces a shared
+  network.
+- **Opt-out (Added)**: `PORTAL_ALLOW_PUBLIC_ACCESS` restores the old open
+  behavior. The portal accepts `1`, `true`, `yes`, and `on`. Every other value
+  keeps the portal shut, so a typing slip cannot open it. The portal writes a
+  warning to the log at every startup while the setting is true, so an audit
+  finds the choice.
+- **Startup message (Added)**: each fallback writes one warning. The message
+  names the served scope, names `PORTAL_ALLOWED_IPS`, gives the example value
+  `10.20.30.0/24,192.168.1.5`, and names the opt-out setting. The message is
+  ASCII only.
+- **Precedence (Unchanged)**: a configured `PORTAL_ALLOWED_IPS` value still
+  wins. The fallback ranges never widen an explicit allowlist.
+- **Tests (Added)**: `tests/unit/web_portal/test_portal_access_control_default.py`
+  adds 24 tests. Twelve of them failed before the fix. The proof case sends a
+  request from the public address `203.0.113.10` to a portal with no allowlist
+  and expects 403.
+- **Documentation (Changed)**: `deploy/.env.example` states the fallback, the
+  container ranges, and the opt-out.
+
 ### Stop the ZTP password from reaching a stored stream (issue #1735)
 
 - **Defect (Fixed)**: `src/device/_utility_commands_action.py` printed the live
