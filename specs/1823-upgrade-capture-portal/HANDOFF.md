@@ -1,6 +1,6 @@
 # Handoff: upgrade capture portal (issue #1823)
 
-**Last updated**: 2026-08-21.
+**Last updated**: 2026-08-23.
 **Branch**: `feat/1823-upgrade-capture-portal`.
 **Pull request**: [#1825](https://github.com/jmorrison-juniper/MistHelper/pull/1825).
 
@@ -15,19 +15,28 @@ the design. This file states the position.
 | Item | State |
 | --- | --- |
 | Tasks in `tasks.md` | 224 of 233 complete. An audit removed 13 checks, and 4 are back |
-| Continuous integration on the pull request | 18 checks pass, 2 skip |
-| Pull request | Open, mergeable, not a draft, no review yet |
+| Continuous integration on the pull request | No check runs. The branch conflicts with `main`. Section 4.1 holds the detail |
+| Pull request | Open, not a draft, no review yet. The merge state is `DIRTY` |
 | Local commits not pushed | None |
 | Uncommitted work | None from this feature |
-| Portal tests | 2613 unit and contract, all pass. 148 browser tests, all pass, 0 skip |
-| Statement coverage of the package | 94.18 percent |
-| Blocking defects | None. The twenty defects of `audit-2026-08-20.md` sections 2.1, 2.2, 2.3, 2.5, 6, 7, 8, 9, 10, 11, 12, and 13 are fixed |
+| Portal tests | 2664 unit and contract, all pass. 148 browser tests, all pass, 0 skip |
+| Statement coverage of the package | 94.26 percent |
+| Blocking defects | None. Every defect of `audit-2026-08-20.md` that an operator can meet is fixed |
 
 The code is written, the code tests pass, and the browser suite drives every
-journey with no skip. An audit on 2026-08-20 found 25 defects. By-eye drives of
-the portal found six more, and the bug scrub of section 2.5 found one more. The
-20 that could mislead or stop an operator are fixed. The audit refuted two more.
-The rest are recorded and open.
+journey with no skip. The audit of 2026-08-20 found 21 defects, numbered 1 to
+21. The work that followed found 12 more. Four came from the browser suite once
+the harness stopped hiding them. Six came from looking at the portal, and two
+came from the bug scrubs. Three later items carry no number. That is 36 records
+in all. Section 3 of the audit refuted two of them, and every remaining defect
+is fixed.
+
+Three items stay open, and none of the three is a defect that an operator can
+meet. Section 4.0 of this file names all three.
+
+Warning: the pass of the browser suite carries one condition. The 13 tests of
+`test_two_operators.py` need a Redis on port 6379. Without one, 12 of them skip
+and the site lock goes untested. Section 8 states the answer.
 
 Warning: no part of this feature has upgraded a real device. Task T232 and task
 T233 need a live organization and real switches. This workstation reaches
@@ -86,9 +95,19 @@ chose its own pair. Each theme now sets a thumb color and a track color, and
 `TestTheScrollbarTakesTheThemeColors` reads what the browser painted on two
 elements under both themes.
 
+The bug scrub of section 2.6 closed last, in commit `776dddd`. It found three
+items in the comparison code. Each one is small, and each one can put a wrong
+line in a file that an operator attaches to a change record:
+
+| Item | The harm |
+| --- | --- |
+| `compare/clients.py` | `VOLATILE_CLIENT_FIELDS` copied the volatile list of the digest builder, and no line read the copy. The last branch of `_compare_one_client` could not run, and it built a client record that names no field and called that record missing |
+| `compare/download.py`, the export | A device whose every change named a credential field lost every row and vanished from the file. A reader takes that absence to mean that nothing happened to the device |
+| `compare/download.py`, the formula guard | The guard omitted the minus sign, so a spreadsheet runs a cell that starts `-1+`. The guard now names all six leaders, and a negative number still reads as a number |
+
 Read `audit-2026-08-20.md` before you merge. It holds the 13 tasks that lost a
 check, the 4 that earned it back, the defects inside tasks that keep a check,
-and the order to fix them in.
+and the order to fix them in. Step 7 of that order is this file.
 
 ---
 
@@ -172,9 +191,21 @@ existing bulk firmware tools through that seam and never calls them directly.
 | Tasks that lost a check | 13 | Audit section 1.1 | 4 are back |
 | Defects that can hurt a device | 2 | Audit section 2.1 | Both fixed |
 | Defects of high severity | 2 | Audit section 2.2 | Both fixed |
-| Other defects | 17 | Audit sections 2.3 to 2.7 | Open |
+| Defects of the test harness | 2 | Audit section 2.3 | Both fixed |
+| Defects of the settle gates | 4 | Audit section 2.4 | All fixed |
+| Defects of the site lock | 6 | Audit section 2.5 | 4 fixed, 1 refuted, 1 refuted in part |
+| Defects of lower severity | 9 | Audit section 2.6 | All fixed |
 | Defects the browser tests found | 4 | Audit sections 6 to 9 | All fixed |
-| Defects a person found by eye | 3 | Audit sections 10 and 11 | All fixed |
+| Defects a person found by eye | 6 | Audit sections 10 to 13 | All fixed |
+| Defects the fault message scrub found | 1 | Audit section 15 | Fixed |
+
+Three items stay open. None of the three is a defect that an operator can meet.
+
+| Open item | Where | Why it stays open |
+| --- | --- | --- |
+| No phase progress reaches the page during a wait | Audit section 2.4, the last paragraphs | This is a design change, not a defect fix. A live channel costs 30 to 90 extra store writes for each phase. The false docstring at `upgrade/phase_gate.py` is the part to fix first |
+| Three modules sit under the 90 percent floor on their own | Audit section 2.7 | The aggregate of 94.26 percent hides them. `app/wiring.py` reaches 82 percent, `app/routes/select.py` 85 percent, and `app/routes/review.py` 89 percent. The audit table names `upgrade/wiring.py`, and no module of that path exists |
+| Four document corrections | Audit section 4 | Four rows of that table read `Open`. They are stale line citations and two counts, and no gate checks a line citation |
 
 The two defects of audit section 2.1 told an operator that the cloud stopped a
 device, when the code cannot know that. An operator who reads that word can cut
@@ -187,9 +218,29 @@ T080, the three audit tasks T227, T228, and T233, and the quickstart run T232.
 
 ### 4.1 Merge the pull request
 
-Pull request #1825 is open and mergeable. Every gate passes, and no blocking
-defect remains. Run every scenario of `quickstart.md` against a real site first,
-which is task T232, because no run of this feature has ever reached a real site.
+Warning: the pull request cannot merge today. The branch sits 66 commits behind
+`main`, and GitHub reports the merge state `DIRTY`. No check runs against a
+conflicted pull request, so `gh pr checks 1825` answers "no checks reported".
+The last green run covers `fc11b9e0`, which is one commit behind the head.
+
+`git merge-tree --write-tree --name-only origin/main HEAD` names the whole
+conflict. Three files conflict, and no more:
+
+| File | Branch commits that touch it |
+| --- | --- |
+| `CHANGELOG.md` | 3 |
+| `container/scripts/start.sh` | 2 |
+| `tests/unit/org/test_org_synthetic_probes_manager.py` | 1 |
+
+A rebase therefore stops at most six times. A person must choose the way,
+because a rebase carries one cost that this feature feels more than most. It
+rewrites all 56 commits, so every commit hash in `audit-2026-08-20.md` and in
+this file then names nothing. Those two documents cite about 20 hashes, and the
+audit already records what a stale citation costs a reader.
+
+Do this after the merge state is clean. Run every scenario of `quickstart.md`
+against a real site, which is task T232. No run of this feature has ever reached
+a real site.
 
 ### 4.2 Issue #1824, which is separate work
 
@@ -364,6 +415,7 @@ Each of these cost real time. Read them before you debug.
 | Gunicorn cannot start on Windows | An import fault on `fcntl` | The portal picks Waitress on Windows already |
 | A stray listener holds port 8056 | An end-to-end run fails almost every test with 401 | Kill the listener first. The fixture attaches to any listener, and a listener from another run holds no test record. Commit `6ce6fb4` turned this skip into a failure, so a broken portal can no longer read as a pass |
 | ArangoDB and Redis do not answer from this shell | The portal writes the CSV backup alone | Set `MISTHELPER_STANDALONE=true` and `REDIS_HOST=127.0.0.1`. Commit `506250b` added a process-local mirror, so a run still reads back |
+| No Redis answers on port 6379 | 12 of the 13 tests of `test_two_operators.py` skip and name a 503 from the lock route | Start one, then set `REDIS_PASSWORD`. Section 9 holds the command. The site lock is the one part of the portal that a browser test cannot reach without a store |
 
 ---
 
@@ -376,7 +428,15 @@ $env:PATHEXT = ".COM;.EXE;.BAT;.CMD;.VBS;.JS;.WS;.MSC;.PS1"
 .\.venv\Scripts\python.exe -m pytest tests/unit/upgrade_portal tests/contract/upgrade_portal -q -p no:playwright
 ```
 
-Expect 2591 passes.
+Expect 2664 passes.
+
+Start a Redis before the browser suite. Without one the site lock answers 503,
+and 12 of the 13 two-operator tests skip:
+
+```powershell
+podman run -d --name misthelper-redis-e2e -p 6379:6379 `
+  -e REDIS_ARGS="--requirepass misthelper" docker.io/redis/redis-stack:latest
+```
 
 Run the browser suite. It starts a portal of its own, so free port 8056 first:
 
@@ -384,12 +444,14 @@ Run the browser suite. It starts a portal of its own, so free port 8056 first:
 $env:PATHEXT = ".COM;.EXE;.BAT;.CMD;.VBS;.JS;.WS;.MSC;.PS1"
 $env:MISTHELPER_STANDALONE = "true"
 $env:REDIS_HOST = "127.0.0.1"
+$env:REDIS_PASSWORD = "misthelper"
 .\.venv\Scripts\python.exe -m pytest tests/e2e/upgrade_portal -q
 ```
 
-Expect 134 passes and no skip. A skip means the harness hid a broken portal.
-The portal writes its own log to `$env:TEMP\upgrade_portal_e2e_8056.log`, which
-states what the server did during the run.
+Expect 148 passes and no skip. A skip means the harness hid a broken portal, or
+the Redis is not running. Run with `-rs` to read the reason. The portal writes
+its own log to `$env:TEMP\upgrade_portal_e2e_8056.log`, which states what the
+server did during the run.
 
 Then open the portal and look at it. Do not skip this step. Rule 4 of
 `contracts/ui-testids.md` states that a test selects by `data-testid` only, so no
@@ -430,7 +492,9 @@ gh pr checks 1825
 ```
 
 `gh pr checks` exits with a non-zero code while a check still runs. That is not
-a failure.
+a failure. It answers "no checks reported" while the branch conflicts with
+`main`, because GitHub starts no check against a conflicted pull request. Read
+`gh pr view 1825 --json mergeStateStatus` to tell the two apart.
 
 ---
 
@@ -443,7 +507,7 @@ a failure.
 | `research.md` | The findings that shaped the design |
 | `data-model.md` | The collections, the fields, and the schema version |
 | `contracts/` | The HTTP interface and the site lock interface |
-| `tasks.md` | All 233 tasks. 220 carry a check |
+| `tasks.md` | All 233 tasks. 224 carry a check |
 | `audit-2026-08-20.md` | The task audit and the defect list. Read this before a merge |
 | `analysis.md` | The cross-artifact review, findings `G1` to `G6` |
 | `quickstart.md` | How to run the portal |
