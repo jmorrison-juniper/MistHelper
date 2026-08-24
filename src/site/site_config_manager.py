@@ -5,9 +5,10 @@ from __future__ import annotations  # WHY: enable PEP 604 union syntax across Py
 import csv  # WHY: parse CSV rows into per-site payload dicts.
 import logging  # WHY: emit structured audit trail for destructive ops.
 import os  # WHY: verify CSV presence before opening.
-import time  # WHY: throttle sequential API calls to avoid rate limits.
 from dataclasses import dataclass, field  # WHY: group callable dependencies into typed containers.
 from typing import Any  # WHY: dependencies are duck-typed injection surfaces.
+
+from src.utils.rate_limiting import AdaptivePacer  # WHY: quota-aware pacing replaces the fixed sleep calls.
 
 # --- Module-level dependency container (populated by configure_...) ---------
 
@@ -23,6 +24,13 @@ class SiteConfigDependencies:  # WHY: typed container consumed by every helper v
     data_exporter: Any = None  # WHY: exports run reports in operator-chosen format.
     mistapi: Any = None  # WHY: root SDK module used for both calls and pagination.
     default_api_page_limit: int = 1000  # WHY: paginate wide list endpoints in one call when possible.
+    api_usage_cache: dict[str, Any] | None = None  # WHY: shared quota view for the adaptive rate limiter.
+
+
+def _pacer(enabled: bool = True) -> AdaptivePacer:  # WHY: one builder keeps every bulk loop on the same quota view.
+    """Return a pacer bound to the live session and the shared API usage cache."""
+    deps = _deps()  # WHY: read the wired collaborators one time per loop.
+    return AdaptivePacer(deps.apisession, deps.api_usage_cache, enabled)  # WHY: PID pacing replaces a fixed sleep.
 
 
 _DEPS: SiteConfigDependencies = SiteConfigDependencies()  # WHY: single shared holder mutated at wire-up.
@@ -190,6 +198,7 @@ class SiteConfigManager:  # WHY: umbrella namespace for the four menu entrypoint
         created_sites: list[dict[str, Any]] = []  # WHY: collect successful records for later export.
         failed_sites: list[dict[str, Any]] = []  # WHY: collect failed records for later export.
         total = len(sites_data)  # WHY: cache for progress lines.
+        pacer = _pacer()  # WHY: one pacer per loop carries the PID state across every create call.
         print(f"\n Creating sites in organization {org_id}...")  # WHY: operator visibility for long loop.
         for index, site_data in enumerate(sites_data, start=1):  # WHY: 1-based indices align with CSV rows.
             site_payload = SiteConfigManager._build_site_payload(site_data)  # WHY: shape payload for API.
@@ -203,7 +212,7 @@ class SiteConfigManager:  # WHY: umbrella namespace for the four menu entrypoint
                 created_sites.append(created)  # WHY: capture success record.
             if failed:  # WHY: at most one of the two is non-None per call.
                 failed_sites.append(failed)  # WHY: capture failure record.
-            time.sleep(0.5)  # WHY: throttle to stay under Mist per-org rate limits.
+            pacer.pace()  # WHY: quota-aware wait replaces the fixed sleep between site creates.
         return created_sites, failed_sites  # WHY: hand paired result buckets to caller.
 
     @staticmethod
@@ -500,7 +509,9 @@ class SiteConfigManager:  # WHY: umbrella namespace for the four menu entrypoint
         }
 
     @staticmethod
-    def _update_one_rf_template(org_id: str, template_info: dict[str, Any], mapping: dict[str, dict[str, str]]) -> None:
+    def _update_one_rf_template(
+        org_id: str, template_info: dict[str, Any], mapping: dict[str, dict[str, str]], pacer: AdaptivePacer
+    ) -> None:
         """Update a single existing RF template and record mapping on success."""
         country = template_info["country"]  # WHY: local key for mapping insertion.
         payload = SiteConfigManager._build_rf_template_payload(country, template_info["name"])  # WHY: fresh body.
@@ -512,12 +523,14 @@ class SiteConfigManager:  # WHY: umbrella namespace for the four menu entrypoint
             if response.status_code == 200:  # WHY: only accept HTTP 200 as successful update.
                 mapping[country] = {"id": template_info["id"], "name": template_info["name"]}
                 print(f"  Updated: {template_info['name']}")  # WHY: operator progress line.
-            time.sleep(0.5)  # WHY: throttle sequential updates.
+            pacer.pace()  # WHY: quota-aware wait replaces the fixed sleep between template updates.
         except (RuntimeError, ValueError, OSError, KeyError) as error:  # WHY: narrow set.
             logging.error("Failed to update template %s: %s", template_info["name"], error)  # WHY: audit.
 
     @staticmethod
-    def _create_one_rf_template(org_id: str, template_info: dict[str, Any], mapping: dict[str, dict[str, str]]) -> None:
+    def _create_one_rf_template(
+        org_id: str, template_info: dict[str, Any], mapping: dict[str, dict[str, str]], pacer: AdaptivePacer
+    ) -> None:
         """Create a single new RF template and record mapping on success."""
         country = template_info["country"]  # WHY: local key for mapping insertion.
         payload = SiteConfigManager._build_rf_template_payload(country, template_info["name"])  # WHY: body.
@@ -530,7 +543,7 @@ class SiteConfigManager:  # WHY: umbrella namespace for the four menu entrypoint
                 created_id = response.data.get("id")  # WHY: extract new template id.
                 mapping[country] = {"id": created_id, "name": template_info["name"]}
                 print(f" Created: {template_info['name']}")  # WHY: operator feedback.
-            time.sleep(0.5)  # WHY: throttle create loop.
+            pacer.pace()  # WHY: quota-aware wait replaces the fixed sleep between template creates.
         except (RuntimeError, ValueError, OSError, KeyError) as error:  # WHY: narrow set.
             logging.error("Failed to create template %s: %s", template_info["name"], error)  # WHY: audit.
 
@@ -552,13 +565,14 @@ class SiteConfigManager:  # WHY: umbrella namespace for the four menu entrypoint
     ) -> dict[str, dict[str, str]]:
         """Execute RF template create/update operations. Returns country->template mapping."""
         template_mapping: dict[str, dict[str, str]] = {}  # WHY: country -> {id,name} lookup for assignment.
+        pacer = _pacer()  # WHY: one pacer spans both write phases so the PID state survives the whole run.
         if update_mode == "update":  # WHY: only touch existing templates on explicit update.
             for template_info in to_update:  # WHY: iterate updates individually so one failure is isolated.
-                SiteConfigManager._update_one_rf_template(org_id, template_info, template_mapping)
+                SiteConfigManager._update_one_rf_template(org_id, template_info, template_mapping, pacer)
         else:  # WHY: skip mode reuses existing ids without API mutation.
             SiteConfigManager._apply_existing_templates_mapping(to_update, template_mapping)
         for template_info in to_create:  # WHY: create fresh templates last so failures do not block updates.
-            SiteConfigManager._create_one_rf_template(org_id, template_info, template_mapping)
+            SiteConfigManager._create_one_rf_template(org_id, template_info, template_mapping, pacer)
         return template_mapping
 
     @staticmethod
@@ -566,6 +580,7 @@ class SiteConfigManager:  # WHY: umbrella namespace for the four menu entrypoint
         site_info: dict[str, Any],
         template: dict[str, str],
         buckets: tuple[list[dict[str, Any]], list[dict[str, Any]]],
+        pacer: AdaptivePacer,
     ) -> None:
         """Assign one site to its RF template and record success/failure."""
         success, failed = buckets  # WHY: unpack shared result accumulators.
@@ -584,7 +599,7 @@ class SiteConfigManager:  # WHY: umbrella namespace for the four menu entrypoint
                 )
             else:  # WHY: non-200 is recorded as HTTP-level failure with status.
                 failed.append({"site_name": site_info["name"], "error": f"HTTP {response.status_code}"})
-            time.sleep(0.3)  # WHY: shorter throttle for site updates than template creates.
+            pacer.pace()  # WHY: quota-aware wait replaces the fixed sleep between site assignments.
         except (RuntimeError, ValueError, OSError, KeyError) as error:  # WHY: narrow set.
             failed.append({"site_name": site_info["name"], "error": str(error)})
 
@@ -597,6 +612,7 @@ class SiteConfigManager:  # WHY: umbrella namespace for the four menu entrypoint
         success: list[dict[str, Any]] = []  # WHY: success bucket for report + export.
         failed: list[dict[str, Any]] = []  # WHY: failure bucket for report + export.
         deps = _deps()  # WHY: local ref shared by whole assignment loop.
+        pacer = _pacer()  # WHY: one pacer spans every country so the PID state tracks the whole assignment run.
         for country, sites in sites_by_country.items():  # WHY: iterate one country at a time.
             if country not in template_mapping:  # WHY: no mapping means we skip that whole country.
                 continue
@@ -608,7 +624,7 @@ class SiteConfigManager:  # WHY: umbrella namespace for the four menu entrypoint
             for site_info in sites:  # WHY: iterate sites within country.
                 if deps.config_utils.check_stop_signal():  # WHY: honor cancel semantics between requests.
                     return success, failed
-                SiteConfigManager._assign_one_site_to_template(site_info, template, (success, failed))
+                SiteConfigManager._assign_one_site_to_template(site_info, template, (success, failed), pacer)
         return success, failed
 
     @staticmethod
@@ -772,6 +788,7 @@ class SiteConfigManager:  # WHY: umbrella namespace for the four menu entrypoint
         profile_info: dict[str, Any],
         created: list[dict[str, Any]],
         failed: list[dict[str, Any]],
+        pacer: AdaptivePacer,
     ) -> None:
         """Create one device profile and append to created/failed bucket."""
         payload = {"name": profile_info["name"], "type": "ap"}  # WHY: minimal API contract for AP profile.
@@ -781,7 +798,7 @@ class SiteConfigManager:  # WHY: umbrella namespace for the four menu entrypoint
                 deps.apisession, org_id, body=payload
             )
             SiteConfigManager._record_profile_create_response(response, profile_info, created, failed)
-            time.sleep(0.5)  # WHY: throttle sequential creates.
+            pacer.pace()  # WHY: quota-aware wait replaces the fixed sleep between profile creates.
         except (RuntimeError, ValueError, OSError, KeyError) as error:  # WHY: narrow set.
             failed.append({"model": profile_info["model"], "name": profile_info["name"], "error": str(error)})
 
@@ -814,8 +831,9 @@ class SiteConfigManager:  # WHY: umbrella namespace for the four menu entrypoint
         created: list[dict[str, Any]] = []  # WHY: success bucket.
         failed: list[dict[str, Any]] = []  # WHY: failure bucket.
         print(f"\n  Step 3: Creating {len(to_create)} new Device Profiles...")  # WHY: legacy step header.
+        pacer = _pacer()  # WHY: one pacer per run carries the PID state across every profile create.
         for profile_info in to_create:  # WHY: iterate sequentially to keep rate under limits.
-            SiteConfigManager._create_one_device_profile(org_id, profile_info, created, failed)
+            SiteConfigManager._create_one_device_profile(org_id, profile_info, created, failed, pacer)
         return created, failed
 
     @staticmethod
@@ -1000,6 +1018,7 @@ class SiteConfigManager:  # WHY: umbrella namespace for the four menu entrypoint
         ap_info: dict[str, Any],
         success: list[dict[str, Any]],
         failed: list[dict[str, Any]],
+        pacer: AdaptivePacer,
     ) -> None:
         """Assign one AP to its device profile, updating success/failed buckets."""
         try:
@@ -1008,7 +1027,7 @@ class SiteConfigManager:  # WHY: umbrella namespace for the four menu entrypoint
                 deps.apisession, org_id, ap_info["profile_id"], body={"macs": [ap_info["mac"]]}
             )
             SiteConfigManager._record_ap_assign_response(response, ap_info, success, failed)
-            time.sleep(0.3)  # WHY: shorter throttle for assignment calls.
+            pacer.pace()  # WHY: quota-aware wait replaces the fixed sleep between AP assignments.
         except (RuntimeError, ValueError, OSError, KeyError) as error:  # WHY: narrow set.
             failed.append({"mac": ap_info["mac"], "name": ap_info["name"], "error": str(error)})
 
@@ -1042,8 +1061,9 @@ class SiteConfigManager:  # WHY: umbrella namespace for the four menu entrypoint
         success: list[dict[str, Any]] = []  # WHY: success bucket.
         failed: list[dict[str, Any]] = []  # WHY: failure bucket.
         print(f"\n  Step 3: Assigning {len(with_profile)} APs to Device Profiles...")  # WHY: legacy header.
+        pacer = _pacer()  # WHY: one pacer per run carries the PID state across every assignment call.
         for ap_info in with_profile:  # WHY: iterate sequentially to stay under rate limits.
-            SiteConfigManager._assign_one_ap_to_profile(org_id, ap_info, success, failed)
+            SiteConfigManager._assign_one_ap_to_profile(org_id, ap_info, success, failed, pacer)
         return success, failed
 
     @staticmethod

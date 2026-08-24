@@ -593,3 +593,50 @@ class RateLimitingUtils:  # WHY: static-method facade groups rate-limit helpers 
         return RateLimitingUtils._try_pipeline_or_fallback(
             apisession, api_usage_cache, tuning_data, smoothed_delay
         )  # WHY: safe execution of PID cycle.
+
+
+class AdaptivePacer:  # WHY: hold the PID state that a sequential write loop must carry between iterations.
+    """Pace a sequential write loop with the adaptive PID rate limiter.
+
+    A bulk write loop must wait between requests to stay below the Mist
+    per-org quota. A fixed sleep cannot read the real quota. A fixed sleep
+    therefore wastes headroom on a small org, and it still permits HTTP 429
+    on a large org that shares the quota with another tool. This class
+    keeps the smoothed delay between iterations. It then applies the delay
+    that RateLimitingUtils.get_rate_limited_delay computes.
+    """
+
+    def __init__(
+        self,
+        apisession: Any = None,
+        api_usage_cache: dict[str, Any] | None = None,
+        enabled: bool = True,
+    ) -> None:  # WHY: one pacer instance owns one loop, so the PID state cannot leak between loops.
+        """Store the session, the shared usage cache, and the enable flag."""
+        self._apisession = apisession  # WHY: the PID pipeline reads the quota through this session.
+        self._api_usage_cache = api_usage_cache  # WHY: shared cache keeps every menu on one quota view.
+        self._enabled = enabled  # WHY: a dry run must not spend wall-clock time on a sleep.
+        self._smoothed_delay: float | None = None  # WHY: None marks the first call of this loop.
+        logging.debug(
+            "AdaptivePacer created (enabled=%s, cache_present=%s)", enabled, api_usage_cache is not None
+        )  # WHY: record the pacing decision for a later audit of a bulk run.
+
+    @property
+    def smoothed_delay(self) -> float | None:  # WHY: expose read-only state so a test can assert the PID carry-over.
+        """Return the current smoothed delay in seconds, or None before the first call."""
+        return self._smoothed_delay  # WHY: callers must not mutate the PID state directly.
+
+    def next_delay(self) -> float:  # WHY: split the computation from the sleep so a test can run without waiting.
+        """Compute the next delay in seconds and keep the smoothed PID state."""
+        self._smoothed_delay, delay_in_seconds = RateLimitingUtils.get_rate_limited_delay(
+            self._smoothed_delay, self._apisession, self._api_usage_cache
+        )  # WHY: the helper returns the new smoothed value and the delay to apply.
+        return delay_in_seconds  # WHY: caller decides whether to sleep for this delay.
+
+    def pace(self) -> float:  # WHY: single call site replaces the hard-coded time.sleep in every bulk write loop.
+        """Wait for the computed delay and return the number of seconds waited."""
+        if not self._enabled:  # WHY: a disabled pacer reports zero wait and performs no sleep.
+            return 0.0  # WHY: keep the return type stable for the caller.
+        delay_in_seconds = self.next_delay()  # WHY: ask the PID controller for the current quota-aware delay.
+        time.sleep(delay_in_seconds)  # WHY: hold the loop for the delay the controller selected.
+        return delay_in_seconds  # WHY: report the wait so a caller can log or assert it.

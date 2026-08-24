@@ -3356,6 +3356,7 @@ def _configure_site_config_manager() -> type[SiteConfigManager]:
             data_exporter=DataExporter,  # Result-report writer
             mistapi=mistapi,  # Root SDK module for calls + pagination
             default_api_page_limit=DEFAULT_API_PAGE_LIMIT,  # Bulk fetch page size
+            api_usage_cache=_api_usage_cache,  # Shared quota view for the adaptive rate limiter
         )
     )
     return SiteConfigManager  # Canonical class ready for menu callback dispatch
