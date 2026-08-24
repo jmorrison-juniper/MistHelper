@@ -16,7 +16,8 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.deps import get_db_session, get_scoped_org_id
+from src.api.deps import get_authenticated_user, get_db_session, get_scoped_org_id
+from src.api.middleware.auth import CurrentUser, require_org_access
 from src.api.schemas.common import ResponseEnvelope
 from src.shared.models.operations import NotificationChannel
 
@@ -99,9 +100,18 @@ async def list_channels(
 async def create_channel(
     body: ChannelCreate,
     db: AsyncSession = Depends(get_db_session),
+    user: CurrentUser = Depends(get_authenticated_user),
 ) -> ChannelResponse:
-    """Create a new notification channel."""
+    """Create a new notification channel.
+
+    The channel holds an outbound endpoint, so an anonymous caller could point
+    an organization's alerts at a host that the caller owns. The caller must
+    hold a valid credential and must belong to the organization.
+    """
     from uuid import uuid4
+
+    logger.info("Notification channel creation starts for organization %s.", body.org_id)
+    require_org_access(str(body.org_id), user)  # Raise 403 when the caller is outside the org
 
     channel = NotificationChannel(
         id=uuid4(),
