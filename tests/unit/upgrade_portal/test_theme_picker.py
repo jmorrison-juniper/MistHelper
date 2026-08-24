@@ -386,9 +386,16 @@ def test_the_base_stylesheet_holds_no_color_value() -> None:
         One literal color would break that promise silently, because the rule
         would keep the same color under every theme and only a person looking at
         the page would find it.
+
+        The scan drops every comment first. A comment paints nothing, and a
+        comment that cites a GitHub issue such as `#2008` reads as a three-digit
+        hexadecimal color to the pattern below. Without this step the test would
+        forbid the one convention that the rest of the repository uses to say
+        why a rule exists.
     """
     base = (theme_folder() / "portal.css").read_text(encoding="utf-8")
-    assert not re.findall(r"#[0-9a-fA-F]{3,8}\b", base)  # No hexadecimal color anywhere.
+    rules = re.sub(r"/\*.*?\*/", "", base, flags=re.DOTALL)  # Keep the declarations, drop the prose.
+    assert not re.findall(r"#[0-9a-fA-F]{3,8}\b", rules)  # No hexadecimal color anywhere.
 
 
 # ---------------------------------------------------------------------------

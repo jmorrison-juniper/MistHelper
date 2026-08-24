@@ -37,7 +37,13 @@ SCOPE_ORG = "org"
 # holds a literal string, not an enumeration member. The value is the name of a
 # cloud function, ``_resolve_endpoint`` looks the name up in a fixed tuple, and a
 # plain string travels through JSON to the browser with no conversion.
+#
+# The site scope offers two calls. ``upgradeSiteDevices`` takes a device list and
+# the orchestration fields. ``upgradeDevice`` takes one device in the path and
+# holds no orchestration field. ``_uses_the_per_device_call`` states when a group
+# takes the second call, and issue #2007 holds the run that asked for it.
 ENDPOINT_SITE_DEVICES = "upgradeSiteDevices"
+ENDPOINT_SITE_DEVICE = "upgradeDevice"
 ENDPOINT_ORG_SSRS = "upgradeOrgSsrs"
 
 STRATEGY_DEFAULT = "big_bang"
@@ -120,9 +126,11 @@ _MESSAGE_NO_CANCEL = "This device family offers no cancel call, so every device 
 # mistapi 0.63.3 builds the cancel path inside that function.
 _ENDPOINT_MODULES = (
     (ENDPOINT_SITE_DEVICES, "mistapi.api.v1.sites.devices"),
+    (ENDPOINT_SITE_DEVICE, "mistapi.api.v1.sites.devices"),
     ("getSiteDeviceUpgrade", "mistapi.api.v1.sites.devices"),
     ("cancelSiteDeviceUpgrade", "mistapi.api.v1.sites.devices"),
     ("listSiteAvailableDeviceVersions", "mistapi.api.v1.sites.devices"),
+    ("searchSiteDeviceEvents", "mistapi.api.v1.sites.devices"),
     ("getSiteSsrUpgrade", "mistapi.api.v1.sites.ssr"),
     (ENDPOINT_ORG_SSRS, "mistapi.api.v1.orgs.ssr"),
     ("cancelOrgSsrUpgrade", "mistapi.api.v1.orgs.ssr"),
@@ -442,11 +450,59 @@ def _strategy_word(strategy: str, family: GatewayFamily) -> str | None:
     return strategy
 
 
+def _uses_the_per_device_call(
+    targets: Sequence[DeviceTarget],
+    family: GatewayFamily,
+    options: UpgradeOptions,
+) -> bool:
+    """Return whether this group takes the per-device upgrade endpoint.
+
+    Why:
+        The cloud offers two site-scope upgrade calls. ``upgradeSiteDevices``
+        takes a device list and adds the orchestration fields ``strategy``,
+        ``canary_phases``, and the peer-to-peer settings. ``upgradeDevice`` takes
+        one device in the path, and its whole schema is ``reboot``,
+        ``reboot_at``, ``snapshot``, ``start_time``, and ``version``. It carries
+        no orchestration field at all.
+
+        A run on 2026-08-24 sent ``reboot: false`` and ``strategy: big_bang``
+        together for one switch through the batch call. The switch wrote the
+        firmware and rebooted four seconds later, and six access points lost
+        power over Ethernet with it. The gateway of the same call kept the
+        choice. Issue #2007 holds the event record.
+
+        That body named a reboot wave and no reboot in one breath, and no
+        operator can tell which one the cloud reads. This function removes the
+        contradiction for the one case where it can: a single device with the
+        reboot control off. A group of one needs no wave, because every strategy
+        word describes the order of several devices.
+
+        The rule stays this narrow on purpose. A run that asks for a reboot has
+        no contradiction to remove, and the batch call already serves it. A
+        session smart router keeps the organization-scope call, because that
+        family offers no per-device path and it is the only family with a cancel
+        call at organization scope.
+
+    Args:
+        targets: The devices of one group.
+        family: The gateway family of the group.
+        options: The choices of the operator.
+
+    Returns:
+        True when the group holds one device, sits outside the session smart
+        router family, and carries the reboot control off.
+    """
+    if options.reboot:  # A wave and a reboot agree, so the batch call stays.
+        return False
+    return len(targets) == 1 and family is not GatewayFamily.SSR
+
+
 def _add_family_fields(
     body: dict[str, object],
     device_type: str,
     options: UpgradeOptions,
     family: GatewayFamily,
+    one_device: bool = False,
 ) -> None:
     """Add the body fields that one device family alone reads.
 
@@ -456,11 +512,16 @@ def _add_family_fields(
         The session smart router body disables a reboot with ``reboot_at``
         instead.
 
+        The per-device schema holds no ``canary_phases`` field, so a per-device
+        body never carries one. The reboot field and the Junos file action field
+        appear in both schemas, so both bodies carry them.
+
     Args:
         body: The body under construction. The function changes it in place.
         device_type: The device type of the group.
         options: The choices of the operator.
         family: The gateway family of the group.
+        one_device: Whether the body travels to the per-device endpoint.
     """
     if family is GatewayFamily.SSR:
         if not options.reboot:
@@ -470,7 +531,7 @@ def _add_family_fields(
         body["reboot"] = options.reboot
         if options.junos_file_action:
             body[_JUNOS_FILE_ACTION_KEY] = True
-    if options.strategy == STRATEGY_CANARY:
+    if options.strategy == STRATEGY_CANARY and not one_device:
         body["canary_phases"] = list(_CANARY_PHASES)
 
 
@@ -504,17 +565,17 @@ def build_body(
     """
     if not targets:
         raise ValueError("an upgrade body needs at least one target")
+    one_device = _uses_the_per_device_call(targets, family, options)  # The small schema holds no list.
     _logger().info("build an upgrade body for %s target(s) of family %s", len(targets), family.value)
-    body: dict[str, object] = {
-        "device_ids": [_device_id(target.mac) for target in targets],
-        "version": targets[0].version_target,
-    }
-    word = _strategy_word(options.strategy, family)
-    if word is not None:
-        body["strategy"] = word
+    body: dict[str, object] = {"version": targets[0].version_target}
+    if not one_device:  # The batch call names every device, and the per-device call names it in the path.
+        body["device_ids"] = [_device_id(target.mac) for target in targets]
+        word = _strategy_word(options.strategy, family)
+        if word is not None:
+            body["strategy"] = word
     if options.start_time is not None:
         body["start_time"] = options.start_time
-    _add_family_fields(body, targets[0].device_type, options, family)
+    _add_family_fields(body, targets[0].device_type, options, family, one_device)
     _logger().debug("the upgrade body holds the keys %s", sorted(body))
     return body
 
@@ -647,6 +708,12 @@ def _build_plan(
         cancel for that family. A run that started at site scope would have no
         way to stop, which FR-038 forbids.
 
+        A group of one device outside that family uses the per-device endpoint
+        when the operator turned the reboot control off.
+        `_uses_the_per_device_call` states why. The cancel call stays the same,
+        because `_cancel_endpoint_name` reads the scope and this plan keeps the
+        site scope.
+
     Args:
         key: The device type, the gateway family, and the target version.
         members: The devices of the group.
@@ -658,9 +725,11 @@ def _build_plan(
         One finished plan.
     """
     is_ssr = key[1] is GatewayFamily.SSR
+    one_device = _uses_the_per_device_call(members, key[1], options)  # Decides between the two site calls.
+    site_endpoint = ENDPOINT_SITE_DEVICE if one_device else ENDPOINT_SITE_DEVICES
     route = PlanRoute(
         scope=SCOPE_ORG if is_ssr else SCOPE_SITE,
-        endpoint=ENDPOINT_ORG_SSRS if is_ssr else ENDPOINT_SITE_DEVICES,
+        endpoint=ENDPOINT_ORG_SSRS if is_ssr else site_endpoint,
         scope_id=identifiers[0] if is_ssr else identifiers[1],
     )
     body = build_body(members, options, key[1])
@@ -784,10 +853,36 @@ def _validate_plan(plan: UpgradePlan) -> None:
         raise ValueError("an upgrade plan needs at least one target")
     if not plan.route.scope_id:
         raise ValueError("an upgrade plan needs a site or organization identifier")
-    if not plan.body.get("device_ids"):
+    if plan.endpoint == ENDPOINT_SITE_DEVICE:  # The path names the device, so the body names none.
+        if len(plan.targets) != 1:
+            raise ValueError("the per-device upgrade endpoint takes exactly one target")
+    elif not plan.body.get("device_ids"):
         raise ValueError("an upgrade plan needs at least one device identifier")
     if plan.scope not in (SCOPE_SITE, SCOPE_ORG):
         raise ValueError("an upgrade plan needs the scope site or the scope org")
+
+
+def _send_plan(session: Any, plan: UpgradePlan) -> Any:
+    """Perform the one cloud call of one plan.
+
+    Why:
+        The two site-scope endpoints take a different number of path values.
+        ``upgradeSiteDevices`` names the site and reads the device list from the
+        body. ``upgradeDevice`` names the site and the device, and its body holds
+        no list. One function holds that difference, so `invoke_upgrade` keeps
+        one shape for every plan.
+
+    Args:
+        session: The Mist API session. The caller owns it.
+        plan: The plan to submit.
+
+    Returns:
+        The raw cloud answer.
+    """
+    call = _resolve_endpoint(plan.endpoint)  # Raises for any name outside the sanctioned tuple.
+    if plan.endpoint == ENDPOINT_SITE_DEVICE:  # The device identifier travels in the path, not the body.
+        return call(session, plan.route.scope_id, _device_id(plan.targets[0].mac), dict(plan.body))
+    return call(session, plan.route.scope_id, dict(plan.body))
 
 
 def invoke_upgrade(session: Any, plan: UpgradePlan) -> UpgradeSubmission:
@@ -815,7 +910,7 @@ def invoke_upgrade(session: Any, plan: UpgradePlan) -> UpgradeSubmission:
     """
     _validate_plan(plan)
     _logger().info("submit %s for %s device(s) at %s scope", plan.endpoint, len(plan.targets), plan.scope)
-    response = _resolve_endpoint(plan.endpoint)(session, plan.route.scope_id, dict(plan.body))
+    response = _send_plan(session, plan)
     submission = _read_submission(response, plan)
     _logger().debug("the cloud answered status %s and upgrade %s", submission.raw_status, submission.upgrade_id)
     return submission

@@ -135,13 +135,40 @@ Grouping rules.
 | Access points | site | `upgradeSiteDevices` |
 | Switches | site | `upgradeSiteDevices` |
 | Junos gateways | site | `upgradeSiteDevices` |
+| One device of any of the three, with the reboot control off | site | `upgradeDevice` |
 | Session smart routers | **org** | `upgradeOrgSsrs` |
+
+**Why a group of one device with no reboot uses a second site call.** The cloud
+offers two site-scope upgrade calls. `upgradeSiteDevices` takes a device list and
+adds the orchestration fields `strategy`, `canary_phases`, and the peer-to-peer
+settings. `upgradeDevice` takes one device in the path, and its whole schema is
+`reboot`, `reboot_at`, `snapshot`, `start_time`, and `version`.
+
+A run on 2026-08-24 sent `reboot: false` and `strategy: big_bang` together for one
+EX4100-F-12P through the batch call. The switch wrote the firmware and rebooted
+four seconds later, and six access points lost power over Ethernet with it. The
+gateway of the same call kept the choice. Issue #2007 holds the event record.
+
+That body named a reboot wave and no reboot in one breath, and no operator can
+tell which one the cloud reads. The smaller call holds no field that can
+contradict the reboot choice. A group of one needs no wave, because every
+strategy word describes the order of several devices.
+
+The rule stays this narrow on purpose. A run that asks for a reboot has no
+contradiction to remove, and the batch call already serves it.
+
+Caution: the smaller call removes a contradiction. It proves nothing. No lab
+switch has yet shown that this call holds the choice, so the plan still carries
+the warning that a switch may reboot.
 
 **Why a session smart router always uses organization scope.** The installed SDK
 offers `cancelOrgSsrUpgrade` at `mistapi/api/v1/orgs/ssr.py:173`. No site-scope
 cancel exists for that family. `mistapi/api/v1/sites/ssr.py` holds
 `getSiteSsrUpgrade` and `upgradeSsr` only. A run that started at site scope would
 have no way to stop, which FR-038 forbids.
+
+A per-device plan keeps the site scope, so `_cancel_endpoint_name` still answers
+`cancelSiteDeviceUpgrade` and the run keeps its stop control.
 
 The function adds a warning when a target list mixes families, so that the
 operator sees the split before the start.
