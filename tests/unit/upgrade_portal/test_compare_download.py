@@ -266,6 +266,23 @@ def test_a_credential_field_never_writes_a_row() -> None:
     assert NEW_VERSION in body
 
 
+def test_a_device_with_only_credential_changes_keeps_one_row() -> None:
+    """A device whose every change reads as a secret still reports that it changed."""
+    delta = device_compare.DeviceDelta(
+        mac=MASTER_MAC,
+        outcome=device_compare.OUTCOME_CHANGED,
+        changes=(device_compare.FieldChange(field="api_token", before="old-secret", after="new-secret"),),
+    )
+
+    rows = download.build_rows(device_compare.DeviceComparison(deltas=(delta,)), client_compare.ClientComparison())
+
+    assert len(rows) == 1
+    assert rows[0].mac == MASTER_MAC
+    assert rows[0].outcome == device_compare.OUTCOME_CHANGED
+    assert rows[0].change.field == ""
+    assert "secret" not in download.render_csv(rows)
+
+
 # ---------------------------------------------------------------------------
 # The comma-separated file
 # ---------------------------------------------------------------------------
@@ -291,7 +308,7 @@ def test_a_name_with_a_comma_reads_back_whole() -> None:
     assert _read_csv(download.render_csv(rows))[0]["name"] == "switch-01, floor 2"
 
 
-@pytest.mark.parametrize("leader", ["=", "+", "@"])
+@pytest.mark.parametrize("leader", ["=", "+", "@", "-"])
 def test_a_cell_that_would_run_gets_a_guard(leader: str) -> None:
     """A spreadsheet never runs a device name that came from the cloud.
 
@@ -312,7 +329,7 @@ def test_a_cell_that_would_run_gets_a_guard(leader: str) -> None:
 
 
 def test_a_negative_number_stays_a_number() -> None:
-    """A signal reading keeps its minus sign, so a spreadsheet reads it."""
+    """A negative count keeps its minus sign, so a spreadsheet sums the column."""
     delta = device_compare.DeviceDelta(
         mac=MASTER_MAC,
         outcome=device_compare.OUTCOME_CHANGED,
@@ -321,6 +338,35 @@ def test_a_negative_number_stays_a_number() -> None:
     rows = download.build_rows(device_compare.DeviceComparison(deltas=(delta,)), client_compare.ClientComparison())
 
     assert _read_csv(download.render_csv(rows))[0]["before"] == "-1"
+
+
+def test_a_formula_that_starts_with_a_minus_sign_gets_a_guard() -> None:
+    """A minus sign starts a formula as well as a number, so the writer reads the whole cell."""
+    delta = device_compare.DeviceDelta(
+        mac=MASTER_MAC,
+        outcome=device_compare.OUTCOME_ADDED,
+        name="-1+cmd|' /c calc'!A0",
+    )
+    rows = download.build_rows(device_compare.DeviceComparison(deltas=(delta,)), client_compare.ClientComparison())
+
+    assert _read_csv(download.render_csv(rows))[0]["name"].startswith("'")
+
+
+@pytest.mark.parametrize("leader", ["\t", "\r"])
+def test_a_control_character_leader_gets_a_guard(leader: str) -> None:
+    """A tab and a carriage return also start a formula in a spreadsheet.
+
+    Args:
+        leader: The control character that would start a formula.
+    """
+    delta = device_compare.DeviceDelta(
+        mac=MASTER_MAC,
+        outcome=device_compare.OUTCOME_ADDED,
+        name=leader + "cmd|' /c calc'!A1",
+    )
+    rows = download.build_rows(device_compare.DeviceComparison(deltas=(delta,)), client_compare.ClientComparison())
+
+    assert "'" + leader in download.render_csv(rows)
 
 
 def test_an_empty_comparison_writes_the_header_alone() -> None:

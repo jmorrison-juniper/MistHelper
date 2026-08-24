@@ -229,6 +229,19 @@ def test_a_new_signal_reading_never_reads_as_a_move() -> None:
     assert clients.compare_clients(before, after).deltas[0].outcome == clients.OUTCOME_PRESENT
 
 
+def test_a_client_with_neither_row_raises() -> None:
+    """A client that no capture holds is a programming fault, never a ``missing`` row.
+
+    Why:
+        The caller walks the union of the two maps, so this call cannot happen
+        in production. A made up ``missing`` record would put a false line in a
+        comparison that an operator attaches to a change record, so the reader
+        raises instead.
+    """
+    with pytest.raises(ValueError, match=CLIENT_MAC):
+        clients._compare_one_client(CLIENT_MAC, None, None)
+
+
 # ---------------------------------------------------------------------------
 # The section readers
 # ---------------------------------------------------------------------------

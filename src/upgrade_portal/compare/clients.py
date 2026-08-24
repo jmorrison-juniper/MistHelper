@@ -67,10 +67,6 @@ HOSTNAME_KEY = "hostname"
 DEVICE_MAC_KEY = "device_mac"
 DEVICE_NAME_KEY = "device_name"
 
-# WHY: A volatile field never enters the match. The list repeats the volatile
-# list of the digest builder, so both lanes forget the same fields.
-VOLATILE_CLIENT_FIELDS = ("timestamp", "last_seen", "uptime", "_ts")
-
 # WHY: The registry joins the key parts with a colon. The other separators
 # appear in hand written keys and in file names, so the reader accepts them
 # all rather than trusting one writer.
@@ -478,14 +474,21 @@ def _compare_one_client(
 
     Returns:
         One client difference record.
+
+    Raises:
+        ValueError: When the client holds neither row.
     """
     if before_entry is not None and after_entry is not None:
         return _paired_delta(mac, before_entry, after_entry)
     if after_entry is not None:
         return _single_delta(mac, after_entry, OUTCOME_ADDED)
-    if before_entry is not None:
-        return _single_delta(mac, before_entry, OUTCOME_MISSING)
-    return ClientDelta(mac=mac, outcome=OUTCOME_MISSING)
+    if before_entry is None:
+        # The caller walks the union of the two maps, so one of the two entries
+        # always holds a row. A client with neither row is a programming fault.
+        # A made up "missing" record would put a false line in a comparison that
+        # an operator attaches to a change record.
+        raise ValueError(f"Client {mac} holds no pre-check row and no post-check row.")
+    return _single_delta(mac, before_entry, OUTCOME_MISSING)
 
 
 def compare_clients(before: Mapping[str, Any], after: Mapping[str, Any]) -> ClientComparison:
@@ -551,7 +554,6 @@ __all__ = [
     "SECTION_CLIENTS_WIRED",
     "SECTION_CLIENTS_WIRELESS",
     "SECTION_FOR_KIND",
-    "VOLATILE_CLIENT_FIELDS",
     "ClientComparison",
     "ClientDelta",
     "ClientMove",

@@ -58,9 +58,9 @@ CREDENTIAL_WORDS = ("password", "secret", "token", "credential", "authorization"
 
 # WHY: A spreadsheet runs a cell that starts with one of these characters. A
 # device name comes from the cloud, so the writer disarms the cell. The minus
-# sign stays out of the list, because a negative number is a normal value and
-# a spreadsheet reads it as a number.
-_FORMULA_LEADERS = ("=", "+", "@")
+# sign belongs in the list, because `-1+cmd|' /c calc'!A0` is a formula that
+# starts with a minus sign. A tab and a carriage return lead the same way.
+_FORMULA_LEADERS = ("=", "+", "@", "-", "\t", "\r")
 _FORMULA_GUARD = "'"
 
 _JSON_INDENT = 2
@@ -221,16 +221,20 @@ def _device_rows_of(delta: device_compare.DeviceDelta) -> list[ExportRow]:
         can sort the file by field and see every version change together. An
         added device and a removed device write one row with no field.
 
+        A device whose every change is a credential field still changed. It
+        keeps one row that names no field, because a device that vanished from
+        the file would tell the reader that nothing happened to it.
+
     Args:
         delta: One device difference record.
 
     Returns:
-        The rows of that device.
+        The rows of that device. Always at least one row.
     """
     base = ExportRow(kind=KIND_DEVICE, mac=delta.mac, name=delta.name, outcome=delta.outcome)
     if delta.outcome != device_compare.OUTCOME_CHANGED:
         return [base]
-    return [
+    rows = [
         ExportRow(
             kind=KIND_DEVICE,
             mac=delta.mac,
@@ -241,6 +245,7 @@ def _device_rows_of(delta: device_compare.DeviceDelta) -> list[ExportRow]:
         for change in delta.changes
         if not is_credential_field(change.field)
     ]
+    return rows or [base]
 
 
 def _client_row_of(delta: client_compare.ClientDelta) -> ExportRow:
@@ -307,6 +312,27 @@ def build_rows(
 # ---------------------------------------------------------------------------
 
 
+def _reads_as_a_number(value: str) -> bool:
+    """Return whether the whole cell reads as one number.
+
+    Why:
+        A minus sign starts a negative number and it also starts a formula.
+        A cell that reads as a number holds no formula, so the writer leaves
+        it alone and a spreadsheet still sums the column.
+
+    Args:
+        value: The raw cell text.
+
+    Returns:
+        True when the text is a plain number.
+    """
+    try:
+        float(value)
+    except ValueError:
+        return False
+    return True
+
+
 def _disarm(value: str) -> str:
     """Return one cell that a spreadsheet cannot run.
 
@@ -321,7 +347,7 @@ def _disarm(value: str) -> str:
     Returns:
         The cell text, with a guard character when the cell would run.
     """
-    if value.startswith(_FORMULA_LEADERS):
+    if value.startswith(_FORMULA_LEADERS) and not _reads_as_a_number(value):
         return _FORMULA_GUARD + value
     return value
 
