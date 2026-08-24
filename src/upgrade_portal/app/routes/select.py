@@ -39,7 +39,7 @@ from __future__ import annotations  # Postponed annotations keep every hint a pl
 
 import inspect  # Reads whether the device reader names a session parameter.
 import logging  # The portal logs with the standard library only.
-from collections.abc import Callable  # Types each injected seam.
+from collections.abc import Callable, Mapping  # Types each injected seam and the address index.
 from dataclasses import dataclass  # Builds the frozen view model of the organization picker.
 from importlib import import_module  # Imports a later module late, never at load.
 from types import ModuleType  # The return type of a late import.
@@ -105,10 +105,13 @@ FALLBACK_TEMPLATE = "layout.html"  # The shell page, shown while a picker templa
 
 MIST_READER_KEY = "MIST_READER"  # A test injects one callable here and reaches no network.
 DEVICE_READER_KEY = "DEVICE_READER"  # The seam for `capture.devices`.
+STATISTICS_READER_KEY = "STATISTICS_READER"  # The seam for the device statistics call.
 LOCK_READER_KEY = "SITE_LOCK_READER"  # The seam for `runtime.lock`.
 SESSION_PARAMETER = "session"  # The first parameter of `capture/devices.py:333 read_inventory`.
 STATUS_FIELD = "status"  # The field that `select/inventory.html` prints in the status column.
 CONNECTED_FIELD = "connected"  # The field that the inventory endpoint carries instead.
+ADDRESS_FIELD = "ip"  # The field that `select/inventory.html` prints in the address column.
+MAC_FIELD = "mac"  # The join key between an inventory record and a statistics record.
 STATUS_CONNECTED = "connected"  # The word for a device that answers the cloud.
 STATUS_DISCONNECTED = "disconnected"  # The word for a device that does not.
 
@@ -120,6 +123,7 @@ LOCK_MODULE = "runtime.lock"  # Built by the site lock work of this phase.
 # match wins, which mirrors `factory.BLUEPRINT_ATTRIBUTES` and needs no
 # registration list inside the device module.
 DEVICE_READER_ATTRIBUTES = ("read_site_inventory", "read_inventory", "list_site_devices")  # First match wins.
+STATISTICS_READER_ATTRIBUTES = ("read_device_statistics",)  # The one name the device module publishes.
 LOCK_READER_ATTRIBUTES = ("read_site_locks", "read_locks", "lock_holders")  # The same rule for the lock module.
 
 # The site list is one page for the operator, so one call must return every site.
@@ -776,6 +780,100 @@ def device_reader() -> Callable[..., Any] | None:
     return find_attribute(module, DEVICE_READER_ATTRIBUTES)  # None until that module publishes a reader.
 
 
+def statistics_reader() -> Callable[..., Any] | None:
+    """Return the callable that reads the device statistics of one site.
+
+    Why:
+        The inventory answer of the cloud carries no address. A probe of
+        `getOrgInventory` on 2026-08-24 returned 22 field names and no address
+        among them, so the address column of the page was empty for every device
+        of every real site. Issue #1994 holds that record.
+
+        The device statistics answer does carry an address, and the capture lane
+        already reads that call. This seam lets the read page reach the same
+        reader, so the address needs no second source of truth.
+
+    Returns:
+        The injected reader, the reader of the device module, or None when
+        neither exists yet.
+    """
+    injected = injected_seam(STATISTICS_READER_KEY)  # A contract test injects a stand-in here.
+    if injected is not None:  # The injection wins, so no import runs at all.
+        return injected  # The test then reaches no cloud account.
+    module = load_optional_module(DEVICES_MODULE)  # None while the device module is still building.
+    return find_attribute(module, STATISTICS_READER_ATTRIBUTES)  # None until that module publishes a reader.
+
+
+def address_index(cloud_session: Any, site_id: str) -> dict[str, str]:
+    """Return the address of each device of one site, keyed by MAC address.
+
+    Why:
+        The page joins the two cloud answers on the MAC address, which
+        `data-model.md` fixes as lower case with no separator. Both answers spell
+        it that way already.
+
+        A failed statistics read leaves the column empty and never fails the
+        page. The address is a convenience on a read page, and an operator who
+        cannot open the inventory at all is worse off than one who reads seven
+        columns instead of eight.
+
+    Args:
+        cloud_session: The cloud session of the current request.
+        site_id: The site to read.
+
+    Returns:
+        One address for each device that reports one. Empty when the read failed
+        or the reader does not exist.
+    """
+    reader = statistics_reader()  # None while the device module is still building.
+    if reader is None:  # No reader, so the page shows the other seven columns.
+        logger.warning("select: no device statistics reader exists, so the address column stays empty")
+        return {}
+    try:  # A read page must survive a failed second call.
+        answer = reader(cloud_session, site_id)
+    except Exception as error:  # The page still answers with every other field.
+        logger.warning("select: the device statistics read failed: %s", type(error).__name__)
+        return {}
+    found = {}  # One entry for each device that reports an address.
+    for record in as_records(answer):  # The same reader shape that the inventory read returns.
+        mac = str(record.get(MAC_FIELD, "")).strip().casefold()  # The join key of both answers.
+        address = str(record.get(ADDRESS_FIELD, "") or "").strip()  # An absent address reads as an empty string.
+        if mac and address:  # A record with either half missing joins nothing.
+            found[mac] = address
+    logger.debug("select: the device statistics read named an address for %s device(s)", len(found))
+    return found
+
+
+def with_address(device: dict[str, Any], addresses: Mapping[str, str]) -> dict[str, Any]:
+    """Return one device record that carries the address of its device.
+
+    Why:
+        The inventory answer carries no address, so the page read an empty cell
+        for every device. This function joins the address of the statistics
+        answer onto the inventory record.
+
+        A record that already names an address keeps it. A device with no entry
+        keeps the empty cell, which is true for a device the statistics call did
+        not report.
+
+    Args:
+        device: One inventory record.
+        addresses: The address of each device, keyed by MAC address.
+
+    Returns:
+        A copy that names an address, or the same record when none exists.
+    """
+    if str(device.get(ADDRESS_FIELD, "") or "").strip():  # The record already names one.
+        return device  # Nothing to add, so the record travels as it stands.
+    mac = str(device.get(MAC_FIELD, "")).strip().casefold()  # The join key of both answers.
+    address = addresses.get(mac)  # None when the statistics call reported no address for this device.
+    if not address:  # The page keeps the empty cell, which is true here.
+        return device  # No address exists to show.
+    named = dict(device)  # A copy, so no caller sees an edited cloud record.
+    named[ADDRESS_FIELD] = address  # The address that the statistics call reported.
+    return named
+
+
 def build_type_counts(devices: list[dict[str, Any]]) -> dict[str, int]:
     """Count the devices of each type, and the whole list.
 
@@ -816,6 +914,13 @@ def read_inventory(org_id: str, site_id: str) -> dict[str, Any] | None:
         identifiers alone. The call now sends the session by keyword, so a
         stand-in that names no session still works and the real reader binds it.
 
+        The inventory answer carries no address, so this function reads the
+        device statistics as well and joins the address onto each record. That is
+        a second cloud call on a read page. It costs one call for each page load,
+        and it fills a column that read empty for every device of every real
+        site. Issue #1994 holds that record. A failed second read leaves the
+        column empty and never fails the page.
+
     Args:
         org_id: The organization that owns the site.
         site_id: The site to read.
@@ -833,7 +938,9 @@ def read_inventory(org_id: str, site_id: str) -> dict[str, Any] | None:
         logger.error("select: the request carries no cloud session, so the inventory read cannot run")
         return None  # The caller answers the plain fault envelope.
     devices = as_records(call_device_reader(reader, record.cloud_session, org_id, site_id))
-    return {"devices": [with_status_word(one) for one in devices], "counts": build_type_counts(devices)}
+    addresses = address_index(record.cloud_session, site_id)  # The second call that carries the address.
+    rows = [with_address(with_status_word(one), addresses) for one in devices]  # Both joins, in one pass.
+    return {"devices": rows, "counts": build_type_counts(devices)}
 
 
 def with_status_word(device: dict[str, Any]) -> dict[str, Any]:

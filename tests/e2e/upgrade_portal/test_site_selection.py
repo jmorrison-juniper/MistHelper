@@ -61,6 +61,23 @@ OK_STATUS = 200  # The contract fixes this status for every page below.
 UNAUTHORIZED_STATUS = 401  # `runtime/identity.py` answers this code with no session.
 NOT_FOUND_STATUS = 404  # The route is not registered yet.
 
+# Every column of the inventory table, in the order the template writes them.
+INVENTORY_COLUMNS = (
+    "Name",
+    "MAC address",
+    "Type",
+    "Model",
+    "Serial number",
+    "Version",
+    "Status",
+    "IP address",
+)
+
+# The column that issue #1994 repaired. `getOrgInventory` carries no address, so
+# the route reads the device statistics as well and joins the address on the MAC
+# address. The column was empty for every device of every real site before that.
+INVENTORY_ADDRESS_COLUMN = "IP address"
+
 # WHY: The server fixture states its own fault and its own skip, so this module
 # must not translate either one. The browser fixture is different: a workstation
 # without a browser binary describes the workstation and never the page.
@@ -329,6 +346,39 @@ class TestSiteInventory:
         wrong = [key for key in keys if not MAC_PATTERN.match(key)]
         assert not wrong, f"These inventory rows hold a MAC address in the wrong spelling: {wrong}."
         assert len(set(keys)) == len(keys), "Two inventory rows share one MAC address in their test identifiers."
+
+    def test_the_address_column_holds_a_value_for_every_device(self, inventory_page: Any) -> None:
+        """Every device row shows an address, and the header count matches the row.
+
+        Why:
+            The column was empty for every device of every real site until issue
+            #1994. The route filled the table from `getOrgInventory`, and a probe
+            of that endpoint returned 22 field names with no address among them.
+            An empty column reads as a missing value, and an operator then looks
+            for a fault that is not there.
+
+            The route now reads the device statistics as well and joins the
+            address on the MAC address. This test reads the rendered cell, so a
+            join that silently misses every device fails here.
+
+            The header count and the cell count travel together. A header that
+            gained a column and left the rows behind is the same defect in the
+            other direction.
+
+        Args:
+            inventory_page: The page that shows the inventory of one site.
+        """
+        table = inventory_page.get_by_test_id(INVENTORY_TABLE_ID)
+        headings = [text.strip() for text in table.locator("thead th").all_inner_texts()]
+        assert headings == list(INVENTORY_COLUMNS), f"The table shows the columns {headings}."
+        rows = table.locator("tbody tr")
+        if not _row_keys(inventory_page, INVENTORY_ROW_PREFIX):  # A site with no device shows no row.
+            return
+        column = headings.index(INVENTORY_ADDRESS_COLUMN)  # The position the template writes the address in.
+        for index in range(rows.count()):  # Every device of the site, and not the first one alone.
+            cells = rows.nth(index).locator("th, td")
+            assert cells.count() == len(headings), f"Row {index} holds {cells.count()} cells."
+            assert cells.nth(column).inner_text().strip(), f"Row {index} shows no address."
 
     def test_the_inventory_page_offers_the_forward_step(self, inventory_page: Any) -> None:
         """The inventory page shows the link that opens the capture page.
