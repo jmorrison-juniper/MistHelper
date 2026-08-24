@@ -68,9 +68,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if not self._redis_url:
             return None
         try:
-            from redis.asyncio import from_url
+            from redis.asyncio import Redis as AsyncRedis
 
-            self._redis = await from_url(self._redis_url)
+            self._redis = AsyncRedis.from_url(self._redis_url)
             return self._redis
         except Exception:
             logger.warning("Redis unavailable — rate limiting disabled")

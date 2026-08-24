@@ -203,7 +203,7 @@ async def login(
 
     _settings = get_settings()
     try:
-        _redis = redis_lib.Redis.from_url(_settings.redis_url)
+        _redis = redis_lib.from_url(_settings.redis_url)
         for oid in privs.org_ids:
             _redis.setex(f"mist_token:{oid}", 8 * 3600, body.token)
         _redis.close()
