@@ -396,6 +396,10 @@ def test_a_plan_with_an_access_point_warns_that_the_cloud_reboots_it() -> None:
         switch and a gateway only, and the cloud reboots an access point on its
         own. An operator who reads the control and plans a window around it
         plans one that is too small, and the wireless service drops outside it.
+
+        The sentence names the count, because a site of one switch and six
+        access points reads as one reboot to plan and it is seven. Issue #2003
+        asks for the count for that reason.
     """
     plans = upgrade_service.plan_upgrade(
         [make_target(mac=MAC_ACCESS_POINT, device_type="ap", model="AP45")],
@@ -404,7 +408,74 @@ def test_a_plan_with_an_access_point_warns_that_the_cloud_reboots_it() -> None:
         SITE_ID,
     )
     warnings = plans[0].warnings
-    assert any("reboots every access point" in one for one in warnings), warnings
+    assert any("access point" in one for one in warnings), warnings
+    assert any("1 access point(s)" in one for one in warnings), warnings
+
+
+def test_the_access_point_warning_counts_every_access_point_of_the_run() -> None:
+    """The sentence names how many access points the cloud reboots.
+
+    Why:
+        A site of one switch and six access points reads as one reboot to plan,
+        and it is seven. The count is the number the operator needs to size the
+        window. Issue #2003 asks for it.
+
+        The count covers the whole selection and not one group, because the
+        warning list belongs to the plan and every plan of one run carries the
+        same list.
+    """
+    targets = [
+        make_target(mac=MAC_SWITCH, device_type="switch", model="EX4100-F-12P"),
+        make_target(mac=MAC_ACCESS_POINT, device_type="ap", model="AP45"),
+        make_target(mac="5c5b350e0011", device_type="ap", model="AP45"),
+        make_target(mac="5c5b350e0012", device_type="ap", model="AP24"),
+    ]
+    plans = upgrade_service.plan_upgrade(targets, UpgradeOptions(reboot=False), ORG_ID, SITE_ID)
+    warnings = plans[0].warnings
+    assert any("3 access point(s)" in one for one in warnings), warnings
+
+
+def test_a_scheduled_run_warns_that_an_access_point_still_reboots() -> None:
+    """A start time also earns the access point sentence.
+
+    Why:
+        A start time says that the operator picked the moment of the disruption.
+        For an access point the cloud picks it instead, so the same mismatch
+        exists whether the operator defers the reboot or schedules the run.
+        Issue #2003 names both cases.
+    """
+    targets = [make_target(mac=MAC_ACCESS_POINT, device_type="ap", model="AP45")]
+    options = UpgradeOptions(reboot=True, start_time=1_800_000_000)
+    plans = upgrade_service.plan_upgrade(targets, options, ORG_ID, SITE_ID)
+    assert any("access point" in one for one in plans[0].warnings), plans[0].warnings
+
+
+def test_a_plain_reboot_run_needs_no_access_point_warning() -> None:
+    """A run that reboots now and plans no window carries no access point sentence.
+
+    Why:
+        The operator asked for a reboot and named no moment, so nothing about the
+        run misleads them. A warning on every run teaches the operator to skip
+        the warnings, and the next one carries a real mismatch.
+    """
+    targets = [make_target(mac=MAC_ACCESS_POINT, device_type="ap", model="AP45")]
+    plans = upgrade_service.plan_upgrade(targets, UpgradeOptions(reboot=True), ORG_ID, SITE_ID)
+    assert not any("access point" in one for one in plans[0].warnings), plans[0].warnings
+
+
+def test_a_run_with_no_access_point_names_no_access_point(_unused: None = None) -> None:
+    """A selection of one switch alone carries no access point sentence.
+
+    Why:
+        A sentence that named zero access points would read as a fault. The
+        count guard drops the sentence when the selection holds none.
+
+    Args:
+        _unused: Unused. The signature keeps the module test shape.
+    """
+    targets = [make_target(mac=MAC_SWITCH, device_type="switch", model="EX4100-F-12P")]
+    plans = upgrade_service.plan_upgrade(targets, UpgradeOptions(reboot=False), ORG_ID, SITE_ID)
+    assert not any("access point" in one for one in plans[0].warnings), plans[0].warnings
 
 
 def test_a_plan_with_a_switch_warns_that_it_may_reboot_anyway() -> None:
