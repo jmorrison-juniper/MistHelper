@@ -7,17 +7,21 @@
 | **Alert Name** | GW_VPN_PATH_DOWN |
 | **Mist alarm key** | `gw_vpn_path_down` |
 | **Platform** | Juniper SSR130 (single gateway at a retail branch — no local HA peer). The SVR peer paths this branch cares about are the overlays to the DC-hub SSR1300 pair (Dallas + Chicago). The same alarm key also fires on SRX gateways running SD-WAN — an SRX-specific runbook is planned as Phase 2 because the CLI (Junos) differs from SSR PCLI. |
-| **Mist native severity** | `critical` |
-| **NOC severity** | **Critical** (native — no override) |
+| **Mist native severity** | `warn` (verified against `GET /api/v1/const/alarm_defs`) |
+| **NOC severity** | **Critical** (override — see rationale below) |
 | **Group** | `infrastructure` |
 | **Clear event key** | `gw_vpn_path_up` |
 | **Correlated alarms** | `vpn_peer_down`, `vpn_path_down`, `bad_wan_uplink`, `intermittent_wan_connectivity`, `gw_bgp_neighbor_down`, `gw_critical_port_down`, `switch_down` |
 | **Prerequisites** | An SVR peer path must be configured between this branch SSR130 and a remote SSR (in this environment, a DC-hub SSR1300). Alarm fires when one or more transport paths that make up the peer relationship go `down` while the overall peer may or may not remain `up`. |
 | **Description** | One or more SD-WAN (SVR / Session Smart Routing) transport paths from the branch SSR130 to a remote SSR are unavailable. The overall VPN **peer** may remain `up` (traffic reconverges onto a surviving transport) or may itself go `down` (fires the separate `vpn_peer_down` alarm) — this alarm covers the per-path state, not the aggregate peer state. |
 
-### Severity note (no override)
+### Severity rationale (Mist `warn` → NOC `critical`)
 
-Mist ships `gw_vpn_path_down` as `critical` natively — a single-path outage on a dual-ISP branch is degraded-but-serving, but the alarm is the earliest signal that a full peer isolation is one failure away. No override is applied.
+Mist ships `gw_vpn_path_down` as `warn` natively, because a single-path outage on a multi-transport branch is degraded and still serving. We page it as **critical** anyway. On a dual-ISP branch the alarm is the earliest signal that full peer isolation is one failure away, and the branch has a single SSR130 with no local HA peer to absorb the second failure.
+
+The override lives in the downstream paging and ticketing layer, keyed off the payload `type` value `gw_vpn_path_down`. It does not live in Mist. See Shared Appendix §2.
+
+**Do not confuse this key with `vpn_path_down`.** That is a separate Marvis alarm with native severity `critical`, and its payload `type` is the uppercase `VPN_PATH_DOWN`. The two keys differ by the `gw_` prefix alone. See `GW_VPN_PEER_DOWN.md` §1.1 for the full SVR key table.
 
 ### SVR vs BGP — two independent overlays on SSR
 
