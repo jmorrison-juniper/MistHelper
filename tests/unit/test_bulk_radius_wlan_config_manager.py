@@ -654,7 +654,7 @@ def test_apply_changes_counts_success_and_failure(capsys: pytest.CaptureFixture[
     with (
         patch.object(brwcm.importlib, "import_module", return_value=fake),
         patch.object(brwcm.mistapi.api.v1.orgs.wlans, "updateOrgWlan", side_effect=lambda *a, **k: next(responses)),
-        patch.object(brwcm.time, "sleep"),
+        patch.object(brwcm.AdaptivePacer, "pace", return_value=0.0),
     ):
         manager._apply_changes()
     out = capsys.readouterr().out
@@ -667,7 +667,10 @@ def test_apply_changes_dry_run_label(capsys: pytest.CaptureFixture[str]) -> None
     manager.selected_wlans = [{"id": "w1", "ssid": "A"}]
     manager.dry_run = True
     fake = _make_mh()
-    with patch.object(brwcm.importlib, "import_module", return_value=fake), patch.object(brwcm.time, "sleep"):
+    with (
+        patch.object(brwcm.importlib, "import_module", return_value=fake),
+        patch.object(brwcm.AdaptivePacer, "pace", return_value=0.0),
+    ):
         manager._apply_changes()
     out = capsys.readouterr().out
     assert "DRY-RUN: Simulating" in out
@@ -904,7 +907,10 @@ def test_confirm_and_apply_proceeds_on_apply(capsys: pytest.CaptureFixture[str])
     manager.selected_wlans = [{"id": "w", "ssid": "S"}]
     fake = _make_mh()
     fake.InputUtils.safe_input.return_value = "APPLY"
-    with patch.object(brwcm.importlib, "import_module", return_value=fake), patch.object(brwcm.time, "sleep"):
+    with (
+        patch.object(brwcm.importlib, "import_module", return_value=fake),
+        patch.object(brwcm.AdaptivePacer, "pace", return_value=0.0),
+    ):
         manager._confirm_and_apply()
     out = capsys.readouterr().out
     assert "Bulk RADIUS WLAN configuration completed" in out
@@ -937,7 +943,7 @@ def _run_manage(
             "updateOrgWlan",
             return_value=SimpleNamespace(status_code=200, data={}),
         ),
-        patch.object(brwcm.time, "sleep"),
+        patch.object(brwcm.AdaptivePacer, "pace", return_value=0.0),
     ):
         manager.manage(dry_run=dry_run)
 
