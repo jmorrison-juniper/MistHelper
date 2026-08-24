@@ -63,6 +63,11 @@ _UPGRADE_JOB_KEYS = ("status", "current_phase", "targets", "reboot_in_progress",
 # read the reboot field and the Junos file action field.
 _JUNOS_DEVICE_TYPES = ("switch", "gateway")
 
+# The two device type words that the reboot warnings read. The cloud spells the
+# device type with these words in every device record.
+DEVICE_TYPE_AP = "ap"
+DEVICE_TYPE_SWITCH = "switch"
+
 # The cloud default list, from the request body schema at
 # documentation/api/utilities/POST_sites_site_id_devices_upgrade.md.
 _CANARY_PHASES = (1, 10, 50, 100)
@@ -84,6 +89,27 @@ _WARNING_MIXED_VERSION = "The selection holds more than one version, so the port
 _WARNING_SSR_STRATEGY = (
     "A session smart router accepts the strategy big_bang or serial only, "
     "so the portal sends no strategy for that family."
+)
+
+# WHY: The cloud reboots an access point whatever this portal sends. The request
+# body schema states it twice, at the `reboot` field of `upgrade_site_devices`
+# and of `device_upgrade`: "For Switches and Gateways only (APs are
+# automatically rebooted)". An operator who reads the reboot control and plans a
+# window around it plans one that is too small, and the wireless service drops
+# outside it.
+_WARNING_AP_ALWAYS_REBOOTS = (
+    "The cloud reboots every access point of this run on its own. "
+    "The reboot control reaches a switch and a gateway only."
+)
+
+# WHY: A run on 2026-08-24 sent `reboot: false` for one EX4100-F-12P through
+# `upgradeSiteDevices`, and the switch installed the firmware and rebooted four
+# seconds later. Six access points lost power over Ethernet with it. Issue #2007
+# holds the event record. The gateway of the same site kept the choice, so the
+# behavior differs by platform inside the batch path. Warn until a lab switch
+# proves otherwise.
+_WARNING_SWITCH_MAY_REBOOT = (
+    "A switch may reboot even with the reboot control off. " "Plan a window for every switch of this run."
 )
 
 _MESSAGE_NO_CANCEL = "This device family offers no cancel call, so every device continues the upgrade."
@@ -541,6 +567,37 @@ def _drops_the_strategy(
     return GatewayFamily.SSR in families and _strategy_word(options.strategy, GatewayFamily.SSR) is None
 
 
+def _reboot_warnings(keys: tuple[tuple[str, GatewayFamily, str], ...], options: UpgradeOptions) -> list[str]:
+    """Return the sentences that name a reboot the operator did not ask for.
+
+    Why:
+        The reboot control is the one promise this feature makes about the
+        moment of disruption. Two device families break that promise, and an
+        operator who plans a window from the control alone plans the wrong one.
+
+        An access point always reboots, because the cloud drives it. A switch
+        rebooted once with the control off, and issue #2007 holds the event
+        record of that run. Both sentences appear only when the operator asked
+        for no reboot, because a run that reboots on purpose needs no warning.
+
+    Args:
+        keys: The group keys of the plan.
+        options: The choices of the operator.
+
+    Returns:
+        Zero, one, or two sentences.
+    """
+    if options.reboot:  # The operator already accepts a reboot, so neither sentence adds anything.
+        return []
+    families = {key[0] for key in keys}  # The device type of each group.
+    found: list[str] = []
+    if DEVICE_TYPE_AP in families:  # The cloud reboots an access point whatever the body says.
+        found.append(_WARNING_AP_ALWAYS_REBOOTS)
+    if DEVICE_TYPE_SWITCH in families:  # Measured on 2026-08-24, and recorded in issue #2007.
+        found.append(_WARNING_SWITCH_MAY_REBOOT)
+    return found
+
+
 def _plan_warnings(keys: Iterable[tuple[str, GatewayFamily, str]], options: UpgradeOptions) -> tuple[str, ...]:
     """Return the plain sentences that the operator reads before the start.
 
@@ -551,12 +608,17 @@ def _plan_warnings(keys: Iterable[tuple[str, GatewayFamily, str]], options: Upgr
         must learn that a session smart router group drops a word that its schema
         does not hold.
 
+        The operator also picks one reboot choice, and two device families do not
+        keep it. `_reboot_warnings` names those, because a window planned from a
+        control that does not hold is worse than no plan at all.
+
     Args:
         keys: The group keys of the plan.
         options: The choices of the operator.
 
     Returns:
-        One sentence for each split and for each dropped strategy.
+        One sentence for each split, for each dropped strategy, and for each
+        family that reboots against the choice of the operator.
     """
     key_list = tuple(keys)
     warnings: list[str] = []
@@ -566,6 +628,7 @@ def _plan_warnings(keys: Iterable[tuple[str, GatewayFamily, str]], options: Upgr
         warnings.append(_WARNING_MIXED_VERSION)
     if _drops_the_strategy(key_list, options):
         warnings.append(_WARNING_SSR_STRATEGY)
+    warnings.extend(_reboot_warnings(key_list, options))
     return tuple(warnings)
 
 

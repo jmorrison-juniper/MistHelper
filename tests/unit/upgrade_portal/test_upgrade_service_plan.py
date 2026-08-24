@@ -380,3 +380,83 @@ class TestPlanPurity:
         second = plan_for(*selection)
         assert [plan.route for plan in first] == [plan.route for plan in second]
         assert [dict(plan.body) for plan in first] == [dict(plan.body) for plan in second]
+
+
+# ---------------------------------------------------------------------------
+# The reboot warnings that a real outage asked for
+# ---------------------------------------------------------------------------
+
+
+def test_a_plan_with_an_access_point_warns_that_the_cloud_reboots_it() -> None:
+    """A no-reboot run that holds an access point says the cloud reboots it anyway.
+
+    Why:
+        The request body schema states it twice, at the `reboot` field of
+        `upgrade_site_devices` and of `device_upgrade`: the field reaches a
+        switch and a gateway only, and the cloud reboots an access point on its
+        own. An operator who reads the control and plans a window around it
+        plans one that is too small, and the wireless service drops outside it.
+    """
+    plans = upgrade_service.plan_upgrade(
+        [make_target(mac=MAC_ACCESS_POINT, device_type="ap", model="AP45")],
+        UpgradeOptions(reboot=False),
+        ORG_ID,
+        SITE_ID,
+    )
+    warnings = plans[0].warnings
+    assert any("reboots every access point" in one for one in warnings), warnings
+
+
+def test_a_plan_with_a_switch_warns_that_it_may_reboot_anyway() -> None:
+    """A no-reboot run that holds a switch says the switch may reboot anyway.
+
+    Why:
+        A run on 2026-08-24 sent `reboot: false` for one EX4100-F-12P and the
+        switch installed the firmware and rebooted four seconds later. Six
+        access points lost power over Ethernet with it, and the site lost
+        service for about six minutes. Issue #2007 holds the event record. The
+        operator must read that risk before the start, not after it.
+    """
+    plans = upgrade_service.plan_upgrade(
+        [make_target(device_type="switch")],
+        UpgradeOptions(reboot=False),
+        ORG_ID,
+        SITE_ID,
+    )
+    warnings = plans[0].warnings
+    assert any("may reboot" in one for one in warnings), warnings
+
+
+def test_a_run_that_asked_for_a_reboot_carries_no_reboot_warning() -> None:
+    """A run that already accepts a reboot reads neither sentence.
+
+    Why:
+        A warning that appears when the operator already chose the behavior is
+        noise, and noise teaches an operator to skip the warnings that matter.
+    """
+    plans = upgrade_service.plan_upgrade(
+        [make_target(device_type="switch"), make_target(mac=MAC_ACCESS_POINT, device_type="ap", model="AP45")],
+        UpgradeOptions(reboot=True),
+        ORG_ID,
+        SITE_ID,
+    )
+    for plan in plans:
+        assert not any("reboot" in one for one in plan.warnings), plan.warnings
+
+
+def test_a_gateway_alone_carries_no_reboot_warning() -> None:
+    """A gateway keeps the no-reboot choice, so it needs no warning.
+
+    Why:
+        The gateway of the site of 2026-08-24 took the same option on the same
+        call and did not reboot. Its uptime never reset. A warning here would
+        claim a risk that the measurement does not show.
+    """
+    plans = upgrade_service.plan_upgrade(
+        [make_target(mac=MAC_GATEWAY, device_type="gateway", model="SRX1500")],
+        UpgradeOptions(reboot=False),
+        ORG_ID,
+        SITE_ID,
+    )
+    for plan in plans:
+        assert not any("reboot" in one for one in plan.warnings), plan.warnings
