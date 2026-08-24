@@ -1753,8 +1753,8 @@
         }
 
         setText(byTestId(STOP_MESSAGE_TESTID, region), outcome.message || "");
-        paintMacList(byTestId(STOP_CANCELLED_TESTID, region), outcome.cancelled, "No device was cancelled.");
-        paintMacList(byTestId(STOP_WRITING_TESTID, region), outcome.already_writing, "No device is writing firmware.");
+        paintMacList(byTestId(STOP_CANCELLED_TESTID, region), outcome.cancelled, "The portal canceled no device.");
+        paintMacList(byTestId(STOP_WRITING_TESTID, region), outcome.already_writing, "No device writes firmware.");
         paintMacList(
             byTestId(STOP_NO_CANCEL_TESTID, region),
             outcome.no_cancel_available,

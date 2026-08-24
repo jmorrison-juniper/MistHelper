@@ -20,6 +20,20 @@ import sys
 # root on a workstation. Neither directory is on sys.path by default.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+# Read `.env` before the factory runs. `MistHelper.py` does the same at its own
+# start, so menu 238 and the `--capture-portal` flag both reach a populated
+# environment. This module is the other door, and Gunicorn opens it directly.
+# Without this call the sign-in page reports that the server holds no API token
+# variable, which is false whenever `.env` names one, and the token sign-in mode
+# then never appears. `override=False` keeps a value that the container already
+# exported, because an explicit setting must beat a file.
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv(override=False)
+except ImportError:  # The portal still starts, and the operator signs in with a pair.
+    logging.getLogger(__name__).warning("wsgi_capture: python-dotenv is absent, so .env was not read")
+
 from src.upgrade_portal.app.factory import create_app
 
 # Both portals share one record format, so one log file stays readable.

@@ -37,6 +37,7 @@ Seams:
 
 from __future__ import annotations  # Postponed annotations keep every hint a plain string.
 
+import inspect  # Reads whether the device reader names a session parameter.
 import logging  # The portal logs with the standard library only.
 from collections.abc import Callable  # Types each injected seam.
 from dataclasses import dataclass  # Builds the frozen view model of the organization picker.
@@ -105,6 +106,11 @@ FALLBACK_TEMPLATE = "layout.html"  # The shell page, shown while a picker templa
 MIST_READER_KEY = "MIST_READER"  # A test injects one callable here and reaches no network.
 DEVICE_READER_KEY = "DEVICE_READER"  # The seam for `capture.devices`.
 LOCK_READER_KEY = "SITE_LOCK_READER"  # The seam for `runtime.lock`.
+SESSION_PARAMETER = "session"  # The first parameter of `capture/devices.py:333 read_inventory`.
+STATUS_FIELD = "status"  # The field that `select/inventory.html` prints in the status column.
+CONNECTED_FIELD = "connected"  # The field that the inventory endpoint carries instead.
+STATUS_CONNECTED = "connected"  # The word for a device that answers the cloud.
+STATUS_DISCONNECTED = "disconnected"  # The word for a device that does not.
 
 PACKAGE_ROOT = __name__.rsplit(".", maxsplit=3)[0]  # Three levels up from `app.routes.select`.
 DEVICES_MODULE = "capture.devices"  # Built by the device read work of this phase.
@@ -333,6 +339,13 @@ def as_records(payload: Any) -> list[dict[str, Any]]:
         under `results`. One reader keeps every caller free of that difference,
         and an unexpected shape becomes an empty list instead of a fault.
 
+        The device module answers with a third shape. `capture/devices.py:67`
+        returns a `DeviceRead`, which carries the rows under `records` beside
+        the reasons of the read. A reader that knew the first two shapes alone
+        answered an empty list, so the inventory page showed no device for a
+        site that holds eight. The stand-in of the contract tests answers a
+        plain list, which is why no test caught it.
+
     Args:
         payload: The value that a cloud read returned.
 
@@ -343,6 +356,9 @@ def as_records(payload: Any) -> list[dict[str, Any]]:
         return [entry for entry in payload if isinstance(entry, dict)]  # Drop an entry of another type.
     if isinstance(payload, dict):  # A paged endpoint wraps the list under one key.
         return as_records(payload.get("results"))  # One step down, and never a second one.
+    held = getattr(payload, "records", None)  # The `DeviceRead` of the device module.
+    if isinstance(held, list):  # Only a list of rows travels on, so no shape can recurse for ever.
+        return [entry for entry in held if isinstance(entry, dict)]  # Drop an entry of another type.
     return []  # An unexpected shape shows no record and raises nothing.
 
 
@@ -405,7 +421,7 @@ def add_org_entry(found: dict[str, str], entry: Any) -> None:
     org_id = identity.privilege_org_id(entry)  # A blank identifier means the entry names no organization.
     if not org_id:  # A site-scoped entry with no organization cannot fill a picker row.
         return  # Drop the entry and keep the rest.
-    name = str(entry.get("name", org_id)) if isinstance(entry, dict) else org_id  # The identifier is the fallback.
+    name = identity.privilege_name(entry) or org_id  # The identifier is the fallback for an unnamed entry.
     found.setdefault(org_id, name)  # The first name wins, so a repeated privilege adds no second row.
 
 
@@ -792,20 +808,90 @@ def read_inventory(org_id: str, site_id: str) -> dict[str, Any] | None:
         and the device type parameter of the statistics call. This function asks
         that module and shapes the answer for the contract.
 
+        The reader of the device module takes the cloud session first, at
+        ``capture/devices.py:333``. This function therefore passes the session of
+        the current request. A call without it raised a `TypeError` and the
+        inventory page answered 500 for every real site. No test caught that,
+        because the injected stand-in of the contract tests takes the two
+        identifiers alone. The call now sends the session by keyword, so a
+        stand-in that names no session still works and the real reader binds it.
+
     Args:
         org_id: The organization that owns the site.
         site_id: The site to read.
 
     Returns:
         The device list and the counts, or None when the device module is not
-        built yet.
+        built yet, or when the request carries no cloud session.
     """
     reader = device_reader()  # None while the device module is still building.
     if reader is None:  # The portal cannot answer this read at all.
         logger.error("select: the device module is not built, so the read cannot run")  # The caller answers.
         return None  # The caller answers the plain fault envelope.
-    devices = as_records(reader(org_id=org_id, site_id=site_id))  # The device module owns every call parameter.
-    return {"devices": devices, "counts": build_type_counts(devices)}  # The shape the contract names.
+    record = identity.current_session()  # The cloud session that the device reader needs.
+    if record is None:  # A request with no session cannot reach the cloud at all.
+        logger.error("select: the request carries no cloud session, so the inventory read cannot run")
+        return None  # The caller answers the plain fault envelope.
+    devices = as_records(call_device_reader(reader, record.cloud_session, org_id, site_id))
+    return {"devices": [with_status_word(one) for one in devices], "counts": build_type_counts(devices)}
+
+
+def with_status_word(device: dict[str, Any]) -> dict[str, Any]:
+    """Return one device record that names its status in a word.
+
+    Why:
+        The inventory endpoint names the state `connected` and carries a true or
+        false value. The table reads `status` and prints `unknown` for a missing
+        field, so every connected device of a real site read as unknown. The
+        state matters most on this page, because an operator reads it before an
+        upgrade and an unknown state hides a device that is already offline.
+
+        A record that already names a status keeps it. The device statistics
+        call spells the field that way, so a later reader of that call needs no
+        change here.
+
+    Args:
+        device: One inventory record.
+
+    Returns:
+        A copy that names a status word.
+    """
+    if str(device.get(STATUS_FIELD, "")).strip():  # The statistics call already names the state.
+        return device  # Nothing to add, so the record travels as it stands.
+    connected = device.get(CONNECTED_FIELD)  # The inventory call names the state this way.
+    if connected is None:  # Neither field exists, so the page keeps its own fallback word.
+        return device  # The template prints `unknown`, which is true here.
+    named = dict(device)  # A copy, so no caller sees an edited cloud record.
+    named[STATUS_FIELD] = STATUS_CONNECTED if connected else STATUS_DISCONNECTED  # One word for each state.
+    return named
+
+
+def call_device_reader(reader: Callable[..., Any], cloud_session: Any, org_id: str, site_id: str) -> Any:
+    """Call the device reader, with the session when the reader names one.
+
+    Why:
+        The reader of the device module takes the cloud session first. A
+        stand-in that a contract test injects takes the two identifiers alone.
+        One caller serves both. It reads the signature rather than catching a
+        `TypeError`, because the real reader may raise that same class from
+        inside itself and a retry would then send the wrong parameters.
+
+    Args:
+        reader: The device reader, injected or real.
+        cloud_session: The cloud session of the current request.
+        org_id: The organization that owns the site.
+        site_id: The site to read.
+
+    Returns:
+        Whatever the reader answered.
+    """
+    try:  # A builtin or a partial may name no signature at all.
+        takes_session = SESSION_PARAMETER in inspect.signature(reader).parameters
+    except (TypeError, ValueError):  # An unreadable signature reads as the stand-in shape.
+        takes_session = False
+    if takes_session:  # The real reader of `capture/devices.py:333`.
+        return reader(session=cloud_session, org_id=org_id, site_id=site_id)
+    return reader(org_id=org_id, site_id=site_id)  # The stand-in of a contract test.
 
 
 def inventory_parts(org_id: str, site_id: str) -> tuple[list[dict[str, Any]], dict[str, int]]:

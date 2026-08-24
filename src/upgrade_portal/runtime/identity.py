@@ -811,7 +811,12 @@ def session_privileges() -> list[Any] | None:
     if record is None:  # No session means no answer, and `require_session` owns that refusal
         return None  # Unknown, so the caller decides
     found: Any = getattr(record.cloud_session, "privileges", None)  # A stand-in session may name no list
-    return list(found) if isinstance(found, list) else None  # A copy, so a caller cannot change the session
+    if found is None or isinstance(found, (str, bytes, Mapping)):  # None, text, and a mapping all name no list
+        return None  # Unknown, so the caller decides
+    try:  # `mistapi` 0.63 answers a `Privileges` object, which iterates and holds no length.
+        return list(found)  # A copy, so a caller cannot change the session
+    except TypeError:  # A value that does not iterate names no privilege at all
+        return None  # Unknown, so the caller decides
 
 
 def permitted_org_ids() -> frozenset[str] | None:
@@ -839,8 +844,10 @@ def privilege_org_id(entry: Any) -> str:
 
     Why:
         The cloud returns a list of dictionaries, and a stand-in session in a
-        test returns whatever the test builds. This function accepts both and
-        never raises, so one malformed entry cannot refuse a whole session.
+        test returns whatever the test builds. `mistapi` 0.63 returns a third
+        shape, which is an object that carries the field as an attribute. This
+        function accepts all three and never raises, so one malformed entry
+        cannot refuse a whole session.
 
         The name carries no leading underscore, because the organization picker
         in `app/routes/select.py` reads the same field. One reader keeps the
@@ -852,9 +859,30 @@ def privilege_org_id(entry: Any) -> str:
     Returns:
         The identifier, or an empty string when the record names none.
     """
-    if not isinstance(entry, dict):  # A list of strings or of objects names no field
-        return ""  # An empty string drops out of the set
-    return str(entry.get(ORG_PRIVILEGE_FIELD, "")).strip()  # One spelling for one identifier
+    if isinstance(entry, Mapping):  # A dictionary from the cloud, or a mapping a test built
+        return str(entry.get(ORG_PRIVILEGE_FIELD, "")).strip()  # One spelling for one identifier
+    found = getattr(entry, ORG_PRIVILEGE_FIELD, "")  # The `_Privilege` object of `mistapi` 0.63
+    return str(found).strip() if found else ""  # An empty string drops out of the set
+
+
+def privilege_name(entry: Any) -> str:
+    """Read the readable organization name out of one privilege record.
+
+    Why:
+        The organization picker shows this text, and the identifier alone would
+        make an operator match a name against a list of hexadecimal keys. The
+        three record shapes of `privilege_org_id` all reach this reader too.
+
+    Args:
+        entry: One privilege record from the cloud session.
+
+    Returns:
+        The name, or an empty string when the record names none.
+    """
+    if isinstance(entry, Mapping):  # A dictionary from the cloud, or a mapping a test built
+        return str(entry.get("name", "")).strip()  # The cloud spells the readable name this way
+    found = getattr(entry, "name", "")  # The `_Privilege` object of `mistapi` 0.63
+    return str(found).strip() if found else ""  # The caller falls back to the identifier
 
 
 def org_is_permitted(org_id: str) -> bool:

@@ -464,6 +464,14 @@ def _wired_record(row: Row) -> ClientRecord | None:
         ``device_mac_port``, which pairs a device with its port. The pair beats
         the parallel arrays, because two arrays can hold a different length.
 
+        The published wired schema carries no ``username`` key. Both
+        ``documentation/api/sites/GET_sites_site_id_wired_clients_search.md``
+        and the organization variant name ``auth_state`` and ``auth_method``
+        and no user name. The read still asks for the key. A cloud that starts
+        to publish an 802.1X identity then reaches the record on its own, and a
+        cloud that publishes none leaves the field empty, which
+        ``data-model.md:154`` allows.
+
     Args:
         row: One raw row of the wired search.
 
@@ -478,6 +486,7 @@ def _wired_record(row: Row) -> ClientRecord | None:
     identity = ClientIdentity(
         hostname=_text(row.get("dhcp_hostname")),
         ip=_text(pair.get("ip") or row.get("ip")),
+        username=_text(row.get("username")),
     )
     return ClientRecord(mac=mac, identity=identity, attachment=_wired_attachment(row, pair))
 

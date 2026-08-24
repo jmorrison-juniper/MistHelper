@@ -628,7 +628,7 @@ def test_a_stop_with_no_cancel_work_claims_no_cancelled_device(
     """
     run_id = seed_run(run_store, RUNNING_STATE)  # The `STOP_RUNNER` seam stays unset in this test.
     outcome: Any = stop_run(upgrade_client, run_id, STOP_WORD).get_json()["outcome"]
-    assert outcome["cancelled"] == []  # No device was cancelled, and the portal claims none.
+    assert outcome["cancelled"] == []  # The portal cancelled no device, and it claims none.
     assert outcome["already_writing"] == []  # The portal names no device it did not read.
     assert outcome["message"]  # One true sentence still reaches the operator.
 

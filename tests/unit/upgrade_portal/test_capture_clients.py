@@ -313,12 +313,30 @@ def test_the_wired_read_leaves_the_device_name_and_the_user_name_empty() -> None
 
     Why:
         No client endpoint returns the name of the serving device, and the
-        wired search endpoint publishes no user name. The record still carries
-        both fields. The assembler fills the device name from the device index.
+        published wired schema carries no user name key. The record still
+        carries both fields. The assembler fills the device name from the
+        device index.
     """
     record = _one_wired_record()
     assert record.attachment.device_name == ""
     assert record.identity.username == ""
+
+
+def test_the_wired_read_keeps_a_user_name_that_the_cloud_supplies() -> None:
+    """A wired row that names a user reaches the record with that name.
+
+    Why:
+        The published wired schema names ``auth_state`` and ``auth_method`` and
+        no user name, so the field is empty for every documented row. A cloud
+        that starts to publish an 802.1X identity must not lose it in silence.
+        The read asks for the key, so the identity travels the moment the cloud
+        offers it.
+    """
+    rows = [{"mac": COLON_FORM, "dhcp_hostname": WIRED_HOSTNAME, "username": "host/lab-pc.example.test"}]
+    records = clients.read_wired_clients(_session(), SITE_ID, _row_source(rows))
+    assert len(records) == 1, "The wired read must build one record for one row."
+    assert records[0].identity.username == "host/lab-pc.example.test"
+    assert records[0].to_dict()["username"] == "host/lab-pc.example.test"
 
 
 def test_the_wired_record_flattens_to_the_stored_field_names() -> None:

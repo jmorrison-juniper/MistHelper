@@ -21,7 +21,7 @@ from typing import Any
 
 import pytest
 
-from src.upgrade_portal.capture import assembly, extras
+from src.upgrade_portal.capture import assembly, collector, extras
 from src.upgrade_portal.capture.clients import ClientAttachment, ClientIdentity, ClientRecord
 
 RUN_ID = "run-0123456789abcdef0123456789abcdef"
@@ -714,11 +714,24 @@ def test_status_is_failed_when_no_section_read() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_the_module_names_six_call_groups() -> None:
-    """The capture fans out over six groups."""
-    assert len(assembly.CALL_GROUPS) == 6
+def test_the_module_names_five_call_groups() -> None:
+    """The capture fans out over five groups."""
+    assert len(assembly.CALL_GROUPS) == 5
     assert assembly.GROUP_DEVICES in assembly.CALL_GROUPS
     assert assembly.GROUP_TIER_THREE in assembly.CALL_GROUPS
+
+
+def test_every_named_call_group_reaches_a_wave() -> None:
+    """No group sits in the inventory that no wave ever schedules.
+
+    Why:
+        A name in ``CALL_GROUPS`` that no wave schedules is dead code, and the
+        old count of six hid such a name for the whole of the build. The
+        failure map of ``collector.py`` also carried an entry that no read
+        could ever reach, so a reader trusted a group that never ran.
+    """
+    scheduled = set(collector.wave_names(collector.TIER_EXTRA))
+    assert scheduled == set(assembly.CALL_GROUPS)
 
 
 def test_run_call_groups_uses_the_injected_pool() -> None:
@@ -731,7 +744,7 @@ def test_run_call_groups_uses_the_injected_pool() -> None:
 
     groups = [assembly.CallGroup(name, lambda name=name: f"read-{name}") for name in assembly.CALL_GROUPS]
     results = assembly.run_call_groups(groups, _runner)
-    assert len(seen[0]) == 6
+    assert len(seen[0]) == 5
     assert set(results) == set(assembly.CALL_GROUPS)
     assert results[assembly.GROUP_DEVICES].value == f"read-{assembly.GROUP_DEVICES}"
 
@@ -760,10 +773,10 @@ def test_a_failed_read_inside_a_group_becomes_a_partial_reason() -> None:
     def _boom() -> None:
         raise RuntimeError("the port call failed")
 
-    groups = [assembly.CallGroup(assembly.GROUP_PORTS, _boom)]
+    groups = [assembly.CallGroup(assembly.GROUP_TIER_THREE, _boom)]
     results = assembly.run_call_groups(groups, _sequential_executor)
-    assert results[assembly.GROUP_PORTS].value is None
-    assert results[assembly.GROUP_PORTS].reasons[0]["reason"] == assembly.REASON_READ_FAILED
+    assert results[assembly.GROUP_TIER_THREE].value is None
+    assert results[assembly.GROUP_TIER_THREE].reasons[0]["reason"] == assembly.REASON_READ_FAILED
 
 
 def test_a_lost_group_becomes_a_partial_reason() -> None:
@@ -789,7 +802,10 @@ def test_group_reasons_collects_every_reason() -> None:
     def _boom() -> None:
         raise RuntimeError("no")
 
-    groups = [assembly.CallGroup(assembly.GROUP_PORTS, _boom), assembly.CallGroup(assembly.GROUP_TIER_THREE, _boom)]
+    groups = [
+        assembly.CallGroup(assembly.GROUP_WIRED_CLIENTS, _boom),
+        assembly.CallGroup(assembly.GROUP_TIER_THREE, _boom),
+    ]
     results = assembly.run_call_groups(groups, _sequential_executor)
     assert len(assembly.group_reasons(results)) == 2
 

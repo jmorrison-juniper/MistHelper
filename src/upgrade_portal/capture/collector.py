@@ -86,7 +86,6 @@ REASON_ROWS: dict[str, tuple[str, ...]] = {  # One failure name, one or two rows
     assembly.GROUP_WIRED_CLIENTS: (ROW_WIRED, ROW_GUEST),
     assembly.GROUP_WIRELESS_STATISTICS: (ROW_WIRELESS,),
     assembly.GROUP_WIRELESS_SEARCH: (ROW_WIRELESS,),
-    assembly.GROUP_PORTS: (ROW_EXTRAS,),
     assembly.GROUP_TIER_THREE: (ROW_EXTRAS, ROW_ALARMS),
     extras.SECTION_SWITCH_PORTS: (ROW_EXTRAS,),
     extras.SECTION_POE: (ROW_EXTRAS,),

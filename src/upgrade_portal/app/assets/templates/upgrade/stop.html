@@ -70,7 +70,7 @@
   <h2 class="confirm-box-title">Stop the run</h2>
 
   <p class="confirm-box-text">
-    Caution: a stop cancels each upgrade that has not started. A device that
+    Caution: a stop cancels each upgrade that waits to start. A device that
     already writes firmware finishes the write. The site can hold two firmware
     versions after a stop.
   </p>
@@ -141,7 +141,7 @@
       {% for mac in stop_cancelled %}
         <li class="cell-mono">{{ mac }}</li>
       {% else %}
-        <li>No device was cancelled.</li>
+        <li>The portal canceled no device.</li>
       {% endfor %}
     </ul>
 
@@ -150,7 +150,7 @@
       {% for mac in stop_writing %}
         <li class="cell-mono">{{ mac }}</li>
       {% else %}
-        <li>No device is writing firmware.</li>
+        <li>No device writes firmware.</li>
       {% endfor %}
     </ul>
 

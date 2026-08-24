@@ -25,6 +25,15 @@ Why the write refusal uses the run create:
     The contrast makes the read rule meaningful. The run create refuses a second
     operator and reaches no cloud at all, so it is the safest write to drive.
 
+Why one class drives the controls of the banner:
+    Every test above reaches the lock over raw HTTP. A raw call proves the
+    server rule and proves nothing about the page. `TestTheLockControlsOfThePage`
+    presses the buttons that an operator presses, so the six control identifiers
+    of `contracts/ui-testids.md` carry a test at last. The takeover pair needs a
+    `confirmation_required` refusal, which the server sends only after the
+    cooldown of five minutes. Two tests therefore answer the lock call
+    themselves, in the way that `test_stop.py` answers the stop call.
+
 Why the module reaches no cloud:
     The server holds a stand-in cloud session with no request method, so a cloud
     call fails inside the process. No test starts a capture, starts an upgrade,
@@ -58,6 +67,31 @@ RUN_HISTORY_API_TEMPLATE = "/api/sites/{site_id}/runs/history"
 SITE_ROW_PREFIX = "site-row-"
 LOCK_STATE_TEMPLATE = "site-lock-state-{site_id}"
 CSRF_META_ID = "csrf-meta"
+
+# The `Lock` section of `contracts/ui-testids.md` fixes these six control names.
+# Every one of them sits in `partials/lock_banner.html`, which the capture page,
+# the options page, and the progress page all include.
+LOCK_BANNER_ID = "lock-banner"
+LOCK_STATE_MESSAGE_ID = "lock-state-message"
+LOCK_TAKE_BUTTON_ID = "lock-take-button"
+LOCK_CONFIRM_INPUT_ID = "lock-confirm-input"
+LOCK_CONFIRM_SUBMIT_ID = "lock-confirm-submit"
+LOCK_RELEASE_BUTTON_ID = "lock-release-button"
+LOCK_ERROR_ID = "lock-error"
+
+# The banner publishes its own state, and `portal.js` rewrites the attribute
+# after every answer. A test reads the attribute rather than a color.
+LOCK_STATE_ATTRIBUTE = "data-lock-state"
+LOCK_STATE_HELD = "held"
+LOCK_STATE_LOCKED = "locked"
+LOCK_STATE_FREE = "free"
+
+OPTIONS_PAGE_TEMPLATE = "/runs/{run_id}"  # The progress page carries the banner and needs no saved plan.
+RUN_ID_FIELD = "run_id"
+LOCK_ROUTE_GLOB = "**/api/sites/*/lock"  # The one call the takeover tests answer themselves.
+CONFIRMATION_REQUIRED_CODE = "confirmation_required"
+NEEDED_TEXT_FIELD = "needed_text"
+TAKEOVER_WORD = "CONFIRM"  # FR-079 fixes this word for a different operator.
 
 CSRF_HEADER = "X-CSRFToken"  # `contracts/README.md` fixes this header name for every write.
 JSON_TYPE = "application/json"
@@ -299,6 +333,84 @@ def held_site(first_page: Any) -> Iterator[str]:
     _write(first_page, "delete", path, {TOKEN_FIELD: token})  # The next test then finds the site free.
 
 
+def _run_on(page: Any, site: str) -> str:
+    """Create one upgrade run on a site and return its key.
+
+    Why:
+        The lock banner lives on the capture page, the options page, and the
+        progress page. All three need a key, and the progress page is the one
+        that opens with no saved plan. The run never starts, so nothing reaches
+        a device.
+
+    Args:
+        page: The page of the operator who holds the site.
+        site: The site key.
+
+    Returns:
+        The run key.
+
+    Raises:
+        AssertionError: If the create answers 401 or 404. Both name a fault of
+            the portal, so neither may report a skip.
+    """
+    path = RUN_CREATE_TEMPLATE.format(site_id=site)
+    answer = _write(page, "post", path, {})
+    if answer.status in (UNAUTHORIZED_STATUS, NOT_FOUND_STATUS):  # The portal itself is broken.
+        raise AssertionError(f"{path} answered {answer.status}, so the portal serves no run route.")
+    body = json.loads(answer.text())
+    if answer.status == CONFLICT_STATUS:  # One live run already holds this site, and the refusal names it.
+        named = str(body.get(ERROR_FIELD, {}).get(DETAILS_FIELD, {}).get(RUN_ID_FIELD, ""))
+        if not named:  # The refusal must name the live run, or the operator cannot open it.
+            raise AssertionError(f"{path} answered 409 and named no run to open. The body reads: {answer.text()!r}")
+        return named
+    if answer.status != CREATED_STATUS:  # No run exists, so no page below can carry the banner.
+        pytest.skip(f"{path} answered {answer.status}, so no run key exists.")
+    return str(body[RUN_ID_FIELD])
+
+
+def _banner_of(page: Any, run: str) -> Any:
+    """Open the progress page of one run and return its lock banner.
+
+    Args:
+        page: The Playwright page object.
+        run: The run key.
+
+    Returns:
+        The banner locator, already visible.
+    """
+    path = OPTIONS_PAGE_TEMPLATE.format(run_id=run)
+    _require_built_route(_page_status(page, path), path)
+    banner = page.get_by_test_id(LOCK_BANNER_ID)
+    sync_api.expect(banner).to_be_visible(timeout=GATE_TIMEOUT_MS)
+    return banner
+
+
+def _answer_the_lock_call(page: Any, status: int, body: dict[str, Any]) -> None:
+    """Answer every lock call of one page with a canned body.
+
+    Why:
+        A ``confirmation_required`` refusal arrives only after the cooldown of
+        five minutes. A test that waited that long would never run. The page
+        behavior is the subject here, so the test supplies the refusal and the
+        page then does what an operator would see it do.
+
+    Args:
+        page: The Playwright page object.
+        status: The status to answer.
+        body: The body to answer.
+    """
+
+    def handle(route: Any) -> None:
+        """Fulfill one lock call with the canned answer.
+
+        Args:
+            route: The intercepted route.
+        """
+        route.fulfill(status=status, content_type=JSON_TYPE, body=json.dumps(body))
+
+    page.route(LOCK_ROUTE_GLOB, handle)
+
+
 class TestTheSecondOperatorIsRefused:
     """A second operator cannot take a site that another operator holds."""
 
@@ -516,3 +628,168 @@ class TestReadingIsAlwaysFree:
         """
         path = SITE_VIEW_TEMPLATE.format(site_id=held_site)
         _require_built_route(_page_status(second_page, path), path)
+
+
+class TestTheLockControlsOfThePage:
+    """The buttons of the lock banner, pressed the way an operator presses them.
+
+    Why:
+        Every other test of this module reaches the lock over raw HTTP. A raw
+        call proves the server rule and proves nothing about the page. T172 asks
+        for the controls, and an operator who cannot take a site from a button
+        cannot work, however correct the server is.
+    """
+
+    def test_the_holder_reads_a_held_banner_with_a_release_control(self, first_page: Any, held_site: str) -> None:
+        """The page of the holder names the hold and offers the release.
+
+        Why:
+            The holder must see that they hold the site, and must be able to
+            give it back. A holder who cannot release forces the next operator
+            to wait out the whole lease.
+
+        Args:
+            first_page: The page of the operator who holds the lock.
+            held_site: The site that this operator holds.
+        """
+        banner = _banner_of(first_page, _run_on(first_page, held_site))
+        assert banner.get_attribute(LOCK_STATE_ATTRIBUTE) == LOCK_STATE_HELD
+        sync_api.expect(first_page.get_by_test_id(LOCK_RELEASE_BUTTON_ID)).to_be_visible(timeout=GATE_TIMEOUT_MS)
+        sync_api.expect(first_page.get_by_test_id(LOCK_TAKE_BUTTON_ID)).to_be_hidden(timeout=GATE_TIMEOUT_MS)
+
+    def test_the_second_operator_reads_a_locked_banner_with_a_take_control(
+        self, first_page: Any, second_page: Any, held_site: str
+    ) -> None:
+        """The page of the second operator names the holder and offers the take.
+
+        Why:
+            WCAG 1.4.1 refuses color as the only signal, so the banner names the
+            state in words. The second operator also needs the take control,
+            because an abandoned session is the case this control exists for.
+
+        Args:
+            first_page: The page of the operator who holds the lock.
+            second_page: The page of the second operator.
+            held_site: The site that the first operator holds.
+        """
+        run = _run_on(first_page, held_site)
+        banner = _banner_of(second_page, run)
+        assert banner.get_attribute(LOCK_STATE_ATTRIBUTE) == LOCK_STATE_LOCKED
+        message = second_page.get_by_test_id(LOCK_STATE_MESSAGE_ID)
+        assert HOLDER_EMAIL in message.inner_text(), f"The banner reads: {message.inner_text()!r}"
+        sync_api.expect(second_page.get_by_test_id(LOCK_TAKE_BUTTON_ID)).to_be_visible(timeout=GATE_TIMEOUT_MS)
+
+    def test_the_take_control_of_a_held_site_writes_the_refusal_in_the_page(
+        self, first_page: Any, second_page: Any, held_site: str
+    ) -> None:
+        """A press on the take control of a held site fills the error region.
+
+        Why:
+            The second operator must read the refusal in the page. A refusal
+            that reached the network log alone would leave the operator pressing
+            a button that appears to do nothing.
+
+        Args:
+            first_page: The page of the operator who holds the lock.
+            second_page: The page of the second operator.
+            held_site: The site that the first operator holds.
+        """
+        run = _run_on(first_page, held_site)
+        _banner_of(second_page, run)
+        second_page.get_by_test_id(LOCK_TAKE_BUTTON_ID).click()
+        region = second_page.get_by_test_id(LOCK_ERROR_ID)
+        sync_api.expect(region).to_be_visible(timeout=GATE_TIMEOUT_MS)
+        assert region.inner_text().strip(), "The take control wrote no sentence into the error region."
+
+    def test_the_take_control_opens_the_takeover_pair_on_a_confirmation_refusal(
+        self, first_page: Any, second_page: Any, held_site: str
+    ) -> None:
+        """A confirmation refusal opens the field and the takeover button.
+
+        Why:
+            FR-079 asks a different operator for a typed word before a takeover.
+            The server sends that refusal only after the cooldown of five
+            minutes, so this test supplies the refusal and reads what the page
+            then does.
+
+        Args:
+            first_page: The page of the operator who holds the lock.
+            second_page: The page of the second operator.
+            held_site: The site that the first operator holds.
+        """
+        run = _run_on(first_page, held_site)
+        _banner_of(second_page, run)
+        refusal = {
+            ERROR_FIELD: {
+                CODE_FIELD: CONFIRMATION_REQUIRED_CODE,
+                "message": "Type the word to take this site.",
+                DETAILS_FIELD: {NEEDED_TEXT_FIELD: TAKEOVER_WORD},
+            }
+        }
+        _answer_the_lock_call(second_page, BAD_REQUEST_STATUS, refusal)
+        second_page.get_by_test_id(LOCK_TAKE_BUTTON_ID).click()
+        field = second_page.get_by_test_id(LOCK_CONFIRM_INPUT_ID)
+        sync_api.expect(field).to_be_visible(timeout=GATE_TIMEOUT_MS)
+        sync_api.expect(second_page.get_by_test_id(LOCK_CONFIRM_SUBMIT_ID)).to_be_visible(timeout=GATE_TIMEOUT_MS)
+        assert field.get_attribute("data-confirm-word") == TAKEOVER_WORD
+
+    def test_the_takeover_button_sends_the_typed_word(self, first_page: Any, second_page: Any, held_site: str) -> None:
+        """The takeover button carries the typed word to the lock call.
+
+        Why:
+            The word is the whole guard of a takeover. A button that sent an
+            empty word would take a site that the server meant to protect.
+
+        Args:
+            first_page: The page of the operator who holds the lock.
+            second_page: The page of the second operator.
+            held_site: The site that the first operator holds.
+        """
+        run = _run_on(first_page, held_site)
+        _banner_of(second_page, run)
+        sent: list[str] = []
+
+        def handle(route: Any) -> None:
+            """Record the typed word, then answer with the confirmation refusal.
+
+            Args:
+                route: The intercepted route.
+            """
+            posted = route.request.post_data or "{}"
+            sent.append(str(json.loads(posted).get("confirm", "")))
+            body = {
+                ERROR_FIELD: {
+                    CODE_FIELD: CONFIRMATION_REQUIRED_CODE,
+                    "message": "Type the word to take this site.",
+                    DETAILS_FIELD: {NEEDED_TEXT_FIELD: TAKEOVER_WORD},
+                }
+            }
+            route.fulfill(status=BAD_REQUEST_STATUS, content_type=JSON_TYPE, body=json.dumps(body))
+
+        second_page.route(LOCK_ROUTE_GLOB, handle)
+        second_page.get_by_test_id(LOCK_TAKE_BUTTON_ID).click()
+        field = second_page.get_by_test_id(LOCK_CONFIRM_INPUT_ID)
+        sync_api.expect(field).to_be_visible(timeout=GATE_TIMEOUT_MS)
+        field.fill(TAKEOVER_WORD)
+        second_page.get_by_test_id(LOCK_CONFIRM_SUBMIT_ID).click()
+        sync_api.expect(field).to_be_visible(timeout=GATE_TIMEOUT_MS)
+        assert TAKEOVER_WORD in sent, f"The takeover button sent {sent!r} and never the typed word."
+
+    def test_the_release_control_gives_the_site_back(self, first_page: Any, held_site: str) -> None:
+        """A press on the release control frees the site and offers the take.
+
+        Why:
+            FR-078 gives an abandoned session a cooldown of five minutes. A
+            release skips that wait, so the next operator starts at once. The
+            banner must also swap its two buttons, or the holder cannot tell
+            that the release worked.
+
+        Args:
+            first_page: The page of the operator who holds the lock.
+            held_site: The site that this operator holds.
+        """
+        banner = _banner_of(first_page, _run_on(first_page, held_site))
+        first_page.get_by_test_id(LOCK_RELEASE_BUTTON_ID).click()
+        sync_api.expect(first_page.get_by_test_id(LOCK_TAKE_BUTTON_ID)).to_be_visible(timeout=GATE_TIMEOUT_MS)
+        assert banner.get_attribute(LOCK_STATE_ATTRIBUTE) == LOCK_STATE_FREE
+        sync_api.expect(first_page.get_by_test_id(LOCK_RELEASE_BUTTON_ID)).to_be_hidden(timeout=GATE_TIMEOUT_MS)

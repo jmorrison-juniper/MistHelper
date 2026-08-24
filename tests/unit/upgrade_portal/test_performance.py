@@ -52,6 +52,11 @@ SMALL_SITE_DEVICES = 50  # The site size that spec.md SC-001 names for the first
 TIER_TWO_GROUPS = 4  # The four call groups of wave one.
 TIER_THREE_GROUPS = 5  # Wave one, and the one extra group of wave two.
 RENDER_BUDGET_SECONDS = 3.0  # The comparison render target of plan.md line 66.
+CAPTURE_BUDGET_SECONDS = 90.0  # The tier 2 capture target of plan.md line 64, for a 250 device site.
+CLOUD_PAGE_SECONDS = 2.5  # A pessimistic wall clock for one paged cloud call, used by the duration model.
+CAPTURE_POOL_WORKERS = 4  # plan.md sizes the capture pool at four workers.
+WAVE_ONE_READS = ("devices", "wired", "wireless_stats", "wireless_search")  # The four groups that run together.
+WAVE_TWO_READS = ("extras",)  # The one group that only tier 3 runs, and only after wave one.
 OLD_VERSION = "21.4R3.15"  # The firmware before the upgrade.
 NEW_VERSION = "23.4R2.13"  # The firmware after the upgrade.
 QUIET_DIGEST = "b1946ac92492d2347c6235b4d2611184"  # One digest that both captures of a quiet site carry.
@@ -402,6 +407,38 @@ def run_capture_for(site: FakeSite, tier: int = collector.TIER_STANDARD) -> dict
     return store.written[-1]  # The stored document of this capture.
 
 
+def modeled_capture_seconds(site: FakeSite, tier: int) -> float:
+    """Return the modeled wall clock of one capture against a real cloud.
+
+    Why:
+        A fake cloud answers in microseconds, so a stopwatch around a fake
+        capture measures nothing that the 90 second target is about. The target
+        is spent on cloud latency, and the shape of the plan decides how much of
+        that latency runs at the same time. This model turns the measured call
+        tally into a duration, so a test can assert seconds and not a count.
+
+        The model follows the two rules that the collector obeys. The pages
+        inside one group run one after another, because the cloud paginates with
+        a cursor. The groups of one wave run at the same time, up to the four
+        workers of the pool. Wave two waits for wave one, because the radio
+        section reads the device statistics of wave one.
+
+    Args:
+        site: The fake site, already read by one capture.
+        tier: The data tier of that capture.
+
+    Returns:
+        The modeled seconds.
+    """
+    waves = [WAVE_ONE_READS] if tier < collector.TIER_EXTRA else [WAVE_ONE_READS, WAVE_TWO_READS]
+    total = 0.0  # The modeled seconds of every wave.
+    for wave in waves:
+        pages = [site.calls[name] for name in wave]  # The page count of each group of this wave.
+        rounds = -(-len(wave) // CAPTURE_POOL_WORKERS)  # A wave wider than the pool needs more than one round.
+        total += max(pages, default=0) * CLOUD_PAGE_SECONDS * rounds  # The slowest group decides the wave.
+    return total
+
+
 # ---------------------------------------------------------------------------
 # The comparison lane fixtures
 # ---------------------------------------------------------------------------
@@ -609,7 +646,81 @@ def test_the_comparison_work_stays_linear_with_the_site() -> None:
     assert counts[1] == counts[0] * 5  # Five times the devices gives five times the work, not twenty five times.
 
 
-def test_the_whole_comparison_renders_inside_the_three_second_budget() -> None:
+def test_a_tier_two_capture_of_a_large_site_fits_the_ninety_second_target() -> None:
+    """A tier 2 capture of a 250-device site models 2.5 seconds of cloud time.
+
+    Why:
+        `plan.md` line 64 promises a 90 second capture. Every other test of this
+        section counts call groups, and a count is not a duration. This test
+        turns the measured tally into seconds with `modeled_capture_seconds`, so
+        it fails the moment the plan grows a wave, serializes a group, or starts
+        a per-device call.
+
+        A 250-device site fills one page of every read, so wave one is four
+        groups of one page each. Four groups fit the four workers of the pool in
+        one round, and the slowest group decides the wave. The model therefore
+        gives one page of latency, which is 2.5 seconds against a budget of 90.
+        The margin is 36 times.
+    """
+    site = FakeSite(LARGE_SITE_DEVICES)  # The site size that the target names.
+    run_capture_for(site)  # One whole tier 2 capture, which fills the tally.
+    modeled = modeled_capture_seconds(site, collector.TIER_STANDARD)  # The tally, turned into seconds.
+    assert modeled == CLOUD_PAGE_SECONDS  # One page of latency, because four groups share four workers.
+    assert modeled < CAPTURE_BUDGET_SECONDS  # The capture stays inside the documented target.
+
+
+def test_a_tier_three_capture_of_a_large_site_also_fits_the_target() -> None:
+    """The extra tier adds one wave and still fits inside 90 seconds.
+
+    Why:
+        The extra tier is the slowest capture the portal runs, so the target
+        must hold for it as well. Wave two waits for wave one, so the extra tier
+        costs two waves and never four.
+    """
+    site = FakeSite(LARGE_SITE_DEVICES)  # The site size that the target names.
+    run_capture_for(site, collector.TIER_EXTRA)  # One whole tier 3 capture.
+    modeled = modeled_capture_seconds(site, collector.TIER_EXTRA)  # Two waves, one after the other.
+    assert modeled == CLOUD_PAGE_SECONDS * 2  # Wave one, then wave two.
+    assert modeled < CAPTURE_BUDGET_SECONDS  # The extra tier stays inside the target too.
+
+
+def test_the_local_work_of_a_large_capture_is_a_small_part_of_the_target() -> None:
+    """The in-process work of a 250-device tier 2 capture takes well under a second.
+
+    Why:
+        The duration model above credits the whole budget to cloud latency. That
+        credit holds only while the local work stays small. This test measures
+        the local half with a fake cloud, so the number is the assembly, the
+        flattening, the digest, and the store write alone. The measured work
+        takes a few milliseconds on a development machine, so a tenth of the
+        budget is a margin wide enough that a loaded build agent cannot fail the
+        test at random. The test asserts no lower bound, because fast is never a
+        fault.
+    """
+    site = FakeSite(LARGE_SITE_DEVICES)  # The site size that the target names.
+    started = time.perf_counter()  # The monotonic clock, which no clock change can move.
+    document = run_capture_for(site)  # One whole tier 2 capture against a cloud with no latency.
+    elapsed = time.perf_counter() - started  # The measured local work.
+    assert elapsed < CAPTURE_BUDGET_SECONDS / 10  # The local half stays a small part of the budget.
+    assert len(document["device_index"]) == LARGE_SITE_DEVICES  # The timing really covered 250 devices.
+
+
+def test_a_per_device_call_would_break_the_modeled_target() -> None:
+    """The model fails a plan that calls the cloud once for each device.
+
+    Why:
+        A test that can never fail proves nothing. This test injects the
+        regression that the target exists to catch, which is a read that grows
+        with the site, and proves that the model reports a breach. Without this
+        proof, a reader cannot tell whether the two tests above pass because the
+        plan is good or because the model is blind.
+    """
+    site = FakeSite(LARGE_SITE_DEVICES)  # The site size that the target names.
+    run_capture_for(site)  # One whole tier 2 capture, which fills the tally.
+    site.calls["devices"] = LARGE_SITE_DEVICES  # The regression: one device call for each device.
+    modeled = modeled_capture_seconds(site, collector.TIER_STANDARD)  # The same model, on the broken plan.
+    assert modeled > CAPTURE_BUDGET_SECONDS  # The model catches the per-device read.
+
     """A changed 250-device site builds its whole comparison page well inside 3 seconds.
 
     Why:

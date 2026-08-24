@@ -320,19 +320,26 @@ def default_token_session(host: str) -> Any:
         The value passes straight into the library call, exactly as the password
         does above, and no name outside that call holds it.
 
+        The build alone leaves the session with no scope. `login` is what asks
+        the cloud which organizations the token reaches, and the organization
+        picker reads that answer. Without this call the picker shows no row and
+        the operator can go no further, whatever the token allows.
+
     Args:
         host: A cloud host that `resolve_host` already checked.
 
     Returns:
-        The `mistapi` session object.
+        The `mistapi` session object, already signed in.
     """
     mistapi: Any = import_module(MISTAPI_MODULE)  # Late, for the same reason as the pair login above.
-    return mistapi.APISession(  # The library reads the token once and owns it from there.
+    cloud_session: Any = mistapi.APISession(  # The library reads the token once and owns it from there.
         apitoken=environment_token_value(),  # Read at the call, so no name of this module holds the value.
         host=host,  # The same catalog check applies, because a token is as sensitive as a password.
         console_log_level=CONSOLE_LOG_LEVEL,  # Info level, so the library prints no credential debug line.
         show_cli_notif=False,  # The portal is not a terminal, so the library must print no prompt.
     )
+    cloud_session.login()  # Fills the privilege list, which the organization picker and the scope check both read.
+    return cloud_session  # The caller registers the session and owns it from there.
 
 
 def attempt_login(cloud_session: Any, code: str = "") -> dict[str, Any]:

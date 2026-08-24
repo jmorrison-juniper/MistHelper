@@ -19,6 +19,7 @@ Fixtures:
 
 from __future__ import annotations  # Postponed annotations keep every hint a plain string.
 
+import time  # The two timed tests of T153 read the monotonic clock.
 from collections.abc import Iterator  # The signed-in fixtures yield and then clean up.
 from typing import Any  # A run record and a status body are both free-form.
 
@@ -575,3 +576,69 @@ def test_a_poll_answers_a_state_outside_the_model_without_a_fault(
     body: Any = answer.get_json()
     assert body["state"] == UNKNOWN_STATE  # The poll reports the truth of the record.
     assert body["message"]  # The page still has one sentence to show the operator.
+
+
+# ---------------------------------------------------------------------------
+# T153: the one second budget of the poll
+# ---------------------------------------------------------------------------
+
+# `tasks.md` T153 asks the status path to answer in under one second while an
+# upgrade runs. The browser polls this path every 30 seconds, so a poll that
+# passed one second would stack against the next poll on a slow run.
+POLL_BUDGET_SECONDS = 1.0  # The target that T153 names.
+POLL_ROUNDS = 20  # Twenty polls, so one slow answer cannot hide behind an average.
+LARGE_RUN_TARGETS = 250  # The site size that plan.md line 64 names, which is the widest record the view builds.
+
+
+def test_the_status_poll_of_a_running_upgrade_answers_inside_one_second(
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """Twenty polls of a running upgrade each answer well inside one second.
+
+    Why:
+        T153 fixes a one second budget and no test measured it, so the second
+        half of that task stood unproved for the whole build. The poll reads one
+        stored record and builds one view, so the work is bounded and the
+        measured answer takes about a millisecond. The test asserts the worst of
+        twenty polls rather than the mean, because a budget that a mean can meet
+        still stalls a page.
+
+    Args:
+        upgrade_client: The signed-in client.
+        run_store: The stand-in run record store.
+    """
+    run_id = seed_run(run_store, RUNNING_STATE, targets=[{"mac": PROBE_MAC}])  # The state the page polls most.
+    worst = 0.0  # The slowest of every poll below.
+    for _ in range(POLL_ROUNDS):  # One measured poll for each round.
+        started = time.perf_counter()  # The monotonic clock, which no clock change can move.
+        answer = read_status(upgrade_client, run_id)  # One whole poll, through the real route.
+        worst = max(worst, time.perf_counter() - started)  # Keep the slowest answer of the run.
+        assert answer.status_code == OK_STATUS  # A refused poll would measure the refusal and not the read.
+    assert worst < POLL_BUDGET_SECONDS  # The slowest poll still fits the documented budget.
+
+
+def test_the_status_poll_of_a_two_hundred_fifty_device_run_answers_inside_one_second(
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """The widest run record the portal builds still answers inside one second.
+
+    Why:
+        The record above holds one device. A budget proved on one device says
+        nothing about the site that the capture target names. This test seeds
+        the widest record that a real run reaches, so the measurement covers the
+        view work of every target row.
+
+    Args:
+        upgrade_client: The signed-in client.
+        run_store: The stand-in run record store.
+    """
+    targets = [{"mac": f"5c5b350e{number:04x}", "name": f"switch-{number:03d}"} for number in range(LARGE_RUN_TARGETS)]
+    run_id = seed_run(run_store, RUNNING_STATE, targets=targets)  # The widest record a real run reaches.
+    started = time.perf_counter()  # The monotonic clock, which no clock change can move.
+    answer = read_status(upgrade_client, run_id)  # One whole poll of the widest record.
+    elapsed = time.perf_counter() - started  # The measured answer.
+    assert answer.status_code == OK_STATUS  # A refused poll would measure the refusal and not the read.
+    assert len(answer.get_json()["targets"]) == LARGE_RUN_TARGETS  # The timing really covered 250 rows.
+    assert elapsed < POLL_BUDGET_SECONDS  # The widest poll still fits the documented budget.

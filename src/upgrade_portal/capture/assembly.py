@@ -137,20 +137,20 @@ GROUP_DEVICES: Final[str] = "devices"
 GROUP_WIRELESS_STATISTICS: Final[str] = "wireless_statistics"
 GROUP_WIRELESS_SEARCH: Final[str] = "wireless_search"
 GROUP_WIRED_CLIENTS: Final[str] = "wired_clients"
-GROUP_PORTS: Final[str] = "ports"
 GROUP_TIER_THREE: Final[str] = "tier_three"
 
-# WHAT: the six call groups that a capture runs at one time.
-# WHY: plan.md sizes the capture pool at 4 workers, so six groups keep every
-#      worker busy without a seventh queue. The guest read rides inside the
-#      wired group, because the guest call is small and a seventh group would
-#      cost a queue slot for one short call.
+# WHAT: the five call groups that a capture runs.
+# WHY: plan.md sizes the capture pool at 4 workers, so the four groups of wave
+#      one fill the pool exactly one time. The guest read rides inside the
+#      wired group, because the guest call is small and a fifth wave-one group
+#      would cost a queue slot for one short call. The port read rides inside
+#      the tier 3 group, because `data-model.md` section 3.5 puts the switch
+#      ports in the extra tier and a tier 2 capture therefore reads no port.
 CALL_GROUPS: Final[tuple[str, ...]] = (
     GROUP_DEVICES,
     GROUP_WIRELESS_STATISTICS,
     GROUP_WIRELESS_SEARCH,
     GROUP_WIRED_CLIENTS,
-    GROUP_PORTS,
     GROUP_TIER_THREE,
 )
 
@@ -1280,7 +1280,6 @@ __all__ = [
     "COUNT_KEYS",
     "DIGEST_WHOLE",
     "GROUP_DEVICES",
-    "GROUP_PORTS",
     "GROUP_TIER_THREE",
     "GROUP_WIRED_CLIENTS",
     "GROUP_WIRELESS_SEARCH",
