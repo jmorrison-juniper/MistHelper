@@ -260,6 +260,41 @@ jobs:
       # Pinned in requirements-dev.txt so Dependabot raises a new release as a
       # reviewable pull request rather than breaking CI on an unrelated commit (issue #1718)
       - run: pip install -r requirements-dev.txt  # pinned (issue #1779)
+      - name: Check the bandit exclude list on both path separators
+        # Issue #1722: bandit compares an exclude entry against a scanned path with a
+        # plain substring test, and it never normalizes the separator. A forward-slash
+        # entry matches a Linux path only. A Windows run then scanned the analyzer
+        # fixtures and reported 42 extra findings that this job never sees.
+        # This job runs on Linux, so only an explicit check can hold the Windows form.
+        run: |
+          python - <<'PY'
+          import pathlib  # Reads pyproject.toml from the checkout root.
+          import tomllib  # Parses the TOML config that bandit also reads.
+
+          from bandit.core.manager import _is_file_included  # The matcher bandit uses.
+
+          config = tomllib.loads(pathlib.Path("pyproject.toml").read_text(encoding="utf-8"))
+          excludes = config["tool"]["bandit"]["exclude_dirs"]  # The list under test.
+          failures = []  # Collects every problem, so one run reports all of them.
+          for entry in excludes:  # A separator-free entry matches on both platforms.
+              if "/" not in entry and "\\" not in entry:
+                  continue  # No separator, so no platform gap.
+              posix = entry.replace("\\", "/")  # The Linux spelling of this entry.
+              windows = posix.replace("/", "\\")  # The Windows spelling of this entry.
+              for spelling in (posix, windows):  # Both spellings must be present.
+                  if spelling not in excludes:
+                      failures.append("exclude_dirs misses the spelling %r" % spelling)
+          samples = [  # The fixture tree that issue #1722 named, in both spellings.
+              "./tools/test_quality_analyzer/fixtures/bad/weak.py",
+              ".\\tools\\test_quality_analyzer\\fixtures\\bad\\weak.py",
+          ]
+          for sample in samples:  # bandit must exclude the sample on either platform.
+              if _is_file_included(sample, ["*.py"], excludes):
+                  failures.append("bandit would scan %s" % sample)
+          if failures:  # A failure here means a Windows run and CI disagree.
+              raise SystemExit("issue #1722 guard failed: " + "; ".join(failures))
+          print("bandit exclude_dirs covers both path separators")
+          PY
       - name: Run Bandit
         # -c pyproject.toml picks up [tool.bandit] targets/exclude_dirs (issue #881)
         # No severity flag: the gate fails on a finding at any severity, including LOW (issue #889)

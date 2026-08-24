@@ -405,6 +405,9 @@ targets = ["MistHelper.py", "maps_manager.py", "wsgi.py", "web_portal", "mist-op
 # with a plain substring test and never normalizes the separator. The forward
 # slash matches a Linux path only, so a Windows run reported 42 phantom
 # findings from this tree (issue #1722). Keep both spellings.
+# The bandit job in .github/workflows/ci.yml checks this rule. The step "Check
+# the bandit exclude list on both path separators" fails when an entry that
+# holds a separator carries one spelling only.
 exclude_dirs = [
     "tests",
     ".venv",
