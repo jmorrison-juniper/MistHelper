@@ -23,7 +23,7 @@ from src.api.deps import (
     get_db_session,
     get_scoped_org_id,
 )
-from src.api.middleware.auth import CurrentUser
+from src.api.middleware.auth import CurrentUser, require_org_access
 from src.api.schemas.common import PaginationMeta, ResponseEnvelope
 from src.api.schemas.config import (
     AcceptDriftRequest,
@@ -173,9 +173,18 @@ async def time_travel(
 async def compute_diff(
     body: DiffRequest,
     db: AsyncSession = Depends(get_db_session),
+    user: CurrentUser = Depends(get_authenticated_user),
 ) -> ResponseEnvelope[DiffResponse]:
-    """Compute field-level diff between two revisions using deepdiff."""
+    """Compute field-level diff between two revisions using deepdiff.
+
+    The caller must hold a valid credential, and the caller must belong to the
+    organization that ``body.org_id`` names. A device configuration holds the
+    network topology, so an anonymous caller must never read one (issue #1979).
+    """
     from src.shared.services.diff import DiffService
+
+    logger.info("Config diff starts for organization %s.", body.org_id)  # Announce the request
+    require_org_access(str(body.org_id), user)  # Raise 403 when the caller is outside the org
 
     old_rev = await _load_revision_by_number(db, body.org_id, body.old_revision_id)
     new_rev = await _load_revision_by_number(db, body.org_id, body.new_revision_id)
@@ -233,12 +242,25 @@ async def compute_diff(
 async def install_from_revision(
     body: InstallFromRevisionRequest,
     db: AsyncSession = Depends(get_db_session),
+    user: CurrentUser = Depends(get_authenticated_user),
 ) -> ResponseEnvelope[InstallJobResponse]:
     """Queue an async job to push a historical revision to target devices.
 
     Requires ``confirm=true`` for safety (destructive operation).
     Creates a ScheduledJob and enqueues a Celery task.
+
+    The route changes the running configuration of a production device, so the
+    caller must hold a valid credential and must belong to the organization
+    that ``body.org_id`` names (issue #1979). The job records the operator, so
+    the audit trail names the person who asked for the push.
     """
+    logger.info(  # Announce the destructive request before any check runs
+        "Install from revision %s starts for organization %s.",
+        body.revision_id,
+        body.org_id,
+    )
+    require_org_access(str(body.org_id), user)  # Raise 403 when the caller is outside the org
+
     if not body.confirm:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -272,6 +294,7 @@ async def install_from_revision(
             "revision_id": body.revision_id,
             "target_entity_ids": [str(eid) for eid in body.target_entity_ids],
             "reason": body.reason,
+            "requested_by": user.email,  # Name the operator, so the audit trail is not anonymous
         },
     )
     db.add(job)

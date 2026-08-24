@@ -16,6 +16,8 @@ Provides:
 
 from __future__ import annotations  # Defer annotation evaluation; cheap forward refs
 
+import logging  # Records the authorization decision on the sync trigger route
+
 from dataclasses import dataclass  # For query-param grouping (replaces 6/7-arg signatures)
 from datetime import UTC, datetime  # Timezone-aware timestamps for ack/recertify
 from typing import TYPE_CHECKING  # For type-only imports below
@@ -57,6 +59,8 @@ from src.shared.models.inventory import (  # ORM inventory models
 if TYPE_CHECKING:  # Type-only imports -- runtime cost zero
     from sqlalchemy.ext.asyncio import AsyncSession  # Async DB session type
     from src.api.middleware.auth import CurrentUser  # Current-user identity object
+
+logger = logging.getLogger(__name__)  # Module logger, so the records name this module
 
 router = APIRouter(prefix="/sync", tags=["sync"])  # /sync/* endpoints
 inv_router = APIRouter(prefix="/inventory", tags=["inventory"])  # /inventory/* endpoints
@@ -161,11 +165,23 @@ async def _recent_ledger_for_org(db: AsyncSession, org_id: UUID) -> list[SyncLed
 
 
 @router.post("/trigger")
-async def trigger_sync(body: SyncTriggerRequest) -> dict[str, str]:
-    """Enqueue an on-demand inventory sync for an org."""
+async def trigger_sync(
+    body: SyncTriggerRequest,
+    user: CurrentUser = Depends(get_authenticated_user),
+) -> dict[str, str]:
+    """Enqueue an on-demand inventory sync for an org.
+
+    The route queues work on the Celery fleet, so an anonymous caller could
+    exhaust the workers. The caller must hold a valid credential and must
+    belong to the organization that ``body.org_id`` names.
+    """
     from src.worker.tasks.sync_tasks import sync_org_inventory  # Lazy import; avoid worker cycle
 
+    logger.info("Inventory sync trigger starts for organization %s.", body.org_id)
+    require_org_access(str(body.org_id), user)  # Raise 403 when the caller is outside the org
+
     sync_org_inventory.delay(str(body.org_id))  # Hand off to Celery worker
+    logger.debug("Inventory sync queued for organization %s.", body.org_id)
     return {"status": "queued", "org_id": str(body.org_id)}  # Caller polls status separately
 
 
