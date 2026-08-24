@@ -284,6 +284,32 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
   counts were stale at menu 234, because menus 235 to 237 reached `main` without
   a README update. The counts now read 238 entries plus Exit, and the menu table
   lists 235 through 238.
+### Count and report the dropped server-sent events (issue #1924, instance 3)
+
+- **Defect (Fixed)**: `PortalEventBus._enqueue_event` in
+  `web_portal/services/event_bus.py` held two silent loss paths. The first
+  `queue.get_nowait()` removed the oldest event to free a slot, and the closing
+  `except Full: pass` discarded the new event. Neither path kept a record.
+- **Reader risk (Explained)**: an operator watching the live operation feed saw
+  an incomplete record of a run and received no indication that a gap existed.
+  Issue #1924 names this shape: a failure path that erases its own evidence.
+- **Counters (Added)**: `_evicted_event_count` and `_rejected_event_count`
+  separate the two loss paths. The `dropped_event_count` property and the
+  `drop_stats()` method expose them to a test and to an operator.
+- **Rate limit (Chosen)**: the bus logs the first drop at WARNING, then doubles
+  the threshold before each later report. A full queue overflows again on the
+  next event, so one line for each drop would flood the log. Issue #1766
+  already records that noise dilutes the WARNING level in this project.
+- **Summary (Added)**: `stop()` reports the final drop total one time, because
+  the growing threshold can leave the last drops unreported.
+- **Live feed (Changed)**: the heartbeat event now carries a `dropped_events`
+  count, so the operator sees the gap in the stream without opening a log.
+- **Lock safety (Verified)**: `publish()` is the only caller and it already
+  holds `self._lock`. `threading.Lock` is not reentrant, so the counters take
+  no further lock and the property reads them without one.
+- **Tests (Added)**: `tests/unit/web_portal/test_event_bus.py` holds 5 new
+  tests. They pin the drop counter, the eviction order, the first WARNING, the
+  bounded line count across a 500-event burst, and the stop summary.
 
 ### Run the quality gates on every pull request (issue #1952)
 
