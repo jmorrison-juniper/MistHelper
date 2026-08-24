@@ -29,6 +29,8 @@ _DEFAULT_REDIS_URL = "redis://localhost:6379/0"
 _DEFAULT_MIST_API_HOST = "api.mist.com"
 _DEFAULT_SYNC_INTERVAL_SECONDS = 300
 _DEFAULT_LOG_LEVEL = "INFO"
+# WHY: a Redis client with no limit waits forever. Five seconds frees the worker.
+_DEFAULT_REDIS_TIMEOUT_SECONDS = 5.0
 
 
 def _env_str(name: str, default: str) -> str:
@@ -42,6 +44,19 @@ def _env_bool(name: str, default: bool) -> bool:
     if raw is None:  # An absent variable must keep the safe default.
         return default
     return raw.strip().lower() in _TRUE_VALUES  # Compare in lower case, so "True" also works.
+
+
+def _env_float(name: str, default: float) -> float:
+    """Return the environment value for *name* as a floating point number."""
+    raw = os.environ.get(name)  # Read the raw text before the conversion.
+    if raw is None:  # An absent variable must keep the documented default.
+        return default
+    try:
+        return float(raw)  # Convert the text, because a socket limit needs a number.
+    except ValueError:
+        # WHY: a bad value must not stop the service. The default keeps the service alive.
+        logger.warning("Setting %s is not a number. The default %s applies.", name, default)
+        return default
 
 
 def _env_int(name: str, default: int) -> int:
@@ -72,6 +87,8 @@ class AppSettings:
     sync_interval_seconds: int = _DEFAULT_SYNC_INTERVAL_SECONDS
     log_level: str = _DEFAULT_LOG_LEVEL
     session_cookie_secure: bool = True
+    redis_socket_timeout_seconds: float = _DEFAULT_REDIS_TIMEOUT_SECONDS
+    redis_connect_timeout_seconds: float = _DEFAULT_REDIS_TIMEOUT_SECONDS
 
 
 def build_settings() -> AppSettings:
@@ -92,6 +109,14 @@ def build_settings() -> AppSettings:
         ),  # Paces the inventory sync.
         log_level=_env_str("LOG_LEVEL", _DEFAULT_LOG_LEVEL),  # Sets how much detail the logs hold.
         session_cookie_secure=_env_bool("SESSION_COOKIE_SECURE", True),  # Defaults to HTTPS only.
+        redis_socket_timeout_seconds=_env_float(
+            "REDIS_SOCKET_TIMEOUT_SECONDS",
+            _DEFAULT_REDIS_TIMEOUT_SECONDS,
+        ),  # Limits one Redis read, so a silent host cannot hold a worker.
+        redis_connect_timeout_seconds=_env_float(
+            "REDIS_CONNECT_TIMEOUT_SECONDS",
+            _DEFAULT_REDIS_TIMEOUT_SECONDS,
+        ),  # Limits the Redis connect, so a host that drops packets fails fast.
     )
     # WHY: the operator needs proof of the cookie policy. The value is a flag, not a secret.
     logger.debug(

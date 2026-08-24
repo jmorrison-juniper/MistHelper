@@ -169,9 +169,16 @@ def _connect_redis() -> Any:
         import redis as redis_lib  # Import here, so a missing driver does not stop the import.
 
         from src.shared.config.settings import get_settings
+        from src.shared.redis_timeouts import redis_timeout_kwargs
 
-        client = redis_lib.Redis.from_url(get_settings().redis_url)  # Address the shared Redis.
+        logger.info("Session store Redis connect starts.")  # Announce the connect attempt.
+        # WHY: a client with no socket limit holds this worker forever on a silent Redis host.
+        client = redis_lib.Redis.from_url(
+            get_settings().redis_url,
+            **redis_timeout_kwargs(),
+        )  # Address the shared Redis.
         client.ping()  # Prove the connection now, because a later failure would end a session.
+        logger.debug("Session store Redis connect done.")  # Confirm the live connection.
         return client
     except Exception as error:  # WHY: the Redis driver raises types this module cannot name.
         # WHY: the fallback map keeps local work alive. A single worker still serves its sessions.

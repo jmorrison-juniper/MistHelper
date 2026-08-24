@@ -101,6 +101,8 @@ class _AppSettings:
     log_level = "INFO"
     database_url = "postgresql+asyncpg://localhost/misthelper_test"
     redis_url = "redis://localhost:6379/0"
+    redis_socket_timeout_seconds = 5.0
+    redis_connect_timeout_seconds = 5.0
     sync_interval_seconds = 300
     mist_api_host = "api.mist.com"
     mist_api_token = ""
