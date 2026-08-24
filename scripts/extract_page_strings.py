@@ -31,12 +31,15 @@ JINJA_EXPRESSION = re.compile(r"\{\{.*?\}\}", re.DOTALL)
 
 # WHY: A script body and a style body hold code, and the STE rules grade prose.
 #
-# Each end tag pattern allows white space before the closing angle bracket. HTML
-# accepts `</script >` and `</style >`, and a pattern that demanded `</script>`
-# exactly would stop at the first such tag and keep the code that follows it as
-# prose. CodeQL reports that gap as `py/bad-tag-filter`.
-SCRIPT_BODY = re.compile(r"<script\b.*?</script\s*>", re.DOTALL | re.IGNORECASE)
-STYLE_BODY = re.compile(r"<style\b.*?</style\s*>", re.DOTALL | re.IGNORECASE)
+# Each end tag pattern accepts what HTML accepts after the tag name: nothing, or
+# white space and then anything up to the closing angle bracket. A browser reads
+# `</script>`, `</script >`, and `</script foo="bar">` as the same end tag. A
+# pattern that demanded `</script>` exactly would stop at the first of the other
+# two forms and keep the code that follows it as prose. CodeQL reports that gap
+# as `py/bad-tag-filter`. The optional group starts with one white space
+# character, so `</scriptfoo>` still does not match.
+SCRIPT_BODY = re.compile(r"<script\b.*?</script(?:\s[^>]*)?>", re.DOTALL | re.IGNORECASE)
+STYLE_BODY = re.compile(r"<style\b.*?</style(?:\s[^>]*)?>", re.DOTALL | re.IGNORECASE)
 HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
 
 # WHY: These three attributes carry text that reaches a reader or a screen
