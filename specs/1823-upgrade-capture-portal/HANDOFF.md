@@ -23,12 +23,19 @@ the design. This file states the position.
 | Statement coverage of the package | 94.28 percent |
 | Blocking defects | None. Every defect of `audit-2026-08-20.md` and of the live run of 2026-08-24 is fixed |
 
-Warning: the read half of this feature now runs against a real organization, and
-the write half does not. `live-run-2026-08-24.md` holds the record. A browser
-drove the Morrison House organization and its site of 8 devices. The sign-in,
-both pickers, the inventory page, the site lock, and a tier 2 capture all pass.
-The capture read 8 devices, 37 wired clients, and 16 wireless clients in about 3
-seconds. No device of this feature has yet received firmware.
+Warning: this feature has now written firmware to a real device, and the run
+caused an outage. On 2026-08-24 an upgrade of one EX4100-F-12P carried
+`reboot: false` and the switch rebooted anyway, four seconds after it installed
+the image. That switch carries power over Ethernet for six access points, so all
+six dropped with it and the site lost service for about six minutes. Issue
+[#2007](https://github.com/jmorrison-juniper/MistHelper/issues/2007) holds the
+event record and the cause. Read it before you run another upgrade.
+
+The read half also runs against a real organization now.
+`live-run-2026-08-24.md` holds that record. A browser drove the Morrison House
+organization and its site of 8 devices. The sign-in, both pickers, the inventory
+page, the site lock, and a tier 2 capture all pass. The capture read 8 devices,
+37 wired clients, and 16 wireless clients in about 3 seconds.
 
 That run found six defects that 2686 code tests and 154 browser tests had all
 passed over. Four of the six share one cause, and the cause is worth reading
@@ -52,9 +59,10 @@ Warning: the pass of the browser suite carries one condition. The 13 tests of
 `test_two_operators.py` need a Redis on port 6379. Without one, 12 of them skip
 and the site lock goes untested. Section 8 states the answer.
 
-Warning: no part of this feature has upgraded a real device. Task T232 and task
-T233 need a live organization and real switches. This workstation reaches
-neither, so both tasks stay open.
+Warning: an upgrade of this feature reboots a switch even when the operator
+chooses no reboot. The measurement of 2026-08-24 is in issue #2007. The reboot
+control is therefore not a promise today, and a window planned from it is too
+small. Task T232 still needs a full quickstart run, and task T233 is closed.
 
 Four defects hid behind the browser skips, and each one broke the feature for a
 real operator:
