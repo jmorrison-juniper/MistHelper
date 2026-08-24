@@ -20,9 +20,7 @@ from __future__ import annotations  # WHY: Enable PEP 563 lazy annotation resolu
 import importlib.util  # WHY: Runtime check for optional deps (plotly/dash/PIL) without hard import cost.
 import logging  # WHY: Emit viewer lifecycle + validation diagnostics to project logger.
 import os  # WHY: Read DASH_PORT env var and check container flags for host binding.
-import threading  # WHY: Run browser-open timer off the main event loop.
-import time  # WHY: Sleep briefly before opening browser so Dash server is ready.
-import webbrowser  # WHY: Auto-open the viewer URL in the operator's default browser.
+import webbrowser  # WHY: The static fallback path opens a local HTML file in the browser of the operator.
 from math import cos, pi, radians, sin  # WHY: Compute crosshair angles + coverage-circle points.
 from typing import Any  # WHY: Type MapsManager wrapper attr without importing the concrete class.
 
@@ -37,11 +35,16 @@ from src.dataclasses.map_viewer_deps import (  # WHY: Grouped scope/data/optiona
     MapViewerOptional,  # WHY: Optional overlays (coverage_data, all_maps, all_sites).
     MapViewerScope,  # WHY: Site/map identity bundle for the viewer session.
 )
+from src.maps._browser_opener import (
+    DelayedBrowserOpener,
+)  # WHY: One stoppable opener replaces the daemon thread that no caller joined.
 from src.maps._container_detection import (
     is_running_in_container,
 )  # WHY: Bind Dash to 0.0.0.0 when containerized so host can reach it.
 
 logger = logging.getLogger(__name__)  # WHY: Module-scoped logger for lifecycle + validation traces.
+
+_DASH_LOOPBACK_HOST = "127.0.0.1"  # WHY: The browser and the Dash server share a host, so loopback always reaches it.
 
 # Optional visualization imports -- these mirror the checks in
 # maps_manager.py so the extracted code sees the same runtime symbols
@@ -92,6 +95,8 @@ class _PlotlyViewer:  # WHY: Class boundary for extracted Plotly/Dash viewer met
 
     def __init__(self, maps_manager: Any) -> None:  # WHY: Bind wrapped MapsManager instance.
         self._mm = maps_manager  # WHY: Store reference for __getattr__ delegation lookups.
+        # WHY: The explicit None stops __getattr__ from forwarding this name to the wrapped manager.
+        self._browser_opener: DelayedBrowserOpener | None = None
 
     def __getattr__(self, name: str) -> Any:  # WHY: Called only when normal lookup fails.
         # Called only when normal lookup fails. Do not use self._mm
@@ -469,13 +474,6 @@ class _PlotlyViewer:  # WHY: Class boundary for extracted Plotly/Dash viewer met
 
         launcher = _ViewerLauncher(self)  # WHY: Bind wrapped viewer so helper methods stay reachable.
         launcher.run(scope, data, optional)  # WHY: Execute the full Dash viewer workflow.
-
-    def _open_browser_after_delay(dash_port: int) -> None:  # WHY: Delayed browser auto-open.
-        """Wait for the Dash server to start, then open the system browser to the viewer URL."""
-        logger.info("Browser auto-open: scheduling open to http://127.0.0.1:%s", dash_port)  # Trace start
-        time.sleep(1.5)  # Wait for Dash server to initialize (matches original delay)
-        webbrowser.open(f"http://127.0.0.1:{dash_port}")  # Launch system browser
-        logger.debug("Browser opened to http://127.0.0.1:%s", dash_port)  # Mirror original log
 
     # ------------------------------------------------------------------
     # Wave E2 helpers extracted from _launch_plotly_viewer to drive CC <= 10
@@ -877,13 +875,23 @@ class _PlotlyViewer:  # WHY: Class boundary for extracted Plotly/Dash viewer met
         logger.info("Starting Dash server on http://%s:%s", dash_host, dash_port)  # Mirror original log
 
     def _schedule_browser_open(self, dash_port: int) -> None:
-        """Start a daemon thread that opens the browser shortly after server boots (skip in container)."""
-        if is_running_in_container():  # No display in container. Skip browser
-            return
+        """Start a delayed browser open for the Dash viewer. A container run skips the open."""
+        if is_running_in_container():  # WHY: A container has no display, and the host opens the browser instead.
+            logger.debug("The viewer runs in a container, so it schedules no browser open")
+            return  # WHY: Nothing to schedule.
+        url = f"http://{_DASH_LOOPBACK_HOST}:{dash_port}"  # WHY: The finished URL removes a port-binding mistake.
+        logger.info("The viewer schedules a browser open to %s", url)  # WHY: Records the request before the start.
+        self._browser_opener = DelayedBrowserOpener(url)  # WHY: The stored opener lets stop join the thread later.
+        self._browser_opener.start()  # WHY: The wait runs off the main thread, so the Dash server can start.
 
-        threading.Thread(  # Background thread -> _open_browser_after_delay
-            target=self._open_browser_after_delay, args=(dash_port,), daemon=True
-        ).start()
+    def stop(self) -> None:
+        """Stop the browser opener and join its thread before this method returns."""
+        if self._browser_opener is None:  # WHY: A viewer that never scheduled an open has nothing to join.
+            logger.debug("The viewer holds no browser opener, so this stop does nothing")
+            return  # WHY: Nothing to stop.
+        logger.info("The viewer stops the browser opener")  # WHY: Records the shutdown request.
+        self._browser_opener.stop()  # WHY: The call ends the wait and joins the thread under a timeout.
+        logger.debug("The viewer finished the browser opener shutdown")  # WHY: Confirms the result after the call.
 
     @staticmethod
     def _run_dash_server(app: object, dash_host: str, dash_port: int) -> None:

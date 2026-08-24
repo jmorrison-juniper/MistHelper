@@ -17,18 +17,18 @@ from src.data.data_processing_utils import DataProcessingUtils
 from src.dataclasses.export_backend_options import ExportBackendOptions
 from src.refactors.endpoint_primary_key_strategies import ENDPOINT_PRIMARY_KEY_STRATEGIES
 from src.refactors.sqlite_database_writer import SQLiteDatabaseWriter
-from src.utils.environment_utils import EnvironmentUtils
 
 # Optional polyglot DB layer — mirror MistHelper's try/except so the exporter
 # still works when the optional dependency is missing.
 try:  # pragma: no cover - import guard mirrors MistHelper
-    from src.db import DatabaseConfig, configure_db_logging
+    from src.db import DatabaseConfig, configure_db_logging, polyglot_hosts_unreachable
     from src.db.router import DatabaseRouter
 
     DB_LAYER_AVAILABLE = True
 except Exception:  # pragma: no cover - graceful degradation when DB layer missing
     DatabaseConfig = None  # type: ignore[assignment, misc]
     configure_db_logging = None  # type: ignore[assignment]
+    polyglot_hosts_unreachable = None  # type: ignore[assignment]
     DatabaseRouter = None  # type: ignore[assignment, misc]
     DB_LAYER_AVAILABLE = False
 
@@ -129,21 +129,52 @@ class DataExporter:  # Multi-backend export facade.
         return csv_ok  # Return the primary result
 
     _standalone_logged = False  # One-shot standalone log guard.
+    _standalone_probe: bool | None = None  # Cached polyglot reachability verdict for the life of the process.
 
     @staticmethod
-    def _is_standalone_mode() -> bool:  # Detect non-container standalone.
-        """Auto-detect standalone mode: skip polyglot when not in a container."""
+    def _standalone_override() -> bool | None:
+        """Return the forced verdict from MISTHELPER_STANDALONE, or None when the operator set no override."""
         standalone_env = os.getenv("MISTHELPER_STANDALONE", "").lower()  # Read the override env.
         if standalone_env == "true":  # Explicit standalone request.
             return True  # Forced standalone.
         if standalone_env == "false":  # Forced non-standalone.
             return False  # Not standalone.
-        if not EnvironmentUtils.is_running_in_container():  # Auto-detect when not in container.
-            if not DataExporter._standalone_logged:  # Log once.
-                logging.info("Standalone mode auto-detected (not in container), skipping polyglot database")
-                DataExporter._standalone_logged = True  # Latch the one-shot log.
-            return True  # Standalone outside a container.
-        return False  # Containerized: not standalone.
+        return None  # No override, so the caller must probe the hosts.
+
+    @classmethod
+    def _polyglot_hosts_silent(cls) -> bool:
+        """Return True when no configured polyglot host answers. The probe runs one time for each process."""
+        if cls._standalone_probe is not None:  # A prior call already paid the probe cost.
+            return cls._standalone_probe
+        if not DataExporter._polyglot_db_layer_available():  # No DB layer means no host to probe.
+            cls._standalone_probe = True  # Cache the verdict so the check stays cheap.
+            return True
+        logging.debug("Probing the polyglot database hosts")  # Log before the network probe.
+        assert polyglot_hosts_unreachable is not None  # nosec B101 - _polyglot_db_layer_available proved the import.
+        cls._standalone_probe = polyglot_hosts_unreachable()  # Ask the db package for one TCP verdict.
+        logging.debug("Polyglot host probe: unreachable=%s", cls._standalone_probe)  # Log the verdict.
+        return cls._standalone_probe
+
+    @classmethod
+    def _is_standalone_mode(cls) -> bool:  # Decide whether the polyglot write must be skipped.
+        """Return True when MistHelper must write CSV and SQLite only.
+
+        The decision follows the reachability of the configured hosts, not the
+        container boundary. A workstation that reaches ArangoDB and Redis writes
+        to them.
+        """
+        override = cls._standalone_override()  # Honor an explicit operator decision first.
+        if override is not None:  # The operator named the mode.
+            return override
+        if not cls._polyglot_hosts_silent():  # At least one backend answers.
+            return False  # Run the polyglot write, inside or outside a container.
+        if not cls._standalone_logged:  # Emit the degraded-mode warning one time.
+            logging.warning(
+                "Polyglot database hosts do not answer. MistHelper writes CSV and SQLite only. "
+                "Set ARANGO_HOST and REDIS_HOST to reach the databases."
+            )  # Make the dropped polyglot write visible in the log.
+            cls._standalone_logged = True  # Latch the one-shot warning.
+        return True  # No backend answers, so stay in CSV and SQLite mode.
 
     @staticmethod
     def _should_skip_polyglot(api_function_name: str | None) -> bool:

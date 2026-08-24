@@ -545,6 +545,11 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
             logging.warning("No gateway selected or gateway selection failed - aborting capture")  # WHY: audit cancel
             return None  # WHY: propagate cancel to orchestrator
         gateway_mac = self.normalize_mac_address(gateway_mac)  # WHY: normalize before payload use
+        # CodeQL py/clear-text-logging-sensitive-data. Verdict: accepted_with_rationale.
+        # Reviewed 2026-08-22. A gateway MAC is a device identifier, and this tool exists to
+        # report device identity. The operator needs the MAC to match a log line to a capture.
+        # The line runs at DEBUG level and writes to the local log file on the operator host.
+        # Review again if the log ships to a remote collector, or if this line adds a secret.
         logging.debug("Selected and normalized gateway MAC: %s", gateway_mac)  # WHY: audit final MAC value
         logging.debug("Prompting for port selection from gateway")  # WHY: audit next interactive step
         port_selection_result = (
@@ -634,6 +639,11 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
             )  # WHY: audit user cancel
             return None  # WHY: signal caller to bail out
         switch_mac = self.normalize_mac_address(switch_mac)  # WHY: normalize before API call to match payload format
+        # CodeQL py/clear-text-logging-sensitive-data. Verdict: accepted_with_rationale.
+        # Reviewed 2026-08-22. A switch MAC is a device identifier, and this tool exists to
+        # report device identity. The operator needs the MAC to match a log line to a capture.
+        # The line runs at DEBUG level and writes to the local log file on the operator host.
+        # Review again if the log ships to a remote collector, or if this line adds a secret.
         logging.debug("Selected and normalized switch MAC: %s", switch_mac)  # WHY: audit final MAC value
         return switch_mac  # WHY: hand normalized MAC back to caller
 
@@ -843,6 +853,11 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
         if ap_mac == "ALL_APS":  # WHY: sentinel routes to multi-AP flow
             return cast(str, ap_mac)  # WHY: caller dispatches to _start_site_scan_capture_all_aps
         ap_mac = self.normalize_mac_address(ap_mac)  # WHY: normalize before payload use
+        # CodeQL py/clear-text-logging-sensitive-data. Verdict: accepted_with_rationale.
+        # Reviewed 2026-08-22. An AP MAC is a device identifier, and this tool exists to
+        # report device identity. The operator needs the MAC to match a log line to a capture.
+        # The line runs at DEBUG level and writes to the local log file on the operator host.
+        # Review again if the log ships to a remote collector, or if this line adds a secret.
         logging.debug("Selected and normalized AP MAC: %s", ap_mac)  # WHY: audit final MAC value
         return ap_mac  # WHY: hand normalized MAC back
 
@@ -872,6 +887,28 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
         print(" SCAN RADIO CAPTURE CONFIGURATION")  # WHY: flow-identifying header
         print("-" * 80)  # WHY: banner end
 
+    @staticmethod
+    def _log_safe_payload_fields(payload: dict[str, Any]) -> str:
+        """Return the sorted field names of a capture payload as one string.
+
+        The summary holds the field names only. It holds no field value. A
+        capture payload can carry a device MAC, a client MAC, an SSID, a
+        tcpdump filter, or a future credential field. Each of these values
+        identifies a person or a device, so the log records the payload
+        shape and never the payload content.
+
+        Args:
+            payload: Capture payload that the caller sends to the Mist API.
+
+        Returns:
+            Comma-separated field names in sorted order.
+        """
+        logging.debug("Building a log-safe field summary for a capture payload")  # WHY: audit before the scrub
+        field_names = sorted(str(key) for key in payload)  # WHY: a key is a code literal, so it holds no user value
+        summary = ", ".join(field_names)  # WHY: one line suits the log record format
+        logging.debug("Field summary built with %d fields", len(field_names))  # WHY: audit after the scrub
+        return summary  # WHY: the caller logs this string in place of the raw payload
+
     def _scan_single_ap_run(self, site_id: str, ap_mac: str) -> None:
         """Gather remaining params and launch a single-AP scan capture."""
         band = self._prompt_scan_band()  # WHY: user picks 2.4/5/6 GHz
@@ -887,7 +924,11 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
             "max_pkt_len": 1300,
             **scan_params,
         }
-        logging.debug("Payload constructed: %s", payload)  # WHY: audit constructed payload
+        # CodeQL py/clear-text-logging-sensitive-data. Verdict: fixed.
+        # Reviewed 2026-08-22. The old line logged the raw payload, so the AP MAC and every
+        # future payload field reached the log. The summary keeps the field names only.
+        fields = self._log_safe_payload_fields(payload)  # WHY: field names only, so no value reaches the log
+        logging.debug("Payload constructed with fields: %s", fields)  # WHY: audit the payload shape
         self._display_scan_capture_summary(payload, enable_loop)  # WHY: confirm before launch
         logging.info("User confirmed - executing site capture")  # WHY: audit launch
         self._run_site_capture(site_id, payload, enable_loop, check_ap_mac=ap_mac)  # WHY: launch via shared runner

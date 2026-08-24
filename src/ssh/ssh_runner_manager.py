@@ -18,6 +18,7 @@ from src.ssh.batch.multi_host_runner import (  # WHY: T013c/T039 extracted multi
 from src.ssh.config.csv_loader import CommandCsvLoader  # WHY: T013a extracted CSV command loader.
 from src.ssh.config.env_loader import EnvSshConfigLoader  # WHY: T013a extracted .env config loader.
 from src.ssh.runtime.app_runner import AppRunner  # WHY: T013d concrete CLI orchestrator, no facade.
+from src.utils.console import echo  # WHY: spec 1031 console echo keeps stdout text and drops the WARNING level.
 
 _PROGRESS_MENU_ID = "97"  # WHY: sentinel menu id shared by start/complete progress emissions.
 _PROGRESS_OPERATION = "ssh_runner"  # WHY: progress operation label used by telemetry sinks.
@@ -107,9 +108,18 @@ class SSHRunnerManager:  # WHY: staticmethod facade preserves the MistHelper pub
     @staticmethod
     def _echo_plan(hosts: Any, username: Any, commands: Any) -> None:  # WHY: extracted echo keeps caller ≤ 25 lines.
         """Echo the resolved execution plan back to the operator."""
-        logging.warning("!? Target hosts: %s", ", ".join(hosts))  # WHY: echo back what we are about to do.
-        logging.warning("!? Username: %s", username)  # WHY: user-visible username echo.
-        logging.warning("!? Commands: %s command(s)", len(commands) if commands else 0)  # WHY: echo count.
+        # CodeQL verdict for alerts 188 and 189, rule py/clear-text-logging-sensitive-data.
+        # Verdict: false_positive. Review date: 2026-08-22. Reason: the two records below
+        # hold a target host list and a login name. Neither value is a password. The rule
+        # raises the password class from a sibling credential in this module, not from
+        # these two values. The operator must read the plan before a bulk SSH run, so the
+        # project keeps both records. Next review trigger: a change that adds a password
+        # argument to _echo_plan, or a new alert on this function.
+        logging.info("Echoing the resolved SSH execution plan to the operator")  # WHY: pre-action log.
+        echo("!? Target hosts: %s", ", ".join(hosts))  # WHY: the operator confirms the target list before the run.
+        echo("!? Username: %s", username)  # WHY: the operator confirms the login account before the run.
+        echo("!? Commands: %s command(s)", len(commands) if commands else 0)  # WHY: the operator confirms the count.
+        logging.debug("Echoed plan for %d host(s)", len(hosts))  # WHY: post-action log with the host count.
 
     @staticmethod
     def _emit_completion(emitter: Any, op_start: float, cancelled: bool) -> None:  # WHY: telemetry helper.
@@ -304,7 +314,7 @@ class SSHRunnerManager:  # WHY: staticmethod facade preserves the MistHelper pub
     @staticmethod
     def _execute_multi_host(hosts: Any, username: Any, password: Any, commands: Any) -> bool:  # WHY: fan-out path.
         """Execute the multi-host / multi-command SSH fan-out path via MultiHostRunner."""
-        logging.warning("\n!? Executing %s command(s) on %s host(s)", len(commands), len(hosts))
+        echo("\n!? Executing %s command(s) on %s host(s)", len(commands), len(hosts))  # WHY: stdout text unchanged.
         summary = MultiHostRunner.run(  # WHY: T013c/T039 direct call via immutable request bundle.
             MultiHostRunRequest(
                 hosts=tuple(hosts),  # WHY: convert list to tuple for frozen dataclass storage.
@@ -320,7 +330,7 @@ class SSHRunnerManager:  # WHY: staticmethod facade preserves the MistHelper pub
         successful = sum(  # WHY: count entries with truthy success flag.
             1 for result in summary.values() if isinstance(result, dict) and result.get("success", False)
         )
-        logging.warning("\n!? Execution Summary: %s/%s hosts successful", successful, len(summary))
+        echo("\n!? Execution Summary: %s/%s hosts successful", successful, len(summary))  # WHY: stdout text unchanged.
         return successful > 0
 
     @staticmethod

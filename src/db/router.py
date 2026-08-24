@@ -8,6 +8,7 @@ from __future__ import annotations  # WHY: postponed annotations for forward-ref
 
 import hashlib  # WHY: sha256 config-body fingerprints for snapshot dedup
 import json  # WHY: canonicalize records before hashing
+import time  # WHY: monotonic clock drives the backend re-probe back-off window
 from dataclasses import dataclass  # WHY: frozen slotted snapshot-arg bundle
 from typing import Any  # WHY: strategy dicts hold heterogeneous values
 
@@ -28,6 +29,8 @@ BACKEND_CSV_ONLY = "csv_only"  # WHY: shared csv_only backend marker
 BACKEND_ARANGO = "arangodb"  # WHY: shared arangodb backend marker
 BACKEND_REDIS = "redis"  # WHY: shared redis (timeseries) backend marker
 BACKEND_REDIS_JSON = "redis_json"  # WHY: shared redis_json backend marker
+
+RECONNECT_WINDOW_SECONDS = 30.0  # WHY: shortest gap between two connect attempts on one backend
 
 SNAPSHOT_SOURCE_API = "api_pull"  # WHY: snapshot origin tag for polled data
 SNAPSHOT_SOURCE_WEBHOOK = "webhook"  # WHY: snapshot origin tag for webhook payloads
@@ -63,9 +66,12 @@ EVT_WEBHOOK_SNAPSHOT_FAILED = "webhook_snapshot_failed"  # WHY: log event name f
 EVT_CFG_HISTORY_FAILED = "config_history_failed"  # WHY: log event name for config-history snapshot failures
 EVT_ARANGO_CLOSE_ERR = "arangodb_close_error"  # WHY: log event name for arango close failure
 EVT_REDIS_CLOSE_ERR = "redis_close_error"  # WHY: log event name for redis close failure
+EVT_REDIS_JSON_CLOSE_ERR = "redis_json_close_error"  # WHY: log event name for redis-json close failure
 EVT_ROUTER_CLOSED = "router_closed"  # WHY: log event name emitted at end of close()
 EVT_STANDALONE_MODE = "standalone_mode"  # WHY: log event name emitted when router starts in csv-only mode
 EVT_DEGRADED_MODE = "degraded_mode"  # WHY: log event name for csv-fallback dispatch
+EVT_BACKEND_RECOVERED = "backend_recovered"  # WHY: log event name for a re-probe that restores a backend
+EVT_BACKEND_LOST = "backend_lost"  # WHY: log event name for a write failure that marks a backend down
 
 
 @dataclass(frozen=True, slots=True)
@@ -113,6 +119,7 @@ class DatabaseRouter:
         self._arango_writer: ArangoDBWriter | None = None  # WHY: writer or None when unreachable
         self._redis_writer: RedisTimeSeriesWriter | None = None  # WHY: writer or None when unreachable
         self._redis_json_writer: RedisJSONWriter | None = None  # WHY: writer or None when unreachable
+        self._last_probe: dict[str, float] = {}  # WHY: monotonic stamp of the newest connect attempt per backend
         if config.standalone_mode:  # WHY: skip DB connects entirely in csv-only mode
             logger.info(EVT_STANDALONE_MODE, msg="CSV-only output")  # WHY: single breadcrumb per boot
             return  # WHY: standalone router serves csv_only results without backends
@@ -122,6 +129,9 @@ class DatabaseRouter:
 
     def _connect_arango(self) -> None:  # WHY: isolate connect errors from constructor
         """Attempt ArangoDB connection. Set availability flag."""
+        self._last_probe[BACKEND_ARANGO] = time.monotonic()  # WHY: start the back-off window at this attempt
+        self._close_writer(self._arango_writer, EVT_ARANGO_CLOSE_ERR)  # WHY: release a stale handle first
+        self._arango_writer = None  # WHY: drop the dead reference before a new connect
         try:
             self._arango_writer = ArangoDBWriter(self.config)  # WHY: sync connect + probe
             self._arango_available = True  # WHY: mark healthy for later dispatch
@@ -131,6 +141,9 @@ class DatabaseRouter:
 
     def _connect_redis(self) -> None:  # WHY: isolate connect errors from constructor
         """Attempt Redis connection. Set availability flag."""
+        self._last_probe[BACKEND_REDIS] = time.monotonic()  # WHY: start the back-off window at this attempt
+        self._close_writer(self._redis_writer, EVT_REDIS_CLOSE_ERR)  # WHY: release a stale handle first
+        self._redis_writer = None  # WHY: drop the dead reference before a new connect
         try:
             self._redis_writer = RedisTimeSeriesWriter(self.config)  # WHY: sync connect + probe
             self._redis_available = True  # WHY: mark healthy for later dispatch
@@ -140,12 +153,68 @@ class DatabaseRouter:
 
     def _connect_redis_json(self) -> None:  # WHY: isolate connect errors from constructor
         """Attempt Redis JSON connection. Set availability flag."""
+        self._last_probe[BACKEND_REDIS_JSON] = time.monotonic()  # WHY: start the back-off window now
+        self._close_writer(self._redis_json_writer, EVT_REDIS_JSON_CLOSE_ERR)  # WHY: release a stale handle
+        self._redis_json_writer = None  # WHY: drop the dead reference before a new connect
         try:
             self._redis_json_writer = RedisJSONWriter(self.config)  # WHY: sync connect + probe
             self._redis_json_available = True  # WHY: mark healthy for later dispatch
         except Exception as error:  # WHY: any connect exception downgrades to csv mode
             self._redis_json_available = False  # WHY: force csv fallback for redis-json writes
             logger.warning(EVT_REDIS_JSON_UNAVAIL, error=str(error))  # WHY: single warning per attempt
+
+    def _is_available(self, backend: str) -> bool:  # WHY: single reader for the three latched flags
+        """Return the latched availability flag of one backend."""
+        flags = {
+            BACKEND_ARANGO: self._arango_available,
+            BACKEND_REDIS: self._redis_available,
+            BACKEND_REDIS_JSON: self._redis_json_available,
+        }  # WHY: one table keeps the three flags in a single place
+        return flags.get(backend, False)  # WHY: an unknown backend name is never available
+
+    def _backoff_elapsed(self, backend: str) -> bool:  # WHY: rate-limit the connect attempts
+        """Return True when the re-probe window of one backend expired."""
+        last_attempt = self._last_probe.get(backend)  # WHY: a backend never probed may connect at once
+        if last_attempt is None:  # WHY: no stamp means no attempt yet
+            return True
+        elapsed = time.monotonic() - last_attempt  # WHY: monotonic clock ignores a system clock change
+        return elapsed >= RECONNECT_WINDOW_SECONDS  # WHY: at most one connect attempt per window
+
+    def _reprobe(self, backend: str) -> bool:  # WHY: answers the live state instead of the boot state
+        """Re-probe one backend and return whether it is available now."""
+        if self.config.standalone_mode:  # WHY: standalone mode never opens a backend connection
+            return False
+        if self._is_available(backend):  # WHY: a healthy backend needs no new connect attempt
+            return True
+        if not self._backoff_elapsed(backend):  # WHY: hold the window so a dead backend is not hammered
+            return False
+        self._reconnect(backend)  # WHY: one fresh connect attempt refreshes the flag and the stamp
+        if self._is_available(backend):  # WHY: report the recovery once, at the moment it happens
+            logger.info(EVT_BACKEND_RECOVERED, backend=backend)
+            return True
+        return False  # WHY: the backend is still down, so the caller falls back to CSV
+
+    def _reconnect(self, backend: str) -> None:  # WHY: maps a backend marker onto its connect method
+        """Run the connect method that belongs to one backend."""
+        connectors = {
+            BACKEND_ARANGO: self._connect_arango,
+            BACKEND_REDIS: self._connect_redis,
+            BACKEND_REDIS_JSON: self._connect_redis_json,
+        }  # WHY: one table keeps the three connect methods in a single place
+        connector = connectors.get(backend)  # WHY: an unknown backend name has no connect method
+        if connector is None:  # WHY: guard clause keeps an unknown marker harmless
+            return
+        connector()  # WHY: the connect method sets both the flag and the probe stamp
+
+    def _mark_unavailable(self, backend: str) -> None:  # WHY: a failed write proves the backend is down
+        """Latch one backend as unavailable after a write failure."""
+        if backend == BACKEND_ARANGO:  # WHY: assignment needs the explicit attribute, not a lookup table
+            self._arango_available = False
+        elif backend == BACKEND_REDIS:
+            self._redis_available = False
+        elif backend == BACKEND_REDIS_JSON:
+            self._redis_json_available = False
+        logger.warning(EVT_BACKEND_LOST, backend=backend)  # WHY: one breadcrumb per lost backend
 
     def write(self, data: list[dict], api_function_name: str) -> WriteResult:  # WHY: public dispatch entry
         """Route data to the correct backend based on PK strategy."""
@@ -171,7 +240,7 @@ class DatabaseRouter:
         strategy: dict[str, Any],
     ) -> WriteResult:  # WHY: arango-only write path with snapshot side-effect
         """Dispatch to ArangoDB. Degrade to csv_only if unavailable."""
-        if not self._arango_available or self._arango_writer is None:  # WHY: guard clause for unavailable
+        if not self._reprobe(BACKEND_ARANGO) or self._arango_writer is None:  # WHY: live state, not boot state
             return self._csv_fallback(api_function_name, BACKEND_ARANGO)
         try:
             result = self._arango_writer.write(data, api_function_name, strategy)  # WHY: perform arango write
@@ -180,6 +249,7 @@ class DatabaseRouter:
             return result  # WHY: propagate underlying writer result verbatim
         except Exception as error:  # WHY: convert unexpected writer failure to csv envelope
             logger.error(EVT_ARANGO_WRITE_ERR, error=str(error))  # WHY: preserve original error diagnostic
+            self._mark_unavailable(BACKEND_ARANGO)  # WHY: a failed write means the backend is down now
             return _error_write_result(data, str(error))
 
     def _snapshot_if_config(
@@ -240,12 +310,13 @@ class DatabaseRouter:
         strategy: dict[str, Any],
     ) -> WriteResult:  # WHY: redis timeseries write path with csv fallback
         """Dispatch to Redis TS. Degrade to csv_only if unavailable."""
-        if not self._redis_available or self._redis_writer is None:  # WHY: guard clause for unavailable
+        if not self._reprobe(BACKEND_REDIS) or self._redis_writer is None:  # WHY: live state, not boot state
             return self._csv_fallback(api_function_name, BACKEND_REDIS)
         try:
             return self._redis_writer.write(data, api_function_name, strategy)  # WHY: perform ts write
         except Exception as error:  # WHY: convert unexpected writer failure to csv envelope
             logger.error(EVT_REDIS_WRITE_ERR, error=str(error))
+            self._mark_unavailable(BACKEND_REDIS)  # WHY: a failed write means the backend is down now
             return _error_write_result(data, str(error))
 
     def _write_redis_json(
@@ -255,12 +326,13 @@ class DatabaseRouter:
         strategy: dict[str, Any],
     ) -> WriteResult:  # WHY: redis JSON write path with csv fallback
         """Dispatch to Redis JSON. Degrade to csv_only if unavailable."""
-        if not self._redis_json_available or self._redis_json_writer is None:  # WHY: guard for unavailable
+        if not self._reprobe(BACKEND_REDIS_JSON) or self._redis_json_writer is None:  # WHY: live state
             return self._csv_fallback(api_function_name, BACKEND_REDIS_JSON)
         try:
             return self._redis_json_writer.write(data, api_function_name, strategy)  # WHY: perform json write
         except Exception as error:  # WHY: convert unexpected writer failure to csv envelope
             logger.error(EVT_REDIS_JSON_WRITE_ERR, error=str(error))
+            self._mark_unavailable(BACKEND_REDIS_JSON)  # WHY: a failed write means the backend is down now
             return _error_write_result(data, str(error))
 
     def _write_dual(
@@ -285,11 +357,15 @@ class DatabaseRouter:
         return self._strategies.get("default", DEFAULT_STRATEGY)  # WHY: user default > module default
 
     def health_check(self) -> dict[str, bool]:  # WHY: exposed for /health endpoints and tests
-        """Check connectivity to all backends."""
+        """Check live connectivity to all backends.
+
+        Each backend is re-probed when its back-off window expired, so a
+        backend that recovered after boot is reported as available.
+        """
         return {
-            "arangodb": self._arango_available,
-            "redis": self._redis_available,
-            "redis_json": self._redis_json_available,
+            "arangodb": self._reprobe(BACKEND_ARANGO),
+            "redis": self._reprobe(BACKEND_REDIS),
+            "redis_json": self._reprobe(BACKEND_REDIS_JSON),
             "standalone": self.config.standalone_mode,
         }  # WHY: uniform status dict consumed by health probes
 
@@ -319,7 +395,7 @@ class DatabaseRouter:
 
         Called by the periodic stats collector background thread.
         """
-        if not self._redis_available or self._redis_writer is None:  # WHY: guard against unavailable
+        if not self._reprobe(BACKEND_REDIS) or self._redis_writer is None:  # WHY: live state, not boot state
             return self._csv_fallback(api_function_name, BACKEND_REDIS)
         strategy = self._resolve_strategy(api_function_name)  # WHY: look up strategy for this api
         return self._write_redis(data, api_function_name, strategy)  # WHY: reuse the shared ts path
@@ -357,6 +433,7 @@ class DatabaseRouter:
         """Close all database connections gracefully."""
         self._close_writer(self._arango_writer, EVT_ARANGO_CLOSE_ERR)  # WHY: shut arango down first
         self._close_writer(self._redis_writer, EVT_REDIS_CLOSE_ERR)  # WHY: shut redis-ts down second
+        self._close_writer(self._redis_json_writer, EVT_REDIS_JSON_CLOSE_ERR)  # WHY: redis-json leaked before
         logger.info(EVT_ROUTER_CLOSED)  # WHY: single breadcrumb marking clean shutdown
 
     @staticmethod

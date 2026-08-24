@@ -59,6 +59,599 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 - **Tests (Added)**: 2548 unit and contract tests under
   `tests/unit/upgrade_portal/` and `tests/contract/upgrade_portal/`. Statement
   coverage of the package is 94.67 percent.
+### Run the quality gates on every pull request (issue #1952)
+
+- **Defect (Fixed)**: `.github/workflows/ci.yml` started on a pull request that
+  targeted `main` only. A pull request against any other base ran no gate. Ruff,
+  Black, mypy, pytest, the coverage gate, Bandit, pip-audit, Pylint, Radon,
+  Vulture, and both docstring gates all stayed silent.
+- **Evidence (Measured)**: pull request #1890 targets
+  `feat/1823-upgrade-capture-portal`. It reported 0 successful checks and 0
+  failed checks, while every pull request against `main` reported 17 to 19. The
+  pull request was closed and reopened to force a new run. The count stayed at
+  zero, which rules out a missed event.
+- **Reader risk (Explained)**: the pull request also reported a `CLEAN` merge
+  state. `CLEAN` means no required check is failing. A reviewer reads an empty
+  check list as safe, and the correct reading is unmeasured.
+- **Trigger (Changed)**: the `pull_request` trigger now carries no branch
+  filter, so a pull request against any base runs every gate.
+- **Cost control (Kept)**: the `push` trigger stays pinned to `main`. A push run
+  on every branch would repeat the pull request run and add no signal.
+- **Tests (Added)**: `tests/guardrails/test_ci_gate_triggers.py` holds 5 tests.
+  They pin the absent branch filter and the narrow push trigger. The tests were
+  verified red first. They report 2 failures against the old workflow and 5
+  passes against the new one.
+
+### The ops-portal CI gate now blocks a merge (issue #1852)
+
+- **Defect (Fixed)**: the `ops_portal` job ran `typecheck`, `lint`, and `test`
+  with `continue-on-error: true`. Each step failed on a configuration defect,
+  so each step reported a result and blocked nothing. The `ops_portal` job is
+  the only gate that reads the TypeScript source and the npm dependency tree.
+  The whole `ops-portal/` application therefore had no enforcing check.
+- **Type check (Fixed)**: `tsconfig.json` set the deprecated `baseUrl` option,
+  and TypeScript 6 refuses it. The option is deleted. The `paths` map resolves
+  relative to the config file, so the `@/*` alias still works. `vite.config.ts`
+  carries its own alias, so the build is unchanged.
+- **Broken imports (Fixed)**: the `baseUrl` error stopped TypeScript before it
+  read any file, so three broken imports in `src/router.tsx` stayed hidden.
+  The router loaded `@/pages/config/TimeTravelPage`, `RevisionsPage`, and
+  `BaselinesPage`, and none of the three files existed. Three `/config` routes
+  and the `time-travel` route pointed at nothing. The three pages are added.
+  Each one reads the existing `configQueries` API layer.
+- **Lint (Fixed)**: the project shipped `.eslintrc.cjs`, and eslint 10 reads
+  `eslint.config.js` only, so eslint found no configuration and exited
+  non-zero. A flat `eslint.config.js` replaces it. Each plugin supplies its own
+  flat configuration, so the file needs no `FlatCompat` shim.
+- **Lint findings (Fixed)**: the working lint step found four errors that had
+  reached `main`. `src/hooks/useTelemetry.ts` declared a never reassigned
+  binding with `let`. `src/pages/deploy/TemplatesPage.tsx` held three labels
+  with no associated control, which a screen reader cannot read. Each label now
+  wraps its control.
+- **Tests (Added)**: the project shipped no test, and vitest exits non-zero
+  when it finds no test. `vitest.config.ts` and
+  `src/components/ConfirmationDialog.test.tsx` add 12 tests. The suite covers
+  the confirmation dialog, which is the safety gate for every destructive
+  action in the portal.
+- **Dialog crash (Fixed)**: the first test run proved that
+  `ConfirmationDialog` threw "Passing props on Fragment" and never rendered.
+  The component passed `as={Fragment}` to the Headless UI dialog, and a
+  Fragment cannot carry the ref and the aria attributes that the dialog sets.
+  Seven call sites guard a destructive action with this dialog. The prop is
+  removed.
+- **Dependencies (Added)**: `@eslint/js`, `globals`, `jsdom`, and
+  `@testing-library/dom` are added as dev dependencies. The lint configuration
+  and the test environment need them. `npm audit` still reports zero
+  vulnerabilities.
+- **Gate (Changed)**: `.github/workflows/ci.yml` drops `continue-on-error` from
+  all three steps. A type error, a lint error, and a failing test now each stop
+  a merge.
+- **Flag (Unchanged)**: `npm ci` keeps `--legacy-peer-deps`. Both
+  `eslint-plugin-jsx-a11y` 6.10.2 and `eslint-plugin-react` 7.37.5 cap their
+  eslint peer range below the installed eslint 10.7.0, and both are the newest
+  published releases. The workflow comment records the measurement.
+
+### Warning: the web portal now refuses a remote client by default (issue #1933)
+
+- **Warning: read this before you upgrade.** This entry changes a shipped
+  default. A running portal can stop answering a remote browser after the
+  upgrade. Set `PORTAL_ALLOWED_IPS` before you upgrade, and no operator loses
+  access. The startup log names the setting and gives an example value.
+- **Defect (Fixed)**: the web portal has no user authentication. The address
+  allowlist is the only access control it has. `PORTAL_ALLOWED_IPS` shipped
+  empty, and `SecurityMiddleware._register_ip_allowlist` read an empty value as
+  "accept every source address". A portal that reached a network therefore
+  served every page, every data browser table, and every operation to any
+  caller who reached the port. No credential was needed.
+- **Fallback (Added)**: an empty `PORTAL_ALLOWED_IPS` value no longer opens the
+  portal. `SecurityMiddleware._build_fallback_allowlist` picks a closed set of
+  networks that fits the run mode. Outside a container the portal serves the
+  loopback ranges `127.0.0.0/8` and `::1/128` only. The operator who starts the
+  portal keeps access.
+- **Container case (Added)**: inside a container the portal serves the private
+  ranges only. These are the two loopback ranges, `10.0.0.0/8`,
+  `172.16.0.0/12`, `192.168.0.0/16`, `169.254.0.0/16`, `fe80::/10`, and
+  `fc00::/7`. A container must bind every interface to answer a published port,
+  so a loopback rule would make every container unreachable. This fallback
+  blocks a direct path from the public internet. It does not replace a real
+  allowlist. Set `PORTAL_ALLOWED_IPS` on a container that faces a shared
+  network.
+- **Opt-out (Added)**: `PORTAL_ALLOW_PUBLIC_ACCESS` restores the old open
+  behavior. The portal accepts `1`, `true`, `yes`, and `on`. Every other value
+  keeps the portal shut, so a typing slip cannot open it. The portal writes a
+  warning to the log at every startup while the setting is true, so an audit
+  finds the choice.
+- **Startup message (Added)**: each fallback writes one warning. The message
+  names the served scope, names `PORTAL_ALLOWED_IPS`, gives the example value
+  `10.20.30.0/24,192.168.1.5`, and names the opt-out setting. The message is
+  ASCII only.
+- **Precedence (Unchanged)**: a configured `PORTAL_ALLOWED_IPS` value still
+  wins. The fallback ranges never widen an explicit allowlist.
+- **Tests (Added)**: `tests/unit/web_portal/test_portal_access_control_default.py`
+  adds 24 tests. Twelve of them failed before the fix. The proof case sends a
+  request from the public address `203.0.113.10` to a portal with no allowlist
+  and expects 403.
+- **Documentation (Changed)**: `deploy/.env.example` states the fallback, the
+  container ranges, and the opt-out.
+
+### Stop the ZTP password from reaching a stored stream (issue #1735)
+
+- **Defect (Fixed)**: `src/device/_utility_commands_action.py` printed the live
+  ZTP password to stdout on every call of menu 144. CodeQL alert 173 reported
+  clear-text logging of sensitive data. Three paths stored the value. The first
+  path is an SSH session transcript on container port 2200. The second path is a
+  shell redirect such as `MistHelper.py > run.txt`. The third path is a planned
+  print-to-logging migration under issue #886.
+- **Terminal gate (Added)**: `_stdout_is_terminal()` calls `sys.stdout.isatty()`
+  before the print. The value now reaches a live terminal only. A stream that
+  lacks `isatty`, and a stream that raises on the call, both count as unsafe.
+- **Warning order (Added)**: the reveal path writes the warning first, the label
+  and the value second, and the copy guidance last. The operator reads the risk
+  before the screen holds the value. Clause C-4 of
+  `specs/1034-codeql-cleartext-logging/contracts/credential_console.md` states
+  that rule.
+- **Withheld notice (Added)**: a redirect, a pipe, and a recorded session now
+  receive a four-line notice. The notice states the decision and the reason. The
+  notice also gives two other sources for the value. The notice never holds the
+  value.
+- **Comment (Changed)**: the old comment claimed the value could not reach a
+  file, and the code did not enforce that claim. The new docstring states the
+  review date 2026-08-22, the reason, the migration rule, and the next review
+  trigger.
+- **Migration rule (Added)**: `TestZtpCredentialMigrationRule` parses the source
+  of the three helpers. The test fails when a `logging` call appears next to the
+  credential. The rule now lives in a test, so a lost comment cannot drop it.
+- **Tests (Added)**: `tests/unit/test_device_utility_commands.py` gains 17 cases.
+  They prove that a terminal stdout prints the value. They prove that the
+  warning reaches the screen before the value. They prove that a pipe stdout
+  prints the value nowhere. They prove that no log record holds the value in
+  either mode. They also prove that the empty-payload path and the error path
+  keep their old behavior.
+- **Divergence from spec 1034 (Noted)**: clause C-2 of the console contract asks
+  for `sys.stdout.write()` instead of `print()`. This change keeps `print()` and
+  blocks the issue #886 migration with an `ast` guard test. Spec 1034 is unbuilt
+  at 0 of 67 tasks, and `CredentialConsole` does not exist yet.
+### Replace the obfuscated all-interfaces bind in the web portal launcher (issue #1711)
+
+Version 26.08.23.01.26
+
+- **Defect (Fixed)**: `_launch_web_portal()` built the bind address with
+  `".".join(("0",) * 4)`. The expression produced the string `0.0.0.0`, and the
+  only purpose of the expression was to hide that literal from bandit rule B104.
+  The project standard forbids a shortcut that silences a real finding. A
+  suppression comment records the decision and the reason. A join expression
+  records nothing.
+- **Bind address (Changed)**: the new function `_resolve_web_portal_host()` holds
+  the decision. It returns the value of `WEB_HOST` when the operator sets that
+  variable. Without that variable it returns `0.0.0.0` inside a container and
+  `127.0.0.1` on a workstation. The old code bound to all interfaces on every
+  platform, so a workstation run exposed the portal to the local network.
+- **Container test (Changed)**: the all-interfaces bind now depends on
+  `EnvironmentUtils.is_running_in_container()`. A container needs the external
+  bind, because the container network maps the port from outside. The container
+  port map controls the exposure.
+- **Suppression (Added)**: the assignment carries `# nosec B104`, and the three
+  comment lines above it state the container condition and the reason. Bandit
+  reports no issue and no warning for the file.
+- **Tests (Added)**: `tests/unit/test_web_portal_bind_address.py` holds 8 cases.
+  They prove the loopback default, the container all-interfaces bind, the
+  `WEB_HOST` override in both states, the fallback for an empty `WEB_HOST` value,
+  and that the join expression is gone from the script.
+
+### Scan the Redis keyspace in batches instead of blocking it (issue #1882)
+
+- **Defect (Fixed)**: `RetentionManager.check_redis_retention` ran the Redis
+  `KEYS` command with the pattern `*.avg_1h`. The pattern starts with a
+  wildcard, so Redis compared every key in the keyspace. Redis serves commands
+  on one thread, so the whole server stalled for the length of each scan. The
+  background sweep thread repeated the stall every 6 hours by default.
+- **`SCAN` loop (Added)**: the check now drives a cursor loop. Each round trip
+  sends `SCAN <cursor> MATCH *.avg_1h COUNT 500`. Redis returns one bounded
+  batch and then serves other clients, so no single command holds the thread.
+- **Memory (Changed)**: the loop adds the length of each batch to a running
+  total and drops the batch. The process never holds the whole key set. The old
+  code returned a list of every matching key only to read its length.
+- **Upper bound (Added)**: `REDIS_SCAN_MAX_KEYS` stops the loop after 100000
+  scanned keys. The sweep then logs the new `redis_retention_scan_capped`
+  warning with the partial count and returns it. The cost of one sweep stays
+  fixed as the keyspace grows.
+- **Contract (Unchanged)**: the method still returns an `int` key count. It
+  still logs a warning and returns 0 when the Redis call raises.
+- **Tests (Added)**: `tests/unit/db/test_retention_redis_scan.py` holds 10
+  cases. A fake client records every command it receives. The cases prove the
+  code issues `SCAN`, never issues `KEYS`, sends `MATCH` and a bounded `COUNT`,
+  follows the cursor until it returns to 0, accepts a cursor that arrives as
+  bytes, and stops at the upper bound against an endless keyspace.
+
+### Run the real rollback when a post-check fails (issue #1887)
+
+- **Defect (Fixed)**: `_execute_scheduled_job` set the job status to
+  `ROLLED_BACK` after a failed post-check, but no restore ran. The new
+  configuration stayed on the live network devices. The operator read the status,
+  believed the network held the previous configuration, and started no manual
+  repair. The audit trail recorded a rollback that never happened.
+- **Configuration backup (Added)**: the workflow now reads the live configuration
+  of every target before the push and keeps the snapshots for the whole job.
+- **Restore on a failed post-check (Added)**: a failed post-check now pushes the
+  captured snapshot back to each device through `RollbackService`.
+- **Install result (Fixed)**: the workflow now reads the install result. A failed
+  install stops the workflow and starts the restore. The post-check no longer
+  runs after a failed install.
+- **Honest job status (Changed)**: the status comes from the real restore
+  outcome. `rolled_back` means that every device holds the previous
+  configuration again. The new value `rollback_failed` means that one or more
+  devices did not restore.
+- **`auto_rollback_on_failure` (Fixed)**: the workflow now reads this payload
+  field. If the value is false, the status is `failed` and no restore runs. The
+  workflow never reports `rolled_back` when no restore ran.
+- **Tests (Added)**: `mist-ops-platform/tests/unit/worker/test_deploy_rollback.py`
+  covers the post-check failure, the failed install, the disabled rollback
+  switch, an incomplete restore, the happy path, and the pre-check failure.
+- **Test setup (Added)**: `mist-ops-platform/tests/conftest.py` supplies a
+  stand-in for `src.shared.config`, because the root `.gitignore` pattern
+  `config/` keeps that package out of git and every clean checkout fails to
+  import the worker modules.
+
+### Add a graceful shutdown path to the web portal (issue #1861)
+
+- **Defect (Fixed)**: nothing called `PortalEventBus.stop()` or shut down the
+  `OperationExecutor` thread pool. A restart sent `SIGTERM`, Gunicorn killed the
+  worker, an in-flight operation aborted mid-run, and the heartbeat thread
+  leaked past the worker exit.
+- **Heartbeat thread (Changed)**: `PortalEventBus._heartbeat_loop` now waits on
+  a `threading.Event` instead of `time.sleep(30)`. `stop()` sets the event, so
+  the thread exits within a bounded join instead of up to 30 seconds later.
+  A second `stop()` call is a no-op, so a duplicate shutdown signal is safe.
+- **Operation pool (Added)**: `OperationExecutor.shutdown()` waits for every
+  in-flight run's future, up to a bounded grace period, then closes the thread
+  pool. A second `shutdown()` call is a no-op.
+- **Shutdown wiring (Added)**: `WebPortalApp.create_app` registers one
+  `atexit` hook through `WebPortalApp._register_shutdown_hook`. Gunicorn never
+  runs `if __name__ == "__main__"`, so the hook calls the new
+  `WebPortalApp.shutdown_app` function, which stops the event bus and drains
+  the operation pool. `shutdown_app` is idempotent, so a duplicate call at
+  process exit does not raise.
+- **Grace period (Added)**: `PORTAL_OPERATION_SHUTDOWN_GRACE_SECONDS` defaults
+  to 30 seconds. `deploy/.env.example` documents it.
+  `container/scripts/start.sh` reads the same value for the Gunicorn
+  `--graceful-timeout` flag, so Python and Gunicorn agree on the drain time.
+- **Container cleanup (Changed)**: `container/scripts/start.sh` `cleanup()` now
+  waits for Gunicorn and sshd to exit, bounded by the grace period plus a
+  10-second margin, then sends `SIGKILL` if a process still runs. The old code
+  sent one `kill` signal and returned right away, so it never confirmed a
+  drain.
+- **Quadlet timeout (Changed)**: `deploy/misthelper.container` sets
+  `TimeoutStopSec=60`, so systemd waits long enough for the bounded shutdown
+  chain to finish before it forces a kill.
+- **Tests (Added)**: `tests/unit/web_portal/test_portal_graceful_shutdown.py`
+  holds 9 tests. They prove the heartbeat thread ends after `stop()`, that
+  `OperationExecutor.shutdown()` closes the pool and waits for a short
+  in-flight run, that `WebPortalApp.shutdown_app` stops both the event bus and
+  the operation executor for a real app, and that every shutdown path is safe
+  to call twice. `tests/e2e/conftest.py` now tears its session-scoped Flask app
+  down through `shutdown_app`, so the long-lived test fixture no longer leaks
+  its own heartbeat thread.
+
+### Add a real readiness probe and keep the health endpoint cheap (issue #1863)
+
+- **Defect (Fixed)**: the `/health` endpoint returned the fixed text `healthy` on
+  every call. It never tested write access to the data directory, which is the
+  one resource with a documented failure. A portal that could not write a single
+  output file still reported a good state, so no monitor saw the fault.
+- **`/health` (Changed)**: the route is now a liveness probe. It reports the
+  process state and the uptime. It reads no disk and it opens no network
+  connection, so a blocked resource cannot slow the reply down. The response
+  keeps the word `healthy`, so an existing monitor still matches.
+- **`/ready` (Added)**: the route tests every resource the portal needs. It
+  writes and deletes one temporary file in the data directory, it opens the
+  SQLite database read-only when the file exists, and it reads the Mist API
+  session state without a network call.
+- **Failure report (Added)**: `/ready` returns code 503 when a check fails, and
+  the body names each failed check under `failed_checks`. The body also carries
+  a detail line for each check, so the operator learns how to repair it.
+- **Quadlet probe (Added)**: `deploy/misthelper.container` now sets `HealthCmd=`
+  against `/ready`, with an interval of 30 seconds, a timeout of 5 seconds,
+  3 retries, a start period of 20 seconds, and `HealthOnFailure=restart`. A
+  wedged portal now restarts, because `Restart=always` alone could not see it.
+- **Tests (Added)**: `tests/unit/web_portal/test_dashboard_readiness.py` holds 14
+  cases. They prove `/ready` returns 503 for a read-only data directory, that the
+  body names the failed check, that `/ready` returns 200 when the directory is
+  writable, and that `/health` answers while every disk call raises.
+- **SQLite query (Changed)**: the database check runs
+  `SELECT count(*) FROM sqlite_master`. That query reads a real page, so SQLite
+  validates the file header. The first version ran `SELECT 1`, which answers from
+  memory. A corrupt database therefore passed the check on the Linux build of
+  SQLite, and the test caught the miss only in CI.
+- **Deferred**: the `Containerfile`, the `Dockerfile`, and `compose.yml` still
+  need a probe. Open pull request #1825 owns those three files today.
+
+### Cap the output file list in a web portal run record (issue #1870)
+
+- **Gap (Fixed)**: issue #1860 bounded `log_messages` and `debug_messages`, and
+  it left `run["output_files"]` without a cap. One per-site export appends one
+  distinct name for each site, so deduplication does not bound that list.
+- **Output files (Changed)**: `output_files` is now a `collections.deque` with a
+  `maxlen`. The deque drops the oldest name, so the operator still sees the most
+  recent output.
+- **Dropped count (Added)**: `dropped_output_file_count` counts every name the
+  cap discarded. `_run_to_dict` and `_run_to_summary` report the count next to
+  `dropped_log_count`.
+- **Setting (Added)**: `PORTAL_RUN_OUTPUT_FILES_MAX` defaults to 500. An
+  unusable value falls back to the default and logs a warning, which matches the
+  three settings issue #1860 added. `deploy/.env.example` documents it.
+- **Read boundary (Changed)**: `_run_to_dict` and `_publish_complete` copy the
+  deque into a list, so the JSON response and the SSE event still encode.
+- **Tests (Added)**: `tests/unit/web_portal/test_operation_output_files_cap.py`
+  holds 11 tests. They cover the cap, the newest-name order, the duplicate name
+  rule, the dropped count in the response, the two read boundaries, the default
+  cap, and the warning for an unusable setting.
+
+### Repair the container health probe command and add the compose probe (issues #1863, #1881)
+
+- **Defect (Fixed)**: `deploy/misthelper.container` ran the probe with
+  `curl --fail --silent --show-error`. The image installs `ca-certificates`,
+  `openssh-server`, and `sudo` only, so the image holds no curl binary. The
+  probe therefore failed on every call, and `HealthOnFailure=restart` restarted
+  a healthy container in a loop.
+- **Quadlet probe (Changed)**: `HealthCmd` now runs the Python interpreter that
+  already runs the application. The command reads `WEB_PORT` and calls `/ready`.
+  A non-200 response raises `HTTPError`, the command exits non-zero, and the
+  runtime marks the container unhealthy.
+- **Container probe (Added)**: `Containerfile` and `Dockerfile` define a
+  `HEALTHCHECK` that calls `/ready` with the same Python command. A Quadlet
+  build can drop the instruction when the image uses the OCI format, so the
+  unit states the command as well.
+- **Compose probe (Added)**: the `misthelper` service in `compose.yml` now
+  carries a `healthcheck` block. It matches the pattern the ArangoDB service
+  and the Redis service already use.
+- **Readiness endpoint (Superseded)**: pull request #1893 landed the `/health`
+  and `/ready` split for issue #1863 first. This change keeps that version of
+  `web_portal/routes/dashboard.py` and supplies the container probe only.
+- **Tests (Added)**: `tests/unit/test_container_health_probe.py` holds 12 tests.
+  They prove that no probe command calls curl, that every probe targets
+  `/ready`, and that the Quadlet unit keeps its timing keys and its restart key.
+
+### Bound the web portal operation run registry (issue #1860)
+
+- **Defect (Fixed)**: `OperationExecutor` kept every run in memory forever, and
+  each run appended one dictionary for every log record the operation emitted.
+  The portal runs as one long-lived Gunicorn worker, so the memory only rose
+  until an out-of-memory kill interrupted a write to the data directory.
+- **Run log (Changed)**: `log_messages` and `debug_messages` are now a
+  `collections.deque` with a `maxlen`. The deque drops the oldest entry, so one
+  high-volume run cannot fill the worker memory.
+- **Dropped count (Added)**: `dropped_log_count` counts every entry the cap
+  discarded. `_run_to_dict` and `_run_to_summary` report the count, so the
+  operator sees that the portal truncated the run log.
+- **Registry cap (Added)**: `OperationExecutor._prune_runs` keeps the most
+  recent finished runs and drops the rest. It also drops a finished run that
+  passed the retention period. It never evicts a pending or a running
+  operation, and it follows the `PortalEventBus._cleanup_stale_subscribers`
+  pattern.
+- **Settings (Added)**: `PORTAL_RUN_LOG_MAX_ENTRIES` defaults to 2000,
+  `PORTAL_RUN_HISTORY_MAX` defaults to 50, and `PORTAL_RUN_RETENTION_SECONDS`
+  defaults to 3600. An unusable value falls back to the default and logs a
+  warning. `deploy/.env.example` documents all three.
+- **Tests (Added)**: `tests/unit/web_portal/test_operation_run_registry_caps.py`
+  holds 11 tests. They cover the registry cap, the per-run log cap, the
+  protection of an active run, the retention period, the dropped count in the
+  response, and the fallback for an unusable setting.
+### Store an opaque session id and unblock the auth event loop (issues #1859, #1858)
+
+- **Cookie (Fixed)**: the `mist_session` cookie held the raw Mist API token. A
+  reader of that cookie gained the full Mist privileges of the operator, outside
+  this application and outside its audit log. The cookie now holds an opaque
+  identifier that `secrets.token_urlsafe(32)` produces.
+- **Token storage (Added)**: `SessionStore` in
+  `mist-ops-platform/src/shared/services/session_store.py` keeps the Mist token in
+  a server-side record. The record uses Redis when Redis answers, and a
+  process-local map when Redis does not answer. `_extract_token` reads the token
+  from that record, so no route reads a token from a client.
+- **Secure flag (Added)**: the cookie now sets `Secure` and `HttpOnly`. The new
+  `SESSION_COOKIE_SECURE` setting defaults to a true value. Set the value to
+  `false` only for local work over plain HTTP.
+- **Logout (Fixed)**: `DELETE /api/v1/auth/session` now deletes the server-side
+  record. A logout therefore ends the session, which the old code could not do.
+- **Event loop (Fixed)**: the Mist `/api/v1/self` lookup ran inside an `async def`
+  dependency and blocked the event loop for one round trip to `api.mist.com`. The
+  lookup now runs in a worker thread through `anyio.to_thread.run_sync`.
+- **Verification cache (Fixed)**: the privilege cache was never active, because
+  both call sites passed `redis=None`. The auth middleware now caches the
+  verification result on the session record for 5 minutes, so a repeat request
+  makes no second call to Mist.
+- **Cache key (Changed)**: the Redis privilege key derived from `hash(token)`,
+  which Python randomizes for each process. The key now derives from a SHA-256
+  digest, so it stays stable across every worker and across a restart.
+- **Status codes (Changed)**: an unreachable Mist API now returns 503 through the
+  new `MistApiUnavailableError`. Only a token that Mist rejects returns 401. A
+  transient upstream fault no longer logs every operator out.
+- **Settings (Added)**: `mist-ops-platform/src/shared/config/settings.py` supplies
+  the `AppSettings` object that six modules already imported. Every default value
+  lives in a module constant, because a `slots` dataclass turns a class attribute
+  into a descriptor instead of the default value.
+- **Tests (Added)**:
+  `mist-ops-platform/tests/unit/api/test_session_security.py` holds 18 tests. They
+  prove the cookie differs from the token, the cookie carries `Secure`, a deleted
+  identifier returns 401, the lookup runs off the event loop, and a second request
+  inside the cache period makes no second upstream call. The suite reports
+  18 passed, and the wider `tests/unit` run reports no new failure.
+
+### Bind the web portal IP allowlist to the peer address (issue #1857)
+
+**Warning:** This entry contains a breaking change. If you run the portal behind
+a reverse proxy and you set `PORTAL_ALLOWED_IPS`, the portal answers 403 to every
+client after this upgrade. The allowlist now reads the socket peer address, which
+is the address of the proxy. Set `PORTAL_TRUSTED_PROXIES` to the address of the
+proxy, or to the CIDR range that holds the proxy, before you upgrade. A portal
+that runs without a proxy needs no action.
+
+- **Defect (Fixed)**: `SecurityMiddleware._get_client_ip` read the
+  client-supplied `X-Forwarded-For` header and fed that value into the
+  `PORTAL_ALLOWED_IPS` check. No reverse proxy sits in front of the portal, so a
+  blocked caller reached every portal operation with one extra header.
+- **Peer address (Changed)**: `SecurityMiddleware._get_peer_ip` returns
+  `request.remote_addr`, and the allowlist judges that address. A caller cannot
+  forge the socket peer address.
+- **PORTAL_TRUSTED_PROXIES (Added)**: this new setting names the reverse proxy
+  addresses that the portal trusts. The default value is empty. The portal reads
+  the forwarded header only when the peer address matches an entry. An entry is
+  a plain address or a CIDR range.
+- **Forwarded entry (Changed)**: `SecurityMiddleware._resolve_client_ip` reads
+  the rightmost entry of the header, because that entry is the address the
+  trusted proxy observed. A caller controls every entry to its left.
+- **Audit trail (Changed)**: the block message now names the client address and
+  the peer address, so the record always holds the real source.
+- **PortalConfigLoader.parse_networks (Added)**: this shared parser replaces
+  `_parse_allowed_ips`. It reads both settings and names the setting in every
+  log message. It reports the position of an invalid entry, not the text of that
+  entry, because an environment value can hold a secret.
+- **Documentation (Added)**: `deploy/.env.example` documents
+  `PORTAL_ALLOWED_IPS` and `PORTAL_TRUSTED_PROXIES` in one section.
+- **Tests (Added)**: `tests/unit/web_portal/test_config_ip_allowlist.py` holds 15
+  cases. A forged header from a blocked peer returns 403. The same header from a
+  trusted proxy peer sets the client address.
+### Remove the spawned Edge profile directory on teardown (issue #1862)
+
+- **Defect (Fixed)**: the address audit spawned a debuggable Edge into a new
+  temporary profile directory on every run in auto mode. The teardown path
+  stopped the process and left the directory on disk. The path was a local
+  variable, so no later code could find it. An Edge profile that completed a
+  Mist login holds the cache, the cookies, and the local storage of that
+  session, so every run leaked one directory of session material.
+- **SpawnedBrowser (Added)**: `src/site/address_audit/ui_geocoder.py` holds a
+  frozen dataclass with a `process` field and a `profile_dir` field.
+  `spawn_debuggable_browser` returns it, so the caller owns both.
+- **Teardown (Changed)**: `MistUIGeocoder._terminate_spawned` stops the browser,
+  waits for the exit, then removes the profile directory. Edge holds a file lock
+  on the profile until the process exits. A stop that passes the 10-second
+  budget leads to a kill, and the removal then runs.
+- **Safety (Added)**: a failed removal logs a WARNING and never raises, and
+  `close()` stays idempotent. One DEBUG line names the removed path, so an
+  operator can confirm the cleanup.
+- **Tests (Added)**: `tests/unit/site/address_audit/test_ui_geocoder_profile_cleanup.py`
+  holds nine cases that use a fake process object, so no test starts a browser.
+
+### Stop the gitignore rule that hid a source package and a security finding (issue #1778)
+
+- **Defect (Fixed)**: line 244 of `.gitignore` held an unanchored `config/` rule.
+  That rule matched every nested directory of that name, so it hid the source
+  package `mist-ops-platform/src/shared/config/` from git and from every
+  scanner. Eight tracked modules import that package, and none of it was
+  tracked.
+- **Ignore rules (Changed)**: `/config/` and `/configs/` now carry a leading
+  slash, so each rule matches the repository root only. The four negation lines
+  that undid the over-broad rule are gone, because they became inert.
+- **Source package (Added)**: `__init__.py`, `constants.py`, and `settings.py`
+  of `mist-ops-platform/src/shared/config/` now enter git. Pull request #1905
+  force-added the same three modules, so this change keeps that version of each
+  module and removes the ignore rule that made the force-add necessary.
+- **B104 (Fixed)**: the `api_host` default was `0.0.0.0`, which binds the API to
+  every interface. Bandit reported it as a MEDIUM `hardcoded_bind_all_interfaces`
+  finding that no gate could see. The current settings module defines no bind
+  address, so the finding is gone. A guard test fails again if a bind-all default
+  returns.
+- **Suppression (Removed)**: the inert `# noqa: S104` note is gone. The root
+  ruff configuration does not select the `S` family, and bandit reads `# nosec`
+  only, so that note suppressed nothing and misled a reader.
+- **Tests (Added)**: `tests/unit/test_config_package_tracked.py` holds six cases.
+  They read text only, so they need no optional dependency. They fail again if
+  an unanchored rule returns, if the package leaves the checkout, if a field
+  default binds to every interface, or if an inert `# noqa: S` note returns.
+
+### Route the Starlink status line through the GPS precision control (issue #1838)
+
+- **Defect (Fixed)**: `StarlinkStatusWidget._status_part_location` built its
+  status line with a hardcoded `:.4f` format on the latitude and on the
+  longitude. That path never called `_format_gps_coordinate`, so it ignored both
+  the `GPS_PRECISION_DECIMALS` default and the operator opt-in that issue #1737
+  added. Four decimal places locate a driveway, and the line reaches stdout,
+  where a redirect or a recorded SSH session can capture it into a support
+  bundle.
+- **Cause (Recorded)**: pull request #1834 fixed the two paths that CodeQL
+  reported as alert 190 and alert 191. Both sat in `_dump_diagnostics_location`.
+  CodeQL never flagged the status line, so the alert-scoped triage never reached
+  it. The module then held two different rules for one value.
+- **Status line (Changed)**: the method now calls `_format_gps_coordinate` for
+  each coordinate. One rule governs every coordinate the module prints. The
+  default rounds to about 100 meters, and `STARLINK_DASHBOARD_EXACT_GPS` returns
+  the exact value through this path too.
+- **Delivery (Recorded)**: pull request #1849 landed the code change and the
+  test cases first. This entry records the fix in the changelog, because #1849
+  merged without one. The source and the tests here match the merged version.
+- **Tests (Added)**: four cases in
+  `tests/unit/test_starlink_dashboard_startup_and_gps.py`. Three prove the
+  behavior of the status line: it rounds on a default run, it returns the exact
+  pair after the opt-in, and it returns `None` when the terminal reports no
+  location. The fourth scans the module source and fails when any coordinate
+  format field states a literal decimal count, so a new caller cannot reopen the
+  same gap. All three behavior tests fail against the unfixed source. All 11
+  tests in the file pass against the fix.
+
+### Replace the assert runtime guards in the SSH package (issue #1720)
+
+- **Defect (Fixed)**: four runtime guards used `assert`. The interpreter removes
+  every `assert` when it runs with `-O`, so each guard disappeared in an
+  optimized run and the code continued past a condition that must stop it.
+- **Guards (Changed)**: `ShellExecutor.execute`, `EnhancedSSHRunner._execute_direct`,
+  `_exec_with_pty`, and `_exec_without_pty` now raise `ValueError` from an
+  explicit `if` check. This copies the pattern that issue #889 established.
+- **Suppressions (Removed)**: the `# nosec B101` comments are gone, because the
+  rule no longer fires. Those comments had hidden the guards from the triage
+  scan of issue #889.
+- **Message (Added)**: `_NO_ACTIVE_CONNECTION_MSG` holds one message per module,
+  so the two packages report the same words.
+- **Tests (Changed)**: the two cases that expected `AssertionError` now expect
+  `ValueError` and match the message. All 180 SSH tests pass under `python` and
+  under `python -O`.
+
+### Re-probe a database backend that recovered after boot (issue #1830)
+
+- **Defect (Fixed)**: `DatabaseRouter` latched the ArangoDB, Redis TimeSeries,
+  and Redis JSON availability flags in `__init__` and never probed again. A
+  backend that recovered after boot stayed unused for the life of the process,
+  and a backend that died after boot was still reported as healthy.
+- **Re-probe (Added)**: `DatabaseRouter._reprobe` answers the live state of one
+  backend. It reconnects when the backend is marked down and the back-off window
+  expired. `RECONNECT_WINDOW_SECONDS` holds that window at 30 seconds, so one
+  dead backend costs at most one connect attempt per window.
+- **health_check (Changed)**: it now returns the re-probed state instead of the
+  boot-time flags. A `/health` endpoint therefore reports a recovered backend as
+  available without a restart.
+- **Write path (Changed)**: `_write_arango`, `_write_redis`, `_write_redis_json`,
+  and `ingest_stats_batch` re-probe before they fall back to CSV. An export that
+  starts before the database container finishes its start sequence now reaches
+  the database once it answers.
+- **Write failure (Changed)**: a write that raises marks its backend as
+  unavailable and logs `backend_lost`. The health report then matches what the
+  write path observes.
+- **Resource leak (Fixed)**: `close()` never closed the Redis JSON writer, and a
+  reconnect never closed the writer it replaced. Both paths now release the
+  handle first.
+- **Tests (Added)**: `TestRouterReprobe` and `TestRouterCloseRedisJson` in
+  `tests/unit/test_router.py`. All seven new cases fail against the pre-fix
+  router.
+### Route polyglot writes by host reachability, not by the container boundary (issue #1824)
+
+- **Fixed**: `DataExporter._is_standalone_mode` returned true whenever
+  MistHelper ran outside a container. Every ArangoDB and Redis write was
+  dropped on a workstation. `DatabaseRouter._csv_fallback` answered
+  `success=True`, so the loss left no trace in the log.
+- **Changed**: the decision now follows a TCP reachability probe against the
+  configured `ARANGO_HOST` and `REDIS_HOST`. MistHelper writes to the polyglot
+  backend whenever one of the two answers, inside or outside a container.
+- **Added**: `src.db.polyglot_hosts_unreachable` runs the probe and records
+  both verdicts through the `polyglot_host_probe` structured log event. The
+  probe uses a TCP connect, not a DNS lookup, because a hostname can resolve
+  while no service listens. The timeout is 0.5 seconds for each host.
+- **Added**: `DataExporter._standalone_probe` caches the verdict for the life
+  of the process, so an export pays the probe cost one time.
+- **Added**: one `WARNING` at the fallback point names the dropped polyglot
+  write and the two environment variables that fix it.
+- **Unchanged**: `MISTHELPER_STANDALONE` still forces the mode. The
+  `--standalone` flag still sets that variable.
+- **Tests (Added)**: `TestPolyglotHostProbe` in `tests/unit/test_standalone.py`
+  and the rewritten `TestIsStandaloneMode` in
+  `tests/unit/export/test_data_exporter.py`.
 
 ### Add five organization-scoped search operations, menus 230 to 234 (issues #1386, #1385, #1383, #1382, #1379)
 

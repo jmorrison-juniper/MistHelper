@@ -50,6 +50,30 @@ same gate closes that issue when it passes again.
 
 See `deploy/.env.example` for environment variable documentation. For full container and SSH setup, see the [Container Setup](https://github.com/jmorrison-juniper/MistHelper/wiki/Container-Setup) and [SSH Remote Access](https://github.com/jmorrison-juniper/MistHelper/wiki/SSH-Remote-Access) wiki pages.
 
+### Corporate proxy and TLS certificates
+
+The container image verifies every TLS certificate. It never disables the check.
+
+Warning: Do not set `PYTHONHTTPSVERIFY=0`, and do not set a CA bundle variable to
+an empty value. Without the check, an attacker on the network path can read your
+Mist API token.
+
+If you sit behind a TLS-inspecting proxy such as Zscaler, mount the proxy root
+certificate. The container adds it to the system trust store at start time.
+
+```powershell
+podman run -d --name misthelper -p 2200:2200 -p 8055:8055 `
+  -v "${PWD}/data:/app/data:rw" -v "${PWD}/.env:/app/.env:ro" `
+  -v "${PWD}/zscaler-root-ca.crt:/usr/local/share/ca-certificates/corp-root-ca.crt:ro" `
+  ghcr.io/jmorrison-juniper/misthelper:latest
+```
+
+To build behind the same proxy, add the root certificate at build time:
+
+```powershell
+podman build --build-arg INSTALL_CORPORATE_CA=true -t misthelper -f Containerfile .
+```
+
 ---
 
 ## Visual Documentation
@@ -218,7 +242,7 @@ mindmap
 | `data/SSH_COMMANDS.CSV` | Fallback SSH command list (legacy root path still supported) |
 | `delay_metrics.json` / `tuning_data.json` | Adaptive rate / tuning persistence |
 | `data/script.log` | Unified runtime log |
-| `Dockerfile` / `Containerfile` | Two container strategies (UV hybrid vs simplified SSL-bypass) |
+| `Dockerfile` / `Containerfile` | Two container strategies (UV hybrid vs simplified pip build). Both verify TLS certificates. |
 | `compose.yml` | Orchestrated service definition (uses `Containerfile` by default) |
 | `agents.md` | Internal "Agents Guide" (style, safety, refactor guidance) |
 
@@ -363,6 +387,18 @@ cd MistHelper
 python -m venv .venv
 .venv\Scripts\Activate.ps1
 ```
+
+**Note for a git worktree**: `git worktree add` copies the tracked files only, so a new
+worktree holds no `.venv` directory. Run the bootstrap one time in the new worktree. The
+script creates `.venv` and installs `requirements.txt` and `requirements-dev.txt`:
+
+```powershell
+python scripts/bootstrap_worktree.py   # Windows or Linux
+.\scripts\bootstrap_worktree.ps1       # Windows entry point
+```
+
+If the environment is absent, `python -m pytest` stops with one message that names this
+command. See issue #1866.
 
 ### Step 3: Install Dependencies
 
@@ -606,6 +642,7 @@ Read `documentation/upgrade_capture_portal.md` for the full operator guide.
 | SSH | Paramiko host key auto-add restricted to trusted internal contexts |
 | Logging | Secrets & tokens excluded; debug gating prevents noisy stdout |
 | Data Integrity | Natural/composite PK strategies avoid silent duplication |
+| Container TLS | The image verifies every certificate. A corporate proxy needs a mounted root certificate, not a disabled check. |
 
 Before extending destructive workflows, replicate existing confirmation pattern and add SECURITY comments as per `agents.md`.
 

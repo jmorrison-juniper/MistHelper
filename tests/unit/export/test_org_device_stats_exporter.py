@@ -19,6 +19,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from tests.support.thread_scoped_sleep import ThreadScopedSleepSpy
+
 
 @pytest.fixture
 def fake_mh(monkeypatch):
@@ -474,7 +476,8 @@ class TestHandleSitePortStatsRetry:
         """Attempt < max should return True after sleeping."""
         from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
-        with patch("src.export.org_device_stats_exporter.time.sleep") as sleep_mock:
+        sleep_mock = ThreadScopedSleepSpy()  # Thread-scoped, so a leaked thread cannot break the exact count.
+        with patch("src.export.org_device_stats_exporter.time.sleep", new=sleep_mock):
             assert OrgDeviceStatsExporter._handle_site_port_stats_retry(0, "Site1", RuntimeError("x")) is True
         sleep_mock.assert_called_once()
 
@@ -482,7 +485,8 @@ class TestHandleSitePortStatsRetry:
         """Attempt at max returns False without sleeping."""
         from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
-        with patch("src.export.org_device_stats_exporter.time.sleep") as sleep_mock:
+        sleep_mock = ThreadScopedSleepSpy()  # Thread-scoped, so a leaked thread cannot fail the no-call check.
+        with patch("src.export.org_device_stats_exporter.time.sleep", new=sleep_mock):
             assert OrgDeviceStatsExporter._handle_site_port_stats_retry(2, "Site1", RuntimeError("x")) is False
         sleep_mock.assert_not_called()
 

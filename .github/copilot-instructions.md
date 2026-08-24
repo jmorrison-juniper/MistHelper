@@ -137,6 +137,42 @@ podman ps  # Confirm container is running
 
 **Note**: Every changelog update triggers this pipeline - no standalone git operations.
 
+### Automated Sweep Safety
+
+An automated sweep is a code change. It carries more risk than a hand edit,
+because it changes many lines at once and because a reviewer reads it as a
+comment-only diff. Pull request #1791 deleted a live declaration and a comment
+marker inside a 515-line "delete comments" diff. Issue #1796 records the case.
+
+Run these four checks on every changed file before you commit a sweep.
+
+| Check | Command | Expected result |
+| - | - | - |
+| Compile | `python -m py_compile <file>` | No output |
+| Lint | `python -m ruff check .` | `All checks passed` |
+| Types | `python -m mypy $MYPY_PATHS --config-file pyproject.toml` | `Success` |
+| Symbols | `python -m tools.symbol_diff --base <base> <file>` | `no module-level name changed`, exit code 0 |
+
+Read the type check scope from the `MYPY_PATHS` value in
+`.github/workflows/ci.yml`. Do not repeat the value here, because a repeated
+value drifts when the scope moves.
+
+The symbol check exists because the other three checks miss a lost declaration.
+A deleted module global still compiles, and no test read that global. The tool
+compares the module-level names of the base revision against the work tree and
+reports every lost name and every added name. An added name can shadow an
+import, so the tool reports both directions.
+
+Obey these four rules for a sweep.
+
+1. A comment sweep deletes comment lines only.
+2. The pull request body states the count of deleted lines that are not
+   comments. The expected count is zero.
+3. A rebase repeats all four checks, because a rebase can reintroduce a loss.
+4. The pull request title names the sweep. A title such as "delete comments"
+   sets the wrong expectation, and a reviewer then reads a 515-line difference
+   as safe.
+
 ### Data Directory Permissions (CRITICAL)
 The container runs MistHelper as a non-root user (`misthelper`) for security. The mounted `data/` directory must be writable:
 ```bash
@@ -147,10 +183,18 @@ chmod -R 777 data/   # Required before first container run
 ### Running Tests
 ```powershell
 # Local development (Windows 11 + venv required - standard environment)
+# A new worktree holds no .venv, so create the environment one time first.
+python scripts/bootstrap_worktree.py   # Creates .venv and installs the requirements
 .venv\Scripts\Activate.ps1
 python MistHelper.py --test
 ```
 **Skip List**: `OperationRegistry` decides. `--test` runs only `safe`, and `--testinteractive` adds `interactive_safe`. Every other category is skipped, which covers `resource_intensive` (14, 18-19, 59, 97-101, 153), `destructive` (154-187, 189-191, 194, 206-208), `interactive`, `websocket`, and `continuous_loop`.
+
+**Warning**: `git worktree add` copies the tracked files only. `.venv` is not tracked, so a new
+worktree has no virtual environment. The activation line then fails, and the tests run against the
+global interpreter. `python -m pytest` stops with one message that names the bootstrap command,
+instead of one import error for each test module. Run `python scripts/bootstrap_worktree.py` in the
+new worktree, activate the environment, then run the tests again. See issue #1866.
 
 ---
 
@@ -379,6 +423,16 @@ MistHelper/                    # main checkout (human or merge agent only)
 ../MistHelper-agent-2/         # worktree for Agent 2 (fix/102-rate-limit)
 ```
 
+Each worktree needs its own virtual environment. Run the bootstrap one time after
+`git worktree add`:
+
+```powershell
+git worktree add ../MistHelper-agent-1 -b feat/101-new-menu main
+cd ../MistHelper-agent-1
+python scripts/bootstrap_worktree.py   # Creates .venv and installs the requirements
+.venv\Scripts\Activate.ps1
+```
+
 ### Copilot Coding Agent, Spaces & Scratchpads
 
 | Scenario | Surface |
@@ -538,12 +592,18 @@ All tools run in `.github/workflows/ci.yml` as a parallel matrix. A PR cannot au
 | Docstring Coverage | **interrogate** | Coverage >= 90 percent |
 | Diagram References | **`scripts/lint_diagram_refs.py`** | Every diagram reference resolves |
 | E2E Browser | **Playwright** (CI `playwright` job) | Gunicorn web UI functional tests |
+| Ops Portal | **npm** (CI `ops_portal` job) | `npm audit --audit-level=high`, `typecheck`, `lint`, and `test` for `ops-portal/`. All four block a merge. |
 | Static Analysis | **CodeQL** (`.github/workflows/codeql.yml`) | Deep code and workflow vulnerability scanning |
 | Dependency Updates | **Dependabot** (`.github/dependabot.yml`) | Weekly pip update PRs |
 
-The workflow runs 13 jobs. CodeQL runs in a separate workflow, and Dependabot is
-not a gate. A caller can override each threshold through a `workflow_call`
-input. The table lists the default.
+The workflow defines 15 gate jobs and two issue-management jobs. Read the job
+list from `.github/workflows/ci.yml` before you trust this count. CodeQL runs in
+a separate workflow, and Dependabot is not a gate. A caller can override each
+threshold through a `workflow_call` input. The table lists the default.
+
+Every gate above `Ops Portal` reads Python only. The `ops_portal` job is the one
+gate that reads the npm dependency tree, so it is the only check that can report
+an advisory in `ops-portal/package-lock.json` (issue #1847).
 
 **Pre-commit hooks** (`.pre-commit-config.yaml`) run Ruff, mypy, and Bandit locally to catch issues before push.
 

@@ -18,8 +18,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.deps import get_authenticated_user, get_db_session
-from src.api.middleware.auth import CurrentUser
+from src.api.deps import (
+    get_authenticated_user,
+    get_db_session,
+    get_scoped_org_id,
+)
+from src.api.middleware.auth import CurrentUser, require_org_access
 from src.api.schemas.common import PaginationMeta, ResponseEnvelope
 from src.api.schemas.config import (
     AcceptDriftRequest,
@@ -54,7 +58,7 @@ router = APIRouter(prefix="/config", tags=["config"])
 
 @router.get("/revisions", summary="List config revisions")
 async def list_revisions(
-    org_id: UUID = Query(...),
+    org_id: UUID = Depends(get_scoped_org_id),
     entity_id: UUID = Query(...),
     entity_type: str | None = Query(None),
     page: int = Query(1, ge=1),
@@ -96,7 +100,7 @@ async def list_revisions(
 @router.get("/revisions/{revision_id}", summary="Get revision detail")
 async def get_revision(
     revision_id: int,
-    org_id: UUID = Query(...),
+    org_id: UUID = Depends(get_scoped_org_id),
     db: AsyncSession = Depends(get_db_session),
 ) -> ResponseEnvelope[RevisionDetailResponse]:
     """Return a full config revision including its JSON payload."""
@@ -122,7 +126,7 @@ async def get_revision(
 
 @router.get("/time-travel", summary="Point-in-time config lookup")
 async def time_travel(
-    org_id: UUID = Query(...),
+    org_id: UUID = Depends(get_scoped_org_id),
     entity_id: UUID = Query(...),
     entity_type: str = Query(...),
     timestamp: datetime = Query(...),
@@ -169,9 +173,18 @@ async def time_travel(
 async def compute_diff(
     body: DiffRequest,
     db: AsyncSession = Depends(get_db_session),
+    user: CurrentUser = Depends(get_authenticated_user),
 ) -> ResponseEnvelope[DiffResponse]:
-    """Compute field-level diff between two revisions using deepdiff."""
+    """Compute field-level diff between two revisions using deepdiff.
+
+    The caller must hold a valid credential, and the caller must belong to the
+    organization that ``body.org_id`` names. A device configuration holds the
+    network topology, so an anonymous caller must never read one (issue #1979).
+    """
     from src.shared.services.diff import DiffService
+
+    logger.info("Config diff starts for organization %s.", body.org_id)  # Announce the request
+    require_org_access(str(body.org_id), user)  # Raise 403 when the caller is outside the org
 
     old_rev = await _load_revision_by_number(db, body.org_id, body.old_revision_id)
     new_rev = await _load_revision_by_number(db, body.org_id, body.new_revision_id)
@@ -229,12 +242,25 @@ async def compute_diff(
 async def install_from_revision(
     body: InstallFromRevisionRequest,
     db: AsyncSession = Depends(get_db_session),
+    user: CurrentUser = Depends(get_authenticated_user),
 ) -> ResponseEnvelope[InstallJobResponse]:
     """Queue an async job to push a historical revision to target devices.
 
     Requires ``confirm=true`` for safety (destructive operation).
     Creates a ScheduledJob and enqueues a Celery task.
+
+    The route changes the running configuration of a production device, so the
+    caller must hold a valid credential and must belong to the organization
+    that ``body.org_id`` names (issue #1979). The job records the operator, so
+    the audit trail names the person who asked for the push.
     """
+    logger.info(  # Announce the destructive request before any check runs
+        "Install from revision %s starts for organization %s.",
+        body.revision_id,
+        body.org_id,
+    )
+    require_org_access(str(body.org_id), user)  # Raise 403 when the caller is outside the org
+
     if not body.confirm:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -268,6 +294,7 @@ async def install_from_revision(
             "revision_id": body.revision_id,
             "target_entity_ids": [str(eid) for eid in body.target_entity_ids],
             "reason": body.reason,
+            "requested_by": user.email,  # Name the operator, so the audit trail is not anonymous
         },
     )
     db.add(job)
@@ -367,7 +394,7 @@ async def _find_status_at(
 
 @router.get("/baselines")
 async def list_baselines(
-    org_id: UUID = Query(...),
+    org_id: UUID = Depends(get_scoped_org_id),
     entity_type: str | None = Query(None),
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=200),
@@ -392,6 +419,7 @@ async def create_baseline(
     user: CurrentUser = Depends(get_authenticated_user),
 ) -> ResponseEnvelope[BaselineResponse]:
     """Create or update a baseline (intended state)."""
+    require_org_access(str(body.org_id), user)  # Refuse a caller outside the org named in the body
     existing = await _find_baseline_by_scope(
         db,
         body.org_id,
@@ -429,8 +457,8 @@ async def accept_drift(
     if not body.confirm:
         raise HTTPException(status_code=400, detail="confirm required")
 
-    baseline = await _load_baseline(db, baseline_id)
-    alert = await _load_drift_alert(db, body.alert_id)
+    baseline = await _load_baseline(db, baseline_id, user)
+    alert = await _load_drift_alert(db, body.alert_id, user)
 
     actual = await _latest_revision_for_baseline(db, baseline)
     if actual and actual.config_blob:
@@ -458,10 +486,10 @@ async def remediate(
     if not body.confirm:
         raise HTTPException(status_code=400, detail="confirm required")
 
-    baseline = await _load_baseline(db, baseline_id)
+    baseline = await _load_baseline(db, baseline_id, user)
 
     for alert_id in body.alert_ids:
-        alert = await _load_drift_alert(db, alert_id)
+        alert = await _load_drift_alert(db, alert_id, user)
         alert.status = "remediated"
         alert.resolved_by = user.email
         from datetime import UTC, datetime as _dt
@@ -491,24 +519,28 @@ async def remediate(
 async def _load_baseline(
     db: AsyncSession,
     baseline_id: UUID,
+    user: CurrentUser,
 ) -> Baseline:
-    """Load a baseline or raise 404."""
+    """Load a baseline or raise 404. Refuse a caller outside the org with 403."""
     stmt = select(Baseline).where(Baseline.baseline_id == baseline_id)
     row = (await db.execute(stmt)).scalar_one_or_none()
     if row is None:
         raise HTTPException(status_code=404, detail="Baseline not found")
+    require_org_access(str(row.org_id), user)  # Refuse a caller outside the org of this record
     return row
 
 
 async def _load_drift_alert(
     db: AsyncSession,
     alert_id: UUID,
+    user: CurrentUser,
 ) -> DriftAlert:
-    """Load a drift alert or raise 404."""
+    """Load a drift alert or raise 404. Refuse a caller outside the org with 403."""
     stmt = select(DriftAlert).where(DriftAlert.alert_id == alert_id)
     row = (await db.execute(stmt)).scalar_one_or_none()
     if row is None:
         raise HTTPException(status_code=404, detail="Alert not found")
+    require_org_access(str(row.org_id), user)  # Refuse a caller outside the org of this record
     return row
 
 

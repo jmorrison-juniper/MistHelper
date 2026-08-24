@@ -16,6 +16,11 @@ When refactoring, restructure into classes per project conventions. No wrappers.
 ## Local Development Quick Reference
 
 ```powershell
+# Prepare a new worktree. "git worktree add" does not copy .venv, so a new
+# worktree has no virtual environment until you run this script.
+.\scripts\bootstrap_worktree.ps1        # Windows
+python scripts/bootstrap_worktree.py    # Windows or Linux
+
 # Activate venv
 .venv\Scripts\Activate.ps1
 
@@ -32,12 +37,20 @@ python MistHelper.py --test
 # Worktree setup for feature work
 git worktree add ../MistHelper-<slug> -b <type>/<issue>-<slug> main
 cd ../MistHelper-<slug>
+python scripts/bootstrap_worktree.py   # Required. The new worktree has no .venv.
+.venv\Scripts\Activate.ps1
 
 # Worktree teardown after merge
 cd ../MistHelper
 git worktree remove ../MistHelper-<slug>
 git checkout main && git pull origin main
 ```
+
+**Warning**: A new worktree holds the tracked files only. `.venv` is not tracked, so
+`.venv\Scripts\Activate.ps1` fails there and the tests then run against the global
+interpreter. `python -m pytest` stops with one message that names the bootstrap
+command. Run `python scripts/bootstrap_worktree.py`, activate the environment, then
+run the tests again. See issue #1866.
 
 ## VS Code Chat-Specific Notes
 
@@ -60,6 +73,8 @@ git checkout main && git pull origin main
 - **File paths**: Use `os.path.join()` or `pathlib.Path()`, never hardcoded separators
 - **Container**: Podman primary, port 2200 (SSH), port 8055 (web UI)
 - **Zscaler**: Use GitHub Actions for container builds, never local `podman push`
+- **Automated sweep**: An automated sweep runs four checks before a commit. See
+  the "Automated Sweep Safety" section in `.github/copilot-instructions.md`.
 - **Inline comments on EVERY line** (NON-NEGOTIABLE): Every executable line of AI-generated
   code must have an inline comment explaining *why*, not just *what*. Code without comments
   is incomplete. When editing existing code, add comments to the entire block being touched.

@@ -511,7 +511,7 @@ class TestCheckpoint:
 
     def test_load_corrupt_json(self):
         """Corrupt JSON returns None."""
-        with open(E911BSSIDReportGenerator.CHECKPOINT_FILE, "w") as handle:
+        with open(E911BSSIDReportGenerator.CHECKPOINT_FILE, "w", encoding="utf-8") as handle:
             handle.write("not json{{{")
         assert E911BSSIDReportGenerator._load_checkpoint("org-1") is None
 

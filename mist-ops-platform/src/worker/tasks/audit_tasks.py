@@ -14,12 +14,12 @@ import logging
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import create_engine, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from src.shared.config.settings import get_settings
 from src.shared.models.governance import ComplianceAuditPack
 from src.shared.models.operations import AuditRecord
+from src.shared.sync_db import sync_engine
 from src.worker.celeryconfig import app
 
 logger = logging.getLogger(__name__)
@@ -36,15 +36,13 @@ def export_audit_records(
     Returns metadata about the generated export including
     record count and serialized content for storage.
     """
-    settings = get_settings()
-    sync_url = settings.database_url.replace("+asyncpg", "+psycopg2")
-    engine = create_engine(sync_url)
+    logger.info("Exporting audit records for organization %s", org_id)
+    # The scope disposes the pool on the success path and on the error path.
+    with sync_engine() as engine, Session(engine) as db:
+        records = _query_filtered(db, org_id, filters)  # Read the matching rows.
+        content = _serialize(records, export_format)  # Turn the rows into text.
 
-    with Session(engine) as db:
-        records = _query_filtered(db, org_id, filters)
-        content = _serialize(records, export_format)
-
-    engine.dispose()
+    logger.debug("Exported %d audit records as %s", len(records), export_format)
     return {
         "status": "completed",
         "record_count": len(records),
@@ -67,11 +65,9 @@ def generate_compliance_pack(
     Queries all audit records in the date range, builds a
     summary, and persists a ComplianceAuditPack record.
     """
-    settings = get_settings()
-    sync_url = settings.database_url.replace("+asyncpg", "+psycopg2")
-    engine = create_engine(sync_url)
-
-    with Session(engine) as db:
+    logger.info("Building a %s compliance pack for organization %s", framework, org_id)
+    # The scope disposes the pool on the success path and on the error path.
+    with sync_engine() as engine, Session(engine) as db:
         records = _query_date_range(
             db,
             org_id,
@@ -92,7 +88,7 @@ def generate_compliance_pack(
         db.commit()
         pack_id = str(pack.pack_id)
 
-    engine.dispose()
+    logger.debug("Built compliance pack %s from %d records", pack_id, len(records))
     return {
         "pack_id": pack_id,
         "status": "completed",
@@ -230,17 +226,14 @@ def run_retention_cleanup() -> dict:
     """Nightly cleanup of expired records per data-model.md retention."""
     from sqlalchemy import text
 
-    settings = get_settings()
-    sync_url = settings.database_url.replace("+asyncpg", "+psycopg2")
-    engine = create_engine(sync_url)
-
+    logger.info("Starting the nightly retention cleanup")
     results: dict[str, int] = {}
-    with Session(engine) as db:
+    # The scope disposes the pool on the success path and on the error path.
+    with sync_engine() as engine, Session(engine) as db:
         for table, days in _RETENTION_DAYS.items():
-            results[table] = _purge_table(db, table, days)
-        db.commit()
+            results[table] = _purge_table(db, table, days)  # Delete the aged rows.
+        db.commit()  # Commit once, so one failure rolls the whole sweep back.
 
-    engine.dispose()
     logger.info("Retention cleanup complete: %s", results)
     return results
 

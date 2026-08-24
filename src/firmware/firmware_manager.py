@@ -36,6 +36,18 @@ apisession: Any = None  # WHY: module-scope api session read by legacy helpers
 org_id: str = ""  # WHY: module-scope org id read by legacy helpers
 PROGRESS_EMITTER: Any = None  # WHY: shared progress emitter for menu 196 sub-flows
 
+# Bounded-retry policy for the continuous monitoring loop (issue #1910).
+# Before this policy a failed status check retried forever, so an expired token
+# or a Mist cloud outage left the operator with an unattended upgrade.
+MONITOR_REFRESH_SECONDS = 7  # WHY: the documented healthy cadence shown in the banner. Do not change it.
+MONITOR_MAX_CONSECUTIVE_FAILURES = 5  # WHY: 5 failed checks span about 105 seconds with the backoff below.
+MONITOR_BACKOFF_BASE_SECONDS = 7  # WHY: the first retry waits the normal cadence, so one short error costs nothing.
+MONITOR_BACKOFF_MULTIPLIER = 2  # WHY: double each wait. The sequence reads 7, 14, 28, 56 seconds.
+MONITOR_BACKOFF_MAX_SECONDS = 60  # WHY: cap the wait at 1 minute, so an outage gets at most 1 request per minute.
+MONITOR_EXIT_COMPLETE = 0  # WHY: every upgrade finished. This is the only success result.
+MONITOR_EXIT_FAILED = 1  # WHY: the status check failed too many times. A scripted caller must see a non-zero code.
+MONITOR_EXIT_CANCELLED = 2  # WHY: the operator pressed Ctrl-C. The upgrades keep running without a watcher.
+
 
 try:
     import mistapi as _mistapi_module  # WHY: optional Mist SDK - module may be absent in test env
@@ -46,6 +58,28 @@ except ImportError:  # pragma: no cover
 mistapi: Any = _mistapi_module
 
 
+_MISTHELPER_MODULE_NAME = "MistHelper"  # WHY: single spelling of the module name the proxy resolves
+# WHY: `tests/conftest.py` records the real import failure under this name when
+# WHY: `MistHelper.py` stops part way through its module body. Issue #1923.
+_IMPORT_ERROR_ATTRIBUTE = "__misthelper_import_error__"
+
+
+def _describe_partial_import(name: str, cause: BaseException) -> str:
+    """Build one message that names the real cause of an unbound attribute."""
+    logging.info("Building the partial-import report for the attribute %s", name)  # Log before the build.
+    cause_text = f"{type(cause).__name__}: {cause}"  # Name the class and the text, so the reader sees both.
+    message = (  # Return one block, because an AttributeError carries a single string.
+        f"MistHelper stopped part way through its import, so the attribute "
+        f"'{name}' never bound. The import failed with:\n"
+        f"    {cause_text}\n"
+        f"This is an environment gap, not a missing declaration. Install the "
+        f"project dependencies with 'python scripts/bootstrap_worktree.py'. "
+        f"See issue #1866 for the empty worktree case."
+    )
+    logging.debug("Built a partial-import report of %d characters", len(message))  # Log the result size.
+    return message  # Give the caller the finished message.
+
+
 class _MistHelperProxy:  # WHY: attribute forwarder to live MistHelper module
     """Forward attribute access to the currently-loaded MistHelper module.
 
@@ -54,12 +88,26 @@ class _MistHelperProxy:  # WHY: attribute forwarder to live MistHelper module
     without importing MistHelper at module load time (which would create a
     circular import). Attributes are resolved at call time so test
     monkey-patches applied to MistHelper are honoured.
+
+    When `MistHelper.py` stops part way through its module body, the half-built
+    module stays in `sys.modules`. A plain `getattr` then reports a missing
+    attribute and hides the real cause. This proxy reports the recorded cause
+    instead. See issue #1923.
     """
 
     def __getattr__(self, name: str) -> Any:  # WHY: only invoked when the attr is missing normally
         """Resolve name against the live MistHelper module (call-time lookup)."""
-        misthelper_module = importlib.import_module("MistHelper")  # WHY: lazy import at call time
-        return getattr(misthelper_module, name)  # WHY: fetch current bound value from MistHelper
+        try:  # Guard the import, because an absent dependency raises here.
+            misthelper_module = importlib.import_module(_MISTHELPER_MODULE_NAME)  # WHY: lazy import at call time
+        except ImportError as import_error:  # The module cannot load at all.
+            raise AttributeError(_describe_partial_import(name, import_error)) from import_error  # Name the real cause.
+        try:  # Guard the lookup, because a half-built module has no such name.
+            return getattr(misthelper_module, name)  # WHY: fetch current bound value from MistHelper
+        except AttributeError:  # The name did not bind on this module.
+            cause = getattr(misthelper_module, _IMPORT_ERROR_ATTRIBUTE, None)  # Read the recorded import failure.
+            if cause is None:  # No record exists, so the module loaded and the name is truly absent.
+                raise  # Keep the original error, because it already states the truth.
+            raise AttributeError(_describe_partial_import(name, cause)) from cause  # Name the real cause.
 
 
 _MH = _MistHelperProxy()  # WHY: sole module-level proxy handle used by FirmwareUpgradeStatusChecker
@@ -129,6 +177,54 @@ def _bind_module_globals(config: FirmwareManagerConfig) -> None:
         msp_privileges = getattr(main_module, "msp_privileges", [])  # WHY: preserve msp cache visibility
         PROGRESS_EMITTER = getattr(main_module, "PROGRESS_EMITTER", None)  # WHY: hook up progress emitter
     logging.debug("firmware_manager module globals rebound for org %s", config.org_id)  # WHY: confirm side effects
+
+
+class MonitoringRetryPolicy:
+    """Count the consecutive failed status checks and set the next wait.
+
+    Why:
+        The continuous monitoring loop used to retry a failed check forever
+        (issue #1910). This policy holds the failure streak, reports when
+        the streak reaches the limit, and grows the wait between the failed
+        attempts. One good check clears the streak, so a single short API
+        error does not end a long upgrade watch.
+    """
+
+    def __init__(self) -> None:
+        """Start the policy with a clean failure streak."""
+        self.consecutive_failures = 0  # WHY: a fresh watch begins with no failures
+
+    def record_success(self) -> None:
+        """Clear the failure streak after a good status check."""
+        self.consecutive_failures = 0  # WHY: one good check proves the session works again
+
+    def record_failure(self) -> int:
+        """Count one failed status check.
+
+        Returns:
+            The new length of the consecutive failure streak.
+        """
+        self.consecutive_failures += 1  # WHY: only an unbroken streak can stop the loop
+        return self.consecutive_failures  # WHY: the caller reports the streak to the operator
+
+    @property
+    def exhausted(self) -> bool:
+        """Report True when the failure streak reaches the attempt limit."""
+        return self.consecutive_failures >= MONITOR_MAX_CONSECUTIVE_FAILURES  # WHY: the loop must stop here
+
+    def next_delay_seconds(self) -> int:
+        """Return the seconds to wait before the next status check.
+
+        Returns:
+            The healthy cadence when the last check passed. A capped
+            exponential backoff while the failures continue.
+        """
+        if self.consecutive_failures == 0:  # WHY: the healthy path keeps the documented cadence
+            return MONITOR_REFRESH_SECONDS
+        exponent = self.consecutive_failures - 1  # WHY: the first failure waits the base with no growth
+        growth = int(MONITOR_BACKOFF_MULTIPLIER**exponent)  # WHY: int() keeps the power typed as an integer
+        delay = MONITOR_BACKOFF_BASE_SECONDS * growth  # WHY: scale the base wait by the streak length
+        return min(delay, MONITOR_BACKOFF_MAX_SECONDS)  # WHY: the cap protects an unhealthy Mist API
 
 
 class FirmwareManager:
@@ -306,7 +402,8 @@ class FirmwareManager:
         """Route to the correct status handler based on scope."""
         if scope_choice == "5":  # WHY: continuous monitoring is separate flow
             logging.info("Entering continuous monitoring mode")  # WHY: audit
-            self._continuous_monitoring_mode(site_filter)  # WHY: dispatch
+            exit_code = self._continuous_monitoring_mode(site_filter)  # WHY: dispatch
+            logging.debug("Continuous monitoring mode returned exit_code=%s", exit_code)  # WHY: audit the outcome
             return None  # WHY: void handler completed
         if scope_choice == "6":  # WHY: org-level upgrade jobs listing
             logging.info("Fetching org-level upgrade jobs")  # WHY: audit
@@ -315,17 +412,27 @@ class FirmwareManager:
         self._execute_status_check(scope_choice, site_filter)  # WHY: default
         return None  # WHY: uniform sentinel
 
-    def _continuous_monitoring_mode(self, site_filter: str | None = None) -> None:
-        """Continuous monitoring mode that auto-refreshes upgrade status until complete or cancelled."""
+    def _continuous_monitoring_mode(self, site_filter: str | None = None) -> int:
+        """Watch the active upgrades until they finish, the checks fail, or the operator exits.
+
+        Args:
+            site_filter: The site to watch. None watches the whole org.
+
+        Returns:
+            ``MONITOR_EXIT_COMPLETE`` when every upgrade finished.
+            ``MONITOR_EXIT_FAILED`` when the status check failed too many times.
+            ``MONITOR_EXIT_CANCELLED`` when the operator pressed Ctrl-C.
+        """
         logging.info("Entering continuous monitoring mode site_filter=%s", site_filter)  # WHY: audit entry
         self._present_monitoring_header()  # WHY: emit banner explaining refresh cadence + Ctrl-C exit
         try:  # WHY: outer try catches user Ctrl-C for clean exit
-            self._run_monitoring_loop(site_filter)  # WHY: delegate refresh loop to helper
+            exit_code = self._run_monitoring_loop(site_filter)  # WHY: delegate refresh loop to helper
         except KeyboardInterrupt:  # WHY: operator pressed Ctrl-C mid-refresh
             print("\n\n  Monitoring mode cancelled by user.")  # WHY: visible exit banner
             logging.info("Continuous monitoring mode cancelled by user")  # WHY: audit user cancel
-            return  # WHY: exit without raising further
-        logging.debug("Continuous monitoring mode exited normally")  # WHY: trace clean exit
+            return MONITOR_EXIT_CANCELLED  # WHY: a cancel is not a completed upgrade watch
+        logging.debug("Continuous monitoring mode exited exit_code=%s", exit_code)  # WHY: trace the outcome
+        return exit_code  # WHY: hand the result to a scripted caller
 
     def _present_monitoring_header(self) -> None:  # WHY: extract banner block for testability
         """Print the fixed banner describing monitoring behavior."""
@@ -333,22 +440,86 @@ class FirmwareManager:
         print("=" * 70)  # WHY: divider matches other section headers
         print("   Monitoring active firmware upgrades...")  # WHY: purpose line
         print("   Press Ctrl+C to exit at any time")  # WHY: exit instruction
-        print("   Auto-refreshing every 7 seconds")  # WHY: cadence disclosure
+        print(f"   Auto-refreshing every {MONITOR_REFRESH_SECONDS} seconds")  # WHY: cadence disclosure
+        print(
+            f"   The monitor stops after {MONITOR_MAX_CONSECUTIVE_FAILURES} failed status checks in a row"
+        )  # WHY: tell the operator the watch can end on its own
         print("   NOTE: Each refresh scans ALL devices for active upgrades")  # WHY: scope disclosure
         print("=" * 70)  # WHY: closing divider
-        logging.info("Starting continuous monitoring mode with 7-second refresh interval")  # WHY: audit
+        logging.info(
+            "Starting continuous monitoring mode refresh_seconds=%d failure_limit=%d",
+            MONITOR_REFRESH_SECONDS,
+            MONITOR_MAX_CONSECUTIVE_FAILURES,
+        )  # WHY: audit the cadence and the retry bound at the start of every watch
 
-    def _run_monitoring_loop(self, site_filter: str | None) -> None:
-        """Drive the poll-print-sleep loop until all upgrades complete."""
+    def _run_monitoring_loop(self, site_filter: str | None) -> int:
+        """Drive the poll-print-sleep loop until the upgrades finish or the checks fail.
+
+        Args:
+            site_filter: The site to watch. None watches the whole org.
+
+        Returns:
+            ``MONITOR_EXIT_COMPLETE`` when every upgrade finished, or
+            ``MONITOR_EXIT_FAILED`` after the consecutive failure limit.
+        """
         iteration = 0  # WHY: counter used in refresh banner
-        while True:  # WHY: loop exits via break when all upgrades done or via KeyboardInterrupt
+        policy = MonitoringRetryPolicy()  # WHY: bound the retries so a broken session cannot loop forever
+        while True:  # WHY: the loop exits on completion, on the failure limit, or on Ctrl-C
             iteration += 1  # WHY: increment before display so first refresh reads #1
             self._clear_monitoring_screen()  # WHY: fresh visual for each iteration
             self._present_monitoring_iteration_header(iteration)  # WHY: banner per iteration
             result = self._execute_monitoring_check(site_filter)  # WHY: fetch upgrades
             if self._handle_monitoring_result(result, iteration):  # WHY: True means loop should exit
-                return  # WHY: propagate loop-exit signal
-            time.sleep(7)  # WHY: pause before next refresh per documented cadence
+                return MONITOR_EXIT_COMPLETE  # WHY: every upgrade finished. Report success
+            if self._record_monitoring_attempt(result, policy, iteration):  # WHY: True means the limit is reached
+                return MONITOR_EXIT_FAILED  # WHY: report the stop so a scripted caller can react
+            time.sleep(policy.next_delay_seconds())  # WHY: normal cadence, or backoff after a failed check
+
+    def _record_monitoring_attempt(self, result: int | None, policy: MonitoringRetryPolicy, iteration: int) -> bool:
+        """Update the retry policy for one status check.
+
+        Args:
+            result: The check result. None marks a failed check.
+            policy: The retry policy that holds the failure streak.
+            iteration: The refresh number shown to the operator.
+
+        Returns:
+            True when the failure streak reached the limit and the loop must stop.
+        """
+        if result is not None:  # WHY: a good check clears the streak, so one short error cannot end a long watch
+            policy.record_success()  # WHY: reset the counter and the backoff
+            return False  # WHY: keep watching
+        failures = policy.record_failure()  # WHY: count this failure and read the new streak length
+        logging.warning(
+            "Monitoring status check failed iteration=%d consecutive=%d limit=%d",
+            iteration,
+            failures,
+            MONITOR_MAX_CONSECUTIVE_FAILURES,
+        )  # WHY: leave an audit trail of every failed check, not only the last one
+        if not policy.exhausted:  # WHY: below the limit the operator only needs the retry notice
+            wait_seconds = policy.next_delay_seconds()  # WHY: show the real wait, which grows per failure
+            print(f"   Retry {failures} of {MONITOR_MAX_CONSECUTIVE_FAILURES} in {wait_seconds} seconds...")
+            return False  # WHY: keep watching
+        self._present_monitoring_failure(failures)  # WHY: tell the operator what failed and what to do next
+        return True  # WHY: signal the loop to stop
+
+    def _present_monitoring_failure(self, failures: int) -> None:
+        """Print the final failure block after the retry limit.
+
+        Args:
+            failures: The number of consecutive failed status checks.
+        """
+        print(f"\n  MONITORING STOPPED after {failures} failed status checks in a row.")  # WHY: clear final state
+        print("   The Mist API did not answer the upgrade status request.")  # WHY: name the cause
+        print("   The firmware upgrade can continue. This tool no longer watches it.")  # WHY: prevent a false belief
+        print("   Do these steps:")  # WHY: give the operator a short recovery list
+        print("   1. Check that your Mist API token is valid and not expired.")  # WHY: the most common cause
+        print("   2. Check the network path from this host to the Mist cloud.")  # WHY: the second cause
+        print("   3. Check the Mist cloud status page for an outage.")  # WHY: the third cause
+        print("   4. Start the monitor again after you correct the problem.")  # WHY: the recovery action
+        logging.error(
+            "Continuous monitoring stopped after %d consecutive failed status checks", failures
+        )  # WHY: ASCII audit record of the final failure for the run log
 
     def _clear_monitoring_screen(self) -> None:  # WHY: platform abstraction wrapped in a helper
         """Clear the terminal window between refreshes."""
@@ -371,9 +542,9 @@ class FirmwareManager:
     def _handle_monitoring_result(self, result: int | None, iteration: int) -> bool:
         """Interpret the check result. Return True if loop should exit."""
         if result is None:  # WHY: transient error path
-            print("\n   Error fetching upgrade status. Retrying...")  # WHY: user-visible retry hint
+            print("\n   Error fetching upgrade status.")  # WHY: user-visible failure notice
             logging.warning("Monitoring iteration %s failed", iteration)  # WHY: audit failure
-            return False  # WHY: keep polling despite one failed iteration
+            return False  # WHY: the retry policy decides whether the loop continues
         if result == 0:  # WHY: zero active upgrades => job complete
             print("\n  All upgrades completed!")  # WHY: completion banner
             print("   No active firmware upgrades detected.")  # WHY: clarify outcome
@@ -381,7 +552,7 @@ class FirmwareManager:
             logging.info("Monitoring mode exiting - all upgrades complete")  # WHY: audit success
             return True  # WHY: signal loop exit
         print(f"\n   Found {result} device(s) actively upgrading")  # WHY: progress signal
-        print("   Next refresh in 7 seconds...")  # WHY: set expectation for cadence
+        print(f"   Next refresh in {MONITOR_REFRESH_SECONDS} seconds...")  # WHY: set expectation for cadence
         return False  # WHY: continue polling
 
     def _print_upgrade_job_timing_info(self, details: dict[str, Any]) -> None:

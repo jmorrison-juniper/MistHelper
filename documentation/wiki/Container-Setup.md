@@ -4,7 +4,7 @@
 
 Two build strategies are available:
 
-1. **`Containerfile`** (simple, pip only, SSL bypass env overrides for constrained corporate PKI)
+1. **`Containerfile`** (simple, pip only, TLS verification on, optional corporate root certificate)
 2. **`Dockerfile`** (multi-path UV attempt + HEALTHCHECK)
 
 ## Local Container Usage
@@ -37,6 +37,51 @@ podman run -d --name misthelper -p 2200:2200 -p 8055:8055 \
   -v "${PWD}/data:/app/data:rw" -v "${PWD}/.env:/app/.env:ro" \
   misthelper
 ```
+
+## Corporate Proxy and TLS Certificates
+
+The image verifies every TLS certificate. It never disables the check.
+
+Warning: Do not set `PYTHONHTTPSVERIFY=0`, and do not set `REQUESTS_CA_BUNDLE`,
+`CURL_CA_BUNDLE`, or `SSL_CERT_FILE` to an empty value. Without the check, an
+attacker on the network path can present a self-signed certificate and read your
+Mist API token. Issue #1906 records the earlier defect.
+
+### Run behind a TLS-inspecting proxy
+
+Mount the proxy root certificate into `/usr/local/share/ca-certificates`. The
+container entrypoint adds the certificate to the system trust store at start
+time, and it writes the result to `data/ssh.log`.
+
+```powershell
+podman run -d --name misthelper -p 2200:2200 -p 8055:8055 `
+  -v "${PWD}/data:/app/data:rw" -v "${PWD}/.env:/app/.env:ro" `
+  -v "${PWD}/zscaler-root-ca.crt:/usr/local/share/ca-certificates/corp-root-ca.crt:ro" `
+  ghcr.io/jmorrison-juniper/misthelper:latest
+```
+
+Confirm the result:
+
+```powershell
+podman exec misthelper env | Select-String "CA_BUNDLE|SSL_CERT_FILE|PYTHONHTTPSVERIFY"
+Select-String -Path data/ssh.log -Pattern "\[TLS\]"
+```
+
+### Build behind a TLS-inspecting proxy
+
+The build fetches packages from PyPI over verified TLS. If the proxy replaces
+the PyPI certificate, add the proxy root certificate at build time:
+
+```powershell
+podman build --build-arg INSTALL_CORPORATE_CA=true -t misthelper -f Containerfile .
+```
+
+The build reads the certificate from `zscaler-root-ca.crt` in the repository
+root. To use a different file, pass `--build-arg CORPORATE_CA_FILE=<path>`. The
+path is relative to the build context.
+
+The default build argument value is `false`, so the published image ships a
+clean trust store.
 
 ## Container Registry
 

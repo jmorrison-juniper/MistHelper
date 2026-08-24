@@ -2429,7 +2429,7 @@ class TestCachePersistence:
         data = {"collected_at": "2025-01-01T00:00:00+00:00", "matrix": []}
         manager._save_cache(data)
         assert os.path.exists(cache_file)
-        with open(cache_file) as fh:
+        with open(cache_file, encoding="utf-8") as fh:
             loaded = json.load(fh)
         assert loaded["matrix"] == []
 
@@ -2444,7 +2444,7 @@ class TestCachePersistence:
         cache_file = os.path.join(str(tmp_path), "cache.json")
         manager.CACHE_FILE = cache_file
         data = {"collected_at": "2025-01-01T00:00:00+00:00", "matrix": []}
-        with open(cache_file, "w") as fh:
+        with open(cache_file, "w", encoding="utf-8") as fh:
             json.dump(data, fh)
         result = manager._load_cache()
         assert result is not None

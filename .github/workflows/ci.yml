@@ -8,9 +8,14 @@
 name: Quality Gates
 
 on:
+  # No branch filter here. A pull request against any base runs every gate.
+  # A filter that named main alone let a stacked pull request merge with zero
+  # checks, which a reviewer reads as clean rather than unmeasured. Issue #1952
+  # records that gap.
   pull_request:
-    branches: [main]
   push:
+    # The push trigger stays pinned to main. A push run on every branch would
+    # repeat the pull request run and add cost with no added signal.
     branches: [main]
   workflow_dispatch:
   workflow_call:
@@ -69,6 +74,16 @@ env:
   # whole project. Lowest measured value is web_portal at 97.5 percent.
   INTERROGATE_PATHS: 'src/ MistHelper.py wsgi.py wsgi_capture.py starlink_dashboard.py web_portal tools'
   COVERAGE_THRESHOLD: ${{ inputs.coverage-threshold || '80' }}
+  # Issue #1895: the ops platform suite keeps its own denominator and its own
+  # floor, so it can never move the root percentage. The suite measures 53.91
+  # percent. The floor sits just under that number, so a coverage drop fails the
+  # gate. Issue #1883 unblocks the last 2 tests and raises the floor further.
+  OPS_PLATFORM_COVERAGE_THRESHOLD: '53'
+  # The count floor proves the gate ran the tests. A broken import path drops a
+  # whole module from collection, and this floor turns that drop into a red gate.
+  # The suite collects 334 tests. If you delete a test on purpose, lower this
+  # number in the same commit.
+  OPS_PLATFORM_MIN_TESTS: '330'
   PYLINT_THRESHOLD: ${{ inputs.pylint-threshold || '9.5' }}
   INTERROGATE_THRESHOLD: ${{ inputs.interrogate-threshold || '90' }}
   # Vulture reports 0 findings at 90, at 80, and at 70. The cliff sits at 60, which
@@ -476,6 +491,129 @@ jobs:
         run: pytest tests/e2e/ -v --timeout=60
 
   # ──────────────────────────────────────────────────────────────
+  # OPS PORTAL (TypeScript + React)
+  # ──────────────────────────────────────────────────────────────
+  ops_portal:
+    name: "ops-portal (npm audit, types, lint, tests)"
+    # Issue #1847: every gate above reads Python only, so no check covered the
+    # TypeScript and React application in ops-portal/. pip-audit parses
+    # requirements.txt, so it can never read an npm lockfile. Two HIGH advisories
+    # therefore sat on main, and a dependency bump to this directory could break
+    # the build while CI stayed green. This job closes both gaps.
+    #
+    # The job runs on every event rather than behind an ops-portal/** path filter.
+    # A filtered job reports "skipped", and a skipped result is ambiguous both to
+    # branch protection and to the two summary jobs below, which read
+    # needs.ops_portal.result. The whole job costs well under a minute with the
+    # npm cache warm, so an unconditional run buys a clear signal cheaply.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: ops-portal
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: ops-portal/package-lock.json
+      - name: Install from the lockfile
+        # npm ci fails when package.json and package-lock.json disagree, so this
+        # step also proves the lockfile is in sync.
+        #
+        # --legacy-peer-deps is required today, and it must stay. Two plugins
+        # cap their eslint peer range below the installed eslint 10.7.0.
+        # eslint-plugin-jsx-a11y 6.10.2 declares "<=^9", and
+        # eslint-plugin-react 7.37.5 declares "<=^9.7". Both are the newest
+        # published releases, so no upgrade clears the conflict yet. A strict
+        # resolve fails with ERESOLVE. Issue #1852 records the measurement.
+        # Delete this flag when both plugins publish an eslint 10 peer range.
+        run: npm ci --legacy-peer-deps
+      - name: Audit the npm dependency tree
+        # This is the blocking security check and the reason issue #1847 exists.
+        # It fails on a HIGH or a CRITICAL advisory. Dependabot reports a MODERATE
+        # or a LOW finding as a pull request, so those do not block a merge here.
+        run: npm audit --audit-level=high
+      # The three steps below block a merge. Issue #1852 fixed the three
+      # configuration defects that kept them advisory. tsconfig.json no longer
+      # sets the deprecated baseUrl, eslint reads a flat eslint.config.js, and
+      # the project ships a vitest suite for the confirmation dialog.
+      - name: Type check
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      - name: Unit tests
+        run: npm run test
+
+  # ──────────────────────────────────────────────────────────────
+  # OPS PLATFORM (FastAPI + Celery sub-project)
+  # ──────────────────────────────────────────────────────────────
+  ops_platform_pytest:
+    name: "pytest (ops platform)"
+    # Issue #1895: no gate read mist-ops-platform/tests. The root
+    # pyproject.toml sets testpaths = ["tests"], and the "pytest (coverage
+    # gate)" job runs pytest from the repository root with no path argument.
+    # pytest therefore collected the root tests/ directory only, so every ops
+    # platform pull request reported green while nothing ran the changed code.
+    #
+    # The job runs from mist-ops-platform, so the sub-project pyproject.toml
+    # supplies testpaths, asyncio_mode, and the marker list. The job runs on
+    # every event rather than behind a path filter, because a skipped result is
+    # ambiguous to a reviewer and to a branch protection rule.
+    #
+    # The gate blocks. It runs 300 tests and it fails on a red test, on a
+    # coverage drop, and on a drop in the collected count.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: mist-ops-platform
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - name: Install dependencies
+        # The root requirements files do not carry deepdiff or mistapi, so the
+        # sub-project keeps its own pinned file (issue #1895).
+        run: pip install -r requirements-dev.txt
+      - name: Confirm the suite collects its tests
+        # A gate that collects nothing still exits green. That result hides a
+        # broken import path and is worse than no gate. This step counts the
+        # collected tests and fails when the count drops below the floor.
+        run: |
+          set -o pipefail
+          COUNT=$(pytest --collect-only -q | grep -c '::' || true)
+          echo "Collected $COUNT tests"
+          if [ "$COUNT" -lt "$OPS_PLATFORM_MIN_TESTS" ]; then
+            echo "::error::Collected $COUNT tests. The floor is $OPS_PLATFORM_MIN_TESTS."
+            exit 1
+          fi
+      - name: Run tests with coverage
+        # Issue #888: the root gate keeps its own SRC_PATH denominator. This job
+        # measures mist-ops-platform/src only, so neither percentage moves the
+        # other.
+        #
+        # The 2 deselected tests fail on main today. They assert the table names
+        # that migration 0001 creates, and the ORM models declare different names
+        # and different columns. Issue #1883 covers that divergence. The repair is
+        # a schema migration and not a test edit, so the pair stays deselected.
+        # Issue #1897 tracks the removal of this list.
+        # Do not add a test to this list to make a new failure go away. Fix the
+        # code instead.
+        run: |
+          pytest --cov=src \
+            --cov-fail-under=${{ env.OPS_PLATFORM_COVERAGE_THRESHOLD }} \
+            --deselect tests/unit/shared/test_models_inventory.py::TestOrganization::test_tablename \
+            --deselect tests/unit/shared/test_models_inventory.py::TestSyncLedgerEntry::test_tablename
+
+  # ──────────────────────────────────────────────────────────────
   # FAILURE → GITHUB ISSUES (auto-create issues for each failure)
   # ──────────────────────────────────────────────────────────────
   create_failure_issues:
@@ -492,6 +630,7 @@ jobs:
       - vulture
       - pydocstyle
       - interrogate
+      - ops_portal
     if: ${{ always() && contains(needs.*.result, 'failure') }}
     runs-on: ubuntu-latest
     permissions:
@@ -530,17 +669,21 @@ jobs:
           RESULTS[vulture]="${{ needs.vulture.result }}"
           RESULTS[pydocstyle]="${{ needs.pydocstyle.result }}"
           RESULTS[interrogate]="${{ needs.interrogate.result }}"
+          RESULTS[ops_portal]="${{ needs.ops_portal.result }}"
 
-          # Scope: PR failures get scoped title (per-PR), push failures use gate-only title (dedup across pushes).
+          # Scope: a PR failure gets a scoped title (per-PR). A branch failure uses a
+          # gate-only title, so repeated runs on the same branch reuse one issue.
           if [ "$EVENT_NAME" = "pull_request" ] && [ -n "$PR_NUMBER" ]; then
             SCOPE="PR #${PR_NUMBER}"
             SEARCH_PREFIX="CI: quality-gate"
             TITLE_SUFFIX=" (PR #${PR_NUMBER})"
             PR_LINK="**PR**: #${PR_NUMBER} — ${PR_TITLE}"
           else
-            SCOPE="push to ${HEAD_REF}"
+            # A run on main now arrives by dispatch as well as by push, so the
+            # wording names the branch instead of the trigger. See issue #1851.
+            SCOPE="run on ${HEAD_REF}"
             TITLE_SUFFIX=""
-            PR_LINK="**Push**: \`${HEAD_REF}\`"
+            PR_LINK="**Run scope**: \`${HEAD_REF}\`"
           fi
 
           for gate in "${!RESULTS[@]}"; do
@@ -593,6 +736,7 @@ jobs:
       - vulture
       - pydocstyle
       - interrogate
+      - ops_portal
     if: ${{ always() }}
     runs-on: ubuntu-latest
     permissions:
@@ -609,7 +753,10 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           HEAD_REF: ${{ github.head_ref || github.ref_name }}
-          IS_MAIN_PUSH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          # A run on main is authoritative for the issue state. A merge that
+          # GITHUB_TOKEN performs starts no push run, so the Auto-merge
+          # workflow dispatches this workflow instead. See issue #1851.
+          IS_MAIN_RUN: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' }}
         run: |
           declare -A RESULTS
           RESULTS[ruff]="${{ needs.ruff.result }}"
@@ -623,16 +770,17 @@ jobs:
           RESULTS[vulture]="${{ needs.vulture.result }}"
           RESULTS[pydocstyle]="${{ needs.pydocstyle.result }}"
           RESULTS[interrogate]="${{ needs.interrogate.result }}"
+          RESULTS[ops_portal]="${{ needs.ops_portal.result }}"
 
           for gate in "${!RESULTS[@]}"; do
             result="${RESULTS[$gate]}"
             if [ "$result" = "success" ]; then
               # On PR events: close only the PR-scoped issue for this gate.
-              # On main push: close all open issues for this gate (main is authoritative).
+              # On a run on main: close all open issues for this gate (main is authoritative).
               if [ "$EVENT_NAME" = "pull_request" ] && [ -n "$PR_NUMBER" ]; then
                 EXACT_TITLE="CI: quality-gate \`${gate}\` failed (PR #${PR_NUMBER})"
                 SEARCH_QUERY="in:title \"${EXACT_TITLE}\""
-              elif [ "$IS_MAIN_PUSH" = "true" ]; then
+              elif [ "$IS_MAIN_RUN" = "true" ]; then
                 SEARCH_QUERY="in:title \"CI: quality-gate \`${gate}\` failed\""
               else
                 continue

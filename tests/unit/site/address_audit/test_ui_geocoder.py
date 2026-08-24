@@ -410,11 +410,13 @@ class TestAutoConnect:
         factory.return_value.start.return_value = driver
         monkeypatch.setattr(ui_mod, "sync_playwright", factory)
         proc = MagicMock()
-        monkeypatch.setattr(MistUIGeocoder, "spawn_debuggable_browser", staticmethod(lambda *a, **k: proc))
+        spawned = ui_mod.SpawnedBrowser(process=proc, profile_dir="C:\\temp\\misthelper-edge-test")  # Issue #1862.
+        monkeypatch.setattr(MistUIGeocoder, "spawn_debuggable_browser", staticmethod(lambda *a, **k: spawned))
         monkeypatch.setattr(ui_mod.InputUtils, "safe_input", staticmethod(lambda *a, **k: ""))
         geo = MistUIGeocoder(UIGeocoderConfig(connect_mode="auto"))
         assert geo.connect() is True
         assert geo._spawned_proc is proc
+        assert geo._spawned_profile_dir == spawned.profile_dir  # The caller owns the profile for the teardown.
         assert driver.chromium.connect_over_cdp.call_count == 2  # Attach-miss, then attach-after-spawn.
 
     def test_auto_falls_back_to_launch_when_no_edge(self, monkeypatch):

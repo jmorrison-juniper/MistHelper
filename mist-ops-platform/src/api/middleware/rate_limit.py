@@ -70,7 +70,12 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         try:
             from redis.asyncio import from_url
 
-            self._redis = await from_url(self._redis_url)
+            from src.shared.redis_timeouts import redis_timeout_kwargs
+
+            logger.info("Rate limit Redis connect starts.")  # Announce the connect attempt.
+            # WHY: a client with no socket limit holds this request forever on a silent host.
+            self._redis = await from_url(self._redis_url, **redis_timeout_kwargs())
+            logger.debug("Rate limit Redis connect done.")  # Confirm the client exists.
             return self._redis
         except Exception:
             logger.warning("Redis unavailable — rate limiting disabled")

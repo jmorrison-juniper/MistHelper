@@ -3481,18 +3481,25 @@ def test_regression_runtime_under_budget(pytestconfig: pytest.Config) -> None:  
         # output, ``--no-header`` trims a few tens of ms, ``-p no:cacheprovider``
         # avoids polluting the parent's cache. The rootdir stays the repo
         # root by default (inherited from the parent pytest invocation).
+        # ``pytest.main`` runs the subset inside this same process, so the nested
+        # session inherits every plugin the outer session already started. The
+        # ``pytest_playwright`` plugin opens a soft-assertion scope for each test
+        # through ``pytest_runtest_call``, and that scope lives in the
+        # module-level ``_soft_errors`` global of ``playwright._impl._assertions``.
+        # The outer scope for this very test is still open, so the first nested
+        # test raises "nested soft assertion scopes are not supported" and every
+        # later node in the nested run fails with it (issue #1846). The subset
+        # holds unit tests only and drives no browser, so the nested run disables
+        # the plugin. ``-p no:<name>`` is a no-op when the plugin is absent, so
+        # this stays correct on a checkout that never installs it.
         exit_code = pytest.main(
             [
                 "-q",  # quiet mode
                 "--no-header",  # skip pytest header
                 "-p",  # disable plugin
                 "no:cacheprovider",  # skip .pytest_cache writes
-                # The playwright plugin cannot re-enter a nested run. Each
-                # nested node dies with "nested soft assertion scopes are not
-                # supported", which fails this test for a reason that has
-                # nothing to do with the runtime budget it measures.
-                "-p",  # disable plugin
-                "no:playwright",  # skip the browser plugin
+                "-p",  # disable a second plugin
+                "no:playwright",  # keep the outer soft-assertion scope out of the nested run
                 *subset,  # the curated subset
             ]
         )

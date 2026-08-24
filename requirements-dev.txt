@@ -25,12 +25,12 @@
 # these pins do not change any gate result.
 
 # Lint and format
-ruff==0.16.1
+ruff==0.16.3
 black==26.5.1
 
 # Type checking
-mypy==1.20.2
-types-requests==2.33.0.20260408
+mypy==2.3.1
+types-requests==2.33.0.20260712
 types-paramiko==5.0.0.20260724
 types-tqdm==4.70.0.20260805
 
@@ -38,7 +38,7 @@ types-tqdm==4.70.0.20260805
 pytest==9.1.1
 pytest-cov==7.1.0
 pytest-timeout==2.4.0
-hypothesis==6.165.2
+hypothesis==6.165.5
 
 # Security
 bandit[toml]==1.9.4

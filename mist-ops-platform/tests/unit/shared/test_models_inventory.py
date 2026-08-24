@@ -98,7 +98,10 @@ class TestSyncLedgerEntry:
 
     def test_primary_key(self) -> None:
         cols = {c.name for c in SyncLedgerEntry.__table__.primary_key.columns}
-        assert cols == {"ledger_id"}
+        # This test asserted "ledger_id". No such column exists. The ORM names the
+        # key "id", and migration 0001 creates sync_ledger_entries with a BigInteger
+        # column named "id" as well. Both sides agree, so the expectation was wrong.
+        assert cols == {"id"}
 
 
 # ---------------------------------------------------------------------------
@@ -123,3 +126,7 @@ class TestDBFactory:
         mock_create.assert_called_once()
         call_url = mock_create.call_args[0][0]
         assert "postgresql" in call_url
+        # WHY: the factory must hand back the engine that create_async_engine
+        # built. Without this assertion the test passes even when the factory
+        # returns None, so the caller would fail later with no cause.
+        assert engine is mock_create.return_value

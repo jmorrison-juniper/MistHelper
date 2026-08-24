@@ -20,11 +20,12 @@ import csv  # WHY: audit-trail CSV writer.
 import importlib  # WHY: lazy MistHelper import to reach live helper classes without circular load.
 import logging  # WHY: structured lifecycle + audit logging.
 import os  # WHY: env-var config + path helpers for the audit CSV.
-import time  # WHY: inter-call sleep to respect API rate limits.
 from datetime import datetime  # WHY: timestamps for scan snapshot + audit trail rows.
 from typing import Any  # WHY: raw WLAN rows are duck-typed dicts from mistapi.
 
 import mistapi  # WHY: direct SDK access for listOrgWlans + updateOrgWlan endpoints.
+
+from src.utils.rate_limiting import AdaptivePacer  # WHY: quota-aware pacing for the bulk WLAN timer PUT loop.
 
 
 class BulkRadiusWLANConfigManager:
@@ -364,12 +365,18 @@ class BulkRadiusWLANConfigManager:
         print(f"\n[*] {mode_label} configuration to {len(self.selected_wlans)} WLANs...")  # Announce.
         success_count = 0  # WLANs updated successfully.
         fail_count = 0  # WLANs that failed.
+        mh = importlib.import_module("MistHelper")  # WHY: reach the live session and the shared quota cache.
+        pacer = AdaptivePacer(  # WHY: quota-aware pacing replaces the fixed 0.3 second sleep.
+            getattr(mh, "apisession", None),  # WHY: the PID pipeline reads the quota through this session.
+            getattr(mh, "_api_usage_cache", None),  # WHY: share one quota view with every other menu.
+            not self.dry_run,  # WHY: a dry run sends no request, so it must not wait.
+        )
         for idx, wlan in enumerate(self.selected_wlans, 1):  # Process each (1-based for display).
             if self._update_one_wlan(idx, wlan):  # Dispatch the per-WLAN update.
                 success_count += 1  # Count success.
             else:
                 fail_count += 1  # Count failure.
-            time.sleep(0.3)  # Brief pause between writes to respect API rate limits.
+            pacer.pace()  # WHY: quota-aware wait replaces the fixed sleep between WLAN writes.
         result_label = "DRY-RUN complete" if self.dry_run else "Update complete"  # Final verb.
         print(f"\n[+] {result_label}: {success_count} successful, {fail_count} failed")  # Show totals.
         logging.info("%s: %s success, %s failed", result_label, success_count, fail_count)  # Log totals.

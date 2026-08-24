@@ -67,7 +67,7 @@ class DataDirectoryChecker:
     def _test_write_permission(self) -> bool:  # Validate data directory write access via test file
         """Create and remove a test file to verify write access."""
         with open(
-            self.test_file, "w"
+            self.test_file, "w", encoding="utf-8"
         ) as file_handle:  # Open test file for writing (will fail if directory not writable)
             file_handle.write("test")  # Write marker content to test file
         os.remove(self.test_file)  # Delete test file to clean up

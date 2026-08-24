@@ -49,6 +49,7 @@ from src.site.address_audit.suite_patterns import (
     SUITE_PATTERN_CAPTURE as _SUITE_PATTERN,
 )  # Shared suite detector (capturing).
 from src.utils.input_utils import InputUtils  # EOF-safe operator prompts.
+from src.utils.tls_policy import TLSVerificationPolicy  # One control for certificate verification.
 
 try:  # Optional dependency: tqdm renders the per-row progress bar.
     from tqdm import tqdm  # Progress bar for the resolve loop.
@@ -456,12 +457,14 @@ class AddressAuditEngine:
     def _skip_ssl_verify() -> bool:
         """Return whether to skip TLS verification for the public Nominatim call.
 
-        Defaults to True because the deployment environment sits behind Zscaler
-        SSL inspection, whose MITM cert otherwise breaks the OpenStreetMap call.
-        Set ``MIST_SKIP_SSL_VERIFY=false`` to enforce verification (non-Zscaler hosts).
+        Defaults to False, because an unverified call exposes the traffic to
+        any host on the network path. Set ``MIST_SKIP_SSL_VERIFY=true`` to opt
+        out behind a proxy that inspects TLS. A better answer is to mount the
+        corporate certificate authority bundle and keep the check on.
+
+        See issue #1914. This helper defaulted to True before that fix.
         """
-        raw = os.environ.get("MIST_SKIP_SSL_VERIFY", "true").strip().lower()  # Env override. Default on.
-        return raw not in ("false", "0", "no", "off")  # Any falsey token re-enables verification.
+        return TLSVerificationPolicy.skip_verification()  # One control decides for every caller.
 
     @staticmethod
     def _make_ui_geocoder(perf: PhaseTimer) -> Any:

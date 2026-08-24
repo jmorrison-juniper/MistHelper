@@ -4,10 +4,31 @@ PublishPort=2200:2200
 PublishPort=8055:8055
 Volume=./data:/app/data:rw
 EnvironmentFile=./.env
+# Health probe for the web portal readiness endpoint (issue #1863).
+# A Quadlet build can drop the Containerfile HEALTHCHECK instruction when the
+# image uses the OCI format, so the unit states the command itself.
+# The image installs no curl, so the probe runs the Python interpreter.
+HealthCmd=python -c "import os,urllib.request;urllib.request.urlopen('http://127.0.0.1:'+os.environ.get('WEB_PORT','8055')+'/ready',timeout=8)"
+HealthInterval=30s
+HealthTimeout=10s
+HealthRetries=3
+HealthStartPeriod=60s
+# Restart the container when the probe reports an unhealthy state. Restart=always
+# alone cannot recover a wedged portal, because the process stays alive.
+HealthOnFailure=restart
 
 [Service]
+# Restart the container after every exit, including a crash of a supervised
+# service. container/scripts/start.sh exits with a non-zero status when the web
+# portal or sshd dies, so an on-failure policy also acts. See issue #1925.
 Restart=always
 RestartSec=5
+# Give the shutdown chain time to finish before systemd forces a stop.
+# PORTAL_OPERATION_SHUTDOWN_GRACE_SECONDS (default 30) sets the Python grace
+# period and the Gunicorn --graceful-timeout value. container/scripts/start.sh
+# then waits that period plus a 10 second margin before it sends SIGKILL.
+# This value stays above the bash-side wait, so systemd never cuts the drain short.
+TimeoutStopSec=60
 
 [Install]
 WantedBy=default.target

@@ -45,7 +45,7 @@ for i, line in enumerate(lines):
         func_ranges.append({"name": full_name, "start": i + 1, "class": current_class})
 
 # Load catalog
-with open("specs/010-endpoint-usage-audit/catalog_matched.json") as f:
+with open("specs/010-endpoint-usage-audit/catalog_matched.json", encoding="utf-8") as f:
     catalog = json.load(f)
 
 # For each MistHelper call site, find containing function
@@ -97,11 +97,11 @@ for cs in catalog:
     cs["menu_operations"] = matched_menus
 
 # Save
-with open("specs/010-endpoint-usage-audit/catalog_matched.json", "w") as f:
+with open("specs/010-endpoint-usage-audit/catalog_matched.json", "w", encoding="utf-8") as f:
     json.dump(catalog, f, indent=2)
 
 # Save menu map
-with open("specs/010-endpoint-usage-audit/menu_map.json", "w") as f:
+with open("specs/010-endpoint-usage-audit/menu_map.json", "w", encoding="utf-8") as f:
     json.dump({str(k): v for k, v in sorted(menu_map.items())}, f, indent=2)
 
 # Stats

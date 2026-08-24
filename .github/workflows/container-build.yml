@@ -12,6 +12,9 @@ on:
       - 'src/**'
       - 'web_portal/**'
       - 'tests/**'
+  # GitHub starts no push run for a merge that GITHUB_TOKEN performs, so the
+  # image on the registry went stale. Issue #1851 records the effect. The
+  # Auto-merge workflow calls this trigger after every merge into main.
   workflow_dispatch:
     inputs:
       version_override:

@@ -221,27 +221,33 @@ function ParamRow({
   return (
     <div className="grid grid-cols-5 gap-2 items-end">
       <div>
-        <label className="block text-xs text-text-muted">Name</label>
-        <input type="text" value={param.name} title="Parameter name"
-          onChange={(e) => onChange(index, 'name', e.target.value)}
-          className="w-full border border-border-default rounded px-2 py-1 text-xs bg-surface-primary text-text-primary" />
+        <label className="block text-xs text-text-muted">
+          <span className="block">Name</span>
+          <input type="text" value={param.name} title="Parameter name"
+            onChange={(e) => onChange(index, 'name', e.target.value)}
+            className="w-full border border-border-default rounded px-2 py-1 text-xs bg-surface-primary text-text-primary" />
+        </label>
       </div>
       <div>
-        <label className="block text-xs text-text-muted">Label</label>
-        <input type="text" value={param.label} title="Parameter label"
-          onChange={(e) => onChange(index, 'label', e.target.value)}
-          className="w-full border border-border-default rounded px-2 py-1 text-xs bg-surface-primary text-text-primary" />
+        <label className="block text-xs text-text-muted">
+          <span className="block">Label</span>
+          <input type="text" value={param.label} title="Parameter label"
+            onChange={(e) => onChange(index, 'label', e.target.value)}
+            className="w-full border border-border-default rounded px-2 py-1 text-xs bg-surface-primary text-text-primary" />
+        </label>
       </div>
       <div>
-        <label className="block text-xs text-text-muted">Type</label>
-        <select value={param.type} title="Parameter type"
-          onChange={(e) => onChange(index, 'type', e.target.value)}
-          className="w-full border border-border-default rounded px-2 py-1 text-xs bg-surface-primary text-text-primary">
-          <option value="string">String</option>
-          <option value="number">Number</option>
-          <option value="boolean">Boolean</option>
-          <option value="select">Select</option>
-        </select>
+        <label className="block text-xs text-text-muted">
+          <span className="block">Type</span>
+          <select value={param.type} title="Parameter type"
+            onChange={(e) => onChange(index, 'type', e.target.value)}
+            className="w-full border border-border-default rounded px-2 py-1 text-xs bg-surface-primary text-text-primary">
+            <option value="string">String</option>
+            <option value="number">Number</option>
+            <option value="boolean">Boolean</option>
+            <option value="select">Select</option>
+          </select>
+        </label>
       </div>
       <div className="flex items-center gap-1">
         <input type="checkbox" checked={param.required} title="Required"

@@ -23,6 +23,9 @@ BYTES_PER_GB = 1024**3  # WHY: convert dataSize (bytes) into GB units
 SECONDS_PER_HOUR = 3600  # WHY: hour -> seconds for sweep sleep interval
 STOP_JOIN_TIMEOUT_SEC = 5  # WHY: bounded join so shutdown never hangs
 REDIS_COMPACTION_PATTERN = "*.avg_1h"  # WHY: match compacted 1h-avg TS keys
+REDIS_SCAN_BATCH = 500  # WHY: COUNT per batch. Redis yields between batches
+REDIS_SCAN_MAX_KEYS = 100000  # WHY: cap the sweep cost as the keyspace grows
+REDIS_SCAN_START_CURSOR = 0  # WHY: the SCAN contract starts and ends at 0
 SWEEP_THREAD_NAME = "retention-sweep"  # WHY: identifiable name in ps/threads
 ENV_MAX_STORAGE_GB = "ARANGO_MAX_STORAGE_GB"  # WHY: override for ceiling GB
 ENV_CHECK_INTERVAL_HOURS = "RETENTION_CHECK_INTERVAL_HOURS"  # WHY: sweep hrs
@@ -32,7 +35,9 @@ EVT_STORAGE_FAIL = "storage_check_failed"  # WHY: log key: stats call failed
 EVT_SNAPSHOTS_PURGED = "arango_snapshots_purged"  # WHY: log key: purge done
 EVT_PURGE_FAIL = "purge_failed"  # WHY: log key: AQL REMOVE raised
 EVT_REDIS_CHECKED = "redis_retention_checked"  # WHY: log key: TS scan done
-EVT_REDIS_FAIL = "redis_check_failed"  # WHY: log key: KEYS command raised
+EVT_REDIS_FAIL = "redis_check_failed"  # WHY: log key: SCAN command raised
+EVT_REDIS_SCAN_START = "redis_retention_scan_started"  # WHY: log key: pre-scan
+EVT_REDIS_SCAN_CAPPED = "redis_retention_scan_capped"  # WHY: log key: cap hit
 EVT_SWEEP_STARTED = "retention_sweep_started"  # WHY: log key: thread spawned
 EVT_SWEEP_STOPPED = "retention_sweep_stopped"  # WHY: log key: thread joined
 EVT_SWEEP_ERROR = "retention_sweep_error"  # WHY: log key: sweep raised
@@ -123,13 +128,20 @@ class RetentionManager:  # WHY: single owner of ArangoDB+Redis retention
         client = getattr(self._redis, "_client", None)  # WHY: writer duck-type
         if client is None:  # WHY: no client -> zero keys checked
             return 0  # WHY: zero signals "nothing to validate"
+        logger.info(
+            EVT_REDIS_SCAN_START,
+            pattern=REDIS_COMPACTION_PATTERN,
+            max_keys=REDIS_SCAN_MAX_KEYS,
+        )  # WHY: record the scan bounds before the first round trip
         try:
-            keys = client.execute_command("KEYS", REDIS_COMPACTION_PATTERN)  # WHY: list compacted 1h-avg TS keys
-            logger.info(EVT_REDIS_CHECKED, keys=len(keys))
-            return len(keys)  # WHY: callers want count, not the key list
-        except Exception as error:  # WHY: KEYS may error on unreachable redis
+            count, capped = _scan_key_count(client)  # WHY: helper keeps LoC low
+        except Exception as error:  # WHY: SCAN may error on unreachable redis
             logger.warning(EVT_REDIS_FAIL, error=str(error))
             return 0
+        if capped:  # WHY: a partial count must never look like a full count
+            logger.warning(EVT_REDIS_SCAN_CAPPED, keys=count)
+        logger.info(EVT_REDIS_CHECKED, keys=count, capped=capped)
+        return count  # WHY: callers want count, not the key list
 
     def start_periodic(self) -> None:
         """Start background retention sweep thread."""
@@ -165,6 +177,37 @@ class RetentionManager:  # WHY: single owner of ArangoDB+Redis retention
             except Exception as error:  # WHY: swallow so loop stays alive
                 logger.error(EVT_SWEEP_ERROR, error=str(error))
             self._stop_event.wait(interval)  # WHY: interruptible sleep
+
+
+def _normalize_cursor(cursor: Any) -> int:
+    """Convert a SCAN cursor reply into an int."""
+    if isinstance(cursor, (bytes, bytearray)):  # WHY: raw replies arrive as bytes
+        return int(cursor.decode("ascii"))  # WHY: a cursor is an ASCII digit run
+    return int(cursor)  # WHY: an int cursor or a str cursor converts directly
+
+
+def _scan_key_count(client: Any) -> tuple[int, bool]:
+    """Count matching Redis keys with a bounded SCAN loop.
+
+    Returns the key count and a flag that reports the upper bound was hit.
+    """
+    cursor = REDIS_SCAN_START_CURSOR  # WHY: the SCAN contract starts at 0
+    total = 0  # WHY: sum the batch sizes so no full key list is ever held
+    while True:  # WHY: SCAN needs repeat calls until the cursor returns to 0
+        cursor, batch = client.execute_command(
+            "SCAN",
+            cursor,
+            "MATCH",
+            REDIS_COMPACTION_PATTERN,
+            "COUNT",
+            REDIS_SCAN_BATCH,
+        )  # WHY: one bounded batch lets Redis serve other clients in between
+        total += len(batch)  # WHY: keep the count only. The batch is dropped
+        cursor = _normalize_cursor(cursor)  # WHY: bytes cursors must compare
+        if total >= REDIS_SCAN_MAX_KEYS:  # WHY: cap the cost of one sweep
+            return total, True  # WHY: report a partial count to the caller
+        if cursor == REDIS_SCAN_START_CURSOR:  # WHY: cursor 0 ends the scan
+            return total, False  # WHY: the full pass finished under the cap
 
 
 def _execute_purge(database: Any) -> int:

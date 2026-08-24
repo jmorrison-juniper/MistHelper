@@ -26,6 +26,8 @@ import time  # WHY: Timing for output loops, cleanup, total duration
 from dataclasses import dataclass  # WHY: Frozen slotted state bundle keeps _collect_output CC low
 from typing import Any  # WHY: paramiko Channel type is dynamic across paramiko versions
 
+from src.utils.console import echo  # WHY: spec 1031 console echo keeps stdout text and drops the WARNING level.
+
 logger = logging.getLogger(__name__)  # WHY: Module-scoped logger for the drain-progress staticmethod
 
 # Module-level constants - extracted so each method's CC stays low (no magic numbers in branches)
@@ -54,6 +56,7 @@ _LARGE_OUTPUT_PRINT_MB = 5.0  # WHY: Only print "receiving large output" for out
 _INITIAL_DRAIN_BUFFER = 4096  # WHY: Buffer size for initial-prompt / cleanup-tail drains
 _CLEANUP_TAIL_SLEEP_S = 0.1  # WHY: Cleanup-tail poll cadence and post-drain pause
 _MB_DIVISOR = 1024 * 1024  # WHY: Bytes-to-megabytes conversion factor
+_NO_ACTIVE_CONNECTION_MSG = "No active SSH connection"  # WHY: shared guard message, issue #1720
 _SHELL_ARTIFACTS: tuple[str, ...] = (  # WHY: Substrings (case-insensitive) that mark filterable shell noise
     "exit",
     "logout",
@@ -154,9 +157,8 @@ class ShellExecutor:
         self, command: str, start_time: float, hostname: str = "unknown"
     ) -> tuple[bool, str, str]:  # WHY: Public entry orchestrates every phase of shell execution
         """Execute ``command`` over an interactive shell and return ``(success, stdout, stderr)``."""
-        assert (
-            self.client is not None
-        ), "No active SSH connection"  # nosec B101 - precondition  # WHY: Precondition invariant for callers holding a live client
+        if self.client is None:  # WHY: a runtime guard must survive python -O, issue #1720
+            raise ValueError(_NO_ACTIVE_CONNECTION_MSG)  # WHY: reject a call made without a live client
         self.logger.info(
             "ShellExecutor: starting interactive shell command on %s", hostname
         )  # WHY: Diagnostic breadcrumb for host-scoped log filtering
@@ -395,8 +397,8 @@ class ShellExecutor:
         state.output += (
             f"\n\n[OUTPUT TRUNCATED - Size limit of {cap_mb}MB reached]\n"  # WHY: Verbatim truncation marker
         )
-        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        self.logger.warning("!? [%s] Output truncated at %dMB, draining remaining data...", hostname, cap_mb)
+        # WHY: spec 1031 console echo. The genuine truncation warning stays above at WARNING.
+        echo("!? [%s] Output truncated at %dMB, draining remaining data...", hostname, cap_mb)  # WHY: notify operator.
         state.truncated = True  # WHY: Loop will drain the tail and exit
 
     def _log_chunk_progress(

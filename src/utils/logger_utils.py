@@ -7,10 +7,13 @@ Target audience: Junior NOC engineers who should never see credentials
 in log files even when DEBUG level is enabled.
 """
 
+import hashlib  # One-way digests for private values that must stay correlatable in a log
 import logging  # Standard library logging for type annotations
 import re  # Regex for pattern-based redaction
 
 REDACTED_PLACEHOLDER = "***REDACTED***"  # Canonical placeholder for scrubbed values
+PRIVATE_DIGEST_EMPTY = "none"  # Token used when the caller supplies no private text
+_PRIVATE_DIGEST_LENGTH = 12  # Hex characters kept from the digest. Enough to stay unique within one run
 
 # Regex patterns that identify credential-like keys in log records.
 # Match is case-insensitive so "Password", "PASSWORD", "password" all trigger.
@@ -40,6 +43,38 @@ def redact_secret(value: str) -> str:
     """
     _ = value  # Accept the value so callers do not need to gate on None. Discard it
     return REDACTED_PLACEHOLDER  # Return placeholder instead of the real value
+
+
+def private_digest(value: str | None) -> str:
+    """Return a short one-way token for a private value so a log never shows the value.
+
+    Use this for personal data that is not a credential, such as a street
+    address. ``redact_secret`` returns the same placeholder for every input, so
+    two log lines about two different addresses look identical. This helper
+    returns a stable token instead. An operator can still follow one address
+    through a whole run, but the log file never holds the address itself.
+
+    The digest is one-way. A reader of the log cannot recover the address from
+    the token.
+
+    Args:
+        value: The private string to protect, such as a street address.
+
+    Returns:
+        ``"none"`` when the value is empty or holds only whitespace.
+        A 12-character lowercase hexadecimal token in every other case.
+
+    Example::
+
+        logging.info("Resolving address (key=%s)", private_digest(street))
+        # -> "Resolving address (key=3f8a1c2d9b04)"
+    """
+    if not value or not value.strip():  # No private text to protect. Keep the log line readable
+        return PRIVATE_DIGEST_EMPTY  # Constant token marks an absent value
+    normalized = " ".join(value.lower().split())  # Case and spacing must not change the token
+    encoded = normalized.encode("utf-8")  # SHA-256 needs bytes, and UTF-8 keeps non-ASCII input stable
+    digest = hashlib.sha256(encoded).hexdigest()  # One-way digest. The private value cannot be restored
+    return digest[:_PRIVATE_DIGEST_LENGTH]  # A short prefix keeps the log line readable
 
 
 def redact_if_sensitive(key: str, value: str) -> str:

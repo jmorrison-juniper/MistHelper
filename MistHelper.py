@@ -777,7 +777,7 @@ try:  # Try to load environment variables from a .env file before any dependency
 except Exception:  # If python-dotenv is not installed yet, fall back to a manual parser
     # Inline fallback: read .env manually so env vars are available
     try:  # Try a best-effort manual parse of the .env file
-        with open(".env") as _ef:  # Open .env in the current working directory
+        with open(".env", encoding="utf-8") as _ef:  # Open .env in the current working directory
             for _line in _ef:  # Process the file one line at a time
                 _line = _line.strip()  # Remove surrounding whitespace and the trailing newline
                 if (
@@ -1154,7 +1154,7 @@ def _apply_dotenv_line(line: str) -> None:  # Set one KEY=VALUE pair from a .env
 def _fallback_load_dotenv() -> None:  # Minimal .env parser used when python-dotenv is not installed
     """Fallback .env loader when python-dotenv package is not installed."""
     try:  # The .env file is optional. Handle its absence/errors gracefully
-        with open(".env") as dotenv_file:  # Open .env in the current working directory
+        with open(".env", encoding="utf-8") as dotenv_file:  # Open .env in the current working directory
             for line in dotenv_file:  # Process the file one line at a time
                 _apply_dotenv_line(line)  # Set this KEY=VALUE pair (skips blanks/comments internally)
     except FileNotFoundError:  # No .env file present
@@ -3356,6 +3356,7 @@ def _configure_site_config_manager() -> type[SiteConfigManager]:
             data_exporter=DataExporter,  # Result-report writer
             mistapi=mistapi,  # Root SDK module for calls + pagination
             default_api_page_limit=DEFAULT_API_PAGE_LIMIT,  # Bulk fetch page size
+            api_usage_cache=_api_usage_cache,  # Shared quota view for the adaptive rate limiter
         )
     )
     return SiteConfigManager  # Canonical class ready for menu callback dispatch
@@ -4851,6 +4852,30 @@ def _run_web_portal_server(app: Any, host: str, port: int, dev_debug: bool) -> N
         app.run(host=host, port=port, debug=dev_debug)  # Honor caller's debug flag locally
 
 
+def _resolve_web_portal_host() -> str:
+    """Return the address that the web portal binds to.
+
+    The WEB_HOST variable overrides every default. Without that
+    variable, a container binds to all interfaces, and a
+    workstation binds to the loopback address.
+    """
+    logging.info("WEB_PORTAL: resolving the bind address for the web portal")  # Log before the resolution starts
+    override_host = os.environ.get("WEB_HOST")  # An operator value must win over both defaults
+    if override_host:  # A set WEB_HOST value controls the bind on a container and on a workstation
+        logging.debug("WEB_PORTAL: bind address came from WEB_HOST: %s", override_host)  # Report the override result
+        return override_host  # Return the operator value and skip the container check
+    in_container = EnvironmentUtils.is_running_in_container()  # Only a container gets the all-interfaces bind
+    if not in_container:  # A workstation must keep the portal on the loopback interface
+        logging.debug("WEB_PORTAL: bind address is the loopback address on a workstation")  # Report the result
+        return "127.0.0.1"  # Keep the portal off every external interface of the workstation
+    # The next assignment runs only when is_running_in_container() returns True. A container needs the
+    # all-interfaces bind, because the container network maps the port from outside. The container port map
+    # controls the exposure, and a workstation returns the loopback address above.
+    all_interfaces_host = "0.0.0.0"  # nosec B104
+    logging.debug("WEB_PORTAL: bind address is %s inside a container", all_interfaces_host)  # Report the result
+    return all_interfaces_host  # Hand the container bind address to the launcher
+
+
 def _launch_web_portal(args: argparse.Namespace) -> None:
     """Launch the Flask web portal.
 
@@ -4865,7 +4890,7 @@ def _launch_web_portal(args: argparse.Namespace) -> None:
     loader = PortalConfigLoader()  # Read web_port + other portal settings from env/.env
     config = loader.load_config()
     port = config["web_port"]
-    host = os.environ.get("WEB_HOST") or ".".join(("0",) * 4)  # All-interfaces bind (env override wins) for containers.
+    host = _resolve_web_portal_host()  # Loopback on a workstation, all interfaces in a container, WEB_HOST wins
 
     app = WebPortalApp.create_app(  # Construct Flask app with shared API session + menu registry
         apisession=apisession,

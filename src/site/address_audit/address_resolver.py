@@ -16,6 +16,12 @@ A SQLite ``geocoding_cache`` table in ``data/mist_data.db`` is read before any
 Tier 2/3 call and upserted after, so reruns make zero external calls for
 unchanged addresses. Any failure degrades to ``ResolverResult(canonical_address
 =None)`` (the row classifies ``NO_RESULT``) -- the audit is never aborted.
+
+Log privacy policy (issue 1733): a street address is private data, and
+``data/script.log`` travels inside the menu-101 support bundle. Every log call in
+this module therefore passes an address through ``private_digest`` first. The
+digest is stable, so an operator can still follow one address across a run, but
+the log file never holds the address itself.
 """
 
 from __future__ import annotations  # PEP 604 union syntax on Python 3.13.
@@ -33,6 +39,7 @@ from src.site.address_audit.models import ResolveCandidates, ResolverResult  # R
 from src.site.address_audit.perf import PhaseTimer  # Per-phase timing to expose slow tiers.
 from src.site.address_audit.suite_patterns import SUITE_PATTERN as _SUITE_PATTERN  # Shared suite/unit detector.
 from src.utils.address_utils import AddressValidationConfig, NominatimValidator  # Reused Tier-2 validator.
+from src.utils.logger_utils import private_digest  # Keep street addresses out of data/script.log (issue 1733).
 
 _DB_RELATIVE_PATH = os.path.join("data", "mist_data.db")  # Constitution-fixed cache location.
 _NOMINATIM_MIN_INTERVAL = 1.1  # Seconds between Nominatim calls (>=1 req/sec ToS).
@@ -61,14 +68,14 @@ class AddressResolver:
         """Resolve one site's address: cache -> Tier 1 -> Tier 2 -> optional Tier 3."""
         query = self._build_query(candidates)  # Construct the human-readable query string.
         key = self._build_query_key(query)  # Normalize it into a cache key.
-        logging.info("Resolving address (key=%s)", key)  # Action-log the resolve start.
+        logging.info("Resolving address (key=%s)", private_digest(key))  # Log the digest, never the street.
         with self._perf.phase("cache_read"):  # Time the SQLite cache lookup.
             cached = self._from_cache(key)  # Cache read before any external call.
         if cached is not None:  # Cache hit -> zero external calls.
             return cached  # Return the cached result verbatim.
         result = self._resolve_uncached(candidates, query)  # Run the tier cascade.
         self._to_cache(key, result)  # Persist the outcome (including negatives).
-        logging.debug("Resolved key=%s via source=%s", key, result.source)  # Action-log the outcome.
+        logging.debug("Resolved key=%s via source=%s", private_digest(key), result.source)  # Digest hides the street.
         return result  # Hand the result back to the engine.
 
     def _resolve_uncached(self, candidates: ResolveCandidates, query: str) -> ResolverResult:
@@ -82,7 +89,7 @@ class AddressResolver:
                 ui = self._maybe_ui(candidates, query)  # Tier 3: Google-via-Mist authority (gated. Fail-soft).
             return self._combine(internal, osm, ui, query)  # Merge the tiers into one result. Candidates are unused.
         except Exception as exc:  # noqa: BLE001 -- one row must never abort the audit.
-            logging.warning("Resolve failed for key derived from '%s': %s", query, exc)  # Log and continue.
+            logging.warning("Resolve failed for key=%s: %s", private_digest(query), exc)  # Digest hides the street.
             return ResolverResult(query=query, canonical_address=None, source="internal", confidence=0.0)
 
     def _combine(
@@ -149,7 +156,8 @@ class AddressResolver:
         if not suite:  # Neither internal source supplies a suite Mist lacks.
             return None  # Nothing to add. Defer to Tier 2.
         clean = self._build_clean_suggestion(candidates.mist_address, suite)  # Mist base + suite, no pollution.
-        logging.debug("Tier 1 internal suggestion (suite=%s): %s", suite, clean)  # Trace the internal hit.
+        # WHY: log a digest and a suite-found flag. The suite and the street are both private (issue 1733).
+        logging.debug("Tier 1 internal suggestion (suite_found=%s, key=%s)", bool(suite), private_digest(clean))
         return ResolverResult(query="", canonical_address=clean, source="internal", confidence=0.7)
 
     def _pick_internal_suite(self, candidates: ResolveCandidates) -> str:  # WHY: keep suite fallback out of Tier 1.
@@ -190,7 +198,8 @@ class AddressResolver:
         self.external_calls += 1  # Count this external call for the run summary.
         mist_street = self._strip_suite_from_dict(candidates.mist_address)  # OSM has no suites -> validate street.
         csv_street = self._strip_suite_from_dict(candidates.csv_address)  # Strip suite so the street can match.
-        logging.info("Validating street via OpenStreetMap/Nominatim: %s", csv_street.get("address", query))
+        street_for_log = csv_street.get("address", query)  # WHY: name the street once so the digest call stays short.
+        logging.info("Validating street via Nominatim (key=%s)", private_digest(street_for_log))  # Digest, not street.
         validator = NominatimValidator(self._nominatim_config)  # Build the reused validator.
         outcome = validator.validate(mist_street, csv_street)  # Geocode both suite-stripped streets.
         comparison = outcome.get("comparison_validation", {})  # The CSV-side geocode result.
@@ -199,7 +208,8 @@ class AddressResolver:
             return None  # Defer to Tier 3 / NO_RESULT.
         confidence = float(comparison.get("confidence", 0.0))  # OSM importance-derived confidence.
         canonical = self._nominatim_canonical(candidates, comparison)  # Clean street line (not raw display_name).
-        logging.info("Nominatim validated street: %s (confidence=%.2f)", canonical, confidence)  # Visible hit.
+        # WHY: the digest proves which street matched without writing the street into the support bundle.
+        logging.info("Nominatim validated street (key=%s, confidence=%.2f)", private_digest(canonical), confidence)
         return ResolverResult(  # Build the Tier-2 result.
             query=query,  # Echo the query for caching.
             canonical_address=canonical,  # OSM-canonicalized address.
@@ -217,8 +227,8 @@ class AddressResolver:
     ) -> None:  # WHY: single-purpose helper keeps _validate_nominatim under the 25-line cap.
         """Emit the "no result" warning with the actual street that was geocoded."""
         street_for_log = csv_street.get("address") or mist_street.get("address") or query  # WHY: prefer the CSV try.
-        logging.warning(  # WHY: show the real street, not the business+suite query string.
-            "Nominatim returned no result for street '%s' (check network/SSL)", street_for_log
+        logging.warning(  # WHY: a digest identifies the failed street without exposing it.
+            "Nominatim returned no result for street key=%s (check network/SSL)", private_digest(street_for_log)
         )
 
     def _nominatim_canonical(self, candidates: ResolveCandidates, comparison: dict[str, Any]) -> str:
@@ -272,7 +282,7 @@ class AddressResolver:
         plain = self._consensus_address(candidates)  # The same address without the business prefix.
         if not plain:  # No usable plain query to retry with.
             return result  # Keep the (empty) primary result.
-        logging.info("Tier 3 retrying without business prefix: %s", plain)  # Action-log the fallback.
+        logging.info("Tier 3 retrying without business prefix (key=%s)", private_digest(plain))  # Digest the retry.
         self.external_calls += 1  # Count the fallback lookup.
         return self._ui_geocoder.geocode_via_ui(plain)  # Plain-address retry (fail-soft).
 
@@ -365,7 +375,8 @@ class AddressResolver:
             return False  # Nothing for the sources to disagree about.
         if not self._has_tied_leaders(numbers, distinct):  # WHY: single leader = majority-wins, no conflict.
             return False  # Clear leader breaks the tie -> not a conflict.
-        logging.info("Conflicting hint house numbers %s; no majority to trust", sorted(distinct))  # Explain the flag.
+        # WHY: a house number is part of a private address, so log the count only (issue 1733).
+        logging.info("Conflicting hint house numbers: %d distinct values, no majority to trust", len(distinct))
         return True  # True only when the sources actively disagree with no winner.
 
     @staticmethod
@@ -475,7 +486,7 @@ class AddressResolver:
         if row is None:  # No cached entry for this key (or read failed).
             return None  # Caller resolves live.
         self.cache_hits += 1  # Count the hit for the run summary.
-        logging.debug("cache hit for %s", key)  # Action-log the hit.
+        logging.debug("cache hit for key=%s", private_digest(key))  # Action-log the hit without the street.
         return self._row_to_result(row, key)  # WHY: hydration is a pure transform of tuple -> dataclass.
 
     def _fetch_cached_row(self, key: str) -> tuple[Any, Any, Any, Any] | None:  # WHY: split I/O from mapping.

@@ -44,10 +44,11 @@ import logging  # Action logging before/after every operation (project NON-NEGOT
 import os  # Filesystem probing for the Edge executable.
 import re  # House-number extraction + suggestion cleanup (defeats the autocomplete lag race).
 import secrets  # Unpredictable RNG source for human-like typing jitter (lint-clean, not security-critical).
-import shutil  # PATH lookup fallback for the Edge executable.
+import shutil  # PATH lookup for the Edge executable and removal of the throwaway profile directory.
 import subprocess  # nosec B404 - The module spawns a debuggable browser, and the call below uses shell=False.
 import tempfile  # Dedicated throwaway profile for the spawned browser.
 import time  # Politeness delay between Google Places lookups.
+from dataclasses import dataclass  # Named structure that pairs the spawned process with its profile directory.
 from typing import Any  # Loose typing for Playwright handles (kept import-light).
 
 from src.site.address_audit.models import ResolverResult, UIGeocoderConfig  # Shared dataclasses.
@@ -76,6 +77,7 @@ _EDGE_INSTALL_TAIL = (
     _EDGE_EXE_NAME,
 )  # WHY: path tail under each ProgramFiles root.
 _PROFILE_PREFIX = "misthelper-edge-"  # WHY: throwaway profile dir prefix so we never touch the operator's real profile.
+_SPAWNED_EXIT_TIMEOUT_S = 10.0  # WHY: bounded wait for Edge to exit, because Edge locks the profile dir until then.
 
 # --- Selector constants (captured 2026-06-29. Re-verify if the Mist dashboard UI changes) ---
 # Google Places Autocomplete attaches ``pac-target-input`` to the bound input and
@@ -87,6 +89,20 @@ INPUT_SELECTORS: tuple[str, ...] = (
     "input[placeholder*='Location']",  # Looser placeholder fallback.
 )
 PAC_ITEM_SELECTOR: str = ".pac-container .pac-item"  # Each Google suggestion row in the dropdown.
+
+
+@dataclass(frozen=True, slots=True)  # WHY: frozen keeps the spawn result immutable for its whole lifetime.
+class SpawnedBrowser:
+    """The debuggable browser we spawned and the throwaway profile directory it uses.
+
+    The caller owns both fields. The caller stops the process first, then removes
+    the directory. A spawned Edge that completed a Mist login holds the cache, the
+    cookies, and the local storage of that session in the directory, so the
+    teardown path must remove it (issue #1862).
+    """
+
+    process: subprocess.Popen[bytes]  # WHY: the caller stops this process when the audit finishes.
+    profile_dir: str  # WHY: the caller removes this directory after the process stops.
 
 
 class MistUIGeocoder:
@@ -106,6 +122,7 @@ class MistUIGeocoder:
         self._context: Any = None  # Active browser context (operator session or fresh).
         self._connected: bool = False  # Whether a usable browser is attached.
         self._spawned_proc: Any = None  # Popen handle when we spawned a debuggable Edge (auto mode).
+        self._spawned_profile_dir: str | None = None  # Throwaway profile to remove once the spawned Edge stops.
         self._lookups_done: int = 0  # Counter enforcing the per-run max-lookups cap.
         logging.debug("MistUIGeocoder initialized (mode=%s)", self._config.connect_mode)  # Trace init.
 
@@ -146,11 +163,12 @@ class MistUIGeocoder:
         if self._try_attach():  # A debuggable browser is already running -> reuse it.
             return True  # Attached to the operator's existing session.
         logging.info("No debuggable browser found; spawning one for login")  # Action-log the spawn path.
-        proc = MistUIGeocoder.spawn_debuggable_browser(self._cdp_port(), self._config.dashboard_url)  # Spawn Edge.
-        if proc is None:  # Edge not installed -> fall back to a Playwright launch.
+        spawned = MistUIGeocoder.spawn_debuggable_browser(self._cdp_port(), self._config.dashboard_url)  # Spawn Edge.
+        if spawned is None:  # Edge not installed -> fall back to a Playwright launch.
             logging.info("Edge unavailable to spawn; falling back to launch mode")  # Inform operator.
             return self._connect_launch()  # Last-resort interactive launch.
-        self._spawned_proc = proc  # Own the spawned browser's lifecycle (terminated on close()).
+        self._spawned_proc = spawned.process  # Own the spawned browser's lifecycle (terminated on close()).
+        self._spawned_profile_dir = spawned.profile_dir  # Own the profile so close() can remove the session material.
         self._await_spawn_login()  # Block until the operator logs in and opens a site settings page.
         return self._try_attach()  # Now take over the spawned, logged-in browser over CDP.
 
@@ -593,27 +611,67 @@ class MistUIGeocoder:
         self._connected = False  # Reset state so a stale handle is never reused.
 
     def _terminate_spawned(self) -> None:
-        """Terminate the debuggable Edge we spawned in auto mode (never raises)."""
-        if self._spawned_proc is None:  # We only own a process when we spawned one.
-            return  # Attach/launch modes have nothing to clean up here.
+        """Stop the debuggable Edge we spawned in auto mode and remove its profile (never raises)."""
+        if self._spawned_proc is not None:  # We only own a process when we spawned one.
+            self._stop_spawned_process()  # Stop Edge first, because Edge locks the profile directory.
+        self._remove_spawned_profile()  # Remove the throwaway profile once the browser process is gone.
+
+    def _stop_spawned_process(self) -> None:
+        """Terminate the spawned Edge and wait for its exit (never raises)."""
+        proc = self._spawned_proc  # Local handle keeps the log lines readable after we clear the field.
+        logging.info("Stopping the spawned debuggable Edge (pid=%s)", proc.pid)  # Action-log the stop request.
         try:
-            self._spawned_proc.terminate()  # Ask the spawned Edge to exit.
-            logging.debug("Terminated spawned debuggable Edge (pid=%s)", self._spawned_proc.pid)  # Trace.
+            proc.terminate()  # Ask the spawned Edge to exit.
+            proc.wait(timeout=_SPAWNED_EXIT_TIMEOUT_S)  # Wait, because Edge holds a lock on the profile directory.
+        except subprocess.TimeoutExpired:  # The browser ignored the polite request inside the budget.
+            logging.warning("The spawned Edge did not exit in %.1f seconds", _SPAWNED_EXIT_TIMEOUT_S)  # Inform.
+            MistUIGeocoder._kill_spawned_process(proc)  # Force the exit so the profile lock is released.
         except Exception as exc:  # noqa: BLE001 -- teardown must not raise.
             logging.debug("Spawned Edge terminate error (ignored): %s", exc)  # Trace and continue.
         self._spawned_proc = None  # Drop the handle so close() is idempotent.
+        logging.debug("Stopped the spawned debuggable Edge (pid=%s)", proc.pid)  # Action-log the result.
+
+    @staticmethod
+    def _kill_spawned_process(proc: Any) -> None:
+        """Kill a spawned browser that ignored the terminate request (never raises)."""
+        logging.info("Killing the spawned debuggable Edge (pid=%s)", proc.pid)  # Action-log the forced stop.
+        try:
+            proc.kill()  # Force the exit so the profile directory lock is released.
+            proc.wait(timeout=_SPAWNED_EXIT_TIMEOUT_S)  # Reap the process before the profile removal runs.
+        except Exception as exc:  # noqa: BLE001 -- teardown must not raise.
+            logging.debug("Spawned Edge kill error (ignored): %s", exc)  # Trace and continue.
+        logging.debug("Killed the spawned debuggable Edge (pid=%s)", proc.pid)  # Action-log the result.
+
+    def _remove_spawned_profile(self) -> None:
+        """Remove the throwaway profile directory of the spawned Edge (never raises)."""
+        profile = self._spawned_profile_dir  # Path recorded when we spawned the debuggable browser.
+        if profile is None:  # Attach mode and launch mode never create a throwaway profile.
+            return  # Nothing to remove, so a second close() call does nothing.
+        self._spawned_profile_dir = None  # Clear the path first, so a second close() call does nothing.
+        logging.info("Removing the spawned browser profile directory")  # Action-log without the session material.
+        try:
+            shutil.rmtree(profile, ignore_errors=True)  # Drop the cache, the cookies, and the local storage.
+        except Exception as exc:  # noqa: BLE001 -- teardown must not raise.
+            logging.warning("Could not remove the browser profile directory %s: %s", profile, exc)  # Inform.
+            return  # The audit continues, because a leftover directory does not stop it.
+        if os.path.isdir(profile):  # The ignore_errors flag hides a failure, so confirm the removal.
+            logging.warning("The browser profile directory remains on disk: %s", profile)  # Inform the operator.
+            return  # The audit continues, because a leftover directory does not stop it.
+        logging.debug("Removed the browser profile directory %s", profile)  # Confirm the cleanup for an operator.
 
     @staticmethod
     def spawn_debuggable_browser(
         cdp_port: int = _DEFAULT_CDP_PORT,
         dashboard_url: str = _DASHBOARD_URL_DEFAULT,
-    ) -> subprocess.Popen[bytes] | None:
+    ) -> SpawnedBrowser | None:
         """Launch system Edge with remote debugging so it can be taken over via CDP.
 
-        Returns the ``Popen`` handle (caller owns its lifecycle) or ``None`` when
-        Edge cannot be located. Uses a throwaway profile so the operator's normal
-        Edge profile is never touched. The operator logs into Mist in this window
-        once, then ``connect_mode="attach"`` reuses that session.
+        Returns a ``SpawnedBrowser`` that holds the process handle and the
+        throwaway profile directory (the caller owns both) or ``None`` when Edge
+        cannot be located. The throwaway profile keeps the operator's normal Edge
+        profile untouched, and the caller removes that directory on teardown. The
+        operator logs into Mist in this window once, then ``connect_mode="attach"``
+        reuses that session.
         """
         edge = MistUIGeocoder._edge_executable()  # Locate the system Edge binary.
         if edge is None:  # No Edge -> cannot offer a takeover target.
@@ -625,7 +683,7 @@ class MistUIGeocoder:
         # WHY: launch Edge now. The operator logs into Mist in this window, then the audit attaches over CDP.
         proc = subprocess.Popen(args)  # nosec B603 - _edge_executable resolved the path and the flags are literals.
         logging.debug("Debuggable Edge started (pid=%s)", proc.pid)  # Trace the PID.
-        return proc  # Caller terminates it when the audit finishes.
+        return SpawnedBrowser(process=proc, profile_dir=profile)  # Caller stops the process and removes the profile.
 
     @staticmethod
     def _debuggable_edge_args(edge: str, cdp_port: int, profile: str, dashboard_url: str) -> list[str]:

@@ -318,15 +318,17 @@ class ClientPacketCaptureDownloader:
         local_path = target / row.filename  # WHY: join via pathlib for cross-platform safety.
         logging.info("Downloading PCAP %s from %s", row.capture_id, row.pcap_url)  # WHY: audit before HTTP.
         try:  # WHY: transfer + write must not crash the batch.
-            response = requests.get(row.pcap_url, stream=True, timeout=_DEFAULT_TIMEOUT_SEC)  # WHY: stream.
-            if response.status_code != _HTTP_OK:  # WHY: guard non-200 responses before write.
-                # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-                logger.error("    Failed %s: HTTP %s", row.filename, response.status_code)  # WHY: feedback.
-                logging.error("Download failed %s: %s", row.capture_id, response.status_code)  # WHY: audit.
-                return False  # WHY: skip write on failure.
-            with open(local_path, "wb") as pcap_file:  # WHY: binary write for PCAP payload.
-                for chunk in response.iter_content(chunk_size=_STREAM_CHUNK_BYTES):  # WHY: chunked stream.
-                    pcap_file.write(chunk)  # WHY: persist each chunk incrementally.
+            # WHY: the context manager closes the streamed body on every path. Without it a non-200 reply or a
+            # mid-stream error keeps the socket checked out of the pool, and a large batch exhausts the pool.
+            with requests.get(row.pcap_url, stream=True, timeout=_DEFAULT_TIMEOUT_SEC) as response:
+                if response.status_code != _HTTP_OK:  # WHY: guard non-200 responses before write.
+                    # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
+                    logger.error("    Failed %s: HTTP %s", row.filename, response.status_code)  # WHY: feedback.
+                    logging.error("Download failed %s: %s", row.capture_id, response.status_code)  # WHY: audit.
+                    return False  # WHY: skip write on failure.
+                with open(local_path, "wb") as pcap_file:  # WHY: binary write for PCAP payload.
+                    for chunk in response.iter_content(chunk_size=_STREAM_CHUNK_BYTES):  # WHY: chunked stream.
+                        pcap_file.write(chunk)  # WHY: persist each chunk incrementally.
             size_mb = local_path.stat().st_size / _BYTES_PER_MB  # WHY: compute size for user feedback.
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info("    Downloaded %s (%.2f MB)", row.filename, size_mb)  # WHY: operator success line.

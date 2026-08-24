@@ -14,6 +14,12 @@ from urllib.parse import urlparse
 
 import structlog
 
+ARANGO_DEFAULT_URL = "http://arangodb:8529"  # Compose service URL used when ARANGO_HOST is unset.
+ARANGO_DEFAULT_PORT = 8529  # Port applied when ARANGO_HOST carries no explicit port.
+REDIS_DEFAULT_HOST = "redis-stack"  # Compose service name used when REDIS_HOST is unset.
+REDIS_DEFAULT_PORT = 6379  # Port applied when REDIS_PORT is unset or unreadable.
+PROBE_TIMEOUT_SECONDS = 0.5  # Short TCP budget so a dead host never stalls an export.
+
 
 def configure_db_logging() -> None:
     """Configure structlog for the db package: JSON, ASCII-only, stdlib."""
@@ -58,9 +64,9 @@ class DatabaseConfig:
         preventing noisy retry loops when running outside a container.
         """
         explicit_standalone = os.environ.get("MISTHELPER_STANDALONE", "").lower() == "true"
-        arango_host = os.environ.get("ARANGO_HOST", "http://arangodb:8529")
-        redis_host = os.environ.get("REDIS_HOST", "redis-stack")
-        redis_port = int(os.environ.get("REDIS_PORT", "6379"))
+        arango_host = os.environ.get("ARANGO_HOST", ARANGO_DEFAULT_URL)
+        redis_host = os.environ.get("REDIS_HOST", REDIS_DEFAULT_HOST)
+        redis_port = _env_int("REDIS_PORT", REDIS_DEFAULT_PORT)
 
         standalone = explicit_standalone or _hosts_unreachable(arango_host, redis_host)
 
@@ -106,6 +112,47 @@ def _can_resolve(hostname: str) -> bool:
         return True
     except socket.gaierror:
         return False
+
+
+def _env_int(name: str, default: int) -> int:
+    """Return an integer environment variable, or the default when the value is absent or unreadable."""
+    raw = os.environ.get(name, "")  # Read the raw value so an empty string keeps the default.
+    try:
+        return int(raw)  # Convert the operator supplied value.
+    except ValueError:
+        return default  # An unreadable port must not stop an export.
+
+
+def _can_connect(hostname: str, port: int) -> bool:
+    """Return True when a TCP connect to the host and port succeeds inside the probe timeout."""
+    try:
+        with socket.create_connection((hostname, port), timeout=PROBE_TIMEOUT_SECONDS):  # Open and close one socket.
+            return True  # A service listens on that address.
+    except OSError:
+        return False  # A refused, filtered, or unresolvable address counts as silent.
+
+
+def polyglot_hosts_unreachable() -> bool:
+    """Return True when neither ArangoDB nor Redis answers a TCP connect.
+
+    The probe reads the same environment variables as ``DatabaseConfig.from_env``.
+    It opens a TCP connection because a hostname can resolve while no service listens.
+    A caller must cache the answer, because each call costs up to two timeouts.
+    """
+    log = structlog.get_logger(__name__)  # Bind the package logger for the probe record.
+    arango_url = os.environ.get("ARANGO_HOST", ARANGO_DEFAULT_URL)  # Read the configured ArangoDB URL.
+    redis_host = os.environ.get("REDIS_HOST", REDIS_DEFAULT_HOST)  # Read the configured Redis host.
+    parsed = urlparse(arango_url)  # Split the URL so the probe gets a host and a port.
+    arango_ok = _can_connect(parsed.hostname or "arangodb", parsed.port or ARANGO_DEFAULT_PORT)  # Probe ArangoDB.
+    redis_ok = _can_connect(redis_host, _env_int("REDIS_PORT", REDIS_DEFAULT_PORT))  # Probe Redis.
+    log.info(
+        "polyglot_host_probe",
+        arango_host=parsed.hostname,
+        arango_reachable=arango_ok,
+        redis_host=redis_host,
+        redis_reachable=redis_ok,
+    )  # Record both verdicts so a dropped write is traceable.
+    return not arango_ok and not redis_ok  # Only total silence makes the polyglot backend unusable.
 
 
 @dataclass

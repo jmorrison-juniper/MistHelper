@@ -1,8 +1,36 @@
 # Contract: The verdict register
 
+> **Superseded on 2026-08-22. Do not use the clauses below as the review standard.**
+>
+> The register now lives at `documentation/security/codeql-verdict-register.md`. A living
+> audit record outlives the feature that created it, so the record moved out of this
+> feature folder. Issue #1878 records the decision.
+>
+> The tool `scripts/codeql_verdict_register.py` writes the register from the GitHub code
+> scanning API and checks it. The `check` mode replaces the manual reconciliation that
+> clause C-8 describes.
+>
+> Three clauses below state values that the live data contradicts. The list explains each
+> difference, because a reader of the history needs the reason.
+>
+> - **C-2 is wrong on the count and the range.** The clause states 19 rows and the alert
+>   range 173 through 191. The API reports 79 dismissed alerts for this rule, and the
+>   numbers run from 1 through 112. The new register states the count in its own summary,
+>   so no clause fixes a count that the next scan changes.
+> - **C-7 is wrong on the reason map.** The clause maps two API reasons. The API also
+>   accepts `used in tests`, and 54 alerts carry it. The new register maps that reason to
+>   the verdict `test_fixture`.
+> - **C-4 has no data for 36 rows.** Those alerts carry no dismissal comment. The new
+>   register writes a warning in the `Reason` cell and names the review trigger, because a
+>   blank cell hides the gap instead of reporting it.
+>
+> Clauses C-1, C-3, C-5, C-6, C-9, C-10, and C-11 carry over. The new register keeps the
+> eleven columns in the stated order.
+
 **Feature**: 1034-codeql-cleartext-logging
 
-**Artifact**: `specs/1034-codeql-cleartext-logging/verdict-register.md`
+**Artifact**: `specs/1034-codeql-cleartext-logging/verdict-register.md` (superseded by
+`documentation/security/codeql-verdict-register.md`)
 
 **Date**: 2026-08-05
 
