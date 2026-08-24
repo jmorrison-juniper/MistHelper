@@ -58,6 +58,28 @@ except ImportError:  # pragma: no cover
 mistapi: Any = _mistapi_module
 
 
+_MISTHELPER_MODULE_NAME = "MistHelper"  # WHY: single spelling of the module name the proxy resolves
+# WHY: `tests/conftest.py` records the real import failure under this name when
+# WHY: `MistHelper.py` stops part way through its module body. Issue #1923.
+_IMPORT_ERROR_ATTRIBUTE = "__misthelper_import_error__"
+
+
+def _describe_partial_import(name: str, cause: BaseException) -> str:
+    """Build one message that names the real cause of an unbound attribute."""
+    logging.info("Building the partial-import report for the attribute %s", name)  # Log before the build.
+    cause_text = f"{type(cause).__name__}: {cause}"  # Name the class and the text, so the reader sees both.
+    message = (  # Return one block, because an AttributeError carries a single string.
+        f"MistHelper stopped part way through its import, so the attribute "
+        f"'{name}' never bound. The import failed with:\n"
+        f"    {cause_text}\n"
+        f"This is an environment gap, not a missing declaration. Install the "
+        f"project dependencies with 'python scripts/bootstrap_worktree.py'. "
+        f"See issue #1866 for the empty worktree case."
+    )
+    logging.debug("Built a partial-import report of %d characters", len(message))  # Log the result size.
+    return message  # Give the caller the finished message.
+
+
 class _MistHelperProxy:  # WHY: attribute forwarder to live MistHelper module
     """Forward attribute access to the currently-loaded MistHelper module.
 
@@ -66,12 +88,26 @@ class _MistHelperProxy:  # WHY: attribute forwarder to live MistHelper module
     without importing MistHelper at module load time (which would create a
     circular import). Attributes are resolved at call time so test
     monkey-patches applied to MistHelper are honoured.
+
+    When `MistHelper.py` stops part way through its module body, the half-built
+    module stays in `sys.modules`. A plain `getattr` then reports a missing
+    attribute and hides the real cause. This proxy reports the recorded cause
+    instead. See issue #1923.
     """
 
     def __getattr__(self, name: str) -> Any:  # WHY: only invoked when the attr is missing normally
         """Resolve name against the live MistHelper module (call-time lookup)."""
-        misthelper_module = importlib.import_module("MistHelper")  # WHY: lazy import at call time
-        return getattr(misthelper_module, name)  # WHY: fetch current bound value from MistHelper
+        try:  # Guard the import, because an absent dependency raises here.
+            misthelper_module = importlib.import_module(_MISTHELPER_MODULE_NAME)  # WHY: lazy import at call time
+        except ImportError as import_error:  # The module cannot load at all.
+            raise AttributeError(_describe_partial_import(name, import_error)) from import_error  # Name the real cause.
+        try:  # Guard the lookup, because a half-built module has no such name.
+            return getattr(misthelper_module, name)  # WHY: fetch current bound value from MistHelper
+        except AttributeError:  # The name did not bind on this module.
+            cause = getattr(misthelper_module, _IMPORT_ERROR_ATTRIBUTE, None)  # Read the recorded import failure.
+            if cause is None:  # No record exists, so the module loaded and the name is truly absent.
+                raise  # Keep the original error, because it already states the truth.
+            raise AttributeError(_describe_partial_import(name, cause)) from cause  # Name the real cause.
 
 
 _MH = _MistHelperProxy()  # WHY: sole module-level proxy handle used by FirmwareUpgradeStatusChecker

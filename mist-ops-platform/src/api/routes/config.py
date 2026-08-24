@@ -419,6 +419,7 @@ async def create_baseline(
     user: CurrentUser = Depends(get_authenticated_user),
 ) -> ResponseEnvelope[BaselineResponse]:
     """Create or update a baseline (intended state)."""
+    require_org_access(str(body.org_id), user)  # Refuse a caller outside the org named in the body
     existing = await _find_baseline_by_scope(
         db,
         body.org_id,
@@ -456,8 +457,8 @@ async def accept_drift(
     if not body.confirm:
         raise HTTPException(status_code=400, detail="confirm required")
 
-    baseline = await _load_baseline(db, baseline_id)
-    alert = await _load_drift_alert(db, body.alert_id)
+    baseline = await _load_baseline(db, baseline_id, user)
+    alert = await _load_drift_alert(db, body.alert_id, user)
 
     actual = await _latest_revision_for_baseline(db, baseline)
     if actual and actual.config_blob:
@@ -485,10 +486,10 @@ async def remediate(
     if not body.confirm:
         raise HTTPException(status_code=400, detail="confirm required")
 
-    baseline = await _load_baseline(db, baseline_id)
+    baseline = await _load_baseline(db, baseline_id, user)
 
     for alert_id in body.alert_ids:
-        alert = await _load_drift_alert(db, alert_id)
+        alert = await _load_drift_alert(db, alert_id, user)
         alert.status = "remediated"
         alert.resolved_by = user.email
         from datetime import UTC, datetime as _dt
@@ -518,24 +519,28 @@ async def remediate(
 async def _load_baseline(
     db: AsyncSession,
     baseline_id: UUID,
+    user: CurrentUser,
 ) -> Baseline:
-    """Load a baseline or raise 404."""
+    """Load a baseline or raise 404. Refuse a caller outside the org with 403."""
     stmt = select(Baseline).where(Baseline.baseline_id == baseline_id)
     row = (await db.execute(stmt)).scalar_one_or_none()
     if row is None:
         raise HTTPException(status_code=404, detail="Baseline not found")
+    require_org_access(str(row.org_id), user)  # Refuse a caller outside the org of this record
     return row
 
 
 async def _load_drift_alert(
     db: AsyncSession,
     alert_id: UUID,
+    user: CurrentUser,
 ) -> DriftAlert:
-    """Load a drift alert or raise 404."""
+    """Load a drift alert or raise 404. Refuse a caller outside the org with 403."""
     stmt = select(DriftAlert).where(DriftAlert.alert_id == alert_id)
     row = (await db.execute(stmt)).scalar_one_or_none()
     if row is None:
         raise HTTPException(status_code=404, detail="Alert not found")
+    require_org_access(str(row.org_id), user)  # Refuse a caller outside the org of this record
     return row
 
 

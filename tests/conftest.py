@@ -18,11 +18,18 @@ from pathlib import Path
 import pytest
 
 # Runtime packages that almost every test module imports through `src`. Keep the
-# list short, because the guard runs before every test session.
-_REQUIRED_RUNTIME_PACKAGES: tuple[str, ...] = ("mistapi", "structlog", "dotenv")
+# list short, because the guard runs before every test session. `paramiko` sits
+# on the import path of `MistHelper.py`, so its absence stops that module part
+# way and hides the cause behind a wrong AttributeError. See issue #1923.
+_REQUIRED_RUNTIME_PACKAGES: tuple[str, ...] = ("mistapi", "structlog", "dotenv", "paramiko")
 
 # The documented command that creates `.venv` and installs the dependencies.
 _BOOTSTRAP_COMMAND = "python scripts/bootstrap_worktree.py"
+
+# The attribute that records why `MistHelper.py` stopped part way through its
+# module body. `src/firmware/firmware_manager.py` reads this name and reports the
+# recorded cause instead of a wrong "no attribute" message. See issue #1923.
+_IMPORT_ERROR_ATTRIBUTE = "__misthelper_import_error__"
 
 
 def _find_missing_packages(names: tuple[str, ...]) -> list[str]:
@@ -75,10 +82,17 @@ if _mh_path.exists() and (_existing is None or _is_init):
     sys.modules["MistHelper"] = _mod
     try:
         _spec.loader.exec_module(_mod)  # type: ignore[union-attr]
-    except SystemExit:
-        pass  # MistHelper.py calls sys.exit(); ignore during import
-    except (ImportError, ModuleNotFoundError):
-        pass  # Missing dependencies (e.g., mistapi); tests for src/ still work
+    except SystemExit as _exit_signal:
+        # MistHelper.py calls sys.exit() during import. The module body stops at
+        # that call, so the names below it never bind. Record the cause. #1923.
+        setattr(_mod, _IMPORT_ERROR_ATTRIBUTE, _exit_signal)  # Keep the real cause on the half-built module.
+    except (ImportError, ModuleNotFoundError) as _import_failure:
+        # A dependency is absent, so the module body stops at that import and the
+        # names below it never bind. Record the cause, because the half-built
+        # module stays in sys.modules and later hides this error. See #1923.
+        logging.info("MistHelper.py stopped part way through its import: %s", _import_failure)  # Log the cause.
+        setattr(_mod, _IMPORT_ERROR_ATTRIBUTE, _import_failure)  # Keep the real cause on the half-built module.
+        logging.debug("Recorded the import failure as %s", _IMPORT_ERROR_ATTRIBUTE)  # Log the result.
 
 
 @pytest.fixture
