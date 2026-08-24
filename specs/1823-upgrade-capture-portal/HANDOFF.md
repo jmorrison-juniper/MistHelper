@@ -1,6 +1,6 @@
 # Handoff: upgrade capture portal (issue #1823)
 
-**Last updated**: 2026-08-23.
+**Last updated**: 2026-08-24.
 **Branch**: `feat/1823-upgrade-capture-portal`.
 **Pull request**: [#1825](https://github.com/jmorrison-juniper/MistHelper/pull/1825).
 
@@ -14,14 +14,28 @@ the design. This file states the position.
 
 | Item | State |
 | --- | --- |
-| Tasks in `tasks.md` | 224 of 233 complete. An audit removed 13 checks, and 4 are back |
+| Tasks in `tasks.md` | 232 of 233 complete. Only T232 waits, and it needs an upgrade of a real device |
 | Continuous integration on the pull request | No check runs. The branch conflicts with `main`. Section 4.1 holds the detail |
 | Pull request | Open, not a draft, no review yet. The merge state is `DIRTY` |
 | Local commits not pushed | None |
 | Uncommitted work | None from this feature |
-| Portal tests | 2664 unit and contract, all pass. 148 browser tests, all pass, 0 skip |
-| Statement coverage of the package | 94.26 percent |
-| Blocking defects | None. Every defect of `audit-2026-08-20.md` that an operator can meet is fixed |
+| Portal tests | 2686 unit and contract, all pass. 154 browser tests, all pass, 0 skip |
+| Statement coverage of the package | 94.28 percent |
+| Blocking defects | None. Every defect of `audit-2026-08-20.md` and of the live run of 2026-08-24 is fixed |
+
+Warning: the read half of this feature now runs against a real organization, and
+the write half does not. `live-run-2026-08-24.md` holds the record. A browser
+drove the Morrison House organization and its site of 8 devices. The sign-in,
+both pickers, the inventory page, the site lock, and a tier 2 capture all pass.
+The capture read 8 devices, 37 wired clients, and 16 wireless clients in about 3
+seconds. No device of this feature has yet received firmware.
+
+That run found six defects that 2686 code tests and 154 browser tests had all
+passed over. Four of the six share one cause, and the cause is worth reading
+before you write another test. A stand-in answered a simpler shape than the
+library or the module really answers, so every reader passed its own test and
+failed the cloud. `tests/unit/upgrade_portal/test_privilege_shapes.py` now holds
+the real shapes.
 
 The code is written, the code tests pass, and the browser suite drives every
 journey with no skip. The audit of 2026-08-20 found 21 defects, numbered 1 to
@@ -215,6 +229,13 @@ again. Commit `4a9d028` fixed both.
 Nine tasks still carry no check. They are the remaining browser identifiers of
 T172, the two measurement tasks T153 and T219, the two field tasks T067 and
 T080, the three audit tasks T227, T228, and T233, and the quickstart run T232.
+
+**Update of 2026-08-24.** Eight of those nine are closed. Each one carries its
+evidence in `tasks.md`, and two carry a record of their own:
+`ste-audit-2026-08-24.md` for T228 and `live-run-2026-08-24.md` for the run that
+closed T233 and moved T232. T232 alone stays open, because it needs an upgrade
+of a real device and a store that verifies. Section 4 of the live run record
+names both conditions.
 
 ### 4.1 Merge the pull request
 
@@ -428,7 +449,7 @@ $env:PATHEXT = ".COM;.EXE;.BAT;.CMD;.VBS;.JS;.WS;.MSC;.PS1"
 .\.venv\Scripts\python.exe -m pytest tests/unit/upgrade_portal tests/contract/upgrade_portal -q -p no:playwright
 ```
 
-Expect 2664 passes.
+Expect 2686 passes.
 
 Start a Redis before the browser suite. Without one the site lock answers 503,
 and 12 of the 13 two-operator tests skip:
@@ -448,11 +469,10 @@ $env:REDIS_PASSWORD = "misthelper"
 .\.venv\Scripts\python.exe -m pytest tests/e2e/upgrade_portal -q
 ```
 
-Expect 148 passes and no skip. A skip means the harness hid a broken portal, or
+Expect 154 passes and no skip. A skip means the harness hid a broken portal, or
 the Redis is not running. Run with `-rs` to read the reason. The portal writes
 its own log to `$env:TEMP\upgrade_portal_e2e_8056.log`, which states what the
 server did during the run.
-
 Then open the portal and look at it. Do not skip this step. Rule 4 of
 `contracts/ui-testids.md` states that a test selects by `data-testid` only, so no
 test in this repository reads what an operator sees. Defects 26, 27, and 28 all
@@ -507,7 +527,9 @@ a failure. It answers "no checks reported" while the branch conflicts with
 | `research.md` | The findings that shaped the design |
 | `data-model.md` | The collections, the fields, and the schema version |
 | `contracts/` | The HTTP interface and the site lock interface |
-| `tasks.md` | All 233 tasks. 224 carry a check |
+| `tasks.md` | All 233 tasks. 232 carry a check |
+| `ste-audit-2026-08-24.md` | The Simplified Technical English audit of task T228 |
+| `live-run-2026-08-24.md` | The first run against a real organization, and the six defects it found |
 | `audit-2026-08-20.md` | The task audit and the defect list. Read this before a merge |
 | `analysis.md` | The cross-artifact review, findings `G1` to `G6` |
 | `quickstart.md` | How to run the portal |
