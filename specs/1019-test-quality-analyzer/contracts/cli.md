@@ -28,6 +28,7 @@ against the repository root.
 | `--summary PATH` | path | `tools/test_quality_analyzer/output/summary.md` | Where to write the Markdown summary. |
 | `--gate` | flag | off | Enable gate mode: exit code 1 if new findings vs baseline. |
 | `--write-baseline` | flag | off | Overwrite the baseline with the current run's findings and exit 0. |
+| `--prune-baseline` | flag | off | Delete every baseline entry whose path the discoverer can never rediscover, then exit 0. |
 | `--disable-rule RULE_ID` | repeatable | none | Runtime rule disable (config file remains untouched). |
 | `--include-mist-api` | flag | off | Override the Mist-API exclusion for this run only. |
 | `--fixed-timestamp ISO8601` | str | `now(UTC)` | Freeze the report timestamp; used by determinism tests only. |
@@ -75,6 +76,21 @@ python -m tools.test_quality_analyzer --write-baseline
 python -m tools.test_quality_analyzer --gate
 # Exits 0 if no new findings vs baseline, 1 if new findings, 2 if engine errored.
 ```
+
+**Prune the stale baseline entries (issue #1769)**:
+```bash
+python -m tools.test_quality_analyzer --prune-baseline
+# Deletes every entry whose path the discoverer can never rediscover, then exits 0.
+```
+
+The discoverer accepts `test_*.py` and `*_test.py` only. A baseline entry for any
+other path can never clear, because no run rediscovers it. `--prune-baseline`
+removes those entries. The flag is idempotent. A second run deletes nothing and
+writes the same bytes.
+
+Caution: `--prune-baseline` cannot combine with `--gate` or with
+`--write-baseline`. Each pair exits 2, because the two modes disagree on what
+the baseline should hold.
 
 **Scoped run (Edge Case 7)**:
 ```bash

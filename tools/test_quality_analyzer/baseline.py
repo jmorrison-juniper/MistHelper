@@ -128,7 +128,9 @@ class BaselineDiffer:
         # Ensure the parent directory exists so write_text does not raise.
         path.parent.mkdir(parents=True, exist_ok=True)
         # Trailing newline so POSIX tools see the file as line-terminated.
-        path.write_text(text + "\n", encoding="utf-8")
+        # newline="\n" holds the LF ending on Windows, so the tracked file stays
+        # byte-identical on both platforms and the diff shows the findings only.
+        path.write_text(text + "\n", encoding="utf-8", newline="\n")
         _LOGGER.debug("Wrote %s findings to baseline %s", len(findings_tuple), path)
 
     def stale_entries(
@@ -154,7 +156,7 @@ class BaselineDiffer:
         stale_set = set(stale_paths)
         # info-before names the work, per Principle VII.
         _LOGGER.info("Pruning %s stale path(s) from the baseline", len(stale_set))
-        # Keep each finding whose file still belongs to the scan set.
+        # Keep each finding whose file the scan still reaches.
         retained = tuple(f for f in baseline.findings if f.file_path not in stale_set)
         # debug-after states how many findings survived the prune.
         _LOGGER.debug(

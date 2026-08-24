@@ -221,7 +221,7 @@ class TestQualityCLI:
         # Validate the mode flags up-front; more than one mode is invalid CLI usage.
         conflict = self._mode_conflict(args)  # None when at most one mode flag is set.
         if conflict is not None:
-            sys.stderr.write(conflict)  # Contract requires the reason on stderr.
+            sys.stderr.write(conflict)  # The contract puts the reason on stderr.
             return 2  # Invalid CLI usage per contract exit code 2.
         # 1. Load the config; ConfigError bubbles up to run() and maps to exit 2.
         _LOGGER.info("Loading config from %s", args.config)
@@ -356,22 +356,24 @@ class TestQualityCLI:
         # One mode or no mode is valid, so the run continues.
         if len(selected) < 2:
             return None
-        # More than one mode is invalid usage, so name every selected flag.
+        # More than one mode is invalid usage, so the message names each one.
         return "test_quality_analyzer: %s are mutually exclusive\n" % " and ".join(selected)
 
     def _prune_baseline(
         self,
         baseline,  # Baseline loaded from the baseline path.
         stale_entries: tuple[str, ...],  # Paths the scan can no longer reach.
-        baseline_path: Path,  # File the prune rewrites in place.
+        baseline_path: Path,  # File that the prune rewrites in place.
     ) -> None:
         """Rewrite the baseline without the stale entries (issue #1769)."""
         # info-before names the file, so an operator can trace the write.
         _LOGGER.info("Pruning %s stale entry path(s) from %s", len(stale_entries), baseline_path)
+        # One differ serves both calls, because the class holds no state.
+        differ = BaselineDiffer()
         # Keep every finding whose file the scan still reaches.
-        retained = BaselineDiffer().prune(baseline, stale_entries)
+        retained = differ.prune(baseline, stale_entries)
         # Write the canonical JSON array back to the same path.
-        BaselineDiffer().write(baseline_path, retained)
+        differ.write(baseline_path, retained)
         # The stdout line reports the result, because the summary line omits it.
         sys.stdout.write("prune: dropped %d stale baseline path(s)\n" % len(stale_entries))
         # debug-after states the retained count for a quick log check.
