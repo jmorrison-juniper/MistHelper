@@ -1434,10 +1434,15 @@ def holder_details(site_id: str) -> dict[str, Any]:
     """Describe the operator that holds one site, for a refusal body.
 
     Why:
-        `contracts/http-api.md:103` asks a `site_locked` refusal to carry the
-        address of the holder and the seconds left of the cooldown. The page
-        shows both, so the waiting operator reads who holds the site and how
-        long the wait lasts before a takeover becomes possible.
+        `contracts/http-api.md:132` asks the `site_locked` refusal of the lock
+        acquire to carry the address of the holder and the seconds left of the
+        cooldown. The page shows both, so the waiting operator reads who holds
+        the site and how long the wait lasts before a takeover becomes possible.
+
+        The acquire is the only refusal that carries the cooldown. The capture
+        refusal and the three run refusals carry less, because only the acquire
+        offers a takeover after the wait. Appendix A of the same contract names
+        all three shapes together.
 
     Args:
         site_id: The site the path named.

@@ -69,6 +69,15 @@ OK_STATUS = 200  # The contract fixes this status for every page below.
 UNAUTHORIZED_STATUS = 401  # `runtime/identity.py` answers this code with no session.
 NOT_FOUND_STATUS = 404  # The route is not registered yet.
 
+# The four signal words that section 12 of `portal.css` prints with generated
+# content, one for each flash level. A hidden container must print none of them.
+# Issue #2008 records the run where the sign-in page announced a bare "Warning:"
+# with no sentence after it, on a page where nothing was wrong.
+FLASH_SIGNAL_WORDS = ("Note:", "Done:", "Caution:", "Warning:")
+
+# The value a browser reports for `content` when no rule builds the pseudo-element.
+NO_GENERATED_CONTENT = "none"
+
 # WHY: The server fixture states its own fault and its own skip, so this module
 # must not translate either one. The browser fixture is different: a workstation
 # without a browser binary describes the workstation and never the page.
@@ -333,6 +342,54 @@ class TestSignInForm:
         region = signin_page.get_by_test_id(SIGNIN_ERROR_ID)
         assert region.count() >= 1, f"The form shows no control with the identifier {SIGNIN_ERROR_ID}."
         assert region.first.is_hidden(), "The error region shows before any refusal."
+
+    def test_the_hidden_error_region_prints_no_signal_word(self, signin_page: Any) -> None:
+        """The hidden error region builds no signal word for any reader.
+
+        Why:
+            Section 12 of `portal.css` prints the signal word of each level with
+            generated content, so the level reads without color. A browser builds
+            that content for a hidden element as well, and one accessibility
+            reader then reported a bare "Warning:" between the heading and the
+            first field. No sentence followed it.
+
+            A signal word with no consequence after it breaks the rule that
+            `documentation/ASD-STE100_writing-guide.md` sets for every warning. It
+            also teaches the operator to skip the word, and the next one carries
+            firmware and a reboot. Issue #2008 holds the report.
+
+            The rule `[hidden]::before` in section 1 removes the content. This
+            test reads the computed content, because the display value alone
+            passed while the defect was live.
+
+        Args:
+            signin_page: The page that shows the sign-in form.
+        """
+        region = signin_page.get_by_test_id(SIGNIN_ERROR_ID).first
+        built = region.evaluate("node => getComputedStyle(node, '::before').content")
+        assert built == NO_GENERATED_CONTENT, f"The hidden region builds the content {built}."
+        for word in FLASH_SIGNAL_WORDS:  # No level word may reach a reader of this page.
+            assert word not in signin_page.inner_text("body"), f"The page reads the signal word {word}."
+
+    def test_a_shown_error_region_prints_its_signal_word(self, signin_page: Any) -> None:
+        """A region that carries a refusal still prints the word "Warning:".
+
+        Why:
+            The guard of issue #2008 must remove the signal word of an empty
+            region and keep the signal word of a real refusal. A guard that
+            removed both would fix the bare word and break WCAG 1.4.1, because
+            the level would then read from color alone.
+
+            This test shows the region the way a refusal does, with the attribute
+            removed and a sentence in place, and reads what the browser builds.
+
+        Args:
+            signin_page: The page that shows the sign-in form.
+        """
+        region = signin_page.get_by_test_id(SIGNIN_ERROR_ID).first
+        region.evaluate("node => { node.removeAttribute('hidden'); node.textContent = 'The cloud refused it.'; }")
+        built = region.evaluate("node => getComputedStyle(node, '::before').content")
+        assert FLASH_SIGNAL_WORDS[3] in built, f"A shown refusal builds {built}, so the level lost its word."
 
     def test_a_typed_password_never_reaches_the_markup(self, signin_page: Any) -> None:
         """A typed password stays in the field and never enters the page markup.

@@ -119,6 +119,37 @@
     padding: 0.75rem 1rem;
 }
 
+/*
+ * The guard for the hidden attribute (issue #2008).
+ *
+ * Three containers carry a level class all the time and hold a sentence only
+ * when something goes wrong. The template hides the empty one with the hidden
+ * attribute. Section 12 prints the signal word of the level with generated
+ * content, and a browser builds that content for a hidden element too. The
+ * accessibility snapshot of the sign-in page therefore read a bare "Warning:"
+ * with no sentence after it, on a page where nothing was wrong.
+ *
+ * A signal word with no consequence after it breaks the rule that
+ * documentation/ASD-STE100_writing-guide.md sets for every warning. It also
+ * teaches the operator to skip the word, and the next one carries firmware and
+ * a reboot.
+ *
+ * The display rule repeats what the vendored Bootstrap file already states.
+ * This portal keeps its own copy, so the guard survives a change of vendor
+ * file. The content rules are the ones that fix the defect.
+ *
+ * Every declaration needs !important, because it must beat an author display
+ * rule such as .flash-item and any class a later page adds.
+ */
+[hidden] {
+    display: none !important;
+}
+
+[hidden]::before,
+[hidden]::after {
+    content: none !important;
+}
+
 /* ==========================================================================
  * 2. Links and focus
  * ========================================================================== */

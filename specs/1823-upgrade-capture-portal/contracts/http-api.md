@@ -590,3 +590,25 @@ always finds the answer expired and always reaches both stores. Two calls inside
 the same window read one probe and report the same body. A caller that needs a
 fresh reading must wait out the window. The window must stay shorter than the
 shortest probe interval in use.
+
+---
+
+## Appendix A. The three `site_locked` refusal shapes
+
+The portal sends three different bodies with the error word `site_locked`. The
+difference is deliberate. A reader who meets two of them in two route modules
+must not make them one shape.
+
+| Refusal | Body beyond the error word | Section |
+| --- | --- | --- |
+| The lock acquire | `actor_email` and `cooldown_remaining` | 3 |
+| The capture start | No details | 4 |
+| `create_run`, `start_run`, and `stop_run` | `actor_email` | 5 |
+
+Only the acquire carries the cooldown, because only the acquire offers a takeover
+after the wait. A refused capture and a refused run offer no takeover, so a
+cooldown number on either one tells the operator nothing it can act on.
+
+This appendix sits at the end of the document on purpose. Several comments in the
+source cite a line of this file, and a paragraph added in the middle would move
+every line below it. Cite this appendix by name.

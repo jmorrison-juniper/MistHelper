@@ -96,8 +96,10 @@
   </p>
 
   {#
-    contracts/http-api.md line 103 sends the cooldown with a site_locked
-    refusal. FR-078 gives an abandoned session 5 minutes, and the operator who
+    contracts/http-api.md line 132 sends the cooldown with the site_locked
+    refusal of the lock acquire. That acquire is the only refusal that carries
+    the cooldown, and Appendix A of the same contract names all three refusal
+    shapes. FR-078 gives an abandoned session 5 minutes, and the operator who
     waits needs to see the wait shrink. The region stays hidden while the site
     is free, and portal.js opens it on the first refusal.
   #}
