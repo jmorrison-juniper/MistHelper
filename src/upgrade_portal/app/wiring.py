@@ -48,6 +48,7 @@ OPTIONS_MODULE = f"{PACKAGE_NAME}.upgrade.options"  # Maps the stored rows onto 
 STOP_MODULE = f"{PACKAGE_NAME}.upgrade.stop"  # Owns every cancel call and the outcome record of a stop.
 LOCK_MODULE = f"{PACKAGE_NAME}.runtime.lock"  # Owns `LockRecord`, which decodes the session text.
 RUNS_MODULE = f"{PACKAGE_NAME}.runtime.runs"  # Owns `RunStateMachine`, the only legal path into `failed`.
+CAPTURE_STORE_MODULE = f"{PACKAGE_NAME}.capture.store"  # Owns `bootstrap_storage`, which creates the collections.
 IDENTITY_MODULE = f"{PACKAGE_NAME}.runtime.identity"  # Owns the operator record of the present request.
 STORE_MODULE = f"{PACKAGE_NAME}.capture.store"  # Owns the document store calls.
 ASSEMBLY_MODULE = f"{PACKAGE_NAME}.capture.assembly"  # Owns the one true form of a capture key.
@@ -942,4 +943,36 @@ def install_seams(app: Flask) -> None:
     app.config.setdefault(RUN_STORE_KEY, DocumentRunStore())  # Replaces the memory store of the route module.
     app.config.setdefault(LAUNCHER_KEY, start_upgrade_run)  # Without this the confirmed run sends nothing.
     app.config.setdefault(STOP_RUNNER_KEY, cancel_run)  # Without this a stop cancels nothing at the cloud.
+    prepare_storage()  # Without this no capture can verify, so no upgrade can ever start.
     logger.info("wiring: the portal holds the run store, the run launcher, and the stop runner")  # One per start.
+
+
+def prepare_storage() -> None:
+    """Create the collections and the indexes that the capture store needs.
+
+    Why:
+        `capture/store.py:637 bootstrap_storage` states that "the portal calls
+        this function on every start". No caller existed, so the collections
+        never appeared. A capture then wrote through the router, which answers a
+        success envelope after a file fallback, and the read-back of the store
+        reported `document_absent`. Every capture therefore failed to verify.
+
+        That single gap closed the whole write half of the feature. The start
+        route refuses an upgrade until the run holds a verified pre-check
+        capture, so no upgrade could ever start against a fresh database.
+
+        The call cannot stop the portal. A database that is out of reach must
+        still leave a portal that reads, because the site pages and the history
+        need no store. `bootstrap_storage` already answers a report rather than
+        raising for that case, and this function guards the rest.
+    """
+    store = load_module(CAPTURE_STORE_MODULE)  # None while the capture store is absent.
+    if store is None:  # A portal with no capture store still serves every read page.
+        logger.warning("wiring: the capture store is absent, so the portal created no collection")
+        return
+    try:  # A store that cannot answer must not stop a portal that still reads.
+        report = store.bootstrap_storage()
+    except Exception as fault:  # The class name alone, because a driver message may carry a connection string.
+        logger.warning("wiring: the storage bootstrap failed (%s)", type(fault).__name__)
+        return
+    logger.info("wiring: the storage bootstrap reported %s", report)

@@ -27,6 +27,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from typing import Any
 
+from src.upgrade_portal.app import wiring
 from src.upgrade_portal.app.routes import auth, select
 from src.upgrade_portal.runtime import identity
 
@@ -373,3 +374,77 @@ def test_the_inventory_status_word_keeps_a_status_the_cloud_already_named() -> N
 def test_the_inventory_status_word_leaves_an_unknown_record_alone() -> None:
     """A record that names neither field keeps the fallback of the template."""
     assert "status" not in select.with_status_word({"mac": "a"})
+
+
+# ---------------------------------------------------------------------------
+# The storage bootstrap that no caller ran
+# ---------------------------------------------------------------------------
+
+
+def test_the_portal_creates_its_collections_at_start(monkeypatch: Any) -> None:
+    """`install_seams` runs the storage bootstrap exactly one time.
+
+    Why:
+        `capture/store.py bootstrap_storage` states that "the portal calls this
+        function on every start". No caller existed, so the collections never
+        appeared against a fresh database. Every capture then wrote through the
+        router, which answers a success envelope after a file fallback, and the
+        read-back of the store reported `document_absent`.
+
+        That single gap closed the whole write half of the feature. The start
+        route refuses an upgrade until the run holds a verified pre-check
+        capture, so no upgrade could ever start.
+    """
+    calls: list[int] = []
+
+    class FakeStore:
+        """A stand-in for the capture store module."""
+
+        @staticmethod
+        def bootstrap_storage() -> str:
+            """Record the call.
+
+            Returns:
+                A report stand-in.
+            """
+            calls.append(1)
+            return "report"
+
+    monkeypatch.setattr(wiring, "load_module", lambda name: FakeStore)
+    wiring.prepare_storage()
+    assert calls == [1]
+
+
+def test_a_missing_capture_store_leaves_the_portal_running(monkeypatch: Any) -> None:
+    """A portal with no capture store still starts and still reads.
+
+    Why:
+        The site pages and the history need no store. A bootstrap that stopped
+        the portal would turn a missing store into a dead portal.
+    """
+    monkeypatch.setattr(wiring, "load_module", lambda name: None)
+    wiring.prepare_storage()
+
+
+def test_a_failed_bootstrap_leaves_the_portal_running(monkeypatch: Any) -> None:
+    """A database that refuses the bootstrap still leaves a portal that reads.
+
+    Why:
+        The read pages need no database. A raise here would stop the portal for
+        every operator, including the ones who only watch another upgrade.
+    """
+
+    class AngryStore:
+        """A stand-in whose bootstrap raises."""
+
+        @staticmethod
+        def bootstrap_storage() -> None:
+            """Raise, as an unreachable database does.
+
+            Raises:
+                RuntimeError: Always.
+            """
+            raise RuntimeError("the database refused the bootstrap")
+
+    monkeypatch.setattr(wiring, "load_module", lambda name: AngryStore)
+    wiring.prepare_storage()
