@@ -88,7 +88,7 @@ class TestRedact:
     def test_nested_and_list_blocks_are_redacted(self) -> None:
         """Acceptance criterion 2. A nested block and a list of blocks both clear."""
         safe = CredentialRedactor.redact(_SETTINGS_RECORD)
-        token = CredentialRedactor.REDACTED_TOKEN
+        token = CredentialRedactor.REDACTION_MARKER
         assert safe["switch_mgmt"]["root_password"] == token
         assert safe["juniper_srx"]["root_password"] == token
         assert safe["ssh_keys"] == token
@@ -119,7 +119,7 @@ class TestRedact:
         safe_list = CredentialRedactor.redact_records([_SETTINGS_RECORD, _SETTINGS_RECORD])
         assert len(safe_list) == 2
         for safe in safe_list:
-            assert safe["switch_mgmt"]["root_password"] == CredentialRedactor.REDACTED_TOKEN
+            assert safe["switch_mgmt"]["root_password"] == CredentialRedactor.REDACTION_MARKER
 
 
 class TestSiteSettingReadBoundary:
@@ -141,8 +141,8 @@ class TestSiteSettingReadBoundary:
                 MagicMock(), {"id": "site-abc", "name": "Morrison House Site"}
             )
         assert config is not None
-        assert config["switch_mgmt"]["root_password"] == CredentialRedactor.REDACTED_TOKEN
-        assert config["ssh_keys"] == CredentialRedactor.REDACTED_TOKEN
+        assert config["switch_mgmt"]["root_password"] == CredentialRedactor.REDACTION_MARKER
+        assert config["ssh_keys"] == CredentialRedactor.REDACTION_MARKER
         assert config["name"] == "kept"  # The operational field survives.
         assert config["site_id"] == "site-abc"  # The tag still applies.
         assert config["site_name"] == "Morrison House Site"  # The tag still applies.
