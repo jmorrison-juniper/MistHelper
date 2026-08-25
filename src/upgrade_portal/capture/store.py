@@ -39,8 +39,25 @@ CAPTURE_COLLECTION = "upgrade_captures"
 RUN_COLLECTION = "upgrade_runs"
 EDGE_COLLECTION = "capture_for_run"
 
-CAPTURE_OPERATION = "upgradeCaptureWrite"
-RUN_OPERATION = "upgradeRunWrite"
+# WHY: The operation name and the collection name must be one value, because the
+# router uses the operation name as the collection name and creates whatever it
+# is handed.
+#
+# `DataExporter.write_with_format_selection(api_function_name=...)` passes the
+# name to `DatabaseRouter.write`, which passes it to
+# `ArangoWriter.write(data, collection_name, strategy)`. That method calls
+# `_ensure_collection(collection_name)`, and `_ensure_collection` creates the
+# collection when it is absent. Nothing translates the name on the way.
+#
+# Issue #2061: these two constants used to read `upgradeCaptureWrite` and
+# `upgradeRunWrite`. Every capture therefore wrote into a collection of that
+# name, and the read-back below looked in `upgrade_captures`, found nothing, and
+# reported `document_absent`. Every capture failed while the write itself
+# succeeded, and the storage bootstrap still reported all three collections
+# ready. Binding each operation to its collection removes the second name, so
+# the two cannot drift again.
+CAPTURE_OPERATION = CAPTURE_COLLECTION
+RUN_OPERATION = RUN_COLLECTION
 
 SCHEMA_VERSION = 1
 
