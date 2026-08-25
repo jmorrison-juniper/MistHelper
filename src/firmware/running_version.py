@@ -175,7 +175,8 @@ class RunningFirmwareVersionResolver:
             return self._stats_fn  # WHY: hand back the stand-in
         import mistapi.api.v1.sites.stats as _site_stats  # WHY: a lazy import keeps module load cheap
 
-        return _site_stats.listSiteDevicesStats  # WHY: the real endpoint that reports the running version
+        stats_fn: Callable[..., Any] = _site_stats.listSiteDevicesStats  # WHY: narrow the untyped module attribute
+        return stats_fn  # WHY: the real endpoint that reports the running version
 
     @staticmethod
     def _rows_from_response(response: Any, site_id: str) -> list[dict[str, Any]]:
