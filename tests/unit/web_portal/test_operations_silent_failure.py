@@ -93,32 +93,39 @@ class TestFetchOrgSitesSilentFailure:
 class TestFetchSiteDevicesSilentFailure:
     """Same pattern for the device-listing helper."""
 
-    def test_logs_exception_on_api_failure(self, caplog):
+    def test_logs_exception_on_api_failure(self):
         """A Mist API exception must produce an ERROR log naming the site."""
         apisession = _fake_apisession()
-        with caplog.at_level(logging.ERROR, logger="web_portal.routes.operations"):
+        # Patch the module logger directly. The full suite reconfigures logging,
+        # so a caplog assertion is not reliable here. See issue #2038.
+        with patch("web_portal.routes.operations.logger") as fake_logger:
             with patch(
                 "mistapi.api.v1.sites.devices.listSiteDevices",
                 side_effect=RuntimeError("connection timeout"),
             ):
-                _fetch_site_devices(apisession, "site-abc", "all")
+                result = _fetch_site_devices(apisession, "site-abc", "all")
 
-        # Before the fix this assertion fails.
-        assert any(
-            "site-abc" in record.message or "device" in record.message.lower() for record in caplog.records
-        ), "Expected an ERROR log record naming the site or operation."
+        # Before the fix this assertion fails, because the handler logs nothing.
+        assert fake_logger.exception.called, "Expected an ERROR log record for the failed device call."
+        # The site identifier must reach the record, so an operator can trace it.
+        assert "site-abc" in fake_logger.exception.call_args[0], "Expected the log record to name the site."
+        assert result == [], "The helper still returns a list, so no call site changes."
 
-    def test_result_carries_error_signal_on_api_failure(self, caplog):
+    def test_result_carries_error_signal_on_api_failure(self):
         """A failed device call must not look like a site with no devices."""
         apisession = _fake_apisession()
-        with patch(
-            "mistapi.api.v1.sites.devices.listSiteDevices",
-            side_effect=RuntimeError("connection timeout"),
-        ):
-            result = _fetch_site_devices(apisession, "site-abc", "all")
+        with patch("web_portal.routes.operations.logger") as fake_logger:
+            with patch(
+                "mistapi.api.v1.sites.devices.listSiteDevices",
+                side_effect=RuntimeError("connection timeout"),
+            ):
+                result = _fetch_site_devices(apisession, "site-abc", "all")
 
+        # An empty list is acceptable only when the failure left a record.
         if result == []:
-            assert caplog.records, "result is [] and no log record exists -- " "the failure is invisible to the caller."
+            assert fake_logger.exception.called, (
+                "result is [] and no log record exists -- " "the failure is invisible to the caller."
+            )
 
 
 # ---------------------------------------------------------------------------
