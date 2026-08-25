@@ -77,14 +77,16 @@ env:
   # Issue #1895: the ops platform suite keeps its own denominator and its own
   # floor, so it can never move the root percentage. Issue #1883 unified the
   # schema and unblocked the last 2 tests, so no test stays deselected now.
-  # The suite measures 56.18 percent on the runner. The floor sits just under
-  # that number, so a coverage drop fails the gate.
+  # This branch measures 56.21 percent, and the merge result measures 58.92
+  # percent, because main gained tests from other pull requests. The floor
+  # tracks the lower value, so a later revert on main cannot fail this gate for
+  # a reason that belongs to another change.
   OPS_PLATFORM_COVERAGE_THRESHOLD: '56'
   # The count floor proves the gate ran the tests. A broken import path drops a
   # whole module from collection, and this floor turns that drop into a red gate.
-  # The suite collects 371 tests. If you delete a test on purpose, lower this
+  # The suite collects 398 tests. If you delete a test on purpose, lower this
   # number in the same commit.
-  OPS_PLATFORM_MIN_TESTS: '365'
+  OPS_PLATFORM_MIN_TESTS: '390'
   PYLINT_THRESHOLD: ${{ inputs.pylint-threshold || '9.5' }}
   INTERROGATE_THRESHOLD: ${{ inputs.interrogate-threshold || '90' }}
   # Vulture reports 0 findings at 90, at 80, and at 70. The cliff sits at 60, which
