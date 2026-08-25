@@ -68,6 +68,12 @@ LAUNCHER_KEY = "RUN_LAUNCHER"  # The seam that hands one prepared record to the 
 STOP_RUNNER_KEY = "STOP_RUNNER"  # The seam that cancels the remaining devices of one run at the cloud.
 
 POST_CHECK_ORDINAL = 2  # The second capture of a run. `driver.post_check_request` sends this value.
+
+# WHY: The storage bootstrap runs once for each process. Every step of it repeats
+# without harm, and a second run costs a database host probe that is not free.
+# `prepare_storage` holds the whole reason, and `reset_storage_bootstrap` clears
+# this flag for a test and for a worker that meets a database restart.
+_STORAGE_PREPARED = False
 POST_CHECK_ROLE = "post"  # The role of that second capture.
 DEFAULT_TIER = 2  # The standard data tier, which the run record carries.
 SITE_SCAN_LIMIT = 200  # The largest number of runs that one site scan reads back.
@@ -965,7 +971,25 @@ def prepare_storage() -> None:
         still leave a portal that reads, because the site pages and the history
         need no store. `bootstrap_storage` already answers a report rather than
         raising for that case, and this function guards the rest.
+
+        The bootstrap runs once for each process and not once for each
+        application. Every step of it repeats without harm, so a second run adds
+        nothing. A second run does cost a database probe, and that probe is not
+        free: `DatabaseConfig.from_env` resolves the database host and the lock
+        store host to decide the standalone mode, and `connect_database` repeats
+        that work whenever the store was out of reach before.
+
+        Warning: a contract test builds one application for each test. Without
+        this guard a run of the contract suite paid one host probe for each of
+        those applications. On a runner where the host name does not resolve
+        quickly, each probe took about 20 seconds, and the whole job reached its
+        15 minute limit and reported as a test failure. Issue #2036 holds that
+        record.
     """
+    global _STORAGE_PREPARED
+    if _STORAGE_PREPARED:  # One process needs the collections built one time.
+        return
+    _STORAGE_PREPARED = True  # Set before the call, so a raise never leaves a retry loop.
     store = load_module(CAPTURE_STORE_MODULE)  # None while the capture store is absent.
     if store is None:  # A portal with no capture store still serves every read page.
         logger.warning("wiring: the capture store is absent, so the portal created no collection")
@@ -976,3 +1000,15 @@ def prepare_storage() -> None:
         logger.warning("wiring: the storage bootstrap failed (%s)", type(fault).__name__)
         return
     logger.info("wiring: the storage bootstrap reported %s", report)
+
+
+def reset_storage_bootstrap() -> None:
+    """Let the next application build the collections again.
+
+    Why:
+        `prepare_storage` runs once for each process. A test that wants to read
+        the bootstrap call needs the guard cleared first, and a long-lived worker
+        needs it cleared after a database restart.
+    """
+    global _STORAGE_PREPARED
+    _STORAGE_PREPARED = False

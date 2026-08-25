@@ -262,3 +262,91 @@ class TestCurrentOperator:
         install_modules(monkeypatch, {wiring.IDENTITY_MODULE: SimpleNamespace(current_session=lambda: record)})
         monkeypatch.setattr(wiring, "read_safely", lambda read, subject: read())
         assert wiring.current_operator() is record
+
+
+class TestTheStorageBootstrapRunsOnce:
+    """Tests for the guard that keeps the bootstrap to one run for each process.
+
+    Why:
+        A contract test builds one application for each test, and every
+        application called the bootstrap. Each call reached
+        ``DatabaseConfig.from_env``, which resolves the database host and the
+        lock store host to decide the standalone mode. On a runner where the host
+        name does not resolve quickly, each call took about 20 seconds, and the
+        whole test job reached its 15 minute limit and reported as a test
+        failure. Issue #2036 holds that record.
+
+        Every step of the bootstrap repeats without harm, so one run for each
+        process is enough.
+    """
+
+    def test_calls_the_store_one_time_for_many_applications(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Five calls reach the capture store one time.
+
+        Args:
+            monkeypatch: The pytest patch helper.
+        """
+        wiring.reset_storage_bootstrap()
+        seen: list[str] = []
+        store = SimpleNamespace(bootstrap_storage=lambda: seen.append("run") or "report")
+        install_modules(monkeypatch, {wiring.CAPTURE_STORE_MODULE: store})
+        for _ in range(5):  # Five applications, as a contract file builds.
+            wiring.prepare_storage()
+        assert len(seen) == 1
+
+    def test_a_reset_lets_the_next_application_build_again(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A worker that meets a database restart can clear the guard.
+
+        Args:
+            monkeypatch: The pytest patch helper.
+        """
+        wiring.reset_storage_bootstrap()
+        seen: list[str] = []
+        store = SimpleNamespace(bootstrap_storage=lambda: seen.append("run") or "report")
+        install_modules(monkeypatch, {wiring.CAPTURE_STORE_MODULE: store})
+        wiring.prepare_storage()
+        wiring.reset_storage_bootstrap()
+        wiring.prepare_storage()
+        assert len(seen) == 2
+
+    def test_a_failed_bootstrap_never_retries_on_every_application(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A store that raises still costs one call and not one for each application.
+
+        Why:
+            The guard is set before the call, so a raise leaves no retry loop.
+            A store that is out of reach is the exact case that made the runner
+            stall, so the guard must hold for it above every other case.
+
+        Args:
+            monkeypatch: The pytest patch helper.
+        """
+        wiring.reset_storage_bootstrap()
+        seen: list[str] = []
+
+        def explode() -> Any:
+            """Raise the way an unreachable store does.
+
+            Returns:
+                Never returns.
+
+            Raises:
+                RuntimeError: Always.
+            """
+            seen.append("run")
+            raise RuntimeError("the document store is out of reach")
+
+        install_modules(monkeypatch, {wiring.CAPTURE_STORE_MODULE: SimpleNamespace(bootstrap_storage=explode)})
+        for _ in range(4):
+            wiring.prepare_storage()
+        assert len(seen) == 1
+
+    def test_an_absent_store_still_leaves_a_portal_that_reads(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A host with no capture store builds an application and raises nothing.
+
+        Args:
+            monkeypatch: The pytest patch helper.
+        """
+        wiring.reset_storage_bootstrap()
+        install_modules(monkeypatch, {})
+        wiring.prepare_storage()  # Raises nothing, which is the whole assertion.
+        wiring.reset_storage_bootstrap()

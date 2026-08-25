@@ -394,6 +394,11 @@ def test_the_portal_creates_its_collections_at_start(monkeypatch: Any) -> None:
         That single gap closed the whole write half of the feature. The start
         route refuses an upgrade until the run holds a verified pre-check
         capture, so no upgrade could ever start.
+
+        The bootstrap now runs once for each process, so this test clears the
+        guard first. Issue #2036 holds the reason for the guard: a contract test
+        builds one application for each test, and every application paid a
+        database host probe that stalled a whole test job.
     """
     calls: list[int] = []
 
@@ -410,6 +415,7 @@ def test_the_portal_creates_its_collections_at_start(monkeypatch: Any) -> None:
             calls.append(1)
             return "report"
 
+    wiring.reset_storage_bootstrap()  # Another test in this process may have run it already.
     monkeypatch.setattr(wiring, "load_module", lambda name: FakeStore)
     wiring.prepare_storage()
     assert calls == [1]
@@ -422,6 +428,7 @@ def test_a_missing_capture_store_leaves_the_portal_running(monkeypatch: Any) -> 
         The site pages and the history need no store. A bootstrap that stopped
         the portal would turn a missing store into a dead portal.
     """
+    wiring.reset_storage_bootstrap()  # The bootstrap runs once for each process.
     monkeypatch.setattr(wiring, "load_module", lambda name: None)
     wiring.prepare_storage()
 
@@ -446,5 +453,6 @@ def test_a_failed_bootstrap_leaves_the_portal_running(monkeypatch: Any) -> None:
             """
             raise RuntimeError("the database refused the bootstrap")
 
+    wiring.reset_storage_bootstrap()  # The bootstrap runs once for each process.
     monkeypatch.setattr(wiring, "load_module", lambda name: AngryStore)
     wiring.prepare_storage()
