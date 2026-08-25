@@ -598,7 +598,15 @@ jobs:
         # come from one source. The editable install reads [project.dependencies]
         # (runtime) and [project.optional-dependencies].dev (test tools) together,
         # so a new runtime package never needs a matching entry in a second file.
-        run: pip install -e ".[dev]"
+        #
+        # pytest-timeout is a test infrastructure tool, not an app runtime package,
+        # so mist-ops-platform/pyproject.toml does not own it. The root
+        # requirements-dev.txt pins it for the root suite. This extra line keeps the
+        # ops platform suite in sync until the sub-project dev extras include it.
+        # Issue #2036 requires --timeout=120 in the pytest step below.
+        run: |
+          pip install -e ".[dev]"
+          pip install "pytest-timeout>=2.3"
       - name: Confirm the suite collects its tests
         # A gate that collects nothing still exits green. That result hides a
         # broken import path and is worse than no gate. This step counts the
