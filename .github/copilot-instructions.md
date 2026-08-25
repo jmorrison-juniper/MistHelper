@@ -353,6 +353,35 @@ listSiteDevices(site_id)
 listSiteDevices(site_id, type="all")
 ```
 
+### Stale Firmware Version (issue #2006)
+Three endpoints report a firmware version for one device, and they do not agree.
+
+| Endpoint | Reports |
+| - | - |
+| `listSiteDevicesStats` | The running version. Safe for a firmware decision. |
+| `getOrgInventory` | The running version. Safe for a firmware decision. |
+| `listSiteDevices` | The configured version. It can be old, or `None`. |
+
+Warning: A firmware decision that reads the `version` field of `listSiteDevices`
+can name a release the device left long ago. An operator then plans the wrong
+upgrade on production hardware.
+
+```python
+# WRONG: the device listing carries the configured version
+version = listSiteDevices(site_id, type="all").data[0]["version"]
+
+# CORRECT: read the running version through the shared resolver
+from src.firmware.running_version import RunningFirmwareVersionResolver
+
+resolver = RunningFirmwareVersionResolver(apisession)
+running = resolver.fetch_site_running_versions(site_id)
+reading = resolver.read(device_row, running)
+```
+
+`reading.is_running` states whether the value is safe for a firmware decision.
+A `False` value means no running version was found, so the caller must warn
+instead of deciding.
+
 ### Windows Path Compatibility
 Use `os.path.join()` or `Path()`, never hardcoded `/` or `\\`
 
