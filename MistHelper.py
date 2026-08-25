@@ -407,6 +407,9 @@ from src.export.license_export_utils import (
 from src.export.msp_inventory_exporter import (
     MSPInventoryExporter,  # Cat B (1013 SC-001 position 8) -- re-export for menu tuple + static call rewire
 )
+from src.export.msp_license_exporter import (
+    MSPLicenseExporter,  # Issue #1260 -- the MSP license export, menu 238
+)
 from src.export.org_admin_exporter import (
     OrgAdminExporter,  # Cat B (1013 SC-001 position 20) -- re-export for MistHelper.OrgAdminExporter callers
 )
@@ -3734,6 +3737,10 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     "237": (
         CountExporter.msp_counts,
         "Run any MSP-scoped Mist count endpoint (3 operations, issue #1802)",
+    ),
+    "238": (
+        MSPLicenseExporter.licenses,
+        "Export the license entitlement, usage, and subscriptions for an MSP (listMspLicenses)",
     ),
     "44": (OrgConfigExporter.psks, "Export PSK (Pre-Shared Key) information for the organization"),
     "45": (OrgConfigExporter.webhooks, "Export webhook configuration for the organization"),
