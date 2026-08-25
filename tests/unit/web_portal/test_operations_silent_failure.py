@@ -16,6 +16,7 @@ Strategy:
 from __future__ import annotations
 
 import logging
+import sys
 from unittest.mock import MagicMock, patch
 
 # Import the helpers directly so the tests do not need a running Flask app.
@@ -90,6 +91,21 @@ class TestFetchOrgSitesSilentFailure:
 # ---------------------------------------------------------------------------
 
 
+class _ExplodingModule:
+    """Stand in for the mistapi module and raise on any attribute read.
+
+    The device helper imports mistapi inside its own try block. The full test
+    suite can leave a mock in sys.modules, and a mock answers every attribute
+    with another mock instead of raising. The helper then returns an empty list
+    without reaching its handler. This class forces the failure that the test
+    needs, and it does not depend on the real package. See issue #2038.
+    """
+
+    def __getattr__(self, name: str):
+        """Raise for every attribute, so the caller enters its exception path."""
+        raise RuntimeError("connection timeout")
+
+
 class TestFetchSiteDevicesSilentFailure:
     """Same pattern for the device-listing helper."""
 
@@ -97,12 +113,10 @@ class TestFetchSiteDevicesSilentFailure:
         """A Mist API exception must produce an ERROR log naming the site."""
         apisession = _fake_apisession()
         # Patch the module logger directly. The full suite reconfigures logging,
-        # so a caplog assertion is not reliable here. See issue #2038.
+        # so a caplog assertion is not reliable here.
         with patch("web_portal.routes.operations.logger") as fake_logger:
-            with patch(
-                "mistapi.api.v1.sites.devices.listSiteDevices",
-                side_effect=RuntimeError("connection timeout"),
-            ):
+            # Replace the module that the helper imports, so the call raises.
+            with patch.dict(sys.modules, {"mistapi": _ExplodingModule()}):
                 result = _fetch_site_devices(apisession, "site-abc", "all")
 
         # Before the fix this assertion fails, because the handler logs nothing.
@@ -115,10 +129,7 @@ class TestFetchSiteDevicesSilentFailure:
         """A failed device call must not look like a site with no devices."""
         apisession = _fake_apisession()
         with patch("web_portal.routes.operations.logger") as fake_logger:
-            with patch(
-                "mistapi.api.v1.sites.devices.listSiteDevices",
-                side_effect=RuntimeError("connection timeout"),
-            ):
+            with patch.dict(sys.modules, {"mistapi": _ExplodingModule()}):
                 result = _fetch_site_devices(apisession, "site-abc", "all")
 
         # An empty list is acceptable only when the failure left a record.
