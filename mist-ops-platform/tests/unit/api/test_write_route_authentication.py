@@ -45,7 +45,9 @@ PUBLIC_WRITE_ROUTES = {  # Write routes that answer an anonymous caller on purpo
     "receive_mist_webhook",
     # The login route creates the session, so no session can exist before it.
     "login",
-    # The refresh route reads the session cookie and issues a token from it.
+    # The refresh route reads the session cookie and renews the record behind
+    # it. It answers 401 when no record matches, so it authenticates the caller
+    # through the cookie instead of a dependency.
     "refresh_token",
     # The logout route deletes the session cookie. A logout must always work.
     "logout",

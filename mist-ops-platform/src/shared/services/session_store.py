@@ -96,6 +96,24 @@ class SessionStore:
         self._write(record)  # Persist the updated record under the same identifier.
         logger.debug("Session privilege cache write done for key %s.", session_key(session_id))
 
+    def renew(self, session_id: str) -> int | None:
+        """Extend the lifetime of the record for *session_id* and return that lifetime.
+
+        The method returns None when no record matches. A renewal must never
+        create a record, because that would let an anonymous caller mint a
+        session.
+        """
+        if not session_id:  # An empty cookie value addresses no record, so report no renewal.
+            return None
+        logger.info("Session record renewal starts.")  # Announce the write before the work.
+        record = self.resolve(session_id)  # Read the record, so a renewal never creates one.
+        if record is None:  # An unknown or expired identifier must not gain a new lifetime.
+            logger.debug("Session record renewal found no record.")
+            return None
+        self._write(record)  # Re-write the record, so the store restarts the session lifetime.
+        logger.debug("Session record renewal done. The key is %s.", session_key(session_id))
+        return SESSION_TTL_SECONDS  # The caller reports this lifetime to the operator.
+
     def delete(self, session_id: str) -> bool:
         """Delete the record for *session_id* and report whether a record existed."""
         if not session_id:  # An empty cookie value addresses no record, so report no deletion.
