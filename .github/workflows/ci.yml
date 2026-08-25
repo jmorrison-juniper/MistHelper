@@ -634,16 +634,13 @@ jobs:
         # (runtime) and [project.optional-dependencies].dev (test tools) together,
         # so a new runtime package never needs a matching entry in a second file.
         #
-        # Two packages stay as explicit pins because they are test infrastructure,
-        # not app runtime packages, so mist-ops-platform/pyproject.toml does not
-        # own them:
+        # requirements-dev.txt adds the two test-infrastructure packages that
+        # mist-ops-platform/pyproject.toml does not own:
         #   pytest-timeout: needed for --timeout=120 (issue #2036).
         #   httpx2: starlette 0.49+ imports httpx2 inside TestClient. The runner
         #     installs starlette through fastapi, so every TestClient test raises
         #     ModuleNotFoundError without this pin.
-        run: |
-          pip install -e ".[dev]"
-          pip install "pytest-timeout>=2.3" "httpx2>=0.28"
+        run: pip install -e ".[dev]" -r requirements-dev.txt
       - name: Confirm the suite collects its tests
         # A gate that collects nothing still exits green. That result hides a
         # broken import path and is worse than no gate. This step counts the
