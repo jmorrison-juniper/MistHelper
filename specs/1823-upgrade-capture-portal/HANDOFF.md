@@ -1,6 +1,6 @@
 # Handoff: upgrade capture portal (issue #1823)
 
-**Last updated**: 2026-08-24.
+**Last updated**: 2026-08-25.
 **Branch**: `feat/1823-upgrade-capture-portal`.
 **Pull request**: [#1825](https://github.com/jmorrison-juniper/MistHelper/pull/1825).
 
@@ -15,12 +15,12 @@ the design. This file states the position.
 | Item | State |
 | --- | --- |
 | Tasks in `tasks.md` | 232 of 233 complete. Only T232 waits, and it needs an upgrade of a real device |
-| Continuous integration on the pull request | No check runs. The branch conflicts with `main`. Section 4.1 holds the detail |
-| Pull request | Open, not a draft, no review yet. The merge state is `DIRTY` |
+| Continuous integration on the pull request | **21 checks run and pass.** The merge of 2026-08-24 ended the conflict. Section 4.1 holds the detail |
+| Pull request | Open, not a draft, no review yet. The merge state is `CLEAN` |
 | Local commits not pushed | None |
 | Uncommitted work | None from this feature |
-| Portal tests | 2686 unit and contract, all pass. 154 browser tests, all pass, 0 skip |
-| Statement coverage of the package | 94.28 percent |
+| Portal tests | 2211 unit and contract for the portal package, all pass. 154 browser tests, all pass, 0 skip |
+| Statement coverage of the package | 95.19 percent. Every module now reaches the 90 percent floor |
 | Blocking defects | None. Every defect of `audit-2026-08-20.md` and of the live run of 2026-08-24 is fixed |
 
 Warning: this feature has now written firmware to a real device, and the run
@@ -204,6 +204,44 @@ existing bulk firmware tools through that seam and never calls them directly.
 
 ## 4. What waits
 
+### 4.-1 The work of 2026-08-25
+
+This session worked the open issues of the feature. Each item below is on the
+branch, and each one carries a comment on its issue.
+
+| Issue | What changed | Proof |
+| --- | --- | --- |
+| [#1997](https://github.com/jmorrison-juniper/MistHelper/issues/1997) | `main` merged into the branch, so the pull request left the `DIRTY` state | 21 checks now run and pass. Section 4.1 |
+| [#2007](https://github.com/jmorrison-juniper/MistHelper/issues/2007) | The per-device upgrade call exists. A one-device run with the reboot control off now takes `upgradeDevice`, whose schema holds no orchestration field | 25 tests. The 205 tests of the four existing files pass with no change |
+| [#2003](https://github.com/jmorrison-juniper/MistHelper/issues/2003) | The access point warning names the count, and it now covers a scheduled run as well as a no-reboot run | 4 tests. Measured on the real site shape: one switch and six access points reads "6 access point(s)" |
+| [#2008](https://github.com/jmorrison-juniper/MistHelper/issues/2008) | The bare `Warning:` is gone. The reported cause was wrong, and the real cause was the generated content of a hidden element | 2 browser tests. Verified in the live page both ways |
+| [#1994](https://github.com/jmorrison-juniper/MistHelper/issues/1994) | The address column fills from the device statistics call | 11 unit tests and 1 browser test. All 8 devices of the live site show an address |
+| [#1995](https://github.com/jmorrison-juniper/MistHelper/issues/1995) | The false docstring is corrected, and the live channel is declined with a reason. The page states when a count moves | Section 4.0 |
+| [#1996](https://github.com/jmorrison-juniper/MistHelper/issues/1996) | All three modules reach the 90 percent floor | 42 tests. Coverage rose to 95.19 percent |
+| [#1828](https://github.com/jmorrison-juniper/MistHelper/issues/1828) | Two comments cite line 132 and not line 103. The contract gained Appendix A | The appendix sits at the end of the file, so it moves no line the source cites |
+
+Two issues opened from the same work:
+
+| Issue | What it holds |
+| --- | --- |
+| [#2027](https://github.com/jmorrison-juniper/MistHelper/issues/2027) | No table of this portal sorts by a column, so an operator cannot group the devices that need the upgrade |
+| [#2036](https://github.com/jmorrison-juniper/MistHelper/issues/2036) | A stalled runner reports as a pytest failure, because the coverage job passes no per-test timeout |
+
+Warning: the per-device call of issue #2007 removes a contradiction and proves
+nothing. No lab switch has yet held the no-reboot choice through it. The plan
+still carries the warning that a switch may reboot, and that issue stays open
+until a switch proves it either way.
+
+One correction belongs here, because this file carried the wrong claim. The
+report of issue #2007 asked the verification path to read the device events.
+It named `version`, `uptime`, and `reboot_in_progress` as the readings to drop.
+The settle gate already reads the events. `upgrade/gate.py` opens the gate on the
+reconnect event. No statistics reading counts before that event arrives.
+`_screen_reading` also drops a record that repeats an older snapshot, which is
+FR-046. The four lying
+signals never misled the portal. They misled the person who ran the upgrade
+outside it.
+
 ### 4.0 The audit of 2026-08-20
 
 `audit-2026-08-20.md` holds the whole result. The short form:
@@ -229,6 +267,28 @@ Three items stay open. None of the three is a defect that an operator can meet.
 | Three modules sit under the 90 percent floor on their own | Audit section 2.7 | The aggregate of 94.26 percent hides them. `app/wiring.py` reaches 82 percent, `app/routes/select.py` 85 percent, and `app/routes/review.py` 89 percent. The audit table names `upgrade/wiring.py`, and no module of that path exists |
 | Four document corrections | Audit section 4 | Four rows of that table read `Open`. They are stale line citations and two counts, and no gate checks a line citation |
 
+**Update of 2026-08-25.** Two of those three are closed.
+
+The phase progress item is closed as a recorded decision, not as a build. The
+docstring of `PhaseProgress` now states what the code does, and it names the
+reason the live channel is absent. The progress page states that each phase count
+moves once, when its phase ends. That removes the harm the report named. A still
+count reads as a stall, and a stalled page during a firmware write is the moment
+an operator reaches for the power. Issue
+[#1995](https://github.com/jmorrison-juniper/MistHelper/issues/1995) holds the
+decision.
+
+The coverage item is closed with tests. Every module now reaches the floor:
+`review.py` at 96 percent, `wiring.py` at 91 percent, and `select.py` at 90
+percent. The package aggregate rose to 95.19 percent. Issue
+[#1996](https://github.com/jmorrison-juniper/MistHelper/issues/1996) holds the
+detail of what the uncovered half held.
+
+The four document corrections stay open. Issue
+[#1998](https://github.com/jmorrison-juniper/MistHelper/issues/1998) holds them.
+Two stale citations of `contracts/http-api.md` are fixed, and the contract gained
+Appendix A, which names all three `site_locked` refusal shapes together.
+
 The two defects of audit section 2.1 told an operator that the cloud stopped a
 device, when the code cannot know that. An operator who reads that word can cut
 power to a switch that is writing firmware, and that switch does not start
@@ -246,6 +306,39 @@ of a real device and a store that verifies. Section 4 of the live run record
 names both conditions.
 
 ### 4.1 Merge the pull request
+
+**Resolved on 2026-08-24.** `origin/main` merged into the branch. The pull
+request now reads `MERGEABLE` and `CLEAN`, and 21 checks run and pass.
+
+The choice was a merge and not a rebase, for the reason stated above. The
+repository squash-merges a pull request, so the merge commit disappears when the
+pull request lands and the history stays one commit either way. The merge
+therefore costs nothing that a rebase would save, and it keeps every hash
+citation true.
+
+Three files conflicted, and the start script needed real care. `main` brought the
+supervision work of issue #1925, which reports the real exit status of a crashed
+service instead of a fixed 0, and that work names two services. This branch adds
+a third, the capture portal. The merged script keeps the issue #1925 structure
+and adds the capture portal to the supervision line, the `wait -n` list, the
+crashed-service report, and the shutdown.
+
+`main` also changed `su misthelper` to `su - misthelper`. The merge keeps the
+form with no dash. A dash starts a login shell, which clears the environment, and
+the portal then starts with no database address and no allow list.
+
+The first green run found one real CodeQL alert at high severity,
+`py/bad-tag-filter` in `scripts/extract_page_strings.py`. It is fixed and not
+suppressed.
+
+Warning: a push while a run is in flight cancels that run, and the cancelled
+check reads as a failure on the pull request. Let a run finish before you push
+again. Issue
+[#2036](https://github.com/jmorrison-juniper/MistHelper/issues/2036) records a
+second cause of the same reading: the coverage job carries a 15 minute limit and
+passes no per-test timeout, so a stalled runner reports as a pytest failure.
+
+The previous text of this section, kept because it explains the choice:
 
 Warning: the pull request cannot merge today. The branch sits 66 commits behind
 `main`, and GitHub reports the merge state `DIRTY`. No check runs against a
@@ -268,8 +361,10 @@ this file then names nothing. Those two documents cite about 20 hashes, and the
 audit already records what a stale citation costs a reader.
 
 Do this after the merge state is clean. Run every scenario of `quickstart.md`
-against a real site, which is task T232. No run of this feature has ever reached
-a real site.
+against a real site, which is task T232. The read half of that run is complete,
+and `live-run-2026-08-24.md` holds it. The upgrade, the stop, and the compare
+scenarios still wait. Issue
+[#1992](https://github.com/jmorrison-juniper/MistHelper/issues/1992) tracks them.
 
 ### 4.2 Issue #1824, which is separate work
 
