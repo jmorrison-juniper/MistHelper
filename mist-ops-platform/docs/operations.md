@@ -19,6 +19,11 @@ docker compose --profile full up -d
 # 3. Run database migrations
 docker compose exec api alembic upgrade head
 
+# The API does not create a table on startup. Alembic owns the schema.
+# Run step 3 before the first request, or every route fails. See issue #1883.
+# Warning: revision 0003_align_schema_with_orm drops every platform table and
+# builds it again. Take a database backup before you run this step.
+
 # 4. Verify health
 curl http://localhost:8000/api/v1/healthz
 
