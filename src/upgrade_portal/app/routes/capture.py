@@ -792,20 +792,54 @@ def stored_progress(document: dict[str, Any], comparable: bool) -> dict[str, Any
 
 
 def stored_page_fields(document: dict[str, Any], tier: int) -> dict[str, Any]:
-    """Build the three fields that the capture page reads and the poll drops.
+    """Build the fields that the capture page reads and the poll drops.
+
+    Why:
+        `STATUS_FIELDS` does not name any field below, so `status_body` removes
+        each one before the poll answers. The page therefore reads them at the
+        first render alone, which is why a stored capture needs them here.
+
+        Issue #2063: `stored_size_bytes` used to be absent from this record. A
+        live capture carries it, because the collector writes it into the
+        progress record when the write ends. A stored capture reaches the page
+        through this function instead, so the size fell back to the template
+        default of zero. The page then read `Verified` beside `0` bytes while
+        the history page read the true size from the same document.
 
     Args:
         document: The stored capture document.
         tier: The data tier of the capture.
 
     Returns:
-        The tier, the run, and the site of one stored capture.
+        The tier, the run, the site, and the stored size of one stored capture.
     """
     return {
         TIER_FIELD: tier,  # The tier list of the page opens on this value.
         RUN_FIELD: str(document.get(RUN_FIELD, "")),  # The link back to the owning run.
         "site_id": str(document.get("site_id", "")),  # The site that this capture read.
+        "stored_size_bytes": stored_size_of(document),  # The measured size of the stored document.
     }
+
+
+def stored_size_of(document: dict[str, Any]) -> int:
+    """Return the stored size of one capture document, in bytes.
+
+    Why:
+        An older document may hold no size, and a document that a later version
+        wrote may hold text. The page shows a number, so a value it cannot read
+        becomes zero rather than a rendering fault.
+
+    Args:
+        document: The stored capture document.
+
+    Returns:
+        The size in bytes, or zero when the document names none.
+    """
+    try:  # A missing key, a None, and a non-numeric value all land here.
+        return int(document.get("stored_size_bytes") or 0)
+    except (TypeError, ValueError):  # The page shows a number, so a bad value reads as zero.
+        logger.warning("capture: the stored capture holds an unreadable size, so the page shows zero")
+        return 0
 
 
 def stored_status(document: dict[str, Any], comparable: bool) -> dict[str, Any]:
@@ -826,7 +860,7 @@ def stored_status(document: dict[str, Any], comparable: bool) -> dict[str, Any]:
     tier = int(document.get(TIER_FIELD, TIER_STANDARD))  # A document with no tier reads as tier 2.
     record = blank_status(str(document.get("capture_id", "")), tier)  # The shape of a live record.
     record.update(stored_progress(document, comparable))  # The finished values replace the empty ones.
-    record.update(stored_page_fields(document, tier))  # `status_body` drops these three again.
+    record.update(stored_page_fields(document, tier))  # `status_body` drops these page fields again.
     return record  # One record answers the page and the poll.
 
 
@@ -1058,6 +1092,14 @@ def page_context(capture_id: str) -> dict[str, Any]:
         "run_id": status.get(RUN_FIELD, ""),  # The link back to the owning run.
         "role": status.get(ROLE_FIELD, DEFAULT_ROLE),  # The half of the run that this capture covers.
         "poll_interval_seconds": POLL_SECONDS,  # Decision D3 of the plan fixes this period.
+        # WHY: issue #2063. The size reaches the page here, at the first render.
+        # `status_body` drops the field, because the poll contract does not name
+        # it, so the browser used to obtain it from one extra read of the whole
+        # capture. That read runs only when a poll answers `verified`, and no
+        # poll runs for a capture that already ended before the page opened. The
+        # page then showed `Verified` beside `0` bytes for every stored capture.
+        # Rendering the value here removes the dependency on that second read.
+        "stored_size_bytes": status.get("stored_size_bytes", 0),
     }
     context.update(lock_banner_context(resolve_org(None) or "", site_id))  # The included banner reads these six.
     return context

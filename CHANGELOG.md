@@ -7,6 +7,37 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### The capture page shows the stored size of a finished capture (issue #2063)
+
+- **Defect (Fixed)**: the capture detail page reported `Stored size in bytes: 0`
+  beside the word `Verified` for a capture that was stored and complete. The
+  history page and the database both held the true size for the same document,
+  so one page disagreed with the other two.
+- **Cause (Found)**: the template reads `stored_size_bytes` from the context
+  root. `status_body` removes that field, because `STATUS_FIELDS` does not name
+  it and the poll contract carries no size, and `page_context` never set it
+  separately. The browser filled the gap with one extra read of the whole
+  capture in `loadStoredSize`, but `refreshCaptureStatus` calls that read only
+  when a poll answers `verified`. A capture that ended before the page opened
+  never polls, so the value stayed at the template default of zero.
+- **Fix (Applied)**: `page_context` now renders `stored_size_bytes` at the first
+  paint, and `stored_page_fields` carries the value for a capture that the
+  portal reads back from the store. The page no longer depends on the second
+  browser read, which stays as a refinement for a capture that finishes while
+  the page is open.
+- **Reading (Hardened)**: `stored_size_of` turns an absent value, a null, and a
+  value the page cannot read into zero, so an older document renders rather than
+  raising.
+- **Tests (Added)**: `tests/unit/upgrade_portal/test_capture_stored_size.py`
+  holds 17 tests. They cover the page fields, the whole status record, the merge
+  order, every unreadable value, the page context, and the rule that the poll
+  body must still drop the size. Five were verified red first against the old
+  code.
+- **Verification (Measured)**: both stored captures were opened after a portal
+  restart, which guarantees no live progress record exists. The page rendered
+  39472 and 15494 bytes, matching the database and the history page. Before the
+  fix the same two pages rendered 0.
+
 ### Every capture failed, because the write name and the read name differed (issue #2061)
 
 - **Defect (Fixed)**: no capture could ever be stored. The portal collected the
