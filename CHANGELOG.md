@@ -7,6 +7,70 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### The portal checks its dependencies and repairs a stopped one (issue #2059)
+
+- **Defect (Fixed)**: the portal started, logged "ready for the port 8056", and
+  served the sign-in page while the document store answered nothing. The
+  operator signed in, picked a site, and only then met a 503, because
+  `acquire_site_lock` fails closed. The fault appeared three pages after its
+  cause. `GET /readyz` already reported the gap, but it answers JSON for an
+  orchestrator and no page showed the result.
+- **Preflight (Added)**: `src/upgrade_portal/runtime/dependencies.py` probes
+  every service the portal needs and returns one report. The sign-in page renders
+  the report, so the operator reads the state, the address, and the next action
+  on the first page.
+- **Probe depth (Stated)**: each probe opens a TCP connection and closes it, so
+  it answers one question: does a service listen. It signs in to nothing,
+  because the page must render fast and must render before the portal holds a
+  credential. The panel names `/readyz` for the deeper reading that also writes
+  to both stores.
+- **Auto-start (Added)**: `src/upgrade_portal/runtime/containers.py` reads the
+  state of one named container and starts it. A stopped container is the common
+  workstation fault and the one case the portal can repair. The module creates
+  nothing, pulls nothing, and removes nothing, so a missing container stays
+  missing and the report names the compose command instead. `CAPTURE_AUTOSTART`
+  turns the behavior off, and `compose.yml` sets it to `0` inside the container,
+  because a container cannot start its sibling.
+- **Command safety (Kept)**: every runtime call passes an argument list and no
+  shell, the runtime path comes from `shutil.which`, each container name passes
+  a pattern that refuses a leading hyphen and every shell character, and each
+  call carries a timeout.
+- **Name collisions (Fixed)**: `compose.yml` named two containers `arangodb` and
+  `redis-stack`. Those names belong to no project, so another project took them
+  first. A container named `truck-arangodb` from a different project held port
+  8529 on the test workstation, and the portal read that foreign database as its
+  own store. It reached a real server, received 401, and reported its own store
+  unreachable. Every service, container, network, and volume now carries the
+  `misthelper-` prefix.
+- **Ports (Moved)**: a vendor default is the port every other project also
+  publishes. ArangoDB moves from 8529 to 9529, Redis from 6379 to 9379, the
+  Insight UI from 8001 to 9526, and Ollama from 11434 to 9530. Each service binds
+  the new port inside the container as well, so each health check names the port
+  its client tool would otherwise guess. Ports 2200, 8055, and 8056 do not move,
+  because none is a vendor default and each already sits in the required range.
+- **Network (Pinned)**: the project network takes the subnet `172.31.240.0/24`
+  and an explicit name. A bridge with no subnet takes the next free range from
+  the runtime pool, and two projects can receive the same range. The test host
+  showed this: the old network held `10.89.0.0/24` from the pool.
+- **Migration (Required)**: the renamed containers use renamed volumes, so a
+  fresh ArangoDB holds no `misthelper` database. Create the database once, and
+  the portal then builds its three collections and seven indexes on the next
+  start. The old `arangodb-data` and `redis-data` volumes are left in place, so
+  no data is deleted by the rename.
+- **Tests (Added)**: 69 tests. `tests/unit/upgrade_portal/test_containers.py`
+  holds 26 and covers the name guard, the runtime search, every reported state,
+  and every failure path. `tests/unit/upgrade_portal/test_dependencies.py` holds
+  30 and covers the probe, the switch, and every reading the page can show.
+  `tests/guardrails/test_compose_naming_policy.py` holds 13 and fails when a
+  later edit reintroduces a generic name, a vendor default port, or a bridge
+  with no subnet. No test runs a container.
+- **Verification (Measured)**: the renamed stack was started on the test host.
+  Both containers report healthy, the network holds the pinned subnet, and the
+  storage bootstrap reported `database_available=True` with 3 collections and 7
+  indexes. `GET /readyz` answered `{"database":"ok","redis":"ok"}`. With
+  `misthelper-redis` stopped, one load of the sign-in page started the container
+  and rendered the state `started`.
+
 ### Add the upgrade capture portal, menu 238 (issue #1823)
 
 - **Menu 238 (Added)**: `Upgrade Capture Portal` starts a web server and prints a

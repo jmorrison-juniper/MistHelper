@@ -45,6 +45,7 @@ from flask import Blueprint, Response, current_app, jsonify, render_template, re
 from jinja2 import TemplateNotFound  # Marks a template that a later module still builds.
 
 from ...runtime import identity  # The registry, the digest, and the sign-out. No copy of them lives here.
+from ..config import load_settings  # The dependency panel probes the addresses the portal itself uses.
 from ..factory import json_error  # The one error envelope that the contract allows.
 
 logger = logging.getLogger(__name__)  # One logger for each module keeps the source visible in the log.
@@ -67,6 +68,8 @@ MODE_FIELD = "mode"  # The body field that names the credential mode of FR-006.
 SIGNIN_TEMPLATE = "auth/signin.html"  # The sign-in page.
 TWO_FACTOR_TEMPLATE = "auth/twofactor.html"  # The second factor page.
 FALLBACK_TEMPLATE = "layout.html"  # The shell page, shown while an auth template is still missing.
+
+DEPENDENCY_DOWN = "down"  # The one preflight state that turns the dependency panel into a warning.
 
 SIGNIN_TITLE = "Sign in"  # The heading and the tab text of the sign-in page.
 TWO_FACTOR_TITLE = "Second factor"  # The heading and the tab text of the second factor page.
@@ -666,6 +669,31 @@ def render_page(name: str, **context: Any) -> str:
         return render_template(FALLBACK_TEMPLATE, **context)  # The shell page always exists.
 
 
+def dependency_rows() -> list[dict[str, str]]:
+    """Probe every portal dependency and return the rows the page renders.
+
+    Why:
+        The portal used to serve this page while the document store answered
+        nothing. The operator met the fault three pages later, as a 503 from the
+        site lock. The rows below put the state on the first page instead.
+
+        A probe fault must never hide the sign-in form, because an operator who
+        cannot sign in also cannot read a history page or repair anything. Every
+        fault therefore becomes an empty row list and the form still renders.
+
+    Returns:
+        One row for each dependency, or an empty list when the probe failed.
+    """
+    try:  # A settings fault or a probe fault must not stop the operator signing in.
+        from ...runtime.dependencies import reading_rows, run_preflight  # Deferred, so a fault stays local.
+
+        settings = load_settings()  # The same settings the portal itself uses, so no address can differ.
+        return reading_rows(run_preflight(settings.arango, settings.redis))  # Probe, then flatten for the page.
+    except Exception:  # noqa: BLE001  # WHY: the sign-in form outranks the banner, so every fault degrades.
+        logger.exception("auth: the dependency preflight failed, so the page shows no dependency panel")
+        return []  # An empty list hides the panel and leaves the form untouched.
+
+
 def signin_context() -> dict[str, Any]:
     """Build the values that the sign-in page reads.
 
@@ -678,12 +706,15 @@ def signin_context() -> dict[str, Any]:
     Returns:
         The template values.
     """
+    rows = dependency_rows()  # The preflight reading of every service the portal needs.
     return {
         "page_title": SIGNIN_TITLE,  # The heading and the tab text.
         "signed_in": False,  # The navigation partial hides every link and the sign-out button.
         "clouds": [{"label": label, "host": host} for label, host in cloud_catalog()],  # The picker rows.
         "default_host": DEFAULT_CLOUD_HOST,  # The row that the page marks as chosen.
         "token_mode_available": identity.environment_token_present(),  # Presence alone, and never a value.
+        "dependencies": rows,  # One row for each service, or an empty list when the probe failed.
+        "dependencies_healthy": all(row["state"] != DEPENDENCY_DOWN for row in rows),  # Drives the banner tone.
     }
 
 

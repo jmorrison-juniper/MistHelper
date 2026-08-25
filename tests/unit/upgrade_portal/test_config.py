@@ -236,7 +236,7 @@ def test_arango_defaults_name_the_container_service() -> None:
         name works there without any operator setup.
     """
     arango = load_settings().arango
-    assert arango.host == "http://arangodb:8529"
+    assert arango.host == "http://misthelper-arangodb:9529"
     assert arango.database == "misthelper"
     assert arango.username == "root"
 
@@ -249,8 +249,8 @@ def test_redis_defaults_name_the_container_service() -> None:
         drive one site at the same time.
     """
     redis = load_settings().redis
-    assert redis.host == "redis-stack"
-    assert redis.port == 6379
+    assert redis.host == "misthelper-redis"
+    assert redis.port == 9379
 
 
 def test_module_constants_hold_the_documented_literals() -> None:
@@ -263,11 +263,11 @@ def test_module_constants_hold_the_documented_literals() -> None:
     assert config.DEFAULT_PORT == 8056
     assert config.DEFAULT_POLL_INTERVAL_SECONDS == 30
     assert config.DEFAULT_THEMES == ("magenta", "default")
-    assert config.DEFAULT_ARANGO_HOST == "http://arangodb:8529"
+    assert config.DEFAULT_ARANGO_HOST == "http://misthelper-arangodb:9529"
     assert config.DEFAULT_ARANGO_DATABASE == "misthelper"
     assert config.DEFAULT_ARANGO_USERNAME == "root"
-    assert config.DEFAULT_REDIS_HOST == "redis-stack"
-    assert config.DEFAULT_REDIS_PORT == 6379
+    assert config.DEFAULT_REDIS_HOST == "misthelper-redis"
+    assert config.DEFAULT_REDIS_PORT == 9379
     assert config.LOWEST_ALLOWED_PORT == 1024
     assert config.HIGHEST_ALLOWED_PORT == 65535
     assert config.LOWEST_POLL_INTERVAL_SECONDS == 5
@@ -752,7 +752,7 @@ def test_arango_overrides_replace_each_address_field(monkeypatch: pytest.MonkeyP
     assert arango.username == "portal_reader"
 
 
-@pytest.mark.parametrize(("raw", "expected"), [("6380", 6380), ("not-a-port", 6379), ("0", 6379), ("70000", 6379)])
+@pytest.mark.parametrize(("raw", "expected"), [("6380", 6380), ("not-a-port", 9379), ("0", 9379), ("70000", 9379)])
 def test_redis_overrides_replace_the_address_and_guard_the_port(
     monkeypatch: pytest.MonkeyPatch, raw: str, expected: int
 ) -> None:
