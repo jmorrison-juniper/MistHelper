@@ -300,12 +300,18 @@ class OperationRegistry:
         "235": {"category": "interactive_safe", "skip_reason": "Requires a count operation choice"},
         "236": {"category": "interactive_safe", "skip_reason": "Requires a count operation and site"},
         "237": {"category": "interactive_safe", "skip_reason": "Requires a count operation and MSP ID"},
-        # WHY: menu 238 starts a local web server and drives a firmware upgrade, so it writes
+        "238": {"category": "interactive_safe", "skip_reason": "Requires an MSP ID"},
+        # WHY: menu 239 starts a local web server and drives a firmware upgrade, so it writes
         # device state. The fail-closed guardrail needs this row or the build breaks.
-        "238": {
+        #
+        # Issue #2065: the portal used to sit at menu 238. Menu 238 reached `main` first as
+        # the MSP license export, which is `interactive_safe` and therefore runs under
+        # `--testinteractive`. Keeping both at 238 would have let one merge resolution start
+        # a firmware upgrade portal inside an automated test pass, so the portal moved to 239.
+        "239": {
             "category": "destructive",
             "skip_reason": (
-                "DESTRUCTIVE: Menu 238 starts the upgrade capture portal on port 8056 and "
+                "DESTRUCTIVE: Menu 239 starts the upgrade capture portal on port 8056 and "
                 "drives a firmware upgrade for the selected site. The menu needs a browser "
                 "and a live Mist test tenant."
             ),

@@ -2,7 +2,7 @@
 
 Why:
     The application factory starts with no argument, because `wsgi_capture.py`
-    and the menu 238 launcher both call `create_app()` with an empty argument
+    and the menu 239 launcher both call `create_app()` with an empty argument
     list. This module therefore reads every setting from the process environment
     and returns one frozen record. A frozen record also stops a request handler
     from changing a setting while the portal runs.

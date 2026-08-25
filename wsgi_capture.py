@@ -21,7 +21,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # Read `.env` before the factory runs. `MistHelper.py` does the same at its own
-# start, so menu 238 and the `--capture-portal` flag both reach a populated
+# start, so menu 239 and the `--capture-portal` flag both reach a populated
 # environment. This module is the other door, and Gunicorn opens it directly.
 # Without this call the sign-in page reports that the server holds no API token
 # variable, which is false whenever `.env` names one, and the token sign-in mode

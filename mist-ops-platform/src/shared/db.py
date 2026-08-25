@@ -62,10 +62,18 @@ async def get_session(
 
 
 async def ensure_tables_exist(engine) -> None:  # noqa: ANN001
-    """Create all ORM tables on startup. Idempotent via checkfirst.
+    """Create all ORM tables. Use this helper in a test fixture only.
+
+    Warning: do not call this helper on the API startup path. `create_all` uses
+    `checkfirst`, so it skips a table that already exists and it never alters
+    one. It therefore cannot repair a schema difference, and it hides the
+    difference instead of reporting it. See issue #1883.
+
+    Alembic owns the deployment schema. Run `alembic upgrade head` before you
+    start the API. See docs/operations.md.
 
     Uses an advisory lock to prevent race conditions when multiple
-    uvicorn workers start simultaneously.
+    test workers start simultaneously.
     """
     import src.shared.models  # noqa: F401 — register all models
     from src.shared.models.base import Base
@@ -80,7 +88,12 @@ async def ensure_tables_exist(engine) -> None:  # noqa: ANN001
 
 
 async def ensure_org_partitions(engine, org_id: str) -> None:  # noqa: ANN001
-    """Create LIST partitions for one org across all partitioned tables."""
+    """Create LIST partitions for one org across all partitioned tables.
+
+    The three tables in `PARTITIONED_TABLES` use `PARTITION BY LIST (org_id)`.
+    The models declare that strategy, and migration `0003_align_schema_with_orm`
+    builds it. A LIST bound therefore matches the parent table.
+    """
     validated = uuid_mod.UUID(str(org_id))
     safe_suffix = validated.hex
 

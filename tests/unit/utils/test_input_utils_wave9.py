@@ -184,3 +184,30 @@ class TestSafeInputDefaultArguments:
         result = InputUtils.safe_input("Enter: ")  # WHY: exercise defaults
         assert result == "value"  # WHY: normal path returns value
         assert called.get("ok") is True  # WHY: input was invoked
+
+
+class TestPromptMspId:
+    """Cover ``prompt_msp_id``, the shared prompt every MSP-scoped menu calls."""
+
+    def test_returns_the_trimmed_identifier(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # WHY: an operator pastes a padded value, and the padding must not reach the API path
+        monkeypatch.setattr("builtins.input", lambda _prompt: "  msp-9  ")  # WHY: mimic a padded paste
+        assert InputUtils.prompt_msp_id() == "msp-9"  # WHY: the trimmed value reaches the URL
+
+    def test_returns_none_for_a_whitespace_answer(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # WHY: whitespace collapses to empty, so the guard must reject it
+        monkeypatch.setattr("builtins.input", lambda _prompt: "   ")  # WHY: mimic a space bar press
+        assert InputUtils.prompt_msp_id() is None  # WHY: an empty identifier cannot build a path
+
+    def test_returns_none_for_an_empty_answer(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # WHY: an immediate Enter press must abort before any API call
+        monkeypatch.setattr("builtins.input", lambda _prompt: "")  # WHY: mimic an immediate Enter press
+        assert InputUtils.prompt_msp_id() is None  # WHY: the guard must reject it
+
+    def test_returns_none_on_eof(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # WHY: an SSH disconnect or a container EOF must return to the menu, not raise
+        def _raise_eof(_prompt: str) -> str:  # WHY: drive the EOF branch of safe_input
+            raise EOFError
+
+        monkeypatch.setattr("builtins.input", _raise_eof)  # WHY: mimic a closed input stream
+        assert InputUtils.prompt_msp_id() is None  # WHY: safe_input degrades to "" and the guard returns None

@@ -44,7 +44,10 @@ class TestOrganization:
     """Verify Organization entity."""
 
     def test_tablename(self) -> None:
-        assert Organization.__tablename__ == "organizations"
+        # Issue #1883: this test asserted "organizations", which is the name that
+        # migration 0001 used. Every route and worker reads the ORM name "orgs",
+        # so the ORM name wins. Migration 0003 now builds "orgs".
+        assert Organization.__tablename__ == "orgs"
 
     def test_primary_key(self) -> None:
         cols = {c.name for c in Organization.__table__.primary_key.columns}
@@ -94,7 +97,10 @@ class TestSyncLedgerEntry:
     """Verify SyncLedgerEntry entity."""
 
     def test_tablename(self) -> None:
-        assert SyncLedgerEntry.__tablename__ == "sync_ledger_entries"
+        # Issue #1883: this test asserted "sync_ledger_entries", which is the name
+        # that migration 0001 used. The ORM names the table "sync_ledger", and the
+        # ORM is the schema owner. Migration 0003 now builds "sync_ledger".
+        assert SyncLedgerEntry.__tablename__ == "sync_ledger"
 
     def test_primary_key(self) -> None:
         cols = {c.name for c in SyncLedgerEntry.__table__.primary_key.columns}

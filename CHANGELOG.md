@@ -7,6 +7,41 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Menu 238 was allocated twice, so the portal moved to menu 239 (issue #2065)
+
+- **Defect (Fixed)**: `main` gave menu 238 to the MSP license export, which is
+  `interactive_safe`. This branch gave menu 238 to the upgrade capture portal,
+  which is `destructive`. Each branch passed the registry guardrail on its own,
+  because that check compares `menu_actions` against the registry inside one
+  branch and never reads the merge base.
+- **Safety (Explained)**: the two entries disagreed on the category, and the
+  category decides whether an automated run may execute the option. Had the
+  merge kept the portal action under the `interactive_safe` row from `main`,
+  `python MistHelper.py --testinteractive` would have started the firmware
+  upgrade portal on port 8056 during a normal test pass. That is the one outcome
+  the destructive classification exists to prevent.
+- **Renumber (Applied)**: `listMspLicenses` reached `main` first, so it keeps
+  menu 238. The upgrade capture portal moves to menu **239** and keeps its
+  `destructive` category. The `--capture-portal` flag is unchanged.
+- **Merge (Resolved)**: pull request #1825 reported `DIRTY`, so 80 commits of
+  portal work could not reach `main`. This commit merges `origin/main` into the
+  branch and resolves all six conflicts: `MistHelper.py`,
+  `src/utils/operation_registry.py`, `README.md`, `CHANGELOG.md`, and the two
+  generated menu references.
+- **Counts (Corrected)**: the registry now holds 240 entries, numbered 0 to 239.
+  `interactive_safe` reads 71 and covers 235-238. `destructive` reads 42 and
+  covers 154-187, 189-191, 194, 206-208, and 239.
+- **Guardrail (Added)**: `tests/guardrails/test_menu_number_uniqueness.py` holds
+  6 tests. They refuse a duplicate key, a gap in the numbering, and two numbers
+  that answer one action. They also pin the portal to `destructive` and pin menu
+  238 to the MSP license export, so a later branch that takes 238 back fails at
+  once.
+- **Finding (Recorded)**: the new guardrail found that menus 151 and 152 both
+  call `DataCollectionManager.continuous_loop` with no argument that tells them
+  apart, while each advertises different work. Issue #2066 tracks the repair.
+  The pair sits in `KNOWN_SHARED_ACTIONS` so the guardrail still catches a new
+  duplicate while that one waits.
+
 ### The capture page shows the stored size of a finished capture (issue #2063)
 
 - **Defect (Fixed)**: the capture detail page reported `Stored size in bytes: 0`
@@ -205,6 +240,51 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 - **Tests (Added)**: 2548 unit and contract tests under
   `tests/unit/upgrade_portal/` and `tests/contract/upgrade_portal/`. Statement
   coverage of the package is 94.67 percent.
+### Export the MSP licenses through menu 238 (issue #1260)
+
+- **Gap (Closed)**: the Mist endpoint `listMspLicenses`
+  (`GET /api/v1/msps/{msp_id}/licenses`) had no menu entry. An operator who
+  manages an MSP had to write custom code to read the license entitlement, the
+  usage counters, and the subscription records.
+- **Menu (Added)**: menu 238 runs the export. The registry classifies it
+  `interactive_safe`, because it reads only and it prompts for an MSP ID. The
+  `--testinteractive` run therefore includes it, and the `--test` run skips it.
+- **Class (Added)**: `src/export/msp_license_exporter.py` holds
+  `MSPLicenseExporter`. It prompts through `InputUtils.safe_input`, calls the
+  SDK once, and writes through `DataExporter.write_with_format_selection`, so
+  the CSV, SQLite, and ArangoDB backends all work.
+- **Response shape (Explained)**: the endpoint returns one aggregate object, not
+  a list. The object holds four counter maps, one `licenses` array, and one
+  `amendments` array. The endpoint is not paginated, so the exporter reads
+  `response.data` instead of running `mistapi.get_all`.
+- **Two files (Chosen)**: the exporter writes `MSPLicenses_<msp>_summary.csv`
+  and `MSPLicenses_<msp>_details.csv`. One wide row would hold one column for
+  each subscription field, so the column count would change every time the MSP
+  buys or retires a subscription. Two files keep both schemas stable. The
+  detail file carries a `record_type` column, because a subscription record and
+  an amendment record share the same field names.
+- **Primary keys (Added)**: `ENDPOINT_PRIMARY_KEY_STRATEGIES` gains
+  `listMspLicenses` as a `natural_pk` on `msp_id` and `listMspLicensesDetails`
+  as a `natural_pk` on `id`. Both are natural keys, so a repeat run upserts and
+  writes no duplicate row.
+- **Shared prompt (Extracted)**: `InputUtils.prompt_msp_id` now holds the MSP
+  identifier prompt. Menu 237 carried its own copy inside `CountExporter`, and a
+  second copy in the new exporter made Pylint report duplicate code. One method
+  keeps the prompt text, the trim, and the abort rule identical across both MSP
+  menus. `CountExporter._prompt_msp_id` is deleted, not delegated, because the
+  project forbids a wrapper.
+- **Tests (Added)**: `tests/unit/export/test_msp_license_exporter.py` holds 22
+  tests. They cover the abort path, the non-dict body, both row builders, the
+  malformed-array guards, the empty result, the error handler, both primary-key
+  entries, and the menu wiring. `tests/unit/utils/test_input_utils_wave9.py`
+  gains 4 tests for the shared prompt, including the EOF path. Every Mist call
+  is mocked, so no test reaches the live cloud.
+- **Documentation (Updated)**: `documentation/menu_reference.md` and
+  `documentation/wiki/Menu-Reference.md` were regenerated. The README operation
+  counts were stale at menu 234, because menus 235 to 237 reached `main` without
+  a README update. The counts now read 238 entries plus Exit, and the menu table
+  lists 235 through 238.
+
 ### Run the quality gates on every pull request (issue #1952)
 
 - **Defect (Fixed)**: `.github/workflows/ci.yml` started on a pull request that

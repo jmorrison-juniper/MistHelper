@@ -452,19 +452,19 @@ class TestRepositoryGuardrails:
     """Tests for the repository entries that the portal needs (T213 to T215)."""
 
     def test_menu_238_carries_the_destructive_registry_entry(self) -> None:
-        """Menu 238 holds a registry row, and the row names the destructive category.
+        """Menu 239 holds a registry row, and the row names the destructive category.
 
         Why:
             ``OperationRegistry.get`` fails closed. An absent option returns the
-            ``unregistered`` category and the build breaks. Menu 238 starts a
+            ``unregistered`` category and the build breaks. Menu 239 starts a
             web server and drives a firmware upgrade, so it writes device state.
         """
-        anchor = where(REGISTRY_PATH, line_of(REGISTRY_PATH, '"238":'))  # WHY: Names the row or the head of the file.
-        entry = OperationRegistry.get("238")  # WHY: The public reader, never the private table.
+        anchor = where(REGISTRY_PATH, line_of(REGISTRY_PATH, '"239":'))  # WHY: Names the row or the head of the file.
+        entry = OperationRegistry.get("239")  # WHY: The public reader, never the private table.
         category = entry.get("category", "")  # WHY: An absent key reads as an empty string.
-        assert category != "unregistered", f"{anchor} holds no row for menu 238"
+        assert category != "unregistered", f"{anchor} holds no row for menu 239"
         assert category == "destructive", f"{anchor} sets the category {category}, and the row needs destructive"
-        assert entry.get("skip_reason", "") != "", f"{anchor} holds no skip reason for menu 238"
+        assert entry.get("skip_reason", "") != "", f"{anchor} holds no skip reason for menu 239"
 
     @pytest.mark.parametrize(
         ("endpoint", "key_field"),

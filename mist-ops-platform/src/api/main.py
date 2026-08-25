@@ -18,9 +18,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     engine = build_engine(settings)
     app.state.engine = engine
 
-    from src.shared.db import ensure_tables_exist
-
-    await ensure_tables_exist(engine)
+    # WHY: Alembic owns the schema. See issue #1883. A `create_all` call on
+    # startup used `checkfirst`, so it skipped every table the migration built
+    # and it added the missing ORM tables. The result matched neither owner.
+    # Run `alembic upgrade head` before you start the API. See docs/operations.md.
 
     yield
     await engine.dispose()

@@ -4,8 +4,8 @@ Network Operations & Data Export Tool for Juniper Mist Cloud
 [![Quality Gates](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/ci.yml/badge.svg)](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/ci.yml)
 [![Container Build](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/container-build.yml/badge.svg)](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/container-build.yml)
 
-**Operation Count:** The code defines 238 actionable menu entries, numbered 1 to
-238 with no gaps. Exit is menu 0, so the registry holds 239 entries in total.
+**Operation Count:** The code defines 239 actionable menu entries, numbered 1 to
+239 with no gaps. Exit is menu 0, so the registry holds 240 entries in total.
 The [Menu Reference](#menu-reference) section lists every category and range.
 
 MistHelper is a production-focused Python application that streamlines large-scale Juniper Mist Cloud data extraction, enrichment, transformation, and limited lifecycle operations. It supports both interactive (menu) and fully automated CLI execution, with flexible output to CSV files, a local SQLite database, or a polyglot backend (ArangoDB for documents, Redis for time-series and JSON caching) using natural/composite business keys (no artificial surrogate IDs for core entities). The codebase emphasizes safety, transparency, and predictable behavior-aligned with the included internal Agents Guide and NASA/JPL style defensive programming practices.
@@ -146,7 +146,7 @@ flowchart LR
   'fontFamily': 'ui-monospace, monospace'
 }}}%%
 mindmap
-   root((MistHelper<br/>239 Operations))
+   root((MistHelper<br/>240 Operations))
     Safe Org Exports (64)
       Sites and Analysis 1-7
       Device Inventory 8-13
@@ -161,7 +161,7 @@ mindmap
       Support and Assets 188, 193
       JSI and Mist Edge 204-205
       Org Searches 230-234
-    Interactive Safe (70)
+    Interactive Safe (71)
       Site Devices 60-72
       Site Insights 73-79
       Site Stats 80-91
@@ -171,7 +171,7 @@ mindmap
       Site Event Searches 214-220
       Site Client and Device Searches 221-224
       Site Stats and Zones 225-229
-      Count Endpoints 235-237
+      Counts and MSP Licenses 235-238
     Resource Intensive (10)
       Heavy Inventory 14, 18-19
       Bulk Exports 59
@@ -204,7 +204,7 @@ mindmap
       Gateway Template 194
       Synthetic Probes 206
       AP Profile Migration 207-208
-      Upgrade Capture Portal 238
+      Upgrade Capture Portal 239
 ```
 
 > See [full operations reference](documentation/diagrams/operations/operations-reference.md) with lifecycle states, NOC engineer journey, and safety requirements.
@@ -512,7 +512,7 @@ Primary flags (from argparse block near end of file):
 | `--tui` | Launch Terminal User Interface mode for visual API navigation |
 | `--login` | Use interactive login (email/password) instead of API token - enables MSP-level API access |
 | `--web-portal` | Launch the web portal interface on port 8055 (or WEB_PORT env var) |
-| `--capture-portal` | Launch the upgrade capture portal on port 8056 (or CAPTURE_PORT env var). Same as menu 238. |
+| `--capture-portal` | Launch the upgrade capture portal on port 8056 (or CAPTURE_PORT env var). Same as menu 239. |
 | `--testinteractive` | Run systematic test of read-only interactive menu options |
 
 Examples (PowerShell friendly):
@@ -543,13 +543,13 @@ fails closed, so `--test` skips any option that the registry does not name
 | Category | Count | Menu numbers | Behavior under `--test` |
 |----------|-------|--------------|-------------------------|
 | `safe` | 64 | 1-13, 15-17, 20-58, 188, 193, 204-205, 230-234 | Runs |
-| `interactive_safe` | 70 | 60-96, 195-203, 209-229, 235-237 | Runs under `--testinteractive` |
-| `destructive` | 42 | 154-187, 189-191, 194, 206-208, 238 | Never runs |
+| `interactive_safe` | 71 | 60-96, 195-203, 209-229, 235-238 | Runs under `--testinteractive` |
+| `destructive` | 42 | 154-187, 189-191, 194, 206-208, 239 | Never runs |
 | `interactive` | 29 | 0, 124-150, 192 | Never runs |
 | `websocket` | 22 | 102-123 | Never runs |
 | `resource_intensive` | 10 | 14, 18-19, 59, 97-101, 153 | Never runs |
 | `continuous_loop` | 2 | 151-152 | Never runs |
-| **Total** | **239** | 0-238, no gaps | Menu 0 is Exit |
+| **Total** | **240** | 0-239, no gaps | Menu 0 is Exit |
 
 Warning: A destructive operation changes the Mist cloud configuration. Read
 `documentation/menu_reference.md` before you run one.
@@ -598,10 +598,11 @@ Warning: A destructive operation changes the Mist cloud configuration. Read
 | 232 | Search organization WAN clients (`searchOrgWanClients`) | `safe` |
 | 233 | Search organization WAN client events (`searchOrgWanClientEvents`) | `safe` |
 | 234 | Search organization system events (`searchOrgSystemEvents`) | `safe` |
-| 235 | Run any organization-scoped Mist count endpoint (35 operations) | `interactive_safe` |
+| 235 | Run any org-scoped Mist count endpoint (35 operations) | `interactive_safe` |
 | 236 | Run any site-scoped Mist count endpoint (32 operations) | `interactive_safe` |
-| 237 | Run any managed-service-provider count endpoint (3 operations) | `interactive_safe` |
-| 238 | Start the upgrade capture portal on port 8056 | `destructive` |
+| 237 | Run any MSP-scoped Mist count endpoint (3 operations) | `interactive_safe` |
+| 238 | Export the MSP license entitlement, usage, and subscriptions (`listMspLicenses`) | `interactive_safe` |
+| 239 | Start the upgrade capture portal on port 8056 | `destructive` |
 
 Menu 197 writes to `data/packet_captures/<mac>/vlan_<id>/`. Every other
 operation in the table writes through `DataExporter`, so it honors the CSV,
@@ -616,7 +617,7 @@ records the state of a site before a firmware upgrade and after the firmware
 upgrade, then shows you what changed. In this portal, a capture is one record
 of site state and not a packet capture.
 
-Start the portal from menu entry **238**, or with this command:
+Start the portal from menu entry **239**, or with this command:
 
 ```bash
 python MistHelper.py --capture-portal

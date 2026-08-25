@@ -3,6 +3,11 @@
 
 # Security - Never commit sensitive files
 .env
+# WHY: `.env` alone does not cover a copy such as `.env.backup-2059` or
+# `.env.2026-08-25`. A copy holds the same API token as the original, so the
+# pattern below covers every suffix an operator adds while editing.
+.env.*
+!.env.example
 !documentation/sample.env
 
 # Copyrighted standard - do not redistribute (ASD-STE100 license restricts sharing)

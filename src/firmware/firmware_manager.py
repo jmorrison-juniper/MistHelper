@@ -20,6 +20,10 @@ from dataclasses import dataclass  # WHY: FirmwareManagerConfig frozen value obj
 from datetime import UTC, datetime  # WHY: UTC-aware ISO timestamps and CSV filenames
 from typing import Any, cast  # WHY: Any for opaque API objects. Cast narrows mypy return types
 
+from src.firmware.running_version import (  # WHY: one reader holds the running-version endpoint rule
+    RunningFirmwareVersionResolver,
+)
+
 # Type aliases for injected dependencies keep readable signatures across helpers.
 SafeInputFn = Callable[..., str]  # WHY: safe_input(prompt, context=...) returning stripped text
 SelectSiteFn = Callable[..., Any]  # WHY: interactive site picker used by menu 196 sub-flows
@@ -2743,6 +2747,13 @@ class FirmwareManager:
     def _fetch_site_gateway_devices(self, site_id: Any, site_name: str) -> list[dict[str, Any]] | None:
         """Fetch gateway devices for a single site.
 
+        Warning:
+            The rows of ``listSiteDevices`` carry the configured firmware
+            version, not the running version. Never read the ``version`` field
+            of these rows for a firmware decision. Use
+            ``RunningFirmwareVersionResolver`` instead, which reads
+            ``listSiteDevicesStats`` or ``getOrgInventory``.
+
         Returns:
             list of device dicts on success, None on API error.
         """
@@ -3028,6 +3039,81 @@ class FirmwareManager:
         if site_result.get("error"):  # WHY: propagate error record
             results["errors"].append(site_result["error"])  # WHY: aggregate for summary
 
+    def _fetch_site_running_versions(self, site_id: str) -> dict[str, str]:
+        """Read the running firmware version of every device at one site.
+
+        Args:
+            site_id: The site to read.
+
+        Returns:
+            A map of device id or MAC address to the running version string.
+        """
+        logging.info("Loading running firmware versions site=%s", site_id)  # WHY: entry audit
+        resolver = RunningFirmwareVersionResolver(self.apisession)  # WHY: one reader holds the endpoint rule
+        running_by_key = resolver.fetch_site_running_versions(site_id)  # WHY: read the stats endpoint
+        logging.debug("Loaded running firmware versions site=%s keys=%d", site_id, len(running_by_key))  # WHY: exit
+        return running_by_key  # WHY: the overlay joins device rows against this map
+
+    def _overlay_running_versions(
+        self,
+        site_id: str,
+        site_ssrs: list[dict[str, Any]],
+        inventory: dict[str, dict[str, Any]],
+    ) -> dict[str, dict[str, Any]]:
+        """Return an inventory whose version fields hold the running version.
+
+        Why:
+            The site device listing reports the configured version, not the
+            running version. A firmware decision that reads the listing value
+            can plan the wrong upgrade on production hardware.
+
+        Args:
+            site_id: The site that owns the discovered devices.
+            site_ssrs: The SSR rows returned by the site device listing.
+            inventory: The org inventory map keyed by device id.
+
+        Returns:
+            A new inventory map that carries the running version for each device.
+        """
+        logging.info("Overlaying running versions site=%s devices=%d", site_id, len(site_ssrs))  # WHY: entry audit
+        running_by_key = self._fetch_site_running_versions(site_id)  # WHY: running state beats configured state
+        merged = dict(inventory)  # WHY: copy so the shared org inventory stays unchanged
+        resolver = RunningFirmwareVersionResolver(self.apisession)  # WHY: one reader applies the endpoint rule
+        for row in site_ssrs:  # WHY: one pass over every discovered SSR row
+            self._apply_running_version(merged, row, running_by_key, resolver)  # WHY: keep this loop body short
+        logging.debug("Overlaid running versions site=%s entries=%d", site_id, len(merged))  # WHY: exit audit
+        return merged  # WHY: the validator reads this map
+
+    @staticmethod
+    def _apply_running_version(
+        merged: dict[str, dict[str, Any]],
+        row: dict[str, Any],
+        running_by_key: dict[str, str],
+        resolver: RunningFirmwareVersionResolver,
+    ) -> None:
+        """Write the running version of one device row into the merged inventory.
+
+        Args:
+            merged: The inventory map to update in place.
+            row: One SSR row from the site device listing.
+            running_by_key: The running version map for the site.
+            resolver: The reader that applies the endpoint rule.
+        """
+        dev_id = str(row.get("id") or "")  # WHY: the inventory map is keyed by device id
+        if not dev_id:  # WHY: a row without an id cannot join to the inventory
+            return  # WHY: skip the row rather than create a bad key
+        reading = resolver.read(row, running_by_key)  # WHY: never treat the listing value as running
+        entry = dict(merged.get(dev_id, {}))  # WHY: copy so an org inventory entry stays unchanged
+        entry.setdefault("model", row.get("model", ""))  # WHY: keep a model for the operator messages
+        entry.setdefault("type", row.get("type", ""))  # WHY: keep the type for the operator messages
+        entry.setdefault("site_id", row.get("site_id", ""))  # WHY: keep the site anchor for reporting
+        if reading.is_running:  # WHY: only a running reading may replace the inventory value
+            entry["version"] = reading.value  # WHY: the decision now reads the version the device runs
+        else:  # WHY: no stats row exists for this device
+            entry.setdefault("version", reading.value)  # WHY: keep any org inventory value, which is running state
+            entry["version_is_stale"] = True  # WHY: mark the reading so a report can warn the operator
+        merged[dev_id] = entry  # WHY: publish the updated entry for the validator
+
     def _run_ssr_site_upgrade_flow(
         self,
         site: dict[str, Any],
@@ -3042,8 +3128,11 @@ class FirmwareManager:
         if not site_ssrs:  # WHY: nothing to upgrade here
             return  # WHY: skip remaining work
         ssr_ids = [ssr["id"] for ssr in site_ssrs]  # WHY: id list for validator
+        inventory = self._overlay_running_versions(  # WHY: the decision must read the running version
+            site.get("id", ""), site_ssrs, upgrade_config["inventory"]
+        )
         validated, _ = self._validate_ssr_devices_for_version(  # WHY: filter incompatible SSRs
-            ssr_ids, upgrade_config["inventory"], upgrade_config["version"]
+            ssr_ids, inventory, upgrade_config["version"]
         )
         if not validated:  # WHY: nothing left after filter
             return  # WHY: skip upgrade call

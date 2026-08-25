@@ -1,7 +1,7 @@
 """Unit tests for the server choice of the upgrade capture portal.
 
 Why:
-    ``runtime/server.py`` decides which WSGI server starts the portal. Menu 238
+    ``runtime/server.py`` decides which WSGI server starts the portal. menu 239
     and the browser test fixture both read that decision, so a wrong answer
     stops the portal on a whole platform. The module needs a test, and the test
     must never start a server.

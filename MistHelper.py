@@ -407,6 +407,9 @@ from src.export.license_export_utils import (
 from src.export.msp_inventory_exporter import (
     MSPInventoryExporter,  # Cat B (1013 SC-001 position 8) -- re-export for menu tuple + static call rewire
 )
+from src.export.msp_license_exporter import (
+    MSPLicenseExporter,  # Issue #1260 -- the MSP license export, menu 238
+)
 from src.export.org_admin_exporter import (
     OrgAdminExporter,  # Cat B (1013 SC-001 position 20) -- re-export for MistHelper.OrgAdminExporter callers
 )
@@ -3736,6 +3739,10 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
         "Run any MSP-scoped Mist count endpoint (3 operations, issue #1802)",
     ),
     "238": (
+        MSPLicenseExporter.licenses,
+        "Export the license entitlement, usage, and subscriptions for an MSP (listMspLicenses)",
+    ),
+    "239": (
         # A lambda defers the name lookup, because _launch_capture_portal is defined
         # further down this module and this dict is built the moment the module loads.
         lambda: _launch_capture_portal(),
@@ -4946,7 +4953,7 @@ def _launch_capture_portal(dev_debug: bool = False) -> None:
     """Launch the upgrade capture portal on port 8056.
 
     Why:
-        Menu 238 and the --capture-portal flag need one shared start path. The portal runs in
+        Menu 239 and the --capture-portal flag need one shared start path. The portal runs in
         its own process on its own port, because the port 8055 portal holds process-level state
         that a second application would corrupt.
 
@@ -5145,7 +5152,7 @@ def _add_interface_mode_flags(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help=(
             "Launch the upgrade capture portal on port 8056 (or CAPTURE_PORT env var) instead of the CLI menu"
-        ),  # Gunicorn upgrade capture portal, menu 238
+        ),  # Gunicorn upgrade capture portal, menu 239
     )
 
 

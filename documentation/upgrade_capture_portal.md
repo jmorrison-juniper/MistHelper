@@ -513,7 +513,7 @@ the Mist cloud by hand.
 
 These limits are the behavior of the code today.
 
-**The menu starts the development server.** Menu 238 and the `--capture-portal`
+**The menu starts the development server.** menu 239 and the `--capture-portal`
 flag start the Flask development server. Neither path starts Waitress, and
 neither path starts Gunicorn. The container path prints this advice and then
 starts the same development server:

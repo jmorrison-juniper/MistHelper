@@ -18,6 +18,7 @@ import mistapi
 import pytest
 
 from src.export.count_exporter import _MSP_OPS, _ORG_OPS, _SITE_OPS, CountExporter, _CountOp
+from src.utils.input_utils import InputUtils
 
 
 @pytest.fixture
@@ -180,14 +181,19 @@ class TestSiteCounts:
 
 
 class TestMspCounts:
-    """Cover ``msp_counts`` and ``_prompt_msp_id``, the menu 237 entry point."""
+    """Cover ``msp_counts``, the menu 237 entry point.
+
+    The identifier prompt now lives in ``InputUtils.prompt_msp_id``, because
+    menu 238 asks for the same value. ``tests/unit/utils/test_input_utils_wave9.py``
+    covers the prompt itself, so these tests patch it and cover the routing only.
+    """
 
     def test_msp_counts_returns_when_the_operator_declines_the_operation(self, fake_mh: Any) -> None:
         """A declined operation must abort before the identifier prompt runs."""
         with (
             patch.object(importlib, "import_module", return_value=fake_mh),
             patch.object(CountExporter, "_choose", return_value=None),
-            patch.object(CountExporter, "_prompt_msp_id") as prompt_spy,
+            patch.object(InputUtils, "prompt_msp_id") as prompt_spy,
             patch.object(CountExporter, "_run") as run_spy,
         ):
             CountExporter.msp_counts()  # WHY: drive the first guard branch.
@@ -199,7 +205,7 @@ class TestMspCounts:
         with (
             patch.object(importlib, "import_module", return_value=fake_mh),
             patch.object(CountExporter, "_choose", return_value=_MSP_OPS[0]),
-            patch.object(CountExporter, "_prompt_msp_id", return_value=None),
+            patch.object(InputUtils, "prompt_msp_id", return_value=None),
             patch.object(CountExporter, "_run") as run_spy,
         ):
             CountExporter.msp_counts()  # WHY: drive the declined-identifier guard.
@@ -210,27 +216,9 @@ class TestMspCounts:
         with (
             patch.object(importlib, "import_module", return_value=fake_mh),
             patch.object(CountExporter, "_choose", return_value=_MSP_OPS[0]),
-            patch.object(CountExporter, "_prompt_msp_id", return_value="msp-9"),
+            patch.object(InputUtils, "prompt_msp_id", return_value="msp-9"),
             patch.object(CountExporter, "_run") as run_spy,
         ):
             CountExporter.msp_counts()  # WHY: drive the happy path.
         # WHY: the MSP path has no friendly name, so the identifier doubles as the label.
         run_spy.assert_called_once_with(_MSP_OPS[0], "msp-9", "msp-9")
-
-    def test_prompt_msp_id_returns_none_for_a_blank_answer(self, fake_mh: Any) -> None:
-        """A blank answer must abort, because the API path needs an identifier."""
-        fake_mh.InputUtils.safe_input.return_value = "   "  # WHY: whitespace collapses to empty.
-        with patch.object(importlib, "import_module", return_value=fake_mh):
-            assert CountExporter._prompt_msp_id() is None  # WHY: the guard must reject it.
-
-    def test_prompt_msp_id_trims_the_answer(self, fake_mh: Any) -> None:
-        """A pasted identifier keeps stray whitespace, so the prompt must trim it."""
-        fake_mh.InputUtils.safe_input.return_value = "  msp-9  "  # WHY: mimic a paste with padding.
-        with patch.object(importlib, "import_module", return_value=fake_mh):
-            assert CountExporter._prompt_msp_id() == "msp-9"  # WHY: trimmed value reaches the URL.
-
-    def test_prompt_msp_id_rejects_an_empty_answer(self, fake_mh: Any) -> None:
-        """An empty answer must not become part of an API path."""
-        fake_mh.InputUtils.safe_input.return_value = ""  # WHY: mimic an immediate Enter press.
-        with patch.object(importlib, "import_module", return_value=fake_mh):
-            assert CountExporter._prompt_msp_id() is None  # WHY: the guard must reject it.
