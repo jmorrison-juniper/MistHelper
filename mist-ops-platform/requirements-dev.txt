@@ -17,7 +17,7 @@ pytest-cov>=6.0
 fastapi>=0.115
 sqlalchemy>=2.0
 pydantic>=2.10
-pydantic-settings>=2.7
+pydantic-settings>=2.15.0
 
 # alembic backs migrations/versions/. tests/unit/shared/test_schema_agreement.py
 # imports alembic at module scope, because it runs the whole migration chain in
