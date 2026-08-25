@@ -18,6 +18,10 @@ from src.shared.mist.types import ENTITY_ENDPOINT_MAP
 
 logger = logging.getLogger(__name__)
 
+# WHY: ordered from the most specific entity to the least, so the push record
+# names the device when the caller supplies one.
+_ENTITY_ID_KEYS = ("device_id", "wlan_id", "network_id", "site_id")
+
 
 @dataclass(frozen=True)
 class PushResult:
@@ -73,8 +77,13 @@ class ConfigPushExecutor:
         """
         endpoint = ENTITY_ENDPOINT_MAP.get(entity_type)
         if endpoint is None:
+            logger.error(  # WHY: the caller reads the result only, so the log carries the reason.
+                "No write endpoint for entity type %s, so the push never ran.",
+                entity_type,
+            )
             return PushResult(
-                entity_id=uuid4(),
+                # WHY: name the real device, so the record never points at a phantom.
+                entity_id=_resolve_entity_uuid(entity_ids),
                 entity_type=entity_type,
                 success=False,
                 error=f"No write endpoint for entity type: {entity_type}",
@@ -138,12 +147,33 @@ class ConfigPushExecutor:
 
 
 def _resolve_entity_uuid(ids: dict[str, str]) -> UUID:
-    """Extract the most specific entity UUID from an ID dict."""
-    for key in ("device_id", "wlan_id", "network_id", "site_id"):
+    """Return the most specific entity UUID from an ID dict.
+
+    The caller prints the result as the identity of the device in the log line
+    that reports the push, so a silent substitution would name a device that
+    does not exist. Every rejected value leaves a warning.
+    """
+    for key in _ENTITY_ID_KEYS:
         value = ids.get(key)
-        if value:
-            try:
-                return UUID(value)
-            except ValueError:
-                continue
-    return uuid4()
+        if not value:
+            continue  # WHY: an absent key is normal, so it needs no record.
+        try:
+            return UUID(value)  # WHY: the normal path reports the real device.
+        except ValueError:
+            logger.warning(  # WHY: issue #1924 requires a record on every recovery path.
+                "Entity key %s holds %r, which is not a UUID. The push record drops it.",
+                key,
+                value,
+            )
+    return _synthetic_entity_uuid(sorted(ids))
+
+
+def _synthetic_entity_uuid(keys: list[str]) -> UUID:
+    """Return a fresh UUID and record that no key supplied a real one."""
+    synthetic = uuid4()  # WHY: PushResult.entity_id needs a UUID the caller can store.
+    logger.warning(  # WHY: without this line the push record names an unknown device.
+        "No entity key in %s supplied a UUID. Identifier %s is synthetic.",
+        keys,
+        synthetic,
+    )
+    return synthetic
