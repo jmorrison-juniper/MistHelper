@@ -31,7 +31,6 @@ def operations_page():
 @operations_bp.route("/api/operations/list")
 def list_operations():
     """Return categorized list of non-destructive operations."""
-
     menu_actions = current_app.config.get("MENU_ACTIONS", {})
     executor = _get_executor()
     categories = executor.build_category_list(menu_actions)
