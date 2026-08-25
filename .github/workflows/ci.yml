@@ -235,7 +235,18 @@ jobs:
         # uncovered lines to the denominator, so the percentage drops against the 80
         # floor without any test changing. Widen it only together with the tests that
         # cover the added code.
-        run: pytest --cov=${{ env.SRC_PATH }} --cov-fail-under=${{ env.COVERAGE_THRESHOLD }}
+        #
+        # Issue #2036: --timeout=120 gives each test 120 seconds before pytest marks
+        # it as FAILED with a traceback that names the hung call. The job limit is 15
+        # minutes, so a single stalled test now fails fast and visibly instead of
+        # silently consuming the full job budget.
+        run: pytest --cov=${{ env.SRC_PATH }} --cov-fail-under=${{ env.COVERAGE_THRESHOLD }} --timeout=120
+      - name: Report job timeout
+        # Issue #2036: a cancelled result means the job hit timeout-minutes, not that
+        # a test failed. This step writes a plain line so a reader can tell a stalled
+        # runner from a broken test without counting timestamps in the log.
+        if: cancelled()
+        run: echo "::error::The pytest job was cancelled at the timeout-minutes limit (15 min). A per-test timeout of 120 s should have caught any stalled test first. Check the log for a test that held the runner."
 
   # ──────────────────────────────────────────────────────────────
   # SECURITY
@@ -583,9 +594,11 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
       - name: Install dependencies
-        # The root requirements files do not carry deepdiff or mistapi, so the
-        # sub-project keeps its own pinned file (issue #1895).
-        run: pip install -r requirements-dev.txt
+        # Issue #2034: install from pyproject.toml so runtime and dev packages
+        # come from one source. The editable install reads [project.dependencies]
+        # (runtime) and [project.optional-dependencies].dev (test tools) together,
+        # so a new runtime package never needs a matching entry in a second file.
+        run: pip install -e ".[dev]"
       - name: Confirm the suite collects its tests
         # A gate that collects nothing still exits green. That result hides a
         # broken import path and is worse than no gate. This step counts the
@@ -612,7 +625,14 @@ jobs:
         # Fix the code instead.
         run: |
           pytest --cov=src \
-            --cov-fail-under=${{ env.OPS_PLATFORM_COVERAGE_THRESHOLD }}
+            --cov-fail-under=${{ env.OPS_PLATFORM_COVERAGE_THRESHOLD }} \
+            --timeout=120  # Issue #2036: fail fast on a stalled test instead of consuming the full job budget
+      - name: Report job timeout
+        # Issue #2036: a cancelled result means the job hit timeout-minutes. This
+        # step writes a plain line so a reader can tell a stalled runner from a
+        # broken test without counting timestamps in the log.
+        if: cancelled()
+        run: echo "::error::The ops platform pytest job was cancelled at the timeout-minutes limit (15 min). A per-test timeout of 120 s should have caught any stalled test first. Check the log for a test that held the runner."
 
   # ──────────────────────────────────────────────────────────────
   # FAILURE → GITHUB ISSUES (auto-create issues for each failure)
