@@ -7,6 +7,57 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Every capture failed, because the write name and the read name differed (issue #2061)
+
+- **Defect (Fixed)**: no capture could ever be stored. The portal collected the
+  data correctly, wrote it to ArangoDB successfully, and then declared the write
+  failed. Both tier 2 and tier 3 failed the same way, and the page showed every
+  collection phase as `done` beside the sentence "The portal could not store the
+  capture."
+- **Cause (Found)**: `src/upgrade_portal/capture/store.py` held two names for one
+  thing. It wrote through `CAPTURE_OPERATION = "upgradeCaptureWrite"` and read
+  back through `CAPTURE_COLLECTION = "upgrade_captures"`.
+  `DataExporter.write_with_format_selection` hands the operation name to
+  `DatabaseRouter.write`, which hands it to `ArangoWriter.write` as the
+  collection name. `ArangoWriter._ensure_collection` then creates the collection
+  when it is absent. Nothing translates the name on the way, so every capture
+  created and filled a collection named `upgradeCaptureWrite`, and the read-back
+  looked in an empty `upgrade_captures` and reported `document_absent`.
+- **Evidence (Measured)**: the two failed captures of the report were found in
+  the wrong collection under the exact keys from the log.
+  `upgradeCaptureWrite` held 2 documents while `upgrade_captures`,
+  `upgrade_runs`, and `capture_for_run` each held 0. The `data/` directory held
+  21 capture backup files, so the fault predates the report.
+- **Fix (Applied)**: each operation name is now bound to its collection name,
+  `CAPTURE_OPERATION = CAPTURE_COLLECTION` and `RUN_OPERATION = RUN_COLLECTION`.
+  The second name is gone, so the two cannot drift again. The matching keys in
+  `ENDPOINT_PRIMARY_KEY_STRATEGIES` move with them and keep `natural_pk` on
+  `capture_id` and `run_id`.
+- **Why no gate caught it**: every readiness signal was green while every
+  capture failed. The storage bootstrap creates the three collections the portal
+  reads and reports `collections=3, indexes=7, database_available=True`, and
+  `GET /readyz` answered `{"database":"ok","redis":"ok"}`. Neither one exercises
+  the write path, and the write path never used those collections.
+- **Tests (Added)**: `test_the_write_name_equals_the_read_name` asserts the two
+  names are one value for both targets, and
+  `test_no_stale_write_endpoint_name_returns` refuses either retired name in the
+  strategy table. The first test was verified red against the old constants: it
+  reported 2 failures before the fix and passes after it.
+- **Verification (Measured)**: both tiers were run against a live site after the
+  fix and both reached the verified state.
+
+  | Tier | Key | State | Stored bytes |
+  | - | - | - | - |
+  | 2 | `cap-b4e8473a...-01` | `verified` | 15494 |
+  | 3 | `cap-434b67ea...-01` | `verified` | 39472 |
+
+  The page reads "Capture progress verified 100%" and "The portal read the
+  capture back and the record matches." `upgrade_captures` holds 2 documents and
+  `capture_for_run` holds 2 edges.
+- **Migration (Done)**: the stray `upgradeCaptureWrite` collection held two
+  captures that never left the `writing` state. Both keep a CSV backup under
+  `data/`, so the collection was dropped without data loss.
+
 ### The portal checks its dependencies and repairs a stopped one (issue #2059)
 
 - **Defect (Fixed)**: the portal started, logged "ready for the port 8056", and

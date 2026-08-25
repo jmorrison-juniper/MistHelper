@@ -40,6 +40,12 @@ from pathlib import Path
 import pytest
 
 from src.refactors.endpoint_primary_key_strategies import ENDPOINT_PRIMARY_KEY_STRATEGIES
+from src.upgrade_portal.capture.store import (  # WHY: issue #2061 pins the write name to the read name.
+    CAPTURE_COLLECTION,
+    CAPTURE_OPERATION,
+    RUN_COLLECTION,
+    RUN_OPERATION,
+)
 from src.utils.operation_registry import OperationRegistry
 
 # WHY: This file sits at tests/unit/upgrade_portal, so the root is three levels up.
@@ -462,7 +468,7 @@ class TestRepositoryGuardrails:
 
     @pytest.mark.parametrize(
         ("endpoint", "key_field"),
-        [("upgradeCaptureWrite", "capture_id"), ("upgradeRunWrite", "run_id")],
+        [(CAPTURE_COLLECTION, "capture_id"), (RUN_COLLECTION, "run_id")],
     )
     def test_the_portal_write_endpoint_uses_natural_pk(self, endpoint: str, key_field: str) -> None:
         """Each portal write endpoint uses the natural primary key strategy.
@@ -482,6 +488,53 @@ class TestRepositoryGuardrails:
         strategy = entry.get("type", "")  # WHY: The message repeats the wrong value.
         assert strategy == "natural_pk", f"{anchor} sets the strategy {strategy} for {endpoint}"
         assert entry.get("primary_key") == [key_field], f"{anchor} names another key field for {endpoint}"
+
+    @pytest.mark.parametrize(
+        ("operation", "collection"),
+        [(CAPTURE_OPERATION, CAPTURE_COLLECTION), (RUN_OPERATION, RUN_COLLECTION)],
+    )
+    def test_the_write_name_equals_the_read_name(self, operation: str, collection: str) -> None:
+        """The name the portal writes equals the name the portal reads.
+
+        Why:
+            Issue #2061. ``DataExporter.write_with_format_selection`` hands the
+            operation name to ``DatabaseRouter.write``, which hands it to
+            ``ArangoWriter.write`` as the collection name.
+            ``ArangoWriter._ensure_collection`` then creates whatever it is
+            handed. Nothing translates the name on the way.
+
+            The two constants used to differ. Every capture wrote into a
+            collection named ``upgradeCaptureWrite`` while the read-back looked
+            in ``upgrade_captures``, found nothing, and reported
+            ``document_absent``. Every capture failed while the write succeeded,
+            and the storage bootstrap still reported all three collections
+            ready, so no readiness signal caught it.
+
+        Args:
+            operation: The name the portal writes through.
+            collection: The name the portal reads back.
+        """
+        assert operation == collection, (
+            f"The portal writes {operation!r} and reads {collection!r}. "
+            "The router creates the collection it is handed, so a capture would "
+            "land in the write name and the verify would fail with document_absent."
+        )
+
+    @pytest.mark.parametrize("stale", ["upgradeCaptureWrite", "upgradeRunWrite"])
+    def test_no_stale_write_endpoint_name_returns(self, stale: str) -> None:
+        """Neither retired endpoint name comes back into the strategy table.
+
+        Why:
+            Issue #2061. Each of these names created a collection of its own and
+            broke every capture. An entry under one of them would mean the write
+            name and the read name had parted again.
+
+        Args:
+            stale: The retired endpoint name.
+        """
+        assert (
+            stale not in ENDPOINT_PRIMARY_KEY_STRATEGIES
+        ), f"{stale} returned to the strategy table. It names a collection that the portal never reads."
 
     def test_the_brand_theme_stays_tracked_by_git(self) -> None:
         """Git tracks the brand theme, and no ``.gitignore`` rule drops it.
