@@ -32,6 +32,9 @@
     page_title           - the heading text and the tab text.
     theme                - the name of the current theme. See layout.html.
     themes               - the theme names the operator may pick.
+    dependencies         - one row for each service the portal needs. Empty
+                           hides the panel.
+    dependencies_healthy - false when one service does not answer.
 #}
 {% extends 'layout.html' %}
 
@@ -50,12 +53,82 @@
 {% set token_ready = token_mode_available | default(false) %}
 {% set refusal = error_message | default('', true) %}
 {% set heading = page_title | default('Sign in', true) %}
+{% set dependency_rows = dependencies | default([], true) %}
+{% set dependencies_ok = dependencies_healthy | default(true) %}
 
 {% block title %}{{ heading }}{% endblock %}
 
 {% block heading %}<h1>{{ heading }}</h1>{% endblock %}
 
 {% block content %}
+{#
+  The dependency panel.
+
+  Why it sits above the form:
+    The portal refuses to claim a site when the lock store does not answer, and
+    it answers 503 at that moment. Without this panel the operator meets that
+    refusal three pages after signing in, and the page that carries the cause is
+    not the page that shows the fault. The panel puts the cause first.
+
+  Why an empty list hides the panel:
+    The probe runs inside a guard, and a probe fault produces an empty list. A
+    healthy portal with a broken probe must still show a usable form, so an
+    empty list renders nothing at all.
+
+  What the rows never carry:
+    A row holds a service name, an address, a state word, and one sentence. It
+    never holds a password, a token, or a connection string.
+#}
+{% if dependency_rows %}
+<div class="portal-card"
+     id="dependency-panel"
+     data-testid="dependency-panel"
+     data-healthy="{{ 'true' if dependencies_ok else 'false' }}">
+  <h2 class="portal-card-title">Service check</h2>
+
+  {% if not dependencies_ok %}
+  <div class="alert alert-danger flash-danger"
+       id="dependency-warning"
+       data-testid="dependency-warning"
+       role="alert">
+    A service the portal needs does not answer. You may sign in, but a site
+    claim and an upgrade will refuse until every service below answers.
+  </div>
+  {% endif %}
+
+  <table class="table">
+    <thead>
+      <tr>
+        <th scope="col">Service</th>
+        <th scope="col">Address</th>
+        <th scope="col">State</th>
+        <th scope="col">Next action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in dependency_rows %}
+      <tr data-testid="dependency-row-{{ row.key }}" data-state="{{ row.state }}">
+        <td>{{ row.label }}</td>
+        <td><code>{{ row.address }}</code></td>
+        <td data-testid="dependency-state-{{ row.key }}">{{ row.state }}</td>
+        <td>{{ row.detail }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {#
+    The panel opens a TCP connection and closes it, so it reports whether a
+    service listens. It does not sign in to that service. The route below writes
+    to both stores, so it also catches a store that listens and then refuses.
+  #}
+  <p class="text-muted">
+    This check tests that each service listens. For the deeper check that also
+    writes to each store, read <code>/readyz</code>.
+  </p>
+</div>
+{% endif %}
+
 <div class="portal-card">
   <h2 class="portal-card-title">Sign in to the Mist cloud</h2>
 

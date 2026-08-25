@@ -57,11 +57,11 @@ REDIS_PASSWORD_VARIABLE = "REDIS_PASSWORD"  # nosec B105  # WHY: this names an e
 DEFAULT_PORT = 8056  # Port 8055 already serves the data browsing portal.
 DEFAULT_POLL_INTERVAL_SECONDS = 30  # The contract sets the browser poll rate.
 DEFAULT_THEMES = ("magenta", "default")  # The two stylesheets the portal ships. The first one is the default.
-DEFAULT_ARANGO_HOST = "http://arangodb:8529"  # The service name inside the container network.
+DEFAULT_ARANGO_HOST = "http://misthelper-arangodb:9529"  # The service name and port inside the container network.
 DEFAULT_ARANGO_DATABASE = "misthelper"  # The database the other tools already use.
 DEFAULT_ARANGO_USERNAME = "root"  # The account the container image creates.
-DEFAULT_REDIS_HOST = "redis-stack"  # The service name inside the container network.
-DEFAULT_REDIS_PORT = 6379  # The standard Redis port.
+DEFAULT_REDIS_HOST = "misthelper-redis"  # The service name inside the container network.
+DEFAULT_REDIS_PORT = 9379  # The project Redis port. Not 6379, which every other project also publishes.
 DEFAULT_PROXY_HOPS = 0  # No proxy. The socket address is the client address.
 
 # WHY: The customer chose the automatic post-check capture. The two names below
