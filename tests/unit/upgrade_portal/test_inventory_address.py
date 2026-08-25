@@ -20,6 +20,7 @@ Why:
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -65,6 +66,32 @@ def install_reader(monkeypatch: pytest.MonkeyPatch, reader: Any) -> None:
         reader: The replacement reader, or None for no reader at all.
     """
     monkeypatch.setattr(select, "statistics_reader", lambda: reader)
+
+
+def _fail_on_import(name: str) -> Any:
+    """Fail the test when the route imports the device module.
+
+    Why:
+        A contract test that injects one seam must reach no cloud through
+        another. The import of the device module is the step that would open
+        that path, so this stand-in makes the step itself a failure.
+
+    Args:
+        name: The module the route asked for.
+
+    Raises:
+        AssertionError: Always.
+    """
+    raise AssertionError(f"the route must import no cloud module here, and it asked for {name}")
+
+
+def _module_with_reader() -> Any:
+    """Return a stand-in device module that publishes a statistics reader.
+
+    Returns:
+        One module-like object with the one name the seam reads.
+    """
+    return SimpleNamespace(read_device_statistics=lambda session, site_id: "read")
 
 
 class TestTheAddressIndex:
@@ -131,6 +158,43 @@ class TestTheAddressIndex:
         """
         install_reader(monkeypatch, None)
         assert select.address_index(object(), SITE_ID) == {}
+
+    def test_reaches_no_cloud_when_the_device_reader_is_injected(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """An injected device reader keeps the address read away from the cloud.
+
+        Why:
+            A contract test injects the device reader so that no test needs a
+            cloud account. Without this rule the same test would make a real
+            cloud call for the address, which is the defect class of issue
+            #1991: a stand-in that answers a simpler shape than the cloud hides
+            what the cloud really does.
+
+            This test patches nothing but the two seam readers, so it proves the
+            rule inside `statistics_reader` and not inside a caller.
+
+        Args:
+            monkeypatch: The pytest patch helper.
+        """
+        seams = {select.DEVICE_READER_KEY: lambda *args: []}  # The device reader alone is injected.
+        monkeypatch.setattr(select, "injected_seam", seams.get)
+        monkeypatch.setattr(select, "load_optional_module", _fail_on_import)
+        assert select.statistics_reader() is None
+
+    def test_reads_the_module_when_no_seam_is_injected(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A running portal with no injection reaches the real device module.
+
+        Why:
+            The rule above must not disable the address in production. This test
+            reads the other side of the branch.
+
+        Args:
+            monkeypatch: The pytest patch helper.
+        """
+        monkeypatch.setattr(select, "injected_seam", lambda key: None)
+        monkeypatch.setattr(select, "load_optional_module", lambda name: _module_with_reader())
+        found = select.statistics_reader()
+        assert found is not None
+        assert found(object(), SITE_ID) == "read"
 
     def test_answers_empty_when_the_read_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A failed statistics read never fails the page.

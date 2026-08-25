@@ -793,13 +793,23 @@ def statistics_reader() -> Callable[..., Any] | None:
         already reads that call. This seam lets the read page reach the same
         reader, so the address needs no second source of truth.
 
+        A portal that reads its devices from an injected stand-in reaches no
+        cloud for the address either. Without that rule a contract test that
+        injects one reader would make a real cloud call for the other, which is
+        the defect class of issue #1991: a stand-in that answers a simpler shape
+        than the cloud hides what the cloud really does. A test that wants the
+        address joins injects this seam as well.
+
     Returns:
         The injected reader, the reader of the device module, or None when
-        neither exists yet.
+        neither applies.
     """
     injected = injected_seam(STATISTICS_READER_KEY)  # A contract test injects a stand-in here.
     if injected is not None:  # The injection wins, so no import runs at all.
         return injected  # The test then reaches no cloud account.
+    if injected_seam(DEVICE_READER_KEY) is not None:  # The devices come from a stand-in, so the address must too.
+        logger.debug("select: the device reader is injected, so the address read stays away from the cloud")
+        return None  # The page shows the other seven columns.
     module = load_optional_module(DEVICES_MODULE)  # None while the device module is still building.
     return find_attribute(module, STATISTICS_READER_ATTRIBUTES)  # None until that module publishes a reader.
 
