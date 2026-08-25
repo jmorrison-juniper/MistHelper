@@ -137,6 +137,23 @@
 
   <h3 class="status-panel-title">Cascade phases</h3>
 
+  {#
+    The count of a phase moves once, when the phase ends. The portal watches the
+    devices every 20 seconds, and it writes the count of a phase to the run
+    record after that phase settles. So a count that sits still means the phase
+    is still waiting, and it never means the page stopped.
+
+    This sentence exists because a still count reads as a stall, and a page that
+    looks stalled during a firmware write is the moment an operator reaches for
+    the power. Issue #1995 records the decision to state the behavior instead of
+    building a live channel, which would cost 30 to 90 extra store writes for
+    each phase.
+  #}
+  <p class="portal-card-note" data-testid="upgrade-phase-cadence">
+    Each phase count moves once, when that phase ends. A count that does not
+    change means the portal is still waiting for the devices of that phase.
+  </p>
+
   <div class="status-phase-list">
     {% for name in phase_names %}
       {% set phase = phase_map.get(name, {}) %}

@@ -94,10 +94,28 @@ class PhaseProgress:
     """How far one phase moved after one poll round.
 
     Why:
-        FR-048 asks the portal to report progress as each device returns, and a
-        phase may wait half an hour. The adapter sends this record after every
-        round, so the operator sees the count rise during the wait instead of
-        seeing one answer at the end.
+        FR-048 asks the portal to report progress as each device returns. The
+        adapter builds this record after every round and hands it to the
+        progress seat of `PhaseGateDeps`.
+
+        Caution: in production nothing publishes this record to the operator.
+        `app/wiring.py` puts the site lock heartbeat in the progress seat,
+        because that seat is the only call inside the 20-second poll loop, and
+        `wiring.build_heartbeat` calls `driver.lock_heartbeat` with two
+        arguments. The optional `progress` parameter of that function is
+        therefore `None`, so the heartbeat renews the lock and forwards this
+        record nowhere.
+
+        The run record holds one write site for `phases`, at
+        `upgrade/driver.py`, and it runs after `settle()` returns. The count on
+        the progress page therefore holds its opening value for the length of a
+        phase and then jumps.
+
+        The live channel stays unbuilt on purpose. One store write for each round
+        is 30 to 90 extra writes for each phase, and a phase may hold half an
+        hour. `audit-2026-08-20.md` section 2.4 declined it, and issue #1995
+        records the decision. The page states when the count moves instead, so a
+        still count reads as a wait and not as a stall.
 
     Attributes:
         run_id: The run key.
