@@ -288,19 +288,19 @@ class TestIsStandaloneMode:
         assert DataExporter._standalone_override() is None
 
 
-class TestShouldSkipPolyglot:
+class TestPolyglotSkipReason:
     def test_skip_when_no_api_name(self, monkeypatch):
         monkeypatch.setattr(de_module, "DB_LAYER_AVAILABLE", True)
-        assert DataExporter._should_skip_polyglot(None) is True
+        assert DataExporter._polyglot_skip_reason(None) == de_module.SKIP_NO_API_FUNCTION_NAME
 
     def test_skip_when_db_layer_unavailable(self, monkeypatch):
         monkeypatch.setattr(de_module, "DB_LAYER_AVAILABLE", False)
-        assert DataExporter._should_skip_polyglot("listStuff") is True
+        assert DataExporter._polyglot_skip_reason("listStuff") == de_module.SKIP_DB_LAYER_MISSING
 
     def test_skip_when_standalone(self, monkeypatch):
         monkeypatch.setattr(de_module, "DB_LAYER_AVAILABLE", True)
         with patch.object(DataExporter, "_is_standalone_mode", return_value=True):
-            assert DataExporter._should_skip_polyglot("listStuff") is True
+            assert DataExporter._polyglot_skip_reason("listStuff") == de_module.SKIP_STANDALONE_MODE
 
     def test_skip_when_router_none_after_init(self, monkeypatch):
         monkeypatch.setattr(de_module, "DB_LAYER_AVAILABLE", True)
@@ -309,7 +309,7 @@ class TestShouldSkipPolyglot:
             patch.object(DataExporter, "_init_router"),
         ):
             DataExporter._router = None
-            assert DataExporter._should_skip_polyglot("listStuff") is True
+            assert DataExporter._polyglot_skip_reason("listStuff") == de_module.SKIP_ROUTER_UNAVAILABLE
 
     def test_do_not_skip_when_router_available(self, monkeypatch):
         monkeypatch.setattr(de_module, "DB_LAYER_AVAILABLE", True)
@@ -318,7 +318,20 @@ class TestShouldSkipPolyglot:
             patch.object(DataExporter, "_init_router"),
         ):
             DataExporter._router = MagicMock()
-            assert DataExporter._should_skip_polyglot("listStuff") is False
+            assert DataExporter._polyglot_skip_reason("listStuff") is None
+
+    def test_every_cause_has_a_message(self):
+        """Each cause identifier needs plain-language text, because the log line quotes it."""
+        causes = [
+            de_module.SKIP_NO_API_FUNCTION_NAME,
+            de_module.SKIP_DB_LAYER_MISSING,
+            de_module.SKIP_STANDALONE_MODE,
+            de_module.SKIP_ROUTER_UNAVAILABLE,
+            de_module.SKIP_ROUTER_FILE_FALLBACK,
+            de_module.SKIP_ROUTER_WRITE_FAILED,
+        ]
+        for cause in causes:
+            assert de_module.POLYGLOT_SKIP_MESSAGES[cause].strip()
 
 
 class TestPerformPolyglotWrite:
@@ -328,32 +341,36 @@ class TestPerformPolyglotWrite:
         result.backend = "arango"
         result.records_written = 5
         result.records_failed = 0
+        result.success = True
         router.write.return_value = result
         DataExporter._router = router
-        DataExporter._perform_polyglot_write([{"a": 1}], "listStuff")
+        outcome = DataExporter._perform_polyglot_write([{"a": 1}], "listStuff")
         router.write.assert_called_once_with([{"a": 1}], "listStuff")
+        assert outcome.written is True
 
     def test_failure_swallowed(self):
         router = MagicMock()
         router.write.side_effect = RuntimeError("boom")
         DataExporter._router = router
         # Should not raise
-        DataExporter._perform_polyglot_write([{"a": 1}], "listStuff")
+        outcome = DataExporter._perform_polyglot_write([{"a": 1}], "listStuff")
+        assert outcome.written is False
 
 
 class TestRouteToPolyglot:
     def test_skip_short_circuits(self):
         with (
-            patch.object(DataExporter, "_should_skip_polyglot", return_value=True),
+            patch.object(DataExporter, "_polyglot_skip_reason", return_value=de_module.SKIP_STANDALONE_MODE),
             patch.object(DataExporter, "_perform_polyglot_write") as perform,
         ):
-            DataExporter._route_to_polyglot([{"a": 1}], "listStuff")
+            outcome = DataExporter._route_to_polyglot([{"a": 1}], "listStuff")
             perform.assert_not_called()
+        assert outcome.written is False
 
     def test_uses_raw_data_when_provided(self):
         raw = [{"raw": True}]
         with (
-            patch.object(DataExporter, "_should_skip_polyglot", return_value=False),
+            patch.object(DataExporter, "_polyglot_skip_reason", return_value=None),
             patch.object(DataExporter, "_perform_polyglot_write") as perform,
         ):
             DataExporter._route_to_polyglot([{"a": 1}], "listStuff", raw_data=raw)
@@ -361,7 +378,7 @@ class TestRouteToPolyglot:
 
     def test_falls_back_to_data_when_raw_data_none(self):
         with (
-            patch.object(DataExporter, "_should_skip_polyglot", return_value=False),
+            patch.object(DataExporter, "_polyglot_skip_reason", return_value=None),
             patch.object(DataExporter, "_perform_polyglot_write") as perform,
         ):
             DataExporter._route_to_polyglot([{"a": 1}], "listStuff", raw_data=None)
@@ -622,3 +639,119 @@ class TestModuleImport:
     def test_module_reimportable(self):
         importlib.reload(de_module)
         assert hasattr(de_module, "DataExporter")
+        # A reload builds a new class object. Later tests mutate the imported class,
+        # while method bodies resolve ``DataExporter`` from the module. Restore the
+        # binding so both names point at one class again.
+        de_module.DataExporter = DataExporter
+
+
+def _skip_warnings(caplog):
+    """Return every warning record that names a polyglot skip cause."""
+    return [record.getMessage() for record in caplog.records if record.levelno >= logging.WARNING]
+
+
+class TestPolyglotSkipNamesTheCause:
+    """Issue #2009: each skip cause must write one log line and return a truthful result."""
+
+    def test_missing_api_function_name_names_the_cause(self, monkeypatch, caplog):
+        monkeypatch.setattr(de_module, "DB_LAYER_AVAILABLE", True)
+        with caplog.at_level(logging.WARNING):
+            outcome = DataExporter._route_to_polyglot([{"a": 1}], None)
+        assert outcome.written is False
+        assert outcome.skip_reason == de_module.SKIP_NO_API_FUNCTION_NAME
+        assert any("no API function name" in message for message in _skip_warnings(caplog))
+
+    def test_missing_db_layer_names_the_cause(self, monkeypatch, caplog):
+        monkeypatch.setattr(de_module, "DB_LAYER_AVAILABLE", False)
+        with caplog.at_level(logging.WARNING):
+            outcome = DataExporter._route_to_polyglot([{"a": 1}], "listStuff")
+        assert outcome.written is False
+        assert outcome.skip_reason == de_module.SKIP_DB_LAYER_MISSING
+        assert any("database layer is not installed" in message for message in _skip_warnings(caplog))
+
+    def test_standalone_mode_names_the_cause_and_the_three_states(self, monkeypatch, caplog):
+        monkeypatch.setattr(de_module, "DB_LAYER_AVAILABLE", True)
+        with (
+            patch.object(DataExporter, "_is_standalone_mode", return_value=True),
+            caplog.at_level(logging.WARNING),
+        ):
+            outcome = DataExporter._route_to_polyglot([{"a": 1}], "listStuff")
+        assert outcome.written is False
+        assert outcome.skip_reason == de_module.SKIP_STANDALONE_MODE
+        messages = _skip_warnings(caplog)
+        assert any("standalone mode" in message for message in messages)
+        assert any("MISTHELPER_STANDALONE" in message for message in messages)
+
+    def test_router_build_failure_names_the_cause(self, monkeypatch, caplog):
+        monkeypatch.setattr(de_module, "DB_LAYER_AVAILABLE", True)
+        with (
+            patch.object(DataExporter, "_is_standalone_mode", return_value=False),
+            patch.object(DataExporter, "_init_router"),
+            caplog.at_level(logging.WARNING),
+        ):
+            DataExporter._router = None
+            outcome = DataExporter._route_to_polyglot([{"a": 1}], "listStuff")
+        assert outcome.written is False
+        assert outcome.skip_reason == de_module.SKIP_ROUTER_UNAVAILABLE
+        assert any("router did not build" in message for message in _skip_warnings(caplog))
+
+    def test_each_cause_logs_one_line_for_each_dropped_write(self, monkeypatch, caplog):
+        """A second dropped write must log again, because a second data set was lost."""
+        monkeypatch.setattr(de_module, "DB_LAYER_AVAILABLE", False)
+        with caplog.at_level(logging.WARNING):
+            DataExporter._route_to_polyglot([{"a": 1}], "listStuff")
+            DataExporter._route_to_polyglot([{"a": 2}], "listStuff")
+        assert sum("database layer is not installed" in message for message in _skip_warnings(caplog)) == 2
+
+    def test_csv_only_envelope_is_not_reported_as_a_database_write(self, caplog):
+        """The router returns success after a file fallback, so the outcome must say nothing was written."""
+        router = MagicMock()
+        router.write.return_value = types.SimpleNamespace(
+            success=True,
+            backend="csv_only",
+            records_written=0,
+            records_failed=0,
+            error_message="arangodb unavailable, CSV only",
+        )
+        DataExporter._router = router
+        with caplog.at_level(logging.WARNING):
+            outcome = DataExporter._perform_polyglot_write([{"a": 1}], "listStuff")
+        assert outcome.written is False
+        assert outcome.skip_reason == de_module.SKIP_ROUTER_FILE_FALLBACK
+        assert any("reached no database" in message for message in _skip_warnings(caplog))
+
+    def test_router_exception_reports_failure(self, caplog):
+        router = MagicMock()
+        router.write.side_effect = RuntimeError("boom")
+        DataExporter._router = router
+        with caplog.at_level(logging.WARNING):
+            outcome = DataExporter._perform_polyglot_write([{"a": 1}], "listStuff")
+        assert outcome.written is False
+        assert outcome.skip_reason == de_module.SKIP_ROUTER_WRITE_FAILED
+
+    def test_successful_write_reports_the_row_count(self):
+        router = MagicMock()
+        router.write.return_value = types.SimpleNamespace(
+            success=True,
+            backend="arangodb",
+            records_written=5,
+            records_failed=0,
+            error_message=None,
+        )
+        DataExporter._router = router
+        outcome = DataExporter._perform_polyglot_write([{"a": 1}], "listStuff")
+        assert outcome.written is True
+        assert outcome.records_written == 5
+        assert outcome.skip_reason is None
+
+    def test_export_warns_when_the_requested_database_write_was_dropped(self, fake_mh, monkeypatch, caplog):
+        """The CSV write succeeds, so the caller must still learn that the database write was lost."""
+        monkeypatch.setattr(de_module, "DB_LAYER_AVAILABLE", False)
+        with (
+            patch.object(DataExporter, "_validate_write_inputs", return_value=True),
+            patch.object(DataExporter, "_dispatch_format_write", return_value=True),
+            caplog.at_level(logging.WARNING),
+        ):
+            ok = DataExporter.write_with_format_selection([{"a": 1}], "target", api_function_name="listStuff")
+        assert ok is True
+        assert any("database write was dropped" in message for message in _skip_warnings(caplog))
