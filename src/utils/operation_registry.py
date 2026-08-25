@@ -300,6 +300,7 @@ class OperationRegistry:
         "235": {"category": "interactive_safe", "skip_reason": "Requires a count operation choice"},
         "236": {"category": "interactive_safe", "skip_reason": "Requires a count operation and site"},
         "237": {"category": "interactive_safe", "skip_reason": "Requires a count operation and MSP ID"},
+        "238": {"category": "interactive_safe", "skip_reason": "Requires an MSP ID"},
         "186": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Deletes all generated cache CSV files"},
         "58": {"category": "safe"},
         "187": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Creates config objects in destination org"},

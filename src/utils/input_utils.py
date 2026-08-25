@@ -71,6 +71,33 @@ class InputUtils:
         return user_input  # Normal path: return the trimmed user response.
 
     @staticmethod
+    def prompt_msp_id() -> str | None:
+        """Ask the operator for an MSP identifier and reject an empty answer.
+
+        Why:
+            MistHelper caches an org identifier and a site identifier, but it
+            caches no MSP identifier. Every MSP-scoped menu therefore asks for
+            the value. One method keeps the prompt text, the trim, and the abort
+            rule identical across those menus.
+
+        Returns:
+            The trimmed MSP identifier, or None when the operator declines. An
+            empty answer, an EOF, and a Ctrl+C all reach this method as an empty
+            string, so all three return None.
+        """
+        logging.info("Prompting the operator for the MSP identifier")  # Action log before the prompt.
+        value = InputUtils.safe_input(
+            "Enter MSP ID: ",
+            allow_empty=False,  # An empty identifier cannot build the API path.
+            context="input_utils.msp_id",
+        ).strip()
+        logging.debug("Completed the MSP prompt with value_present=%s", bool(value))  # Result trace.
+        if not value:  # A blank answer, an EOF, or an interrupt must abort before any API call.
+            logging.info("! No MSP ID supplied. Returning to the menu.")  # User-facing cancel line.
+            return None
+        return value
+
+    @staticmethod
     def _handle_empty(default_value: str, allow_empty: bool, context: str) -> str:
         """Resolve the empty-input case per default/allow_empty policy."""
         # WHY: extracted to keep safe_input CC<=5 and length<=25 lines.

@@ -29,6 +29,7 @@ import mistapi  # WHY: direct SDK access for every count operation.
 from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: canonical flatten and escape helpers keep CSV output consistent with peers.
+from src.utils.input_utils import InputUtils  # WHY: the shared, EOF-safe MSP identifier prompt.
 
 
 @dataclass(frozen=True)
@@ -265,30 +266,7 @@ class CountExporter:
         operation = CountExporter._choose(_MSP_OPS, "msp")  # Ask which count to run.
         if operation is None:  # The chooser already logged the cancellation.
             return
-        msp_id = CountExporter._prompt_msp_id()  # MSP identifiers have no shared resolver yet.
+        msp_id = InputUtils.prompt_msp_id()  # MSP identifiers have no cached resolver.
         if msp_id is None:  # The prompt helper already logged the cancellation.
             return
         CountExporter._run(operation, msp_id, msp_id)  # Execute and persist.
-
-    @staticmethod
-    def _prompt_msp_id() -> str | None:
-        """Prompt for the MSP identifier, which has no cached resolver.
-
-        Why:
-            The org and site paths reuse existing resolvers. No MSP equivalent
-            exists, so this asks directly and rejects an empty answer.
-        """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of InputUtils.
-        logging.info("Prompting the operator for the MSP identifier")  # Action log before the prompt.
-        value = str(  # WHY: the lazy module attribute is untyped, so pin the declared str return.
-            mh.InputUtils.safe_input(
-                "Enter MSP ID: ",
-                allow_empty=False,  # An empty identifier is invalid for the API path.
-                context="count_exporter.msp_id",
-            )
-        ).strip()
-        logging.debug("Completed the MSP prompt with value_present=%s", bool(value))  # Result trace.
-        if not value:  # A blank answer, an EOF, or an interrupt must abort before any API call.
-            logging.info("! No MSP ID supplied. Returning to the menu.")  # User-facing cancel line.
-            return None
-        return value

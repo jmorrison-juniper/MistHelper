@@ -7,6 +7,51 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Export the MSP licenses through menu 238 (issue #1260)
+
+- **Gap (Closed)**: the Mist endpoint `listMspLicenses`
+  (`GET /api/v1/msps/{msp_id}/licenses`) had no menu entry. An operator who
+  manages an MSP had to write custom code to read the license entitlement, the
+  usage counters, and the subscription records.
+- **Menu (Added)**: menu 238 runs the export. The registry classifies it
+  `interactive_safe`, because it reads only and it prompts for an MSP ID. The
+  `--testinteractive` run therefore includes it, and the `--test` run skips it.
+- **Class (Added)**: `src/export/msp_license_exporter.py` holds
+  `MSPLicenseExporter`. It prompts through `InputUtils.safe_input`, calls the
+  SDK once, and writes through `DataExporter.write_with_format_selection`, so
+  the CSV, SQLite, and ArangoDB backends all work.
+- **Response shape (Explained)**: the endpoint returns one aggregate object, not
+  a list. The object holds four counter maps, one `licenses` array, and one
+  `amendments` array. The endpoint is not paginated, so the exporter reads
+  `response.data` instead of running `mistapi.get_all`.
+- **Two files (Chosen)**: the exporter writes `MSPLicenses_<msp>_summary.csv`
+  and `MSPLicenses_<msp>_details.csv`. One wide row would hold one column for
+  each subscription field, so the column count would change every time the MSP
+  buys or retires a subscription. Two files keep both schemas stable. The
+  detail file carries a `record_type` column, because a subscription record and
+  an amendment record share the same field names.
+- **Primary keys (Added)**: `ENDPOINT_PRIMARY_KEY_STRATEGIES` gains
+  `listMspLicenses` as a `natural_pk` on `msp_id` and `listMspLicensesDetails`
+  as a `natural_pk` on `id`. Both are natural keys, so a repeat run upserts and
+  writes no duplicate row.
+- **Shared prompt (Extracted)**: `InputUtils.prompt_msp_id` now holds the MSP
+  identifier prompt. Menu 237 carried its own copy inside `CountExporter`, and a
+  second copy in the new exporter made Pylint report duplicate code. One method
+  keeps the prompt text, the trim, and the abort rule identical across both MSP
+  menus. `CountExporter._prompt_msp_id` is deleted, not delegated, because the
+  project forbids a wrapper.
+- **Tests (Added)**: `tests/unit/export/test_msp_license_exporter.py` holds 22
+  tests. They cover the abort path, the non-dict body, both row builders, the
+  malformed-array guards, the empty result, the error handler, both primary-key
+  entries, and the menu wiring. `tests/unit/utils/test_input_utils_wave9.py`
+  gains 4 tests for the shared prompt, including the EOF path. Every Mist call
+  is mocked, so no test reaches the live cloud.
+- **Documentation (Updated)**: `documentation/menu_reference.md` and
+  `documentation/wiki/Menu-Reference.md` were regenerated. The README operation
+  counts were stale at menu 234, because menus 235 to 237 reached `main` without
+  a README update. The counts now read 238 entries plus Exit, and the menu table
+  lists 235 through 238.
+
 ### Run the quality gates on every pull request (issue #1952)
 
 - **Defect (Fixed)**: `.github/workflows/ci.yml` started on a pull request that
