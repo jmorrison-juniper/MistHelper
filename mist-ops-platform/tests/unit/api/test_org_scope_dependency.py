@@ -29,6 +29,8 @@ if str(PLATFORM_ROOT) not in sys.path:  # Only extend the path once
 
 ORG_IN_SCOPE = "11111111-1111-1111-1111-111111111111"  # Organization the caller owns
 ORG_OUT_OF_SCOPE = "22222222-2222-2222-2222-222222222222"  # Organization the caller must not read
+HTTP_OK = 200  # Names the success status, because a bare number is a magic value
+HTTP_FORBIDDEN = 403  # Names the status that a scope refusal returns
 
 
 # -- Static guard -------------------------------------------------------
@@ -96,7 +98,12 @@ def test_no_route_reads_org_id_from_query() -> None:
 # -- Live request behavior ----------------------------------------------
 
 
-def _build_probe_app(org_ids: list[str], *, is_msp: bool = False):
+def _build_probe_app(
+    org_ids: list[str],
+    *,
+    is_msp: bool = False,
+    msp_org_ids: list[str] | None = None,
+):
     """Return a small app whose single route uses the scope dependency."""
     fastapi = pytest.importorskip("fastapi")  # Skip when the web framework is absent
     pytest.importorskip("httpx")  # The test client needs httpx
@@ -115,7 +122,13 @@ def _build_probe_app(org_ids: list[str], *, is_msp: bool = False):
 
     async def fake_user() -> CurrentUser:
         """Return a caller whose scope the test controls."""
-        return CurrentUser(token="test-token", email="tester@example.com", org_ids=org_ids, is_msp=is_msp)
+        return CurrentUser(
+            token="test-token",
+            email="tester@example.com",
+            org_ids=org_ids,
+            is_msp=is_msp,
+            msp_org_ids=msp_org_ids or [],  # Organizations that the MSP of the caller owns
+        )
 
     app.dependency_overrides[get_authenticated_user] = fake_user  # Skip the live Mist lookup
     return app
@@ -145,11 +158,16 @@ def test_caller_cannot_read_another_organization() -> None:
     assert "Insufficient privileges" in response.text  # The refusal names the cause
 
 
-def test_msp_caller_reads_any_organization() -> None:
-    """An MSP caller keeps cross-organization access."""
-    app = _build_probe_app([], is_msp=True)  # MSP caller holds no explicit org list
-    response = _get(app, ORG_OUT_OF_SCOPE)  # Request any organization
-    assert response.status_code == 200  # The MSP branch allows the request
+def test_msp_caller_reads_only_the_organizations_the_msp_owns() -> None:
+    """An MSP caller reaches an owned organization and no other one.
+
+    The old check returned at once for any MSP caller. That granted every
+    organization on the platform to one MSP operator. Issue #2017 records the
+    defect. Module ``test_msp_org_scope`` holds the full set of cases.
+    """
+    app = _build_probe_app([], is_msp=True, msp_org_ids=[ORG_IN_SCOPE])  # The MSP owns one org
+    assert _get(app, ORG_IN_SCOPE).status_code == HTTP_OK  # The owned organization stays reachable
+    assert _get(app, ORG_OUT_OF_SCOPE).status_code == HTTP_FORBIDDEN  # Every other org is refused
 
 
 def test_caller_without_a_token_is_refused() -> None:
