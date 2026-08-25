@@ -160,9 +160,7 @@ class TestClientConnectivityDoesNotReportAnUnverifiedPass:
             "The check must not record an unverified pass."
         )
 
-    def test_client_connectivity_logs_the_missing_input(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_client_connectivity_logs_the_missing_input(self, caplog: pytest.LogCaptureFixture) -> None:
         # WHY: the fix must name the missing input so an operator can act.
         mist = MagicMock()
         mist.list_all_entities.return_value = SimpleNamespace(
@@ -175,6 +173,6 @@ class TestClientConnectivityDoesNotReportAnUnverifiedPass:
             service.run_all("org-1", ["dev-b"])  # WHY: run the pipeline to trigger the log.
 
         # WHY: a silent placeholder is the bug. The fix must warn that no real check ran.
-        assert any(r.levelno >= logging.WARNING for r in caplog.records), (
-            "Expected a WARNING from the client connectivity check, but none was emitted."
-        )
+        assert any(
+            r.levelno >= logging.WARNING for r in caplog.records
+        ), "Expected a WARNING from the client connectivity check, but none was emitted."

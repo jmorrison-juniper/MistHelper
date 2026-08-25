@@ -48,9 +48,9 @@ class TestReadyzLogsOnMissingEngine:
         assert response.status_code == 200
         assert response.json() == {"status": "unavailable"}
         # WHY: the bug was silence. The fix must produce at least one warning record.
-        assert any(r.levelno >= logging.WARNING for r in caplog.records), (
-            "Expected a WARNING on the missing-engine path but the log was empty."
-        )
+        assert any(
+            r.levelno >= logging.WARNING for r in caplog.records
+        ), "Expected a WARNING on the missing-engine path but the log was empty."
 
 
 class TestReadyzLogsOnQueryFailure:
@@ -79,17 +79,13 @@ class TestReadyzLogsOnQueryFailure:
         assert response.status_code == 200
         assert response.json() == {"status": "unavailable"}
         # WHY: the fix must record the exception, not swallow it.
-        has_exc_info = any(
-            r.levelno >= logging.WARNING and r.exc_info for r in caplog.records
-        )
+        has_exc_info = any(r.levelno >= logging.WARNING and r.exc_info for r in caplog.records)
         has_error_text = any(
             "connection refused" in r.getMessage().lower() or "connection refused" in str(r.exc_info).lower()
             for r in caplog.records
             if r.exc_info
         )
-        assert has_exc_info or has_error_text, (
-            "Expected the query exception to appear in the log, but it was absent."
-        )
+        assert has_exc_info or has_error_text, "Expected the query exception to appear in the log, but it was absent."
 
 
 # ---------------------------------------------------------------------------
@@ -108,9 +104,7 @@ class TestMetricsAnswers501:
         response = client.get("/metrics")  # WHY: call the placeholder endpoint.
 
         # WHY: 200 hides the gap from monitoring. The fix must return 501.
-        assert response.status_code == 501, (
-            f"Expected HTTP 501 from /metrics but received {response.status_code}."
-        )
+        assert response.status_code == 501, f"Expected HTTP 501 from /metrics but received {response.status_code}."
 
     def test_metrics_emits_a_warning(self, caplog: pytest.LogCaptureFixture) -> None:
         # WHY: every scrape should announce the gap in the log.
@@ -121,6 +115,6 @@ class TestMetricsAnswers501:
             client.get("/metrics")  # WHY: call the route to trigger the log.
 
         # WHY: a silent placeholder is the bug. The fix must produce a warning.
-        assert any(r.levelno >= logging.WARNING for r in caplog.records), (
-            "Expected a WARNING from /metrics but the log was empty."
-        )
+        assert any(
+            r.levelno >= logging.WARNING for r in caplog.records
+        ), "Expected a WARNING from /metrics but the log was empty."
