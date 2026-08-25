@@ -227,6 +227,29 @@ Two issues opened from the same work:
 | [#2027](https://github.com/jmorrison-juniper/MistHelper/issues/2027) | No table of this portal sorts by a column, so an operator cannot group the devices that need the upgrade |
 | [#2036](https://github.com/jmorrison-juniper/MistHelper/issues/2036) | A stalled runner reports as a pytest failure, because the coverage job passes no per-test timeout |
 
+The cause behind issue #2036 is found and fixed, and it belonged to this branch.
+The pytest gate reached its 15 minute limit twice and reported as a test failure
+both times. Both logs showed the same shape: exactly three passing tests each
+minute for eleven minutes, which is 20 seconds for each test. The two stalls hit
+two different files of `tests/contract/upgrade_portal/`.
+
+The `portal_app` fixture is function scoped, so a contract test builds one whole
+application for each test. `create_app` calls `install_seams`, which calls
+`prepare_storage`, which calls `bootstrap_storage`. That reaches
+`connect_database`. This function caches a handle and never caches a failure.
+An unreachable store is therefore probed again on every call.
+`DatabaseConfig.from_env` then
+resolves the database host and the lock store host to decide the standalone mode.
+A workstation fails those names at once. A runner that does not costs about 20
+seconds for each application the suite builds.
+
+`prepare_storage` now runs once for each process. Every step of the bootstrap
+repeats without harm, so a second run adds nothing and only costs the probe. The
+flag is set before the call, so a store that raises leaves no retry loop. That
+case is the exact one that stalled the runner. `reset_storage_bootstrap` clears
+the flag for a test and for a worker that meets a database restart. The pytest
+gate now finishes in 7 minutes 7 seconds.
+
 Warning: the per-device call of issue #2007 removes a contradiction and proves
 nothing. No lab switch has yet held the no-reboot choice through it. The plan
 still carries the warning that a switch may reboot, and that issue stays open
@@ -241,6 +264,40 @@ reconnect event. No statistics reading counts before that event arrives.
 FR-046. The four lying
 signals never misled the portal. They misled the person who ran the upgrade
 outside it.
+
+### 4.-0.5 The site at the end of 2026-08-24
+
+A read of the site about 7 hours and 40 minutes after the upgrade. Nothing was
+queued: `listSiteDeviceUpgrades` answered zero jobs, so no device could reboot on
+its own.
+
+| Device | Version | Uptime | `fwupdate_stat` |
+| --- | --- | --- | --- |
+| Morrison-Switch | 25.4R1-S2.3 | 27454 s | `success` and `Upgraded` |
+| SRX-1500 | 23.4R2-S5.5 | 2094315 s | `inprogress` and `Installing image` |
+| Office AP | 0.15.34994 | 27303 s | `success` |
+| The other 5 access points | 0.15.34994 | about 1232000 s | 3 `success`, 2 `inprogress` |
+
+**A fifth reading goes stale, and it is the one the record called truthful.** The
+SRX reports that it installs an image while the site holds no upgrade job at all.
+It has reported that for over seven hours. Its uptime of about 24 days shows
+that it never rebooted.
+
+`live-run-2026-08-24.md` section 5.1 names four readings that mislead after an
+upgrade, and it names `fwupdate_stat.progress_brief` as one of two that told the
+truth. That is wrong for this device. A reader who waits for `Upgraded` on this
+gateway waits forever. Only `searchSiteDeviceEvents` has stayed honest.
+
+**A correction to the outage record.** The uptime readings refine what the six
+`AP_DISCONNECTED` events meant. Only the Office AP power cycled, and its uptime
+matches the switch reboot. The other five access points hold an uptime of about
+14 days, so they lost the network path and kept their power. The outage is no
+smaller for it, because every access point left the cloud and the site lost
+wireless service either way. The record should say one power cycle and five path
+losses, and not six power cycles.
+
+The staged image on the SRX activates on the next reboot, whenever a person
+chooses to give it one. Do not wait on the progress field.
 
 ### 4.0 The audit of 2026-08-20
 
@@ -540,6 +597,8 @@ Each of these cost real time. Read them before you debug.
 | A stray listener holds port 8056 | An end-to-end run fails almost every test with 401 | Kill the listener first. The fixture attaches to any listener, and a listener from another run holds no test record. Commit `6ce6fb4` turned this skip into a failure, so a broken portal can no longer read as a pass |
 | ArangoDB and Redis do not answer from this shell | The portal writes the CSV backup alone | Set `MISTHELPER_STANDALONE=true` and `REDIS_HOST=127.0.0.1`. Commit `506250b` added a process-local mirror, so a run still reads back |
 | No Redis answers on port 6379 | 12 of the 13 tests of `test_two_operators.py` skip and name a 503 from the lock route | Start one, then set `REDIS_PASSWORD`. Section 9 holds the command. The site lock is the one part of the portal that a browser test cannot reach without a store |
+| A test job stalls at about 20 seconds for each test | The pytest gate reaches its 15 minute limit and reports as a test failure. Every test still passes. The log shows exactly 3 passing tests each minute | The `portal_app` fixture builds one application for each test, and each one probed the database host. `prepare_storage` now runs once for each process. If this returns, read the log timestamps first. A uniform time for every test names a fixture and never a test body. Issue #2036 |
+| A cloud module reaches the network from a contract test | A contract test hangs or reaches a real account | A seam fell back to the real module because only its sibling seam was injected. `select.statistics_reader` shows the rule: read the real module only when no stand-in is in place anywhere |
 
 ---
 
