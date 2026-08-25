@@ -75,15 +75,16 @@ env:
   INTERROGATE_PATHS: 'src/ MistHelper.py wsgi.py starlink_dashboard.py web_portal tools'
   COVERAGE_THRESHOLD: ${{ inputs.coverage-threshold || '80' }}
   # Issue #1895: the ops platform suite keeps its own denominator and its own
-  # floor, so it can never move the root percentage. The suite measures 53.91
-  # percent. The floor sits just under that number, so a coverage drop fails the
-  # gate. Issue #1883 unblocks the last 2 tests and raises the floor further.
-  OPS_PLATFORM_COVERAGE_THRESHOLD: '53'
+  # floor, so it can never move the root percentage. Issue #1883 unified the
+  # schema and unblocked the last 2 tests, so no test stays deselected now.
+  # The suite measures 56.18 percent on the runner. The floor sits just under
+  # that number, so a coverage drop fails the gate.
+  OPS_PLATFORM_COVERAGE_THRESHOLD: '56'
   # The count floor proves the gate ran the tests. A broken import path drops a
   # whole module from collection, and this floor turns that drop into a red gate.
-  # The suite collects 334 tests. If you delete a test on purpose, lower this
+  # The suite collects 371 tests. If you delete a test on purpose, lower this
   # number in the same commit.
-  OPS_PLATFORM_MIN_TESTS: '330'
+  OPS_PLATFORM_MIN_TESTS: '365'
   PYLINT_THRESHOLD: ${{ inputs.pylint-threshold || '9.5' }}
   INTERROGATE_THRESHOLD: ${{ inputs.interrogate-threshold || '90' }}
   # Vulture reports 0 findings at 90, at 80, and at 70. The cliff sits at 60, which
@@ -600,18 +601,16 @@ jobs:
         # measures mist-ops-platform/src only, so neither percentage moves the
         # other.
         #
-        # The 2 deselected tests fail on main today. They assert the table names
-        # that migration 0001 creates, and the ORM models declare different names
-        # and different columns. Issue #1883 covers that divergence. The repair is
-        # a schema migration and not a test edit, so the pair stays deselected.
-        # Issue #1897 tracks the removal of this list.
-        # Do not add a test to this list to make a new failure go away. Fix the
-        # code instead.
+        # This job deselected 2 tests until issue #1883. They asserted the table
+        # names that migration 0001 creates, and the ORM models declared other
+        # names. Migration 0003_align_schema_with_orm unified the two schemas on
+        # the ORM models, so both tests now pass and the deselect list is empty.
+        # Issue #1897 tracked that removal.
+        # Do not add a test to a deselect list to make a new failure go away.
+        # Fix the code instead.
         run: |
           pytest --cov=src \
-            --cov-fail-under=${{ env.OPS_PLATFORM_COVERAGE_THRESHOLD }} \
-            --deselect tests/unit/shared/test_models_inventory.py::TestOrganization::test_tablename \
-            --deselect tests/unit/shared/test_models_inventory.py::TestSyncLedgerEntry::test_tablename
+            --cov-fail-under=${{ env.OPS_PLATFORM_COVERAGE_THRESHOLD }}
 
   # ──────────────────────────────────────────────────────────────
   # FAILURE → GITHUB ISSUES (auto-create issues for each failure)
