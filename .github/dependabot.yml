@@ -30,3 +30,27 @@ updates:
       - "dependencies"
     commit-message:
       prefix: "deps(ops-portal)"
+    groups:
+      # React and react-dom must carry the exact same version. React refuses to
+      # start when the two differ, and the ops-portal job then fails with
+      # "Incompatible React versions". One group raises both in one pull
+      # request, so the two versions can never separate. Pull request #1815
+      # raised react alone and failed for that reason.
+      react:
+        patterns:
+          - "react"
+          - "react-dom"
+          - "@types/react"
+          - "@types/react-dom"
+    ignore:
+      # typescript-eslint refuses to load under TypeScript 7.0. Version 8.68.0
+      # of @typescript-eslint/parser declares the peer range
+      # "typescript": ">=4.8.4 <6.1.0", so the lint step stops with
+      # "typescript-eslint does not support TS 7.0". Pull request #1817 raised
+      # TypeScript to 7.0.2 and failed for that reason.
+      #
+      # Remove this entry when @typescript-eslint/parser widens its peer range
+      # to accept TypeScript 7. Raise TypeScript and typescript-eslint in the
+      # same pull request at that time.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
