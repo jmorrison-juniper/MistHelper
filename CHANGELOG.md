@@ -35,6 +35,33 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
   `Success: no issues found in 387 source files`. `tools.symbol_diff` reports
   `no module-level name changed` and exits 0. The count of deleted lines that
   are not comments is zero.
+### Read one organization security intelligence profile (spec 635, issue #1148)
+
+- **Gap (Closed)**: MistHelper exported the whole SecIntel profile list through
+  `listOrgSecIntelProfiles`, and that list view holds the summary fields only.
+  An operator who reviewed one profile had to open the Mist portal to read the
+  full body. Menu **240** now reads one profile through `getOrgSecIntelProfile`
+  (`GET /api/v1/orgs/{org_id}/secintelprofiles/{secintelprofile_id}`).
+- **Prompt (Chosen)**: the endpoint needs a profile UUID. A junior engineer
+  cannot be expected to know a UUID, and a typed UUID invites a typing error.
+  The exporter therefore reads the profile list first, prints a numbered table,
+  and asks for a number. The operator never types a UUID.
+- **Response shape (Explained)**: the endpoint returns one object and it is not
+  paginated, so `OrgSecIntelProfileExporter._fetch` reads `response.data`.
+  `mistapi.get_all` would return nothing useful for this call.
+- **Primary key (Added)**: `getOrgSecIntelProfile` joins
+  `ENDPOINT_PRIMARY_KEY_STRATEGIES` as a `natural_pk` on `id`, with indexes on
+  `org_id` and `name`. A repeat read of the same profile therefore upserts
+  instead of writing a duplicate row.
+- **Category (Assigned)**: menu 240 is `interactive_safe`. The operation reads
+  only, and it needs an org and a profile choice, so it runs under
+  `--testinteractive` and not under `--test`.
+- **Tests (Added)**: `tests/unit/export/test_org_sec_intel_profile_exporter.py`
+  holds 23 tests. They pin the paging call, the rejection of a malformed list
+  entry, the numbered prompt with every cancel path, the `response.data` read
+  with four wrong body shapes, the flatten step, the exact operationId that
+  reaches the writer, and the promise that an SDK error returns to the menu
+  instead of ending the session. Every Mist call is mocked.
 
 ### Menu 238 was allocated twice, so the portal moved to menu 239 (issue #2065)
 

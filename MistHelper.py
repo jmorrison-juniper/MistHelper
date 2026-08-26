@@ -434,6 +434,9 @@ from src.export.org_inventory_exporter import (
 from src.export.org_search_exporter import (
     OrgSearchExporter,  # Specs 874-879 / issues #1379, #1382, #1383, #1385, #1386 -- org search menus 230-234
 )
+from src.export.org_sec_intel_profile_exporter import (
+    OrgSecIntelProfileExporter,  # Issue #1148 -- one SecIntel profile read by id, menu 240
+)
 from src.export.org_site_exporter import (
     OrgSiteExporter,  # Cat E canonical (1014 P9) -- re-export for MistHelper.OrgSiteExporter callers
 )
@@ -3747,6 +3750,10 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
         # further down this module and this dict is built the moment the module loads.
         lambda: _launch_capture_portal(),
         "Launch the upgrade capture portal on port 8056 (pre-check, upgrade, post-check)",
+    ),
+    "240": (
+        OrgSecIntelProfileExporter.profile,
+        "Export one organization security intelligence profile (getOrgSecIntelProfile)",
     ),
     "44": (OrgConfigExporter.psks, "Export PSK (Pre-Shared Key) information for the organization"),
     "45": (OrgConfigExporter.webhooks, "Export webhook configuration for the organization"),

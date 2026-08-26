@@ -2072,6 +2072,13 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "unique_constraints": [],
         "description": "Organization packet capture records",
     },
+    "getOrgSecIntelProfile": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["org_id", "name"],
+        "unique_constraints": [],
+        "description": "One organization security intelligence profile, read by id (issue #1148)",
+    },
     "listOrgSecIntelProfiles": {
         "type": "natural_pk",
         "primary_key": ["id"],
