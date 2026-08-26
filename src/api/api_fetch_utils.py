@@ -27,6 +27,8 @@ from typing import Any  # WHY: return-type annotations for dynamic dicts.
 import mistapi  # WHY: dotted-path Mist API resolution + pagination helper.
 from tqdm import tqdm  # WHY: progress bar for long-running site/device fetches.
 
+from src.security import CredentialRedactor  # WHY: strip device credentials at the read boundary (#2011).
+
 
 class APIFetchUtils:  # Higher-level org/site fetchers.
     """Centralized API fetch utilities.
@@ -80,11 +82,19 @@ class APIFetchUtils:  # Higher-level org/site fetchers.
 
     @staticmethod
     def _fetch_single_site_setting(apisession, site):
-        """Fetch one site's settings. Tag with id/name. Return dict or None on failure."""
+        """Fetch one site's settings. Tag with id/name. Return dict or None on failure.
+
+        Warning:
+            ``getSiteSetting`` answers device credentials in clear text. The
+            record holds ``switch_mgmt.root_password``, ``juniper_srx.root_password``,
+            and ``ssh_keys``. Every caller exports this record, so the credential
+            is removed here at the read boundary. See GitHub issue #2011.
+        """
         site_id = site.get("id")  # Target site id
         site_name = site.get("name", "Unnamed Site")  # Friendly site label
         try:
-            config = mistapi.api.v1.sites.setting.getSiteSetting(apisession, site_id).data  # Fetch site settings
+            raw = mistapi.api.v1.sites.setting.getSiteSetting(apisession, site_id).data  # Fetch site settings
+            config = CredentialRedactor.redact(raw)  # Drop every credential before the record travels.
             config["site_id"] = site_id  # Tag with site id
             config["site_name"] = site_name  # Tag with site name
             logging.info("! Fetched config for site: %s (ID: %s)", site_name, site_id)
