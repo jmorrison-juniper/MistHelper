@@ -329,14 +329,27 @@ def _login_response(
 
 
 @auth_router.post("/token")
-async def refresh_token() -> ResponseEnvelope[TokenRefreshResponse]:
-    """Refresh an existing session token (placeholder)."""
-    import secrets
+async def refresh_token(request: Request) -> ResponseEnvelope[TokenRefreshResponse]:
+    """Extend the current session and return the identifier that the store holds.
 
+    The route reads the session cookie and renews the record behind it. A caller
+    with no valid session receives 401, because no session exists to refresh.
+    """
+    from fastapi import HTTPException
+
+    from src.api.middleware.auth import SESSION_COOKIE_NAME, get_session_store
+
+    logger.info("Session refresh starts.")  # Announce the refresh before the store read.
+    session_id = request.cookies.get(SESSION_COOKIE_NAME, "")  # The cookie carries the identifier.
+    lifetime = get_session_store(request).renew(session_id)  # Renew only a record that exists.
+    if lifetime is None:  # An anonymous or expired caller holds no session to extend.
+        logger.warning("Session refresh refused. No record matched the session cookie.")
+        raise HTTPException(status_code=401, detail="No active session to refresh")
+    logger.debug("Session refresh done. The record lives for %d more seconds.", lifetime)
     return ResponseEnvelope(
         data=TokenRefreshResponse(
-            session_id=secrets.token_urlsafe(32),
-            expires_in=3600,
+            session_id=session_id,  # Return the identifier the store knows, never a new random one.
+            expires_in=lifetime,  # Report the true lifetime that the renewal set.
         ),
     )
 
