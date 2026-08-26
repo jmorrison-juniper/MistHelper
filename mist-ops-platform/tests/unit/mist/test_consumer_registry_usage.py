@@ -6,19 +6,26 @@ with the correct entity type string — no raw api_module/list_method args.
 
 from __future__ import annotations
 
-from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 import pytest
 
+from src.shared.mist.endpoints import ApiResult
+
 
 def _mock_api_result(
     data: dict[str, Any] | list[dict[str, Any]],
     status_code: int = 200,
-) -> SimpleNamespace:
-    return SimpleNamespace(status_code=status_code, data=data)
+) -> ApiResult:
+    """Return a real ApiResult, because the callers now read result.success.
+
+    A SimpleNamespace carried only status_code and data. `_read_records` reads
+    `result.success` before it reads `result.data` (issue #1884), so a stub
+    without that property raised AttributeError instead of proving the call.
+    """
+    return ApiResult(status_code=status_code, data=data)
 
 
 class TestAuthUsesRegistry:
