@@ -7,6 +7,60 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### The capture portal waited on serial cloud calls and raced on the tracker (issue #2090)
+
+- **Strategy (Applied)**: `documentation/python-parallelism-matrix.md` decides the
+  tool for each case. Every hot path of the portal waits on a network, so the
+  bottleneck is input and output. The matrix answers that case with a bounded
+  thread pool and warns against a process pool, because the payload is a
+  multi-megabyte document and the pickle cost is larger than the gain. No change
+  raises the cloud call count, so the hourly call budget is unchanged.
+- **Defect (Fixed)**: `capture/extras.py` made four cloud calls one after another
+  inside the tier 3 call group. Each call walks every page, so a large site paid
+  the sum of four page walks. `tests/unit/upgrade_portal/test_performance.py`
+  credited that group with one page of latency, because its fake answered the
+  whole group in one call. The code was about four times slower than its own
+  documented model and no test could see it.
+- **Fan-out (Added)**: `runtime/pools.py` grows `BoundedFanOut`. It runs a small
+  set of named blocking calls at one time, never wider than
+  `CAPTURE_WORKER_TARGET`, and returns one answer for each name. A call that
+  raises answers with None, so one fault never loses the other answers.
+- **Capture (Faster)**: the four tier 3 reads now run at one time. The tier 3
+  group costs the longest page walk instead of the sum of four.
+- **Stop (Faster)**: `upgrade/stop.py` cancelled each upgrade plan one at a time,
+  and each plan costs two cloud calls. A run holds up to one plan for each device
+  family, so a stop waited for six round trips before the last plan reached the
+  cloud. Every second of that wait is a second in which one more device can start
+  to write firmware, and FR-038d forbids an interrupt of a write. The cancels now
+  run at one time.
+- **Race (Fixed)**: `upgrade/driver.py` `write_tracker` read `ActiveUpgrades.json`,
+  dropped one row, appended a row, and wrote the whole file with no lock. The plan
+  allows six runs at one time and each run owns a driver thread, so two threads
+  could interleave and lose one run row. An operator then saw no record of a run
+  that was still writing firmware. A process-wide re-entrant lock now holds the
+  read and the write together.
+- **Atomic (Added)**: the tracker write lands through a neighbor file and one
+  rename, so a reader never meets a half-written file. Windows refuses to rename a
+  file that another handle holds open, so the reader takes the same lock and both
+  the read and the rename try again after a short pause.
+- **Waste (Removed)**: `capture/assembly.py` `stamp_size` ran four whole JSON
+  serializations of a multi-megabyte document every time. The number settles after
+  two or three rounds. The loop now stops the moment the number repeats, which is
+  what `capture/store.py` already did.
+- **Model (Repaired)**: the performance model now drives the real
+  `extras.collect_extras` with counted cloud calls and reads the four tier 3
+  tallies apart from the call group tallies. Five new tests pin the call count at
+  four, pin the group cost at one page, and prove the model reports four times the
+  cloud time for a group that runs its calls in order.
+- **Tests (Added)**: 18 tests. Each concurrency test uses a barrier, which
+  releases only when every party arrives, so it passes under a fan-out and times
+  out under a loop. A value test alone could not tell the two apart.
+- **Not Changed (Explained)**: the settle gate poll still makes its two reads in
+  order. The round already sleeps 20 seconds and the round count is capped, so a
+  faster round buys nothing and the gate is safety critical. The comparison
+  counters still walk the delta list once for each count, because the list holds
+  at most 250 devices and 5000 clients and five passes cost about one millisecond.
+
 ### Remove the unused noqa directives and gate the rule (issue #1792)
 
 - **Defect (Fixed)**: 310 `# noqa` directives suppressed nothing. A stale

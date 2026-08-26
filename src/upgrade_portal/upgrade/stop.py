@@ -18,6 +18,7 @@ Why:
 
 from __future__ import annotations
 
+import functools
 import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -30,6 +31,7 @@ from src.firmware.upgrade_service import (
     cancel_upgrade,
     read_upgrade_status,
 )
+from src.upgrade_portal.runtime.pools import BoundedFanOut, FanOutCall
 from src.upgrade_portal.runtime.signals import (
     STOP_CONFIRMATION_TEXT,
     ConfirmationRequiredError,
@@ -64,6 +66,9 @@ _WRITE_RULE: Final[str] = "The portal never interrupts a write, so the"
 # running. The house rule of the upgrade seam reports the same result for a
 # refused cancel, so the portal never claims a stop that did not happen.
 _MESSAGE_CALL_FAILED: Final[str] = "The cloud did not answer the cancel call, so every device continues the upgrade."
+
+# WHY: The plain name of the cancel batch, for the fan-out log records.
+_FANOUT_DESCRIPTION: Final[str] = "upgrade cancel calls"
 
 
 @dataclass(frozen=True, slots=True)
@@ -360,12 +365,89 @@ def merge_results(results: Sequence[TargetResult]) -> StopOutcome:
     )
 
 
+def _lost_target(target: StopTarget) -> TargetResult:
+    """Report one plan whose cancel call never returned an answer.
+
+    Why:
+        ``cancel_target`` holds its own error boundary, so this path is a last
+        guard. A lost answer must read exactly like a refused cancel, because
+        the portal must never claim a stop that it cannot prove.
+
+    Args:
+        target: The plan whose answer the portal lost.
+
+    Returns:
+        An outcome that leaves every device of the plan running.
+    """
+    logger.warning("The portal lost the cancel answer for upgrade %s", target.upgrade_id)
+    return TargetResult(CancelOutcome((), plan_macs(target.plan), (), _MESSAGE_CALL_FAILED), status_known=False)
+
+
+def _cancel_calls(session: Any, targets: Sequence[StopTarget]) -> dict[str, FanOutCall]:
+    """Bind one cancel call for each plan of the run.
+
+    Why:
+        The fan-out keys the answers by name, and two plans of one run can
+        carry the same cloud identifier. The position joins the identifier, so
+        no plan can take the place of another.
+
+    Args:
+        session: The Mist session.
+        targets: One entry for each plan of the run.
+
+    Returns:
+        One bound call for each plan, by position and identifier.
+    """
+    return {
+        _target_key(position, target): functools.partial(cancel_target, session, target)
+        for position, target in enumerate(targets)
+    }
+
+
+def _target_key(position: int, target: StopTarget) -> str:
+    """Return the fan-out name of one plan.
+
+    Args:
+        position: The place of the plan in the list of the run.
+        target: The plan itself.
+
+    Returns:
+        A name that no other plan of the same run can hold.
+    """
+    return f"{position}:{target.upgrade_id}"
+
+
+def _collect_results(answers: Mapping[str, Any], targets: Sequence[StopTarget]) -> list[TargetResult]:
+    """Read one result for each plan out of the fan-out answers.
+
+    Args:
+        answers: The result of the fan-out.
+        targets: One entry for each plan of the run, in the same order.
+
+    Returns:
+        One result for each plan, in the order of the plans.
+    """
+    results: list[TargetResult] = []
+    for position, target in enumerate(targets):
+        answer = answers.get(_target_key(position, target))
+        results.append(answer if isinstance(answer, TargetResult) else _lost_target(target))
+    return results
+
+
 def stop_run(session: Any, targets: Sequence[StopTarget], confirmation: str) -> StopOutcome:
     """Cancel every plan of one run after the operator types STOP.
 
     Why:
         This is the whole stop control. The caller supplies the plans, and
         the module answers with the three lists and one plain message.
+
+        The cancel calls run at one time. Each plan costs two cloud calls, and
+        a run holds up to one plan for each family, so a run in order waits for
+        six network round trips before the last plan reaches the cloud. Every
+        second of that wait is a second in which one more device can start to
+        write firmware, and FR-038d forbids an interrupt of a write. The
+        fan-out therefore shortens the window in which a stop can still save a
+        device. The call count never changes.
 
     Args:
         session: The Mist session.
@@ -380,8 +462,8 @@ def stop_run(session: Any, targets: Sequence[StopTarget], confirmation: str) -> 
     """
     require_confirmation(confirmation)
     logger.info("The portal stops %s upgrade plans at the request of an operator", len(targets))
-    results = [cancel_target(session, target) for target in targets]
-    outcome = merge_results(results)
+    answers = BoundedFanOut.run(_cancel_calls(session, targets), _FANOUT_DESCRIPTION)
+    outcome = merge_results(_collect_results(answers, targets))
     logger.info("The stop cancelled %s devices", len(outcome.cancelled))
     logger.info("The stop left %s devices in mid-write", len(outcome.already_writing))
     return outcome

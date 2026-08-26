@@ -297,6 +297,55 @@ def test_stored_size_settles_on_its_own_width() -> None:
     assert document["stored_size_bytes"] == assembly.measure_size_bytes(document)
 
 
+def test_the_size_stamp_stops_the_moment_the_number_repeats(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The stamp serializes the document only until the number settles.
+
+    Why:
+        A whole capture is a document of several megabytes and every round
+        serializes all of it. A round that cannot change the answer is pure
+        processor time that an operator waits for. The counter proves the loop
+        stops, and the value assertion proves it stops at the right number.
+
+    Args:
+        monkeypatch: The pytest patch helper.
+    """
+    rounds: list[int] = []
+    real_measure = assembly.measure_size_bytes
+
+    def counted(document: Any) -> int:
+        """Measure one document and record that the stamp asked."""
+        rounds.append(1)
+        return real_measure(document)
+
+    monkeypatch.setattr(assembly, "measure_size_bytes", counted)
+    stamped = assembly.stamp_size({"capture_id": "cap-0001", "devices": [{"mac": "5c5b350e0001"}]})
+    assert len(rounds) < assembly._SIZE_ROUNDS
+    assert stamped["stored_size_bytes"] == real_measure(stamped)
+
+
+def test_the_size_stamp_never_runs_more_rounds_than_the_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A number that never settles still ends the loop at the documented limit.
+
+    Why:
+        The early stop must not become a wait with no end. A measurement that
+        answers a new number every round proves the limit still holds.
+
+    Args:
+        monkeypatch: The pytest patch helper.
+    """
+    rounds: list[int] = []
+
+    def never_settles(document: Any) -> int:
+        """Answer a new number every round, so the loop can never break early."""
+        del document
+        rounds.append(1)
+        return len(rounds)
+
+    monkeypatch.setattr(assembly, "measure_size_bytes", never_settles)
+    assembly.stamp_size({"capture_id": "cap-0001"})
+    assert len(rounds) == assembly._SIZE_ROUNDS
+
+
 def test_stored_size_measures_the_body_and_not_the_driver_fields() -> None:
     """The store drops every underscore field, and this measurement does too."""
     document = _document()

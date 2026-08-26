@@ -14,6 +14,8 @@ from __future__ import annotations
 import json
 import logging
 import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
@@ -33,6 +35,13 @@ BROWSER_ID = "browser-0123456789"  # 18 URL-safe characters, inside the 16 to 12
 # The shape of a redis-py connection fault. The driver meets this text, and no
 # part of it may reach the run record, the CSV backup, the browser, or a log.
 CREDENTIAL_FAULT_TEXT = "Error 111 connecting to redis://:s3cret-password@10.0.0.9:6379. Connection refused."
+
+# The plan allows six sites under upgrade at one time, so six driver threads can
+# reach the tracker together. The race test uses that exact number.
+_TRACKER_THREAD_COUNT = 6
+_TRACKER_BARRIER_SECONDS = 5.0  # A broken barrier must fail in seconds, not hang the suite
+_TRACKER_WRITE_ROUNDS = 40  # Enough writes to meet a reader, few enough to stay fast
+_TRACKER_READ_PAUSE_SECONDS = 0.001  # Keeps the reader off a hot loop, which would starve the writer
 
 
 class FixedClock:
@@ -611,6 +620,88 @@ class TestTrackerPath:
         path = driver.write_tracker(make_record(), "t1", root=tmp_path)
         rows = json.loads(path.read_text(encoding="utf-8"))
         assert len(rows) == 1
+
+
+class TestTrackerUnderThreads:
+    """Two run threads that write the tracker both keep their row.
+
+    Why:
+        The write is a read, a change, and a write of the whole file. The plan
+        allows six runs at one time and each run owns a driver thread. Without
+        the lock, the second thread reads the file before the first thread
+        writes it, and the row of the first run disappears. An operator then
+        sees no record of a run that is still writing firmware.
+    """
+
+    def test_every_thread_keeps_its_row(self, tmp_path: Path) -> None:
+        """Six threads write six runs and the file holds all six.
+
+        Why:
+            A barrier lines every thread up on the same moment, which is the
+            moment the race needs. A test that wrote one run after another
+            would pass with or without the lock.
+
+        Args:
+            tmp_path: The temporary directory pytest supplies.
+        """
+        barrier = threading.Barrier(_TRACKER_THREAD_COUNT)  # Every writer starts in the same moment
+        run_ids = [f"run-{index:02d}" for index in range(_TRACKER_THREAD_COUNT)]
+
+        def write(run_id: str) -> None:
+            """Write one run row after every other writer arrives."""
+            record = make_record() | {"run_id": run_id, "_key": run_id}
+            barrier.wait(timeout=_TRACKER_BARRIER_SECONDS)
+            driver.write_tracker(record, "t1", root=tmp_path)
+
+        with ThreadPoolExecutor(max_workers=_TRACKER_THREAD_COUNT) as pool:
+            list(pool.map(write, run_ids))
+        rows = json.loads((tmp_path / "ActiveUpgrades.json").read_text(encoding="utf-8"))
+        assert sorted(row["run_id"] for row in rows) == run_ids
+
+    def test_the_write_leaves_no_scratch_file(self, tmp_path: Path) -> None:
+        """The atomic write renames its neighbor file and leaves nothing behind.
+
+        Why:
+            A scratch file that survived would grow one file for each run and
+            would confuse an operator who reads the data directory.
+
+        Args:
+            tmp_path: The temporary directory pytest supplies.
+        """
+        driver.write_tracker(make_record(), "t1", root=tmp_path)
+        assert [path.name for path in tmp_path.iterdir()] == ["ActiveUpgrades.json"]
+
+    def test_a_reader_never_meets_an_empty_file(self, tmp_path: Path) -> None:
+        """Every read during a long run of writes finds whole JSON.
+
+        Why:
+            A direct write empties the file first. A reader that arrived in
+            that moment would report no active upgrade, which is the exact
+            wrong answer while a device writes firmware. The test drives the
+            production reader, because that reader turns a failed read into an
+            empty list and an operator cannot tell the two apart.
+
+        Args:
+            tmp_path: The temporary directory pytest supplies.
+        """
+        path = tmp_path / "ActiveUpgrades.json"
+        driver.write_tracker(make_record(), "t0", root=tmp_path)
+        readings: list[int] = []
+        stop_reading = threading.Event()
+
+        def read_often() -> None:
+            """Read the file until the writer stops, and keep every row count."""
+            while not stop_reading.is_set():
+                readings.append(len(driver._read_tracker(path)))
+                time.sleep(_TRACKER_READ_PAUSE_SECONDS)  # A hot loop starves the writer through the interpreter lock
+
+        reader = threading.Thread(target=read_often, daemon=True)
+        reader.start()
+        for index in range(_TRACKER_WRITE_ROUNDS):
+            driver.write_tracker(make_record() | {"run_id": f"run-{index}"}, "t1", root=tmp_path)
+        stop_reading.set()
+        reader.join(timeout=_TRACKER_BARRIER_SECONDS)
+        assert readings and min(readings) >= 1
 
 
 class TestSingleWriter:

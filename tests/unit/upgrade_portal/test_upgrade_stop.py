@@ -9,6 +9,7 @@ Why:
 
 from __future__ import annotations
 
+import threading
 from typing import Any
 
 import pytest
@@ -21,6 +22,13 @@ RUN_ID = "run-" + "b" * 32
 MAC_ONE = "5c5b350e0001"
 MAC_TWO = "5c5b350e0002"
 MAC_THREE = "5c5b350e0003"
+
+# WHY: A run holds up to one plan for each device family, which is three.
+_PLAN_MACS = (MAC_ONE, MAC_TWO, MAC_THREE)
+_PLAN_COUNT = len(_PLAN_MACS)
+
+# WHY: A broken barrier must fail the test in seconds, not hang the whole suite.
+_BARRIER_TIMEOUT_SECONDS = 5.0
 
 
 class FakeRunStore:
@@ -458,3 +466,76 @@ class TestStopRunAndRecord:
         """
         outcome = stop.stop_run(object(), [make_stop_target((MAC_ONE,))], "STOP")
         assert isinstance(outcome, StopOutcome)
+
+
+class TestStopFanOut:
+    """Every plan of one run reaches the cloud at one time.
+
+    Why:
+        A run holds one plan for each device family, and each plan costs two
+        cloud calls. Run in order, the last plan waits for every earlier round
+        trip, and every second of that wait is a second in which one more
+        device can start to write firmware. FR-038d forbids an interrupt of a
+        write, so a stop that arrives late saves nothing.
+    """
+
+    def test_every_plan_cancels_at_one_time(self, calls: dict[str, Any]) -> None:
+        """Three plans all reach the barrier, so no plan waited for another.
+
+        Why:
+            A barrier releases only when every party arrives. It therefore
+            passes under a fan-out and times out under a loop, which a test on
+            the answer alone could never tell apart.
+
+        Args:
+            calls: The patched cloud calls of the stop path.
+        """
+        barrier = threading.Barrier(_PLAN_COUNT)  # WHY: Releases only when every plan arrives.
+
+        def meet(plan: Any) -> CancelOutcome:
+            """Wait for the other plans, then report this plan cancelled."""
+            barrier.wait(timeout=_BARRIER_TIMEOUT_SECONDS)  # WHY: A loop would time out here.
+            return CancelOutcome(tuple(target.mac for target in plan.targets), (), (), "cancelled")
+
+        calls["cancel_answer"] = meet
+        targets = [make_stop_target((mac,), f"up-{index}") for index, mac in enumerate(_PLAN_MACS)]
+        outcome = stop.stop_run(object(), targets, stop.STOP_CONFIRMATION_TEXT)
+        assert outcome.cancelled == tuple(sorted(_PLAN_MACS))
+        assert len(calls["cancel"]) == _PLAN_COUNT
+
+    def test_two_plans_that_share_a_cloud_identifier_both_answer(self, calls: dict[str, Any]) -> None:
+        """One identifier on two plans still gives two results.
+
+        Why:
+            The fan-out keys its answers by name. A name built from the cloud
+            identifier alone would let the second plan overwrite the first, and
+            the operator would read a stop of half the devices as a whole stop.
+
+        Args:
+            calls: The patched cloud calls of the stop path.
+        """
+        calls["cancel_answer"] = lambda plan: CancelOutcome(tuple(t.mac for t in plan.targets), (), (), "cancelled")
+        targets = [make_stop_target((MAC_ONE,), "up-1"), make_stop_target((MAC_TWO,), "up-1")]
+        outcome = stop.stop_run(object(), targets, stop.STOP_CONFIRMATION_TEXT)
+        assert outcome.cancelled == (MAC_ONE, MAC_TWO)
+        assert len(calls["cancel"]) == 2
+
+    def test_a_lost_answer_leaves_every_device_of_that_plan_running(
+        self, calls: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A fan-out that drops one name never claims a stop it cannot prove.
+
+        Why:
+            The portal must never tell an operator that a device stopped when
+            it holds no answer. A lost answer must read exactly like a refused
+            cancel.
+
+        Args:
+            calls: The patched cloud calls of the stop path.
+            monkeypatch: The pytest patch helper.
+        """
+        monkeypatch.setattr(stop.BoundedFanOut, "run", lambda calls, description: {})
+        targets = [make_stop_target((MAC_ONE, MAC_TWO), "up-1")]
+        outcome = stop.stop_run(object(), targets, stop.STOP_CONFIRMATION_TEXT)
+        assert outcome.cancelled == ()
+        assert outcome.already_writing == (MAC_ONE, MAC_TWO)
