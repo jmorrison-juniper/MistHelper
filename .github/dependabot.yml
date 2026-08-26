@@ -30,3 +30,52 @@ updates:
       - "dependencies"
     commit-message:
       prefix: "deps(ops-portal)"
+    groups:
+      # React and react-dom must carry the exact same version. React refuses to
+      # start when the two differ, and the ops-portal job then fails with
+      # "Incompatible React versions". One group raises both in one pull
+      # request, so the two versions can never separate. Pull request #1815
+      # raised react alone and failed for that reason.
+      react:
+        patterns:
+          - "react"
+          - "react-dom"
+          - "@types/react"
+          - "@types/react-dom"
+    ignore:
+      # typescript-eslint refuses to load under TypeScript 7.0. Version 8.68.0
+      # of @typescript-eslint/parser declares the peer range
+      # "typescript": ">=4.8.4 <6.1.0", so the lint step stops with
+      # "typescript-eslint does not support TS 7.0". Pull request #1817 raised
+      # TypeScript to 7.0.2 and failed for that reason.
+      #
+      # This entry stops Dependabot from proposing that update again. It does
+      # not decide when the project adopts TypeScript 7.
+      #
+      # Two paths lead to TypeScript 7. Take one of them deliberately, in a
+      # pull request that a person reviews.
+      #
+      #   Path A, wait: @typescript-eslint/parser widens its peer range to
+      #     accept TypeScript 7. Raise both packages together at that time.
+      #
+      #   Path B, run the two versions side by side: Microsoft publishes
+      #     @typescript/typescript6 from the microsoft/TypeScript repository for
+      #     this purpose. An npm alias points the name "typescript" at that
+      #     package, so typescript-eslint reads the version 6 API, and a second
+      #     alias carries the real typescript 7 for the build.
+      #
+      #     Path B needs a script change as well as a dependency change.
+      #     @typescript/typescript6 ships the binary "tsc6", not "tsc", so
+      #     "tsc -b" and "tsc --noEmit" must name the binary that the version 7
+      #     alias provides. Confirm which package owns node_modules/.bin/tsc
+      #     before you trust the build.
+      #
+      #     Verified on 2026-08-26: typescript is 7.0.2,
+      #     @typescript/typescript6 is 6.0.2, and @typescript-eslint/parser is
+      #     8.68.0. The package "@typescript/native" does not exist. The
+      #     preview package is "@typescript/native-preview", and it ships the
+      #     binary "tsgo".
+      #
+      # Issue #2077 records the evidence for both paths.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
