@@ -57,6 +57,18 @@ PIP_TIMEOUT = "15"
 # The default port of each scheme that a pip index can use.
 SCHEME_PORTS: dict[str, int] = {"http": 80, "https": 443}
 
+# The GitHub account that can write to this repository. A push from another
+# account returns 403. See issue #1893.
+EXPECTED_GITHUB_ACCOUNT = "jmorrison-juniper"
+
+# The environment variables that override the stored gh login. A set variable
+# wins over the account that `gh auth switch` selects.
+TOKEN_VARIABLES: tuple[str, ...] = ("GH_TOKEN", "GITHUB_TOKEN")
+
+# The seconds that the script waits for the gh command to name the account. A
+# short wait keeps the check cheap on a slow network.
+GH_PROBE_TIMEOUT_SECONDS = 15.0
+
 
 class PipIndexProbe:
     """Report whether the configured pip index accepts a connection."""
@@ -219,6 +231,66 @@ def report_result(bootstrapper: WorktreeBootstrapper, installed: list[str]) -> N
     LOGGER.info("To run the tests, run: python -m pytest -q")
 
 
+class GitHubAccountChecker:
+    """Report the GitHub account that a push and a pull request will use.
+
+    A worktree can hold two logged-in accounts. The environment variable
+    `GH_TOKEN` overrides the stored login, so a push can run as an account that
+    cannot write. The failure message names an account type and not the
+    variable, so a reader does not learn the cause. See issue #1893.
+    """
+
+    def __init__(self, expected: str = EXPECTED_GITHUB_ACCOUNT) -> None:
+        """Store the account that this repository accepts."""
+        self.expected = expected  # Keep the one account that can write.
+
+    def read_active_account(self) -> str | None:
+        """Return the login that the gh command reports, or None when unknown."""
+        executable = shutil.which("gh")  # Find gh without a hardcoded path.
+        if executable is None:  # A worktree without gh cannot answer the question.
+            LOGGER.debug("The gh command is absent, so the account check is skipped.")
+            return None
+        LOGGER.debug("Reading the active GitHub account through %s", executable)
+        try:  # A slow network or a broken login must not stop the bootstrap.
+            result = subprocess.run(  # nosec B603 - the argument list is fixed.
+                [executable, "api", "user", "--jq", ".login"],
+                capture_output=True,
+                text=True,
+                timeout=GH_PROBE_TIMEOUT_SECONDS,
+                check=False,
+            )
+        except (OSError, subprocess.SubprocessError) as error:  # Report and continue.
+            LOGGER.debug("The account read failed: %s", error)
+            return None
+        if result.returncode != 0:  # A failed call names no account.
+            LOGGER.debug("The account read returned code %d", result.returncode)
+            return None
+        return result.stdout.strip() or None  # An empty answer means unknown.
+
+    def warn_on_mismatch(self) -> bool:
+        """Print a warning when the active account cannot write. Return True when it can."""
+        account = self.read_active_account()  # Ask gh which account is active.
+        if account is None:  # An unknown account is not proof of a fault.
+            LOGGER.debug("The active GitHub account is unknown, so no warning is printed.")
+            return True
+        if account == self.expected:  # The common and correct case.
+            LOGGER.info("The active GitHub account is %s.", account)
+            return True
+        self._report_wrong_account(account)  # Tell the reader the cause and the repair.
+        return False
+
+    def _report_wrong_account(self, account: str) -> None:
+        """Print the cause of a wrong account and the command that repairs it."""
+        LOGGER.warning("Warning: the active GitHub account is %s, and a push needs %s.", account, self.expected)
+        LOGGER.warning("A push returns 403, and a pull request reports an Enterprise Managed User error.")
+        overrides = [name for name in TOKEN_VARIABLES if os.environ.get(name)]  # Name the real cause.
+        if overrides:  # A set variable beats the stored login, so say which one.
+            LOGGER.warning("These variables override the stored login: %s", ", ".join(overrides))
+        LOGGER.warning("To repair the account, run this line before each command:")
+        LOGGER.warning("  $env:GH_TOKEN=$null; $env:GITHUB_TOKEN=$null; gh auth switch -u %s", self.expected)
+        LOGGER.warning("See issue #1893 for the full record.")
+
+
 def main(argv: list[str] | None = None) -> int:
     """Run the bootstrap and return the exit code of the script."""
     logging.basicConfig(level=logging.INFO, format="%(message)s")  # Show one plain line for each step.
@@ -233,6 +305,7 @@ def main(argv: list[str] | None = None) -> int:
         LOGGER.error("The bootstrap failed: %s", error)
         return 1  # Report the failure to the shell.
     report_result(bootstrapper, installed)  # Tell the user which interpreter to activate.
+    GitHubAccountChecker().warn_on_mismatch()  # Warn before the user pushes with the wrong account.
     LOGGER.debug("The bootstrap completed for %s", root)
     return 0  # Report the success to the shell.
 

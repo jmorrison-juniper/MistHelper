@@ -150,18 +150,31 @@ class PreCheckService:
         org_id: str,
         target_ids: list[str],
     ) -> list[CheckResult]:
-        """Verify firmware version compatibility (placeholder).
+        """Return a skipped result for every target.
 
-        Future: compare target config requirements against device
-        firmware version to catch incompatible settings.
+        The check requires a firmware version from the device record and a
+        target firmware string from the deployment job. Neither input is
+        available on this call path yet. Returning a non-passing result
+        prevents the caller from recording an unverified pass.
+
+        Future: when target firmware is passed into this method, replace
+        this block with a real version comparison.
         """
         results: list[CheckResult] = []
         for device_id in target_ids:
+            # WHY: warn once per device so the operator sees which check never ran.
+            logger.warning(
+                "Version compatibility check skipped for device %s in org %s."
+                " The target firmware version is not available on this call path.",
+                device_id,
+                org_id,
+            )
+            # WHY: passed=False stops a caller from recording this as a verified pass.
             results.append(
                 CheckResult(
                     name=f"version_compat:{device_id}",
-                    passed=True,
-                    message="Version compatibility check passed (basic)",
+                    passed=False,
+                    message=("Version compatibility check skipped." " The target firmware version is not available."),
                 )
             )
         return results

@@ -10,14 +10,14 @@
 # Test runner and plugins. pyproject.toml sets asyncio_mode = "auto", so
 # pytest-asyncio must be present or collection stops on the first async test.
 pytest>=8.3
-pytest-asyncio>=0.24
+pytest-asyncio>=1.4.0
 pytest-cov>=6.0
 
 # Application packages that the tests import at module scope.
 fastapi>=0.115
 sqlalchemy>=2.0
 pydantic>=2.10
-pydantic-settings>=2.7
+pydantic-settings>=2.15.0
 
 # alembic backs migrations/versions/. tests/unit/shared/test_schema_agreement.py
 # imports alembic at module scope, because it runs the whole migration chain in
@@ -39,7 +39,7 @@ httpx2>=0.28
 
 # deepdiff backs src/shared/services/diff.py. Its absence caused the collection
 # error in tests/unit/shared/test_diff.py.
-deepdiff>=8.0
+deepdiff>=9.1.0
 
 # celery and redis back the worker and the health route. src/api/routes/health.py
 # imports redis inside the readiness handler, so every TestClient call to that

@@ -39,19 +39,42 @@ async def readyz(request: Request) -> dict[str, str]:
     """Readiness probe — verifies database connectivity."""
     engine = getattr(request.app.state, "engine", None)
     if engine is None:
+        # WHY: an operator cannot diagnose a probe failure without a cause.
+        logger.warning("Readiness probe failed. The database engine is absent from app state.")
         return {"status": "unavailable"}
     try:
         async with engine.connect() as conn:
             await conn.execute(__import__("sqlalchemy").text("SELECT 1"))
         return {"status": "ready"}
     except Exception:
+        # WHY: log the exception so the traceback reaches the operator, not just the word.
+        logger.warning(
+            "Readiness probe failed. The database query raised an exception.",
+            exc_info=True,
+        )
         return {"status": "unavailable"}
 
 
 @router.get("/metrics")
-async def metrics() -> dict[str, str]:
-    """Placeholder for Prometheus metrics export."""
-    return {"status": "metrics_placeholder"}
+async def metrics() -> None:
+    """Reject Prometheus scrapes until real metrics are exported.
+
+    The route previously answered 200 with a fixed body. A Prometheus
+    scrape then recorded a healthy target with no series, so no alert
+    could fire. Answering 501 makes the gap visible to every scraper.
+    """
+    # WHY: warn on every call so the gap is visible in the application log.
+    logger.warning(
+        "The /metrics route is not implemented. Real Prometheus series are not exported yet."
+        " Returning 501 so the scrape fails loudly."
+    )
+    # WHY: raise HTTPException so FastAPI returns 501 with a JSON detail body.
+    from fastapi import HTTPException
+
+    raise HTTPException(
+        status_code=501,
+        detail="Prometheus metrics export is not implemented. No series are available.",
+    )
 
 
 # -- Notification channel schemas ----------------------------------------
@@ -329,14 +352,27 @@ def _login_response(
 
 
 @auth_router.post("/token")
-async def refresh_token() -> ResponseEnvelope[TokenRefreshResponse]:
-    """Refresh an existing session token (placeholder)."""
-    import secrets
+async def refresh_token(request: Request) -> ResponseEnvelope[TokenRefreshResponse]:
+    """Extend the current session and return the identifier that the store holds.
 
+    The route reads the session cookie and renews the record behind it. A caller
+    with no valid session receives 401, because no session exists to refresh.
+    """
+    from fastapi import HTTPException
+
+    from src.api.middleware.auth import SESSION_COOKIE_NAME, get_session_store
+
+    logger.info("Session refresh starts.")  # Announce the refresh before the store read.
+    session_id = request.cookies.get(SESSION_COOKIE_NAME, "")  # The cookie carries the identifier.
+    lifetime = get_session_store(request).renew(session_id)  # Renew only a record that exists.
+    if lifetime is None:  # An anonymous or expired caller holds no session to extend.
+        logger.warning("Session refresh refused. No record matched the session cookie.")
+        raise HTTPException(status_code=401, detail="No active session to refresh")
+    logger.debug("Session refresh done. The record lives for %d more seconds.", lifetime)
     return ResponseEnvelope(
         data=TokenRefreshResponse(
-            session_id=secrets.token_urlsafe(32),
-            expires_in=3600,
+            session_id=session_id,  # Return the identifier the store knows, never a new random one.
+            expires_in=lifetime,  # Report the true lifetime that the renewal set.
         ),
     )
 

@@ -235,7 +235,18 @@ jobs:
         # uncovered lines to the denominator, so the percentage drops against the 80
         # floor without any test changing. Widen it only together with the tests that
         # cover the added code.
-        run: pytest --cov=${{ env.SRC_PATH }} --cov-fail-under=${{ env.COVERAGE_THRESHOLD }}
+        #
+        # Issue #2036: --timeout=120 gives each test 120 seconds before pytest marks
+        # it as FAILED with a traceback that names the hung call. The job limit is 15
+        # minutes, so a single stalled test now fails fast and visibly instead of
+        # silently consuming the full job budget.
+        run: pytest --cov=${{ env.SRC_PATH }} --cov-fail-under=${{ env.COVERAGE_THRESHOLD }} --timeout=120
+      - name: Report job timeout
+        # Issue #2036: a cancelled result means the job hit timeout-minutes, not that
+        # a test failed. This step writes a plain line so a reader can tell a stalled
+        # runner from a broken test without counting timestamps in the log.
+        if: cancelled()
+        run: echo "::error::The pytest job was cancelled at the timeout-minutes limit (15 min). A per-test timeout of 120 s should have caught any stalled test first. Check the log for a test that held the runner."
 
   # ──────────────────────────────────────────────────────────────
   # SECURITY
@@ -263,6 +274,41 @@ jobs:
       # Pinned in requirements-dev.txt so Dependabot raises a new release as a
       # reviewable pull request rather than breaking CI on an unrelated commit (issue #1718)
       - run: pip install -r requirements-dev.txt  # pinned (issue #1779)
+      - name: Check the bandit exclude list on both path separators
+        # Issue #1722: bandit compares an exclude entry against a scanned path with a
+        # plain substring test, and it never normalizes the separator. A forward-slash
+        # entry matches a Linux path only. A Windows run then scanned the analyzer
+        # fixtures and reported 42 extra findings that this job never sees.
+        # This job runs on Linux, so only an explicit check can hold the Windows form.
+        run: |
+          python - <<'PY'
+          import pathlib  # Reads pyproject.toml from the checkout root.
+          import tomllib  # Parses the TOML config that bandit also reads.
+
+          from bandit.core.manager import _is_file_included  # The matcher bandit uses.
+
+          config = tomllib.loads(pathlib.Path("pyproject.toml").read_text(encoding="utf-8"))
+          excludes = config["tool"]["bandit"]["exclude_dirs"]  # The list under test.
+          failures = []  # Collects every problem, so one run reports all of them.
+          for entry in excludes:  # A separator-free entry matches on both platforms.
+              if "/" not in entry and "\\" not in entry:
+                  continue  # No separator, so no platform gap.
+              posix = entry.replace("\\", "/")  # The Linux spelling of this entry.
+              windows = posix.replace("/", "\\")  # The Windows spelling of this entry.
+              for spelling in (posix, windows):  # Both spellings must be present.
+                  if spelling not in excludes:
+                      failures.append("exclude_dirs misses the spelling %r" % spelling)
+          samples = [  # The fixture tree that issue #1722 named, in both spellings.
+              "./tools/test_quality_analyzer/fixtures/bad/weak.py",
+              ".\\tools\\test_quality_analyzer\\fixtures\\bad\\weak.py",
+          ]
+          for sample in samples:  # bandit must exclude the sample on either platform.
+              if _is_file_included(sample, ["*.py"], excludes):
+                  failures.append("bandit would scan %s" % sample)
+          if failures:  # A failure here means a Windows run and CI disagree.
+              raise SystemExit("issue #1722 guard failed: " + "; ".join(failures))
+          print("bandit exclude_dirs covers both path separators")
+          PY
       - name: Run Bandit
         # -c pyproject.toml picks up [tool.bandit] targets/exclude_dirs (issue #881)
         # No severity flag: the gate fails on a finding at any severity, including LOW (issue #889)
@@ -583,9 +629,21 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
       - name: Install dependencies
-        # The root requirements files do not carry deepdiff or mistapi, so the
-        # sub-project keeps its own pinned file (issue #1895).
-        run: pip install -r requirements-dev.txt
+        # Issue #2034: install from pyproject.toml so runtime and dev packages
+        # come from one source. The editable install reads [project.dependencies]
+        # (runtime) and [project.optional-dependencies].dev (test tools) together,
+        # so a new runtime package never needs a matching entry in a second file.
+        #
+        # Two packages stay as explicit pins because they are test infrastructure,
+        # not app runtime packages, so mist-ops-platform/pyproject.toml does not
+        # own them:
+        #   pytest-timeout: needed for --timeout=120 (issue #2036).
+        #   httpx2: starlette 0.49+ imports httpx2 inside TestClient. The runner
+        #     installs starlette through fastapi, so every TestClient test raises
+        #     ModuleNotFoundError without this pin.
+        run: |
+          pip install -e ".[dev]"
+          pip install "pytest-timeout>=2.3" "httpx2>=0.28"
       - name: Confirm the suite collects its tests
         # A gate that collects nothing still exits green. That result hides a
         # broken import path and is worse than no gate. This step counts the
@@ -612,7 +670,97 @@ jobs:
         # Fix the code instead.
         run: |
           pytest --cov=src \
-            --cov-fail-under=${{ env.OPS_PLATFORM_COVERAGE_THRESHOLD }}
+            --cov-fail-under=${{ env.OPS_PLATFORM_COVERAGE_THRESHOLD }} \
+            --timeout=120  # Issue #2036: fail fast on a stalled test instead of consuming the full job budget
+      - name: Report job timeout
+        # Issue #2036: a cancelled result means the job hit timeout-minutes. This
+        # step writes a plain line so a reader can tell a stalled runner from a
+        # broken test without counting timestamps in the log.
+        if: cancelled()
+        run: echo "::error::The ops platform pytest job was cancelled at the timeout-minutes limit (15 min). A per-test timeout of 120 s should have caught any stalled test first. Check the log for a test that held the runner."
+
+  ops_platform_ruff:
+    name: "Ruff (ops platform)"
+    # Issue #1974: mist-ops-platform/pyproject.toml declares its own stricter
+    # [tool.ruff] configuration, and no gate ever read it. The root
+    # pyproject.toml names the subtree in extend-exclude, and every root lint job
+    # runs from the repository root, so "ruff check ." skipped the whole
+    # sub-project. The sub-project declared a standard that nothing enforced.
+    #
+    # The cost was real. An F821 undefined name reached production in
+    # src/worker/sync/events.py, where the documented fallback called uuid4
+    # without an import. Issue #1975 repaired that crash. This job stops the next
+    # one.
+    #
+    # The job runs from mist-ops-platform, so ruff discovers the sub-project
+    # configuration. Config discovery, and not path exclusion, is the cause of
+    # the gap, so --force-exclude does not solve it.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: mist-ops-platform
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - name: Install ruff
+        # The root file pins the ruff version that the "Ruff (lint)" job uses
+        # (issue #1779). Both gates install the same pin, so a rule change
+        # between ruff releases cannot move one gate without the other. The
+        # sub-project requirements-dev.txt carries test packages only.
+        run: pip install -r ../requirements-dev.txt
+      - name: Confirm ruff reads the sub-project configuration
+        # A gate that falls back to the root configuration reports green while it
+        # checks nothing. That result is the exact defect this job repairs, so
+        # the job proves the config before it trusts the result. The step names
+        # the resolved settings file and fails on any other file.
+        run: |
+          ruff check --show-settings . > ruff-settings.txt
+          SETTINGS=$(grep '^Settings path:' ruff-settings.txt)
+          rm -f ruff-settings.txt
+          echo "$SETTINGS"
+          case "$SETTINGS" in
+            *mist-ops-platform*pyproject.toml*) ;;
+            *)
+              echo "::error::Ruff did not read mist-ops-platform/pyproject.toml."
+              exit 1
+              ;;
+          esac
+      - name: Ruff correctness gate (blocking)
+        # The full sub-project configuration reports 393 findings today. A gate
+        # that fails on the first day blocks every pull request, so this step
+        # is a ratchet. It selects the correctness families and it measures zero,
+        # which makes it green today and red on the first regression.
+        #
+        # F, B, and E9 hold the rules that find defects rather than style. F821
+        # (undefined name), F841 (unused variable), F811 (redefinition), F632
+        # (identity comparison), B006 (mutable default), and B904 (lost exception
+        # context) all block from this day.
+        #
+        # Three rules stay out, with the count each reports today. Each one is
+        # deferred, not accepted. Never widen this ignore list to clear a new
+        # finding. Fix the code, or clear the family and delete its entry here.
+        #   F401 unused-import (69). Mechanical. Issue #1974 tracks the sweep.
+        #   B008 function-call-in-default-argument (122). Every hit is the
+        #        FastAPI Depends and Query idiom. The repair is the
+        #        flake8-bugbear extend-immutable-calls setting, not a source
+        #        edit, so it belongs in a separate change.
+        #   B905 zip-without-explicit-strict (1). One call site.
+        #
+        # mist-ops-platform/docs/ruff-ratchet.md records the full split.
+        run: ruff check . --select F,B,E9 --ignore F401,B008,B905 --output-format=concise
+      - name: Ruff full configuration report (advisory)
+        # The blocking step above covers a subset. This step runs the whole
+        # sub-project configuration, so every remaining finding stays visible in
+        # the job log. It does not block, because 393 findings cannot clear in
+        # one change. Read the count here to tighten the blocking step.
+        continue-on-error: true
+        run: ruff check . --statistics
 
   # ──────────────────────────────────────────────────────────────
   # FAILURE → GITHUB ISSUES (auto-create issues for each failure)

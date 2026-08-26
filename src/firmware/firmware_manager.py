@@ -2828,14 +2828,19 @@ class FirmwareManager:
     ) -> str:
         """Return a single-word verdict for one candidate device.
 
-        Verdicts: 'missing' / 'current' / 'downgrade' / 'upgrade'.
+        Verdicts: 'missing' / 'stale' / 'current' / 'downgrade' / 'upgrade'.
+        'stale' means the only version available is the configured value from
+        the device listing. A stale reading must never produce a silent upgrade.
         """
         logging.info("Classifying SSR device id=%s target=%s", dev_id, target_version)  # WHY: entry audit
         if dev_id not in inventory:  # WHY: id must be present in inventory to proceed
             self._emit_ssr_verdict_missing(dev_id)  # WHY: uniform missing feedback
             return "missing"  # WHY: sentinel for orchestrator
-        info = inventory[dev_id]  # WHY: fetch model/version pair
-        current = info.get("version", "")  # WHY: currently-running firmware
+        info = inventory[dev_id]  # WHY: fetch model/version pair and staleness marker
+        if info.get("version_is_stale"):  # WHY: a stale reading cannot support a firmware decision
+            self._emit_ssr_verdict_stale(dev_id, info)  # WHY: warn the operator by name before skipping
+            return "stale"  # WHY: sentinel tells the orchestrator to keep this device out of the upgrade list
+        current = info.get("version", "")  # WHY: the running firmware version, confirmed as running state
         if current == target_version:  # WHY: already at target -> no-op
             self._emit_ssr_verdict_current(dev_id, target_version)  # WHY: uniform current feedback
             return "current"  # WHY: sentinel for orchestrator
@@ -2849,6 +2854,27 @@ class FirmwareManager:
         """Log + print the missing-inventory verdict."""
         logging.warning("Device %s not found in org SSR inventory - skipping", dev_id)  # WHY: audit miss
         print(f"    !? Device {dev_id} not in SSR inventory - skipping")  # WHY: operator feedback
+
+    def _emit_ssr_verdict_stale(self, dev_id: str, info: dict[str, Any]) -> None:
+        """Log + print the stale-reading verdict.
+
+        Warning: The only available version came from the device listing, not
+        from a running-version endpoint. Proceeding would risk an upgrade built
+        on a configured version that the device may have left long ago.
+        """
+        stale_value = info.get("version", "unknown")  # WHY: show the operator the value that was rejected
+        model = info.get("model", "unknown")  # WHY: the model helps the operator identify the device
+        logging.warning(  # WHY: write the staleness to the log for post-incident review
+            "Stale firmware reading for device %s (%s) value=%s - no running version found in any endpoint - skipping",
+            dev_id,
+            model,
+            stale_value,
+        )
+        print(  # WHY: the operator must see this warning during the maintenance window, not only in the log
+            f"    WARNING: Device {dev_id} ({model}) - firmware version {stale_value!r} is a stale"
+            f" reading. No running version was found in listSiteDevicesStats or getOrgInventory."
+            f" Skipping this device to prevent an upgrade decision on a stale reading."
+        )
 
     def _emit_ssr_verdict_current(self, dev_id: str, target_version: str) -> None:
         """Log + print the already-at-target verdict."""
@@ -3109,9 +3135,12 @@ class FirmwareManager:
         entry.setdefault("site_id", row.get("site_id", ""))  # WHY: keep the site anchor for reporting
         if reading.is_running:  # WHY: only a running reading may replace the inventory value
             entry["version"] = reading.value  # WHY: the decision now reads the version the device runs
+            entry.pop("version_is_stale", None)  # WHY: a running reading clears any stale marker from a prior pass
         else:  # WHY: no stats row exists for this device
-            entry.setdefault("version", reading.value)  # WHY: keep any org inventory value, which is running state
-            entry["version_is_stale"] = True  # WHY: mark the reading so a report can warn the operator
+            had_version = bool(entry.get("version"))  # WHY: the org inventory version is running state; keep it
+            entry.setdefault("version", reading.value)  # WHY: fall back to the listing value only when nothing else
+            if not had_version:  # WHY: mark stale only when the org inventory also had no running version
+                entry["version_is_stale"] = True  # WHY: signal that both running-version endpoints missed this device
         merged[dev_id] = entry  # WHY: publish the updated entry for the validator
 
     def _run_ssr_site_upgrade_flow(
