@@ -39,19 +39,42 @@ async def readyz(request: Request) -> dict[str, str]:
     """Readiness probe — verifies database connectivity."""
     engine = getattr(request.app.state, "engine", None)
     if engine is None:
+        # WHY: an operator cannot diagnose a probe failure without a cause.
+        logger.warning("Readiness probe failed. The database engine is absent from app state.")
         return {"status": "unavailable"}
     try:
         async with engine.connect() as conn:
             await conn.execute(__import__("sqlalchemy").text("SELECT 1"))
         return {"status": "ready"}
     except Exception:
+        # WHY: log the exception so the traceback reaches the operator, not just the word.
+        logger.warning(
+            "Readiness probe failed. The database query raised an exception.",
+            exc_info=True,
+        )
         return {"status": "unavailable"}
 
 
 @router.get("/metrics")
-async def metrics() -> dict[str, str]:
-    """Placeholder for Prometheus metrics export."""
-    return {"status": "metrics_placeholder"}
+async def metrics() -> None:
+    """Reject Prometheus scrapes until real metrics are exported.
+
+    The route previously answered 200 with a fixed body. A Prometheus
+    scrape then recorded a healthy target with no series, so no alert
+    could fire. Answering 501 makes the gap visible to every scraper.
+    """
+    # WHY: warn on every call so the gap is visible in the application log.
+    logger.warning(
+        "The /metrics route is not implemented. Real Prometheus series are not exported yet."
+        " Returning 501 so the scrape fails loudly."
+    )
+    # WHY: raise HTTPException so FastAPI returns 501 with a JSON detail body.
+    from fastapi import HTTPException
+
+    raise HTTPException(
+        status_code=501,
+        detail="Prometheus metrics export is not implemented. No series are available.",
+    )
 
 
 # -- Notification channel schemas ----------------------------------------

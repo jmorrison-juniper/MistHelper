@@ -4,12 +4,18 @@ Issue #1886. Before this fix, PreCheckService called list_all_entities
 once for every target device, so a run over N devices paged the whole
 org inventory N times. These tests prove the fetch count no longer
 depends on the number of target devices.
+
+Issue #2038, finding 3: the version compatibility check always returned
+a passing result with no comparison. These tests prove the fix.
 """
 
 from __future__ import annotations
 
+import logging
 from types import SimpleNamespace
 from unittest.mock import MagicMock
+
+import pytest
 
 from src.worker.checks.pre_checks import PreCheckService
 
@@ -121,3 +127,55 @@ class TestInventoryFetchFailureFailsEveryTarget:
         assert "Mist API unreachable" in by_name["reachability:dev-a"].message
         # WHY: the failure must still cost exactly one fetch attempt, not two.
         assert mist.list_all_entities.call_count == EXPECTED_INVENTORY_FETCHES_PER_RUN
+
+
+# ---------------------------------------------------------------------------
+# Issue #2038, finding 3: version compatibility check must not report a pass
+# ---------------------------------------------------------------------------
+
+
+class TestVersionCompatDoesNotReportAnUnverifiedPass:
+    """Prove that version_compat results are not trivially passing.
+
+    The bug: _check_version_compat returned passed=True for every device
+    without reading any data. A caller would record a verified deployment
+    even when no comparison ran.
+    """
+
+    def test_version_compat_result_is_not_unconditionally_passing(self) -> None:
+        # WHY: supply a connected device so the reachability check passes.
+        mist = MagicMock()
+        mist.list_all_entities.return_value = SimpleNamespace(
+            status_code=200,
+            data=[{"id": "dev-a", "status": "connected"}],
+        )
+        service = PreCheckService(MagicMock(), mist)  # WHY: DB session unused here.
+
+        results = service.run_all("org-1", ["dev-a"])  # WHY: exercise the full pipeline.
+
+        by_name = {r.name: r for r in results}  # WHY: index for a readable assertion.
+        compat_result = by_name.get("version_compat:dev-a")
+        assert compat_result is not None, "Expected a version_compat result for dev-a."
+        # WHY: the bug was that passed=True with no evidence. The fix must set
+        # passed=False (or another non-passing value) when no comparison ran.
+        assert compat_result.passed is not True, (
+            "version_compat returned True without comparing any version data. "
+            "The check must not record an unverified pass."
+        )
+
+    def test_version_compat_logs_the_missing_input(self, caplog: pytest.LogCaptureFixture) -> None:
+        # WHY: the fix must name the missing input so an operator can act.
+        mist = MagicMock()
+        mist.list_all_entities.return_value = SimpleNamespace(
+            status_code=200,
+            data=[{"id": "dev-b", "status": "connected"}],
+        )
+        service = PreCheckService(MagicMock(), mist)  # WHY: DB session unused here.
+
+        with caplog.at_level(logging.WARNING, logger="src.worker.checks.pre_checks"):
+            service.run_all("org-1", ["dev-b"])  # WHY: run the pipeline to trigger the log.
+
+        # WHY: a silent placeholder is the bug. The fix must warn that no real check ran.
+        assert any(
+            r.levelno >= logging.WARNING for r in caplog.records
+        ), "Expected a WARNING from the version compatibility check, but none was emitted."

@@ -8,8 +8,11 @@ depends on the number of target devices.
 
 from __future__ import annotations
 
+import logging
 from types import SimpleNamespace
 from unittest.mock import MagicMock
+
+import pytest
 
 from src.worker.checks.post_checks import PostCheckService
 
@@ -121,3 +124,55 @@ class TestInventoryFetchFailureFailsEveryTarget:
         assert "Mist API unreachable" in by_name["health:dev-a"].message
         # WHY: the failure must still cost exactly one fetch attempt, not two.
         assert mist.list_all_entities.call_count == EXPECTED_INVENTORY_FETCHES_PER_RUN
+
+
+# ---------------------------------------------------------------------------
+# Issue #2038, finding 4: connectivity check must not report an unverified pass
+# ---------------------------------------------------------------------------
+
+
+class TestClientConnectivityDoesNotReportAnUnverifiedPass:
+    """Prove that client_connectivity results are not trivially passing.
+
+    The bug: _check_client_connectivity returned passed=True for every
+    device without reading a client count. A caller would record a
+    verified deployment even when no client data was read.
+    """
+
+    def test_client_connectivity_result_is_not_unconditionally_passing(self) -> None:
+        # WHY: supply a connected device so the health check passes.
+        mist = MagicMock()
+        mist.list_all_entities.return_value = SimpleNamespace(
+            status_code=200,
+            data=[{"id": "dev-a", "status": "connected"}],
+        )
+        service = PostCheckService(MagicMock(), mist)  # WHY: DB session unused here.
+
+        results = service.run_all("org-1", ["dev-a"])  # WHY: exercise the full pipeline.
+
+        by_name = {r.name: r for r in results}  # WHY: index for a readable assertion.
+        conn_result = by_name.get("client_connectivity:dev-a")
+        assert conn_result is not None, "Expected a client_connectivity result for dev-a."
+        # WHY: the bug was that passed=True with no evidence. The fix must set
+        # passed=False (or another non-passing value) when no comparison ran.
+        assert conn_result.passed is not True, (
+            "client_connectivity returned True without reading any client count. "
+            "The check must not record an unverified pass."
+        )
+
+    def test_client_connectivity_logs_the_missing_input(self, caplog: pytest.LogCaptureFixture) -> None:
+        # WHY: the fix must name the missing input so an operator can act.
+        mist = MagicMock()
+        mist.list_all_entities.return_value = SimpleNamespace(
+            status_code=200,
+            data=[{"id": "dev-b", "status": "connected"}],
+        )
+        service = PostCheckService(MagicMock(), mist)  # WHY: DB session unused here.
+
+        with caplog.at_level(logging.WARNING, logger="src.worker.checks.post_checks"):
+            service.run_all("org-1", ["dev-b"])  # WHY: run the pipeline to trigger the log.
+
+        # WHY: a silent placeholder is the bug. The fix must warn that no real check ran.
+        assert any(
+            r.levelno >= logging.WARNING for r in caplog.records
+        ), "Expected a WARNING from the client connectivity check, but none was emitted."

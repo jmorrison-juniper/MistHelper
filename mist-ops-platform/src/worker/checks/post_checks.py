@@ -133,18 +133,31 @@ class PostCheckService:
         org_id: str,
         target_ids: list[str],
     ) -> list[CheckResult]:
-        """Verify client count is within expected range (placeholder).
+        """Return a skipped result for every target.
 
-        Future: compare pre-deploy client count with post-deploy
-        and flag if significant drop detected.
+        The check requires a pre-deployment client count to compare against
+        a post-deployment count. That count is not passed into this method
+        yet. Returning a non-passing result prevents the caller from
+        recording an unverified pass.
+
+        Future: when pre-deploy client counts are passed in, replace this
+        block with a real comparison and flag a significant drop.
         """
         results: list[CheckResult] = []
         for device_id in target_ids:
+            # WHY: warn once per device so the operator sees which check never ran.
+            logger.warning(
+                "Client connectivity check skipped for device %s in org %s."
+                " No pre-deployment client count is available to compare.",
+                device_id,
+                org_id,
+            )
+            # WHY: passed=False stops a caller from recording this as a verified pass.
             results.append(
                 CheckResult(
                     name=f"client_connectivity:{device_id}",
-                    passed=True,
-                    message="Client connectivity check passed (basic)",
+                    passed=False,
+                    message=("Client connectivity check skipped." " No pre-deployment client count is available."),
                 )
             )
         return results
