@@ -679,6 +679,89 @@ jobs:
         if: cancelled()
         run: echo "::error::The ops platform pytest job was cancelled at the timeout-minutes limit (15 min). A per-test timeout of 120 s should have caught any stalled test first. Check the log for a test that held the runner."
 
+  ops_platform_ruff:
+    name: "Ruff (ops platform)"
+    # Issue #1974: mist-ops-platform/pyproject.toml declares its own stricter
+    # [tool.ruff] configuration, and no gate ever read it. The root
+    # pyproject.toml names the subtree in extend-exclude, and every root lint job
+    # runs from the repository root, so "ruff check ." skipped the whole
+    # sub-project. The sub-project declared a standard that nothing enforced.
+    #
+    # The cost was real. An F821 undefined name reached production in
+    # src/worker/sync/events.py, where the documented fallback called uuid4
+    # without an import. Issue #1975 repaired that crash. This job stops the next
+    # one.
+    #
+    # The job runs from mist-ops-platform, so ruff discovers the sub-project
+    # configuration. Config discovery, and not path exclusion, is the cause of
+    # the gap, so --force-exclude does not solve it.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: mist-ops-platform
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - name: Install ruff
+        # The root file pins the ruff version that the "Ruff (lint)" job uses
+        # (issue #1779). Both gates install the same pin, so a rule change
+        # between ruff releases cannot move one gate without the other. The
+        # sub-project requirements-dev.txt carries test packages only.
+        run: pip install -r ../requirements-dev.txt
+      - name: Confirm ruff reads the sub-project configuration
+        # A gate that falls back to the root configuration reports green while it
+        # checks nothing. That result is the exact defect this job repairs, so
+        # the job proves the config before it trusts the result. The step names
+        # the resolved settings file and fails on any other file.
+        run: |
+          ruff check --show-settings . > ruff-settings.txt
+          SETTINGS=$(grep '^Settings path:' ruff-settings.txt)
+          rm -f ruff-settings.txt
+          echo "$SETTINGS"
+          case "$SETTINGS" in
+            *mist-ops-platform*pyproject.toml*) ;;
+            *)
+              echo "::error::Ruff did not read mist-ops-platform/pyproject.toml."
+              exit 1
+              ;;
+          esac
+      - name: Ruff correctness gate (blocking)
+        # The full sub-project configuration reports 393 findings today. A gate
+        # that fails on the first day blocks every pull request, so this step
+        # is a ratchet. It selects the correctness families and it measures zero,
+        # which makes it green today and red on the first regression.
+        #
+        # F, B, and E9 hold the rules that find defects rather than style. F821
+        # (undefined name), F841 (unused variable), F811 (redefinition), F632
+        # (identity comparison), B006 (mutable default), and B904 (lost exception
+        # context) all block from this day.
+        #
+        # Three rules stay out, with the count each reports today. Each one is
+        # deferred, not accepted. Never widen this ignore list to clear a new
+        # finding. Fix the code, or clear the family and delete its entry here.
+        #   F401 unused-import (69). Mechanical. Issue #1974 tracks the sweep.
+        #   B008 function-call-in-default-argument (122). Every hit is the
+        #        FastAPI Depends and Query idiom. The repair is the
+        #        flake8-bugbear extend-immutable-calls setting, not a source
+        #        edit, so it belongs in a separate change.
+        #   B905 zip-without-explicit-strict (1). One call site.
+        #
+        # mist-ops-platform/docs/ruff-ratchet.md records the full split.
+        run: ruff check . --select F,B,E9 --ignore F401,B008,B905 --output-format=concise
+      - name: Ruff full configuration report (advisory)
+        # The blocking step above covers a subset. This step runs the whole
+        # sub-project configuration, so every remaining finding stays visible in
+        # the job log. It does not block, because 393 findings cannot clear in
+        # one change. Read the count here to tighten the blocking step.
+        continue-on-error: true
+        run: ruff check . --statistics
+
   # ──────────────────────────────────────────────────────────────
   # FAILURE → GITHUB ISSUES (auto-create issues for each failure)
   # ──────────────────────────────────────────────────────────────
