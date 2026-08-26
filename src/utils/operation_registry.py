@@ -301,6 +301,10 @@ class OperationRegistry:
         "236": {"category": "interactive_safe", "skip_reason": "Requires a count operation and site"},
         "237": {"category": "interactive_safe", "skip_reason": "Requires a count operation and MSP ID"},
         "238": {"category": "interactive_safe", "skip_reason": "Requires an MSP ID"},
+        "240": {
+            "category": "interactive_safe",
+            "skip_reason": "Requires an org and a security intelligence profile choice",
+        },
         # WHY: menu 239 starts a local web server and drives a firmware upgrade, so it writes
         # device state. The fail-closed guardrail needs this row or the build breaks.
         #

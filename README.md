@@ -4,8 +4,8 @@ Network Operations & Data Export Tool for Juniper Mist Cloud
 [![Quality Gates](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/ci.yml/badge.svg)](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/ci.yml)
 [![Container Build](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/container-build.yml/badge.svg)](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/container-build.yml)
 
-**Operation Count:** The code defines 239 actionable menu entries, numbered 1 to
-239 with no gaps. Exit is menu 0, so the registry holds 240 entries in total.
+**Operation Count:** The code defines 240 actionable menu entries, numbered 1 to
+240 with no gaps. Exit is menu 0, so the registry holds 241 entries in total.
 The [Menu Reference](#menu-reference) section lists every category and range.
 
 MistHelper is a production-focused Python application that streamlines large-scale Juniper Mist Cloud data extraction, enrichment, transformation, and limited lifecycle operations. It supports both interactive (menu) and fully automated CLI execution, with flexible output to CSV files, a local SQLite database, or a polyglot backend (ArangoDB for documents, Redis for time-series and JSON caching) using natural/composite business keys (no artificial surrogate IDs for core entities). The codebase emphasizes safety, transparency, and predictable behavior-aligned with the included internal Agents Guide and NASA/JPL style defensive programming practices.
@@ -146,7 +146,7 @@ flowchart LR
   'fontFamily': 'ui-monospace, monospace'
 }}}%%
 mindmap
-   root((MistHelper<br/>240 Operations))
+   root((MistHelper<br/>241 Operations))
     Safe Org Exports (64)
       Sites and Analysis 1-7
       Device Inventory 8-13
@@ -161,7 +161,7 @@ mindmap
       Support and Assets 188, 193
       JSI and Mist Edge 204-205
       Org Searches 230-234
-    Interactive Safe (71)
+    Interactive Safe (72)
       Site Devices 60-72
       Site Insights 73-79
       Site Stats 80-91
@@ -172,6 +172,7 @@ mindmap
       Site Client and Device Searches 221-224
       Site Stats and Zones 225-229
       Counts and MSP Licenses 235-238
+      Org SecIntel Profile 240
     Resource Intensive (10)
       Heavy Inventory 14, 18-19
       Bulk Exports 59
@@ -543,13 +544,13 @@ fails closed, so `--test` skips any option that the registry does not name
 | Category | Count | Menu numbers | Behavior under `--test` |
 |----------|-------|--------------|-------------------------|
 | `safe` | 64 | 1-13, 15-17, 20-58, 188, 193, 204-205, 230-234 | Runs |
-| `interactive_safe` | 71 | 60-96, 195-203, 209-229, 235-238 | Runs under `--testinteractive` |
+| `interactive_safe` | 72 | 60-96, 195-203, 209-229, 235-238, 240 | Runs under `--testinteractive` |
 | `destructive` | 42 | 154-187, 189-191, 194, 206-208, 239 | Never runs |
 | `interactive` | 29 | 0, 124-150, 192 | Never runs |
 | `websocket` | 22 | 102-123 | Never runs |
 | `resource_intensive` | 10 | 14, 18-19, 59, 97-101, 153 | Never runs |
 | `continuous_loop` | 2 | 151-152 | Never runs |
-| **Total** | **240** | 0-239, no gaps | Menu 0 is Exit |
+| **Total** | **241** | 0-240, no gaps | Menu 0 is Exit |
 
 Warning: A destructive operation changes the Mist cloud configuration. Read
 `documentation/menu_reference.md` before you run one.
@@ -603,6 +604,7 @@ Warning: A destructive operation changes the Mist cloud configuration. Read
 | 237 | Run any MSP-scoped Mist count endpoint (3 operations) | `interactive_safe` |
 | 238 | Export the MSP license entitlement, usage, and subscriptions (`listMspLicenses`) | `interactive_safe` |
 | 239 | Start the upgrade capture portal on port 8056 | `destructive` |
+| 240 | Export one organization security intelligence profile (`getOrgSecIntelProfile`) | `interactive_safe` |
 
 Menu 197 writes to `data/packet_captures/<mac>/vlan_<id>/`. Every other
 operation in the table writes through `DataExporter`, so it honors the CSV,

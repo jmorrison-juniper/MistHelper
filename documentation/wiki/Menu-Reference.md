@@ -3,9 +3,9 @@
 This page is generated. Run `python scripts/generate_menu_wiki.py` after any
 change to `menu_actions` in `MistHelper.py` or to `src/utils/operation_registry.py`.
 
-MistHelper defines **239 actionable menu entries**, numbered
-1 to 239 with no gaps.
-Menu 0 is Exit, so the registry holds 240 entries in total.
+MistHelper defines **240 actionable menu entries**, numbered
+1 to 240 with no gaps.
+Menu 0 is Exit, so the registry holds 241 entries in total.
 
 The Safety column reads from `src/utils/operation_registry.py`, which is the
 single source of truth. The classifier fails closed, so an unregistered option
@@ -22,7 +22,7 @@ never runs in an automated test pass.
 
 | Menu numbers | Category | Summary |
 |---|---|---|
-| 60-96, 195-203, 209-229, 235-238 | Interactive safe | 71 operations. Read-only, but they prompt for a site or a device. The --testinteractive run includes them. |
+| 60-96, 195-203, 209-229, 235-238, 240 | Interactive safe | 72 operations. Read-only, but they prompt for a site or a device. The --testinteractive run includes them. |
 | 1-13, 15-17, 20-58, 188, 193, 204-205, 230-234 | Safe org exports | 64 operations. Read-only org exports. The --test run includes them. |
 | 154-187, 189-191, 194, 206-208, 239 | Destructive | 42 operations. They change the Mist cloud configuration. Each one needs a typed confirmation. |
 | 0, 124-150, 192 | Interactive | 29 operations. They prompt the operator, so no automated run includes them. |
@@ -274,6 +274,7 @@ never runs in an automated test pass.
 | 237 | Run any MSP-scoped Mist count endpoint (3 operations, issue #1802) | Interactive safe | `CountExporter.msp_counts` |
 | 238 | Export the license entitlement, usage, and subscriptions for an MSP (listMspLicenses) | Interactive safe | `MSPLicenseExporter.licenses` |
 | 239 | Launch the upgrade capture portal on port 8056 (pre-check, upgrade, post-check) | Destructive | `lambda: _launch_capture_portal()` |
+| 240 | Export one organization security intelligence profile (getOrgSecIntelProfile) | Interactive safe | `OrgSecIntelProfileExporter.profile` |
 
 This page should be regenerated whenever `menu_actions` or the operation registry
 changes, so the wiki stays aligned with the code.
