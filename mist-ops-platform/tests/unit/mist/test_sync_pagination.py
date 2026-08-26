@@ -12,7 +12,8 @@ from uuid import uuid4
 
 
 def _api_result(data: list) -> SimpleNamespace:
-    return SimpleNamespace(status_code=200, data=data)
+    # The sync services read .success before they read .data (issue #1884).
+    return SimpleNamespace(status_code=200, data=data, success=True)
 
 
 class TestInventorySyncPagination:

@@ -125,7 +125,11 @@ class MistEndpointService:
         entity_type: str,
         ids: dict[str, str],
     ) -> ApiResult:
-        """Fetch all pages of a list operation via the registry."""
+        """Fetch all pages of a list operation via the registry.
+
+        The result carries the status code of the last page. If the call
+        fails, the result holds the Mist error body and no data records.
+        """
         # WHY: log before the outbound calls.
         logger.info("Listing entity %s from Mist", entity_type)
         endpoint = MistEntityRegistry.get(entity_type)
@@ -134,13 +138,22 @@ class MistEndpointService:
             raise AttributeError(msg)
         func = self._resolve_func(endpoint, endpoint.list_method)
         args = self._build_args(endpoint, ids)
-        all_data = self._paginate(func, args)
-        logger.debug(
-            "List %s returned %d records",
-            entity_type,
-            len(all_data),
-        )  # WHY: summarize the outcome after all pages.
-        return ApiResult(status_code=200, data=all_data)
+        all_data, response = self._paginate(func, args)  # read the pages and the last response
+        return self._list_result(entity_type, all_data, response)  # use the real status
+
+    @staticmethod
+    def _list_result(entity_type: str, rows: list, response: Any) -> ApiResult:
+        """Build a list result from the status of the last page."""
+        result = MistEndpointService._wrap(response)  # read the real status of that page
+        if not result.success:  # a failed call must never report data records
+            logger.warning(  # name the entity type and the status of the failure
+                "Mist list of %s failed with status %s",
+                entity_type,
+                result.status_code,
+            )
+            return result  # give the caller the failure and the Mist error body
+        logger.debug("Mist list of %s read %d records", entity_type, len(rows))  # log the end
+        return ApiResult(status_code=result.status_code, data=rows)  # real status plus rows
 
     # -- internal helpers ------------------------------------------------
 
@@ -178,8 +191,12 @@ class MistEndpointService:
             data = {}
         return ApiResult(status_code=status, data=data)
 
-    def _paginate(self, func: Any, args: dict[str, str]) -> list:
-        """Follow SDK pagination until the last page, the page limit, or a repeat."""
+    def _paginate(self, func: Any, args: dict[str, str]) -> tuple[list, Any]:
+        """Follow SDK pagination and return the rows and the last response.
+
+        The caller needs the last response, because ``list_all_entities``
+        reports the status code of that page. Issue #1884.
+        """
         all_data: list = []
         response = self._invoke_with_protection(func, args)  # WHY: protect the first page too.
         all_data.extend(self._extract_list(response))
@@ -192,7 +209,12 @@ class MistEndpointService:
             response = self._invoke_with_protection(func, {**args, "next": cursor})
             all_data.extend(self._extract_list(response))
             pages += 1  # WHY: count the page against MAX_PAGINATION_PAGES.
-        return all_data
+        logger.debug(
+            "Mist pagination read %d pages and %d rows",
+            pages,
+            len(all_data),
+        )  # WHY: summarize the outcome after all pages.
+        return all_data, response  # WHY: the caller reads the status of the last response.
 
     def _invoke_with_protection(
         self,
@@ -274,7 +296,9 @@ class MistEndpointService:
     @staticmethod
     def _extract_list(response: Any) -> list:
         """Extract list data from an SDK response."""
-        data = getattr(response, "data", response)
-        if isinstance(data, list):
+        data = getattr(response, "data", response)  # read the body of this page
+        if isinstance(data, list):  # only a list body holds data records
             return data
-        return [data] if data else []
+        kind = type(data).__name__  # name the body type for the log line
+        logger.debug("Mist page body is a %s and not a list, so drop it", kind)
+        return []  # an error body must never become a data record
