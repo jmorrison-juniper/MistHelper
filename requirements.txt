@@ -61,7 +61,7 @@ redis[hiredis]>=7.4.0
 structlog
 
 # Pygments: CVE-2026-4539 has no fix available yet - ignored in CI pip-audit
-Pygments>=2.20.0
+Pygments>=2.21.0
 
 # Testing (dev dependency - not needed at runtime)
 pytest
