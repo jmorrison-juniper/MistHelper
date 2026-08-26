@@ -23,4 +23,4 @@ pytest-timeout>=2.3
 # starlette 0.49 and newer import httpx2 inside TestClient. The runner installs
 # starlette through fastapi, so every TestClient test raises
 # "ModuleNotFoundError: No module named 'httpx2'" without this pin.
-httpx2>=0.28
+httpx2>=2.12.0
