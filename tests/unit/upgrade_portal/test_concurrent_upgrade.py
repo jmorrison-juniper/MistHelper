@@ -284,13 +284,13 @@ def empty_memory_store() -> Iterator[upgrade.MemoryRunStore]:
     Yields:
         A memory store that starts with no record.
     """
-    held = dict(upgrade._RUNS)  # noqa: SLF001  # WHY: the module owns this table and publishes no reader.
-    upgrade._RUNS.clear()  # noqa: SLF001  # WHY: an earlier record would answer this scan and hide a defect.
+    held = dict(upgrade._RUNS)  # WHY: the module owns this table and publishes no reader.
+    upgrade._RUNS.clear()  # WHY: an earlier record would answer this scan and hide a defect.
     try:  # The test body runs against an empty table.
         yield upgrade.MemoryRunStore()  # Every instance reads the same shared table.
     finally:  # The table outlives the test, so put the earlier content back.
-        upgrade._RUNS.clear()  # noqa: SLF001  # WHY: drop the records that this test wrote.
-        upgrade._RUNS.update(held)  # noqa: SLF001  # WHY: restore the state that the test found.
+        upgrade._RUNS.clear()  # WHY: drop the records that this test wrote.
+        upgrade._RUNS.update(held)  # WHY: restore the state that the test found.
 
 
 def seed_run(store: SiteAwareStore, state: str, site_id: str = SITE_ID) -> str:

@@ -273,11 +273,11 @@ class _SsidTemplatePhase3Cluster(_ClusterBase):  # WHY: exported for parent __in
         _log_phase3_start()  # WHY: emit banner + telemetry once
         if not self._load_cache_or_bail():  # WHY: shared preamble — abort when Phase 1 skipped
             return  # WHY: cache preamble already printed the bail message
-        resuming, prior_results = parent._offer_resume(_PHASE_ID)  # noqa: SLF001
+        resuming, prior_results = parent._offer_resume(_PHASE_ID)
         group_plan = _compute_group_plan(parent.cache)  # WHY: derive plan from Phase 1 cache
         _display_group_plan(group_plan)  # WHY: user preview before confirming
         prompt = f"Create/assign {len(group_plan['groups'])} site groups?"  # WHY: confirmation prompt copy
-        if not parent._confirm_or_cancel(prompt):  # noqa: SLF001 — shared preamble helper
+        if not parent._confirm_or_cancel(prompt):  # shared preamble helper
             return  # WHY: user declined — phase aborts without persistence
         group_plan = self._call("_ensure_groups_exist", group_plan)  # WHY: create missing groups first
         resume_state = prior_results if resuming else []  # WHY: pass prior rows only when resuming
@@ -287,7 +287,7 @@ class _SsidTemplatePhase3Cluster(_ClusterBase):  # WHY: exported for parent __in
     def _persist_phase3_results(self, results: list[dict[str, Any]]) -> None:  # WHY: extracted persistence tail
         """Save phase results, hand them to the writer, and print the summary."""
         parent = self._mm  # WHY: proxy alias for readability + W0212 avoidance
-        parent._save_phase_results(_PHASE_ID, results)  # noqa: SLF001 — parent owns phase-state save
+        parent._save_phase_results(_PHASE_ID, results)  # parent owns phase-state save
         parent.write_data_fn(  # WHY: hand rows to the configured writer (parquet/table)
             data=results,
             filename_or_table=_WRITE_FILENAME,  # WHY: consistent sink label across phases
@@ -296,7 +296,7 @@ class _SsidTemplatePhase3Cluster(_ClusterBase):  # WHY: exported for parent __in
         # WHY: phase45 owns the shared summary helper — import directly to avoid
         # routing through the parent module (mypy [attr-defined] on re-export).
         from ._ssid_template_phase45 import (
-            _print_phase_summary,  # noqa: PLC0415 — local import keeps import graph shallow
+            _print_phase_summary,  # local import keeps import graph shallow
         )
 
         _print_phase_summary(_PHASE_LABEL, results)  # WHY: emit success/failure summary
@@ -305,7 +305,7 @@ class _SsidTemplatePhase3Cluster(_ClusterBase):  # WHY: exported for parent __in
         """Create missing site groups and record their IDs."""
         parent = self._mm  # WHY: proxy alias
         # WHY: parent owns the creator so tests can patch mistapi at the parent module.
-        from .ssid_template_consolidation import _create_site_group  # noqa: PLC0415 — local import breaks cycle
+        from .ssid_template_consolidation import _create_site_group  # local import breaks cycle
 
         for group in plan.get("groups", []):  # WHY: iterate over every planned group
             _ensure_single_group(group, parent, _create_site_group)  # WHY: delegate per-group branching
@@ -319,7 +319,7 @@ class _SsidTemplatePhase3Cluster(_ClusterBase):  # WHY: exported for parent __in
         """Assign sites to their target groups via additive merge."""
         parent = self._mm  # WHY: proxy alias
         # WHY: parent owns the per-group assigner so tests can patch mistapi at parent.
-        from .ssid_template_consolidation import _assign_group_sites  # noqa: PLC0415 — local import breaks cycle
+        from .ssid_template_consolidation import _assign_group_sites  # local import breaks cycle
 
         completed_ids = _build_completed_ids(resume_from)  # WHY: dedupe set for idempotent resume
         results: list[dict[str, Any]] = list(resume_from) if resume_from else []  # WHY: seed with prior rows

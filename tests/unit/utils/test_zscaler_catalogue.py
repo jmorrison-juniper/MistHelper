@@ -931,7 +931,7 @@ class TestUS3PersistedObservations:
         # NOT raise; it should refresh and persist the merged doc.
         try:
             result = zc_mod.ensure_fresh(cenr_path, {})
-        except Exception as exc:  # noqa: BLE001 -- test asserts non-raise
+        except Exception as exc:  # test asserts non-raise
             pytest.fail(f"ensure_fresh raised on malformed cache path: {exc}")
         assert isinstance(result, dict)
         assert result.get("schema_version") == 3

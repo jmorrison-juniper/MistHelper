@@ -73,7 +73,7 @@ class PingDeviceExecutor:  # WHY: orchestrates ping-over-WebSocket diagnostic wo
         websocket_manager: WebSocketManager | None = None  # WHY: tracked for finally cleanup.
         try:  # WHY: mirror legacy try/except/finally so cleanup always runs.
             websocket_manager = self._run_workflow(deps, debug_mode)  # WHY: drive workflow.
-        except Exception as ping_error:  # noqa: BLE001  # WHY: match legacy resilience broad catch.
+        except Exception as ping_error:  # WHY: match legacy resilience broad catch.
             log_ws_error(f"WebSocket ping operation failed: {ping_error}", debug_mode)  # WHY: log.
             logging.debug("EXIT: ping_device_websocket - error")  # WHY: trace marker preserved.
         finally:  # WHY: always release WS resources on any exit path.

@@ -442,12 +442,12 @@ class TestUpgradeStatusStartTime:
     def test_the_status_keeps_the_start_time(self) -> None:
         """The reader carries the moment that the cloud reported."""
         payload = {"status": "upgrading", "current_phase": "reboot", "start_time": START_TIME}
-        status = upgrade_service._normalize_status(payload, UPGRADE_ID, HTTP_OK)  # noqa: SLF001  # WHY: the unit here.
+        status = upgrade_service._normalize_status(payload, UPGRADE_ID, HTTP_OK)  # WHY: the unit here.
         assert status["start_time"] == START_TIME
 
     def test_a_payload_with_no_start_time_reads_as_none(self) -> None:
         """A missing field stays absent, and the reader invents no moment."""
-        status = upgrade_service._normalize_status({}, UPGRADE_ID, HTTP_OK)  # noqa: SLF001  # WHY: the unit here.
+        status = upgrade_service._normalize_status({}, UPGRADE_ID, HTTP_OK)  # WHY: the unit here.
         assert status["start_time"] is None
 
     def test_the_other_status_fields_stay_the_same(self) -> None:
@@ -458,7 +458,7 @@ class TestUpgradeStatusStartTime:
             renamed one would report the wrong state on every poll.
         """
         payload = {"status": "upgrading", "current_phase": "reboot", "start_time": START_TIME}
-        status = upgrade_service._normalize_status(payload, UPGRADE_ID, HTTP_OK)  # noqa: SLF001  # WHY: the unit.
+        status = upgrade_service._normalize_status(payload, UPGRADE_ID, HTTP_OK)  # WHY: the unit.
         assert status["upgrade_id"] == UPGRADE_ID
         assert status["raw_status"] == HTTP_OK
         assert status["status"] == "upgrading"

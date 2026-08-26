@@ -320,6 +320,6 @@ class GatewayTestExporter:
     def test_results_by_site(fast: bool = False) -> None:  # Export tests by site.
         """Delegator: all logic lives in src/refactors/serial_cc/test_results_by_site.py."""
         GatewayTestExporter._resolve_misthelper_runtime()  # WHY: the service uses wired gateway helpers.
-        from src.refactors.serial_cc.test_results_by_site import GatewayTestResultsService  # noqa: PLC0415
+        from src.refactors.serial_cc.test_results_by_site import GatewayTestResultsService
 
         GatewayTestResultsService.execute(fast=fast)  # Delegate to extracted service. Keeps CC at A(1)

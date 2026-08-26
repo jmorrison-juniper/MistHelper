@@ -144,7 +144,7 @@ class MistUIGeocoder:
             self._connected = ok  # Record state for the geocode_via_ui guard.
             logging.debug("Browser connect result=%s", ok)  # Action-log outcome.
             return ok  # True when a usable context was established.
-        except Exception as exc:  # noqa: BLE001 -- never crash the audit on connect failure.
+        except Exception as exc:  # never crash the audit on connect failure.
             logging.warning("Browser connect failed: %s", exc)  # Surface the cause.
             self.close()  # Tidy any partially started driver/browser.
             return False  # Signal Tier-3 unavailable for this run.
@@ -176,7 +176,7 @@ class MistUIGeocoder:
         """Attempt a CDP takeover without raising (used by the auto strategy)."""
         try:
             return self._connect_attach()  # Reuse the standard takeover path.
-        except Exception as exc:  # noqa: BLE001 -- a missing endpoint is expected in auto mode.
+        except Exception as exc:  # a missing endpoint is expected in auto mode.
             logging.info("CDP takeover at %s not available yet: %s", self._config.cdp_endpoint, exc)  # Trace.
             return False  # Signal "no debuggable browser" so the caller can spawn one.
 
@@ -256,7 +256,7 @@ class MistUIGeocoder:
             try:
                 if page.query_selector(selector) is not None:  # Immediate (non-waiting) DOM probe.
                     return True  # Found the autocomplete input.
-            except Exception as exc:  # noqa: BLE001 -- a transient DOM error must not abort the probe.
+            except Exception as exc:  # a transient DOM error must not abort the probe.
                 logging.debug("Field probe error for %s: %s", selector, exc)  # Trace and keep probing.
         return False  # No candidate matched on the current page.
 
@@ -278,7 +278,7 @@ class MistUIGeocoder:
             with self._perf.phase("ui.politeness"):  # Time the fixed >=1 req/sec courtesy delay.
                 time.sleep(self._config.politeness_delay_s)  # >=1 req/sec politeness toward Google.
             return self._build_result(query, suggestions)  # Convert suggestions to a ResolverResult.
-        except Exception as exc:  # noqa: BLE001 -- fail soft per OQ-002.
+        except Exception as exc:  # fail soft per OQ-002.
             logging.warning("UI geocode failed for query '%s': %s", query, exc)  # Log and continue.
             return None  # One flaky lookup must not abort the audit.
 
@@ -424,7 +424,7 @@ class MistUIGeocoder:
         """Pause via Playwright's clock between polls (no-op-safe in tests)."""
         try:
             page.wait_for_timeout(millis)  # Cooperative wait that yields to the browser event loop.
-        except Exception as exc:  # noqa: BLE001 -- a timing helper must never abort the lookup.
+        except Exception as exc:  # a timing helper must never abort the lookup.
             logging.debug("wait_for_timeout ignored: %s", exc)  # Trace and continue.
 
     @staticmethod
@@ -486,7 +486,7 @@ class MistUIGeocoder:
         for selector in INPUT_SELECTORS:  # Try candidates in priority order.
             try:
                 return page.wait_for_selector(selector, timeout=per_try)  # First hit wins.
-            except Exception as exc:  # noqa: BLE001 -- try the next candidate.
+            except Exception as exc:  # try the next candidate.
                 last_error = exc  # Keep probing.
         raise RuntimeError(f"Location Search input not found: {last_error}")  # All candidates missed.
 
@@ -495,7 +495,7 @@ class MistUIGeocoder:
         """Return the trimmed visible text of a suggestion row, or empty on error."""
         try:
             return (element.inner_text() or "").strip()  # Visible text of the .pac-item row.
-        except Exception:  # noqa: BLE001 -- a stale DOM node yields no text.
+        except Exception:  # a stale DOM node yields no text.
             return ""  # Treat as empty so it is filtered out.
 
     def _build_result(self, query: str, suggestions: list[str]) -> ResolverResult:
@@ -600,12 +600,12 @@ class MistUIGeocoder:
         try:
             if self._browser is not None:  # Disconnect/close the browser if open.
                 self._browser.close()  # In attach mode this only drops our CDP connection.
-        except Exception as exc:  # noqa: BLE001 -- teardown must not raise.
+        except Exception as exc:  # teardown must not raise.
             logging.debug("Browser close error (ignored): %s", exc)  # Trace and continue.
         try:
             if self._playwright is not None:  # Stop the Playwright driver process.
                 self._playwright.stop()  # Release the driver subprocess.
-        except Exception as exc:  # noqa: BLE001 -- teardown must not raise.
+        except Exception as exc:  # teardown must not raise.
             logging.debug("Playwright stop error (ignored): %s", exc)  # Trace and continue.
         self._terminate_spawned()  # Close any Edge we spawned ourselves (auto mode).
         self._connected = False  # Reset state so a stale handle is never reused.
@@ -626,7 +626,7 @@ class MistUIGeocoder:
         except subprocess.TimeoutExpired:  # The browser ignored the polite request inside the budget.
             logging.warning("The spawned Edge did not exit in %.1f seconds", _SPAWNED_EXIT_TIMEOUT_S)  # Inform.
             MistUIGeocoder._kill_spawned_process(proc)  # Force the exit so the profile lock is released.
-        except Exception as exc:  # noqa: BLE001 -- teardown must not raise.
+        except Exception as exc:  # teardown must not raise.
             logging.debug("Spawned Edge terminate error (ignored): %s", exc)  # Trace and continue.
         self._spawned_proc = None  # Drop the handle so close() is idempotent.
         logging.debug("Stopped the spawned debuggable Edge (pid=%s)", proc.pid)  # Action-log the result.
@@ -638,7 +638,7 @@ class MistUIGeocoder:
         try:
             proc.kill()  # Force the exit so the profile directory lock is released.
             proc.wait(timeout=_SPAWNED_EXIT_TIMEOUT_S)  # Reap the process before the profile removal runs.
-        except Exception as exc:  # noqa: BLE001 -- teardown must not raise.
+        except Exception as exc:  # teardown must not raise.
             logging.debug("Spawned Edge kill error (ignored): %s", exc)  # Trace and continue.
         logging.debug("Killed the spawned debuggable Edge (pid=%s)", proc.pid)  # Action-log the result.
 
@@ -651,7 +651,7 @@ class MistUIGeocoder:
         logging.info("Removing the spawned browser profile directory")  # Action-log without the session material.
         try:
             shutil.rmtree(profile, ignore_errors=True)  # Drop the cache, the cookies, and the local storage.
-        except Exception as exc:  # noqa: BLE001 -- teardown must not raise.
+        except Exception as exc:  # teardown must not raise.
             logging.warning("Could not remove the browser profile directory %s: %s", profile, exc)  # Inform.
             return  # The audit continues, because a leftover directory does not stop it.
         if os.path.isdir(profile):  # The ignore_errors flag hides a failure, so confirm the removal.

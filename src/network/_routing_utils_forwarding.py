@@ -509,8 +509,8 @@ class _RoutingUtilsForwarding:  # WHY: cluster wrapper matching the parsing/disp
         return {  # WHY: dict literal keeps positional projection concise
             "destination": parts[0],  # WHY: first token is always the destination
             "next_hop": parts[1] if len(parts) > 1 else "",  # WHY: 2nd token when present
-            "interface": parts[2] if len(parts) > 2 else "",  # noqa: PLR2004  # WHY: 3rd token
-            "service": parts[3] if len(parts) > 3 else "",  # noqa: PLR2004  # WHY: 4th token
+            "interface": parts[2] if len(parts) > 2 else "",  # WHY: 3rd token
+            "service": parts[3] if len(parts) > 3 else "",  # WHY: 4th token
             "table": "",  # WHY: text format has no table context
             "type": "",  # WHY: text format has no explicit type
         }

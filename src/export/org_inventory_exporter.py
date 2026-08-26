@@ -410,9 +410,7 @@ class OrgInventoryExporter:  # Org inventory exporters.
         master_csv_data = [
             OrgInventoryExporter._build_master_csv_row(device) for device in site_configs
         ]  # Build all master rows up front
-        master_csv_filename = (
-            f"{safe_org_name}_CombinedInventory_Master.csv"  # Include org for multi-org runs  # noqa: E501
-        )
+        master_csv_filename = f"{safe_org_name}_CombinedInventory_Master.csv"  # Include org for multi-org runs
         master_csv_file = os.path.join(output_folder, master_csv_filename)  # Final path
         master_csv_fieldnames = ["serial", "mac", "model", "Street Address", "City", "State", "Zip"]  # Stable order
         OrgInventoryExporter._persist_master_csv(master_csv_file, master_csv_fieldnames, master_csv_data)

@@ -17,7 +17,7 @@ import pytest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
-from web_portal.services.data_browser import DataBrowserService  # noqa: E402
+from web_portal.services.data_browser import DataBrowserService
 
 
 @pytest.fixture(name="service")

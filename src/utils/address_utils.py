@@ -34,7 +34,7 @@ except ImportError:  # pragma: no cover  # WHY: absence is non-fatal
     urllib3 = None  # type: ignore[assignment]  # WHY: sentinel checked before disabling warnings
     _has_urllib3 = False  # WHY: skip suppression path when the module is missing
 
-from src.utils.tls_policy import TLSVerificationPolicy  # noqa: E402  # One control for certificate verification.
+from src.utils.tls_policy import TLSVerificationPolicy  # One control for certificate verification.
 
 try:  # WHY: rapidfuzz is optional. Degrade to difflib on absence
     from rapidfuzz import fuzz  # WHY: faster token-sort ratio when available

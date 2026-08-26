@@ -227,7 +227,7 @@ class CountExporter:
             rawdata = mistapi.get_all(response=response, mist_session=mh.apisession)  # Page all rows.
             filename = f"{operation.operation}_{label.replace(' ', '_')}.csv"  # Per-target filename.
             CountExporter._persist(rawdata, filename, operation.operation)  # Write the result.
-        except Exception as e:  # noqa: BLE001 -- surface any SDK or network error, keep the menu alive.
+        except Exception as e:  # surface any SDK or network error, keep the menu alive.
             logging.error("Error running %s for %s: %s", operation.operation, label, e)  # Context.
             logging.info("! Error running %s: %s", operation.operation, e)  # ASCII-only user notice.
 

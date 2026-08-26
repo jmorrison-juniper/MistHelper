@@ -37,7 +37,7 @@ from typing import Any
 
 # WHY: importing the mistapi sub-modules at module load lets tests monkey-patch
 # them via ``patch("mistapi.api.v1.sites.devices.updateSiteDevice", ...)``.
-import mistapi  # noqa: F401  # WHY: kept for get_all() pagination in production paths.
+import mistapi  # WHY: kept for get_all() pagination in production paths.
 from mistapi.api.v1.orgs import deviceprofiles as _mist_deviceprofiles  # WHY: profile picker + snapshot fetcher.
 from mistapi.api.v1.orgs import sites as _mist_orgs_sites  # WHY: org-wide site enumeration.
 from mistapi.api.v1.sites import devices as _mist_site_devices  # WHY: per-site AP listing + updateSiteDevice PUT.
@@ -191,7 +191,7 @@ class APProfileMigrationManager:
 
         # WHY: lazy import breaks the circular dependency between the top-level
         # MistHelper.py module and this src/ package.
-        import MistHelper as _mh  # noqa: PLC0415  # WHY: call-time only.
+        import MistHelper as _mh  # WHY: call-time only.
 
         # WHY: resolve org context via the shared cached-or-prompted helper.
         org_id = _mh.ConfigUtils.get_cached_or_prompted_org_id()
@@ -211,7 +211,7 @@ class APProfileMigrationManager:
         # WHY: FR-008 -- same-profile selection is a no-op destructive run whose
         # only effect is a spurious success audit line. Refuse loudly.
         if source_id == target_id:
-            print(  # noqa: T201
+            print(
                 "Error: source and target device profiles are the same. " "Select two different profiles.",
             )
             _LOGGER.warning("Refused: source and target profiles are identical (id=%s)", source_id)
@@ -223,7 +223,7 @@ class APProfileMigrationManager:
         # WHY: FR-010 -- empty source is not a failure; print the exact
         # short-circuit message and return before writing any file.
         if not ap_records:
-            print("No APs bound to source profile. Nothing to migrate.")  # noqa: T201
+            print("No APs bound to source profile. Nothing to migrate.")
             _LOGGER.info("Nothing to migrate: source profile %s has zero APs", source_id)
             return
 
@@ -234,13 +234,13 @@ class APProfileMigrationManager:
         # WHY: guarded confirmation -- accepts MIGRATE (live) or DRY-RUN (preview).
         decision = APProfileMigrationManager._confirm_migration(len(ap_records), source_name, target_name)
         if decision == "cancel":
-            print("Migration cancelled.")  # noqa: T201
+            print("Migration cancelled.")
             _LOGGER.info("Cancelled by operator at confirmation prompt")
             return
         if decision == "dry_run":
             # WHY: FR-015 -- dry-run writes no file and issues no PUT. Return
             # immediately so no backup or PUT side effect occurs.
-            print("Dry run: no changes made")  # noqa: T201
+            print("Dry run: no changes made")
             _LOGGER.info("Dry-run selected; no backup and no PUT will be issued")
             return
 
@@ -359,7 +359,7 @@ class APProfileMigrationManager:
 
         # WHY: lazy import for the shared MistHelper helpers keeps this module
         # circular-import-safe.
-        import MistHelper as _mh  # noqa: PLC0415
+        import MistHelper as _mh
 
         org_id = _mh.ConfigUtils.get_cached_or_prompted_org_id()
         # WHY: fall back to the ambient MistHelper apisession when the caller
@@ -372,7 +372,7 @@ class APProfileMigrationManager:
         candidates = APProfileMigrationManager._list_backup_files(_DATA_DIR)
         backup_path = APProfileMigrationManager._pick_backup_file(candidates)
         if backup_path is None:
-            print("No backup file selected. Revert cancelled.")  # noqa: T201
+            print("No backup file selected. Revert cancelled.")
             _LOGGER.info("Revert cancelled: no backup file selected")
             return
 
@@ -381,7 +381,7 @@ class APProfileMigrationManager:
         try:
             payload = APProfileMigrationManager._load_and_validate_backup(str(backup_path))
         except ValueError as exc:
-            print(f"Invalid backup: {exc}")  # noqa: T201
+            print(f"Invalid backup: {exc}")
             _LOGGER.warning("Revert refused: backup validation failed: %s", exc)
             return
 
@@ -389,7 +389,7 @@ class APProfileMigrationManager:
         # org does not match." Guards against running a backup from org A
         # against org B, which would touch APs that are not in the backup.
         if payload["org_id"] != org_id:
-            print(  # noqa: T201
+            print(
                 f"Refused: backup org_id {payload['org_id']!r} does not match " f"current org_id {org_id!r}.",
             )
             _LOGGER.warning(
@@ -409,7 +409,7 @@ class APProfileMigrationManager:
         # ran, refuse the revert with an audited failure so the operator sees a
         # loud short-circuit rather than a silent "success" with zero PUTs.
         if not APProfileMigrationManager._verify_source_profile_exists(mist_session, org_id, source_id):
-            print(  # noqa: T201
+            print(
                 f"Source profile {source_id} no longer exists in org {org_id}. "
                 f"Recreate the profile or hand-edit the backup before retrying.",
             )
@@ -440,7 +440,7 @@ class APProfileMigrationManager:
             str(backup_path),
         )
         if decision != "live":
-            print("Revert cancelled.")  # noqa: T201
+            print("Revert cancelled.")
             _LOGGER.info("Revert cancelled by operator at confirmation prompt")
             return
 
@@ -624,7 +624,7 @@ class APProfileMigrationManager:
                 site_id,
                 source_id,
             )
-        except Exception as exc:  # noqa: BLE001  # WHY: tolerant per FR-023.
+        except Exception as exc:  # WHY: tolerant per FR-023.
             # WHY: FR-A04 -- 429 is a throttle signal. Feed the limiter via
             # cache invalidation and continue; do NOT count the AP as failed
             # on 429 alone.
@@ -710,19 +710,19 @@ class APProfileMigrationManager:
                 ``_compute_revert_outcome``.
             pacing_stats: Final pacing counters from the revert loop.
         """
-        print("\nRevert summary:")  # noqa: T201
-        print(f"  Backup file: {backup_path}")  # noqa: T201
-        print(f"  Source profile: {source_name} (id={source_id})")  # noqa: T201
-        print(f"  Planned APs: {planned_count}")  # noqa: T201
-        print(f"  Reverted APs: {len(reverted_ids)}")  # noqa: T201
-        print(f"  Missing APs: {len(missing_ids)}")  # noqa: T201
-        print(f"  Failed APs: {len(failed_ids)}")  # noqa: T201
-        print(f"  Outcome: {outcome}")  # noqa: T201
+        print("\nRevert summary:")
+        print(f"  Backup file: {backup_path}")
+        print(f"  Source profile: {source_name} (id={source_id})")
+        print(f"  Planned APs: {planned_count}")
+        print(f"  Reverted APs: {len(reverted_ids)}")
+        print(f"  Missing APs: {len(missing_ids)}")
+        print(f"  Failed APs: {len(failed_ids)}")
+        print(f"  Outcome: {outcome}")
         if missing_ids:
             # WHY: name every missing AP so the operator can hand-fix.
-            print(f"  Missing device_ids: {', '.join(missing_ids)}")  # noqa: T201
+            print(f"  Missing device_ids: {', '.join(missing_ids)}")
         if failed_ids:
-            print(f"  Failed device_ids: {', '.join(failed_ids)}")  # noqa: T201
+            print(f"  Failed device_ids: {', '.join(failed_ids)}")
 
         # WHY: FR-A09 -- adaptive-rate-limiter telemetry lines. Same text,
         # same order as the migrate-side summary so operators reading both
@@ -730,10 +730,10 @@ class APProfileMigrationManager:
         delay_count = int(pacing_stats["delay_count"])
         delay_mean = (pacing_stats["delay_sum"] / delay_count) if delay_count > 0 else 0.0
         delay_max = float(pacing_stats["delay_max"])
-        print(f"  Total PUTs issued        : {int(pacing_stats['puts_issued'])}")  # noqa: T201
-        print(f"  HTTP 429 responses seen  : {int(pacing_stats['http_429_seen'])}")  # noqa: T201
-        print(f"  Non-429 failures         : {int(pacing_stats['non_429_failures'])}")  # noqa: T201
-        print(f"  Rate limiter delay (s)   : mean={delay_mean:.3f}  max={delay_max:.3f}")  # noqa: T201
+        print(f"  Total PUTs issued        : {int(pacing_stats['puts_issued'])}")
+        print(f"  HTTP 429 responses seen  : {int(pacing_stats['http_429_seen'])}")
+        print(f"  Non-429 failures         : {int(pacing_stats['non_429_failures'])}")
+        print(f"  Rate limiter delay (s)   : mean={delay_mean:.3f}  max={delay_max:.3f}")
 
     @staticmethod
     def _build_revert_audit_payload(
@@ -850,7 +850,7 @@ class APProfileMigrationManager:
         """
         # WHY: lazy import matches lines 147/265/471; keeps top-of-module
         # circular-safe against the MistHelper entry point.
-        import MistHelper as _mh  # noqa: PLC0415
+        import MistHelper as _mh
 
         try:
             smoothed, delay = _mh.RateLimitingUtils.get_rate_limited_delay(
@@ -858,7 +858,7 @@ class APProfileMigrationManager:
                 _mh.apisession,
                 _mh._api_usage_cache,
             )
-        except Exception as exc:  # noqa: BLE001  # WHY: FR-A06 -- limiter is diagnostic, not critical.
+        except Exception as exc:  # WHY: FR-A06 -- limiter is diagnostic, not critical.
             # WHY: FR-A06 -- a limiter fault MUST NOT halt the migration.
             # Fall back to a fixed conservative sleep and log the fault so
             # the operator can investigate later.
@@ -899,7 +899,7 @@ class APProfileMigrationManager:
             never crashes the loop.
         """
         # WHY: lazy import for the same reason as _apply_pacing above.
-        import MistHelper as _mh  # noqa: PLC0415
+        import MistHelper as _mh
 
         _LOGGER.warning(
             "The API returned HTTP 429. Invalidating the API usage cache to trigger a limiter refresh",
@@ -944,7 +944,7 @@ class APProfileMigrationManager:
         # ready-made list on .data and get_all handles both shapes.
         try:
             profiles = mistapi.get_all(response=response, mist_session=session)
-        except Exception:  # noqa: BLE001  # WHY: fallback for mocked responses.
+        except Exception:  # WHY: fallback for mocked responses.
             profiles = getattr(response, "data", []) or []
 
         ap_profiles = [p for p in profiles if p.get("type") == "ap"]
@@ -978,13 +978,13 @@ class APProfileMigrationManager:
                 operator cancels the picker.
         """
         # WHY: lazy import for InputUtils so this module stays circular-safe.
-        import MistHelper as _mh  # noqa: PLC0415
+        import MistHelper as _mh
 
         ap_profiles = APProfileMigrationManager._fetch_and_sort_ap_profiles(session, org_id)
 
-        print(f"\n{prompt_text}")  # noqa: T201
+        print(f"\n{prompt_text}")
         for idx, prof in enumerate(ap_profiles, start=1):
-            print(f"  {idx}. {prof.get('name', '<unnamed>')} (id={prof.get('id', '<no-id>')})")  # noqa: T201
+            print(f"  {idx}. {prof.get('name', '<unnamed>')} (id={prof.get('id', '<no-id>')})")
 
         # WHY: EOF-safe input via the shared safe_input helper; retry on
         # non-numeric or out-of-range input.
@@ -1001,7 +1001,7 @@ class APProfileMigrationManager:
             try:
                 index = int(choice)
             except ValueError:
-                print(f"  Enter a number between 1 and {count}.")  # noqa: T201
+                print(f"  Enter a number between 1 and {count}.")
                 continue
             if 1 <= index <= count:
                 picked = ap_profiles[index - 1]
@@ -1010,7 +1010,7 @@ class APProfileMigrationManager:
                     str(picked.get("name", "")),
                     dict(picked),
                 )
-            print(f"  Enter a number between 1 and {count}.")  # noqa: T201
+            print(f"  Enter a number between 1 and {count}.")
 
     @staticmethod
     def _discover_aps_on_source_profile(session: Any, org_id: str, source_profile_id: str) -> list[dict[str, Any]]:
@@ -1036,7 +1036,7 @@ class APProfileMigrationManager:
         sites_response = _mist_orgs_sites.listOrgSites(session, org_id)
         try:
             sites = mistapi.get_all(response=sites_response, mist_session=session)
-        except Exception:  # noqa: BLE001
+        except Exception:
             sites = getattr(sites_response, "data", []) or []
 
         records: list[dict[str, Any]] = []
@@ -1050,7 +1050,7 @@ class APProfileMigrationManager:
                 # switches / gateways at the API side.
                 devs_response = _mist_site_devices.listSiteDevices(session, site_id, type="ap")
                 devs = mistapi.get_all(response=devs_response, mist_session=session)
-            except Exception:  # noqa: BLE001  # WHY: skip unreachable sites.
+            except Exception:  # WHY: skip unreachable sites.
                 _LOGGER.exception("Failed to list devices for site %s", site_id)
                 continue
 
@@ -1088,11 +1088,11 @@ class APProfileMigrationManager:
         """
         _source_id, source_name = source
         _target_id, target_name = target
-        print("\nPlanned migration:")  # noqa: T201
+        print("\nPlanned migration:")
         for rec in ap_records:
             hostname = rec.get("hostname") or "-"
-            print(f"  device_id={rec['device_id']}  hostname={hostname}  site={rec['site_id']}")  # noqa: T201
-        print(f"Total: {len(ap_records)} APs will be reassigned " f"from {source_name} to {target_name}")  # noqa: T201
+            print(f"  device_id={rec['device_id']}  hostname={hostname}  site={rec['site_id']}")
+        print(f"Total: {len(ap_records)} APs will be reassigned " f"from {source_name} to {target_name}")
 
     @staticmethod
     def _confirm_migration(count: int, source_name: str, target_name: str) -> str:
@@ -1115,7 +1115,7 @@ class APProfileMigrationManager:
               * ``"cancel"`` -- any other input; abort with no changes.
         """
         # WHY: lazy import for InputUtils per the module load rule.
-        import MistHelper as _mh  # noqa: PLC0415
+        import MistHelper as _mh
 
         prompt = (
             f"\nType {_KEYWORD_LIVE!r} to reassign {count} APs from "
@@ -1259,7 +1259,7 @@ class APProfileMigrationManager:
                 # counts as a success.
                 APProfileMigrationManager._check_reassign_response(response, ap_record["device_id"])
                 return
-            except Exception as exc:  # noqa: BLE001  # WHY: broad catch for retry policy.
+            except Exception as exc:  # WHY: broad catch for retry policy.
                 last_exc = exc
                 # WHY: sleep only if there is a next attempt to make. Attribute
                 # access on the ``time`` module (rather than a captured default
@@ -1377,7 +1377,7 @@ class APProfileMigrationManager:
             pacing_stats["puts_issued"] += 1
             try:
                 APProfileMigrationManager._reassign_one_ap(session, rec, target_id)
-            except Exception as exc:  # noqa: BLE001  # WHY: partial-success record path.
+            except Exception as exc:  # WHY: partial-success record path.
                 # WHY: FR-A04 -- 429 is a throttle signal, not a hard failure.
                 # Feed the cache-invalidation signal to the limiter and keep
                 # going; the retry policy in ``_reassign_one_ap`` already
@@ -1457,17 +1457,17 @@ class APProfileMigrationManager:
         planned = len(payload.get("aps_planned", []))
         reassigned = len(payload.get("aps_reassigned", []))
         outcome = payload.get("outcome", "unknown")
-        print("\nMigration summary:")  # noqa: T201
-        print(f"  Source profile: {source_name} (id={source_id})")  # noqa: T201
-        print(f"  Target profile: {target_name} (id={target_id})")  # noqa: T201
-        print(f"  Planned APs: {planned}")  # noqa: T201
-        print(f"  Reassigned APs: {reassigned}")  # noqa: T201
-        print(f"  Outcome: {outcome}")  # noqa: T201
-        print(f"  Backup file: {backup_path}")  # noqa: T201
+        print("\nMigration summary:")
+        print(f"  Source profile: {source_name} (id={source_id})")
+        print(f"  Target profile: {target_name} (id={target_id})")
+        print(f"  Planned APs: {planned}")
+        print(f"  Reassigned APs: {reassigned}")
+        print(f"  Outcome: {outcome}")
+        print(f"  Backup file: {backup_path}")
         if outcome != "success":
             fd = payload.get("failure_detail")
             if fd is not None:
-                print(f"  Failed AP: {fd.get('failed_device_id')}  " f"reason: {fd.get('error_message')}")  # noqa: T201
+                print(f"  Failed AP: {fd.get('failed_device_id')}  " f"reason: {fd.get('error_message')}")
         # WHY: FR-A09 -- adaptive-rate-limiter telemetry lines. Text and
         # order pinned by data-model-rate-limiting.md section 2 so menus
         # 207 and 208 present one consistent block to the operator.
@@ -1483,10 +1483,10 @@ class APProfileMigrationManager:
         _delay_sum = float(pacing_stats.get("delay_sum", 0.0))
         _delay_mean = (_delay_sum / _delay_count) if _delay_count > 0 else 0.0
         _delay_max = float(pacing_stats.get("delay_max", 0.0))
-        print(f"  Total PUTs issued        : {int(pacing_stats.get('puts_issued', 0))}")  # noqa: T201
-        print(f"  HTTP 429 responses seen  : {int(pacing_stats.get('http_429_seen', 0))}")  # noqa: T201
-        print(f"  Non-429 failures         : {int(pacing_stats.get('non_429_failures', 0))}")  # noqa: T201
-        print(f"  Rate limiter delay (s)   : mean={_delay_mean:.3f}  max={_delay_max:.3f}")  # noqa: T201
+        print(f"  Total PUTs issued        : {int(pacing_stats.get('puts_issued', 0))}")
+        print(f"  HTTP 429 responses seen  : {int(pacing_stats.get('http_429_seen', 0))}")
+        print(f"  Non-429 failures         : {int(pacing_stats.get('non_429_failures', 0))}")
+        print(f"  Rate limiter delay (s)   : mean={_delay_mean:.3f}  max={_delay_max:.3f}")
 
     # ------------------------------------------------------------------
     # Private helpers -- revert (T036-T042)
@@ -1538,16 +1538,16 @@ class APProfileMigrationManager:
             list is empty.
         """
         # WHY: lazy import for InputUtils keeps this module circular-safe.
-        import MistHelper as _mh  # noqa: PLC0415
+        import MistHelper as _mh
 
         if not candidates:
-            print("No backup files found under data/. Nothing to revert.")  # noqa: T201
+            print("No backup files found under data/. Nothing to revert.")
             _LOGGER.info("No backup files present under data/")
             return None
 
-        print("\nSelect the backup file to revert:")  # noqa: T201
+        print("\nSelect the backup file to revert:")
         for idx, path in enumerate(candidates, start=1):
-            print(f"  {idx}. {path.name}")  # noqa: T201
+            print(f"  {idx}. {path.name}")
 
         count = len(candidates)
         # WHY: retry loop for non-numeric or out-of-range input; matches the
@@ -1564,11 +1564,11 @@ class APProfileMigrationManager:
             try:
                 index = int(choice)
             except ValueError:
-                print(f"  Enter a number between 1 and {count}.")  # noqa: T201
+                print(f"  Enter a number between 1 and {count}.")
                 continue
             if 1 <= index <= count:
                 return candidates[index - 1]
-            print(f"  Enter a number between 1 and {count}.")  # noqa: T201
+            print(f"  Enter a number between 1 and {count}.")
 
     @staticmethod
     def _load_and_validate_backup(path: str) -> dict[str, Any]:
@@ -1770,7 +1770,7 @@ class APProfileMigrationManager:
         # visible via the mistapi log line the SDK writes.
         try:
             response = _mist_deviceprofiles.getOrgDeviceProfile(session, org_id, source_profile_id)
-        except Exception as exc:  # noqa: BLE001  # WHY: any error treats profile as missing.
+        except Exception as exc:  # WHY: any error treats profile as missing.
             _LOGGER.warning("getOrgDeviceProfile raised for %s: %s", source_profile_id, exc)
             return False
         # WHY: mistapi may return a response object with .status_code; a 404
@@ -1810,7 +1810,7 @@ class APProfileMigrationManager:
             otherwise.
         """
         # WHY: lazy import for InputUtils per the module load rule.
-        import MistHelper as _mh  # noqa: PLC0415
+        import MistHelper as _mh
 
         prompt = (
             f"\nType {_KEYWORD_REVERT!r} to revert {count} APs back to "
@@ -1863,7 +1863,7 @@ class APProfileMigrationManager:
         for attempt in range(len(_RETRY_BACKOFF_SECONDS) + 1):
             try:
                 response = _mist_site_devices.updateSiteDevice(session, site_id, device_id, body)
-            except Exception as exc:  # noqa: BLE001  # WHY: broad catch for retry policy.
+            except Exception as exc:  # WHY: broad catch for retry policy.
                 last_exc = exc
                 if attempt < len(_RETRY_BACKOFF_SECONDS):
                     time.sleep(_RETRY_BACKOFF_SECONDS[attempt])
@@ -1905,7 +1905,7 @@ class APProfileMigrationManager:
         """
         # WHY: lazy import so the top-level module load stays circular-safe
         # even if TelemetryEmitter grows a heavy dependency later.
-        from src.analytics.telemetry_emitter import TelemetryEmitter  # noqa: PLC0415
+        from src.analytics.telemetry_emitter import TelemetryEmitter
 
         # WHY: colocate the telemetry file with the backup files so the
         # operator finds every audit artefact under one directory.
@@ -1935,7 +1935,7 @@ class APProfileMigrationManager:
         """
         # WHY: lazy import so the top-level module load stays circular-safe
         # even if TelemetryEmitter grows a heavy dependency later.
-        from src.analytics.telemetry_emitter import TelemetryEmitter  # noqa: PLC0415
+        from src.analytics.telemetry_emitter import TelemetryEmitter
 
         # WHY: colocate with backup files and the revert audit stream so the
         # operator finds every artefact under one directory.

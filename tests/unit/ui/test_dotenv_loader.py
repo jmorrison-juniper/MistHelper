@@ -68,7 +68,7 @@ def test_load_swallows_read_errors(tui_stub, _cwd: Path, monkeypatch: pytest.Mon
     """Read errors must not propagate; loader returns empty dict instead."""
     (_cwd / ".env").write_text("X=1\n", encoding="utf-8")  # File exists -> open() runs
 
-    def _boom(*_a, **_k):  # noqa: ANN001 — pytest test helper
+    def _boom(*_a, **_k):  # pytest test helper
         raise OSError("simulated")  # Force the read path to raise
 
     monkeypatch.setattr("builtins.open", _boom)  # Patch the global open()

@@ -26,14 +26,14 @@ from types import ModuleType  # WHY: precise type for importlib.reload() argumen
 import pytest  # WHY: parametrized fixtures + monkeypatch integration.
 
 # WHY: import the eight small refactor modules under test.
-from src.refactors import fast_mode_backoff_multiplier as fmbm  # noqa: E402
-from src.refactors import fast_mode_constants as fmc  # noqa: E402
-from src.refactors import fast_mode_devices_per_thread as fmdpt  # noqa: E402
-from src.refactors import fast_mode_sequential_max_retries as fmsmr  # noqa: E402
-from src.refactors import is_debug_mode as idm  # noqa: E402
-from src.refactors import mist_site_exclude_prefix as msep  # noqa: E402
-from src.refactors import mist_wan_target_ports as mwtp  # noqa: E402
-from src.refactors import package_import_map as pim  # noqa: E402
+from src.refactors import fast_mode_backoff_multiplier as fmbm
+from src.refactors import fast_mode_constants as fmc
+from src.refactors import fast_mode_devices_per_thread as fmdpt
+from src.refactors import fast_mode_sequential_max_retries as fmsmr
+from src.refactors import is_debug_mode as idm
+from src.refactors import mist_site_exclude_prefix as msep
+from src.refactors import mist_wan_target_ports as mwtp
+from src.refactors import package_import_map as pim
 
 # WHY: env vars that our importlib.reload() tests mutate. Kept in sync with _ENV_MUTATED_MODULES below
 # so the teardown fixture can strip them from os.environ before reloading each module to defaults.

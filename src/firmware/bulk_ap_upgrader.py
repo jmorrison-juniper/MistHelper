@@ -455,7 +455,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
             site_aps = self._request_site_aps(site_id, mistapi)  # WHY: capture intermediate value
             # WHY: PCPP Persist — record result in aggregate + per-site maps
             self._record_site_ap_result(site_id, site_name, site_aps)  # WHY: instance state
-        except Exception as error:  # noqa: BLE001 — API errors surface any way here
+        except Exception as error:  # API errors surface any way here
             # WHY: PCPP Persist error path — record empty result + error string for tracking
             self._record_site_ap_error(site_id, site_name, error)  # WHY: instance state
         logging.debug("Fetch APs done site=%s total_all_aps=%s", site_name, len(self.all_aps))  # WHY: debug log (FR-...
@@ -1698,7 +1698,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
             response = list_device_models(self.apisession)  # WHY: single API call fetches the org-wide model set
             all_models = getattr(response, "data", response) or []  # WHY: mistapi wraps payload in .data
             return all_models  # WHY: raw payload passed to Compute phase for filtering + grouping
-        except Exception as error:  # noqa: BLE001  # WHY: network / import errors get logged, not raised
+        except Exception as error:  # WHY: network / import errors get logged, not raised
             logging.warning("Failed to fetch AP model families from API: %s", error)  # WHY: postmortem trail
             print("   Warning: Could not fetch AP models from API")  # WHY: user-visible fallback notice
             return None  # WHY: distinct from empty-list — signals request failure to caller
@@ -2241,7 +2241,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
                 writer.writeheader()  # WHY: header row is required for downstream consumers
                 writer.writerows(self.results)  # WHY: bulk-write pre-computed row dicts
             return True  # WHY: signals caller that persistence succeeded and Present phase may run
-        except Exception as error:  # noqa: BLE001  # WHY: any I/O failure must be reported, not crashed on
+        except Exception as error:  # WHY: any I/O failure must be reported, not crashed on
             print(f"! Failed to write results: {error}")  # WHY: operator-facing surface for CSV write failure
             logging.warning("Failed to write results CSV %s: %s", filename, error)  # WHY: keep for postmortem
             return False  # WHY: caller uses this to skip the success banner path

@@ -99,7 +99,7 @@ class SiteMistEdgeEventsExporter:
             )
             rawdata = mistapi.get_all(response=response, mist_session=mh.apisession)  # Page all rows.
             SiteMistEdgeEventsExporter._persist_site_mist_edge_events(rawdata, site_name)  # Persist or notify empty.
-        except Exception as e:  # noqa: BLE001 -- surface any SDK/network error to the user instead of crashing.
+        except Exception as e:  # surface any SDK/network error to the user instead of crashing.
             logging.error(  # ERROR trace with site context for post-mortem correlation.
                 "Error fetching Mist Edge events for site %s: %s", site_name, e
             )

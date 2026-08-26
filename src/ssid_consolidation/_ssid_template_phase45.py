@@ -491,7 +491,7 @@ class _SsidTemplatePhase45Cluster(_ClusterBase):
         group_plan, configs = preflight  # WHY: unpack the two artifacts returned by preflight
         _display_template_plan(configs, group_plan)  # WHY: user preview before confirming
         prompt = f"Create/update {len(configs)} templates?"  # WHY: confirmation prompt copy
-        if not parent._confirm_or_cancel(prompt):  # noqa: SLF001 — shared preamble helper
+        if not parent._confirm_or_cancel(prompt):  # shared preamble helper
             return  # WHY: user declined -> phase aborts without persistence
         results = self._call("_create_or_update_templates", configs, group_plan)  # WHY: run per-group loop
         self._persist_phase4_results(results)  # WHY: save + write + summary in one call
@@ -499,7 +499,7 @@ class _SsidTemplatePhase45Cluster(_ClusterBase):
     def _persist_phase4_results(self, results: list[dict[str, Any]]) -> None:
         """Save phase 4 results, hand them to the writer, and print the summary."""
         parent = self._mm  # WHY: proxy alias for readability + W0212 avoidance
-        parent._save_phase_results(_PHASE4_ID, results)  # noqa: SLF001 — parent owns phase-state save
+        parent._save_phase_results(_PHASE4_ID, results)  # parent owns phase-state save
         parent.write_data_fn(  # WHY: hand rows to the configured writer (parquet/table)
             data=results,
             filename_or_table=_PHASE4_WRITE_FILENAME,  # WHY: consistent sink label across phases
@@ -514,7 +514,7 @@ class _SsidTemplatePhase45Cluster(_ClusterBase):
         parent = self._mm  # WHY: proxy alias
         if not self._load_cache_or_bail():  # WHY: shared preamble — abort when Phase 1 skipped
             return None  # WHY: cache preamble already printed the bail message
-        phase3_results = parent._load_phase_results(3)  # noqa: SLF001
+        phase3_results = parent._load_phase_results(3)
         if not phase3_results:  # WHY: phase 4 depends on Phase 3 groups being materialized
             logging.warning("Phase 3 results not found. Run Phase 3 first.")  # WHY: operator-visible reason
             return None  # WHY: abort until phase 3 has been executed
@@ -538,7 +538,7 @@ class _SsidTemplatePhase45Cluster(_ClusterBase):
         basename = os.environ.get(_TEMPLATE_BASENAME_ENV, parent.target_ssid)  # WHY: env override or default
         existing_templates = _build_existing_template_lookup(parent.cache)  # WHY: name->template index
         # WHY: parent owns the mistapi-touching worker so tests can patch mistapi at parent.
-        from .ssid_template_consolidation import (  # noqa: PLC0415 — local import breaks cycle
+        from .ssid_template_consolidation import (  # local import breaks cycle
             _create_or_update_single_template,
         )
 
@@ -583,7 +583,7 @@ class _SsidTemplatePhase45Cluster(_ClusterBase):
             logging.warning("No SSIDs to disable.")  # WHY: operator-visible reason for the no-op
             return  # WHY: skip persistence when the plan is empty
         prompt = f"Disable {len(to_disable)} SSIDs in old templates?"  # WHY: confirmation prompt copy
-        if not parent._confirm_or_cancel(prompt):  # noqa: SLF001 — shared preamble helper
+        if not parent._confirm_or_cancel(prompt):  # shared preamble helper
             return  # WHY: user declined -> phase aborts without persistence
         resume_state = prior_results if resuming else []  # WHY: pass prior rows only when resuming
         results = self._call("_disable_ssids", plan, resume_state)  # WHY: run per-entry disable loop
@@ -592,7 +592,7 @@ class _SsidTemplatePhase45Cluster(_ClusterBase):
     def _persist_phase5_results(self, results: list[dict[str, Any]]) -> None:
         """Save phase 5 results, hand them to the writer, and print the summary."""
         parent = self._mm  # WHY: proxy alias for readability + W0212 avoidance
-        parent._save_phase_results(_PHASE5_ID, results)  # noqa: SLF001 — parent owns phase-state save
+        parent._save_phase_results(_PHASE5_ID, results)  # parent owns phase-state save
         parent.write_data_fn(  # WHY: hand rows to the configured writer (parquet/table)
             data=results,
             filename_or_table=_PHASE5_WRITE_FILENAME,  # WHY: consistent sink label across phases
@@ -607,7 +607,7 @@ class _SsidTemplatePhase45Cluster(_ClusterBase):
         parent = self._mm  # WHY: proxy alias
         if not self._load_cache_or_bail():  # WHY: shared preamble — abort when Phase 1 skipped
             return None  # WHY: cache preamble already printed the bail message
-        resuming, prior_results = parent._offer_resume(_PHASE5_ID)  # noqa: SLF001
+        resuming, prior_results = parent._offer_resume(_PHASE5_ID)
         plan = _build_disable_plan(parent.cache)  # WHY: shape the per-site disable plan
         to_disable = [entry for entry in plan if entry["status"] == _STATUS_TO_DISABLE]  # WHY: actionable slice
         _display_disable_plan(plan)  # WHY: user preview before confirming
@@ -623,7 +623,7 @@ class _SsidTemplatePhase45Cluster(_ClusterBase):
         completed_ids = self._collect_completed_ids(resume_from)  # WHY: dedupe against prior-run rows
         results: list[dict[str, Any]] = list(resume_from) if resume_from else []  # WHY: seed with prior rows
         # WHY: parent owns the mistapi-touching worker so tests can patch mistapi at parent.
-        from .ssid_template_consolidation import _disable_single_ssid  # noqa: PLC0415 — local import breaks cycle
+        from .ssid_template_consolidation import _disable_single_ssid  # local import breaks cycle
 
         for entry in plan:  # WHY: one iteration per plan entry
             self._process_disable_entry(entry, completed_ids, results, _disable_single_ssid, parent)  # WHY: split
@@ -647,7 +647,7 @@ class _SsidTemplatePhase45Cluster(_ClusterBase):
             return  # WHY: resume-safe -- skip rows already disabled last run
         results.append(disable_fn(entry, parent.org_id, parent.apisession))  # WHY: perform mist PUT
         if len(results) % _DISABLE_CHECKPOINT_INTERVAL == 0:  # WHY: incremental checkpoint every N rows
-            parent._save_phase_results(_PHASE5_ID, results)  # noqa: SLF001 — intra-package checkpoint
+            parent._save_phase_results(_PHASE5_ID, results)  # intra-package checkpoint
 
     @staticmethod
     def _collect_completed_ids(

@@ -554,7 +554,7 @@ class GatewayExportUtils:  # WHY: centralised gateway export utility class extra
     @staticmethod
     def wan2_variable_migration(fast: bool = False, dry_run: bool = False) -> None:
         """Update gateway template WAN2 variable through extracted migrator."""
-        from src.gateway.wan2_variable import GatewayWan2VariableMigrator, Wan2VariableDeps  # noqa: PLC0415
+        from src.gateway.wan2_variable import GatewayWan2VariableMigrator, Wan2VariableDeps
 
         deps = Wan2VariableDeps(  # WHY: build immutable dep bundle for the migrator.
             org_id=ConfigUtils.get_cached_or_prompted_org_id(),

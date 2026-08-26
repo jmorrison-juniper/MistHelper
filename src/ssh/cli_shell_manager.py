@@ -196,7 +196,7 @@ class CLIShellManager:
         logging.info("Closing the CLI shell WebSocket")  # WHY: audit before the close.
         try:  # WHY: the socket may already be closed by the exit key handler.
             ws.close()  # WHY: closing wakes the blocked recv() so the receive thread can end.
-        except Exception as close_error:  # noqa: BLE001 - cleanup must never mask the session outcome.
+        except Exception as close_error:  # cleanup must never mask the session outcome.
             logging.debug("CLI shell WebSocket close failed: %s", close_error)  # WHY: trace only.
         receiver.join(timeout=_RECEIVER_JOIN_TIMEOUT_SEC)  # WHY: bound the wait so a stuck socket cannot hang exit.
         logging.debug("CLI shell shutdown done (receiver_alive=%s)", receiver.is_alive())  # WHY: result summary.

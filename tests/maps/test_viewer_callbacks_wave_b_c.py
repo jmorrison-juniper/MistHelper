@@ -531,10 +531,10 @@ def test_execute_delete_map_exception_returns_span() -> None:
     """An exception is caught and surfaced as an error Span."""
 
     class _BrokenMistapi:
-        class api:  # noqa: N801 - mimic mistapi attribute style
-            class v1:  # noqa: N801
-                class sites:  # noqa: N801
-                    class maps:  # noqa: N801
+        class api:  # mimic mistapi attribute style
+            class v1:
+                class sites:
+                    class maps:
                         @staticmethod
                         def deleteSiteMap(*_a: Any, **_k: Any) -> None:
                             raise RuntimeError("network boom")

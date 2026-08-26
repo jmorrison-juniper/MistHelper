@@ -122,7 +122,7 @@ class _FakeMistapi:
         v1_ns = types.SimpleNamespace(sites=sites_ns)
         self.api = types.SimpleNamespace(v1=v1_ns)
 
-    def get_all(self, response: Any, mist_session: Any) -> list[dict[str, Any]]:  # noqa: ARG002
+    def get_all(self, response: Any, mist_session: Any) -> list[dict[str, Any]]:
         if response in (None,):
             return []
         # Route based on which endpoint produced the response by status code only is unreliable;

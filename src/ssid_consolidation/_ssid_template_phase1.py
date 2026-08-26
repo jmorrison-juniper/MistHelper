@@ -638,9 +638,9 @@ class _SsidTemplatePhase1Cluster(_ClusterBase):
     def _try_load_cached(self) -> dict[str, Any] | None:
         """Return cached org data when operator accepts reuse. None otherwise."""
         parent = self._mm  # WHY: proxy alias for readability + W0212 avoidance
-        from ._ssid_template_cache import _cache_age_minutes  # noqa: PLC0415 — local avoids cycle
+        from ._ssid_template_cache import _cache_age_minutes  # local avoids cycle
 
-        cached = parent._load_cache()  # noqa: SLF001 — cluster helper is intra-package
+        cached = parent._load_cache()  # cluster helper is intra-package
         if not cached or not cached.get("data"):  # WHY: no cache => caller performs fresh fetch
             return None
         age = _cache_age_minutes(cached.get("collected_at", ""))  # WHY: minutes since cache stamp
@@ -664,7 +664,7 @@ class _SsidTemplatePhase1Cluster(_ClusterBase):
     ) -> None:
         """Save Phase 1 outputs and print summary."""
         parent = self._mm  # WHY: proxy alias for readability + W0212 avoidance
-        parent._save_cache(  # noqa: SLF001 — cluster helper is intra-package
+        parent._save_cache(  # cluster helper is intra-package
             {"data": org_data, "matrix": matrix, "deviations": deviations},
         )
         self._write_phase1_outputs(matrix, deviations)  # WHY: helper isolates the 2 dump calls

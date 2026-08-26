@@ -689,7 +689,7 @@ def dependency_rows() -> list[dict[str, str]]:
 
         settings = load_settings()  # The same settings the portal itself uses, so no address can differ.
         return reading_rows(run_preflight(settings.arango, settings.redis))  # Probe, then flatten for the page.
-    except Exception:  # noqa: BLE001  # WHY: the sign-in form outranks the banner, so every fault degrades.
+    except Exception:  # WHY: the sign-in form outranks the banner, so every fault degrades.
         logger.exception("auth: the dependency preflight failed, so the page shows no dependency panel")
         return []  # An empty list hides the panel and leaves the form untouched.
 

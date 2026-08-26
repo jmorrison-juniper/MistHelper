@@ -152,7 +152,7 @@ class WANProbeConfigManager:  # WAN probe config manager (Menu 166 destructive e
 
     def _build_template_site_counts(self) -> None:
         """Tally how many sites reference each gateway template (skipping MIST_SITE_EXCLUDE_PREFIX names)."""
-        from src.refactors.mist_site_exclude_prefix import (  # noqa: PLC0415 - local import.
+        from src.refactors.mist_site_exclude_prefix import (  # local import.
             MIST_SITE_EXCLUDE_PREFIX,
         )
 

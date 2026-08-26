@@ -318,7 +318,7 @@ class _UtilityCommandsAction(_ClusterBase):  # WHY: cluster wrapper mirroring ea
         delivers the credential, or when CodeQL reopens alert 173.
         """
         print(f"\n{_ZTP_REVEAL_WARNING}")  # WHY: the risk reaches the screen before the value
-        print(f"-> ZTP Password: {ztp_credential}")  # noqa: T201
+        print(f"-> ZTP Password: {ztp_credential}")
         print("-> Copy the value now. The value is a one-time credential.")  # WHY: guidance after the risk
 
     @staticmethod

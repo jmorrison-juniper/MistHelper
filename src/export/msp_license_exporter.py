@@ -179,6 +179,6 @@ class MSPLicenseExporter:
             stem = f"MSPLicenses_{msp_id.replace(' ', '_')}"  # Per-MSP filename stem shared by both files.
             MSPLicenseExporter._persist(summary_rows, f"{stem}_summary.csv", "listMspLicenses", "license summary")
             MSPLicenseExporter._persist(detail_rows, f"{stem}_details.csv", "listMspLicensesDetails", "license detail")
-        except Exception as e:  # noqa: BLE001 -- surface any SDK or network error, keep the menu alive.
+        except Exception as e:  # surface any SDK or network error, keep the menu alive.
             logging.error("Error fetching the licenses for MSP %s: %s", msp_id, e)  # Failure context.
             logging.info("! Error fetching MSP license data: %s", e)  # ASCII-only user notice.

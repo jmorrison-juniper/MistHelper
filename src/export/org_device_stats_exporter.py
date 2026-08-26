@@ -395,7 +395,7 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
         OrgDeviceStatsExporter._save_device_port_stats_output(all_port_stats, output_file)  # Persist collected rows.
 
     @staticmethod
-    def device_port_stats(fast: bool = False):  # noqa: C901, PLR0912, PLR0915
+    def device_port_stats(fast: bool = False):
         """Export port-level statistics for switches and gateways to OrgDevicePortStats.csv.
 
         Fast mode caches recent CSV (CSV_FRESHNESS_MINUTES) and parallelizes site fetches with

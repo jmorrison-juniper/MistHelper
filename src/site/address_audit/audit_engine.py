@@ -347,7 +347,7 @@ class AddressAuditEngine:
         try:
             rows = self._authority_ingester.load(business_csv_path)  # Parse authoritative rows from selected file.
             return self._authority_ingester.build_index(rows)  # Pre-index for O(1) per-row lookup.
-        except Exception as exc:  # noqa: BLE001 -- authority file is additive, never run-blocking.
+        except Exception as exc:  # authority file is additive, never run-blocking.
             logger.warning("Business-authoritative CSV load failed (%s); continuing without it", exc)  # Fail-soft log.
             return {"by_name": {}, "by_full": {}, "by_no_suite": {}}  # Degrade to empty authority index.
 
@@ -379,7 +379,7 @@ class AddressAuditEngine:
         """Fully paginate a Mist API response into a list (empty on failure)."""
         try:
             return mistapi.get_all(response=response, mist_session=apisession) or []  # Exhaust pagination.
-        except Exception as exc:  # noqa: BLE001 -- a read failure must not crash the audit.
+        except Exception as exc:  # a read failure must not crash the audit.
             logger.warning("Mist pagination failed: %s", exc)  # Log and degrade to empty.
             return []  # Return nothing so the audit continues.
 
@@ -411,7 +411,7 @@ class AddressAuditEngine:
         try:
             response = mistapi.api.v1.sites.setting.getSiteSetting(apisession, site_id)  # Site settings call.
             record = getattr(response, "data", {}) or {}  # Settings payload (vars, snmp_config).
-        except Exception as exc:  # noqa: BLE001 -- enrichment is best-effort.
+        except Exception as exc:  # enrichment is best-effort.
             logger.debug("Site settings fetch failed for %s: %s", site_id, exc)  # Trace and degrade.
             record = {}  # Empty record -> enricher yields None.
         record.setdefault("id", site_id)  # Carry the id for log context.

@@ -68,7 +68,7 @@ class TUILauncher:  # Launch TUI mode from interactive menu.
             self._run_tui()  # Enter the Rich event loop
         except KeyboardInterrupt:  # User hit Ctrl+C inside the TUI
             self._handle_keyboard_interrupt()  # Log and print exit banner
-        except Exception as error:  # noqa: BLE001 - TUI errors must never crash the numbered menu
+        except Exception as error:  # TUI errors must never crash the numbered menu
             self._handle_fatal_error(error)  # Log traceback and surface user-visible error
         finally:  # Always run regardless of exception path
             self._restore_console_logging()  # Re-attach console handlers before returning to menu

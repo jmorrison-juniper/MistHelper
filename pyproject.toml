@@ -178,7 +178,13 @@ target-version = "py313"
 extend-exclude = ["mist-ops-platform", "web_portal", "scripts", "src/maps"]
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "UP", "B", "G", "PLW1514"]
+select = ["E", "F", "W", "I", "UP", "B", "G", "PLW1514", "RUF100"]
+# Issue #1792: RUF100 (unused-noqa) reports a `# noqa` directive that suppresses
+# nothing. A stale directive hides the next real finding on that line and it
+# tells a reader that a problem exists where none does. The sweep that closed
+# issue #1792 removed every unused directive, and this rule holds the count at
+# zero, so a reader can trust that each remaining directive answers a real
+# finding.
 # Issue #1795: PLW1514 (unspecified-encoding) is a preview rule. `preview` turns
 # preview rules on and `explicit-preview-rules` limits them to the codes named in
 # `select`, so no other preview rule reaches this gate. An `open()` call in text

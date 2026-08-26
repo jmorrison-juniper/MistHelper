@@ -137,7 +137,7 @@ class _RoutingUtilsParsing:  # WHY: cluster wrapper matching the ``_packet_captu
     def _parse_tabular_route_line(self, line: str) -> dict[str, Any] | None:
         """Parse a space-separated tabular route line into a route entry."""
         parts = line.split()  # WHY: whitespace-split into tokens for positional access
-        if len(parts) < 2:  # noqa: PLR2004 — need at least destination + next-hop  # WHY: guard clause
+        if len(parts) < 2:  # need at least destination + next-hop  # WHY: guard clause
             return None  # WHY: single-token lines are section headers, not routes
         entry = _empty_route_entry()  # WHY: shared factory keeps field order/shape uniform
         entry["destination"] = parts[0]  # WHY: default when no flag prefix consumed parts[0]

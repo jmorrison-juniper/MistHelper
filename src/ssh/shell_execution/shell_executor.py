@@ -166,7 +166,7 @@ class ShellExecutor:
             return self._run_phases(
                 command, start_time, hostname
             )  # WHY: Delegate the phase pipeline to a bounded helper
-        except Exception as shell_error:  # noqa: BLE001  # WHY: Top-level fallback mirrors original behavior
+        except Exception as shell_error:  # WHY: Top-level fallback mirrors original behavior
             # WHY: Any escape from the pipeline surfaces as the documented failure tuple
             err_type = type(shell_error).__name__  # WHY: Class name only for concise error phrasing
             error_msg = f"Shell execution error: {err_type}: {shell_error}"  # WHY: Preserve original phrasing
@@ -238,9 +238,9 @@ class ShellExecutor:
             time.sleep(_SEND_SETTLE_S)  # WHY: Small delay so the device has time to buffer the full line
             self.logger.debug("Sent command to shell: %s", command)  # WHY: Trace outbound command
             return None  # WHY: Caller proceeds with phases 3+
-        except (
-            Exception
-        ) as send_error:  # noqa: BLE001 - any send failure mirrors original handling  # WHY: Preserve blanket-except semantics for compatibility
+        # WHY: a blanket except keeps the compatibility of the returned tuple,
+        # because any send failure mirrors the original handling.
+        except Exception as send_error:
             self.logger.warning("Error sending command: %s", send_error)  # WHY: Log root cause for debugging
             return False, "", f"Failed to send command: {send_error}"  # WHY: Documented failure tuple
 
@@ -477,7 +477,7 @@ class ShellExecutor:
             self.logger.warning("Command cleanup interrupted by user")  # WHY: Log operator-driven interrupt
         except (
             Exception
-        ) as cleanup_error:  # noqa: BLE001 - cleanup errors are best-effort  # WHY: Preserve blanket-except behavior for compatibility
+        ) as cleanup_error:  # cleanup errors are best-effort  # WHY: Preserve blanket-except behavior for compatibility
             self.logger.debug("Warning during cleanup: %s", cleanup_error)  # WHY: Trace non-fatal cleanup issue
         cleanup_duration = time.time() - cleanup_start  # WHY: Final cleanup wall-clock
         if cleanup_duration > _CLEANUP_LOG_THRESHOLD_S:  # WHY: Only log when cleanup was unusually slow
@@ -490,7 +490,7 @@ class ShellExecutor:
             shell.close()  # WHY: Force channel close to prevent hangs
         except (
             Exception
-        ) as close_error:  # noqa: BLE001 - close errors are best-effort  # WHY: Preserve blanket-except behavior for compatibility
+        ) as close_error:  # close errors are best-effort  # WHY: Preserve blanket-except behavior for compatibility
             self.logger.debug("Warning during shell close: %s", close_error)  # WHY: Trace non-fatal close issue
 
     def _drain_cleanup_tail(self, shell: Any) -> None:  # WHY: Drain within cleanup budget - exit early on silence

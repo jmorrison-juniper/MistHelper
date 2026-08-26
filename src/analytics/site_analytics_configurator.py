@@ -148,7 +148,7 @@ class SiteAnalyticsConfigurator:  # WHY: static namespace collecting configurato
         """Fetch site settings for scan, returning None on API/network failure."""  # WHY: isolates GET path.
         try:
             response = deps.mistapi.api.v1.sites.setting.getSiteSetting(deps.apisession, site_id=site_id)
-        except Exception as error:  # noqa: BLE001  # WHY: mistapi may raise varied exceptions per site.
+        except Exception as error:  # WHY: mistapi may raise varied exceptions per site.
             logging.warning("Error scanning %s: %s", site_name, error)  # WHY: continue with next site on error.
             return None  # WHY: treat as unfetchable.
         if response.status_code != _HTTP_OK:  # WHY: non-200 means we cannot trust settings payload.
@@ -525,7 +525,7 @@ class SiteAnalyticsConfigurator:  # WHY: static namespace collecting configurato
                 return result  # WHY: short-circuit on fetch failure.
             SiteAnalyticsConfigurator._apply_standard_sections(site, current_settings, result)  # WHY: mutate.
             SiteAnalyticsConfigurator._push_updated_settings(site_id, site_name, current_settings, deps, result)
-        except Exception as error:  # noqa: BLE001  # WHY: mistapi can raise varied exceptions per site.
+        except Exception as error:  # WHY: mistapi can raise varied exceptions per site.
             result["status"] = "ERROR"  # WHY: distinguish exception from HTTP failure.
             result["error"] = str(error)  # WHY: keep exception text in the CSV row.
             logging.error("Error updating %s: %s", site_name, error)  # WHY: audit trail entry.

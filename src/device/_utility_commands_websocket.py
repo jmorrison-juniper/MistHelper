@@ -98,7 +98,7 @@ class _UtilityCommandsWebsocket(_ClusterBase):  # WHY: cluster wrapper mirroring
             websocket_manager,
         )
 
-    def _safe_execute_ws(  # noqa: PLR0913
+    def _safe_execute_ws(
         self,
         site_id: str,
         device_id: str,
@@ -141,7 +141,7 @@ class _UtilityCommandsWebsocket(_ClusterBase):  # WHY: cluster wrapper mirroring
             ),
         )
 
-    def _execute_ws_command(  # noqa: PLR0913
+    def _execute_ws_command(
         self,
         site_id: str,
         device_id: str,
@@ -167,7 +167,7 @@ class _UtilityCommandsWebsocket(_ClusterBase):  # WHY: cluster wrapper mirroring
     # WebSocket command lifecycle (streaming variant)
     # ------------------------------------------------------------------
 
-    def _run_streaming_command(  # noqa: PLR0913
+    def _run_streaming_command(
         self,
         site_id: str,
         device_id: str,

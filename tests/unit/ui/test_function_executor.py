@@ -8,12 +8,12 @@ from unittest.mock import MagicMock
 from src.ui.execution.function_executor import FunctionExecutor, _redact
 
 
-def _api_call(org_id: str, limit: int = 100):  # noqa: ANN201 — test stub
+def _api_call(org_id: str, limit: int = 100):  # test stub
     """Test stand-in for an API function — returns a dict-shaped result."""
     return {"results": [{"id": org_id}], "next": None}  # Single page payload
 
 
-def _api_call_with_session(mist_session, org_id: str):  # noqa: ANN001, ANN201
+def _api_call_with_session(mist_session, org_id: str):
     """API stub requiring 'mist_session' to exercise the session autofill branch."""
     return {"results": [{"session": str(mist_session), "org": org_id}]}
 
@@ -92,7 +92,7 @@ def test_start_handles_signature_failure(tui_stub) -> None:
 def test_execute_handles_call_failure(tui_stub) -> None:
     """Any exception from the call is captured into last_error/output_lines."""
 
-    def _raises():  # noqa: ANN202
+    def _raises():
         raise ValueError("api broke")
 
     tui_stub.current_function = {"name": "broken", "object": _raises}  # Pre-seed selection
@@ -126,7 +126,7 @@ def test_execute_paginates_via_next_cursor(tui_stub) -> None:
     """If result.next is truthy, the executor follows the cursor via mist_get."""
 
     class _PagedResult:
-        def __init__(self, next_url, data) -> None:  # noqa: ANN001
+        def __init__(self, next_url, data) -> None:
             self.next = next_url  # Pagination cursor
             self.data = data  # Parsed-style payload
 

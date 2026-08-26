@@ -26,7 +26,7 @@ class OrgDeviceInventorySummary:
     def _get_summary_impl() -> Any:  # Build the summary core.
         """Configure and return extracted single-org summary implementation."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of live apisession/mistapi/DataExporter/org_id.
-        from src.inventory.org_device_inventory_summary import (  # noqa: PLC0415
+        from src.inventory.org_device_inventory_summary import (
             OrgDeviceInventorySummaryCore,
             configure_org_device_inventory_summary_dependencies,
         )
@@ -43,7 +43,7 @@ class OrgDeviceInventorySummary:
     def _get_msp_impl() -> Any:  # Build the MSP orchestrator.
         """Configure and return extracted MSP orchestration implementation."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of live apisession/InputUtils/DataExporter/msp.
-        from src.inventory.org_device_inventory_msp import (  # noqa: PLC0415
+        from src.inventory.org_device_inventory_msp import (
             OrgDeviceInventoryMSPOrchestrator,
             configure_org_device_inventory_msp_dependencies,
         )

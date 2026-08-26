@@ -133,7 +133,7 @@ class _MapsManagerStub:
         return self._backup_path
 
 
-def _make_clone_mistapi(  # noqa: PLR0913 - many small flags to drive each step independently
+def _make_clone_mistapi(  # many small flags to drive each step independently
     source_response: _FakeResponse,
     create_response: _FakeResponse,
     upload_response: _FakeResponse | None = None,
@@ -361,7 +361,7 @@ def test_handle_drawing_no_trigger_returns_empty(_dash_stub: types.ModuleType) -
     _dash_stub.callback_context.triggered = []
     callbacks = MapViewerCallbacks(state=_make_state())
 
-    msg, cache = callbacks._drawing.handle_drawing_tools(  # noqa: PLR0913 - dispatcher signature
+    msg, cache = callbacks._drawing.handle_drawing_tools(  # dispatcher signature
         1, 0, 0, 0, 0, 0, "zone", "Z1", {"layout": {"shapes": []}}, {}, {}
     )
 
