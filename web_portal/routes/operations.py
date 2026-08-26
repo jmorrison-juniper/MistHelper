@@ -16,6 +16,9 @@ from flask import (
     request,
 )
 
+# Module-level logger so every helper identifies its source file in log output.
+logger = logging.getLogger(__name__)
+
 operations_bp = Blueprint("operations", __name__)
 
 
@@ -28,8 +31,6 @@ def operations_page():
 @operations_bp.route("/api/operations/list")
 def list_operations():
     """Return categorized list of non-destructive operations."""
-    from web_portal.services.operation import OperationExecutor
-
     menu_actions = current_app.config.get("MENU_ACTIONS", {})
     executor = _get_executor()
     categories = executor.build_category_list(menu_actions)
@@ -299,6 +300,11 @@ def _fetch_org_sites(apisession, org_id: str) -> list:
             for site in sites
         ]
     except Exception:
+        # Use logger.exception() so the full traceback appears at ERROR level.
+        # Name the org ID so the operator can find the failing request in logs.
+        logger.exception("Failed to list sites for org %s", org_id)
+        # Return [] because the route call site reads len() directly and cannot
+        # handle a non-list.  The log record above makes the failure visible.
         return []
 
 
@@ -328,6 +334,10 @@ def _fetch_site_devices(apisession, site_id: str, device_type: str) -> list:
             for device in devices
         ]
     except Exception:
+        # Use logger.exception() so the full traceback appears at ERROR level.
+        # Name the site ID and device type so the operator can trace the request.
+        logger.exception("Failed to list devices for site %s (type=%s)", site_id, device_type)
+        # Return [] because the route reads len() directly on this result.
         return []
 
 
@@ -367,6 +377,11 @@ def _fetch_wireless_clients(mistapi, apisession, site_id: str) -> list:
             for client in results
         ]
     except Exception:
+        # Use logger.exception() so the full traceback appears at ERROR level.
+        # Name the site ID so the operator can cross-reference with the Mist portal.
+        logger.exception("Failed to list wireless clients for site %s", site_id)
+        # Return [] because _fetch_site_clients concatenates both lists and
+        # cannot handle a non-list return type without being rewritten.
         return []
 
 
@@ -388,4 +403,9 @@ def _fetch_wired_clients(mistapi, apisession, site_id: str) -> list:
             for client in results
         ]
     except Exception:
+        # Use logger.exception() so the full traceback appears at ERROR level.
+        # Name the site ID so the operator knows which site's wired query failed.
+        logger.exception("Failed to list wired clients for site %s", site_id)
+        # Return [] because _fetch_site_clients concatenates both lists and
+        # cannot handle a non-list return type without being rewritten.
         return []
