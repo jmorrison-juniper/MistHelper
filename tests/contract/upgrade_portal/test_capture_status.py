@@ -208,7 +208,7 @@ def wired_app(portal_app: Flask, fake_mist_api: Any, capture_runner: RecordingRu
         The wired application.
     """
     portal_app.config[MIST_READER_KEY] = fake_mist_api.read
-    portal_app.config[LOCK_READER_KEY] = lambda org_id, site_ids: {}  # Every site reads as free.
+    portal_app.config[LOCK_READER_KEY] = lambda org_id, site_ids: dict.fromkeys(site_ids)  # Reachable, no lock.
     portal_app.config[RUNNER_KEY] = capture_runner
     # WHY: without this seam the route falls back to the real store, which opens
     # a database connection. A contract test must reach no server, so the empty

@@ -241,8 +241,16 @@ def upgrade_app(portal_app: Flask, run_store: RecordingRunStore) -> Flask:
     Why:
         The create call and the options call both write a run record. The store
         sits behind a seam, so a contract test replaces it and reaches no
-        database server. The lock reader answers no holder, because a held site
-        already has its own test in `test_upgrade_routes.py`.
+        database server. The lock reader answers a reachable store that holds no
+        lock, because a held site already has its own test in
+        `test_upgrade_routes.py`.
+
+        The reader must name every site it was asked about. `lock_holder` reads
+        an absent key as `unknown`, not as free, so an empty index means the
+        store did not answer and `lock_refusal` then refuses the write with 503.
+        `dict.fromkeys` gives each site a None holder, which is the shape a
+        reachable store returns for a free site. See issue #1827 and pull
+        request #1890.
 
     Args:
         portal_app: The real application from the shared fixture.
@@ -252,7 +260,9 @@ def upgrade_app(portal_app: Flask, run_store: RecordingRunStore) -> Flask:
         The application with the seams in place.
     """
     portal_app.config[RUN_STORE_KEY] = run_store  # No ArangoDB server runs in a contract test.
-    portal_app.config[LOCK_READER_KEY] = lambda org_id, site_ids: {}  # No Redis server runs in a contract test.
+    # A reachable lock store that holds no lock. An empty index would read as an
+    # unreachable store and every write below would answer 503.
+    portal_app.config[LOCK_READER_KEY] = lambda org_id, site_ids: dict.fromkeys(site_ids)
     portal_app.config["WTF_CSRF_ENABLED"] = False  # One test below reads the untouched application instead.
     return portal_app  # Every test below drives this application.
 
