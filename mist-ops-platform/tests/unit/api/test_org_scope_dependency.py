@@ -77,6 +77,132 @@ def _calls_a_scope_check(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     return False
 
 
+def _has_auth_dependency(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+    """Return True when the function declares an authentication dependency.
+
+    A route without this dependency is fully anonymous. The platform accepts
+    both get_authenticated_user and get_scoped_org_id as valid auth dependencies.
+    get_scoped_org_id calls get_authenticated_user internally, so either form
+    satisfies the authentication requirement.
+    """
+    auth_deps = {"get_authenticated_user", "get_scoped_org_id"}  # Both forms satisfy auth
+    all_args = node.args.args + node.args.kwonlyargs  # Every named parameter
+    all_defaults = (
+        ([None] * (len(node.args.args) - len(node.args.defaults)))
+        + list(node.args.defaults)
+        + list(node.args.kw_defaults)
+    )  # Align defaults with arguments
+    for arg, default in zip(all_args, all_defaults):  # Walk each arg-default pair
+        if default is None:  # No default means no Depends
+            continue
+        if not (isinstance(default, ast.Call) and getattr(default.func, "id", "") == "Depends"):
+            continue  # Not a Depends() call
+        dep_args = default.args  # The argument passed to Depends(...)
+        if not dep_args:  # Depends called with no positional arg
+            continue
+        dep_name = getattr(dep_args[0], "id", "")  # Simple name, e.g. get_authenticated_user
+        if dep_name in auth_deps:  # Found an accepted authentication dependency
+            return True
+    return False
+
+
+def _is_route_handler(node: ast.FunctionDef | ast.AsyncFunctionDef, tree: ast.Module) -> bool:
+    """Return True when the function is decorated with a router method decorator."""
+    router_methods = {"get", "post", "put", "patch", "delete"}  # HTTP method decorator names
+    for decorator in node.decorator_list:  # Walk all decorators on this function
+        if not isinstance(decorator, ast.Call):  # Only decorated calls count
+            continue
+        func = decorator.func  # The decorator itself
+        method = getattr(func, "attr", None)  # e.g. router.get -> "get"
+        if method in router_methods:  # Matches an HTTP method
+            return True
+    return False
+
+
+def _get_route_handlers_without_auth(path: pathlib.Path) -> list[str]:
+    """Return function names that are route handlers with no auth dependency."""
+    tree = ast.parse(path.read_text(encoding="utf-8"))  # Parse the source without importing it
+    offenders: list[str] = []  # Collect handlers that lack authentication
+    for node in ast.walk(tree):  # Visit every AST node
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue  # Only functions can be route handlers
+        if not _is_route_handler(node, tree):  # Skip non-route functions
+            continue
+        if not _has_auth_dependency(node):  # Route has no authentication dependency
+            offenders.append(node.name)  # Record the offender
+    return offenders
+
+
+def _default_is_depends(default: ast.expr | None) -> bool:
+    """Return True when the default value is a Depends() call.
+
+    FastAPI dependency parameters use Depends(func) as their default value.
+    Body parameters have no default or use a Body() literal. Only body
+    parameters need the require_org_access check.
+    """
+    if default is None:  # No default value
+        return False
+    if not isinstance(default, ast.Call):  # Not a function call
+        return False
+    func_name = getattr(default.func, "id", None)  # Simple function name
+    return func_name == "Depends"  # True only for Depends(...)
+
+
+def _body_org_id_without_scope_check(path: pathlib.Path) -> list[str]:
+    """Return handler names that accept a body model with org_id but skip the scope check.
+
+    A handler that reads org_id from a body parameter passes the guard only
+    when its body calls require_org_access or _resolve_org_ids. Without that
+    call, any authenticated caller supplies any org_id and writes into that org.
+
+    Parameters with a Depends(...) default are FastAPI dependencies, not body
+    parameters. Those are excluded because the dependency performs its own
+    scope check through get_scoped_org_id or require_org_access.
+    """
+    tree = ast.parse(path.read_text(encoding="utf-8"))  # Parse without importing
+    body_org_id_models: set[str] = set()  # Names of models that carry org_id
+    for node in ast.walk(tree):  # Collect class definitions first
+        if not isinstance(node, ast.ClassDef):
+            continue  # Only classes can be models
+        ann_names = {
+            stmt.target.id
+            for stmt in node.body
+            if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name)
+        }  # Collect annotated assignments (e.g. org_id: UUID)
+        assign_names = {
+            stmt.targets[0].id
+            for stmt in node.body
+            if isinstance(stmt, ast.Assign) and isinstance(stmt.targets[0], ast.Name)
+        }  # Collect plain assignments too
+        if "org_id" in (ann_names | assign_names):  # This model carries org_id
+            body_org_id_models.add(node.name)
+    offenders: list[str] = []  # Handlers that accept a body org_id without the check
+    for node in ast.walk(tree):  # Walk only route handlers
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue  # Only handlers matter
+        if not _is_route_handler(node, tree):  # Skip helper functions
+            continue
+        if _calls_a_scope_check(node):  # Handler already performs its own check
+            continue
+        all_args = node.args.args + node.args.kwonlyargs  # Every named parameter
+        all_defaults = (
+            ([None] * (len(node.args.args) - len(node.args.defaults)))
+            + list(node.args.defaults)
+            + list(node.args.kw_defaults)
+        )  # Align defaults with argument positions
+        for arg, default in zip(all_args, all_defaults):  # Walk arg-default pairs
+            if _default_is_depends(default):  # Depends() params are FastAPI dependencies
+                continue
+            annotation = arg.annotation  # The type annotation of this parameter
+            if annotation is None:  # No type annotation
+                continue
+            ann_name = getattr(annotation, "id", None)  # Simple name, e.g. ExportRequest
+            if ann_name in body_org_id_models:  # Parameter type carries org_id
+                offenders.append(node.name)
+                break  # One match per handler is enough
+    return offenders
+
+
 def test_no_route_reads_org_id_from_query() -> None:
     """Assert that every route reads ``org_id`` through the scope dependency.
 
@@ -92,6 +218,48 @@ def test_no_route_reads_org_id_from_query() -> None:
     assert offenders == {}, (  # Report every offender at once, so one run shows all the work
         "These routes read org_id straight from Query and skip the membership "
         f"check. Use Depends(get_scoped_org_id) instead: {offenders}"
+    )
+
+
+# Health and webhook routes do not expose tenant data, so they are exempt from authentication.
+_AUTH_EXEMPT_MODULES = {"health.py", "webhooks.py", "__init__.py"}  # Modules that may omit auth
+
+
+def test_no_route_handler_is_anonymous() -> None:
+    """Assert that every data route handler declares get_authenticated_user.
+
+    A handler without an authentication dependency is fully anonymous. Any
+    caller who reaches the port can read or write data without a token. This
+    test catches the pattern before it reaches the branch.
+    """
+    offenders: dict[str, list[str]] = {}  # Map a module name to its offending handlers
+    for module in sorted(ROUTES_DIR.glob("*.py")):  # Read every route module
+        if module.name in _AUTH_EXEMPT_MODULES:  # Skip exempt modules
+            continue
+        found = _get_route_handlers_without_auth(module)  # Collect handlers with no auth
+        if found:  # Only record a module that holds an offender
+            offenders[module.name] = found
+    assert offenders == {}, (
+        "These route handlers have no authentication dependency and are fully anonymous. "
+        f"Add user: CurrentUser = Depends(get_authenticated_user): {offenders}"
+    )
+
+
+def test_no_handler_accepts_body_org_id_without_scope_check() -> None:
+    """Assert that every handler that accepts a body org_id calls require_org_access.
+
+    A handler that reads org_id from a request body and never calls
+    require_org_access lets any authenticated caller write data into any
+    organization. This test catches the pattern before it reaches the branch.
+    """
+    offenders: dict[str, list[str]] = {}  # Map a module name to its offending handlers
+    for module in sorted(ROUTES_DIR.glob("*.py")):  # Read every route module
+        found = _body_org_id_without_scope_check(module)  # Collect the offenders
+        if found:  # Only record a module that holds an offender
+            offenders[module.name] = found
+    assert offenders == {}, (
+        "These handlers accept a body with org_id but never call require_org_access. "
+        f"Add require_org_access(str(body.org_id), user) before writing data: {offenders}"
     )
 
 

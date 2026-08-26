@@ -290,13 +290,22 @@ async def list_devices(
 async def get_device(
     device_id: UUID,
     db: AsyncSession = Depends(get_db_session),
+    user: CurrentUser = Depends(get_authenticated_user),
 ) -> ResponseEnvelope[DeviceResponse]:
-    """Get a single device by ID."""
-    stmt = select(Device).where(Device.device_id == device_id)  # Single-row lookup
+    """Get a single device by ID, scoped to the caller's organizations."""
+    logger.info("get_device called for device_id=%s by user=%s", device_id, user.email)
+    stmt = select(Device).where(Device.device_id == device_id)  # Single-row lookup by device UUID
     row = (await db.execute(stmt)).scalar_one_or_none()  # 0 or 1 result
-    if not row:  # 404 path
+    if not row:  # 404 path — device does not exist
         raise HTTPException(status_code=404, detail="Device not found")
-    return ResponseEnvelope(data=_device_to_response(row))  # 200 path
+    require_org_access(str(row.org_id), user)  # Refuse a caller outside the org of this device
+    logger.debug(
+        "get_device: device_id=%s org_id=%s returned to user=%s",
+        device_id,
+        row.org_id,
+        user.email,
+    )  # Log device returned to confirm the scope check passed
+    return ResponseEnvelope(data=_device_to_response(row))  # 200 path — caller is in scope
 
 
 # ===================================================================
@@ -368,13 +377,16 @@ async def list_drift_alerts(
 async def get_drift_alert(
     alert_id: UUID,
     db: AsyncSession = Depends(get_db_session),
-    _user: CurrentUser = Depends(get_authenticated_user),
+    user: CurrentUser = Depends(get_authenticated_user),
 ) -> ResponseEnvelope[DriftAlertDetail]:
-    """Get drift alert detail with full diff payload."""
+    """Get drift alert detail with full diff payload, scoped to the caller's org."""
+    logger.info("get_drift_alert called for alert_id=%s by user=%s", alert_id, user.email)
     stmt = select(DriftAlert).where(DriftAlert.alert_id == alert_id)  # Single-row lookup
     alert = (await db.execute(stmt)).scalar_one_or_none()  # 0 or 1
     if alert is None:  # 404 path
         raise HTTPException(status_code=404, detail="Alert not found")
+    require_org_access(str(alert.org_id), user)  # Refuse a caller outside the org of this alert
+    logger.debug("get_drift_alert: alert_id=%s returned to user=%s", alert_id, user.email)
     return ResponseEnvelope(data=DriftAlertDetail.model_validate(alert))
 
 
@@ -385,15 +397,22 @@ async def acknowledge_drift_alert(
     db: AsyncSession = Depends(get_db_session),
     user: CurrentUser = Depends(get_authenticated_user),
 ) -> ResponseEnvelope[DriftAlertDetail]:
-    """Acknowledge a drift alert."""
+    """Acknowledge a drift alert, scoped to the caller's org."""
+    logger.info("acknowledge_drift_alert called for alert_id=%s by user=%s", alert_id, user.email)
     stmt = select(DriftAlert).where(DriftAlert.alert_id == alert_id)  # Look up alert
     alert = (await db.execute(stmt)).scalar_one_or_none()  # 0 or 1
     if alert is None:  # 404 path
         raise HTTPException(status_code=404, detail="Alert not found")
+    require_org_access(str(alert.org_id), user)  # Refuse a caller outside the org of this alert
     alert.status = "acknowledged"  # Flip state to acknowledged
     alert.resolved_by = user.email  # Track who acknowledged
     alert.resolved_at = datetime.now(UTC)  # Track when (UTC)
     await db.flush()  # Push changes to DB without committing the transaction
+    logger.debug(
+        "acknowledge_drift_alert: alert_id=%s acknowledged by user=%s",
+        alert_id,
+        user.email,
+    )  # Log acknowledgment to confirm the write completed
     return ResponseEnvelope(data=DriftAlertDetail.model_validate(alert))
 
 
@@ -456,9 +475,11 @@ async def list_policies(
 async def create_policy(
     body: PolicyCreate,
     db: AsyncSession = Depends(get_db_session),
-    _user: CurrentUser = Depends(get_authenticated_user),
+    user: CurrentUser = Depends(get_authenticated_user),
 ) -> ResponseEnvelope[PolicyResponse]:
-    """Create a network policy."""
+    """Create a network policy, scoped to the caller's org."""
+    logger.info("create_policy called for org_id=%s by user=%s", body.org_id, user.email)
+    require_org_access(str(body.org_id), user)  # Refuse a caller outside the target org
     policy = NetworkPolicy(
         org_id=body.org_id,
         mist_entity_id=body.mist_entity_id,
@@ -471,6 +492,11 @@ async def create_policy(
     )  # Hydrate ORM object from request body
     db.add(policy)  # Stage insert
     await db.flush()  # Push to DB to populate generated columns
+    logger.debug(
+        "create_policy: policy_id=%s created for org_id=%s",
+        policy.policy_id,
+        body.org_id,
+    )  # Log creation to confirm the flush completed
     return ResponseEnvelope(data=PolicyResponse.model_validate(policy))
 
 
@@ -481,15 +507,23 @@ async def recertify_policy(
     db: AsyncSession = Depends(get_db_session),
     user: CurrentUser = Depends(get_authenticated_user),
 ) -> ResponseEnvelope[PolicyResponse]:
-    """Recertify a policy before expiration."""
+    """Recertify a policy before expiration, scoped to the caller's org."""
+    logger.info("recertify_policy called for policy_id=%s by user=%s", policy_id, user.email)
     if not body.confirm:  # Reject unconfirmed recertify
         raise HTTPException(status_code=400, detail="confirm required")
     stmt = select(NetworkPolicy).where(NetworkPolicy.policy_id == policy_id)  # Look up policy
     policy = (await db.execute(stmt)).scalar_one_or_none()  # 0 or 1
     if policy is None:  # 404 path
         raise HTTPException(status_code=404, detail="Policy not found")
+    require_org_access(str(policy.org_id), user)  # Refuse a caller outside the org of this policy
     policy.last_reviewed_at = datetime.now(UTC)  # Stamp review time
     policy.reviewed_by = user.email  # Track who reviewed
     policy.version = policy.version + 1  # Bump version
     await db.flush()  # Push update
+    logger.debug(
+        "recertify_policy: policy_id=%s version=%s by user=%s",
+        policy_id,
+        policy.version,
+        user.email,
+    )  # Log recertification to confirm the bump completed
     return ResponseEnvelope(data=PolicyResponse.model_validate(policy))
