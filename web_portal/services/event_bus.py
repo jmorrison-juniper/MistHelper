@@ -18,10 +18,23 @@ class PortalEventBus:
     Each SSE connection subscribes and receives its own Queue.
     Events are copied to all subscriber queues on publish.
     Subscriber queues are bounded to prevent memory leaks.
+
+    A bounded queue must drop an event when a subscriber reads too slowly. The
+    bus counts every drop and reports the total, because a lost event with no
+    record leaves the operator with an incomplete feed and no way to see the
+    gap. Issue #1924 records the defect.
     """
 
     MAX_SUBSCRIBERS = 10
     QUEUE_MAX_SIZE = 100
+    # WHY: the drop report starts at the first drop and then doubles the
+    # threshold. A full queue overflows again on the very next event, so one
+    # line for each drop would fill the log with thousands of identical lines.
+    FIRST_DROP_LOG_THRESHOLD = 1
+    # WHY: the growth factor for the threshold above. A factor of 2 keeps the
+    # line count near the base-2 logarithm of the drop total, so 1000 drops
+    # produce 10 lines and the operator still sees the first loss at once.
+    DROP_LOG_GROWTH_FACTOR = 2
     # WHY: the heartbeat cadence in seconds. Named so a reader does not have to
     # match a bare literal against the poll timeout at line 78.
     HEARTBEAT_INTERVAL_S = 30
@@ -38,6 +51,15 @@ class PortalEventBus:
         # wake the moment stop() runs. A bool forces the loop to finish a full
         # time.sleep(30) before it re-reads the flag.
         self._stop_event = threading.Event()
+        # WHY: count the oldest events that the bus removed to free a slot. The
+        # old code discarded them with no record, so the feed lost data silently.
+        self._evicted_event_count = 0
+        # WHY: count the new events that the bus could not store. This is the
+        # second silent loss path in the same method.
+        self._rejected_event_count = 0
+        # WHY: hold the drop total that triggers the next report. See the
+        # FIRST_DROP_LOG_THRESHOLD comment for the reason behind the rate limit.
+        self._next_drop_log_at = self.FIRST_DROP_LOG_THRESHOLD
 
     def start(self) -> None:
         """Start the heartbeat timer thread.
@@ -83,6 +105,7 @@ class PortalEventBus:
             subscriber_count = len(self._subscribers)
             self._subscribers.clear()
         logging.debug("Event bus stopped and dropped %d subscriber(s)", subscriber_count)
+        self._log_drop_summary()  # Report the final loss total, because the rate limit can hide it.
 
     def subscribe(self, run_id: str = None) -> str:
         """Create a new subscriber and return its unique ID."""
@@ -131,18 +154,93 @@ class PortalEventBus:
         return filter_id == run_id
 
     def _enqueue_event(self, queue: Queue, event: dict) -> None:
-        """Add event to queue, dropping oldest if full."""
+        """Add an event to a queue, and remove the oldest event when the queue is full.
+
+        Both loss paths increment a counter. The bus reports the total on a
+        rate-limited schedule and again when it stops. See issue #1924.
+
+        The only caller, ``publish``, already holds ``self._lock``.
+        ``threading.Lock`` is not reentrant, so this method must not acquire
+        that lock again. A second acquire would deadlock the publisher.
+        """
         try:
-            queue.put_nowait(event)
+            queue.put_nowait(event)  # The normal path stores the event and loses nothing.
+            return  # An early return keeps the loss accounting below out of the hot path.
         except Full:
-            try:
-                queue.get_nowait()
-            except Empty:
-                pass
-            try:
-                queue.put_nowait(event)
-            except Full:
-                pass
+            pass  # A full queue continues to the eviction path below.
+        try:
+            queue.get_nowait()  # Free one slot, so the newest event still reaches the operator.
+            self._evicted_event_count += 1  # Record the oldest event that the portal lost.
+            self._record_event_drop()  # Report the loss on the rate-limited schedule.
+        except Empty:
+            pass  # A reader emptied the queue first, so this path lost no event.
+        try:
+            queue.put_nowait(event)  # Store the new event in the slot that the eviction freed.
+        except Full:
+            self._rejected_event_count += 1  # Record the new event that the portal lost.
+            self._record_event_drop()  # Report the loss on the rate-limited schedule.
+
+    def _record_event_drop(self) -> None:
+        """Report a dropped event, at a rate that grows with the drop total.
+
+        A per-drop WARNING is not an option here. A queue that overflows once
+        overflows again on the next event, so the log would fill with identical
+        lines. Issue #1766 records that noise already dilutes the WARNING level
+        in this project. The threshold therefore doubles after each report, so
+        the operator sees the first loss at once and the line count stays low.
+        """
+        total = self.dropped_event_count  # Read the combined total for both loss paths.
+        if total < self._next_drop_log_at:
+            return  # Stay silent until the total reaches the next threshold.
+        logging.warning(
+            "Web portal event bus dropped %d server-sent event(s): %d evicted oldest, "
+            "%d rejected newest. A subscriber reads the stream too slowly.",
+            total,
+            self._evicted_event_count,
+            self._rejected_event_count,
+        )
+        # WHY: raise the bar before the next report, so a burst cannot flood the log.
+        self._next_drop_log_at = total * self.DROP_LOG_GROWTH_FACTOR
+
+    def _log_drop_summary(self) -> None:
+        """Report the final count of dropped events when the bus stops.
+
+        The rate limit in ``_record_event_drop`` can leave the last drops
+        unreported. This summary guarantees that the true total reaches the log
+        one time for each run of the bus.
+        """
+        total = self.dropped_event_count  # Read the combined total for both loss paths.
+        if total == 0:
+            logging.debug("Event bus dropped no server-sent event")  # Confirm a clean run.
+            return
+        logging.warning(
+            "Event bus dropped %d server-sent event(s) in total: %d evicted oldest, %d rejected newest",
+            total,
+            self._evicted_event_count,
+            self._rejected_event_count,
+        )
+
+    @property
+    def dropped_event_count(self) -> int:
+        """Return the total count of server-sent events that the bus dropped.
+
+        The property takes no lock. Each counter is a plain integer, and a
+        reader wants the running total rather than a locked snapshot. A lock
+        here would also deadlock a caller that already holds ``self._lock``.
+        """
+        return self._evicted_event_count + self._rejected_event_count
+
+    def drop_stats(self) -> dict:
+        """Return the drop counters, so an operator can read the real loss.
+
+        Returns:
+            dict: ``evicted_oldest``, ``rejected_new``, and ``total`` counts.
+        """
+        return {
+            "evicted_oldest": self._evicted_event_count,  # Oldest events removed to free a slot.
+            "rejected_new": self._rejected_event_count,  # New events that the bus could not store.
+            "total": self.dropped_event_count,  # The sum that the operator reads first.
+        }
 
     def _heartbeat_loop(self) -> None:
         """Send heartbeat events every ``HEARTBEAT_INTERVAL_S`` seconds.
@@ -158,6 +256,9 @@ class PortalEventBus:
                 {
                     "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                     "active_operations": active_count,
+                    # WHY: put the loss total in the feed itself, so the operator
+                    # reading the live stream can see a gap without opening a log.
+                    "dropped_events": self.dropped_event_count,
                 },
             )
             self._cleanup_stale_subscribers()  # WHY: drop subscribers older than one hour.
