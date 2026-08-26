@@ -286,6 +286,7 @@ and the start control posts to no site.
 | 409 | `site_locked` with `details.actor_email` when a different operator holds the site lock |
 | 409 | `upgrade_already_running` with `details.run_id` when a run of this site has not finished |
 | 500 | `run_write_failed` when the run store refused the write |
+| 503 | `lock_store_unreachable` when the portal cannot read the site lock |
 
 `POST /api/runs` reaches the same handler and answers the same body. The two paths
 are one endpoint, not two. The path above names the site. `POST /api/runs` reads
@@ -341,6 +342,7 @@ upgrades.
 | 409 | `site_locked` with `details.actor_email` when a different operator holds the site lock |
 | 409 | `upgrade_targets_missing` when the saved plan names no device |
 | 500 | `run_write_failed` when the run store refused the write |
+| 503 | `lock_store_unreachable` when the portal cannot read the site lock |
 
 The portal refuses to start unless a verified pre-check capture exists.
 
@@ -418,6 +420,7 @@ The browser polls this endpoint every 30 seconds.
 | 404 | `run_not_found` |
 | 409 | `site_locked` with `details.actor_email` when a different operator holds the site lock |
 | 409 | `run_not_stoppable` when the run already finished |
+| 503 | `lock_store_unreachable` when the portal cannot read the site lock |
 
 ```json
 {
@@ -438,6 +441,18 @@ the cancel is best effort and that a device in mid-flash may still complete. The
 FR-038i binds this control to the operator who holds the site lock. The lock check
 runs before every other check of this route, so a second operator reads
 `site_locked` even when the run already finished.
+
+### The unreadable lock store
+
+The three routes above write. Each one answers `503` `lock_store_unreachable`
+when the portal cannot read the site lock. `contracts/site-lock.md:116` fixes
+that rule and forbids a fallback lock. The body names no operator, because the
+portal read no holder and any address there would be a guess.
+
+A read keeps the opposite rule. `GET /api/sites` marks the row `unknown`, and the
+capture start in section 4 still starts. A capture writes no firmware, and a page
+writes nothing at all. Only an upgrade route writes firmware to a device, so only
+an upgrade route fails closed.
 
 ### `GET /runs/<run_id>/options` — the options page
 
