@@ -230,14 +230,14 @@ class _SsidTemplatePhase2Cluster(_ClusterBase):
     def _confirm_phase2_write(self, plan: list[dict[str, Any]]) -> bool:  # WHY: isolates the prompt path
         """Prompt the operator to proceed with the pending write count."""
         pending = sum(1 for p in plan if p["status"] == _STATUS_PENDING)  # WHY: only pending drives writes
-        return bool(self._mm._confirm_or_cancel(f"Write site variables for {pending} sites?"))  # noqa: SLF001
+        return bool(self._mm._confirm_or_cancel(f"Write site variables for {pending} sites?"))
 
     def _execute_phase2_plan(self, plan: list[dict[str, Any]]) -> None:  # WHY: post-confirm coordinator
         """Run resume + write + persist + summary in one flow."""
         parent = self._mm  # WHY: proxy alias for readability + W0212 avoidance
-        resuming, prior_results = parent._offer_resume(2)  # noqa: SLF001
+        resuming, prior_results = parent._offer_resume(2)
         results = self._call("_write_site_variables", plan, prior_results if resuming else [])
-        parent._save_phase_results(2, results)  # noqa: SLF001
+        parent._save_phase_results(2, results)
         parent.write_data_fn(  # WHY: persist to org-scoped sink for later phases
             data=results,
             filename_or_table="ssid_consolidation_site_vars",
@@ -246,7 +246,7 @@ class _SsidTemplatePhase2Cluster(_ClusterBase):
         # WHY: phase45 owns the shared summary helper — import directly to avoid
         # routing through the parent module (mypy [attr-defined] on re-export).
         from ._ssid_template_phase45 import (
-            _print_phase_summary,  # noqa: PLC0415 — local import keeps import graph shallow
+            _print_phase_summary,  # local import keeps import graph shallow
         )
 
         _print_phase_summary("Phase 2", results)  # WHY: one-line status footer for operator
@@ -263,11 +263,11 @@ class _SsidTemplatePhase2Cluster(_ClusterBase):
         pending_entries = _select_pending_entries(plan, completed_ids)  # WHY: only write what remains
         site_groups = _group_entries_by_site(pending_entries)  # WHY: one API call per site
         # WHY: parent owns the per-site writer so tests can patch mistapi at the parent module.
-        from .ssid_template_consolidation import _write_single_site_vars  # noqa: PLC0415 — local import breaks cycle
+        from .ssid_template_consolidation import _write_single_site_vars  # local import breaks cycle
 
         for site_id, entries in site_groups.items():  # WHY: iterate the batched writes
             result = _write_single_site_vars(site_id, entries, parent.cache, parent.apisession)
             results.extend(result)  # WHY: accumulate per-site results
             if len(results) % _CHECKPOINT_INTERVAL == 0:  # WHY: bounded checkpoint cadence
-                parent._save_phase_results(2, results)  # noqa: SLF001 — intra-package checkpoint
+                parent._save_phase_results(2, results)  # intra-package checkpoint
         return results  # WHY: caller feeds this into _save_phase_results + write_data_fn

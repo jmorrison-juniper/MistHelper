@@ -1,3 +1,3 @@
 """Compatibility test entrypoint forwarding to capture workflow tests."""
 
-from tests.unit.capture.test_multi_ap_scan_workflow import *  # noqa: F401,F403
+from tests.unit.capture.test_multi_ap_scan_workflow import *  # noqa: F403

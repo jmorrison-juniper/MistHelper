@@ -78,7 +78,7 @@ class WAN2MigrationLauncher:
             manager = self._build_manager()  # Instantiate the canonical WAN2MigrationManager
             manager.set_site_variable()  # Run the WAN2 site-variable flow (blocks until user exits)
             logging.debug("Menu #149: WAN2 migration session returned cleanly")  # Log clean session close
-        except Exception as error:  # noqa: BLE001 - runtime errors must never crash the numbered menu
+        except Exception as error:  # runtime errors must never crash the numbered menu
             self._handle_fatal_error(error)  # Log traceback and surface user-visible error
 
     def _wire_dependencies(self) -> None:
@@ -86,7 +86,7 @@ class WAN2MigrationLauncher:
         logging.info("WAN2MigrationLauncher: wiring runtime dependencies into wan2_migration_manager")  # Log wire start
         misthelper = self._misthelper()  # Cache module handle for the ten attribute lookups below
         from src.gateway import (
-            wan2_migration_manager as wan2_module,  # noqa: PLC0415 - lazy import keeps startup path light
+            wan2_migration_manager as wan2_module,  # lazy import keeps startup path light
         )
 
         wan2_module.configure_wan2_migration_dependencies(  # Publish MistHelper-owned deps as frozen dataclass
@@ -109,7 +109,7 @@ class WAN2MigrationLauncher:
         """Instantiate the canonical WAN2MigrationManager with dependencies already wired."""
         logging.info("WAN2MigrationLauncher: instantiating canonical WAN2MigrationManager")  # Log build start
         from src.gateway.wan2_migration_manager import (
-            WAN2MigrationManager,  # noqa: PLC0415 - lazy import mirrors _wire_dependencies
+            WAN2MigrationManager,  # lazy import mirrors _wire_dependencies
         )
 
         manager = WAN2MigrationManager()  # Canonical class. Constructor pulls wired module globals

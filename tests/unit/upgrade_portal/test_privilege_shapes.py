@@ -219,7 +219,7 @@ def test_the_token_sign_in_signs_the_session_in(monkeypatch: Any) -> None:
         """A stand-in for the `mistapi` module."""
 
         @staticmethod
-        def APISession(**_: Any) -> TokenSessionSpy:  # noqa: N802  # The library spells the name this way.
+        def APISession(**_: Any) -> TokenSessionSpy:  # The library spells the name this way.
             """Return the spy in place of a real session.
 
             Returns:

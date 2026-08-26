@@ -195,7 +195,7 @@ def test_populate_table_emits_separator(tui_stub) -> None:
         def __init__(self) -> None:
             self.rows: list[tuple[str, str]] = []
 
-        def add_row(self, field: str, value: str) -> None:  # noqa: D401 - test helper
+        def add_row(self, field: str, value: str) -> None:  # test helper
             self.rows.append((field, value))
 
     table = _StubTable()  # Capture writes

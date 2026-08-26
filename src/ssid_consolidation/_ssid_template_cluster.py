@@ -66,7 +66,7 @@ class _ClusterBase:  # WHY: shared wrapper base for every ssid_template cluster
         warning off the per-phase clusters without leaking parent internals.
         """
         parent = self._mm  # WHY: proxy alias
-        cached = parent._load_cache()  # noqa: SLF001 — cluster helper is intra-package
+        cached = parent._load_cache()  # cluster helper is intra-package
         if not cached:  # WHY: cache missing means Phase 1 was skipped
             logging.warning("Phase 1 cache not found. Run Phase 1 first.")  # WHY: user bail msg
             return False  # WHY: signal to caller to abort the phase

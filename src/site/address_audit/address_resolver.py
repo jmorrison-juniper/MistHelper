@@ -88,7 +88,7 @@ class AddressResolver:
             with self._perf.phase("tier3_ui"):  # Time the browser tier incl. typing/read/politeness.
                 ui = self._maybe_ui(candidates, query)  # Tier 3: Google-via-Mist authority (gated. Fail-soft).
             return self._combine(internal, osm, ui, query)  # Merge the tiers into one result. Candidates are unused.
-        except Exception as exc:  # noqa: BLE001 -- one row must never abort the audit.
+        except Exception as exc:  # one row must never abort the audit.
             logging.warning("Resolve failed for key=%s: %s", private_digest(query), exc)  # Digest hides the street.
             return ResolverResult(query=query, canonical_address=None, source="internal", confidence=0.0)
 

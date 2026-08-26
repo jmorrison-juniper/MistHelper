@@ -175,7 +175,7 @@ class SshConnector:
         self.logger.debug("SSH client created with TOFU enrollment and strict host key verification")  # WHY: trace.
         try:
             self._trust_host_on_first_use(client, hostname, port)  # WHY: enroll first-seen key into managed store.
-        except Exception as enroll_error:  # noqa: BLE001 - broad catch: log then translate to connection failure.
+        except Exception as enroll_error:  # broad catch: log then translate to connection failure.
             self.logger.exception("TOFU enrollment failed for %s:%s: %s", hostname, port, enroll_error)  # WHY: audit.
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             self.logger.error("[ERROR] Host key enrollment failed: %s", enroll_error)
@@ -194,7 +194,7 @@ class SshConnector:
         self.logger.info("Releasing the abandoned SSH client for %s:%s", hostname, port)  # WHY: audit the cleanup.
         try:  # WHY: close() raises when the transport never started, and that must not mask the real failure.
             client.close()  # WHY: stop the paramiko transport thread and release the socket.
-        except Exception as close_error:  # noqa: BLE001 - cleanup must never replace the original connect failure.
+        except Exception as close_error:  # cleanup must never replace the original connect failure.
             self.logger.debug("SSH client close failed for %s:%s: %s", hostname, port, close_error)  # WHY: trace only.
             return  # WHY: the client is unusable either way, so the caller needs no further signal.
         self.logger.debug("SSH client closed for %s:%s", hostname, port)  # WHY: post-action result summary.
@@ -314,7 +314,7 @@ class SshConnector:
             self._invoke_paramiko_connect(client, hostname, port, username, password)  # WHY: real paramiko call.
             self._log_connect_success(hostname, time.time() - connection_start)  # WHY: verbatim success trace.
             return True  # WHY: success — caller keeps the live client handle.
-        except Exception as connect_error:  # noqa: BLE001 - broad catch: dispatched by _handle_connect_exception.
+        except Exception as connect_error:  # broad catch: dispatched by _handle_connect_exception.
             return self._handle_connect_exception(connect_error, hostname, port, username)  # WHY: table dispatch.
 
     def _invoke_paramiko_connect(

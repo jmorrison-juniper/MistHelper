@@ -101,7 +101,7 @@ class SiteGuestAuthorizationExporter:
             SiteGuestAuthorizationExporter._persist_site_guest_authorizations(  # Persist or notify empty.
                 rawdata, site_name
             )
-        except Exception as e:  # noqa: BLE001 -- surface any SDK/network error to the user instead of crashing.
+        except Exception as e:  # surface any SDK/network error to the user instead of crashing.
             logging.error(  # ERROR trace with site context for post-mortem correlation.
                 "Error fetching guest authorization for site %s: %s", site_name, e
             )

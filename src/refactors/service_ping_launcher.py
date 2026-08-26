@@ -71,7 +71,7 @@ class ServicePingLauncher:
             manager = self._build_manager()  # Instantiate the canonical ServicePingManager
             manager.execute()  # Run the interactive ping flow (blocks until user exits)
             logging.debug("Menu #120: Service Ping session returned cleanly")  # Log clean session close
-        except Exception as error:  # noqa: BLE001 - runtime errors must never crash the numbered menu
+        except Exception as error:  # runtime errors must never crash the numbered menu
             self._handle_fatal_error(error)  # Log traceback and surface user-visible error
 
     def _wire_dependencies(self) -> None:

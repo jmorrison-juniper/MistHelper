@@ -2759,7 +2759,7 @@ def _list_org_sites(mist_session: Any, org_id: str) -> list[dict[str, Any]]:
     try:
         response = _mist_orgs_sites.listOrgSites(mist_session, org_id)
         sites = mistapi.get_all(response=response, mist_session=mist_session)
-    except Exception as err:  # noqa: BLE001 -- surface any transport error.
+    except Exception as err:  # surface any transport error.
         logging.error("listOrgSites(%s) failed: %s", org_id, err)
         print(f"  listOrgSites failed ({err}); skipping site overrides.")
         return []
@@ -2971,7 +2971,7 @@ def _put_site_setting(mist_session: Any, site_id: str, body: dict[str, Any]) -> 
     """
     try:
         put_response = _mist_site_setting.updateSiteSettings(mist_session, site_id, body)
-    except Exception as err:  # noqa: BLE001 -- surface any transport error.
+    except Exception as err:  # surface any transport error.
         print(f"  Site {site_id}: updateSiteSettings failed ({err}); skipping.")
         logging.error("updateSiteSettings(%s) failed: %s", site_id, err)
         return False
@@ -3002,7 +3002,7 @@ def _fetch_site_setting(mist_session: Any, site_id: str) -> dict[str, Any] | Non
     """
     try:
         response = _mist_site_setting.getSiteSetting(mist_session, site_id)
-    except Exception as err:  # noqa: BLE001 -- surface any transport error.
+    except Exception as err:  # surface any transport error.
         print(f"  Site {site_id}: getSiteSetting failed ({err}); skipping.")
         logging.error("getSiteSetting(%s) failed: %s", site_id, err)
         return None

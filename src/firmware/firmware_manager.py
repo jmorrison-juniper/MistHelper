@@ -527,8 +527,8 @@ class FirmwareManager:
 
     def _clear_monitoring_screen(self) -> None:  # WHY: platform abstraction wrapped in a helper
         """Clear the terminal window between refreshes."""
-        import os  # noqa: PLC0415  # WHY: lazy import to keep monitoring cost off startup
-        import platform  # noqa: PLC0415  # WHY: lazy import platform detection
+        import os  # WHY: lazy import to keep monitoring cost off startup
+        import platform  # WHY: lazy import platform detection
 
         if platform.system() == "Windows":  # WHY: cmd.exe uses cls
             os.system("cls")  # nosec B605 B607  # WHY: intentional shell call for terminal reset
@@ -561,7 +561,7 @@ class FirmwareManager:
 
     def _print_upgrade_job_timing_info(self, details: dict[str, Any]) -> None:
         """Print start and reboot time for an upgrade job, converting epoch to human-readable."""
-        from datetime import datetime as dt_module  # noqa: PLC0415
+        from datetime import datetime as dt_module
 
         start_time = details.get("start_time")  # WHY: read epoch start time
         if start_time:  # WHY: only render when present
@@ -656,7 +656,7 @@ class FirmwareManager:
 
     def _fetch_org_upgrade_jobs(self) -> tuple[Any, list[Any]]:
         """Return (api_module, upgrade_jobs_list) tuple from the mist API."""
-        import mistapi.api.v1.orgs.devices as org_devices_api  # noqa: PLC0415   # WHY: lazy import per policy
+        import mistapi.api.v1.orgs.devices as org_devices_api  # WHY: lazy import per policy
 
         print("  Fetching org-level upgrade jobs...")  # WHY: operator progress line
         list_response = org_devices_api.listOrgDeviceUpgrades(self.apisession, self.org_id)  # WHY: API call
@@ -723,7 +723,7 @@ class FirmwareManager:
         """Print a formatted table of devices currently upgrading."""
         if not active_upgrades:  # WHY: skip render when nothing to show
             return
-        import sys as _sys  # noqa: PLC0415
+        import sys as _sys
 
         _main_d = _sys.modules.get("__main__") or _sys.modules.get("MistHelper")  # WHY: resolve MistHelper module
         print("\n  Devices Currently Upgrading:")  # WHY: section header
@@ -1310,7 +1310,7 @@ class FirmwareManager:
         Returns:
             Sorted list of org dicts, or None if unavailable.
         """
-        import mistapi.api.v1.msps.orgs as msp_orgs_api  # noqa: PLC0415
+        import mistapi.api.v1.msps.orgs as msp_orgs_api
 
         global apisession
         logging.info("Fetching MSP org list msp=%s", msp_id)  # WHY: audit entry
@@ -1419,7 +1419,7 @@ class FirmwareManager:
         Returns:
             Sorted list of site dicts, or None if unavailable.
         """
-        import mistapi.api.v1.orgs.sites as org_sites_api  # noqa: PLC0415
+        import mistapi.api.v1.orgs.sites as org_sites_api
 
         global apisession
         logging.info("Fetching org sites org=%s", target_org_id)  # WHY: audit entry
@@ -1733,7 +1733,7 @@ class FirmwareManager:
             return {"record": self._make_msp_record(plan, "completed", dry_run), "stop": False}  # WHY: happy path
         except KeyboardInterrupt:  # WHY: user pressed Ctrl-C mid-flow
             return self._handle_msp_interrupt(plan, target_org_name, dry_run)  # WHY: prompt continuation policy
-        except Exception as exc:  # noqa: BLE001  # WHY: surface any downstream failure without abort
+        except Exception as exc:  # WHY: surface any downstream failure without abort
             return self._handle_msp_failure(plan, target_org_name, exc, dry_run)  # WHY: capture error record
 
     def _run_msp_bulk_upgrader(  # WHY: construct + execute the pre-selected-sites bulk upgrader
@@ -4015,9 +4015,7 @@ class FirmwareUpgradeStatusChecker:
 
     def _record_stored_upgrade(self, upgrade_id: str, site_id: str, site_name: str, details: dict[str, Any]) -> None:
         """Append one stored-upgrade record from a getSiteDeviceUpgrade response into active_upgrades."""
-        print(
-            f"      Upgrade {upgrade_id[:8]}... at site '{site_name}': Status = {details.get('status', 'Unknown')}"  # noqa: E501
-        )
+        print(f"      Upgrade {upgrade_id[:8]}... at site '{site_name}': Status = {details.get('status', 'Unknown')}")
         self.active_upgrades.append(
             {
                 "upgrade_id": upgrade_id,

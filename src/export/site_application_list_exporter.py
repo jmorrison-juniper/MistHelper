@@ -85,6 +85,6 @@ class SiteApplicationListExporter:
             )
             rawdata = mistapi.get_all(response=response, mist_session=mh.apisession)  # Page through all rows.
             SiteApplicationListExporter._persist_applications(rawdata, site_name)  # Persist or report empty.
-        except Exception as e:  # noqa: BLE001 -- surface any SDK or network error rather than crashing the menu.
+        except Exception as e:  # surface any SDK or network error rather than crashing the menu.
             logging.error("Error fetching the application list for site %s: %s", site_name, e)  # Failure context.
             logging.info("! Error fetching application list data: %s", e)  # ASCII-only user notice.

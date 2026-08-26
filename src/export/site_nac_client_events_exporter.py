@@ -99,7 +99,7 @@ class SiteNacClientEventsExporter:
             )
             rawdata = mistapi.get_all(response=response, mist_session=mh.apisession)  # Page all rows.
             SiteNacClientEventsExporter._persist_site_nac_client_events(rawdata, site_name)  # Persist or notify empty.
-        except Exception as e:  # noqa: BLE001 -- surface any SDK/network error to the user instead of crashing.
+        except Exception as e:  # surface any SDK/network error to the user instead of crashing.
             logging.error(  # ERROR trace with site context for post-mortem correlation.
                 "Error fetching NAC client events for site %s: %s", site_name, e
             )

@@ -550,7 +550,7 @@ class LockHeartbeat:
         run_id = self._plan.record.run_id
         try:
             self._plan.release(self._plan.key, self._plan.record)
-        except Exception as error:  # noqa: BLE001  # WHY: The run already ended, so no fault may end it again.
+        except Exception as error:  # WHY: The run already ended, so no fault may end it again.
             logger.warning("Run %s could not release the site lock (%s)", run_id, type(error).__name__)
             return False
         logger.info("Run %s released the site lock", run_id)
@@ -607,7 +607,7 @@ class LockHeartbeat:
             return self._quiet()  # contracts/site-lock.md line 137 gives the store a retry window
         except SiteLockError:
             return self._lost(LOCK_LOST_REASON)  # A takeover or an expiry moved the lock
-        except Exception as error:  # noqa: BLE001  # WHY: A beat must never end a live upgrade.
+        except Exception as error:  # WHY: A beat must never end a live upgrade.
             return self._lost(f"The portal could not renew the site lock ({type(error).__name__}).")
         return self._held(int(left))
 
@@ -1148,7 +1148,7 @@ class RunDriver:
         try:
             self._submit(record)
             self._cascade(record)
-        except Exception as error:  # noqa: BLE001  # WHY: The thread must write the reason, never die silently.
+        except Exception as error:  # WHY: The thread must write the reason, never die silently.
             self._fail(record, error)
         finally:
             self._quiet_lock()  # The run reached a final state, so the heartbeat stops

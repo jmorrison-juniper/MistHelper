@@ -125,7 +125,7 @@ def test_append_module_record_ignores_non_mistapi(tui_stub) -> None:
 def test_append_function_record_uses_signature_when_available(tui_stub) -> None:
     """``_append_function_record`` extracts inspect.signature output as a string."""
 
-    def example(a, b="x"):  # noqa: ANN001, ANN201 — bare to avoid PEP 563 stringification
+    def example(a, b="x"):  # bare to avoid PEP 563 stringification
         """Example docstring."""
 
     LevelDiscoverer(tui_stub)._append_function_record(example, "example")  # Append record
@@ -139,7 +139,7 @@ def test_append_function_record_falls_back_when_signature_fails(tui_stub, monkey
     """Callables whose signature cannot be introspected use the ``(...)`` placeholder."""
     import inspect as _inspect
 
-    def _raise(_obj):  # noqa: ANN001, ANN202 — test helper
+    def _raise(_obj):  # test helper
         raise ValueError("no signature")  # Force the except branch in append_function_record
 
     monkeypatch.setattr(_inspect, "signature", _raise)  # Patch the module symbol

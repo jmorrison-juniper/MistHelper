@@ -53,7 +53,7 @@ def _fetch_msp_name(msp_id: str, session: Any) -> str | None:
         logging.debug("_fetch_msp_name: no session, returning None")  # AFTER: no-session trace
         return None  # Cannot look anything up
     try:  # API call and payload parsing may fail. Degrade to None on any error
-        import mistapi.api.v1.msps.msps as msps_api  # noqa: PLC0415  # Lazy import of MSP details endpoint
+        import mistapi.api.v1.msps.msps as msps_api  # Lazy import of MSP details endpoint
 
         response = msps_api.getMspDetails(session, msp_id)  # Fetch the MSP record by ID via the shared session
         result = _extract_msp_name(response)  # Pull the name from the payload (None when absent/malformed)
@@ -124,7 +124,7 @@ def _msp_extract_from_user_data(user_data: dict[str, Any], session: Any) -> list
 def _msp_fetch_user_data(session: Any) -> dict[str, Any] | None:
     """Call getSelf and return the validated user-data dict, or None when unavailable or malformed."""
     logging.info("_msp_fetch_user_data: entry")  # BEFORE: trace API call
-    import mistapi.api.v1.self.self as self_api  # noqa: PLC0415  # Lazy import of the "self" endpoint module
+    import mistapi.api.v1.self.self as self_api  # Lazy import of the "self" endpoint module
 
     response = self_api.getSelf(session)  # Ask the API who the authenticated user is (via injected session).
     if not response or not hasattr(response, "data"):  # No usable payload came back.

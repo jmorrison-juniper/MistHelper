@@ -127,7 +127,7 @@ class SensitiveFilter(logging.Filter):
         re.IGNORECASE,
     )
 
-    def filter(self, record: logging.LogRecord) -> bool:  # noqa: A003
+    def filter(self, record: logging.LogRecord) -> bool:
         """Scrub the formatted log message in-place before it is emitted.
 
         Args:
@@ -145,6 +145,6 @@ class SensitiveFilter(logging.Filter):
             if sanitized != message:  # Only mutate if something was actually scrubbed
                 record.msg = sanitized  # Replace the message with the sanitized version
                 record.args = ()  # Clear args so getMessage() uses the new msg directly
-        except Exception:  # noqa: BLE001 - never crash a logging filter
+        except Exception:  # never crash a logging filter
             pass  # nosec B110 - A log call inside this filter re-enters the filter and recurses without end.
         return True  # Always pass the record on. We only sanitize, never suppress

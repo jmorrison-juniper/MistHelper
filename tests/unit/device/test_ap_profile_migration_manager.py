@@ -2052,7 +2052,7 @@ def test_migrate_integration_real_limiter_seeded_cache(
         cache so the addendum does not silently break the PID limiter's
         contract.
     """
-    from src.utils.rate_limiting import RateLimitingUtils as _RealLimiter  # noqa: PLC0415
+    from src.utils.rate_limiting import RateLimitingUtils as _RealLimiter
 
     # WHY: install the real limiter class (not a MagicMock) so the manager
     # exercises the PID math per research Q4.

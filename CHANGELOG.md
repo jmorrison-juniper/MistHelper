@@ -7,6 +7,35 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Remove the unused noqa directives and gate the rule (issue #1792)
+
+- **Defect (Fixed)**: 310 `# noqa` directives suppressed nothing. A stale
+  directive hides the next real finding on the same line, and it tells a reader
+  that a problem exists where none does. `ruff check . --fix` removed all 310.
+- **Gate (Added)**: `RUF100` joins `select` in `pyproject.toml`. The rule reports
+  a directive that suppresses nothing, so the count stays at zero and a reader
+  can trust that every remaining directive answers a real finding.
+- **Comments (Restored)**: the ruff fix removes the whole trailing comment when
+  the reason runs on directly after the code, so
+  `except Exception:  # noqa: BLE001 - the SDK raises bare Exception` lost its
+  reason. This project requires a reason on every executable line, so a repair
+  pass read the base revision of each changed file and put 121 lost reasons back
+  as plain comments. No line lost its reason.
+- **Count (Explained)**: the earlier attempt on this issue removed 287
+  directives. `main` has moved since then, so the sweep was measured again
+  against the current tree and it now reports 310. A rebase of the old sweep
+  would have left the 23 newer directives in place, and the new gate would then
+  have failed on the very branch that added it.
+- **Formatting (Applied)**: `src/export/org_inventory_exporter.py` and
+  `src/firmware/firmware_manager.py` needed black after the sweep, because the
+  shorter lines let black rejoin two wrapped calls.
+- **Sweep safety (Verified)**: the four checks of the sweep policy pass.
+  `py_compile` reports no output for all 107 changed files. `ruff check .`
+  reports `All checks passed`. `mypy src/ MistHelper.py wsgi.py` reports
+  `Success: no issues found in 387 source files`. `tools.symbol_diff` reports
+  `no module-level name changed` and exits 0. The count of deleted lines that
+  are not comments is zero.
+
 ### Menu 238 was allocated twice, so the portal moved to menu 239 (issue #2065)
 
 - **Defect (Fixed)**: `main` gave menu 238 to the MSP license export, which is

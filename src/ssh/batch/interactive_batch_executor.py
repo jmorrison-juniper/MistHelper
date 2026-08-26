@@ -179,7 +179,7 @@ def _write_ascii_fallback(
     try:
         safe_message = message.encode("ascii", errors="replace").decode("ascii")  # WHY: last-resort encoding.
         _persist_log_line(host_log_file, safe_message)  # WHY: reuse the sanitised persister.
-    except Exception:  # noqa: BLE001 - last-resort path (verbatim behaviour)
+    except Exception:  # last-resort path (verbatim behaviour)
         logger.error("Failed to write sanitized message to host log")  # WHY: preserve original error line.
 
 
@@ -194,7 +194,7 @@ def _write_clean_line(
         _persist_log_line(host_log_file, safe_message)  # WHY: durable append with owner-only perms.
     except UnicodeEncodeError:  # WHY: ASCII fallback path mirrors original behaviour.
         _write_ascii_fallback(message, host_log_file, logger)  # WHY: retry via ASCII-encoded persister.
-    except Exception as write_error:  # noqa: BLE001 - last-resort path (verbatim)
+    except Exception as write_error:  # last-resort path (verbatim)
         logger.error(
             "Unexpected error writing to host log %s: %s", host_log_file, write_error
         )  # WHY: preserve original error line.
@@ -284,7 +284,7 @@ class InteractiveBatchExecutor:  # WHY: static-method container for the interact
         try:
             overall_success = InteractiveBatchExecutor._execute_session(request, log_ctx, logger)  # WHY: run session.
             return overall_success  # WHY: propagate session outcome to caller.
-        except Exception as session_error:  # noqa: BLE001 - top-level fallback (verbatim)
+        except Exception as session_error:  # top-level fallback (verbatim)
             InteractiveBatchExecutor._handle_session_error(
                 request.hostname, session_error, log_ctx, logger
             )  # WHY: verbatim error path.
@@ -528,7 +528,7 @@ class InteractiveBatchExecutor:  # WHY: static-method container for the interact
         except KeyboardInterrupt:  # WHY: Ctrl+C halts remaining steps (verbatim UX).
             InteractiveBatchExecutor._handle_step_interrupt(step_ctx, writer, logger)  # WHY: verbatim logs.
             return True, False
-        except Exception as step_error:  # noqa: BLE001 - per-step fallback (verbatim)
+        except Exception as step_error:  # per-step fallback (verbatim)
             InteractiveBatchExecutor._handle_step_exception(step_ctx, step_error, writer, logger)  # WHY: log.
             return True, False
 
@@ -715,7 +715,7 @@ class InteractiveBatchExecutor:  # WHY: static-method container for the interact
             time.sleep(_SHELL_EXIT_PAUSE)  # WHY: give the device a moment to process the exit.
             shell.close()  # WHY: release the paramiko shell channel.
             logger.debug("[%s] Interactive shell closed gracefully", hostname)  # WHY: parity debug.
-        except Exception as cleanup_error:  # noqa: BLE001 - cleanup is best-effort (verbatim)
+        except Exception as cleanup_error:  # cleanup is best-effort (verbatim)
             logger.debug("[%s] Shell cleanup warning: %s", hostname, cleanup_error)  # WHY: parity debug.
 
     @staticmethod
@@ -744,7 +744,7 @@ class InteractiveBatchExecutor:  # WHY: static-method container for the interact
         """Write the session footer. Fall back to a minimal footer on any error."""
         try:
             writer(_build_footer_text(overall_success, host_log_file))  # WHY: verbatim footer block.
-        except Exception as footer_error:  # noqa: BLE001 - footer is best-effort (verbatim)
+        except Exception as footer_error:  # footer is best-effort (verbatim)
             InteractiveBatchExecutor._write_simple_footer(writer, footer_error, logger)  # WHY: fallback path.
 
     @staticmethod
@@ -762,5 +762,5 @@ class InteractiveBatchExecutor:  # WHY: static-method container for the interact
         try:
             simple_footer = f"Session completed at {datetime.now().strftime(_TS_FMT_HUMAN)}"  # WHY: parity.
             writer(simple_footer)  # WHY: best-effort persistence of the minimal footer.
-        except Exception as fallback_error:  # noqa: BLE001 - last-resort path (verbatim)
+        except Exception as fallback_error:  # last-resort path (verbatim)
             logger.error("Even simple interactive footer failed: %s", fallback_error)  # WHY: log parity.

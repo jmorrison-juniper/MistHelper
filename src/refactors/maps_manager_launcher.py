@@ -96,7 +96,7 @@ class MapsManagerLauncher:
             self.org_id = self._config_utils().get_cached_or_prompted_org_id()  # Late-bound ConfigUtils
             logging.debug("MapsManagerLauncher: org id resolved (present=%s)", bool(self.org_id))  # Log resolution
             return bool(self.org_id)  # Empty string means the user aborted - abort launch
-        except Exception as error:  # noqa: BLE001 - prompt errors must never crash the menu
+        except Exception as error:  # prompt errors must never crash the menu
             self._handle_fatal_error(error)  # Log traceback and surface user-visible error
             return False  # Signal caller to abort the launch
 
@@ -109,7 +109,7 @@ class MapsManagerLauncher:
             self.maps_manager = self._external_class(self._apisession(), self.org_id)  # Late-bound apisession
             self.maps_manager.run_interactive_menu()  # Enter blocking interactive loop (Dash web server)
             logging.debug("MapsManagerLauncher: interactive menu returned cleanly")  # Log clean return
-        except Exception as error:  # noqa: BLE001 - runtime errors must never crash the numbered menu
+        except Exception as error:  # runtime errors must never crash the numbered menu
             self._handle_fatal_error(error)  # Log traceback and surface user-visible error
 
     def _handle_fatal_error(self, error: Exception) -> None:

@@ -188,7 +188,7 @@ class _RoutingUtilsDisplay:  # WHY: cluster wrapper matches the Phase 1 parsing-
             return None  # WHY: unable to group without a CIDR mask
         prefix = dest.split("/")[0]  # WHY: drop the mask portion before splitting octets
         octets = prefix.split(".")  # WHY: split IPv4 dotted decimal for octet inspection
-        if len(octets) < 2:  # noqa: PLR2004 — WHY: /16 group needs the first two octets only
+        if len(octets) < 2:  # WHY: /16 group needs the first two octets only
             return None  # WHY: malformed address cannot be grouped
         return f"{octets[0]}.{octets[1]}.0.0/16"  # WHY: canonical /16 label for grouping
 

@@ -1234,7 +1234,7 @@ def _run_probe_validation(
                 "endpoints (n=%d); refresh kept anyway",
                 len(results),
             )
-    except Exception as exc:  # noqa: BLE001 -- validation is best-effort
+    except Exception as exc:  # validation is best-effort
         logger.warning("zscaler_catalogue: validation crashed: %s", exc)
     return probes, results
 

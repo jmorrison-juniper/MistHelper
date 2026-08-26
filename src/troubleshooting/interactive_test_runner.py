@@ -59,7 +59,7 @@ class _LoggedErrorObserver(logging.Handler):
         self.error_count = 0  # WHY: cheap monotonic tally. Callers only check >0.
         self.ignored_count = 0  # WHY: #1786 -- third-party records, reported so they stay visible.
 
-    def emit(self, record: logging.LogRecord) -> None:  # noqa: D401 -- logging.Handler API
+    def emit(self, record: logging.LogRecord) -> None:  # logging.Handler API
         """Increment the captured error tally for each ERROR (or higher) record."""
         if record.levelno < logging.ERROR:
             return

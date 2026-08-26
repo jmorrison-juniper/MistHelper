@@ -68,8 +68,8 @@ def _restore_mistapi_modules() -> None:
 # import. See issue #1739.
 _install_mistapi_stubs()
 try:
-    import src.ssid_consolidation.ssid_template_consolidation as _mod  # noqa: E402
-    from src.ssid_consolidation.ssid_template_consolidation import (  # noqa: E402
+    import src.ssid_consolidation.ssid_template_consolidation as _mod
+    from src.ssid_consolidation.ssid_template_consolidation import (
         SSIDTemplateConsolidationManager,
         SsidTemplateDeps,
         TemplateOpParams,

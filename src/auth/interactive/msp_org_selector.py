@@ -106,7 +106,7 @@ class MspOrgSelector:
             return  # Cannot continue without a session
         try:
             orgs = self._fetch_msp_orgs(apisession, msp_id)  # Sorted list of org dicts (or None)
-        except Exception as org_error:  # noqa: BLE001  Preserve legacy catch-all surface
+        except Exception as org_error:  # Preserve legacy catch-all surface
             logging.warning("  X Error fetching MSP organizations: %s", org_error)  # Legacy message routed via logger
             logging.error("Failed to fetch MSP organizations: %s", org_error)  # Legacy error log
             return  # Bail out without mutating org_id

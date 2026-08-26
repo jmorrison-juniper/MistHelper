@@ -80,15 +80,15 @@ class _ValueFormatter:  # WHY: replaces inner closure so it can be unit-tested
         result: str = renderer(self, value)  # WHY: dispatch to bound-method renderer
         return result  # WHY: explicit str typing keeps mypy strict happy
 
-    def _render_bool(self, value: bool) -> str:  # noqa: ARG002 - self kept for uniform signature
+    def _render_bool(self, value: bool) -> str:  # self kept for uniform signature
         """Render a bool value in cyan (kept before int by dispatch table)."""
         return f"[bright_cyan]{value!s}[/bright_cyan]"  # WHY: bool distinguished from int
 
-    def _render_number(self, value: int | float) -> str:  # noqa: ARG002 - self kept for uniform signature
+    def _render_number(self, value: int | float) -> str:  # self kept for uniform signature
         """Render numeric values (int/float) with the green highlight."""
         return f"[bright_green]{value}[/bright_green]"  # WHY: numeric emphasis in grid
 
-    def _render_dict(self, value: dict[str, Any]) -> str:  # noqa: ARG002 - self kept for uniform signature
+    def _render_dict(self, value: dict[str, Any]) -> str:  # self kept for uniform signature
         """Render a dict value as a 'expand below' marker with key count."""
         return f"[magenta]v {len(value)} keys (expanded below)[/magenta]"  # WHY: defer to flatten
 

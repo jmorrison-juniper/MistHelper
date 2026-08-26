@@ -55,7 +55,7 @@ def test_save_swallows_write_failure(
     """A serialization failure is logged but does NOT propagate."""
     tui_stub.function_params = {}  # No params
 
-    def _boom(*_a, **_kw) -> None:  # noqa: ANN001
+    def _boom(*_a, **_kw) -> None:
         raise OSError("disk full")
 
     monkeypatch.setattr("builtins.open", _boom)  # Force open() to fail

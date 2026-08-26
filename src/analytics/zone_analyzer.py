@@ -113,7 +113,7 @@ class ZoneConfigurationAnalyzer:
         check_stop_fn: CheckStopFn,
     ) -> dict[str, Any]:
         """Collect engagement and occupancy settings from all sites."""
-        import mistapi  # noqa: F811  # WHY: deferred import so tests can stub the module
+        import mistapi  # WHY: deferred import so tests can stub the module
 
         info_msg = "Fetching site settings for engagement/occupancy analysis..."  # WHY: banner literal reused below
         sites = _fetch_sites_or_warn(all_sites_fn, org_id, info_msg)  # WHY: shared warning path when empty
@@ -134,7 +134,7 @@ class ZoneConfigurationAnalyzer:
         check_stop_fn: CheckStopFn,
     ) -> dict[str, Any]:
         """Collect zone configurations from all sites."""
-        import mistapi  # noqa: F811  # WHY: deferred import so tests can stub the module
+        import mistapi  # WHY: deferred import so tests can stub the module
 
         sites = _fetch_sites_or_warn(all_sites_fn, org_id, "Fetching all sites in organization...")  # WHY: shared warn
         if not sites:  # WHY: nothing to iterate when the org has no sites
@@ -293,7 +293,7 @@ class ZoneConfigurationAnalyzer:
         save_data_fn: SaveDataFn,
     ) -> None:
         """Export analysis results to CSV files."""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")  # noqa: DTZ005  # WHY: local wall-clock filename stamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")  # WHY: local wall-clock filename stamp
         analyses = {  # WHY: bundle the three analyses to keep helper param counts low
             "zones": combined.get("zones", {}),  # WHY: zone analysis dict
             "engagement": combined.get("engagement", {}),  # WHY: engagement analysis dict

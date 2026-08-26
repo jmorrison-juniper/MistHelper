@@ -155,7 +155,7 @@ def test_disconnect_from_reader_thread_skips_the_self_join() -> None:
         """Call disconnect from inside the reader thread, which models an on_close callback."""
         try:  # WHY: A raised error inside a thread would otherwise be lost.
             manager.disconnect()  # WHY: The self-join branch under test.
-        except BaseException as thread_error:  # noqa: BLE001  # WHY: Report any error to the main thread.
+        except BaseException as thread_error:  # WHY: Report any error to the main thread.
             failures.append(thread_error)  # WHY: Main thread asserts the list is empty.
 
     reader = threading.Thread(target=disconnect_from_reader, daemon=True)  # WHY: Stands in for the reader.

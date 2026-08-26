@@ -827,7 +827,7 @@ class TestSeams:
             record, and the builder reads them from there.
         """
         beat = driver.lock_heartbeat(make_record(), make_lock())
-        assert beat._plan.key == "misthelper:lock:site:org-1:site-1"  # noqa: SLF001  # WHY: The plan is the only seam.
+        assert beat._plan.key == "misthelper:lock:site:org-1:site-1"  # WHY: The plan is the only seam.
 
     def test_the_key_reaches_every_refresh_call(self) -> None:
         """The key of the plan is the key the compare-and-extend call reads."""

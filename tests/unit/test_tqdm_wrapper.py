@@ -24,7 +24,7 @@ def test_wrapper_module_exposes_tqdm_symbol():
 def test_wrapper_real_tqdm_when_installed():
     """When ``tqdm`` is importable, the wrapper re-exports the real package callable."""
     try:
-        from tqdm import tqdm as real_tqdm  # noqa: PLC0415  # Import inside test to check installed path.
+        from tqdm import tqdm as real_tqdm  # Import inside test to check installed path.
     except ImportError:
         pytest.skip("tqdm package not installed; real-path test not applicable in this env.")
     module = importlib.reload(importlib.import_module("src.utils.tqdm_wrapper"))

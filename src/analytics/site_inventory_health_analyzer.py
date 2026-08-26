@@ -106,7 +106,7 @@ class SiteInventoryHealthAnalyzer:  # WHY: namespace for the analyzer entry poin
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info("  Found %d sites", len(sites))
             return sites  # WHY: hand off list to caller for grouping
-        except Exception as error:  # noqa: BLE001 - Mist SDK raises bare Exception subclasses
+        except Exception as error:  # Mist SDK raises bare Exception subclasses
             logging.error("Failed to fetch sites: %s", error)  # WHY: capture root cause for support
             return []  # WHY: empty list triggers downstream fetch-failure path
 
@@ -124,7 +124,7 @@ class SiteInventoryHealthAnalyzer:  # WHY: namespace for the analyzer entry poin
             logging.debug("Fetched %d devices from organization inventory", len(devices))  # WHY: post-action log
             SiteInventoryHealthAnalyzer._print_device_summary(devices)  # WHY: type/connected breakdown
             return devices  # WHY: hand off list to caller for grouping
-        except Exception as error:  # noqa: BLE001 - Mist SDK raises bare Exception subclasses
+        except Exception as error:  # Mist SDK raises bare Exception subclasses
             logging.error("Failed to fetch devices: %s", error)  # WHY: capture root cause for support
             return []  # WHY: empty list triggers downstream fetch-failure path
 
