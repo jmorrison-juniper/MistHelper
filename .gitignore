@@ -21,6 +21,10 @@ data/ste_dictionary.json
 .env.production
 .env.staging
 *.log
+# WHY: a saved test run is a local artifact, not source. `e2e-baseline.txt` was
+# a pytest transcript that a `git add -A` swept into a commit twice.
+e2e-baseline.txt
+*-baseline.txt
 *.key
 *.pem
 *.p12
