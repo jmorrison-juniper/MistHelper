@@ -92,7 +92,11 @@ def _has_auth_dependency(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
         + list(node.args.defaults)
         + list(node.args.kw_defaults)
     )  # Align defaults with arguments
-    for arg, default in zip(all_args, all_defaults):  # Walk each arg-default pair
+    # WHY: the pair keeps each default aligned with its argument. Only the
+    # default carries the `Depends(...)` call that this check reads, so the
+    # argument node itself stays unused and takes the underscore name. Ruff
+    # rule B007 reports a loop variable that no line of the body reads.
+    for _arg, default in zip(all_args, all_defaults):  # Walk each arg-default pair
         if default is None:  # No default means no Depends
             continue
         if not (isinstance(default, ast.Call) and getattr(default.func, "id", "") == "Depends"):
