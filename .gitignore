@@ -3,6 +3,11 @@
 
 # Security - Never commit sensitive files
 .env
+# WHY: `.env` alone does not cover a copy such as `.env.backup-2059` or
+# `.env.2026-08-25`. A copy holds the same API token as the original, so the
+# pattern below covers every suffix an operator adds while editing.
+.env.*
+!.env.example
 !documentation/sample.env
 
 # Copyrighted standard - do not redistribute (ASD-STE100 license restricts sharing)
@@ -16,6 +21,10 @@ data/ste_dictionary.json
 .env.production
 .env.staging
 *.log
+# WHY: a saved test run is a local artifact, not source. `e2e-baseline.txt` was
+# a pytest transcript that a `git add -A` swept into a commit twice.
+e2e-baseline.txt
+*-baseline.txt
 *.key
 *.pem
 *.p12

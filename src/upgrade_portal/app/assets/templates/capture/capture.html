@@ -1,0 +1,270 @@
+{#
+  capture/capture.html - the capture page of the upgrade capture portal.
+
+  Why this file exists:
+    One page covers the whole life of one capture. It starts the capture, it
+    shows the progress, and it shows the result. A second page would need a
+    second poll and a second set of test identifiers for the same six sections.
+
+  Why the page holds no script:
+    The content security policy is 'self' only. See src/upgrade_portal/app/
+    security.py. The policy blocks an inline script and blocks the style
+    attribute. Every behavior of this page therefore lives in portal.js, and
+    every color lives in a stylesheet.
+
+  Why the links hold a literal path:
+    contracts/http-api.md fixes every public path of this portal. The blueprint
+    endpoint names are not fixed, and the route modules do not exist yet. A
+    url_for call against an endpoint name would raise while this page renders,
+    so every path follows the contract. url_for stays for a static asset.
+
+  The contract with portal.js:
+    portal.js reads data-capture-id and data-poll-seconds from the progress
+    region. With a capture identifier it polls GET /api/captures/<id>/status
+    every 30 seconds and paints the values below. The start button carries
+    data-site-id, data-run-id, and data-role, which build the body of
+    POST /api/sites/<site_id>/captures.
+
+  Why the page polls instead of listening:
+    Decision D3 of the plan fixes a 30-second poll. The portal sends no
+    server-sent event, because the existing event bus caps at 10 subscribers.
+
+  Variables a route may supply:
+    site_id       - the site the capture reads. The start button needs it.
+    site_name     - the site name for the heading.
+    capture_id    - the identifier of an existing capture. Empty before a start.
+    status        - the last known status. The shape matches the body of
+                    GET /api/captures/<id>/status exactly: state, percent,
+                    sections, counts, partial_reasons, verified, and message.
+                    portal.js paints the same fields from the poll, so the
+                    server render and the poll never disagree.
+    stored_size_bytes     - the stored size of the capture, in bytes.
+    tier                  - 2 or 3. Defaults to 2, as contracts/http-api.md
+                            states.
+    run_id                - the run this capture belongs to. May be absent.
+    role                  - `pre` or `post`. Defaults to `pre`.
+    poll_interval_seconds - the poll period. Defaults to 30.
+    page_title            - the heading text and the tab text.
+    theme, themes         - see layout.html.
+#}
+{% extends 'layout.html' %}
+
+{% block title %}{{ page_title | default('Capture', true) }}{% endblock %}
+
+{% block heading %}<h1>{{ page_title | default('Capture', true) }}</h1>{% endblock %}
+
+{% block content %}
+{#
+  The six section names come from contracts/http-api.md:155-159. The identifier
+  appends the section key of that body without any change, so portal.js finds
+  the element straight from the key it reads. A second spelling would need a
+  translation table in the script and in every test.
+#}
+{% set section_labels = [
+  ('devices', 'Devices'),
+  ('clients_wired', 'Wired clients'),
+  ('clients_wireless', 'Wireless clients'),
+  ('clients_guest', 'Guest clients'),
+  ('extras', 'Extra data'),
+  ('alarms', 'Alarms')
+] %}
+
+{# data-model.md fixes these nine count keys and this order. #}
+{% set count_labels = [
+  ('devices_total', 'Devices in total'),
+  ('devices_connected', 'Devices connected'),
+  ('devices_disconnected', 'Devices disconnected'),
+  ('gateways', 'Gateways'),
+  ('switches', 'Switches'),
+  ('access_points', 'Access points'),
+  ('clients_wired', 'Wired clients'),
+  ('clients_wireless', 'Wireless clients'),
+  ('clients_guest', 'Guest clients')
+] %}
+
+{#
+  Every value passes through a default filter first. The portal runs Jinja with
+  the standard undefined type, and this step also holds if a later setting turns
+  on the strict undefined type.
+#}
+{% set status_record = status | default({}, true) %}
+{% set state_value = status_record.state | default('pending', true) %}
+{% set percent_value = status_record.percent | default(0, true) %}
+{% set sections_map = status_record.sections | default({}, true) %}
+{% set counts_map = status_record.counts | default({}, true) %}
+{% set partial_reasons = status_record.partial_reasons | default([], true) %}
+{% set is_verified = status_record.verified | default(false, true) %}
+{% set status_message = status_record.message | default('', true) %}
+{% set capture_identifier = capture_id | default(status_record.capture_id, true) | default('', true) %}
+{% set chosen_tier = tier | default(2, true) | int %}
+{% set site_label = site_name | default('', true) %}
+
+{#
+  FR-072 gives one site to one operator. The banner sits above the start
+  control, so the operator reads who holds the site before the start button
+  comes into view. `select.lock_banner_context` supplies the six values.
+#}
+{% include 'partials/lock_banner.html' %}
+
+<div class="portal-card">
+  <h2 class="portal-card-title">Start a capture</h2>
+
+  {% if site_label %}
+    <p class="portal-card-note">The capture reads the site {{ site_label }}.</p>
+  {% endif %}
+
+  <div class="mb-3">
+    <label class="form-label" for="capture-tier-select">Data tier</label>
+
+    {#
+      Tier 2 is the default, as contracts/http-api.md:140-141 states. The
+      endpoint refuses any other value with the code bad_tier.
+    #}
+    <select class="form-select"
+            id="capture-tier-select"
+            data-testid="capture-tier-select"
+            aria-describedby="capture-tier-note">
+      <option value="2" {{ 'selected' if chosen_tier != 3 else '' }}>
+        Tier 2. The device state and the client lists.
+      </option>
+      <option value="3" {{ 'selected' if chosen_tier == 3 else '' }}>
+        Tier 3. Tier 2, the port state, the radio state, and the alarms.
+      </option>
+    </select>
+
+    <p class="portal-card-note" id="capture-tier-note">
+      Tier 3 reads more data and takes more time.
+    </p>
+  </div>
+
+  {#
+    The button sends JSON and reads the capture identifier from the answer, so
+    it is a button and not a form. A form would move the browser to a new page
+    and would lose the 202 body. portal.js adds the token header.
+  #}
+  <button type="button"
+          class="portal-button portal-button-primary"
+          data-testid="capture-start-button"
+          data-site-id="{{ site_id | default('', true) }}"
+          data-run-id="{{ run_id | default('', true) }}"
+          data-role="{{ role | default('pre', true) }}">Start the capture</button>
+
+  {#
+    FR-040 requires a manual refresh control. The poll runs every 30 seconds,
+    and this control reads the status at once.
+  #}
+  <button type="button"
+          class="portal-button"
+          data-testid="capture-refresh-button">Refresh now</button>
+</div>
+
+{#
+  aria-live="polite" makes a screen reader read the new state after the poll
+  paints it. The reader waits for a pause, so the text never cuts off a
+  sentence the operator is already reading.
+#}
+<section class="status-panel"
+         data-testid="capture-progress"
+         data-capture-id="{{ capture_identifier }}"
+         data-poll-seconds="{{ poll_interval_seconds | default(30, true) }}"
+         aria-live="polite">
+
+  <h2 class="status-panel-title">
+    Capture progress
+    <span class="status-panel-state" data-capture-field="state">{{ state_value }}</span>
+    <span class="capture-progress-percent"
+          data-testid="capture-progress-percent">{{ percent_value }}%</span>
+  </h2>
+
+  {#
+    The track carries the ARIA values and the bar carries the paint. portal.js
+    sets the bar width through the style property of the element. The content
+    security policy blocks the style attribute in this file, and it does not
+    block the style property that a script sets.
+  #}
+  <div class="capture-progress-track"
+       data-capture-field="track"
+       role="progressbar"
+       aria-label="Capture progress"
+       aria-valuemin="0"
+       aria-valuemax="100"
+       aria-valuenow="{{ percent_value }}">
+    <div class="capture-progress-bar" data-capture-field="bar"></div>
+  </div>
+
+  <ul class="status-section-list">
+    {% for key, label in section_labels %}
+      <li class="status-section" data-testid="capture-section-{{ key }}">
+        {{ label }}:
+        <span data-section-state>{{ sections_map.get(key, 'pending') }}</span>
+      </li>
+    {% endfor %}
+  </ul>
+
+  <p class="status-message" data-capture-field="message">{{ status_message }}</p>
+
+  <dl class="row mb-0">
+    {% for key, label in count_labels %}
+      <dt class="col-sm-4">{{ label }}</dt>
+      <dd class="col-sm-8 cell-number" data-capture-count="{{ key }}">{{ counts_map.get(key, 0) }}</dd>
+    {% endfor %}
+  </dl>
+</section>
+
+<div class="portal-card">
+  <h2 class="portal-card-title">Result</h2>
+
+  {#
+    The badge names the result in words as well as in a color. WCAG 1.4.1
+    forbids color as the only signal. The badge always renders, so a test finds
+    it before the capture ends and after it ends.
+  #}
+  <p>
+    <span class="portal-badge {{ 'badge-verified' if is_verified else 'badge-partial' }}"
+          data-testid="capture-verified-badge">{{ 'Verified' if is_verified else 'Not verified' }}</span>
+  </p>
+
+  <dl class="row mb-0">
+    <dt class="col-sm-4">Capture identifier</dt>
+    <dd class="col-sm-8 font-monospace" data-capture-field="identifier">{{ capture_identifier }}</dd>
+
+    {#
+      FR-032b requires the stored size. The value is the raw byte count, so a
+      test reads one number and no unit.
+    #}
+    <dt class="col-sm-4">Stored size in bytes</dt>
+    <dd class="col-sm-8 cell-number"
+        data-testid="capture-size-bytes">{{ stored_size_bytes | default(0, true) }}</dd>
+  </dl>
+</div>
+
+{#
+  portal.css prepends "Caution:" to a flash-warning through a stylesheet rule.
+  A partial capture is recoverable, because the operator can run the capture
+  again, so the signal word is Caution and not Warning.
+#}
+<div class="flash-item flash-warning"
+     data-testid="capture-partial-warning"
+     {{ '' if partial_reasons else 'hidden' }}>
+  <span>
+    The capture did not read every section. A comparison that uses this capture
+    can miss a device or a client.
+    <span data-partial-list>
+      {% for reason in partial_reasons %}
+        {{ reason.section | default('unknown section', true) }}:
+        {{ reason.reason | default('no reason', true) }}.
+      {% endfor %}
+    </span>
+  </span>
+</div>
+
+{#
+  portal.css prepends "Warning:" to a flash-danger through a stylesheet rule.
+  role="alert" makes a screen reader read the fault at once, because the
+  operator must stop and act.
+#}
+<div class="flash-item flash-danger"
+     data-testid="capture-error"
+     role="alert"
+     hidden></div>
+{% endblock %}

@@ -129,8 +129,11 @@ SHUTDOWN_GRACE_SECONDS="${PORTAL_OPERATION_SHUTDOWN_GRACE_SECONDS:-30}"
 CONTAINER_KILL_MARGIN_SECONDS=10
 
 # Start Gunicorn web portal in the background
+# Warning: do not add a dash to `su`. A dash starts a login shell, which clears
+# the environment. Every runtime variable that `compose.yml` supplies is then
+# lost, and the portal starts with no database address and no allow list.
 log_container_event "[PORTAL] Starting the web portal on port $WEB_PORT."  # Report the start before the launch, so a failed launch has a start point in the log.
-su - misthelper -c "cd /app && gunicorn wsgi:app \
+su misthelper -c "cd /app && gunicorn wsgi:app \
     --bind 0.0.0.0:${WEB_PORT} \
     --workers 1 \
     --worker-class gthread \
@@ -161,7 +164,27 @@ _wait_for_pid_or_kill() {
     wait "$pid" 2>/dev/null || true
 }
 
-# Trap signals to stop both processes
+# Determine upgrade capture portal port (default 8056)
+CAPTURE_PORT="${CAPTURE_PORT:-8056}"
+
+# Start the capture portal in a second Gunicorn process.
+# A separate process keeps a long upgrade run away from the data browsing
+# portal, so a fault in one portal cannot stop the other.
+# Warning: `su` carries no dash here for the reason given above. With a dash,
+# CAPTURE_ALLOWED_IPS never reaches the portal and every client address passes.
+log_container_event "[CAPTURE] Starting the upgrade capture portal on port $CAPTURE_PORT."  # Report the start before the launch, so a failed launch has a start point in the log.
+su misthelper -c "cd /app && gunicorn wsgi_capture:app \
+    --bind 0.0.0.0:${CAPTURE_PORT} \
+    --workers 1 \
+    --worker-class gthread \
+    --threads 4 \
+    --timeout 120 \
+    --access-logfile /app/data/capture_access.log \
+    --error-logfile /app/data/capture_error.log" &
+CAPTURE_PID=$!
+log_container_event "[CAPTURE] Started the upgrade capture portal with PID $CAPTURE_PID."  # Name the PID, so the operator can match a later crash line to this service.
+
+# Trap signals to stop every process
 cleanup() {
     local final_status="${1:-0}"  # Default to 0, because an operator stop is a success and needs no restart.
     log_container_event "[CONTAINER] Shutting down. The exit status will be $final_status."  # Report the plan before the shutdown, so the operator sees the cause order.
@@ -169,9 +192,11 @@ cleanup() {
     local kill_wait
     kill_wait=$((SHUTDOWN_GRACE_SECONDS + CONTAINER_KILL_MARGIN_SECONDS))
     kill "$GUNICORN_PID" 2>/dev/null || true
+    kill "$CAPTURE_PID" 2>/dev/null || true
     kill "$SSHD_PID" 2>/dev/null || true
     # Wait for a clean exit within the bound, so an in-flight operation can finish first.
     _wait_for_pid_or_kill "$GUNICORN_PID" "$kill_wait"
+    _wait_for_pid_or_kill "$CAPTURE_PID" "$kill_wait"
     _wait_for_pid_or_kill "$SSHD_PID" "$kill_wait"
     log_container_event "[CONTAINER] Shutdown complete. The container exits with status $final_status."  # Report the result after the shutdown, so the operator can match the status to the cause.
     exit "$final_status"  # Report the real status, because a fixed 0 hides a crash from every restart policy.
@@ -187,9 +212,9 @@ log_container_event "[CONTAINER] Started sshd with PID $SSHD_PID."  # Name the P
 # Warning: "wait -n" returns the status of the service that ended. A discarded
 # status makes a crash look like a clean stop, and no restart policy fires.
 # See issue #1925.
-log_container_event "[CONTAINER] Supervising the web portal (PID $GUNICORN_PID) and sshd (PID $SSHD_PID)."  # Record the start of the supervision, so a later crash line has a start point.
+log_container_event "[CONTAINER] Supervising the web portal (PID $GUNICORN_PID), the capture portal (PID $CAPTURE_PID), and sshd (PID $SSHD_PID)."  # Record the start of the supervision, so a later crash line has a start point.
 set +e  # Turn off the exit-on-error option, so a crash reaches the report below instead of ending the script in silence.
-wait -n "$GUNICORN_PID" "$SSHD_PID" 2>/dev/null
+wait -n "$GUNICORN_PID" "$CAPTURE_PID" "$SSHD_PID" 2>/dev/null
 SERVICE_EXIT_STATUS=$?  # Keep the status of the service that ended, because the container must report that status.
 set -e  # Restore the exit-on-error option for the rest of the script.
 
@@ -199,6 +224,8 @@ set -e  # Restore the exit-on-error option for the rest of the script.
 CRASHED_SERVICE="an unknown service"  # Hold a safe default, because a race can end both services together.
 if ! kill -0 "$GUNICORN_PID" 2>/dev/null; then
     CRASHED_SERVICE="the gunicorn web portal"  # The portal no longer answers, so the portal ended first.
+elif ! kill -0 "$CAPTURE_PID" 2>/dev/null; then
+    CRASHED_SERVICE="the upgrade capture portal"  # The capture portal no longer answers, so it ended first.
 elif ! kill -0 "$SSHD_PID" 2>/dev/null; then
     CRASHED_SERVICE="the sshd daemon"  # The daemon no longer answers, so the daemon ended first.
 fi
@@ -211,5 +238,5 @@ if [ "$SERVICE_EXIT_STATUS" -eq 0 ]; then
 fi
 
 log_container_event "[CONTAINER] ERROR: $CRASHED_SERVICE exited with status $SERVICE_EXIT_STATUS."  # Name the service and the status, because the operator needs both to find the cause.
-log_container_event "[CONTAINER] ERROR: The container stops the other service and exits with a failure status."  # State the next step, so the operator knows that a restart policy can act.
-cleanup "$SERVICE_EXIT_STATUS"  # Stop the other service, then exit with the captured status.
+log_container_event "[CONTAINER] ERROR: The container stops the other services and exits with a failure status."  # State the next step, so the operator knows that a restart policy can act.
+cleanup "$SERVICE_EXIT_STATUS"  # Stop the other services, then exit with the captured status.

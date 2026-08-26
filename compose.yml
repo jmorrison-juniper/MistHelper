@@ -1,8 +1,46 @@
 version: '3.8'
 
+# ==============================================================================
+# Naming and port policy (issue #2059)
+# ==============================================================================
+# Every service, container, network, and volume below carries the `misthelper-`
+# prefix. Every published port sits between 1000 and 10000 and is not the vendor
+# default.
+#
+# Why the prefix:
+#   This file used to name two containers `arangodb` and `redis-stack`. Those
+#   names belong to no project in particular, so a second project on the same
+#   workstation takes them first and MistHelper then cannot start. That happened:
+#   a container named `truck-arangodb` from another project held port 8529, and
+#   the upgrade portal read that foreign database as its own store. The portal
+#   reached a real server, received 401, and reported its own store unreachable.
+#
+# Why the ports moved:
+#   A vendor default port is the port every other project also publishes. Moving
+#   off the default removes the collision, and it also stops a stray client that
+#   someone pointed at a default database from writing into this one.
+#
+#   | Service    | Vendor default | Published here |
+#   | ---------- | -------------- | -------------- |
+#   | ArangoDB   | 8529           | 9529           |
+#   | Redis      | 6379           | 9379           |
+#   | Insight UI | 8001           | 9526           |
+#   | Ollama     | 11434          | 9530           |
+#
+#   Ports 2200, 8055, and 8056 do not move. None is a vendor default, each one
+#   already sits in the required range, and each one is named in the README, in
+#   the SSH guide, and in the browser tests.
+#
+# Why the network pins a subnet:
+#   A bridge with no subnet takes the next free range from the runtime pool. Two
+#   projects that both accept a pool address can receive the same range, and the
+#   routes then collide on the host. A named subnet keeps this project on one
+#   range that no other compose file in this fleet claims.
+# ==============================================================================
+
 services:
   misthelper:
-    build: 
+    build:
       context: .
       dockerfile: Containerfile  # Use Containerfile for Podman, Dockerfile for Docker
     container_name: misthelper-app
@@ -11,6 +49,8 @@ services:
       - "2200:2200"
       # Web portal for data browsing and operations
       - "8055:8055"
+      # Upgrade capture portal for pre-check and post-check work
+      - "8056:8056"
     volumes:
       # Mount local data directory to persist SQLite database and logs
       # The container writes to /app/data, this maps it to ./data on host
@@ -24,17 +64,23 @@ services:
       - PYTHONUNBUFFERED=1
       # Web portal port (must match exposed port)
       - WEB_PORT=8055
-      # Database connection (container names resolve via compose network)
-      - ARANGO_HOST=http://arangodb:8529
-      - REDIS_HOST=redis-stack
-      - REDIS_PORT=6379
+      # Upgrade capture portal port (must match exposed port)
+      - CAPTURE_PORT=8056
+      # Database connection. The service names below resolve on the project
+      # network, and the ports match the non-default ports each service binds.
+      - ARANGO_HOST=http://misthelper-arangodb:9529
+      - REDIS_HOST=misthelper-redis
+      - REDIS_PORT=9379
+      # A container cannot start a sibling container, so the portal reports a
+      # stopped dependency here and never tries to repair it.
+      - CAPTURE_AUTOSTART=0
       # SSL settings for UV downloads (if needed)
       - REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
       - SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
     depends_on:
-      arangodb:
+      misthelper-arangodb:
         condition: service_healthy
-      redis-stack:
+      misthelper-redis:
         condition: service_healthy
     networks:
       - misthelper-network
@@ -52,83 +98,99 @@ services:
     # Interactive mode for CLI usage
     stdin_open: true
     tty: true
-    
+
     # Common use cases - uncomment as needed:
     # Default: Site list export
     # command: ["python", "MistHelper.py", "--menu", "11", "--output-format", "sqlite"]
-    
+
     # Device inventory
     # command: ["python", "MistHelper.py", "--menu", "12", "--output-format", "sqlite"]
-    
+
     # Interactive mode (shows menu)
     # command: ["python", "MistHelper.py"]
-    
+
     # Systematic testing
     # command: ["python", "MistHelper.py", "--test"]
 
-  # Optional: Use Docker format for Docker users
-  # misthelper-docker:
-  #   build: 
-  #     context: .
-  #     dockerfile: Dockerfile  # Docker-compatible version with HEALTHCHECK
-  #   # ... same config as above
-
-  arangodb:
+  misthelper-arangodb:
     image: docker.io/arangodb/arangodb:3.12
-    container_name: arangodb
+    container_name: misthelper-arangodb
+    # The server binds 9529 rather than the vendor default 8529, so the port is
+    # the project port on the network and on the host alike. A stray client that
+    # someone pointed at a default ArangoDB therefore cannot reach this data.
+    command: ["arangod", "--server.endpoint", "tcp://0.0.0.0:9529"]
     ports:
-      - "8529:8529"
+      - "9529:9529"
     volumes:
-      - arangodb-data:/var/lib/arangodb3
+      - misthelper-arangodb-data:/var/lib/arangodb3
     environment:
       # CRITICAL: ArangoDB only reads ARANGO_ROOT_PASSWORD on FIRST boot
       # (when /var/lib/arangodb3 is empty). Changing this value after the
       # volume is initialized has NO effect. To reset the password:
-      #   podman stop arangodb && podman rm arangodb
-      #   podman volume rm arangodb-data
-      #   podman compose up -d arangodb
+      #   podman stop misthelper-arangodb && podman rm misthelper-arangodb
+      #   podman volume rm misthelper-arangodb-data
+      #   podman compose up -d misthelper-arangodb
       - ARANGO_ROOT_PASSWORD=${ARANGO_ROOT_PASSWORD:-misthelper}
     networks:
       - misthelper-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "arangosh", "--server.password", "${ARANGO_ROOT_PASSWORD:-misthelper}", "--javascript.execute-string", "print(1)"]
+      # The endpoint is named here as well. `arangosh` defaults to port 8529,
+      # so without this flag the probe would test a port the server never binds
+      # and the service would never report healthy.
+      test:
+        - "CMD"
+        - "arangosh"
+        - "--server.endpoint"
+        - "tcp://127.0.0.1:9529"
+        - "--server.password"
+        - "${ARANGO_ROOT_PASSWORD:-misthelper}"
+        - "--javascript.execute-string"
+        - "print(1)"
       interval: 10s
       timeout: 10s
       retries: 5
       start_period: 20s
 
-  redis-stack:
+  misthelper-redis:
     image: docker.io/redis/redis-stack:latest
-    container_name: redis-stack
+    container_name: misthelper-redis
     ports:
-      - "6379:6379"
-      # RedisInsight web UI for browsing data
-      - "8001:8001"
+      - "9379:9379"
+      # RedisInsight web UI for browsing data. The bundled UI binds 8001 inside
+      # the image, so the host side moves and the container side stays.
+      - "9526:8001"
     volumes:
-      - redis-data:/data
+      - misthelper-redis-data:/data
     environment:
-      - REDIS_ARGS=--requirepass ${REDIS_PASSWORD:-misthelper}
+      # The server binds 9379 rather than the vendor default 6379, for the same
+      # reason the database above moves off 8529.
+      - REDIS_ARGS=--requirepass ${REDIS_PASSWORD:-misthelper} --port 9379
     networks:
       - misthelper-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-misthelper}", "ping"]
+      # `redis-cli` defaults to port 6379, so the probe names the port too.
+      test: ["CMD", "redis-cli", "-p", "9379", "-a", "${REDIS_PASSWORD:-misthelper}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
 
-  ollama:
+  misthelper-ollama:
     image: docker.io/ollama/ollama
-    container_name: ollama-misthelper
+    container_name: misthelper-ollama
     ports:
-      - "11434:11434"
+      - "9530:9530"
     volumes:
       # Named volume keeps models across container restarts/upgrades.
       # Without this, every `podman rm` wipes the downloaded models.
-      - ollama-models:/root/.ollama
+      - misthelper-ollama-models:/root/.ollama
     environment:
+      # The server binds 9530 rather than the vendor default 11434. The default
+      # also sits above 10000, which the port policy at the top of this file
+      # does not allow.
+      - OLLAMA_HOST=0.0.0.0:9530
       # MoE CPU offload: expert FFN layers run from system RAM,
       # attention/embedding layers stay on GPU.  Drops mixtral:8x7b
       # VRAM requirement from ~26 GB to ~10 GB.
@@ -155,16 +217,27 @@ services:
 
 networks:
   misthelper-network:
+    name: misthelper-network
     driver: bridge
+    ipam:
+      config:
+        # A range that no other compose file in this fleet claims. A bridge with
+        # no subnet takes the next free range from the runtime pool, and two
+        # projects can then receive the same range.
+        - subnet: 172.31.240.0/24
 
 volumes:
   misthelper-data:
+    name: misthelper-data
     driver: local
-  arangodb-data:
+  misthelper-arangodb-data:
+    name: misthelper-arangodb-data
     driver: local
-  redis-data:
+  misthelper-redis-data:
+    name: misthelper-redis-data
     driver: local
   # Persistent model storage for the local Ollama instance.
   # Models survive container restarts, upgrades, and `podman rm`.
-  ollama-models:
+  misthelper-ollama-models:
+    name: misthelper-ollama-models
     driver: local

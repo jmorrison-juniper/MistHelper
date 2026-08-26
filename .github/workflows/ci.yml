@@ -72,7 +72,7 @@ env:
   PYDOCSTYLE_PATHS: 'src/ wsgi.py web_portal'
   # interrogate: every target clears the 90 percent floor, so this gate covers the
   # whole project. Lowest measured value is web_portal at 97.5 percent.
-  INTERROGATE_PATHS: 'src/ MistHelper.py wsgi.py starlink_dashboard.py web_portal tools'
+  INTERROGATE_PATHS: 'src/ MistHelper.py wsgi.py wsgi_capture.py starlink_dashboard.py web_portal tools'
   COVERAGE_THRESHOLD: ${{ inputs.coverage-threshold || '80' }}
   # Issue #1895: the ops platform suite keeps its own denominator and its own
   # floor, so it can never move the root percentage. Issue #1883 unified the

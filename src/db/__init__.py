@@ -14,10 +14,10 @@ from urllib.parse import urlparse
 
 import structlog
 
-ARANGO_DEFAULT_URL = "http://arangodb:8529"  # Compose service URL used when ARANGO_HOST is unset.
-ARANGO_DEFAULT_PORT = 8529  # Port applied when ARANGO_HOST carries no explicit port.
-REDIS_DEFAULT_HOST = "redis-stack"  # Compose service name used when REDIS_HOST is unset.
-REDIS_DEFAULT_PORT = 6379  # Port applied when REDIS_PORT is unset or unreadable.
+ARANGO_DEFAULT_URL = "http://misthelper-arangodb:9529"  # Compose service URL used when ARANGO_HOST is unset.
+ARANGO_DEFAULT_PORT = 9529  # Port applied when ARANGO_HOST carries no explicit port.
+REDIS_DEFAULT_HOST = "misthelper-redis"  # Compose service name used when REDIS_HOST is unset.
+REDIS_DEFAULT_PORT = 9379  # Port applied when REDIS_PORT is unset or unreadable.
 PROBE_TIMEOUT_SECONDS = 0.5  # Short TCP budget so a dead host never stalls an export.
 
 
@@ -45,12 +45,12 @@ def configure_db_logging() -> None:
 class DatabaseConfig:
     """Connection settings for polyglot database backends."""
 
-    arango_host: str = "http://arangodb:8529"
+    arango_host: str = "http://misthelper-arangodb:9529"
     arango_database: str = "misthelper"
     arango_username: str = "root"
     arango_password: str = "misthelper"
-    redis_host: str = "redis-stack"
-    redis_port: int = 6379
+    redis_host: str = "misthelper-redis"
+    redis_port: int = 9379
     redis_password: str = "misthelper"
     standalone_mode: bool = False
     webhook_enabled: bool = True

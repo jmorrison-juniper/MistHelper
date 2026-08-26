@@ -7,6 +7,239 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Menu 238 was allocated twice, so the portal moved to menu 239 (issue #2065)
+
+- **Defect (Fixed)**: `main` gave menu 238 to the MSP license export, which is
+  `interactive_safe`. This branch gave menu 238 to the upgrade capture portal,
+  which is `destructive`. Each branch passed the registry guardrail on its own,
+  because that check compares `menu_actions` against the registry inside one
+  branch and never reads the merge base.
+- **Safety (Explained)**: the two entries disagreed on the category, and the
+  category decides whether an automated run may execute the option. Had the
+  merge kept the portal action under the `interactive_safe` row from `main`,
+  `python MistHelper.py --testinteractive` would have started the firmware
+  upgrade portal on port 8056 during a normal test pass. That is the one outcome
+  the destructive classification exists to prevent.
+- **Renumber (Applied)**: `listMspLicenses` reached `main` first, so it keeps
+  menu 238. The upgrade capture portal moves to menu **239** and keeps its
+  `destructive` category. The `--capture-portal` flag is unchanged.
+- **Merge (Resolved)**: pull request #1825 reported `DIRTY`, so 80 commits of
+  portal work could not reach `main`. This commit merges `origin/main` into the
+  branch and resolves all six conflicts: `MistHelper.py`,
+  `src/utils/operation_registry.py`, `README.md`, `CHANGELOG.md`, and the two
+  generated menu references.
+- **Counts (Corrected)**: the registry now holds 240 entries, numbered 0 to 239.
+  `interactive_safe` reads 71 and covers 235-238. `destructive` reads 42 and
+  covers 154-187, 189-191, 194, 206-208, and 239.
+- **Guardrail (Added)**: `tests/guardrails/test_menu_number_uniqueness.py` holds
+  6 tests. They refuse a duplicate key, a gap in the numbering, and two numbers
+  that answer one action. They also pin the portal to `destructive` and pin menu
+  238 to the MSP license export, so a later branch that takes 238 back fails at
+  once.
+- **Finding (Recorded)**: the new guardrail found that menus 151 and 152 both
+  call `DataCollectionManager.continuous_loop` with no argument that tells them
+  apart, while each advertises different work. Issue #2066 tracks the repair.
+  The pair sits in `KNOWN_SHARED_ACTIONS` so the guardrail still catches a new
+  duplicate while that one waits.
+
+### The capture page shows the stored size of a finished capture (issue #2063)
+
+- **Defect (Fixed)**: the capture detail page reported `Stored size in bytes: 0`
+  beside the word `Verified` for a capture that was stored and complete. The
+  history page and the database both held the true size for the same document,
+  so one page disagreed with the other two.
+- **Cause (Found)**: the template reads `stored_size_bytes` from the context
+  root. `status_body` removes that field, because `STATUS_FIELDS` does not name
+  it and the poll contract carries no size, and `page_context` never set it
+  separately. The browser filled the gap with one extra read of the whole
+  capture in `loadStoredSize`, but `refreshCaptureStatus` calls that read only
+  when a poll answers `verified`. A capture that ended before the page opened
+  never polls, so the value stayed at the template default of zero.
+- **Fix (Applied)**: `page_context` now renders `stored_size_bytes` at the first
+  paint, and `stored_page_fields` carries the value for a capture that the
+  portal reads back from the store. The page no longer depends on the second
+  browser read, which stays as a refinement for a capture that finishes while
+  the page is open.
+- **Reading (Hardened)**: `stored_size_of` turns an absent value, a null, and a
+  value the page cannot read into zero, so an older document renders rather than
+  raising.
+- **Tests (Added)**: `tests/unit/upgrade_portal/test_capture_stored_size.py`
+  holds 17 tests. They cover the page fields, the whole status record, the merge
+  order, every unreadable value, the page context, and the rule that the poll
+  body must still drop the size. Five were verified red first against the old
+  code.
+- **Verification (Measured)**: both stored captures were opened after a portal
+  restart, which guarantees no live progress record exists. The page rendered
+  39472 and 15494 bytes, matching the database and the history page. Before the
+  fix the same two pages rendered 0.
+
+### Every capture failed, because the write name and the read name differed (issue #2061)
+
+- **Defect (Fixed)**: no capture could ever be stored. The portal collected the
+  data correctly, wrote it to ArangoDB successfully, and then declared the write
+  failed. Both tier 2 and tier 3 failed the same way, and the page showed every
+  collection phase as `done` beside the sentence "The portal could not store the
+  capture."
+- **Cause (Found)**: `src/upgrade_portal/capture/store.py` held two names for one
+  thing. It wrote through `CAPTURE_OPERATION = "upgradeCaptureWrite"` and read
+  back through `CAPTURE_COLLECTION = "upgrade_captures"`.
+  `DataExporter.write_with_format_selection` hands the operation name to
+  `DatabaseRouter.write`, which hands it to `ArangoWriter.write` as the
+  collection name. `ArangoWriter._ensure_collection` then creates the collection
+  when it is absent. Nothing translates the name on the way, so every capture
+  created and filled a collection named `upgradeCaptureWrite`, and the read-back
+  looked in an empty `upgrade_captures` and reported `document_absent`.
+- **Evidence (Measured)**: the two failed captures of the report were found in
+  the wrong collection under the exact keys from the log.
+  `upgradeCaptureWrite` held 2 documents while `upgrade_captures`,
+  `upgrade_runs`, and `capture_for_run` each held 0. The `data/` directory held
+  21 capture backup files, so the fault predates the report.
+- **Fix (Applied)**: each operation name is now bound to its collection name,
+  `CAPTURE_OPERATION = CAPTURE_COLLECTION` and `RUN_OPERATION = RUN_COLLECTION`.
+  The second name is gone, so the two cannot drift again. The matching keys in
+  `ENDPOINT_PRIMARY_KEY_STRATEGIES` move with them and keep `natural_pk` on
+  `capture_id` and `run_id`.
+- **Why no gate caught it**: every readiness signal was green while every
+  capture failed. The storage bootstrap creates the three collections the portal
+  reads and reports `collections=3, indexes=7, database_available=True`, and
+  `GET /readyz` answered `{"database":"ok","redis":"ok"}`. Neither one exercises
+  the write path, and the write path never used those collections.
+- **Tests (Added)**: `test_the_write_name_equals_the_read_name` asserts the two
+  names are one value for both targets, and
+  `test_no_stale_write_endpoint_name_returns` refuses either retired name in the
+  strategy table. The first test was verified red against the old constants: it
+  reported 2 failures before the fix and passes after it.
+- **Verification (Measured)**: both tiers were run against a live site after the
+  fix and both reached the verified state.
+
+  | Tier | Key | State | Stored bytes |
+  | - | - | - | - |
+  | 2 | `cap-b4e8473a...-01` | `verified` | 15494 |
+  | 3 | `cap-434b67ea...-01` | `verified` | 39472 |
+
+  The page reads "Capture progress verified 100%" and "The portal read the
+  capture back and the record matches." `upgrade_captures` holds 2 documents and
+  `capture_for_run` holds 2 edges.
+- **Migration (Done)**: the stray `upgradeCaptureWrite` collection held two
+  captures that never left the `writing` state. Both keep a CSV backup under
+  `data/`, so the collection was dropped without data loss.
+
+### The portal checks its dependencies and repairs a stopped one (issue #2059)
+
+- **Defect (Fixed)**: the portal started, logged "ready for the port 8056", and
+  served the sign-in page while the document store answered nothing. The
+  operator signed in, picked a site, and only then met a 503, because
+  `acquire_site_lock` fails closed. The fault appeared three pages after its
+  cause. `GET /readyz` already reported the gap, but it answers JSON for an
+  orchestrator and no page showed the result.
+- **Preflight (Added)**: `src/upgrade_portal/runtime/dependencies.py` probes
+  every service the portal needs and returns one report. The sign-in page renders
+  the report, so the operator reads the state, the address, and the next action
+  on the first page.
+- **Probe depth (Stated)**: each probe opens a TCP connection and closes it, so
+  it answers one question: does a service listen. It signs in to nothing,
+  because the page must render fast and must render before the portal holds a
+  credential. The panel names `/readyz` for the deeper reading that also writes
+  to both stores.
+- **Auto-start (Added)**: `src/upgrade_portal/runtime/containers.py` reads the
+  state of one named container and starts it. A stopped container is the common
+  workstation fault and the one case the portal can repair. The module creates
+  nothing, pulls nothing, and removes nothing, so a missing container stays
+  missing and the report names the compose command instead. `CAPTURE_AUTOSTART`
+  turns the behavior off, and `compose.yml` sets it to `0` inside the container,
+  because a container cannot start its sibling.
+- **Command safety (Kept)**: every runtime call passes an argument list and no
+  shell, the runtime path comes from `shutil.which`, each container name passes
+  a pattern that refuses a leading hyphen and every shell character, and each
+  call carries a timeout.
+- **Name collisions (Fixed)**: `compose.yml` named two containers `arangodb` and
+  `redis-stack`. Those names belong to no project, so another project took them
+  first. A container named `truck-arangodb` from a different project held port
+  8529 on the test workstation, and the portal read that foreign database as its
+  own store. It reached a real server, received 401, and reported its own store
+  unreachable. Every service, container, network, and volume now carries the
+  `misthelper-` prefix.
+- **Ports (Moved)**: a vendor default is the port every other project also
+  publishes. ArangoDB moves from 8529 to 9529, Redis from 6379 to 9379, the
+  Insight UI from 8001 to 9526, and Ollama from 11434 to 9530. Each service binds
+  the new port inside the container as well, so each health check names the port
+  its client tool would otherwise guess. Ports 2200, 8055, and 8056 do not move,
+  because none is a vendor default and each already sits in the required range.
+- **Network (Pinned)**: the project network takes the subnet `172.31.240.0/24`
+  and an explicit name. A bridge with no subnet takes the next free range from
+  the runtime pool, and two projects can receive the same range. The test host
+  showed this: the old network held `10.89.0.0/24` from the pool.
+- **Migration (Required)**: the renamed containers use renamed volumes, so a
+  fresh ArangoDB holds no `misthelper` database. Create the database once, and
+  the portal then builds its three collections and seven indexes on the next
+  start. The old `arangodb-data` and `redis-data` volumes are left in place, so
+  no data is deleted by the rename.
+- **Tests (Added)**: 69 tests. `tests/unit/upgrade_portal/test_containers.py`
+  holds 26 and covers the name guard, the runtime search, every reported state,
+  and every failure path. `tests/unit/upgrade_portal/test_dependencies.py` holds
+  30 and covers the probe, the switch, and every reading the page can show.
+  `tests/guardrails/test_compose_naming_policy.py` holds 13 and fails when a
+  later edit reintroduces a generic name, a vendor default port, or a bridge
+  with no subnet. No test runs a container.
+- **Verification (Measured)**: the renamed stack was started on the test host.
+  Both containers report healthy, the network holds the pinned subnet, and the
+  storage bootstrap reported `database_available=True` with 3 collections and 7
+  indexes. `GET /readyz` answered `{"database":"ok","redis":"ok"}`. With
+  `misthelper-redis` stopped, one load of the sign-in page started the container
+  and rendered the state `started`.
+
+### Add the upgrade capture portal, menu 238 (issue #1823)
+
+- **Menu 238 (Added)**: `Upgrade Capture Portal` starts a web server and prints a
+  clickable link. The flag `--capture-portal` starts the same server without the
+  menu. Spec 1823.
+- **New package (Added)**: `src/upgrade_portal/`. It sits outside `web_portal/`,
+  which ruff and mypy exclude, so every gate covers the new code.
+- **Port (Added)**: `CAPTURE_PORT`, default 8056. The portal takes its own port,
+  so it never fights the other portal in a container or on a shared desktop.
+- **Server (Added)**: Gunicorn on Linux and Waitress on Windows. Windows ships no
+  `fcntl`, and `gunicorn.util` imports `fcntl`, so Gunicorn cannot start there.
+- **Bind address (Added)**: the portal binds the loopback address on a desktop.
+  It binds every address only inside a container, where the port map is the only
+  way in.
+- **Capture (Added)**: one capture records the firmware, the device state, and
+  the client counts of one site. The operator picks a standard tier or a full
+  tier. Every capture writes to ArangoDB, to a CSV file under `data/`, and to the
+  browser as a table. The page offers the CSV as a download.
+- **Upgrade (Added)**: the portal reuses the bulk firmware tools through a new
+  seam, `src/firmware/upgrade_service.py`. The operator types `CONFIRM` to unlock
+  the start control, and types `STOP` to cancel the devices not yet started.
+- **Settle logic (Added)**: the portal watches the device events of the site
+  every 20 seconds. It waits for the reconnect message, then waits one more
+  minute before the post-upgrade capture. Access points and clients wait for the
+  switches, and everything waits for the gateways.
+- **Comparison (Added)**: the compare page shows the two captures side by side
+  and adds a statistics summary. The page offers that summary as a CSV download.
+- **Site lock (Added)**: Redis holds one lock for each site, so two operators
+  never work one site at the same time. An operator signs in with a work email
+  address, and the lock pairs that address with the browser. One operator can
+  therefore hold several sites in several tabs. An abandoned session frees the
+  site after a five minute cooldown. Any operator can read a site and download
+  its data without a lock.
+- **Lost lock (Added)**: a lost lock never fails a run. The portal submits the
+  upgrade to the cloud, and the cloud then owns the work. The banner states that
+  the upgrade continues in the cloud and that the devices still reboot.
+- **Theme (Added)**: the navigation holds a theme picker, and the portal now
+  reads the choice. The picker is a GET form, because the content security
+  policy blocks an inline script, so the page reloads with `?theme=<name>`. One
+  context processor reads that argument for every page. Before this the picker
+  rendered, accepted a choice, reloaded the page, and changed nothing, so the
+  brand theme was unreachable. A name the portal does not ship reads as the
+  neutral theme, so no operator input reaches a file path.
+- **History (Added)**: the portal keeps every capture without an expiry, and it
+  records the stored size of each one. An operator can return a week later and
+  read the same comparison.
+- **Storage (Added)**: ArangoDB is the primary store, with collections
+  `upgrade_captures` and `upgrade_runs` and the edge `capture_for_run`. Redis
+  holds the site lock alone. CSV files under `data/` are the fallback.
+- **Tests (Added)**: 2548 unit and contract tests under
+  `tests/unit/upgrade_portal/` and `tests/contract/upgrade_portal/`. Statement
+  coverage of the package is 94.67 percent.
 ### Export the MSP licenses through menu 238 (issue #1260)
 
 - **Gap (Closed)**: the Mist endpoint `listMspLicenses`

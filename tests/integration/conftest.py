@@ -1,7 +1,10 @@
 """Fixtures for integration tests that call the real Mist API.
 
-These tests require valid credentials in .env (MIST_APITOKEN + org_id).
-They are skipped automatically when credentials are absent.
+A test that calls the real cloud asks for the `mist_api_session` fixture or the
+`org_id` fixture. Both read credentials from .env (MIST_APITOKEN + org_id), and
+both are skipped automatically when those credentials are absent. A test in this
+directory that asks for neither fixture builds its own stand-ins, so it runs
+either way.
 
 Usage:
     pytest tests/integration/ -m integration -v
@@ -13,7 +16,7 @@ import os
 import pytest
 
 # ---------------------------------------------------------------------------
-# Credential detection -- skip entire module when missing
+# Credential detection -- skip the credentialed tests when .env holds nothing
 # ---------------------------------------------------------------------------
 
 _env_loaded = False
@@ -39,14 +42,37 @@ def _has_credentials() -> bool:
     return _ensure_env()
 
 
-# Auto-skip every test in this directory when credentials are missing
+# Fixtures that read .env. A test that asks for one of these needs credentials.
+_CREDENTIAL_FIXTURES = frozenset({"mist_api_session", "org_id"})
+
+
+# Auto-skip the credentialed tests in this directory when credentials are missing
 def pytest_collection_modifyitems(config, items):
-    """Skip integration tests when API credentials are not available."""
+    """Skip integration tests that need API credentials when none are present.
+
+    Why:
+        An earlier version of this hook skipped every test under
+        `tests/integration/`. That rule is too wide. Some integration tests
+        build their own stand-ins, open no socket, and reach no cloud, so they
+        passed locally and then skipped silently in continuous integration,
+        where they proved nothing. The hook now asks each test which fixtures
+        it wants. `item.fixturenames` holds the whole resolved closure, so a
+        test that reaches a credentialed fixture through another fixture is
+        still caught.
+
+    Args:
+        config: The pytest configuration. The hook does not read it.
+        items: The collected tests. The hook marks a subset of them.
+    """
+    if _has_credentials():
+        return
     skip_marker = pytest.mark.skip(reason="No Mist API credentials (.env)")
     for item in items:
-        if "integration" in str(item.fspath):
-            if not _has_credentials():
-                item.add_marker(skip_marker)
+        if "integration" not in str(item.fspath):
+            continue
+        if _CREDENTIAL_FIXTURES.isdisjoint(item.fixturenames):
+            continue  # This test supplies its own stand-ins and needs no cloud.
+        item.add_marker(skip_marker)
 
 
 # ---------------------------------------------------------------------------

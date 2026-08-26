@@ -1,0 +1,57 @@
+{#
+  error.html - the shared fault page of the upgrade capture portal.
+
+  Why this file exists:
+    A browser request can fail for seven reasons. contracts/README.md lists the
+    status codes 400, 401, 403, 404, 409, 429, and 500. One page for all seven
+    keeps the wording and the recovery link identical, so the operator learns
+    one page instead of seven.
+
+    A JSON request receives the error envelope instead. This page shows the same
+    three fields to a person.
+
+  Variables a route may supply:
+    error_title    - a short heading. Defaults to a plain sentence.
+    error_message  - one plain sentence for the operator.
+    error_code     - the stable lower-case code, such as site_locked.
+    status_code    - the HTTP status code.
+
+  The message never holds a stack trace, a token, or a password. Jinja escapes
+  every value, and this page marks no value as safe, because a message can carry
+  text from the cloud.
+#}
+{% extends 'layout.html' %}
+
+{% block title %}{{ error_title | default('The request failed', true) }}{% endblock %}
+
+{% block heading %}<h1>{{ error_title | default('The request failed', true) }}</h1>{% endblock %}
+
+{% block content %}
+<div class="portal-card">
+
+  {#
+    The class flash-danger gives the sentence the prefix "Warning:" through
+    portal.css. The level therefore reads without color, as WCAG 1.4.1 requires.
+  #}
+  <p class="flash-item flash-danger">
+    {{ error_message | default('The portal cannot complete this request.', true) }}
+  </p>
+
+  {% if status_code or error_code %}
+    <dl class="row mb-0">
+      {% if status_code %}
+        <dt class="col-sm-3">Status code</dt>
+        <dd class="col-sm-9 font-monospace">{{ status_code }}</dd>
+      {% endif %}
+      {% if error_code %}
+        {# A support request quotes this code. The code never changes for a wording change. #}
+        <dt class="col-sm-3">Error code</dt>
+        <dd class="col-sm-9 font-monospace">{{ error_code }}</dd>
+      {% endif %}
+    </dl>
+  {% endif %}
+
+</div>
+
+<p><a href="/select/site">Go to the site list</a></p>
+{% endblock %}

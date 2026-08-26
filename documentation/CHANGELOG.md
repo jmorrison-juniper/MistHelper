@@ -1,5 +1,12 @@
 # MistHelper Changelog
 
+> **This file is an archive.** The current changelog is
+> [`CHANGELOG.md`](../CHANGELOG.md) in the repository root. Every entry after
+> version `26.01.16.22.00` goes in the root file, and no entry goes in both.
+> This file keeps the earlier history, the migration guide, and the release
+> notes that the root file does not hold. The newest entry here is from January
+> 2026. Check the date of a section before you act on it.
+
 ## Version History
 
 ### version 26.01.16.22.00

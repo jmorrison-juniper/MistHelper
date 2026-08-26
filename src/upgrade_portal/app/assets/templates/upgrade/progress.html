@@ -1,0 +1,334 @@
+{#
+  upgrade/progress.html - the live run page of the upgrade capture portal.
+
+  Why this file exists:
+    contracts/http-api.md line 290 names GET /runs/<run_id> as the live run
+    view with the phase list and the device table. This file is that view. The
+    upgrade takes a long time, so the page must answer one question at a glance:
+    what is the run doing now. The run state, the four cascade phases, and the
+    state of each device therefore sit above every other detail.
+
+  Why the page polls instead of streaming:
+    The plan chose a 30-second poll over server-sent events, because the
+    existing event bus stops at 10 subscribers. FR-039 asks for a refresh every
+    30 seconds. contracts/http-api.md line 262 repeats the same interval. The
+    poll interval reaches the browser through data-poll-seconds, so an operator
+    view and a test can use a different value without a code change.
+
+  Why the page also holds a refresh button:
+    FR-040 asks for a manual refresh. An operator who waits for a device to
+    return does not want to wait 30 more seconds to see it.
+
+  Why the stop control is an include:
+    FR-038a asks for a stop control while the run is live, and the contract
+    names no separate stop page. upgrade/stop.html holds that control and this
+    page includes it.
+
+  Why the page holds no script:
+    The content security policy is 'self' only. The policy blocks an inline
+    script and blocks the style attribute. Every behavior lives in portal.js.
+
+  Why the links hold a literal path:
+    contracts/http-api.md fixes every public path of this portal. The blueprint
+    endpoint names are not fixed, so a url_for call against an endpoint name
+    would raise while this page renders.
+
+  The contract with portal.js:
+    The status region carries data-run-region, data-run-id, and
+    data-poll-seconds. portal.js reads GET /api/runs/<run_id>/status, paints the
+    run state, each phase state, each phase count, and the state of each device.
+    A device cell carries data-run-device with the MAC address and data-run-field
+    with the field name, so the paint never rebuilds a row.
+
+    The version check badge carries data-run-version-check with the MAC address
+    and no data-run-field. portal.js replaces the whole text of every field cell
+    on each poll, which would drop the span. The function paintRunVersionChecks
+    in portal.js therefore selects the badge by data-run-version-check, and
+    paints it on each poll. That function holds the same three words and the
+    same three classes that the two maps in this page hold.
+
+  Variables a route may supply:
+    run_id                - the run identifier. The poll needs it.
+    status                - the body of GET /api/runs/<run_id>/status. Holds
+                            state, phase_order, phases, targets, stop_request,
+                            pre_capture_id, post_capture_id, and message.
+    site_name             - the site name for the summary line.
+    poll_interval_seconds - the seconds between two polls. The default is 30.
+    stop_outcome          - see upgrade/stop.html.
+    stop_available        - see upgrade/stop.html.
+    page_title            - the heading text and the tab text.
+    theme, themes         - see layout.html.
+#}
+{% extends 'layout.html' %}
+
+{#
+  Every value passes through a default filter first. The portal runs Jinja with
+  the strict undefined type, so a missing key raises instead of rendering an
+  empty string.
+#}
+{% set status_record = status | default({}, true) %}
+{% set run_key = run_id | default(status_record.run_id | default('', true), true) %}
+{% set run_state = status_record.state | default('created', true) %}
+{% set run_message = status_record.message | default('', true) %}
+{% set device_rows = status_record.targets | default([], true) %}
+{% set site_label = site_name | default('', true) %}
+{% set pre_key = status_record.pre_capture_id | default('', true) %}
+{% set post_key = status_record.post_capture_id | default('', true) %}
+
+{#
+  The cascade order is fixed: gateways, then switches, then access points, then
+  wireless clients. See data-model.md section 4.1. The page reads the order from
+  the answer, so a later release can add a phase without a template change.
+#}
+{% set phase_names = status_record.phase_order | default(['gateways', 'switches', 'aps', 'clients'], true) %}
+{% set phase_entries = status_record.phases | default([], true) %}
+
+{#
+  The answer holds a list of phases and the page needs a lookup by name. The
+  guard skips an entry with no name, because a missing name is undefined under
+  the strict undefined type and cannot serve as a key.
+#}
+{% set phase_map = {} %}
+{% for entry in phase_entries %}
+  {% if entry.name is defined and entry.name %}
+    {% set _ = phase_map.update({entry.name: entry}) %}
+  {% endif %}
+{% endfor %}
+
+{#
+  The label of a phase is for a person. The name of a phase is for the contract.
+  A phase with no label falls back to its own name, so a new phase still renders.
+#}
+{% set phase_labels = {
+  'gateways': 'Gateways',
+  'switches': 'Switches',
+  'aps': 'Access points',
+  'clients': 'Wireless clients'
+} %}
+
+{% block title %}{{ page_title | default('Upgrade run', true) }}{% endblock %}
+
+{% block heading %}<h1>{{ page_title | default('Upgrade run', true) }}</h1>{% endblock %}
+
+{% block content %}
+<section class="status-panel"
+         data-run-region
+         data-run-id="{{ run_key }}"
+         data-poll-seconds="{{ poll_interval_seconds | default(30, true) }}"
+         aria-live="polite">
+  <h2 class="status-panel-title">Run state</h2>
+
+  {#
+    The state word sits in the markup, so a test reads it without a script and
+    without generated content.
+  #}
+  <p class="status-panel-state" data-testid="upgrade-state">{{ run_state }}</p>
+
+  <p class="status-message" data-run-field="message">{{ run_message }}</p>
+
+  {% if site_label %}
+    <p class="portal-card-note">The run works at the site {{ site_label }}.</p>
+  {% endif %}
+
+  <button type="button"
+          class="portal-button"
+          data-testid="upgrade-refresh-button"
+          data-run-refresh>Refresh now</button>
+
+  <h3 class="status-panel-title">Cascade phases</h3>
+
+  {#
+    The count of a phase moves once, when the phase ends. The portal watches the
+    devices every 20 seconds, and it writes the count of a phase to the run
+    record after that phase settles. So a count that sits still means the phase
+    is still waiting, and it never means the page stopped.
+
+    This sentence exists because a still count reads as a stall, and a page that
+    looks stalled during a firmware write is the moment an operator reaches for
+    the power. Issue #1995 records the decision to state the behavior instead of
+    building a live channel, which would cost 30 to 90 extra store writes for
+    each phase.
+  #}
+  <p class="portal-card-note" data-testid="upgrade-phase-cadence">
+    Each phase count moves once, when that phase ends. A count that does not
+    change means the portal is still waiting for the devices of that phase.
+  </p>
+
+  <div class="status-phase-list">
+    {% for name in phase_names %}
+      {% set phase = phase_map.get(name, {}) %}
+      {% set phase_state = phase.state | default('waiting', true) %}
+      {% set settled_count = phase.settled | default(0, true) %}
+      {% set total_count = phase.total | default(0, true) %}
+      {% set phase_note = phase.note | default('', true) %}
+
+      <span class="status-phase-name">{{ phase_labels.get(name, name) }}</span>
+
+      <span class="status-phase-state"
+            data-testid="upgrade-phase-{{ name }}"
+            data-run-phase="{{ name }}"
+            data-run-field="state">{{ phase_state }}</span>
+
+      {#
+        The count cell reads as a sentence, because a bare pair of numbers does
+        not say what the numbers count. A phase that reports no total shows its
+        own words instead of a division by zero.
+      #}
+      <span class="status-phase-count"
+            data-testid="upgrade-phase-progress-{{ name }}"
+            data-run-phase="{{ name }}"
+            data-run-field="progress">
+        {%- if total_count -%}
+          {{ settled_count }} of {{ total_count }} settled
+        {%- elif phase_state == 'settled' -%}
+          All settled
+        {%- else -%}
+          Not started
+        {%- endif -%}
+      </span>
+
+      {#
+        The note names what the gate could not read, so a phase that waited on a
+        silent cloud states a cause. The cell always exists, because the poll
+        finds it by selector and fills it without rebuilding the row. The tag
+        holds no space around the value, so an empty note leaves an empty
+        element and the rule `.status-phase-note:empty` drops the whole row.
+      #}
+      <span class="status-phase-note"
+            data-testid="upgrade-phase-note-{{ name }}"
+            data-run-phase="{{ name }}"
+            data-run-field="note">{{- phase_note -}}</span>
+    {% endfor %}
+  </div>
+
+  <h3 class="status-panel-title">Captures</h3>
+
+  <dl class="row mb-0">
+    <dt class="col-sm-4">Pre-check capture</dt>
+    <dd class="col-sm-8 cell-mono" data-run-field="pre_capture_id">
+      {{ pre_key | default('None saved', true) }}
+    </dd>
+
+    <dt class="col-sm-4">Post-check capture</dt>
+    <dd class="col-sm-8 cell-mono" data-run-field="post_capture_id">
+      {{ post_key | default('None saved', true) }}
+    </dd>
+  </dl>
+
+  <div class="portal-table-scroll">
+    <table class="portal-table" data-testid="upgrade-run-table">
+      <caption class="visually-hidden">
+        Every device in the run, with its state, its firmware version before
+        and after the upgrade, and the result of the version check.
+      </caption>
+
+      <thead>
+        <tr>
+          <th scope="col">Name</th>
+          <th scope="col">MAC address</th>
+          <th scope="col">Type</th>
+          <th scope="col">State</th>
+          <th scope="col">Version before</th>
+          <th scope="col">Target version</th>
+          <th scope="col">Version after</th>
+          <th scope="col">Version check</th>
+        </tr>
+      </thead>
+
+      {#
+        The version check of FR-051. A device can report the job complete and
+        still return on its old firmware, which reads as a success until
+        something compares the two versions.
+
+        The badge carries words, never color alone, because WCAG 1.4.1 refuses
+        color as the only signal. The three classes come from `portal.css` and
+        already serve the capture page and the site list.
+
+        `upgrade/gate.py` holds the same three tokens and the same rule. The
+        filters `trim` and `lower` repeat the rule of `normalize_version`
+        there, so a device that reports " 23.4R2.13 " reads as a match.
+      #}
+      {% set version_check_class = {
+           'version_match': 'badge-verified',
+           'version_mismatch': 'badge-failed',
+           'version_pending': 'badge-partial'
+         } %}
+      {% set version_check_text = {
+           'version_match': 'Version matches',
+           'version_mismatch': 'Version mismatch',
+           'version_pending': 'Awaiting version'
+         } %}
+
+      <tbody>
+        {% for device in device_rows %}
+          {% set mac = device.mac | default('', true) %}
+          {% set requested = device.version_target | default('', true) | trim | lower %}
+          {% set reported = device.version_after | default('', true) | trim | lower %}
+
+          {#
+            The gate writes `version_outcome` onto the row once it reads a
+            version. The page uses its own comparison while that token is
+            absent, so a run that started earlier still shows the check.
+          #}
+          {% set outcome = device.version_outcome | default('', true) or (
+               'version_pending' if not requested or not reported
+               else ('version_match' if requested == reported else 'version_mismatch')
+             ) %}
+
+          <tr data-run-device-row="{{ mac }}">
+            <th scope="row">{{ device.name | default('Unnamed device', true) }}</th>
+            <td class="cell-mono">{{ mac }}</td>
+            <td>{{ device.device_type | default('unknown', true) }}</td>
+
+            <td data-testid="upgrade-device-state-{{ mac }}"
+                data-run-device="{{ mac }}"
+                data-run-field="state">{{ device.state | default('pending', true) }}</td>
+
+            <td class="cell-mono"
+                data-run-device="{{ mac }}"
+                data-run-field="version_before">{{ device.version_before | default('unknown', true) }}</td>
+
+            <td class="cell-mono"
+                data-run-device="{{ mac }}"
+                data-run-field="version_target">{{ device.version_target | default('none', true) }}</td>
+
+            {#
+              The cloud fills this value only after the settle gate passes, so
+              the cell reads "not yet" until then. An empty cell would look like
+              a fault.
+            #}
+            <td class="cell-mono"
+                data-run-device="{{ mac }}"
+                data-run-field="version_after">{{ device.version_after | default('not yet', true) }}</td>
+
+            {#
+              The badge holds no `data-run-field`, because `portal.js` replaces
+              the whole text of every field cell on each poll and would drop the
+              span. `data-run-version-check` is the hook that the function
+              `paintRunVersionChecks` in `portal.js` reads instead.
+            #}
+            <td data-testid="upgrade-device-version-check-{{ mac }}">
+              <span class="portal-badge {{ version_check_class.get(outcome, 'badge-partial') }}"
+                    data-run-version-check="{{ mac }}">{{ version_check_text.get(outcome, 'Awaiting version') }}</span>
+            </td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="8" class="portal-table-empty">The run holds no device.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+{% include 'upgrade/stop.html' %}
+
+{#
+  FR-072 gives one site to one operator. The banner sits below the run state,
+  because this page answers one question first: what is the run doing now. The
+  site lock is a second question, and it never gates the content above.
+  `select.lock_banner_context` supplies the six values.
+#}
+{% include 'partials/lock_banner.html' %}
+{% endblock %}
