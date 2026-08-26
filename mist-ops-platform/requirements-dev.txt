@@ -39,7 +39,7 @@ httpx2>=0.28
 
 # deepdiff backs src/shared/services/diff.py. Its absence caused the collection
 # error in tests/unit/shared/test_diff.py.
-deepdiff>=8.0
+deepdiff>=9.1.0
 
 # celery and redis back the worker and the health route. src/api/routes/health.py
 # imports redis inside the readiness handler, so every TestClient call to that
