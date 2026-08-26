@@ -981,6 +981,13 @@ def stamp_size(document: Mapping[str, Any]) -> dict[str, Any]:
         measurement changes the answer. A few rounds let the number settle on
         its own width.
 
+        The loop stops the moment the number repeats. A whole capture is a
+        document of several megabytes, and every round serializes all of it, so
+        a round that cannot change the answer is pure waste. The number settles
+        after two rounds for almost every capture, and it settles after three
+        rounds when the width of the number grows. ``capture/store.py`` already
+        stops early, so this loop now matches it and both report one number.
+
     Args:
         document: The capture document.
 
@@ -989,7 +996,10 @@ def stamp_size(document: Mapping[str, Any]) -> dict[str, Any]:
     """
     stamped = dict(document)
     for _round in range(_SIZE_ROUNDS):
-        stamped["stored_size_bytes"] = measure_size_bytes(stamped)
+        size = measure_size_bytes(stamped)  # One whole serialization of the document
+        if size == stamped.get("stored_size_bytes"):  # The width settled, so a later round reads the same number
+            break
+        stamped["stored_size_bytes"] = size  # The new number may change its own width, so measure again
     return stamped
 
 

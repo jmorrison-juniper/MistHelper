@@ -20,6 +20,7 @@ Why:
 from __future__ import annotations
 
 import logging
+import threading
 from types import SimpleNamespace
 from typing import Any
 
@@ -29,6 +30,9 @@ from src.upgrade_portal.capture import extras
 
 _SCOPE = extras.SiteScope("org-0001", "site-0001")  # WHY: One scope serves every test in this module.
 _FAULT_MESSAGE = "The page walk failed."  # WHY: No log record may repeat this, so one test asserts its absence.
+
+# WHY: A broken barrier must fail the test in seconds, not hang the whole suite.
+_BARRIER_TIMEOUT_SECONDS = 5.0
 
 _SWITCH_MAC = "5c5b350e0001"
 _AP_MAC = "5c5b350e0002"
@@ -454,3 +458,105 @@ def test_the_page_walk_keeps_the_first_page_when_the_walk_raises(
     assert walked.data == [_PORT_ROW]
     assert "RuntimeError" in caplog.text
     assert _FAULT_MESSAGE not in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# The fan-out
+# ---------------------------------------------------------------------------
+
+
+class _BarrierCall:
+    """One cloud call that waits for every other call of the same batch.
+
+    Why:
+        A reader cannot tell a fan-out from a loop by the answer alone, because
+        both give the same sections. A barrier releases only when every party
+        arrives, so it passes under a fan-out and times out under a loop.
+    """
+
+    def __init__(self, barrier: threading.Barrier, response: Any) -> None:
+        """Create a call that meets the other calls of its batch.
+
+        Args:
+            barrier: The barrier that every call of the batch shares.
+            response: The value that the call returns after the barrier.
+        """
+        self.barrier = barrier  # WHY: The shared meeting point of the batch.
+        self.response = response  # WHY: The answer that the fake hands back.
+
+    def __call__(self, session: Any, scope: extras.SiteScope) -> Any:
+        """Wait for the other calls, then answer.
+
+        Args:
+            session: The session. The fake ignores it.
+            scope: The organization and the site of the call.
+
+        Returns:
+            The response that the test supplied.
+        """
+        del session, scope  # WHY: The barrier decides the outcome, not the arguments.
+        self.barrier.wait(timeout=_BARRIER_TIMEOUT_SECONDS)  # WHY: A loop would time out here.
+        return self.response
+
+
+def _barrier_calls(parties: int, names: tuple[str, ...]) -> dict[str, _BarrierCall]:
+    """Return one barrier call for each name of a batch.
+
+    Args:
+        parties: How many calls the batch runs at one time.
+        names: The cloud call names that join the batch.
+
+    Returns:
+        One barrier call for each name.
+    """
+    barrier = threading.Barrier(parties)  # WHY: One barrier for the whole batch.
+    return {name: _BarrierCall(barrier, _response(_ROWS[name])) for name in names}
+
+
+def test_every_tier_three_cloud_call_runs_at_one_time() -> None:
+    """The four tier 3 reads all reach the barrier, so none waited for another.
+
+    Why:
+        Every read reaches a different endpoint, so no read depends on another.
+        Run in order, a large site paid the sum of four page walks. Run at one
+        time, it pays the longest walk alone and the call count never changes.
+    """
+    calls = _barrier_calls(len(extras.CLOUD_FETCHERS), tuple(extras.CLOUD_FETCHERS))
+    sections = extras.collect_extras(object(), _SCOPE, extras.SourcePayloads(device_stats=[_AP_STAT]), calls)
+    assert set(sections) == set(extras.SECTION_NAMES)
+    assert sections[extras.SECTION_TUNNELS].reason == extras.REASON_READ
+    assert sections[extras.SECTION_ALARMS].reason == extras.REASON_READ
+
+
+def test_a_supplied_port_list_leaves_the_port_call_out_of_the_batch() -> None:
+    """Three calls fan out when the caller already holds the port rows.
+
+    Why:
+        The barrier of three proves the port call never joined the batch. A
+        barrier of three would never release if a fourth party were expected,
+        and a fourth call would never release if only three were expected.
+    """
+    calls = _barrier_calls(len(extras._CALLED_SECTIONS), extras._CALLED_SECTIONS)
+    calls[extras.SOURCE_PORTS] = _FakeCall(_response(_ROWS[extras.SOURCE_PORTS]))  # type: ignore[assignment]
+    sources = extras.SourcePayloads(port_records=[_PORT_ROW], device_stats=[_AP_STAT])
+    sections = extras.collect_extras(object(), _SCOPE, sources, calls)
+    assert calls[extras.SOURCE_PORTS].scopes == []  # type: ignore[union-attr]
+    assert sections[extras.SECTION_SWITCH_PORTS].records[0]["port_id"] == _PORT_ROW["port_id"]
+
+
+def test_a_lost_fan_out_answer_still_names_the_section(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A fan-out that drops one name still leaves six sections.
+
+    Why:
+        `collect_extras` promises all six names to its caller. That promise
+        must survive a fault inside the pool itself, not only a fault inside a
+        cloud call.
+
+    Args:
+        monkeypatch: The pytest patch helper.
+    """
+    monkeypatch.setattr(extras.BoundedFanOut, "run", lambda calls, description: {})
+    sections = _collect(_fake_calls(), extras.SourcePayloads(device_stats=[_AP_STAT]))
+    assert set(sections) == set(extras.SECTION_NAMES)
+    assert sections[extras.SECTION_ALARMS].reason == extras.REASON_CALL_FAILED
+    assert sections[extras.SECTION_SWITCH_PORTS].reason == extras.REASON_CALL_FAILED

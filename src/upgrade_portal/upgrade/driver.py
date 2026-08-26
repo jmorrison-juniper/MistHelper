@@ -123,6 +123,25 @@ AP_PHASE: Final[str] = "aps"
 TRACKER_FILENAME: Final[str] = "ActiveUpgrades.json"
 DATA_DIRECTORY_NAME: Final[str] = "data"
 
+# WHY: The tracker write reads the whole file, drops one row, and writes the
+# whole file back. Up to six run driver threads share that file, so a write
+# without a lock loses the row of whichever run read first. The lock also holds
+# the readers, because Windows refuses to rename a file that another handle
+# holds open, and the write lands through a rename. It is re-entrant, because
+# the write calls the reader while it holds the lock.
+_TRACKER_GUARD: Final[threading.RLock] = threading.RLock()
+
+# WHY: The write lands through a rename, and Windows refuses to open the target
+# of a rename for a few milliseconds. Five attempts at 4 milliseconds cover that
+# window and still fail fast on a real permission fault.
+_READ_ATTEMPTS: Final[int] = 5
+_READ_RETRY_SECONDS: Final[float] = 0.004
+
+# WHY: A reader holds the target of the rename for a few milliseconds. Ten
+# attempts at 4 milliseconds cover a busy reader and still fail inside a
+# twentieth of a second, which is far below any operator-visible wait.
+_WRITE_ATTEMPTS: Final[int] = 10
+
 # WHY: The driver names the step that failed, so the operator reads where the
 # run stopped and not only that it stopped.
 STAGE_UPGRADE: Final[str] = "upgrade"
@@ -767,6 +786,32 @@ def tracker_path(filename: str = TRACKER_FILENAME, root: Path | None = None) -> 
     return base / Path(filename).name  # The name alone, so no caller escapes the data directory
 
 
+def _tracker_text(path: Path) -> str | None:
+    """Read the tracker file, and try again after a refusal.
+
+    Why:
+        The write lands through a rename. Windows refuses to open the target
+        of a rename for a very short moment, so a reader that arrives in that
+        moment meets a permission error. One retry after a short pause clears
+        that window. Without the retry, ``_read_tracker`` reports an empty
+        tracker and the caller reads a running upgrade as no upgrade at all.
+
+    Args:
+        path: The tracker file path.
+
+    Returns:
+        The text of the file, or None when every attempt failed.
+    """
+    for attempt in range(_READ_ATTEMPTS):  # A refusal during a rename clears in a few milliseconds
+        try:
+            return path.read_text(encoding="utf-8")
+        except OSError:  # The rename window, a lost handle, or a real permission fault
+            if attempt + 1 >= _READ_ATTEMPTS:  # Every attempt failed, so the caller must hear about it
+                return None
+            time.sleep(_READ_RETRY_SECONDS)  # Give the rename time to finish
+    return None  # Unreachable, and it keeps the return type honest for the type checker
+
+
 def _read_tracker(path: Path) -> list[dict[str, Any]]:
     """Return the rows the tracker file holds.
 
@@ -774,17 +819,34 @@ def _read_tracker(path: Path) -> list[dict[str, Any]]:
         A damaged tracker must not stop an upgrade. The reader answers with
         an empty list and writes one warning.
 
+        The read holds the same lock as the write. Windows refuses to rename a
+        file that another handle holds open, and the write lands through a
+        rename, so a reader inside this process would make that rename fail.
+        The lock keeps the two apart. A reader in another process still meets
+        the rename, and the retry inside ``_tracker_text`` covers that case.
+
+        The reader never tests for the file before it opens it. A rename makes
+        the target absent for a very short moment, and a test before the open
+        would read that moment as a fresh clone with no tracker at all. The
+        open therefore runs first, and the test for a fresh clone runs only
+        after every attempt failed.
+
     Args:
         path: The tracker file path.
 
     Returns:
         Every row of the file. An empty list when the file is absent or bad.
     """
-    if not path.exists():
+    with _TRACKER_GUARD:  # Keep every reader of this process out of the rename window
+        text = _tracker_text(path)
+    if text is None:  # Every read attempt failed, so decide between absent and unreadable
+        if not path.exists():  # A fresh clone holds no tracker, which is normal and silent
+            return []
+        logger.warning("The portal could not read the upgrade tracker at %s", path)
         return []
     try:
-        rows = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+        rows = json.loads(text)
+    except ValueError:  # The file holds text that is not JSON
         logger.warning("The portal could not read the upgrade tracker at %s", path)
         return []
     return [dict(row) for row in rows if isinstance(row, dict)]
@@ -819,6 +881,18 @@ def write_tracker(record: Mapping[str, Any], now: str, root: Path | None = None)
         is still running. The file must live in one known place, so every
         process finds the same file.
 
+        The write is a read, a change, and a write of the whole file. The plan
+        allows six runs at one time and each run owns a driver thread, so two
+        threads can reach this function together. Without the lock, the second
+        thread reads the file before the first thread writes it, and the row of
+        the first run disappears. The operator then sees no record of a run
+        that is still writing firmware. The lock holds for the whole read and
+        the whole write, which is the only order that keeps both rows.
+
+        The write also lands through a neighbor file and one rename. A rename
+        inside one directory is atomic, so a reader never meets a half-written
+        file, and a process that dies mid-write leaves the last whole file.
+
     Args:
         record: The run record.
         now: The present time as ISO 8601 text in UTC.
@@ -829,11 +903,44 @@ def write_tracker(record: Mapping[str, Any], now: str, root: Path | None = None)
     """
     path = tracker_path(TRACKER_FILENAME, root)
     entry = _tracker_entry(record, now)
-    rows = [row for row in _read_tracker(path) if row.get("run_id") != entry["run_id"]]
-    rows.append(entry)
-    path.write_text(json.dumps(rows, indent=2), encoding="utf-8")
+    with _TRACKER_GUARD:  # One reader and one writer at a time, so no run row is lost
+        rows = [row for row in _read_tracker(path) if row.get("run_id") != entry["run_id"]]
+        rows.append(entry)
+        _replace_tracker(path, rows)
     logger.info("The portal wrote the upgrade tracker for run %s to %s", entry["run_id"], path)
     return path
+
+
+def _replace_tracker(path: Path, rows: Sequence[Mapping[str, Any]]) -> None:
+    """Write the tracker rows through a neighbor file and one rename.
+
+    Why:
+        A direct write empties the file first. A reader that arrives in that
+        moment reads no row and reports no active upgrade, which is the exact
+        wrong answer during an upgrade.
+
+        Windows refuses a rename while another handle holds the target open,
+        so the rename tries again after a short pause. The last attempt raises,
+        because a tracker that never lands is a fault the caller must hear.
+
+    Args:
+        path: The tracker file path.
+        rows: Every row the file must hold.
+
+    Raises:
+        OSError: When every rename attempt met a refusal.
+    """
+    scratch = path.with_name(f"{path.name}.{threading.get_ident()}.part")  # One name for each writer thread
+    scratch.write_text(json.dumps(list(rows), indent=2), encoding="utf-8")  # The whole file, off to the side
+    for attempt in range(_WRITE_ATTEMPTS):  # A reader holds the target for a few milliseconds at most
+        try:
+            scratch.replace(path)  # One rename inside one directory, which the operating system makes atomic
+            return  # The tracker landed whole
+        except OSError:  # A reader holds the target, or the directory refused the rename
+            if attempt + 1 >= _WRITE_ATTEMPTS:  # Every attempt failed, so the caller owns the fault
+                scratch.unlink(missing_ok=True)  # Leave no half-written neighbor behind
+                raise
+            time.sleep(_READ_RETRY_SECONDS)  # Give the reader time to close the target
 
 
 def settling_state(phase: str) -> RunState:

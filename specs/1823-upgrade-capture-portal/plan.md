@@ -229,23 +229,31 @@ split satisfies the Five-Item Rule at the package level and at the module level.
 
 ### Threading model
 
-Three layers use threads. Each layer has a different owner and a different
+Four layers use threads. Each layer has a different owner and a different
 lifetime.
 
 | Layer | Tool | Size | Rule |
 | --- | --- | --- | --- |
 | Capture collection | `ConnectionPoolExecutor` | 4 workers | One pool for each capture. The pool closes when the capture ends. |
+| Tier 3 cloud reads | `BoundedFanOut` | 4 workers | One fan-out inside the tier 3 call group. It runs the four reads of that group at one time and closes when the group ends. |
 | Settle gate polling | The same pool shape | 4 workers | One bulk org-scope call for each round covers every device. |
 | Upgrade run driver | One long-lived thread for each run | 1 | The thread owns the run. No other thread writes the run record. |
 
-Two rules protect correctness.
+The stop control also uses `BoundedFanOut`. It runs the cancel call of each
+upgrade plan at one time, because a stop that arrives late saves no device.
+
+Three rules protect correctness.
 
 - The portal never calls `src/firmware/firmware_manager.py`. The module holds four
   globals at `:34-37`, and the save-and-restore blocks at `:1736` and `:1797` are
   not thread safe. Two concurrent web requests would corrupt each other.
-- Concurrency belongs at the call-group level. A per-device fan-out costs about
-  125 times the requests and gains nothing, because the cloud already answers a
-  bulk query for the whole site.
+- Concurrency belongs at the call-group level or above. A per-device fan-out costs
+  about 125 times the requests and gains nothing, because the cloud already answers
+  a bulk query for the whole site. A fan-out inside one group is allowed only when
+  each call reaches a different endpoint, which is the tier 3 case.
+- Every file that two threads write takes a lock, and it lands through a rename.
+  `driver.write_tracker` reads the whole tracker, drops one row, and writes the
+  whole file back, so two run threads without a lock lose one run row.
 
 ### Cloud call rules that the code must obey
 

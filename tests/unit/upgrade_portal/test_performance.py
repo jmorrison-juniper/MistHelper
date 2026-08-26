@@ -39,6 +39,7 @@ import time  # The one timed test reads the monotonic clock.
 from collections import Counter  # One tally for each read name of a fake site.
 from collections.abc import Callable, Mapping  # The worker shape of the pool, and the store write shape.
 from dataclasses import dataclass, field  # The fakes of this module.
+from types import SimpleNamespace  # The two-field shape of a cloud answer.
 from typing import Any  # A session, a store result, and a document are all free-form.
 
 from src.upgrade_portal.capture import assembly, collector, devices, extras  # The capture lane under test.
@@ -57,6 +58,9 @@ CLOUD_PAGE_SECONDS = 2.5  # A pessimistic wall clock for one paged cloud call, u
 CAPTURE_POOL_WORKERS = 4  # plan.md sizes the capture pool at four workers.
 WAVE_ONE_READS = ("devices", "wired", "wireless_stats", "wireless_search")  # The four groups that run together.
 WAVE_TWO_READS = ("extras",)  # The one group that only tier 3 runs, and only after wave one.
+TIER_THREE_GROUP = "extras"  # The name of the group that fans its cloud calls out.
+TIER_THREE_READS = tuple(extras.CLOUD_FETCHERS)  # The four cloud calls inside that one group.
+TIER_THREE_CLOUD_CALLS = 4  # The ports, the tunnels, the BGP peers, and the alarms.
 OLD_VERSION = "21.4R3.15"  # The firmware before the upgrade.
 NEW_VERSION = "23.4R2.13"  # The firmware after the upgrade.
 QUIET_DIGEST = "b1946ac92492d2347c6235b4d2611184"  # One digest that both captures of a quiet site carry.
@@ -191,11 +195,15 @@ class FakeSite:
 
     Attributes:
         device_count: The number of devices the fake site holds.
-        calls: One tally for each read name.
+        calls: One tally for each call group name.
+        cloud_calls: One tally for each cloud call inside the tier 3 group. The
+            two tallies stay apart, because a group and a call inside a group
+            answer two different questions.
     """
 
     device_count: int  # Every read answers with this many rows.
-    calls: Counter[str] = field(default_factory=Counter)  # Starts empty and grows one read at a time.
+    calls: Counter[str] = field(default_factory=Counter)  # Starts empty and grows one call group at a time.
+    cloud_calls: Counter[str] = field(default_factory=Counter)  # Starts empty and grows one tier 3 call at a time.
 
     def inventory_rows(self) -> list[dict[str, Any]]:
         """Build one inventory row for each device of the fake site.
@@ -298,23 +306,57 @@ class FakeSite:
         ]
 
     def read_extras(self, session: Any, scope: extras.SiteScope, device_stats: Any) -> dict[str, extras.ExtraSection]:
-        """Answer the tier 3 group with one empty section for each extra name.
+        """Answer the tier 3 group through the real collector of that group.
 
         Why:
-            Only tier 3 reads this group. The tally proves that tier 2 leaves it
-            alone, which is what keeps the tier 2 capture at four call groups.
+            An earlier version of this fake answered the six sections itself.
+            The model then saw one call for the whole group, while the real
+            group made four cloud calls one after another, and no test could
+            tell. This fake now drives ``extras.collect_extras`` and counts each
+            cloud call of its own, so the model measures the code and not a
+            stand-in.
 
         Args:
-            session: Unused.
-            scope: Unused.
-            device_stats: Unused.
+            session: Passed through. The fake cloud calls ignore it.
+            scope: Passed through. The fake cloud calls ignore it.
+            device_stats: The tier 2 statistics that the radio section reads.
 
         Returns:
             One section for each tier 3 name.
         """
-        del session, scope, device_stats  # A fake site needs no session and no statistics.
         self.calls["extras"] += 1  # The fifth call group, which only tier 3 runs.
-        return {name: extras.ExtraSection(name, (), "", 200) for name in extras.SECTION_NAMES}  # Empty but present.
+        payloads = extras.SourcePayloads(device_stats=device_stats)  # The radio section costs no cloud call.
+        return extras.collect_extras(session, scope, payloads, self.tier_three_fetchers())  # The real group.
+
+    def tier_three_fetchers(self) -> dict[str, Any]:
+        """Return one counted stand-in for each cloud call of the tier 3 group.
+
+        Why:
+            Each name gets its own tally, so the model can tell four calls that
+            run at one time from four calls that run one after another.
+
+        Returns:
+            One fake cloud call for each name of ``extras.CLOUD_FETCHERS``.
+        """
+        return {name: self.tier_three_call(name) for name in extras.CLOUD_FETCHERS}  # One counted call for each name.
+
+    def tier_three_call(self, name: str) -> Any:
+        """Return one counted stand-in for one tier 3 cloud call.
+
+        Args:
+            name: The cloud call name to count.
+
+        Returns:
+            A call that tallies its name and answers with an empty page.
+        """
+
+        def fetch(session: Any, scope: extras.SiteScope) -> SimpleNamespace:
+            """Tally this cloud call and answer with one empty page."""
+            del session, scope  # A fake cloud call needs no session and no scope.
+            self.cloud_calls[name] += 1  # One tally for each tier 3 cloud call.
+            return SimpleNamespace(status_code=200, data=[])  # The two fields the reader looks at.
+
+        return fetch
 
     def reads(self) -> collector.SiteReads:
         """Return the five reads in the holder that the collector expects.
@@ -407,6 +449,46 @@ def run_capture_for(site: FakeSite, tier: int = collector.TIER_STANDARD) -> dict
     return store.written[-1]  # The stored document of this capture.
 
 
+def bounded_rounds(work_count: int) -> int:
+    """Return how many full rounds a bounded pool needs for one set of work.
+
+    Why:
+        Both the call group pool and the tier 3 fan-out hold four workers, so
+        work wider than four costs more than one round. One helper states that
+        rule, and both parts of the model read it.
+
+    Args:
+        work_count: How many pieces of work run together.
+
+    Returns:
+        The round count, which is 1 for any set that fits the pool.
+    """
+    return -(-work_count // CAPTURE_POOL_WORKERS)  # Round up, because a part round still costs a whole wait.
+
+
+def group_pages(site: FakeSite, name: str) -> int:
+    """Return how many cloud pages one call group waits for, one after another.
+
+    Why:
+        Most groups make one call, so their page tally is the wait. The tier 3
+        group makes four calls and runs them at one time, so its wait is the
+        longest of the four and never their sum. A model that added them would
+        pass a serial group, which is the exact regression this file exists to
+        catch.
+
+    Args:
+        site: The fake site, already read by one capture.
+        name: The call group name.
+
+    Returns:
+        The page count that this group waits for.
+    """
+    if name != TIER_THREE_GROUP:  # Every other group makes one call of its own
+        return site.calls[name]
+    pages = [site.cloud_calls[read] for read in TIER_THREE_READS]  # One tally for each tier 3 cloud call
+    return max(pages, default=0) * bounded_rounds(len(TIER_THREE_READS))  # The longest call decides the group
+
+
 def modeled_capture_seconds(site: FakeSite, tier: int) -> float:
     """Return the modeled wall clock of one capture against a real cloud.
 
@@ -418,10 +500,11 @@ def modeled_capture_seconds(site: FakeSite, tier: int) -> float:
         tally into a duration, so a test can assert seconds and not a count.
 
         The model follows the two rules that the collector obeys. The pages
-        inside one group run one after another, because the cloud paginates with
-        a cursor. The groups of one wave run at the same time, up to the four
-        workers of the pool. Wave two waits for wave one, because the radio
-        section reads the device statistics of wave one.
+        inside one call run one after another, because the cloud paginates with
+        a cursor. Independent calls run at one time, up to the four workers of
+        the pool. That rule holds between the groups of one wave and inside the
+        tier 3 group. Wave two waits for wave one, because the radio section
+        reads the device statistics of wave one.
 
     Args:
         site: The fake site, already read by one capture.
@@ -433,10 +516,26 @@ def modeled_capture_seconds(site: FakeSite, tier: int) -> float:
     waves = [WAVE_ONE_READS] if tier < collector.TIER_EXTRA else [WAVE_ONE_READS, WAVE_TWO_READS]
     total = 0.0  # The modeled seconds of every wave.
     for wave in waves:
-        pages = [site.calls[name] for name in wave]  # The page count of each group of this wave.
-        rounds = -(-len(wave) // CAPTURE_POOL_WORKERS)  # A wave wider than the pool needs more than one round.
-        total += max(pages, default=0) * CLOUD_PAGE_SECONDS * rounds  # The slowest group decides the wave.
+        pages = [group_pages(site, name) for name in wave]  # The page count of each group of this wave.
+        total += max(pages, default=0) * CLOUD_PAGE_SECONDS * bounded_rounds(len(wave))  # The slowest group decides
     return total
+
+
+def serial_tier_three_seconds(site: FakeSite) -> float:
+    """Return what the tier 3 group would cost with its calls in order.
+
+    Why:
+        A test that can never fail proves nothing. This is the regression the
+        fan-out removed, so one test compares it against the real model and
+        proves the model can tell the two shapes apart.
+
+    Args:
+        site: The fake site, already read by one tier 3 capture.
+
+    Returns:
+        The modeled seconds of a tier 3 group that waits for each call in turn.
+    """
+    return sum(site.cloud_calls[read] for read in TIER_THREE_READS) * CLOUD_PAGE_SECONDS
 
 
 # ---------------------------------------------------------------------------
@@ -682,6 +781,58 @@ def test_a_tier_three_capture_of_a_large_site_also_fits_the_target() -> None:
     modeled = modeled_capture_seconds(site, collector.TIER_EXTRA)  # Two waves, one after the other.
     assert modeled == CLOUD_PAGE_SECONDS * 2  # Wave one, then wave two.
     assert modeled < CAPTURE_BUDGET_SECONDS  # The extra tier stays inside the target too.
+
+
+def test_the_tier_three_group_makes_exactly_four_cloud_calls() -> None:
+    """The extra tier costs four cloud calls, whatever the size of the site.
+
+    Why:
+        The fan-out changes when the calls run, never how many run. A change
+        that raised the count would take a larger share of the hourly cloud
+        call budget than the plan allows.
+    """
+    site = FakeSite(LARGE_SITE_DEVICES)  # The site size that the target names.
+    run_capture_for(site, collector.TIER_EXTRA)  # One whole tier 3 capture.
+    assert [site.cloud_calls[read] for read in TIER_THREE_READS] == [1] * len(TIER_THREE_READS)
+    assert len(TIER_THREE_READS) == TIER_THREE_CLOUD_CALLS  # The count the budget document names.
+
+
+def test_a_tier_two_capture_makes_no_tier_three_cloud_call() -> None:
+    """The default tier never reaches one tier 3 endpoint.
+
+    Why:
+        Tier 3 is an option that an operator turns on for one run. A tier 2
+        capture that paid for it would raise the cost of every capture.
+    """
+    site = FakeSite(SMALL_SITE_DEVICES)  # A small site keeps the fixture fast.
+    run_capture_for(site)  # One whole tier 2 capture.
+    assert site.cloud_calls == Counter()  # Not one tier 3 endpoint answered.
+
+
+def test_the_tier_three_group_costs_one_page_and_not_four() -> None:
+    """The four tier 3 calls run at one time, so the group waits for one page.
+
+    Why:
+        Four calls that ran in order would cost four pages. The model reads the
+        four tallies apart, so it reports the longest call and never the sum.
+    """
+    site = FakeSite(LARGE_SITE_DEVICES)  # The site size that the target names.
+    run_capture_for(site, collector.TIER_EXTRA)  # One whole tier 3 capture.
+    assert group_pages(site, TIER_THREE_GROUP) == 1  # One page, because the four calls share four workers.
+
+
+def test_a_serial_tier_three_group_would_cost_four_times_the_cloud_time() -> None:
+    """The model tells a fan-out apart from a group that waits for each call.
+
+    Why:
+        A test that can never fail proves nothing. This test measures the
+        regression the fan-out removed, so a later change that puts the four
+        calls back in order shows up as four times the cloud time.
+    """
+    site = FakeSite(LARGE_SITE_DEVICES)  # The site size that the target names.
+    run_capture_for(site, collector.TIER_EXTRA)  # One whole tier 3 capture.
+    fanned = group_pages(site, TIER_THREE_GROUP) * CLOUD_PAGE_SECONDS  # What the code costs today.
+    assert serial_tier_three_seconds(site) == fanned * TIER_THREE_CLOUD_CALLS  # Four times, one for each call.
 
 
 def test_the_local_work_of_a_large_capture_is_a_small_part_of_the_target() -> None:

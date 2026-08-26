@@ -22,12 +22,15 @@ Why:
 
 from __future__ import annotations
 
+import functools
 import logging
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
 import mistapi
+
+from src.upgrade_portal.runtime.pools import BoundedFanOut, FanOutCall
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +59,9 @@ SOURCE_PORTS = "ports"
 # The three sections that own a cloud call of their own. The port sections
 # share one call and the radio section makes none.
 _CALLED_SECTIONS: tuple[str, ...] = (SECTION_TUNNELS, SECTION_BGP_PEERS, SECTION_ALARMS)
+
+# The plain name of the tier 3 batch, for the fan-out log records.
+_FANOUT_DESCRIPTION = "tier 3 cloud reads"
 
 REASON_READ = ""
 REASON_CALL_FAILED = "cloud_call_failed"
@@ -491,15 +497,32 @@ def _radio_section(device_stats: Sequence[Mapping[str, Any]] | None) -> ExtraSec
     return ExtraSection(SECTION_RADIOS, tuple(records), REASON_READ, 0)
 
 
-def _read_ports(
-    session: Any, scope: SiteScope, sources: SourcePayloads, fetchers: Mapping[str, CloudFetch]
-) -> ExtraSection:
-    """Return the raw port records that feed the port section and the power section.
+def _supplied_ports(records: Sequence[Mapping[str, Any]]) -> ExtraSection:
+    """Wrap the port rows that another step already read.
 
     Why:
         Supplied records cost nothing. A caller that already ran the port call
-        group hands the rows over and this module makes no call. A caller that
-        supplies nothing gets one call, which still feeds both sections.
+        group hands the rows over and this module makes no call.
+
+    Args:
+        records: The port rows the caller supplied.
+
+    Returns:
+        A section named after the shared port read. It is not a capture
+        section, so each port section copies its own fields out of it.
+    """
+    return ExtraSection(SOURCE_PORTS, tuple(dict(row) for row in records), REASON_READ, 0)
+
+
+def _cloud_calls(
+    session: Any, scope: SiteScope, sources: SourcePayloads, fetchers: Mapping[str, CloudFetch]
+) -> dict[str, FanOutCall]:
+    """Bind every tier 3 cloud read that this capture still needs.
+
+    Why:
+        The fan-out runs a call that takes no argument, so every argument binds
+        here. A caller that already read the ports leaves the port call out, so
+        the portal never repeats a read that it already holds.
 
     Args:
         session: The mistapi session.
@@ -508,12 +531,55 @@ def _read_ports(
         fetchers: The cloud calls, by name.
 
     Returns:
-        A section named after the shared port read. It is not a capture
-        section, so each port section copies its own fields out of it.
+        One bound call for each read, by section name.
     """
-    if sources.port_records is not None:
-        return ExtraSection(SOURCE_PORTS, tuple(dict(row) for row in sources.port_records), REASON_READ, 0)
-    return _read_section(SOURCE_PORTS, session, scope, fetchers[SOURCE_PORTS])
+    names = list(_CALLED_SECTIONS)  # The three sections that own a call of their own
+    if sources.port_records is None:  # No supplied rows, so the shared port read joins the batch
+        names.append(SOURCE_PORTS)
+    return {name: functools.partial(_read_section, name, session, scope, fetchers[name]) for name in names}
+
+
+def _answered(name: str, answers: Mapping[str, Any]) -> ExtraSection:
+    """Read one section out of the fan-out answers.
+
+    Why:
+        ``_read_section`` holds the error boundary and always answers with a
+        section, so an absent answer can only mean that the fan-out itself
+        lost the call. That loss must still leave a named section, because
+        ``collect_extras`` promises every name to its caller.
+
+    Args:
+        name: The section name.
+        answers: The result of the fan-out.
+
+    Returns:
+        The section, empty and with a reason after a lost call.
+    """
+    section = answers.get(name)
+    if isinstance(section, ExtraSection):
+        return section
+    logger.warning("Upgrade portal lost the tier 3 read of %s", name)
+    return ExtraSection(name, (), REASON_CALL_FAILED, 0)
+
+
+def _ports_section(sources: SourcePayloads, answers: Mapping[str, Any]) -> ExtraSection:
+    """Return the shared port read of one capture.
+
+    Why:
+        Two sections copy their fields out of one port read. That read arrives
+        either from the caller or from the fan-out, and both paths must give
+        the same shape, so one function answers for both.
+
+    Args:
+        sources: The reads that another step already made.
+        answers: The result of the fan-out.
+
+    Returns:
+        A section named after the shared port read.
+    """
+    if sources.port_records is not None:  # The caller already holds the rows, so no call was made
+        return _supplied_ports(sources.port_records)
+    return _answered(SOURCE_PORTS, answers)  # The fan-out made the call
 
 
 def _derive(source: ExtraSection, name: str, fields: tuple[str, ...]) -> ExtraSection:
@@ -549,6 +615,13 @@ def collect_extras(
         section without a membership test, and a failure in one section never
         removes another. The caller assembles the capture document.
 
+        The cloud reads run at one time. Every read reaches a different
+        endpoint, so no read waits for another, and
+        ``documentation/python-parallelism-matrix.md`` answers a set of
+        independent network waits with a bounded thread pool. Run in order,
+        four page walks cost the sum of four waits. Run at one time, they cost
+        the longest wait alone, and the call count never changes.
+
     Args:
         session: The mistapi session. A test never needs a real one.
         scope: The organization and the site to read.
@@ -565,14 +638,14 @@ def collect_extras(
     calls: dict[str, CloudFetch] = dict(CLOUD_FETCHERS)
     if fetchers is not None:
         calls.update(fetchers)
-    ports = _read_ports(session, scope, payloads, calls)
+    answers = BoundedFanOut.run(_cloud_calls(session, scope, payloads, calls), _FANOUT_DESCRIPTION)
+    ports = _ports_section(payloads, answers)
     sections = {
         SECTION_SWITCH_PORTS: _derive(ports, SECTION_SWITCH_PORTS, _SWITCH_PORT_FIELDS),
         SECTION_POE: _derive(ports, SECTION_POE, _POE_FIELDS),
         SECTION_RADIOS: _radio_section(payloads.device_stats),
     }
-    for name in _CALLED_SECTIONS:
-        sections[name] = _read_section(name, session, scope, calls[name])
+    sections.update({name: _answered(name, answers) for name in _CALLED_SECTIONS})
     return sections
 
 

@@ -11,6 +11,7 @@ Why:
 from __future__ import annotations
 
 import atexit
+import functools
 import inspect
 import logging
 import threading
@@ -24,6 +25,7 @@ from src.upgrade_portal.runtime import pools as pools_module
 from src.upgrade_portal.runtime.pools import (
     CAPTURE_WORKER_TARGET,
     SHUTDOWN_TIMEOUT_SECONDS,
+    BoundedFanOut,
     CapturePool,
     CaptureWorker,
     DrainGate,
@@ -575,3 +577,122 @@ class TestExecuteBudget:
         fresh_pool.GATE.begin_drain()
         fresh_pool.execute([1, 2], probe.observe, "call groups")
         assert probe.calls == []
+
+
+class TestBoundedFanOutSizing:
+    """The fan-out never runs wider than the work or than the capture target.
+
+    Why:
+        A pool wider than the capture target takes a larger share of the hourly
+        cloud call budget than the plan allows, and a pool wider than the work
+        holds a thread that never runs. Both faults are silent, so a test pins
+        the size.
+    """
+
+    def test_the_worker_count_never_passes_the_capture_target(self) -> None:
+        """A batch wider than the target still runs at the target."""
+        assert BoundedFanOut.resolve_worker_count(CAPTURE_WORKER_TARGET * 5) == CAPTURE_WORKER_TARGET
+
+    def test_the_worker_count_never_passes_the_work(self) -> None:
+        """A batch of two runs on two workers, not on the whole target."""
+        assert BoundedFanOut.resolve_worker_count(2) == 2
+
+    def test_the_worker_count_is_never_zero(self) -> None:
+        """An empty batch still reports one worker, because a pool of zero raises."""
+        assert BoundedFanOut.resolve_worker_count(0) == 1
+
+
+class TestBoundedFanOutConcurrency:
+    """The fan-out really runs the calls at one time.
+
+    Why:
+        A fan-out that ran the calls in order would still answer with the right
+        values, so a value test alone proves nothing. Every test here uses a
+        barrier. A barrier releases only when every party arrives, so it passes
+        under a real fan-out and times out under a loop.
+    """
+
+    def test_every_call_runs_at_one_time(self) -> None:
+        """Four calls all reach the barrier, so none waited for another.
+
+        Why:
+            This is the whole point of the change. Four tier 3 cloud reads used
+            to cost the sum of four network waits. They now cost the longest
+            wait alone.
+        """
+        barrier = threading.Barrier(CAPTURE_WORKER_TARGET)  # Releases only when every call arrives
+
+        def meet(name: str) -> str:
+            """Wait for the other calls, then report this name."""
+            barrier.wait(timeout=BARRIER_TIMEOUT_SECONDS)  # A loop would time out here
+            return name
+
+        calls = {f"call-{index}": functools.partial(meet, f"call-{index}") for index in range(CAPTURE_WORKER_TARGET)}
+        answers = BoundedFanOut.run(calls, "probe calls")
+        assert answers == {f"call-{index}": f"call-{index}" for index in range(CAPTURE_WORKER_TARGET)}
+
+    def test_a_batch_wider_than_the_target_still_finishes(self) -> None:
+        """Twice the target of calls all answer, because the pool reuses a thread.
+
+        Why:
+            A barrier of the full width would deadlock a bounded pool, so this
+            test counts answers instead. It proves the extra calls wait for a
+            free worker and never fall on the floor.
+        """
+        calls = {f"call-{index}": functools.partial(int, index) for index in range(CAPTURE_WORKER_TARGET * 2)}
+        answers = BoundedFanOut.run(calls, "probe calls")
+        assert answers == {f"call-{index}": index for index in range(CAPTURE_WORKER_TARGET * 2)}
+
+    def test_one_call_runs_in_the_calling_thread(self) -> None:
+        """A batch of one costs no thread at all.
+
+        Why:
+            A thread costs about 50 microseconds and buys nothing for one call.
+            A worker thread would also hide a fault behind a second stack.
+        """
+        answers = BoundedFanOut.run({"only": threading.get_ident}, "probe calls")
+        assert answers["only"] == threading.get_ident()
+
+    def test_an_empty_batch_answers_with_no_name(self) -> None:
+        """No call gives no answer, and never raises."""
+        assert BoundedFanOut.run({}, "probe calls") == {}
+
+
+class TestBoundedFanOutFailure:
+    """One failed call never loses the answer of another call.
+
+    Why:
+        The tier 3 sections are optional and a stop must reach every plan it
+        can. A fan-out that raised on the first fault would lose every other
+        answer of the same batch, which is the exact opposite of both rules.
+    """
+
+    def test_a_raised_call_answers_with_no_value(self, caplog: pytest.LogCaptureFixture) -> None:
+        """The failed name holds None and the log names the call.
+
+        Args:
+            caplog: The pytest log capture helper.
+        """
+
+        def fail() -> str:
+            """Raise the fault that the caller must survive."""
+            raise RuntimeError("the cloud refused the call")
+
+        with caplog.at_level(logging.ERROR):
+            answers = BoundedFanOut.run({"good": lambda: "value", "bad": fail}, "probe calls")
+        assert answers == {"good": "value", "bad": None}
+        assert any("Fan-out call bad" in record.getMessage() for record in caplog.records)
+
+    def test_a_raised_call_in_a_batch_of_one_also_answers(self) -> None:
+        """The single-call path holds the same error boundary as the pool path.
+
+        Why:
+            The two paths must never disagree. A caller that reads None on one
+            path and meets an exception on the other cannot be written safely.
+        """
+
+        def fail() -> str:
+            """Raise the fault that the caller must survive."""
+            raise RuntimeError("the cloud refused the call")
+
+        assert BoundedFanOut.run({"only": fail}, "probe calls") == {"only": None}

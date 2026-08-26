@@ -5,8 +5,21 @@ Why:
     enforces a call budget, so the portal must bound the work in flight. The
     portal also runs under Gunicorn with the ``gthread`` worker class, so it
     must let the work in flight finish when the worker process stops. One
-    module owns both rules, so no caller builds a second pool. The shared
-    ``ConnectionPoolExecutor`` stays the only pool in the repository.
+    module owns both rules, so no caller builds a second pool.
+
+    The module holds two shapes, because a capture holds two shapes of work.
+    ``CapturePool`` starts a batch of call groups from a request thread and
+    reaches the shared ``ConnectionPoolExecutor``. ``BoundedFanOut`` runs a
+    handful of named blocking calls that already sit inside one work item, such
+    as the four tier 3 cloud calls of one call group. Both shapes bound the
+    work in flight to ``CAPTURE_WORKER_TARGET``, so neither one raises the
+    share of the hourly cloud call budget that a capture holds.
+
+    ``documentation/python-parallelism-matrix.md`` decides the tool. Every call
+    of this module waits on a network, so the bottleneck is input and output
+    and not the processor. The matrix answers that case with a thread pool, and
+    it warns that a process pool would pay a pickle cost for a payload that a
+    thread shares for free.
 """
 
 from __future__ import annotations  # Enable postponed evaluation for forward-ref typing
@@ -15,7 +28,8 @@ import atexit  # Run the drain when the worker process exits normally
 import logging  # Action logging per Constitution VII
 import threading  # Condition and Semaphore for the budget and the drain gate
 import time  # Monotonic clock for the drain deadline
-from collections.abc import Callable  # Type of the worker the caller supplies
+from collections.abc import Callable, Mapping  # Worker shape plus the named call set of a fan-out
+from concurrent.futures import Future, ThreadPoolExecutor  # Bounded fan-out of blocking calls
 from typing import Any, ClassVar, Final  # Loose payload typing plus class-level state
 
 from src.refactors.connection_pool_executor import ConnectionPoolExecutor  # The one pool the repository owns
@@ -38,6 +52,18 @@ SHUTDOWN_TIMEOUT_SECONDS: Final[float] = 25.0
 # WHY: src/refactors/connection_pool_executor.py:178 submits
 #      (item, connection_semaphore), so every worker takes exactly those two.
 CaptureWorker = Callable[[Any, threading.Semaphore], Any]
+
+# WHAT: the shape of one call inside a fan-out.
+# WHY: a fan-out call already holds every argument it needs, because the caller
+#      binds them before it hands the call over. The pool then needs no
+#      knowledge of the cloud, and a test passes a plain function.
+FanOutCall = Callable[[], Any]
+
+# WHAT: the prefix of every fan-out thread name.
+# WHY: a thread dump during a stalled capture must name the owner of the wait.
+#      Without a prefix the dump shows ``ThreadPoolExecutor-3_1`` and no reader
+#      can tell a portal thread from a thread of the wider application.
+FANOUT_THREAD_PREFIX: Final[str] = "portal-fanout"
 
 
 class DrainGate:
@@ -270,3 +296,139 @@ class CapturePool:
         atexit.register(CapturePool.shutdown)  # Run the drain when the process exits normally
         CapturePool._HOOK_INSTALLED = True  # Remember the registration for this process
         logging.info("* Capture pool shutdown hook installed, drain %s seconds", SHUTDOWN_TIMEOUT_SECONDS)  # Announce
+
+
+class BoundedFanOut:
+    """Runs a small set of named blocking calls at one time.
+
+    Why:
+        Some portal work holds several independent cloud calls inside one work
+        item. The four tier 3 reads of a capture are one case, and the cancel
+        call of each upgrade plan of a stop is another. Run in order, the
+        operator waits for the sum of the network waits. Run at one time, the
+        operator waits for the longest wait alone. The call count never
+        changes, so the hourly cloud call budget never changes.
+
+        This class does not reach ``ConnectionPoolExecutor``, and the reason is
+        not style. That executor splits the work into batches, draws a ``tqdm``
+        progress bar on standard output, and builds a pool for each batch. A
+        progress bar belongs to the command line and not to a web worker. The
+        executor also expects a two-argument worker and a semaphore that it
+        owns, which a caller inside a pool worker cannot supply.
+
+        The class holds no drain gate on purpose. Every caller already runs
+        inside work that the gate counts, and ``run`` returns only after every
+        call ends, so the gate still covers the fan-out. A stop must also reach
+        the cloud during a shutdown, because a refused cancel leaves a device
+        writing firmware.
+    """
+
+    @staticmethod
+    def resolve_worker_count(call_count: int) -> int:
+        """Report how many calls of one fan-out run at one time.
+
+        Why:
+            A pool wider than the work wastes a thread, and a pool wider than
+            ``CAPTURE_WORKER_TARGET`` takes a larger share of the hourly cloud
+            call budget than the plan allows.
+
+        Args:
+            call_count: How many calls the caller supplied.
+
+        Returns:
+            A count of 1 or more that never rises above the target or the work.
+        """
+        return max(1, min(CAPTURE_WORKER_TARGET, call_count))  # Never zero, never wider than the work or the target
+
+    @staticmethod
+    def _log_failure(name: str, description: str, error: BaseException) -> None:
+        """Write the one log record that a failed fan-out call gets.
+
+        Why:
+            Both the pool path and the single-call path report a failure. One
+            writer keeps the two records identical, so an operator reads one
+            sentence whatever path the call took.
+
+        Args:
+            name: The name the caller gave this call.
+            description: Plain name of the batch.
+            error: The fault the call raised.
+        """
+        logging.error("! Fan-out call %s of %s failed: %s", name, description, type(error).__name__)  # Name the call
+
+    @staticmethod
+    def _resolve(name: str, future: Future[Any], description: str) -> Any:
+        """Read the answer of one call that a worker thread ran.
+
+        Why:
+            A raised call must never lose the answer of the other calls. The
+            failure therefore becomes a None value and one log record, and the
+            caller decides what an absent answer means.
+
+        Args:
+            name: The name the caller gave this call.
+            future: The pending answer of the call.
+            description: Plain name of the batch, for the log record.
+
+        Returns:
+            The value of the call, or None after a failure.
+        """
+        try:  # The call reaches a network, so it may raise
+            return future.result()  # Block until this one call ends
+        except Exception as error:  # WHY: one failed call must not lose the answer of the other calls
+            BoundedFanOut._log_failure(name, description, error)  # One writer for both paths
+            return None  # The caller reads an absent answer as a failed call
+
+    @staticmethod
+    def _run_in_order(calls: Mapping[str, FanOutCall], description: str) -> dict[str, Any]:
+        """Run the calls in the calling thread.
+
+        Why:
+            The matrix at ``documentation/python-parallelism-matrix.md`` puts
+            the cost of a thread at about 50 microseconds and asks for work far
+            above that before a thread pays. One call never pays, and a fan-out
+            of one also hides a fault behind a worker thread, which makes a
+            test harder to read.
+
+            The error boundary matches the pool path exactly. A caller that met
+            an exception on one path and a None value on the other could not be
+            written safely.
+
+        Args:
+            calls: One named call for each piece of work.
+            description: Plain name of the batch, for the log record.
+
+        Returns:
+            One answer for each name. An absent answer is None.
+        """
+        answers: dict[str, Any] = {}  # One entry for each name the caller gave
+        for name, call in calls.items():  # The caller supplied one call or none, so the order costs nothing
+            try:  # The call reaches a network, so it may raise
+                answers[name] = call()  # The caller owns the cloud call
+            except Exception as error:  # WHY: the pool path answers None, so this path must answer None too
+                BoundedFanOut._log_failure(name, description, error)  # One writer for both paths
+                answers[name] = None  # The caller reads an absent answer as a failed call
+        return answers  # The caller reads every name it supplied
+
+    @staticmethod
+    def run(calls: Mapping[str, FanOutCall], description: str = "cloud calls") -> dict[str, Any]:
+        """Run every call at one time and collect the answers by name.
+
+        Args:
+            calls: One named call for each piece of work. Each call takes no
+                argument, because the caller binds every argument first.
+            description: Plain name of the batch, for the log records.
+
+        Returns:
+            One answer for each name the caller supplied. A call that raised
+            holds None, so the caller never loses the other answers.
+        """
+        if len(calls) < 2:  # One call or none never pays for a thread
+            return BoundedFanOut._run_in_order(calls, description)
+        workers = BoundedFanOut.resolve_worker_count(len(calls))  # Bound the work in flight
+        logging.info("[FAN-OUT] Starting %s %s across %s workers", len(calls), description, workers)  # BEFORE
+        with ThreadPoolExecutor(max_workers=workers, thread_name_prefix=FANOUT_THREAD_PREFIX) as pool:
+            pending = {name: pool.submit(call) for name, call in calls.items()}  # Every call starts before any wait
+            answers = {name: BoundedFanOut._resolve(name, future, description) for name, future in pending.items()}
+        logging.debug("[FAN-OUT] Finished %s %s", len(answers), description)  # AFTER
+        return answers  # The caller reads every name it supplied
