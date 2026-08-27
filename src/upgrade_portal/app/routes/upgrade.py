@@ -76,6 +76,7 @@ from .select import (  # The sibling module owns these rules, so no copy of them
     LOCK_STATE_UNKNOWN,
     SELECTED_SITE_KEY,
     find_attribute,
+    find_site,
     load_optional_module,
     lock_banner_context,
     read_site_locks,
@@ -697,14 +698,48 @@ def chosen_site(site_id: str | None) -> str | None:
     return stored if isinstance(stored, str) and stored else None  # A damaged field reads as no pick.
 
 
+def readable_site_name(org_id: str, site_id: str, given: str) -> str:
+    """Return the site name in words for one new run record.
+
+    Why:
+        Issue #2100 asks the three upgrade pages to name the site in words. The
+        picker stores the site identifier alone, so a create call that carries no
+        name once wrote the identifier into the name field. The cloud holds the
+        real name, so this function reads it one time for each new run.
+
+        A silent cloud or an unknown site returns the identifier. The operator
+        then reads a value instead of a blank field.
+
+    Args:
+        org_id: The organization that holds the site.
+        site_id: The site the run acts on.
+        given: The name the create body carries, or an empty string.
+
+    Returns:
+        The site name in words, or the site identifier.
+    """
+    if given:  # The caller knows the name already, so no cloud read is needed.
+        return given
+    logger.info("upgrade: read the name of the site %s for a new run", site_id)  # BEFORE the cloud read.
+    try:
+        site = find_site(site_id, org_id)  # The sibling module owns every rule of this read.
+    except Exception:  # A named site beats a fault, so any failure keeps the identifier.
+        logger.warning("upgrade: the site %s did not answer, so the run keeps the identifier", site_id)
+        return site_id  # The page still shows a value that an operator can quote.
+    name = str(site.get("name", "")).strip() if site else ""  # An unknown site answers None.
+    logger.debug("upgrade: the site %s answered the name %s", site_id, name or site_id)  # AFTER the cloud read.
+    return name or site_id  # An empty name falls back to the identifier.
+
+
 def new_run_spec(org_id: str, site_id: str) -> RunSpec:
     """Build the record request for one new run.
 
     Why:
         The record holds a readable name for the organization and for the site,
         and the picker stores neither name in the session. The body may carry
-        both, and the identifier stands in when it does not, so the page always
-        shows a value and the record never holds an empty name.
+        both. The site name comes from the cloud when the body carries none, so
+        the three upgrade pages name the site in words. The identifier stands in
+        when no name exists, so the record never holds an empty name.
 
     Args:
         org_id: The organization of the current session.
@@ -718,7 +753,7 @@ def new_run_spec(org_id: str, site_id: str) -> RunSpec:
         org_id=org_id,  # Every read of this run stays inside this organization.
         org_name=str(body.get("org_name") or org_id),  # The identifier reads better than an empty name.
         site_id=site_id,  # FR-014 binds one run to one site.
-        site_name=str(body.get("site_name") or site_id),  # The same rule for the site.
+        site_name=readable_site_name(org_id, site_id, str(body.get("site_name") or "")),  # Issue #2100.
         actor_email=actor_address(),  # FR-038h asks the record to name the operator.
         browser_id=browser_key(),  # Names the tab group that created the run.
         tier=chosen_tier(),  # The pre-check capture reads this tier.
@@ -1189,6 +1224,29 @@ def run_is_live(record: dict[str, Any]) -> bool:
     return state not in RunStateMachine.TERMINAL  # A final run accepts no stop.
 
 
+def site_labels(record: dict[str, Any]) -> dict[str, str]:
+    """Build the two site values that one upgrade page shows.
+
+    Why:
+        Issue #2100 asks the options page, the confirm page, and the run page to
+        name the site in words. Each page also keeps the site identifier, because
+        an operator quotes that identifier in a support case.
+
+        A record with an empty stored name falls back to the identifier. The
+        operator then reads a value instead of a blank field.
+
+    Args:
+        record: The run record the page shows. May be empty.
+
+    Returns:
+        The site name and the site identifier of the page.
+    """
+    site_id = str(record.get("site_id", ""))  # FR-014 binds one run to one site.
+    stored = str(record.get("site_name", "")).strip()  # A stored blank must not reach the page.
+    logger.debug("upgrade: the site %s reads as the name %s", site_id, stored or site_id)  # A poll renders this.
+    return {"site_name": stored or site_id, "site_id": site_id}  # Both values reach every one of the three pages.
+
+
 def stop_control_state(record: dict[str, Any]) -> dict[str, Any]:
     """Build the two values that the stop partial reads.
 
@@ -1254,14 +1312,17 @@ def run_page(run_id: str) -> str:
     record = load_run(run_id) or {}  # An absent run still renders, so the operator reads a page and not a fault.
     poll_seconds = current_app.config.get("POLL_INTERVAL_SECONDS", 30)  # Decision D3 fixes this period.
     logger.info("upgrade: show the run page of %s", run_id)  # One line for each page read.
+    context = {
+        **site_labels(record),  # Issue #2100 names the site in words and keeps the identifier.
+        **stop_control_state(record),  # The two values that the included stop partial reads.
+        **run_lock_banner(record),  # The six values that the included lock banner reads.
+    }  # One merged dict, because the banner repeats `site_id` and a second splat of it would fault.
     return render_page(
         PROGRESS_TEMPLATE,
         run_id=run_id,  # The page builds every control identifier from this value.
         status=RunStatusView().build(record),  # The same body that the poll answers.
-        site_name=str(record.get("site_name", "")),  # The heading of the page.
         poll_interval_seconds=poll_seconds,  # The script reads this through `data-poll-seconds`.
-        **stop_control_state(record),  # The two values that the included stop partial reads.
-        **run_lock_banner(record),  # The six values that the included lock banner reads.
+        **context,  # The site labels, the stop partial values, and the lock banner values.
     )
 
 
@@ -1286,15 +1347,18 @@ def options_page(run_id: str) -> str:
     record = load_run(run_id) or {}  # An absent run still renders an empty picker.
     view = options_view(record)  # The site inventory fills a new run, and a saved choice outranks it.
     logger.info("upgrade: show the options page of %s with %s device(s)", run_id, len(view[TARGETS_FIELD]))
+    context = {
+        **site_labels(record),  # Issue #2100 names the site in words and keeps the identifier.
+        **run_lock_banner(record),  # The six values that the included lock banner reads.
+    }  # One merged dict, because the banner repeats `site_id` and a second splat of it would fault.
     return render_page(
         OPTIONS_TEMPLATE,
         run_id=run_id,  # The page builds every control identifier from this value.
-        site_name=str(record.get("site_name", "")),  # The heading of the page.
         targets=view[TARGETS_FIELD],  # One row for each device of the site.
         versions_by_model=view[VIEW_VERSIONS_FIELD],  # One version list for each model of those rows.
         options=record.get("options", {}),  # The three controls show the saved choice.
         warnings=[],  # The save call answers the warnings, so the first read of the page shows none.
-        **run_lock_banner(record),  # The six values that the included lock banner reads.
+        **context,  # The site labels and the lock banner values.
     )
 
 
@@ -1319,11 +1383,11 @@ def confirm_page(run_id: str) -> str:
     return render_page(
         CONFIRM_TEMPLATE,
         run_id=run_id,  # The page builds every control identifier from this value.
-        site_name=str(record.get("site_name", "")),  # The heading of the page.
         targets=record.get(TARGETS_FIELD, []),  # The operator reads the whole list one last time.
         options=record.get("options", {}),  # The three controls show the saved choice.
         pre_capture_id=record.get(PRE_CAPTURE_FIELD),  # Names the saved pre-check, or None.
         pre_capture_verified=bool(record.get(PRE_CAPTURE_FIELD)),  # FR-035 unlocks the control on this value.
+        **site_labels(record),  # Issue #2100 names the site in words and keeps the identifier.
     )
 
 
