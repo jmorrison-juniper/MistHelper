@@ -226,7 +226,14 @@
 
   <dl class="row mb-0">
     <dt class="col-sm-4">Capture identifier</dt>
-    <dd class="col-sm-8 font-monospace" data-capture-field="identifier">{{ capture_identifier }}</dd>
+    {#
+      The field sits outside the progress region above, so a script that
+      searches that region finds nothing. The test identifier gives portal.js a
+      document-wide address, in the same way as the stored size below.
+    #}
+    <dd class="col-sm-8 font-monospace"
+        data-testid="capture-identifier"
+        data-capture-field="identifier">{{ capture_identifier }}</dd>
 
     {#
       FR-032b requires the stored size. The value is the raw byte count, so a
