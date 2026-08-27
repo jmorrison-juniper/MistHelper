@@ -3,13 +3,13 @@
   portal.
 
   Why this file exists:
-    An upgrade writes firmware and reboots a device. The operator must not reach
-    that action with one press. FR-033 and FR-034 ask for a typed word, and the
-    customer asked for "a box the operator must type a word into before a
-    shaded-out begin button unlocks". This page holds that box and that button,
-    and it holds nothing else that can start work. The last read of the plan
-    sits on the same page, so the operator reads the count of devices and the
-    warnings before the word unlocks the button.
+    An upgrade writes firmware, and it can reboot a device. The operator must
+    not reach that action with one press. FR-033 and FR-034 ask for a typed
+    word, and the customer asked for "a box the operator must type a word into
+    before a shaded-out begin button unlocks". This page holds that box and that
+    button, and it holds nothing else that can start work. The last read of the
+    plan sits on the same page, so the operator reads the count of devices and
+    the warnings before the word unlocks the button.
 
   Why the begin button starts disabled:
     The disabled attribute sits in the markup, not in a script. A browser that
@@ -95,6 +95,13 @@
 {% set device_count = target_rows | length %}
 
 {#
+  English writes "1 device" and writes "2 devices". The count reaches the warning
+  sentence, and issue #2099 records the text "1 devices" on the live portal. A
+  sentence that miscounts one device reads as a sentence nobody checked.
+#}
+{% set device_noun = 'device' if device_count == 1 else 'devices' %}
+
+{#
   The gate opens on two facts. FR-035 asks for a verified pre-check. The plan
   must also name at least one device, because a start that sends nothing still
   reports a complete run and an operator would read that run as an upgrade of
@@ -160,11 +167,36 @@
   {#
     The consequence sits in the markup. A signal word from a stylesheet rule is
     generated content, and no browser test can read generated content.
+
+    The sentence reads the saved reboot option, because the plan block above
+    prints the same option. The first build printed "reboots each one" on every
+    plan. It therefore printed that claim beside a plan block that printed "No",
+    and issue #2099 records that contradiction. An operator who reads the same
+    warning on every plan learns that the warning carries no information.
+
+    Neither branch promises that a device stays up. Issue #2007 records one
+    EX4100-F-12P that rebooted four seconds after the write, although the request
+    carried a disabled reboot. That switch carried power over Ethernet for six
+    access points, and the site lost service for about six minutes. A branch that
+    promised no outage was false on that day.
+
+    The branch for a disabled reboot also names the other cost. A device that
+    never reboots keeps the old firmware, and the run still reads as complete.
+
+    The identifier upgrade-confirm-warning gives a browser test one stable hook.
+    A test reads the sentence for both reboot states and proves the two differ.
   #}
-  <p class="confirm-box-text">
-    Warning: the upgrade writes new firmware to {{ device_count }} devices and
-    reboots each one. A device is offline while it reboots. The portal cannot
-    undo a write.
+  <p class="confirm-box-text" data-testid="upgrade-confirm-warning">
+    Warning: the upgrade writes new firmware to {{ device_count }} {{ device_noun }}.
+    {% if reboot_chosen %}
+      The portal reboots each switch and each gateway.
+    {% else %}
+      The portal does not ask for a reboot.
+      A device can still reboot on its own after the write.
+      A device that does not reboot keeps the old firmware until its next reboot.
+    {% endif %}
+    A device is offline while it reboots.
+    The portal cannot undo a write.
   </p>
 
   <p class="confirm-box-text">
