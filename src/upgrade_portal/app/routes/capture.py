@@ -38,6 +38,8 @@ from typing import Any  # A capture document and an injected seam are both free-
 
 from flask import Blueprint, Response, current_app, has_app_context, jsonify, request  # The framework.
 
+from ...capture import export as capture_export  # The download writer. It reaches no cloud, so a plain import is safe.
+from ...capture import tables as capture_tables  # The page row builders. The same rule holds for this module.
 from ...runtime import identity  # The real session guard. No copy of it lives here.
 from ...runtime.runs import RunStateMachine  # The run states belong to that module, so no copy of them lives here.
 from ..factory import json_error  # The one error envelope that the contract allows.
@@ -62,6 +64,7 @@ capture_bp = Blueprint("capture", __name__)  # No URL prefix, because the paths 
 START_PATH = "/api/sites/<site_id>/captures"  # The start of one capture.
 STATUS_PATH = "/api/captures/<capture_id>/status"  # The poll target of the browser.
 READ_PATH = "/api/captures/<capture_id>"  # The whole capture document.
+EXPORT_PATH = "/api/captures/<capture_id>/export"  # The file download of one whole capture.
 PAGE_PATH = "/captures/<capture_id>"  # The human view of one capture.
 
 CAPTURE_TEMPLATE = "capture/capture.html"  # The page that starts a capture and shows its progress.
@@ -135,6 +138,7 @@ PRE_CHECK_LOCKED_CODE = "pre_check_locked"  # A run that sent firmware keeps the
 CAPTURE_NOT_FOUND_CODE = "capture_not_found"  # No such capture.
 CAPTURE_NOT_VERIFIED_CODE = "capture_not_verified"  # `contracts/http-api.md:176` fixes this code.
 CAPTURE_TOO_NEW_CODE = "schema_version_too_new"  # `capture.store.REASON_SCHEMA_TOO_NEW` names this refusal.
+BAD_FORMAT_CODE = capture_export.ERROR_BAD_FORMAT  # The writer owns this code, so no copy of it lives here.
 
 BAD_TIER_MESSAGE = "Choose the data tier 2 or the data tier 3."  # Names both legal values.
 SITE_NOT_FOUND_MESSAGE = "The portal found no such site in this organization."  # Names the scope.
@@ -143,6 +147,11 @@ PRE_CHECK_LOCKED_MESSAGE = "This upgrade started, so its first capture stays. Op
 CAPTURE_NOT_FOUND_MESSAGE = "The portal holds no capture with that identifier."  # No cure.
 CAPTURE_NOT_VERIFIED_MESSAGE = "The portal did not read this capture back, so it may not be compared."  # Why.
 CAPTURE_TOO_NEW_MESSAGE = "A later version of the portal wrote this capture. Upgrade the portal to read it."  # Cure.
+BAD_FORMAT_MESSAGE = "Choose the file format csv or the file format json."  # Names both legal values.
+
+FORMAT_ARGUMENT = "format"  # The query argument that names the file format of the download.
+ATTACHMENT_HEADER = "Content-Disposition"  # The header that makes the browser save the file.
+ATTACHMENT_PATTERN = 'attachment; filename="{name}"'  # The browser reads the name from this header.
 
 START_MESSAGE = "The portal queued the capture."  # The first panel text.
 COLLECTING_MESSAGE = "The portal is reading the site."  # The panel text while the worker runs.
@@ -897,6 +906,29 @@ def stored_body(capture_id: str) -> dict[str, Any] | None:
     return stored_status(document, bool(getattr(load, "comparable", False)))  # A missing flag reads as false.
 
 
+def stored_document(capture_id: str) -> dict[str, Any]:
+    """Read the whole stored document of one capture.
+
+    Why:
+        The page tables and the download both read every captured row, and
+        `stored_body` answers the status record alone. This helper hands over
+        the raw document, so neither reader rebuilds it from the status.
+
+    Args:
+        capture_id: The identifier of the capture.
+
+    Returns:
+        The stored document, or an empty map when the store holds no such
+        capture. An empty map paints an empty table, which FR-026 allows.
+    """
+    if not has_app_context():  # A caller outside the request cycle can reach no configured store.
+        logger.debug("capture: no application context, so the tables paint no row")  # Names the empty answer.
+        return {}  # An empty map paints three empty tables, and never an error.
+    load = load_stored(capture_id)  # None when no reader exists.
+    document: Any = getattr(load, "capture", None) if load is not None else None  # The stored fields.
+    return document if isinstance(document, dict) else {}  # A missing capture paints an empty table, not an error.
+
+
 def refusal_for(load: Any) -> tuple[Response, int]:
     """Turn one refused store read into the error envelope.
 
@@ -1028,6 +1060,55 @@ def read_capture(capture_id: str) -> tuple[Response, int]:
     return jsonify(document), OK_STATUS  # The whole document, because the comparison reads every field.
 
 
+def build_attachment(result: Any) -> tuple[Response, int]:
+    """Turn one written file into a download answer.
+
+    Why:
+        The browser must save the file and must not paint it. The attachment
+        header carries the name, so the operator finds the capture again in the
+        download folder without opening the file.
+
+    Args:
+        result: The record that the writer answered with.
+
+    Returns:
+        The file and its status.
+    """
+    response = Response(result.body, mimetype=result.media_type)  # The media type tells the browser what it holds.
+    response.headers[ATTACHMENT_HEADER] = ATTACHMENT_PATTERN.format(name=result.filename)  # The browser saves it.
+    return response, OK_STATUS  # A written file is always a success.
+
+
+@capture_bp.get(EXPORT_PATH)
+@identity.require_session
+def download_capture(capture_id: str) -> tuple[Response, int]:
+    """Hand over one whole capture as a file.
+
+    Why:
+        FR-027 requires a file download of a completed capture, and Acceptance
+        Scenario 3 requires that the file holds every captured row. The refusals
+        match `read_capture`, because the same store read feeds both routes. A
+        capture the portal never read back answers 409, so no operator files a
+        change record against a reading that may never have reached the store.
+
+    Args:
+        capture_id: The capture the path named.
+
+    Returns:
+        The file, or the refusal envelope.
+    """
+    load = load_stored(capture_id)  # None when the store module is missing.
+    document: Any = getattr(load, "capture", None) if load is not None else None  # The whole stored document.
+    if load is None or not getattr(load, "comparable", False) or not isinstance(document, dict):  # Three refusals.
+        return refusal_for(load)  # The store names the code, so the route passes it straight on.
+    logger.info("capture: write the download of the capture %s", capture_id)  # The identifier reads in the log.
+    result = capture_export.export_capture(document, request.args.get(FORMAT_ARGUMENT, ""))  # The writer owns it.
+    if not result.ok:  # The caller named a format that the writer does not write.
+        return json_error(BAD_REQUEST_STATUS, BAD_FORMAT_CODE, BAD_FORMAT_MESSAGE)  # The message names both values.
+    logger.debug("capture: the download holds %s characters", len(result.body))  # The size proves the file exists.
+    return build_attachment(result)  # The browser saves the file under the name the writer chose.
+
+
 @capture_bp.get(PAGE_PATH)
 @identity.require_session
 def capture_page(capture_id: str) -> str:
@@ -1102,5 +1183,52 @@ def page_context(capture_id: str) -> dict[str, Any]:
         # Rendering the value here removes the dependency on that second read.
         "stored_size_bytes": status.get("stored_size_bytes", 0),
     }
+    context.update(table_context(capture_id, status))  # FR-026. The three tables of User Story 1.
     context.update(lock_banner_context(resolve_org(None) or "", site_id))  # The included banner reads these six.
     return context
+
+
+def table_context(capture_id: str, status: Mapping[str, Any]) -> dict[str, Any]:
+    """Build the three row lists and the two download links of the page.
+
+    Why:
+        FR-026 requires that the portal shows a completed capture as tables, and
+        FR-027 requires a download. A capture the portal never verified holds no
+        stored document, so both tables and both links read an empty capture.
+        An empty table is a valid answer, because a site may hold no device.
+
+        The store read runs for a verified capture alone. A running capture has
+        written nothing yet, so a read of it would cost one call and answer
+        nothing.
+
+    Args:
+        capture_id: The capture the path named.
+        status: The status record that the page paints.
+
+    Returns:
+        The three row lists and the two download addresses.
+    """
+    verified = bool(status.get("verified")) and bool(status.get("capture_id"))  # Only a stored capture holds rows.
+    document = stored_document(capture_id) if verified else {}  # An empty map paints three empty tables.
+    context: dict[str, Any] = dict(capture_tables.page_tables(document))  # The device rows and the client rows.
+    context["can_download"] = verified  # The page shows the download controls for a verified capture alone.
+    context["export_csv_href"] = export_href(capture_id, capture_export.FORMAT_CSV) if verified else ""
+    context["export_json_href"] = export_href(capture_id, capture_export.FORMAT_JSON) if verified else ""
+    return context
+
+
+def export_href(capture_id: str, export_format: str) -> str:
+    """Return the address of one capture download.
+
+    Why:
+        The template must not build a path by hand. A path that a template
+        builds drifts from `EXPORT_PATH` on the day the path moves.
+
+    Args:
+        capture_id: The capture the path named.
+        export_format: `csv` or `json`.
+
+    Returns:
+        The address of that download.
+    """
+    return EXPORT_PATH.replace("<capture_id>", capture_id) + "?" + FORMAT_ARGUMENT + "=" + export_format
