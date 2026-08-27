@@ -21,6 +21,8 @@ from typing import Any
 
 import pytest
 
+from tests.support.lock_store_double import FakeLockStore  # The store stand-in that keeps every test off Redis.
+
 logger = logging.getLogger(__name__)
 
 # WHY: An obviously fake value. FR-009 forbids a real token value anywhere in
@@ -36,6 +38,12 @@ FAKE_SITE_ID = "00000000-0000-0000-0000-0000000000bb"
 # them. A contract test drives the routes alone, so `portal_app` empties both.
 LAUNCHER_KEY = "RUN_LAUNCHER"  # Hands one prepared record to the run driver.
 STOP_RUNNER_KEY = "STOP_RUNNER"  # Performs the cancel work of one stop.
+
+# WHY: The capture start takes the site lock, so a start writes to the lock
+# store. Without a stand-in that write reaches the Redis server of the computer
+# that runs the suite and leaves a real key behind. `test_lock.py` overrides
+# this seam with a store of its own, so the injection here changes nothing there.
+LOCK_CLIENT_KEY = "LOCK_STORE_CLIENT"  # The seam that holds the lock store, named by `select.py`.
 
 # WHY: The smallest payload that still holds each field a route reads. A
 # contract test checks the response shape, so a large payload adds no value.
@@ -229,6 +237,7 @@ def portal_app() -> Any:
     app.config.update(TESTING=True)  # WHY: Test mode reports the real exception instead of a 500 page.
     app.config[LAUNCHER_KEY] = None  # WHY: No contract test may start a real run driver thread.
     app.config[STOP_RUNNER_KEY] = None  # WHY: No contract test may send a real cancel to the cloud.
+    app.config[LOCK_CLIENT_KEY] = FakeLockStore()  # WHY: A capture start writes a lock, and no test may reach Redis.
     return app
 
 

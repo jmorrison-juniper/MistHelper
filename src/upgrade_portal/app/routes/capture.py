@@ -38,19 +38,24 @@ from typing import Any  # A capture document and an injected seam are both free-
 
 from flask import Blueprint, Response, current_app, has_app_context, jsonify, request  # The framework.
 
-from ...runtime import identity  # The real session guard. No copy of it lives here.
+from ...runtime import identity, lock  # The real session guard and the real lock rules. No copy of them lives here.
 from ...runtime.runs import RunStateMachine  # The run states belong to that module, so no copy of them lives here.
 from ..factory import json_error  # The one error envelope that the contract allows.
 from .select import (  # The sibling module owns these rules, so no copy of them lives here.
+    build_lock_request,
+    drop_lock_record,
     find_attribute,
     find_site,
     injected_seam,
     load_optional_module,
     lock_banner_context,
+    lock_client,
     org_display_name,
     read_site_locks,
     render_page,
     resolve_org,
+    session_lock_record,
+    store_lock_record,
 )
 from .upgrade import run_store  # The sibling module owns the run record store, so no copy of it lives here.
 
@@ -711,12 +716,102 @@ def pre_check_locked(body: dict[str, Any]) -> bool:
     return True
 
 
+def renew_own_lock(org_id: str, site_id: str) -> bool:
+    """Extend a site lock that this browser already holds.
+
+    Why:
+        A beat needs no typed word and keeps the same token, so the holder starts
+        a second capture on the same site with no extra step. An acquire would
+        ask a quiet holder for the word `continue` and would stop that journey.
+
+    Args:
+        org_id: The organization that holds the site.
+        site_id: The site the capture reads.
+
+    Returns:
+        True when this browser still holds the site. False when the start must
+        ask the store for a fresh lock.
+    """
+    record = session_lock_record(site_id)  # None means this browser took no lock on that site.
+    if record is None:  # No stored record, so there is nothing to extend.
+        return False  # The caller asks the store for a fresh lock.
+    logger.info("capture: the start extends the lock that this session holds on site %s", site_id)  # Before.
+    try:  # The lock store sits on a network and may not answer.
+        lock.refresh_site_lock(lock.build_key(org_id, site_id), record, client=lock_client())
+    except lock.LockStoreUnreachableError:  # `contracts/site-lock.md` lets a capture start with no lock.
+        logger.warning("capture: the lock store did not answer the beat of site %s, so the hold stands", site_id)
+        return True  # The stored record stays, because no answer proves no loss.
+    except lock.SiteLockError:  # The lock expired, or a takeover moved it to another operator.
+        logger.info("capture: this session no longer holds site %s, so the start asks for a fresh lock", site_id)
+        drop_lock_record(site_id)  # A stale record would make every later beat fail the same way.
+        return False  # The acquire below then answers the real state of the site.
+    logger.debug("capture: the start extended the lock of site %s", site_id)  # After, with no address.
+    return True  # This browser still holds the site.
+
+
+def take_site_lock(org_id: str, site_id: str) -> tuple[Response, int] | None:
+    """Take the site lock for the operator that starts one capture.
+
+    Why:
+        `spec.md` User Story 4 Acceptance Scenario 1 grants the lock to the
+        operator that starts a capture on a free site. Without the grant two
+        operators read the site as free and capture it at the same moment.
+
+    Args:
+        org_id: The organization that holds the site.
+        site_id: The site the capture reads.
+
+    Returns:
+        The refusal envelope, or None when the capture may start.
+    """
+    ask = build_lock_request(org_id, site_id)  # None means the session carries no owner.
+    if ask is None:  # No owner means no identity to grant a site to.
+        logger.warning("capture: the session named no owner, so the start of site %s took no lock", site_id)
+        return None  # The capture still starts, because the guard above already passed this request.
+    logger.info("capture: the start asks for the lock of site %s", site_id)  # Before the write.
+    try:  # The lock store sits on a network and may not answer.
+        grant = lock.acquire_site_lock(ask, client=lock_client())
+    except lock.LockStoreUnreachableError:  # `contracts/site-lock.md` lets a capture start with no lock.
+        logger.warning("capture: the lock store did not answer, so the capture of site %s starts unlocked", site_id)
+        return None  # Only an upgrade fails closed here, because only an upgrade writes firmware.
+    except lock.SiteLockError:  # Another operator won the race between the read above and this write.
+        logger.warning("capture: another operator holds site %s, so the start stops", site_id)
+        return json_error(CONFLICT_STATUS, SITE_LOCKED_CODE, SITE_LOCKED_MESSAGE)  # The holder must end first.
+    store_lock_record(site_id, grant.record)  # The signed session carries the record to every later beat.
+    logger.debug("capture: the start holds site %s in the state %s", site_id, grant.state)  # After, no address.
+    return None  # The capture may start, and this operator holds the site.
+
+
+def hold_site_lock(org_id: str, site_id: str) -> tuple[Response, int] | None:
+    """Make sure the starting operator holds the site lock.
+
+    Why:
+        Two paths lead to a held site. This browser may hold the lock already, or
+        the site may be free. One reader keeps that choice in one place, so the
+        start route reads one line.
+
+    Args:
+        org_id: The organization that holds the site.
+        site_id: The site the capture reads.
+
+    Returns:
+        The refusal envelope, or None when the capture may start.
+    """
+    if renew_own_lock(org_id, site_id):  # The holder needs a beat and never a fresh acquire.
+        return None  # This browser already holds the site, so the capture may start.
+    return take_site_lock(org_id, site_id)  # The site reads as free, so the start takes it.
+
+
 def capture_conflict(org_id: str, site_id: str, body: dict[str, Any]) -> tuple[Response, int] | None:
     """Answer the refusal that stops one capture, or None when it may start.
 
     Why:
         Two rules answer 409 for a capture start: another operator holds the site, and the run already locked the
         pre-check it holds. One reader holds both, so the route keeps one line for the pair that shares an answer.
+
+        The grant runs last, after both refusals pass. A capture that the portal
+        refuses must leave the site exactly as it found it, and the grant still
+        happens before the route reads the cloud.
 
     Args:
         org_id: The organization that holds the site.
@@ -730,7 +825,7 @@ def capture_conflict(org_id: str, site_id: str, body: dict[str, Any]) -> tuple[R
         return json_error(CONFLICT_STATUS, SITE_LOCKED_CODE, SITE_LOCKED_MESSAGE)  # The holder must end first.
     if pre_check_locked(body):  # A started run keeps the only reading of the site before the upgrade.
         return json_error(CONFLICT_STATUS, PRE_CHECK_LOCKED_CODE, PRE_CHECK_LOCKED_MESSAGE)  # The reading stays.
-    return None  # Every rule that answers 409 passed, so the reading may start.
+    return hold_site_lock(org_id, site_id)  # Every 409 rule passed, so this operator now takes the site.
 
 
 # --------------------------------------------------------------------------
