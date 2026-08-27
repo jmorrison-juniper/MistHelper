@@ -148,6 +148,7 @@ that a region search caused.
 | `upgrade-target-table` | The target table on the options page |
 | `upgrade-target-row-{mac}` | One target row |
 | `upgrade-warning-list` | The warning list from the plan |
+| `upgrade-confirm-warning` | The warning sentence above the confirmation field. The text states what the saved reboot option does. |
 | `upgrade-confirm-input` | The field for the word `CONFIRM` |
 | `upgrade-start-button` | Start the upgrade |
 | `upgrade-lock-banner` | The lost lock warning on the progress page |
