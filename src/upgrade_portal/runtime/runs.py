@@ -583,6 +583,12 @@ class RunStatusView:
         RunState.FAILED.value: "The run failed. Read the error field for the reason.",
     }
 
+    # WHY: A run stays in the created state after its pre-check capture ends,
+    # because only a start of the upgrade moves the state. The map sentence for
+    # that state would then deny a capture the same page prints. Issue #2105
+    # records the report. This sentence covers the second case.
+    CREATED_WITH_PRE_CAPTURE_MESSAGE: ClassVar[str] = "The pre-check capture is saved. Choose the upgrade options next."
+
     def build(self, record: Mapping[str, Any], message: str | None = None) -> dict[str, Any]:
         """Return the status body for one run.
 
@@ -683,7 +689,38 @@ class RunStatusView:
         if current is not None and current.get("state") == PhaseState.SKIPPED:
             plural = cls.PHASE_NOUNS.get(family, ("device", "devices"))[1]
             return f"The site holds no {plural}, so the portal does not wait for this group."
-        return cls.STATE_MESSAGES.get(state, "The run is in progress.")
+        return cls._state_message(record, state)
+
+    @classmethod
+    def _state_message(cls, record: Mapping[str, Any], state: str) -> str:
+        """Return the sentence for one run state, read from the run.
+
+        Why:
+            A state word alone cannot describe every run. A run keeps the
+            created state after its pre-check capture ends, so the created
+            sentence must read the run and report what the run holds. Issue
+            #2105 records a page that denied a capture it printed.
+
+        Args:
+            record: The stored run record.
+            state: The run state word.
+
+        Returns:
+            One sentence in plain words.
+        """
+        # WHY: The run page polls every 30 seconds, so an info line here would
+        # fill the log with one entry for each poll of each open page. The debug
+        # level keeps the trace and leaves a production log readable.
+        logger.debug("run status: the view reads the sentence for the state %s", state)
+        # WHY: A stored value of None or of empty spaces means no capture. The
+        # strip keeps a page from reading a blank identifier as a saved capture.
+        pre_capture = str(record.get("pre_capture_id") or "").strip()
+        if state == RunState.CREATED.value and pre_capture:
+            logger.debug("run status: the created run holds a pre-check capture")
+            return cls.CREATED_WITH_PRE_CAPTURE_MESSAGE
+        sentence = cls.STATE_MESSAGES.get(state, "The run is in progress.")
+        logger.debug("run status: the view chose a sentence of %s characters", len(sentence))
+        return sentence
 
     @staticmethod
     def _identity(record: Mapping[str, Any]) -> dict[str, Any]:
