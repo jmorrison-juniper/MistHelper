@@ -107,8 +107,14 @@ element inside it. That inner attribute is a script hook, not a test hook.
 | `capture-section-{name}` | One section state, such as `capture-section-devices` |
 | `capture-verified-badge` | The read-back result |
 | `capture-partial-warning` | The partial capture warning |
+| `capture-identifier` | The capture identifier value |
 | `capture-size-bytes` | The stored size value |
 | `capture-error` | The capture error region |
+
+`capture-identifier` and `capture-size-bytes` sit in the Result card, and that
+card sits outside `capture-progress`. The script must read both through the
+document and never through the progress region. Issue #2093 records the failure
+that a region search caused.
 
 ### Upgrade
 
