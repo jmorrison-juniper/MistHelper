@@ -185,6 +185,16 @@ counts = {
 }
 ```
 
+The history view reads `gateways`, `switches`, and `access_points` from this map
+and names the device types of the stored capture set. FR-084a asks for that
+column. The view lists the three words in the cascade order of section 4.1,
+which runs gateways, then switches, then access points.
+
+The view reads the device types from this map and never from the upgrade run.
+One capture reads every device type at one time, so a capture set holds more
+than one type. The run holds no single type either, because section 4.2 puts
+`device_type` on one entry of `targets` and one run can carry many entries.
+
 ### 3.7 Validation rules
 
 1. `ordinal` is 1 or greater.

@@ -45,7 +45,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, is_dataclass
 from datetime import UTC, datetime
 from importlib import import_module
 from inspect import signature
@@ -111,6 +111,28 @@ DEVICE_COUNT_FIELD = "device_count"
 CLIENT_COUNT_FIELD = "client_count"
 DEVICE_TOTAL_KEY = "devices_total"
 CLIENT_COUNT_KEYS = ("clients_wired", "clients_wireless", "clients_guest")
+
+# FR-084a asks the history view to name the device types that each capture set
+# holds. One capture reads every device type at one time, so a capture set holds
+# a mixed set and names no single type. The upgrade run names no single type
+# either, because `data-model.md` section 4.2 puts `device_type` on one entry of
+# `targets`. The stored `counts` map is therefore the one honest source, and it
+# already travels with every history row.
+#
+# Each entry pairs one stored count name with the word for one device and the
+# word for more than one device. The order is the cascade order of
+# `data-model.md` section 4.1, so the page reads the way an upgrade runs.
+DEVICE_TYPE_WORDS: tuple[tuple[str, str, str], ...] = (
+    ("gateways", "gateway", "gateways"),
+    ("switches", "switch", "switches"),
+    ("access_points", "access point", "access points"),
+)
+DEVICE_TYPE_FIELD = "device_type_text"
+DEVICE_TYPE_TEST_ID_FIELD = "device_type_test_id"
+DEVICE_TYPE_TEST_ID_PREFIX = "history-device-type-"
+NO_DEVICE_TYPE_TEXT = "No device type"
+DEVICE_TYPE_SEPARATOR = ", "
+CAPTURE_ID_FIELD = "capture_id"
 
 # Section 6 of `contracts/http-api.md` sets the two page defaults. The two bounds
 # are the portal's own, because the contract sets none and an unbounded limit
@@ -1159,6 +1181,50 @@ def row_counts(row: Mapping[str, Any]) -> dict[str, int]:
     return {DEVICE_COUNT_FIELD: whole_number(devices), CLIENT_COUNT_FIELD: whole_number(clients)}
 
 
+def device_type_phrase(count: int, one_word: str, many_words: str) -> str:
+    """Return the words for one device count.
+
+    Why:
+        A cell that read `1 gateways` would look like a fault to an operator.
+        The count and the word travel together, so the caller joins whole
+        phrases and never repairs a word later.
+
+    Args:
+        count: The count of this device type.
+        one_word: The word for one device of this type.
+        many_words: The word for more than one device of this type.
+
+    Returns:
+        The count and the word, with one space between them.
+    """
+    return f"{count} {one_word if count == 1 else many_words}"
+
+
+def device_type_text(row: Mapping[str, Any]) -> str:
+    """Return the device types that one stored capture set holds.
+
+    Why:
+        FR-084a asks the history view to name the device types of each capture
+        set. A capture reads every type at one time, so the cell names each
+        type that the set holds and the count of it. The order is the cascade
+        order of `data-model.md` section 4.1.
+
+    Args:
+        row: One stored history row.
+
+    Returns:
+        The device types, or the plain fallback text.
+    """
+    counts = row.get(COUNTS_FIELD)  # The store projects this map on every row.
+    stored: Mapping[str, Any] = counts if isinstance(counts, Mapping) else {}  # A missing map reads as empty.
+    parts = []  # The phrases of the types that this set holds.
+    for name, one_word, many_words in DEVICE_TYPE_WORDS:  # The cascade order fixes the reading order.
+        total = whole_number(stored.get(name))  # A bad stored value reads as zero, so no row stops the page.
+        if total:  # A type of no device names nothing, because it tells the operator nothing.
+            parts.append(device_type_phrase(total, one_word, many_words))
+    return DEVICE_TYPE_SEPARATOR.join(parts) if parts else NO_DEVICE_TYPE_TEXT
+
+
 def history_row(row: Mapping[str, Any]) -> dict[str, Any]:
     """Return one history row that carries every field the contract names.
 
@@ -1313,6 +1379,127 @@ def build_history(rows: list[dict[str, Any]], window: PageWindow) -> Any:
     return call_builder(builder, rows, window)
 
 
+@dataclass(frozen=True, slots=True)
+class HistoryPageView:
+    """The history view that the page prints.
+
+    Why:
+        The compare package owns ``HistoryRow`` and ``HistoryView``, and both
+        are frozen. The route cannot add a column there, so it builds this view
+        beside the compare one and adds the device types of FR-084a. The
+        attribute names match the compare view, so the template reads one shape.
+
+    Attributes:
+        rows: The rows of this page, each one with its device types.
+        total: The count of the whole history.
+        page_size: The page size in force.
+        offset: The page start in force.
+        has_next: The state of the next control.
+        has_previous: The state of the previous control.
+        next_url: The address of the next page.
+        previous_url: The address of the previous page.
+    """
+
+    rows: tuple[Mapping[str, Any], ...] = ()
+    total: int = 0
+    page_size: int = 0
+    offset: int = 0
+    has_next: bool = False
+    has_previous: bool = False
+    next_url: str = ""
+    previous_url: str = ""
+
+
+def view_field(view: Any, name: str, fallback: Any) -> Any:
+    """Return one field of the compare view, whatever shape it holds.
+
+    Why:
+        ``build_history`` answers a dataclass, and it answers a plain map when
+        the compare package holds no builder. The page must print the same
+        paging under both shapes.
+
+    Args:
+        view: The compare view.
+        name: The field to read.
+        fallback: The value for an absent field.
+
+    Returns:
+        The field, or the fallback.
+    """
+    if isinstance(view, Mapping):  # The fallback shape of `build_history` is a plain map.
+        return view.get(name, fallback)
+    return getattr(view, name, fallback)
+
+
+def view_row_mapping(row: Any) -> dict[str, Any]:
+    """Return one compare row as a map the route can add to.
+
+    Why:
+        A compare row is frozen, so the route copies it. A map row travels
+        unchanged, because the fallback shape already carries plain rows.
+
+    Args:
+        row: One row of the compare view.
+
+    Returns:
+        The row as a map.
+    """
+    if is_dataclass(row) and not isinstance(row, type):  # A frozen row cannot grow a field, so copy it.
+        return asdict(row)
+    if isinstance(row, Mapping):  # The fallback shape hands the plain store rows straight through.
+        return dict(row)
+    logger.warning("review: one history row holds no readable shape")
+    return {}
+
+
+def page_rows(view: Any, shaped: Sequence[Mapping[str, Any]]) -> tuple[Mapping[str, Any], ...]:
+    """Return the rows of the page, each one naming its device types.
+
+    Why:
+        The compare view holds the printed columns and the stored rows hold the
+        ``counts`` map. The two join on the capture identifier, so a compare
+        view that reordered its rows still meets the right counts.
+
+    Args:
+        view: The compare view.
+        shaped: The stored rows of this page.
+
+    Returns:
+        The rows, ready for the page.
+    """
+    counts_by_id = {row.get(CAPTURE_ID_FIELD, ""): row for row in shaped}  # One read of the store rows.
+    built = []  # The rows that the page prints.
+    for row in view_field(view, ROWS_KEY, ()):  # The compare view fixes the printed order.
+        copied = view_row_mapping(row)
+        capture_id = str(copied.get(CAPTURE_ID_FIELD, ""))  # The join key, and the identifier of the cell.
+        copied[DEVICE_TYPE_FIELD] = device_type_text(counts_by_id.get(capture_id, copied))
+        copied[DEVICE_TYPE_TEST_ID_FIELD] = f"{DEVICE_TYPE_TEST_ID_PREFIX}{capture_id}" if capture_id else ""
+        built.append(copied)
+    return tuple(built)
+
+
+def build_page_view(view: Any, shaped: Sequence[Mapping[str, Any]]) -> HistoryPageView:
+    """Return the compare view with the device types of FR-084a added.
+
+    Args:
+        view: The compare view.
+        shaped: The stored rows of this page.
+
+    Returns:
+        The view that the page prints.
+    """
+    return HistoryPageView(
+        rows=page_rows(view, shaped),  # The one field that the route adds to.
+        total=whole_number(view_field(view, TOTAL_FIELD, len(shaped))),  # A bad total reads as zero.
+        page_size=whole_number(view_field(view, "page_size", len(shaped))),
+        offset=whole_number(view_field(view, OFFSET_FIELD, DEFAULT_HISTORY_OFFSET)),
+        has_next=bool(view_field(view, "has_next", False)),  # An absent control stays closed.
+        has_previous=bool(view_field(view, "has_previous", False)),
+        next_url=str(view_field(view, "next_url", "") or ""),  # A `None` address prints as no address.
+        previous_url=str(view_field(view, "previous_url", "") or ""),
+    )
+
+
 # ---------------------------------------------------------------------------
 # The routes
 # ---------------------------------------------------------------------------
@@ -1455,11 +1642,14 @@ def history_page() -> str:
     limit, offset = read_window_values()
     rows, total = read_store_page(capture_lister(), CAPTURES_FIELD, site_id, limit, offset)
     shaped = [history_row(row) for row in rows]
+    logger.info("review: the portal is naming the device types of %s history rows", len(shaped))
+    page_view = build_page_view(build_history(shaped, build_window(site_id, limit, offset, total)), shaped)
+    logger.debug("review: the history page holds %s rows of %s", len(page_view.rows), page_view.total)
     return render_page(
         HISTORY_TEMPLATE,
         page_title=HISTORY_PAGE_TITLE,
         signed_in=True,
         site_name=read_site_name(shaped),
-        history_view=build_history(shaped, build_window(site_id, limit, offset, total)),
+        history_view=page_view,
         moment_texts=moment_texts(shaped),
     )
