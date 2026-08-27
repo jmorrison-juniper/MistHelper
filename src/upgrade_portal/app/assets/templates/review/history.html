@@ -46,13 +46,14 @@
     endpoint names are not fixed, so a url_for call against an endpoint name
     would raise while this page renders. url_for stays for a static asset.
 
-  The fixed test identifiers of contracts/ui-testids.md lines 162 to 166:
-    history-table              - the history table
-    history-row-{capture_id}   - one history row
-    history-open-{capture_id}  - the open control of that row
-    history-page-next          - the next page control
-    history-page-previous      - the previous page control
-    nav-history                - lives in partials/nav.html, not here
+  The fixed test identifiers of contracts/ui-testids.md lines 162 to 167:
+    history-table                     - the history table
+    history-row-{capture_id}          - one history row
+    history-open-{capture_id}         - the open control of that row
+    history-device-type-{capture_id}  - the device types that the capture holds
+    history-page-next                 - the next page control
+    history-page-previous             - the previous page control
+    nav-history                       - lives in partials/nav.html, not here
 
   Why the columns hold a width budget:
     Issue #2106 measured one row at about 113 pixels. The automatic table
@@ -70,7 +71,8 @@
                    has_next, has_previous, next_url, and previous_url.
                    Each row holds capture_id, started_at, role, capture_status,
                    device_count, client_count, stored_size_bytes,
-                   stored_size_text, row_test_id, open_test_id, and open_url.
+                   stored_size_text, row_test_id, open_test_id, open_url,
+                   device_type_text, and device_type_test_id.
     moment_texts - the short moment of each row, keyed by the capture
                    identifier. review.moment_texts settles every entry.
     theme, themes, signed_in - see layout.html.
@@ -128,7 +130,8 @@
   <table class="portal-table history-table" id="history-table" data-testid="history-table">
     <caption class="visually-hidden">
       The stored captures of the site. Each row holds the moment, the role, the
-      state, the device count, the client count, and the stored size.
+      state, the device count, the device types, the client count, and the
+      stored size.
     </caption>
 
     <thead>
@@ -138,6 +141,7 @@
         <th scope="col">Role</th>
         <th scope="col">State</th>
         <th scope="col">Devices</th>
+        <th scope="col">Device types</th>
         <th scope="col">Clients</th>
         <th scope="col">Stored size</th>
         <th scope="col">Action</th>
@@ -182,6 +186,23 @@
 
           <td class="cell-number">{{ row.device_count }}</td>
 
+          {#
+            FR-084a asks the page to name the device types that the capture set
+            holds. One capture reads every type at one time, so the cell names
+            each type and the count of it. A capture set of no device reads the
+            plain fallback text, because FR-084a forbids an empty cell here.
+
+            The default filter covers a view model that a compare builder made
+            without the route. StrictUndefined stops the page otherwise.
+          #}
+          {% set device_types = row.device_type_text | default('No device type', true) %}
+          {% set device_type_id = row.device_type_test_id | default('', true) %}
+          {% if device_type_id %}
+            <td data-testid="{{ device_type_id }}">{{ device_types }}</td>
+          {% else %}
+            <td>{{ device_types }}</td>
+          {% endif %}
+
           <td class="cell-number">{{ row.client_count }}</td>
 
           {#
@@ -206,7 +227,7 @@
         </tr>
       {% else %}
         <tr>
-          <td colspan="8" class="portal-table-empty">
+          <td colspan="9" class="portal-table-empty">
             The portal found no stored capture. Run a pre-check capture first.
           </td>
         </tr>

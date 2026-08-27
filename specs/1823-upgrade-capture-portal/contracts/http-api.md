@@ -591,6 +591,13 @@ lock would hide the record from the operator who watches another upgrade.
 
 Returns the human view of the same list, for one site or for the organization.
 
+The page shows one column that the endpoint above does not answer. The column
+names the device types that the stored capture set holds, and it names the count
+of each type. FR-084a asks for the column. The page builds the text from the
+three device names of the stored `counts` map, so the endpoint body stays as
+this section states it. The page keeps the role column beside the new column,
+because FR-084b asks for both.
+
 ---
 
 ## 7. Health
