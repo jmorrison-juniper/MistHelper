@@ -251,6 +251,43 @@ server-sent events.
 | 409 | `capture_not_verified` when the portal has not read the key back |
 | 409 | `schema_version_too_new` when a later version of the portal wrote the capture |
 
+### `GET /api/captures/<capture_id>/export` — the file download of one capture
+
+FR-027 requires a file download of a completed capture. Acceptance Scenario 3
+requires that the file holds every captured row.
+
+| Item | Value |
+| --- | --- |
+| Query | `format`, which is `csv` or `json`. The portal reads the value without regard to case and trims the spaces around it |
+| 200 | The file, with `Content-Disposition: attachment` and the name `capture-<capture_id>.<format>` |
+| 400 | `bad_format` when the query names any other value, or names none |
+| 404 | `capture_not_found` |
+| 409 | `capture_not_verified` when the portal has not read the key back |
+| 409 | `schema_version_too_new` when a later version of the portal wrote the capture |
+
+The refusals match `GET /api/captures/<capture_id>`, because one store read feeds
+both routes. A capture the portal never read back answers 409, so no operator
+files a change record against a reading that may never have reached the store.
+
+The file holds one row for every device and one row for every client. Each
+chassis member holds its own row. The first five columns name the capture:
+`org_name`, `site_name`, `capture_id`, `role`, and `captured_at`. Every row
+repeats those five values, so one row alone still names the capture that wrote
+it and a spreadsheet reads the whole file as one flat table.
+
+The writer applies two safety controls to every cell.
+
+1. It drops any field whose name reads as a credential, so no token value and no
+   password value reaches the file.
+2. It puts an apostrophe in front of any value that starts with `=`, `+`, `-`,
+   `@`, a tab, or a carriage return, unless the value reads as a number. A
+   spreadsheet would otherwise run that cell as a formula.
+
+`src/upgrade_portal/compare/download.py` owns both rules. The capture writer
+holds a copy of each one, because an import from `compare` into `capture` would
+make the two packages depend on each other. A unit test compares the two copies,
+so neither one drifts alone.
+
 ### `GET /captures/<capture_id>` — the capture page
 
 | Item | Value |
