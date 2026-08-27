@@ -289,38 +289,45 @@
     min-width: 52rem;
 }
 
-/* The eight column widths total 100 percent. The two text columns take the
- * largest share, and the action column keeps enough width for the control. */
+/* The nine column widths total 100 percent. The two text columns take the
+ * largest share, and the action column keeps enough width for the control.
+ * Issue #2107 added the device type column at position 6. A budget that named
+ * eight columns left the ninth column with no width, and the device type text
+ * then wrapped and stood a row at about 85 pixels. */
 .history-table thead th:nth-child(1) {
-    width: 24%;
+    width: 22%;
 }
 
 .history-table thead th:nth-child(2) {
-    width: 16%;
+    width: 15%;
 }
 
 .history-table thead th:nth-child(3) {
-    width: 7%;
+    width: 6%;
 }
 
 .history-table thead th:nth-child(4) {
-    width: 11%;
+    width: 10%;
 }
 
 .history-table thead th:nth-child(5) {
-    width: 8%;
+    width: 7%;
 }
 
 .history-table thead th:nth-child(6) {
-    width: 8%;
+    width: 12%;
 }
 
 .history-table thead th:nth-child(7) {
-    width: 13%;
+    width: 7%;
 }
 
 .history-table thead th:nth-child(8) {
-    width: 13%;
+    width: 11%;
+}
+
+.history-table thead th:nth-child(9) {
+    width: 10%;
 }
 
 /* The row header of this table reads as a plain cell. `.portal-table` styles
@@ -357,6 +364,15 @@
 /* The short moment holds 20 characters and fits the column. The rule stops a
  * longer stored moment from wrapping when a row reaches no short text. */
 .history-table .cell-moment {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* A row can name more than one device type, such as "access point, switch".
+ * That text wraps and stands the row above the height budget of issue #2106,
+ * so the cell clips and keeps the whole value in its title attribute. */
+.history-table .cell-device-type {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
