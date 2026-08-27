@@ -72,6 +72,7 @@
 {% set run_message = status_record.message | default('', true) %}
 {% set device_rows = status_record.targets | default([], true) %}
 {% set site_label = site_name | default('', true) %}
+{% set site_key = site_id | default('', true) %}
 {% set pre_key = status_record.pre_capture_id | default('', true) %}
 {% set post_key = status_record.post_capture_id | default('', true) %}
 
@@ -126,8 +127,18 @@
 
   <p class="status-message" data-run-field="message">{{ run_message }}</p>
 
+  {#
+    Issue #2100 names the site in words on every page that leads to a firmware
+    write. The identifier stays on the page, because an operator quotes the
+    identifier in a support case. Neither element carries `data-run-field`, so
+    the 30-second poll never paints over the two values.
+  #}
   {% if site_label %}
-    <p class="portal-card-note">The run works at the site {{ site_label }}.</p>
+    <p class="portal-card-note">The run works at the site <span data-testid="upgrade-site-name">{{ site_label }}</span>.</p>
+  {% endif %}
+
+  {% if site_key %}
+    <p class="portal-card-note">The site identifier is <code data-testid="upgrade-site-id">{{ site_key }}</code>.</p>
   {% endif %}
 
   <button type="button"

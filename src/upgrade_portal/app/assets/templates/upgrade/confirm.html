@@ -79,6 +79,7 @@
 {% set warning_lines = warnings | default([], true) %}
 {% set option_values = options | default({}, true) %}
 {% set site_label = site_name | default('', true) %}
+{% set site_key = site_id | default('', true) %}
 {% set capture_key = pre_capture_id | default('', true) %}
 
 {#
@@ -113,8 +114,17 @@
   <h2 class="portal-card-title">Read the plan</h2>
 
   <dl class="row mb-0">
+    {#
+      Issue #2100 names the site in words on this page. The confirm control
+      writes firmware to production hardware, so the operator must read the
+      target as a name. The identifier keeps its own row, because an operator
+      quotes the identifier in a support case.
+    #}
     <dt class="col-sm-4">Site</dt>
-    <dd class="col-sm-8">{{ site_label | default('Unknown site', true) }}</dd>
+    <dd class="col-sm-8" data-testid="upgrade-site-name">{{ site_label | default('Unknown site', true) }}</dd>
+
+    <dt class="col-sm-4">Site identifier</dt>
+    <dd class="col-sm-8"><code data-testid="upgrade-site-id">{{ site_key | default('None recorded', true) }}</code></dd>
 
     <dt class="col-sm-4">Devices to upgrade</dt>
     <dd class="col-sm-8">{{ device_count }}</dd>

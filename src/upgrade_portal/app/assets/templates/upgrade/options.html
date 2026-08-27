@@ -60,6 +60,7 @@
 {% set warning_lines = warnings | default([], true) %}
 {% set option_values = options | default({}, true) %}
 {% set site_label = site_name | default('', true) %}
+{% set site_key = site_id | default('', true) %}
 {% set next_url = confirm_url | default('/runs/' ~ run_key ~ '/confirm', true) %}
 
 {#
@@ -99,8 +100,18 @@
 <div class="portal-card">
   <h2 class="portal-card-title">Choose the upgrade options</h2>
 
+  {#
+    Issue #2100 names the site in words on every page that leads to a firmware
+    write. The identifier stays on the page, because an operator quotes the
+    identifier in a support case. The span holds the value alone, so a test
+    reads the value without the sentence around it.
+  #}
   {% if site_label %}
-    <p class="portal-card-note">The upgrade runs at the site {{ site_label }}.</p>
+    <p class="portal-card-note">The upgrade runs at the site <span data-testid="upgrade-site-name">{{ site_label }}</span>.</p>
+  {% endif %}
+
+  {% if site_key %}
+    <p class="portal-card-note">The site identifier is <code data-testid="upgrade-site-id">{{ site_key }}</code>.</p>
   {% endif %}
 
   <div class="mb-3">
