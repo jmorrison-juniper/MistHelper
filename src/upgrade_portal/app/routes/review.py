@@ -89,6 +89,7 @@ HISTORY_PAGE_PATH = "/history"
 BEFORE_FIELD = "before"
 AFTER_FIELD = "after"
 FORMAT_FIELD = "format"
+SCOPE_FIELD = "scope"
 OUTCOME_FIELD = "outcome"
 SITE_ID_FIELD = "site_id"
 SITE_NAME_FIELD = "site_name"
@@ -169,7 +170,13 @@ CAPTURE_SITE_MISMATCH_MESSAGE = "The two captures name different sites."
 COMPARISON_UNAVAILABLE = "comparison_unavailable"
 COMPARISON_UNAVAILABLE_MESSAGE = "The portal cannot read a capture right now."
 BAD_FORMAT_MESSAGE = "Ask for the csv format or the json format."
-
+BAD_SCOPE_MESSAGE = "Ask for the differences scope or the full scope."
+# WHY: The download module names the fault. One map turns that name into the
+# words that the operator reads, so the route holds no branch of its own.
+_EXPORT_MESSAGES: dict[str, str] = {
+    compare_download.ERROR_BAD_FORMAT: BAD_FORMAT_MESSAGE,
+    compare_download.ERROR_BAD_SCOPE: BAD_SCOPE_MESSAGE,
+}
 _REFUSALS: dict[str, tuple[int, str, str]] = {
     CAPTURE_NOT_FOUND: (NOT_FOUND_STATUS, CAPTURE_NOT_FOUND, CAPTURE_NOT_FOUND_MESSAGE),
     CAPTURE_NOT_VERIFIED: (CONFLICT_STATUS, CAPTURE_NOT_VERIFIED, CAPTURE_NOT_VERIFIED_MESSAGE),
@@ -807,6 +814,51 @@ def render_picker(before_id: str, after_id: str, notice: str = "") -> str:
     )
 
 
+def build_download_links(ids: Mapping[str, str]) -> dict[str, str]:
+    """Return the four download addresses of one comparison.
+
+    Why:
+        The page offers the differences file and the full file, each in two
+        formats. The two older addresses name no scope, so a link that an
+        operator saved before the full scope arrived still works.
+
+    Args:
+        ids: The two capture identifiers, under ``before`` and ``after``.
+
+    Returns:
+        The four addresses, under the names that the template prints.
+    """
+    path = COMPARISONS_EXPORT_API_PATH
+    full = {SCOPE_FIELD: compare_download.SCOPE_FULL}
+    return {
+        "csv_href": build_link(path, {**ids, FORMAT_FIELD: compare_download.FORMAT_CSV}),
+        "json_href": build_link(path, {**ids, FORMAT_FIELD: compare_download.FORMAT_JSON}),
+        "full_csv_href": build_link(path, {**ids, FORMAT_FIELD: compare_download.FORMAT_CSV, **full}),
+        "full_json_href": build_link(path, {**ids, FORMAT_FIELD: compare_download.FORMAT_JSON, **full}),
+    }
+
+
+def build_export_context(parts: ComparisonParts) -> compare_download.ExportContext:
+    """Return the reading that the full download needs.
+
+    Why:
+        The full file names the site, the organization, the two moments, and
+        every statistic. The route already holds all of that, so it hands the
+        whole reading over and the download counts nothing again.
+
+    Args:
+        parts: The whole comparison result.
+
+    Returns:
+        The two captures and the flat statistics.
+    """
+    return compare_download.ExportContext(
+        before=parts.before,
+        after=parts.after,
+        statistics=parts.statistics.to_dict(),
+    )
+
+
 def build_page_context(parts: ComparisonParts, chosen: str) -> dict[str, Any]:
     """Return every value that the comparison page shows.
 
@@ -835,8 +887,7 @@ def build_page_context(parts: ComparisonParts, chosen: str) -> dict[str, Any]:
         "clients": compare_render.build_client_section(parts.clients, client_outcome),
         "statistics": compare_render.build_statistics_section(parts.statistics),
         "filters": build_filter_choices(chosen, ids),
-        "csv_href": build_link(COMPARISONS_EXPORT_API_PATH, {**ids, FORMAT_FIELD: compare_download.FORMAT_CSV}),
-        "json_href": build_link(COMPARISONS_EXPORT_API_PATH, {**ids, FORMAT_FIELD: compare_download.FORMAT_JSON}),
+        **build_download_links(ids),
     }
 
 
@@ -1240,9 +1291,11 @@ def download_comparison() -> tuple[Response, int]:
         return json_error(pair.status, pair.code, pair.message)
     parts = build_parts(*both)
     wanted = request.args.get(FORMAT_FIELD, "")
-    result = compare_download.export_comparison(parts.devices, parts.clients, wanted)
+    scope = request.args.get(SCOPE_FIELD, compare_download.SCOPE_DIFFERENCES)
+    context = build_export_context(parts)
+    result = compare_download.export_comparison(parts.devices, parts.clients, wanted, scope, context)
     if not result.ok:
-        return json_error(BAD_REQUEST_STATUS, result.error, BAD_FORMAT_MESSAGE)
+        return json_error(BAD_REQUEST_STATUS, result.error, _EXPORT_MESSAGES.get(result.error, BAD_FORMAT_MESSAGE))
     return build_attachment(result)
 
 

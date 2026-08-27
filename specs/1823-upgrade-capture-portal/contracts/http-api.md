@@ -562,10 +562,29 @@ Takes the same two query values and renders the human view.
 
 | Item | Value |
 | --- | --- |
-| Query | `before`, `after`, `format=csv` or `format=json` |
+| Query | `before`, `after`, `format=csv` or `format=json`, `scope=differences` or `scope=full` |
 | 200 | A file attachment |
 | 400 | `bad_format` |
+| 400 | `bad_scope` |
 | 409 | `schema_version_too_new` |
+
+`scope` is optional and defaults to `differences`. The default writes the same
+bytes as before this value existed, so a saved link keeps its meaning.
+
+`scope=full` writes a header block and then every row of both captures. The
+header block names the site, the organization, both captures, both moments, and
+every statistic. A row that did not change writes a row too, because User Story 2
+asks the file to prove that a device came back.
+
+A digest match makes the page skip a section. The full export compares that
+section again without the digests, so the file names every device even when the
+page shows none. The header detail `skipped_sections` records which sections the
+page skipped, because a reader must know why a page count and a file count can
+differ.
+
+Every header cell and every row cell passes the value guard, so a value that
+starts with `=`, `+`, `-`, or `@` cannot run as a formula in a spreadsheet. No
+statistic whose name reads as a credential reaches the file.
 
 This route shares its reader with `GET /api/comparisons`, so it refuses a
 capture that a later release wrote. An export of a capture the portal cannot
