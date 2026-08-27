@@ -159,6 +159,8 @@ that a region search caused.
 | `upgrade-phase-progress-{name}` | The settled count for that phase |
 | `upgrade-device-state-{mac}` | The state cell for one device |
 | `upgrade-device-version-check-{mac}` | The version check badge for one device (FR-051) |
+| `upgrade-site-name` | The site name on the options page, the confirm page, and the run page |
+| `upgrade-site-id` | The site identifier on those same three pages |
 
 `upgrade-target-table` and `upgrade-run-table` are two different tables. The
 target table lists what the run will do. The run table lists what the run has
