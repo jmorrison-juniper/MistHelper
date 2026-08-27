@@ -16,6 +16,12 @@ Why:
     device section and names it in ``skipped_sections``. This short circuit is
     the reason a large site renders in seconds. Never compare a section that
     the digests already prove equal.
+
+    A skipped section holds no row, but it still holds devices. The comparison
+    therefore counts the devices of the skipped section and reports the count
+    in ``proved_unchanged``. The digest proves every one of those devices
+    unchanged. Without that count the page shows a bare zero, and an operator
+    reads the zero as an empty site rather than as a quiet one.
 """
 
 from __future__ import annotations
@@ -158,20 +164,30 @@ class DeviceComparison:
         an empty delta list must be able to tell an equal site from a site
         that the digest short circuit never compared.
 
+        The proved count travels beside them. A digest match proves every
+        device of the section unchanged, so the count states how many devices
+        the match covered. A caller that reports a bare zero instead tells the
+        operator that the site is empty, which is a different fact.
+
     Attributes:
         deltas: One entry for each device, sorted by address.
         skipped_sections: Each section whose digest matched.
+        proved_unchanged: The devices that a matching digest proved unchanged.
+            Zero when the comparison read the rows itself.
     """
 
     deltas: tuple[DeviceDelta, ...] = ()
     skipped_sections: tuple[str, ...] = ()
+    proved_unchanged: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         """Return the device result as a plain dictionary.
 
         Why:
             The route lane merges this dictionary into the comparison body,
-            so the two key names match the contract exactly.
+            so the two key names match the contract exactly. The proved count
+            stays out of the dictionary, because the contract names two keys
+            here and reports every count in the statistics object.
 
         Returns:
             A dictionary with ``device_deltas`` and ``skipped_sections``.
@@ -372,6 +388,31 @@ def _compare_one_device(
     return DeviceDelta(mac=mac, outcome=outcome, name=_device_name(after_row), changes=changes)
 
 
+def _proved_unchanged_count(before: Mapping[str, Any], after: Mapping[str, Any]) -> int:
+    """Return how many devices a matching device digest proved unchanged.
+
+    Why:
+        A matching digest proves the two device sections equal, so every
+        device in the section is unchanged. The comparison reads no row, so
+        the count must come from the size of the section instead. A count of
+        zero would read as an empty site, which is a different fact.
+
+        The reader takes the larger of the two sizes. The digest proves the
+        two sections equal, so the larger size is the true size. A stored
+        document that lost a row then never lowers the count.
+
+    Args:
+        before: The pre-check capture.
+        after: The post-check capture.
+
+    Returns:
+        The device count of the proved section.
+    """
+    before_total = len(_device_index(before))  # WHY: The same reader drops a bad row here and in the comparison.
+    after_total = len(_device_index(after))  # WHY: The post-check size is the count the operator asked for.
+    return max(before_total, after_total)  # WHY: A partial document must never lower a proved count.
+
+
 def compare_devices(before: Mapping[str, Any], after: Mapping[str, Any]) -> DeviceComparison:
     """Compare the devices of two captures.
 
@@ -386,11 +427,13 @@ def compare_devices(before: Mapping[str, Any], after: Mapping[str, Any]) -> Devi
 
     Returns:
         The device differences, or an empty list with ``devices`` named in
-        ``skipped_sections``.
+        ``skipped_sections`` and the proved count beside it.
     """
     if digest_matches(before, after, SECTION_DEVICES):
         logger.info("Upgrade portal skipped the %s section, because the two digests match", SECTION_DEVICES)
-        return DeviceComparison(skipped_sections=(SECTION_DEVICES,))
+        proved = _proved_unchanged_count(before, after)  # WHY: The count replaces the bare zero on the page.
+        logger.debug("Upgrade portal proved %s devices unchanged in the %s section", proved, SECTION_DEVICES)
+        return DeviceComparison(skipped_sections=(SECTION_DEVICES,), proved_unchanged=proved)
     before_index = _device_index(before)
     after_index = _device_index(after)
     addresses = sorted(set(before_index) | set(after_index))
