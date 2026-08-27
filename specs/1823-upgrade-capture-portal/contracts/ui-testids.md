@@ -109,6 +109,25 @@ element inside it. That inner attribute is a script hook, not a test hook.
 | `capture-partial-warning` | The partial capture warning |
 | `capture-size-bytes` | The stored size value |
 | `capture-error` | The capture error region |
+| `capture-device-table` | The device table of a completed capture |
+| `capture-device-row-{mac}` | One device row, such as `capture-device-row-0011220000aa` |
+| `capture-client-wired-table` | The wired client table |
+| `capture-client-wireless-table` | The wireless client table |
+| `capture-client-row-{mac}` | One client row of either client table |
+| `capture-export-csv` | The download of the capture as a comma-separated file |
+| `capture-export-json` | The download of the capture as a JSON file |
+
+FR-026 requires the three tables. Each table renders on every page render, even
+for a capture that holds no row. A site with no device of a type is a valid
+capture, so the table shows an empty state row and the page shows no error.
+
+The address in a row identifier is the address without a separator and in lower
+case, which is the key of the device index. Each chassis member holds its own
+index entry, so each member holds its own row.
+
+The two download controls appear once the portal verified the capture. A capture
+the portal never read back offers no download, because the file could hold rows
+that never reached the store.
 
 ### Upgrade
 

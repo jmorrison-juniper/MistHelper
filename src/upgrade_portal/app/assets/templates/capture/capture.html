@@ -236,6 +236,188 @@
     <dd class="col-sm-8 cell-number"
         data-testid="capture-size-bytes">{{ stored_size_bytes | default(0, true) }}</dd>
   </dl>
+
+  {#
+    FR-027 requires a file download of a completed capture. The two controls
+    appear once the portal verified the capture, because a capture the portal
+    never read back may hold rows that never reached the store. The controls are
+    plain links, so a browser with no script still downloads the file. The
+    content security policy of this portal is 'self' and blocks an inline style
+    attribute, so each control carries a class and no style.
+  #}
+  {% if can_download | default(false, true) %}
+    <p class="mt-3 mb-0">
+      <a class="portal-button"
+         data-testid="capture-export-csv"
+         href="{{ export_csv_href | default('', true) }}"
+         download>Download as CSV</a>
+      <a class="portal-button"
+         data-testid="capture-export-json"
+         href="{{ export_json_href | default('', true) }}"
+         download>Download as JSON</a>
+    </p>
+  {% endif %}
+</div>
+
+{#
+  FR-026 requires that the portal shows a completed capture as tables. The page
+  showed the counts alone before this section, so an operator read that a site
+  holds eight devices and could not read which eight.
+
+  Every table renders, even for a capture that holds no row. Acceptance
+  Scenario 1 calls an empty capture valid, so an empty table is the right answer
+  and an error is not. A test therefore finds each table on every render.
+#}
+<div class="portal-card">
+  <h2 class="portal-card-title">Devices</h2>
+
+  <div class="portal-table-scroll">
+    <table class="portal-table" data-testid="capture-device-table">
+      <caption class="visually-hidden">
+        Every device of this capture. A chassis member appears as its own row,
+        so a stack that loses a member shows the loss as a missing row.
+      </caption>
+
+      <thead>
+        <tr>
+          <th scope="col">Name</th>
+          <th scope="col">MAC address</th>
+          <th scope="col">Type</th>
+          <th scope="col">Model</th>
+          <th scope="col">Serial number</th>
+          <th scope="col">Version</th>
+          <th scope="col">Status</th>
+          <th scope="col">Uptime in seconds</th>
+          <th scope="col">Chassis role</th>
+          <th scope="col">Members</th>
+          <th scope="col">IP address</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {% for device in device_rows | default([], true) %}
+          {% set device_mac = device.mac | default('', true) %}
+
+          <tr data-testid="capture-device-row-{{ device_mac }}">
+            <th scope="row">{{ device.name | default('Unnamed device', true) }}</th>
+            <td class="cell-mono">{{ device_mac }}</td>
+            <td>{{ device.type | default('unknown', true) }}</td>
+            <td>{{ device.model | default('unknown', true) }}</td>
+            <td class="cell-mono">{{ device.serial | default('unknown', true) }}</td>
+            {#
+              User Story 1 names the version, the status, and the uptime. The
+              device index holds all three, because the raw device list holds
+              the configured version and not the running version.
+            #}
+            <td class="cell-mono">{{ device.version | default('unknown', true) }}</td>
+            <td>{{ device.status | default('unknown', true) }}</td>
+            <td class="cell-number">{{ device.uptime | default('', true) }}</td>
+            <td>{{ device.vc_role | default('', true) }}</td>
+            <td class="cell-number">{{ device.num_members | default('', true) }}</td>
+            <td class="cell-mono">{{ device.ip | default('', true) }}</td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="11" class="portal-table-empty">
+              This capture holds no device.
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="portal-card">
+  <h2 class="portal-card-title">Wired clients</h2>
+
+  <div class="portal-table-scroll">
+    <table class="portal-table" data-testid="capture-client-wired-table">
+      <caption class="visually-hidden">
+        Every wired client of this capture, with the switch and the port that
+        holds it.
+      </caption>
+
+      <thead>
+        <tr>
+          <th scope="col">Host name</th>
+          <th scope="col">MAC address</th>
+          <th scope="col">IP address</th>
+          <th scope="col">VLAN</th>
+          <th scope="col">Parent device</th>
+          <th scope="col">Port</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {% for client in wired_rows | default([], true) %}
+          {% set client_mac = client.mac | default('', true) %}
+
+          <tr data-testid="capture-client-row-{{ client_mac }}">
+            <th scope="row">{{ client.hostname | default('Unnamed client', true) }}</th>
+            <td class="cell-mono">{{ client_mac }}</td>
+            <td class="cell-mono">{{ client.ip | default('', true) }}</td>
+            <td class="cell-number">{{ client.vlan | default('', true) }}</td>
+            <td>{{ client.parent_device | default('unknown', true) }}</td>
+            <td class="cell-mono">{{ client.port_id | default('', true) }}</td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="6" class="portal-table-empty">
+              This capture holds no wired client.
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="portal-card">
+  <h2 class="portal-card-title">Wireless clients</h2>
+
+  <div class="portal-table-scroll">
+    <table class="portal-table" data-testid="capture-client-wireless-table">
+      <caption class="visually-hidden">
+        Every wireless client of this capture, with the access point, the
+        network name, and the band that holds it.
+      </caption>
+
+      <thead>
+        <tr>
+          <th scope="col">Host name</th>
+          <th scope="col">MAC address</th>
+          <th scope="col">IP address</th>
+          <th scope="col">VLAN</th>
+          <th scope="col">Parent device</th>
+          <th scope="col">Network name</th>
+          <th scope="col">Band</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {% for client in wireless_rows | default([], true) %}
+          {% set client_mac = client.mac | default('', true) %}
+
+          <tr data-testid="capture-client-row-{{ client_mac }}">
+            <th scope="row">{{ client.hostname | default('Unnamed client', true) }}</th>
+            <td class="cell-mono">{{ client_mac }}</td>
+            <td class="cell-mono">{{ client.ip | default('', true) }}</td>
+            <td class="cell-number">{{ client.vlan | default('', true) }}</td>
+            <td>{{ client.parent_device | default('unknown', true) }}</td>
+            <td>{{ client.ssid | default('', true) }}</td>
+            <td>{{ client.band | default('', true) }}</td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="7" class="portal-table-empty">
+              This capture holds no wireless client.
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </div>
 
 {#
