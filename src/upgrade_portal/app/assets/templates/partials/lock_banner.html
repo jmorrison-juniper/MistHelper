@@ -41,9 +41,10 @@
 
   Variables a route may supply:
     site_id       - the site the banner covers. The three calls need it.
-    lock_state    - one of free, locked, held, or unknown. The default is
-                    unknown, which is what contracts/site-lock.md line 138 asks
-                    a page to show when the lock store does not answer.
+    lock_state    - one of free, locked, held, unknown, or site_unknown. The
+                    default is unknown, which is what contracts/site-lock.md line
+                    138 asks a page to show when the lock store does not answer.
+                    site_unknown covers a page that holds no site identifier.
     lock_holder   - the work email address of the holder. Empty when free.
     lock_cooldown - the seconds left before a takeover becomes possible. Zero
                     means the wait is over.
@@ -89,6 +90,9 @@
       This site is free. Take the site before you start a capture or an upgrade.
     {% elif lock_state_name == 'locked' %}
       {{ lock_holder_name }} holds this site.
+    {% elif lock_state_name == 'site_unknown' %}
+      This page names no site, so the portal cannot read a lock. Open a site
+      from the site list to work with its lock.
     {% else %}
       The portal cannot read the lock state right now. You can still read this
       page. A write needs the lock, so try the take button.

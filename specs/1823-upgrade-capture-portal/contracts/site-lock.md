@@ -167,3 +167,20 @@ lock gates a capture for every operator except the holder.
 An unreachable lock store still lets a capture start. The read above marks the
 lock state unknown, and an unknown state names no holder. The fail-closed `503`
 stays with the acquire, because only that path leads to a firmware write.
+
+## The read-only banner states
+
+| State | Meaning |
+| --- | --- |
+| `free` | The site holds no lock. Any operator can take it. |
+| `locked` | Another operator holds the lock. The page names the holder. |
+| `held` | The reader holds the lock. The page shows the countdown. |
+| `unknown` | The lock store did not answer. The page shows no holder. |
+| `site_unknown` | The page carries no site identifier, so no lock question exists. |
+
+The banner shows exactly one state. The first four states answer a lock question
+for a known site. `unknown` means the store stayed silent for a site the page
+names. `site_unknown` differs, because the page holds no site to ask about. A run
+history entry with no matching run reaches this state, and the banner then names
+neither a holder nor a store fault. This keeps `unknown` honest, because a silent
+store and an absent site are separate facts and read as separate words.

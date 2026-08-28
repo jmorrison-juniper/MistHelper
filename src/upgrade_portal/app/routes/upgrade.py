@@ -1350,8 +1350,8 @@ def run_lock_banner(record: dict[str, Any]) -> dict[str, Any]:
         session names another site.
 
         An absent run leaves both values empty, which renders the banner in the
-        `unknown` state. That is the answer `contracts/site-lock.md:138` asks a
-        page to show, so a missing run still renders.
+        `site_unknown` state. That is the answer `contracts/site-lock.md` asks a
+        page with no site to show, so a missing run still renders.
 
     Args:
         record: The run record the page shows. May be empty.

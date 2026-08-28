@@ -168,6 +168,12 @@ LOCK_STATE_UNKNOWN = "unknown"  # The lock store did not answer, so the portal c
 # holds the token, so only a page of this browser can report the fourth state.
 LOCK_STATE_HELD = "held"  # This browser holds the lock, and the banner shows the release control.
 
+# `partials/lock_banner.html` names a fifth word for a page that cannot name
+# its site. A page with no site holds no lock key, so no store read can tell
+# the state. This word stays out of `site_lock_state`, which reads the store
+# and keeps `unknown` for a store that does not answer.
+LOCK_STATE_SITE_UNKNOWN = "site_unknown"  # The page named no site, so no lock key exists to read.
+
 # Warning: a second spelling of the organization scope rule can become a
 # security defect. `runtime/identity.py` owns that rule, the
 # `org_not_permitted` code, the refusal sentence, and the 403 status. This
@@ -1809,11 +1815,15 @@ def lock_banner_context(org_id: str, site_id: str) -> dict[str, Any]:
     Args:
         org_id: The organization that owns the site. An empty value reads as
             `unknown`, because the lock key needs both halves.
-        site_id: The site the page acts on.
+        site_id: The site the page acts on. An empty value reads as
+            `site_unknown`, because no lock key exists to read.
 
     Returns:
         The six values that `partials/lock_banner.html` names in its header.
     """
+    if not site_id:  # A page with no site names no lock key, so no read can tell the state.
+        logger.debug("select: the page named no site, so the banner reads site_unknown")  # No trace, no address.
+        return build_lock_banner("", LOCK_STATE_SITE_UNKNOWN, "", 0, "")  # The fifth state names the missing site.
     held = session_lock_record(site_id)  # None means this browser stored no lock for the site.
     if held is not None and held.lock_token:  # A stored token is the one proof that this browser holds the site.
         holder = held.owner.actor_email  # The banner may show this address, and no log line may hold it.
@@ -1839,7 +1849,7 @@ def build_lock_banner(site_id: str, state: str, holder: str, cooldown: int, toke
 
     Args:
         site_id: The site the banner covers.
-        state: One of `free`, `locked`, `held`, or `unknown`.
+        state: One of `free`, `locked`, `held`, `unknown`, or `site_unknown`.
         holder: The work email address of the holder. Empty when none is known.
         cooldown: The seconds left before a takeover becomes possible.
         token: The lock token this browser holds. Empty when it holds none.
