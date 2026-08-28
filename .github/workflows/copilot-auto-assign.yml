@@ -14,8 +14,21 @@
 name: Copilot Auto-Assign
 
 on:
-  issues:
-    types: [labeled]
+  # WHY this workflow no longer starts on a labeled event: the label event fires
+  # for every label on every issue, and GitHub cannot filter a label name at the
+  # trigger. The job then skipped on almost every run. A recent sample held 86
+  # runs of this workflow in the last 100 runs of the repository, and all 86
+  # skipped. That hid every real failure in the Actions tab.
+  #
+  # The checkbox workflow now assigns the agent when an issue opens, which is
+  # the path almost every issue takes. A maintainer who wants the agent on an
+  # issue that already exists starts this workflow by hand and names the issue.
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: The number of the issue that the agent must take
+        required: true
+        type: string
 
 permissions:
   issues: write
@@ -26,14 +39,13 @@ env:
 
 jobs:
   assign-copilot:
-    if: github.event.label.name == 'copilot'
     runs-on: ubuntu-latest
     steps:
       - name: Assign Copilot to issue
         uses: actions/github-script@v9
         with:
           script: |
-            const issueNumber = context.issue.number;
+            const issueNumber = Number(context.payload.inputs.issue_number);
             const owner = context.repo.owner;
             const repo = context.repo.repo;
 

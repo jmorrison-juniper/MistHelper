@@ -1,7 +1,15 @@
 # Copilot Label from Issue Checkbox
 # When a new issue is created with the "Assign to Copilot Coding Agent" checkbox
-# checked, this workflow automatically adds the 'copilot' label -- which in turn
-# triggers copilot-auto-assign.yml to assign the agent.
+# checked, this workflow adds the 'copilot' label and assigns the agent.
+#
+# WHY this workflow now assigns the agent itself: the assignment once lived in
+# copilot-auto-assign.yml, which started on every labeled event. GitHub cannot
+# filter a label name at the trigger, so that workflow started for every label
+# on every issue and skipped on almost all of them. This workflow already runs
+# once for each new issue, so it carries the work with no extra run.
+#
+# A maintainer who wants the agent on an issue that already exists starts
+# copilot-auto-assign.yml by hand and names the issue number.
 
 name: Copilot Label from Checkbox
 
@@ -19,21 +27,62 @@ jobs:
   check-copilot-checkbox:
     runs-on: ubuntu-latest
     steps:
-      - name: Add copilot label if checkbox is checked
+      - name: Add copilot label and assign the agent if the checkbox is checked
         uses: actions/github-script@v9
         with:
           script: |
             const body = context.payload.issue.body || '';
             const pattern = /\[x\]\s*Assign to Copilot Coding Agent/i;
 
-            if (pattern.test(body)) {
-              console.log('Copilot checkbox detected -- adding label');
-              await github.rest.issues.addLabels({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                labels: ['copilot']
-              });
-            } else {
+            if (!pattern.test(body)) {
               console.log('Copilot checkbox not checked -- skipping');
+              return;
+            }
+
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const issue_number = context.issue.number;
+
+            console.log('Copilot checkbox detected -- adding label');
+            await github.rest.issues.addLabels({
+              owner,
+              repo,
+              issue_number,
+              labels: ['copilot']
+            });
+
+            try {
+              await github.rest.issues.addAssignees({
+                owner,
+                repo,
+                issue_number,
+                assignees: ['copilot']
+              });
+              console.log(`Assigned Copilot to issue #${issue_number}`);
+
+              await github.rest.issues.addLabels({
+                owner,
+                repo,
+                issue_number,
+                labels: ['in-progress']
+              });
+            } catch (error) {
+              console.log(`Could not assign Copilot: ${error.message}`);
+
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number,
+                body: [
+                  '**Copilot Coding Agent could not be assigned.**',
+                  '',
+                  'This usually means one of:',
+                  '- The repository owner account does not have a Copilot Business/Enterprise seat',
+                  '- The Copilot Coding Agent policy is not enabled in org/account settings',
+                  '',
+                  'To implement manually: open VS Code and ask Copilot Chat to work this issue.',
+                  '',
+                  `Error: \`${error.message}\``
+                ].join('\n')
+              });
             }

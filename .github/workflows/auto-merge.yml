@@ -17,17 +17,25 @@ on:
     # The closed type carries the merge result. The dispatch job below reads
     # that result and repairs main in seconds.
     types: [labeled, synchronize, opened, reopened, closed]
+  # WHY this push trigger stays, although it starts one run for each push to a
+  # feature branch: the orphan job below reads that push and reports a commit
+  # that arrived after its pull request merged. The repository deletes a branch
+  # on merge and squashes every merge, so an orphaned commit is easy to make and
+  # hard to see. Issue #1960 records a real loss. One run for each push costs
+  # about one minute, and the schedule below cannot replace it, because a
+  # schedule reads no push event.
   push:
-    # A push to a feature branch can arrive after the merge closed the pull
-    # request. The orphan job below reads that push and reports the loss.
-    # Issue #1960 records the effect.
     branches-ignore:
       - main
   schedule:
     # The backstop. GitHub can suppress the closed event above, because
-    # GITHUB_TOKEN performs the merge. The hourly run repairs main even when
-    # no merge event arrives.
-    - cron: '37 * * * *'
+    # GITHUB_TOKEN performs the merge. This run repairs main even when no
+    # merge event arrives.
+    # WHY every six hours and not every hour: the hourly form started about 720
+    # runs each month, and GitHub bills a whole minute for each one. That spent
+    # more than a third of the monthly allowance on a backstop that finds work
+    # only after a merge. Four runs a day still repair main on the same day.
+    - cron: '37 */6 * * *'
   # A maintainer can start the dispatch job by hand after an outage.
   workflow_dispatch:
 
