@@ -62,6 +62,7 @@
     var CAPTURE_TIER_TESTID = "capture-tier-select";
     var CAPTURE_VERIFIED_TESTID = "capture-verified-badge";
     var CAPTURE_PARTIAL_TESTID = "capture-partial-warning";
+    var CAPTURE_IDENTIFIER_TESTID = "capture-identifier";
     var CAPTURE_SIZE_TESTID = "capture-size-bytes";
     var CAPTURE_ERROR_TESTID = "capture-error";
 
@@ -655,7 +656,10 @@
         paintVerified(status.verified);
 
         if (status.capture_id) {
-            setText(region.querySelector('[data-capture-field="identifier"]'), status.capture_id);
+            /* The identifier field sits in the Result card, and that card sits
+             * outside this region. A search of the region finds nothing, so
+             * this read covers the whole document, as the stored size does. */
+            setText(byTestId(CAPTURE_IDENTIFIER_TESTID), status.capture_id);
         }
     }
 
@@ -856,7 +860,10 @@
             .then(function (created) {
                 if (region && created && created.capture_id) {
                     region.setAttribute("data-capture-id", created.capture_id);
-                    setText(region.querySelector('[data-capture-field="identifier"]'), created.capture_id);
+                    /* The identifier field sits outside this region, so the
+                     * read covers the whole document. The operator then reads
+                     * the name of the capture before the first poll answers. */
+                    setText(byTestId(CAPTURE_IDENTIFIER_TESTID), created.capture_id);
                     storedSizeLoaded = false;
                     refreshCaptureStatus(region);
                     startCapturePoll(region);
