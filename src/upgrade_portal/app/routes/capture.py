@@ -36,7 +36,7 @@ import uuid  # Names a run that the operator started without one.
 from collections.abc import Callable, Mapping  # Types each injected seam and each read-only record.
 from typing import Any  # A capture document and an injected seam are both free-form.
 
-from flask import Blueprint, Response, current_app, has_app_context, jsonify, request  # The framework.
+from flask import Blueprint, Response, current_app, g, has_app_context, jsonify, request  # The framework.
 
 from ...capture import export as capture_export  # The download writer. It reaches no cloud, so a plain import is safe.
 from ...capture import tables as capture_tables  # The page row builders. The same rule holds for this module.
@@ -52,6 +52,7 @@ from .select import (  # The sibling module owns these rules, so no copy of them
     load_optional_module,
     lock_banner_context,
     lock_client,
+    lock_grant_body,
     org_display_name,
     read_site_locks,
     render_page,
@@ -75,6 +76,7 @@ PAGE_PATH = "/captures/<capture_id>"  # The human view of one capture.
 CAPTURE_TEMPLATE = "capture/capture.html"  # The page that starts a capture and shows its progress.
 
 RUNNER_KEY = "CAPTURE_RUNNER"  # The seam for the collection work.
+LOCK_GRANT_ATTR = "capture_lock_grant"  # The request-local field that carries a fresh grant to the answer.
 LOADER_KEY = "CAPTURE_LOADER"  # The seam for the stored capture reader.
 
 STORE_MODULE = "capture.store"  # Built by the storage work of this phase.
@@ -814,6 +816,7 @@ def take_site_lock(org_id: str, site_id: str) -> tuple[Response, int] | None:
         logger.warning("capture: another operator holds site %s, so the start stops", site_id)
         return json_error(CONFLICT_STATUS, SITE_LOCKED_CODE, SITE_LOCKED_MESSAGE)  # The holder must end first.
     store_lock_record(site_id, grant.record)  # The signed session carries the record to every later beat.
+    setattr(g, LOCK_GRANT_ATTR, grant)  # The answer reads this to report a grant it took on this call, FR-109
     logger.debug("capture: the start holds site %s in the state %s", site_id, grant.state)  # After, no address.
     return None  # The capture may start, and this operator holds the site.
 
@@ -1101,7 +1104,11 @@ def launch_capture(site: dict[str, Any], org_id: str, tier: int, body: dict[str,
     start_worker(job)  # The reading runs beside this request.
     logger.info("capture: started the capture %s of the site %s at tier %s", capture_id, site_id, tier)  # Audit.
     status_url = f"/api/captures/{capture_id}/status"  # The path that the browser polls every 30 seconds.
-    return jsonify({"capture_id": capture_id, "status_url": status_url}), ACCEPTED_STATUS  # 202, work continues.
+    answer: dict[str, Any] = {"capture_id": capture_id, "status_url": status_url}  # The two fields every start returns.
+    grant = getattr(g, LOCK_GRANT_ATTR, None)  # Set only when this start took the lock on a free site.
+    if grant is not None:  # FR-109 adds the grant only when the start took the lock on this call
+        answer["lock"] = lock_grant_body(grant)  # FR-107 and FR-110 read this to paint the banner and beat
+    return jsonify(answer), ACCEPTED_STATUS  # 202, work continues.
 
 
 @capture_bp.post(START_PATH)

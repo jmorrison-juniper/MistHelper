@@ -59,6 +59,13 @@ New 202 body when the start took the lock:
   holder. This delta does not change the refusal answer. It changes the 202
   success answer only.
 
+**Implementation note**: The 202 grant reuses the lock endpoint serializer. The
+`lock` object holds `lock_token`, `expires_in`, and `state`, exactly as section 3
+shows at line 129. The browser reads `lock_token` to start the beat. The banner
+forces the `held` label, so `state` stays the lock endpoint value `acquired`. The
+JSON sample above named the three fields loosely, and the real fields match
+section 3.
+
 ### Delta H2 - A run-less capture writes no edge (#2096)
 
 **Parent section**: `POST /api/sites/<site_id>/captures` (http-api.md line 176)

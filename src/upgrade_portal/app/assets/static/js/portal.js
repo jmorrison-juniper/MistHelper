@@ -887,6 +887,18 @@
                     refreshCaptureStatus(region);
                     startCapturePoll(region);
                 }
+                if (created && created.lock) {
+                    /* The start took the site lock on this call, so the banner
+                     * must show the hold and the beat must begin. FR-107 and
+                     * FR-110 ask for both with no reload. A read-only page has
+                     * no banner, so the paint runs only when the region exists. */
+                    var lockRegion = getLockRegion();
+                    if (lockRegion) {
+                        paintLockHeld(lockRegion, created.lock);
+                        paintLockCooldown(lockRegion, 0);
+                        startLockBeat(lockRegion);
+                    }
+                }
                 showFlash("The capture started. The page reads the state every 30 seconds.", "success");
                 return created;
             })

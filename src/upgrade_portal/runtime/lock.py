@@ -548,6 +548,25 @@ def _write_takeover_audit(org_id: str, site_id: str, audit: TakeoverAudit) -> No
         raise TakeoverAuditError(AUDIT_SINK_MESSAGE) from fault
 
 
+def _clean_run(value: str | None) -> str:
+    """Return one run value with no forbidden None word.
+
+    Why:
+        FR-112 forbids the word None in a stored lock. A caller that wraps a
+        missing run with str writes that word, so this rule maps the word and a
+        real None to the empty run the contract allows.
+
+    Args:
+        value: The run value a caller passed, which may be missing.
+
+    Returns:
+        The run value, or an empty string when the lock names no run.
+    """
+    if value is None or value == "None":  # A missing run reaches here as None or the word None
+        return ""  # The empty run is the one value FR-112 allows for no run
+    return value  # A real run key passes through with no change
+
+
 @dataclass(frozen=True, slots=True, repr=False)
 class LockRecord:
     """The value that one lock key holds.
@@ -564,6 +583,16 @@ class LockRecord:
     run_id: str  # The run this lock protects
     acquired_at: str  # ISO 8601 in UTC, unchanged by a heartbeat
     refreshed_at: str  # ISO 8601 in UTC, moved forward by every heartbeat
+
+    def __post_init__(self) -> None:
+        """Map a forbidden run word to the empty run FR-112 allows.
+
+        Why:
+            A caller that wraps a missing run with str writes the word None.
+            FR-112 forbids that word in a stored record, so the record cleans the
+            field once, here, for every path that builds it.
+        """
+        object.__setattr__(self, "run_id", _clean_run(self.run_id))  # A frozen field needs this write
 
     def to_record(self) -> dict[str, str]:
         """Return the six fields that contracts/site-lock.md fixes.
@@ -726,6 +755,16 @@ class LockRequest:
     owner: SessionOwner  # The operator and browser pair that would hold the lock
     run_id: str  # The run the operator wants to start
     confirmation_text: str = ""  # Empty until the operator answers a prompt
+
+    def __post_init__(self) -> None:
+        """Map a forbidden run word to the empty run FR-112 allows.
+
+        Why:
+            The route builds this request from the body, and a body with a JSON
+            null run reaches the field as the word None. The request cleans it,
+            so the record the acquisition writes never carries that word.
+        """
+        object.__setattr__(self, "run_id", _clean_run(self.run_id))  # A frozen field needs this write
 
     @property
     def key(self) -> str:

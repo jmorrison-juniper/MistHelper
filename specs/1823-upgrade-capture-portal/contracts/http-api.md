@@ -178,14 +178,14 @@ from these two routes.
 | Item | Value |
 | --- | --- |
 | Body | `{ "tier": 2, "run_id": "<string or null>", "role": "pre" }` |
-| 202 | `{ "capture_id": "<string>", "status_url": "/api/captures/<id>/status" }` |
+| 202 | `{ "capture_id": "<string>", "status_url": "/api/captures/<id>/status", "lock": { "lock_token", "expires_in", "state" } }` (the `lock` object appears only when the start took the lock, FR-109) |
 | 400 | `bad_tier` when `tier` is not 2 or 3 |
 | 404 | `site_not_found` when the chosen organization holds no such site |
 | 409 | `site_locked` when a different operator holds the site lock |
 | 409 | `pre_check_locked` when the named run already sent firmware |
 
 The portal starts the work in the background and answers at once. `tier` defaults
-to 2.
+to 2. The 202 answer adds a `lock` grant, shaped as the take answer of section 3, only when the start took the lock on this call (FR-109). A start that names no owner takes no lock and reports no hold (FR-111).
 
 The `pre_check_locked` refusal protects the one reading of a site before its
 upgrade. When the body names a run, the capture identifier derives from that run,
