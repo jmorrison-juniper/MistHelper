@@ -336,6 +336,15 @@ A thin edge so that a graph traversal can move from a run to its captures.
 | `_to` | string | `upgrade_captures/{capture_key}`. |
 | `role` | string | `pre` or `post`. |
 
+### 5.1 Run-less capture (FR-100)
+
+A capture that names no run writes no run document and no edge. The portal
+derives its key from a fresh nonce, so two run-less captures never share a key.
+The `run_id` field of that capture stays empty. The upgrade start adopts the
+standalone pre-check and writes the `pre` edge at adoption time. A one-time
+repair at worker start removes any dangling edge that an earlier build wrote for
+an invented run.
+
 ## 6. SiteLock
 
 The lock lives in Redis and never in process memory. The existing portal keeps its

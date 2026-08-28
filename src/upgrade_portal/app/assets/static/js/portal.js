@@ -65,13 +65,18 @@
     var CAPTURE_IDENTIFIER_TESTID = "capture-identifier";
     var CAPTURE_SIZE_TESTID = "capture-size-bytes";
     var CAPTURE_ERROR_TESTID = "capture-error";
+    /* Delta U1 adds the two controls below. contracts/ui-testids.md lines
+     * 120-121 fix both values. The button starts a run for the site of the
+     * verified pre-check, and the region names a refusal. */
+    var CAPTURE_START_UPGRADE_TESTID = "capture-start-upgrade-button";
+    var CAPTURE_START_UPGRADE_ERROR_TESTID = "capture-start-upgrade-error";
 
-    /* The upgrade identifiers. contracts/ui-testids.md lines 99-113 fix every
-     * value below. */
+    /* The upgrade identifiers. The `Upgrade` section of contracts/ui-testids.md
+     * fixes every value below. Delta U2 turned three controls into radio groups. */
     var UPGRADE_VERSION_ALL_TESTID = "upgrade-version-select-all";
-    var UPGRADE_REBOOT_TESTID = "upgrade-reboot-toggle";
-    var UPGRADE_JUNOS_TESTID = "upgrade-junos-file-action-toggle";
-    var UPGRADE_STRATEGY_TESTID = "upgrade-strategy-select";
+    var UPGRADE_REBOOT_GROUP_TESTID = "upgrade-reboot-group";
+    var UPGRADE_JUNOS_GROUP_TESTID = "upgrade-junos-file-action-group";
+    var UPGRADE_STRATEGY_GROUP_TESTID = "upgrade-strategy-group";
     var UPGRADE_WARNING_TESTID = "upgrade-warning-list";
     var UPGRADE_SAVE_TESTID = "upgrade-options-save-button";
     var UPGRADE_CONFIRM_TESTID = "upgrade-confirm-input";
@@ -108,6 +113,12 @@
     var LOCK_LOST_CODE = "lock_lost";
     var LOCK_CONFIRM_CODE = "confirmation_required";
     var LOCK_HELD_CODE = "site_locked";
+
+    /* The two refusals that a run creation returns. The capture page names the
+     * holder for the first and the live run for the second. upgrade.py lines
+     * 140-162 fix both code strings. */
+    var RUN_SITE_LOCKED_CODE = "site_locked";
+    var RUN_ALREADY_RUNNING_CODE = "upgrade_already_running";
 
     /* The poll stops on these three states. The capture then never changes
      * again, so a further read would add load and would report the same body. */
@@ -551,6 +562,14 @@
         var isVerified = verified === true;
         badge.className = "portal-badge " + (isVerified ? "badge-verified" : "badge-partial");
         badge.textContent = isVerified ? "Verified" : "Not verified";
+
+        /* FR-101 reveals the upgrade path once the capture verifies. The button
+         * ships hidden, so a fresh capture that verifies through the poll shows
+         * the control with no reload. A not-verified poll hides it again. */
+        var upgradeButton = byTestId(CAPTURE_START_UPGRADE_TESTID);
+        if (upgradeButton) {
+            upgradeButton.hidden = !isVerified;
+        }
     }
 
     /**
@@ -880,6 +899,18 @@
                     refreshCaptureStatus(region);
                     startCapturePoll(region);
                 }
+                if (created && created.lock) {
+                    /* The start took the site lock on this call, so the banner
+                     * must show the hold and the beat must begin. FR-107 and
+                     * FR-110 ask for both with no reload. A read-only page has
+                     * no banner, so the paint runs only when the region exists. */
+                    var lockRegion = getLockRegion();
+                    if (lockRegion) {
+                        paintLockHeld(lockRegion, created.lock);
+                        paintLockCooldown(lockRegion, 0);
+                        startLockBeat(lockRegion);
+                    }
+                }
                 showFlash("The capture started. The page reads the state every 30 seconds.", "success");
                 return created;
             })
@@ -890,6 +921,92 @@
                 button.disabled = false;
                 showCaptureError((error && error.message) || "The capture did not start.");
                 return null;
+            });
+    }
+
+    /**
+     * Writes one refusal into the start-upgrade error region.
+     *
+     * Why: FR-104 and FR-105 ask the region to name the cause. The region sits
+     * beside the button, so the operator reads the refusal next to the control
+     * that caused it and not in the shared flash region.
+     *
+     * @param {string} text The sentence for the operator.
+     * @returns {void}
+     */
+    function showCaptureUpgradeError(text) {
+        var box = byTestId(CAPTURE_START_UPGRADE_ERROR_TESTID);  /* One region for the two refusals. */
+        if (!box) {  /* A page with no verified capture renders no region. */
+            return;  /* Nothing to write, so the call ends. */
+        }
+        box.textContent = String(text);  /* Text, never markup, so a holder address stays inert. */
+    }
+
+    /**
+     * Builds the sentence that a run-creation refusal shows.
+     *
+     * Why: FR-104 names the holder and FR-105 names the live run. The server
+     * message stays generic, and the identifier rides in the details, so this
+     * helper joins the two into one sentence the operator can act on.
+     *
+     * @param {Error} error An Error from fetchJson.
+     * @returns {string} The sentence for the region.
+     */
+    function nameCaptureUpgradeRefusal(error) {
+        var code = (error && error.code) || "";  /* The stable code decides the wording. */
+        var details = (error && error.details) || {};  /* The identifier rides here, not in the message. */
+        var message = (error && error.message) || "The upgrade could not start.";  /* The generic sentence. */
+        if (code === RUN_SITE_LOCKED_CODE && details.actor_email) {  /* A second operator holds the site. */
+            return message + " The holder is " + details.actor_email + ".";  /* FR-104 names that operator. */
+        }
+        if (code === RUN_ALREADY_RUNNING_CODE && details.run_id) {  /* One run of this site has not finished. */
+            return message + " The open run is " + details.run_id + ".";  /* FR-105 names that run. */
+        }
+        return message;  /* Any other fault keeps the plain server sentence. */
+    }
+
+    /**
+     * Creates a run for the site of this capture and opens the options page.
+     *
+     * Why: FR-101 offers an upgrade from a verified pre-check. FR-102 asks the
+     * portal to create the run through the site endpoint and to carry the new
+     * run identifier to the options page. The server adopts the pre-check, so
+     * the browser sends no capture identifier.
+     *
+     * @param {Element} button The start-upgrade button. It names the site.
+     * @returns {Promise<Object|null>} The 201 body, or null on a refusal.
+     */
+    function startUpgradeFromCapture(button) {
+        var siteId = (button.getAttribute("data-site-id") || "").trim();  /* The path names the site. */
+        if (!siteId) {  /* A page with no site cannot post the run. */
+            showCaptureUpgradeError("The page names no site, so the upgrade cannot start.");  /* The operator reads why. */
+            return Promise.resolve(null);  /* No call runs without a site. */
+        }
+
+        button.disabled = true;  /* A second click would create a second run of the same site. */
+        showCaptureUpgradeError("");  /* A fresh try clears the last refusal. */
+
+        return fetchJson("/api/sites/" + encodeURIComponent(siteId) + "/runs", {
+            method: "POST",  /* The create endpoint reads no body beyond the token header. */
+            body: {}  /* The server adopts the pre-check, so the browser sends no fields. */
+        })
+            .then(function (created) {  /* The 201 body carries the new run identifier. */
+                var runId = (created && created.run_id) || "";  /* FR-102 carries this value onward. */
+                if (runId) {  /* A run with an identifier owns an options page. */
+                    window.location.assign("/runs/" + encodeURIComponent(runId) + "/options");  /* Opens that page. */
+                    return created;  /* The browser leaves this page, so nothing else runs. */
+                }
+                button.disabled = false;  /* A body with no run leaves the button ready to retry. */
+                showCaptureUpgradeError("The portal created no run, so the upgrade did not start.");  /* States the gap. */
+                return created;  /* The caller sees the empty answer. */
+            })
+            .catch(function (error) {  /* A 409 or a 503 lands here as an Error. */
+                /* The log carries the stable code and the status only. It
+                 * carries no session value and no email address. */
+                console.error("The upgrade start failed.", error && error.code, error && error.status);  /* No address. */
+                button.disabled = false;  /* The refusal leaves the button ready to retry. */
+                showCaptureUpgradeError(nameCaptureUpgradeRefusal(error));  /* Names the holder or the live run. */
+                return null;  /* The caller reads the failure. */
             });
     }
 
@@ -985,6 +1102,16 @@
         if (refreshButton) {
             refreshButton.addEventListener("click", function () {
                 refreshCaptureStatus(region);
+            });
+        }
+
+        /* FR-101 offers the upgrade path once the capture verifies. The button
+         * renders for a verified capture alone, so a page that never verified
+         * carries no listener here. */
+        var startUpgradeButton = byTestId(CAPTURE_START_UPGRADE_TESTID);
+        if (startUpgradeButton) {
+            startUpgradeButton.addEventListener("click", function () {
+                startUpgradeFromCapture(startUpgradeButton);
             });
         }
 
@@ -1166,6 +1293,28 @@
     }
 
     /**
+     * Reads the value of the checked radio inside a group.
+     *
+     * Why: Delta U2 turned three single-choice controls into radio groups. A
+     * group shows every choice at once, and the browser keeps exactly one radio
+     * checked. The saved body still needs the one chosen value, so this helper
+     * reads it. A group with no checked radio returns the fallback, so a save
+     * never sends an empty choice.
+     *
+     * @param {string} groupTestId The data-testid of the radio group container.
+     * @param {string} fallback The default value when no radio is checked.
+     * @returns {string} The value of the checked radio, or the fallback.
+     */
+    function checkedRadioValue(groupTestId, fallback) {
+        var group = byTestId(groupTestId);  /* The fieldset holds the radios of one choice. */
+        if (!group) {
+            return fallback;  /* The page drew no group, so the caller keeps the default. */
+        }
+        var chosen = group.querySelector('input[type="radio"]:checked');  /* The DOM marks one radio. */
+        return chosen ? chosen.value : fallback;  /* The one checked option, or the default. */
+    }
+
+    /**
      * Saves the upgrade options and moves to the confirmation page.
      *
      * Why: The endpoint answers with the planned targets and the warnings, so
@@ -1183,14 +1332,14 @@
             return Promise.resolve(null);
         }
 
-        var rebootToggle = byTestId(UPGRADE_REBOOT_TESTID);
-        var junosToggle = byTestId(UPGRADE_JUNOS_TESTID);
-        var strategySelect = byTestId(UPGRADE_STRATEGY_TESTID);
+        var rebootChoice = checkedRadioValue(UPGRADE_REBOOT_GROUP_TESTID, "yes");  /* Reboot defaults to yes. */
+        var junosChoice = checkedRadioValue(UPGRADE_JUNOS_GROUP_TESTID, "no");  /* Junos action defaults to no. */
+        var strategyChoice = checkedRadioValue(UPGRADE_STRATEGY_GROUP_TESTID, "big_bang");  /* Strategy defaults to big bang. */
         var payload = {
             targets: collectUpgradeTargets(),
-            reboot: rebootToggle ? rebootToggle.checked : true,
-            junos_file_action: junosToggle ? junosToggle.checked : false,
-            strategy: strategySelect ? strategySelect.value : "big_bang"
+            reboot: rebootChoice === "yes",  /* The saved field stays a boolean. */
+            junos_file_action: junosChoice === "yes",  /* The saved field stays a boolean. */
+            strategy: strategyChoice  /* The saved field stays the strategy string. */
         };
 
         /* The button stays disabled until the answer arrives. A second click

@@ -14,11 +14,14 @@ from __future__ import annotations
 
 import logging
 import socket
+from collections.abc import Iterator
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+
+from src.upgrade_portal.runtime import lock  # WHY: The fixture drops the cached lock store handle.
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +129,7 @@ class FakeLockStore:
 
 
 @pytest.fixture(autouse=True)
-def _block_network(monkeypatch: pytest.MonkeyPatch) -> None:
+def _block_network(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """Stop every outbound socket call inside this test package.
 
     Why:
@@ -135,8 +138,20 @@ def _block_network(monkeypatch: pytest.MonkeyPatch) -> None:
         network. The block turns a hidden network call into a clear error at
         the exact line that made the call.
 
+        The socket block alone does not keep that promise. ``lock`` caches one
+        open client in a module global, and a contract test that ran earlier in
+        the same process leaves a live Redis connection there. The block stops
+        a new socket, so the leftover handle still reaches a real Redis and a
+        unit test then writes a real lock that outlives it. The next test reads
+        that lock and refuses a free site. This fixture therefore drops the
+        cached handle on the way in and on the way out, so each unit test meets
+        an unreachable lock store no matter what ran before it.
+
     Args:
         monkeypatch: The pytest patch helper.
+
+    Yields:
+        None. The test body runs with the network blocked.
     """
 
     def _refuse(*args: Any, **kwargs: Any) -> None:
@@ -154,6 +169,12 @@ def _block_network(monkeypatch: pytest.MonkeyPatch) -> None:
     logger.debug("Block the network for one unit test")  # WHY: ASCII only, %s style, no credential.
     monkeypatch.setattr(socket.socket, "connect", _refuse)  # WHY: Catches a direct socket call.
     monkeypatch.setattr(socket, "create_connection", _refuse)  # WHY: Catches requests and urllib3.
+    lock.reset_connection()  # WHY: Drop a live handle that an earlier contract test cached.
+    try:  # WHY: The test body runs with no reachable lock store.
+        yield
+    finally:  # WHY: A handle opened here must not reach the next test either.
+        lock.reset_connection()  # WHY: Leave the module as clean as this fixture found it.
+        logger.debug("Release the lock store handle after one unit test")  # WHY: Records the cleanup.
 
 
 @pytest.fixture

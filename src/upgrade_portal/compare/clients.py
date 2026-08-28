@@ -179,13 +179,21 @@ class ClientComparison:
         means nothing until the reader knows whether the digests skipped the
         work.
 
+        The proved count travels beside them. A digest match proves every
+        client of the section present, so the count states how many clients the
+        match covered. A caller that reports a bare zero instead tells the
+        operator that the site lost every client, which is a different fact.
+
     Attributes:
         deltas: One entry for each client, sorted by address.
         skipped_sections: Each client section whose digest matched.
+        proved_present: The clients that a matching digest proved present.
+            Zero when the comparison read the rows itself.
     """
 
     deltas: tuple[ClientDelta, ...] = ()
     skipped_sections: tuple[str, ...] = ()
+    proved_present: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         """Return the client result as a plain dictionary.
@@ -491,6 +499,57 @@ def _compare_one_client(
     return _single_delta(mac, before_entry, OUTCOME_MISSING)
 
 
+def _present_section_size(before: Mapping[str, Any], after: Mapping[str, Any], kind: str) -> int:
+    """Return how many present clients a matching digest proved for one kind.
+
+    Why:
+        A matching digest proves the two client sections equal, so every client
+        in the section is present. The comparison reads no row, so the count
+        must come from the size of the section instead. A count of zero would
+        read as a lost site, which is a different fact.
+
+        The reader takes the larger of the two sizes. The digest proves the two
+        sections equal, so the larger size is the true size. A stored document
+        that lost a row then never lowers the count.
+
+    Args:
+        before: The pre-check capture.
+        after: The post-check capture.
+        kind: ``wired``, ``wireless``, or ``guest``.
+
+    Returns:
+        The present client count of the proved section.
+    """
+    before_total = len({address for address, _ in _rows_of_kind(before, kind)})  # WHY: One address counts once.
+    after_total = len({address for address, _ in _rows_of_kind(after, kind)})  # WHY: The post-check size.
+    return max(before_total, after_total)  # WHY: A partial document must never lower a proved count.
+
+
+def _proved_present_count(before: Mapping[str, Any], after: Mapping[str, Any], skipped: tuple[str, ...]) -> int:
+    """Return how many present clients the matching client digests proved.
+
+    Why:
+        Each skipped section proves its own clients present, so the count sums
+        the three sections. A section the comparison read stays out of the sum,
+        because its clients already travel in the delta list. Summing only the
+        skipped sections keeps a client out of the count and the delta list at
+        once, so no client counts twice.
+
+    Args:
+        before: The pre-check capture.
+        after: The post-check capture.
+        skipped: Each client section whose digest matched.
+
+    Returns:
+        The present client count over every skipped client section.
+    """
+    total = 0  # WHY: The running sum over the skipped sections.
+    for kind in CLIENT_KINDS:  # WHY: Walk the three kinds in one fixed order.
+        if SECTION_FOR_KIND[kind] in skipped:  # WHY: Only a skipped section proves a count.
+            total += _present_section_size(before, after, kind)  # WHY: Add the proved size of this kind.
+    return total  # WHY: The whole proved present count of the comparison.
+
+
 def compare_clients(before: Mapping[str, Any], after: Mapping[str, Any]) -> ClientComparison:
     """Compare the clients of two captures.
 
@@ -504,7 +563,8 @@ def compare_clients(before: Mapping[str, Any], after: Mapping[str, Any]) -> Clie
         after: The post-check capture.
 
     Returns:
-        The client differences and each skipped client section.
+        The client differences, each skipped client section, and the count of
+        clients that the matching digests proved present.
     """
     skipped = matched_sections(before, after, CLIENT_SECTIONS)
     kinds = tuple(kind for kind in CLIENT_KINDS if SECTION_FOR_KIND[kind] not in skipped)
@@ -512,8 +572,10 @@ def compare_clients(before: Mapping[str, Any], after: Mapping[str, Any]) -> Clie
     after_map = _client_map(after, kinds)
     addresses = sorted(set(before_map) | set(after_map))
     deltas = tuple(_compare_one_client(mac, before_map.get(mac), after_map.get(mac)) for mac in addresses)
+    proved = _proved_present_count(before, after, skipped)  # WHY: The count replaces the bare zero on the page.
     logger.info("Upgrade portal compared %s clients and skipped %s sections", len(deltas), len(skipped))
-    return ClientComparison(deltas=deltas, skipped_sections=skipped)
+    logger.debug("Upgrade portal proved %s clients present over the skipped sections", proved)
+    return ClientComparison(deltas=deltas, skipped_sections=skipped, proved_present=proved)
 
 
 def count_outcome(deltas: Iterable[ClientDelta], outcome: str) -> int:

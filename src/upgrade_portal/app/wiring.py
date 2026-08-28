@@ -66,6 +66,7 @@ SERVICE_MODULE = "src.firmware.upgrade_service"  # Owns `plan_upgrade` and `invo
 RUN_STORE_KEY = "RUN_STORE"  # The seam that holds the run record store.
 LAUNCHER_KEY = "RUN_LAUNCHER"  # The seam that hands one prepared record to the run driver.
 STOP_RUNNER_KEY = "STOP_RUNNER"  # The seam that cancels the remaining devices of one run at the cloud.
+PRECHECK_ADOPTER_KEY = "PRECHECK_ADOPTER"  # The seam that reads and links a standalone pre-check.
 
 POST_CHECK_ORDINAL = 2  # The second capture of a run. `driver.post_check_request` sends this value.
 
@@ -262,6 +263,57 @@ class DocumentRunStore:
             return mirrored_site_runs(site_id)  # The lock check of the route still guards a second operator.
         rows = [dict(row) for row in getattr(page, "rows", ())]  # The row holds the run key and the state.
         return rows or mirrored_site_runs(site_id)  # An empty answer may mean a database with nothing in it.
+
+
+class StandalonePrecheckAdopter:
+    """Read the newest standalone pre-check of a site and link it to a run.
+
+    Why:
+        Delta H3 asks the run create call to adopt the newest verified
+        standalone pre-check of the site. This adopter reads that pre-check from
+        the capture store and writes the pre edge, so the route stays free of a
+        direct store call. Every call catches every fault, because a create call
+        must survive an unreachable store (FR-103).
+    """
+
+    def newest_precheck(self, site_id: str) -> str:
+        """Return the newest standalone pre-check key of one site.
+
+        Args:
+            site_id: The site the new run belongs to.
+
+        Returns:
+            The pre-check key, or an empty string when the site holds none.
+        """
+        store = load_module(STORE_MODULE)  # Late, so the import of this module opens no socket.
+        if store is None:  # The store module is absent, so no site holds a pre-check to adopt.
+            return ""  # The route then creates a run with no adopted pre-check.
+        try:  # The store sits on a network and may not answer.
+            found: Any = store.latest_standalone_precheck(site_id)  # None when the site holds none.
+        except Exception as fault:  # A create call must survive an unreachable store.
+            logger.warning("wiring: the pre-check read of site %s failed with %s", site_id, type(fault).__name__)
+            return ""  # The run still stands, and the operator saves a pre-check on the run itself.
+        return str(found.get("capture_id", "")) if isinstance(found, Mapping) else ""  # A damaged row reads as none.
+
+    def write_capture_edge(self, run_id: str, capture_id: str, role: str) -> None:
+        """Write one edge from a run to its adopted pre-check.
+
+        Args:
+            run_id: The new run the edge starts at.
+            capture_id: The adopted pre-check the edge points at.
+            role: The role the edge carries, ``pre`` for an adoption.
+        """
+        store = load_module(STORE_MODULE)  # Late, for the same reason as the read above.
+        if store is None:  # No store module means no edge, and the run still stands.
+            return  # The history view then shows the run with no linked pre-check.
+        edge = {"run_id": run_id, "capture_id": capture_id, "role": role}  # `write_edge` reads these three fields.
+        logger.info("wiring: link the run %s to the pre-check %s", run_id, capture_id)  # BEFORE the edge write.
+        try:  # The store sits on a network and may not answer.
+            result: Any = store.write_edge(edge)  # The writer proves the edge with a read-back.
+        except Exception as fault:  # A create call must survive an unreachable store.
+            logger.warning("wiring: the pre edge of the run %s failed with %s", run_id, type(fault).__name__)
+            return  # A lost edge hides no capture, because the run names its pre-check field too.
+        logger.debug("wiring: the pre edge of the run %s verified %s", run_id, getattr(result, "verified", False))
 
 
 class CaptureBridge:
@@ -924,7 +976,7 @@ def cancel_run(run_id: str) -> Any:
 
 
 def install_seams(app: Flask) -> None:
-    """Write the store, the launcher, and the stop runner into the configuration.
+    """Write the store, the launcher, the stop runner, and the adopter into the config.
 
     Why:
         Each value lands with `setdefault`, so a caller that already chose a
@@ -949,8 +1001,9 @@ def install_seams(app: Flask) -> None:
     app.config.setdefault(RUN_STORE_KEY, DocumentRunStore())  # Replaces the memory store of the route module.
     app.config.setdefault(LAUNCHER_KEY, start_upgrade_run)  # Without this the confirmed run sends nothing.
     app.config.setdefault(STOP_RUNNER_KEY, cancel_run)  # Without this a stop cancels nothing at the cloud.
+    app.config.setdefault(PRECHECK_ADOPTER_KEY, StandalonePrecheckAdopter())  # The run create call adopts a pre-check.
     prepare_storage()  # Without this no capture can verify, so no upgrade can ever start.
-    logger.info("wiring: the portal holds the run store, the run launcher, and the stop runner")  # One per start.
+    logger.info("wiring: the portal holds the run store, the launcher, the stop runner, and the adopter")  # Once.
 
 
 def prepare_storage() -> None:

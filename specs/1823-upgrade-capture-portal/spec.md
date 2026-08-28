@@ -72,10 +72,10 @@ file and confirm that the file holds the same rows.
 ### User Story 2 - Compare the state before and after an upgrade (Priority: P1)
 
 After the upgrade finishes, the operator runs a second capture. The portal then
-enables the compare control. The portal shows the two captures as two sorted
-tables side by side. The portal marks each row as unchanged, changed, missing, or
-added. The portal shows overall statistics. The operator downloads the comparison
-as a file.
+enables the compare control. The portal shows one device difference table and one
+client difference table. Each changed row names the value before and the value
+after. The portal marks each row as unchanged, changed, missing, or added. The
+portal shows overall statistics. The operator downloads the comparison as a file.
 
 **Why this priority**: This delivers the second half of the customer request. The
 comparison is the artifact that proves the upgrade did no harm. Without it the
@@ -89,8 +89,9 @@ comparison marks that client as missing.
 **Acceptance Scenarios**:
 
 1. **Given** the first capture and the second capture both saved, **When** the
-   operator presses the compare control, **Then** the portal shows both captures
-   as two tables that use the same sort order.
+   operator presses the compare control, **Then** the portal shows one device
+   difference table and one client difference table, each sorted by address, and
+   each changed row names the value before and the value after.
 2. **Given** a device reports a new firmware version in the second capture,
    **When** the portal builds the comparison, **Then** the portal marks that
    device as changed and shows the old version and the new version.
@@ -111,14 +112,15 @@ comparison marks that client as missing.
 
 ### User Story 3 - Start the upgrade and watch every device return (Priority: P2)
 
-The operator selects the upgrade options as radio groups. The operator types
-`CONFIRM` in a text box. The portal then enables the begin control. The operator
-presses begin. The portal sends the upgrade job. The portal refreshes a status
-display every 30 seconds and offers a manual refresh. The portal waits for each
-device to reconnect, to reset its uptime, and to report the new firmware version.
-The portal then waits 60 more seconds for that device. When every device settles,
-the portal shows the new firmware version for each device and prompts for the
-second capture. While the upgrade job runs, the operator can stop it. A stop
+The operator selects the upgrade options as radio groups. The operator picks the
+versions from dropdowns, because a version list can hold many values. The operator
+types `CONFIRM` in a text box. The portal then enables the begin control. The
+operator presses begin. The portal sends the upgrade job. The portal refreshes a
+status display every 30 seconds and offers a manual refresh. The portal waits for
+each device to reconnect, to reset its uptime, and to report the new firmware
+version. The portal then waits 60 more seconds for that device. When every device
+settles, the portal shows the new firmware version for each device and prompts for
+the second capture. While the upgrade job runs, the operator can stop it. A stop
 action cancels every device that has not started yet.
 
 **Why this priority**: This removes the manual watch that costs the operator the
@@ -443,8 +445,10 @@ with the same rows and the same statistics.
 
 - **FR-016**: The portal MUST show the same upgrade options that the existing bulk
   firmware upgrade flow prompts for, for the selected device type.
-- **FR-017**: The portal MUST show each option group as a radio group that accepts
-  exactly one selection.
+- **FR-017**: The portal MUST show the strategy group, the reboot group, and the
+  Junos file action group as radio groups that each accept one selection. The
+  portal MUST show the version lists as dropdowns, because a version list can hold
+  more than 20 values, which a radio group cannot show well.
 - **FR-018**: The portal MUST preselect the same default value that the existing
   bulk firmware upgrade flow uses for each option.
 - **FR-019**: If the device type is gateway, the portal MUST detect the router
@@ -591,10 +595,15 @@ with the same rows and the same statistics.
 
 - **FR-064**: After the second capture saves, the portal MUST enable the compare
   control.
-- **FR-065**: The portal MUST show the first capture and the second capture as two
-  sorted tables side by side.
-- **FR-066**: Both tables MUST use the same sort order, so that the operator sees
-  which rows are missing and which rows are new.
+- **FR-065**: The portal MUST show one device difference table and one client
+  difference table. Each changed row names the value before and the value after in
+  one row, so the reader compares no two tables by eye.
+- **FR-066**: Each difference table MUST sort by address, so that a reader finds a
+  device or a client by one key. A two-table side-by-side view is optional and
+  MUST NOT replace the difference table as the default. The portal keeps the single
+  difference table as the default, because a walkthrough showed that one table
+  marks a moved client on one row and names both access points. Two side-by-side
+  tables force the reader to compare rows by eye, which the single table removes.
 - **FR-067**: The portal MUST mark each row as unchanged, changed, missing, or
   added.
 - **FR-068**: If a wireless client attached to a different access point between

@@ -259,6 +259,27 @@ class BootstrapReport:
 
 
 @dataclass(frozen=True, slots=True)
+class RepairReport:
+    """The outcome of the one-time dangling edge repair.
+
+    Why:
+        The portal logs one line at start. The report gives that line the
+        facts, and a test reads the same report. Issue 2096 left edges that
+        point at a run that never existed, and this report counts how many the
+        repair removed.
+
+    Attributes:
+        scanned: The number of edges the repair read.
+        removed: The number of dangling edges the repair removed.
+        database_available: True when the repair reached the database.
+    """
+
+    scanned: int
+    removed: int
+    database_available: bool
+
+
+@dataclass(frozen=True, slots=True)
 class _Target:
     """The write target for one kind of document.
 
@@ -326,6 +347,13 @@ class CaptureState(StrEnum):
 # store is the only component that learns the outcome of the read-back, so the
 # store writes the field.
 CAPTURE_STATE_FIELD = "state"
+
+
+# WHY: The pre-check half of an upgrade names this role. A standalone pre-check
+# holds this role and an empty run, and the run creation adopts the newest such
+# capture (Delta H3, FR-103). The value repeats `assembly.ROLE_PRE` on purpose,
+# so the store stays free of any import of the assembly module.
+STANDALONE_ROLE = "pre"
 
 
 class CaptureStateMachine:
@@ -672,11 +700,13 @@ def bootstrap_storage(database: Any = None) -> BootstrapReport:
     collections = tuple(name for name, edge in _COLLECTIONS if _ensure_collection(handle, name, edge))
     indexes = tuple(plan.name for plan in INDEX_PLAN if _ensure_index(handle, plan))
     edge_ready = _edge_index_present(handle)
+    repair = repair_dangling_edges(handle)  # Issue 2096. One pass for each worker at start clears old dangling edges.
     logger.info(
-        "Upgrade portal storage ready, collections=%s, indexes=%s, edge_index=%s",
+        "Upgrade portal storage ready, collections=%s, indexes=%s, edge_index=%s, edges_removed=%s",
         len(collections),
         len(indexes),
         edge_ready,
+        repair.removed,  # The count of dangling edges the repair cleared this start.
     )
     return BootstrapReport(collections, indexes, edge_ready, True)
 
@@ -1528,6 +1558,144 @@ def _link_capture_to_run(capture: Mapping[str, Any], database: Any) -> None:
 
 
 # ---------------------------------------------------------------------------
+# The one-time repair of dangling edges (issue 2096)
+# ---------------------------------------------------------------------------
+
+# WHY: The scan reads every edge of the capture_for_run collection. The name
+# comes from a module constant, so no caller text reaches the query.
+_EDGE_SCAN_QUERY = "FOR edge IN " + EDGE_COLLECTION + " RETURN edge"
+
+
+def _edge_run_key(edge: Mapping[str, Any]) -> str:
+    """Return the run key that one edge names in its ``_from`` field.
+
+    Why:
+        The edge stores its run as ``upgrade_runs/run-xxxx``. The repair reads
+        the run key alone, so it can look the run up by key.
+
+    Args:
+        edge: The edge document.
+
+    Returns:
+        The run key, or an empty string when the ``_from`` field names no run.
+    """
+    origin = str(edge.get("_from", ""))  # The handle of the run, with the collection prefix.
+    prefix = RUN_COLLECTION + "/"  # The prefix that every run handle carries.
+    return origin[len(prefix) :] if origin.startswith(prefix) else ""  # The key alone, or nothing.
+
+
+def _run_absent(database: Any, run_key: str) -> bool | None:
+    """Report whether the run of one edge is absent. None means the read failed.
+
+    Why:
+        The repair removes an edge only when its run does not exist. A read that
+        raises is not proof of absence, so the repair leaves that edge and this
+        function reports the failed read.
+
+    Args:
+        database: The database handle.
+        run_key: The key of the run to read.
+
+    Returns:
+        True when the run is absent. False when it exists. None when the read
+        failed.
+    """
+    if not run_key:  # A broken handle names no run, so no run document exists for it.
+        return True
+    try:
+        stored = database.collection(RUN_COLLECTION).get(run_key)  # The run document, or None when absent.
+    except Exception as error:  # A failed read is not proof of absence, so the edge stays.
+        logger.warning("Upgrade portal could not read run %s for a repair: %s", run_key, type(error).__name__)
+        return None
+    return stored is None  # A clean None means the run is truly absent.
+
+
+def _remove_edge(database: Any, edge_key: str) -> bool:
+    """Remove one edge by key.
+
+    Why:
+        A dangling edge points at a run that never existed, so the removal
+        frees the history view. A lost removal hides no capture, because the
+        capture names its run.
+
+    Args:
+        database: The database handle.
+        edge_key: The key of the edge to remove.
+
+    Returns:
+        True when the driver accepted the removal.
+    """
+    try:
+        database.collection(EDGE_COLLECTION).delete(edge_key)  # The next scan no longer sees this edge.
+    except Exception as error:  # A failed removal loses no capture, so the repair reports it and moves on.
+        logger.warning("Upgrade portal could not remove edge %s: %s", edge_key, type(error).__name__)
+        return False
+    return True
+
+
+def _repair_one_edge(database: Any, edge: Mapping[str, Any]) -> bool:
+    """Remove one edge when its run is absent, and leave every other edge.
+
+    Args:
+        database: The database handle.
+        edge: The edge document.
+
+    Returns:
+        True when the repair removed the edge.
+    """
+    edge_key = str(edge.get("_key", ""))  # Names the edge in each log record below.
+    run_key = _edge_run_key(edge)  # The run the edge points at.
+    absent = _run_absent(database, run_key)  # True absent, False live, None on a failed read.
+    if not absent:  # A live edge and a failed read both keep the edge.
+        return False
+    logger.info("Upgrade portal removes dangling edge %s, because run %s is absent", edge_key, run_key)
+    removed = _remove_edge(database, edge_key)  # The driver removes the edge from the collection.
+    logger.debug("Upgrade portal removed dangling edge %s, result=%s", edge_key, removed)
+    return removed
+
+
+def _scan_edges(database: Any) -> list[dict[str, Any]]:
+    """Return every edge of the ``capture_for_run`` collection.
+
+    Args:
+        database: The database handle.
+
+    Returns:
+        One copy of each edge document, or an empty list on a failed scan.
+    """
+    return [dict(edge) for edge in _run_aql(database, _EDGE_SCAN_QUERY, {})]  # A read fault reports an empty scan.
+
+
+def repair_dangling_edges(database: Any = None) -> RepairReport:
+    """Remove every capture edge whose run no longer exists.
+
+    Why:
+        Issue 2096 left dangling edges. The old start invented a run for a
+        run-less capture and wrote an edge to that invented run. The run never
+        existed, so the history view walked into nothing. This repair reads
+        every edge, reads the run each edge names before any removal, and
+        removes only an edge whose run is absent. It leaves every capture and
+        every live edge, and a second run removes nothing (D2, FR-098, FR-099).
+
+    Args:
+        database: A database handle for a test. The function opens the shared
+            handle when the caller passes nothing.
+
+    Returns:
+        The repair report.
+    """
+    handle = database if database is not None else connect_database()
+    if handle is None:  # A repair needs the database, so an unreachable store skips the pass.
+        logger.warning("Upgrade portal skipped the dangling edge repair, the document store is out of reach")
+        return RepairReport(0, 0, False)
+    logger.info("Upgrade portal starts the dangling edge repair")  # One record before the scan.
+    edges = _scan_edges(handle)  # Every edge of the collection.
+    removed = sum(1 for edge in edges if _repair_one_edge(handle, edge))  # One removal for each dangling edge.
+    logger.debug("Upgrade portal finished the dangling edge repair, scanned=%s removed=%s", len(edges), removed)
+    return RepairReport(len(edges), removed, True)
+
+
+# ---------------------------------------------------------------------------
 # Reading a capture back out
 # ---------------------------------------------------------------------------
 
@@ -1576,6 +1744,22 @@ _LIST_TAIL = (
     "  RETURN {" + ",".join(name + ":doc." + name for name in LIST_FIELDS) + "}\n"
 )
 _COUNT_TAIL = "  COLLECT WITH COUNT INTO total\n  RETURN total\n"
+
+# WHY: The one query that reads the newest standalone pre-check of a site. Every
+# name below comes from a fixed field of this module and never from caller text,
+# so no operator value reaches the query. Each value travels as a bind instead.
+# The four filters name the site, the pre role, an empty run, and the verified
+# state, and the sort with the limit hands back the newest match alone (FR-103).
+_PRECHECK_QUERY = (
+    "FOR doc IN " + CAPTURE_COLLECTION + "\n"
+    "  FILTER doc.site_id == @site_id\n"
+    "  FILTER doc.role == @role\n"
+    "  FILTER doc.run_id == @empty_run\n"
+    "  FILTER doc." + CAPTURE_STATE_FIELD + " == @verified\n"
+    "  SORT doc.started_at DESC\n"
+    "  LIMIT 1\n"
+    "  RETURN doc\n"
+)
 
 # WHY: The run history row. Every name below comes from the UpgradeRun table of
 # data-model.md section 4 and from `RunRecordBuilder.REQUIRED_FIELDS` in
@@ -1841,6 +2025,38 @@ def list_captures(query: CaptureQuery, database: Any = None) -> CaptureListPage:
     return CaptureListPage(tuple(dict(row) for row in rows), total, query.limit, query.offset, True)
 
 
+def latest_standalone_precheck(site_id: str, database: Any = None) -> dict[str, Any] | None:
+    """Return the newest verified standalone pre-check of one site.
+
+    Why:
+        The run creation adopts the newest pre-check that named no run, so an
+        operator never repeats a reading the site already holds. The reader
+        narrows by the site, the pre role, an empty run, and the verified
+        state, then reads the newest by start time (Delta H3, FR-103).
+
+    Args:
+        site_id: The site whose pre-check the run adopts.
+        database: A database handle for a test.
+
+    Returns:
+        The newest matching capture, or None when the site holds none.
+    """
+    logger.info("Upgrade portal reads the newest standalone pre-check of site %s", site_id)  # Name the read.
+    handle = database if database is not None else connect_database()  # A test injects its own handle.
+    if handle is None:  # An unreachable store adopts nothing, so the run creation reads no pre-check.
+        return None  # The caller then creates a run with no adopted pre-check.
+    binds = {  # Every value travels as a bind, so no caller text reaches the query.
+        "site_id": site_id,  # The one site the reader narrows by.
+        "role": STANDALONE_ROLE,  # The pre-check half of the upgrade.
+        "empty_run": "",  # A standalone capture names no run.
+        "verified": CaptureState.VERIFIED.value,  # A comparison trusts a proved reading alone.
+    }
+    rows = _run_aql(handle, _PRECHECK_QUERY, binds)  # The newest match sits first, because the sort is descending.
+    found = rows[0] if rows else None  # An empty answer means the site holds no standalone pre-check.
+    logger.debug("Upgrade portal read %d standalone pre-check rows for site %s", len(rows), site_id)  # Report.
+    return dict(found) if found is not None else None  # A copy stops a caller edit of the stored row.
+
+
 def list_runs(query: RunQuery, database: Any = None) -> RunListPage:
     """Return one page of run rows, newest first.
 
@@ -1958,6 +2174,7 @@ __all__ = [
     "RUN_LIST_FIELDS",
     "RUN_OPERATION",
     "SCHEMA_VERSION",
+    "STANDALONE_ROLE",
     "STORAGE_BACKUP_FILE",
     "STORAGE_DATABASE",
     "STORAGE_NONE",
@@ -1981,6 +2198,7 @@ __all__ = [
     "is_comparable",
     "is_readable_schema_version",
     "is_schema_version",
+    "latest_standalone_precheck",
     "list_captures",
     "list_runs",
     "load_capture",

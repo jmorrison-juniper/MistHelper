@@ -264,6 +264,31 @@
          download>Download as JSON</a>
     </p>
   {% endif %}
+
+  {#
+    FR-101 offers an upgrade path once the capture verifies. The control always
+    renders, so the poll can reveal it with no reload after a fresh capture
+    verifies. A capture that never verified keeps the button hidden, because it
+    holds no clean pre-check. portal.js posts the run and opens the options page
+    (FR-102). The button sends JSON, so it is a button and not a form, in the
+    same way as the start control above.
+  #}
+  <p class="mt-3 mb-0">
+    <button type="button"
+            class="portal-button portal-button-primary"
+            data-testid="capture-start-upgrade-button"
+            data-site-id="{{ site_id | default('', true) }}"
+            {% if not is_verified %}hidden{% endif %}>Start the upgrade</button>
+  </p>
+  {#
+    FR-104 and FR-105 name the cause of a refusal. aria-live lets a screen
+    reader read the lock holder or the running run after portal.js paints it.
+    The region stays empty until a refusal arrives, so a clean start shows
+    nothing here.
+  #}
+  <p class="portal-card-note"
+     data-testid="capture-start-upgrade-error"
+     aria-live="polite"></p>
 </div>
 
 {#

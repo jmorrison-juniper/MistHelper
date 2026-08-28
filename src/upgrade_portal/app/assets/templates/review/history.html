@@ -198,9 +198,9 @@
           {% set device_types = row.device_type_text | default('No device type', true) %}
           {% set device_type_id = row.device_type_test_id | default('', true) %}
           {% if device_type_id %}
-            <td data-testid="{{ device_type_id }}">{{ device_types }}</td>
+            <td class="cell-device-type" title="{{ device_types }}" data-testid="{{ device_type_id }}">{{ device_types }}</td>
           {% else %}
-            <td>{{ device_types }}</td>
+            <td class="cell-device-type" title="{{ device_types }}">{{ device_types }}</td>
           {% endif %}
 
           <td class="cell-number">{{ row.client_count }}</td>

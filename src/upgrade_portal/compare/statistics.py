@@ -342,6 +342,12 @@ def count_clients(comparison: client_compare.ClientComparison) -> ClientCounts:
         The counter reads the outcome of each record, so ``moved`` stays its
         own number and never joins the loss count.
 
+        A digest match leaves no record to read. The counter then adds the
+        proved count to the present count, because the match proves every
+        client of that section present. This count is the number that shows an
+        upgrade returned the clients, so it must never read as zero for a busy
+        site.
+
     Args:
         comparison: The client half of the comparison.
 
@@ -349,8 +355,9 @@ def count_clients(comparison: client_compare.ClientComparison) -> ClientCounts:
         The four client counts.
     """
     deltas = comparison.deltas
+    read = client_compare.count_outcome(deltas, client_compare.OUTCOME_PRESENT)  # WHY: The rows the counter saw.
     return ClientCounts(
-        present=client_compare.count_outcome(deltas, client_compare.OUTCOME_PRESENT),
+        present=read + comparison.proved_present,  # WHY: One of the two numbers is always zero.
         moved=client_compare.count_outcome(deltas, client_compare.OUTCOME_MOVED),
         added=client_compare.count_outcome(deltas, client_compare.OUTCOME_ADDED),
         missing=client_compare.count_outcome(deltas, client_compare.OUTCOME_MISSING),

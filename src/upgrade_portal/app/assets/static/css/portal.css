@@ -371,6 +371,15 @@
     white-space: nowrap;
 }
 
+/* A row can name more than one device type, such as "access point, switch".
+ * That text wraps and stands the row above the height budget of issue #2106,
+ * so the cell clips and keeps the whole value in its title attribute. */
+.history-table .cell-device-type {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 /* The action cell never wraps, so the control cannot stack its letters. */
 .history-table .cell-action {
     white-space: nowrap;
@@ -403,8 +412,9 @@
  * 5. Option bubbles
  *
  * A bubble group replaces a plain radio list for a small set of choices, such
- * as the capture tier or the upgrade strategy. The real radio input stays in
- * the document and stays focusable. Only its paint is hidden. A hidden input
+ * as the sign-in credential choice and the three upgrade option groups: the
+ * strategy, the reboot, and the Junos file action. The real radio input stays
+ * in the document and stays focusable. Only its paint is hidden. A hidden input
  * with display:none leaves the tab order, and a keyboard operator then loses
  * the control.
  * ========================================================================== */

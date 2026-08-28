@@ -117,6 +117,12 @@ element inside it. That inner attribute is a script hook, not a test hook.
 | `capture-client-row-{mac}` | One client row of either client table |
 | `capture-export-csv` | The download of the capture as a comma-separated file |
 | `capture-export-json` | The download of the capture as a JSON file |
+| `capture-start-upgrade-button` | Starts an upgrade for the site of this capture. Posts to `POST /api/sites/<site_id>/runs`, then opens the options page (FR-101). |
+| `capture-start-upgrade-error` | Shows a refusal from the run creation. Names the lock holder for a lock refusal (FR-104). Names the running run for a live-run refusal (FR-105). |
+
+The two controls above render for a verified capture alone (Delta U1, FR-101). A
+capture the portal never verified holds no clean pre-check, so the button hides
+until the verified badge reads verified.
 
 FR-026 requires the three tables. Each table renders on every page render, even
 for a capture that holds no row. A site with no device of a type is a valid
@@ -141,9 +147,9 @@ that a region search caused.
 | --- | --- |
 | `upgrade-version-select-{mac}` | Target version for one device |
 | `upgrade-version-select-all` | Apply one version to every matching model |
-| `upgrade-reboot-toggle` | The reboot option |
-| `upgrade-junos-file-action-toggle` | The Junos file action option |
-| `upgrade-strategy-select` | The strategy option |
+| `upgrade-reboot-group` | The reboot radio group. Holds `upgrade-reboot-yes` and `upgrade-reboot-no` (Delta U2). |
+| `upgrade-junos-file-action-group` | The Junos file action radio group. Holds `upgrade-junos-file-action-yes` and `upgrade-junos-file-action-no` (Delta U2). |
+| `upgrade-strategy-group` | The strategy radio group. Holds `upgrade-strategy-big-bang` and `upgrade-strategy-canary` (Delta U2). |
 | `upgrade-options-save-button` | Save the chosen options |
 | `upgrade-target-table` | The target table on the options page |
 | `upgrade-target-row-{mac}` | One target row |

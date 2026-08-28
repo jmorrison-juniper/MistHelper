@@ -17,7 +17,7 @@ Concurrency:
     pages with a cursor.
 
 The six progress rows and the five stored sections:
-    ``contracts/http-api.md:155`` lists six section rows in the progress body
+    ``contracts/http-api.md:239`` lists six section rows in the progress body
     and ``capture/capture.html`` renders six rows. The stored document holds
     five digest sections, and ``data-model.md`` section 3.5 keeps the alarms
     inside the extras. Both readings are correct, because they describe two
@@ -49,7 +49,7 @@ logger = logging.getLogger(__name__)  # One logger for each module keeps the sou
 TIER_STANDARD = assembly.TIER_STANDARD  # The device state and the client lists.
 TIER_EXTRA = assembly.TIER_EXTRA  # Tier 2, the ports, the radios, the tunnels, the peers, and the alarms.
 
-# The six progress rows of `contracts/http-api.md:155`. `assembly.py:96` owns
+# The six progress rows of `contracts/http-api.md:239`. `assembly.py:96` owns
 # these names and states why a report row and a digest key are two different
 # things. This module points at those names, so one concept keeps one term.
 ROW_DEVICES = assembly.SECTION_DEVICES  # The device inventory and the device statistics.
@@ -952,24 +952,32 @@ def capture_identity(job: Mapping[str, Any]) -> assembly.CaptureIdentity:
     Why:
         ``assembly.capture_key`` builds the capture key from the run alone. An
         empty run therefore builds the key ``cap--01``, and a second empty run
-        overwrites the first record. A placeholder key collides the same way.
+        overwrites the first record. A run-less start instead carries a fresh
+        nonce key, so the identity reads that key and names no run (D1,
+        FR-096). A job with no run and no key stays a fault.
 
     Args:
         job: The capture job.
 
     Returns:
-        The run, the ordinal, and the operator.
+        The run, the ordinal, the operator, and the standalone key.
 
     Raises:
-        ValueError: If the job names no run.
+        ValueError: If the job names no run and holds no standalone key.
     """
     run_id = str(job.get("run_id", "")).strip()  # A blank value names no run.
-    if not run_id:  # An empty run reaches the key of every other empty run.
+    ordinal = int(job.get("ordinal", assembly.FIRST_ORDINAL))  # The first capture reads ordinal 1.
+    actor_email = str(job.get("actor_email", ""))  # The signed-in operator, never a credential.
+    if run_id:  # A run start builds its key from the run and the ordinal.
+        return assembly.CaptureIdentity(run_id=run_id, ordinal=ordinal, actor_email=actor_email)
+    standalone_key = str(job.get("capture_id", "")).strip()  # The route prebuilt this nonce key.
+    if not standalone_key:  # No run and no key would collide under cap--01.
         raise ValueError(MISSING_RUN_MESSAGE)  # The route marks the capture failed.
     return assembly.CaptureIdentity(
-        run_id=run_id,  # The guard above proved this value.
-        ordinal=int(job.get("ordinal", assembly.FIRST_ORDINAL)),
-        actor_email=str(job.get("actor_email", "")),
+        run_id="",  # A run-less capture names no run, so it builds no edge.
+        ordinal=ordinal,  # The pre-check reads ordinal 1.
+        actor_email=actor_email,  # The operator who asked for the pre-check.
+        standalone_key=standalone_key,  # The identity carries the prebuilt nonce key.
     )
 
 

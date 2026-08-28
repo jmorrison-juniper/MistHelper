@@ -34,7 +34,6 @@ import pytest
 pytest.importorskip("playwright.sync_api", reason="The Playwright package is not installed.")
 
 from playwright.sync_api import Error as PlaywrightError  # WHY: The skip above runs first.
-from playwright.sync_api import sync_playwright  # WHY: The skip above runs first.
 
 from src.upgrade_portal.app import factory  # WHY: The skip above runs first.
 
@@ -183,25 +182,33 @@ def portal_test_id_attribute() -> None:
 
 
 @pytest.fixture(scope="module")
-def browser() -> Iterator[Any]:
+def browser(playwright: Any) -> Iterator[Any]:
     """Start one browser for this module, and stop it at the end.
 
     Why:
         A browser start costs a second or more. One browser serves every test
         of this module, and each test opens its own page.
 
+        The driver arrives from the Playwright plugin rather than from a private
+        ``sync_playwright()`` call. Another test in the same session starts an
+        asyncio loop, and the sync API refuses to start a second driver inside
+        that loop. A private driver therefore passed when this module ran alone
+        and raised at setup in a full run, which turned the browser gate red.
+
+    Args:
+        playwright: The driver that the Playwright plugin owns for the session.
+
     Yields:
         The browser.
     """
-    with sync_playwright() as driver:  # WHY: The context manager stops the driver process.
-        try:
-            started = driver.chromium.launch()  # WHY: One engine is enough to prove a selector.
-        except PlaywrightError as error:  # WHY: A workstation with no browser binary reports a skip.
-            pytest.skip(f"No browser binary is installed. {error}")
-        try:
-            yield started  # The tests run here.
-        finally:
-            started.close()  # WHY: A leaked browser would hold a process after the run.
+    try:
+        started = playwright.chromium.launch()  # WHY: One engine is enough to prove a selector.
+    except PlaywrightError as error:  # WHY: A workstation with no browser binary reports a skip.
+        pytest.skip(f"No browser binary is installed. {error}")
+    try:
+        yield started  # The tests run here.
+    finally:
+        started.close()  # WHY: A leaked browser would hold a process after the run.
 
 
 def open_capture_page(

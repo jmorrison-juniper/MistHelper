@@ -140,62 +140,129 @@
     </p>
   </div>
 
-  <div class="mb-3">
-    <label class="form-label" for="upgrade-strategy-select">Upgrade strategy</label>
-
-    <select class="form-select"
-            id="upgrade-strategy-select"
-            data-testid="upgrade-strategy-select"
+  <fieldset class="bubble-group mb-3"
+            data-testid="upgrade-strategy-group"
             aria-describedby="upgrade-strategy-note">
-      <option value="big_bang" {{ 'selected' if chosen_strategy != 'canary' else '' }}>
-        All devices at the same time
-      </option>
-      <option value="canary" {{ 'selected' if chosen_strategy == 'canary' else '' }}>
-        A few devices first, then the rest
-      </option>
-    </select>
+    {#
+      Delta U2 shows the strategy as a radio group, so both choices show at
+      once. Big bang writes every device together. Canary writes a small set
+      first. The value strings match the saved strategy field.
+    #}
+    <legend class="bubble-group-legend">Upgrade strategy</legend>
 
-    <p class="portal-card-note" id="upgrade-strategy-note">
+    <div class="bubble-option">
+      <input type="radio"
+             id="upgrade-strategy-big-bang"
+             name="upgrade-strategy"
+             class="bubble-option-input"
+             data-testid="upgrade-strategy-big-bang"
+             value="big_bang"
+             {{ 'checked' if chosen_strategy != 'canary' else '' }}>
+      <label class="bubble-option-label" for="upgrade-strategy-big-bang">
+        All devices at the same time
+      </label>
+    </div>
+
+    <div class="bubble-option">
+      <input type="radio"
+             id="upgrade-strategy-canary"
+             name="upgrade-strategy"
+             class="bubble-option-input"
+             data-testid="upgrade-strategy-canary"
+             value="canary"
+             {{ 'checked' if chosen_strategy == 'canary' else '' }}>
+      <label class="bubble-option-label" for="upgrade-strategy-canary">
+        A few devices first, then the rest
+      </label>
+    </div>
+
+    <p class="bubble-option-hint" id="upgrade-strategy-note">
       The second strategy upgrades 1 percent, then 10 percent, then 50 percent,
       then the rest.
     </p>
-  </div>
+  </fieldset>
 
-  <div class="form-check mb-3">
+  <fieldset class="bubble-group mb-3"
+            data-testid="upgrade-reboot-group"
+            aria-describedby="upgrade-reboot-note">
     {#
       The cloud reboots an access point on its own, so this option reaches a
       switch and a gateway only. See src/firmware/upgrade_service.py:49-51.
     #}
-    <input class="form-check-input"
-           type="checkbox"
-           id="upgrade-reboot-toggle"
-           data-testid="upgrade-reboot-toggle"
-           aria-describedby="upgrade-reboot-note"
-           {{ 'checked' if reboot_chosen else '' }}>
-    <label class="form-check-label" for="upgrade-reboot-toggle">
-      Reboot each switch and each gateway after the write
-    </label>
-    <p class="portal-card-note" id="upgrade-reboot-note">
+    <legend class="bubble-group-legend">Reboot each switch and each gateway after the write</legend>
+
+    <div class="bubble-option">
+      <input type="radio"
+             id="upgrade-reboot-yes"
+             name="upgrade-reboot"
+             class="bubble-option-input"
+             data-testid="upgrade-reboot-yes"
+             value="yes"
+             {{ 'checked' if reboot_chosen else '' }}>
+      <label class="bubble-option-label" for="upgrade-reboot-yes">
+        Yes, reboot each switch and each gateway after the write
+      </label>
+    </div>
+
+    <div class="bubble-option">
+      <input type="radio"
+             id="upgrade-reboot-no"
+             name="upgrade-reboot"
+             class="bubble-option-input"
+             data-testid="upgrade-reboot-no"
+             value="no"
+             {{ 'checked' if not reboot_chosen else '' }}>
+      <label class="bubble-option-label" for="upgrade-reboot-no">
+        No, hold the reboot for a later manual window
+      </label>
+    </div>
+
+    <p class="bubble-option-hint" id="upgrade-reboot-note">
       An access point reboots on its own, so this option does not reach it. A
       device that does not reboot keeps the old firmware until the next reboot.
     </p>
-  </div>
+  </fieldset>
 
-  <div class="form-check mb-3">
-    <input class="form-check-input"
-           type="checkbox"
-           id="upgrade-junos-file-action-toggle"
-           data-testid="upgrade-junos-file-action-toggle"
-           aria-describedby="upgrade-junos-file-action-note"
-           {{ 'checked' if junos_action_chosen else '' }}>
-    <label class="form-check-label" for="upgrade-junos-file-action-toggle">
-      Complete the Junos file action after the reboot
-    </label>
-    <p class="portal-card-note" id="upgrade-junos-file-action-note">
+  <fieldset class="bubble-group mb-3"
+            data-testid="upgrade-junos-file-action-group"
+            aria-describedby="upgrade-junos-file-action-note">
+    {#
+      The Junos file action runs after the reboot. The radio group shows both
+      choices at once, so the operator reads the second choice without a menu.
+    #}
+    <legend class="bubble-group-legend">Complete the Junos file action after the reboot</legend>
+
+    <div class="bubble-option">
+      <input type="radio"
+             id="upgrade-junos-file-action-yes"
+             name="upgrade-junos-file-action"
+             class="bubble-option-input"
+             data-testid="upgrade-junos-file-action-yes"
+             value="yes"
+             {{ 'checked' if junos_action_chosen else '' }}>
+      <label class="bubble-option-label" for="upgrade-junos-file-action-yes">
+        Yes, complete the Junos file action after the reboot
+      </label>
+    </div>
+
+    <div class="bubble-option">
+      <input type="radio"
+             id="upgrade-junos-file-action-no"
+             name="upgrade-junos-file-action"
+             class="bubble-option-input"
+             data-testid="upgrade-junos-file-action-no"
+             value="no"
+             {{ 'checked' if not junos_action_chosen else '' }}>
+      <label class="bubble-option-label" for="upgrade-junos-file-action-no">
+        No, skip the Junos file action
+      </label>
+    </div>
+
+    <p class="bubble-option-hint" id="upgrade-junos-file-action-note">
       A Junos device reads this option. The action adds time to the upgrade of
       each device.
     </p>
-  </div>
+  </fieldset>
 
   {#
     The button sends JSON and reads the answer, so it is a button and not a

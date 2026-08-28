@@ -96,7 +96,7 @@ class BadOptionError(ValueError):
     """One upgrade option holds a value that the portal refuses.
 
     Why:
-        ``contracts/http-api.md:207`` answers ``POST /api/runs/<id>/options``
+        ``contracts/http-api.md:348`` answers ``POST /api/runs/<id>/options``
         with the error code ``bad_option``. The route layer needs one exception
         that already carries that code, so no route repeats the mapping. The
         message names the field and never repeats the value, because a refused
@@ -428,7 +428,7 @@ def build_options(payload: Mapping[str, Any], now: Callable[[], int] | None = _n
     """Map the interface controls onto the seam option record.
 
     Why:
-        ``contracts/http-api.md:209-216`` fixes the body of the options call.
+        ``contracts/http-api.md:356-364`` fixes the body of the options call.
         The seam holds the four fields that the cloud reads. This function is
         the only place that joins the two, so a new control changes one file.
 

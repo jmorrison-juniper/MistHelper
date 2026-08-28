@@ -178,24 +178,33 @@ from these two routes.
 | Item | Value |
 | --- | --- |
 | Body | `{ "tier": 2, "run_id": "<string or null>", "role": "pre" }` |
-| 202 | `{ "capture_id": "<string>", "status_url": "/api/captures/<id>/status" }` |
+| 202 | `{ "capture_id": "<string>", "status_url": "/api/captures/<id>/status", "lock": { "lock_token", "expires_in", "state" } }` (the `lock` object appears only when the start took the lock, FR-109) |
 | 400 | `bad_tier` when `tier` is not 2 or 3 |
 | 404 | `site_not_found` when the chosen organization holds no such site |
 | 409 | `site_locked` when a different operator holds the site lock |
 | 409 | `pre_check_locked` when the named run already sent firmware |
 
 The portal starts the work in the background and answers at once. `tier` defaults
-to 2.
+to 2. The 202 answer adds a `lock` grant, shaped as the take answer of section 3, only when the start took the lock on this call (FR-109). A start that names no owner takes no lock and reports no hold (FR-111).
 
 The `pre_check_locked` refusal protects the one reading of a site before its
-upgrade. The capture identifier derives from the run alone, so a repeat pre-check
-of the same run carries the identifier of the first one and replaces that stored
-document in place. Before the run sends firmware, that replacement is what the
-operator asked for, and the portal accepts it. After the run sends firmware, the
-new reading describes upgraded devices, and the comparison would then measure the
-upgraded site against itself. The route refuses there, so no worker starts and no
-store write ever opens. The rule reads the run state, so a stopped run and a
-failed run both keep the pre-check they hold.
+upgrade. When the body names a run, the capture identifier derives from that run,
+so a repeat pre-check of the same run carries the identifier of the first one and
+replaces that stored document in place. Before the run sends firmware, that
+replacement is what the operator asked for, and the portal accepts it. After the
+run sends firmware, the new reading describes upgraded devices, and the
+comparison would then measure the upgraded site against itself. The route refuses
+there, so no worker starts and no store write ever opens. The rule reads the run
+state, so a stopped run and a failed run both keep the pre-check they hold.
+
+When the body names no run, the capture identifier derives from a fresh capture
+nonce, so two run-less captures never collide. The capture stands alone as a site
+pre-check. The portal writes no run document and no `capture_for_run` edge for
+that capture (FR-096, FR-100). The `run_id` field of the body reads `null` or
+stays absent for a standalone capture, and the stored capture document then holds
+an empty `run_id` field. The upgrade start adopts that standalone pre-check and
+writes the edge at that time (Delta H3). A one-time repair at start clears any old
+dangling edge that an earlier build wrote for an invented run.
 
 The rule guards the pre-check half alone. The run driver owns the post half and
 gives it the second ordinal, so a post-check writes its own document and collides
@@ -328,6 +337,13 @@ and the start control posts to no site.
 `POST /api/runs` reaches the same handler and answers the same body. The two paths
 are one endpoint, not two. The path above names the site. `POST /api/runs` reads
 the site from the signed session.
+
+When it creates the run, the portal adopts the newest verified standalone pre-check
+of that site (Delta H3, FR-103). The portal sets the run `pre_capture_id` field to
+that capture and writes the `capture_for_run` edge with role `pre`. A site with no
+standalone pre-check creates the run unchanged, so the field stays empty and the
+portal writes no edge. The lock refusal and the live-run refusal both run before the
+adoption, so a refused create adopts nothing.
 
 ### `GET /api/runs/<run_id>/versions` — available versions
 
