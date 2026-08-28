@@ -119,6 +119,15 @@ PROBE_LOCK_TTL_SECONDS = 60  # The lock store drops the scratch key when no prob
 READINESS_CACHE_SECONDS = 5  # How long one readiness answer serves every caller. See `read_readiness`.
 READINESS_CACHE_KEY = "answer"  # The one key of the cache below. The process holds one answer, never a set.
 
+# WHY 12 hours: the lock renewal beat posts every 60 seconds, and a post carries
+# the token. `flask-wtf` defaults this value to 3600 seconds, which is the same
+# length as `LOCK_TTL_SECONDS`. The two therefore expired together, every beat
+# after the first hour answered 400, and the site lock died with no renewal. A
+# real cascade runs longer than one hour, because the settle gate allows 60
+# minutes for each device, so the token must outlive the work. Issue #2110
+# records a portal log that held 228 refusals, one each minute.
+CSRF_TOKEN_SECONDS = 43200  # 12 hours. The token must outlive the longest upgrade.
+
 THEME_ARGUMENT = "theme"  # The GET form of `partials/nav.html` sends the choice under this name.
 THEME_DEFAULT = "magenta"  # The dark brand theme. An operator with no choice sees this one.
 THEMES_KEY = "THEMES"  # `apply_web_config` writes the configured names under this key.
@@ -686,6 +695,7 @@ def apply_portal_config(app: Flask, settings: PortalSettings) -> None:
     app.config["PORTAL_SETTINGS"] = settings  # The whole frozen record, for a route that needs more.
     app.config["POLL_INTERVAL_SECONDS"] = settings.web.poll_interval_seconds  # The page reads this value.
     app.config["THEMES"] = list(settings.web.themes)  # A list, because a template iterates it.
+    app.config["WTF_CSRF_TIME_LIMIT"] = CSRF_TOKEN_SECONDS  # The beat must outlive the lock it renews.
 
 
 def apply_cookie_config(app: Flask, settings: PortalSettings) -> None:
