@@ -196,6 +196,18 @@
      * site, so one handle is enough and a second start replaces the first. */
     var lockBeatTimer = null;
 
+    /* The count of beats that failed in a row. A single failure can be a passing
+     * network fault, so the beat stops only after a run of them. */
+    var lockBeatFailures = 0;
+
+    /* Three failures span about three minutes at the 60 second beat, which is
+     * long enough to ride out a brief fault and short enough that an operator
+     * learns before the lock expires. */
+    var LOCK_BEAT_FAILURE_LIMIT = 3;
+
+    var LOCK_BEAT_STOPPED_MESSAGE =
+        "The portal stopped renewing this site, because three renewals failed. Reload the page and take the site again.";
+
     /* The stored size needs one extra read, and the value never changes after
      * the capture is verified. This flag keeps that read to one call. */
     var storedSizeLoaded = false;
@@ -2147,12 +2159,22 @@
 
         return fetchJson(path + "/heartbeat", { method: "POST", body: { lock_token: token } })
             .then(function (answer) {
+                lockBeatFailures = 0;  /* A good beat clears the count, so only a run of failures stops the beat. */
                 showLockError(region, "");
                 return answer;
             })
             .catch(function (error) {
                 console.error("The lock heartbeat failed.", error && error.code, error && error.status);
+                lockBeatFailures += 1;  /* Count this failure, because one bad beat may be a passing network fault. */
                 handleLockRefusal(region, error);
+                /* A beat that fails this many times in a row cannot recover on
+                 * its own. It would otherwise post every 60 seconds forever
+                 * while the banner still promised a renewal. Issue #2110
+                 * records a log that held 228 such posts. */
+                if (lockBeatFailures >= LOCK_BEAT_FAILURE_LIMIT) {
+                    stopLockBeat();
+                    paintLockFree(region, LOCK_BEAT_STOPPED_MESSAGE);
+                }
                 return null;
             });
     }
@@ -2184,6 +2206,7 @@
      */
     function startLockBeat(region) {
         stopLockBeat();
+        lockBeatFailures = 0;  /* A fresh beat starts with a clean count, so an earlier run never stops this one. */
         if (!region || !(region.getAttribute("data-lock-token") || "")) {
             return;
         }
