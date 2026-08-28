@@ -56,13 +56,13 @@ result with no help.
 
 **Purpose**: Prove a green start before any change. These tasks block every story.
 
-- [ ] T001 Confirm the branch and record the green baseline. Run `git status` to
+- [X] T001 Confirm the branch and record the green baseline. Run `git status` to
   confirm the tree is `integration/upgrade-portal-fixes` and holds no unrelated
   change. Run `git log main..HEAD --oneline` to confirm the eleven sibling fixes
   are present. Run `python -m pytest tests/unit/upgrade_portal tests/contract/upgrade_portal`
   and `python -m pytest tests/e2e/upgrade_portal` from the repository root, and
   record the pass counts (about 13842 unit and 167 browser) as the baseline.
-- [ ] T002 [P] Confirm the batch adds no dependency and the stores answer. Read
+- [X] T002 [P] Confirm the batch adds no dependency and the stores answer. Read
   `requirements.txt` and `pyproject.toml` and confirm no new third-party package
   is needed. Confirm ArangoDB and Redis are reachable for the contract layer and
   the browser layer, as `spec-remaining-defects.md` names them.
@@ -79,7 +79,7 @@ adds no shared module and no new subpackage, so this phase is small.
 **⚠️ CRITICAL**: US1 (Phase 3) is the data-graph foundation. Phase B depends on it.
 The whole comparison trusts a clean graph. So US1 lands before US2.
 
-- [ ] T003 Verify the empty-run edge guards in `src/upgrade_portal/capture/store.py`.
+- [X] T003 Verify the empty-run edge guards in `src/upgrade_portal/capture/store.py`.
   Read `build_edge` (~line 1351), `write_edge` (~line 1458), and
   `_link_capture_to_run` (~line 1516). Confirm each one already skips an empty
   `run_id`. US1 relies on these guards, so no edge forms for a standalone capture.
@@ -104,11 +104,11 @@ renders the correct plan.
 
 ### Tests for User Story 1 (write first, ensure they FAIL)
 
-- [ ] T004 [P] [US1] Create the failing unit test
+- [X] T004 [P] [US1] Create the failing unit test
   `tests/unit/upgrade_portal/test_capture_standalone_key.py`. Assert two standalone
   captures hold different `cap-{hex}-01` keys and write no `capture_for_run` edge
   (D1, FR-096, Risk 1).
-- [ ] T005 [P] [US1] Create the failing unit test
+- [X] T005 [P] [US1] Create the failing unit test
   `tests/unit/upgrade_portal/test_store_repair_dangling_edges.py`. Seed one live
   edge and one dangling edge in one store. Assert the repair removes the dangling
   edge, keeps the live edge, logs each removal, leaves every capture document, and
@@ -116,34 +116,34 @@ renders the correct plan.
 
 ### Implementation for User Story 1
 
-- [ ] T006 [US1] Add a standalone key builder in
+- [X] T006 [US1] Add a standalone key builder in
   `src/upgrade_portal/capture/assembly.py`. The builder reads a fresh `uuid4` hex
   nonce, not a run, and returns `cap-{hex}-01`. Keep `capture_key` for the run path
   (D1).
-- [ ] T007 [US1] In `src/upgrade_portal/app/routes/capture.py::build_job`
+- [X] T007 [US1] In `src/upgrade_portal/app/routes/capture.py::build_job`
   (~line 606, invented value at ~line 618): when the body names no run, set
   `run_id=""` and build the key from the standalone builder of T006. Do not invent
   a run identifier (D1, FR-096).
-- [ ] T008 [US1] In `src/upgrade_portal/capture/collector.py::capture_identity`
+- [X] T008 [US1] In `src/upgrade_portal/capture/collector.py::capture_identity`
   (~line 949): accept a job that names no run and carries a prebuilt standalone
   key. Build the document from that key instead of raising `MISSING_RUN_MESSAGE`
   for an empty run (D1).
-- [ ] T009 [P] [US1] Add `repair_dangling_edges` to
+- [X] T009 [P] [US1] Add `repair_dangling_edges` to
   `src/upgrade_portal/capture/store.py`. Scan the `capture_for_run` edges. Read the
   run document that each edge names in `_from` before any removal. Remove only an
   edge whose run document does not exist. Log each removed edge with its key and
   the missing run key. Leave every capture document (D2, FR-097, FR-098, Risk 2).
-- [ ] T010 [US1] Call `repair_dangling_edges` once from the ensure path in
+- [X] T010 [US1] Call `repair_dangling_edges` once from the ensure path in
   `src/upgrade_portal/capture/store.py`, near `_ensure_collection` (~line 577), so
   it runs once for each worker at start and stays idempotent (D2). Depends on T009.
 
 ### Contract and data-model updates for User Story 1
 
-- [ ] T011 [P] [US1] Update `specs/1823-upgrade-capture-portal/contracts/http-api.md`
+- [X] T011 [P] [US1] Update `specs/1823-upgrade-capture-portal/contracts/http-api.md`
   for Delta H2. State that a body with no run derives the key from a fresh nonce,
   stands alone as a site pre-check, and writes no run and no edge. Update the source
   anchor comments that name the http-api line numbers in the same commit.
-- [ ] T012 [P] [US1] Record the run-less capture decision in
+- [X] T012 [P] [US1] Record the run-less capture decision in
   `specs/1823-upgrade-capture-portal/data-model.md` (FR-100). State the four facts:
   no run and no edge for a run-less capture; the standalone key comes from a nonce;
   the upgrade start writes the edge at adoption time; a one-time repair clears old
@@ -151,7 +151,7 @@ renders the correct plan.
 
 ### Checkpoint for User Story 1
 
-- [ ] T013 [US1] Run the US1 gate. Confirm T004 and T005 now pass. Run `ruff`,
+- [X] T013 [US1] Run the US1 gate. Confirm T004 and T005 now pass. Run `ruff`,
   `black --check`, and `mypy` strict on `src/upgrade_portal/capture/assembly.py`,
   `src/upgrade_portal/capture/collector.py`, `src/upgrade_portal/capture/store.py`,
   and `src/upgrade_portal/app/routes/capture.py`. Confirm zero dangling edges after
@@ -173,36 +173,36 @@ page with no typed address.
 
 ### Tests for User Story 2 (write first, ensure they FAIL)
 
-- [ ] T014 [P] [US2] Create the failing unit test
+- [X] T014 [P] [US2] Create the failing unit test
   `tests/unit/upgrade_portal/test_run_adopts_precheck.py`. Seed several captures.
   Assert `latest_standalone_precheck` returns the newest capture with `role=pre`,
   an empty `run_id`, and a verified state (FR-103, Risk 3).
-- [ ] T015 [P] [US2] Create the failing contract test
+- [X] T015 [P] [US2] Create the failing contract test
   `tests/contract/upgrade_portal/test_run_create_adopts_precheck.py`. Assert
   `POST /api/sites/<site_id>/runs` writes the `capture_for_run` edge with role
   `pre` to the new run and sets the run pre-check field (Delta H3, FR-103).
 
 ### Implementation for User Story 2
 
-- [ ] T016 [US2] Add `latest_standalone_precheck(site_id)` to
+- [X] T016 [US2] Add `latest_standalone_precheck(site_id)` to
   `src/upgrade_portal/capture/store.py`. Filter role `pre`, an empty `run_id`, and
   a verified state. Read the newest by date (FR-103, Risk 3). Depends on Phase A.
-- [ ] T017 [US2] In `src/upgrade_portal/app/routes/upgrade.py::create_run`
+- [X] T017 [US2] In `src/upgrade_portal/app/routes/upgrade.py::create_run`
   (~line 766): adopt the newest verified standalone pre-check, write the `pre`
   edge, and set the run pre-check field. Keep the existing lock refusal and the
   live-run refusal in front of the adoption (Delta H3, FR-103, FR-104, FR-105).
-- [ ] T018 [US2] Add the start-upgrade control and its error region to
+- [X] T018 [US2] Add the start-upgrade control and its error region to
   `src/upgrade_portal/app/assets/templates/capture/capture.html`. Use the test
   identifiers `capture-start-upgrade-button` and `capture-start-upgrade-error`
   (Delta U1, FR-101).
-- [ ] T019 [US2] In `src/upgrade_portal/app/assets/static/js/portal.js`: post
+- [X] T019 [US2] In `src/upgrade_portal/app/assets/static/js/portal.js`: post
   `POST /api/sites/<site_id>/runs`, read the new run identifier, open the options
   page, and render a refusal that names the lock holder or the unfinished run
   (FR-102, FR-104, FR-105). Shared file: sequence before US3 and US6 edits.
 
 ### Contract updates for User Story 2
 
-- [ ] T020 [P] [US2] Update
+- [X] T020 [P] [US2] Update
   `specs/1823-upgrade-capture-portal/contracts/http-api.md` for Delta H3 (the run
   create adopts a standalone pre-check) and
   `specs/1823-upgrade-capture-portal/contracts/ui-testids.md` for Delta U1 (the two
@@ -210,11 +210,11 @@ page with no typed address.
 
 ### Browser journey and checkpoint for User Story 2
 
-- [ ] T021 [US2] Update the browser test
+- [X] T021 [US2] Update the browser test
   `tests/e2e/upgrade_portal/test_capture.py`. Walk from the site list, to the
   capture view, to the options page, to the confirm page, with no typed address
   (FR-106, SC-018).
-- [ ] T022 [US2] Run the US2 gate. Confirm T014, T015, and T021 pass. Run `ruff`,
+- [X] T022 [US2] Run the US2 gate. Confirm T014, T015, and T021 pass. Run `ruff`,
   `black --check`, and `mypy` strict on `src/upgrade_portal/capture/store.py` and
   `src/upgrade_portal/app/routes/upgrade.py`. Confirm the browser reaches the
   confirm page with no typed address. US2 is now independently testable.
@@ -238,36 +238,36 @@ reload. Confirm the banner reports the operator as the holder.
 
 ### Tests for User Story 3 (write first, ensure they FAIL)
 
-- [ ] T023 [P] [US3] Create the failing unit test
+- [X] T023 [P] [US3] Create the failing unit test
   `tests/unit/upgrade_portal/test_lock_record_empty_run.py`. Assert the stored lock
   record holds an empty run string, never the text `None`, when the lock names no
   run (FR-112, Risk 4).
-- [ ] T024 [P] [US3] Create the failing contract test
+- [X] T024 [P] [US3] Create the failing contract test
   `tests/contract/upgrade_portal/test_capture_start_lock_grant.py`. Assert the 202
   answer carries the `lock` object after a lock take, and holds no `lock` object on
   a refusal and on a start with no owner (Delta H1, FR-109, FR-111, Risk 5).
 
 ### Implementation for User Story 3
 
-- [ ] T025 [US3] In `src/upgrade_portal/runtime/lock.py`: ensure the stored run
+- [X] T025 [US3] In `src/upgrade_portal/runtime/lock.py`: ensure the stored run
   value is an empty string, never `str(None)` (`LockRecord.run_id` ~line 564,
   `LockRequest.run_id` ~line 727) (FR-112, Risk 4).
-- [ ] T026 [US3] In `src/upgrade_portal/app/routes/capture.py`: thread the grant
+- [X] T026 [US3] In `src/upgrade_portal/app/routes/capture.py`: thread the grant
   from `capture_conflict` (~line 814) and `take_site_lock` (~line 761) through
   `launch_capture` into the 202 body. Send the grant on the success answer only
   (Delta H1, FR-109, Risk 5).
-- [ ] T027 [US3] In `src/upgrade_portal/app/assets/static/js/portal.js`: on a
+- [X] T027 [US3] In `src/upgrade_portal/app/assets/static/js/portal.js`: on a
   capture-start success, read the grant and call the existing painters
   `paintLockHeld` (~line 1928) and `startLockBeat` (~line 2185). Add no new painter
   (FR-107, FR-108, FR-110). Shared file: this edit lands before the US6 edit.
 
 ### Contract update and checkpoint for User Story 3
 
-- [ ] T028 [P] [US3] Update
+- [X] T028 [P] [US3] Update
   `specs/1823-upgrade-capture-portal/contracts/http-api.md` for Delta H1 (the 202
   answer carries the lock grant after a lock take). Update the source anchor
   comments in the same commit.
-- [ ] T029 [US3] Run the US3 gate. Confirm T023 and T024 pass. Run `ruff`,
+- [X] T029 [US3] Run the US3 gate. Confirm T023 and T024 pass. Run `ruff`,
   `black --check`, and `mypy` strict on `src/upgrade_portal/runtime/lock.py` and
   `src/upgrade_portal/app/routes/capture.py`. Confirm the banner reports the true
   holder with no reload (SC-019) and the lock survives one renewal period (SC-020).
@@ -289,7 +289,7 @@ true client count and the return rate reads correctly.
 
 ### Tests for User Story 4 (write first, ensure it FAILS)
 
-- [ ] T030 [P] [US4] Create the failing unit test
+- [X] T030 [P] [US4] Create the failing unit test
   `tests/unit/upgrade_portal/test_compare_client_present_counts.py`. Compare two
   identical captures and assert the present count equals the client count. Guard
   against a double count. Assert a genuine empty section still reads zero. Assert
@@ -298,19 +298,19 @@ true client count and the return rate reads correctly.
 
 ### Implementation for User Story 4
 
-- [ ] T031 [US4] In `src/upgrade_portal/compare/clients.py`: add `proved_present`
+- [X] T031 [US4] In `src/upgrade_portal/compare/clients.py`: add `proved_present`
   to `ClientComparison` and add a section-size reader that takes the larger of the
   two client index sizes. Fill the field in `compare_clients` (~line 494) by
   summing the proved present count over the three skipped sections (wired,
   wireless, guest) (D3, FR-113, FR-114).
-- [ ] T032 [US4] In `src/upgrade_portal/compare/statistics.py::count_clients`
+- [X] T032 [US4] In `src/upgrade_portal/compare/statistics.py::count_clients`
   (~line 338): add the proved present count to the present count. The return rate
   reads the corrected present count with no further change (D3, FR-115). Depends on
   T031.
 
 ### Checkpoint for User Story 4
 
-- [ ] T033 [US4] Run the US4 gate. Confirm T030 passes. Run `ruff`,
+- [X] T033 [US4] Run the US4 gate. Confirm T030 passes. Run `ruff`,
   `black --check`, and `mypy` strict on `src/upgrade_portal/compare/clients.py` and
   `src/upgrade_portal/compare/statistics.py`. Confirm the `to_dict` form still names
   only `client_deltas` and `skipped_sections`. Re-run the existing
@@ -333,7 +333,7 @@ unreachable lock store.
 
 ### Tests for User Story 5 (write first, ensure it FAILS)
 
-- [ ] T034 [P] [US5] Create the failing unit test
+- [X] T034 [P] [US5] Create the failing unit test
   `tests/unit/upgrade_portal/test_lock_banner_site_unknown.py`. Assert an empty
   site identifier reads the `site_unknown` state. Assert the `unknown` state stays
   reserved for an unreachable store. Assert a run identifier that resolves to no
@@ -341,21 +341,21 @@ unreachable lock store.
 
 ### Implementation for User Story 5
 
-- [ ] T035 [US5] In `src/upgrade_portal/app/routes/select.py`: add the
+- [X] T035 [US5] In `src/upgrade_portal/app/routes/select.py`: add the
   `site_unknown` state constant and return it from `lock_banner_context`
   (~line 1790) when the site identifier is empty. Keep `site_lock_state`
   (~line 614) `unknown` reserved for an unreachable store (D5, FR-118, FR-119).
-- [ ] T036 [US5] Add one sentence for the `site_unknown` state to
+- [X] T036 [US5] Add one sentence for the `site_unknown` state to
   `src/upgrade_portal/app/assets/templates/partials/lock_banner.html`. Do not
   change the `held`, `free`, `locked`, or `unknown` wording (D5, FR-119).
 
 ### Contract update and checkpoint for User Story 5
 
-- [ ] T037 [P] [US5] Update
+- [X] T037 [P] [US5] Update
   `specs/1823-upgrade-capture-portal/contracts/site-lock.md` for Delta S1 (the
   fifth banner state `site_unknown`). Update the source anchor comments in the same
   commit.
-- [ ] T038 [US5] Run the US5 gate. Confirm T034 passes. Run `ruff`,
+- [X] T038 [US5] Run the US5 gate. Confirm T034 passes. Run `ruff`,
   `black --check`, and `mypy` strict on `src/upgrade_portal/app/routes/select.py`.
   Confirm a page with a resolvable site reports a lock state that agrees with every
   other page in the session (FR-119).
@@ -378,7 +378,7 @@ version controls stay dropdowns. Confirm every default is unchanged.
 
 ### Tests for User Story 6 (write first, ensure it FAILS)
 
-- [ ] T039 [P] [US6] Update the contract test
+- [X] T039 [P] [US6] Update the contract test
   `tests/contract/upgrade_portal/test_upgrade_options.py`. Read the new group and
   option identifiers (`upgrade-strategy-group`, `upgrade-reboot-group`,
   `upgrade-junos-file-action-group`). Assert the saved body keeps the three field
@@ -387,7 +387,7 @@ version controls stay dropdowns. Confirm every default is unchanged.
 
 ### Implementation for User Story 6
 
-- [ ] T040 [US6] Convert three controls to radio groups in
+- [X] T040 [US6] Convert three controls to radio groups in
   `src/upgrade_portal/app/assets/templates/upgrade/options.html`. Add
   `upgrade-strategy-group` with `upgrade-strategy-big-bang` and
   `upgrade-strategy-canary`; `upgrade-reboot-group` with `upgrade-reboot-yes` and
@@ -396,17 +396,17 @@ version controls stay dropdowns. Confirm every default is unchanged.
   version dropdowns `upgrade-version-select-all` and `upgrade-version-select-<mac>`
   (D6, FR-122). Keep the defaults: strategy all-at-once, reboot yes, Junos file
   action no (FR-123).
-- [ ] T041 [US6] In `src/upgrade_portal/app/assets/static/js/portal.js`: read the
+- [X] T041 [US6] In `src/upgrade_portal/app/assets/static/js/portal.js`: read the
   checked radio for each group. Replace the `UPGRADE_REBOOT_TESTID`,
   `UPGRADE_JUNOS_TESTID`, and `UPGRADE_STRATEGY_TESTID` constants (~lines 72-74)
   with the new group identifiers. Keep the saved body field names and defaults
   (D6, FR-124). Shared file: land this edit after the US3 edit T027.
-- [ ] T042 [P] [US6] Style the radio groups in
+- [X] T042 [P] [US6] Style the radio groups in
   `src/upgrade_portal/app/assets/static/css/portal.css`.
 
 ### RISK task - retire every old identifier (US6)
 
-- [ ] T043 [US6] **Find and update every existing test and asset that reads a
+- [X] T043 [US6] **Find and update every existing test and asset that reads a
   retired identifier.** Grep `tests/` and
   `specs/1823-upgrade-capture-portal/contracts/` for `upgrade-strategy-select`,
   `upgrade-reboot-toggle`, and `upgrade-junos-file-action-toggle`. Update each hit
@@ -418,14 +418,14 @@ version controls stay dropdowns. Confirm every default is unchanged.
 
 ### Contract update, browser journey, and checkpoint for User Story 6
 
-- [ ] T044 [P] [US6] Update
+- [X] T044 [P] [US6] Update
   `specs/1823-upgrade-capture-portal/contracts/ui-testids.md` for Delta U2 (retire
   the three old identifiers; add the group and option identifiers; the version
   identifiers do not change). Update the source anchor comments in the same commit.
-- [ ] T045 [US6] Update the browser test
+- [X] T045 [US6] Update the browser test
   `tests/e2e/upgrade_portal/test_upgrade.py`. Drive the three radio groups through
   the options page with the new identifiers (FR-121). Depends on T043.
-- [ ] T046 [US6] Run the US6 gate. Confirm T039 and T045 pass. Run `ruff`,
+- [X] T046 [US6] Run the US6 gate. Confirm T039 and T045 pass. Run `ruff`,
   `black --check`, and `mypy` strict on the touched source. Grep `src/`, `tests/`,
   and `specs/1823-upgrade-capture-portal/` and confirm zero retired identifiers
   remain (FR-124, Risk 6).
@@ -445,14 +445,14 @@ row names the value before and the value after.
 
 ### Implementation for User Story 7
 
-- [ ] T047 [US7] Amend `specs/1823-upgrade-capture-portal/spec.md`. Rewrite FR-065
+- [X] T047 [US7] Amend `specs/1823-upgrade-capture-portal/spec.md`. Rewrite FR-065
   and FR-066 to describe one device difference table and one client difference
   table, each sorted by address. Rewrite User Story 2 Acceptance Scenario 1 to
   match. Amend FR-017 for the radio groups and the version-list dropdown exception.
   Align the User Story 2 and User Story 3 story text. Record the reason for the
   single difference table (D7, FR-125, FR-126, FR-127). This task is the sole owner
   of parent `spec.md` edits, so US6 does not also edit `spec.md`.
-- [ ] T048 [US7] Confirm no code change is needed. Read
+- [X] T048 [US7] Confirm no code change is needed. Read
   `src/upgrade_portal/compare/render.py` and confirm it already builds one device
   difference table and one client difference table (D7). Re-run
   `tests/unit/upgrade_portal/test_compare_render.py` to confirm the view is
@@ -466,7 +466,7 @@ row names the value before and the value after.
 
 **Purpose**: Confirm the batch-wide gates on every touched file.
 
-- [ ] T049 [P] Audit the Constitution gates on every file that US1 through US6
+- [X] T049 [P] Audit the Constitution gates on every file that US1 through US6
   touched. Confirm each new line carries an inline WHY comment. Confirm each
   operation logs before and after with ASCII `%s` records. Confirm each new or
   edited function stays within 5 parameters and 25 lines. Files: `capture/assembly.py`,
@@ -474,7 +474,7 @@ row names the value before and the value after.
   `app/routes/upgrade.py`, `app/routes/select.py`, `runtime/lock.py`,
   `compare/clients.py`, `compare/statistics.py`, and the touched templates, the
   `portal.js` file, and `portal.css`.
-- [ ] T050 **FINAL VERIFICATION - run every quality gate from the repository root.**
+- [X] T050 **FINAL VERIFICATION - run every quality gate from the repository root.**
   All must pass with no regression against the T001 baseline.
   - `python -m ruff check .`
   - `python -m black --check .`
