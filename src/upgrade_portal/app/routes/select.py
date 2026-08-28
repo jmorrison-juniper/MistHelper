@@ -1548,8 +1548,8 @@ def build_lock_request(org_id: str, site_id: str) -> lock.LockRequest | None:
         org_id=org_id,  # The organization half of the Redis key.
         site_id=site_id,  # The site half of the same key.
         owner=owner,  # FR-073 pairs the address with the browser.
-        run_id=str(body.get(RUN_FIELD, "")),  # An empty value means no run exists yet.
-        confirmation_text=str(body.get(CONFIRM_FIELD, "")),  # FR-079 fixes the letter case, so nothing changes here.
+        run_id=str(body.get(RUN_FIELD) or ""),  # A null value and a missing key both mean no run.
+        confirmation_text=str(body.get(CONFIRM_FIELD) or ""),  # The same rule. A null must not read as text.
     )
 
 
