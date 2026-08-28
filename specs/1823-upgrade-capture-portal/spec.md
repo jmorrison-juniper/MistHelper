@@ -255,7 +255,9 @@ with the same rows and the same statistics.
 
 1. **Given** a completed upgrade run exists for a site, **When** the operator
    opens the history view for that site, **Then** the portal lists every stored
-   capture set with its date and its device type.
+   capture set with its date and with the device types that the capture set
+   holds. If the capture set holds no device, the portal shows the text
+   `No device type`. The portal never shows an empty cell there.
 2. **Given** the operator selected a stored capture set, **When** the portal
    renders it, **Then** the portal shows the same tables and the same statistics
    as on the day of the upgrade.
@@ -374,6 +376,23 @@ with the same rows and the same statistics.
   writes firmware, because an interrupted write can leave a device unusable. If
   the cloud offers no cancel action for that device type, say so plainly and do
   not claim a cancellation.
+
+### Session 2026-08-27
+
+- Q: User Story 6 asks the history view to name the device type of each stored
+  capture set. Which device type does the view name? → A: The view names the
+  device types that the capture set itself holds. The view also names the count
+  of each type, such as `1 gateway, 1 switch, 6 access points`. Four facts
+  settle the answer. First, one capture reads every device type at one time, so
+  one stored capture set holds gateways, switches, and access points together
+  and has no single device type. Second, the upgrade run holds no single device
+  type either, because section 4.2 of `data-model.md` puts `device_type` on one
+  entry of `targets` and one run can carry many entries. Third, defect #2096
+  leaves the run collection empty, so a stored capture cannot reach its run
+  today. Fourth, the stored `counts` map already travels with every history row,
+  so the view names the device types at no extra read. A view that named the
+  run instead would show an empty column today and could not name one type after
+  the repair of #2096.
 
 ## Requirements *(mandatory)*
 
@@ -621,6 +640,15 @@ with the same rows and the same statistics.
 
 - **FR-084**: The portal MUST let an operator retrieve a stored capture set by
   site and by date.
+- **FR-084a**: The history view MUST name the device types that each stored
+  capture set holds, and MUST name the count of each type. The view MUST read
+  the three device names of the stored `counts` map, and MUST list them in the
+  cascade order of gateway, switch, and access point. If the capture set holds
+  no device, the view MUST show the text `No device type`, and MUST NOT show an
+  empty cell.
+- **FR-084b**: The history view MUST keep the role column beside the device type
+  column. The role names the place of the capture in one run, and the device
+  types name the contents of the capture. The two columns answer two questions.
 - **FR-085**: A stored capture set MUST render with the same tables, the same
   statistics, and the same download content as on the day of the upgrade.
 

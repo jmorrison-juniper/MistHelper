@@ -286,41 +286,50 @@
  */
 .history-table {
     table-layout: fixed;
-    min-width: 52rem;
+    /* WHY 58rem and not 52rem: the device type column joined this table, so the
+     * eight earlier columns would each lose room at the old width. */
+    min-width: 58rem;
 }
 
-/* The eight column widths total 100 percent. The two text columns take the
- * largest share, and the action column keeps enough width for the control. */
+/* The nine column widths total 100 percent. The capture identifier and the
+ * device type phrase take the largest share, and the action column keeps
+ * enough width to hold the control on one line. */
 .history-table thead th:nth-child(1) {
-    width: 24%;
+    width: 20%;
 }
 
 .history-table thead th:nth-child(2) {
-    width: 16%;
+    width: 14%;
 }
 
 .history-table thead th:nth-child(3) {
-    width: 7%;
+    width: 6%;
 }
 
 .history-table thead th:nth-child(4) {
-    width: 11%;
+    width: 9%;
 }
 
 .history-table thead th:nth-child(5) {
-    width: 8%;
+    width: 7%;
 }
 
+/* The device type column holds a phrase such as `1 gateway, 1 switch, 6 access
+ * points`, so it takes the second largest share. */
 .history-table thead th:nth-child(6) {
-    width: 8%;
+    width: 18%;
 }
 
 .history-table thead th:nth-child(7) {
-    width: 13%;
+    width: 7%;
 }
 
 .history-table thead th:nth-child(8) {
-    width: 13%;
+    width: 9%;
+}
+
+.history-table thead th:nth-child(9) {
+    width: 10%;
 }
 
 /* The row header of this table reads as a plain cell. `.portal-table` styles
