@@ -46,6 +46,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from importlib import import_module
 from inspect import signature
 from types import ModuleType
@@ -94,6 +95,7 @@ OUTCOME_FIELD = "outcome"
 SITE_ID_FIELD = "site_id"
 SITE_NAME_FIELD = "site_name"
 CAPTURE_ID_FIELD = "capture_id"
+STARTED_AT_FIELD = "started_at"
 CAPTURES_FIELD = "captures"
 RUNS_FIELD = "runs"
 TOTAL_FIELD = "total"
@@ -143,6 +145,14 @@ COMPARE_TEMPLATE = "review/compare.html"
 COMPARE_SELECT_TEMPLATE = "review/compare_select.html"
 HISTORY_TEMPLATE = "review/history.html"
 FALLBACK_TEMPLATE = "layout.html"
+
+# The short moment of one history row. The store writes
+# `datetime.now(tz=UTC).isoformat()`, which holds 32 characters and wraps across
+# four lines in the narrow moment column of issue #2106. The short form holds 20
+# characters and fits one line. The page keeps the stored value in a `title`
+# attribute, so the operator still reads the second and the microsecond.
+MOMENT_TEXTS_FIELD = "moment_texts"
+MOMENT_TEXT_FORMAT = "%Y-%m-%d %H:%M UTC"
 
 COMPARE_PAGE_TITLE = "Capture comparison"
 PICKER_PAGE_TITLE = "Choose two captures"
@@ -1175,6 +1185,65 @@ def history_row(row: Mapping[str, Any]) -> dict[str, Any]:
     return shaped
 
 
+def short_moment(value: Any) -> str:
+    """Return one stored moment in a short form that fits one line.
+
+    Why:
+        ``capture/assembly.py`` writes ``datetime.now(tz=UTC).isoformat()``,
+        which holds 32 characters. Issue #2106 measured that text across four
+        lines in the moment column, and one row then stood 113 pixels tall. The
+        short form holds the day and the minute, which is enough to tell two
+        captures apart. The page keeps the stored text in a ``title``
+        attribute, so the second and the microsecond stay reachable.
+
+        A value this reader cannot parse comes back unchanged. A later release
+        of the store may write another shape, and a page that dropped the value
+        would leave the operator with an empty cell.
+
+    Args:
+        value: The moment as the store holds it.
+
+    Returns:
+        The short moment, the value unchanged, or an empty text.
+    """
+    if not isinstance(value, str):  # A partial record can hold None under this name.
+        return ""
+    try:
+        moment = datetime.fromisoformat(value)  # Reads the offset form and the trailing Z form.
+    except ValueError:  # A shape this reader does not know stays as it stands.
+        return value
+    if moment.tzinfo is None:  # The store writes UTC, so a moment with no zone is already UTC.
+        moment = moment.replace(tzinfo=UTC)
+    return moment.astimezone(UTC).strftime(MOMENT_TEXT_FORMAT)  # One zone for every row.
+
+
+def moment_texts(rows: Iterable[Mapping[str, Any]]) -> dict[str, str]:
+    """Return the short moment of each history row, under the row key.
+
+    Why:
+        ``compare/render.py`` owns the columns of the table, and its row record
+        is frozen. The page therefore reads the short moment from a map beside
+        the view model, keyed by the capture identifier that each row already
+        carries. A row with no identifier reaches no entry, because one empty
+        key would serve two rows and the page would then show the moment of the
+        wrong capture.
+
+    Args:
+        rows: The history rows of this page.
+
+    Returns:
+        The capture identifier and the short moment of each row.
+    """
+    logger.info("review: the portal shapes the moment text of the history rows")  # Before the work.
+    texts = {
+        capture_id: short_moment(row.get(STARTED_AT_FIELD))  # The row key reaches the short text.
+        for row in rows
+        if (capture_id := text_field(row, CAPTURE_ID_FIELD))  # A row with no key reaches no entry.
+    }
+    logger.debug("review: the portal shaped %s moment texts", len(texts))  # After the work.
+    return texts
+
+
 def read_site_name(rows: Sequence[Mapping[str, Any]]) -> str:
     """Return the site name that the history rows carry.
 
@@ -1392,4 +1461,5 @@ def history_page() -> str:
         signed_in=True,
         site_name=read_site_name(shaped),
         history_view=build_history(shaped, build_window(site_id, limit, offset, total)),
+        moment_texts=moment_texts(shaped),
     )

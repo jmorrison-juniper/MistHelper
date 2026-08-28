@@ -54,6 +54,15 @@
     history-page-previous      - the previous page control
     nav-history                - lives in partials/nav.html, not here
 
+  Why the columns hold a width budget:
+    Issue #2106 measured one row at about 113 pixels. The automatic table
+    layout hands the width to the widest column. The capture identifier holds
+    39 characters and the stored moment holds 32, so those two columns took
+    most of the width. The action column then collapsed, and the Open control
+    printed one letter on each line. portal.css now states the width of each
+    column under the class history-table, and the two long cells clip their
+    text and keep the whole value in a title attribute.
+
   Variables a route supplies:
     page_title   - the heading text and the tab text.
     site_name    - the name of the site the rows belong to.
@@ -62,6 +71,8 @@
                    Each row holds capture_id, started_at, role, capture_status,
                    device_count, client_count, stored_size_bytes,
                    stored_size_text, row_test_id, open_test_id, and open_url.
+    moment_texts - the short moment of each row, keyed by the capture
+                   identifier. review.moment_texts settles every entry.
     theme, themes, signed_in - see layout.html.
 #}
 {% extends 'layout.html' %}
@@ -86,6 +97,14 @@
 {% set previous_url = view.previous_url | default('', true) %}
 {% set site_label = site_name | default('', true) %}
 
+{#
+  The moment map holds the short moment of each row, keyed by the capture
+  identifier. review.moment_texts settles every entry, so the page cuts no text
+  and names no zone. A caller that renders this page without the map still sees
+  a moment, because each cell falls back to the stored value of its own row.
+#}
+{% set moments = moment_texts | default({}, true) %}
+
 {% block title %}{{ page_title | default('Capture history', true) }}{% endblock %}
 
 {% block heading %}<h1>{{ page_title | default('Capture history', true) }}</h1>{% endblock %}
@@ -106,7 +125,7 @@
 </div>
 
 <div class="portal-table-scroll">
-  <table class="portal-table" id="history-table" data-testid="history-table">
+  <table class="portal-table history-table" id="history-table" data-testid="history-table">
     <caption class="visually-hidden">
       The stored captures of the site. Each row holds the moment, the role, the
       state, the device count, the client count, and the stored size.
@@ -136,9 +155,21 @@
 
         <tr data-testid="{{ row.row_test_id }}">
 
-          <th scope="row" class="cell-mono">{{ row.capture_id }}</th>
+          {#
+            The identifier holds 39 characters, and the column holds less. The
+            cell class clips the text and shows an ellipsis, and the title
+            attribute keeps the whole value. An operator who quotes the
+            identifier in a support case therefore loses nothing.
+          #}
+          <th scope="row" class="cell-mono cell-capture" title="{{ row.capture_id }}">{{ row.capture_id }}</th>
 
-          <td>{{ row.started_at }}</td>
+          {#
+            The cell shows the short moment and holds the stored moment. The
+            map arrives ready from review.moment_texts, so the page cuts no
+            text and names no zone. A row that reaches no entry falls back to
+            the stored value, which is long but true.
+          #}
+          <td class="cell-moment" title="{{ row.started_at }}">{{ moments[row.capture_id] | default(row.started_at, true) }}</td>
 
           {#
             The role reads pre or post in the store. The page prints the stored
@@ -161,7 +192,13 @@
           #}
           <td class="cell-number" data-size-bytes="{{ row.stored_size_bytes }}">{{ row.stored_size_text }}</td>
 
-          <td>
+          {#
+            The action cell never wraps. Issue #2106 shows the control as the
+            four letters O, p, e, and n, one letter on each line, because the
+            column collapsed. portal.css holds the width budget of the column
+            and the no-wrap rule of this cell.
+          #}
+          <td class="cell-action">
             <a class="portal-button portal-button-primary"
                data-testid="{{ row.open_test_id }}"
                href="{{ row.open_url }}">Open</a>
