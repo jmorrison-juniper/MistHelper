@@ -10,8 +10,11 @@ Why:
     that roamed to another access point is on the network, so counting the
     roam as a loss would raise a false alarm on every busy site.
 
-    A count of zero after a digest skip means the comparison did no work in
-    that section, not that the section is empty. The comparison body carries
+    A digest match skips a section, and the comparison then reads no row
+    there. The device counts still report the truth. The device comparison
+    counts the devices of the skipped section, and the digest proves every
+    one of them unchanged. A client count of zero after a skip still means
+    the comparison did no work in that section. The comparison body carries
     ``skipped_sections`` beside these counts for that reason.
 """
 
@@ -310,6 +313,11 @@ def count_devices(comparison: device_compare.DeviceComparison) -> DeviceCounts:
         The counter reads the outcome of each record, so the counts can never
         drift from the table that the operator reads beside them.
 
+        A digest match leaves no record to read. The counter then adds the
+        proved count, because the match proves every device of that section
+        unchanged. This count is the number that shows an upgrade did no
+        harm, so it must never read as zero for a site full of devices.
+
     Args:
         comparison: The device half of the comparison.
 
@@ -317,8 +325,9 @@ def count_devices(comparison: device_compare.DeviceComparison) -> DeviceCounts:
         The five device counts.
     """
     deltas = comparison.deltas
+    read = device_compare.count_outcome(deltas, device_compare.OUTCOME_UNCHANGED)  # WHY: The rows the counter saw.
     return DeviceCounts(
-        unchanged=device_compare.count_outcome(deltas, device_compare.OUTCOME_UNCHANGED),
+        unchanged=read + comparison.proved_unchanged,  # WHY: One of the two numbers is always zero.
         changed=device_compare.count_outcome(deltas, device_compare.OUTCOME_CHANGED),
         added=device_compare.count_outcome(deltas, device_compare.OUTCOME_ADDED),
         removed=device_compare.count_outcome(deltas, device_compare.OUTCOME_REMOVED),
@@ -374,7 +383,8 @@ def build_statistics(
         elapsed_seconds=max(elapsed_seconds, 0.0),
     )
     logger.info(
-        "Upgrade portal rolled up %s changed devices and %s missing clients",
+        "Upgrade portal rolled up %s unchanged devices, %s changed devices, and %s missing clients",
+        statistics.devices.unchanged,
         statistics.devices.changed,
         statistics.clients.missing,
     )
