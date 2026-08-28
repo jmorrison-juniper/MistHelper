@@ -259,6 +259,27 @@ class BootstrapReport:
 
 
 @dataclass(frozen=True, slots=True)
+class RepairReport:
+    """The outcome of the one-time dangling edge repair.
+
+    Why:
+        The portal logs one line at start. The report gives that line the
+        facts, and a test reads the same report. Issue 2096 left edges that
+        point at a run that never existed, and this report counts how many the
+        repair removed.
+
+    Attributes:
+        scanned: The number of edges the repair read.
+        removed: The number of dangling edges the repair removed.
+        database_available: True when the repair reached the database.
+    """
+
+    scanned: int
+    removed: int
+    database_available: bool
+
+
+@dataclass(frozen=True, slots=True)
 class _Target:
     """The write target for one kind of document.
 
@@ -672,11 +693,13 @@ def bootstrap_storage(database: Any = None) -> BootstrapReport:
     collections = tuple(name for name, edge in _COLLECTIONS if _ensure_collection(handle, name, edge))
     indexes = tuple(plan.name for plan in INDEX_PLAN if _ensure_index(handle, plan))
     edge_ready = _edge_index_present(handle)
+    repair = repair_dangling_edges(handle)  # Issue 2096. One pass for each worker at start clears old dangling edges.
     logger.info(
-        "Upgrade portal storage ready, collections=%s, indexes=%s, edge_index=%s",
+        "Upgrade portal storage ready, collections=%s, indexes=%s, edge_index=%s, edges_removed=%s",
         len(collections),
         len(indexes),
         edge_ready,
+        repair.removed,  # The count of dangling edges the repair cleared this start.
     )
     return BootstrapReport(collections, indexes, edge_ready, True)
 
@@ -1525,6 +1548,144 @@ def _link_capture_to_run(capture: Mapping[str, Any], database: Any) -> None:
         capture_key,  # The capture that holds no link.
         outcome.reason,  # The machine name of the failure.
     )
+
+
+# ---------------------------------------------------------------------------
+# The one-time repair of dangling edges (issue 2096)
+# ---------------------------------------------------------------------------
+
+# WHY: The scan reads every edge of the capture_for_run collection. The name
+# comes from a module constant, so no caller text reaches the query.
+_EDGE_SCAN_QUERY = "FOR edge IN " + EDGE_COLLECTION + " RETURN edge"
+
+
+def _edge_run_key(edge: Mapping[str, Any]) -> str:
+    """Return the run key that one edge names in its ``_from`` field.
+
+    Why:
+        The edge stores its run as ``upgrade_runs/run-xxxx``. The repair reads
+        the run key alone, so it can look the run up by key.
+
+    Args:
+        edge: The edge document.
+
+    Returns:
+        The run key, or an empty string when the ``_from`` field names no run.
+    """
+    origin = str(edge.get("_from", ""))  # The handle of the run, with the collection prefix.
+    prefix = RUN_COLLECTION + "/"  # The prefix that every run handle carries.
+    return origin[len(prefix) :] if origin.startswith(prefix) else ""  # The key alone, or nothing.
+
+
+def _run_absent(database: Any, run_key: str) -> bool | None:
+    """Report whether the run of one edge is absent. None means the read failed.
+
+    Why:
+        The repair removes an edge only when its run does not exist. A read that
+        raises is not proof of absence, so the repair leaves that edge and this
+        function reports the failed read.
+
+    Args:
+        database: The database handle.
+        run_key: The key of the run to read.
+
+    Returns:
+        True when the run is absent. False when it exists. None when the read
+        failed.
+    """
+    if not run_key:  # A broken handle names no run, so no run document exists for it.
+        return True
+    try:
+        stored = database.collection(RUN_COLLECTION).get(run_key)  # The run document, or None when absent.
+    except Exception as error:  # A failed read is not proof of absence, so the edge stays.
+        logger.warning("Upgrade portal could not read run %s for a repair: %s", run_key, type(error).__name__)
+        return None
+    return stored is None  # A clean None means the run is truly absent.
+
+
+def _remove_edge(database: Any, edge_key: str) -> bool:
+    """Remove one edge by key.
+
+    Why:
+        A dangling edge points at a run that never existed, so the removal
+        frees the history view. A lost removal hides no capture, because the
+        capture names its run.
+
+    Args:
+        database: The database handle.
+        edge_key: The key of the edge to remove.
+
+    Returns:
+        True when the driver accepted the removal.
+    """
+    try:
+        database.collection(EDGE_COLLECTION).delete(edge_key)  # The next scan no longer sees this edge.
+    except Exception as error:  # A failed removal loses no capture, so the repair reports it and moves on.
+        logger.warning("Upgrade portal could not remove edge %s: %s", edge_key, type(error).__name__)
+        return False
+    return True
+
+
+def _repair_one_edge(database: Any, edge: Mapping[str, Any]) -> bool:
+    """Remove one edge when its run is absent, and leave every other edge.
+
+    Args:
+        database: The database handle.
+        edge: The edge document.
+
+    Returns:
+        True when the repair removed the edge.
+    """
+    edge_key = str(edge.get("_key", ""))  # Names the edge in each log record below.
+    run_key = _edge_run_key(edge)  # The run the edge points at.
+    absent = _run_absent(database, run_key)  # True absent, False live, None on a failed read.
+    if not absent:  # A live edge and a failed read both keep the edge.
+        return False
+    logger.info("Upgrade portal removes dangling edge %s, because run %s is absent", edge_key, run_key)
+    removed = _remove_edge(database, edge_key)  # The driver removes the edge from the collection.
+    logger.debug("Upgrade portal removed dangling edge %s, result=%s", edge_key, removed)
+    return removed
+
+
+def _scan_edges(database: Any) -> list[dict[str, Any]]:
+    """Return every edge of the ``capture_for_run`` collection.
+
+    Args:
+        database: The database handle.
+
+    Returns:
+        One copy of each edge document, or an empty list on a failed scan.
+    """
+    return [dict(edge) for edge in _run_aql(database, _EDGE_SCAN_QUERY, {})]  # A read fault reports an empty scan.
+
+
+def repair_dangling_edges(database: Any = None) -> RepairReport:
+    """Remove every capture edge whose run no longer exists.
+
+    Why:
+        Issue 2096 left dangling edges. The old start invented a run for a
+        run-less capture and wrote an edge to that invented run. The run never
+        existed, so the history view walked into nothing. This repair reads
+        every edge, reads the run each edge names before any removal, and
+        removes only an edge whose run is absent. It leaves every capture and
+        every live edge, and a second run removes nothing (D2, FR-098, FR-099).
+
+    Args:
+        database: A database handle for a test. The function opens the shared
+            handle when the caller passes nothing.
+
+    Returns:
+        The repair report.
+    """
+    handle = database if database is not None else connect_database()
+    if handle is None:  # A repair needs the database, so an unreachable store skips the pass.
+        logger.warning("Upgrade portal skipped the dangling edge repair, the document store is out of reach")
+        return RepairReport(0, 0, False)
+    logger.info("Upgrade portal starts the dangling edge repair")  # One record before the scan.
+    edges = _scan_edges(handle)  # Every edge of the collection.
+    removed = sum(1 for edge in edges if _repair_one_edge(handle, edge))  # One removal for each dangling edge.
+    logger.debug("Upgrade portal finished the dangling edge repair, scanned=%s removed=%s", len(edges), removed)
+    return RepairReport(len(edges), removed, True)
 
 
 # ---------------------------------------------------------------------------

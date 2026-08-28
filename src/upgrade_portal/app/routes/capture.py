@@ -83,6 +83,7 @@ COLLECTOR_MODULE = "capture.collector"  # The module that reads a whole site.
 
 LOADER_ATTRIBUTES = ("load_capture", "read_capture", "get_capture")  # The first match wins.
 KEY_ATTRIBUTES = ("capture_key", "build_capture_key")  # The identifier shape belongs to the assembly module.
+STANDALONE_KEY_ATTRIBUTES = ("standalone_capture_key",)  # The nonce key of a run-less capture, from the same module.
 COLLECTOR_ATTRIBUTES = ("run_capture", "collect_capture", "capture_site")  # The same rule for the collector.
 
 TIER_FIELD = "tier"  # The body field that names the data tier.
@@ -454,6 +455,25 @@ def build_capture_id(run_id: str) -> str:
     return f"{KEY_PREFIX}{tail.lower()}-{FIRST_ORDINAL:02d}"  # The lower case matches the key of the store.
 
 
+def build_standalone_capture_id() -> str:
+    """Build the identifier of one run-less capture from a fresh nonce.
+
+    Why:
+        Issue 2096 names the defect. A run-less start invented a run and wrote a
+        dangling edge. This builder asks the assembly module for a nonce key, so
+        the run-less capture stands alone and writes no run and no edge (D1,
+        FR-096). The fallback repeats the same nonce form before that module
+        lands, so the identifier the browser reads is the key the store writes.
+
+    Returns:
+        A capture identifier in the form ``cap-{nonce_hex}-01``.
+    """
+    builder = find_attribute(load_optional_module(ASSEMBLY_MODULE), STANDALONE_KEY_ATTRIBUTES)  # None before it lands.
+    if builder is not None:  # The assembly module owns the one true nonce form.
+        return str(builder())  # The store writes the key this call returns.
+    return f"{KEY_PREFIX}{uuid.uuid4().hex}-{FIRST_ORDINAL:02d}"  # The same rule, spelled out.
+
+
 def default_runner(job: dict[str, Any]) -> None:
     """Read one whole site through the collection module.
 
@@ -606,6 +626,12 @@ def job_context(site: dict[str, Any], org_id: str) -> dict[str, Any]:
 def build_job(site: dict[str, Any], org_id: str, tier: int, body: dict[str, Any]) -> dict[str, Any]:
     """Build the capture job that the worker reads.
 
+    Why:
+        Issue 2096 names the defect. A start with no run invented a run and
+        wrote a dangling edge. A run-less start now names no run and carries a
+        fresh nonce key, so it stands alone as a site pre-check and writes no
+        run and no edge (D1, FR-096).
+
     Args:
         site: The site record of the site the capture reads.
         org_id: The organization that holds the site.
@@ -615,10 +641,11 @@ def build_job(site: dict[str, Any], org_id: str, tier: int, body: dict[str, Any]
     Returns:
         The capture job.
     """
-    run_id = str(body.get(RUN_FIELD) or f"{RUN_PREFIX}{uuid.uuid4().hex}")  # A start with no run names its own.
+    run_id = str(body.get(RUN_FIELD) or "").strip()  # A blank body names no run, so the start stands alone.
+    capture_id = build_capture_id(run_id) if run_id else build_standalone_capture_id()  # A nonce key for no run.
     return {  # The worker reads these eleven fields and nothing else.
-        "capture_id": build_capture_id(run_id),
-        "run_id": run_id,
+        "capture_id": capture_id,
+        "run_id": run_id,  # Empty for a run-less pre-check, so the store writes no edge.
         "ordinal": FIRST_ORDINAL,
         "role": str(body.get(ROLE_FIELD) or DEFAULT_ROLE),
         "org_id": org_id,

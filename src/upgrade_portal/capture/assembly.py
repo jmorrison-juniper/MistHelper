@@ -22,6 +22,7 @@ import json  # Canonical JSON form of a section
 import logging  # Action logging per Constitution VII
 import threading  # Semaphore type of the shared worker shape
 import time  # Monotonic clock, so the duration is measured and never estimated
+import uuid  # Fresh nonce for the key of a run-less capture
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -273,19 +274,22 @@ class CaptureIdentity:
 
     Why:
         The Five-Item Rule caps a record at 5 fields, and the capture document
-        holds 24 top-level fields. This record carries the three fields that
+        holds 24 top-level fields. This record carries the four fields that
         answer which run and which operator. The role is not a field, because
         ``data-model.md:189`` derives the role from the ordinal.
 
     Attributes:
-        run_id: The key of the owning run.
+        run_id: The key of the owning run. Empty for a run-less pre-check.
         ordinal: 1 for the pre-check. 2 for the post-check. Higher for a repeat.
         actor_email: The signed-in operator. Never a credential.
+        standalone_key: The prebuilt key of a run-less capture. Empty for a run
+            capture, which builds its key from the run and the ordinal.
     """
 
     run_id: str
     ordinal: int = FIRST_ORDINAL
     actor_email: str = ""
+    standalone_key: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -426,6 +430,22 @@ def capture_key(run_id: str, ordinal: int) -> str:
         The key in the form ``cap-{run_hex}-{ordinal:02d}``.
     """
     return f"{KEY_PREFIX}{run_hex(run_id)}-{_whole_number(ordinal):02d}"
+
+
+def standalone_capture_key() -> str:
+    """Build the key of one run-less capture from a fresh nonce.
+
+    Why:
+        Issue 2096 names the defect. A run-less capture built the key from an
+        empty run, so it landed under ``cap--01`` and the next run-less capture
+        overwrote it. This builder reads a fresh ``uuid4`` hex nonce in place of
+        the run, so two run-less captures never collide (D1, FR-096). The key
+        keeps the run-capture form, so a reader meets no new shape.
+
+    Returns:
+        A key in the form ``cap-{nonce_hex}-01``.
+    """
+    return f"{KEY_PREFIX}{uuid.uuid4().hex}-{FIRST_ORDINAL:02d}"
 
 
 def tier_of(sections: CaptureSections) -> int:
@@ -1018,7 +1038,7 @@ def _identity_fields(identity: CaptureIdentity, site: SiteIdentity) -> dict[str,
     Returns:
         The eleven identity fields.
     """
-    key = capture_key(identity.run_id, identity.ordinal)
+    key = identity.standalone_key or capture_key(identity.run_id, identity.ordinal)  # A nonce key wins for no run.
     return {
         "_key": key,
         "capture_id": key,
@@ -1353,6 +1373,7 @@ __all__ = [
     "section_digest",
     "sequential_reads",
     "stamp_size",
+    "standalone_capture_key",
     "strip_volatile",
     "tier_of",
     "validate_capture",

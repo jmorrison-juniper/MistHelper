@@ -188,14 +188,23 @@ The portal starts the work in the background and answers at once. `tier` default
 to 2.
 
 The `pre_check_locked` refusal protects the one reading of a site before its
-upgrade. The capture identifier derives from the run alone, so a repeat pre-check
-of the same run carries the identifier of the first one and replaces that stored
-document in place. Before the run sends firmware, that replacement is what the
-operator asked for, and the portal accepts it. After the run sends firmware, the
-new reading describes upgraded devices, and the comparison would then measure the
-upgraded site against itself. The route refuses there, so no worker starts and no
-store write ever opens. The rule reads the run state, so a stopped run and a
-failed run both keep the pre-check they hold.
+upgrade. When the body names a run, the capture identifier derives from that run,
+so a repeat pre-check of the same run carries the identifier of the first one and
+replaces that stored document in place. Before the run sends firmware, that
+replacement is what the operator asked for, and the portal accepts it. After the
+run sends firmware, the new reading describes upgraded devices, and the
+comparison would then measure the upgraded site against itself. The route refuses
+there, so no worker starts and no store write ever opens. The rule reads the run
+state, so a stopped run and a failed run both keep the pre-check they hold.
+
+When the body names no run, the capture identifier derives from a fresh capture
+nonce, so two run-less captures never collide. The capture stands alone as a site
+pre-check. The portal writes no run document and no `capture_for_run` edge for
+that capture (FR-096, FR-100). The `run_id` field of the body reads `null` or
+stays absent for a standalone capture, and the stored capture document then holds
+an empty `run_id` field. The upgrade start adopts that standalone pre-check and
+writes the edge at that time (Delta H3). A one-time repair at start clears any old
+dangling edge that an earlier build wrote for an invented run.
 
 The rule guards the pre-check half alone. The run driver owns the post half and
 gives it the second ordinal, so a post-check writes its own document and collides
