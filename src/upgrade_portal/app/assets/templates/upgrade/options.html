@@ -143,6 +143,11 @@
   <fieldset class="bubble-group mb-3"
             data-testid="upgrade-strategy-group"
             aria-describedby="upgrade-strategy-note">
+    {#
+      Delta U2 shows the strategy as a radio group, so both choices show at
+      once. Big bang writes every device together. Canary writes a small set
+      first. The value strings match the saved strategy field.
+    #}
     <legend class="bubble-group-legend">Upgrade strategy</legend>
 
     <div class="bubble-option">
@@ -221,6 +226,10 @@
   <fieldset class="bubble-group mb-3"
             data-testid="upgrade-junos-file-action-group"
             aria-describedby="upgrade-junos-file-action-note">
+    {#
+      The Junos file action runs after the reboot. The radio group shows both
+      choices at once, so the operator reads the second choice without a menu.
+    #}
     <legend class="bubble-group-legend">Complete the Junos file action after the reboot</legend>
 
     <div class="bubble-option">

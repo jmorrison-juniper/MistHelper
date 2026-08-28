@@ -1294,11 +1294,11 @@
      * @returns {string} The value of the checked radio, or the fallback.
      */
     function checkedRadioValue(groupTestId, fallback) {
-        var group = byTestId(groupTestId);
+        var group = byTestId(groupTestId);  /* The fieldset holds the radios of one choice. */
         if (!group) {
             return fallback;  /* The page drew no group, so the caller keeps the default. */
         }
-        var chosen = group.querySelector('input[type="radio"]:checked');
+        var chosen = group.querySelector('input[type="radio"]:checked');  /* The DOM marks one radio. */
         return chosen ? chosen.value : fallback;  /* The one checked option, or the default. */
     }
 
@@ -1320,14 +1320,14 @@
             return Promise.resolve(null);
         }
 
-        var rebootChoice = checkedRadioValue(UPGRADE_REBOOT_GROUP_TESTID, "yes");
-        var junosChoice = checkedRadioValue(UPGRADE_JUNOS_GROUP_TESTID, "no");
-        var strategyChoice = checkedRadioValue(UPGRADE_STRATEGY_GROUP_TESTID, "big_bang");
+        var rebootChoice = checkedRadioValue(UPGRADE_REBOOT_GROUP_TESTID, "yes");  /* Reboot defaults to yes. */
+        var junosChoice = checkedRadioValue(UPGRADE_JUNOS_GROUP_TESTID, "no");  /* Junos action defaults to no. */
+        var strategyChoice = checkedRadioValue(UPGRADE_STRATEGY_GROUP_TESTID, "big_bang");  /* Strategy defaults to big bang. */
         var payload = {
             targets: collectUpgradeTargets(),
-            reboot: rebootChoice === "yes",
-            junos_file_action: junosChoice === "yes",
-            strategy: strategyChoice
+            reboot: rebootChoice === "yes",  /* The saved field stays a boolean. */
+            junos_file_action: junosChoice === "yes",  /* The saved field stays a boolean. */
+            strategy: strategyChoice  /* The saved field stays the strategy string. */
         };
 
         /* The button stays disabled until the answer arrives. A second click
