@@ -29,6 +29,33 @@ export function TimelineScrubber({ selectedTimestamp, onSelectTimestamp }: Timel
     onSelectTimestamp(timestamp.toISOString().slice(0, 16));
   }
 
+  // A slider must answer the keyboard as well as the pointer. Without this a
+  // keyboard user reaches the control with the tab key and can then do nothing
+  // with it, which the jsx-a11y click-events-have-key-events rule refuses.
+  function handleBarKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    const current = selected ? selected.getTime() : now.getTime();  // No choice yet means start at the newest moment.
+    const step = event.shiftKey ? 7 * dayMs : dayMs;  // The shift key moves a week, so a long range needs few presses.
+    let next: number | null = null;  // Null means this key carries no meaning for a slider.
+
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') {
+      next = current - step;  // Both keys move toward the older end, which matches the native slider.
+    } else if (event.key === 'ArrowRight' || event.key === 'ArrowUp') {
+      next = current + step;  // Both keys move toward the newer end.
+    } else if (event.key === 'Home') {
+      next = rangeStart.getTime();  // Home jumps to the oldest moment the range holds.
+    } else if (event.key === 'End') {
+      next = now.getTime();  // End jumps to the newest moment.
+    }
+
+    if (next === null) {
+      return;  // Let every other key reach the browser, so tab and the shortcuts still work.
+    }
+
+    event.preventDefault();  // Stop the page scrolling under an arrow key press.
+    const bounded = Math.max(rangeStart.getTime(), Math.min(now.getTime(), next));  // Never leave the range.
+    onSelectTimestamp(new Date(bounded).toISOString().slice(0, 16));  // The same shape the click path sends.
+  }
+
   const markerPosition = selected ? getPositionPercent(selected) : null;
 
   return (
@@ -46,6 +73,7 @@ export function TimelineScrubber({ selectedTimestamp, onSelectTimestamp }: Timel
         onMouseUp={() => setIsDragging(false)}
         onMouseLeave={() => setIsDragging(false)}
         onMouseMove={(e) => { if (isDragging) handleBarClick(e); }}
+        onKeyDown={handleBarKeyDown}
         role="slider"
         aria-label="Timeline scrubber"
         aria-valuemin={0}
