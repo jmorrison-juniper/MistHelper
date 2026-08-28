@@ -190,6 +190,8 @@ the word and never the class.
 | `compare-filter-{outcome}` | A filter, such as `compare-filter-missing` |
 | `compare-export-csv` | Download as CSV |
 | `compare-export-json` | Download as JSON |
+| `compare-export-full-csv` | Download the full comparison as CSV |
+| `compare-export-full-json` | Download the full comparison as JSON |
 
 ### History
 
