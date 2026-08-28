@@ -349,6 +349,13 @@ class CaptureState(StrEnum):
 CAPTURE_STATE_FIELD = "state"
 
 
+# WHY: The pre-check half of an upgrade names this role. A standalone pre-check
+# holds this role and an empty run, and the run creation adopts the newest such
+# capture (Delta H3, FR-103). The value repeats `assembly.ROLE_PRE` on purpose,
+# so the store stays free of any import of the assembly module.
+STANDALONE_ROLE = "pre"
+
+
 class CaptureStateMachine:
     """Move one capture between the states the data model allows.
 
@@ -1738,6 +1745,22 @@ _LIST_TAIL = (
 )
 _COUNT_TAIL = "  COLLECT WITH COUNT INTO total\n  RETURN total\n"
 
+# WHY: The one query that reads the newest standalone pre-check of a site. Every
+# name below comes from a fixed field of this module and never from caller text,
+# so no operator value reaches the query. Each value travels as a bind instead.
+# The four filters name the site, the pre role, an empty run, and the verified
+# state, and the sort with the limit hands back the newest match alone (FR-103).
+_PRECHECK_QUERY = (
+    "FOR doc IN " + CAPTURE_COLLECTION + "\n"
+    "  FILTER doc.site_id == @site_id\n"
+    "  FILTER doc.role == @role\n"
+    "  FILTER doc.run_id == @empty_run\n"
+    "  FILTER doc." + CAPTURE_STATE_FIELD + " == @verified\n"
+    "  SORT doc.started_at DESC\n"
+    "  LIMIT 1\n"
+    "  RETURN doc\n"
+)
+
 # WHY: The run history row. Every name below comes from the UpgradeRun table of
 # data-model.md section 4 and from `RunRecordBuilder.REQUIRED_FIELDS` in
 # src/upgrade_portal/runtime/runs.py, so the row names the fields the writer
@@ -2002,6 +2025,38 @@ def list_captures(query: CaptureQuery, database: Any = None) -> CaptureListPage:
     return CaptureListPage(tuple(dict(row) for row in rows), total, query.limit, query.offset, True)
 
 
+def latest_standalone_precheck(site_id: str, database: Any = None) -> dict[str, Any] | None:
+    """Return the newest verified standalone pre-check of one site.
+
+    Why:
+        The run creation adopts the newest pre-check that named no run, so an
+        operator never repeats a reading the site already holds. The reader
+        narrows by the site, the pre role, an empty run, and the verified
+        state, then reads the newest by start time (Delta H3, FR-103).
+
+    Args:
+        site_id: The site whose pre-check the run adopts.
+        database: A database handle for a test.
+
+    Returns:
+        The newest matching capture, or None when the site holds none.
+    """
+    logger.info("Upgrade portal reads the newest standalone pre-check of site %s", site_id)  # Name the read.
+    handle = database if database is not None else connect_database()  # A test injects its own handle.
+    if handle is None:  # An unreachable store adopts nothing, so the run creation reads no pre-check.
+        return None  # The caller then creates a run with no adopted pre-check.
+    binds = {  # Every value travels as a bind, so no caller text reaches the query.
+        "site_id": site_id,  # The one site the reader narrows by.
+        "role": STANDALONE_ROLE,  # The pre-check half of the upgrade.
+        "empty_run": "",  # A standalone capture names no run.
+        "verified": CaptureState.VERIFIED.value,  # A comparison trusts a proved reading alone.
+    }
+    rows = _run_aql(handle, _PRECHECK_QUERY, binds)  # The newest match sits first, because the sort is descending.
+    found = rows[0] if rows else None  # An empty answer means the site holds no standalone pre-check.
+    logger.debug("Upgrade portal read %d standalone pre-check rows for site %s", len(rows), site_id)  # Report.
+    return dict(found) if found is not None else None  # A copy stops a caller edit of the stored row.
+
+
 def list_runs(query: RunQuery, database: Any = None) -> RunListPage:
     """Return one page of run rows, newest first.
 
@@ -2119,6 +2174,7 @@ __all__ = [
     "RUN_LIST_FIELDS",
     "RUN_OPERATION",
     "SCHEMA_VERSION",
+    "STANDALONE_ROLE",
     "STORAGE_BACKUP_FILE",
     "STORAGE_DATABASE",
     "STORAGE_NONE",
@@ -2142,6 +2198,7 @@ __all__ = [
     "is_comparable",
     "is_readable_schema_version",
     "is_schema_version",
+    "latest_standalone_precheck",
     "list_captures",
     "list_runs",
     "load_capture",

@@ -107,6 +107,7 @@ PROGRESS_TEMPLATE = "upgrade/progress.html"  # The live run view, which includes
 RUN_STORE_KEY = "RUN_STORE"  # The seam for the run record store.
 LAUNCHER_KEY = "RUN_LAUNCHER"  # The seam that hands one prepared record to the run driver.
 STOP_RUNNER_KEY = "STOP_RUNNER"  # The seam for the cancel work of a stop.
+PRECHECK_ADOPTER_KEY = "PRECHECK_ADOPTER"  # The seam that reads and links a standalone pre-check.
 OPTIONS_BUILDER_KEY = "UPGRADE_OPTIONS_BUILDER"  # The seam for `upgrade/options.py`.
 OPTIONS_VIEW_KEY = "UPGRADE_OPTIONS_VIEW"  # The seam for the device rows of the options page.
 VERSIONS_KEY = "UPGRADE_VERSIONS"  # The version list of each model, for the options page.
@@ -120,6 +121,10 @@ BY_MODEL_FIELD = "by_model"  # `contracts/http-api.md` section 5 fixes this answ
 STORE_READ = "read_run"  # The reader that `runtime/signals.RunRecordStore` asks for.
 STORE_WRITE = "write_run"  # The writer of the same shape.
 STORE_SITE_RUNS = "runs_for_site"  # The site scan that FR-037 asks for. A store may publish none.
+
+ADOPT_READ = "newest_precheck"  # The reader the adopter seam publishes for the newest pre-check.
+ADOPT_WRITE = "write_capture_edge"  # The writer the adopter seam publishes for the pre edge.
+ROLE_PRE = "pre"  # Delta H3 fixes this role for the edge from a run to its adopted pre-check.
 
 CONFIRM_FIELD = "confirm"  # The body field that carries the typed word, for both the start and the stop.
 CONFIRM_TEXT = "CONFIRM"  # FR-033 fixes this exact text and this exact letter case for the start.
@@ -304,6 +309,27 @@ def stop_runner() -> Any | None:
     """
     candidate = injected_object(STOP_RUNNER_KEY)  # The stop work injects one callable here.
     return candidate if callable(candidate) else None  # A value that is not callable counts as unset.
+
+
+def precheck_adopter() -> Any | None:
+    """Return the object that reads and links a standalone pre-check.
+
+    Why:
+        Delta H3 asks the run create call to adopt the newest verified
+        standalone pre-check of the site. The adoption reads the newest key and
+        writes one edge, so it sits behind a seam and a contract test injects a
+        stand-in that reaches no database.
+
+    Returns:
+        The injected adopter with both methods, or None when none is wired.
+    """
+    candidate = injected_object(PRECHECK_ADOPTER_KEY)  # The wiring injects one adopter here.
+    if candidate is None:  # No wiring yet, so the run create call adopts no pre-check.
+        return None  # The creation then leaves the pre-check field empty.
+    if not all(callable(getattr(candidate, name, None)) for name in (ADOPT_READ, ADOPT_WRITE)):  # Wrong shape.
+        logger.error("upgrade: the injected pre-check adopter holds no %s and no %s pair", ADOPT_READ, ADOPT_WRITE)
+        return None  # A wrong shape must not break a run, so the creation adopts nothing.
+    return candidate  # The real adopter, which reads the newest pre-check and writes the edge.
 
 
 def options_builder() -> Any | None:
@@ -760,6 +786,50 @@ def new_run_spec(org_id: str, site_id: str) -> RunSpec:
     )
 
 
+def adopt_precheck(record: dict[str, Any], site_id: str) -> str:
+    """Set the run pre-check field to the newest standalone pre-check.
+
+    Why:
+        Delta H3 asks the run create call to adopt the newest verified
+        standalone pre-check of the site. The field lands before the save, so
+        the stored run names the pre-check at once (FR-103).
+
+    Args:
+        record: The new run record, before the save.
+        site_id: The site the run belongs to.
+
+    Returns:
+        The adopted capture key, or an empty string when the site holds none.
+    """
+    adopter = precheck_adopter()  # The seam that reads the newest standalone pre-check.
+    capture_id = str(adopter.newest_precheck(site_id)) if adopter is not None else ""  # "" means no adoption.
+    if capture_id:  # The site holds a standalone pre-check for this run to adopt.
+        record[PRE_CAPTURE_FIELD] = capture_id  # The saved run then names the pre-check for the later start.
+    return capture_id  # The caller writes the edge after the save proves the run.
+
+
+def link_adopted_precheck(run_id: str, capture_id: str) -> None:
+    """Write the pre edge from one run to its adopted pre-check.
+
+    Why:
+        The history view walks the graph from a run to its two captures. The
+        edge lands after the save, so it never points at a run the store
+        refused (Delta H3, FR-103).
+
+    Args:
+        run_id: The new run the edge starts at.
+        capture_id: The adopted pre-check the edge points at.
+    """
+    if not capture_id:  # The run adopted nothing, so there is no edge to write.
+        return  # A site with no pre-check leaves the graph unchanged.
+    adopter = precheck_adopter()  # The same seam that read the pre-check key.
+    if adopter is None:  # No wiring means no edge, and the run still stands.
+        return  # The creation already answered the operator.
+    logger.info("upgrade: link the run %s to the pre-check %s", run_id, capture_id)  # BEFORE the edge write.
+    adopter.write_capture_edge(run_id, capture_id, ROLE_PRE)  # The edge carries the pre role of Delta H3.
+    logger.debug("upgrade: the run %s now names the pre-check %s", run_id, capture_id)  # AFTER the edge write.
+
+
 @upgrade_bp.post(CREATE_PATH)
 @upgrade_bp.post(CREATE_ALT_PATH)
 @identity.require_session
@@ -787,9 +857,11 @@ def create_run(site_id: str | None = None) -> tuple[Response, int]:
     if refusal is not None:  # One of the two checks stopped the call.
         return refusal  # The body already names the holder or the live run.
     record = RunRecordBuilder().build(new_run_spec(org_id, chosen))  # The record layer owns every field.
+    adopted = adopt_precheck(record, chosen)  # Set the pre-check field before the save (Delta H3).
     logger.info("upgrade: create the run %s for the site %s", record["run_id"], chosen)  # BEFORE the write.
     if not save_run(record):  # The store reports the true result.
         return write_failed()  # The operator retries instead of reading a run that does not exist.
+    link_adopted_precheck(record["run_id"], adopted)  # Write the pre edge after the save proved the run.
     logger.info("upgrade: the run %s holds the state %s", record["run_id"], record["state"])  # AFTER the write.
     return jsonify({"run_id": record["run_id"], "state": record["state"]}), CREATED_STATUS
 

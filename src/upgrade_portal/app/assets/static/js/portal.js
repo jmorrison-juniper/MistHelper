@@ -65,6 +65,11 @@
     var CAPTURE_IDENTIFIER_TESTID = "capture-identifier";
     var CAPTURE_SIZE_TESTID = "capture-size-bytes";
     var CAPTURE_ERROR_TESTID = "capture-error";
+    /* Delta U1 adds the two controls below. contracts/ui-testids.md lines
+     * 120-121 fix both values. The button starts a run for the site of the
+     * verified pre-check, and the region names a refusal. */
+    var CAPTURE_START_UPGRADE_TESTID = "capture-start-upgrade-button";
+    var CAPTURE_START_UPGRADE_ERROR_TESTID = "capture-start-upgrade-error";
 
     /* The upgrade identifiers. contracts/ui-testids.md lines 99-113 fix every
      * value below. */
@@ -108,6 +113,12 @@
     var LOCK_LOST_CODE = "lock_lost";
     var LOCK_CONFIRM_CODE = "confirmation_required";
     var LOCK_HELD_CODE = "site_locked";
+
+    /* The two refusals that a run creation returns. The capture page names the
+     * holder for the first and the live run for the second. upgrade.py lines
+     * 140-162 fix both code strings. */
+    var RUN_SITE_LOCKED_CODE = "site_locked";
+    var RUN_ALREADY_RUNNING_CODE = "upgrade_already_running";
 
     /* The poll stops on these three states. The capture then never changes
      * again, so a further read would add load and would report the same body. */
@@ -539,6 +550,14 @@
         var isVerified = verified === true;
         badge.className = "portal-badge " + (isVerified ? "badge-verified" : "badge-partial");
         badge.textContent = isVerified ? "Verified" : "Not verified";
+
+        /* FR-101 reveals the upgrade path once the capture verifies. The button
+         * ships hidden, so a fresh capture that verifies through the poll shows
+         * the control with no reload. A not-verified poll hides it again. */
+        var upgradeButton = byTestId(CAPTURE_START_UPGRADE_TESTID);
+        if (upgradeButton) {
+            upgradeButton.hidden = !isVerified;
+        }
     }
 
     /**
@@ -882,6 +901,92 @@
     }
 
     /**
+     * Writes one refusal into the start-upgrade error region.
+     *
+     * Why: FR-104 and FR-105 ask the region to name the cause. The region sits
+     * beside the button, so the operator reads the refusal next to the control
+     * that caused it and not in the shared flash region.
+     *
+     * @param {string} text The sentence for the operator.
+     * @returns {void}
+     */
+    function showCaptureUpgradeError(text) {
+        var box = byTestId(CAPTURE_START_UPGRADE_ERROR_TESTID);  /* One region for the two refusals. */
+        if (!box) {  /* A page with no verified capture renders no region. */
+            return;  /* Nothing to write, so the call ends. */
+        }
+        box.textContent = String(text);  /* Text, never markup, so a holder address stays inert. */
+    }
+
+    /**
+     * Builds the sentence that a run-creation refusal shows.
+     *
+     * Why: FR-104 names the holder and FR-105 names the live run. The server
+     * message stays generic, and the identifier rides in the details, so this
+     * helper joins the two into one sentence the operator can act on.
+     *
+     * @param {Error} error An Error from fetchJson.
+     * @returns {string} The sentence for the region.
+     */
+    function nameCaptureUpgradeRefusal(error) {
+        var code = (error && error.code) || "";  /* The stable code decides the wording. */
+        var details = (error && error.details) || {};  /* The identifier rides here, not in the message. */
+        var message = (error && error.message) || "The upgrade could not start.";  /* The generic sentence. */
+        if (code === RUN_SITE_LOCKED_CODE && details.actor_email) {  /* A second operator holds the site. */
+            return message + " The holder is " + details.actor_email + ".";  /* FR-104 names that operator. */
+        }
+        if (code === RUN_ALREADY_RUNNING_CODE && details.run_id) {  /* One run of this site has not finished. */
+            return message + " The open run is " + details.run_id + ".";  /* FR-105 names that run. */
+        }
+        return message;  /* Any other fault keeps the plain server sentence. */
+    }
+
+    /**
+     * Creates a run for the site of this capture and opens the options page.
+     *
+     * Why: FR-101 offers an upgrade from a verified pre-check. FR-102 asks the
+     * portal to create the run through the site endpoint and to carry the new
+     * run identifier to the options page. The server adopts the pre-check, so
+     * the browser sends no capture identifier.
+     *
+     * @param {Element} button The start-upgrade button. It names the site.
+     * @returns {Promise<Object|null>} The 201 body, or null on a refusal.
+     */
+    function startUpgradeFromCapture(button) {
+        var siteId = (button.getAttribute("data-site-id") || "").trim();  /* The path names the site. */
+        if (!siteId) {  /* A page with no site cannot post the run. */
+            showCaptureUpgradeError("The page names no site, so the upgrade cannot start.");  /* The operator reads why. */
+            return Promise.resolve(null);  /* No call runs without a site. */
+        }
+
+        button.disabled = true;  /* A second click would create a second run of the same site. */
+        showCaptureUpgradeError("");  /* A fresh try clears the last refusal. */
+
+        return fetchJson("/api/sites/" + encodeURIComponent(siteId) + "/runs", {
+            method: "POST",  /* The create endpoint reads no body beyond the token header. */
+            body: {}  /* The server adopts the pre-check, so the browser sends no fields. */
+        })
+            .then(function (created) {  /* The 201 body carries the new run identifier. */
+                var runId = (created && created.run_id) || "";  /* FR-102 carries this value onward. */
+                if (runId) {  /* A run with an identifier owns an options page. */
+                    window.location.assign("/runs/" + encodeURIComponent(runId) + "/options");  /* Opens that page. */
+                    return created;  /* The browser leaves this page, so nothing else runs. */
+                }
+                button.disabled = false;  /* A body with no run leaves the button ready to retry. */
+                showCaptureUpgradeError("The portal created no run, so the upgrade did not start.");  /* States the gap. */
+                return created;  /* The caller sees the empty answer. */
+            })
+            .catch(function (error) {  /* A 409 or a 503 lands here as an Error. */
+                /* The log carries the stable code and the status only. It
+                 * carries no session value and no email address. */
+                console.error("The upgrade start failed.", error && error.code, error && error.status);  /* No address. */
+                button.disabled = false;  /* The refusal leaves the button ready to retry. */
+                showCaptureUpgradeError(nameCaptureUpgradeRefusal(error));  /* Names the holder or the live run. */
+                return null;  /* The caller reads the failure. */
+            });
+    }
+
+    /**
      * Hides each table row that does not match the search text.
      *
      * Why: The site list of one organization fits in one page. A server filter
@@ -973,6 +1078,16 @@
         if (refreshButton) {
             refreshButton.addEventListener("click", function () {
                 refreshCaptureStatus(region);
+            });
+        }
+
+        /* FR-101 offers the upgrade path once the capture verifies. The button
+         * renders for a verified capture alone, so a page that never verified
+         * carries no listener here. */
+        var startUpgradeButton = byTestId(CAPTURE_START_UPGRADE_TESTID);
+        if (startUpgradeButton) {
+            startUpgradeButton.addEventListener("click", function () {
+                startUpgradeFromCapture(startUpgradeButton);
             });
         }
 

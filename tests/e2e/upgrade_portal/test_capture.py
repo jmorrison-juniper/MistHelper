@@ -58,11 +58,31 @@ SECTION_KEYS = ("devices", "clients_wired", "clients_wireless", "clients_guest",
 
 CAPTURE_TIER_ID = "capture-tier-select"
 CAPTURE_START_ID = "capture-start-button"
+CAPTURE_REFRESH_ID = "capture-refresh-button"
 CAPTURE_PROGRESS_ID = "capture-progress"
 CAPTURE_PERCENT_ID = "capture-progress-percent"
 CAPTURE_VERIFIED_ID = "capture-verified-badge"
 CAPTURE_SIZE_ID = "capture-size-bytes"
 CAPTURE_ERROR_ID = "capture-error"
+
+# Delta U1 adds the two controls below. `contracts/ui-testids.md` fixes both
+# identifiers. The button starts a run for the site of the verified pre-check,
+# and the region names a refusal.
+CAPTURE_START_UPGRADE_ID = "capture-start-upgrade-button"
+CAPTURE_START_UPGRADE_ERROR_ID = "capture-start-upgrade-error"
+
+# The click path out of the site list. `test_site_selection.py` reads the same
+# two identifiers, so the walk below opens the same pages an operator opens.
+SITE_OPEN_PREFIX = "site-open-"
+SITE_CAPTURE_LINK_ID = "site-capture-link"
+
+# The options page and the confirm page of the run the upgrade button creates.
+# `contracts/http-api.md` section 5 fixes both page paths and the create path.
+VERSION_SELECT_ALL_ID = "upgrade-version-select-all"
+OPTIONS_SAVE_ID = "upgrade-options-save-button"
+CONFIRM_INPUT_ID = "upgrade-confirm-input"
+OPTIONS_PAGE_SUFFIX = "/options"  # The run page that picks a version for each device.
+CONFIRM_PAGE_SUFFIX = "/confirm"  # The run page that reads the typed word.
 
 # The history page lists every stored capture, and each row carries an open
 # control whose identifier ends with the capture key. That key is the only
@@ -83,12 +103,16 @@ NON_EMPTY_PATTERN = re.compile(r".+")
 HIGHEST_PERCENT = 100
 
 OK_STATUS = 200  # The contract fixes this status for every page below.
+CREATED_STATUS = 201  # `POST /api/sites/<site_id>/runs` answers 201 with the run key.
 ACCEPTED_STATUS = 202  # `POST /api/sites/<site_id>/captures` answers 202.
 UNAUTHORIZED_STATUS = 401  # `runtime/identity.py` answers this code with no session.
 NOT_FOUND_STATUS = 404  # The route is not registered yet.
-LOCKED_STATUS = 409  # Another operator holds the site lock.
+LOCKED_STATUS = 409  # Another operator holds the site lock, or a run of the site is live.
+UNREACHABLE_STATUS = 503  # The portal cannot read the site lock store.
 
 START_TIMEOUT_MS = 15000  # The start call reaches the Mist cloud, so it needs more than the default.
+VERIFY_ATTEMPTS = 20  # The refresh clicks that force a status read while the worker verifies.
+VERIFY_WAIT_MS = 500  # The pause between two refresh clicks, so the worker thread can finish.
 
 # WHY: The server fixture states its own fault and its own skip, so this module
 # must not translate either one. The browser fixture is different: a workstation
@@ -475,3 +499,121 @@ class TestStoredCaptureRead:
         _require_built_route(_page_status(portal_page, path), path)
         body = portal_page.evaluate("() => JSON.parse(document.body.innerText || '{}')")
         assert body.get("capture_id") == capture_id, f"{path} answered a body for {body.get('capture_id')!r}."
+
+
+def _is_run_create(answer: Any) -> bool:
+    """Report whether one response answers the call that creates a run.
+
+    Why:
+        The upgrade button posts one create call, and the page reads more than
+        one endpoint. The walk waits on the one call the contract fixes:
+        `POST /api/sites/<site_id>/runs`.
+
+    Args:
+        answer: The Playwright response object.
+
+    Returns:
+        True when the response answers the create call.
+    """
+    is_post: bool = str(answer.request.method) == "POST"  # The contract fixes POST for the create call.
+    return is_post and str(answer.url).rstrip("/").endswith("/runs")  # The path ends with the collection name.
+
+
+def _run_id_from_url(url: str) -> str:
+    """Return the run key that sits inside a run page URL.
+
+    Why:
+        The create answer body is gone once the browser opens the options
+        page. The options URL still holds the run key, so the walk reads the
+        key from the path rather than the emptied answer.
+
+    Args:
+        url: The current page URL, such as ".../runs/<key>/options".
+
+    Returns:
+        The run key from the URL path.
+    """
+    tail = url.split("/runs/", 1)[1]  # The text after the collection name opens with the run key.
+    return tail.split("/", 1)[0]  # The key ends at the next path separator.
+
+
+def _walk_to_capture_view(page: Any) -> None:
+    """Open the capture view by clicking from the site list.
+
+    Why:
+        SC-018 asks for a walk with no typed address. The site list is the one
+        entry the operator opens, and every later step is a click. This helper
+        opens the inventory of the first site, then the capture view of it.
+
+    Args:
+        page: The Playwright page object.
+    """
+    site_id = _first_site_id(page)  # This call opens the site list, which is the one entry the walk types.
+    with page.expect_response(lambda answer: answer.request.is_navigation_request()):
+        page.get_by_test_id(f"{SITE_OPEN_PREFIX}{site_id}").click()  # The site row opens the inventory page.
+    with page.expect_response(lambda answer: answer.request.is_navigation_request()):
+        page.get_by_test_id(SITE_CAPTURE_LINK_ID).click()  # The inventory page opens the capture view.
+
+
+def _start_and_reveal_upgrade(page: Any) -> None:
+    """Start a capture and wait for the upgrade button to show.
+
+    Why:
+        FR-101 reveals the upgrade button once the capture verifies. The
+        stand-in verifies in a worker thread, so the walk clicks the refresh
+        control until the badge reads verified. The poll period then never
+        delays the walk.
+
+    Args:
+        page: The Playwright page object, on the capture view.
+    """
+    with page.expect_response(_is_capture_start, timeout=START_TIMEOUT_MS) as event:
+        page.get_by_test_id(CAPTURE_START_ID).click()  # The start button posts the capture.
+    if event.value.status == LOCKED_STATUS:  # Another operator holds the lock, so no capture can start here.
+        pytest.skip("The start call answered 409. Another operator holds the lock on this site.")
+    assert event.value.status == ACCEPTED_STATUS, f"The start call answered {event.value.status}, not 202."
+    badge = page.get_by_test_id(CAPTURE_VERIFIED_ID)  # The badge reads verified once the worker finishes.
+    for _ in range(VERIFY_ATTEMPTS):  # Each pass forces one status read, so the walk never waits a poll period.
+        if (badge.inner_text() or "").strip() == "Verified":  # The worker wrote the verified record.
+            break  # The upgrade button is now visible, so the walk continues.
+        page.get_by_test_id(CAPTURE_REFRESH_ID).click()  # The refresh control reads the status at once.
+        page.wait_for_timeout(VERIFY_WAIT_MS)  # A short pause lets the worker thread store the record.
+    sync_api.expect(page.get_by_test_id(CAPTURE_START_UPGRADE_ID)).to_be_visible(timeout=START_TIMEOUT_MS)
+
+
+class TestUpgradeJourney:
+    """The operator walks from the site list to the confirm page by clicking."""
+
+    def test_walk_from_the_site_list_reaches_the_confirm_page(self, portal_page: Any) -> None:
+        """The upgrade button carries the operator from a capture to the confirm page.
+
+        Why:
+            FR-106 and SC-018 ask for a walk from the site list to the confirm
+            page with no typed address. The walk opens the site list once, then
+            clicks through the inventory, the capture, the run create, and the
+            options save. A broken step leaves the operator with no path from a
+            verified pre-check to an upgrade.
+
+        Args:
+            portal_page: The browser page that points at the running portal.
+        """
+        _walk_to_capture_view(portal_page)  # Site list, to inventory, to capture view, by clicks alone.
+        _start_and_reveal_upgrade(portal_page)  # Start the capture and wait for the upgrade button.
+
+        with portal_page.expect_response(_is_run_create, timeout=START_TIMEOUT_MS) as run_event:
+            portal_page.get_by_test_id(CAPTURE_START_UPGRADE_ID).click()  # The button posts the run create.
+        status = run_event.value.status  # The status reads without a body, so it survives the navigation.
+        if status in (LOCKED_STATUS, UNREACHABLE_STATUS):  # A live run or a dead lock store stops a fresh run.
+            pytest.skip(f"The run create answered {status}, so no fresh run key exists to walk.")
+        assert status == CREATED_STATUS, f"The run create answered {status}. The contract fixes 201."
+
+        portal_page.wait_for_url(f"**/runs/*{OPTIONS_PAGE_SUFFIX}", timeout=START_TIMEOUT_MS)
+        run_id = _run_id_from_url(portal_page.url)  # The options URL holds the run key that the walk follows.
+        picker = portal_page.get_by_test_id(VERSION_SELECT_ALL_ID)  # The bulk control fills every device version.
+        if picker.locator("option").count() <= 1:  # Only the empty prompt exists, so no version can plan a device.
+            pytest.skip("The options page offered no version, so the save would keep an empty plan.")
+        picker.select_option(index=1)  # The first real version, because index 0 is the empty prompt.
+        portal_page.get_by_test_id(OPTIONS_SAVE_ID).click()  # The save writes the plan and opens the confirm page.
+
+        portal_page.wait_for_url(f"**/runs/{run_id}{CONFIRM_PAGE_SUFFIX}", timeout=START_TIMEOUT_MS)
+        sync_api.expect(portal_page.get_by_test_id(CONFIRM_INPUT_ID)).to_be_visible(timeout=START_TIMEOUT_MS)

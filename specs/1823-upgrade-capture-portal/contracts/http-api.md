@@ -338,6 +338,13 @@ and the start control posts to no site.
 are one endpoint, not two. The path above names the site. `POST /api/runs` reads
 the site from the signed session.
 
+When it creates the run, the portal adopts the newest verified standalone pre-check
+of that site (Delta H3, FR-103). The portal sets the run `pre_capture_id` field to
+that capture and writes the `capture_for_run` edge with role `pre`. A site with no
+standalone pre-check creates the run unchanged, so the field stays empty and the
+portal writes no edge. The lock refusal and the live-run refusal both run before the
+adoption, so a refused create adopts nothing.
+
 ### `GET /api/runs/<run_id>/versions` — available versions
 
 | Item | Value |
