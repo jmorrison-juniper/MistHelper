@@ -410,8 +410,9 @@
  * 5. Option bubbles
  *
  * A bubble group replaces a plain radio list for a small set of choices, such
- * as the capture tier or the upgrade strategy. The real radio input stays in
- * the document and stays focusable. Only its paint is hidden. A hidden input
+ * as the sign-in credential choice and the three upgrade option groups: the
+ * strategy, the reboot, and the Junos file action. The real radio input stays
+ * in the document and stays focusable. Only its paint is hidden. A hidden input
  * with display:none leaves the tab order, and a keyboard operator then loses
  * the control.
  * ========================================================================== */

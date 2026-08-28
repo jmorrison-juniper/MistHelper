@@ -54,8 +54,15 @@ CSRF_HEADER = "X-CSRFToken"  # `portal.js` sends the token under this header nam
 
 # The options page controls.
 VERSION_SELECT_ALL_ID = "upgrade-version-select-all"
-REBOOT_TOGGLE_ID = "upgrade-reboot-toggle"
-STRATEGY_SELECT_ID = "upgrade-strategy-select"
+REBOOT_GROUP_ID = "upgrade-reboot-group"
+REBOOT_YES_ID = "upgrade-reboot-yes"
+REBOOT_NO_ID = "upgrade-reboot-no"
+STRATEGY_GROUP_ID = "upgrade-strategy-group"
+STRATEGY_BIG_BANG_ID = "upgrade-strategy-big-bang"
+STRATEGY_CANARY_ID = "upgrade-strategy-canary"
+JUNOS_GROUP_ID = "upgrade-junos-file-action-group"
+JUNOS_YES_ID = "upgrade-junos-file-action-yes"
+JUNOS_NO_ID = "upgrade-junos-file-action-no"
 OPTIONS_SAVE_ID = "upgrade-options-save-button"
 TARGET_TABLE_ID = "upgrade-target-table"
 TARGET_ROW_PREFIX = "upgrade-target-row-"
@@ -492,19 +499,21 @@ class TestUpgradeOptions:
     """The options page picks a version and sets the four upgrade options."""
 
     def test_options_page_shows_every_option_control(self, options_page: Any) -> None:
-        """The page shows the bulk version control, the two options, and the save control.
+        """The page shows the bulk version control, the three groups, and the save control.
 
         Why:
-            FR-027 to FR-030 name the reboot option and the strategy option. An
-            operator who cannot see one of them cannot choose it, and the portal
-            would then send the default to live hardware with no consent.
+            FR-121 turns the reboot option, the strategy option, and the Junos
+            file action into radio groups. An operator who cannot see one of them
+            cannot choose it, and the portal would then send the default to live
+            hardware with no consent.
 
         Args:
             options_page: The page that shows the version picker.
         """
         sync_api.expect(options_page.get_by_test_id(VERSION_SELECT_ALL_ID)).to_be_visible()
-        sync_api.expect(options_page.get_by_test_id(REBOOT_TOGGLE_ID)).to_be_visible()
-        sync_api.expect(options_page.get_by_test_id(STRATEGY_SELECT_ID)).to_be_visible()
+        sync_api.expect(options_page.get_by_test_id(REBOOT_GROUP_ID)).to_be_visible()
+        sync_api.expect(options_page.get_by_test_id(STRATEGY_GROUP_ID)).to_be_visible()
+        sync_api.expect(options_page.get_by_test_id(JUNOS_GROUP_ID)).to_be_visible()
         sync_api.expect(options_page.get_by_test_id(OPTIONS_SAVE_ID)).to_be_visible()
 
     def test_options_page_gives_one_version_control_to_each_device(self, options_page: Any) -> None:
@@ -523,21 +532,46 @@ class TestUpgradeOptions:
             sync_api.expect(options_page.get_by_test_id(f"{VERSION_SELECT_PREFIX}{mac}")).to_be_visible()
 
     def test_options_page_keeps_the_chosen_reboot_state(self, options_page: Any) -> None:
-        """The reboot control holds the state the operator sets.
+        """The reboot group holds the state the operator sets.
 
         Why:
             The reboot option decides whether the site drops traffic at the end
-            of the upgrade. A control that snapped back to its default would send
-            a reboot the operator cleared.
+            of the upgrade. A radio group that snapped back to its default would
+            send a reboot the operator cleared.
 
         Args:
             options_page: The page that shows the version picker.
         """
-        toggle = options_page.get_by_test_id(REBOOT_TOGGLE_ID)
-        toggle.uncheck()
-        sync_api.expect(toggle).not_to_be_checked()
-        toggle.check()
-        sync_api.expect(toggle).to_be_checked()
+        reboot_no = options_page.get_by_test_id(REBOOT_NO_ID)  # The choice that holds the reboot back.
+        reboot_yes = options_page.get_by_test_id(REBOOT_YES_ID)  # The default choice, which reboots.
+        reboot_no.check()  # The operator clears the reboot.
+        sync_api.expect(reboot_no).to_be_checked()  # The cleared choice holds.
+        sync_api.expect(reboot_yes).not_to_be_checked()  # A radio group keeps exactly one choice.
+        reboot_yes.check()  # The operator restores the reboot.
+        sync_api.expect(reboot_yes).to_be_checked()  # The restored choice holds.
+        sync_api.expect(reboot_no).not_to_be_checked()  # The other choice clears.
+
+    def test_options_page_holds_the_chosen_strategy_and_junos_action(self, options_page: Any) -> None:
+        """The strategy group and the Junos group hold the choice the operator sets.
+
+        Why:
+            FR-121 turns each single choice into a radio group. A group that lost
+            the choice would run a strategy or a Junos action the operator never
+            picked.
+
+        Args:
+            options_page: The page that shows the version picker.
+        """
+        canary = options_page.get_by_test_id(STRATEGY_CANARY_ID)  # The staged strategy.
+        big_bang = options_page.get_by_test_id(STRATEGY_BIG_BANG_ID)  # The default strategy.
+        canary.check()  # The operator picks the staged rollout.
+        sync_api.expect(canary).to_be_checked()  # The staged choice holds.
+        sync_api.expect(big_bang).not_to_be_checked()  # The default clears.
+        junos_yes = options_page.get_by_test_id(JUNOS_YES_ID)  # The Junos file action on.
+        junos_no = options_page.get_by_test_id(JUNOS_NO_ID)  # The Junos default, which is off.
+        junos_yes.check()  # The operator turns the Junos file action on.
+        sync_api.expect(junos_yes).to_be_checked()  # The chosen action holds.
+        sync_api.expect(junos_no).not_to_be_checked()  # The default clears.
 
 
 class TestUpgradeConfirm:

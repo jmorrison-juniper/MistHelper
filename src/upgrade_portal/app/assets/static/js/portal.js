@@ -71,12 +71,12 @@
     var CAPTURE_START_UPGRADE_TESTID = "capture-start-upgrade-button";
     var CAPTURE_START_UPGRADE_ERROR_TESTID = "capture-start-upgrade-error";
 
-    /* The upgrade identifiers. contracts/ui-testids.md lines 99-113 fix every
-     * value below. */
+    /* The upgrade identifiers. The `Upgrade` section of contracts/ui-testids.md
+     * fixes every value below. Delta U2 turned three controls into radio groups. */
     var UPGRADE_VERSION_ALL_TESTID = "upgrade-version-select-all";
-    var UPGRADE_REBOOT_TESTID = "upgrade-reboot-toggle";
-    var UPGRADE_JUNOS_TESTID = "upgrade-junos-file-action-toggle";
-    var UPGRADE_STRATEGY_TESTID = "upgrade-strategy-select";
+    var UPGRADE_REBOOT_GROUP_TESTID = "upgrade-reboot-group";
+    var UPGRADE_JUNOS_GROUP_TESTID = "upgrade-junos-file-action-group";
+    var UPGRADE_STRATEGY_GROUP_TESTID = "upgrade-strategy-group";
     var UPGRADE_WARNING_TESTID = "upgrade-warning-list";
     var UPGRADE_SAVE_TESTID = "upgrade-options-save-button";
     var UPGRADE_CONFIRM_TESTID = "upgrade-confirm-input";
@@ -1281,6 +1281,28 @@
     }
 
     /**
+     * Reads the value of the checked radio inside a group.
+     *
+     * Why: Delta U2 turned three single-choice controls into radio groups. A
+     * group shows every choice at once, and the browser keeps exactly one radio
+     * checked. The saved body still needs the one chosen value, so this helper
+     * reads it. A group with no checked radio returns the fallback, so a save
+     * never sends an empty choice.
+     *
+     * @param {string} groupTestId The data-testid of the radio group container.
+     * @param {string} fallback The default value when no radio is checked.
+     * @returns {string} The value of the checked radio, or the fallback.
+     */
+    function checkedRadioValue(groupTestId, fallback) {
+        var group = byTestId(groupTestId);
+        if (!group) {
+            return fallback;  /* The page drew no group, so the caller keeps the default. */
+        }
+        var chosen = group.querySelector('input[type="radio"]:checked');
+        return chosen ? chosen.value : fallback;  /* The one checked option, or the default. */
+    }
+
+    /**
      * Saves the upgrade options and moves to the confirmation page.
      *
      * Why: The endpoint answers with the planned targets and the warnings, so
@@ -1298,14 +1320,14 @@
             return Promise.resolve(null);
         }
 
-        var rebootToggle = byTestId(UPGRADE_REBOOT_TESTID);
-        var junosToggle = byTestId(UPGRADE_JUNOS_TESTID);
-        var strategySelect = byTestId(UPGRADE_STRATEGY_TESTID);
+        var rebootChoice = checkedRadioValue(UPGRADE_REBOOT_GROUP_TESTID, "yes");
+        var junosChoice = checkedRadioValue(UPGRADE_JUNOS_GROUP_TESTID, "no");
+        var strategyChoice = checkedRadioValue(UPGRADE_STRATEGY_GROUP_TESTID, "big_bang");
         var payload = {
             targets: collectUpgradeTargets(),
-            reboot: rebootToggle ? rebootToggle.checked : true,
-            junos_file_action: junosToggle ? junosToggle.checked : false,
-            strategy: strategySelect ? strategySelect.value : "big_bang"
+            reboot: rebootChoice === "yes",
+            junos_file_action: junosChoice === "yes",
+            strategy: strategyChoice
         };
 
         /* The button stays disabled until the answer arrives. A second click

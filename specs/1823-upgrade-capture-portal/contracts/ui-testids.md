@@ -147,9 +147,9 @@ that a region search caused.
 | --- | --- |
 | `upgrade-version-select-{mac}` | Target version for one device |
 | `upgrade-version-select-all` | Apply one version to every matching model |
-| `upgrade-reboot-toggle` | The reboot option |
-| `upgrade-junos-file-action-toggle` | The Junos file action option |
-| `upgrade-strategy-select` | The strategy option |
+| `upgrade-reboot-group` | The reboot radio group. Holds `upgrade-reboot-yes` and `upgrade-reboot-no` (Delta U2). |
+| `upgrade-junos-file-action-group` | The Junos file action radio group. Holds `upgrade-junos-file-action-yes` and `upgrade-junos-file-action-no` (Delta U2). |
+| `upgrade-strategy-group` | The strategy radio group. Holds `upgrade-strategy-big-bang` and `upgrade-strategy-canary` (Delta U2). |
 | `upgrade-options-save-button` | Save the chosen options |
 | `upgrade-target-table` | The target table on the options page |
 | `upgrade-target-row-{mac}` | One target row |

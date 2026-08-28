@@ -84,6 +84,27 @@ CREATE_ANSWER_FIELDS = {"run_id", "state"}
 # WHY: The default of each option control, as `contracts/http-api.md` names it.
 DEFAULT_OPTIONS = {"reboot": True, "junos_file_action": False, "strategy": "big_bang"}
 
+# WHY: Delta U2 retires one select and two toggles for three radio groups, so
+# #2101 shows every choice at once. The page draws each group under these
+# identifiers. The saved body keeps the three field names above, so the run
+# driver reads the same record as before.
+STRATEGY_GROUP_ID = "upgrade-strategy-group"  # The radio group that replaces the strategy select.
+REBOOT_GROUP_ID = "upgrade-reboot-group"  # The radio group that replaces the reboot toggle.
+JUNOS_GROUP_ID = "upgrade-junos-file-action-group"  # The radio group that replaces the Junos toggle.
+RADIO_OPTION_IDS = (
+    "upgrade-strategy-big-bang",  # The strategy default, which upgrades every device at once.
+    "upgrade-strategy-canary",  # The staged strategy, which upgrades a small set first.
+    "upgrade-reboot-yes",  # The reboot default, which reboots each device after the write.
+    "upgrade-reboot-no",  # The choice that holds the reboot for a later manual window.
+    "upgrade-junos-file-action-yes",  # The choice that turns the Junos file action on.
+    "upgrade-junos-file-action-no",  # The Junos file action default, which leaves it off.
+)
+RETIRED_CONTROL_IDS = (
+    "upgrade-strategy-select",  # The retired select, which showed one strategy at a time.
+    "upgrade-reboot-toggle",  # The retired reboot toggle, which hid the second choice.
+    "upgrade-junos-file-action-toggle",  # The retired Junos toggle, which hid the second choice.
+)
+
 PROBE_MODEL = "EX4400-48P"  # The model of the one device of the stand-in site.
 PROBE_VERSIONS = ["23.4R2-S4.11", "24.2R1.17"]  # The versions that the cloud names for that model.
 PROBE_VERSION_TARGET = "24.2R1.17"  # The version that the operator picks in both tests below.
@@ -864,6 +885,38 @@ def test_the_options_page_draws_a_version_control_for_every_device(
     assert PROBE_VERSION_TARGET in page  # The version list of the model reached that control.
     assert "The run holds no device" not in page  # The empty table is the defect this test guards.
     assert view.calls == [(ORG_ID, SITE_ID)]  # One read, scoped to the site of the run.
+
+
+def test_the_options_page_draws_a_radio_group_for_each_single_choice(
+    upgrade_app: Flask,
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """The options page draws a radio group for strategy, reboot, and Junos action.
+
+    Why:
+        Issue #2101 asked for a radio group in place of one select and two
+        toggles. A radio group shows every choice at once, so the operator reads
+        all options without opening a menu. Delta U2 fixes the group and option
+        identifiers, and the three retired identifiers never render again.
+
+    Args:
+        upgrade_app: The application with the seams injected.
+        upgrade_client: The signed-in client.
+        run_store: The stand-in run record store.
+    """
+    view = StandInOptionsView()  # The seam stands for the site inventory read.
+    upgrade_app.config[OPTIONS_VIEW_KEY] = view  # The page reads its device rows from this seam.
+    run_id = seed_run(run_store, "pre_capture_done")  # The stage at which an operator picks options.
+    answer = upgrade_client.get(OPTIONS_PAGE_TEMPLATE.format(run_id=run_id))
+    assert answer.status_code == OK_STATUS  # A page read never refuses a run that exists.
+    page = answer.get_data(as_text=True)  # The rendered options page the browser receives.
+    for group_id in (STRATEGY_GROUP_ID, REBOOT_GROUP_ID, JUNOS_GROUP_ID):
+        assert f'data-testid="{group_id}"' in page  # Each single choice draws a radio group now.
+    for option_id in RADIO_OPTION_IDS:
+        assert f'data-testid="{option_id}"' in page  # Each radio option carries its own identifier.
+    for retired_id in RETIRED_CONTROL_IDS:
+        assert f'data-testid="{retired_id}"' not in page  # No retired identifier renders again.
 
 
 def test_a_thin_saved_row_widens_into_the_record_the_run_driver_reads(
