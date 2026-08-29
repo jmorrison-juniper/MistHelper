@@ -173,6 +173,43 @@ def _eligible_devices(devices: Sequence[Mapping[str, Any]], device_type: str) ->
     ]
 
 
+def _model_version_sets(
+    devices: Sequence[Mapping[str, Any]],
+    versions_by_model: Mapping[str, Sequence[str]],
+) -> list[set[str]]:
+    """Return the nonempty version set for each eligible device model."""
+    return [
+        {
+            normalized
+            for version in versions_by_model.get(str(device["model"]).strip(), ())
+            if (normalized := _normalized_version(version))
+        }
+        for device in devices
+    ]
+
+
+def _common_candidates(version_sets: Sequence[set[str]]) -> list[str]:
+    """Return common versions in descending numeric release order."""
+    common = set.intersection(*version_sets) if version_sets else set()
+    return sorted(common, key=_numeric_version_key, reverse=True)
+
+
+def _configured_override(
+    device_type: str,
+    configured: Mapping[str, str | None],
+) -> str:
+    """Return the configured type override in its comparison form."""
+    value = configured.get(TYPE_OVERRIDE_VARIABLES[device_type])
+    return _normalized_version(value) if value else ""
+
+
+def _type_warning(device_type: str, eligible: Sequence[Mapping[str, Any]], candidates: Sequence[str]) -> str | None:
+    """Return the warning when a type has devices but no shared version."""
+    if eligible and not candidates:
+        return WARNING_NO_COMMON_CANDIDATE.format(device_type=TYPE_DISPLAY_NAMES[device_type])
+    return None
+
+
 class TypedVersionSelector:
     """Choose one safe default from versions that every device type supports."""
 
@@ -187,31 +224,14 @@ class TypedVersionSelector:
         selections: dict[str, dict[str, Any]] = {}
         for device_type in SUPPORTED_DEVICE_TYPES:
             eligible = _eligible_devices(devices, device_type)
-            sets = [
-                {
-                    _normalized_version(version)
-                    for version in versions_by_model.get(str(device["model"]).strip(), ())
-                    if _normalized_version(version)
-                }
-                for device in eligible
-            ]
-            common = set.intersection(*sets) if sets else set()
-            candidates = sorted(common, key=_numeric_version_key, reverse=True)
-            override = (
-                _normalized_version(configured.get(TYPE_OVERRIDE_VARIABLES[device_type]))
-                if configured.get(TYPE_OVERRIDE_VARIABLES[device_type])
-                else ""
-            )
-            selected = override if override in common else (candidates[0] if candidates else None)
+            candidates = _common_candidates(_model_version_sets(eligible, versions_by_model))
+            override = _configured_override(device_type, configured)
+            selected = override if override in candidates else (candidates[0] if candidates else None)
             selections[device_type] = {
                 "candidates": candidates,
                 "selected_version": selected,
                 "override_value": override or None,
-                "warning": (
-                    WARNING_NO_COMMON_CANDIDATE.format(device_type=TYPE_DISPLAY_NAMES[device_type])
-                    if eligible and not candidates
-                    else None
-                ),
+                "warning": _type_warning(device_type, eligible, candidates),
             }
         logger.debug("Upgrade portal selected typed defaults for %s type(s)", len(selections))
         return selections
