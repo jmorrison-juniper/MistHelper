@@ -311,7 +311,9 @@ def test_the_stored_size_still_fills(browser: Any) -> None:
         f"/api/captures/{CAPTURE_ID}/status": status_body("verified", 100),  # The poll answer.
         f"/api/captures/{CAPTURE_ID}": {"stored_size_bytes": STORED_SIZE},  # The stored size read.
     }
-    page = open_capture_page(browser, CAPTURE_ID, answers)  # A page that already names the capture.
+    page = open_capture_page(
+        browser, CAPTURE_ID, answers, status_body("verified", 100)
+    )  # A verified page has stored tables.
     try:
         page.locator(f'[data-testid="{REFRESH_TESTID}"]').click()  # The real listener of the real control.
         page.wait_for_function(  # WHY: The refresh reads the status, and the verified state reads the size.

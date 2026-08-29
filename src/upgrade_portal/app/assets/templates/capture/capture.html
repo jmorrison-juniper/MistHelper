@@ -167,6 +167,7 @@
          data-testid="capture-progress"
          data-capture-id="{{ capture_identifier }}"
          data-poll-seconds="{{ poll_interval_seconds | default(30, true) }}"
+         data-capture-tables-ready="{{ 'true' if is_verified else 'false' }}"
          aria-live="polite">
 
   <h2 class="status-panel-title">
