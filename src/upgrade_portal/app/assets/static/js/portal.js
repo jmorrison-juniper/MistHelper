@@ -894,15 +894,12 @@
             body: payload
         })
             .then(function (created) {
-                if (region && created && created.capture_id) {
-                    region.setAttribute("data-capture-id", created.capture_id);
-                    /* The identifier field sits outside this region, so the
-                     * read covers the whole document. The operator then reads
-                     * the name of the capture before the first poll answers. */
-                    setText(byTestId(CAPTURE_IDENTIFIER_TESTID), created.capture_id);
-                    storedSizeLoaded = false;
-                    refreshCaptureStatus(region);
-                    startCapturePoll(region);
+                if (created && created.capture_id) {
+                    /* A new capture page has no identifier, so it cannot load
+                     * stored rows when the worker completes. The real capture
+                     * page has the identifier in its path and reads those rows. */
+                    window.location.assign("/captures/" + encodeURIComponent(created.capture_id));
+                    return created;
                 }
                 if (created && created.lock) {
                     /* The start took the site lock on this call, so the banner

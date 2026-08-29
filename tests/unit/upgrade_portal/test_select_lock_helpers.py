@@ -257,3 +257,39 @@ class TestCapturePageUrl:
         built = select.capture_page_url("a&b=c")
         assert "a&b=c" not in built
         assert "a%26b%3Dc" in built
+
+
+class TestInventoryFirmwareTargets:
+    """Tests for the firmware target state that the inventory page shows."""
+
+    def test_adds_a_model_target_and_mismatch_state(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The table uses the shared model fallback and marks only a mismatch."""
+        devices = [
+            {"mac": "aa:aa:aa:aa:aa:01", "type": "ap", "model": "AP45", "version": "0.14.8"},
+            {"mac": "aa:aa:aa:aa:aa:02", "type": "switch", "model": "EX4400", "version": "24.2R1.17"},
+            {"mac": "aa:aa:aa:aa:aa:03", "type": "gateway", "model": "SSR120", "version": ""},
+        ]
+        session = SimpleNamespace(cloud_session=object())
+        calls: list[tuple[Any, str, list[dict[str, Any]], str]] = []
+
+        def read_versions(
+            cloud_session: Any, site_id: str, rows: list[dict[str, Any]], org_id: str
+        ) -> dict[str, tuple[str, ...]]:
+            calls.append((cloud_session, site_id, rows, org_id))
+            return {
+                "AP45": ("0.14.9", "0.14.8"),
+                "EX4400": ("24.2R1.17",),
+                "SSR120": (),
+            }
+
+        monkeypatch.setattr(select.identity, "current_session", lambda: session)
+        monkeypatch.setattr(select, "read_model_versions", read_versions)
+        rows = select.inventory_rows_with_targets(ORG_ID, SITE_ID, devices)
+
+        assert calls == [(session.cloud_session, SITE_ID, devices, ORG_ID)]
+        assert rows[0]["version_target"] == "0.14.9"
+        assert rows[0]["firmware_mismatch"] is True
+        assert rows[1]["version_target"] == "24.2R1.17"
+        assert rows[1]["firmware_mismatch"] is False
+        assert rows[2]["version_target"] == ""
+        assert rows[2]["firmware_mismatch"] is False

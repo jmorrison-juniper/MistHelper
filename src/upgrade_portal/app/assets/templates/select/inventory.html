@@ -130,7 +130,15 @@
           <td>{{ device.type | default('unknown', true) }}</td>
           <td>{{ device.model | default('unknown', true) }}</td>
           <td class="cell-mono">{{ device.serial | default('unknown', true) }}</td>
-          <td class="cell-mono">{{ device.version | default('unknown', true) }}</td>
+          <td class="cell-mono{% if device.firmware_mismatch | default(false, true) %} firmware-mismatch{% endif %}">
+            {{ device.version | default('unknown', true) }}
+            {% if device.firmware_mismatch | default(false, true) %}
+              <span class="firmware-mismatch-indicator"
+                    data-testid="inventory-firmware-mismatch-{{ mac }}">
+                Target: {{ device.version_target }}
+              </span>
+            {% endif %}
+          </td>
           {#
             The status reads as a word. The table adds no color, so the status
             needs no second signal. WCAG 1.4.1 forbids color as the only signal.
