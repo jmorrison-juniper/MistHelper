@@ -17,6 +17,8 @@ Why:
 from __future__ import annotations
 
 import logging
+import os
+import re
 import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass
@@ -79,6 +81,19 @@ START_TIME_HORIZON_SECONDS = 365 * 24 * 60 * 60
 
 WARNING_MIXED_FAMILY = "The site holds two gateway families. The portal reports the result of each family on its own."
 WARNING_SAME_VERSION = "One device already runs the version that you chose. The portal still sends the upgrade."
+WARNING_NO_COMMON_CANDIDATE = "No common compatible version exists for the {device_type} devices."
+
+SUPPORTED_DEVICE_TYPES = (DEVICE_TYPE_AP, DEVICE_TYPE_SWITCH, DEVICE_TYPE_GATEWAY)
+TYPE_DISPLAY_NAMES = {
+    DEVICE_TYPE_AP: "access point",
+    DEVICE_TYPE_SWITCH: "switch",
+    DEVICE_TYPE_GATEWAY: "gateway",
+}
+TYPE_OVERRIDE_VARIABLES = {
+    DEVICE_TYPE_AP: "CAPTURE_DEFAULT_AP_VERSION",
+    DEVICE_TYPE_SWITCH: "CAPTURE_DEFAULT_SWITCH_VERSION",
+    DEVICE_TYPE_GATEWAY: "CAPTURE_DEFAULT_GATEWAY_VERSION",
+}
 
 _BOOLEAN_WORDS: Mapping[str, bool] = {
     "true": True,
@@ -134,6 +149,92 @@ class InventoryRead:
 
     records: list[dict[str, Any]]
     partial_reasons: list[dict[str, Any]]
+
+
+def _normalized_version(value: object) -> str:
+    """Return the exact version form used for compatibility comparisons."""
+    return str(value).strip()
+
+
+def _numeric_version_key(version: str) -> tuple[int, ...]:
+    """Return numeric release components so display ordering cannot choose a release."""
+    parts = tuple(int(part) for part in re.findall(r"\d+", version))
+    return parts or (-1,)
+
+
+def _eligible_devices(devices: Sequence[Mapping[str, Any]], device_type: str) -> list[Mapping[str, Any]]:
+    """Return supported, identified records of one type that can take a target."""
+    return [
+        device
+        for device in devices
+        if str(device.get("type", "")).strip().lower() == device_type
+        and normalize_device_mac(device.get("mac"))
+        and str(device.get("model", "")).strip()
+    ]
+
+
+def _model_version_sets(
+    devices: Sequence[Mapping[str, Any]],
+    versions_by_model: Mapping[str, Sequence[str]],
+) -> list[set[str]]:
+    """Return the nonempty version set for each eligible device model."""
+    return [
+        {
+            normalized
+            for version in versions_by_model.get(str(device["model"]).strip(), ())
+            if (normalized := _normalized_version(version))
+        }
+        for device in devices
+    ]
+
+
+def _common_candidates(version_sets: Sequence[set[str]]) -> list[str]:
+    """Return common versions in descending numeric release order."""
+    common = set.intersection(*version_sets) if version_sets else set()
+    return sorted(common, key=_numeric_version_key, reverse=True)
+
+
+def _configured_override(
+    device_type: str,
+    configured: Mapping[str, str | None],
+) -> str:
+    """Return the configured type override in its comparison form."""
+    value = configured.get(TYPE_OVERRIDE_VARIABLES[device_type])
+    return _normalized_version(value) if value else ""
+
+
+def _type_warning(device_type: str, eligible: Sequence[Mapping[str, Any]], candidates: Sequence[str]) -> str | None:
+    """Return the warning when a type has devices but no shared version."""
+    if eligible and not candidates:
+        return WARNING_NO_COMMON_CANDIDATE.format(device_type=TYPE_DISPLAY_NAMES[device_type])
+    return None
+
+
+class TypedVersionSelector:
+    """Choose one safe default from versions that every device type supports."""
+
+    def select(
+        self,
+        devices: Sequence[Mapping[str, Any]],
+        versions_by_model: Mapping[str, Sequence[str]],
+        overrides: Mapping[str, str | None] | None = None,
+    ) -> dict[str, dict[str, Any]]:
+        """Return candidates, selection, and warning for every supported type."""
+        configured = overrides if overrides is not None else os.environ
+        selections: dict[str, dict[str, Any]] = {}
+        for device_type in SUPPORTED_DEVICE_TYPES:
+            eligible = _eligible_devices(devices, device_type)
+            candidates = _common_candidates(_model_version_sets(eligible, versions_by_model))
+            override = _configured_override(device_type, configured)
+            selected = override if override in candidates else (candidates[0] if candidates else None)
+            selections[device_type] = {
+                "candidates": candidates,
+                "selected_version": selected,
+                "override_value": override or None,
+                "warning": _type_warning(device_type, eligible, candidates),
+            }
+        logger.debug("Upgrade portal selected typed defaults for %s type(s)", len(selections))
+        return selections
 
 
 def _partial_reason(reason: str, http_status: int) -> dict[str, Any]:
@@ -254,12 +355,13 @@ def read_model_versions(
     """
     models = collect_models(devices)
     logger.info("Upgrade portal reads the available versions of %s model(s) at site %s", len(models), site_id)
-    return list_available_versions(session, site_id, models)
+    return list_available_versions(session, site_id, devices)
 
 
 def build_version_options(
     devices: Sequence[Mapping[str, Any]],
     by_model: Mapping[str, tuple[str, ...]],
+    type_selections: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """Build one version choice row for each device.
 
@@ -272,21 +374,32 @@ def build_version_options(
     Args:
         devices: The inventory rows.
         by_model: The version list of each model.
+        type_selections: The selected default for each device type.
 
     Returns:
         One row for each device, in the order that the inventory returned.
     """
+    selections = type_selections or {}
     rows: list[dict[str, Any]] = []
     for device in devices:
         model = str(device.get("model", "")).strip()
+        device_type = str(device.get("type", "")).strip().lower()
+        versions = sorted(
+            {_normalized_version(version) for version in by_model.get(model, ()) if _normalized_version(version)},
+            key=_numeric_version_key,
+            reverse=True,
+        )
+        selected = str(selections.get(device_type, {}).get("selected_version") or "")
+        version_target = selected if selected in versions else (versions[0] if versions else "")
         rows.append(
             {
                 "mac": normalize_device_mac(device.get("mac")),
                 "name": str(device.get("name", "")).strip(),
-                "device_type": str(device.get("type", "")).strip().lower(),
+                "device_type": device_type,
                 "model": model,
                 "version_before": str(device.get("version", "")).strip(),
-                "versions": list(by_model.get(model, ())),
+                "version_target": version_target,
+                "versions": versions,
             }
         )
     logger.debug("Upgrade portal offers a version choice for %s device(s)", len(rows))
@@ -631,6 +744,7 @@ def _resolve_choice(
 def build_targets(
     devices: Sequence[Mapping[str, Any]],
     choices: Sequence[Mapping[str, Any]],
+    versions_by_model: Mapping[str, Sequence[str]] | None = None,
 ) -> list[dict[str, Any]]:
     """Build the run ``targets`` list from the browser choices.
 
@@ -648,11 +762,20 @@ def build_targets(
         One target entry for each choice, in the order of the request.
 
     Raises:
-        BadOptionError: If a choice names an unknown device or no version.
+        BadOptionError: If a choice names an unknown device, no version, or a
+            version that current availability does not offer.
     """
     index = {normalize_device_mac(device.get("mac")): device for device in devices}
     logger.info("Upgrade portal builds %s upgrade target(s)", len(choices))
-    entries = [build_target_entry(*_resolve_choice(index, choice)) for choice in choices]
+    resolved = [_resolve_choice(index, choice) for choice in choices]
+    if versions_by_model is not None:
+        for device, version in resolved:
+            model = str(device.get("model", "")).strip()
+            offered = {_normalized_version(item) for item in versions_by_model.get(model, ())}
+            if version not in offered:
+                logger.warning("Upgrade portal refused an unavailable target for model %s", model)
+                raise BadOptionError("version_target")
+    entries = [build_target_entry(device, version) for device, version in resolved]
     logger.debug("Upgrade portal built targets for %s device type(s)", len({row["device_type"] for row in entries}))
     return entries
 
@@ -735,11 +858,13 @@ def build_options_view(session: Any, org_id: str, site_id: str) -> dict[str, Any
         logger.warning("Upgrade portal read no device of site %s for the options page", site_id)
         return {"targets": [], "versions_by_model": {}}
     by_model = read_model_versions(session, site_id, inventory.records)
-    rows = build_version_options(inventory.records, by_model)
+    type_selections = TypedVersionSelector().select(inventory.records, by_model)
+    rows = build_version_options(inventory.records, by_model, type_selections)
     logger.info("Upgrade portal offers %s device(s) on the options page of site %s", len(rows), site_id)
     return {
         "targets": rows,
         "versions_by_model": {name: list(items) for name, items in by_model.items()},
+        "type_selections": type_selections,
     }
 
 
@@ -774,7 +899,8 @@ def build_options_record(session: Any, org_id: str, site_id: str, body: Mapping[
         return {}
     choices = body.get("targets")
     rows = [one for one in choices if isinstance(one, Mapping)] if isinstance(choices, list) else []
-    entries = build_targets(inventory.records, rows)
+    by_model = read_model_versions(session, site_id, inventory.records) if rows else {}
+    entries = build_targets(inventory.records, rows, by_model if rows else None)
     return {
         "targets": entries,
         "options": asdict(build_options(body)),
@@ -792,9 +918,11 @@ __all__ = [
     "STATE_PENDING",
     "STRATEGY_CHOICES",
     "WARNING_MIXED_FAMILY",
+    "WARNING_NO_COMMON_CANDIDATE",
     "WARNING_SAME_VERSION",
     "BadOptionError",
     "InventoryRead",
+    "TypedVersionSelector",
     "build_options",
     "build_options_record",
     "build_options_view",

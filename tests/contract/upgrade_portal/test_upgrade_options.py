@@ -919,6 +919,35 @@ def test_the_options_page_draws_a_radio_group_for_each_single_choice(
         assert f'data-testid="{retired_id}"' not in page  # No retired identifier renders again.
 
 
+def test_the_options_page_draws_the_three_type_version_controls(
+    upgrade_app: Flask,
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """The page renders typed controls and removes the retired global control."""
+    view = StandInOptionsView()
+    upgrade_app.config[OPTIONS_VIEW_KEY] = view
+    run_id = seed_run(run_store, "pre_capture_done")
+    page = upgrade_client.get(OPTIONS_PAGE_TEMPLATE.format(run_id=run_id)).get_data(as_text=True)
+    for device_type in ("ap", "switch", "gateway"):
+        assert f'data-testid="upgrade-version-select-{device_type}"' in page
+    assert 'data-testid="upgrade-version-select-all"' not in page
+
+
+def test_an_unavailable_target_is_rejected_without_replacing_the_saved_plan(
+    upgrade_client: FlaskClient, run_store: RecordingRunStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A stale save returns `bad_option` and leaves the existing targets unchanged."""
+    monkeypatch.setattr(options_module, "read_upgrade_inventory", stand_in_inventory)
+    monkeypatch.setattr(options_module, "read_model_versions", lambda *args: {"AP45": ()})
+    old_targets = [{"mac": PROBE_MAC, "version_target": PROBE_VERSION_TARGET}]
+    run_id = seed_run(run_store, "pre_capture_done", targets=old_targets)
+    answer = save_options(upgrade_client, run_id, {"targets": old_targets})
+    assert answer.status_code == BAD_REQUEST_STATUS
+    assert read_error_code(answer) == BAD_OPTION_CODE
+    assert run_store.runs[run_id]["targets"] == old_targets
+
+
 def test_a_thin_saved_row_widens_into_the_record_the_run_driver_reads(
     upgrade_client: FlaskClient,
     run_store: RecordingRunStore,
@@ -938,6 +967,7 @@ def test_a_thin_saved_row_widens_into_the_record_the_run_driver_reads(
         monkeypatch: The fixture that points the module read at the stand-in.
     """
     monkeypatch.setattr(options_module, "read_upgrade_inventory", stand_in_inventory)
+    monkeypatch.setattr(options_module, "read_model_versions", lambda *args: {PROBE_MODEL: tuple(PROBE_VERSIONS)})
     run_id = seed_run(run_store, "pre_capture_done")  # A fresh run, which holds no target row.
     answer = save_options(upgrade_client, run_id, THIN_BODY)
     assert answer.status_code == OK_STATUS  # A good option set never refuses.

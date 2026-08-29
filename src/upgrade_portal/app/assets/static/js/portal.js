@@ -73,7 +73,11 @@
 
     /* The upgrade identifiers. The `Upgrade` section of contracts/ui-testids.md
      * fixes every value below. Delta U2 turned three controls into radio groups. */
-    var UPGRADE_VERSION_ALL_TESTID = "upgrade-version-select-all";
+    var UPGRADE_VERSION_TYPE_TESTIDS = [
+        "upgrade-version-select-ap",
+        "upgrade-version-select-switch",
+        "upgrade-version-select-gateway"
+    ];
     var UPGRADE_REBOOT_GROUP_TESTID = "upgrade-reboot-group";
     var UPGRADE_JUNOS_GROUP_TESTID = "upgrade-junos-file-action-group";
     var UPGRADE_STRATEGY_GROUP_TESTID = "upgrade-strategy-group";
@@ -1216,8 +1220,9 @@
      * @param {Element} allSelect The apply-to-every-device control.
      * @returns {number} The count of devices that took the version.
      */
-    function applyVersionToEveryDevice(allSelect) {
-        var wanted = (allSelect.value || "").trim();
+    function applyVersionToDeviceType(typeSelect) {
+        var wanted = (typeSelect.value || "").trim();
+        var deviceType = (typeSelect.getAttribute("data-version-type") || "").trim();
         if (!wanted) {
             return 0;
         }
@@ -1225,6 +1230,9 @@
         var changed = 0;
         var selects = document.querySelectorAll("[data-version-for]");
         Array.prototype.forEach.call(selects, function (select) {
+            if (select.getAttribute("data-device-type") !== deviceType) {
+                return;
+            }
             var offered = false;
             Array.prototype.forEach.call(select.options, function (option) {
                 if (option.value === wanted) {
@@ -1387,12 +1395,15 @@
             });
         }
 
-        var allSelect = byTestId(UPGRADE_VERSION_ALL_TESTID);
-        if (allSelect) {
-            allSelect.addEventListener("change", function () {
-                applyVersionToEveryDevice(allSelect);
+        UPGRADE_VERSION_TYPE_TESTIDS.forEach(function (testId) {
+            var typeSelect = byTestId(testId);
+            if (typeSelect) {
+                typeSelect.addEventListener("change", function () {
+                    applyVersionToDeviceType(typeSelect);
+                });
+                applyVersionToDeviceType(typeSelect);
             });
-        }
+        });
     }
 
     /**

@@ -1317,37 +1317,54 @@ def _group_versions(
     return {model: tuple(versions) for model, versions in grouped.items()}
 
 
+def _version_requests(
+    devices: Iterable[Mapping[str, object]],
+) -> tuple[tuple[str, str], ...]:
+    """Return the unique device type and model pairs for version reads."""
+    requests = {
+        (
+            str(device.get("device_type", device.get("type", ""))).strip().lower(),
+            str(device.get("model", "")).strip(),
+        )
+        for device in devices
+    }
+    return tuple(sorted((device_type, model) for device_type, model in requests if device_type and model))
+
+
 def list_available_versions(
     session: Any,
     site_id: str,
-    models: Iterable[str],
+    devices: Iterable[Mapping[str, object]],
 ) -> Mapping[str, tuple[str, ...]]:
     """Return the version list of each model at one site.
 
     Why:
-        The operator picks a version for each device, so the portal needs the
-        list before it builds the plan. One read serves every model, because a
-        read for each model would spend the rate limit for no gain.
+        The cloud defaults this endpoint to access points when the request omits
+        the device type. Each request names both the device type and model, so a
+        switch or gateway receives only versions that Mist offers for that model.
 
-        Decision (tasks.md open decision 2, closed here): the read uses the site
-        scope through ``listSiteAvailableDeviceVersions``. The note in tasks.md
-        states that both version endpoints are organization-scoped. That is not
-        true of the installed SDK: ``listSiteAvailableDeviceVersions`` sits at
-        ``mistapi/api/v1/sites/devices.py:1378`` and takes a site identifier, so
-        the contract signature needs no change.
+        The local API contract at
+        ``documentation/api/utilities/GET_sites_site_id_devices_versions.md``
+        defines ``type`` and ``model`` query parameters. It specifically requires
+        their combined use for switch and gateway devices.
 
     Args:
         session: The Mist API session. The caller owns it.
         site_id: The site identifier.
-        models: The models that the caller asked for. An empty list keeps every
-            model that the cloud returns.
+        devices: The device records that name each device type and model.
 
     Returns:
         The version list of each model.
     """
-    wanted = frozenset(str(model).strip().upper() for model in models if str(model).strip())
-    _logger().info("read the available versions of %s model(s) at site %s", len(wanted), site_id)
-    response = _resolve_endpoint("listSiteAvailableDeviceVersions")(session, site_id)
-    grouped = _group_versions(_rows(response), wanted)
+    requests = _version_requests(devices)
+    wanted = frozenset(model.upper() for _, model in requests)
+    _logger().info("read the available versions of %s device model(s) at site %s", len(requests), site_id)
+    endpoint = _resolve_endpoint("listSiteAvailableDeviceVersions")
+    rows = tuple(
+        row
+        for device_type, model in requests
+        for row in _rows(endpoint(session, site_id, type=device_type, model=model))
+    )
+    grouped = _group_versions(rows, wanted)
     _logger().debug("the cloud returned versions for %s model(s)", len(grouped))
     return grouped
