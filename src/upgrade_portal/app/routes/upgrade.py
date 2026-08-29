@@ -1085,16 +1085,17 @@ def options_view(record: dict[str, Any]) -> dict[str, Any]:
     session = cloud_session()  # The sign-in built this session, and the record never carries one.
     builder = injected_object(OPTIONS_VIEW_KEY) or module_attribute(VIEW_ATTRIBUTES)  # The seam, then the module.
     if ready or session is None or not callable(builder):  # Any one of the three already answers the page.
-        return {TARGETS_FIELD: stored, VIEW_VERSIONS_FIELD: ready}
+        return {TARGETS_FIELD: stored, VIEW_VERSIONS_FIELD: ready, "type_selections": {}}
     site_id = str(record.get("site_id", ""))  # FR-014 binds one run to one site, so one site scopes the read.
     try:  # The builder reaches the cloud, and the cloud refuses and times out.
         answer = dict(builder(session, str(record.get("org_id", "")), site_id))
     except Exception:  # A page with no row beats a page that shows a fault to the operator.
         logger.warning("upgrade: the inventory read of the site %s did not answer", site_id)  # No stack trace.
-        return {TARGETS_FIELD: stored, VIEW_VERSIONS_FIELD: ready}
+        return {TARGETS_FIELD: stored, VIEW_VERSIONS_FIELD: ready, "type_selections": {}}
     return {
         TARGETS_FIELD: stored or list(answer.get(TARGETS_FIELD, [])),  # A saved choice outranks a fresh read.
         VIEW_VERSIONS_FIELD: version_index(answer.get(VIEW_VERSIONS_FIELD)),  # One version list for each model.
+        "type_selections": dict(answer.get("type_selections", {})),
     }
 
 
@@ -1127,9 +1128,9 @@ def composed_options(record: dict[str, Any], body: dict[str, Any]) -> dict[str, 
         answer: Any = builder(session, str(record.get("org_id", "")), site_id, body)
     except ValueError:  # A refused option must reach the operator as a named field, not as a silent echo.
         raise
-    except Exception:  # A cloud fault falls back to the body, which the page already showed.
+    except Exception as failure:  # An unavailable current read must not turn stale browser data into a plan.
         logger.warning("upgrade: the inventory read of the site %s did not answer", site_id)  # No stack trace.
-        return None
+        raise ValueError("the current target availability could not be verified") from failure
     return dict(answer) if answer else None  # An empty answer means the read named no device.
 
 
@@ -1428,6 +1429,7 @@ def options_page(run_id: str) -> str:
         run_id=run_id,  # The page builds every control identifier from this value.
         targets=view[TARGETS_FIELD],  # One row for each device of the site.
         versions_by_model=view[VIEW_VERSIONS_FIELD],  # One version list for each model of those rows.
+        type_selections=view.get("type_selections", {}),  # The safe common targets of each device type.
         options=record.get("options", {}),  # The three controls show the saved choice.
         warnings=[],  # The save call answers the warnings, so the first read of the page shows none.
         **context,  # The site labels and the lock banner values.

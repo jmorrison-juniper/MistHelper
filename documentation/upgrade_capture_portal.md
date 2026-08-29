@@ -235,8 +235,17 @@ A tier value that is not 2 and not 3 gives this message: `Choose the data tier
 
 ## Choose the upgrade options
 
-The options page lists every device of the site with its firmware version.
-Choose the target version for each device that you want to upgrade.
+The options page lists every device of the site with its firmware version. It
+also provides separate access point, switch, and gateway target controls. Each
+control selects the highest numeric version returned for every eligible device
+of that type. You can still change an individual device target.
+
+Set `CAPTURE_DEFAULT_AP_VERSION`, `CAPTURE_DEFAULT_SWITCH_VERSION`, or
+`CAPTURE_DEFAULT_GATEWAY_VERSION` to prefer an approved target for one type.
+The portal uses the value only when it exactly matches a version returned for
+every eligible device of that type. A blank, malformed, unavailable, or
+incompatible setting falls back to the safe highest compatible version. A type
+with no common version remains unselected and the page explains why.
 
 The page also offers three controls.
 
@@ -250,6 +259,11 @@ The page shows a warning in two cases:
 
 - `The site holds two gateway families. The portal reports the result of each family on its own.`
 - `One device already runs the version that you chose. The portal still sends the upgrade.`
+- `No common compatible version exists for the <device type> devices.`
+
+Saving options re-reads current inventory and available versions. It rejects an
+unknown or unavailable target without changing the saved plan. Saving never
+starts an upgrade; only the later `CONFIRM` action can start one.
 
 ## Confirm and start the upgrade
 

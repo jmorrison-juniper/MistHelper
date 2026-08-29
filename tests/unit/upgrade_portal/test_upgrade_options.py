@@ -138,6 +138,7 @@ def record_inventory_call(monkeypatch: pytest.MonkeyPatch, rows: list[dict[str, 
 
     monkeypatch.setattr(mistapi.api.v1.orgs.inventory, "getOrgInventory", fake_endpoint)
     monkeypatch.setattr(mistapi, "get_all", lambda mist_session, response: rows)
+    monkeypatch.setattr(module, "list_available_versions", lambda *args: VERSION_MAP)
     return seen
 
 
@@ -219,7 +220,7 @@ class TestVersionOptions:
         rows = [SWITCH_ROW, AP_ROW, dict(SWITCH_ROW), {"model": "  "}]
         assert module.collect_models(rows) == ("AP45", "EX4400-48P")
 
-    def test_read_model_versions_passes_the_site_and_the_models(
+    def test_read_model_versions_passes_the_site_and_the_devices(
         self,
         monkeypatch: pytest.MonkeyPatch,
         fake_mist_session: Any,
@@ -227,14 +228,14 @@ class TestVersionOptions:
         """The version read is site-scoped, which the seam already proved."""
         seen: dict[str, Any] = {}
 
-        def fake_list(session: Any, site_id: str, models: Any) -> dict[str, tuple[str, ...]]:
+        def fake_list(session: Any, site_id: str, devices: Any) -> dict[str, tuple[str, ...]]:
             seen["site_id"] = site_id
-            seen["models"] = tuple(models)
+            seen["devices"] = tuple(devices)
             return {"AP45": ("0.14.29076",)}
 
         monkeypatch.setattr(module, "list_available_versions", fake_list)
         result = module.read_model_versions(fake_mist_session, "site-1", [AP_ROW])
-        assert seen == {"site_id": "site-1", "models": ("AP45",)}
+        assert seen == {"site_id": "site-1", "devices": (AP_ROW,)}
         assert result == {"AP45": ("0.14.29076",)}
 
     def test_build_version_options_joins_the_device_to_its_versions(self) -> None:
@@ -248,9 +249,20 @@ class TestVersionOptions:
                 "device_type": "switch",
                 "model": "EX4400-48P",
                 "version_before": "23.4R2-S3.9",
-                "versions": ["23.4R2-S4.11", "24.2R1.17"],
+                "version_target": "24.2R1.17",
+                "versions": ["24.2R1.17", "23.4R2-S4.11"],
             }
         ]
+
+    def test_build_version_options_falls_back_to_the_model_highest_version(self) -> None:
+        """A type default that a model lacks must not leave that device unselected."""
+        selections = {"ap": {"selected_version": "0.15.34994"}}
+        rows = module.build_version_options(
+            [AP_ROW],
+            {"AP45": ("0.14.29076", "0.15.34533")},
+            selections,
+        )
+        assert rows[0]["version_target"] == "0.15.34533"
 
     def test_a_model_with_no_version_list_gets_an_empty_list(self) -> None:
         """A missing model must not raise, because the operator still sees the row."""
@@ -510,6 +522,74 @@ class TestTargetWarnings:
         entries = module.build_targets([SWITCH_ROW], choices)
         assert module.target_warnings(entries) == (module.WARNING_SAME_VERSION,)
 
+
+class TestTypedVersionSelections:
+    """The safe, type-specific candidates that the options page uses."""
+
+    def test_the_selector_intersects_normalized_versions_and_ranks_them_numerically(self) -> None:
+        """A type default must be common to every device and use numeric ordering."""
+        devices = [
+            dict(AP_ROW, model="AP45"),
+            dict(AP_ROW, mac="5c5b350e0005", model="AP32"),
+            dict(SWITCH_ROW),
+        ]
+        versions = {
+            "AP45": (" 0.14.9 ", "0.14.12", "0.14.20"),
+            "AP32": ("0.14.9", "0.14.12"),
+            "EX4400-48P": ("24.2R1.17",),
+        }
+        selections = module.TypedVersionSelector().select(devices, versions)
+        assert selections["ap"]["candidates"] == ["0.14.12", "0.14.9"]
+        assert selections["ap"]["selected_version"] == "0.14.12"
+        assert selections["switch"]["selected_version"] == "24.2R1.17"
+
+    def test_the_selector_warns_when_a_type_has_no_common_candidate(self) -> None:
+        """The page must leave an incompatible type unselected."""
+        devices = [dict(AP_ROW, model="AP45"), dict(AP_ROW, mac="5c5b350e0005", model="AP32")]
+        selections = module.TypedVersionSelector().select(devices, {"AP45": ("0.14.12",), "AP32": ("0.14.9",)})
+        assert selections["ap"]["selected_version"] is None
+        assert selections["ap"]["warning"] == module.WARNING_NO_COMMON_CANDIDATE.format(device_type="access point")
+
+
+class TestSaveTimeVersionValidation:
+    """The save builder rejects targets that current availability no longer offers."""
+
+    def test_a_stale_target_is_refused_before_any_plan_is_built(
+        self, monkeypatch: pytest.MonkeyPatch, fake_mist_session: Any
+    ) -> None:
+        """A page-time version is unsafe when the current read no longer returns it."""
+        monkeypatch.setattr(module, "read_upgrade_inventory", lambda *args: module.InventoryRead([AP_ROW], []))
+        monkeypatch.setattr(module, "read_model_versions", lambda *args: {"AP45": ("0.14.29216",)})
+        with pytest.raises(module.BadOptionError) as caught:
+            module.build_options_record(
+                fake_mist_session,
+                ORG_ID,
+                SITE_ID,
+                {"targets": [{"mac": AP_ROW["mac"], "version_target": "0.14.99999"}]},
+            )
+        assert caught.value.field == "version_target"
+
+
+class TestTypeVersionOverrides:
+    """The three operational overrides remain isolated and must be compatible."""
+
+    @pytest.mark.parametrize(
+        ("variable", "device_type", "model", "version"),
+        [
+            ("CAPTURE_DEFAULT_AP_VERSION", "ap", "AP45", "0.14.9"),
+            ("CAPTURE_DEFAULT_SWITCH_VERSION", "switch", "EX4400-48P", "24.2R1.17"),
+            ("CAPTURE_DEFAULT_GATEWAY_VERSION", "gateway", "SRX345", "23.4R2-S4.11"),
+        ],
+    )
+    def test_a_compatible_override_applies_only_to_its_type(
+        self, variable: str, device_type: str, model: str, version: str
+    ) -> None:
+        """An approved exact common candidate outranks only its own default."""
+        devices = [dict(AP_ROW), dict(SWITCH_ROW), dict(JUNOS_ROW)]
+        versions = {"AP45": ("0.14.9", "0.14.12"), "EX4400-48P": ("24.2R1.17",), "SRX345": ("23.4R2-S4.11",)}
+        selections = module.TypedVersionSelector().select(devices, versions, {variable: version})
+        assert selections[device_type]["selected_version"] == version
+
     def test_a_device_with_no_version_before_reports_no_repeat_warning(self) -> None:
         """An empty reading must not look like a match."""
         row = dict(AP_ROW, version="")
@@ -625,8 +705,9 @@ class TestBuildOptionsRecord:
         fake_mist_session: Any,
     ) -> None:
         """The operator may have picked the row above the one they meant."""
-        record_inventory_call(monkeypatch, [SWITCH_ROW])
-        body = {"targets": [{"mac": "5c5b350e0001", "version_target": "23.4R2-S3.9"}]}
+        current = dict(SWITCH_ROW, version="24.2R1.17")
+        record_inventory_call(monkeypatch, [current])
+        body = {"targets": [{"mac": "5c5b350e0001", "version_target": "24.2R1.17"}]}
         answer = module.build_options_record(fake_mist_session, ORG_ID, SITE_ID, body)
         assert answer["warnings"] == [module.WARNING_SAME_VERSION]
 

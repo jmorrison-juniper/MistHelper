@@ -7,6 +7,21 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Use safe type-specific firmware targets in the capture portal
+
+- **Defaults (Added)**: The upgrade capture portal now selects the numerically
+  highest compatible firmware version for each access point, switch, and gateway
+  type. Each device uses the type target when compatible. Otherwise, it uses its
+  own highest compatible version.
+- **Configuration (Added)**: `CAPTURE_DEFAULT_AP_VERSION`,
+  `CAPTURE_DEFAULT_SWITCH_VERSION`, and `CAPTURE_DEFAULT_GATEWAY_VERSION` can
+  set a type target. The portal ignores an unavailable value and uses the safe
+  fallback.
+- **Controls (Changed)**: The options page now has separate access point, switch,
+  and gateway selectors. The retired all-device selector is removed.
+- **Discovery (Fixed)**: Version discovery now sends the Mist device type and
+  model. Mist otherwise defaults the version request to access points.
+
 ### The capture portal waited on serial cloud calls and raced on the tracker (issue #2090)
 
 - **Strategy (Applied)**: `documentation/python-parallelism-matrix.md` decides the

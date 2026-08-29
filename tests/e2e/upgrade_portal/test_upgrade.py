@@ -53,7 +53,11 @@ CSRF_META_ID = "csrf-meta"  # `layout.html` publishes the token under this ident
 CSRF_HEADER = "X-CSRFToken"  # `portal.js` sends the token under this header name.
 
 # The options page controls.
-VERSION_SELECT_ALL_ID = "upgrade-version-select-all"
+TYPE_VERSION_SELECT_IDS = (
+    "upgrade-version-select-ap",
+    "upgrade-version-select-switch",
+    "upgrade-version-select-gateway",
+)
 REBOOT_GROUP_ID = "upgrade-reboot-group"
 REBOOT_YES_ID = "upgrade-reboot-yes"
 REBOOT_NO_ID = "upgrade-reboot-no"
@@ -420,11 +424,13 @@ def _chose_one_version_for_every_device(page: Any) -> bool:
     Returns:
         True when the page offered a version and the bulk control took it.
     """
-    picker = page.get_by_test_id(VERSION_SELECT_ALL_ID)
-    if picker.locator("option").count() <= OFFERED_VERSION_INDEX:
-        return False  # The entry at 0 is the empty prompt, so the site offers no version at all.
-    picker.select_option(index=OFFERED_VERSION_INDEX)  # `portal.js` copies it into every device that offers it.
-    return True
+    chose_target = False
+    for test_id in TYPE_VERSION_SELECT_IDS:
+        picker = page.get_by_test_id(test_id)
+        if picker.locator("option").count() > OFFERED_VERSION_INDEX:
+            picker.select_option(index=OFFERED_VERSION_INDEX)
+            chose_target = True
+    return chose_target
 
 
 def _saved_options(page: Any, run_id: str) -> bool:
@@ -510,7 +516,9 @@ class TestUpgradeOptions:
         Args:
             options_page: The page that shows the version picker.
         """
-        sync_api.expect(options_page.get_by_test_id(VERSION_SELECT_ALL_ID)).to_be_visible()
+        for test_id in TYPE_VERSION_SELECT_IDS:
+            sync_api.expect(options_page.get_by_test_id(test_id)).to_be_visible()
+        assert options_page.get_by_test_id("upgrade-version-select-all").count() == 0
         sync_api.expect(options_page.get_by_test_id(REBOOT_GROUP_ID)).to_be_visible()
         sync_api.expect(options_page.get_by_test_id(STRATEGY_GROUP_ID)).to_be_visible()
         sync_api.expect(options_page.get_by_test_id(JUNOS_GROUP_ID)).to_be_visible()

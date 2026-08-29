@@ -62,6 +62,7 @@ class Recorder:
                 empty answer with status 200.
         """
         self.calls: list[tuple[str, tuple[Any, ...]]] = []
+        self.keywords: list[dict[str, Any]] = []
         self.response = response if response is not None else FakeResponse(200, {})
 
     def __call__(self, name: str) -> Callable[..., FakeResponse]:
@@ -74,7 +75,7 @@ class Recorder:
             A callable that records its arguments and returns the answer.
         """
 
-        def _call(*args: Any) -> FakeResponse:
+        def _call(*args: Any, **kwargs: Any) -> FakeResponse:
             """Record one call and return the canned answer.
 
             Args:
@@ -84,6 +85,7 @@ class Recorder:
                 The canned answer.
             """
             self.calls.append((name, args))
+            self.keywords.append(kwargs)
             return self.response
 
         return _call
@@ -842,8 +844,8 @@ class TestReadUpgradeStatus:
 class TestListAvailableVersions:
     """Tests for the version reader."""
 
-    def test_performs_one_cloud_read_for_every_model(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """One read serves every model, so the rate limit stays intact.
+    def test_reads_each_device_type_and_model(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Each read names the type, so the cloud does not default to access points.
 
         Args:
             monkeypatch: The pytest patch helper.
@@ -851,8 +853,18 @@ class TestListAvailableVersions:
         rows = [{"model": "AP45", "version": "0.14.29181"}, {"model": "EX4100-48P", "version": "23.4R2-S3"}]
         recorder = Recorder(FakeResponse(200, rows))
         install(monkeypatch, recorder)
-        upgrade_service.list_available_versions(object(), SITE_ID, ["AP45", "EX4100-48P"])
-        assert recorder.names == ["listSiteAvailableDeviceVersions"]
+        devices = (
+            {"type": "ap", "model": "AP45"},
+            {"type": "switch", "model": "EX4100-48P"},
+            {"type": "gateway", "model": "SRX1500"},
+        )
+        upgrade_service.list_available_versions(object(), SITE_ID, devices)
+        assert recorder.names == ["listSiteAvailableDeviceVersions"] * 3
+        assert recorder.keywords == [
+            {"type": "ap", "model": "AP45"},
+            {"type": "gateway", "model": "SRX1500"},
+            {"type": "switch", "model": "EX4100-48P"},
+        ]
 
     def test_uses_the_site_scope(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """The read passes the site identifier.
@@ -862,8 +874,20 @@ class TestListAvailableVersions:
         """
         recorder = Recorder(FakeResponse(200, []))
         install(monkeypatch, recorder)
-        upgrade_service.list_available_versions(object(), SITE_ID, [])
+        upgrade_service.list_available_versions(object(), SITE_ID, [{"type": "ap", "model": "AP45"}])
         assert recorder.calls[0][1][1] == SITE_ID
+
+    def test_reads_the_portal_device_type_field(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Portal target rows use ``device_type`` instead of inventory ``type``."""
+        recorder = Recorder(FakeResponse(200, [{"model": "EX4100-48P", "version": "23.4R2-S3"}]))
+        install(monkeypatch, recorder)
+        grouped = upgrade_service.list_available_versions(
+            object(),
+            SITE_ID,
+            [{"device_type": "switch", "model": "EX4100-48P"}],
+        )
+        assert recorder.keywords == [{"type": "switch", "model": "EX4100-48P"}]
+        assert grouped == {"EX4100-48P": ("23.4R2-S3",)}
 
     def test_groups_the_versions_by_model(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """The portal shows one version list for each model.
@@ -877,19 +901,20 @@ class TestListAvailableVersions:
             {"model": "EX4100-48P", "version": "23.4R2-S3"},
         ]
         install(monkeypatch, Recorder(FakeResponse(200, rows)))
-        grouped = upgrade_service.list_available_versions(object(), SITE_ID, ["AP45"])
+        grouped = upgrade_service.list_available_versions(object(), SITE_ID, [{"type": "ap", "model": "AP45"}])
         assert grouped == {"AP45": ("0.14.29181", "0.12.27219")}
 
-    def test_keeps_every_model_for_an_empty_request(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """An empty model list keeps every model that the cloud returned.
+    def test_makes_no_request_without_a_device_type_and_model(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A partial device cannot make a safe version request.
 
         Args:
             monkeypatch: The pytest patch helper.
         """
-        rows = [{"model": "AP45", "version": "0.14.29181"}, {"model": "EX4100-48P", "version": "23.4R2-S3"}]
-        install(monkeypatch, Recorder(FakeResponse(200, rows)))
+        recorder = Recorder(FakeResponse(200, [{"model": "AP45", "version": "0.14.29181"}]))
+        install(monkeypatch, recorder)
         grouped = upgrade_service.list_available_versions(object(), SITE_ID, [])
-        assert sorted(grouped) == ["AP45", "EX4100-48P"]
+        assert grouped == {}
+        assert recorder.calls == []
 
     def test_drops_a_row_with_no_version(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A row with no version helps nobody, so the reader drops it.
@@ -898,7 +923,7 @@ class TestListAvailableVersions:
             monkeypatch: The pytest patch helper.
         """
         install(monkeypatch, Recorder(FakeResponse(200, [{"model": "AP45", "version": ""}])))
-        assert upgrade_service.list_available_versions(object(), SITE_ID, []) == {}
+        assert upgrade_service.list_available_versions(object(), SITE_ID, [{"type": "ap", "model": "AP45"}]) == {}
 
     def test_returns_nothing_for_a_cloud_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A cloud error answers with no list, so the reader returns no model.
@@ -907,7 +932,7 @@ class TestListAvailableVersions:
             monkeypatch: The pytest patch helper.
         """
         install(monkeypatch, Recorder(FakeResponse(500, None)))
-        assert upgrade_service.list_available_versions(object(), SITE_ID, ["AP45"]) == {}
+        assert upgrade_service.list_available_versions(object(), SITE_ID, [{"type": "ap", "model": "AP45"}]) == {}
 
 
 class TestResolveEndpoint:

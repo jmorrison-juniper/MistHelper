@@ -57,6 +57,7 @@
 {% set run_key = run_id | default('', true) %}
 {% set target_rows = targets | default([], true) %}
 {% set versions_map = versions_by_model | default({}, true) %}
+{% set typed_selections = type_selections | default({}, true) %}
 {% set warning_lines = warnings | default([], true) %}
 {% set option_values = options | default({}, true) %}
 {% set site_label = site_name | default('', true) %}
@@ -114,31 +115,29 @@
     <p class="portal-card-note">The site identifier is <code data-testid="upgrade-site-id">{{ site_key }}</code>.</p>
   {% endif %}
 
-  <div class="mb-3">
-    <label class="form-label" for="upgrade-version-select-all">
-      Apply one version to every device that offers it
-    </label>
-
-    {#
-      The control writes into each device select. A device whose model does not
-      offer the chosen version keeps the version the operator picked for it.
-    #}
-    <select class="form-select"
-            id="upgrade-version-select-all"
-            data-testid="upgrade-version-select-all"
-            data-version-all
-            aria-describedby="upgrade-version-select-all-note">
-      <option value="">Choose a version for each device below</option>
-      {% for version in every_version %}
-        <option value="{{ version }}">{{ version }}</option>
-      {% endfor %}
-    </select>
-
-    <p class="portal-card-note" id="upgrade-version-select-all-note">
-      The portal writes this version into every device that offers it. A device
-      that does not offer this version keeps its own value.
-    </p>
-  </div>
+  {% for device_type, label in [('ap', 'access points'), ('switch', 'switches'), ('gateway', 'gateways')] %}
+    {% set selection = typed_selections.get(device_type, {}) %}
+    {% set candidates = selection.get('candidates', []) %}
+    {% set selected = selection.get('selected_version', '') %}
+    <div class="mb-3">
+      <label class="form-label" for="upgrade-version-select-{{ device_type }}">
+        Apply a version to compatible {{ label }}
+      </label>
+      <select class="form-select"
+              id="upgrade-version-select-{{ device_type }}"
+              data-testid="upgrade-version-select-{{ device_type }}"
+              data-version-type="{{ device_type }}"
+              aria-describedby="upgrade-version-select-{{ device_type }}-note">
+        <option value="">Choose a version for each {{ label }} device below</option>
+        {% for version in candidates %}
+          <option value="{{ version }}" {{ 'selected' if version == selected else '' }}>{{ version }}</option>
+        {% endfor %}
+      </select>
+      <p class="portal-card-note" id="upgrade-version-select-{{ device_type }}-note">
+        {{ selection.get('warning', 'The portal applies this version only to compatible ' ~ label ~ '.') }}
+      </p>
+    </div>
+  {% endfor %}
 
   <fieldset class="bubble-group mb-3"
             data-testid="upgrade-strategy-group"
@@ -336,6 +335,7 @@
                     id="upgrade-version-select-{{ mac }}"
                     data-testid="upgrade-version-select-{{ mac }}"
                     data-version-for="{{ mac }}"
+                    data-device-type="{{ device.device_type | default('', true) }}"
                     aria-label="Target version for {{ device_name }}">
               <option value="">Do not upgrade this device</option>
               {% for version in model_versions %}
