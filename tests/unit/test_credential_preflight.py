@@ -78,6 +78,45 @@ class TestCredentialPreflight:
         monkeypatch.setenv("MIST_HOST", "api.mist.com")  # WHY: --login authenticates via email/password, no token.
         assert MistHelper._preflight_verify_credentials(require_token=False) is None
 
+    def test_capture_portal_starts_without_an_environment_token(self, monkeypatch):
+        """The capture portal validates its host and defers session setup to its sign-in route."""
+        _clear_credential_env(monkeypatch)
+        monkeypatch.setenv("MIST_HOST", "api.mist.com")  # WHY: isolate the no-token launch case.
+        session_initializer = MagicMock()
+        monkeypatch.setattr(MistHelper.MistSessionInitializer, "initialize", session_initializer)
+        args = argparse.Namespace(
+            login=False, capture_portal=True, test=False, testinteractive=False
+        )  # WHY: match the direct --capture-portal invocation.
+
+        assert MistHelper._establish_mist_session(args) is None
+
+        session_initializer.assert_not_called()  # WHY: browser sign-in constructs the Mist session later.
+
+    def test_capture_portal_still_rejects_an_invalid_host(self, monkeypatch):
+        """The capture portal bypasses the token requirement, not host validation."""
+        _clear_credential_env(monkeypatch)
+        monkeypatch.setenv("MIST_HOST", "your_host_here")
+        args = argparse.Namespace(login=False, capture_portal=True, test=False, testinteractive=False)
+
+        with pytest.raises(SystemExit) as exc_info:
+            MistHelper._establish_mist_session(args)
+
+        assert exc_info.value.code == 1
+
+    def test_non_capture_mode_still_requires_an_environment_token(self, monkeypatch):
+        """A normal token mode rejects a missing token before session initialization."""
+        _clear_credential_env(monkeypatch)
+        monkeypatch.setenv("MIST_HOST", "api.mist.com")
+        session_initializer = MagicMock()
+        monkeypatch.setattr(MistHelper.MistSessionInitializer, "initialize", session_initializer)
+        args = argparse.Namespace(login=False, capture_portal=False, test=False, testinteractive=False)
+
+        with pytest.raises(SystemExit) as exc_info:
+            MistHelper._establish_mist_session(args)
+
+        assert exc_info.value.code == 1
+        session_initializer.assert_not_called()  # WHY: the fail-closed rule remains before network work.
+
     def test_preflight_never_imports_network_libraries(self):
         """SC-004: the preflight helper's source imports neither requests nor mistapi (structural zero-HTTP)."""
         source = inspect.getsource(MistHelper._preflight_verify_credentials)

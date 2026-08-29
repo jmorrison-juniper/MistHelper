@@ -631,8 +631,10 @@ The portal needs ArangoDB for the capture records and Redis for the site lock.
 One site takes one operator at a time. The portal keeps every capture, and it
 writes a CSV backup file under `data/` when the database write fails.
 
-When the portal starts without an environment token, it offers a browser token
-sign-in. The token remains in the browser session and is never logged or saved.
+The `--capture-portal` command validates `MIST_HOST`, but does not require an
+environment token at startup. When the portal starts without an environment
+token, it offers a browser token sign-in. The token remains in the browser
+session and is never logged or saved.
 The upgrade options select all, one, or more device types. The portal marks a
 known running firmware version that differs from its safe target.
 

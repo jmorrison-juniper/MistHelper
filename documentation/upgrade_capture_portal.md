@@ -100,6 +100,10 @@ The console prints the address. Open that address in a browser.
 
 To stop the portal, press `Ctrl+C` in the console.
 
+The command validates `MIST_HOST`, but it does not require `MIST_APITOKEN` or
+`MIST_API_TOKEN` at startup. Without an environment token, the sign-in page
+offers the browser token mode.
+
 ### Environment variables
 
 | Variable | Default | Purpose |
