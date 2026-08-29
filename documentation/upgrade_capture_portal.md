@@ -141,12 +141,18 @@ may reach the portal.
 The sign-in page asks for your work email address. The portal uses that address
 as your name on the site lock and on every record that you write.
 
-The page offers two credential modes.
+The page offers three credential modes.
 
 | Mode | Value in the request | Password needed |
 | --- | --- | --- |
 | Environment API token | `environment_token` | **No** |
 | Mist account | `provider_login` | **Yes** |
+| Browser API token | `browser_token` | **No** |
+
+The browser token control appears only when the portal starts without an
+environment token. The portal sends the token to Mist for the current browser
+session. It reads the safe token name from Mist and uses that name for the
+audit record and site lock. The portal does not store, show, or log the token.
 
 **Environment API token.** The portal reads the token from the environment
 variable `MIST_APITOKEN` or `MIST_API_TOKEN`. You type your email address and
@@ -264,6 +270,15 @@ The page shows a warning in two cases:
 Saving options re-reads current inventory and available versions. It rejects an
 unknown or unavailable target without changing the saved plan. Saving never
 starts an upgrade; only the later `CONFIRM` action can start one.
+
+Select all supported device types, one device type, or more than one device
+type. The selected types limit the target rows and the saved upgrade plan. The
+pre-check capture still records every device.
+
+The page marks a known running firmware version when it differs from the safe
+target. A compatible configured type target has priority. Otherwise, the portal
+uses the highest compatible version for the device model. An unknown running
+version has no mismatch mark.
 
 ## Confirm and start the upgrade
 

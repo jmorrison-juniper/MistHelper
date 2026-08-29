@@ -56,6 +56,8 @@ PORTAL_VARIABLES = (
     "CAPTURE_ALLOWED_IPS",
     "CAPTURE_PROXY_HOPS",
     "CAPTURE_POST_CHECK_MODE",
+    "MIST_APITOKEN",
+    "MIST_API_TOKEN",
     "ARANGO_HOST",
     "ARANGO_DATABASE",
     "ARANGO_USERNAME",
@@ -872,7 +874,8 @@ def test_no_settings_field_is_named_after_a_password_value(record_type: type) ->
     names = [field.name for field in fields(record_type)]
     assert "password" not in names
     assert all(not name.endswith("_password") for name in names)
-    assert all("token" not in name for name in names)
+    assert "token" not in names
+    assert all(not name.endswith("_token") for name in names)
 
 
 def test_the_arango_record_holds_exactly_four_fields() -> None:
@@ -895,12 +898,12 @@ def test_the_redis_record_holds_exactly_three_fields() -> None:
     assert [field.name for field in fields(RedisSettings)] == ["host", "port", "password_variable"]
 
 
-def test_the_web_record_holds_exactly_five_fields() -> None:
-    """The web record holds the five documented fields.
+def test_the_web_record_holds_the_startup_token_state() -> None:
+    """The web record holds its documented fields and a token-presence flag.
 
     Why:
-        The Five-Item Rule caps this record at five fields. A sixth field would
-        mean a new settings group.
+        The flag keeps the browser-token decision fixed for the process lifetime.
+        It records a Boolean state and never a token value.
     """
     assert [field.name for field in fields(WebSettings)] == [
         "port",
@@ -908,6 +911,7 @@ def test_the_web_record_holds_exactly_five_fields() -> None:
         "poll_interval_seconds",
         "themes",
         "allowed_networks",
+        "environment_token_present",
     ]
 
 

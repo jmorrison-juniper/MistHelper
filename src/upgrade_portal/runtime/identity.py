@@ -102,8 +102,8 @@ CREDENTIAL_FIELD_NAMES: Final[frozenset[str]] = frozenset(
 _EMAIL_DIGEST_BYTES: Final[int] = 8  # 8 bytes give a 16 character digest
 _FORBIDDEN_STATUS: Final[int] = 403  # The status that `contracts/http-api.md` fixes for a scope refusal
 _MAX_EMAIL_LENGTH: Final[int] = 254  # The longest address a mail server accepts
-_EMAIL_PATTERN: Final[re.Pattern[str]] = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")  # One at sign, one dot
 _BROWSER_ID_PATTERN: Final[re.Pattern[str]] = re.compile(r"^[A-Za-z0-9_-]{16,128}$")  # The URL-safe shape
+_TOKEN_NAME_PATTERN: Final[re.Pattern[str]] = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
 
 # The guard below needs a generic signature. It declares the two type variables
 # here, in the form of `typing`, and not in the form of PEP 695.
@@ -159,6 +159,19 @@ def email_digest(actor_email: str) -> str:  # The only form of an address that a
     return hashlib.blake2s(candidate.encode("utf-8"), digest_size=_EMAIL_DIGEST_BYTES).hexdigest()  # One way
 
 
+def _has_valid_email_shape(candidate: str) -> bool:
+    """Report whether text has the work-email shape that the portal accepts."""
+    local, separator, domain = candidate.partition("@")
+    return bool(
+        separator
+        and local
+        and domain
+        and "@" not in domain
+        and "." in domain
+        and not any(character.isspace() for character in candidate)
+    )
+
+
 def normalize_email(raw_email: str) -> str:  # Runs before any identity reaches a lock record
     """Trim and lower-case a work email address.
 
@@ -181,7 +194,7 @@ def normalize_email(raw_email: str) -> str:  # Runs before any identity reaches 
     candidate = raw_email.strip().casefold()  # One spelling for one person
     if not candidate or len(candidate) > _MAX_EMAIL_LENGTH:  # An empty or oversize value never reaches a lock
         raise ValueError("The work email address is empty or too long.")  # No part of the value in the text
-    if _EMAIL_PATTERN.match(candidate) is None:  # A value with no domain part cannot name a work mailbox
+    if not _has_valid_email_shape(candidate):  # A value with no domain part cannot name a work mailbox
         raise ValueError("The work email address has no domain part.")  # No part of the value in the text
     return candidate  # The one spelling that every later comparison uses
 
@@ -314,6 +327,14 @@ class CredentialMode(StrEnum):  # A StrEnum, so a page and a record hold the sam
 
     ENVIRONMENT_TOKEN = "environment_token"  # nosec B105  # WHY: this names a mode. The environment holds the token
     PROVIDER_LOGIN = "provider_login"  # The operator supplies an address and a password in User Story 5
+    BROWSER_TOKEN = "browser_token"  # nosec B105  # The operator supplies a token for this browser session.
+
+
+class IdentityKind(StrEnum):
+    """The type of safe identity that a session owner holds."""
+
+    EMAIL = "email"  # The ordinary operator work address.
+    TOKEN_NAME = "token_name"  # nosec B105  # The safe token name that the cloud returns.
 
 
 class CredentialUnavailableError(RuntimeError):  # A RuntimeError, so a route catches it apart from ValueError
@@ -344,6 +365,7 @@ class SessionOwner:  # Frozen, so a stored owner cannot change while the site lo
 
     actor_email: str  # The normalized address, held for the lock record and for nothing else
     browser_id: str  # The cookie value that separates one computer from another
+    identity_kind: IdentityKind = IdentityKind.EMAIL  # Selects the validation rule for actor_email.
 
     def __post_init__(self) -> None:
         """Refuse a pair when either half fails its check.
@@ -362,8 +384,10 @@ class SessionOwner:  # Frozen, so a stored owner cannot change while the site lo
                 identifier has the wrong shape. No message holds any part of
                 either value, because a message may reach a log record.
         """
-        if normalize_email(self.actor_email) != self.actor_email:  # Raises first on an empty or malformed value
+        if self.identity_kind is IdentityKind.EMAIL and normalize_email(self.actor_email) != self.actor_email:
             raise ValueError("The work email address is not in its normalized form.")  # No value in the text
+        if self.identity_kind is IdentityKind.TOKEN_NAME and _TOKEN_NAME_PATTERN.fullmatch(self.actor_email) is None:
+            raise ValueError("The token name has the wrong shape.")
         if _BROWSER_ID_PATTERN.match(self.browser_id) is None:  # The cookie half needs the same guarantee
             raise ValueError("The browser identifier has the wrong shape.")  # The value stays out of the text
 
@@ -618,6 +642,28 @@ def build_owner(actor_email: str, browser_id: str) -> SessionOwner:
     return SessionOwner(actor_email=normalize_email(actor_email), browser_id=browser_id)  # Both halves checked
 
 
+def build_token_owner(token_name: str, browser_id: str) -> SessionOwner:
+    """Build an owner from the safe token name that the cloud returns.
+
+    Args:
+        token_name: The safe token name from the cloud identity response.
+        browser_id: The value that identifies the browser.
+
+    Returns:
+        The token-name identity pair.
+
+    Raises:
+        ValueError: If either supplied identity value has an unsafe shape.
+    """
+    if _BROWSER_ID_PATTERN.match(browser_id) is None:
+        raise ValueError("The browser identifier has the wrong shape.")
+    return SessionOwner(
+        actor_email=token_name,
+        browser_id=browser_id,
+        identity_kind=IdentityKind.TOKEN_NAME,
+    )
+
+
 def sign_in(owner: SessionOwner, cloud_session: Any, mode: CredentialMode) -> OperatorSession:
     """Register a cloud session for one owner, and mark the browser session.
 
@@ -666,6 +712,13 @@ def sign_in_with_environment_token(owner: SessionOwner, cloud_session: Any) -> O
     if not environment_token_present():  # Ask about presence alone, and read no value
         raise CredentialUnavailableError("Set MIST_APITOKEN or MIST_API_TOKEN before you sign in.")  # Names only
     return sign_in(owner, cloud_session, CredentialMode.ENVIRONMENT_TOKEN)  # One seam for both modes
+
+
+def sign_in_with_browser_token(owner: SessionOwner, cloud_session: Any) -> OperatorSession:
+    """Register a cloud session that a browser token created."""
+    if owner.identity_kind is not IdentityKind.TOKEN_NAME:
+        raise ValueError("A browser token requires a token-name identity.")
+    return sign_in(owner, cloud_session, CredentialMode.BROWSER_TOKEN)
 
 
 def current_session() -> OperatorSession | None:

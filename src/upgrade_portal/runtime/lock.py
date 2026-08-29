@@ -65,7 +65,11 @@ from typing import Any, ClassVar, Final  # Store handles, error codes, and fixed
 # still stays one way, because this module reaches `app/config.py` alone and that
 # module imports the standard library only.
 from ..app.config import RedisSettings, load_redis_settings
-from .identity import SessionOwner, email_digest  # The one identity notion, and the one safe form of an address
+from .identity import (
+    IdentityKind,
+    SessionOwner,
+    email_digest,
+)  # The one identity notion, and the one safe form of an address
 
 __all__ = [
     "ACQUIRE_ATTEMPTS",
@@ -600,7 +604,7 @@ class LockRecord:
         Returns:
             A dictionary with the flat shape the contract shows.
         """
-        return {
+        record = {
             "actor_email": self.owner.actor_email,  # The site list shows this to the next operator
             "browser_id": self.owner.browser_id,  # Separates one computer from another
             "lock_token": self.lock_token,  # Proves which acquisition holds the lock
@@ -608,6 +612,9 @@ class LockRecord:
             "acquired_at": self.acquired_at,  # When the operator first took the site
             "refreshed_at": self.refreshed_at,  # When the last heartbeat arrived
         }
+        if self.owner.identity_kind.value != "email":
+            record["identity_kind"] = self.owner.identity_kind.value
+        return record
 
     def to_json(self) -> str:
         """Return the record as the JSON text that Redis stores.
@@ -653,6 +660,7 @@ class LockRecord:
             owner = SessionOwner(
                 actor_email=str(stored.get("actor_email", "")),  # Raises on an empty or malformed address
                 browser_id=str(stored.get("browser_id", "")),  # Raises on a forged cookie shape
+                identity_kind=IdentityKind(str(stored.get("identity_kind", "email"))),
             )
         except ValueError:  # A damaged owner means the value cannot grant anything
             return None

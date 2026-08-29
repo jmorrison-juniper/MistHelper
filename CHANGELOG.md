@@ -7,6 +7,18 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Browser token and safe device selection
+
+- **Added**: The capture portal accepts a browser API token only when it started
+  without an environment token. The portal reads a safe token name for the
+  session audit and never stores, shows, or logs the token value.
+- **Added**: Operators can select all supported device types, one device type,
+  or several device types for an upgrade plan. The capture still includes every
+  device.
+- **Added**: The options page marks known firmware versions that differ from
+  the safe target. A compatible configured target takes priority. Otherwise,
+  the portal uses the highest compatible model version.
+
 ### Restore capture portal browser controls
 
 - **Fixed**: The portal JavaScript now initializes correctly. Site lock, capture,

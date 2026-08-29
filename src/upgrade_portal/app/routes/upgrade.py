@@ -115,6 +115,7 @@ VERSIONS_MODULE = "upgrade.options"  # The module that reads the version list of
 VERSIONS_ATTRIBUTES = ("read_model_versions",)  # The reader name that the module above publishes.
 VIEW_ATTRIBUTES = ("build_options_view",)  # The builder of the device rows of the options page.
 RECORD_ATTRIBUTES = ("build_options_record",)  # The builder of the stored target list.
+SELECTED_TYPES_ATTRIBUTES = ("selected_device_types",)  # The validator of selected upgrade types.
 VIEW_VERSIONS_FIELD = "versions_by_model"  # The render keyword that `options.html` reads.
 BY_MODEL_FIELD = "by_model"  # `contracts/http-api.md` section 5 fixes this answer field.
 
@@ -892,16 +893,26 @@ def built_options(record: dict[str, Any], body: dict[str, Any]) -> dict[str, Any
     Raises:
         ValueError: When one option holds a value that the portal refuses.
     """
+    reader = module_attribute(SELECTED_TYPES_ATTRIBUTES)
+    selected_types = list(reader(body)) if callable(reader) else ["ap", "switch", "gateway"]
     builder = options_builder()  # A test injects one callable here.
     if builder is not None:
         answer: Any = builder(record, body)
-        return dict(answer)
+        built = dict(answer)
+        built["selected_types"] = selected_types
+        return built
     composed = composed_options(record, body)  # The module owns the inventory read and the family.
     if composed is not None:
+        composed["selected_types"] = selected_types
         return composed
     rows = body.get(TARGETS_FIELD)  # No inventory answered, so the body carries what the page showed.
     targets = [dict(row) for row in rows if isinstance(row, dict)] if isinstance(rows, list) else []
-    return {TARGETS_FIELD: targets, "options": plain_options(body), WARNINGS_FIELD: []}
+    return {
+        TARGETS_FIELD: targets,
+        "options": plain_options(body),
+        "selected_types": selected_types,
+        WARNINGS_FIELD: [],
+    }
 
 
 def plain_options(body: dict[str, Any]) -> dict[str, Any]:
@@ -949,11 +960,21 @@ def save_options(run_id: str) -> tuple[Response, int]:
         return json_error(BAD_REQUEST_STATUS, BAD_OPTION_CODE, str(failure))
     record[TARGETS_FIELD] = built.get(TARGETS_FIELD, [])  # The run record holds one entry for each device.
     record["options"] = built.get("options", {})  # The three fields the cloud reads.
+    record["selected_types"] = list(built.get("selected_types", ["ap", "switch", "gateway"]))
     if not save_run(record):  # The store reports the true result.
         return write_failed()  # The operator retries instead of reading a choice that was never kept.
     logger.info("upgrade: the run %s holds %s targets", run_id, len(record[TARGETS_FIELD]))  # AFTER the change.
     warnings = list(built.get(WARNINGS_FIELD, []))  # One sentence for each device the operator must look at.
-    return jsonify({TARGETS_FIELD: record[TARGETS_FIELD], WARNINGS_FIELD: warnings}), OK_STATUS
+    return (
+        jsonify(
+            {
+                TARGETS_FIELD: record[TARGETS_FIELD],
+                "selected_types": record["selected_types"],
+                WARNINGS_FIELD: warnings,
+            }
+        ),
+        OK_STATUS,
+    )
 
 
 # --------------------------------------------------------------------------
@@ -1085,17 +1106,31 @@ def options_view(record: dict[str, Any]) -> dict[str, Any]:
     session = cloud_session()  # The sign-in built this session, and the record never carries one.
     builder = injected_object(OPTIONS_VIEW_KEY) or module_attribute(VIEW_ATTRIBUTES)  # The seam, then the module.
     if ready or session is None or not callable(builder):  # Any one of the three already answers the page.
-        return {TARGETS_FIELD: stored, VIEW_VERSIONS_FIELD: ready, "type_selections": {}}
+        return {
+            TARGETS_FIELD: stored,
+            VIEW_VERSIONS_FIELD: ready,
+            "type_selections": {},
+            "selected_types": list(record.get("selected_types", ["ap", "switch", "gateway"])),
+        }
     site_id = str(record.get("site_id", ""))  # FR-014 binds one run to one site, so one site scopes the read.
     try:  # The builder reaches the cloud, and the cloud refuses and times out.
         answer = dict(builder(session, str(record.get("org_id", "")), site_id))
     except Exception:  # A page with no row beats a page that shows a fault to the operator.
         logger.warning("upgrade: the inventory read of the site %s did not answer", site_id)  # No stack trace.
-        return {TARGETS_FIELD: stored, VIEW_VERSIONS_FIELD: ready, "type_selections": {}}
+        return {
+            TARGETS_FIELD: stored,
+            VIEW_VERSIONS_FIELD: ready,
+            "type_selections": {},
+            "selected_types": list(record.get("selected_types", ["ap", "switch", "gateway"])),
+        }
+    selected_types = record.get("selected_types")
+    if not isinstance(selected_types, list):
+        selected_types = answer.get("selected_types")
     return {
         TARGETS_FIELD: stored or list(answer.get(TARGETS_FIELD, [])),  # A saved choice outranks a fresh read.
         VIEW_VERSIONS_FIELD: version_index(answer.get(VIEW_VERSIONS_FIELD)),  # One version list for each model.
         "type_selections": dict(answer.get("type_selections", {})),
+        "selected_types": list(selected_types) if isinstance(selected_types, list) else ["ap", "switch", "gateway"],
     }
 
 

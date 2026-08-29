@@ -28,6 +28,7 @@
     clouds               - the label and the host of each Mist cloud.
     default_host         - the host that the page marks as chosen.
     token_mode_available - true when a token variable holds text.
+    browser_token_signin_allowed - true when startup found no environment token.
     error_message        - the reason of a refused attempt. Empty otherwise.
     page_title           - the heading text and the tab text.
     theme                - the name of the current theme. See layout.html.
@@ -51,6 +52,7 @@
 {% set cloud_rows = clouds | default([], true) %}
 {% set chosen_host = default_host | default('api.mist.com', true) %}
 {% set token_ready = token_mode_available | default(false) %}
+{% set browser_token_allowed = browser_token_signin_allowed | default(false) %}
 {% set refusal = error_message | default('', true) %}
 {% set heading = page_title | default('Sign in', true) %}
 {% set dependency_rows = dependencies | default([], true) %}
@@ -260,6 +262,32 @@
             Sign in with the API token that this server already holds
           </label>
         </div>
+      {% endif %}
+
+      {% if browser_token_allowed %}
+        <div class="bubble-option">
+          <input type="radio"
+                 id="signin-mode-browser-token"
+                 name="mode"
+                 class="bubble-option-input"
+                 value="browser_token">
+          <label class="bubble-option-label" for="signin-mode-browser-token">
+            Sign in with a token for this browser session
+          </label>
+        </div>
+        <label class="form-label" for="signin-browser-token">Mist API token</label>
+        <input type="password"
+               id="signin-browser-token"
+               name="token"
+               class="form-control"
+               data-testid="signin-browser-token"
+               autocomplete="off"
+               spellcheck="false"
+               aria-describedby="signin-browser-token-note">
+        <p class="portal-card-note" id="signin-browser-token-note">
+          The portal sends this token to Mist for this browser session. The
+          portal does not store, show, or log the token value.
+        </p>
       {% endif %}
 
       <p class="bubble-option-hint">

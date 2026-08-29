@@ -934,6 +934,38 @@ def test_the_options_page_draws_the_three_type_version_controls(
     assert 'data-testid="upgrade-version-select-all"' not in page
 
 
+def test_the_options_page_marks_known_firmware_mismatches_only(
+    upgrade_app: Flask,
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """A known difference has a marker, and an unknown version does not."""
+    known = dict(
+        PROBE_DEVICE_ROW,
+        safe_target="24.2R1.17",
+        target_source="model_fallback",
+        firmware_mismatch=True,
+    )
+    unknown = dict(
+        PROBE_DEVICE_ROW,
+        mac="5c5b350e0002",
+        version_before="",
+        safe_target="24.2R1.17",
+        target_source="model_fallback",
+        firmware_mismatch=False,
+    )
+    upgrade_app.config[OPTIONS_VIEW_KEY] = lambda session, org_id, site_id: {
+        "targets": [known, unknown],
+        "versions_by_model": {PROBE_MODEL: list(PROBE_VERSIONS)},
+        "type_selections": {},
+    }
+    run_id = seed_run(run_store, "pre_capture_done")
+    page = upgrade_client.get(OPTIONS_PAGE_TEMPLATE.format(run_id=run_id)).get_data(as_text=True)
+    assert f'data-testid="firmware-mismatch-{PROBE_MAC}"' in page
+    assert 'data-testid="firmware-mismatch-5c5b350e0002"' not in page
+    assert 'data-safe-target="24.2R1.17"' in page
+
+
 def test_an_unavailable_target_is_rejected_without_replacing_the_saved_plan(
     upgrade_client: FlaskClient, run_store: RecordingRunStore, monkeypatch: pytest.MonkeyPatch
 ) -> None:

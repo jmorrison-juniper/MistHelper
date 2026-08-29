@@ -695,6 +695,7 @@ def apply_portal_config(app: Flask, settings: PortalSettings) -> None:
     app.config["PORTAL_SETTINGS"] = settings  # The whole frozen record, for a route that needs more.
     app.config["POLL_INTERVAL_SECONDS"] = settings.web.poll_interval_seconds  # The page reads this value.
     app.config["THEMES"] = list(settings.web.themes)  # A list, because a template iterates it.
+    app.config["BROWSER_TOKEN_SIGNIN_ALLOWED"] = not settings.web.environment_token_present
     app.config["WTF_CSRF_TIME_LIMIT"] = CSRF_TOKEN_SECONDS  # The beat must outlive the lock it renews.
 
 

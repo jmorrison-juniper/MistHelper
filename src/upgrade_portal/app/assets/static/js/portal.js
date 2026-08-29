@@ -87,6 +87,7 @@
     var UPGRADE_START_TESTID = "upgrade-start-button";
     var UPGRADE_STATE_TESTID = "upgrade-state";
     var UPGRADE_REFRESH_TESTID = "upgrade-refresh-button";
+    var BROWSER_TOKEN_SIGNIN_TESTID = "signin-browser-token";
 
     /* The stop identifiers. contracts/ui-testids.md lines 117-125 fix every
      * value except the third list, which FR-038f needs and the contract omits. */
@@ -1248,6 +1249,51 @@
     }
 
     /**
+     * Returns the device types that the operator selected for this upgrade.
+     *
+     * @returns {Array<string>} The selected supported device types.
+     */
+    function selectedDeviceTypes() {
+        var selected = [];
+        var choices = document.querySelectorAll("[data-device-type-choice]");
+        Array.prototype.forEach.call(choices, function (choice) {
+            if (choice.checked && choice.value) {
+                selected.push(choice.value);
+            }
+        });
+        return selected;
+    }
+
+    /**
+     * Shows target rows for selected types and hides every other type.
+     *
+     * @returns {void}
+     */
+    function filterUpgradeTargetRows() {
+        var selected = selectedDeviceTypes();
+        var rows = document.querySelectorAll("[data-version-for]");
+        Array.prototype.forEach.call(rows, function (select) {
+            var row = select.closest("tr");
+            if (row) {
+                row.hidden = selected.indexOf(select.getAttribute("data-device-type")) === -1;
+            }
+        });
+    }
+
+    /**
+     * Updates the all-types checkbox after one type checkbox changes.
+     *
+     * @returns {void}
+     */
+    function syncAllDeviceTypes() {
+        var allChoice = document.querySelector("[data-select-all-device-types]");
+        if (allChoice) {
+            allChoice.checked = selectedDeviceTypes().length === 3;
+        }
+        filterUpgradeTargetRows();
+    }
+
+    /**
      * Collects the target list for the upgrade option body.
      *
      * Why: contracts/http-api.md lines 209-216 fix the body shape. A device
@@ -1262,7 +1308,8 @@
         Array.prototype.forEach.call(selects, function (select) {
             var version = (select.value || "").trim();
             var mac = (select.getAttribute("data-version-for") || "").trim();
-            if (version && mac) {
+            var deviceType = select.getAttribute("data-device-type");
+            if (version && mac && selectedDeviceTypes().indexOf(deviceType) !== -1) {
                 targets.push({ mac: mac, version_target: version });
             }
         });
@@ -1345,6 +1392,7 @@
         var strategyChoice = checkedRadioValue(UPGRADE_STRATEGY_GROUP_TESTID, "big_bang");  /* Strategy defaults to big bang. */
         var payload = {
             targets: collectUpgradeTargets(),
+            selected_types: selectedDeviceTypes(),
             reboot: rebootChoice === "yes",  /* The saved field stays a boolean. */
             junos_file_action: junosChoice === "yes",  /* The saved field stays a boolean. */
             strategy: strategyChoice  /* The saved field stays the strategy string. */
@@ -1403,6 +1451,65 @@
                 });
                 applyVersionToDeviceType(typeSelect);
             }
+        });
+        var allChoice = document.querySelector("[data-select-all-device-types]");
+        if (allChoice) {
+            allChoice.addEventListener("change", function () {
+                var choices = document.querySelectorAll("[data-device-type-choice]");
+                Array.prototype.forEach.call(choices, function (choice) {
+                    choice.checked = allChoice.checked;
+                });
+                filterUpgradeTargetRows();
+            });
+        }
+        var choices = document.querySelectorAll("[data-device-type-choice]");
+        Array.prototype.forEach.call(choices, function (choice) {
+            choice.addEventListener("change", syncAllDeviceTypes);
+        });
+        filterUpgradeTargetRows();
+    }
+
+    /**
+     * Sends a browser token only to the portal sign-in endpoint.
+     *
+     * @returns {void}
+     */
+    function initBrowserTokenSignIn() {
+        var tokenInput = byTestId(BROWSER_TOKEN_SIGNIN_TESTID);
+        if (!tokenInput) {
+            return;
+        }
+        var form = tokenInput.closest("form");
+        if (!form) {
+            return;
+        }
+        form.addEventListener("submit", function (event) {
+            var selected = form.querySelector('input[name="mode"]:checked');
+            if (!selected || selected.value !== "browser_token") {
+                return;
+            }
+            event.preventDefault();
+            var token = tokenInput.value.trim();
+            if (!token) {
+                showFlash("Type a Mist API token before you sign in.", "danger");
+                return;
+            }
+            var hostInput = form.querySelector('select[name="host"]');
+            var body = {
+                mode: "browser_token",
+                host: hostInput ? hostInput.value : "",
+                token: token
+            };
+            tokenInput.value = "";
+            fetchJson("/auth/signin", { method: "POST", body: body })
+                .then(function (answer) {
+                    if (answer && answer.next === "/select/org") {
+                        window.location.assign(answer.next);
+                    }
+                })
+                .catch(function (error) {
+                    showRequestError(error);
+                });
         });
     }
 
@@ -2429,6 +2536,7 @@
         /* The gates run before the pages that hold them. A page then starts
          * with a button state that matches the field. */
         initConfirmGates();
+        initBrowserTokenSignIn();
         initUpgradeOptionsPage();
         initUpgradeConfirmPage();
         initRunPage();
@@ -2460,7 +2568,10 @@
     window.upgradePortal.startCapturePoll = startCapturePoll;
     window.upgradePortal.stopCapturePoll = stopCapturePoll;
     window.upgradePortal.applyConfirmGate = applyConfirmGate;
+    window.upgradePortal.initBrowserTokenSignIn = initBrowserTokenSignIn;
     window.upgradePortal.collectUpgradeTargets = collectUpgradeTargets;
+    window.upgradePortal.selectedDeviceTypes = selectedDeviceTypes;
+    window.upgradePortal.filterUpgradeTargetRows = filterUpgradeTargetRows;
     window.upgradePortal.paintUpgradeWarnings = paintUpgradeWarnings;
     window.upgradePortal.saveUpgradeOptions = saveUpgradeOptions;
     window.upgradePortal.startUpgrade = startUpgrade;

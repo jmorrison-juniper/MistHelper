@@ -42,6 +42,7 @@ from collections.abc import Iterator
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 
 import flask
 import pytest
@@ -498,6 +499,7 @@ def stand_in_device(index: int, kind: str) -> dict[str, Any]:
         "mac": f"00000000000{index}",  # A shape that reads as a hardware address.
         "model": f"E2E-{kind.upper()}",  # The model column of the inventory page.
         "serial": f"E2ESERIAL000{index}",  # The serial column of the inventory page.
+        "ip": f"192.0.2.{index}",  # A documentation-range address for the inventory address column.
         "version": "0.14.29216",  # The running firmware version that a capture records.
         "status": "connected",  # The state column, so no row reads as unknown.
         "site_id": STAND_IN_SITE_ID,  # The site that owns every stand-in device.
@@ -904,6 +906,17 @@ def _register_operator(email: str, browser_id: str) -> None:
     identity.SESSION_REGISTRY.register(identity.OperatorSession(owner, StandInCloudSession(), mode))
 
 
+def _skip_storage_bootstrap() -> None:
+    """Keep the stand-in application independent from external storage.
+
+    Why:
+        Browser tests replace every storage seam after the factory returns.
+        A storage bootstrap would only wait for unavailable services. The
+        temporary replacement affects the E2E child process during application
+        creation and never changes the production application.
+    """
+
+
 def build_stand_in_app() -> Any:
     """Build the portal with two signed-in operators and no cloud reach.
 
@@ -927,6 +940,7 @@ def build_stand_in_app() -> Any:
     Returns:
         The Flask application that the server process serves.
     """
+    from src.upgrade_portal.app import wiring  # The test replaces its storage call only while the app starts.
     from src.upgrade_portal.app.factory import create_app  # Late, so a plain collection never builds an app.
     from src.upgrade_portal.app.routes import (
         capture,  # Late as well. It owns the collection seam.
@@ -935,7 +949,8 @@ def build_stand_in_app() -> Any:
         upgrade,  # Late as well. It owns the two options seams.
     )
 
-    built = create_app()  # The production application, with no change to any shipped line.
+    with patch.object(wiring, "prepare_storage", _skip_storage_bootstrap):
+        built = create_app()  # The production application, with no storage wait in this isolated test process.
     built.config[select.MIST_READER_KEY] = stand_in_cloud_read  # The site picker then reads no network.
     built.config[select.DEVICE_READER_KEY] = stand_in_device_read  # The inventory page reads no network.
     built.config[upgrade.OPTIONS_VIEW_KEY] = stand_in_options_view  # The options page then draws every device.

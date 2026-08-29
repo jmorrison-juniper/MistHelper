@@ -209,6 +209,28 @@ class RecordingTokenSession:
         return FakeCloudSession(CLOUD_SUCCESS)  # The token mode never calls the login method.
 
 
+class RecordingBrowserTokenSession:
+    """Record the browser-token builder call without keeping a token.
+
+    Why:
+        The browser-token path may use the submitted value at the cloud boundary.
+        The test proves that it reaches no durable portal record.
+    """
+
+    def __init__(self) -> None:
+        """Create the recorder and one token session."""
+        self.call_count = 0  # The test checks the one permitted cloud boundary.
+        self.hosts: list[str] = []  # A host is safe to retain for the assertion.
+        self.session = FakeCloudSession(CLOUD_SUCCESS)  # The registry holds this object by reference.
+
+    def __call__(self, host: str, token: str) -> FakeCloudSession:
+        """Build the stand-in session and discard the submitted token."""
+        del token  # The recorder must never create a second token lifetime.
+        self.call_count += 1  # The submitted credential must reach one builder call.
+        self.hosts.append(host)  # The host stays inside the approved cloud catalog.
+        return self.session  # The identity lookup and later routes use this same session.
+
+
 @pytest.fixture
 def auth_app() -> Iterator[Flask]:
     """Return the smallest application that can serve the sign-in blueprint.
@@ -546,6 +568,61 @@ def test_token_mode_refuses_a_sign_in_with_no_token_variable(
     assert error_part(answer, "message") == auth.BAD_CREDENTIALS_MESSAGE  # No cure names the token here.
     assert login_seam.calls == []  # The provider seam stayed untouched in this mode.
     assert token_seam.hosts == [auth.DEFAULT_CLOUD_HOST]  # The build ran before the identity check refused.
+
+
+def test_browser_token_sign_in_uses_a_safe_name_and_keeps_no_token(
+    auth_client: FlaskClient,
+    auth_app: Flask,
+) -> None:
+    """A browser token creates one session with a safe GetSelf identity."""
+    builder = RecordingBrowserTokenSession()
+    auth_app.config["BROWSER_TOKEN_SIGNIN_ALLOWED"] = True
+    auth_app.config[auth.BROWSER_TOKEN_SESSION_KEY] = builder
+    auth_app.config[auth.TOKEN_IDENTITY_KEY] = lambda session: {"name": "night-shift-token"}
+    body = {"mode": "browser_token", "token": PROBE_TOKEN}
+    answer = post_signin(auth_client, body)
+    assert answer.status_code == auth.OK_STATUS
+    assert answer.get_json() == {"next": auth.NEXT_AFTER_SIGNIN}
+    assert builder.call_count == 1
+    assert builder.hosts == [auth.DEFAULT_CLOUD_HOST]
+    records = [
+        record
+        for record in identity.SESSION_REGISTRY._sessions.values()
+        if record.credential_mode is identity.CredentialMode.BROWSER_TOKEN
+    ]
+    assert len(records) == 1
+    record = records[0]
+    assert record.owner.actor_email == "night-shift-token"
+    assert record.credential_mode is identity.CredentialMode.BROWSER_TOKEN
+    assert PROBE_TOKEN not in repr(record)
+
+
+def test_browser_token_sign_in_refuses_an_empty_value_before_the_builder(
+    auth_client: FlaskClient,
+    auth_app: Flask,
+) -> None:
+    """An empty browser-token field creates no cloud session."""
+    builder = RecordingBrowserTokenSession()
+    auth_app.config["BROWSER_TOKEN_SIGNIN_ALLOWED"] = True
+    auth_app.config[auth.BROWSER_TOKEN_SESSION_KEY] = builder
+    answer = post_signin(auth_client, {"mode": "browser_token", "token": ""})
+    assert answer.status_code == auth.BAD_REQUEST_STATUS
+    assert error_part(answer, "code") == auth.BAD_CREDENTIALS
+    assert builder.call_count == 0
+
+
+def test_browser_token_sign_in_refuses_when_startup_disallows_the_mode(
+    auth_client: FlaskClient,
+    auth_app: Flask,
+) -> None:
+    """A portal that started with an environment token refuses this mode."""
+    builder = RecordingBrowserTokenSession()
+    auth_app.config["BROWSER_TOKEN_SIGNIN_ALLOWED"] = False
+    auth_app.config[auth.BROWSER_TOKEN_SESSION_KEY] = builder
+    answer = post_signin(auth_client, {"mode": "browser_token", "token": PROBE_TOKEN})
+    assert answer.status_code == auth.BAD_REQUEST_STATUS
+    assert error_part(answer, "code") == auth.BAD_CREDENTIALS
+    assert builder.call_count == 0
 
 
 def test_sign_in_with_no_address_reaches_no_builder(auth_client: FlaskClient, login_seam: RecordingLogin) -> None:
