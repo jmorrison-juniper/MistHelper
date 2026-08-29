@@ -7,6 +7,11 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Restore SSR firmware version choices in the capture portal
+
+- **Fixed**: The portal now reads Session Smart Router versions from the Mist
+  SSR endpoint. It offers the returned versions for each SSR model in a site.
+
 ### Restore capture collection in the container
 
 - **Fixed**: The container image now includes the `scripts` package. The capture

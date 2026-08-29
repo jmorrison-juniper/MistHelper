@@ -134,6 +134,7 @@ _ENDPOINT_MODULES = (
     ("getSiteDeviceUpgrade", "mistapi.api.v1.sites.devices"),
     ("cancelSiteDeviceUpgrade", "mistapi.api.v1.sites.devices"),
     ("listSiteAvailableDeviceVersions", "mistapi.api.v1.sites.devices"),
+    ("listOrgAvailableSsrVersions", "mistapi.api.v1.orgs.ssr"),
     ("searchSiteDeviceEvents", "mistapi.api.v1.sites.devices"),
     ("getSiteSsrUpgrade", "mistapi.api.v1.sites.ssr"),
     (ENDPOINT_ORG_SSRS, "mistapi.api.v1.orgs.ssr"),
@@ -1331,17 +1332,53 @@ def _version_requests(
     return tuple(sorted((device_type, model) for device_type, model in requests if device_type and model))
 
 
+def _ssr_models(devices: Iterable[Mapping[str, object]]) -> tuple[str, ...]:
+    """Return the unique SSR models that require the organization version endpoint."""
+    models = {
+        str(device.get("model", "")).strip() for device in devices if classify_gateway(device) is GatewayFamily.SSR
+    }
+    models.discard("")
+    return tuple(sorted(models))
+
+
+def _version_rows(
+    session: Any,
+    site_id: str,
+    requests: Iterable[tuple[str, str]],
+) -> tuple[Mapping[str, object], ...]:
+    """Read the device-version endpoint for the supplied non-SSR models."""
+    endpoint = _resolve_endpoint("listSiteAvailableDeviceVersions")
+    return tuple(
+        row
+        for device_type, model in requests
+        for row in _rows(endpoint(session, site_id, type=device_type, model=model))
+    )
+
+
+def _ssr_versions(session: Any, org_id: str, models: Iterable[str]) -> Mapping[str, tuple[str, ...]]:
+    """Map organization-level SSR versions to each SSR model in the selected site."""
+    endpoint = _resolve_endpoint("listOrgAvailableSsrVersions")
+    versions = tuple(
+        dict.fromkeys(
+            str(row.get("version", "")).strip() for row in _rows(endpoint(session, org_id)) if row.get("version")
+        )
+    )
+    return {model: versions for model in models if versions}
+
+
 def list_available_versions(
     session: Any,
     site_id: str,
     devices: Iterable[Mapping[str, object]],
+    org_id: str | None = None,
 ) -> Mapping[str, tuple[str, ...]]:
     """Return the version list of each model at one site.
 
     Why:
-        The cloud defaults this endpoint to access points when the request omits
-        the device type. Each request names both the device type and model, so a
-        switch or gateway receives only versions that Mist offers for that model.
+        The cloud defaults the device endpoint to access points when the request
+        omits the device type. Each non-SSR request names both the type and the
+        model. SSR devices use their dedicated organization endpoint, whose rows
+        have a version but no model, so its version list maps to each SSR model.
 
         The local API contract at
         ``documentation/api/utilities/GET_sites_site_id_devices_versions.md``
@@ -1352,19 +1389,24 @@ def list_available_versions(
         session: The Mist API session. The caller owns it.
         site_id: The site identifier.
         devices: The device records that name each device type and model.
+        org_id: The organization identifier needed for SSR version discovery.
 
     Returns:
         The version list of each model.
     """
-    requests = _version_requests(devices)
+    device_rows = tuple(devices)
+    requests = _version_requests(device for device in device_rows if classify_gateway(device) is not GatewayFamily.SSR)
+    ssr_models = _ssr_models(device_rows)
     wanted = frozenset(model.upper() for _, model in requests)
-    _logger().info("read the available versions of %s device model(s) at site %s", len(requests), site_id)
-    endpoint = _resolve_endpoint("listSiteAvailableDeviceVersions")
-    rows = tuple(
-        row
-        for device_type, model in requests
-        for row in _rows(endpoint(session, site_id, type=device_type, model=model))
+    _logger().info(
+        "read the available versions of %s device model(s) at site %s",
+        len(requests) + len(ssr_models),
+        site_id,
     )
-    grouped = _group_versions(rows, wanted)
+    grouped = dict(_group_versions(_version_rows(session, site_id, requests), wanted))
+    if ssr_models and org_id:
+        grouped.update(_ssr_versions(session, org_id, ssr_models))
+    elif ssr_models:
+        _logger().warning("cannot read SSR versions without the organization identifier")
     _logger().debug("the cloud returned versions for %s model(s)", len(grouped))
     return grouped
