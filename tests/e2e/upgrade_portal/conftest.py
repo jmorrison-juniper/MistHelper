@@ -499,6 +499,7 @@ def stand_in_device(index: int, kind: str) -> dict[str, Any]:
         "mac": f"00000000000{index}",  # A shape that reads as a hardware address.
         "model": f"E2E-{kind.upper()}",  # The model column of the inventory page.
         "serial": f"E2ESERIAL000{index}",  # The serial column of the inventory page.
+        "ip": f"192.0.2.{index}",  # A documentation-range address for the inventory address column.
         "version": "0.14.29216",  # The running firmware version that a capture records.
         "status": "connected",  # The state column, so no row reads as unknown.
         "site_id": STAND_IN_SITE_ID,  # The site that owns every stand-in device.

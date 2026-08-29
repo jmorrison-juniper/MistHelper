@@ -102,7 +102,6 @@ CREDENTIAL_FIELD_NAMES: Final[frozenset[str]] = frozenset(
 _EMAIL_DIGEST_BYTES: Final[int] = 8  # 8 bytes give a 16 character digest
 _FORBIDDEN_STATUS: Final[int] = 403  # The status that `contracts/http-api.md` fixes for a scope refusal
 _MAX_EMAIL_LENGTH: Final[int] = 254  # The longest address a mail server accepts
-_EMAIL_PATTERN: Final[re.Pattern[str]] = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")  # One at sign, one dot
 _BROWSER_ID_PATTERN: Final[re.Pattern[str]] = re.compile(r"^[A-Za-z0-9_-]{16,128}$")  # The URL-safe shape
 _TOKEN_NAME_PATTERN: Final[re.Pattern[str]] = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
 
@@ -160,6 +159,19 @@ def email_digest(actor_email: str) -> str:  # The only form of an address that a
     return hashlib.blake2s(candidate.encode("utf-8"), digest_size=_EMAIL_DIGEST_BYTES).hexdigest()  # One way
 
 
+def _has_valid_email_shape(candidate: str) -> bool:
+    """Report whether text has the work-email shape that the portal accepts."""
+    local, separator, domain = candidate.partition("@")
+    return bool(
+        separator
+        and local
+        and domain
+        and "@" not in domain
+        and "." in domain
+        and not any(character.isspace() for character in candidate)
+    )
+
+
 def normalize_email(raw_email: str) -> str:  # Runs before any identity reaches a lock record
     """Trim and lower-case a work email address.
 
@@ -182,7 +194,7 @@ def normalize_email(raw_email: str) -> str:  # Runs before any identity reaches 
     candidate = raw_email.strip().casefold()  # One spelling for one person
     if not candidate or len(candidate) > _MAX_EMAIL_LENGTH:  # An empty or oversize value never reaches a lock
         raise ValueError("The work email address is empty or too long.")  # No part of the value in the text
-    if _EMAIL_PATTERN.match(candidate) is None:  # A value with no domain part cannot name a work mailbox
+    if not _has_valid_email_shape(candidate):  # A value with no domain part cannot name a work mailbox
         raise ValueError("The work email address has no domain part.")  # No part of the value in the text
     return candidate  # The one spelling that every later comparison uses
 
