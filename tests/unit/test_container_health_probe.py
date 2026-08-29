@@ -22,6 +22,7 @@ COMPOSE_FILE = REPO_ROOT / "compose.yml"  # The compose stack definition.
 
 _READINESS_PATH = "/ready"  # Every probe must call the readiness endpoint, not the liveness one.
 _CURL_CALL = re.compile(r"\bcurl\b")  # A word match, so the word "curled" in prose cannot trip the test.
+_RUNTIME_SCRIPT_COPY = "COPY scripts/ ./scripts/"  # The Zscaler catalogue imports the city metadata helper at runtime.
 
 
 def _probe_command_lines(path: Path, marker: str) -> list[str]:
@@ -70,6 +71,16 @@ class TestProbeTargetsReadiness:
         text = COMPOSE_FILE.read_text(encoding="utf-8")  # Read the compose stack text.
         assert "healthcheck:" in text, "The compose file defines no healthcheck block."
         assert _READINESS_PATH in text.split("healthcheck:", 1)[-1][:600]  # The first block is the portal one.
+
+
+class TestCaptureRuntimeScripts:
+    """The image must include scripts that the capture runtime imports."""
+
+    @pytest.mark.parametrize("path", [CONTAINERFILE, DOCKERFILE], ids=["containerfile", "dockerfile"])
+    def test_image_copies_the_capture_runtime_scripts(self, path: Path):
+        """The image includes the city metadata helper required by the Zscaler catalogue import."""
+        text = path.read_text(encoding="utf-8")  # Read the build file once for its copy instructions.
+        assert _RUNTIME_SCRIPT_COPY in text, f"{path.name} omits the scripts package required at runtime."
 
 
 class TestQuadletProbeKeys:

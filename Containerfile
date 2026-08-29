@@ -100,6 +100,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # wsgi_capture.py is the entry point of the upgrade capture portal on port 8056.
 COPY MistHelper.py __init__.py wsgi.py wsgi_capture.py ./
 COPY src/ ./src/
+COPY scripts/ ./scripts/
 COPY web_portal/ ./web_portal/
 
 # Set ownership and switch to non-root user for application files
