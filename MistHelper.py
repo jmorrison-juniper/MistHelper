@@ -5349,13 +5349,21 @@ def _initialize_dependencies(args: argparse.Namespace) -> None:
 def _establish_mist_session(args: argparse.Namespace) -> None:
     """Initialize Mist API session using interactive login or API token, then detect MSP privileges."""
     logging.debug("_establish_mist_session: starting session initialization")  # Log entry
+    is_capture_portal = bool(
+        getattr(args, "capture_portal", False)
+    )  # The portal creates its own environment or browser credential session.
     # Feature 1020 (US3, R4 insertion-point 1): host/token preflight for every dispatch mode. Runs before
     # the --login/token branches so a missing/placeholder host or token exits with a redacted, actionable
     # message BEFORE mistapi/requests can build a malformed URL. require_token is False for interactive
     # --login (email/password auth needs no token). Host is still validated in both modes. The second,
     # distinct failure mode - a non-interactive org-id miss - is guarded separately in ConfigUtils (R4
     # insertion-point 2), since org selection is interactive-vs-non-interactive dependent.
-    _preflight_verify_credentials(require_token=not args.login)  # Fail closed pre-network on bad host/token
+    _preflight_verify_credentials(
+        require_token=not args.login and not is_capture_portal
+    )  # The portal validates its host but can receive a browser token after startup.
+    if is_capture_portal:  # The capture app owns credential selection and session creation per browser.
+        logging.info("CAPTURE_PORTAL: Credential preflight passed; deferring Mist session creation to the portal")
+        return
     _preflight_systematic_test_org(args)  # Resolve org before any session or MSP call in systematic modes.
     if args.login:  # Interactive login requested via --login flag
         _init_interactive_session()  # Email/password path. Exits non-zero on failure.
