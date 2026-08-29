@@ -62,6 +62,11 @@ BROKEN_SELECTOR = "'[data-capture-field=\"identifier\"]'"
 # the identifier paint must follow, so a test names it.
 SIZE_CONSTANT = "CAPTURE_SIZE_TESTID"
 
+# WHY: A newly verified poll needs one page reload, because the status body has
+# counts only and the server renders the captured table rows.
+TABLES_READY_ATTRIBUTE = "data-capture-tables-ready"
+TABLE_RELOAD_FUNCTION = "reloadCaptureTables"
+
 # WHY: The two paints that must fill the field. The first runs after every poll
 # and after the manual refresh. The second runs when the start call answers.
 POLL_FUNCTION = "paintCaptureStatus"
@@ -172,6 +177,26 @@ def test_the_contract_names_the_identifier() -> None:
     """
     contract = CONTRACT_PATH.read_text(encoding="utf-8")  # WHY: The contract is prose, so it keeps its comments.
     assert f"`{IDENTIFIER_TESTID}`" in contract  # The contract names the field.
+
+
+def test_a_verified_poll_reloads_an_unrendered_capture_table() -> None:
+    """A verified poll reloads only when the page has no stored table rows.
+
+    Why:
+        The status response carries summary counts and cannot paint the three
+        result tables. The reload reads the stored document through the page
+        route. The rendered marker prevents a completed page from reloading.
+    """
+    page = source(PAGE_PATH)  # WHY: The server-rendered marker controls the reload.
+    function = script_function(TABLE_RELOAD_FUNCTION)  # WHY: The gate must stay in one helper.
+    refresh = script_function("refreshCaptureStatus")  # WHY: The timer and the control use this path.
+    assert TABLES_READY_ATTRIBUTE in page  # The page tells the script when the server rendered the tables.
+    assert "CAPTURE_TABLES_READY_ATTRIBUTE" in source(SCRIPT_PATH)  # The script names the server marker once.
+    assert "getAttribute(CAPTURE_TABLES_READY_ATTRIBUTE)" in function  # The helper reads the server marker.
+    assert "status.verified !== true" in function  # An incomplete capture never reloads the page.
+    assert '=== "true"' in function  # A rendered capture cannot reload again.
+    assert "window.location.reload()" in function  # The page route rebuilds the table rows.
+    assert f"{TABLE_RELOAD_FUNCTION}(region, status)" in refresh  # Every poll path reaches the gate.
 
 
 def test_the_script_names_the_identifier_through_one_constant() -> None:

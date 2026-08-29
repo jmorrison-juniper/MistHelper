@@ -7,6 +7,12 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Render capture result tables after automatic refresh
+
+- **Fixed**: A capture page now reloads once when polling first finds a verified
+  capture. The reload renders the stored device, wired-client, and
+  wireless-client rows. A page that already rendered its tables does not reload.
+
 ### Show capture results and firmware targets in the portal
 
 - **Fixed**: The capture page now opens the stored capture after the portal starts
@@ -41,7 +47,6 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 - **Fixed**: The portal JavaScript now initializes correctly. Site lock, capture,
   and upgrade option controls now attach to the page.
-
 ### Use safe type-specific firmware targets in the capture portal
 
 - **Defaults (Added)**: The upgrade capture portal now selects the numerically

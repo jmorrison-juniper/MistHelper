@@ -65,6 +65,7 @@
     var CAPTURE_IDENTIFIER_TESTID = "capture-identifier";
     var CAPTURE_SIZE_TESTID = "capture-size-bytes";
     var CAPTURE_ERROR_TESTID = "capture-error";
+    var CAPTURE_TABLES_READY_ATTRIBUTE = "data-capture-tables-ready";
     /* Delta U1 adds the two controls below. contracts/ui-testids.md lines
      * 120-121 fix both values. The button starts a run for the site of the
      * verified pre-check, and the region names a refusal. */
@@ -788,6 +789,27 @@
     }
 
     /**
+     * Reloads a newly verified capture page to render its stored table rows.
+     *
+     * Why: The status endpoint holds summary data only. The three result tables
+     * require a server render of the stored document after verification.
+     *
+     * @param {Element} region The capture progress region.
+     * @param {Object} status The last status body.
+     * @returns {boolean} True when the page reload starts.
+     */
+    function reloadCaptureTables(region, status) {
+        if (!region || !status || status.verified !== true) {
+            return false;
+        }
+        if (region.getAttribute(CAPTURE_TABLES_READY_ATTRIBUTE) === "true") {
+            return false;
+        }
+        window.location.reload();
+        return true;
+    }
+
+    /**
      * Reads the capture status once and paints the page.
      *
      * Why: The manual refresh control and the 30-second poll must do the same
@@ -817,6 +839,9 @@
                     }
                 }
                 if (status && status.verified === true) {
+                    if (reloadCaptureTables(region, status)) {
+                        return status;
+                    }
                     return loadStoredSize(captureId).then(function () {
                         return status;
                     });
@@ -2562,6 +2587,7 @@
     window.upgradePortal.applyTableFilter = applyTableFilter;
     window.upgradePortal.paintCaptureStatus = paintCaptureStatus;
     window.upgradePortal.refreshCaptureStatus = refreshCaptureStatus;
+    window.upgradePortal.reloadCaptureTables = reloadCaptureTables;
     window.upgradePortal.startCapturePoll = startCapturePoll;
     window.upgradePortal.stopCapturePoll = stopCapturePoll;
     window.upgradePortal.applyConfirmGate = applyConfirmGate;

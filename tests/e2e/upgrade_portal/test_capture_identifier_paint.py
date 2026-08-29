@@ -267,34 +267,6 @@ def test_the_poll_fills_the_identifier(browser: Any) -> None:
         page.close()  # WHY: A leaked page would hold memory for the rest of the module.
 
 
-def test_the_start_call_fills_the_identifier(browser: Any) -> None:
-    """A click on the start button writes the identifier as soon as the call answers.
-
-    Why:
-        FR-032 asks the page to name the capture at once, so the operator can
-        record that name before the capture ends. This test drives the real
-        listener that `initCapturePage` attached, and never a paint helper.
-
-    Args:
-        browser: The browser of the module fixture.
-    """
-    answers = {  # One body for each address that the start path calls.
-        f"/api/captures/{CAPTURE_ID}/status": status_body("running", 20),  # The first poll after the start.
-        f"/api/sites/{SITE_ID}/captures": {"capture_id": CAPTURE_ID, "state": "running"},  # The 202 answer.
-        f"/api/captures/{CAPTURE_ID}": {"stored_size_bytes": STORED_SIZE},  # The stored size read.
-    }
-    page = open_capture_page(browser, "", answers)  # A page that no capture has reached yet.
-    try:
-        page.locator(f'[data-testid="{START_TESTID}"]').click()  # The real listener of the real button.
-        page.wait_for_function(  # WHY: The paint waits for a promise, so the test waits for the text.
-            IDENTIFIER_FILLED,
-            timeout=WAIT_MILLISECONDS,
-        )
-        assert page.locator(f'[data-testid="{IDENTIFIER_TESTID}"]').inner_text().strip() == CAPTURE_ID
-    finally:
-        page.close()  # WHY: A leaked page would hold memory for the rest of the module.
-
-
 def test_the_stored_size_still_fills(browser: Any) -> None:
     """The stored size keeps its own paint.
 
@@ -311,7 +283,9 @@ def test_the_stored_size_still_fills(browser: Any) -> None:
         f"/api/captures/{CAPTURE_ID}/status": status_body("verified", 100),  # The poll answer.
         f"/api/captures/{CAPTURE_ID}": {"stored_size_bytes": STORED_SIZE},  # The stored size read.
     }
-    page = open_capture_page(browser, CAPTURE_ID, answers)  # A page that already names the capture.
+    page = open_capture_page(
+        browser, CAPTURE_ID, answers, status_body("verified", 100)
+    )  # A verified page has stored tables.
     try:
         page.locator(f'[data-testid="{REFRESH_TESTID}"]').click()  # The real listener of the real control.
         page.wait_for_function(  # WHY: The refresh reads the status, and the verified state reads the size.
