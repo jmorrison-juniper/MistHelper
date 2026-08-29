@@ -1402,7 +1402,7 @@
                     applyVersionToDeviceType(typeSelect);
                 });
                 applyVersionToDeviceType(typeSelect);
-            });
+            }
         });
     }
 
@@ -2460,7 +2460,6 @@
     window.upgradePortal.startCapturePoll = startCapturePoll;
     window.upgradePortal.stopCapturePoll = stopCapturePoll;
     window.upgradePortal.applyConfirmGate = applyConfirmGate;
-    window.upgradePortal.applyVersionToEveryDevice = applyVersionToEveryDevice;
     window.upgradePortal.collectUpgradeTargets = collectUpgradeTargets;
     window.upgradePortal.paintUpgradeWarnings = paintUpgradeWarnings;
     window.upgradePortal.saveUpgradeOptions = saveUpgradeOptions;
