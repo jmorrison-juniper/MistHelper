@@ -780,6 +780,37 @@ def _resolve_choice(
     return index[mac], version
 
 
+def _selected_target_choices(
+    resolved: Sequence[tuple[Mapping[str, Any], str]],
+    selected_types: Sequence[str] | None,
+) -> list[tuple[Mapping[str, Any], str]]:
+    """Return only target choices of the selected supported types."""
+    allowed_types = set(selected_types) if selected_types is not None else set(SUPPORTED_DEVICE_TYPES)
+    selected = [
+        (device, version)
+        for device, version in resolved
+        if str(device.get("type", "")).strip().lower() in allowed_types
+    ]
+    if resolved and not selected:
+        raise BadOptionError("targets")
+    return selected
+
+
+def _validate_target_versions(
+    selected: Sequence[tuple[Mapping[str, Any], str]],
+    versions_by_model: Mapping[str, Sequence[str]] | None,
+) -> None:
+    """Refuse each target version that its device model does not offer."""
+    if versions_by_model is None:
+        return
+    for device, version in selected:
+        model = str(device.get("model", "")).strip()
+        offered = {_normalized_version(item) for item in versions_by_model.get(model, ())}
+        if version not in offered:
+            logger.warning("Upgrade portal refused an unavailable target for model %s", model)
+            raise BadOptionError("version_target")
+
+
 def build_targets(
     devices: Sequence[Mapping[str, Any]],
     choices: Sequence[Mapping[str, Any]],
@@ -808,21 +839,8 @@ def build_targets(
     index = {normalize_device_mac(device.get("mac")): device for device in devices}
     logger.info("Upgrade portal builds %s upgrade target(s)", len(choices))
     resolved = [_resolve_choice(index, choice) for choice in choices]
-    allowed_types = set(selected_types) if selected_types is not None else set(SUPPORTED_DEVICE_TYPES)
-    selected = [
-        (device, version)
-        for device, version in resolved
-        if str(device.get("type", "")).strip().lower() in allowed_types
-    ]
-    if resolved and not selected:
-        raise BadOptionError("targets")
-    if versions_by_model is not None:
-        for device, version in selected:
-            model = str(device.get("model", "")).strip()
-            offered = {_normalized_version(item) for item in versions_by_model.get(model, ())}
-            if version not in offered:
-                logger.warning("Upgrade portal refused an unavailable target for model %s", model)
-                raise BadOptionError("version_target")
+    selected = _selected_target_choices(resolved, selected_types)
+    _validate_target_versions(selected, versions_by_model)
     entries = [build_target_entry(device, version) for device, version in selected]
     logger.debug("Upgrade portal built targets for %s device type(s)", len({row["device_type"] for row in entries}))
     return entries

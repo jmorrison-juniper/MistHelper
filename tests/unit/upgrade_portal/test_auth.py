@@ -585,7 +585,13 @@ def test_browser_token_sign_in_uses_a_safe_name_and_keeps_no_token(
     assert answer.get_json() == {"next": auth.NEXT_AFTER_SIGNIN}
     assert builder.call_count == 1
     assert builder.hosts == [auth.DEFAULT_CLOUD_HOST]
-    record = next(iter(identity.SESSION_REGISTRY._sessions.values()))
+    records = [
+        record
+        for record in identity.SESSION_REGISTRY._sessions.values()
+        if record.credential_mode is identity.CredentialMode.BROWSER_TOKEN
+    ]
+    assert len(records) == 1
+    record = records[0]
     assert record.owner.actor_email == "night-shift-token"
     assert record.credential_mode is identity.CredentialMode.BROWSER_TOKEN
     assert PROBE_TOKEN not in repr(record)

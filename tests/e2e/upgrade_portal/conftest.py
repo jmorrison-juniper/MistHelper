@@ -939,8 +939,8 @@ def build_stand_in_app() -> Any:
     Returns:
         The Flask application that the server process serves.
     """
-    from src.upgrade_portal.app.factory import create_app  # Late, so a plain collection never builds an app.
     from src.upgrade_portal.app import wiring  # The test replaces its storage call only while the app starts.
+    from src.upgrade_portal.app.factory import create_app  # Late, so a plain collection never builds an app.
     from src.upgrade_portal.app.routes import (
         capture,  # Late as well. It owns the collection seam.
         review,  # Late as well. It owns the two capture seams.

@@ -36,12 +36,12 @@ import logging  # The portal logs with the standard library only.
 import os  # Reads a token variable by name for the environment token mode.
 import threading  # Guards the pending store, because a worker pool serves the routes.
 import time  # Measures the wait of a pending second factor with a monotonic clock.
-from collections.abc import Callable  # Types each injected seam.
+from collections.abc import Callable, Mapping  # Types each injected seam and safe cloud records.
 from dataclasses import dataclass  # Builds the two small records of this module.
 from importlib import import_module  # Imports the cloud library late, never at load.
 from typing import Any  # A cloud session and an injected seam are both free-form.
 
-from flask import Blueprint, Response, current_app, jsonify, render_template, request  # The framework.
+from flask import Blueprint, Response, current_app, has_app_context, jsonify, render_template, request  # The framework.
 from jinja2 import TemplateNotFound  # Marks a template that a later module still builds.
 
 from ...runtime import identity  # The registry, the digest, and the sign-out. No copy of them lives here.
@@ -743,7 +743,8 @@ def signin_context() -> dict[str, Any]:
         "clouds": [{"label": label, "host": host} for label, host in cloud_catalog()],  # The picker rows.
         "default_host": DEFAULT_CLOUD_HOST,  # The row that the page marks as chosen.
         "token_mode_available": identity.environment_token_present(),  # Presence alone, and never a value.
-        "browser_token_signin_allowed": bool(current_app.config.get("BROWSER_TOKEN_SIGNIN_ALLOWED", False)),
+        "browser_token_signin_allowed": has_app_context()
+        and bool(current_app.config.get("BROWSER_TOKEN_SIGNIN_ALLOWED", False)),
         "dependencies": rows,  # One row for each service, or an empty list when the probe failed.
         "dependencies_healthy": all(row["state"] != DEPENDENCY_DOWN for row in rows),  # Drives the banner tone.
     }

@@ -65,7 +65,11 @@ from typing import Any, ClassVar, Final  # Store handles, error codes, and fixed
 # still stays one way, because this module reaches `app/config.py` alone and that
 # module imports the standard library only.
 from ..app.config import RedisSettings, load_redis_settings
-from .identity import IdentityKind, SessionOwner, email_digest  # The one identity notion, and the one safe form of an address
+from .identity import (
+    IdentityKind,
+    SessionOwner,
+    email_digest,
+)  # The one identity notion, and the one safe form of an address
 
 __all__ = [
     "ACQUIRE_ATTEMPTS",

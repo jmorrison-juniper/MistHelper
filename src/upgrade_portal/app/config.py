@@ -236,7 +236,7 @@ def load_web_settings() -> WebSettings:
         poll_interval_seconds=read_poll_interval(),  # A short wait falls back to 30 seconds.
         themes=read_themes(),  # An empty list falls back to the two shipped themes.
         allowed_networks=read_allowed_networks(),  # An empty list leaves the portal open.
-        environment_token_present=any(bool(os.environ.get(name)) for name in MIST_TOKEN_VARIABLES),
+        environment_token_present=any(bool(os.environ.get(name, "")) for name in MIST_TOKEN_VARIABLES),
     )
 
 

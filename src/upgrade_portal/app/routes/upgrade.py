@@ -965,13 +965,16 @@ def save_options(run_id: str) -> tuple[Response, int]:
         return write_failed()  # The operator retries instead of reading a choice that was never kept.
     logger.info("upgrade: the run %s holds %s targets", run_id, len(record[TARGETS_FIELD]))  # AFTER the change.
     warnings = list(built.get(WARNINGS_FIELD, []))  # One sentence for each device the operator must look at.
-    return jsonify(
-        {
-            TARGETS_FIELD: record[TARGETS_FIELD],
-            "selected_types": record["selected_types"],
-            WARNINGS_FIELD: warnings,
-        }
-    ), OK_STATUS
+    return (
+        jsonify(
+            {
+                TARGETS_FIELD: record[TARGETS_FIELD],
+                "selected_types": record["selected_types"],
+                WARNINGS_FIELD: warnings,
+            }
+        ),
+        OK_STATUS,
+    )
 
 
 # --------------------------------------------------------------------------
@@ -1120,11 +1123,14 @@ def options_view(record: dict[str, Any]) -> dict[str, Any]:
             "type_selections": {},
             "selected_types": list(record.get("selected_types", ["ap", "switch", "gateway"])),
         }
+    selected_types = record.get("selected_types")
+    if not isinstance(selected_types, list):
+        selected_types = answer.get("selected_types")
     return {
         TARGETS_FIELD: stored or list(answer.get(TARGETS_FIELD, [])),  # A saved choice outranks a fresh read.
         VIEW_VERSIONS_FIELD: version_index(answer.get(VIEW_VERSIONS_FIELD)),  # One version list for each model.
         "type_selections": dict(answer.get("type_selections", {})),
-        "selected_types": list(record.get("selected_types", answer.get("selected_types", ["ap", "switch", "gateway"]))),
+        "selected_types": list(selected_types) if isinstance(selected_types, list) else ["ap", "switch", "gateway"],
     }
 
 
