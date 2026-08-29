@@ -198,17 +198,16 @@ def test_the_poll_paints_the_identifier_with_a_document_read() -> None:
     assert BROKEN_SELECTOR not in body  # The region read that returned null is gone.
 
 
-def test_the_start_paints_the_identifier_with_a_document_read() -> None:
-    """The start paint fills the field through the document-wide helper.
+def test_the_start_opens_the_page_of_the_new_capture() -> None:
+    """The start response opens the page of the returned capture identifier.
 
     Why:
-        This is the whole repair for the start path. FR-032 asks the page to
-        name the capture as soon as the start call answers, so the operator
-        can record that name before the capture ends.
+        A new capture page has no capture identifier. It cannot load completed
+        capture rows. The stored capture page carries the returned identifier
+        in its path, so it loads those rows after the worker completes.
     """
-    body = script_function(START_FUNCTION)  # WHY: The paint that runs when the 202 answer arrives.
-    assert f"byTestId({IDENTIFIER_CONSTANT})" in body  # The read starts at the document.
-    assert BROKEN_SELECTOR not in body  # The region read that returned null is gone.
+    body = script_function(START_FUNCTION)  # WHY: The handler runs when the 202 answer arrives.
+    assert 'window.location.assign("/captures/" + encodeURIComponent(created.capture_id))' in body
 
 
 def test_no_paint_of_the_script_reads_the_field_from_a_region() -> None:
