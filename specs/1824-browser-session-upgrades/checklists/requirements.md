@@ -1,7 +1,7 @@
 # Specification Quality Checklist: Browser Token and Safe Device Selection
 
-**Purpose**: Validate Companion specification completeness before planning.  
-**Created**: 2026-08-29  
+**Purpose**: Validate Companion specification completeness before planning.
+**Created**: 2026-08-29
 **Feature**: [spec.md](../spec.md)
 
 ## Content Quality

@@ -1,8 +1,8 @@
 # Feature Specification: Browser Token and Safe Device Selection
 
-**Feature Branch**: `2133-browser-session-token-upgrades`  
-**Created**: 2026-08-29  
-**Status**: Draft  
+**Feature Branch**: `2133-browser-session-token-upgrades`
+**Created**: 2026-08-29
+**Status**: Draft
 **Input**: Add browser-session Mist token sign-in, device-type selection, and target-version mismatch warnings.
 
 ## User Scenarios & Testing

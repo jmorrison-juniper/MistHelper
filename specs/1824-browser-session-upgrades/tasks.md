@@ -1,7 +1,7 @@
 # Tasks: Browser Token and Safe Device Selection
 
-**Input**: `spec.md`, `plan.md`, `research.md`, `data-model.md`, and contracts.  
-**Size**: oversized.  
+**Input**: `spec.md`, `plan.md`, `research.md`, `data-model.md`, and contracts.
+**Size**: oversized.
 **Rule**: Do not start a real firmware upgrade.
 
 ## Phase 1: Setup
