@@ -49,7 +49,13 @@ from urllib.parse import urlencode  # Escapes the filter text inside a paging li
 from flask import Blueprint, Response, current_app, jsonify, render_template, request, session  # The framework.
 from jinja2 import TemplateNotFound  # Marks a template that a later module still builds.
 
+from ...capture.devices import normalize_device_mac  # Match inventory rows to the upgrade target records.
 from ...runtime import identity, lock  # The session guard, and the site lock that FR-072 to FR-083 fix.
+from ...upgrade.options import (  # Reuse the upgrade target rules.
+    TypedVersionSelector,
+    build_version_options,
+    read_model_versions,
+)
 from ..factory import build_error_envelope, json_error  # The one error envelope that the contract allows.
 
 logger = logging.getLogger(__name__)  # One logger for each module keeps the source visible in the log.
@@ -1040,6 +1046,44 @@ def inventory_parts(org_id: str, site_id: str) -> tuple[list[dict[str, Any]], di
     return devices, counts  # The page reads both by name.
 
 
+def inventory_rows_with_targets(org_id: str, site_id: str, devices: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Add the safe firmware target and mismatch state to each inventory row.
+
+    Why:
+        The inventory page and the upgrade page must use the same target rule.
+        The shared option builder selects a valid environment override or the
+        highest compatible version for each model. This page keeps its existing
+        inventory fields and adds only the values that describe the target.
+
+    Args:
+        org_id: The organization that owns the site.
+        site_id: The site whose available versions the portal reads.
+        devices: The inventory rows that the table already shows.
+
+    Returns:
+        The inventory rows with the target version and mismatch state.
+    """
+    record = identity.current_session()  # The session guard already verified this browser session.
+    if record is None or not devices:  # A missing session or no device needs no version discovery.
+        return devices  # The table keeps its read-only inventory behavior.
+    logger.info("select: reading firmware targets for %s device(s) at site %s", len(devices), site_id)
+    versions_by_model = read_model_versions(
+        record.cloud_session, site_id, devices, org_id
+    )  # The shared reader includes SSR versions.
+    selections = TypedVersionSelector().select(
+        devices, versions_by_model
+    )  # The type default selects an override or a common candidate.
+    target_rows = build_version_options(
+        devices, versions_by_model, selections
+    )  # The builder applies the per-model fallback.
+    targets_by_mac = {row["mac"]: row for row in target_rows}  # A MAC address joins each target to its inventory row.
+    rows = [
+        {**device, **targets_by_mac.get(normalize_device_mac(device.get(MAC_FIELD)), {})} for device in devices
+    ]  # Preserve table fields.
+    logger.debug("select: added firmware targets to %s inventory row(s) at site %s", len(rows), site_id)
+    return rows  # The template reads the enriched rows without its own target logic.
+
+
 def capture_page_url(site_id: str) -> str:
     """Return the address of the page that starts the first capture of one site.
 
@@ -1390,13 +1434,16 @@ def site_inventory_page(site_id: str) -> tuple[str, int]:
         return render_page(SITE_TEMPLATE, sites=[], org_id=org_id, org_name=""), NOT_FOUND_STATUS  # No row.
     store_chosen_site(site_id)  # The ownership check passed, so the pick is safe to store.
     devices, counts = inventory_parts(org_id, site_id)  # An empty pair means the device module is missing.
+    device_rows = inventory_rows_with_targets(
+        org_id, site_id, devices
+    )  # The table marks versions that differ from their safe target.
     name = str(site.get("name", site_id))  # The identifier fills the heading when the record carries no name.
     return (  # The device table of one site, with its own status.
         render_page(
             INVENTORY_TEMPLATE,
             site_id=site_id,
             site_name=name,
-            devices=devices,
+            devices=device_rows,
             counts=counts,
             capture_url=capture_page_url(site_id),  # The only forward step out of this page.
         ),

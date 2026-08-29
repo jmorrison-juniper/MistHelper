@@ -230,6 +230,18 @@
     word-break: break-word;
 }
 
+.firmware-mismatch {
+    color: var(--portal-danger-bg);
+    font-weight: 600;
+}
+
+.firmware-mismatch-indicator {
+    display: block;
+    font-family: var(--bs-body-font-family);
+    font-size: 0.8rem;
+    font-weight: 400;
+}
+
 .portal-table tbody tr:hover td {
     background-color: var(--portal-table-row-hover);
 }

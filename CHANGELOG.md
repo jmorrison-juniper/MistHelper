@@ -7,6 +7,14 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Show capture results and firmware targets in the portal
+
+- **Fixed**: The capture page now opens the stored capture after the portal starts
+  it. The completed capture tables now load on that page.
+- **Added**: The site inventory now marks a reported firmware version that differs
+  from its safe target. The target uses the configured version when available.
+  Otherwise, the portal uses the highest compatible model version.
+
 ### Restore SSR firmware version choices in the capture portal
 
 - **Fixed**: The portal now reads Session Smart Router versions from the Mist
