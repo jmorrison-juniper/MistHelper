@@ -64,6 +64,7 @@ PASSWORD_FIELD = "password"  # nosec B105  # WHY: this names a request body fiel
 CODE_FIELD = "code"  # The body field that carries the second factor code, read once and never stored.
 HOST_FIELD = "host"  # The body field that names the Mist cloud, checked against the catalog.
 MODE_FIELD = "mode"  # The body field that names the credential mode of FR-006.
+TOKEN_FIELD = "token"  # nosec B105  # The browser token reaches the cloud builder and nothing else.
 
 SIGNIN_TEMPLATE = "auth/signin.html"  # The sign-in page.
 TWO_FACTOR_TEMPLATE = "auth/twofactor.html"  # The second factor page.
@@ -77,6 +78,8 @@ ERROR_KEY = "error_message"  # The template value that fills the `signin-error` 
 
 CLOUD_LOGIN_KEY = "CLOUD_LOGIN"  # A test injects one callable here and opens no socket.
 TOKEN_SESSION_KEY = "CLOUD_TOKEN_SESSION"  # nosec B105  # WHY: this names a configuration key that holds a callable.
+BROWSER_TOKEN_SESSION_KEY = "CLOUD_BROWSER_TOKEN_SESSION"  # nosec B105
+TOKEN_IDENTITY_KEY = "CLOUD_TOKEN_IDENTITY"  # nosec B105  # The injected safe identity lookup.
 
 MISTAPI_MODULE = "mistapi"  # The cloud library, imported late so an import fault cannot stop the portal.
 CONSOLE_LOG_LEVEL = 20  # Info level, so the library prints no debug line that could echo a credential.
@@ -343,6 +346,33 @@ def default_token_session(host: str) -> Any:
     )
     cloud_session.login()  # Fills the privilege list, which the organization picker and the scope check both read.
     return cloud_session  # The caller registers the session and owns it from there.
+
+
+def default_browser_token_session(host: str, token: str) -> Any:
+    """Build a cloud session from one browser token and discard the value."""
+    mistapi: Any = import_module(MISTAPI_MODULE)
+    cloud_session: Any = mistapi.APISession(
+        apitoken=token,
+        host=host,
+        console_log_level=CONSOLE_LOG_LEVEL,
+        show_cli_notif=False,
+    )
+    cloud_session.login()
+    return cloud_session
+
+
+def default_token_identity(cloud_session: Any) -> Mapping[str, Any]:
+    """Read the safe identity record that the cloud associates with a token."""
+    mistapi: Any = import_module(MISTAPI_MODULE)
+    answer = mistapi.api.v1.self.self.getSelf(cloud_session)
+    data = getattr(answer, "data", answer)
+    return data if isinstance(data, Mapping) else {}
+
+
+def token_name(record: Mapping[str, Any]) -> str:
+    """Return the safe token name from a cloud identity record."""
+    value = record.get("name")
+    return value.strip() if isinstance(value, str) else ""
 
 
 def attempt_login(cloud_session: Any, code: str = "") -> dict[str, Any]:
@@ -713,6 +743,7 @@ def signin_context() -> dict[str, Any]:
         "clouds": [{"label": label, "host": host} for label, host in cloud_catalog()],  # The picker rows.
         "default_host": DEFAULT_CLOUD_HOST,  # The row that the page marks as chosen.
         "token_mode_available": identity.environment_token_present(),  # Presence alone, and never a value.
+        "browser_token_signin_allowed": bool(current_app.config.get("BROWSER_TOKEN_SIGNIN_ALLOWED", False)),
         "dependencies": rows,  # One row for each service, or an empty list when the probe failed.
         "dependencies_healthy": all(row["state"] != DEPENDENCY_DOWN for row in rows),  # Drives the banner tone.
     }
@@ -1015,6 +1046,27 @@ def finish_token_session(
     return with_browser_id(next_answer(NEXT_AFTER_SIGNIN), browser_id)  # The cookie travels with this answer.
 
 
+def start_browser_token_session() -> Response | tuple[Response, int]:
+    """Sign in with a browser token when startup permits the credential mode."""
+    if not current_app.config.get("BROWSER_TOKEN_SIGNIN_ALLOWED", False):
+        return credential_refusal()
+    if not read_field(TOKEN_FIELD):
+        return credential_refusal()
+    host = resolve_host(read_field(HOST_FIELD))
+    browser_id = browser_identifier()
+    builder = injected_seam(BROWSER_TOKEN_SESSION_KEY) or default_browser_token_session
+    reader = injected_seam(TOKEN_IDENTITY_KEY) or default_token_identity
+    try:
+        cloud_session = builder(host, read_field(TOKEN_FIELD))
+        owner = identity.build_token_owner(token_name(reader(cloud_session)), browser_id)
+        identity.sign_in_with_browser_token(owner, cloud_session)
+    except Exception as fault:
+        logger.warning("auth: the browser token sign-in failed (%s)", type(fault).__name__)
+        return credential_refusal()
+    logger.info("auth: token-name operator %s signed in with a browser token", owner.email_digest)
+    return with_browser_id(next_answer(NEXT_AFTER_SIGNIN), browser_id)
+
+
 def replay_login(pending: PendingSignIn) -> str:
     """Retry one login with the second factor code that the request carries.
 
@@ -1112,6 +1164,8 @@ def submit_signin() -> Response | tuple[Response, int]:
     Returns:
         The success answer, the second factor answer, or a refusal envelope.
     """
+    if read_field(MODE_FIELD) == identity.CredentialMode.BROWSER_TOKEN.value:
+        return start_browser_token_session()
     actor_email = valid_email(read_field(EMAIL_FIELD))  # An unusable address reads as an empty string.
     if not actor_email:  # No address means the portal cannot name an owner, so the pair cannot pass.
         logger.info("auth: a sign-in arrived with no usable address, so the portal refused it")  # No value.

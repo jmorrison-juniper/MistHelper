@@ -250,6 +250,9 @@ class TestVersionOptions:
                 "model": "EX4400-48P",
                 "version_before": "23.4R2-S3.9",
                 "version_target": "24.2R1.17",
+                "safe_target": "24.2R1.17",
+                "target_source": "model_fallback",
+                "firmware_mismatch": True,
                 "versions": ["24.2R1.17", "23.4R2-S4.11"],
             }
         ]
@@ -497,6 +500,39 @@ class TestBuildTargets:
         entry = module.build_targets([SSR_ROW], choices)[0]
         assert entry["gateway_family"] == "ssr"
         assert entry["scope"] == SCOPE_ORG
+
+    def test_selected_types_limit_the_target_rows(self) -> None:
+        """A selected switch plan cannot also prepare an access point."""
+        choices = [
+            {"mac": SWITCH_ROW["mac"], "version_target": "24.2R1.17"},
+            {"mac": AP_ROW["mac"], "version_target": "0.14.29216"},
+        ]
+        entries = module.build_targets([SWITCH_ROW, AP_ROW], choices, selected_types=("switch",))
+        assert [entry["device_type"] for entry in entries] == ["switch"]
+
+    def test_a_target_of_an_unselected_type_is_refused(self) -> None:
+        """A crafted request cannot add a type the operator did not select."""
+        choice = [{"mac": AP_ROW["mac"], "version_target": "0.14.29216"}]
+        with pytest.raises(module.BadOptionError) as caught:
+            module.build_targets([AP_ROW], choice, selected_types=("switch",))
+        assert caught.value.field == "targets"
+
+
+class TestSelectedDeviceTypes:
+    """The selected device types of one submitted option record."""
+
+    def test_all_supported_types_are_the_default_selection(self) -> None:
+        """A legacy body keeps its existing all-supported-types behavior."""
+        assert module.selected_device_types({}) == ("ap", "switch", "gateway")
+
+    def test_a_selected_type_list_rejects_duplicates_and_unknown_types(self) -> None:
+        """A request must name each supported type once at most."""
+        with pytest.raises(module.BadOptionError) as duplicate:
+            module.selected_device_types({"selected_types": ["switch", "switch"]})
+        assert duplicate.value.field == "selected_types"
+        with pytest.raises(module.BadOptionError) as unsupported:
+            module.selected_device_types({"selected_types": ["router"]})
+        assert unsupported.value.field == "selected_types"
 
 
 class TestTargetWarnings:

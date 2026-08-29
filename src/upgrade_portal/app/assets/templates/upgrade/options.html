@@ -58,6 +58,7 @@
 {% set target_rows = targets | default([], true) %}
 {% set versions_map = versions_by_model | default({}, true) %}
 {% set typed_selections = type_selections | default({}, true) %}
+{% set selected_type_rows = selected_types | default(['ap', 'switch', 'gateway'], true) %}
 {% set warning_lines = warnings | default([], true) %}
 {% set option_values = options | default({}, true) %}
 {% set site_label = site_name | default('', true) %}
@@ -114,6 +115,35 @@
   {% if site_key %}
     <p class="portal-card-note">The site identifier is <code data-testid="upgrade-site-id">{{ site_key }}</code>.</p>
   {% endif %}
+
+  <fieldset class="bubble-group mb-3" data-testid="upgrade-device-type-selection">
+    <legend class="bubble-group-legend">Device types to upgrade</legend>
+    <div class="bubble-option">
+      <input type="checkbox"
+             id="upgrade-type-all"
+             class="bubble-option-input"
+             data-testid="upgrade-type-all"
+             data-select-all-device-types
+             {{ 'checked' if selected_type_rows | length == 3 else '' }}>
+      <label class="bubble-option-label" for="upgrade-type-all">All supported device types</label>
+    </div>
+    {% for device_type, label in [('ap', 'Access points'), ('switch', 'Switches'), ('gateway', 'Gateways')] %}
+      <div class="bubble-option">
+        <input type="checkbox"
+               id="upgrade-type-{{ device_type }}"
+               class="bubble-option-input"
+               data-testid="upgrade-type-{{ device_type }}"
+               data-device-type-choice="{{ device_type }}"
+               value="{{ device_type }}"
+               {{ 'checked' if device_type in selected_type_rows else '' }}>
+        <label class="bubble-option-label" for="upgrade-type-{{ device_type }}">{{ label }}</label>
+      </div>
+    {% endfor %}
+    <p class="bubble-option-hint">
+      Select all, one, or more supported device types. The portal captures every
+      device before it prepares the selected upgrade plan.
+    </p>
+  </fieldset>
 
   {% for device_type, label in [('ap', 'access points'), ('switch', 'switches'), ('gateway', 'gateways')] %}
     {% set selection = typed_selections.get(device_type, {}) %}
@@ -318,12 +348,22 @@
         {% set chosen_version = device.version_target | default('', true) %}
         {% set model_versions = versions_map.get(model, []) %}
 
-        <tr data-testid="upgrade-target-row-{{ mac }}">
+        <tr data-testid="upgrade-target-row-{{ mac }}"
+            data-device-type="{{ device.device_type | default('', true) }}">
           <th scope="row">{{ device_name }}</th>
           <td class="cell-mono">{{ mac }}</td>
           <td>{{ device.device_type | default('unknown', true) }}</td>
           <td>{{ model | default('unknown', true) }}</td>
-          <td class="cell-mono">{{ device.version_before | default('unknown', true) }}</td>
+          <td class="cell-mono">
+            {{ device.version_before | default('unknown', true) }}
+            {% if device.firmware_mismatch | default(false) %}
+              <span class="portal-badge badge-partial"
+                    data-testid="firmware-mismatch-{{ mac }}"
+                    data-safe-target="{{ device.safe_target | default('', true) }}">
+                Different from safe target {{ device.safe_target | default('', true) }}
+              </span>
+            {% endif %}
+          </td>
 
           <td>
             {#

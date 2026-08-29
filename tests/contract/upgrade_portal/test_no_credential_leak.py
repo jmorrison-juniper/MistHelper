@@ -616,6 +616,25 @@ def test_the_token_mode_writes_no_token_to_the_log(
     assert_no_secret(log_surfaces(caplog.records), "a log record of the token mode")
 
 
+def test_browser_token_signin_leaks_no_value_from_its_session(
+    leak_client: FlaskClient,
+    leak_app: Flask,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The submitted browser token stays inside the session object alone."""
+    leak_app.config["BROWSER_TOKEN_SIGNIN_ALLOWED"] = True
+    leak_app.config["CLOUD_BROWSER_TOKEN_SESSION"] = lambda host, token: FakeCloudSession([])
+    leak_app.config["CLOUD_TOKEN_IDENTITY"] = lambda session: {"name": "night-shift-token"}
+    with caplog.at_level(logging.DEBUG):
+        answer = leak_client.post(SIGNIN_PATH, json={"mode": "browser_token", "token": PROBE_TOKEN})
+    assert_no_secret(response_surfaces(answer), "the browser-token answer")
+    assert_no_secret(log_surfaces(caplog.records), "a browser-token log record")
+    record = registered_record(leak_client)
+    assert record is not None
+    for field in dataclasses.fields(record):
+        assert_no_secret(repr(getattr(record, field.name)), f"the browser-token session field {field.name}")
+
+
 # ---------------------------------------------------------------------------
 # The identity module holds no credential value
 # ---------------------------------------------------------------------------

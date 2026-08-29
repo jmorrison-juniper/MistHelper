@@ -44,6 +44,7 @@ POLL_VARIABLE = "CAPTURE_POLL_SECONDS"  # The wait between two browser status ca
 ALLOWED_ADDRESSES_VARIABLE = "CAPTURE_ALLOWED_IPS"  # A comma list of networks.
 PROXY_HOPS_VARIABLE = "CAPTURE_PROXY_HOPS"  # The count of trusted reverse proxies in front of the portal.
 POST_CHECK_MODE_VARIABLE = "CAPTURE_POST_CHECK_MODE"  # Names who starts the second capture of a run.
+MIST_TOKEN_VARIABLES = ("MIST_APITOKEN", "MIST_API_TOKEN")  # The names of the cloud token variables.
 
 ARANGO_HOST_VARIABLE = "ARANGO_HOST"  # The full URL of the primary store.
 ARANGO_DATABASE_VARIABLE = "ARANGO_DATABASE"  # The database name inside that store.
@@ -90,7 +91,7 @@ THEME_NAME_PATTERN = re.compile(r"\A[A-Za-z0-9_-]{1,32}\Z")  # Letters, digits, 
 
 @dataclass(frozen=True, slots=True)  # Frozen stops a request handler from changing a setting.
 class WebSettings:
-    """The listener, the session key, the poll rate, the themes, and the allow list.
+    """The listener, the session key, the poll rate, themes, and the allow list.
 
     Why:
         The web layer needs these five values and no more. A separate record for
@@ -103,6 +104,8 @@ class WebSettings:
         themes: The name of each stylesheet the operator may choose.
         allowed_networks: The networks that may reach the portal. An empty tuple
             means the portal accepts every client address.
+        environment_token_present: States whether the container had a cloud
+            token when the portal started.
     """
 
     port: int  # The port that Gunicorn binds.
@@ -110,6 +113,7 @@ class WebSettings:
     poll_interval_seconds: int  # The browser reads this value from the page.
     themes: tuple[str, ...]  # A tuple, because a frozen record needs a fixed value.
     allowed_networks: tuple[Network, ...]  # An empty tuple leaves the portal open.
+    environment_token_present: bool = False  # This fixed startup state controls browser token sign-in.
 
 
 @dataclass(frozen=True, slots=True)  # Frozen stops a request handler from changing a setting.
@@ -232,6 +236,7 @@ def load_web_settings() -> WebSettings:
         poll_interval_seconds=read_poll_interval(),  # A short wait falls back to 30 seconds.
         themes=read_themes(),  # An empty list falls back to the two shipped themes.
         allowed_networks=read_allowed_networks(),  # An empty list leaves the portal open.
+        environment_token_present=any(bool(os.environ.get(name)) for name in MIST_TOKEN_VARIABLES),
     )
 
 

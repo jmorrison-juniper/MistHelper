@@ -721,6 +721,26 @@ def test_credential_mode_holds_both_modes() -> None:
     assert CredentialMode.PROVIDER_LOGIN.value == "provider_login"
 
 
+def test_browser_token_owner_uses_the_safe_token_name(
+    flask_app: flask.Flask,
+    fake_mist_session: SimpleNamespace,
+) -> None:
+    """A browser token uses its GetSelf name as the lock-holder identity."""
+    with flask_app.test_request_context("/", headers=cookie_header(FIRST_BROWSER_ID)):
+        owner = identity.build_token_owner("night-shift-token", FIRST_BROWSER_ID)
+        record = identity.sign_in_with_browser_token(owner, fake_mist_session)
+        assert record.credential_mode is CredentialMode.BROWSER_TOKEN
+        assert identity.SESSION_REGISTRY.get(owner.key) is record
+    assert owner.actor_email == "night-shift-token"
+    assert "night-shift-token" not in owner.email_digest
+
+
+def test_browser_token_owner_refuses_an_unsafe_token_name() -> None:
+    """A token value cannot become a durable identity by accident."""
+    with pytest.raises(ValueError):
+        identity.build_token_owner("token with a slash/value", FIRST_BROWSER_ID)
+
+
 # --------------------------------------------------------------------------
 # SessionRegistry
 # --------------------------------------------------------------------------

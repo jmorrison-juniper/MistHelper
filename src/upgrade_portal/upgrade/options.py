@@ -203,6 +203,36 @@ def _configured_override(
     return _normalized_version(value) if value else ""
 
 
+def safe_model_target(
+    device_type: str,
+    versions: Sequence[str],
+    override: str | None,
+) -> tuple[str, str]:
+    """Return the safe target and the rule that selected it for one model."""
+    offered = sorted(
+        {_normalized_version(version) for version in versions if _normalized_version(version)},
+        key=_numeric_version_key,
+        reverse=True,
+    )
+    configured = _normalized_version(override) if override else ""
+    if configured and configured in offered:
+        return configured, "override"
+    return (offered[0], "model_fallback") if offered else ("", "unavailable")
+
+
+def selected_device_types(body: Mapping[str, Any]) -> tuple[str, ...]:
+    """Validate the selected device types, or use every supported type by default."""
+    raw_types = body.get("selected_types")
+    if raw_types is None:
+        return SUPPORTED_DEVICE_TYPES
+    if not isinstance(raw_types, list) or not raw_types:
+        raise BadOptionError("selected_types")
+    selected = tuple(str(item).strip().lower() for item in raw_types)
+    if len(set(selected)) != len(selected) or any(item not in SUPPORTED_DEVICE_TYPES for item in selected):
+        raise BadOptionError("selected_types")
+    return selected
+
+
 def _type_warning(device_type: str, eligible: Sequence[Mapping[str, Any]], candidates: Sequence[str]) -> str | None:
     """Return the warning when a type has devices but no shared version."""
     if eligible and not candidates:
@@ -390,15 +420,24 @@ def build_version_options(
             reverse=True,
         )
         selected = str(selections.get(device_type, {}).get("selected_version") or "")
-        version_target = selected if selected in versions else (versions[0] if versions else "")
+        safe_target, target_source = safe_model_target(
+            device_type,
+            versions,
+            _configured_override(device_type, os.environ),
+        )
+        version_target = selected if selected in versions else safe_target
+        version_before = str(device.get("version", "")).strip()
         rows.append(
             {
                 "mac": normalize_device_mac(device.get("mac")),
                 "name": str(device.get("name", "")).strip(),
                 "device_type": device_type,
                 "model": model,
-                "version_before": str(device.get("version", "")).strip(),
+                "version_before": version_before,
                 "version_target": version_target,
+                "safe_target": safe_target,
+                "target_source": target_source,
+                "firmware_mismatch": bool(version_before) and bool(safe_target) and version_before != safe_target,
                 "versions": versions,
             }
         )
@@ -745,6 +784,7 @@ def build_targets(
     devices: Sequence[Mapping[str, Any]],
     choices: Sequence[Mapping[str, Any]],
     versions_by_model: Mapping[str, Sequence[str]] | None = None,
+    selected_types: Sequence[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Build the run ``targets`` list from the browser choices.
 
@@ -768,14 +808,22 @@ def build_targets(
     index = {normalize_device_mac(device.get("mac")): device for device in devices}
     logger.info("Upgrade portal builds %s upgrade target(s)", len(choices))
     resolved = [_resolve_choice(index, choice) for choice in choices]
+    allowed_types = set(selected_types) if selected_types is not None else set(SUPPORTED_DEVICE_TYPES)
+    selected = [
+        (device, version)
+        for device, version in resolved
+        if str(device.get("type", "")).strip().lower() in allowed_types
+    ]
+    if resolved and not selected:
+        raise BadOptionError("targets")
     if versions_by_model is not None:
-        for device, version in resolved:
+        for device, version in selected:
             model = str(device.get("model", "")).strip()
             offered = {_normalized_version(item) for item in versions_by_model.get(model, ())}
             if version not in offered:
                 logger.warning("Upgrade portal refused an unavailable target for model %s", model)
                 raise BadOptionError("version_target")
-    entries = [build_target_entry(device, version) for device, version in resolved]
+    entries = [build_target_entry(device, version) for device, version in selected]
     logger.debug("Upgrade portal built targets for %s device type(s)", len({row["device_type"] for row in entries}))
     return entries
 
@@ -899,11 +947,13 @@ def build_options_record(session: Any, org_id: str, site_id: str, body: Mapping[
         return {}
     choices = body.get("targets")
     rows = [one for one in choices if isinstance(one, Mapping)] if isinstance(choices, list) else []
+    selected_types = selected_device_types(body)
     by_model = read_model_versions(session, site_id, inventory.records) if rows else {}
-    entries = build_targets(inventory.records, rows, by_model if rows else None)
+    entries = build_targets(inventory.records, rows, by_model if rows else None, selected_types)
     return {
         "targets": entries,
         "options": asdict(build_options(body)),
+        "selected_types": list(selected_types),
         "warnings": list(target_warnings(entries)),
     }
 
@@ -928,6 +978,8 @@ __all__ = [
     "build_options_view",
     "build_target_entry",
     "build_targets",
+    "safe_model_target",
+    "selected_device_types",
     "build_version_options",
     "collect_models",
     "read_model_versions",

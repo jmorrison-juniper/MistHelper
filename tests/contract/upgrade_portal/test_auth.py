@@ -289,6 +289,35 @@ def test_signin_page_needs_no_session(auth_client: FlaskClient) -> None:
     assert "not_authenticated" not in response.get_data(as_text=True)
 
 
+def test_signin_page_shows_the_browser_token_control_only_when_allowed(
+    auth_client: FlaskClient,
+    portal_app: Any,
+) -> None:
+    """The startup flag controls the browser-token input."""
+    portal_app.config["BROWSER_TOKEN_SIGNIN_ALLOWED"] = True
+    enabled_page = auth_client.get(SIGNIN_PATH).get_data(as_text=True)
+    assert 'data-testid="signin-browser-token"' in enabled_page
+    assert PROBE_TOKEN not in enabled_page
+    portal_app.config["BROWSER_TOKEN_SIGNIN_ALLOWED"] = False
+    disabled_page = auth_client.get(SIGNIN_PATH).get_data(as_text=True)
+    assert 'data-testid="signin-browser-token"' not in disabled_page
+
+
+def test_browser_token_signin_answers_the_organization_picker(
+    auth_client: FlaskClient,
+    portal_app: Any,
+) -> None:
+    """A valid browser token signs in with no typed email address."""
+    portal_app.config["BROWSER_TOKEN_SIGNIN_ALLOWED"] = True
+    portal_app.config["CLOUD_BROWSER_TOKEN_SESSION"] = lambda host, token: FakeCloudSession([])
+    portal_app.config["CLOUD_TOKEN_IDENTITY"] = lambda session: {"name": "night-shift-token"}
+    response = auth_client.post(SIGNIN_PATH, json={"mode": "browser_token", "token": PROBE_TOKEN})
+    assert response.status_code == 200
+    assert response.get_json() == {"next": ORG_PATH}
+    assert PROBE_TOKEN not in response.get_data(as_text=True)
+    auth_client.post(SIGNOUT_PATH)  # WHY: Clear the registry entry that this test created.
+
+
 def test_signin_success_answers_the_organization_picker(auth_client: FlaskClient, portal_app: Any) -> None:
     """A cloud that accepts the pair sends the operator to the organization picker."""
     portal_app.config["CLOUD_LOGIN"] = RecordingLogin([CLOUD_SUCCESS])
