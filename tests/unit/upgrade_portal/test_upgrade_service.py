@@ -889,6 +889,20 @@ class TestListAvailableVersions:
         assert recorder.keywords == [{"type": "switch", "model": "EX4100-48P"}]
         assert grouped == {"EX4100-48P": ("23.4R2-S3",)}
 
+    def test_reads_ssr_versions_from_the_organization_endpoint(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """SSR versions use the separate organization endpoint and map to the SSR model."""
+        recorder = Recorder(FakeResponse(200, [{"package": "SSR", "version": "6.3.0-1"}]))
+        install(monkeypatch, recorder)
+        grouped = upgrade_service.list_available_versions(
+            object(),
+            SITE_ID,
+            [{"type": "gateway", "model": "SSR120"}],
+            ORG_ID,
+        )
+        assert recorder.names == ["listOrgAvailableSsrVersions"]
+        assert recorder.calls[0][1][1] == ORG_ID
+        assert grouped == {"SSR120": ("6.3.0-1",)}
+
     def test_groups_the_versions_by_model(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """The portal shows one version list for each model.
 

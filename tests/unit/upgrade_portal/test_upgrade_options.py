@@ -220,22 +220,28 @@ class TestVersionOptions:
         rows = [SWITCH_ROW, AP_ROW, dict(SWITCH_ROW), {"model": "  "}]
         assert module.collect_models(rows) == ("AP45", "EX4400-48P")
 
-    def test_read_model_versions_passes_the_site_and_the_devices(
+    def test_read_model_versions_passes_the_site_devices_and_organization(
         self,
         monkeypatch: pytest.MonkeyPatch,
         fake_mist_session: Any,
     ) -> None:
-        """The version read is site-scoped, which the seam already proved."""
+        """The version read receives the organization needed for SSR discovery."""
         seen: dict[str, Any] = {}
 
-        def fake_list(session: Any, site_id: str, devices: Any) -> dict[str, tuple[str, ...]]:
+        def fake_list(
+            session: Any,
+            site_id: str,
+            devices: Any,
+            org_id: str | None,
+        ) -> dict[str, tuple[str, ...]]:
             seen["site_id"] = site_id
             seen["devices"] = tuple(devices)
+            seen["org_id"] = org_id
             return {"AP45": ("0.14.29076",)}
 
         monkeypatch.setattr(module, "list_available_versions", fake_list)
-        result = module.read_model_versions(fake_mist_session, "site-1", [AP_ROW])
-        assert seen == {"site_id": "site-1", "devices": (AP_ROW,)}
+        result = module.read_model_versions(fake_mist_session, "site-1", [AP_ROW], "org-1")
+        assert seen == {"site_id": "site-1", "devices": (AP_ROW,), "org_id": "org-1"}
         assert result == {"AP45": ("0.14.29076",)}
 
     def test_build_version_options_joins_the_device_to_its_versions(self) -> None:

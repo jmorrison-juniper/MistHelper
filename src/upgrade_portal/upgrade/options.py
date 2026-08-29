@@ -367,6 +367,7 @@ def read_model_versions(
     session: Any,
     site_id: str,
     devices: Sequence[Mapping[str, Any]],
+    org_id: str | None = None,
 ) -> Mapping[str, tuple[str, ...]]:
     """Return the version list of each model that the site holds.
 
@@ -379,13 +380,14 @@ def read_model_versions(
         session: The cloud session. The caller owns it.
         site_id: The site to read.
         devices: The inventory rows that name the models.
+        org_id: The organization that owns the site and supplies SSR versions.
 
     Returns:
         The version list of each model.
     """
     models = collect_models(devices)
     logger.info("Upgrade portal reads the available versions of %s model(s) at site %s", len(models), site_id)
-    return list_available_versions(session, site_id, devices)
+    return list_available_versions(session, site_id, devices, org_id)
 
 
 def build_version_options(
@@ -923,7 +925,7 @@ def build_options_view(session: Any, org_id: str, site_id: str) -> dict[str, Any
     if not inventory.records:  # A failed read must never spend a second call for no gain.
         logger.warning("Upgrade portal read no device of site %s for the options page", site_id)
         return {"targets": [], "versions_by_model": {}}
-    by_model = read_model_versions(session, site_id, inventory.records)
+    by_model = read_model_versions(session, site_id, inventory.records, org_id)
     type_selections = TypedVersionSelector().select(inventory.records, by_model)
     rows = build_version_options(inventory.records, by_model, type_selections)
     logger.info("Upgrade portal offers %s device(s) on the options page of site %s", len(rows), site_id)
@@ -966,7 +968,7 @@ def build_options_record(session: Any, org_id: str, site_id: str, body: Mapping[
     choices = body.get("targets")
     rows = [one for one in choices if isinstance(one, Mapping)] if isinstance(choices, list) else []
     selected_types = selected_device_types(body)
-    by_model = read_model_versions(session, site_id, inventory.records) if rows else {}
+    by_model = read_model_versions(session, site_id, inventory.records, org_id) if rows else {}
     entries = build_targets(inventory.records, rows, by_model if rows else None, selected_types)
     return {
         "targets": entries,
