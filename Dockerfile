@@ -98,6 +98,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application files
 COPY MistHelper.py __init__.py ./
+COPY scripts/ ./scripts/
 
 # Set ownership and switch to non-root user for application files
 RUN chown -R misthelper:misthelper /app

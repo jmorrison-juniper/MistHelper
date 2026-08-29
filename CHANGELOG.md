@@ -7,6 +7,11 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Restore capture collection in the container
+
+- **Fixed**: The container image now includes the `scripts` package. The capture
+  collector can import the Zscaler city metadata helper during startup.
+
 ### Browser token and safe device selection
 
 - **Added**: The capture portal accepts a browser API token only when it started
