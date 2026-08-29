@@ -7,6 +7,11 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Restore capture portal browser controls
+
+- **Fixed**: The portal JavaScript now initializes correctly. Site lock, capture,
+  and upgrade option controls now attach to the page.
+
 ### Use safe type-specific firmware targets in the capture portal
 
 - **Defaults (Added)**: The upgrade capture portal now selects the numerically
