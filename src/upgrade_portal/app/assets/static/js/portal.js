@@ -1473,7 +1473,6 @@
                 });
                 applyVersionToDeviceType(typeSelect);
             }
-<<<<<<< HEAD
         });
         var allChoice = document.querySelector("[data-select-all-device-types]");
         if (allChoice) {
@@ -1533,8 +1532,6 @@
                 .catch(function (error) {
                     showRequestError(error);
                 });
-=======
->>>>>>> cdff5b01 (version 26.08.29.19.38 - render capture result tables after verification)
         });
     }
 
@@ -2594,10 +2591,7 @@
     window.upgradePortal.startCapturePoll = startCapturePoll;
     window.upgradePortal.stopCapturePoll = stopCapturePoll;
     window.upgradePortal.applyConfirmGate = applyConfirmGate;
-<<<<<<< HEAD
     window.upgradePortal.initBrowserTokenSignIn = initBrowserTokenSignIn;
-=======
->>>>>>> cdff5b01 (version 26.08.29.19.38 - render capture result tables after verification)
     window.upgradePortal.collectUpgradeTargets = collectUpgradeTargets;
     window.upgradePortal.selectedDeviceTypes = selectedDeviceTypes;
     window.upgradePortal.filterUpgradeTargetRows = filterUpgradeTargetRows;
