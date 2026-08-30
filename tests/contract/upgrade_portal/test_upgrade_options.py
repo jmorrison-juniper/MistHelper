@@ -69,6 +69,7 @@ ORG_NOT_CHOSEN_CODE = "org_not_chosen"  # The session holds no organization at a
 SITE_NOT_CHOSEN_CODE = "site_not_chosen"  # The task path carries no site and the session holds none.
 BAD_OPTION_CODE = "bad_option"  # `contracts/http-api.md` fixes this code for the options call.
 PRE_CAPTURE_MISSING_CODE = "pre_capture_missing"  # FR-035 refuses a start with no saved pre-check.
+RUN_NOT_READY_CODE = "run_not_ready"  # The run must reach the confirmation stage before it starts.
 
 CONFIRM_WORD = "CONFIRM"  # FR-034 fixes this exact word, in these exact letters.
 
@@ -849,6 +850,34 @@ def test_a_start_with_no_saved_pre_check_answers_the_documented_code(
     answer = upgrade_client.post(path, json={"confirm": CONFIRM_WORD})  # The right word, so only FR-035 refuses.
     assert answer.status_code == CONFLICT_STATUS  # A state conflict, and never a caller defect.
     assert read_error_code(answer) == PRE_CAPTURE_MISSING_CODE  # The page then sends the operator to the pre-check.
+
+
+def test_a_saved_plan_prepares_an_adopted_pre_check_for_confirmation(
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """A saved plan moves a verified adopted pre-check run to confirmation."""
+    run_id = seed_run(run_store, "created", pre_capture_id="cap-probe")  # The standalone capture already completed.
+    answer = save_options(upgrade_client, run_id, THIN_BODY)  # The operator saves the upgrade plan.
+    assert answer.status_code == OK_STATUS  # The plan reaches the run record.
+    assert run_store.runs[run_id]["state"] == "awaiting_confirmation"  # The start route may now send the upgrade.
+
+
+def test_a_start_before_confirmation_names_the_required_recovery(
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """A premature start is not reported as an already-started upgrade."""
+    run_id = seed_run(  # A damaged or old run can have a pre-check and targets without the confirmation state.
+        run_store,
+        "created",
+        pre_capture_id="cap-probe",
+        targets=[{"mac": PROBE_MAC, "version_target": PROBE_VERSION_TARGET}],
+    )
+    answer = upgrade_client.post(START_PATH_TEMPLATE.format(run_id=run_id), json={"confirm": CONFIRM_WORD})
+    assert answer.status_code == CONFLICT_STATUS  # The run is recoverable, but it cannot start yet.
+    assert read_error_code(answer) == RUN_NOT_READY_CODE  # The browser displays the state-specific cure.
+    assert run_store.runs[run_id]["state"] == "created"  # A rejected start never changes the run state.
 
 
 # ---------------------------------------------------------------------------

@@ -394,6 +394,7 @@ upgrades.
 | 409 | `pre_capture_missing` when no verified pre-check exists |
 | 409 | `site_locked` with `details.actor_email` when a different operator holds the site lock |
 | 409 | `upgrade_targets_missing` when the saved plan names no device |
+| 409 | `run_not_ready` when the run has not reached confirmation |
 | 500 | `run_write_failed` when the run store refused the write |
 | 503 | `lock_store_unreachable` when the portal cannot read the site lock |
 
@@ -403,6 +404,10 @@ The portal also refuses to start a plan that names no device. An operator who
 opens the options page and saves it without a chosen version saves an empty
 plan. A start of that plan would send nothing and would still report a complete
 run, so the operator would read a site that never changed as an upgraded site.
+
+The portal accepts a new start only from `awaiting_confirmation`. A run with a
+verified pre-check capture in `created` needs its options saved again. The run
+page gives the operator a link to the saved options.
 
 An earlier version of this table named `lock_lost` here. The route raises
 `site_locked` instead. That is the same code that section 3 and section 4 use for

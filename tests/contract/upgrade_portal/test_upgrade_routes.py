@@ -605,6 +605,19 @@ def test_run_page_renders_the_live_view(upgrade_client: FlaskClient, run_store: 
     assert 'data-testid="stop-button"' in page  # The included `stop.html` read the two values the route passed.
 
 
+def test_run_page_gives_a_recovery_link_for_an_unprepared_run(
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """A stalled run tells the operator how to restore the confirmation path."""
+    run_id = seed_run(run_store, "created", pre_capture_id="capture-1", targets=[PLANNED_ROW])
+    answer = upgrade_client.get(f"/runs/{run_id}")  # The run page must expose the recovery action.
+    page = answer.get_data(as_text=True)  # The rendered page that the operator reads.
+    assert answer.status_code == OK_STATUS  # A recoverable run still has a readable page.
+    assert 'data-testid="upgrade-recovery-options-link"' in page  # The page names the recovery control.
+    assert f'href="/runs/{run_id}/options"' in page  # The control opens the correct saved plan.
+
+
 def test_options_page_renders_the_version_picker(
     upgrade_client: FlaskClient,
     run_store: RecordingRunStore,

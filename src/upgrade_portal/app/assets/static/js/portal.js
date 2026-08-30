@@ -1936,9 +1936,10 @@
      * manual refresh. Both call this function.
      *
      * @param {Element} region The run status region.
+     * @param {boolean} [reportSuccess] True when the operator requested this read.
      * @returns {Promise<Object|null>} The status body, or null on a fault.
      */
-    function refreshRunStatus(region) {
+    function refreshRunStatus(region, reportSuccess) {
         var runId = readRunId(region);
         if (!runId) {
             return Promise.resolve(null);
@@ -1946,6 +1947,9 @@
         return fetchJson("/api/runs/" + encodeURIComponent(runId) + "/status")
             .then(function (status) {
                 paintRunStatus(region, status);
+                if (reportSuccess && status) {
+                    showFlash("The run state is current. " + (status.message || ""), "info");
+                }
                 if (status && RUN_FINISHED_STATES.indexOf(status.state) !== -1) {
                     stopRunPoll();
                 }
@@ -2004,7 +2008,7 @@
         var refreshButton = byTestId(UPGRADE_REFRESH_TESTID);
         if (refreshButton) {
             refreshButton.addEventListener("click", function () {
-                refreshRunStatus(region);
+                refreshRunStatus(region, true);
             });
         }
 
