@@ -152,6 +152,7 @@ A `ClientRecord` holds these fields.
 | `snr` | integer | Wireless only. From the client statistics call. |
 | `random_mac` | boolean | Wireless only. From the client search call. |
 | `username` | string | May be empty. Never a password. |
+| `manufacture` | string | Wired only. May be empty. |
 
 The wireless list is a join. The portal calls `listSiteWirelessClientsStats` for
 signal strength and `searchSiteWirelessClients` for the random MAC flag, then
