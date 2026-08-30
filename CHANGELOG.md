@@ -7,6 +7,15 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Restore confirmed upgrade starts
+
+- **Fixed**: A run that adopts a verified pre-check capture now moves to the
+  confirmation stage when its upgrade plan is saved. The portal sends the
+  upgrade after the operator confirms it.
+- **Changed**: A run that cannot start now names the recovery step. The run
+  page links to the saved upgrade options. Manual refresh now confirms that the
+  displayed state is current.
+
 ### Show useful wired-client identity data
 
 - **Display (Changed)**: The wired-client table now uses `hostname` and falls

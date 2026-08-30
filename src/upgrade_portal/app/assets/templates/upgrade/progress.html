@@ -127,6 +127,16 @@
 
   <p class="status-message" data-run-field="message">{{ run_message }}</p>
 
+  {% if run_state == 'created' and pre_key %}
+    <p class="portal-card-note">
+      This run has a verified pre-check capture, but it is not ready to start.
+      <a class="portal-button"
+         data-testid="upgrade-recovery-options-link"
+         href="{{ url_for('upgrade.options_page', run_id=run_key) }}">Choose upgrade options</a>
+      then save the plan and confirm the upgrade.
+    </p>
+  {% endif %}
+
   {#
     Issue #2100 names the site in words on every page that leads to a firmware
     write. The identifier stays on the page, because an operator quotes the

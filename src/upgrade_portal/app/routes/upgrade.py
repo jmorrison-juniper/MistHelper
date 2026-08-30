@@ -146,6 +146,7 @@ BAD_OPTION_CODE = "bad_option"  # `contracts/http-api.md` fixes this code for th
 CONFIRMATION_REQUIRED_CODE = "confirmation_required"  # The operator typed the wrong word.
 PRE_CAPTURE_MISSING_CODE = "pre_capture_missing"  # No verified pre-check exists, so no start may run.
 TARGETS_MISSING_CODE = "upgrade_targets_missing"  # The saved plan names no device, so the start would send nothing.
+RUN_NOT_READY_CODE = "run_not_ready"  # The run has not reached the confirmation stage.
 RUN_NOT_STOPPABLE_CODE = "run_not_stoppable"  # The run already reached a state that a stop cannot change.
 RUN_WRITE_FAILED_CODE = "run_write_failed"  # The store refused the write, so the operator must retry.
 UPGRADE_RUNNING_CODE = "upgrade_already_running"  # FR-037: one run of this site has not reached a final state.
@@ -159,6 +160,9 @@ CONFIRM_REQUIRED_MESSAGE = "The start control needs the exact text CONFIRM."  # 
 STOP_REQUIRED_MESSAGE = "The stop control needs the exact text STOP."  # Names the word and the case.
 PRE_CAPTURE_MISSING_MESSAGE = "Save a verified pre-check capture before you start the upgrade."  # The cure.
 TARGETS_MISSING_MESSAGE = "The saved plan names no device. Choose a version on the options page and save it."  # Cure.
+RUN_NOT_READY_MESSAGE = (
+    "The run is not ready to start. Open the upgrade options, save the plan, then confirm the upgrade."  # The cure.
+)
 RUN_WRITE_FAILED_MESSAGE = "The portal could not write the run record. Try again."  # The cure.
 UPGRADE_RUNNING_MESSAGE = "An upgrade already runs at this site. Open that run before you start a new one."  # Cure.
 LOCK_STORE_DOWN_MESSAGE = (  # Warning: a guess here can start a second upgrade on a live site.
@@ -961,6 +965,7 @@ def save_options(run_id: str) -> tuple[Response, int]:
     record[TARGETS_FIELD] = built.get(TARGETS_FIELD, [])  # The run record holds one entry for each device.
     record["options"] = built.get("options", {})  # The three fields the cloud reads.
     record["selected_types"] = list(built.get("selected_types", ["ap", "switch", "gateway"]))
+    prepare_confirmation(record)  # A verified adopted pre-check completes the stages before the typed confirmation.
     if not save_run(record):  # The store reports the true result.
         return write_failed()  # The operator retries instead of reading a choice that was never kept.
     logger.info("upgrade: the run %s holds %s targets", run_id, len(record[TARGETS_FIELD]))  # AFTER the change.
@@ -975,6 +980,30 @@ def save_options(run_id: str) -> tuple[Response, int]:
         ),
         OK_STATUS,
     )
+
+
+def prepare_confirmation(record: dict[str, Any]) -> None:
+    """Move a verified pre-check run to the confirmation stage.
+
+    Why:
+        A standalone capture is verified before the portal attaches it to a new
+        run. The capture route cannot move that new run through its history.
+        Saving its target plan is the first point where the portal knows that
+        the verified pre-check and the upgrade plan belong together.
+
+    Args:
+        record: The run record that may now be ready for confirmation.
+    """
+    if not record.get(PRE_CAPTURE_FIELD) or not record.get(
+        TARGETS_FIELD
+    ):  # A missing reading or plan cannot reach confirmation.
+        return  # The start route gives the operator the matching refusal.
+    machine = RunStateMachine()  # One state machine owns every valid move.
+    if machine.read_state(record) is not RunState.CREATED:  # A repeated save must keep its existing stage.
+        return  # The record already reflects the operator journey.
+    for state in (RunState.PRE_CAPTURE_RUNNING, RunState.PRE_CAPTURE_DONE, RunState.AWAITING_CONFIRMATION):
+        machine.advance(record, state)  # Preserve the complete state history before the confirmation gate.
+    logger.info("upgrade: the run %s is ready for confirmation", record["run_id"])  # AFTER the final state change.
 
 
 # --------------------------------------------------------------------------
@@ -1270,12 +1299,22 @@ def start_run(run_id: str) -> tuple[Response, int]:
     refusal = start_refusal(record)  # The three rules of FR-033 to FR-035, plus the lock check of T182.
     if refusal is not None:  # One rule refused, and the answer already names which one.
         return refusal  # The operator reads the code and the cure.
+    machine = RunStateMachine()  # One state model distinguishes a duplicate from a premature start.
+    current = machine.read_state(record)  # The stored state decides whether this call may send firmware.
+    if current is not RunState.AWAITING_CONFIRMATION:  # Only this state may start a new firmware submission.
+        if (
+            current in RunStateMachine.CHAIN[RunStateMachine.CHAIN.index(RunState.UPGRADE_SUBMITTING) :]
+        ):  # Firmware submission already began.
+            logger.info(
+                "upgrade: the run %s already started, so this call sent nothing", run_id
+            )  # AFTER the state read.
+            return jsonify({"state": current.value}), ACCEPTED_STATUS  # A duplicate start stays idempotent.
+        logger.warning(
+            "upgrade: the run %s cannot start from the state %s", run_id, current.value
+        )  # The record needs recovery.
+        return json_error(CONFLICT_STATUS, RUN_NOT_READY_CODE, RUN_NOT_READY_MESSAGE)  # Name the next operator action.
     logger.info("upgrade: start the run %s", run_id)  # BEFORE the state change.
-    try:  # A second tab reaches this line while the run already sends, which is not a fault.
-        RunStateMachine().advance(record, RunState.UPGRADE_SUBMITTING)
-    except RunTransitionError:  # FR-038 accepts one begin action, so the second one changes nothing.
-        logger.info("upgrade: the run %s already started, so this call sent nothing", run_id)  # AFTER the read.
-        return jsonify({"state": str(record.get("state", ""))}), ACCEPTED_STATUS
+    machine.advance(record, RunState.UPGRADE_SUBMITTING)  # The confirmation state permits this one move.
     if not save_run(record):  # The store reports the true result.
         return write_failed()  # No upgrade goes out while the record says the run never started.
     logger.info("upgrade: the run %s holds the state %s", run_id, record["state"])  # AFTER the state change.
