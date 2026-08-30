@@ -376,7 +376,7 @@
           <th scope="col">Host name</th>
           <th scope="col">MAC address</th>
           <th scope="col">IP address</th>
-          <th scope="col">VLAN</th>
+          <th scope="col">Manufacturer</th>
           <th scope="col">Parent device</th>
           <th scope="col">Port</th>
         </tr>
@@ -390,7 +390,7 @@
             <th scope="row">{{ client.hostname | default('Unnamed client', true) }}</th>
             <td class="cell-mono">{{ client_mac }}</td>
             <td class="cell-mono">{{ client.ip | default('', true) }}</td>
-            <td class="cell-number">{{ client.vlan | default('', true) }}</td>
+            <td>{{ client.manufacture | default('', true) }}</td>
             <td>{{ client.parent_device | default('unknown', true) }}</td>
             <td class="cell-mono">{{ client.port_id | default('', true) }}</td>
           </tr>
