@@ -40,6 +40,7 @@ WIRED_HOSTNAME = "desk-01"
 WIRED_IP = "10.10.0.7"
 WIRED_PORT = "ge-0/0/7"
 WIRED_VLAN = 30
+WIRED_MANUFACTURE = "Cisco Systems, Inc"
 
 # WHY: The parallel arrays of the wired row hold different values from the
 # paired object. A test then proves which of the two sources the reader read.
@@ -52,7 +53,10 @@ ARRAY_VLAN = 99
 # because the wired search endpoint publishes neither.
 WIRED_ROW: dict[str, Any] = {
     "mac": COLON_FORM,
+    "hostname": [WIRED_HOSTNAME],
+    "last_hostname": "desk-01-previous",
     "dhcp_hostname": WIRED_HOSTNAME,
+    "manufacture": WIRED_MANUFACTURE,
     "ip": [ARRAY_IP],
     "vlan": [ARRAY_VLAN],
     "device_mac": [ARRAY_SWITCH_MAC],
@@ -296,6 +300,19 @@ def test_the_wired_read_carries_the_names_of_the_client() -> None:
     assert (identity.hostname, identity.ip) == (WIRED_HOSTNAME, WIRED_IP)
 
 
+def test_the_wired_read_uses_the_last_host_name_when_hostname_is_empty() -> None:
+    """The last host name identifies a client when the current list is empty."""
+    row = dict(WIRED_ROW)
+    row["hostname"] = []
+    records = clients.read_wired_clients(_session(), SITE_ID, _row_source([row]))
+    assert records[0].identity.hostname == "desk-01-previous"
+
+
+def test_the_wired_read_carries_the_manufacturer() -> None:
+    """The wired record preserves the manufacturer for the capture table."""
+    assert _one_wired_record().identity.manufacture == WIRED_MANUFACTURE
+
+
 def test_the_wired_read_carries_the_switch_and_the_port() -> None:
     """The wired record holds the serving switch, the port, and the number.
 
@@ -350,6 +367,7 @@ def test_the_wired_record_flattens_to_the_stored_field_names() -> None:
         "mac": NORMAL_FORM,
         "hostname": WIRED_HOSTNAME,
         "ip": WIRED_IP,
+        "manufacture": WIRED_MANUFACTURE,
         "device_mac": SWITCH_MAC,
         "port_id": WIRED_PORT,
         "vlan": WIRED_VLAN,

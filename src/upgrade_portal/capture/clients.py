@@ -84,11 +84,14 @@ class ClientIdentity:
         ip: The address of the client on the network. Empty when absent.
         username: The identity from the authentication exchange. Never a
             password and never an access code.
+        manufacture: The client manufacturer. Empty when the cloud does not
+            identify it.
     """
 
     hostname: str = ""
     ip: str = ""
     username: str = ""
+    manufacture: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -484,11 +487,29 @@ def _wired_record(row: Row) -> ClientRecord | None:
     paired = _first(row.get("device_mac_port"))
     pair: Row = paired if isinstance(paired, Mapping) else {}
     identity = ClientIdentity(
-        hostname=_text(row.get("dhcp_hostname")),
+        hostname=_wired_hostname(row),
         ip=_text(pair.get("ip") or row.get("ip")),
         username=_text(row.get("username")),
+        manufacture=_text(row.get("manufacture")),
     )
     return ClientRecord(mac=mac, identity=identity, attachment=_wired_attachment(row, pair))
+
+
+def _wired_hostname(row: Row) -> str:
+    """Return the usable host name from one wired-client response.
+
+    Why:
+        Mist has returned a host name under three keys. A current response can
+        hold `hostname` as a list and `last_hostname` as a scalar. The capture
+        keeps one value so the table does not display a list.
+
+    Args:
+        row: One raw wired-client response.
+
+    Returns:
+        The first usable host name from the current and older response keys.
+    """
+    return _text(row.get("hostname")) or _text(row.get("last_hostname")) or _text(row.get("dhcp_hostname"))
 
 
 def _wired_attachment(row: Row, pair: Row) -> ClientAttachment:
@@ -636,6 +657,7 @@ def _merge_identity(primary: ClientIdentity, secondary: ClientIdentity) -> Clien
         hostname=_present(primary.hostname, secondary.hostname) or "",
         ip=_present(primary.ip, secondary.ip) or "",
         username=_present(primary.username, secondary.username) or "",
+        manufacture=_present(primary.manufacture, secondary.manufacture) or "",
     )
 
 
