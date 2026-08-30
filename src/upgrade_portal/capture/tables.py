@@ -46,10 +46,10 @@ DEVICE_COLUMNS = (
     "ip",
 )
 
-# The columns of the wired client table. User Story 1 names the address, the
-# host name, the address, the VLAN, and the parent device. The port sits beside
-# them, because a wired client hangs off one port and the operator checks it.
-WIRED_COLUMNS = ("hostname", "mac", "ip", "vlan", "parent_device", "port_id")
+# The columns of the wired client table identify the client and its attachment.
+# The manufacturer helps an operator identify unmanaged equipment. The VLAN
+# number does not identify the client and therefore stays out of this table.
+WIRED_COLUMNS = ("hostname", "mac", "ip", "manufacture", "parent_device", "port_id")
 
 # The columns of the wireless client table. The same five fields of the story,
 # and then the network name and the band. A wireless client has no port.
@@ -157,8 +157,33 @@ def _client_row(columns: tuple[str, ...], record: Mapping[str, Any]) -> dict[str
     """
     source = readable(record)  # No credential field reaches a cell.
     row = _row(columns, source)  # Every column of the table, in order.
+    row["hostname"] = client_hostname(source)  # Old wired captures can hold the name in either field.
     row["parent_device"] = cell_text(source.get(PARENT_SOURCE))  # The column name differs from the source name.
     return row
+
+
+def client_hostname(source: Mapping[str, Any]) -> str:
+    """Return the usable host name from one client record.
+
+    Why:
+        Current and older wired-client responses use different host name fields.
+        Some current responses put one name in a list. The table needs one
+        readable value and must not show a Python list representation.
+
+    Args:
+        source: One credential-free client record.
+
+    Returns:
+        The host name, or an empty string when neither source names the client.
+    """
+    for field in ("hostname", "last_hostname"):  # Prefer the current field before the older fallback.
+        value = source.get(field)  # A source can omit either field.
+        if isinstance(value, (list, tuple)):  # Mist can return one or more observed names.
+            value = next((item for item in value if cell_text(item)), None)  # Use the first usable observed name.
+        name = cell_text(value)  # All field shapes become one display value.
+        if name:  # An empty value must not hide the fallback field.
+            return name  # The first usable field identifies the client.
+    return ""  # The template shows its existing unnamed-client text.
 
 
 def client_table(capture: Mapping[str, Any], group: str, columns: tuple[str, ...]) -> list[dict[str, str]]:

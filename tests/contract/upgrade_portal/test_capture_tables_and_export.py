@@ -117,8 +117,10 @@ STORED_CAPTURE: dict[str, Any] = {
         "wired": [
             {
                 "mac": WIRED_CLIENT_MAC,
-                "hostname": "desk-01",
+                "hostname": ["desk-01"],
+                "last_hostname": "desk-01-fallback",
                 "ip": "192.168.1.110",
+                "manufacture": "Cisco Systems, Inc",
                 "device_mac": MASTER_MAC,
                 "device_name": "switch-01",
                 "port_id": "ge-0/0/3",
@@ -406,16 +408,37 @@ def test_a_device_row_names_the_five_fields_of_the_story(signed_in: FlaskClient)
     assert "JW0000000000" in page
 
 
-def test_a_wired_client_row_names_the_five_fields_of_the_story(signed_in: FlaskClient) -> None:
-    """User Story 1 names the address, the host name, the address, the VLAN, and the parent.
+def test_a_wired_client_row_shows_the_host_name_and_manufacturer(signed_in: FlaskClient) -> None:
+    """The wired row shows a normalized host name and the manufacturer.
 
     Args:
         signed_in: The signed-in browser.
     """
     page = open_page(signed_in)
+    wired_table = page.split(WIRED_TABLE_MARKER, maxsplit=1)[1].split(WIRELESS_TABLE_MARKER, maxsplit=1)[0]
     assert f'data-testid="capture-client-row-{WIRED_CLIENT_MAC}"' in page
-    assert "desk-01" in page
-    assert "192.168.1.110" in page
+    assert "desk-01" in wired_table
+    assert "Cisco Systems, Inc" in wired_table
+    assert '<th scope="col">Manufacturer</th>' in wired_table
+    assert '<th scope="col">VLAN</th>' not in wired_table
+
+
+def test_a_wired_client_row_falls_back_to_the_last_host_name(wired_app: Flask, signed_in: FlaskClient) -> None:
+    """An older wired record can name the client only in `last_hostname`.
+
+    Args:
+        wired_app: The portal with a capture that holds the fallback field.
+        signed_in: The signed-in browser.
+    """
+    capture = dict(STORED_CAPTURE)
+    clients = dict(capture["clients"])
+    wired_client = dict(clients["wired"][0])
+    wired_client["hostname"] = []
+    wired_client["last_hostname"] = "desk-01-fallback"
+    clients["wired"] = [wired_client]
+    capture["clients"] = clients
+    wired_app.config[LOADER_KEY] = RecordingLoader(StoredLoad(capture, True, ""))
+    assert "desk-01-fallback" in open_page(signed_in)
 
 
 def test_a_wireless_client_row_reaches_the_page(signed_in: FlaskClient) -> None:

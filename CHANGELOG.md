@@ -7,6 +7,12 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Show useful wired-client identity data
+
+- **Display (Changed)**: The wired-client table now uses `hostname` and falls
+  back to `last_hostname`. It shows the manufacturer and no longer shows the
+  VLAN number.
+
 ### Render capture result tables after automatic refresh
 
 - **Fixed**: A capture page now reloads once when polling first finds a verified
