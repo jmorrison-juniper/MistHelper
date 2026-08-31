@@ -132,6 +132,9 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 
+# Playwright MCP browser tool artifacts (snapshots, screenshots) from ad hoc E2E checks
+.playwright-mcp/
+
 # Translations
 *.mo
 *.pot
