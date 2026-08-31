@@ -41,6 +41,7 @@ import time
 from collections.abc import Iterator
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import patch
 
@@ -438,16 +439,16 @@ def portal_test_id_attribute(request: pytest.FixtureRequest) -> None:
     playwright_driver.selectors.set_test_id_attribute(PLAYWRIGHT_CONFIG["testIdAttribute"])
 
 
-class StandInCloudSession:  # Carries a privilege list and nothing else, so no method can open a socket
+class StandInCloudSession:  # Carries a privilege list and a narrow read, so every other call still fails fast
     """The cloud session that stands in for a signed-in operator.
 
     Why:
         `identity.OperatorSession` holds a reference to a `mistapi` object, and
         the portal passes that object to every cloud call. A real object would
         reach a live tenant, and no test may do that. This class carries the
-        one field the portal reads and carries no request method at all, so a
-        route that tried a cloud call would fail in the process and could not
-        reach the network.
+        one field the site picker reads and the one read the inventory page's
+        stale-firmware check needs. Every other call still finds no method and
+        fails in the process, so it could not reach the network either.
 
     Attributes:
         privileges: The organization records that the picker page reads.
@@ -456,6 +457,35 @@ class StandInCloudSession:  # Carries a privilege list and nothing else, so no m
     def __init__(self) -> None:
         """Store the one privilege record that the organization picker shows."""
         self.privileges = [{"scope": "org", "org_id": STAND_IN_ORG_ID, "name": STAND_IN_ORG_NAME}]
+
+    def mist_get(self, uri: str, query: dict[str, str] | None = None) -> SimpleNamespace:
+        """Answer the one read the inventory page's stale-firmware check needs.
+
+        Why:
+            `select.inventory_rows_with_targets` reads
+            `listSiteAvailableDeviceVersions` for every stand-in device model,
+            so the site inventory page raised `AttributeError` before this
+            method existed (issue #2172). The answer reuses `STAND_IN_VERSIONS`,
+            the same version pair `stand_in_version_map` already publishes for
+            the options page, so both pages agree on one fixed answer.
+
+        Args:
+            uri: The request path. Only the device-versions path answers rows.
+            query: The query parameters. `model` names the row the answer carries.
+
+        Returns:
+            An object with the one `data` attribute that `_rows` reads.
+
+        Raises:
+            AssertionError: When the call is not the one this stand-in answers,
+                so an unexpected cloud call still fails in the process and
+                still cannot reach the network.
+        """
+        if not uri.endswith("/devices/versions"):
+            raise AssertionError(f"StandInCloudSession.mist_get answers no read for {uri!r}.")
+        model = str((query or {}).get("model", ""))
+        rows = [{"model": model, "version": version} for version in STAND_IN_VERSIONS]
+        return SimpleNamespace(data=rows)
 
 
 def stand_in_cloud_read(name: str, **parameters: Any) -> list[dict[str, Any]]:
