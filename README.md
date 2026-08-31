@@ -189,8 +189,8 @@ mindmap
       Tools 136-147
       Config Mgmt 148-150
       Ticket Viewer 192
-    Continuous (2)
-      Loops 151-152
+    Continuous (1)
+      Loops 151
     Destructive (42)
       ::icon(fa fa-warning)
       Firmware 154-157
@@ -549,8 +549,8 @@ fails closed, so `--test` skips any option that the registry does not name
 | `interactive` | 29 | 0, 124-150, 192 | Never runs |
 | `websocket` | 22 | 102-123 | Never runs |
 | `resource_intensive` | 10 | 14, 18-19, 59, 97-101, 153 | Never runs |
-| `continuous_loop` | 2 | 151-152 | Never runs |
-| **Total** | **241** | 0-240, no gaps | Menu 0 is Exit |
+| `continuous_loop` | 1 | 151 | Never runs |
+| **Total** | **240** | 0-240, gap at 152 (retired, issue #2066) | Menu 0 is Exit |
 
 Warning: A destructive operation changes the Mist cloud configuration. Read
 `documentation/menu_reference.md` before you run one.

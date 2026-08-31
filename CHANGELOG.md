@@ -7,6 +7,20 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Retire the duplicate continuous-loop menu number
+
+- **Removed**: Menu 152 ran the same `DataCollectionManager.continuous_loop`
+  action as menu 151, under a vaguer description. One of the two
+  descriptions could not be true for both numbers. Menu 152 is retired. Menu
+  151 keeps the accurate description. It stays the one number for this
+  action. `RETIRED_MENU_NUMBERS` in
+  `tests/guardrails/test_menu_number_uniqueness.py` records the gap. The
+  guardrail still catches a new, unexplained gap, and it refuses a future
+  reuse of 152.
+- **Changed**: The generated menu reference, the README menu tables, and the
+  architecture diagram now show one `continuous_loop` operation. Each one
+  also shows the corrected total of 240 operations.
+
 ### Link the open run that an already-running refusal names
 
 - **Added**: The capture page's already-running-upgrade refusal now shows the

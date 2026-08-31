@@ -315,7 +315,7 @@ you trust this table. Counts were measured on 2026-08-05. Run
 | `interactive` | 29 | 0, 124-150, 192 |
 | `websocket` | 22 | 102-123 |
 | `resource_intensive` | 10 | 14, 18-19, 59, 97-101, 153 |
-| `continuous_loop` | 2 | 151-152 |
+| `continuous_loop` | 1 | 151 |
 
 Warning: A `destructive` operation changes the Mist cloud configuration. Never
 automate one without explicit user confirmation. The destructive set is
