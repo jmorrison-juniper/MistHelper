@@ -159,8 +159,33 @@ class TestReadinessMistApiSession:
 
         assert payload["checks"]["mist_api_session"]["ok"] is True
 
+    def test_ready_returns_503_when_get_cloud_reports_no_host(self, writable_data_dir: str) -> None:
+        """A real mistapi session with no configured cloud fails this check.
+
+        Regression cover for the readiness probe that read a `.host`
+        attribute the real `mistapi.APISession` class never sets. The class
+        stores the cloud host on a private attribute and exposes it only
+        through `get_cloud()`.
+        """
+        session = SimpleNamespace(get_cloud=lambda: "")  # WHY: matches the real APISession shape.
+        client = _build_test_app(writable_data_dir, apisession=session).test_client()
+
+        response = client.get("/ready")
+
+        assert response.status_code == 503
+        assert response.get_json()["failed_checks"] == ["mist_api_session"]
+
+    def test_ready_passes_when_get_cloud_names_a_host(self, writable_data_dir: str) -> None:
+        """A real mistapi session with a configured cloud host passes."""
+        session = SimpleNamespace(get_cloud=lambda: "api.mist.com")  # WHY: matches the real APISession shape.
+        client = _build_test_app(writable_data_dir, apisession=session).test_client()
+
+        payload = client.get("/ready").get_json()
+
+        assert payload["checks"]["mist_api_session"]["detail"] == "Mist API session targets api.mist.com"
+
     def test_ready_returns_503_when_the_session_has_no_cloud_host(self, writable_data_dir: str) -> None:
-        """A session with no cloud host cannot reach Mist, so this fails."""
+        """A simple test double with only a `.host` attribute still fails on empty."""
         session = SimpleNamespace(host="")  # WHY: an empty host is the misconfigured state.
         client = _build_test_app(writable_data_dir, apisession=session).test_client()
 
@@ -170,7 +195,7 @@ class TestReadinessMistApiSession:
         assert response.get_json()["failed_checks"] == ["mist_api_session"]
 
     def test_ready_passes_when_the_session_names_a_cloud_host(self, writable_data_dir: str) -> None:
-        """A session with a cloud host passes without a network call."""
+        """A simple test double with only a `.host` attribute still passes, as a fallback."""
         session = SimpleNamespace(host="api.mist.com")  # WHY: a configured host is the good state.
         client = _build_test_app(writable_data_dir, apisession=session).test_client()
 

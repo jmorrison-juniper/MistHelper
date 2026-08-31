@@ -7,6 +7,19 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Group the local stack under one project and drop the unused Ollama container
+
+- **Removed**: The local compose stack no longer builds or starts an Ollama
+  container. No file under `src/` used it. The only other Ollama references
+  are in the standalone `scripts/mist_ideas_*` tools. Those tools connect to
+  an external Ollama fleet through `OLLAMA_SERVERS`. They do not read this
+  compose file. Issue #2167 records the finding.
+- **Changed**: `compose.yml` now sets an explicit project name. This is the
+  same pattern that the fiber-planner project uses. Every service now joins
+  one pod in Podman. Before this change, the project name came from the
+  current folder name. A worktree checkout could then start a separate pod
+  instead of the shared one.
+
 ### Restore confirmed upgrade starts
 
 - **Fixed**: A run that adopts a verified pre-check capture now moves to the

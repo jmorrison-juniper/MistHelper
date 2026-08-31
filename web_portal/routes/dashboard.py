@@ -151,7 +151,14 @@ def _check_mist_api_session(apisession) -> dict:
         # WHY: the portal serves the data browser with no session, so an absent session is not a fault.
         logging.debug("Readiness probe found no Mist API session")
         return {"ok": True, "detail": "no Mist API session configured"}
-    host = getattr(apisession, "host", "")  # WHY: read the cloud host without a request to Mist.
+    # WHY: mistapi 0.63+ stores the cloud host on the private `_cloud_uri` attribute and
+    # exposes it only through `get_cloud()`. A public `host` attribute never exists on that
+    # class, so reading `.host` always returned the empty default and failed readiness.
+    get_cloud = getattr(apisession, "get_cloud", None)
+    if callable(get_cloud):
+        host = get_cloud()
+    else:
+        host = getattr(apisession, "host", "")  # WHY: fall back for a simple test double.
     if not host:
         logging.warning("Readiness probe found a Mist API session with no cloud host")  # WHY: name the failure.
         return {"ok": False, "detail": "Mist API session has no cloud host"}

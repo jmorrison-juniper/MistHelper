@@ -1,5 +1,3 @@
-version: '3.8'
-
 # ==============================================================================
 # Naming and port policy (issue #2059)
 # ==============================================================================
@@ -25,7 +23,6 @@ version: '3.8'
 #   | ArangoDB   | 8529           | 9529           |
 #   | Redis      | 6379           | 9379           |
 #   | Insight UI | 8001           | 9526           |
-#   | Ollama     | 11434          | 9530           |
 #
 #   Ports 2200, 8055, and 8056 do not move. None is a vendor default, each one
 #   already sits in the required range, and each one is named in the README, in
@@ -36,7 +33,21 @@ version: '3.8'
 #   projects that both accept a pool address can receive the same range, and the
 #   routes then collide on the host. A named subnet keeps this project on one
 #   range that no other compose file in this fleet claims.
+#
+# Why one project name:
+#   An explicit `name:` groups every service under one Podman pod, the same
+#   pattern the fiber-planner project uses. Without it, the project name comes
+#   from the current folder, and a worktree checkout then starts its own
+#   separate pod instead of joining the shared one.
+#
+# Why no Ollama service:
+#   No file under `src/` imports Ollama. The only other Ollama references live
+#   in `scripts/mist_ideas_*`, standalone idea-generation tools that connect to
+#   an external Ollama fleet through `OLLAMA_SERVERS` and never touch this
+#   compose file. Issue #2167 records the removal.
 # ==============================================================================
+
+name: ${COMPOSE_PROJECT_NAME:-misthelper}
 
 services:
   misthelper:
@@ -177,44 +188,6 @@ services:
       retries: 5
       start_period: 10s
 
-  misthelper-ollama:
-    image: docker.io/ollama/ollama
-    container_name: misthelper-ollama
-    ports:
-      - "9530:9530"
-    volumes:
-      # Named volume keeps models across container restarts/upgrades.
-      # Without this, every `podman rm` wipes the downloaded models.
-      - misthelper-ollama-models:/root/.ollama
-    environment:
-      # The server binds 9530 rather than the vendor default 11434. The default
-      # also sits above 10000, which the port policy at the top of this file
-      # does not allow.
-      - OLLAMA_HOST=0.0.0.0:9530
-      # MoE CPU offload: expert FFN layers run from system RAM,
-      # attention/embedding layers stay on GPU.  Drops mixtral:8x7b
-      # VRAM requirement from ~26 GB to ~10 GB.
-      - OLLAMA_SCHED_SPREAD=1
-      # KV cache quantization: q8_0 halves VRAM vs fp16 default
-      # with negligible quality loss. q4_0 saves more but causes
-      # measurable perplexity drift on longer contexts.
-      - OLLAMA_KV_CACHE_TYPE=q8_0
-    dns:
-      # Explicit DNS avoids Podman virtual network DNS failures
-      # when pulling large models from Cloudflare R2 (ollama.com).
-      - 8.8.8.8
-      - 1.1.1.1
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-    networks:
-      - misthelper-network
-    restart: unless-stopped
-
 networks:
   misthelper-network:
     name: misthelper-network
@@ -235,9 +208,4 @@ volumes:
     driver: local
   misthelper-redis-data:
     name: misthelper-redis-data
-    driver: local
-  # Persistent model storage for the local Ollama instance.
-  # Models survive container restarts, upgrades, and `podman rm`.
-  misthelper-ollama-models:
-    name: misthelper-ollama-models
     driver: local
