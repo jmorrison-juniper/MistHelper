@@ -26,14 +26,23 @@ from src.utils.operation_registry import OperationRegistry
 CAPTURE_PORTAL_MENU = "239"  # The portal moved here when 238 reached main as the MSP export.
 MSP_LICENSE_MENU = "238"  # `listMspLicenses`, merged to main first, so it keeps the number.
 
-# WHY: menus 151 and 152 both call `DataCollectionManager.continuous_loop` with
-# no argument that tells them apart, yet each advertises different work. Menu 151
-# offers a "loop refresh of core datasets (site list, inventory, stats, ports,
-# VPN)" and menu 152 offers a "continuous data collection loop (5 core API calls
-# with rate limiting)". One of the two descriptions cannot be true. This test
-# found the pair, and issue #2066 tracks the repair. The entry stays here so the
-# guardrail still catches a NEW duplicate while the recorded one waits.
-KNOWN_SHARED_ACTIONS: frozenset[tuple[str, str]] = frozenset({("151", "152")})
+# WHY: menus 151 and 152 both called `DataCollectionManager.continuous_loop`
+# with no argument that told them apart, yet each advertised different work.
+# Issue #2066 resolved the pair: 152 was a plain duplicate of 151, so 152 is
+# retired instead of given a fake second behavior. `RETIRED_MENU_NUMBERS`
+# below records the resulting gap, so `test_the_numbers_run_without_a_gap`
+# still catches a NEW unexplained gap while this recorded one stays quiet.
+KNOWN_SHARED_ACTIONS: frozenset[tuple[str, str]] = frozenset()
+
+# WHY: a retired number must never return to service, because a reused number
+# could carry an operator's old habit into a new, different action. Each
+# member of this set names the issue that retired it, in the comment beside
+# the literal, so a later reader finds the reason without a git blame.
+RETIRED_MENU_NUMBERS: frozenset[str] = frozenset(
+    {
+        "152",  # Issue #2066: a plain duplicate of 151's continuous_loop call.
+    }
+)
 
 
 class TestMenuNumbersAreUnique:
@@ -56,7 +65,13 @@ class TestMenuNumbersAreUnique:
         numbers = sorted(int(key) for key in MistHelper.menu_actions)
         expected = list(range(numbers[0], numbers[-1] + 1))
         missing = sorted(set(expected) - set(numbers))
-        assert not missing, f"The menu numbering holds a gap at {missing}"
+        unexplained = [number for number in missing if str(number) not in RETIRED_MENU_NUMBERS]
+        assert not unexplained, f"The menu numbering holds a gap at {unexplained}"
+
+    def test_a_retired_number_never_returns_to_service(self) -> None:
+        """Each retired number stays out of `menu_actions` for good."""
+        reused = sorted(RETIRED_MENU_NUMBERS & set(MistHelper.menu_actions))
+        assert not reused, f"A retired menu number is back in service: {reused}"
 
     def test_no_two_numbers_share_one_action(self) -> None:
         """Two numbers that call one function mean a rename left a stale row.

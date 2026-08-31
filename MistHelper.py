@@ -3895,16 +3895,15 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     "95": (InteractiveDisplayUtils.device_tests, "View synthetic test stats for a selected gateway device"),
     "96": (InteractiveDisplayUtils.device_config, "View configuration details for a selected device"),
     # > Continuous Operations & Monitoring
+    # WHY: menu 152 duplicated this action with a vaguer description. Issue
+    # #2066 retired 152. The number stays retired; see RETIRED_MENU_NUMBERS in
+    # tests/guardrails/test_menu_number_uniqueness.py.
     "151": (
         DataCollectionManager.continuous_loop,
         (
             "Loop refresh of core datasets (site list, inventory, stats, ports, VPN) Stop with CTRL+C or create "
             "'stop_loop.txt'"
         ),
-    ),
-    "152": (
-        DataCollectionManager.continuous_loop,
-        "Run continuous data collection loop (5 core API calls with rate limiting)",
     ),
     # > File Processing & Support Operations
     "100": (

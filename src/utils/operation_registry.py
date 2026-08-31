@@ -160,8 +160,9 @@ class OperationRegistry:
         "78": {"category": "interactive_safe", "skip_reason": "Requires site and device selection"},
         "79": {"category": "interactive_safe", "skip_reason": "Requires site and client selection"},
         # --- continuous loop ------------------------------------------------
+        # WHY: 152 was a duplicate of 151 (issue #2066). The number stays
+        # retired; do not reuse it.
         "151": {"category": "continuous_loop", "skip_reason": "Continuous loop operation"},
-        "152": {"category": "continuous_loop", "skip_reason": "Continuous data collection loop"},
         # --- resource intensive (file/support) ------------------------------
         "100": {
             "category": "resource_intensive",

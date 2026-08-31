@@ -3,9 +3,9 @@
 This page is generated. Run `python scripts/generate_menu_wiki.py` after any
 change to `menu_actions` in `MistHelper.py` or to `src/utils/operation_registry.py`.
 
-MistHelper defines **240 actionable menu entries**, numbered
-1 to 240 with no gaps.
-Menu 0 is Exit, so the registry holds 241 entries in total.
+MistHelper defines **239 actionable menu entries**, numbered
+1 to 240 with gaps at 152.
+Menu 0 is Exit, so the registry holds 240 entries in total.
 
 The Safety column reads from `src/utils/operation_registry.py`, which is the
 single source of truth. The classifier fails closed, so an unregistered option
@@ -28,7 +28,7 @@ never runs in an automated test pass.
 | 0, 124-150, 192 | Interactive | 29 operations. They prompt the operator, so no automated run includes them. |
 | 102-123 | WebSocket | 22 operations. They open a WebSocket stream to a device. |
 | 14, 18-19, 59, 97-101, 153 | Resource intensive | 10 operations. They run long or fetch a large payload. |
-| 151-152 | Continuous loop | 2 operations. They loop until the operator stops them. |
+| 151 | Continuous loop | 1 operations. They loop until the operator stops them. |
 
 ## Full Menu Table
 
@@ -186,7 +186,6 @@ never runs in an automated test pass.
 | 149 | Set WAN2 Interface Site Variable - Configure 'wan2_interface' site variable for template-based WAN migration (Reports sites with ge-0/0/1 overrides) | Interactive | `lambda: WAN2MigrationLauncher().launch()` |
 | 150 | Extract Gateway Template Configuration (DIA_Pico, Picocell) - Save specific configs to JSON for replication | Interactive | `lambda: GatewayTemplateConfigManager(org_id=ConfigUtils.get_cached_or_prompted_org_id(), apisession=apisession, input_fn=InputUtils.safe_input, get_csv_path_fn=FilePathUtils.get_csv_path, save_data_fn=DataExporter.write_with_format_selection, check_and_generate_csv_fn=CacheUtils.check_and_generate_csv, generate_sites_fn=OrgSiteExporter.sites, sanitize_filename_fn=EnhancedSSHRunner.sanitize_filename).extract()` |
 | 151 | Loop refresh of core datasets (site list, inventory, stats, ports, VPN) Stop with CTRL+C or create 'stop_loop.txt' | Continuous loop | `DataCollectionManager.continuous_loop` |
-| 152 | Run continuous data collection loop (5 core API calls with rate limiting) | Continuous loop | `DataCollectionManager.continuous_loop` |
 | 153 | Bulk Org Data Collection (populate ArangoDB/Redis/SQLite with all org-level APIs) | Resource intensive | `lambda: OrgDataCollector.execute(OrgExportUtils.export_data, ConfigUtils.get_cached_or_prompted_org_id, InputUtils.safe_input)` |
 | 154 | DESTRUCTIVE: Advanced AP firmware upgrade with mode selection - upgrade by site list/selection or by Gateway Template assignment | Destructive | `lambda: _build_firmware_manager(apisession, ConfigUtils.get_cached_or_prompted_org_id()).execute_firmware_upgrade_with_mode_selection()` |
 | 155 | DESTRUCTIVE: Advanced Switch firmware upgrade with mode selection - upgrade by site list/selection or by Gateway Template assignment | Destructive | `lambda: _build_firmware_manager(apisession, ConfigUtils.get_cached_or_prompted_org_id()).execute_switch_firmware_upgrade_with_mode_selection()` |

@@ -154,7 +154,7 @@ flowchart TD
 | `src/firmware/` | `FirmwareManager` | 154-157 |
 | `src/gateway/` | `GatewayExportUtils`, `GatewayStatsExporter`, `WAN2MigrationManager` | 31-50, 104-111, 149, 167 |
 | `src/inventory/` | `OrgDeviceInventorySummaryCore`, `OrgDeviceInventoryMSPOrchestrator` | 8-9, 13-14 |
-| `src/monitoring/` | `ContinuousMonitor` | 151-152 |
+| `src/monitoring/` | `ContinuousMonitor` | 151 |
 | `src/site/` | `SiteConfigManager` | 171-174 |
 | `src/sle/` | `SLEExporter` | 51-55 |
 | `src/ssh/` | `EnhancedSSHRunner`, `SSHRunnerManager` | 175-176 |
