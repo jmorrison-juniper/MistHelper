@@ -1,0 +1,77 @@
+- generic [active] [ref=f17e1]:
+  - link "Skip to the main content" [ref=f17e2] [cursor=pointer]:
+    - /url: "#portal-main"
+  - banner [ref=f17e3]:
+    - generic [ref=f17e4]:
+      - link "Upgrade capture portal" [ref=f17e5] [cursor=pointer]:
+        - /url: /
+      - navigation "Main"
+      - generic [ref=f17e7]:
+        - generic [ref=f17e8]:
+          - generic [ref=f17e9]: Theme
+          - combobox "Theme" [ref=f17e10]:
+            - option "Magenta" [selected]
+            - option "Default"
+        - button "Apply theme" [ref=f17e11] [cursor=pointer]
+  - main [ref=f17e12]:
+    - status
+    - heading "Sign in" [level=1] [ref=f17e13]
+    - generic [ref=f17e14]:
+      - heading "Service check" [level=2] [ref=f17e15]
+      - table [ref=f17e16]:
+        - rowgroup [ref=f17e17]:
+          - row [ref=f17e18]:
+            - columnheader "Service" [ref=f17e19]
+            - columnheader "Address" [ref=f17e20]
+            - columnheader "State" [ref=f17e21]
+            - columnheader "Next action" [ref=f17e22]
+        - rowgroup [ref=f17e23]:
+          - row [ref=f17e24]:
+            - cell "Document store (ArangoDB)" [ref=f17e25]
+            - cell [ref=f17e26]:
+              - code [ref=f17e27]: host.containers.internal:9529
+            - cell "up" [ref=f17e28]
+            - cell "The service answers." [ref=f17e29]
+          - row [ref=f17e30]:
+            - cell "Site lock store (Redis)" [ref=f17e31]
+            - cell [ref=f17e32]:
+              - code [ref=f17e33]: host.containers.internal:9379
+            - cell "up" [ref=f17e34]
+            - cell "The service answers." [ref=f17e35]
+      - paragraph [ref=f17e36]:
+        - text: This check tests that each service listens. For the deeper check that also writes to each store, read
+        - code [ref=f17e37]: /readyz
+        - text: .
+    - generic [ref=f17e38]:
+      - heading "Sign in to the Mist cloud" [level=2] [ref=f17e39]
+      - generic [ref=f17e40]:
+        - generic [ref=f17e41]: Work email address
+        - textbox "Work email address" [ref=f17e42]
+        - paragraph [ref=f17e43]: Use the address of your Mist account. The portal stores a one-way digest of this address in each log record, and never the address itself.
+        - generic [ref=f17e44]: Password
+        - textbox "Password" [ref=f17e45]
+        - paragraph [ref=f17e46]: The portal sends this password to the Mist cloud and keeps no copy. No log record holds it. Leave this field empty for the environment token mode.
+        - generic [ref=f17e47]: Mist cloud
+        - combobox "Mist cloud" [ref=f17e48]:
+          - option "Global 01 (api.mist.com)" [selected]
+          - option "Global 02 (api.gc1.mist.com)"
+          - option "Global 03 (api.ac2.mist.com)"
+          - option "Global 04 (api.gc2.mist.com)"
+          - option "Global 05 (api.gc4.mist.com)"
+          - option "EMEA 01 (api.eu.mist.com)"
+          - option "EMEA 02 (api.gc3.mist.com)"
+          - option "EMEA 03 (api.ac6.mist.com)"
+          - option "EMEA 04 (api.gc6.mist.com)"
+          - option "APAC 01 (api.ac5.mist.com)"
+          - option "APAC 03 (api.gc7.mist.com)"
+        - paragraph [ref=f17e49]: Choose the cloud that holds your organizations. The portal accepts a listed cloud only.
+        - group "Credential" [ref=f17e50]:
+          - generic [ref=f17e52]:
+            - radio "Sign in with the address and the password above" [checked] [ref=f17e53] [cursor=pointer]
+            - generic [ref=f17e54] [cursor=pointer]: Sign in with the address and the password above
+          - generic [ref=f17e55]:
+            - radio "Sign in with the API token that this server already holds" [ref=f17e56] [cursor=pointer]
+            - generic [ref=f17e57] [cursor=pointer]: Sign in with the API token that this server already holds
+          - paragraph [ref=f17e58]: This server holds an API token in an environment variable. The token mode reaches the one organization that the token names. The portal never shows the token value.
+        - button "Sign in" [ref=f17e59] [cursor=pointer]
+  - contentinfo [ref=f17e60]: Upgrade capture portal

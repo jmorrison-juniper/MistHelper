@@ -1,0 +1,52 @@
+- generic [active] [ref=f18e1]:
+  - link "Skip to the main content" [ref=f18e2] [cursor=pointer]:
+    - /url: "#portal-main"
+  - banner [ref=f18e3]:
+    - generic [ref=f18e4]:
+      - link "Upgrade capture portal" [ref=f18e5] [cursor=pointer]:
+        - /url: /
+      - navigation "Main" [ref=f18e6]:
+        - link "Sites" [ref=f18e7] [cursor=pointer]:
+          - /url: /select/site
+        - link "History" [ref=f18e8] [cursor=pointer]:
+          - /url: /history
+      - generic [ref=f18e9]:
+        - generic [ref=f18e10]:
+          - generic [ref=f18e11]:
+            - generic [ref=f18e12]: Theme
+            - combobox "Theme" [ref=f18e13]:
+              - option "Magenta" [selected]
+              - option "Default"
+          - button "Apply theme" [ref=f18e14] [cursor=pointer]
+        - button "Sign out" [ref=f18e16] [cursor=pointer]
+  - main [ref=f18e17]:
+    - status
+    - heading "Organizations" [level=1] [ref=f18e18]
+    - generic [ref=f18e19]:
+      - heading "Find an organization" [level=2] [ref=f18e20]
+      - search [ref=f18e21]:
+        - generic [ref=f18e22]: Search the organizations
+        - searchbox "Search the organizations" [ref=f18e23]
+        - button "Search every page" [ref=f18e24] [cursor=pointer]
+      - paragraph [ref=f18e25]: The filter reads the organization name and the organization identifier. The portal filters every organization that this sign-in may act on, and then shows one page of the matches. The filter matches 1 organizations. This page starts after 0 of them, and one page holds 25 rows.
+    - table [ref=f18e27]:
+      - caption [ref=f18e28]: One page of the organizations that this sign-in may act on, with the button that chooses one.
+      - rowgroup [ref=f18e29]:
+        - row [ref=f18e30]:
+          - columnheader "Organization" [ref=f18e31]
+          - columnheader "Identifier" [ref=f18e32]
+          - columnheader "Action" [ref=f18e33]
+      - rowgroup [ref=f18e34]:
+        - row [ref=f18e35]:
+          - rowheader "Morrison House" [ref=f18e36]
+          - cell "8a1ea872-241a-4c8e-a5ca-2d85674c7229" [ref=f18e37]
+          - cell [ref=f18e38]:
+            - button "Choose Morrison House" [ref=f18e40] [cursor=pointer]:
+              - text: Choose
+              - generic [ref=f18e41]: Morrison House
+    - generic [ref=f18e42]:
+      - heading "More organizations" [level=2] [ref=f18e43]
+      - generic [ref=f18e44]:
+        - button "Show the earlier organizations" [disabled] [ref=f18e45]
+        - button "Show the later organizations" [disabled] [ref=f18e46]
+  - contentinfo [ref=f18e47]: Upgrade capture portal
