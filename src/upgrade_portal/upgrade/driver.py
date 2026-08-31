@@ -146,6 +146,7 @@ _WRITE_ATTEMPTS: Final[int] = 10
 # run stopped and not only that it stopped.
 STAGE_UPGRADE: Final[str] = "upgrade"
 STAGE_POST_CAPTURE: Final[str] = "post_capture"
+STAGE_STORE: Final[str] = "store"  # A run record that never reached the database, read back by _save.
 
 # WHY: The run record reaches ArangoDB, the CSV backup, and the browser. A
 # fault of the cloud library, of Redis, or of ArangoDB carries the connection
@@ -873,7 +874,7 @@ def _tracker_entry(record: Mapping[str, Any], now: str) -> dict[str, Any]:
     }
 
 
-def write_tracker(record: Mapping[str, Any], now: str, root: Path | None = None) -> Path:
+def write_tracker(record: Mapping[str, Any], now: str, root: Path | None = None) -> Path | None:
     """Write the active upgrade identifiers of one run under the data directory.
 
     Why:
@@ -893,20 +894,31 @@ def write_tracker(record: Mapping[str, Any], now: str, root: Path | None = None)
         inside one directory is atomic, so a reader never meets a half-written
         file, and a process that dies mid-write leaves the last whole file.
 
+        The tracker is a convenience for restart recovery, not the record of
+        the run. The upgrade already reached the cloud by the time the driver
+        calls this function, so a full disk or a permission fault here must
+        report a failure and return, never raise out of a best-effort step.
+
     Args:
         record: The run record.
         now: The present time as ISO 8601 text in UTC.
         root: The data directory. The repository data directory by default.
 
     Returns:
-        The path the driver wrote.
+        The path the driver wrote, or None when the write failed. The caller
+        logs a None result, because a lost tracker leaves nothing on disk that
+        names a run still writing firmware.
     """
     path = tracker_path(TRACKER_FILENAME, root)
     entry = _tracker_entry(record, now)
-    with _TRACKER_GUARD:  # One reader and one writer at a time, so no run row is lost
-        rows = [row for row in _read_tracker(path) if row.get("run_id") != entry["run_id"]]
-        rows.append(entry)
-        _replace_tracker(path, rows)
+    try:
+        with _TRACKER_GUARD:  # One reader and one writer at a time, so no run row is lost
+            rows = [row for row in _read_tracker(path) if row.get("run_id") != entry["run_id"]]
+            rows.append(entry)
+            _replace_tracker(path, rows)
+    except OSError as error:  # A full disk or a permission fault, caught so a best-effort step never raises.
+        logger.error("The portal could not write the upgrade tracker for run %s: %s", entry["run_id"], error)
+        return None
     logger.info("The portal wrote the upgrade tracker for run %s to %s", entry["run_id"], path)
     return path
 
@@ -1383,6 +1395,12 @@ class RunDriver:
     def _submit(self, record: MutableMapping[str, Any]) -> None:
         """Send the upgrade to the cloud and write the tracker.
 
+        Why:
+            The tracker is a convenience for restart recovery, and the upgrade
+            already reached the cloud by this point in the method. A lost
+            tracker write must never fail a run whose firmware write is
+            already underway on real hardware, so this step only logs.
+
         Args:
             record: The run record.
 
@@ -1394,7 +1412,9 @@ class RunDriver:
         if self._deps.submit is not None and not self._deps.submit.submit(record):
             raise RunDriverError("The cloud refused the upgrade, so the run stops here.")
         self._beat()  # The submission returned, so the lock beats again before the run moves on
-        write_tracker(record, self._deps.clock.now_text())
+        if write_tracker(record, self._deps.clock.now_text()) is None:
+            run_id = record.get("run_id", "")
+            logger.error("Run %s reached the cloud, but the upgrade tracker did not record it.", run_id)
         self._advance(record, RunState.UPGRADE_RUNNING)
 
     def _cascade(self, record: MutableMapping[str, Any]) -> None:
@@ -1667,6 +1687,16 @@ class RunDriver:
             thread writes that one field. A read back before each write keeps
             a stop request that arrived after the driver read the record.
 
+            A write that does not reach the store leaves the run state in
+            memory disagreeing with the run state in the database. The run
+            then never appears right in the history page, and it cannot be
+            resumed. The method reads the write result and moves the run to
+            the failed state when the store never confirmed it, the same
+            rule `write_capture` already applies to a capture. One retry
+            write reports the failed state to the store; a second failure
+            only logs, because a state machine already in its final state
+            refuses a repeat transition and this method must never recurse.
+
         Args:
             record: The run record.
         """
@@ -1674,4 +1704,15 @@ class RunDriver:
         if stored is not None and stored.get("stop_request") is not None:
             record["stop_request"] = stored["stop_request"]
         record["updated_at"] = self._deps.clock.now_text()
-        self._deps.store.write_run(dict(record))
+        if self._deps.store.write_run(dict(record)):
+            return
+        run_id = record.get("run_id", "")
+        logger.error("Run %s record did not reach the store", run_id)
+        message = "The run record did not reach the store."
+        try:
+            self._machine.fail(record, STAGE_STORE, message)  # In-memory only; no recursive _save call below.
+        except RunTransitionError:
+            logger.warning("Run %s already holds a final state, so the driver wrote no reason", run_id)
+            return
+        if not self._deps.store.write_run(dict(record)):  # One attempt to persist the failed state itself.
+            logger.error("Run %s failed state also did not reach the store", run_id)
