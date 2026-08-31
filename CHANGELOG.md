@@ -7,6 +7,25 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Link the open run that an already-running refusal names
+
+- **Added**: The capture page's already-running-upgrade refusal now shows the
+  open run identifier as a link to its live view (`/runs/<run_id>`). Before
+  this change the identifier was plain text, and an operator had to copy it
+  by hand. The site-lock-holder refusal keeps showing its address as plain
+  text alone, because that value comes from another operator and must never
+  reach `innerHTML`. The link is a real anchor element, built through
+  `createElement`, never a concatenated string.
+
+### Fix the E2E stand-in cloud session's crash on the site inventory page
+
+- **Fixed**: The browser test fixture's stand-in cloud session had no
+  `mist_get` method. Every browser test that opened the site inventory page
+  then met a 500 fault. The stale-firmware check (issue #2006) started
+  reading device versions through that session, and the stand-in never grew
+  a method for it. The stand-in now answers the one read that check needs.
+  Every other cloud call still fails fast, as the class always intended.
+
 ### Report a lost run write and a lost tracker write instead of discarding them
 
 - **Fixed**: The upgrade driver now reads the result of `write_run`. A write

@@ -970,11 +970,56 @@
     }
 
     /**
-     * Builds the sentence that a run-creation refusal shows.
+     * Writes one run-creation refusal into the start-upgrade error region.
      *
-     * Why: FR-104 names the holder and FR-105 names the live run. The server
-     * message stays generic, and the identifier rides in the details, so this
-     * helper joins the two into one sentence the operator can act on.
+     * Why: FR-104 names the holder by address, and that address comes from
+     * another operator, so it must stay on `textContent` alone, the same as
+     * `showCaptureUpgradeError` above. FR-105 names a run identifier that the
+     * portal itself generated, and issue #2172 asks that identifier to open
+     * the live run in one click. The two needs conflict inside one string, so
+     * this function builds the FR-105 sentence from real nodes -- a text node,
+     * then an anchor built through `createElement`, then a closing text node
+     * -- and never through a concatenated HTML string. No holder value passes
+     * through this path or through `innerHTML` anywhere in this function.
+     *
+     * @param {Error|null} error An Error from fetchJson, or null to clear the region.
+     * @returns {void}
+     */
+    function showCaptureUpgradeRefusal(error) {
+        var box = byTestId(CAPTURE_START_UPGRADE_ERROR_TESTID);  /* One region for the two refusals. */
+        if (!box) {  /* A page with no verified capture renders no region. */
+            return;  /* Nothing to write, so the call ends. */
+        }
+        while (box.firstChild) {  /* Clears the last refusal, link or plain text alike. */
+            box.removeChild(box.firstChild);
+        }
+        if (!error) {  /* A fresh try clears the region and writes nothing further. */
+            return;
+        }
+        var code = (error && error.code) || "";  /* The stable code decides the wording. */
+        var details = (error && error.details) || {};  /* The identifier rides here, not in the message. */
+        var message = (error && error.message) || "The upgrade could not start.";  /* The generic sentence. */
+        var runId = details.run_id ? String(details.run_id) : "";  /* Empty when the server sent none. */
+        if (code === RUN_ALREADY_RUNNING_CODE && runId) {  /* One run of this site has not finished. */
+            box.appendChild(document.createTextNode(message + " The open run is "));  /* Text, built as a node. */
+            var link = document.createElement("a");  /* A real anchor, never a string with a tag in it. */
+            link.href = "/runs/" + encodeURIComponent(runId);  /* RUN_PAGE_PATH: the live run view. */
+            link.textContent = runId;  /* The identifier itself is the link text, and nothing else. */
+            box.appendChild(link);
+            box.appendChild(document.createTextNode("."));  /* Closes the sentence after the link. */
+            return;
+        }
+        box.textContent = nameCaptureUpgradeRefusal(error);  /* Every other refusal, plain text only. */
+    }
+
+    /**
+     * Builds the sentence that names the site-lock holder, or the plain
+     * server message for any other refusal.
+     *
+     * Why: FR-104 names the holder in one plain sentence, safe for
+     * `textContent` because the caller never treats it as markup.
+     * `showCaptureUpgradeRefusal` handles FR-105's run identifier itself, as
+     * a link, so this helper never builds that sentence.
      *
      * @param {Error} error An Error from fetchJson.
      * @returns {string} The sentence for the region.
@@ -985,9 +1030,6 @@
         var message = (error && error.message) || "The upgrade could not start.";  /* The generic sentence. */
         if (code === RUN_SITE_LOCKED_CODE && details.actor_email) {  /* A second operator holds the site. */
             return message + " The holder is " + details.actor_email + ".";  /* FR-104 names that operator. */
-        }
-        if (code === RUN_ALREADY_RUNNING_CODE && details.run_id) {  /* One run of this site has not finished. */
-            return message + " The open run is " + details.run_id + ".";  /* FR-105 names that run. */
         }
         return message;  /* Any other fault keeps the plain server sentence. */
     }
@@ -1032,7 +1074,7 @@
                  * carries no session value and no email address. */
                 console.error("The upgrade start failed.", error && error.code, error && error.status);  /* No address. */
                 button.disabled = false;  /* The refusal leaves the button ready to retry. */
-                showCaptureUpgradeError(nameCaptureUpgradeRefusal(error));  /* Names the holder or the live run. */
+                showCaptureUpgradeRefusal(error);  /* Names the holder in text, or links the live run. */
                 return null;  /* The caller reads the failure. */
             });
     }

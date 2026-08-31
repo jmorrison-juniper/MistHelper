@@ -617,3 +617,43 @@ class TestUpgradeJourney:
 
         portal_page.wait_for_url(f"**/runs/{run_id}{CONFIRM_PAGE_SUFFIX}", timeout=START_TIMEOUT_MS)
         sync_api.expect(portal_page.get_by_test_id(CONFIRM_INPUT_ID)).to_be_visible(timeout=START_TIMEOUT_MS)
+
+    def test_a_refused_second_start_shows_a_link_to_the_open_run(self, portal_page: Any) -> None:
+        """Issue #2172: the open-run refusal now carries a link, not plain text.
+
+        Why:
+            One run already holds a site once the first create call lands,
+            whether that call landed just now or before this test began. A
+            second create call at the same site must then answer 409 with
+            `upgrade_already_running`, and the error region must render the
+            named run as a link to its live view, not as inert text the
+            operator has to copy by hand.
+
+        Args:
+            portal_page: The browser page that points at the running portal.
+        """
+        _walk_to_capture_view(portal_page)
+        _start_and_reveal_upgrade(portal_page)
+        with portal_page.expect_response(_is_run_create, timeout=START_TIMEOUT_MS) as first_event:
+            portal_page.get_by_test_id(CAPTURE_START_UPGRADE_ID).click()  # The first attempt sets up the scenario.
+        first_status = first_event.value.status
+        if first_status not in (CREATED_STATUS, LOCKED_STATUS):  # Neither state can seed a live run at this site.
+            pytest.skip(f"The first run create answered {first_status}, so this walk cannot set up its scenario.")
+
+        _walk_to_capture_view(portal_page)  # Back to the same site's capture view, by clicking alone.
+        _start_and_reveal_upgrade(portal_page)  # A fresh capture, so the upgrade button shows again.
+        with portal_page.expect_response(_is_run_create, timeout=START_TIMEOUT_MS) as second_event:
+            portal_page.get_by_test_id(CAPTURE_START_UPGRADE_ID).click()  # A run already holds this site now.
+        second_status = second_event.value.status
+        if second_status == UNREACHABLE_STATUS:  # The lock store answered no better on the second try either.
+            pytest.skip("The second run create answered 503. The portal cannot reach the site lock store.")
+        assert second_status == LOCKED_STATUS, f"The second run create answered {second_status}, not 409."
+
+        error_region = portal_page.get_by_test_id(CAPTURE_START_UPGRADE_ERROR_ID)
+        sync_api.expect(error_region).to_contain_text("Open that run before you start", timeout=START_TIMEOUT_MS)
+        link = error_region.locator("a")
+        sync_api.expect(link).to_be_visible(timeout=START_TIMEOUT_MS)
+        run_id = (link.inner_text() or "").strip()
+        assert run_id, "The link inside the error region named no run identifier."
+        href = link.get_attribute("href") or ""
+        assert href == f"/runs/{run_id}", f"The link pointed at {href!r}, not /runs/{run_id}."
