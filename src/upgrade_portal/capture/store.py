@@ -553,6 +553,15 @@ def _open_database(config: DatabaseConfig) -> Any:
         return None
     try:
         client = ArangoClient(hosts=config.arango_host, request_timeout=REQUEST_TIMEOUT_SECONDS)
+        system_db = client.db(
+            "_system",
+            username=config.arango_username,
+            password=config.arango_password,
+            verify=True,
+        )
+        if not system_db.has_database(config.arango_database):
+            system_db.create_database(config.arango_database)
+            logger.info("Upgrade portal created database %s", config.arango_database)
         return client.db(
             config.arango_database,
             username=config.arango_username,

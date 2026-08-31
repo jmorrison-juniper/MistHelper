@@ -178,6 +178,16 @@ class TestReadinessMistApiSession:
 
         assert payload["checks"]["mist_api_session"]["detail"] == "Mist API session targets api.mist.com"
 
+    def test_ready_uses_the_cloud_uri_when_the_session_omits_host(self, writable_data_dir: str) -> None:
+        """The current Mist session stores the host on `_cloud_uri`, so the probe accepts it."""
+        session = SimpleNamespace(_cloud_uri="api.mist.com")  # WHY: mistapi stores the cloud host here.
+        client = _build_test_app(writable_data_dir, apisession=session).test_client()
+
+        payload = client.get("/ready").get_json()
+
+        assert payload["checks"]["mist_api_session"]["ok"] is True
+        assert payload["checks"]["mist_api_session"]["detail"] == "Mist API session targets api.mist.com"
+
 
 class TestLivenessEndpoint:
     """Verify the liveness endpoint stays cheap and never reads the disk."""
