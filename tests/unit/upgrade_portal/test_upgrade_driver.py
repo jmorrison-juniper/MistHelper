@@ -79,6 +79,8 @@ class FakeStore:
         self.states: list[str] = []
         self.inject_stop_after: int | None = None
         self.reads = 0
+        self.fail_writes = False  # WHY: issue #2067 -- a store that reports every write as lost.
+        self.write_attempts = 0  # WHY: the retry-once rule of _save needs a count a test can read.
 
     def read_run(self, run_id: str) -> dict[str, Any] | None:
         """Return the stored record.
@@ -104,8 +106,11 @@ class FakeStore:
             run: The whole record.
 
         Returns:
-            Always True.
+            False when `fail_writes` is set. Otherwise always True.
         """
+        self.write_attempts += 1
+        if self.fail_writes:
+            return False  # WHY: issue #2067 -- the record never reaches the store.
         self.record = dict(run)
         self.writers.append(threading.current_thread().name)
         self.states.append(str(run.get("state", "")))
@@ -803,6 +808,115 @@ class TestStopAndFailure:
         final = parts["driver"].run(make_record())
         assert final["state"] == RunState.FAILED.value
         assert parts["gate"].calls == []
+
+
+class TestDiscardedWrites:
+    """Issue #2067: a failed store write must be logged and must not vanish.
+
+    Why:
+        The driver used to discard the result of `write_run` and of
+        `write_tracker`. A run whose record never reached the store looked
+        identical to one that landed, and a lost tracker write left an
+        upgrade running with nothing on disk that named it. These tests hold
+        both paths to a reported failure.
+    """
+
+    def test_a_lost_run_write_is_logged_and_moves_the_run_to_failed(
+        self, parts: dict[str, Any], caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A `write_run` that never lands moves the record to failed.
+
+        Args:
+            parts: The doubles and the driver.
+            caplog: The pytest log recorder.
+        """
+        parts["store"].fail_writes = True
+        record = make_record()
+        with caplog.at_level(logging.ERROR, logger="src.upgrade_portal.upgrade.driver"):
+            parts["driver"]._save(record)
+        assert record["state"] == RunState.FAILED.value
+        assert "did not reach the store" in record["error"]["message"]
+        assert f"Run {RUN_ID} record did not reach the store" in caplog.text
+
+    def test_a_second_lost_write_of_the_failed_state_only_logs(
+        self, parts: dict[str, Any], caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A record already in the failed state accepts no repeat transition.
+
+        Why:
+            `_save` must never recurse through `_fail`. A store that keeps
+            failing must still return, and a second call must log rather
+            than raise `RunTransitionError` out of a write path.
+
+        Args:
+            parts: The doubles and the driver.
+            caplog: The pytest log recorder.
+        """
+        parts["store"].fail_writes = True
+        record = make_record()
+        parts["driver"]._save(record)
+        with caplog.at_level(logging.WARNING, logger="src.upgrade_portal.upgrade.driver"):
+            parts["driver"]._save(record)  # Must return quietly, not raise.
+        assert record["state"] == RunState.FAILED.value
+        assert "already holds a final state" in caplog.text
+
+    def test_a_recovered_store_write_after_a_fault_reports_nothing(
+        self, parts: dict[str, Any], caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A write that lands leaves the record untouched and logs nothing.
+
+        Args:
+            parts: The doubles and the driver.
+            caplog: The pytest log recorder.
+        """
+        record = make_record()
+        with caplog.at_level(logging.ERROR, logger="src.upgrade_portal.upgrade.driver"):
+            parts["driver"]._save(record)
+        assert record["state"] == RunState.AWAITING_CONFIRMATION.value
+        assert caplog.text == ""
+
+    def test_write_tracker_reports_a_fault_instead_of_raising(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """A disk fault during the tracker write returns None, and raises nothing.
+
+        Args:
+            tmp_path: The temporary directory pytest supplies.
+            monkeypatch: The pytest patch helper.
+            caplog: The pytest log recorder.
+        """
+
+        def raise_disk_fault(path: Path, rows: Any) -> None:
+            del path, rows
+            raise OSError("No space left on device")
+
+        monkeypatch.setattr(driver, "_replace_tracker", raise_disk_fault)
+        with caplog.at_level(logging.ERROR, logger="src.upgrade_portal.upgrade.driver"):
+            result = driver.write_tracker(make_record(), "t1", root=tmp_path)
+        assert result is None
+        assert "could not write the upgrade tracker" in caplog.text
+
+    def test_a_lost_tracker_write_does_not_fail_the_run(
+        self,
+        parts: dict[str, Any],
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """The upgrade already reached the cloud, so a lost tracker only logs.
+
+        Args:
+            parts: The doubles and the driver.
+            monkeypatch: The pytest patch helper.
+            caplog: The pytest log recorder.
+        """
+        monkeypatch.setattr(driver, "write_tracker", lambda *args, **kwargs: None)
+        with caplog.at_level(logging.ERROR, logger="src.upgrade_portal.upgrade.driver"):
+            final = parts["driver"].run(make_record())
+        assert final["state"] == RunState.COMPLETE.value
+        assert "reached the cloud, but the upgrade tracker did not record it" in caplog.text
 
 
 class FaultingCapture:

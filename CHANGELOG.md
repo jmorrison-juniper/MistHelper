@@ -7,6 +7,19 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Report a lost run write and a lost tracker write instead of discarding them
+
+- **Fixed**: The upgrade driver now reads the result of `write_run`. A write
+  that never reaches the store logs the fact. The record then moves to the
+  failed state, the same rule `write_capture` already applies to a capture.
+  One retry writes the failed state to the store. A second failure only logs,
+  because the driver must never recurse through its own failure path.
+- **Fixed**: `write_tracker` now catches a disk fault and returns `None`
+  instead of raising. The tracker is a convenience for restart recovery. The
+  upgrade already reached the cloud by the time the driver writes the tracker.
+  A lost tracker write now only logs. It never fails a run whose firmware
+  write is already underway on real hardware.
+
 ### Group the local stack under one project and drop the unused Ollama container
 
 - **Removed**: The local compose stack no longer builds or starts an Ollama
