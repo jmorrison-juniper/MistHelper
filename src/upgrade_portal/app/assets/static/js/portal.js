@@ -1488,17 +1488,39 @@
     }
 
     /**
-     * Shows an advanced control only when its device type and strategy apply.
+     * Reads the value of a control that another control depends on.
+     *
+     * Why: A dependency names either a radio group or a text control. A radio
+     * group answers the value of its checked radio, and a text control answers
+     * its own trimmed value. One reader serves both, so the rule in the markup
+     * needs no kind of its own.
+     *
+     * @param {string} testId The data-testid of the control to read.
+     * @returns {string} The current value, or an empty text when it is absent.
+     */
+    function dependencyValue(testId) {
+        var group = byTestId(testId);
+        if (!group) {
+            return "";  /* An absent control satisfies no rule, so the dependent stays hidden. */
+        }
+        if (group.tagName === "FIELDSET") {
+            return checkedRadioValue(testId, "");  /* A radio group answers its checked value. */
+        }
+        return (group.value || "").trim();  /* A text control and a select both answer a value. */
+    }
+
+    /**
+     * Shows an advanced control only when every rule of that control passes.
      *
      * Why: Issue #2156 asks the page to hide a control that the selection does
-     * not read. The cloud reads the radio fields for an access point alone, and
-     * it reads the phase list for the staged strategy alone. A control that
-     * stayed visible would invite a value that the cloud silently drops.
+     * not read. Issue #2185 adds the rules that depend on another control,
+     * because a control whose dependency is off invites a value that the cloud
+     * silently drops.
      *
-     * Each rule lives in the markup, under data-requires-device-type,
-     * data-requires-strategy, and data-requires-family. A control names every
-     * device type, every strategy, and every gateway family that reads it,
-     * separated by spaces. A control that names no attribute always shows.
+     * Each rule lives in the markup. A control names every device type, every
+     * strategy, and every gateway family that reads it, separated by spaces. It
+     * also names one control that must hold a value, and one control that must
+     * hold any value at all. A control that names no attribute always shows.
      *
      * @returns {void}
      */
@@ -1507,7 +1529,8 @@
         var strategy = checkedRadioValue(UPGRADE_STRATEGY_GROUP_TESTID, "big_bang");
         var families = selectedGatewayFamilies();  /* Issue #2157 reads the family of each row. */
         var controls = document.querySelectorAll(
-            "[data-requires-device-type], [data-requires-strategy], [data-requires-family]"
+            "[data-requires-device-type], [data-requires-strategy], [data-requires-family], "
+                + "[data-requires-control], [data-requires-filled]"
         );
         Array.prototype.forEach.call(controls, function (control) {
             var wantedTypes = (control.getAttribute("data-requires-device-type") || "").split(" ");
@@ -1518,8 +1541,53 @@
             var typeOk = matchesAnyRule(wantedTypes, selectedTypes);
             var strategyOk = matchesAnyRule(wantedStrategies, [strategy]);
             var familyOk = matchesAnyRule(wantedFamilies, families);
-            control.hidden = !(typeOk && strategyOk && familyOk);
+            var valueOk = matchesControlValue(control.getAttribute("data-requires-control"));
+            var filledOk = matchesFilledControl(control.getAttribute("data-requires-filled"));
+            control.hidden = !(typeOk && strategyOk && familyOk && valueOk && filledOk);
         });
+    }
+
+    /**
+     * Answers whether the named control holds the value that a rule demands.
+     *
+     * Why: Issue #2185. The reboot moment reaches the cloud only when the
+     * reboot control says yes, and the size of a download group reaches it only
+     * when the download control says yes. A control that stayed visible would
+     * invite a value that the cloud drops without a word.
+     *
+     * The rule reads "testid:value". An absent rule passes, because a control
+     * with no such rule never depends on another value.
+     *
+     * @param {string|null} rule The rule text from the markup.
+     * @returns {boolean} True when the control passes this rule.
+     */
+    function matchesControlValue(rule) {
+        if (!rule) {
+            return true;  /* The control names no value rule, so it always passes. */
+        }
+        var parts = rule.split(":");
+        if (parts.length !== 2) {
+            return true;  /* A rule that names no value cannot hide a control by mistake. */
+        }
+        return dependencyValue(parts[0]) === parts[1];
+    }
+
+    /**
+     * Answers whether the named control holds any value at all.
+     *
+     * Why: Issue #2185. The failure count of each phase needs one entry for
+     * each phase, and the server refuses a list that does not match. A control
+     * that appeared before the phase list invited a refusal that the operator
+     * could not predict.
+     *
+     * @param {string|null} testId The data-testid that the markup names.
+     * @returns {boolean} True when the control passes this rule.
+     */
+    function matchesFilledControl(testId) {
+        if (!testId) {
+            return true;  /* The control names no such rule, so it always passes. */
+        }
+        return dependencyValue(testId).length > 0;
     }
 
     /**
@@ -1718,8 +1786,51 @@
         Array.prototype.forEach.call(versionSelects, function (select) {
             select.addEventListener("change", filterAdvancedUpgradeControls);
         });
+        watchDependencyControls();  /* Issue #2185 repaints when a named dependency changes. */
         filterUpgradeTargetRows();
         filterAdvancedUpgradeControls();
+    }
+
+    /**
+     * Repaints the advanced controls when a control that others depend on changes.
+     *
+     * Why: Issue #2185. The reboot moment appears when the reboot control says
+     * yes, and the failure count appears when the phase list holds a phase.
+     * Neither control repaints on its own, so the page would keep a stale
+     * visible set until some other choice changed.
+     *
+     * The rules name their dependency in the markup, so this reader collects
+     * the names from the markup as well. A new rule then needs no change here.
+     *
+     * @returns {void}
+     */
+    function watchDependencyControls() {
+        var named = {};  /* Collect each name once, because two rules may name one control. */
+        var rules = document.querySelectorAll("[data-requires-control], [data-requires-filled]");
+        Array.prototype.forEach.call(rules, function (control) {
+            var value = control.getAttribute("data-requires-control");
+            if (value) {
+                named[value.split(":")[0]] = true;  /* The rule reads "testid:value". */
+            }
+            var filled = control.getAttribute("data-requires-filled");
+            if (filled) {
+                named[filled] = true;
+            }
+        });
+        Object.keys(named).forEach(function (testId) {
+            var target = byTestId(testId);
+            if (!target) {
+                return;  /* A rule may name a control that this page does not draw. */
+            }
+            /* A radio group holds its radios, and a text control is its own
+             * source. The input event covers typing, and the change event
+             * covers a radio and a select. */
+            var sources = target.tagName === "FIELDSET" ? target.querySelectorAll('input[type="radio"]') : [target];
+            Array.prototype.forEach.call(sources, function (source) {
+                source.addEventListener("change", filterAdvancedUpgradeControls);
+                source.addEventListener("input", filterAdvancedUpgradeControls);
+            });
+        });
     }
 
     /**
