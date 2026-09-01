@@ -120,6 +120,31 @@ echo "[SSH] Each SSH connection spawns its own MistHelper session." >> /app/data
 echo "[SSH] Connect with: ssh -p 2200 $USERNAME@<container-ip>" >> /app/data/ssh.log
 echo "[SSH] Use option 0 in MistHelper to disconnect." >> /app/data/ssh.log
 
+# Carry the runtime configuration into every SSH session.
+#
+# Why: `compose.yml` supplies the credentials through `env_file`, which fills
+# the environment of this process and writes no file. The SSH daemon starts each
+# session with a fresh environment, and `PermitUserEnvironment` stays off. A
+# session therefore reached MistHelper with no API token, the preflight refused,
+# and the restart loop repeated the same permanent fault five times. Issue #2181
+# holds that report.
+#
+# This step runs as root, so it is the one writer. `misthelper-session.sh` is
+# the one reader. The helper script owns the allowlist and the file mode, so a
+# test proves those rules without a container start.
+SESSION_ENV_FILE="${MISTHELPER_SESSION_ENV_FILE:-/etc/misthelper/session.env}"
+SESSION_ENV_WRITER="${MISTHELPER_SESSION_ENV_WRITER:-/usr/local/bin/write-session-env.sh}"
+
+if [ -x "$SESSION_ENV_WRITER" ]; then
+    if SESSION_ENV_REPORT="$("$SESSION_ENV_WRITER" "$USERNAME" "$SESSION_ENV_FILE")"; then
+        log_container_event "$SESSION_ENV_REPORT"  # The helper names the variables and prints no value.
+    else
+        log_container_event "[SSH] WARNING: could not write $SESSION_ENV_FILE. An SSH session will find no API token."
+    fi
+else
+    log_container_event "[SSH] WARNING: $SESSION_ENV_WRITER is missing. An SSH session will find no API token."
+fi
+
 # Determine web portal port (default 8055)
 WEB_PORT="${WEB_PORT:-8055}"
 

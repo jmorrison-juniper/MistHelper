@@ -7,6 +7,26 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Carry the API token into every SSH session
+
+- **Fixed**: An operator who connected over SSH met a login loop. MistHelper
+  refused to start, and the session script restarted it five times before it
+  closed the connection. Issue #2181.
+- **Fixed**: The cause was a missing credential. The compose file supplies the
+  token through `env_file`, which fills the environment of the container
+  process and writes no file. The SSH daemon starts each session with a fresh
+  environment, so no credential reached a session. The entrypoint now writes an
+  allowlist of configuration names to a file, and the session script reads that
+  file.
+- **Added**: A new script at `container/scripts/write-session-env.sh` owns the
+  allowlist. It writes the file with the mode 0400 and the ownership of the
+  session user, so no other account of the container reads the token. It names
+  each variable in the log and prints no value.
+- **Changed**: The session script refuses at the first attempt when no token
+  reaches it. A missing token is a permanent fault of the configuration. The
+  restart loop repeated that failure five times, and it hid the one useful
+  line. The refusal names the cause and names the variable that repairs it.
+
 ### Write the safety design of the BIOS, FPGA, and Mist Edge workflows
 
 - **Added**: A design document at

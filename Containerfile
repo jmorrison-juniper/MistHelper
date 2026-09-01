@@ -108,7 +108,11 @@ RUN chown -R misthelper:misthelper /app
 
 # Copy and configure container entrypoint script
 COPY container/scripts/start.sh /start.sh
-RUN chmod +x /start.sh
+# The entrypoint runs the writer as root at container start. The writer carries
+# the runtime configuration into a file that the SSH session reads, because the
+# SSH daemon starts every session with a fresh environment. See issue #2181.
+COPY container/scripts/write-session-env.sh /usr/local/bin/write-session-env.sh
+RUN chmod +x /start.sh /usr/local/bin/write-session-env.sh
 
 USER misthelper
 
