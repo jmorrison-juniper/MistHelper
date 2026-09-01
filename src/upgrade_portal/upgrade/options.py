@@ -28,11 +28,17 @@ from typing import Any
 import mistapi
 
 from src.firmware.upgrade_service import (
+    MESH_UPGRADE_CHOICES,
+    NODE_ORDER_CHOICES,
     SCOPE_ORG,
     SCOPE_SITE,
+    STRATEGY_CANARY,
     STRATEGY_DEFAULT,
+    CanaryOptions,
     DeviceTarget,
     GatewayFamily,
+    PeerToPeerOptions,
+    RrmOptions,
     UpgradeOptions,
     classify_gateway,
     list_available_versions,
@@ -105,6 +111,27 @@ _BOOLEAN_WORDS: Mapping[str, bool] = {
     "1": True,
     "0": False,
 }
+
+# The stored option record nests the three advanced groups, because `asdict`
+# walks a nested record. The browser posts every field flat instead. The reader
+# merges each nested group back up before it reads one field, so one reading
+# path serves both shapes. Every field name inside a group is already the cloud
+# field name, so the merge renames nothing.
+_OPTION_GROUP_KEYS = ("canary", "rrm", "peer_to_peer")
+
+# A percentage names a share of the run, so the cloud refuses a value outside
+# this range (POST_sites_site_id_devices_upgrade.md:67-68).
+_PERCENTAGE_LOWEST = 0
+_PERCENTAGE_HIGHEST = 100
+
+# A phase list that named no phase would upgrade nothing, and a list longer than
+# this reads as a paste mistake. The cloud names no limit, so the portal sets one
+# that no real maintenance plan reaches.
+_PHASE_COUNT_HIGHEST = 20
+
+# A download group of no access point downloads nothing, and a count above this
+# reads as a paste mistake. The cloud default is 10.
+_P2P_SIZE_HIGHEST = 1000
 
 
 class BadOptionError(ValueError):
@@ -518,7 +545,7 @@ def _now_epoch() -> int:
     return int(time.time())
 
 
-def _guard_start_time(moment: int, now: int) -> int:
+def _guard_start_time(moment: int, now: int, field: str = "start_time") -> int:
     """Refuse a chosen moment that sits outside the window a run can use.
 
     Why:
@@ -528,9 +555,14 @@ def _guard_start_time(moment: int, now: int) -> int:
         the operator waits for work that can never start. Both readings look
         valid to every earlier check, so the window is the only guard.
 
+        The separate reboot window obeys the same rule, so it passes its own
+        field name. A refusal that named the start time for a bad reboot window
+        would send the operator to the wrong control.
+
     Args:
         moment: The chosen moment in epoch seconds.
         now: The current moment in epoch seconds.
+        field: The control that holds the moment.
 
     Returns:
         The chosen moment, unchanged.
@@ -540,11 +572,11 @@ def _guard_start_time(moment: int, now: int) -> int:
             ahead.
     """
     if moment < now - START_TIME_GRACE_SECONDS:
-        logger.warning("Upgrade portal refused a start time that is already past")
-        raise BadOptionError("start_time")
+        logger.warning("Upgrade portal refused the field %s because the moment is already past", field)
+        raise BadOptionError(field)
     if moment > now + START_TIME_HORIZON_SECONDS:
-        logger.warning("Upgrade portal refused a start time more than one year ahead")
-        raise BadOptionError("start_time")
+        logger.warning("Upgrade portal refused the field %s because the moment is more than one year ahead", field)
+        raise BadOptionError(field)
     return moment
 
 
@@ -578,16 +610,286 @@ def _read_start_time(payload: Mapping[str, Any], now: Callable[[], int] | None) 
     return moment if now is None else _guard_start_time(moment, now())
 
 
+def _flat_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
+    """Merge every nested advanced group of a stored record back into flat keys.
+
+    Why:
+        ``build_options_record`` stores the option record through ``asdict``,
+        which writes the three advanced groups as nested mappings. The browser
+        posts the same fields flat. One reading path must serve both shapes, or
+        a saved run would replay with every advanced choice dropped and the
+        cloud would run a plan that nobody picked.
+
+    Args:
+        payload: The request body, or the stored option record.
+
+    Returns:
+        One flat mapping. A flat key of the payload outranks a nested one,
+        because a fresh browser choice must replace a stored one.
+    """
+    merged = dict(payload)
+    for group in _OPTION_GROUP_KEYS:
+        nested = payload.get(group)
+        if isinstance(nested, Mapping):  # A stored record nests. A browser body does not.
+            for name, value in nested.items():
+                merged.setdefault(name, value)  # The group field names are already the cloud names.
+    return merged
+
+
+def _read_whole_number(payload: Mapping[str, Any], field: str, highest: int) -> int | None:
+    """Read one optional whole number, or refuse a value outside its range.
+
+    Why:
+        Every advanced count and every percentage reaches the cloud as a whole
+        number. A text value or a negative value would reach the cloud and set a
+        limit that nobody chose, and the cloud refusal names no field.
+
+    Args:
+        payload: The flat request body.
+        field: The cloud field name.
+        highest: The largest value the portal accepts.
+
+    Returns:
+        The chosen number, or None when the operator left the control alone.
+
+    Raises:
+        BadOptionError: If the value is not a whole number inside the range.
+    """
+    value = payload.get(field)
+    if value is None or not str(value).strip():
+        return None
+    word = str(value).strip()
+    if isinstance(value, bool) or not word.isdigit():  # A sign, a decimal point, and a word all fail here.
+        raise BadOptionError(field)
+    number = int(word)
+    if number > highest:
+        logger.warning("Upgrade portal refused the field %s above its limit", field)
+        raise BadOptionError(field)
+    return number
+
+
+def _read_number_list(payload: Mapping[str, Any], field: str) -> tuple[int, ...] | None:
+    """Read one optional list of whole numbers from a text field or a real list.
+
+    Why:
+        The phase control and the failure control both carry a list. A text
+        input posts ``1,10,50,100`` and a JSON client posts a real list. Both
+        must reach the same tuple, and every other shape is a caller fault.
+
+    Args:
+        payload: The flat request body.
+        field: The cloud field name.
+
+    Returns:
+        The chosen numbers, or None when the operator left the control alone.
+
+    Raises:
+        BadOptionError: If any entry is not a whole number, or the list is
+            empty, or the list is longer than the portal accepts.
+    """
+    value = payload.get(field)
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return None
+    # A stored record replays a tuple, a JSON store replays a list, and a text
+    # input posts one comma-separated word. All three reach the same entries.
+    sequence = list(value) if isinstance(value, (list, tuple)) else str(value).split(",")
+    entries = [str(one).strip() for one in sequence if str(one).strip()]
+    if not entries or len(entries) > _PHASE_COUNT_HIGHEST:
+        logger.warning("Upgrade portal refused the list field %s for its length", field)
+        raise BadOptionError(field)
+    if not all(word.isdigit() for word in entries):  # A sign and a decimal point both fail here.
+        raise BadOptionError(field)
+    return tuple(int(word) for word in entries)
+
+
+def _read_word_choice(payload: Mapping[str, Any], field: str, choices: Sequence[str]) -> str | None:
+    """Read one optional word that must come from a fixed list.
+
+    Why:
+        The cloud refuses the whole call when a word sits outside its own
+        enumeration, and the refusal names no field. The portal checks each word
+        before it builds the body.
+
+    Args:
+        payload: The flat request body.
+        field: The cloud field name.
+        choices: Every word that the cloud accepts for this field.
+
+    Returns:
+        The chosen word, or None when the operator left the control alone.
+
+    Raises:
+        BadOptionError: If the word sits outside the list.
+    """
+    value = payload.get(field)
+    if value is None or not str(value).strip():
+        return None
+    word = str(value).strip().lower()
+    if word not in choices:
+        raise BadOptionError(field)
+    return word
+
+
+def _read_optional_boolean(payload: Mapping[str, Any], field: str) -> bool | None:
+    """Read one optional boolean that stays absent until the operator sets it.
+
+    Why:
+        Every radio resource management flag has a cloud default, and the
+        contract asks the portal to omit an optional field unless the operator
+        picks it. A ``False`` that the portal invented would replace a cloud
+        default that the operator never saw.
+
+    Args:
+        payload: The flat request body.
+        field: The cloud field name.
+
+    Returns:
+        The chosen boolean, or None when the body names no value.
+
+    Raises:
+        BadOptionError: If the body holds a value that no rule maps.
+    """
+    if field not in payload or payload[field] is None or not str(payload[field]).strip():
+        return None
+    return _read_boolean(payload, field, False)
+
+
+def _read_canary(payload: Mapping[str, Any]) -> CanaryOptions:
+    """Read the three staged-upgrade controls.
+
+    Args:
+        payload: The flat request body.
+
+    Returns:
+        The staged-upgrade settings.
+
+    Raises:
+        BadOptionError: If a phase list, a failure list, or the percentage holds
+            a value that no rule maps.
+    """
+    phases = _read_number_list(payload, "canary_phases")
+    failures = _read_number_list(payload, "max_failures")
+    if failures is not None and len(failures) != len(phases or ()):
+        # The cloud needs one failure limit for each phase. A shorter list would
+        # leave a later phase with no limit at all, and the run would continue
+        # through a failure that the operator meant to stop.
+        logger.warning("Upgrade portal refused a failure list that does not match the phase list")
+        raise BadOptionError("max_failures")
+    return CanaryOptions(
+        canary_phases=phases,
+        max_failures=failures,
+        max_failure_percentage=_read_whole_number(payload, "max_failure_percentage", _PERCENTAGE_HIGHEST),
+    )
+
+
+def _read_rrm(payload: Mapping[str, Any]) -> RrmOptions:
+    """Read the five radio resource management controls.
+
+    Args:
+        payload: The flat request body.
+
+    Returns:
+        The radio resource management settings.
+
+    Raises:
+        BadOptionError: If a percentage or a word holds a value that no rule
+            maps.
+    """
+    return RrmOptions(
+        rrm_first_batch_percentage=_read_whole_number(payload, "rrm_first_batch_percentage", _PERCENTAGE_HIGHEST),
+        rrm_max_batch_percentage=_read_whole_number(payload, "rrm_max_batch_percentage", _PERCENTAGE_HIGHEST),
+        rrm_mesh_upgrade=_read_word_choice(payload, "rrm_mesh_upgrade", MESH_UPGRADE_CHOICES),
+        rrm_node_order=_read_word_choice(payload, "rrm_node_order", NODE_ORDER_CHOICES),
+        rrm_slow_ramp=_read_optional_boolean(payload, "rrm_slow_ramp"),
+    )
+
+
+def _read_peer_to_peer(payload: Mapping[str, Any]) -> PeerToPeerOptions:
+    """Read the three access-point-to-access-point download controls.
+
+    Args:
+        payload: The flat request body.
+
+    Returns:
+        The peer-to-peer download settings.
+
+    Raises:
+        BadOptionError: If a count holds a value that no rule maps.
+    """
+    return PeerToPeerOptions(
+        enable_p2p=_read_boolean(payload, "enable_p2p", DEFAULT_OPTIONS.peer_to_peer.enable_p2p),
+        p2p_cluster_size=_read_whole_number(payload, "p2p_cluster_size", _P2P_SIZE_HIGHEST),
+        p2p_parallelism=_read_whole_number(payload, "p2p_parallelism", _P2P_SIZE_HIGHEST),
+    )
+
+
+def _read_reboot_at(payload: Mapping[str, Any], now: Callable[[], int] | None) -> int | None:
+    """Map the separate reboot window onto epoch seconds.
+
+    Why:
+        A switch and a Junos gateway can write the firmware in one window and
+        reboot in a later one. The moment obeys the same window rule as the
+        start time, because a moment already past reboots the device at once and
+        a moment far ahead never reboots it at all.
+
+    Args:
+        payload: The flat request body.
+        now: The clock that bounds the moment, or None to replay a stored choice.
+
+    Returns:
+        The chosen moment in epoch seconds, or None to reboot as soon as the
+        write ends.
+
+    Raises:
+        BadOptionError: If the value is not a whole number of seconds, or names
+            a moment outside the window that a run can use.
+    """
+    value = payload.get("reboot_at")
+    if value is None or not str(value).strip():
+        return None
+    word = str(value).strip()
+    if isinstance(value, bool) or not word.isdigit():
+        raise BadOptionError("reboot_at")
+    moment = int(word)  # ``isdigit`` already refused a sign, so the value is whole and not negative.
+    return moment if now is None else _guard_start_time(moment, now(), "reboot_at")
+
+
+def _guard_strategy_settings(options: UpgradeOptions) -> None:
+    """Refuse an advanced setting that its own strategy never reads.
+
+    Why:
+        The cloud reads a phase list for the canary strategy alone, and it reads
+        every radio field for the radio strategy alone. A body that carried one
+        outside its own strategy would drop the setting without a word, and the
+        operator would read a plan that the cloud never runs.
+
+    Args:
+        options: The finished option record.
+
+    Raises:
+        BadOptionError: If a setting sits outside the strategy that reads it.
+    """
+    if options.strategy != STRATEGY_CANARY and options.canary.canary_phases is not None:
+        logger.warning("Upgrade portal refused a phase list outside the staged strategy")
+        raise BadOptionError("canary_phases")
+    if options.strategy == STRATEGY_DEFAULT and options.canary.max_failure_percentage is not None:
+        logger.warning("Upgrade portal refused a failure limit for a single write of every device")
+        raise BadOptionError("max_failure_percentage")
+
+
 def build_options(payload: Mapping[str, Any], now: Callable[[], int] | None = _now_epoch) -> UpgradeOptions:
     """Map the interface controls onto the seam option record.
 
     Why:
         ``contracts/http-api.md:356-364`` fixes the body of the options call.
-        The seam holds the four fields that the cloud reads. This function is
-        the only place that joins the two, so a new control changes one file.
+        This function is the only place that joins the controls and the seam, so
+        a new control changes one file. It reads a flat body from the browser and
+        a nested body from the store, because ``_flat_payload`` merges the two
+        shapes into one first.
 
     Args:
-        payload: The request body of ``POST /api/runs/<run_id>/options``.
+        payload: The request body of ``POST /api/runs/<run_id>/options``, or the
+            stored option record of one run.
         now: The clock that bounds the start time. Pass None to replay a stored
             choice, which the operator already made against an earlier clock.
 
@@ -598,14 +900,106 @@ def build_options(payload: Mapping[str, Any], now: Callable[[], int] | None = _n
         BadOptionError: If any option holds a value that no rule maps.
     """
     logger.info("Upgrade portal maps %s upgrade option field(s)", len(payload))
+    flat = _flat_payload(payload)  # One shape, whether the browser or the store sent it.
     options = UpgradeOptions(
-        reboot=_read_boolean(payload, "reboot", DEFAULT_OPTIONS.reboot),
-        junos_file_action=_read_boolean(payload, "junos_file_action", DEFAULT_OPTIONS.junos_file_action),
-        strategy=_read_strategy(payload),
-        start_time=_read_start_time(payload, now),
+        reboot=_read_boolean(flat, "reboot", DEFAULT_OPTIONS.reboot),
+        junos_file_action=_read_boolean(flat, "junos_file_action", DEFAULT_OPTIONS.junos_file_action),
+        strategy=_read_strategy(flat),
+        start_time=_read_start_time(flat, now),
+        reboot_at=_read_reboot_at(flat, now),
+        force=_read_boolean(flat, "force", DEFAULT_OPTIONS.force),
+        stable_version=_read_boolean(flat, "stable_version", DEFAULT_OPTIONS.stable_version),
+        canary=_read_canary(flat),
+        rrm=_read_rrm(flat),
+        peer_to_peer=_read_peer_to_peer(flat),
     )
+    _guard_strategy_settings(options)  # A setting outside its own strategy is a caller fault.
     logger.debug("Upgrade portal chose the strategy %s with reboot %s", options.strategy, options.reboot)
     return options
+
+
+def build_option_record(payload: Mapping[str, Any]) -> dict[str, Any]:
+    """Return the stored option record of one request body.
+
+    Why:
+        Two callers store an option record. ``build_options_record`` stores one
+        after it reads the site inventory, and the route stores one when no
+        inventory answers. Both must write the same shape, or a run that met a
+        failed inventory read would lose every advanced choice and the schedule
+        that the operator picked.
+
+    Args:
+        payload: The request body of the options call.
+
+    Returns:
+        The option record, with the three advanced groups nested.
+
+    Raises:
+        BadOptionError: If any option holds a value that no rule maps.
+    """
+    return asdict(build_options(payload))
+
+
+def _display_text(value: Any) -> str:
+    """Turn one stored advanced value into the text that a control shows.
+
+    Why:
+        Every advanced control is a text field or a select, and both read text.
+        A list joins with commas, because the phase control and the failure
+        control both post that form. A boolean becomes a word, because the
+        radio ramp select offers a word. An absent value becomes an empty text,
+        which every control reads as "keep the cloud default".
+
+    Args:
+        value: The stored value of one advanced option.
+
+    Returns:
+        The text that the control shows.
+    """
+    if value is None:
+        return ""
+    if isinstance(value, bool):  # This test must come first, because a bool is an int.
+        return "yes" if value else "no"
+    if isinstance(value, (list, tuple)):
+        return ",".join(str(one) for one in value)
+    return str(value)
+
+
+def advanced_option_values(stored: Mapping[str, Any]) -> dict[str, str]:
+    """Flatten the stored advanced options into the text of each control.
+
+    Why:
+        ``build_options_record`` stores the three advanced groups as nested
+        mappings, and the options page draws one flat control for each field. A
+        template that walked the groups on its own would repeat the storage
+        shape in markup, and a later change of that shape would leave the page
+        blank with no error at all.
+
+        A saved run must reopen with every choice still shown. Issue #2156 asks
+        for that reload, because an operator who edits one control and loses the
+        other eight sends a plan that nobody reviewed.
+
+    Args:
+        stored: The ``options`` record of one run, or an empty mapping.
+
+    Returns:
+        The text of each advanced control, keyed by its cloud field name.
+    """
+    flat = _flat_payload(stored)  # One shape, whether the record nests the groups or not.
+    names = (
+        "max_failure_percentage",
+        "canary_phases",
+        "max_failures",
+        "reboot_at",
+        "p2p_cluster_size",
+        "p2p_parallelism",
+        "rrm_first_batch_percentage",
+        "rrm_max_batch_percentage",
+        "rrm_node_order",
+        "rrm_mesh_upgrade",
+        "rrm_slow_ramp",
+    )
+    return {name: _display_text(flat.get(name)) for name in names}
 
 
 def resolve_family_scope(device_type: str, device: Mapping[str, Any]) -> tuple[str | None, str]:
@@ -993,6 +1387,8 @@ __all__ = [
     "BadOptionError",
     "InventoryRead",
     "TypedVersionSelector",
+    "advanced_option_values",
+    "build_option_record",
     "build_options",
     "build_options_record",
     "build_options_view",

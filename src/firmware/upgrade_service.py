@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, field
 from enum import StrEnum
 from importlib import import_module
 from typing import Any
@@ -49,6 +49,21 @@ ENDPOINT_ORG_SSRS = "upgradeOrgSsrs"
 STRATEGY_DEFAULT = "big_bang"
 STRATEGY_SERIAL = "serial"
 STRATEGY_CANARY = "canary"
+STRATEGY_RRM = "rrm"
+
+# The word that asks the cloud for the vendor stable build instead of a named
+# version (documentation/api/utilities/POST_sites_site_id_devices_upgrade.md:197).
+VERSION_STABLE = "stable"
+
+# The two enumerations that the radio resource management fields accept, from
+# the same request body schema at lines 135 and 139.
+MESH_UPGRADE_CHOICES = ("parallel", "sequential")
+NODE_ORDER_CHOICES = ("center_to_fringe", "fringe_to_center")
+
+# The strategy words that the batch site call accepts. The radio resource
+# management word reaches an access point alone, and `_strategy_word` drops it
+# for every other device type.
+_AP_ONLY_STRATEGIES = (STRATEGY_RRM,)
 
 # The complete strategy enumeration of the session smart router request body, from
 # documentation/api/utilities/POST_orgs_org_id_ssr_upgrade.md:57. That schema
@@ -95,6 +110,22 @@ _WARNING_MIXED_VERSION = "The selection holds more than one version, so the port
 _WARNING_SSR_STRATEGY = (
     "A session smart router accepts the strategy big_bang or serial only, "
     "so the portal sends no strategy for that family."
+)
+
+# WHY: The request body schema marks `rrm` as an access point word ("For APs
+# only and if `strategy`==`rrm`" at every rrm field). An operator who picks the
+# radio strategy for a mixed selection reads one control and gets two behaviors,
+# so the plan must name the group that drops the word.
+_WARNING_RRM_STRATEGY = (
+    "The radio strategy reaches an access point only, "
+    "so the portal sends no strategy for the switches and the gateways of this run."
+)
+
+# WHY: The stable choice replaces every version the operator picked in the
+# device table. The table still shows those versions, so the operator would read
+# one plan on the page and the cloud would run another.
+_WARNING_STABLE_VERSION = (
+    "The run asks the cloud for the vendor stable build, " "so the cloud ignores every version that this page shows."
 )
 
 # WHY: The cloud reboots an access point whatever this portal sends. The request
@@ -195,12 +226,99 @@ class DeviceTarget:
 
 
 @dataclass(frozen=True, slots=True)
+class CanaryOptions:
+    """The staged-upgrade settings of one run.
+
+    Why:
+        The cloud reads these three fields only when the strategy is not
+        ``big_bang``, and ``max_failures`` only when the strategy is ``canary``.
+        One record holds them together, so the option record stays readable and
+        a caller sees at a glance which settings belong to a staged upgrade.
+
+        Each field name is the literal cloud field name. A reader who compares
+        this record against
+        ``documentation/api/utilities/POST_sites_site_id_devices_upgrade.md``
+        needs no translation table.
+
+    Attributes:
+        canary_phases: The percentage of devices of each phase, or ``None`` for
+            the cloud default of 1, 10, 50, and 100.
+        max_failures: The count of failures allowed inside each phase, or
+            ``None`` to use the percentage instead. The cloud needs one entry
+            for each phase.
+        max_failure_percentage: The percentage of failures allowed across the
+            whole upgrade, or ``None`` for the cloud default of 5.
+    """
+
+    canary_phases: tuple[int, ...] | None = None
+    max_failures: tuple[int, ...] | None = None
+    max_failure_percentage: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class RrmOptions:
+    """The radio resource management settings of an access point upgrade.
+
+    Why:
+        The cloud reads these five fields only for an access point and only when
+        the strategy is ``rrm``. The strategy walks the radio neighbourhood in
+        batches, so it keeps wireless coverage while the firmware moves.
+
+    Attributes:
+        rrm_first_batch_percentage: The percentage of access points of the first
+            batch, or ``None`` for the cloud default.
+        rrm_max_batch_percentage: The largest percentage of access points of any
+            later batch, or ``None`` for the cloud default.
+        rrm_mesh_upgrade: ``parallel`` or ``sequential`` for the mesh access
+            points at the end of the run, or ``None`` for the cloud default.
+        rrm_node_order: ``center_to_fringe`` or ``fringe_to_center``, or ``None``
+            for the cloud default.
+        rrm_slow_ramp: Whether each batch grows slowly, or ``None`` for the cloud
+            default.
+    """
+
+    rrm_first_batch_percentage: int | None = None
+    rrm_max_batch_percentage: int | None = None
+    rrm_mesh_upgrade: str | None = None
+    rrm_node_order: str | None = None
+    rrm_slow_ramp: bool | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class PeerToPeerOptions:
+    """The access-point-to-access-point download settings of one run.
+
+    Why:
+        An access point can take the firmware from a neighbour instead of from
+        the cloud. A site on a slow link finishes far sooner that way. The cloud
+        reads these fields for an access point alone.
+
+    Attributes:
+        enable_p2p: Whether an access point may take the firmware from a
+            neighbour.
+        p2p_cluster_size: The count of access points of one download group, or
+            ``None`` for the cloud default of 10.
+        p2p_parallelism: The count of download groups that run together, or
+            ``None`` for the cloud default.
+    """
+
+    enable_p2p: bool = False
+    p2p_cluster_size: int | None = None
+    p2p_parallelism: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class UpgradeOptions:
     """The choices that the operator made for one upgrade run.
 
     Why:
         One frozen record carries every choice into the pure body builder, so no
         function reads a shared setting and no thread sees a half-changed value.
+
+        The three advanced settings sit in their own records, because each one
+        reaches the cloud only under its own condition. A flat record of
+        eighteen fields would hide that rule and would break the five-item rule
+        of the project.
 
     Attributes:
         reboot: Whether the cloud reboots the device. A switch and a gateway read
@@ -209,12 +327,28 @@ class UpgradeOptions:
             the reboot. A Junos device reads the value.
         strategy: The cloud upgrade strategy.
         start_time: Epoch seconds for a delayed start, or ``None`` for now.
+        reboot_at: Epoch seconds for a reboot that runs later than the write, or
+            ``None`` to reboot as soon as the write ends. A switch and a gateway
+            read the value.
+        force: Whether the cloud writes the firmware even when the device already
+            runs the chosen version.
+        stable_version: Whether the cloud picks the vendor stable build instead
+            of the version that the operator picked for each device.
+        canary: The staged-upgrade settings.
+        rrm: The radio resource management settings.
+        peer_to_peer: The access-point-to-access-point download settings.
     """
 
     reboot: bool = True
     junos_file_action: bool = False
     strategy: str = STRATEGY_DEFAULT
     start_time: int | None = None
+    reboot_at: int | None = None
+    force: bool = False
+    stable_version: bool = False
+    canary: CanaryOptions = field(default_factory=CanaryOptions)
+    rrm: RrmOptions = field(default_factory=RrmOptions)
+    peer_to_peer: PeerToPeerOptions = field(default_factory=PeerToPeerOptions)
 
 
 @dataclass(frozen=True, slots=True)
@@ -433,8 +567,8 @@ def classify_gateway(device: Mapping[str, object]) -> GatewayFamily:
     return family
 
 
-def _strategy_word(strategy: str, family: GatewayFamily) -> str | None:
-    """Return the strategy word that one family accepts, or ``None``.
+def _strategy_word(strategy: str, family: GatewayFamily, device_type: str = "") -> str | None:
+    """Return the strategy word that one family and one device type accept.
 
     Why:
         The session smart router schema lists ``big_bang`` and ``serial`` alone.
@@ -443,15 +577,23 @@ def _strategy_word(strategy: str, family: GatewayFamily) -> str | None:
         change to ``big_bang``, because a silent change would run a strategy that
         the operator never asked for.
 
+        The request body schema marks ``rrm`` as an access point word. The same
+        rule applies to it: a switch group drops the word, and ``plan_upgrade``
+        puts a warning on the plan.
+
     Args:
         strategy: The strategy that the operator chose.
         family: The gateway family of the group.
+        device_type: The device type of the group. An empty text skips the
+            access point check, which keeps every older caller working.
 
     Returns:
-        The strategy word, or ``None`` when the family accepts no such word.
+        The strategy word, or ``None`` when the group accepts no such word.
     """
     if family is GatewayFamily.SSR and strategy not in _SSR_STRATEGIES:
         return None
+    if strategy in _AP_ONLY_STRATEGIES and device_type and device_type != DEVICE_TYPE_AP:
+        return None  # A switch and a gateway hold no radio neighbourhood to walk.
     return strategy
 
 
@@ -502,6 +644,122 @@ def _uses_the_per_device_call(
     return len(targets) == 1 and family is not GatewayFamily.SSR
 
 
+def _copy_present(body: dict[str, object], values: Mapping[str, object]) -> None:
+    """Copy each named value that the operator set into one request body.
+
+    Why:
+        The contract asks the portal to omit an optional field unless the
+        operator picks it. A body that carried ``None`` would send a null where
+        the cloud expects a number, and the cloud refuses the whole call.
+
+    Args:
+        body: The body under construction. The function changes it in place.
+        values: The cloud field name of each optional setting and its value.
+    """
+    for name, value in values.items():
+        if value is not None:  # ``None`` means the operator left the control alone.
+            body[name] = value
+
+
+def _add_ssr_fields(body: dict[str, object], options: UpgradeOptions) -> None:
+    """Add the reboot schedule of one session smart router body.
+
+    Why:
+        That schema holds no reboot flag. It disables a reboot with a
+        ``reboot_at`` of -1 instead
+        (documentation/api/utilities/POST_orgs_org_id_ssr_upgrade.md:47).
+
+    Args:
+        body: The body under construction. The function changes it in place.
+        options: The choices of the operator.
+    """
+    if not options.reboot:  # The one way this schema holds a reboot back.
+        body["reboot_at"] = _REBOOT_DISABLED
+        return
+    _copy_present(body, {"reboot_at": options.reboot_at})  # A separate reboot window.
+
+
+def _add_junos_fields(body: dict[str, object], options: UpgradeOptions) -> None:
+    """Add the reboot fields that a switch and a Junos gateway read.
+
+    Why:
+        The cloud rejects the reboot field and the Junos file action field on an
+        access point, so only these two device types carry them. The schema
+        reads ``reboot_at`` only when ``reboot`` is true, so a held reboot sends
+        no window at all.
+
+    Args:
+        body: The body under construction. The function changes it in place.
+        options: The choices of the operator.
+    """
+    body["reboot"] = options.reboot
+    if options.junos_file_action:
+        body[_JUNOS_FILE_ACTION_KEY] = True
+    if options.reboot:  # A held reboot needs no window, and the cloud ignores one.
+        _copy_present(body, {"reboot_at": options.reboot_at})
+
+
+def _add_canary_fields(body: dict[str, object], options: UpgradeOptions) -> None:
+    """Add the staged-upgrade fields of one batch body.
+
+    Why:
+        The request body schema reads ``canary_phases`` and ``max_failures``
+        only for the canary strategy, and ``max_failure_percentage`` for every
+        strategy above ``big_bang``. A field outside its own strategy makes the
+        cloud refuse the whole call.
+
+    Args:
+        body: The body under construction. The function changes it in place.
+        options: The choices of the operator.
+    """
+    canary = options.canary
+    if options.strategy == STRATEGY_CANARY:
+        body["canary_phases"] = list(canary.canary_phases or _CANARY_PHASES)  # The cloud default stays the default.
+        _copy_present(body, {"max_failures": list(canary.max_failures) if canary.max_failures else None})
+    if options.strategy != STRATEGY_DEFAULT:  # One write of every device allows no partial failure.
+        _copy_present(body, {"max_failure_percentage": canary.max_failure_percentage})
+
+
+def _add_access_point_fields(body: dict[str, object], options: UpgradeOptions) -> None:
+    """Add the fields that an access point group alone reads.
+
+    Why:
+        The request body schema marks the peer-to-peer fields and every radio
+        resource management field "For APs only". A switch body that carried one
+        would send a field that its own platform never reads.
+
+    Args:
+        body: The body under construction. The function changes it in place.
+        options: The choices of the operator.
+    """
+    peer = options.peer_to_peer
+    if peer.enable_p2p:  # The two size fields reach the cloud only with the flag.
+        body["enable_p2p"] = True
+        _copy_present(body, {"p2p_cluster_size": peer.p2p_cluster_size, "p2p_parallelism": peer.p2p_parallelism})
+    if options.strategy == STRATEGY_RRM:  # Every field of this record names its own cloud key.
+        _copy_present(body, asdict(options.rrm))
+
+
+def _add_orchestration_fields(body: dict[str, object], device_type: str, options: UpgradeOptions) -> None:
+    """Add the batch-only orchestration fields of one body.
+
+    Why:
+        The per-device schema holds five fields and no orchestration field at
+        all. Only the batch site call reads a phase list, a failure limit, the
+        force flag, and the access point settings.
+
+    Args:
+        body: The body under construction. The function changes it in place.
+        device_type: The device type of the group.
+        options: The choices of the operator.
+    """
+    _add_canary_fields(body, options)
+    if options.force:  # The cloud writes the firmware even onto a device that already runs it.
+        body["force"] = True
+    if device_type == DEVICE_TYPE_AP:
+        _add_access_point_fields(body, options)
+
+
 def _add_family_fields(
     body: dict[str, object],
     device_type: str,
@@ -509,17 +767,12 @@ def _add_family_fields(
     family: GatewayFamily,
     one_device: bool = False,
 ) -> None:
-    """Add the body fields that one device family alone reads.
+    """Add the body fields that one device family and one endpoint read.
 
     Why:
-        The cloud rejects the reboot field and the Junos file action field on an
-        access point, and the session smart router body carries neither field.
-        The session smart router body disables a reboot with ``reboot_at``
-        instead.
-
-        The per-device schema holds no ``canary_phases`` field, so a per-device
-        body never carries one. The reboot field and the Junos file action field
-        appear in both schemas, so both bodies carry them.
+        Three cloud schemas carry three different field sets, and a wrong field
+        makes the cloud refuse the whole call. This function picks the set that
+        matches the family and the endpoint, and each helper owns one set.
 
     Args:
         body: The body under construction. The function changes it in place.
@@ -529,15 +782,13 @@ def _add_family_fields(
         one_device: Whether the body travels to the per-device endpoint.
     """
     if family is GatewayFamily.SSR:
-        if not options.reboot:
-            body["reboot_at"] = _REBOOT_DISABLED
-        return
+        _add_ssr_fields(body, options)
+        return  # That schema reads no other field of this portal.
     if device_type in _JUNOS_DEVICE_TYPES:
-        body["reboot"] = options.reboot
-        if options.junos_file_action:
-            body[_JUNOS_FILE_ACTION_KEY] = True
-    if options.strategy == STRATEGY_CANARY and not one_device:
-        body["canary_phases"] = list(_CANARY_PHASES)
+        _add_junos_fields(body, options)
+    if one_device:
+        return  # The per-device schema holds no orchestration field at all.
+    _add_orchestration_fields(body, device_type, options)
 
 
 def build_body(
@@ -572,15 +823,17 @@ def build_body(
         raise ValueError("an upgrade body needs at least one target")
     one_device = _uses_the_per_device_call(targets, family, options)  # The small schema holds no list.
     _logger().info("build an upgrade body for %s target(s) of family %s", len(targets), family.value)
-    body: dict[str, object] = {"version": targets[0].version_target}
+    device_type = targets[0].device_type  # One group holds one device type, so one row names it.
+    version = VERSION_STABLE if options.stable_version else targets[0].version_target
+    body: dict[str, object] = {"version": version}
     if not one_device:  # The batch call names every device, and the per-device call names it in the path.
         body["device_ids"] = [_device_id(target.mac) for target in targets]
-        word = _strategy_word(options.strategy, family)
+        word = _strategy_word(options.strategy, family, device_type)
         if word is not None:
             body["strategy"] = word
     if options.start_time is not None:
         body["start_time"] = options.start_time
-    _add_family_fields(body, targets[0].device_type, options, family, one_device)
+    _add_family_fields(body, device_type, options, family, one_device)
     _logger().debug("the upgrade body holds the keys %s", sorted(body))
     return body
 
@@ -674,6 +927,34 @@ def _reboot_warnings(
     return found
 
 
+def _advanced_warnings(
+    keys: tuple[tuple[str, GatewayFamily, str], ...],
+    options: UpgradeOptions,
+) -> list[str]:
+    """Return the sentences that name an advanced choice the cloud changes.
+
+    Why:
+        Two advanced controls apply to a narrower set than the page suggests.
+        The radio strategy reaches an access point alone, and the stable choice
+        replaces every version that the device table shows. An operator who
+        reads the control and never reads the limit plans the wrong run.
+
+    Args:
+        keys: The group keys of the plan.
+        options: The choices of the operator.
+
+    Returns:
+        Zero, one, or two sentences.
+    """
+    found: list[str] = []
+    other_types = {key[0] for key in keys} - {DEVICE_TYPE_AP}  # Every group that holds no access point.
+    if options.strategy == STRATEGY_RRM and other_types:  # The word never reaches those groups.
+        found.append(_WARNING_RRM_STRATEGY)
+    if options.stable_version:  # The picked versions of the device table never reach the cloud.
+        found.append(_WARNING_STABLE_VERSION)
+    return found
+
+
 def _plan_warnings(
     keys: Iterable[tuple[str, GatewayFamily, str]],
     options: UpgradeOptions,
@@ -709,6 +990,7 @@ def _plan_warnings(
         warnings.append(_WARNING_MIXED_VERSION)
     if _drops_the_strategy(key_list, options):
         warnings.append(_WARNING_SSR_STRATEGY)
+    warnings.extend(_advanced_warnings(key_list, options))
     warnings.extend(_reboot_warnings(key_list, options, access_points))
     return tuple(warnings)
 

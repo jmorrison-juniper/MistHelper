@@ -7,6 +7,36 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Expose the advanced firmware upgrade controls of the cloud schema
+
+- **Added**: The portal now offers every remaining upgrade field of the cloud
+  schema. The new controls are the phase list of a staged
+  upgrade and the failure limit of each phase. They are the failure
+  percentage of the whole run and a separate window for the reboot of a
+  switch and a gateway. They are the serial strategy and the radio strategy
+  with its five settings. They are the three settings for a download between
+  access points. They are the force flag and the vendor stable build. Before
+  this change an operator who needed one of these fields had to leave the
+  portal and call the cloud by hand. Issue #2156.
+- **Added**: The page hides a control that the selection does not read. The
+  radio settings reach an access point only. The settings for a download
+  between access points reach an access point only. The separate window for
+  a reboot reaches a switch and a gateway only. The phase list reaches the
+  staged strategy only.
+- **Added**: The confirmation page names each advanced control that the run
+  submits, and it names no control that keeps the cloud default.
+- **Added**: The plan warns when the radio strategy misses the switches and
+  the gateways of a mixed run. It also warns that the stable build ignores
+  every version that the device table shows.
+- **Fixed**: The save call of the options dropped the schedule and every
+  advanced choice when no site inventory answered. That path stored three
+  fields by hand instead of the whole option record. It now maps the body
+  through the one module that owns every rule. Both paths store the same
+  record, and both refuse the same bad value.
+- **Fixed**: A refusal of the separate reboot window named the start time.
+  The refusal now names the reboot control, so the operator opens the control
+  that holds the fault.
+
 ### Show the saved plan warning list on the confirm page
 
 - **Fixed**: The confirm page shows the same list of warnings that the

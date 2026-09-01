@@ -82,6 +82,27 @@
     var UPGRADE_REBOOT_GROUP_TESTID = "upgrade-reboot-group";
     var UPGRADE_JUNOS_GROUP_TESTID = "upgrade-junos-file-action-group";
     var UPGRADE_STRATEGY_GROUP_TESTID = "upgrade-strategy-group";
+    var UPGRADE_FORCE_GROUP_TESTID = "upgrade-force-group";
+    var UPGRADE_STABLE_GROUP_TESTID = "upgrade-stable-version-group";
+    var UPGRADE_P2P_GROUP_TESTID = "upgrade-p2p-group";
+
+    /* Issue #2156 draws nine advanced controls. Each entry names the cloud
+     * field and the data-testid of the control that holds it, so the payload
+     * builder needs one loop instead of nine reads. The server validates every
+     * value again, because a browser never decides what the cloud may read. */
+    var UPGRADE_ADVANCED_FIELDS = [
+        "max_failure_percentage",
+        "canary_phases",
+        "max_failures",
+        "reboot_at",
+        "p2p_cluster_size",
+        "p2p_parallelism",
+        "rrm_first_batch_percentage",
+        "rrm_max_batch_percentage",
+        "rrm_node_order",
+        "rrm_mesh_upgrade",
+        "rrm_slow_ramp"
+    ];
     var UPGRADE_WARNING_TESTID = "upgrade-warning-list";
     var UPGRADE_SAVE_TESTID = "upgrade-options-save-button";
     var UPGRADE_CONFIRM_TESTID = "upgrade-confirm-input";
@@ -1355,6 +1376,7 @@
             allChoice.checked = selectedDeviceTypes().length === 3;
         }
         filterUpgradeTargetRows();
+        filterAdvancedUpgradeControls();  /* Issue #2156 hides a control the selection does not read. */
     }
 
     /**
@@ -1434,6 +1456,107 @@
     }
 
     /**
+     * Shows an advanced control only when its device type and strategy apply.
+     *
+     * Why: Issue #2156 asks the page to hide a control that the selection does
+     * not read. The cloud reads the radio fields for an access point alone, and
+     * it reads the phase list for the staged strategy alone. A control that
+     * stayed visible would invite a value that the cloud silently drops.
+     *
+     * Each rule lives in the markup, under data-requires-device-type and
+     * data-requires-strategy. A control names every device type and every
+     * strategy that reads it, separated by spaces. A control that names neither
+     * attribute always shows.
+     *
+     * @returns {void}
+     */
+    function filterAdvancedUpgradeControls() {
+        var selectedTypes = selectedDeviceTypes();  /* The device type checkboxes of the page. */
+        var strategy = checkedRadioValue(UPGRADE_STRATEGY_GROUP_TESTID, "big_bang");
+        var controls = document.querySelectorAll("[data-requires-device-type], [data-requires-strategy]");
+        Array.prototype.forEach.call(controls, function (control) {
+            var wantedTypes = (control.getAttribute("data-requires-device-type") || "").split(" ");
+            var wantedStrategies = (control.getAttribute("data-requires-strategy") || "").split(" ");
+            /* An empty attribute yields one empty word, which no rule matches.
+             * The filter below removes it, so an absent rule reads as "always". */
+            var typeOk = matchesAnyRule(wantedTypes, selectedTypes);
+            var strategyOk = matchesAnyRule(wantedStrategies, [strategy]);
+            control.hidden = !(typeOk && strategyOk);
+        });
+    }
+
+    /**
+     * Answers whether a control rule matches the current page state.
+     *
+     * Why: A control with no rule of one kind always passes that kind. A
+     * control with a rule passes when the page state holds at least one of the
+     * named words.
+     *
+     * @param {Array<string>} wanted The words that the markup names.
+     * @param {Array<string>} current The words that the page state holds.
+     * @returns {boolean} True when the control passes this rule.
+     */
+    function matchesAnyRule(wanted, current) {
+        var named = wanted.filter(function (word) {
+            return word.length > 0;  /* An absent attribute splits into one empty word. */
+        });
+        if (named.length === 0) {
+            return true;  /* The control names no rule of this kind, so it always passes. */
+        }
+        return named.some(function (word) {
+            return current.indexOf(word) !== -1;
+        });
+    }
+
+    /**
+     * Collects the advanced upgrade fields that the operator filled in.
+     *
+     * Why: contracts/http-api.md asks the portal to omit an optional field
+     * unless the operator picks it. An empty control therefore sends no key at
+     * all, and the cloud keeps its own default. A hidden control also sends no
+     * key, because the selection does not read it and a stale value would reach
+     * the cloud from a control that nobody can see.
+     *
+     * @returns {Object} One key for each advanced field that carries a value.
+     */
+    function collectAdvancedUpgradeFields() {
+        var values = {};
+        UPGRADE_ADVANCED_FIELDS.forEach(function (field) {
+            var control = byTestId("upgrade-" + field.replace(/_/g, "-"));
+            if (!control || isHiddenControl(control)) {
+                return;  /* The page drew no control, or the selection does not read it. */
+            }
+            var text = (control.value || "").trim();
+            if (text) {
+                values[field] = text;  /* The server maps the text and refuses a bad value. */
+            }
+        });
+        return values;
+    }
+
+    /**
+     * Answers whether one control sits inside a hidden section of the page.
+     *
+     * Why: The visibility rules set the hidden attribute on the wrapper of a
+     * control, never on the control itself. A read of the control alone would
+     * therefore miss the rule and would send a value that the selection does
+     * not read.
+     *
+     * @param {Element} control The control to test.
+     * @returns {boolean} True when the control or an ancestor is hidden.
+     */
+    function isHiddenControl(control) {
+        var node = control;
+        while (node && node !== document.body) {
+            if (node.hidden) {
+                return true;
+            }
+            node = node.parentElement;
+        }
+        return false;
+    }
+
+    /**
      * Saves the upgrade options and moves to the confirmation page.
      *
      * Why: The endpoint answers with the planned targets and the warnings, so
@@ -1459,8 +1582,20 @@
             selected_types: selectedDeviceTypes(),
             reboot: rebootChoice === "yes",  /* The saved field stays a boolean. */
             junos_file_action: junosChoice === "yes",  /* The saved field stays a boolean. */
-            strategy: strategyChoice  /* The saved field stays the strategy string. */
+            strategy: strategyChoice,  /* The saved field stays the strategy string. */
+            /* Issue #2156. Each advanced flag defaults to the safe current
+             * behavior, so an operator who changes nothing sends the same body
+             * as before this feature. */
+            force: checkedRadioValue(UPGRADE_FORCE_GROUP_TESTID, "no") === "yes",
+            stable_version: checkedRadioValue(UPGRADE_STABLE_GROUP_TESTID, "no") === "yes",
+            enable_p2p: checkedRadioValue(UPGRADE_P2P_GROUP_TESTID, "no") === "yes"
         };
+        /* The remaining advanced fields carry text, and an empty control sends
+         * no key at all. The server then keeps the cloud default. */
+        var advanced = collectAdvancedUpgradeFields();
+        Object.keys(advanced).forEach(function (field) {
+            payload[field] = advanced[field];
+        });
 
         /* The button stays disabled until the answer arrives. A second click
          * would send a second plan for the same run. */
@@ -1524,13 +1659,24 @@
                     choice.checked = allChoice.checked;
                 });
                 filterUpgradeTargetRows();
+                filterAdvancedUpgradeControls();
             });
         }
         var choices = document.querySelectorAll("[data-device-type-choice]");
         Array.prototype.forEach.call(choices, function (choice) {
             choice.addEventListener("change", syncAllDeviceTypes);
         });
+        /* Issue #2156. The strategy decides which advanced control applies, so
+         * every radio of that group repaints the advanced section. */
+        var strategyGroup = byTestId(UPGRADE_STRATEGY_GROUP_TESTID);
+        if (strategyGroup) {
+            var strategyRadios = strategyGroup.querySelectorAll('input[type="radio"]');
+            Array.prototype.forEach.call(strategyRadios, function (radio) {
+                radio.addEventListener("change", filterAdvancedUpgradeControls);
+            });
+        }
         filterUpgradeTargetRows();
+        filterAdvancedUpgradeControls();
     }
 
     /**
