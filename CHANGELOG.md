@@ -7,6 +7,26 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Add the release train and the schedule of a session smart router
+
+- **Added**: The options page offers the release train of a session smart
+  router. The control names the three words that the router schema holds, which
+  are alpha, beta, and stable. Only the router schema reads a channel, so the
+  page hides the control unless the run upgrades a router. Issue #2157.
+- **Added**: The options page offers the moment that the firmware download
+  begins. Each cloud schema of the three holds the field, so the control shows
+  for every device type. Before this change the portal held the rule and
+  offered no control at all.
+- **Added**: The plan warns when a run upgrades two routers or more under a
+  single wave. Two routers of one site may share the wide area link, and one
+  wave reboots the pair at once. The portal names the risk and keeps the order
+  that the operator chose.
+- **Added**: The confirmation page reports the release train, the download
+  moment, and the reboot moment before the firmware moves.
+- **Changed**: The note of the separate window for a reboot now states the rule
+  of a router. That schema holds no reboot flag, so a no on the reboot control
+  sends the value that disables the reboot of the router.
+
 ### Expose the advanced firmware upgrade controls of the cloud schema
 
 - **Added**: The portal now offers every remaining upgrade field of the cloud

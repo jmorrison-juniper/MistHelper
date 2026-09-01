@@ -95,13 +95,15 @@
         "canary_phases",
         "max_failures",
         "reboot_at",
+        "start_time",
         "p2p_cluster_size",
         "p2p_parallelism",
         "rrm_first_batch_percentage",
         "rrm_max_batch_percentage",
         "rrm_node_order",
         "rrm_mesh_upgrade",
-        "rrm_slow_ramp"
+        "rrm_slow_ramp",
+        "channel"
     ];
     var UPGRADE_WARNING_TESTID = "upgrade-warning-list";
     var UPGRADE_SAVE_TESTID = "upgrade-options-save-button";
@@ -1330,6 +1332,7 @@
                 changed += 1;
             }
         });
+        filterAdvancedUpgradeControls();  /* Issue #2157 reads the family of every row under upgrade. */
         return changed;
     }
 
@@ -1456,6 +1459,35 @@
     }
 
     /**
+     * Reads the gateway families that the selected device rows hold.
+     *
+     * Why: Issue #2157 shows the router controls only when the run holds a
+     * session smart router. The device type checkboxes name a gateway and never
+     * name a family, because a family follows from the model. The server
+     * decides the family and writes it onto each row, so the page reads the
+     * attribute instead of a model list that would age.
+     *
+     * A row that carries no target version leaves the count, because a device
+     * with no version never reaches the cloud.
+     *
+     * @returns {Array<string>} The families of the devices under upgrade.
+     */
+    function selectedGatewayFamilies() {
+        var families = [];
+        var selectedTypes = selectedDeviceTypes();
+        var selects = document.querySelectorAll("[data-version-for]");
+        Array.prototype.forEach.call(selects, function (select) {
+            var family = (select.getAttribute("data-gateway-family") || "").trim();
+            var deviceType = select.getAttribute("data-device-type");
+            var wanted = family && selectedTypes.indexOf(deviceType) !== -1 && (select.value || "").trim();
+            if (wanted && families.indexOf(family) === -1) {
+                families.push(family);
+            }
+        });
+        return families;
+    }
+
+    /**
      * Shows an advanced control only when its device type and strategy apply.
      *
      * Why: Issue #2156 asks the page to hide a control that the selection does
@@ -1463,25 +1495,30 @@
      * it reads the phase list for the staged strategy alone. A control that
      * stayed visible would invite a value that the cloud silently drops.
      *
-     * Each rule lives in the markup, under data-requires-device-type and
-     * data-requires-strategy. A control names every device type and every
-     * strategy that reads it, separated by spaces. A control that names neither
-     * attribute always shows.
+     * Each rule lives in the markup, under data-requires-device-type,
+     * data-requires-strategy, and data-requires-family. A control names every
+     * device type, every strategy, and every gateway family that reads it,
+     * separated by spaces. A control that names no attribute always shows.
      *
      * @returns {void}
      */
     function filterAdvancedUpgradeControls() {
         var selectedTypes = selectedDeviceTypes();  /* The device type checkboxes of the page. */
         var strategy = checkedRadioValue(UPGRADE_STRATEGY_GROUP_TESTID, "big_bang");
-        var controls = document.querySelectorAll("[data-requires-device-type], [data-requires-strategy]");
+        var families = selectedGatewayFamilies();  /* Issue #2157 reads the family of each row. */
+        var controls = document.querySelectorAll(
+            "[data-requires-device-type], [data-requires-strategy], [data-requires-family]"
+        );
         Array.prototype.forEach.call(controls, function (control) {
             var wantedTypes = (control.getAttribute("data-requires-device-type") || "").split(" ");
             var wantedStrategies = (control.getAttribute("data-requires-strategy") || "").split(" ");
+            var wantedFamilies = (control.getAttribute("data-requires-family") || "").split(" ");
             /* An empty attribute yields one empty word, which no rule matches.
              * The filter below removes it, so an absent rule reads as "always". */
             var typeOk = matchesAnyRule(wantedTypes, selectedTypes);
             var strategyOk = matchesAnyRule(wantedStrategies, [strategy]);
-            control.hidden = !(typeOk && strategyOk);
+            var familyOk = matchesAnyRule(wantedFamilies, families);
+            control.hidden = !(typeOk && strategyOk && familyOk);
         });
     }
 
@@ -1675,6 +1712,12 @@
                 radio.addEventListener("change", filterAdvancedUpgradeControls);
             });
         }
+        /* Issue #2157. The gateway family follows from the device rows under
+         * upgrade, so a version change can add or remove a router. */
+        var versionSelects = document.querySelectorAll("[data-version-for]");
+        Array.prototype.forEach.call(versionSelects, function (select) {
+            select.addEventListener("change", filterAdvancedUpgradeControls);
+        });
         filterUpgradeTargetRows();
         filterAdvancedUpgradeControls();
     }

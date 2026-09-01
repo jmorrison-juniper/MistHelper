@@ -130,13 +130,15 @@
   ('max_failures', 'Failures allowed inside each phase'),
   ('max_failure_percentage', 'Failures allowed across the whole run, as a percentage'),
   ('reboot_at', 'Reboot moment of each switch and each gateway, in epoch seconds'),
+  ('start_time', 'Download start moment, in epoch seconds'),
   ('p2p_cluster_size', 'Access points of one download group'),
   ('p2p_parallelism', 'Download groups that run together'),
   ('rrm_first_batch_percentage', 'Access points of the first radio batch, as a percentage'),
   ('rrm_max_batch_percentage', 'Largest radio batch after the first, as a percentage'),
   ('rrm_node_order', 'Order of the radio batches across the site'),
   ('rrm_mesh_upgrade', 'Order of the mesh access points at the end of the run'),
-  ('rrm_slow_ramp', 'Grow each radio batch slowly')
+  ('rrm_slow_ramp', 'Grow each radio batch slowly'),
+  ('channel', 'Release train of each session smart router')
 ] %}
 
 {% block title %}{{ page_title | default('Confirm the upgrade', true) }}{% endblock %}

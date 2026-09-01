@@ -737,6 +737,52 @@ def test_confirm_page_names_no_advanced_control_that_keeps_the_cloud_default(
     assert "keeps the cloud default" in page  # One note states the rule for every hidden control.
 
 
+def test_confirm_page_reports_the_release_train_and_the_schedule(
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """`GET /runs/<id>/confirm` names the router train and both schedule moments.
+
+    Why:
+        Issue #2157 asks the confirmation page to report the channel and the
+        download and reboot schedule. This is the last page before firmware
+        moves. An operator who cannot read the release train may send a router
+        onto an alpha build and drop the wide area network of the site.
+
+    Args:
+        upgrade_client: The signed-in client.
+        run_store: The stand-in run record store.
+    """
+    stored = {
+        "reboot": True,
+        "strategy": "serial",
+        "start_time": 1900000000,
+        "reboot_at": 1900003600,
+        "ssr": {"channel": "beta"},
+    }
+    run_id = seed_run(run_store, "pre_capture_done", options=stored)
+    page = upgrade_client.get(f"/runs/{run_id}/confirm").get_data(as_text=True)
+    assert "beta" in page  # The release train reaches the last page before the firmware moves.
+    assert "1900000000" in page  # The download moment reaches the same page.
+    assert "1900003600" in page  # The reboot moment reaches the same page.
+    assert "Release train" in page  # The row carries a label that an operator reads.
+
+
+def test_confirm_page_names_no_release_train_when_the_run_holds_no_router(
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """A run that picked no train draws no train row at all.
+
+    Args:
+        upgrade_client: The signed-in client.
+        run_store: The stand-in run record store.
+    """
+    run_id = seed_run(run_store, "pre_capture_done", options={"reboot": True, "strategy": "big_bang"})
+    page = upgrade_client.get(f"/runs/{run_id}/confirm").get_data(as_text=True)
+    assert 'data-testid="upgrade-summary-channel"' not in page  # An untouched control draws no row.
+
+
 # ---------------------------------------------------------------------------
 # T154: the guarded stop
 # ---------------------------------------------------------------------------

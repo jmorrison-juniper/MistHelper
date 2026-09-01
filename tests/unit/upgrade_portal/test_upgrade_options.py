@@ -260,6 +260,9 @@ class TestVersionOptions:
                 "target_source": "model_fallback",
                 "firmware_mismatch": True,
                 "versions": ["24.2R1.17", "23.4R2-S4.11"],
+                # Issue #2157 shows the router controls only for a router row,
+                # so every row names its gateway family. A switch has none.
+                "gateway_family": "",
             }
         ]
 
