@@ -965,11 +965,12 @@ def save_options(run_id: str) -> tuple[Response, int]:
     record[TARGETS_FIELD] = built.get(TARGETS_FIELD, [])  # The run record holds one entry for each device.
     record["options"] = built.get("options", {})  # The three fields the cloud reads.
     record["selected_types"] = list(built.get("selected_types", ["ap", "switch", "gateway"]))
+    warnings = list(built.get(WARNINGS_FIELD, []))  # One sentence for each device the operator must look at.
+    record[WARNINGS_FIELD] = warnings  # Persist so the confirm page can show the same warning list.
     prepare_confirmation(record)  # A verified adopted pre-check completes the stages before the typed confirmation.
     if not save_run(record):  # The store reports the true result.
         return write_failed()  # The operator retries instead of reading a choice that was never kept.
     logger.info("upgrade: the run %s holds %s targets", run_id, len(record[TARGETS_FIELD]))  # AFTER the change.
-    warnings = list(built.get(WARNINGS_FIELD, []))  # One sentence for each device the operator must look at.
     return (
         jsonify(
             {
@@ -1533,6 +1534,7 @@ def confirm_page(run_id: str) -> str:
         run_id=run_id,  # The page builds every control identifier from this value.
         targets=record.get(TARGETS_FIELD, []),  # The operator reads the whole list one last time.
         options=record.get("options", {}),  # The three controls show the saved choice.
+        warnings=record.get(WARNINGS_FIELD, []),  # Issue #2003: the last page repeats the saved warning list.
         pre_capture_id=record.get(PRE_CAPTURE_FIELD),  # Names the saved pre-check, or None.
         pre_capture_verified=bool(record.get(PRE_CAPTURE_FIELD)),  # FR-035 unlocks the control on this value.
         **site_labels(record),  # Issue #2100 names the site in words and keeps the identifier.
