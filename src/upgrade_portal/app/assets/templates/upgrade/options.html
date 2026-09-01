@@ -79,6 +79,17 @@
 #}
 {% set reboot_chosen = option_values.reboot | default(true) %}
 {% set junos_action_chosen = option_values.junos_file_action | default(false) %}
+{% set force_chosen = option_values.force | default(false) %}
+{% set stable_version_chosen = option_values.stable_version | default(false) %}
+{% set p2p_chosen = option_values.get('peer_to_peer', {}).get('enable_p2p', false) %}
+
+{#
+  Issue #2156 draws the advanced controls. The route sends one flat mapping of
+  text values, because every advanced control is a text field or a select and
+  both read text. The route owns the shape, so this template never walks the
+  three nested option groups on its own.
+#}
+{% set advanced_values = advanced | default({}, true) %}
 
 {#
   The apply-to-every-device control needs one list that holds every version of
@@ -205,9 +216,42 @@
       </label>
     </div>
 
+    {#
+      Issue #2156 adds the two remaining strategy words of the cloud schema.
+      Serial writes one device at a time, which keeps a site on one link
+      reachable. The radio word walks the radio neighbourhood in batches, and
+      the cloud reads it for an access point alone.
+    #}
+    <div class="bubble-option">
+      <input type="radio"
+             id="upgrade-strategy-serial"
+             name="upgrade-strategy"
+             class="bubble-option-input"
+             data-testid="upgrade-strategy-serial"
+             value="serial"
+             {{ 'checked' if chosen_strategy == 'serial' else '' }}>
+      <label class="bubble-option-label" for="upgrade-strategy-serial">
+        One device at a time
+      </label>
+    </div>
+
+    <div class="bubble-option">
+      <input type="radio"
+             id="upgrade-strategy-rrm"
+             name="upgrade-strategy"
+             class="bubble-option-input"
+             data-testid="upgrade-strategy-rrm"
+             value="rrm"
+             {{ 'checked' if chosen_strategy == 'rrm' else '' }}>
+      <label class="bubble-option-label" for="upgrade-strategy-rrm">
+        Access points in radio batches, so coverage holds
+      </label>
+    </div>
+
     <p class="bubble-option-hint" id="upgrade-strategy-note">
       The second strategy upgrades 1 percent, then 10 percent, then 50 percent,
-      then the rest.
+      then the rest. The fourth strategy reaches an access point only. The
+      portal sends no strategy for a switch or a gateway of that run.
     </p>
   </fieldset>
 
@@ -292,6 +336,363 @@
       each device.
     </p>
   </fieldset>
+
+  {#
+    Issue #2156 exposes the remaining upgrade fields of the cloud schema. Each
+    control keeps the current behavior as its default, so an operator who
+    changes nothing sends the same body as before.
+
+    Two attributes drive the visibility. `data-requires-device-type` names every
+    device type that reads the control, and `data-requires-strategy` names every
+    strategy that reads it. portal.js sets the hidden attribute from the device
+    type checkboxes and the strategy radio group. The markup carries no style
+    attribute, because the content security policy blocks one.
+  #}
+  <div class="portal-card" data-testid="upgrade-advanced-options">
+    <h2 class="portal-card-title">Advanced upgrade controls</h2>
+
+    <p class="portal-card-note">
+      Each control below keeps the cloud default until you change it. The page
+      hides a control that the device types of this run do not read.
+    </p>
+
+    <div class="mb-3" data-requires-strategy="canary serial rrm" data-testid="upgrade-max-failure-percentage-field">
+      <label class="form-label" for="upgrade-max-failure-percentage">
+        Failures allowed across the whole run, as a percentage
+      </label>
+      <input type="number"
+             class="form-control"
+             id="upgrade-max-failure-percentage"
+             data-testid="upgrade-max-failure-percentage"
+             min="0"
+             max="100"
+             step="1"
+             value="{{ advanced_values.get('max_failure_percentage') | default('', true) }}"
+             aria-describedby="upgrade-max-failure-percentage-note">
+      <p class="portal-card-note" id="upgrade-max-failure-percentage-note">
+        Leave the field empty to keep the cloud default of 5 percent. The cloud
+        reads this field for every strategy above one write of every device.
+      </p>
+    </div>
+
+    <div class="mb-3" data-requires-strategy="canary" data-testid="upgrade-canary-phases-field">
+      <label class="form-label" for="upgrade-canary-phases">
+        Phases of the staged upgrade, as percentages
+      </label>
+      <input type="text"
+             class="form-control"
+             id="upgrade-canary-phases"
+             data-testid="upgrade-canary-phases"
+             inputmode="numeric"
+             autocomplete="off"
+             placeholder="1,10,50,100"
+             value="{{ advanced_values.get('canary_phases') | default('', true) }}"
+             aria-describedby="upgrade-canary-phases-note">
+      <p class="portal-card-note" id="upgrade-canary-phases-note">
+        Write one whole number for each phase, separated by commas. Leave the
+        field empty to keep the cloud default of 1, 10, 50, and 100.
+      </p>
+    </div>
+
+    <div class="mb-3" data-requires-strategy="canary" data-testid="upgrade-max-failures-field">
+      <label class="form-label" for="upgrade-max-failures">
+        Failures allowed inside each phase, as a count
+      </label>
+      <input type="text"
+             class="form-control"
+             id="upgrade-max-failures"
+             data-testid="upgrade-max-failures"
+             inputmode="numeric"
+             autocomplete="off"
+             placeholder="1,2,5,10"
+             value="{{ advanced_values.get('max_failures') | default('', true) }}"
+             aria-describedby="upgrade-max-failures-note">
+      <p class="portal-card-note" id="upgrade-max-failures-note">
+        Write one count for each phase above. The portal refuses a list that
+        does not match the phase list. Leave the field empty to use the
+        percentage instead.
+      </p>
+    </div>
+
+    <div class="mb-3" data-requires-device-type="switch gateway" data-testid="upgrade-reboot-at-field">
+      <label class="form-label" for="upgrade-reboot-at">
+        Reboot each switch and each gateway at this moment, in epoch seconds
+      </label>
+      <input type="number"
+             class="form-control"
+             id="upgrade-reboot-at"
+             data-testid="upgrade-reboot-at"
+             min="0"
+             step="1"
+             value="{{ advanced_values.get('reboot_at') | default('', true) }}"
+             aria-describedby="upgrade-reboot-at-note">
+      <p class="portal-card-note" id="upgrade-reboot-at-note">
+        Leave the field empty to reboot as soon as the write ends. The cloud
+        reads this moment only when the reboot control above says yes. The
+        portal refuses a moment already past and a moment more than one year
+        ahead.
+      </p>
+    </div>
+
+    <fieldset class="bubble-group mb-3"
+              data-testid="upgrade-force-group"
+              aria-describedby="upgrade-force-note">
+      <legend class="bubble-group-legend">Write the firmware onto a device that already runs the version</legend>
+
+      <div class="bubble-option">
+        <input type="radio"
+               id="upgrade-force-no"
+               name="upgrade-force"
+               class="bubble-option-input"
+               data-testid="upgrade-force-no"
+               value="no"
+               {{ 'checked' if not force_chosen else '' }}>
+        <label class="bubble-option-label" for="upgrade-force-no">
+          No, skip a device that already runs the version
+        </label>
+      </div>
+
+      <div class="bubble-option">
+        <input type="radio"
+               id="upgrade-force-yes"
+               name="upgrade-force"
+               class="bubble-option-input"
+               data-testid="upgrade-force-yes"
+               value="yes"
+               {{ 'checked' if force_chosen else '' }}>
+        <label class="bubble-option-label" for="upgrade-force-yes">
+          Yes, write the firmware again and reboot the device
+        </label>
+      </div>
+
+      <p class="bubble-option-hint" id="upgrade-force-note">
+        Warning: the second choice reboots a device that needed no upgrade. The
+        service of that device stops for the length of one reboot.
+      </p>
+    </fieldset>
+
+    <fieldset class="bubble-group mb-3"
+              data-testid="upgrade-stable-version-group"
+              aria-describedby="upgrade-stable-version-note">
+      <legend class="bubble-group-legend">Choose the firmware version</legend>
+
+      <div class="bubble-option">
+        <input type="radio"
+               id="upgrade-stable-version-no"
+               name="upgrade-stable-version"
+               class="bubble-option-input"
+               data-testid="upgrade-stable-version-no"
+               value="no"
+               {{ 'checked' if not stable_version_chosen else '' }}>
+        <label class="bubble-option-label" for="upgrade-stable-version-no">
+          Use the version that I picked for each device below
+        </label>
+      </div>
+
+      <div class="bubble-option">
+        <input type="radio"
+               id="upgrade-stable-version-yes"
+               name="upgrade-stable-version"
+               class="bubble-option-input"
+               data-testid="upgrade-stable-version-yes"
+               value="yes"
+               {{ 'checked' if stable_version_chosen else '' }}>
+        <label class="bubble-option-label" for="upgrade-stable-version-yes">
+          Use the vendor stable build for every device
+        </label>
+      </div>
+
+      <p class="bubble-option-hint" id="upgrade-stable-version-note">
+        Warning: the second choice ignores every version of the table below. The
+        cloud picks the build, and this page cannot name it before the run.
+      </p>
+    </fieldset>
+
+    <fieldset class="bubble-group mb-3"
+              data-requires-device-type="ap"
+              data-testid="upgrade-p2p-group"
+              aria-describedby="upgrade-p2p-note">
+      <legend class="bubble-group-legend">Let an access point take the firmware from a neighbour</legend>
+
+      <div class="bubble-option">
+        <input type="radio"
+               id="upgrade-enable-p2p-no"
+               name="upgrade-enable-p2p"
+               class="bubble-option-input"
+               data-testid="upgrade-enable-p2p-no"
+               value="no"
+               {{ 'checked' if not p2p_chosen else '' }}>
+        <label class="bubble-option-label" for="upgrade-enable-p2p-no">
+          No, every access point downloads from the cloud
+        </label>
+      </div>
+
+      <div class="bubble-option">
+        <input type="radio"
+               id="upgrade-enable-p2p-yes"
+               name="upgrade-enable-p2p"
+               class="bubble-option-input"
+               data-testid="upgrade-enable-p2p-yes"
+               value="yes"
+               {{ 'checked' if p2p_chosen else '' }}>
+        <label class="bubble-option-label" for="upgrade-enable-p2p-yes">
+          Yes, an access point may take the firmware from a neighbour
+        </label>
+      </div>
+
+      <p class="bubble-option-hint" id="upgrade-p2p-note">
+        The second choice saves the link of a site with a slow connection. The
+        cloud reads this control for an access point only.
+      </p>
+    </fieldset>
+
+    <div class="mb-3" data-requires-device-type="ap" data-testid="upgrade-p2p-cluster-size-field">
+      <label class="form-label" for="upgrade-p2p-cluster-size">
+        Access points of one download group
+      </label>
+      <input type="number"
+             class="form-control"
+             id="upgrade-p2p-cluster-size"
+             data-testid="upgrade-p2p-cluster-size"
+             min="0"
+             step="1"
+             value="{{ advanced_values.get('p2p_cluster_size') | default('', true) }}"
+             aria-describedby="upgrade-p2p-cluster-size-note">
+      <p class="portal-card-note" id="upgrade-p2p-cluster-size-note">
+        Leave the field empty to keep the cloud default of 10. The cloud reads
+        this field only when the control above says yes.
+      </p>
+    </div>
+
+    <div class="mb-3" data-requires-device-type="ap" data-testid="upgrade-p2p-parallelism-field">
+      <label class="form-label" for="upgrade-p2p-parallelism">
+        Download groups that run together
+      </label>
+      <input type="number"
+             class="form-control"
+             id="upgrade-p2p-parallelism"
+             data-testid="upgrade-p2p-parallelism"
+             min="0"
+             step="1"
+             value="{{ advanced_values.get('p2p_parallelism') | default('', true) }}"
+             aria-describedby="upgrade-p2p-parallelism-note">
+      <p class="portal-card-note" id="upgrade-p2p-parallelism-note">
+        Leave the field empty to keep the cloud default. The cloud reads this
+        field only when the control above says yes.
+      </p>
+    </div>
+
+    <div class="mb-3"
+         data-requires-device-type="ap"
+         data-requires-strategy="rrm"
+         data-testid="upgrade-rrm-first-batch-percentage-field">
+      <label class="form-label" for="upgrade-rrm-first-batch-percentage">
+        Access points of the first radio batch, as a percentage
+      </label>
+      <input type="number"
+             class="form-control"
+             id="upgrade-rrm-first-batch-percentage"
+             data-testid="upgrade-rrm-first-batch-percentage"
+             min="0"
+             max="100"
+             step="1"
+             value="{{ advanced_values.get('rrm_first_batch_percentage') | default('', true) }}"
+             aria-describedby="upgrade-rrm-first-batch-percentage-note">
+      <p class="portal-card-note" id="upgrade-rrm-first-batch-percentage-note">
+        Leave the field empty to keep the cloud default.
+      </p>
+    </div>
+
+    <div class="mb-3"
+         data-requires-device-type="ap"
+         data-requires-strategy="rrm"
+         data-testid="upgrade-rrm-max-batch-percentage-field">
+      <label class="form-label" for="upgrade-rrm-max-batch-percentage">
+        Largest radio batch after the first, as a percentage
+      </label>
+      <input type="number"
+             class="form-control"
+             id="upgrade-rrm-max-batch-percentage"
+             data-testid="upgrade-rrm-max-batch-percentage"
+             min="0"
+             max="100"
+             step="1"
+             value="{{ advanced_values.get('rrm_max_batch_percentage') | default('', true) }}"
+             aria-describedby="upgrade-rrm-max-batch-percentage-note">
+      <p class="portal-card-note" id="upgrade-rrm-max-batch-percentage-note">
+        Leave the field empty to keep the cloud default.
+      </p>
+    </div>
+
+    <div class="mb-3"
+         data-requires-device-type="ap"
+         data-requires-strategy="rrm"
+         data-testid="upgrade-rrm-node-order-field">
+      <label class="form-label" for="upgrade-rrm-node-order">
+        Order of the radio batches across the site
+      </label>
+      <select class="form-select"
+              id="upgrade-rrm-node-order"
+              data-testid="upgrade-rrm-node-order"
+              aria-describedby="upgrade-rrm-node-order-note">
+        <option value="">Keep the cloud default</option>
+        {% for word, label in [('center_to_fringe', 'Start at the center of the site'),
+                               ('fringe_to_center', 'Start at the edge of the site')] %}
+          <option value="{{ word }}"
+                  {{ 'selected' if advanced_values.get('rrm_node_order') == word else '' }}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <p class="portal-card-note" id="upgrade-rrm-node-order-note">
+        The cloud walks the radio neighbourhood in this order.
+      </p>
+    </div>
+
+    <div class="mb-3"
+         data-requires-device-type="ap"
+         data-requires-strategy="rrm"
+         data-testid="upgrade-rrm-mesh-upgrade-field">
+      <label class="form-label" for="upgrade-rrm-mesh-upgrade">
+        Order of the mesh access points at the end of the run
+      </label>
+      <select class="form-select"
+              id="upgrade-rrm-mesh-upgrade"
+              data-testid="upgrade-rrm-mesh-upgrade"
+              aria-describedby="upgrade-rrm-mesh-upgrade-note">
+        <option value="">Keep the cloud default</option>
+        {% for word, label in [('parallel', 'All mesh access points together'),
+                               ('sequential', 'One mesh access point at a time')] %}
+          <option value="{{ word }}"
+                  {{ 'selected' if advanced_values.get('rrm_mesh_upgrade') == word else '' }}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <p class="portal-card-note" id="upgrade-rrm-mesh-upgrade-note">
+        A mesh access point carries the traffic of another access point, so the
+        cloud upgrades it last.
+      </p>
+    </div>
+
+    <div class="mb-3"
+         data-requires-device-type="ap"
+         data-requires-strategy="rrm"
+         data-testid="upgrade-rrm-slow-ramp-field">
+      <label class="form-label" for="upgrade-rrm-slow-ramp">
+        Growth of each radio batch
+      </label>
+      <select class="form-select"
+              id="upgrade-rrm-slow-ramp"
+              data-testid="upgrade-rrm-slow-ramp"
+              aria-describedby="upgrade-rrm-slow-ramp-note">
+        <option value="">Keep the cloud default</option>
+        {% for word, label in [('yes', 'Grow each batch slowly'), ('no', 'Grow each batch at the usual rate')] %}
+          <option value="{{ word }}"
+                  {{ 'selected' if advanced_values.get('rrm_slow_ramp') == word else '' }}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <p class="portal-card-note" id="upgrade-rrm-slow-ramp-note">
+        A slow growth keeps more coverage while the firmware moves.
+      </p>
+    </div>
+  </div>
 
   {#
     The button sends JSON and reads the answer, so it is a button and not a

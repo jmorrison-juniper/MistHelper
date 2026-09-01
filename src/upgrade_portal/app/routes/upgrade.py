@@ -115,6 +115,8 @@ VERSIONS_MODULE = "upgrade.options"  # The module that reads the version list of
 VERSIONS_ATTRIBUTES = ("read_model_versions",)  # The reader name that the module above publishes.
 VIEW_ATTRIBUTES = ("build_options_view",)  # The builder of the device rows of the options page.
 RECORD_ATTRIBUTES = ("build_options_record",)  # The builder of the stored target list.
+ADVANCED_ATTRIBUTES = ("advanced_option_values",)  # The reader of the advanced control text of one run.
+OPTION_RECORD_ATTRIBUTES = ("build_option_record",)  # The mapper of one request body onto a stored record.
 SELECTED_TYPES_ATTRIBUTES = ("selected_device_types",)  # The validator of selected upgrade types.
 VIEW_VERSIONS_FIELD = "versions_by_model"  # The render keyword that `options.html` reads.
 BY_MODEL_FIELD = "by_model"  # `contracts/http-api.md` section 5 fixes this answer field.
@@ -920,22 +922,35 @@ def built_options(record: dict[str, Any], body: dict[str, Any]) -> dict[str, Any
 
 
 def plain_options(body: dict[str, Any]) -> dict[str, Any]:
-    """Read the three upgrade option fields out of one request body.
+    """Read the upgrade option record out of one request body.
 
     Why:
-        `contracts/http-api.md` section 5 fixes the options body. That body holds
-        four fields, and `targets` is the fourth one. `built_options` reads
-        `targets` on its own, so this function reads the three option fields
-        only. The record holds them unchanged, so the confirmation page shows
-        what the operator picked.
+        `contracts/http-api.md` section 5 fixes the options body. `built_options`
+        reads `targets` on its own, so this function reads every option field
+        beside it.
+
+        `upgrade/options.py` owns every mapping rule and every refusal, so this
+        function reaches that module first. Issue #2156 needs it: the advanced
+        controls live in that module alone, and a body that skipped it would
+        store three fields and drop every advanced choice with no word to the
+        operator. The three basic fields stand only while that module does not
+        import, which is the same rule that every other seam of this route
+        follows.
 
     Args:
         body: The request body of the options call.
 
     Returns:
-        The three option fields, with the documented default of each one.
+        The option record that the store keeps.
+
+    Raises:
+        ValueError: When one option holds a value that the portal refuses.
     """
-    return {
+    mapper = module_attribute(OPTION_RECORD_ATTRIBUTES)  # The module owns every rule and every refusal.
+    if callable(mapper):
+        record: Any = mapper(body)  # A refused value raises, and `save_options` maps it to `bad_option`.
+        return dict(record)
+    return {  # No module, so the three fields that the contract names by hand.
         "reboot": bool(body.get("reboot", True)),  # The cloud reboots an access point on its own.
         "junos_file_action": bool(body.get("junos_file_action", False)),  # A copy only, until the operator asks.
         "strategy": str(body.get("strategy") or "big_bang"),  # The contract names this value as the default.
@@ -1111,6 +1126,30 @@ def module_attribute(names: tuple[str, ...]) -> Any:
         The attribute, or None when the module or the name is absent.
     """
     return find_attribute(load_optional_module(VERSIONS_MODULE), names)  # A missing module answers None.
+
+
+def advanced_values(record: dict[str, Any]) -> dict[str, str]:
+    """Return the text that each advanced upgrade control shows.
+
+    Why:
+        Issue #2156 draws nine advanced controls, and a saved run must reopen
+        with every choice still shown. `upgrade/options.py` owns the storage
+        shape of those choices, so it owns the flattening. This seam keeps the
+        route working through a build stage in which that module does not
+        import, the same rule that every other seam of this route follows.
+
+    Args:
+        record: The stored run record.
+
+    Returns:
+        The text of each advanced control, or an empty mapping when the module
+        is absent. Every control then shows the cloud default.
+    """
+    reader = module_attribute(ADVANCED_ATTRIBUTES)  # The module owns every rule of the shape.
+    if not callable(reader):  # A missing module must draw an empty control, never a fault page.
+        return {}
+    values: Any = reader(record.get("options", {}))  # One flat mapping of text values.
+    return dict(values)
 
 
 def options_view(record: dict[str, Any]) -> dict[str, Any]:
@@ -1506,6 +1545,7 @@ def options_page(run_id: str) -> str:
         versions_by_model=view[VIEW_VERSIONS_FIELD],  # One version list for each model of those rows.
         type_selections=view.get("type_selections", {}),  # The safe common targets of each device type.
         options=record.get("options", {}),  # The three controls show the saved choice.
+        advanced=advanced_values(record),  # Issue #2156 reopens every advanced control with its saved value.
         warnings=[],  # The save call answers the warnings, so the first read of the page shows none.
         **context,  # The site labels and the lock banner values.
     )
@@ -1534,6 +1574,7 @@ def confirm_page(run_id: str) -> str:
         run_id=run_id,  # The page builds every control identifier from this value.
         targets=record.get(TARGETS_FIELD, []),  # The operator reads the whole list one last time.
         options=record.get("options", {}),  # The three controls show the saved choice.
+        advanced=advanced_values(record),  # Issue #2156 names every advanced control before the firmware moves.
         warnings=record.get(WARNINGS_FIELD, []),  # Issue #2003: the last page repeats the saved warning list.
         pre_capture_id=record.get(PRE_CAPTURE_FIELD),  # Names the saved pre-check, or None.
         pre_capture_verified=bool(record.get(PRE_CAPTURE_FIELD)),  # FR-035 unlocks the control on this value.

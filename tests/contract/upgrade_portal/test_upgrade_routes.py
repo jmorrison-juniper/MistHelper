@@ -683,6 +683,60 @@ def test_confirm_page_shows_the_warning_list_the_options_call_saved(
     assert "The plan found no warning." not in page  # The empty-list fallback text must not show beside it.
 
 
+def test_confirm_page_names_every_advanced_control_that_the_run_submits(
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """`GET /runs/<id>/confirm` names each advanced control that the operator set.
+
+    Why:
+        Issue #2156 asks the confirmation page to show the exact submitted
+        fields. This is the last page before firmware moves, so an operator who
+        cannot read the phase list or the force flag confirms a plan they never
+        reviewed.
+
+    Args:
+        upgrade_client: The signed-in client.
+        run_store: The stand-in run record store.
+    """
+    stored = {
+        "reboot": True,
+        "strategy": "canary",
+        "force": True,
+        "stable_version": True,
+        "canary": {"canary_phases": [25, 50, 100], "max_failures": None, "max_failure_percentage": 12},
+        "peer_to_peer": {"enable_p2p": True, "p2p_cluster_size": 12, "p2p_parallelism": None},
+    }
+    run_id = seed_run(run_store, "pre_capture_done", options=stored)
+    page = upgrade_client.get(f"/runs/{run_id}/confirm").get_data(as_text=True)
+    assert "25,50,100" in page  # The phase list reaches the page as the operator wrote it.
+    assert "12" in page  # The failure percentage and the download group both reach the page.
+    assert 'data-testid="upgrade-summary-force"' in page  # The force row always shows its own answer.
+    assert "vendor stable build" in page  # The stable choice overrides every picked version.
+
+
+def test_confirm_page_names_no_advanced_control_that_keeps_the_cloud_default(
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """The advanced summary hides a control that the operator never set.
+
+    Why:
+        A page of eleven "cloud default" rows hides the one row that the
+        operator changed. The summary therefore lists the changed controls
+        alone, and one note states the rule for the rest.
+
+    Args:
+        upgrade_client: The signed-in client.
+        run_store: The stand-in run record store.
+    """
+    run_id = seed_run(run_store, "pre_capture_done", options={"reboot": True, "strategy": "big_bang"})
+    page = upgrade_client.get(f"/runs/{run_id}/confirm").get_data(as_text=True)
+    assert 'data-testid="upgrade-advanced-summary"' in page  # The card renders for every run.
+    assert 'data-testid="upgrade-summary-canary-phases"' not in page  # An untouched control draws no row.
+    assert "keeps the cloud default" in page  # One note states the rule for every hidden control.
+
+
 # ---------------------------------------------------------------------------
 # T154: the guarded stop
 # ---------------------------------------------------------------------------

@@ -48,6 +48,10 @@
     options              - the chosen options. Holds reboot, junos_file_action,
                            and strategy.
     warnings             - the plain sentences that plan_upgrade returned.
+    advanced             - the text of each advanced upgrade control, keyed by
+                           its cloud field name. Issue #2156 names every control
+                           that this run submits, because this is the last page
+                           before the firmware moves.
     pre_capture_id       - the identifier of the pre-check capture.
     pre_capture_verified - true only after the store read the capture back.
                            The default is false, so a route that does not send
@@ -111,6 +115,29 @@
 #}
 {% set start_ready = pre_check_ready and device_count > 0 %}
 {% set chosen_strategy = option_values.strategy | default('big_bang', true) %}
+{% set force_chosen = option_values.force | default(false) %}
+{% set stable_version_chosen = option_values.stable_version | default(false) %}
+{% set p2p_chosen = option_values.get('peer_to_peer', {}).get('enable_p2p', false) %}
+
+{#
+  Issue #2156 names each advanced control that the operator set. The route sends
+  one flat mapping of text values under `advanced`, and this list pairs each
+  cloud field name with the words that an operator reads.
+#}
+{% set advanced_values = advanced | default({}, true) %}
+{% set advanced_summary_rows = [
+  ('canary_phases', 'Phases of the staged upgrade, as percentages'),
+  ('max_failures', 'Failures allowed inside each phase'),
+  ('max_failure_percentage', 'Failures allowed across the whole run, as a percentage'),
+  ('reboot_at', 'Reboot moment of each switch and each gateway, in epoch seconds'),
+  ('p2p_cluster_size', 'Access points of one download group'),
+  ('p2p_parallelism', 'Download groups that run together'),
+  ('rrm_first_batch_percentage', 'Access points of the first radio batch, as a percentage'),
+  ('rrm_max_batch_percentage', 'Largest radio batch after the first, as a percentage'),
+  ('rrm_node_order', 'Order of the radio batches across the site'),
+  ('rrm_mesh_upgrade', 'Order of the mesh access points at the end of the run'),
+  ('rrm_slow_ramp', 'Grow each radio batch slowly')
+] %}
 
 {% block title %}{{ page_title | default('Confirm the upgrade', true) }}{% endblock %}
 
@@ -140,6 +167,10 @@
     <dd class="col-sm-8">
       {% if chosen_strategy == 'canary' %}
         A few devices first, then the rest
+      {% elif chosen_strategy == 'serial' %}
+        One device at a time
+      {% elif chosen_strategy == 'rrm' %}
+        Access points in radio batches, and no strategy for a switch or a gateway
       {% else %}
         All devices at the same time
       {% endif %}
@@ -157,6 +188,56 @@
     <dt class="col-sm-4">Pre-check capture</dt>
     <dd class="col-sm-8 cell-mono">{{ capture_key | default('None saved', true) }}</dd>
   </dl>
+</div>
+
+{#
+  Issue #2156 names every advanced control that this run submits. The confirm
+  page is the last page before the firmware moves, so the operator must read the
+  exact fields that reach the cloud. A row appears only when the operator set the
+  control, because a page of eleven "cloud default" rows hides the one row that
+  the operator changed.
+#}
+<div class="portal-card" data-testid="upgrade-advanced-summary">
+  <h2 class="portal-card-title">Advanced upgrade controls</h2>
+
+  <dl class="row mb-0">
+    <dt class="col-sm-4">Firmware version</dt>
+    <dd class="col-sm-8" data-testid="upgrade-summary-stable-version">
+      {% if stable_version_chosen %}
+        The vendor stable build, so the cloud ignores every version of the plan
+      {% else %}
+        The version that the operator picked for each device
+      {% endif %}
+    </dd>
+
+    <dt class="col-sm-4">Write onto a device that already runs the version</dt>
+    <dd class="col-sm-8" data-testid="upgrade-summary-force">
+      {{ 'Yes, and the device reboots' if force_chosen else 'No' }}
+    </dd>
+
+    <dt class="col-sm-4">Access point takes the firmware from a neighbour</dt>
+    <dd class="col-sm-8" data-testid="upgrade-summary-enable-p2p">
+      {{ 'Yes' if p2p_chosen else 'No, every access point downloads from the cloud' }}
+    </dd>
+
+    {#
+      Every remaining row reads one text value that the route flattened. An
+      empty text means that the operator kept the cloud default, so the row
+      stays away and the list holds the changed controls alone.
+    #}
+    {% for field, label in advanced_summary_rows %}
+      {% if advanced_values.get(field) %}
+        <dt class="col-sm-4">{{ label }}</dt>
+        <dd class="col-sm-8" data-testid="upgrade-summary-{{ field | replace('_', '-') }}">
+          {{ advanced_values.get(field) }}
+        </dd>
+      {% endif %}
+    {% endfor %}
+  </dl>
+
+  <p class="portal-card-note" data-testid="upgrade-advanced-summary-note">
+    Every control that this list does not name keeps the cloud default.
+  </p>
 </div>
 
 <div class="portal-card">

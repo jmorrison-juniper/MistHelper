@@ -106,6 +106,40 @@ RETIRED_CONTROL_IDS = (
     "upgrade-junos-file-action-toggle",  # The retired Junos toggle, which hid the second choice.
 )
 
+# WHY: Issue #2156 names nine control families in its own table. The page draws
+# one control for each cloud field of those families, under these identifiers.
+# A missing control sends the operator back to the cloud interface for a field
+# that this portal claims to own.
+ADVANCED_CONTROL_IDS = (
+    "upgrade-advanced-options",  # The card that holds every control below.
+    "upgrade-canary-phases",  # `canary_phases`
+    "upgrade-max-failures",  # `max_failures`
+    "upgrade-max-failure-percentage",  # `max_failure_percentage`
+    "upgrade-reboot-at",  # `reboot_at`
+    "upgrade-force-yes",  # `force`
+    "upgrade-stable-version-yes",  # `version=stable`
+    "upgrade-enable-p2p-yes",  # `enable_p2p`
+    "upgrade-p2p-cluster-size",  # `p2p_cluster_size`
+    "upgrade-p2p-parallelism",  # `p2p_parallelism`
+    "upgrade-rrm-first-batch-percentage",  # `rrm_first_batch_percentage`
+    "upgrade-rrm-max-batch-percentage",  # `rrm_max_batch_percentage`
+    "upgrade-rrm-node-order",  # `rrm_node_order`
+    "upgrade-rrm-mesh-upgrade",  # `rrm_mesh_upgrade`
+    "upgrade-rrm-slow-ramp",  # `rrm_slow_ramp`
+)
+
+# WHY: Each body below holds one value that the documented schema refuses. The
+# cloud refusal names no field, so the portal must refuse first and name the
+# control that holds the fault.
+REFUSED_ADVANCED_BODIES = (
+    {"strategy": "canary", "max_failure_percentage": "101"},  # The schema fixes the range 0 to 100.
+    {"strategy": "big_bang", "canary_phases": "25,50"},  # A phase list outside the staged strategy.
+    {"strategy": "canary", "canary_phases": "25,50,100", "max_failures": "1,2"},  # One limit for each phase.
+    {"strategy": "rrm", "rrm_node_order": "sideways"},  # A word outside the documented enumeration.
+    {"strategy": "rrm", "rrm_mesh_upgrade": "at_once"},  # The same rule for the mesh word.
+    {"reboot_at": "not-a-moment"},  # A reboot window that names no epoch second.
+)
+
 PROBE_MODEL = "EX4400-48P"  # The model of the one device of the stand-in site.
 PROBE_VERSIONS = ["23.4R2-S4.11", "24.2R1.17"]  # The versions that the cloud names for that model.
 PROBE_VERSION_TARGET = "24.2R1.17"  # The version that the operator picks in both tests below.
@@ -746,7 +780,12 @@ def test_the_options_call_writes_the_documented_defaults(
     """
     run_id = seed_run(run_store, "pre_capture_done")  # The stage at which an operator picks a version.
     assert save_options(upgrade_client, run_id, {"targets": []}).status_code == OK_STATUS
-    assert run_store.runs[run_id]["options"] == DEFAULT_OPTIONS  # Every documented default reached the record.
+    saved = run_store.runs[run_id]["options"]  # The record the confirmation page reads back.
+    # WHY: The record holds the advanced groups of issue #2156 beside these
+    # three fields. The contract fixes the default of each field below, so the
+    # test reads them one by one and a later field never breaks it.
+    for field, value in DEFAULT_OPTIONS.items():
+        assert saved[field] == value  # Every documented default reached the record.
 
 
 def test_the_options_call_keeps_a_cleared_reboot_and_a_chosen_strategy(
@@ -1098,3 +1137,160 @@ def test_a_thin_saved_row_widens_into_the_record_the_run_driver_reads(
     assert saved["device_type"] == "switch"  # The inventory named the type, and the browser never does.
     assert saved["version_target"] == PROBE_VERSION_TARGET  # The choice of the operator stands.
     assert saved["state"] == options_module.STATE_PENDING  # The driver reads this field on every device.
+
+
+# ---------------------------------------------------------------------------
+# Issue #2156: the advanced upgrade controls
+# ---------------------------------------------------------------------------
+
+
+def test_the_options_page_draws_every_advanced_control(
+    upgrade_app: Flask,
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """The options page draws one control for each advanced upgrade field.
+
+    Why:
+        Issue #2156 states that the portal exposed a subset of the cloud upgrade
+        fields. An operator who needed a phase list, a failure limit, or a radio
+        setting had to leave the portal and call the cloud by hand.
+
+    Args:
+        upgrade_app: The application with the seams injected.
+        upgrade_client: The signed-in client.
+        run_store: The stand-in run record store.
+    """
+    upgrade_app.config[OPTIONS_VIEW_KEY] = StandInOptionsView()  # The seam stands for the site inventory read.
+    run_id = seed_run(run_store, "pre_capture_done")
+    page = upgrade_client.get(OPTIONS_PAGE_TEMPLATE.format(run_id=run_id)).get_data(as_text=True)
+    for test_id in ADVANCED_CONTROL_IDS:
+        assert f'data-testid="{test_id}"' in page  # Every control of the issue table renders.
+
+
+def test_the_options_page_marks_each_advanced_control_with_its_own_rule(
+    upgrade_app: Flask,
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """Each advanced control names the device types and strategies that read it.
+
+    Why:
+        Issue #2156 asks the page to hide a control when its selected device
+        type does not support it. The rule lives in the markup, because the
+        content security policy blocks an inline script and portal.js therefore
+        reads the rule from the attribute.
+
+    Args:
+        upgrade_app: The application with the seams injected.
+        upgrade_client: The signed-in client.
+        run_store: The stand-in run record store.
+    """
+    upgrade_app.config[OPTIONS_VIEW_KEY] = StandInOptionsView()
+    run_id = seed_run(run_store, "pre_capture_done")
+    page = upgrade_client.get(OPTIONS_PAGE_TEMPLATE.format(run_id=run_id)).get_data(as_text=True)
+    assert 'data-requires-device-type="ap"' in page  # The radio and peer-to-peer controls.
+    assert 'data-requires-device-type="switch gateway"' in page  # The separate reboot window.
+    assert 'data-requires-strategy="canary"' in page  # The phase list and the per-phase failure count.
+    assert 'data-requires-strategy="rrm"' in page  # Every radio resource management field.
+
+
+def test_the_options_page_offers_the_two_new_strategy_words(
+    upgrade_app: Flask,
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """The strategy group offers the serial word and the radio word.
+
+    Args:
+        upgrade_app: The application with the seams injected.
+        upgrade_client: The signed-in client.
+        run_store: The stand-in run record store.
+    """
+    upgrade_app.config[OPTIONS_VIEW_KEY] = StandInOptionsView()
+    run_id = seed_run(run_store, "pre_capture_done")
+    page = upgrade_client.get(OPTIONS_PAGE_TEMPLATE.format(run_id=run_id)).get_data(as_text=True)
+    assert 'data-testid="upgrade-strategy-serial"' in page  # One device at a time.
+    assert 'data-testid="upgrade-strategy-rrm"' in page  # Access points in radio batches.
+
+
+def test_an_advanced_choice_reaches_the_stored_option_record(
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """A save call stores every advanced choice in its own nested group.
+
+    Why:
+        The run driver rebuilds the option record from the store, so a choice
+        that never reached the store never reaches the cloud. The operator would
+        read one plan on the page and the cloud would run another.
+
+    Args:
+        upgrade_client: The signed-in client.
+        run_store: The stand-in run record store.
+    """
+    run_id = seed_run(run_store, "pre_capture_done")
+    body = {
+        "targets": [],
+        "strategy": "canary",
+        "canary_phases": "25,50,100",
+        "max_failure_percentage": "12",
+        "force": True,
+        "enable_p2p": True,
+        "p2p_cluster_size": "12",
+    }
+    assert save_options(upgrade_client, run_id, body).status_code == OK_STATUS
+    saved = run_store.runs[run_id]["options"]  # The record the run driver reads back.
+    assert saved["force"] is True
+    assert saved["canary"]["canary_phases"] == (25, 50, 100)  # The staged group holds its own fields.
+    assert saved["canary"]["max_failure_percentage"] == 12
+    assert saved["peer_to_peer"]["enable_p2p"] is True  # The peer-to-peer group holds its own fields.
+    assert saved["peer_to_peer"]["p2p_cluster_size"] == 12
+
+
+def test_a_refused_advanced_value_answers_the_documented_code(
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """An advanced value outside its documented range answers 400 `bad_option`.
+
+    Why:
+        Issue #2156 asks the server to validate every value. The browser is not
+        the guard, because a hand-typed body reaches the same route.
+
+    Args:
+        upgrade_client: The signed-in client.
+        run_store: The stand-in run record store.
+    """
+    run_id = seed_run(run_store, "pre_capture_done")
+    before = dict(run_store.runs[run_id]["options"])  # The record layer already seeded the defaults.
+    for body in REFUSED_ADVANCED_BODIES:
+        answer = save_options(upgrade_client, run_id, {"targets": [], **body})
+        assert answer.status_code == BAD_REQUEST_STATUS  # The contract fixes 400 for a refused option.
+        assert read_error_code(answer) == BAD_OPTION_CODE  # One code for every refused option.
+    assert run_store.runs[run_id]["options"] == before  # No refused call ever wrote a partial record.
+
+
+def test_a_saved_run_reopens_with_every_advanced_choice_shown(
+    upgrade_app: Flask,
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """The options page shows the advanced values that an earlier save stored.
+
+    Why:
+        Issue #2156 asks for a saved-run reload. An operator who edits one
+        control and loses the other ten sends a plan that nobody reviewed.
+
+    Args:
+        upgrade_app: The application with the seams injected.
+        upgrade_client: The signed-in client.
+        run_store: The stand-in run record store.
+    """
+    upgrade_app.config[OPTIONS_VIEW_KEY] = StandInOptionsView()
+    run_id = seed_run(run_store, "pre_capture_done")
+    body = {"targets": [], "strategy": "canary", "canary_phases": "25,50,100", "p2p_cluster_size": "12"}
+    assert save_options(upgrade_client, run_id, body).status_code == OK_STATUS
+    page = upgrade_client.get(OPTIONS_PAGE_TEMPLATE.format(run_id=run_id)).get_data(as_text=True)
+    assert 'value="25,50,100"' in page  # The phase control reopens with the saved list.
+    assert 'value="12"' in page  # The download group control reopens with the saved count.
