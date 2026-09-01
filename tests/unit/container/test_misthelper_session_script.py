@@ -33,6 +33,11 @@ HARNESS_TIMEOUT_SECONDS = 60
 # Skip the module when bash is absent, because the script needs bash.
 pytestmark = pytest.mark.skipif(BASH_PATH is None, reason="bash is required to run the session script")
 
+# The token that every loop test carries. Issue #2181 makes the script refuse a
+# session with no token, so a loop test must supply one. No test reaches the
+# Mist cloud, so the value only has to be present.
+STAND_IN_TOKEN = "stand-in-token-for-the-session-tests"
+
 # Fail at once with a fixed code, because a startup defect fails at once.
 ALWAYS_FAILS_STUB = "#!/bin/bash\nexit 3\n"
 # Exit with success, because menu option 0 ends a session.
@@ -76,6 +81,14 @@ def _run_session_script(app_dir: Path, overrides: dict[str, str]) -> tuple[int, 
     env["MISTHELPER_APP_DIR"] = app_dir.as_posix()  # Point the script at the fake application directory.
     env["MISTHELPER_SESSION_DIR"] = (app_dir / "sessions").as_posix()  # Keep the session marker in the temporary tree.
     env["MISTHELPER_PYTHON"] = "bash"  # Run the stub with bash, because the stub is a shell script.
+    # Issue #2181. The script refuses a session that holds no API token, so a
+    # loop test needs one. The value is a stand-in, because no test reaches the
+    # Mist cloud. The name of the real token never enters this environment.
+    env["MIST_APITOKEN"] = STAND_IN_TOKEN
+    env.pop("MIST_API_TOKEN", None)  # Keep one token name in play, so each test states its own condition.
+    # Point at a path inside the temporary tree, so no test reads the real
+    # configuration file of a container that runs on the same machine.
+    env["MISTHELPER_SESSION_ENV_FILE"] = (app_dir / "session.env").as_posix()
     env.update(overrides)  # Apply the restart controls for this test.
     output_path = app_dir / "session_output.txt"  # Collect the output in a file, because a pipe blocks after a kill.
     with output_path.open("w", encoding="utf-8") as handle:
@@ -208,3 +221,100 @@ class TestSessionRestartLoop:
         assert _count_starts(output) == 1, output  # A clean exit must start MistHelper one time.
         assert "User selected exit. Closing session." in output, output  # The clean message must stay.
         assert status == 0, output  # A clean exit must report success.
+
+
+class TestSessionCredentials:
+    """Prove that the session receives the token and refuses fast without one.
+
+    Why:
+        `compose.yml` supplies the credentials through `env_file`, which fills
+        the environment of the container process and writes no file. The SSH
+        daemon starts every session with a fresh environment, so no credential
+        reached the session on its own. MistHelper then refused five times in a
+        row, and the operator read a login loop. Issue #2181 holds that report.
+    """
+
+    def test_a_session_with_no_token_refuses_before_the_first_start(self, tmp_path: Path) -> None:
+        """A missing token is permanent, so no start attempt may happen at all."""
+        app_dir = _build_fake_app(tmp_path, CLEAN_EXIT_STUB)  # The stub would succeed, so only the gate can stop it.
+        status, output = _run_or_fail(
+            app_dir,
+            {
+                "MIST_APITOKEN": "",  # Clear the stand-in token of the harness.
+                "MIST_API_TOKEN": "",  # Clear the second accepted name as well.
+                "MISTHELPER_MAX_START_ATTEMPTS": "5",  # Keep the normal limit, so a loop would show.
+                "MISTHELPER_RESTART_DELAY_SECONDS": "1",  # Keep the value small for speed.
+            },
+        )
+
+        assert _count_starts(output) == 0, output  # The gate sits before the loop, so nothing starts.
+        assert status == 1, output  # The session closes with a failure status.
+
+    def test_the_refusal_names_the_cause_and_holds_no_token(self, tmp_path: Path) -> None:
+        """The operator needs the cause, and the terminal keeps whatever it prints."""
+        app_dir = _build_fake_app(tmp_path, CLEAN_EXIT_STUB)
+        _, output = _run_or_fail(
+            app_dir,
+            {"MIST_APITOKEN": "", "MIST_API_TOKEN": "", "MISTHELPER_RESTART_DELAY_SECONDS": "1"},
+        )
+
+        assert "holds no Mist API token" in output, output  # The message names the missing item.
+        assert "MIST_APITOKEN" in output, output  # The message names the variable that fixes it.
+        assert "failed 5 times" not in output, output  # No retry loop repeats a permanent fault.
+
+    def test_the_session_reads_the_token_from_the_configuration_file(self, tmp_path: Path) -> None:
+        """The entrypoint writes that file, because the daemon passes no environment."""
+        app_dir = _build_fake_app(tmp_path, CLEAN_EXIT_STUB)
+        env_file = app_dir / "session.env"
+        env_file.write_text("MIST_APITOKEN=from-the-file\n", encoding="ascii", newline="\n")
+
+        status, output = _run_or_fail(
+            app_dir,
+            {
+                "MIST_APITOKEN": "",  # The environment carries nothing, as in a real session.
+                "MIST_API_TOKEN": "",
+                "MISTHELPER_SESSION_ENV_FILE": env_file.as_posix(),
+                "MISTHELPER_RESTART_DELAY_SECONDS": "1",
+            },
+        )
+
+        assert _count_starts(output) == 1, output  # The file satisfied the gate, so the session started.
+        assert status == 0, output  # The stub exits clean, so the session ends clean.
+
+    def test_a_token_with_a_space_and_a_quotation_mark_survives_the_file(self, tmp_path: Path) -> None:
+        """`start.sh` quotes each value, so an unusual token must read back whole."""
+        app_dir = _build_fake_app(
+            tmp_path,
+            '#!/bin/bash\necho "SEEN=[$MIST_APITOKEN]"\nexit 0\n',  # Print the value that reached the session.
+        )
+        env_file = app_dir / "session.env"
+        # This is the exact form that `printf '%s=%q\\n'` writes for a value that
+        # holds a space and a quotation mark.
+        env_file.write_text('MIST_APITOKEN=tok\\ en\\"x\n', encoding="ascii", newline="\n")
+
+        _, output = _run_or_fail(
+            app_dir,
+            {
+                "MIST_APITOKEN": "",
+                "MIST_API_TOKEN": "",
+                "MISTHELPER_SESSION_ENV_FILE": env_file.as_posix(),
+                "MISTHELPER_RESTART_DELAY_SECONDS": "1",
+            },
+        )
+
+        assert 'SEEN=[tok en"x]' in output, output  # A lost character would send a broken token to the cloud.
+
+    def test_the_second_token_name_also_satisfies_the_gate(self, tmp_path: Path) -> None:
+        """The preflight accepts either name, so the gate must accept both."""
+        app_dir = _build_fake_app(tmp_path, CLEAN_EXIT_STUB)
+        status, output = _run_or_fail(
+            app_dir,
+            {
+                "MIST_APITOKEN": "",  # Leave the first name empty.
+                "MIST_API_TOKEN": "the-second-name",  # Supply the second name alone.
+                "MISTHELPER_RESTART_DELAY_SECONDS": "1",
+            },
+        )
+
+        assert _count_starts(output) == 1, output  # The second name must open the gate.
+        assert status == 0, output  # The session then runs as usual.

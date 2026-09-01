@@ -50,6 +50,13 @@ LOG_FILE="${MISTHELPER_LOG_FILE:-${APP_DIR}/data/ssh.log}"
 RUNTIME_LOG_FILE="${MISTHELPER_RUNTIME_LOG_FILE:-${APP_DIR}/data/script.log}"
 PYTHON_COMMAND="${MISTHELPER_PYTHON:-python}"
 
+# The configuration that the entrypoint carried into this session.
+# The SSH daemon starts a fresh environment, so no credential of the container
+# reaches this script on its own. `start.sh` writes this file as root, and this
+# script is its one reader. Issue #2181 holds the report of the login loop that
+# the missing file caused.
+SESSION_ENV_FILE="${MISTHELPER_SESSION_ENV_FILE:-/etc/misthelper/session.env}"
+
 # Get unique session ID based on SSH connection
 SESSION_ID="${SSH_CONNECTION// /_}"
 SESSION_ID="${SESSION_ID//[:.]/_}"
@@ -88,6 +95,34 @@ echo ""
 
 # Change to application directory
 cd "$APP_DIR"
+
+# Read the configuration that the entrypoint carried into this session.
+# The file holds one `name=value` line for each name of the allowlist of
+# `start.sh`. The `set -a` pair exports every name that the file defines, so
+# MistHelper reads them as ordinary environment variables.
+if [[ -r "$SESSION_ENV_FILE" ]]; then
+    set -a  # Export each name that the next line defines.
+    # shellcheck source=/dev/null
+    source "$SESSION_ENV_FILE"
+    set +a  # Stop the export, so no later variable of this script leaks.
+    { echo "[SESSION] Read the session configuration from $SESSION_ENV_FILE" >> "$LOG_FILE"; } 2>/dev/null || true
+fi
+
+# Refuse a session that holds no API token.
+#
+# Why: a missing token is a permanent fault of the configuration. The restart
+# loop below treats a failure as a transient fault, so it repeated this one five
+# times over about 30 seconds. The operator then read the same error five times
+# and had to scroll to find the cause. Issue #2181 holds that report.
+#
+# The check names the cause once and closes the session. It never prints a token
+# value, because the terminal and the log file both keep what it prints.
+if [[ -z "${MIST_APITOKEN:-}" && -z "${MIST_API_TOKEN:-}" ]]; then
+    log_session_line "[SESSION] This session holds no Mist API token, so MistHelper cannot start."
+    log_session_line "[SESSION] The container carries the token into $SESSION_ENV_FILE at start."
+    log_session_line "[SESSION] Set MIST_APITOKEN in the .env file of the container, then start the container again."
+    exit 1  # Close at once, because a restart repeats a fault that no wait clears.
+fi
 
 # Main session loop
 FAILED_STARTS=0  # Count the failed starts in a row, because the loop stops at the attempt limit.
