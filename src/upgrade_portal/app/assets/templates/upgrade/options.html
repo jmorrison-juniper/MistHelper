@@ -197,7 +197,7 @@
              class="bubble-option-input"
              data-testid="upgrade-strategy-big-bang"
              value="big_bang"
-             {{ 'checked' if chosen_strategy != 'canary' else '' }}>
+             {{ 'checked' if chosen_strategy == 'big_bang' else '' }}>
       <label class="bubble-option-label" for="upgrade-strategy-big-bang">
         All devices at the same time
       </label>
@@ -256,11 +256,14 @@
   </fieldset>
 
   <fieldset class="bubble-group mb-3"
+            data-requires-device-type="switch gateway"
             data-testid="upgrade-reboot-group"
             aria-describedby="upgrade-reboot-note">
     {#
       The cloud reboots an access point on its own, so this option reaches a
       switch and a gateway only. See src/firmware/upgrade_service.py:49-51.
+      Issue #2185 adds the attribute that holds the rule, because the comment
+      above stated it and the markup did not.
     #}
     <legend class="bubble-group-legend">Reboot each switch and each gateway after the write</legend>
 
@@ -297,11 +300,14 @@
   </fieldset>
 
   <fieldset class="bubble-group mb-3"
+            data-requires-device-type="switch gateway"
             data-testid="upgrade-junos-file-action-group"
             aria-describedby="upgrade-junos-file-action-note">
     {#
       The Junos file action runs after the reboot. The radio group shows both
       choices at once, so the operator reads the second choice without a menu.
+      Issue #2185 hides the group for a run of access points alone, because the
+      cloud rejects the field on an access point.
     #}
     <legend class="bubble-group-legend">Complete the Junos file action after the reboot</legend>
 
@@ -394,7 +400,10 @@
       </p>
     </div>
 
-    <div class="mb-3" data-requires-strategy="canary" data-testid="upgrade-max-failures-field">
+    <div class="mb-3"
+         data-requires-strategy="canary"
+         data-requires-filled="upgrade-canary-phases"
+         data-testid="upgrade-max-failures-field">
       <label class="form-label" for="upgrade-max-failures">
         Failures allowed inside each phase, as a count
       </label>
@@ -438,7 +447,10 @@
       </p>
     </div>
 
-    <div class="mb-3" data-requires-device-type="switch gateway" data-testid="upgrade-reboot-at-field">
+    <div class="mb-3"
+         data-requires-device-type="switch gateway"
+         data-requires-control="upgrade-reboot-group:yes"
+         data-testid="upgrade-reboot-at-field">
       <label class="form-label" for="upgrade-reboot-at">
         Reboot each switch and each gateway at this moment, in epoch seconds
       </label>
@@ -571,7 +583,10 @@
       </p>
     </fieldset>
 
-    <div class="mb-3" data-requires-device-type="ap" data-testid="upgrade-p2p-cluster-size-field">
+    <div class="mb-3"
+         data-requires-device-type="ap"
+         data-requires-control="upgrade-p2p-group:yes"
+         data-testid="upgrade-p2p-cluster-size-field">
       <label class="form-label" for="upgrade-p2p-cluster-size">
         Access points of one download group
       </label>
@@ -589,7 +604,10 @@
       </p>
     </div>
 
-    <div class="mb-3" data-requires-device-type="ap" data-testid="upgrade-p2p-parallelism-field">
+    <div class="mb-3"
+         data-requires-device-type="ap"
+         data-requires-control="upgrade-p2p-group:yes"
+         data-testid="upgrade-p2p-parallelism-field">
       <label class="form-label" for="upgrade-p2p-parallelism">
         Download groups that run together
       </label>

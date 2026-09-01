@@ -1387,3 +1387,106 @@ def test_a_saved_run_reopens_with_the_release_train_shown(
     assert save_options(upgrade_client, run_id, {"targets": [], "channel": "beta"}).status_code == OK_STATUS
     page = upgrade_client.get(OPTIONS_PAGE_TEMPLATE.format(run_id=run_id)).get_data(as_text=True)
     assert '<option value="beta"\n                  selected>' in page  # The saved train reopens selected.
+
+
+# ---------------------------------------------------------------------------
+# Issue #2185: the dependency order of the option controls
+# ---------------------------------------------------------------------------
+
+
+def test_the_reboot_controls_name_the_device_types_that_read_them(
+    upgrade_app: Flask,
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """The cloud reboots an access point on its own, so those controls hide.
+
+    Why:
+        Both groups carried a comment that stated the rule and no attribute that
+        held it. A run of access points alone therefore drew a reboot control
+        that the cloud never reads, and the operator planned a window around a
+        control with no effect. Issue #2185.
+
+    Args:
+        upgrade_app: The application with the seams injected.
+        upgrade_client: The signed-in client.
+        run_store: The stand-in run record store.
+    """
+    upgrade_app.config[OPTIONS_VIEW_KEY] = StandInOptionsView()
+    run_id = seed_run(run_store, "pre_capture_done")
+    page = upgrade_client.get(OPTIONS_PAGE_TEMPLATE.format(run_id=run_id)).get_data(as_text=True)
+    for group in ("upgrade-reboot-group", "upgrade-junos-file-action-group"):
+        marker = f'data-requires-device-type="switch gateway"\n            data-testid="{group}"'
+        assert marker in page, group  # Each group now carries the rule that its comment states.
+
+
+def test_each_control_that_depends_on_another_value_names_that_control(
+    upgrade_app: Flask,
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """A control whose dependency is off invites a value that the cloud drops.
+
+    Why:
+        The reboot moment reaches the cloud only when the reboot control says
+        yes. The size of a download group reaches it only when the download
+        control says yes. Issue #2185 states both rules.
+
+    Args:
+        upgrade_app: The application with the seams injected.
+        upgrade_client: The signed-in client.
+        run_store: The stand-in run record store.
+    """
+    upgrade_app.config[OPTIONS_VIEW_KEY] = StandInOptionsView()
+    run_id = seed_run(run_store, "pre_capture_done")
+    page = upgrade_client.get(OPTIONS_PAGE_TEMPLATE.format(run_id=run_id)).get_data(as_text=True)
+    assert 'data-requires-control="upgrade-reboot-group:yes"' in page  # The reboot moment.
+    assert page.count('data-requires-control="upgrade-p2p-group:yes"') == 2  # Both download group controls.
+
+
+def test_the_failure_count_waits_for_the_phase_list(
+    upgrade_app: Flask,
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """The server refuses a failure list that does not match the phase list.
+
+    Why:
+        The control appeared beside the phase list, so an operator could fill it
+        first and meet a refusal that no control on the page predicted.
+
+    Args:
+        upgrade_app: The application with the seams injected.
+        upgrade_client: The signed-in client.
+        run_store: The stand-in run record store.
+    """
+    upgrade_app.config[OPTIONS_VIEW_KEY] = StandInOptionsView()
+    run_id = seed_run(run_store, "pre_capture_done")
+    page = upgrade_client.get(OPTIONS_PAGE_TEMPLATE.format(run_id=run_id)).get_data(as_text=True)
+    assert 'data-requires-filled="upgrade-canary-phases"' in page  # The deepest rule of the graph.
+
+
+def test_one_strategy_radio_carries_the_checked_attribute(
+    upgrade_app: Flask,
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """Two checked radios of one group leave the choice to the document order.
+
+    Why:
+        The first radio tested for "not canary", so a saved run with the serial
+        strategy marked both the first radio and the serial radio. The browser
+        picks the last such radio in tree order, so the page looked correct by
+        accident. A change of order would have exposed it. Issue #2185.
+
+    Args:
+        upgrade_app: The application with the seams injected.
+        upgrade_client: The signed-in client.
+        run_store: The stand-in run record store.
+    """
+    upgrade_app.config[OPTIONS_VIEW_KEY] = StandInOptionsView()
+    run_id = seed_run(run_store, "pre_capture_done")
+    assert save_options(upgrade_client, run_id, {"targets": [], "strategy": "serial"}).status_code == OK_STATUS
+    page = upgrade_client.get(OPTIONS_PAGE_TEMPLATE.format(run_id=run_id)).get_data(as_text=True)
+    strategy_block = page.split('data-testid="upgrade-strategy-group"')[1].split("</fieldset>")[0]
+    assert strategy_block.count("checked") == 1, strategy_block  # Exactly one radio of the group is checked.

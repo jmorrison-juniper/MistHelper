@@ -7,6 +7,31 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Reveal each upgrade option only when its dependency is satisfied
+
+- **Fixed**: The reboot control and the control for the Junos file action
+  appeared for a run of access points alone. The cloud reboots an access point
+  on its own. The cloud rejects each of the two fields on an access point. An
+  operator therefore planned a window around a control with no effect. Each
+  group now names the device types that read it. Issue #2185.
+- **Fixed**: The reboot moment appeared when the operator held the reboot. The
+  cloud reads that moment only when the reboot is on, so the page now reveals
+  the control after the operator chooses a reboot.
+- **Fixed**: The size and the parallelism of a download group appeared when the
+  download between access points was off. Each control now waits for that choice.
+- **Fixed**: The count of failures inside each phase appeared before the phase
+  list held a phase. The server refuses a list that does not match the phase
+  list, so an operator met a refusal that no control predicted. The control now
+  waits for the phase list.
+- **Fixed**: The first strategy radio tested for "not canary". A saved run with
+  the serial strategy therefore marked two radios of one group. The browser
+  picks the last such radio, so the page looked correct by accident. The test is
+  now an exact match.
+- **Added**: Two rule attributes for the page. One names a control and the value
+  that reveals the dependent control. The other names a control that must hold
+  any value at all. Both rules live in the markup, because the policy for
+  content security allows no inline script.
+
 ### Carry the API token into every SSH session
 
 - **Fixed**: An operator who connected over SSH met a login loop. MistHelper
