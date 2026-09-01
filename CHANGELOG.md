@@ -7,6 +7,18 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Write the safety design of the BIOS, FPGA, and Mist Edge workflows
+
+- **Added**: A design document at
+  `specs/2158-high-risk-firmware-workflows/design.md`. It states the boundaries
+  of three workflows with a high risk. None of the three belongs on the ordinary
+  firmware page. The document adds no user-visible control. Issue #2158.
+- **Added**: The document records one finding that shapes every later choice.
+  A BIOS run and an FPGA run reach four endpoints of the Mist API. Each one
+  writes. No endpoint reads the state of such a run. No endpoint stops one.
+  The design therefore forbids a progress bar and a stop button for those two
+  workflows. It defines a recovery procedure that reads the device instead.
+
 ### Add the release train and the schedule of a session smart router
 
 - **Added**: The options page offers the release train of a session smart
