@@ -126,6 +126,8 @@ ADVANCED_CONTROL_IDS = (
     "upgrade-rrm-node-order",  # `rrm_node_order`
     "upgrade-rrm-mesh-upgrade",  # `rrm_mesh_upgrade`
     "upgrade-rrm-slow-ramp",  # `rrm_slow_ramp`
+    "upgrade-start-time",  # `start_time`, issue #2157
+    "upgrade-ssr-channel",  # `channel`, issue #2157
 )
 
 # WHY: Each body below holds one value that the documented schema refuses. The
@@ -138,6 +140,8 @@ REFUSED_ADVANCED_BODIES = (
     {"strategy": "rrm", "rrm_node_order": "sideways"},  # A word outside the documented enumeration.
     {"strategy": "rrm", "rrm_mesh_upgrade": "at_once"},  # The same rule for the mesh word.
     {"reboot_at": "not-a-moment"},  # A reboot window that names no epoch second.
+    {"channel": "nightly"},  # A release train outside the router enumeration, issue #2157.
+    {"start_time": "not-a-moment"},  # A download window that names no epoch second, issue #2157.
 )
 
 PROBE_MODEL = "EX4400-48P"  # The model of the one device of the stand-in site.
@@ -1294,3 +1298,92 @@ def test_a_saved_run_reopens_with_every_advanced_choice_shown(
     page = upgrade_client.get(OPTIONS_PAGE_TEMPLATE.format(run_id=run_id)).get_data(as_text=True)
     assert 'value="25,50,100"' in page  # The phase control reopens with the saved list.
     assert 'value="12"' in page  # The download group control reopens with the saved count.
+
+
+# ---------------------------------------------------------------------------
+# Issue #2157: the session smart router controls
+# ---------------------------------------------------------------------------
+
+
+def test_the_options_page_marks_the_channel_control_as_router_only(
+    upgrade_app: Flask,
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """The release train control names the one family that reads a channel.
+
+    Why:
+        Issue #2157 asks the page to show the router controls only when the run
+        holds a router. The page cannot read the model rules that name a router,
+        so the markup names the family and portal.js reads each device row.
+
+    Args:
+        upgrade_app: The application with the seams injected.
+        upgrade_client: The signed-in client.
+        run_store: The stand-in run record store.
+    """
+    upgrade_app.config[OPTIONS_VIEW_KEY] = StandInOptionsView()
+    run_id = seed_run(run_store, "pre_capture_done")
+    page = upgrade_client.get(OPTIONS_PAGE_TEMPLATE.format(run_id=run_id)).get_data(as_text=True)
+    assert 'data-requires-family="ssr"' in page  # The rule that hides the control from every other family.
+
+
+def test_the_options_page_offers_every_documented_release_train(
+    upgrade_app: Flask,
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """The channel control offers the three words that the router schema names.
+
+    Args:
+        upgrade_app: The application with the seams injected.
+        upgrade_client: The signed-in client.
+        run_store: The stand-in run record store.
+    """
+    upgrade_app.config[OPTIONS_VIEW_KEY] = StandInOptionsView()
+    run_id = seed_run(run_store, "pre_capture_done")
+    page = upgrade_client.get(OPTIONS_PAGE_TEMPLATE.format(run_id=run_id)).get_data(as_text=True)
+    for word in ("alpha", "beta", "stable"):
+        assert f'<option value="{word}"' in page  # Every word of the cloud enumeration.
+
+
+def test_a_router_choice_reaches_the_stored_option_record(
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """A save call stores the release train and the download window.
+
+    Why:
+        The run driver rebuilds the option record from the store. A train that
+        never reached the store never reaches the cloud, and the router would
+        follow a train that the operator did not pick.
+
+    Args:
+        upgrade_client: The signed-in client.
+        run_store: The stand-in run record store.
+    """
+    run_id = seed_run(run_store, "pre_capture_done")
+    body = {"targets": [], "strategy": "serial", "channel": "beta"}
+    assert save_options(upgrade_client, run_id, body).status_code == OK_STATUS
+    saved = run_store.runs[run_id]["options"]  # The record the run driver reads back.
+    assert saved["ssr"]["channel"] == "beta"  # The router group holds its own field.
+    assert saved["strategy"] == "serial"  # The one order that keeps a pair in service.
+
+
+def test_a_saved_run_reopens_with_the_release_train_shown(
+    upgrade_app: Flask,
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """The options page shows the release train that an earlier save stored.
+
+    Args:
+        upgrade_app: The application with the seams injected.
+        upgrade_client: The signed-in client.
+        run_store: The stand-in run record store.
+    """
+    upgrade_app.config[OPTIONS_VIEW_KEY] = StandInOptionsView()
+    run_id = seed_run(run_store, "pre_capture_done")
+    assert save_options(upgrade_client, run_id, {"targets": [], "channel": "beta"}).status_code == OK_STATUS
+    page = upgrade_client.get(OPTIONS_PAGE_TEMPLATE.format(run_id=run_id)).get_data(as_text=True)
+    assert '<option value="beta"\n                  selected>' in page  # The saved train reopens selected.

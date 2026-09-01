@@ -32,6 +32,7 @@ from src.firmware.upgrade_service import (
     NODE_ORDER_CHOICES,
     SCOPE_ORG,
     SCOPE_SITE,
+    SSR_CHANNEL_CHOICES,
     STRATEGY_CANARY,
     STRATEGY_DEFAULT,
     CanaryOptions,
@@ -39,6 +40,7 @@ from src.firmware.upgrade_service import (
     GatewayFamily,
     PeerToPeerOptions,
     RrmOptions,
+    SsrOptions,
     UpgradeOptions,
     classify_gateway,
     list_available_versions,
@@ -117,7 +119,7 @@ _BOOLEAN_WORDS: Mapping[str, bool] = {
 # merges each nested group back up before it reads one field, so one reading
 # path serves both shapes. Every field name inside a group is already the cloud
 # field name, so the merge renames nothing.
-_OPTION_GROUP_KEYS = ("canary", "rrm", "peer_to_peer")
+_OPTION_GROUP_KEYS = ("canary", "rrm", "peer_to_peer", "ssr")
 
 # A percentage names a share of the run, so the cloud refuses a value outside
 # this range (POST_sites_site_id_devices_upgrade.md:67-68).
@@ -468,6 +470,10 @@ def build_version_options(
                 "target_source": target_source,
                 "firmware_mismatch": bool(version_before) and bool(safe_target) and version_before != safe_target,
                 "versions": versions,
+                # Issue #2157 shows the router controls only when the selection
+                # holds a router. The page cannot read the model rules, so the
+                # row carries the family that `classify_gateway` decided.
+                "gateway_family": resolve_family_scope(device_type, device)[0] or "",
             }
         )
     logger.debug("Upgrade portal offers a version choice for %s device(s)", len(rows))
@@ -839,6 +845,28 @@ def _read_peer_to_peer(payload: Mapping[str, Any]) -> PeerToPeerOptions:
     )
 
 
+def _read_ssr(payload: Mapping[str, Any]) -> SsrOptions:
+    """Read the release train of a session smart router run.
+
+    Why:
+        Only the session smart router schema holds a channel. The reader refuses
+        every other word, because the cloud answers a bad channel with a 400 and
+        names no field. The operator would then read one refusal for the whole
+        call and would not know which control caused it.
+
+    Args:
+        payload: The flat request body.
+
+    Returns:
+        The session smart router settings.
+
+    Raises:
+        BadOptionError: If the channel names a word outside the cloud
+            enumeration.
+    """
+    return SsrOptions(channel=_read_word_choice(payload, "channel", SSR_CHANNEL_CHOICES))
+
+
 def _read_reboot_at(payload: Mapping[str, Any], now: Callable[[], int] | None) -> int | None:
     """Map the separate reboot window onto epoch seconds.
 
@@ -928,6 +956,7 @@ def build_options(payload: Mapping[str, Any], now: Callable[[], int] | None = _n
         canary=_read_canary(flat),
         rrm=_read_rrm(flat),
         peer_to_peer=_read_peer_to_peer(flat),
+        ssr=_read_ssr(flat),
     )
     _guard_strategy_settings(options)  # A setting outside its own strategy is a caller fault.
     logger.debug("Upgrade portal chose the strategy %s with reboot %s", options.strategy, options.reboot)
@@ -1007,6 +1036,7 @@ def advanced_option_values(stored: Mapping[str, Any]) -> dict[str, str]:
         "canary_phases",
         "max_failures",
         "reboot_at",
+        "start_time",
         "p2p_cluster_size",
         "p2p_parallelism",
         "rrm_first_batch_percentage",
@@ -1014,6 +1044,7 @@ def advanced_option_values(stored: Mapping[str, Any]) -> dict[str, str]:
         "rrm_node_order",
         "rrm_mesh_upgrade",
         "rrm_slow_ramp",
+        "channel",
     )
     return {name: _display_text(flat.get(name)) for name in names}
 

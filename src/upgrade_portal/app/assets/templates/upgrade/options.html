@@ -414,6 +414,30 @@
       </p>
     </div>
 
+    {#
+      Issue #2157 adds the download start. Every one of the three cloud upgrade
+      schemas holds the field, so the control names no device type and no
+      family. A session smart router reads it as the moment that the download
+      begins, and the reboot moment below follows it.
+    #}
+    <div class="mb-3" data-testid="upgrade-start-time-field">
+      <label class="form-label" for="upgrade-start-time">
+        Begin the firmware download at this moment, in epoch seconds
+      </label>
+      <input type="number"
+             class="form-control"
+             id="upgrade-start-time"
+             data-testid="upgrade-start-time"
+             min="0"
+             step="1"
+             value="{{ advanced_values.get('start_time') | default('', true) }}"
+             aria-describedby="upgrade-start-time-note">
+      <p class="portal-card-note" id="upgrade-start-time-note">
+        Leave the field empty to begin at once. The portal refuses a moment
+        already past and a moment more than one year ahead.
+      </p>
+    </div>
+
     <div class="mb-3" data-requires-device-type="switch gateway" data-testid="upgrade-reboot-at-field">
       <label class="form-label" for="upgrade-reboot-at">
         Reboot each switch and each gateway at this moment, in epoch seconds
@@ -427,10 +451,11 @@
              value="{{ advanced_values.get('reboot_at') | default('', true) }}"
              aria-describedby="upgrade-reboot-at-note">
       <p class="portal-card-note" id="upgrade-reboot-at-note">
-        Leave the field empty to reboot as soon as the write ends. The cloud
-        reads this moment only when the reboot control above says yes. The
-        portal refuses a moment already past and a moment more than one year
-        ahead.
+        Leave the field empty to reboot as soon as the write ends. A switch and
+        a Junos gateway read this moment only when the reboot control above says
+        yes. A session smart router holds no reboot control, so a no on that
+        control sends the value that disables its reboot. The portal refuses a
+        moment already past and a moment more than one year ahead.
       </p>
     </div>
 
@@ -692,6 +717,37 @@
         A slow growth keeps more coverage while the firmware moves.
       </p>
     </div>
+
+    {#
+      Issue #2157 adds the release train of a session smart router. Only that
+      cloud schema holds a channel, and the page cannot read the model rules
+      that name a router. `data-requires-family` therefore names the family, and
+      portal.js reads the family of each selected device row.
+    #}
+    <div class="mb-3"
+         data-requires-family="ssr"
+         data-testid="upgrade-ssr-channel-field">
+      <label class="form-label" for="upgrade-ssr-channel">
+        Release train of each session smart router
+      </label>
+      <select class="form-select"
+              id="upgrade-ssr-channel"
+              data-testid="upgrade-ssr-channel"
+              aria-describedby="upgrade-ssr-channel-note">
+        <option value="">Keep the train that the router follows now</option>
+        {% for word, label in [('stable', 'Stable, the tested build'),
+                               ('beta', 'Beta, the build under test'),
+                               ('alpha', 'Alpha, the earliest build')] %}
+          <option value="{{ word }}"
+                  {{ 'selected' if advanced_values.get('channel') == word else '' }}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <p class="portal-card-note" id="upgrade-ssr-channel-note">
+        Warning: an alpha build or a beta build carries defects that no test
+        found yet. A router on such a build can drop the wide area network of
+        the site. Choose the stable train for a production site.
+      </p>
+    </div>
   </div>
 
   {#
@@ -777,6 +833,7 @@
                     data-testid="upgrade-version-select-{{ mac }}"
                     data-version-for="{{ mac }}"
                     data-device-type="{{ device.device_type | default('', true) }}"
+                    data-gateway-family="{{ device.gateway_family | default('', true) }}"
                     aria-label="Target version for {{ device_name }}">
               <option value="">Do not upgrade this device</option>
               {% for version in model_versions %}

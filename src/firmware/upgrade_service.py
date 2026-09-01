@@ -71,6 +71,10 @@ _AP_ONLY_STRATEGIES = (STRATEGY_RRM,)
 # carries one of these two words or no strategy field at all.
 _SSR_STRATEGIES = (STRATEGY_DEFAULT, STRATEGY_SERIAL)
 
+# The release train that a session smart router follows, from the same request
+# body schema at line 35. No other device family reads a channel at all.
+SSR_CHANNEL_CHOICES = ("alpha", "beta", "stable")
+
 # The cloud accepts an upgrade with 200 or with 202 (bulk_switch_upgrader.py:967).
 ACCEPTED_STATUS = (200, 202)
 
@@ -110,6 +114,20 @@ _WARNING_MIXED_VERSION = "The selection holds more than one version, so the port
 _WARNING_SSR_STRATEGY = (
     "A session smart router accepts the strategy big_bang or serial only, "
     "so the portal sends no strategy for that family."
+)
+
+# WHY: Two session smart routers of one site often form a high-availability
+# pair. The vendor states the rule at
+# documentation/api/utilities/POST_orgs_org_id_ssr_upgrade.md:181. A big_bang
+# run writes the firmware to both routers at the same moment, and the site then
+# loses the wide area network for the whole reboot. The portal never changes the
+# choice of the operator, because a silent change runs an order that nobody
+# reviewed. It names the risk and leaves the choice.
+_WARNING_SSR_HA_PAIR = (
+    "The run holds {count} session smart routers, which may form a "
+    "high-availability pair. A big_bang run reboots both at once and drops the "
+    "wide area network of the site. Choose the serial strategy to keep one "
+    "router in service."
 )
 
 # WHY: The request body schema marks `rrm` as an access point word ("For APs
@@ -308,6 +326,27 @@ class PeerToPeerOptions:
 
 
 @dataclass(frozen=True, slots=True)
+class SsrOptions:
+    """The release train of a session smart router upgrade.
+
+    Why:
+        Only the session smart router schema holds a channel
+        (documentation/api/utilities/POST_orgs_org_id_ssr_upgrade.md:35). Every
+        other cloud upgrade schema refuses the field, so it cannot sit beside
+        the settings that every family reads.
+
+        The field name is the literal cloud field name, so a reader who compares
+        this record against that schema needs no translation table.
+
+    Attributes:
+        channel: ``alpha``, ``beta``, or ``stable``, or ``None`` to keep the
+            train that the router already follows.
+    """
+
+    channel: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class UpgradeOptions:
     """The choices that the operator made for one upgrade run.
 
@@ -337,6 +376,7 @@ class UpgradeOptions:
         canary: The staged-upgrade settings.
         rrm: The radio resource management settings.
         peer_to_peer: The access-point-to-access-point download settings.
+        ssr: The session smart router settings.
     """
 
     reboot: bool = True
@@ -349,6 +389,7 @@ class UpgradeOptions:
     canary: CanaryOptions = field(default_factory=CanaryOptions)
     rrm: RrmOptions = field(default_factory=RrmOptions)
     peer_to_peer: PeerToPeerOptions = field(default_factory=PeerToPeerOptions)
+    ssr: SsrOptions = field(default_factory=SsrOptions)
 
 
 @dataclass(frozen=True, slots=True)
@@ -662,17 +703,22 @@ def _copy_present(body: dict[str, object], values: Mapping[str, object]) -> None
 
 
 def _add_ssr_fields(body: dict[str, object], options: UpgradeOptions) -> None:
-    """Add the reboot schedule of one session smart router body.
+    """Add the channel and the reboot schedule of one session smart router body.
 
     Why:
         That schema holds no reboot flag. It disables a reboot with a
         ``reboot_at`` of -1 instead
         (documentation/api/utilities/POST_orgs_org_id_ssr_upgrade.md:47).
 
+        The channel names the release train that the router follows
+        (line 35 of the same schema). No other cloud upgrade schema holds the
+        field, so this writer is the only one that sends it.
+
     Args:
         body: The body under construction. The function changes it in place.
         options: The choices of the operator.
     """
+    _copy_present(body, {"channel": options.ssr.channel})  # The release train, when the operator picked one.
     if not options.reboot:  # The one way this schema holds a reboot back.
         body["reboot_at"] = _REBOOT_DISABLED
         return
@@ -955,10 +1001,33 @@ def _advanced_warnings(
     return found
 
 
+def _ssr_warnings(options: UpgradeOptions, routers: int) -> list[str]:
+    """Return the sentence that names a high-availability risk of a router pair.
+
+    Why:
+        Two session smart routers of one site often carry the wide area network
+        together. The vendor asks for a sequential order for such a pair
+        (documentation/api/utilities/POST_orgs_org_id_ssr_upgrade.md:181). The
+        portal never changes the choice of the operator, because a silent change
+        runs an order that nobody reviewed. It names the risk instead.
+
+    Args:
+        options: The choices of the operator.
+        routers: The count of session smart routers in the whole selection.
+
+    Returns:
+        Zero sentences or one sentence.
+    """
+    if routers > 1 and options.strategy != STRATEGY_SERIAL:  # A pair and a single wave together.
+        return [_WARNING_SSR_HA_PAIR.format(count=routers)]
+    return []
+
+
 def _plan_warnings(
     keys: Iterable[tuple[str, GatewayFamily, str]],
     options: UpgradeOptions,
     access_points: int = 0,
+    routers: int = 0,
 ) -> tuple[str, ...]:
     """Return the plain sentences that the operator reads before the start.
 
@@ -977,6 +1046,7 @@ def _plan_warnings(
         keys: The group keys of the plan.
         options: The choices of the operator.
         access_points: The number of access points in the whole selection.
+        routers: The number of session smart routers in the whole selection.
 
     Returns:
         One sentence for each split, for each dropped strategy, and for each
@@ -990,6 +1060,7 @@ def _plan_warnings(
         warnings.append(_WARNING_MIXED_VERSION)
     if _drops_the_strategy(key_list, options):
         warnings.append(_WARNING_SSR_STRATEGY)
+    warnings.extend(_ssr_warnings(options, routers))
     warnings.extend(_advanced_warnings(key_list, options))
     warnings.extend(_reboot_warnings(key_list, options, access_points))
     return tuple(warnings)
@@ -1063,7 +1134,8 @@ def plan_upgrade(
     _logger().info("plan an upgrade for %s target(s)", len(targets))
     groups = _group_targets(targets)
     access_points = sum(1 for target in targets if target.device_type == DEVICE_TYPE_AP)  # The count the warning names.
-    warnings = _plan_warnings(groups, options, access_points)
+    routers = sum(len(members) for key, members in groups.items() if key[1] is GatewayFamily.SSR)
+    warnings = _plan_warnings(groups, options, access_points, routers)
     identifiers = (org_id, site_id)
     plans = tuple(_build_plan(key, members, options, identifiers, warnings) for key, members in groups.items())
     _logger().debug("the plan holds %s cloud call(s)", len(plans))
