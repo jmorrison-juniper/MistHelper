@@ -50,9 +50,16 @@ mkdir -p "$(dirname "$TARGET")"  # The file needs its directory before the write
 # Build the file under a strict mode before any value reaches the disk. A file
 # created with the default mode would stay world readable for the moment between
 # the write and the change of mode.
+#
+# The staged mode is 0600 and not 0400, because the loop below appends to this
+# file. A read-only file refuses an append from its own owner, and only root
+# passes that check. The entrypoint runs as root, so a 0400 stage would work in
+# the container and would fail for every other caller. The final mode is 0400,
+# and no moment of this script leaves the file open to another account.
 STAGED="${TARGET}.new"
+rm -f "$STAGED"  # Remove a stage that an earlier failed run left behind, because 0400 refuses a rewrite.
 : > "$STAGED"  # Start from an empty file, because a stale value must never survive a restart.
-chmod 0400 "$STAGED"  # Close the file to every other account before the token lands in it.
+chmod 0600 "$STAGED"  # Close the file to every other account before the token lands in it.
 
 CARRIED=()  # The names that reached the file, for the report below.
 for NAME in "${SESSION_ENV_NAMES[@]}"; do
@@ -64,6 +71,7 @@ for NAME in "${SESSION_ENV_NAMES[@]}"; do
     fi
 done
 
+chmod 0400 "$STAGED"  # Drop the write bit, because the session only reads the file.
 chown "$OWNER" "$STAGED" 2>/dev/null || true  # A test runs as one account, so a failed change of owner is not fatal.
 mv -f "$STAGED" "$TARGET"  # Replace in one step, so no session reads a half-written file.
 
