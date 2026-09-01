@@ -7,6 +7,16 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Show the saved plan warning list on the confirm page
+
+- **Fixed**: The confirm page shows the same list of warnings that the
+  options page saved, for example the access-point reboot warning. Before
+  this change, the options-save call answered a warning list but never wrote
+  it onto the run record. The confirm page reads a fresh record with no
+  warning list at all, so it always showed "The plan found no warning," even
+  when a real warning applied. The confirm page is the last page before
+  firmware moves, so a hidden warning was a safety gap. Issue #2003.
+
 ### Retire the duplicate continuous-loop menu number
 
 - **Removed**: Menu 152 ran the same `DataCollectionManager.continuous_loop`

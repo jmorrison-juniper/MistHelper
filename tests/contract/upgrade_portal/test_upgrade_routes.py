@@ -437,6 +437,7 @@ def test_save_options_answers_the_targets_and_the_warnings(
     assert saved["targets"][0]["mac"] == "5c5b350e0001"  # The record holds one row for each device.
     assert saved["warnings"] == []  # No inventory read runs, so the answer claims no warning.
     assert run_store.runs[run_id]["options"]["reboot"] is True  # The record holds the four option fields.
+    assert run_store.runs[run_id]["warnings"] == []  # Issue #2003: the record itself must hold the warning list.
 
 
 def test_save_options_refuses_an_unknown_run(upgrade_client: FlaskClient) -> None:
@@ -657,6 +658,29 @@ def test_confirm_page_locks_the_start_without_a_pre_check(
     ready_id = seed_run(run_store, "pre_capture_done", pre_capture_id="capture-1")  # A run with a saved pre-check.
     ready_page = upgrade_client.get(f"/runs/{ready_id}/confirm").get_data(as_text=True)  # The same page, unlocked.
     assert PRE_CHECK_HINT not in ready_page  # A saved pre-check clears the hint, so the route reads the record.
+
+
+def test_confirm_page_shows_the_warning_list_the_options_call_saved(
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """`GET /runs/<id>/confirm` shows the same warning list the options save stored.
+
+    Why:
+        Issue #2003: the options page shows a plan warning after a save, but the
+        operator can move straight to the confirm page without reading it. The
+        confirm page is the last page before firmware moves, so it must repeat
+        the same warning list, and never the empty-list fallback text.
+
+    Args:
+        upgrade_client: The signed-in client.
+        run_store: The stand-in run record store.
+    """
+    warning_text = "3 access points always reboot with this build, no matter the reboot choice."
+    run_id = seed_run(run_store, "pre_capture_done", warnings=[warning_text])  # Mirrors a saved options call.
+    page = upgrade_client.get(f"/runs/{run_id}/confirm").get_data(as_text=True)  # The last page before the upgrade.
+    assert warning_text in page  # The confirm page must repeat the saved warning list.
+    assert "The plan found no warning." not in page  # The empty-list fallback text must not show beside it.
 
 
 # ---------------------------------------------------------------------------

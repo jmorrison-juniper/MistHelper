@@ -212,6 +212,40 @@ class RefusingOptionsBuilder:
         raise ValueError(self.reason)  # `options.BadOptionError` is a `ValueError`, so the route catches this.
 
 
+class WarningOptionsBuilder:
+    """Answers a fixed target list, option record, and warning list.
+
+    Why:
+        Issue #2003: only a builder that answers a real warning proves that
+        `save_options` writes it onto the run record. No builder ships in a
+        contract test, so this stand-in fills that role.
+    """
+
+    def __init__(self, warnings: list[str]) -> None:
+        """Build the stand-in with the warning list it always answers.
+
+        Args:
+            warnings: The plain sentences the built options carry.
+        """
+        self.warnings = warnings  # The route must copy this list onto the record.
+
+    def __call__(self, record: dict[str, Any], body: dict[str, Any]) -> dict[str, Any]:
+        """Answer a thin target list, the default options, and the warning list.
+
+        Args:
+            record: The run record. This stand-in reads none of it.
+            body: The request body of the save call.
+
+        Returns:
+            The three fields `built_options` always widens into a record.
+        """
+        return {
+            "targets": list(body.get("targets", [])),
+            "options": {"reboot": True, "junos_file_action": False, "strategy": "big_bang"},
+            "warnings": list(self.warnings),
+        }
+
+
 class StandInOptionsView:
     """Answer one device row and one version list, and reach no cloud.
 
@@ -819,6 +853,34 @@ def test_a_refused_option_answers_the_documented_code(
     assert answer.status_code == BAD_REQUEST_STATUS  # The contract fixes 400 for a refused option.
     assert read_error_code(answer) == BAD_OPTION_CODE  # A distinct word from `run_not_found`.
     assert run_store.runs[run_id]["targets"] == [{"mac": PROBE_MAC}]  # The refused call kept the saved choice.
+
+
+def test_a_saved_option_keeps_its_warning_list_for_the_confirm_page(
+    upgrade_app: Flask,
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """An options call stores the same warning list it answers, for the confirm page.
+
+    Why:
+        Issue #2003: the confirm page loads the run record fresh, with no
+        access to the answer body of an earlier save call. A save that answered
+        a warning but never stored it left the confirm page with no way to show
+        that warning, so the operator reached the last page before the upgrade
+        with no warning at all.
+
+    Args:
+        upgrade_app: The application with the seams injected.
+        upgrade_client: The signed-in client.
+        run_store: The stand-in run record store.
+    """
+    warning_text = "3 access points always reboot with this build, no matter the reboot choice."
+    upgrade_app.config[OPTIONS_BUILDER_KEY] = WarningOptionsBuilder([warning_text])
+    run_id = seed_run(run_store, "pre_capture_done")  # The stage at which an operator picks a version.
+    answer = save_options(upgrade_client, run_id, {"targets": []})
+    assert answer.status_code == OK_STATUS  # A warning never refuses the save that reports it.
+    assert answer.get_json()["warnings"] == [warning_text]  # The immediate answer already carried the warning.
+    assert run_store.runs[run_id]["warnings"] == [warning_text]  # The stored record must carry the same list.
 
 
 # ---------------------------------------------------------------------------
