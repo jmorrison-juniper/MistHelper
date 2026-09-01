@@ -668,6 +668,25 @@ def _read_whole_number(payload: Mapping[str, Any], field: str, highest: int) -> 
     return number
 
 
+def _number_entries(value: Any) -> list[str]:
+    """Split one list control into its entries, whatever shape it arrives in.
+
+    Why:
+        A stored record replays a tuple, a JSON store replays a list, and a text
+        input posts one comma-separated word. All three must reach the same
+        entries, and each empty entry drops so a trailing comma reads as no
+        entry at all.
+
+    Args:
+        value: The raw value of one list control.
+
+    Returns:
+        One text entry for each number that the control names.
+    """
+    sequence = list(value) if isinstance(value, (list, tuple)) else str(value).split(",")
+    return [str(one).strip() for one in sequence if str(one).strip()]
+
+
 def _read_number_list(payload: Mapping[str, Any], field: str) -> tuple[int, ...] | None:
     """Read one optional list of whole numbers from a text field or a real list.
 
@@ -690,10 +709,7 @@ def _read_number_list(payload: Mapping[str, Any], field: str) -> tuple[int, ...]
     value = payload.get(field)
     if value is None or (isinstance(value, str) and not value.strip()):
         return None
-    # A stored record replays a tuple, a JSON store replays a list, and a text
-    # input posts one comma-separated word. All three reach the same entries.
-    sequence = list(value) if isinstance(value, (list, tuple)) else str(value).split(",")
-    entries = [str(one).strip() for one in sequence if str(one).strip()]
+    entries = _number_entries(value)
     if not entries or len(entries) > _PHASE_COUNT_HIGHEST:
         logger.warning("Upgrade portal refused the list field %s for its length", field)
         raise BadOptionError(field)
