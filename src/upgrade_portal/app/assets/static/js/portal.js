@@ -139,6 +139,7 @@
     var RESCHEDULE_INPUT_TESTID = "run-reschedule-input";
     var RESCHEDULE_BUTTON_TESTID = "run-reschedule-button";
     var CANCEL_BUTTON_TESTID = "run-cancel-button";
+    var RETRY_BUTTON_TESTID = "run-retry-button";  /* Issue #2202. */
 
     /* The lock identifiers. contracts/ui-testids.md lines 77-82 fix every value
      * below. */
@@ -2799,6 +2800,59 @@
     }
 
     /**
+     * Sends the retry of one failed run.
+     *
+     * Why: Issue #2202 builds a new run from the settings of a failed one. The
+     * new run needs a fresh capture, so the browser follows the answer to the
+     * capture page of the new run.
+     *
+     * @param {Element} button The control the operator pressed.
+     * @returns {Promise} The answer, or null after a refusal.
+     */
+    function requestRunRetry(button) {
+        var runId = button.getAttribute("data-run-id") || "";
+        button.disabled = true;
+        return fetchJson("/api/runs/" + encodeURIComponent(runId) + "/retry", {
+            method: "POST",
+            body: {}
+        })
+            .then(function (answer) {
+                var notes = (answer && answer.notes) || [];
+                var index = 0;
+                for (index = 0; index < notes.length; index += 1) {
+                    /* The page names every schedule that the retry dropped. */
+                    showFlash(notes[index], "warning", true);
+                }
+                showFlash("The portal built a retry. Take a fresh capture before you start it.", "success", true);
+                return answer;
+            })
+            .catch(function (error) {
+                console.error("The retry failed.", error && error.code, error && error.status);
+                showRequestError(error);
+                button.disabled = false;
+                return null;
+            });
+    }
+
+    /**
+     * Binds the retry control of a failed run.
+     *
+     * @returns {void}
+     */
+    function initRunRetryControl() {
+        var region = document.querySelector("[data-testid='run-retry-controls']");
+        if (!region) {
+            return;
+        }
+        var button = byTestId(RETRY_BUTTON_TESTID, region);
+        if (button) {
+            button.addEventListener("click", function () {
+                requestRunRetry(button);
+            });
+        }
+    }
+
+    /**
      * Binds the reschedule control and the cancel control of the run page.
      *
      * Why: Both controls appear for a run that has not begun. A page that holds
@@ -3293,6 +3347,7 @@
         initUpgradeConfirmPage();
         initRunPage();
         initStopControl();
+        initRunRetryControl();  // Issue #2202: the retry of a failed run.
         initRunScheduleControls();  // Issue #2201: the reschedule and the cancel of a run that has not begun.
         initLockBanner();
     }
@@ -3354,4 +3409,5 @@
     window.upgradePortal.startLockBeat = startLockBeat;
     window.upgradePortal.stopLockBeat = stopLockBeat;
 })();
+
 

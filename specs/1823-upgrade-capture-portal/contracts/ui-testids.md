@@ -224,6 +224,17 @@ above, which cancels the work that the cloud already holds.
 | `run-cancel-button` | End the run with no cloud call |
 | `run-schedule-locked-note` | The reason both controls are off |
 
+### Retry
+
+Issue #2202 adds this control. It appears for a failed run, and for no other
+state.
+
+| Identifier | Control |
+| --- | --- |
+| `run-retry-controls` | The region that holds the retry |
+| `run-retry-button` | Build a new run from the settings of this one |
+| `run-retry-locked-note` | The reason the retry is off |
+
 ### Comparison
 
 | Identifier | Control |

@@ -358,6 +358,46 @@
 #}
 {% set may_change_schedule = run_not_started | default(false, true) %}
 {% set may_write_site = lock_write_allowed | default(false, true) %}
+{% set run_failed = run_state_name | default('', true) == 'failed' %}
+
+{#
+  Issue #2202: a failed run holds every choice that the operator made. The
+  retry builds a new run from those settings, so no operator rebuilds a plan by
+  hand and drops a setting on the way.
+#}
+{% if run_failed %}
+  <section class="portal-card" data-testid="run-retry-controls">
+    <h2 class="portal-card-title">This run failed</h2>
+
+    <p class="portal-card-note">
+      The retry keeps every option of this run, the device list, and the target
+      version of each device. It needs a fresh capture first, because the site
+      changed while this run wrote firmware to part of it.
+    </p>
+
+    <button type="button"
+            class="portal-button portal-button-primary"
+            data-testid="run-retry-button"
+            data-needs-lock
+            data-run-id="{{ run_id | default('', true) }}"
+            {% if not may_write_site %}disabled aria-describedby="run-retry-locked"{% endif %}
+            >Retry this run</button>
+
+    {% if not may_write_site %}
+      <p class="portal-note" id="run-retry-locked"
+         data-lock-reason-note
+         data-testid="run-retry-locked-note">
+        {% if lock_holder | default('', true) %}
+          {{ lock_holder | default('', true) }} holds this site, so the retry is
+          off. Take the site to retry this run.
+        {% else %}
+          Another operator holds this site, so the retry is off.
+        {% endif %}
+      </p>
+    {% endif %}
+  </section>
+{% endif %}
+
 {% if may_change_schedule %}
   <section class="portal-card" data-testid="run-schedule-controls">
     <h2 class="portal-card-title">This run has not begun</h2>
