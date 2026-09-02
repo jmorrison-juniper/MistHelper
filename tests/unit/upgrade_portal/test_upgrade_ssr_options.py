@@ -42,12 +42,12 @@ from src.firmware.upgrade_service import (
 )
 from src.upgrade_portal.upgrade.options import (
     BadOptionError,
-    format_duration,
-    parse_duration_seconds,
     advanced_option_values,
     build_option_record,
     build_options,
     build_version_options,
+    format_duration,
+    parse_duration_seconds,
 )
 
 SITE_ID = "11111111-1111-1111-1111-111111111111"
