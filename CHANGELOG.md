@@ -7,6 +7,26 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Take a duration instead of an epoch second for the two schedule controls
+
+- **Changed**: Each schedule control takes a duration that counts from the
+  moment that the operator starts the job. The operator writes a number and
+  a unit, such as `200s`, `5m`, `8h`, or `3d`. Issue #2187.
+- **Changed**: The portal refuses a value with no unit. A bare number reads as
+  seconds to one operator and as minutes to another, and the two readings differ
+  by a factor of sixty.
+- **Added**: The confirmation page names the duration and the moment that the
+  duration reaches. The moment carries the word "about" and the condition of the
+  start, because the operator did not start the job yet.
+- **Changed**: The saved run keeps the duration and not the moment. An operator
+  saves the options, reads the plan for ten minutes, and still gets the window
+  that they asked for.
+- **Fixed**: A run saved before this change keeps its stored moment. A whole
+  number of ten digits or more reads as an epoch second, and a value with a
+  unit reads as a duration. Warning: a stored epoch second that reads as a
+  duration can stop the upgrade of a whole site. Such a value names a moment
+  about 60 years ahead. The run then never writes firmware.
+
 ### Reveal each upgrade option only when its dependency is satisfied
 
 - **Fixed**: The reboot control and the control for the Junos file action

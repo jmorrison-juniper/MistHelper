@@ -40,6 +40,7 @@ from src.firmware.upgrade_service import (
     GatewayFamily,
     PeerToPeerOptions,
     RrmOptions,
+    ScheduleOptions,
     SsrOptions,
     UpgradeOptions,
     classify_gateway,
@@ -87,6 +88,26 @@ START_TIME_GRACE_SECONDS = 120
 # every real maintenance window and still refuses that mistake.
 START_TIME_HORIZON_SECONDS = 365 * 24 * 60 * 60
 
+# The units of a schedule that the operator writes, and the seconds of each one.
+# Issue #2187 replaces the epoch second with a duration, because no operator
+# holds an epoch second and a mistake of one digit moves a run by years.
+DURATION_UNIT_SECONDS: Mapping[str, int] = {
+    "s": 1,
+    "m": 60,
+    "h": 60 * 60,
+    "d": 24 * 60 * 60,
+}
+
+# The smallest count of digits that reads as an epoch second. A run saved before
+# issue #2187 stored an epoch second in the same field, and that value must keep
+# its meaning. Ten digits covers every epoch second from 2001 onward, and no
+# duration of one year reaches ten digits.
+#
+# Warning: never read a stored epoch second as a duration. A value such as
+# 1900000000 would become about 60 years after the start, and the run would then
+# never write firmware.
+EPOCH_DIGIT_COUNT = 10
+
 WARNING_MIXED_FAMILY = "The site holds two gateway families. The portal reports the result of each family on its own."
 WARNING_SAME_VERSION = "One device already runs the version that you chose. The portal still sends the upgrade."
 WARNING_NO_COMMON_CANDIDATE = "No common compatible version exists for the {device_type} devices."
@@ -119,7 +140,7 @@ _BOOLEAN_WORDS: Mapping[str, bool] = {
 # merges each nested group back up before it reads one field, so one reading
 # path serves both shapes. Every field name inside a group is already the cloud
 # field name, so the merge renames nothing.
-_OPTION_GROUP_KEYS = ("canary", "rrm", "peer_to_peer", "ssr")
+_OPTION_GROUP_KEYS = ("canary", "rrm", "peer_to_peer", "ssr", "schedule")
 
 # A percentage names a share of the run, so the cloud refuses a value outside
 # this range (POST_sites_site_id_devices_upgrade.md:67-68).
@@ -586,36 +607,6 @@ def _guard_start_time(moment: int, now: int, field: str = "start_time") -> int:
     return moment
 
 
-def _read_start_time(payload: Mapping[str, Any], now: Callable[[], int] | None) -> int | None:
-    """Map the start time control onto epoch seconds.
-
-    Why:
-        The cloud reads ``start_time`` as epoch seconds. A text value or a
-        negative value would reach the cloud and schedule the upgrade at a
-        moment that nobody chose.
-
-    Args:
-        payload: The request body.
-        now: The clock that reads the current moment, or None to keep a stored
-            choice exactly as the operator made it.
-
-    Returns:
-        The chosen moment in epoch seconds, or None for an immediate start.
-
-    Raises:
-        BadOptionError: If the value is not a whole number of seconds, or names
-            a moment outside the window that a run can use.
-    """
-    value = payload.get("start_time")
-    if value is None or not str(value).strip():
-        return None
-    word = str(value).strip()
-    if isinstance(value, bool) or not word.isdigit():
-        raise BadOptionError("start_time")
-    moment = int(word)  # ``isdigit`` already refused a sign, so the value is whole and not negative.
-    return moment if now is None else _guard_start_time(moment, now())
-
-
 def _flat_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
     """Merge every nested advanced group of a stored record back into flat keys.
 
@@ -867,35 +858,138 @@ def _read_ssr(payload: Mapping[str, Any]) -> SsrOptions:
     return SsrOptions(channel=_read_word_choice(payload, "channel", SSR_CHANNEL_CHOICES))
 
 
-def _read_reboot_at(payload: Mapping[str, Any], now: Callable[[], int] | None) -> int | None:
-    """Map the separate reboot window onto epoch seconds.
+def parse_duration_seconds(text: str, field: str) -> int:
+    """Map a duration such as ``5m`` onto a count of seconds.
 
     Why:
-        A switch and a Junos gateway can write the firmware in one window and
-        reboot in a later one. The moment obeys the same window rule as the
-        start time, because a moment already past reboots the device at once and
-        a moment far ahead never reboots it at all.
+        Issue #2187 replaces the epoch second of the two schedule controls. An
+        operator who wanted a window eight hours ahead had to leave the portal,
+        find the current epoch, add 28800, and paste the sum. A mistake of one
+        digit moved the run by years.
+
+        The reader refuses a value with no unit. A bare number reads as seconds
+        to one operator and as minutes to another, and the two readings differ
+        by a factor of sixty.
 
     Args:
-        payload: The flat request body.
-        now: The clock that bounds the moment, or None to replay a stored choice.
+        text: The duration that the operator wrote, such as ``200s`` or ``3d``.
+        field: The control that holds the value, for the refusal.
 
     Returns:
-        The chosen moment in epoch seconds, or None to reboot as soon as the
-        write ends.
+        The count of seconds after the start of the job.
 
     Raises:
-        BadOptionError: If the value is not a whole number of seconds, or names
-            a moment outside the window that a run can use.
+        BadOptionError: If the text names no unit, names an unknown unit, holds
+            no number, or names a span longer than the window of one year.
     """
-    value = payload.get("reboot_at")
-    if value is None or not str(value).strip():
-        return None
+    word = text.strip().lower().replace(" ", "")  # An operator may write "5 m".
+    if len(word) < 2:  # One character can hold a unit or a number, and never both.
+        raise BadOptionError(field)
+    unit = word[-1]
+    if unit not in DURATION_UNIT_SECONDS:
+        logger.warning("Upgrade portal refused the field %s because the unit is not one of s, m, h, or d", field)
+        raise BadOptionError(field)
+    number = word[:-1]
+    if not number.isdigit():  # ``isdigit`` refuses a sign, a space, and a decimal point.
+        raise BadOptionError(field)
+    seconds = int(number) * DURATION_UNIT_SECONDS[unit]
+    if seconds > START_TIME_HORIZON_SECONDS:
+        logger.warning("Upgrade portal refused the field %s because the span is more than one year", field)
+        raise BadOptionError(field)
+    return seconds
+
+
+def _read_stored_duration(stored: Any, field: str) -> int:
+    """Read a duration that an earlier save already turned into seconds.
+
+    Why:
+        A stored duration needs no parse, because the save already applied every
+        rule. It still needs the range check, because a record can reach this
+        reader from a store that another writer filled.
+
+    Args:
+        stored: The stored count of seconds.
+        field: The control that holds the value, for the refusal.
+
+    Returns:
+        The count of seconds.
+
+    Raises:
+        BadOptionError: If the value is not a whole count inside the window.
+    """
+    word = str(stored).strip()
+    if not word.isdigit():
+        raise BadOptionError(field)
+    seconds = int(word)
+    if seconds > START_TIME_HORIZON_SECONDS:
+        raise BadOptionError(field)
+    return seconds
+
+
+def _read_written_schedule(value: Any, field: str, now: Callable[[], int] | None) -> tuple[int | None, int | None]:
+    """Read the schedule value that the browser sent or an older record held.
+
+    Args:
+        value: The value of the plain field name.
+        field: The cloud field name.
+        now: The clock that turns a duration into a moment, or None.
+
+    Returns:
+        The duration in seconds and the moment in epoch seconds.
+
+    Raises:
+        BadOptionError: If the value matches no rule.
+    """
     word = str(value).strip()
-    if isinstance(value, bool) or not word.isdigit():
-        raise BadOptionError("reboot_at")
-    moment = int(word)  # ``isdigit`` already refused a sign, so the value is whole and not negative.
-    return moment if now is None else _guard_start_time(moment, now(), "reboot_at")
+    if isinstance(value, bool):
+        raise BadOptionError(field)
+    if word.isdigit() and len(word) >= EPOCH_DIGIT_COUNT:
+        # A run saved before issue #2187 holds a moment here. The window guard
+        # still applies, because a stale moment writes firmware at once.
+        moment = int(word)
+        return None, moment if now is None else _guard_start_time(moment, now(), field)
+    seconds = parse_duration_seconds(word, field)
+    return seconds, (now() + seconds if now is not None else None)
+
+
+def _read_schedule(
+    payload: Mapping[str, Any],
+    field: str,
+    now: Callable[[], int] | None,
+) -> tuple[int | None, int | None]:
+    """Read one schedule control as a duration and as a moment.
+
+    Why:
+        The operator writes a duration that counts from the start of the job.
+        The cloud request body takes an epoch second, so the portal keeps both
+        forms. The duration is the record that survives a save, and the moment
+        follows from the clock of the reader.
+
+        A run saved before issue #2187 stored an epoch second in the same field.
+        That value keeps its meaning, so a long whole number reads as a moment
+        and a value with a unit reads as a duration.
+
+    Args:
+        payload: The flat request body, or the stored option record.
+        field: The cloud field name, which is ``start_time`` or ``reboot_at``.
+        now: The clock that turns a duration into a moment. Pass None to keep a
+            stored moment exactly as an earlier save made it.
+
+    Returns:
+        The duration in seconds and the moment in epoch seconds. Each one is
+        None when the operator left the control alone.
+
+    Raises:
+        BadOptionError: If the value matches no rule above.
+    """
+    stored = payload.get(f"{field}_after")  # The duration in seconds that issue #2187 stores.
+    if stored is not None and str(stored).strip() and not isinstance(stored, bool):
+        seconds = _read_stored_duration(stored, field)
+        return seconds, (now() + seconds if now is not None else None)
+    value = payload.get(field)  # A browser body and an older record both use the plain name.
+    if value is None or not str(value).strip():
+        return None, None
+    return _read_written_schedule(value, field, now)
 
 
 def _guard_strategy_settings(options: UpgradeOptions) -> None:
@@ -945,18 +1039,21 @@ def build_options(payload: Mapping[str, Any], now: Callable[[], int] | None = _n
     """
     logger.info("Upgrade portal maps %s upgrade option field(s)", len(payload))
     flat = _flat_payload(payload)  # One shape, whether the browser or the store sent it.
+    start_after, start_moment = _read_schedule(flat, "start_time", now)
+    reboot_after, reboot_moment = _read_schedule(flat, "reboot_at", now)
     options = UpgradeOptions(
         reboot=_read_boolean(flat, "reboot", DEFAULT_OPTIONS.reboot),
         junos_file_action=_read_boolean(flat, "junos_file_action", DEFAULT_OPTIONS.junos_file_action),
         strategy=_read_strategy(flat),
-        start_time=_read_start_time(flat, now),
-        reboot_at=_read_reboot_at(flat, now),
+        start_time=start_moment,
+        reboot_at=reboot_moment,
         force=_read_boolean(flat, "force", DEFAULT_OPTIONS.force),
         stable_version=_read_boolean(flat, "stable_version", DEFAULT_OPTIONS.stable_version),
         canary=_read_canary(flat),
         rrm=_read_rrm(flat),
         peer_to_peer=_read_peer_to_peer(flat),
         ssr=_read_ssr(flat),
+        schedule=ScheduleOptions(start_time_after=start_after, reboot_at_after=reboot_after),
     )
     _guard_strategy_settings(options)  # A setting outside its own strategy is a caller fault.
     logger.debug("Upgrade portal chose the strategy %s with reboot %s", options.strategy, options.reboot)
@@ -1010,6 +1107,28 @@ def _display_text(value: Any) -> str:
     return str(value)
 
 
+def format_duration(seconds: int) -> str:
+    """Turn a count of seconds back into the shortest duration text.
+
+    Why:
+        The page shows the operator the value that they wrote. A record holds
+        the seconds, so this function picks the largest unit that divides the
+        count without a remainder. A value of 28800 therefore reads as ``8h``
+        and not as ``28800s``.
+
+    Args:
+        seconds: The count of seconds after the start of the job.
+
+    Returns:
+        The duration text, such as ``8h``.
+    """
+    for unit in ("d", "h", "m"):  # Try the largest unit first, so the text stays short.
+        size = DURATION_UNIT_SECONDS[unit]
+        if seconds >= size and seconds % size == 0:
+            return f"{seconds // size}{unit}"
+    return f"{seconds}s"  # Seconds always divide, so this is the last resort.
+
+
 def advanced_option_values(stored: Mapping[str, Any]) -> dict[str, str]:
     """Flatten the stored advanced options into the text of each control.
 
@@ -1035,8 +1154,6 @@ def advanced_option_values(stored: Mapping[str, Any]) -> dict[str, str]:
         "max_failure_percentage",
         "canary_phases",
         "max_failures",
-        "reboot_at",
-        "start_time",
         "p2p_cluster_size",
         "p2p_parallelism",
         "rrm_first_batch_percentage",
@@ -1046,7 +1163,13 @@ def advanced_option_values(stored: Mapping[str, Any]) -> dict[str, str]:
         "rrm_slow_ramp",
         "channel",
     )
-    return {name: _display_text(flat.get(name)) for name in names}
+    shown = {name: _display_text(flat.get(name)) for name in names}
+    # Issue #2187. The two schedule controls hold a duration, so the page shows
+    # the duration that the operator wrote and never the epoch second behind it.
+    for field in ("start_time", "reboot_at"):
+        seconds = flat.get(f"{field}_after")
+        shown[field] = format_duration(int(seconds)) if isinstance(seconds, int) else ""
+    return shown
 
 
 def resolve_family_scope(device_type: str, device: Mapping[str, Any]) -> tuple[str | None, str]:

@@ -47,7 +47,9 @@ from __future__ import annotations  # Postponed annotations keep every hint a pl
 
 import logging  # The portal logs with the standard library only.
 import threading  # One guard for the memory run store, which a driver thread also writes.
+import time  # Issue #2187 previews the moment that a schedule duration names.
 from collections.abc import Iterable, Mapping  # The version answer arrives in more than one shape.
+from datetime import UTC, datetime  # The same preview needs a readable moment.
 from typing import Any, NamedTuple  # A run record is free-form, and the lock read carries two fixed fields.
 
 from flask import Blueprint, Response, current_app, jsonify, request, session  # The framework of the portal.
@@ -1149,7 +1151,35 @@ def advanced_values(record: dict[str, Any]) -> dict[str, str]:
     if not callable(reader):  # A missing module must draw an empty control, never a fault page.
         return {}
     values: Any = reader(record.get("options", {}))  # One flat mapping of text values.
-    return dict(values)
+    shown = dict(values)
+    _add_schedule_preview(shown, record.get("options", {}))  # Issue #2187 names the moment behind each duration.
+    return shown
+
+
+def _add_schedule_preview(shown: dict[str, str], options: Mapping[str, Any]) -> None:
+    """Add the moment that each schedule duration names, if the run started now.
+
+    Why:
+        Issue #2187 replaces the epoch second with a duration. The operator
+        reads the intent on the confirmation page, and the intent alone does not
+        say when the firmware moves. This preview names the moment as well.
+
+        The text carries the word "about" and the condition of the start,
+        because the operator has not started the job yet. A page that named one
+        exact moment would state a falsehood the moment the operator paused.
+
+    Args:
+        shown: The control text of the run. The function changes it in place.
+        options: The stored option record of the run.
+    """
+    schedule = options.get("schedule") if isinstance(options.get("schedule"), Mapping) else {}
+    now = int(time.time())  # The preview counts from this read, and the start moves it.
+    for field in ("start_time", "reboot_at"):
+        seconds = schedule.get(f"{field}_after") if isinstance(schedule, Mapping) else None
+        if not isinstance(seconds, int):
+            continue  # A run with no duration shows no preview line.
+        moment = datetime.fromtimestamp(now + seconds, tz=UTC)
+        shown[f"{field}_preview"] = f"about {moment.strftime('%Y-%m-%d %H:%M UTC')} if you start now"
 
 
 def options_view(record: dict[str, Any]) -> dict[str, Any]:
