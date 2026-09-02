@@ -19,6 +19,11 @@ import os
 
 from tools import check_citations
 
+# The checker scans this file too, so a sample citation written as one literal
+# would report itself as a broken citation. Each test builds its sample from two
+# parts, and no literal of this file reads as a citation.
+_MD = ".md"  # The suffix that the citation pattern needs.
+
 
 def test_a_virtual_environment_path_reads_as_external() -> None:
     """A citation into the installed packages must never depend on the disk.
@@ -54,13 +59,13 @@ def test_a_citation_past_the_end_of_a_file_is_reported(tmp_path: object) -> None
     folder = str(tmp_path)  # The pytest fixture answers a path object.
     notes = os.path.join(folder, "notes")  # The citation reads `notes/short.md`.
     os.makedirs(notes, exist_ok=True)
-    target = os.path.join(notes, "short.md")  # The cited file.
+    target = os.path.join(notes, f"short{_MD}")  # The cited file.
     with open(target, "w", encoding="utf-8") as handle:
         handle.write("one\ntwo\n")  # Two lines, so line 99 cannot exist.
     source = os.path.join(folder, "cites.py")  # The file that holds the citation.
     with open(source, "w", encoding="utf-8") as handle:
-        handle.write("# See notes/short.md:99 for the rule.\n")
-    index = {"short.md": [target.replace("\\", "/")]}  # The checker matches on the file name.
+        handle.write(f"# See notes/short{_MD}:99 for the rule.\n")
+    index = {f"short{_MD}": [target.replace("\\", "/")]}  # The checker matches on the file name.
     found, findings = check_citations.check_file(source.replace("\\", "/"), {}, index)
     assert found == 1  # The checker read the citation.
     assert len(findings) == 1  # The line sits past the end of the file.
@@ -76,13 +81,13 @@ def test_a_citation_inside_a_file_is_accepted(tmp_path: object) -> None:
     folder = str(tmp_path)  # The pytest fixture answers a path object.
     notes = os.path.join(folder, "notes")  # The citation reads `notes/long.md`.
     os.makedirs(notes, exist_ok=True)
-    target = os.path.join(notes, "long.md")  # The cited file.
+    target = os.path.join(notes, f"long{_MD}")  # The cited file.
     with open(target, "w", encoding="utf-8") as handle:
         handle.write("\n".join(str(number) for number in range(100)))  # 100 lines.
     source = os.path.join(folder, "cites.py")  # The file that holds the citation.
     with open(source, "w", encoding="utf-8") as handle:
-        handle.write("# See notes/long.md:42 for the rule.\n")
-    index = {"long.md": [target.replace("\\", "/")]}  # The checker matches on the file name.
+        handle.write(f"# See notes/long{_MD}:42 for the rule.\n")
+    index = {f"long{_MD}": [target.replace("\\", "/")]}  # The checker matches on the file name.
     found, findings = check_citations.check_file(source.replace("\\", "/"), {}, index)
     assert found == 1  # The checker read the citation.
     assert findings == []  # The line sits inside the file.
