@@ -1295,6 +1295,52 @@ UNKNOWN_RUN_STATE = "unknown"
 FINISHED_RUN_STATES = frozenset({"succeeded", "failed", "stopped", "complete", "completed"})
 
 
+def run_site_label(record: Mapping[str, Any]) -> str:
+    """Return the site name of one run, or its identifier.
+
+    Why:
+        An old record holds the identifier alone. A row with an empty site tells
+        the operator nothing, and the identifier at least reaches the site page.
+
+    Args:
+        record: The stored run record.
+
+    Returns:
+        The site name, the site identifier, or an empty text.
+    """
+    return str(record.get("site_name") or record.get("site_id") or "")
+
+
+def run_end_moment(record: Mapping[str, Any], state: str) -> str:
+    """Return the stored end moment of one run, or an empty text.
+
+    Why:
+        A run that still runs has not ended. A page that showed the last update
+        as an end moment would tell the operator that a live run finished.
+
+    Args:
+        record: The stored run record.
+        state: The state that the row shows.
+
+    Returns:
+        The stored moment when the run ended, or an empty text.
+    """
+    return str(record.get("updated_at") or "") if state in FINISHED_RUN_STATES else ""
+
+
+def run_device_count(record: Mapping[str, Any]) -> int:
+    """Return how many devices one run acts on.
+
+    Args:
+        record: The stored run record.
+
+    Returns:
+        The count of targets. A run that reached no options holds none.
+    """
+    targets: Any = record.get("targets") or []  # A run that reached no options holds no target.
+    return len(targets) if isinstance(targets, (list, tuple)) else 0
+
+
 def run_history_row(record: Mapping[str, Any]) -> dict[str, Any]:
     """Shape one stored run record into the row that the history page paints.
 
@@ -1315,17 +1361,15 @@ def run_history_row(record: Mapping[str, Any]) -> dict[str, Any]:
         keys.
     """
     state = str(record.get("state") or "").strip() or UNKNOWN_RUN_STATE  # An old record names no state.
-    targets: Any = record.get("targets") or []  # A run that reached no options holds no target.
-    ended = str(record.get("updated_at") or "") if state in FINISHED_RUN_STATES else ""  # A live run has no end.
     return {
         "run_id": str(record.get("run_id") or ""),
-        "site_name": str(record.get("site_name") or record.get("site_id") or ""),
+        "site_name": run_site_label(record),
         "site_id": str(record.get("site_id") or ""),
         "state": state,
-        "device_count": len(targets) if isinstance(targets, (list, tuple)) else 0,
+        "device_count": run_device_count(record),
         "started_text": short_moment(record.get("created_at")),  # The human UTC moment.
         "started_raw": str(record.get("created_at") or ""),  # The stored text, for the title attribute.
-        "ended_text": short_moment(ended),  # Empty while the run still runs.
+        "ended_text": short_moment(run_end_moment(record, state)),  # Empty while the run still runs.
         "pre_capture_id": str(record.get("pre_capture_id") or ""),
         "post_capture_id": str(record.get("post_capture_id") or ""),
     }
