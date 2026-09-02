@@ -304,6 +304,18 @@
 <div class="portal-card">
   <h2 class="portal-card-title">Devices</h2>
 
+  {#
+    Issue #2075 caps each table. A capped table must state what it removed,
+    because an operator would otherwise read a cut table as the whole site.
+    An uncapped table states nothing, so the common page carries no noise.
+  #}
+  {% if (device_rows_held | default(0, true)) > (device_rows | length) %}
+    <p class="portal-note" data-testid="capture-device-cap-note">
+      This table shows the first {{ device_rows | length }} of
+      {{ device_rows_held }} devices. Download the capture to read every record.
+    </p>
+  {% endif %}
+
   <div class="portal-table-scroll">
     <table class="portal-table" data-testid="capture-device-table"
                  data-sortable>
@@ -365,6 +377,14 @@
 <div class="portal-card">
   <h2 class="portal-card-title">Wired clients</h2>
 
+  {% if (wired_rows_held | default(0, true)) > (wired_rows | length) %}
+    <p class="portal-note" data-testid="capture-wired-cap-note">
+      This table shows the first {{ wired_rows | length }} of
+      {{ wired_rows_held }} wired clients. Download the capture to read every
+      record.
+    </p>
+  {% endif %}
+
   <div class="portal-table-scroll">
     <table class="portal-table" data-testid="capture-client-wired-table"
                  data-sortable>
@@ -410,6 +430,14 @@
 
 <div class="portal-card">
   <h2 class="portal-card-title">Wireless clients</h2>
+
+  {% if (wireless_rows_held | default(0, true)) > (wireless_rows | length) %}
+    <p class="portal-note" data-testid="capture-wireless-cap-note">
+      This table shows the first {{ wireless_rows | length }} of
+      {{ wireless_rows_held }} wireless clients. Download the capture to read
+      every record.
+    </p>
+  {% endif %}
 
   <div class="portal-table-scroll">
     <table class="portal-table" data-testid="capture-client-wireless-table"
