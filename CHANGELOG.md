@@ -7,6 +7,22 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Order any table by any column
+
+- **Added**: Every table of the portal now sorts by any column, both ways. The
+  header answers a pointer, the Enter key, and the Space key. Issue #2027.
+- **Added**: Each sortable header carries `aria-sort`, so a screen reader names
+  the order. Each header also carries a shape, so the order needs no color.
+- **Added**: A column that holds a control offers no order. An action column
+  holds a button and never a value, so an order of those cells means nothing.
+- **Added**: The history page states that a sort orders the rows of the page on
+  screen. The sort runs in the browser, so it never reaches a later page.
+
+Warning: an operator who cannot order a device list can miss a device of the
+upgrade. A missed device keeps its old firmware, and the fleet then holds two
+versions. Finding that device is the fault that this whole feature exists to
+catch.
+
 ### Tell an operator why the organization picker is empty
 
 - **Fixed**: The organization picker told an operator with a valid token that

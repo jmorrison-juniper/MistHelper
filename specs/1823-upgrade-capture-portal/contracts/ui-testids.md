@@ -247,3 +247,24 @@ the word and never the class.
 | `nav-history` | Navigation to the history |
 | `flash-message` | The message region |
 | `csrf-meta` | The meta tag that holds the token |
+
+### Table sorting
+
+Issue #2027 lets an operator order any table by any column. The sort runs in the
+browser, so it needs no identifier of its own on each header. It marks the
+markup instead, and a test reads these attributes.
+
+| Attribute | Meaning |
+| --- | --- |
+| `data-sortable` | The table offers a sort on every column that carries no `data-no-sort` |
+| `data-no-sort` | The header carries a control and never a value, so it offers no order |
+| `data-sort-value` | The cell states its own order, which lets a readable date sort by its epoch |
+| `data-sort-arrow` | The shape that names the sort state, so no reader depends on color |
+
+| Identifier | Control |
+| --- | --- |
+| `history-sort-scope` | The note that states that a sort orders the rows of the page on screen |
+
+Each sortable header carries `role="button"`, `tabindex="0"`, and `aria-sort`.
+The value of `aria-sort` is `none`, `ascending`, or `descending`, and one column
+at a time holds an order.

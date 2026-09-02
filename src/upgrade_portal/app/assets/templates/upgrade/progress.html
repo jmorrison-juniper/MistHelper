@@ -237,7 +237,8 @@
   </dl>
 
   <div class="portal-table-scroll">
-    <table class="portal-table" data-testid="upgrade-run-table">
+    <table class="portal-table" data-testid="upgrade-run-table"
+                 data-sortable>
       <caption class="visually-hidden">
         Every device in the run, with its state, its firmware version before
         and after the upgrade, and the result of the version check.
@@ -250,7 +251,7 @@
           <th scope="col">Type</th>
           <th scope="col">State</th>
           <th scope="col">Version before</th>
-          <th scope="col">Target version</th>
+          <th scope="col" data-no-sort>Target version</th>
           <th scope="col">Version after</th>
           <th scope="col">Version check</th>
         </tr>

@@ -1047,3 +1047,30 @@
         overflow: visible;
     }
 }
+
+/* Issue #2027. A sortable header acts as a control, so it shows the pointer
+   shape and a focus ring. The arrow carries the sort state as a shape, so a
+   reader who cannot tell two colors apart still reads the order. */
+.portal-sort-header {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.portal-sort-header:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: -2px;
+}
+
+.portal-sort-arrow {
+  margin-left: 0.35rem;
+  opacity: 0.55;
+  font-size: 0.85em;
+}
+
+/* The active column shows its arrow at full strength, so the ordered column
+   stands out from the columns that only offer an order. */
+.portal-sort-header[aria-sort="ascending"] .portal-sort-arrow,
+.portal-sort-header[aria-sort="descending"] .portal-sort-arrow {
+  opacity: 1;
+}
