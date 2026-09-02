@@ -7,6 +7,19 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### List every upgrade run on the history page
+
+- **Added**: The history page holds a runs section beside the captures section.
+  Each row names the run, the site, the state, the device count, the start
+  moment, and the end moment. Issue #2199.
+- **Added**: Each run row links to the capture from before the upgrade and to
+  the capture from after it, so a reader reaches the comparison in one press.
+- **Fixed**: Every moment of the runs section reads as UTC. The store writes the
+  offset of the machine that started the run, so two runs of one afternoon could
+  read as two different hours.
+- **Added**: A run stored before the state field existed reads as `unknown`. The
+  page never hides such a row, because that run still happened.
+
 ### Name the control in a refused option, and state its rule
 
 - **Fixed**: A refused option named the internal cloud field, which appears on
