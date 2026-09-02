@@ -37,6 +37,7 @@ SORTABLE_TABLES = (
     "compare-client-table",
     "history-table",
     "history-run-table",  # Issue #2199 added the runs section of the history page.
+    "history-audit-table",  # Issue #2221 added the audit log of the history page.
     "inventory-table",
     "upgrade-target-table",
     "upgrade-run-table",

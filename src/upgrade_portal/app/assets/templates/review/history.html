@@ -197,6 +197,66 @@
 </div>
 
 <div class="portal-card">
+  <h2 class="portal-card-title">Audit log</h2>
+
+  <p class="portal-card-note">
+    Every change of a site lock, newest first. Each row names the moment in UTC,
+    the site, the action, and the operator. The portal shows a one-way digest of
+    the address of the operator and never the address itself.
+  </p>
+</div>
+
+<div class="portal-table-scroll">
+  <table class="portal-table" data-testid="history-audit-table" data-sortable>
+    <caption class="visually-hidden">
+      Every take, release, takeover, and expiry of a site lock.
+    </caption>
+
+    <thead>
+      <tr>
+        <th scope="col">Moment</th>
+        <th scope="col">Site</th>
+        <th scope="col">Action</th>
+        <th scope="col">Operator</th>
+        <th scope="col">Taken from</th>
+      </tr>
+    </thead>
+
+    <tbody>
+      {% for entry in audit_rows | default([], true) %}
+        <tr data-testid="history-audit-row-{{ loop.index }}">
+          <th scope="row" title="{{ entry.occurred_at }}">{{ entry.moment_text }}</th>
+          <td class="cell-mono">{{ entry.site_id }}</td>
+          <td>
+            <span class="portal-badge badge-{{ entry.action }}"
+                  data-testid="history-audit-action-{{ loop.index }}">{{ entry.action }}</span>
+            {#
+              Issue #2221: no writer records an expiry. No request runs at the
+              moment a hold ends, so the reader states where the fact comes
+              from. A reader who took an inferred row for a recorded one would
+              trust a moment that nobody measured.
+            #}
+            {% if entry.inferred %}
+              <span class="portal-note" data-testid="history-audit-inferred-{{ loop.index }}">
+                Read from the trail. The portal records no expiry as it happens.
+              </span>
+            {% endif %}
+          </td>
+          <td class="cell-mono">{{ entry.actor_digest }}</td>
+          <td class="cell-mono">{{ entry.previous_digest }}</td>
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="5" class="portal-table-empty" data-testid="history-audit-empty">
+            The portal holds no site lock action yet.
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="portal-card">
   <h2 class="portal-card-title">Captures</h2>
 
   <p class="portal-card-note">

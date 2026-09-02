@@ -73,8 +73,14 @@ from .identity import (
 
 __all__ = [
     "ACQUIRE_ATTEMPTS",
+    # Issue #2221: the four action names of the trail, and the reader path.
+    "ACTION_EXPIRE",
+    "ACTION_RELEASE",
+    "ACTION_TAKE",
+    "ACTION_TAKEOVER",
     "AUDIT_DIRECTORY",
     "AUDIT_FILE_NAME",
+    "audit_trail_path",
     "COMMAND_TIMEOUT_SECONDS",
     "CONNECT_TIMEOUT_SECONDS",
     "COOLDOWN_SECONDS",
@@ -466,7 +472,56 @@ class TakeoverAudit:
 #      trail without a change to the stored data model, and it lets this module
 #      keep the one-way import direction the header above describes.
 AUDIT_DIRECTORY: Final[str] = "data"  # The directory every local artifact of this tool uses
-AUDIT_FILE_NAME: Final[str] = "upgrade_takeover_audit.jsonl"  # One JSON object for each takeover
+AUDIT_FILE_NAME: Final[str] = "upgrade_takeover_audit.jsonl"  # One JSON object for each lock action
+
+# Issue #2221: the four actions that the trail records. The takeover was the
+# only one before, because `contracts/site-lock.md` asks for a record of it. A
+# page built on a trail of takeovers alone would read as though no operator ever
+# took or released a site, which is a false account of the day.
+ACTION_TAKE: Final[str] = "take"  # An operator took a free site
+ACTION_RELEASE: Final[str] = "release"  # The operator released the site
+ACTION_TAKEOVER: Final[str] = "takeover"  # An operator took a site that another held
+ACTION_EXPIRE: Final[str] = "expire"  # The hold ended with no release
+
+
+def _write_lock_action(org_id: str, site_id: str, action: str, actor_email: str, previous: str = "") -> None:
+    """Add one lock action to the append-only trail.
+
+    Why:
+        Issue #2221 asks the trail to hold every take, release, takeover, and
+        expiry. A page that showed a takeover alone would tell the reader that
+        one lock action ever happened.
+
+    Warning: this write never fails closed. A takeover refuses itself when the
+    trail cannot hold it, because a takeover moves a site from one operator to
+    another and an unaccountable move is worse than a refused one. A take and a
+    release move nothing that a reader cannot see on the page, so a lost record
+    of one must not stop honest work on an unwritable disk.
+
+    Args:
+        org_id: The organization of the site.
+        site_id: The site the action reached.
+        action: One of the four action names above.
+        actor_email: The operator who acted.
+        previous: The operator who held the site before a takeover.
+    """
+    document = {
+        "action": action,
+        "actor_email": actor_email,
+        "previous_actor_email": previous,
+        "occurred_at": _utc_now_text(),
+        "org_id": org_id,
+        "site_id": site_id,
+    }
+    try:
+        _append_audit_line(document)
+    except Exception as fault:  # The action already happened, so a lost record must not undo it.
+        _LOGGER.warning(
+            "lock: the portal could not record the %s of site %s (%s)",
+            action,
+            site_id,
+            type(fault).__name__,  # The message may name a path or a connection string.
+        )
 
 
 def _checkout_root() -> Path:
@@ -506,6 +561,20 @@ def _audit_path() -> Path:
     return directory / AUDIT_FILE_NAME
 
 
+def audit_trail_path() -> Path:
+    """Return the file that holds the trail of every lock action.
+
+    Why:
+        Issue #2221 reads this trail for the audit log of the history page. A
+        reader outside this module needs the path, and a private name would make
+        that reader depend on a name that this module may change.
+
+    Returns:
+        The absolute path of the append-only trail.
+    """
+    return _audit_path()
+
+
 def _append_audit_line(document: dict[str, str]) -> None:
     """Add one audit record to the end of the trail.
 
@@ -542,6 +611,10 @@ def _write_takeover_audit(org_id: str, site_id: str, audit: TakeoverAudit) -> No
     document = audit.to_record()  # The two addresses and the time
     document["org_id"] = org_id  # Without this pair, no reader can place the row
     document["site_id"] = site_id
+    # Issue #2221: every row of the trail names its action, so one reader serves
+    # all four. A row written before that change holds no action, and the reader
+    # of the audit log reads such a row as a takeover.
+    document["action"] = ACTION_TAKEOVER
     try:
         _append_audit_line(document)
     except Exception as fault:  # A site that no reader can account for is worse than a refused takeover.
@@ -1132,6 +1205,10 @@ def acquire_site_lock(request: LockRequest, client: Any = None) -> LockGrant:
         fresh = _new_record(request)
         if _write_new_lock(handle, request.key, fresh):  # The store decided the race
             _LOGGER.info("lock: operator %s holds site %s", request.owner.email_digest, request.site_id)
+            # Issue #2221: the trail records the take, so the audit log of the
+            # history page names every change of a site lock and not the
+            # takeover alone.
+            _write_lock_action(request.org_id, request.site_id, ACTION_TAKE, request.owner.actor_email)
             return LockGrant(record=fresh, state=LockState.ACQUIRED)
         held = _read_record(handle, request.key)
         if held is not None:  # A holder exists, so answer the operator about that holder
@@ -1191,6 +1268,28 @@ def refresh_site_lock(key: str, record: LockRecord, client: Any = None) -> int:
     return LOCK_TTL_SECONDS
 
 
+def key_scope(key: str) -> tuple[str, str]:
+    """Return the organization and the site that one lock key names.
+
+    Why:
+        Issue #2221 records a release, and `release_site_lock` receives the key
+        and the record alone. The key already carries both identifiers, so the
+        signature needs no new parameter and no caller changes.
+
+    Args:
+        key: The lock key, from `build_key`.
+
+    Returns:
+        The organization and the site. Each one is empty when the key holds
+        another shape, which leaves the trail row without a scope and never
+        raises during a release.
+    """
+    parts = key.split(":")  # `KEY_TEMPLATE` joins the parts with a colon.
+    if len(parts) < 2:  # A shape this reader does not know names no scope.
+        return "", ""
+    return parts[-2], parts[-1]  # The organization and the site sit at the end.
+
+
 def release_site_lock(key: str, record: LockRecord, client: Any = None) -> ReleaseOutcome:
     """Give up a lock the caller still holds.
 
@@ -1219,6 +1318,10 @@ def release_site_lock(key: str, record: LockRecord, client: Any = None) -> Relea
     if int(freed) != _SCRIPT_HELD:  # The lock expired, or a takeover moved it
         raise _release_loss(int(freed), record.run_id)
     _LOGGER.info("lock: the portal released the lock that run %s held", record.run_id)
+    # Issue #2221: the trail records the release beside the take, so a reader
+    # sees the whole hold and not the start of it alone.
+    org_id, site_id = key_scope(key)
+    _write_lock_action(org_id, site_id, ACTION_RELEASE, record.owner.actor_email)
     return ReleaseOutcome.RELEASED
 
 
