@@ -1,6 +1,6 @@
 # MistHelper - AI Agent Instructions
 
-Global coding standards (autonomous workflow, 5-item rule, inline comments, action logging, quality gates) are in `coding-standards.instructions.md` and apply automatically. This file adds MistHelper-specific guidance only.
+Global coding standards (autonomous workflow, 5-item rule, inline comments, action logging, quality gates) are in [coding-standards.instructions.md](instructions/coding-standards.instructions.md) and apply automatically. This file adds MistHelper-specific guidance only.
 
 When refactoring code, avoid using wrappers; actually restructure into classes as per project conventions.
 
@@ -30,7 +30,7 @@ Caveman may remove filler, pleasantries, and hedging. Caveman must not drop an a
 ## Core Architecture
 
 ### Python Project Hierarchy (5-Item Rule)
-See `coding-standards.instructions.md` § Structural Discipline for limits (max 5 params, 5 blocks, 25 lines).
+See [coding-standards.instructions.md](instructions/coding-standards.instructions.md) § Structural Discipline for limits (max 5 params, 5 blocks, 25 lines).
 
 Python hierarchy levels:
 1. **Project Root** → 2. **Packages/Directories** → 3. **Module Files** → 4. **Classes/Functions/Constants** → 5. **Methods/Attributes/Expressions**
@@ -100,42 +100,38 @@ MistHelper uses **natural business keys** from the Mist API, not artificial IDs.
 4. **Multi-Backend Output**: Call `DataExporter.write_with_format_selection(data, filename, api_function_name=...)`
 5. **Update README**: Modify operation count and add to menu table
 6. **Version Changelog**: Update `CHANGELOG.md` with `version YY.MM.DD.HH.MM` format (UTC timestamp)
-7. **Git Workflow**: Execute full deployment pipeline (see below)
+7. **Git Workflow**: Follow [git-flow-multi-agent.instructions.md](instructions/git-flow-multi-agent.instructions.md)
 
-### MANDATORY: Full Deployment Pipeline
-**AI agents MUST execute this complete workflow after any code changes:**
+### Validate locally, then push once
+
+Branching, agent coordination, and Actions minute rules live in
+[git-flow-multi-agent.instructions.md](instructions/git-flow-multi-agent.instructions.md).
+That file is authoritative. This section states the local loop only.
+
+Run these checks before every commit.
 
 ```powershell
-# Step 1: Validate BEFORE Commit (syntax + lint + format)
-python -m py_compile MistHelper.py    # Syntax check (no output = valid)
-python -m ruff check MistHelper.py    # Lint check (must pass clean)
-python -m black --check MistHelper.py # Format check (run without --check to auto-fix)
-# All three must pass before committing.
-
-# Step 2: Commit and Push
-git add MistHelper.py README.md  # Include all modified files
-git commit -m "version YY.MM.DD.HH.MM - description"  # UTC timestamp format
-git push origin main
-
-# Step 3: Wait for Container Build (triggers automatically on push)
-# The workflow includes a validation job that checks Python syntax BEFORE building.
-gh run list --workflow=container-build.yml --limit 1
-gh run watch <run-id>  # Wait for completion
-
-# Step 4: Pull New Image
-podman pull ghcr.io/jmorrison-juniper/misthelper:latest
-
-# Step 5: Restart Container
-podman stop misthelper ; podman rm misthelper
-podman run -d --name misthelper -p 2200:2200 -p 8055:8055 -v "${PWD}/data:/app/data:rw" -v "${PWD}/.env:/app/.env:ro" ghcr.io/jmorrison-juniper/misthelper:latest
-
-# Step 6: Verify
-podman ps  # Confirm container is running
+python -m py_compile MistHelper.py    # Syntax check. No output means valid.
+python -m ruff check MistHelper.py    # Lint check. Must pass clean.
+python -m black --check MistHelper.py # Format check. Drop --check to auto-fix.
 ```
 
-**DO NOT skip steps.** The user expects the container to be updated and running after code changes.
+Build and run the container on your own machine. Podman builds the same
+image that the registry builds.
 
-**Note**: Every changelog update triggers this pipeline - no standalone git operations.
+```powershell
+podman build -t misthelper:local .
+podman stop misthelper ; podman rm misthelper
+podman run -d --name misthelper -p 2200:2200 -p 8055:8055 `
+  -v "${PWD}/data:/app/data:rw" -v "${PWD}/.env:/app/.env:ro" misthelper:local
+podman ps
+```
+
+Caution: do not push a commit to make a registry build an image that Podman
+builds here in one minute. A registry build spends runner minutes, and the
+account holds a fixed balance each month. Pull
+`ghcr.io/jmorrison-juniper/misthelper:latest` only when you need the exact
+image that a release produced.
 
 ### Automated Sweep Safety
 
@@ -221,7 +217,7 @@ if confirmation != "UPGRADE":
 Use for all `input()` calls, destructive confirmations, menu selections, and any context that could encounter EOF.
 
 ### Inline Comments (NON-NEGOTIABLE)
-See `coding-standards.instructions.md` § Inline Comments for full rules. Python example:
+See [coding-standards.instructions.md](instructions/coding-standards.instructions.md) § Inline Comments for full rules. Python example:
 
 ```python
 result = api.get_sites(org_id)  # Fetch all sites for this org from Mist API
@@ -229,7 +225,7 @@ sites = [s for s in result if s.get("name")]  # Exclude unnamed/placeholder site
 ```
 
 ### Action Logging (NON-NEGOTIABLE)
-See `coding-standards.instructions.md` § Action Logging for full rules. Python example:
+See [coding-standards.instructions.md](instructions/coding-standards.instructions.md) § Action Logging for full rules. Python example:
 
 ```python
 logging.info("Fetching device list for site %s", site_id)  # Log before API call
@@ -238,7 +234,7 @@ logging.debug("Received %d devices from API", len(result))  # Log result count a
 ```
 
 ### Logging Standards
-See `coding-standards.instructions.md` § Logging Standards.
+See [coding-standards.instructions.md](instructions/coding-standards.instructions.md) § Logging Standards.
 - **ASCII Only**: Replace Unicode with ASCII equivalents (emoji map in agents.md). No Unicode in logs.
 
 ### File Path Management
@@ -389,7 +385,7 @@ Use `os.path.join()` or `Path()`, never hardcoded `/` or `\\`
 
 ## Project-Specific Conventions
 
-See `coding-standards.instructions.md` for naming standards and code readability rules.
+See [coding-standards.instructions.md](instructions/coding-standards.instructions.md) for naming standards and code readability rules.
 - **Class-based**: All features organized under semantic class names, no wrapper functions
 
 ---
@@ -412,8 +408,10 @@ See `coding-standards.instructions.md` for naming standards and code readability
 
 ## Multi-Agent Git Workflow
 
-Global workflow rules are in `git-workflow.instructions.md` (applied via `applyTo: "**"`).
-This section adds MistHelper-specific overrides only.
+The branch model, the rules for parallel agents, and the rules that protect the
+GitHub Actions minute balance live in
+[git-flow-multi-agent.instructions.md](instructions/git-flow-multi-agent.instructions.md).
+That file is authoritative. This section adds MistHelper-specific detail only.
 
 ### MistHelper-Specific Error-to-Issue Triggers
 
@@ -438,7 +436,8 @@ Every issue and PR MUST have at least:
 
 ### Fleet Coordination (MistHelper-Specific)
 
-See `git-workflow.instructions.md` § Agent Coordination for general rules. MistHelper additions:
+See [git-flow-multi-agent.instructions.md](instructions/git-flow-multi-agent.instructions.md)
+§ Part 2 for the general rules. MistHelper adds these:
 
 - **MistHelper.py is a hot file**: Only one agent should have an open PR modifying it at a time.
   Others should wait or work on non-overlapping files (tests, docs, CI, web portal).
@@ -483,27 +482,10 @@ Follows `.github/copilot-instructions.md` automatically. Cannot run `--test` (no
 
 ### Conflict Resolution Playbook
 
-**Strategy 1 -- Sequential Merge (preferred)**:
-1. Merge the cleanest PR first (fewest files, best coverage, most isolated).
-2. All other agents rebase onto updated `main`: `git fetch origin && git rebase origin/main`.
-3. Repeat: merge next cleanest, rebase remaining.
-
-**Strategy 2 -- Merge Agent (complex conflicts)**:
-Designate one agent as the reconciliation owner. It reviews competing PRs,
-produces a single reconciled branch incorporating all changes. Other agents
-stop pushing once the merge agent takes over.
-
-**Strategy 3 -- Redesign the Boundary (recurring conflicts)**:
-If the same files keep conflicting, extract contested code into separate modules
-so agents work on non-overlapping files. Refactoring investment that pays off
-across all future multi-agent work.
-
-**Conflict resolution rules**:
-- Never force-push to someone else's branch.
-- Always rebase, never merge `main` into feature branches.
-- Prefer `--force-with-lease` over `--force` for rebased branches.
-- If conflicts are extensive (>20 lines), abandon and re-implement from fresh `main`.
-- Let Copilot propose conflict resolutions -- paste both versions into chat.
+See [git-flow-multi-agent.instructions.md](instructions/git-flow-multi-agent.instructions.md)
+§ "When the same files keep conflicting" for the three strategies and the rules.
+One MistHelper addition: paste both versions into chat and let Copilot propose
+the resolution.
 
 ### Agent Observability & Efficiency
 
@@ -542,13 +524,21 @@ across all future multi-agent work.
 
 ### Copilot Token Efficiency
 
-See `copilot-token-efficiency.instructions.md` (applied globally via `applyTo: "**"`).
+See `copilot-token-efficiency.instructions.md` in the VS Code user profile at
+`%APPDATA%\Code\User\prompts\`. That file governs the model choice, the MCP
+servers, and the chat session. A cloud agent makes none of those choices, so
+the file stays out of this repository and costs no tokens here.
 
 ### Windows Branch Switching & Post-Merge Fix Timing
 
-See `git-workflow.instructions.md` § Windows Branch Switching and § Post-Merge Fix Timing.
+See [git-flow-multi-agent.instructions.md](instructions/git-flow-multi-agent.instructions.md)
+§ "Rules for shared state". Use a worktree instead of `git checkout`. Never push
+a commit to a branch after a maintainer squash-merged its pull request.
 
 ### NEVER Do These
+
+See [git-flow-multi-agent.instructions.md](instructions/git-flow-multi-agent.instructions.md)
+for the full rules. The short list:
 
 - Push fixes to a branch after its PR is squash-merged (commits become orphaned)
 - Add `auto-merge` label before CodeQL finishes on code PRs
@@ -556,6 +546,7 @@ See `git-workflow.instructions.md` § Windows Branch Switching and § Post-Merge
 - Force-push to `main` or shared branches
 - Run `git checkout` while VS Code has files open (use worktrees instead)
 - Skip `python -m py_compile`, `ruff check`, or `black --check` before committing
+- Push a commit only to make a workflow build a container that Podman builds here
 
 ---
 
@@ -643,7 +634,7 @@ an advisory in `ops-portal/package-lock.json` (issue #1847).
 
 ### Security Findings: Fix Over Suppress
 
-See `coding-standards.instructions.md` § Security Findings. Project-specific tools: bandit, pip-audit, CodeQL.
+See [coding-standards.instructions.md](instructions/coding-standards.instructions.md) § Security Findings. Project-specific tools: bandit, pip-audit, CodeQL.
 
 ### Delivery Artifacts (Per Release Tag)
 
@@ -694,7 +685,8 @@ PRs touching web UI must include:
 
 ## Complexity-Driven SpecKit Escalation
 
-See `git-workflow.instructions.md` § SpecKit Escalation for the full decision tree.
+See [git-flow-multi-agent.instructions.md](instructions/git-flow-multi-agent.instructions.md)
+§ Part 7 for the full decision table.
 
 **MistHelper-specific escalation triggers**:
 - Any change to a destructive operation (154-187, 189-191, 194, 206-208)

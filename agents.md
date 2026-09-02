@@ -1,9 +1,11 @@
 # MistHelper - AI Agent Instructions
 
 > **Canonical source**: `.github/copilot-instructions.md` contains the full project guide
-> (architecture, database strategy, workflows, CI/CD, git workflow, web UI autonomy).
-> This file supplements it with local VS Code Chat-specific notes.
-> Do NOT duplicate content from copilot-instructions.md here.
+> (architecture, database strategy, workflows, CI/CD, web UI autonomy).
+> **Branching, parallel agents, and GitHub Actions minutes** live in
+> [.github/instructions/git-flow-multi-agent.instructions.md](.github/instructions/git-flow-multi-agent.instructions.md).
+> This file supplements both with local VS Code Chat-specific notes.
+> Do NOT duplicate content from either file here.
 
 ## Role
 
@@ -72,7 +74,14 @@ run the tests again. See issue #1866.
 - **ASCII only in logs**: No Unicode/emoji
 - **File paths**: Use `os.path.join()` or `pathlib.Path()`, never hardcoded separators
 - **Container**: Podman primary, port 2200 (SSH), port 8055 (web UI)
-- **Zscaler**: Use GitHub Actions for container builds, never local `podman push`
+- **Zscaler**: Zscaler blocks a `podman push` to `ghcr.io`. Build and run the image
+  locally with `podman build` and `podman run`. Use GitHub Actions only when the
+  registry must hold the image, such as a release.
+- **Actions minutes**: MistHelper is public, so a standard runner costs nothing.
+  A private repository spends the 2,000 free minutes each month. Validate locally
+  first. Never push a commit only to start a workflow. See
+  [git-flow-multi-agent.instructions.md](.github/instructions/git-flow-multi-agent.instructions.md)
+  § Part 3.
 - **Automated sweep**: An automated sweep runs four checks before a commit. See
   the "Automated Sweep Safety" section in `.github/copilot-instructions.md`.
 - **Inline comments on EVERY line** (NON-NEGOTIABLE): Every executable line of AI-generated
@@ -85,7 +94,7 @@ run the tests again. See issue #1866.
 - **Token efficiency** (Effective June 2026): Use Auto mode by default. Share only relevant
   files/functions -- never entire repos. Start only needed MCP servers. Use agent mode for
   multi-step tasks, standard chat for quick questions. Ask for a plan before large changes.
-  See `copilot-token-efficiency.instructions.md` for full details.
+  See `.github/copilot-instructions.md` § Agent Observability & Efficiency for full details.
 - **Writing style -- Simplified Technical English (STE)** (NON-NEGOTIABLE): All
   documentation, code comments, pull request text, error messages, user-facing
   communication and printed output, and agent output MUST follow the STE writing

@@ -105,4 +105,23 @@ Python 3.13+: Follow standard conventions
 
 
 <!-- MANUAL ADDITIONS START -->
+## Branching, parallel agents, and Actions minutes
+
+The branch model, the rules that hold parallel agents apart, and the rules that
+protect the GitHub Actions minute balance live in one file:
+`.github/instructions/git-flow-multi-agent.instructions.md`. That file is
+authoritative. Read it before you create a branch, before you commit, and
+before you start a workflow run.
+
+Three rules matter most.
+
+1. Branch from `main`. Never branch from another feature branch.
+2. Use a worktree. Never run `git checkout` in a shared checkout.
+3. Validate on your own machine first. Never push a commit only to start a
+   workflow. MistHelper is public, so a standard runner costs nothing. A
+   private repository spends the 2,000 free minutes each month.
+
+Caution: this file carries a stale generation date. If it disagrees with
+`.github/copilot-instructions.md`, obey `.github/copilot-instructions.md`.
+
 <!-- MANUAL ADDITIONS END -->
