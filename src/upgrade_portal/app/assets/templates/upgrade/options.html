@@ -431,19 +431,20 @@
     #}
     <div class="mb-3" data-testid="upgrade-start-time-field">
       <label class="form-label" for="upgrade-start-time">
-        Begin the firmware download at this moment, in epoch seconds
+        Begin the firmware download after this much time
       </label>
-      <input type="number"
+      <input type="text"
              class="form-control"
              id="upgrade-start-time"
              data-testid="upgrade-start-time"
-             min="0"
-             step="1"
+             autocomplete="off"
+             placeholder="5m"
              value="{{ advanced_values.get('start_time') | default('', true) }}"
              aria-describedby="upgrade-start-time-note">
       <p class="portal-card-note" id="upgrade-start-time-note">
-        Leave the field empty to begin at once. The portal refuses a moment
-        already past and a moment more than one year ahead.
+        Write a number and a unit. Use s for seconds, m for minutes, h for
+        hours, and d for days. An example is 8h. The time counts from the moment
+        that you start the job. Leave the field empty to begin at once.
       </p>
     </div>
 
@@ -452,22 +453,21 @@
          data-requires-control="upgrade-reboot-group:yes"
          data-testid="upgrade-reboot-at-field">
       <label class="form-label" for="upgrade-reboot-at">
-        Reboot each switch and each gateway at this moment, in epoch seconds
+        Reboot each switch and each gateway after this much time
       </label>
-      <input type="number"
+      <input type="text"
              class="form-control"
              id="upgrade-reboot-at"
              data-testid="upgrade-reboot-at"
-             min="0"
-             step="1"
+             autocomplete="off"
+             placeholder="8h"
              value="{{ advanced_values.get('reboot_at') | default('', true) }}"
              aria-describedby="upgrade-reboot-at-note">
       <p class="portal-card-note" id="upgrade-reboot-at-note">
-        Leave the field empty to reboot as soon as the write ends. A switch and
-        a Junos gateway read this moment only when the reboot control above says
-        yes. A session smart router holds no reboot control, so a no on that
-        control sends the value that disables its reboot. The portal refuses a
-        moment already past and a moment more than one year ahead.
+        Write a number and a unit, such as 8h. The time counts from the moment
+        that you start the job. Leave the field empty to reboot as soon as the
+        write ends. A session smart router holds no reboot control, so a no on
+        the control above sends the value that disables its reboot.
       </p>
     </div>
 

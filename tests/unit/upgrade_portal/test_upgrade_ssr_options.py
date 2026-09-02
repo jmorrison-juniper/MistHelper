@@ -42,6 +42,8 @@ from src.firmware.upgrade_service import (
 )
 from src.upgrade_portal.upgrade.options import (
     BadOptionError,
+    format_duration,
+    parse_duration_seconds,
     advanced_option_values,
     build_option_record,
     build_options,
@@ -324,9 +326,9 @@ def test_the_options_page_reopens_with_the_saved_channel() -> None:
 
 
 def test_the_options_page_reopens_with_the_saved_download_moment() -> None:
-    """The confirmation page reports the download schedule from this same text."""
-    stored = build_option_record({"start_time": str(moment_soon())})
-    assert advanced_option_values(stored)["start_time"] == str(moment_soon())
+    """The page shows the duration that the operator wrote, not the epoch behind it."""
+    stored = build_option_record({"start_time": "8h"})
+    assert advanced_option_values(stored)["start_time"] == "8h"
 
 
 def test_a_run_with_no_router_choice_shows_an_empty_channel_control() -> None:
@@ -358,3 +360,61 @@ def test_a_junos_gateway_row_names_the_other_gateway_family() -> None:
     device = {"mac": MAC_SWITCH, "name": "fw1", "type": "gateway", "model": "SRX345", "version": "23.4R2-S3"}
     rows = build_version_options([device], {"SRX345": ("23.4R2-S4",)})
     assert rows[0]["gateway_family"] == GatewayFamily.JUNOS.value
+
+
+# ---------------------------------------------------------------------------
+# Issue #2187: the schedule as a duration
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("text", "seconds"),
+    [("200s", 200), ("5m", 300), ("8h", 28800), ("3d", 259200), ("0s", 0), ("5 m", 300)],
+)
+def test_each_duration_reads_as_its_count_of_seconds(text: str, seconds: int) -> None:
+    """The four units cover every window that a maintenance plan uses."""
+    assert parse_duration_seconds(text, "start_time") == seconds
+
+
+@pytest.mark.parametrize("bad", ["300", "5x", "m", "-5m", "5.5m", "400d", "", "s"])
+def test_the_portal_refuses_a_duration_that_no_rule_maps(bad: str) -> None:
+    """A bare number reads as seconds to one operator and as minutes to another."""
+    with pytest.raises(BadOptionError):
+        parse_duration_seconds(bad, "start_time")
+
+
+@pytest.mark.parametrize(("seconds", "text"), [(200, "200s"), (300, "5m"), (28800, "8h"), (259200, "3d"), (90, "90s")])
+def test_a_duration_reads_back_in_the_largest_unit_that_fits(seconds: int, text: str) -> None:
+    """The page shows the operator a value that they recognise."""
+    assert format_duration(seconds) == text
+
+
+def test_the_duration_reaches_the_body_as_a_moment() -> None:
+    """The cloud takes an epoch second, so the portal converts the duration."""
+    options = options_from({"start_time": "8h"})
+    assert options.start_time == fixed_now() + 28800
+
+
+def test_the_stored_record_keeps_the_duration_and_not_the_moment() -> None:
+    """A saved run must replay against the clock of the start, not of the save."""
+    stored = build_option_record({"start_time": "8h", "reboot_at": "3d"})
+    assert stored["schedule"] == {"start_time_after": 28800, "reboot_at_after": 259200}
+
+
+def test_a_saved_duration_resolves_against_a_later_clock() -> None:
+    """An operator who reads the plan for ten minutes still gets the window asked for."""
+    stored = build_option_record({"start_time": "8h"})
+    later = build_options(stored, now=lambda: fixed_now() + 600)
+    assert later.start_time == fixed_now() + 600 + 28800
+
+
+def test_a_run_saved_before_this_change_keeps_its_stored_moment() -> None:
+    """A stored epoch second read as a duration would move the run by about 60 years."""
+    replayed = build_options({"start_time": fixed_now() + 3600}, now=fixed_now)
+    assert (replayed.start_time, replayed.schedule.start_time_after) == (fixed_now() + 3600, None)
+
+
+def test_an_empty_schedule_holds_no_duration_and_no_moment() -> None:
+    """An empty control means the run begins at once."""
+    options = options_from({})
+    assert (options.start_time, options.schedule.start_time_after) == (None, None)

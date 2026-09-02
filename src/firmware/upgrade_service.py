@@ -347,6 +347,31 @@ class SsrOptions:
 
 
 @dataclass(frozen=True, slots=True)
+class ScheduleOptions:
+    """The two upgrade windows, as the operator wrote them.
+
+    Why:
+        The cloud request body takes an epoch second. No operator holds an epoch
+        second, so issue #2187 asks the page for a duration such as ``5m`` or
+        ``8h``. The duration counts from the start of the job.
+
+        This record keeps the duration, and ``UpgradeOptions`` keeps the moment
+        that follows from it. A saved run therefore replays the intent of the
+        operator against the clock of the start, and not against the clock of
+        the save.
+
+    Attributes:
+        start_time_after: The seconds between the start of the job and the
+            firmware download, or ``None`` to begin at once.
+        reboot_at_after: The seconds between the start of the job and the
+            reboot, or ``None`` to reboot as soon as the write ends.
+    """
+
+    start_time_after: int | None = None
+    reboot_at_after: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class UpgradeOptions:
     """The choices that the operator made for one upgrade run.
 
@@ -377,6 +402,7 @@ class UpgradeOptions:
         rrm: The radio resource management settings.
         peer_to_peer: The access-point-to-access-point download settings.
         ssr: The session smart router settings.
+        schedule: The two windows that the operator wrote as a duration.
     """
 
     reboot: bool = True
@@ -390,6 +416,7 @@ class UpgradeOptions:
     rrm: RrmOptions = field(default_factory=RrmOptions)
     peer_to_peer: PeerToPeerOptions = field(default_factory=PeerToPeerOptions)
     ssr: SsrOptions = field(default_factory=SsrOptions)
+    schedule: ScheduleOptions = field(default_factory=lambda: ScheduleOptions())
 
 
 @dataclass(frozen=True, slots=True)

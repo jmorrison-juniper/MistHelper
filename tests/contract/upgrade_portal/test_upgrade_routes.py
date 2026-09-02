@@ -756,15 +756,15 @@ def test_confirm_page_reports_the_release_train_and_the_schedule(
     stored = {
         "reboot": True,
         "strategy": "serial",
-        "start_time": 1900000000,
-        "reboot_at": 1900003600,
         "ssr": {"channel": "beta"},
+        "schedule": {"start_time_after": 3600, "reboot_at_after": 28800},
     }
     run_id = seed_run(run_store, "pre_capture_done", options=stored)
     page = upgrade_client.get(f"/runs/{run_id}/confirm").get_data(as_text=True)
     assert "beta" in page  # The release train reaches the last page before the firmware moves.
-    assert "1900000000" in page  # The download moment reaches the same page.
-    assert "1900003600" in page  # The reboot moment reaches the same page.
+    assert "1h" in page  # The download duration reads back in the unit that fits it.
+    assert "8h" in page  # The reboot duration reads back the same way.
+    assert "if you start now" in page  # Each duration carries the moment that it names.
     assert "Release train" in page  # The row carries a label that an operator reads.
 
 
