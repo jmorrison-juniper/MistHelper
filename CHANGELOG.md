@@ -7,6 +7,25 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Show the effective default in every upgrade option control
+
+- **Added**: Each optional control names the value that applies when the
+  operator leaves it empty. The page reads that value from the server, because
+  the cloud schema and the environment both live there. A default written into
+  the markup by hand would drift from the schema. Issue #2186.
+- **Fixed**: The control for the failures inside each phase carried the text
+  `1,2,5,10`. The cloud names no such default. An operator therefore read an
+  invented example as the value that the run would use. The page no longer
+  shows that text.
+- **Added**: The three version defaults of the environment reach the page.
+  `CAPTURE_DEFAULT_AP_VERSION`, `CAPTURE_DEFAULT_SWITCH_VERSION`, and
+  `CAPTURE_DEFAULT_GATEWAY_VERSION` each name the version of one device type.
+
+Warning: a default that reached the request body can start an upgrade that
+nobody reviewed. Such a run would carry a value that the operator never chose.
+The page shows each default as placeholder text alone, and a test proves that an
+untouched control stores nothing.
+
 ### Take a duration instead of an epoch second for the two schedule controls
 
 - **Changed**: Each schedule control takes a duration that counts from the
