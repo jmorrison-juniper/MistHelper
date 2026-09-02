@@ -96,6 +96,7 @@ OPTIONS_API_PATH = "/api/runs/<run_id>/options"  # The saved target list and the
 VERSIONS_PATH = "/api/runs/<run_id>/versions"  # `contracts/http-api.md` section 5 names this path.
 START_PATH = "/api/runs/<run_id>/start"  # The one begin action of a run.
 STATUS_PATH = "/api/runs/<run_id>/status"  # The poll target of the browser.
+RETRY_PATH = "/api/runs/<run_id>/retry"  # Issue #2202 builds a new run from the settings of a failed one.
 RESCHEDULE_PATH = "/api/runs/<run_id>/reschedule"  # Issue #2201 moves the start of a run that has not begun.
 CANCEL_PATH = "/api/runs/<run_id>/cancel"  # Issue #2201 ends a run that never reached the cloud.
 STOP_PATH = "/api/runs/<run_id>/stop"  # The one stop action of a run.
@@ -1709,6 +1710,8 @@ def run_page(run_id: str) -> str:
         # Issue #2201 shows the reschedule and the cancel for a run that has not
         # reached the cloud. A run past that point offers the stop control alone.
         run_not_started=run_not_started(record),
+        # Issue #2202 shows the retry for a failed run, and for no other state.
+        run_state_name=str(record.get("state") or ""),
         **context,  # The site labels, the stop partial values, and the lock banner values.
     )
 
@@ -1933,11 +1936,14 @@ def record_stop_outcome(store: Any, run_id: str, outcome: StopOutcome) -> dict[s
     return load_run(run_id) or {}  # Read again, because this write changed the record.
 
 
-# Issue #2201: the two codes that the reschedule and the cancel answer.
 RUN_ALREADY_STARTED_CODE = "run_already_started"  # The run reached the cloud, so the stop control applies instead.
 RUN_ALREADY_STARTED_MESSAGE = (
     "This run already sent firmware to the cloud. Use the stop control, which cancels the work that has not begun."
 )
+
+# Issue #2202: a retry reaches a failed run alone.
+RUN_NOT_RETRYABLE_CODE = "run_not_retryable"
+RUN_NOT_RETRYABLE_MESSAGE = "A retry reads a failed run. This run holds another state, so no retry applies to it."
 
 
 def run_not_started(record: Mapping[str, Any]) -> bool:
@@ -1978,6 +1984,113 @@ def guard_not_started(record: dict[str, Any]) -> tuple[Response, int] | None:
     if run_not_started(record):  # The run holds a plan alone.
         return None
     return json_error(CONFLICT_STATUS, RUN_ALREADY_STARTED_CODE, RUN_ALREADY_STARTED_MESSAGE)
+
+
+# Issue #2202: the two names that the schedule group of a stored option record
+# holds. Each one names the duration that the operator wrote, in seconds.
+SCHEDULE_DURATION_FIELDS: Mapping[str, str] = {
+    "start_time": "start_time_after",
+    "reboot_at": "reboot_at_after",
+}
+
+RETRY_DROPPED_SCHEDULE_MESSAGE = (
+    "The earlier run named an exact moment, which now sits in the past. "
+    "This run starts at once unless you set a new time."
+)
+
+
+def rebased_options(options: Mapping[str, Any]) -> tuple[dict[str, Any], list[str]]:
+    """Copy every option of a failed run and move each schedule to the present.
+
+    Why:
+        Issue #2202 asks a retry to reuse every choice of the failed run. A
+        rebuild by hand drops a setting, and the retry then runs a plan that
+        differs from the one that failed.
+
+        Warning: a schedule of the failed run names a moment in the past. A
+        retry that kept that moment would write the firmware at once, and the
+        operator would read a delayed start that never happens.
+
+        The record holds the duration beside the moment, so a retry keeps the
+        duration and counts it again at the moment of the start. A record that
+        holds a moment alone comes from a run saved before issue #2187, or from
+        a reschedule. Such a schedule cannot be rebased, so the retry drops it
+        and the page names the drop.
+
+    Args:
+        options: The stored option record of the failed run.
+
+    Returns:
+        The options for the new run, and one sentence for each dropped schedule.
+    """
+    copied = dict(options)  # A copy, so the failed record keeps every value it holds.
+    schedule: Any = copied.get("schedule") or {}  # The group that holds each duration.
+    notes: list[str] = []  # One sentence for each schedule that the retry dropped.
+    for field, duration_name in SCHEDULE_DURATION_FIELDS.items():  # One pass for each schedule control.
+        if field not in copied:  # The failed run named no such schedule at all.
+            continue
+        duration = schedule.get(duration_name) if isinstance(schedule, Mapping) else None
+        if isinstance(duration, int) and duration > 0:  # The record holds the duration the operator wrote.
+            continue  # The start route counts it again, so the retry keeps it as it stands.
+        copied.pop(field, None)  # A moment alone cannot be rebased, so it never reaches the new run.
+        notes.append(RETRY_DROPPED_SCHEDULE_MESSAGE)
+        logger.info("upgrade: the retry dropped the schedule %s, which named a moment alone", field)
+    return copied, notes
+
+
+@upgrade_bp.post(RETRY_PATH)
+@identity.require_session
+def retry_run(run_id: str) -> tuple[Response, int]:
+    """Build a new run from the settings of one failed run.
+
+    Why:
+        A failed run holds every choice that the operator made, and the portal
+        offered no way to use them again. The operator returned to the site,
+        took the lock, and rebuilt every option by hand. A rebuild by hand drops
+        a setting, and the retry then ran a plan that differed from the one that
+        failed.
+
+        The new run takes no pre-check of the failed run. The site changed while
+        that run wrote firmware to part of it, so the reading before the failure
+        no longer describes the site. The operator therefore reaches the capture
+        page, and the confirmation stays locked until a fresh capture verifies.
+
+    Args:
+        run_id: The key of the failed run.
+
+    Returns:
+        The new run identifier, or a refusal.
+    """
+    failed = load_run(run_id)  # Read first, because the record names the site the lock guards.
+    if failed is None:  # A run that left the store, or a key that never existed.
+        return run_not_found()
+    refusal = stop_lock_refusal(failed)  # FR-038i binds every write of a run to the operator that holds the site.
+    if refusal is not None:  # Another operator holds the site, so this call writes nothing.
+        return refusal
+    if str(failed.get("state") or "") != RunState.FAILED.value:  # A retry reaches a failed run alone.
+        return json_error(CONFLICT_STATUS, RUN_NOT_RETRYABLE_CODE, RUN_NOT_RETRYABLE_MESSAGE)
+    org_id = str(failed.get("org_id") or "")  # The new run keeps the scope of the failed one.
+    site_id = str(failed.get("site_id") or "")  # FR-014 binds one run to one site.
+    logger.info("upgrade: build a retry of the failed run %s", run_id)  # BEFORE the write.
+    record = RunRecordBuilder().build(new_run_spec(org_id, site_id))  # The record layer owns every field.
+    options, notes = rebased_options(failed.get("options") or {})  # Every choice, with each schedule rebased.
+    record["options"] = options
+    record[TARGETS_FIELD] = list(failed.get(TARGETS_FIELD) or [])  # The same devices and the same versions.
+    record["retry_of_run_id"] = run_id  # The new record names the run that it came from.
+    if not save_run(record):  # The operator must learn that the portal kept nothing.
+        return write_failed()
+    logger.info("upgrade: the retry %s came from the failed run %s", record["run_id"], run_id)  # AFTER the write.
+    return (
+        jsonify(
+            {
+                "run_id": record["run_id"],
+                "state": record["state"],
+                "retry_of_run_id": run_id,
+                "notes": notes,  # The page names every schedule that the retry dropped.
+            }
+        ),
+        CREATED_STATUS,
+    )
 
 
 @upgrade_bp.post(RESCHEDULE_PATH)

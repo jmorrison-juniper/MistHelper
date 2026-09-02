@@ -469,6 +469,34 @@ The key sits last in the body, so it never hides a key that this contract fixes.
 
 The browser polls this endpoint every 30 seconds.
 
+### `POST /api/runs/<run_id>/retry` — build a new run from a failed one
+
+| Item | Value |
+| --- | --- |
+| Body | Empty |
+| 201 | `{ "run_id": "<new id>", "state": "created", "retry_of_run_id": "<old id>", "notes": [] }` |
+| 401 | `not_authenticated` when no browser session exists |
+| 404 | `run_not_found` |
+| 409 | `site_locked` when a different operator holds the site lock |
+| 409 | `run_not_retryable` when the run holds any state except `failed` |
+| 500 | `run_write_failed` when the store refused the write |
+| 503 | `lock_store_unreachable` when the portal cannot read the site lock |
+
+The new run copies every option of the failed run, the device list, and the
+target version of each device. It names the failed run in `retry_of_run_id`.
+
+Warning: a schedule of the failed run names a moment in the past. A retry that
+kept that moment would write the firmware at once, and the operator would read a
+delayed start that never happens.
+
+The record holds the duration beside the moment, so the retry keeps the duration
+and the start route counts it again. A record that holds a moment alone cannot be
+rebased. The retry drops that schedule, and `notes` names each drop.
+
+The new run adopts no capture of the failed run. The site changed while that run
+wrote firmware to part of it, so the reading before the failure no longer
+describes the site. The confirmation stays locked until a fresh capture verifies.
+
 ### `POST /api/runs/<run_id>/reschedule` — move the start of a run that has not begun
 
 | Item | Value |

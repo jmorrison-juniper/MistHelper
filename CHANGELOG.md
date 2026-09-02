@@ -7,6 +7,21 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Retry a failed run in one press
+
+- **Added**: A failed run offers a retry to the holder of the site lock. The new
+  run copies every option, the device list, and the target version of each
+  device, and it names the failed run that it came from. Issue #2202.
+- **Fixed**: The retry rebases each schedule. A schedule of the failed run names
+  a moment in the past, and a retry that kept it would write the firmware at
+  once while the operator read a delayed start that never happens.
+- **Note**: The record holds the duration beside the moment, so the retry keeps
+  the duration and the start route counts it again. A record that holds a moment
+  alone cannot be rebased. The retry drops that schedule and names the drop.
+- **Note**: The retry adopts no capture of the failed run. The site changed
+  while that run wrote firmware to part of it, so the confirmation stays locked
+  until a fresh capture verifies.
+
 ### Repair every run link of the history page
 
 - **Fixed**: Each run row of the history page linked `/runs/<run_id>/progress`,
