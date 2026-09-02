@@ -9,9 +9,54 @@ This file records the result of every scenario in `quickstart.md`. Each scenario
 carries one result: PASS, FAIL, or BLOCKED. BLOCKED means the environment
 prevented the run. A scenario that did not run never counts as a PASS.
 
+The file holds two runs. Read the run of 2026-09-02 first, because it replaces
+every result of the earlier run that it names. The run of 2026-08-20 stays in
+the file, because it records what a workstation with no credential can prove.
+
 ---
 
-## 1. Environment
+## 0. The live run of 2026-09-02
+
+**Environment**: the container stack. `misthelper-app` served the portal on port
+8056, `misthelper-arangodb` held the documents, and `misthelper-redis` held the
+site lock. `GET /readyz` answered `{"database":"ok","redis":"ok","status":
+"ready"}`.
+
+**Site**: Morrison House Site, `cf36153a-97bb-4974-8f8f-e9cc25d64d83`, of the
+Morrison House organization. The site holds nine devices.
+
+| # | Scenario | Result | Evidence |
+| --- | --- | --- | --- |
+| 1 | Prerequisites | PASS | `/readyz` answers 200 with both stores ok. The sign-in page lists both services as up. |
+| 2 | Start from the container | PASS | The portal answered every page of the run on port 8056. |
+| 4 | Scenario A, the first capture | PASS | Capture `cap-94b9e2fb486c47eea7c77a0506d2d4d6-01` reached `verified` at 100 percent. It holds 9 devices, 40 wired clients, and 20 wireless clients, and it stores 18,618 bytes. The page reads `The portal read the capture back and the record matches.` |
+| 5 | Scenario B, compare two captures | PASS | The portal compared `cap-bb14061de58045e4995bb2ad8d7a77df-01` against `cap-2e740cb7ef2d49a089d285ef1dae8049-01`, which stand 42 hours apart. The client table named every added client, every missing client, and every client that stayed. The device table read `The digests matched, so the portal compared no device`, which is correct, because no firmware changed. The full CSV export answered 200 with 83 lines. |
+| 8 | Scenario E, two operators and one site | PASS | The lock control answered `You hold this site. The portal renews the hold every 60 seconds.` The release control answered `You released this site. Another operator may take it now.` |
+| 9 | Scenario F, the history view | PASS | The history page listed 8 stored captures, each with a readable UTC moment, the role, the state, the device count, the device types, the client count, and the stored size. |
+
+### The two scenarios that stay open
+
+Scenario C writes firmware to real hardware and reboots it. Scenario D stops
+that upgrade. Both need a person who decides to run them.
+
+Warning: no agent may start scenario C alone. The write reaches production
+hardware, and a reboot removes the network of the site for several minutes.
+
+| # | Scenario | Result | Why |
+| --- | --- | --- | --- |
+| 6 | Scenario C, upgrade with the settle gate | BLOCKED | A person must choose the window and watch the run. |
+| 7 | Scenario D, the stop control | BLOCKED | It needs the run of scenario C. |
+
+### What the run found
+
+The run found one defect. The site inventory page answered the status 500 for
+this site, because one device reports the type `router` and the portal modeled
+three types alone. Issue #2211 records the defect, and pull request #2212
+repaired it. The capture of scenario A ran after that repair.
+
+---
+
+## 1. Environment of the earlier run of 2026-08-20
 
 | Item | Value |
 | --- | --- |
@@ -45,7 +90,10 @@ credentials. Neither result is a product defect.
 
 ---
 
-## 2. Results
+## 2. Results of the earlier run of 2026-08-20
+
+The run of 2026-09-02 above replaces every BLOCKED result of this table except
+the two that name live hardware.
 
 | # | Scenario | Result | Evidence |
 | --- | --- | --- | --- |
