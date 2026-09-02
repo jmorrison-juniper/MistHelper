@@ -197,19 +197,27 @@
         </tr>
       {% else %}
         {#
-          An empty page is a real state, not a fault. Two causes reach it, and
-          the two need different words. A cloud session states its own scope, so
-          an account with no privilege record reaches no organization. A filter
-          that matches nothing is the other cause, and the operator fixes that
-          one alone. The filter text tells the two causes apart, so the page
-          tests one string and counts nothing. review/history.html tests
-          site_label the same way.
+          An empty page is a real state, not a fault. Three causes reach it, and
+          each one needs different words. A filter that matches nothing is the
+          first, and the operator fixes that one alone. A cloud session that
+          named a privilege list with no organization is the second, and an
+          administrator fixes that one.
+
+          The third cause is a cloud read that never answered. Issue #1989 holds
+          the report. The page told an operator with a valid token that the
+          sign-in reaches no organization, and it sent that operator to an
+          administrator who could change nothing. `privilege_state` tells the
+          second cause from the third.
         #}
         <tr>
-          <td colspan="3" class="portal-table-empty">
+          <td colspan="3" class="portal-table-empty" data-testid="orgs-empty-note">
             {% if filter_text %}
               No organization matches the filter. Clear the filter to see every
               organization.
+            {% elif privilege_state | default('known', true) == 'unknown' %}
+              The portal could not read the organizations of this sign-in. The
+              cloud named no privilege list. Check that the Mist cloud above is
+              the cloud that holds your organizations, then sign in again.
             {% else %}
               This sign-in reaches no organization. Ask an administrator for
               access, then sign in again.

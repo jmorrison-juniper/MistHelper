@@ -168,6 +168,12 @@ LOCK_STATE_FREE = "free"  # The lock store answered and named no holder.
 LOCK_STATE_LOCKED = "locked"  # The lock store answered and named a holder.
 LOCK_STATE_UNKNOWN = "unknown"  # The lock store did not answer, so the portal cannot tell.
 
+# The two answers of `privilege_state`. The cloud names a privilege list, or it
+# names none. An unknown list is not an empty one, and issue #1989 holds the
+# report of a page that treated the two as one.
+STATE_UNKNOWN = "unknown"  # The cloud named no privilege list, so the scope of this sign-in is unread.
+STATE_KNOWN = "known"  # The cloud named a privilege list, so an empty picker is a real answer.
+
 # `partials/lock_banner.html` names a fourth word that the site list cannot
 # reach. The lock store answers one address for each site, and several browsers
 # of one operator share that address. Only the signed session of this browser
@@ -414,12 +420,39 @@ def permitted_orgs() -> list[dict[str, str]]:
     Returns:
         One record for each organization, sorted by name.
     """
-    privileges = identity.session_privileges() or []  # A session with no privilege list shows an empty picker.
+    logger.info("select: read the privilege list of this sign-in")  # Report before the pass.
+    # An unknown list reads as empty here. `privilege_state` tells the two apart.
+    privileges = identity.session_privileges() or []
     found: dict[str, str] = {}  # One entry for each organization, so a repeated privilege counts once.
     for entry in privileges:  # One pass over the privilege list of this operator.
         add_org_entry(found, entry)  # The helper drops an entry that names no organization.
     ordered = sorted(found.items(), key=lambda pair: pair[1])  # The picker lists the organizations by name.
+    logger.debug("select: the picker holds %s organization(s)", len(ordered))  # Report the count after the pass.
     return [{ORG_FIELD: key, "name": name} for key, name in ordered]  # One record for each picker row.
+
+
+def privilege_state() -> str:
+    """Return whether the portal read the privilege list of this sign-in.
+
+    Why:
+        `identity.session_privileges` answers None for an unknown list and a
+        list for a known one. `permitted_orgs` flattens None to an empty list,
+        so the picker could not tell an account with no organization from a
+        cloud read that failed.
+
+        The page then told an operator with a valid token that the sign-in
+        reaches no organization, and it sent that operator to an administrator
+        who could change nothing. Issue #1989 holds that report.
+
+    Returns:
+        ``unknown`` when the cloud named no privilege list, and ``known`` when
+        it named one. A known list may still hold no organization, which is a
+        real answer and not a fault.
+    """
+    logger.info("select: test whether the cloud named a privilege list")  # Report before the read.
+    state = STATE_UNKNOWN if identity.session_privileges() is None else STATE_KNOWN
+    logger.debug("select: the privilege list of this sign-in is %s", state)  # Report the answer.
+    return state
 
 
 def add_org_entry(found: dict[str, str], entry: Any) -> None:
@@ -1359,7 +1392,14 @@ def org_page() -> str:
     needle = request.args.get(FILTER_FIELD, "").strip()  # An absent argument reads as no filter.
     offset = read_whole_number(OFFSET_FIELD, 0)  # A damaged link reads as the first page.
     view = build_org_view(permitted_orgs(), offset, needle)  # The builder settles the filter and the paging.
-    return render_page(ORG_TEMPLATE, organizations=view.rows, org_view=view)  # The page prints settled values.
+    # Issue #1989. An empty picker has two causes, and the two need different
+    # words. The page reads this state to pick the sentence that fits.
+    return render_page(
+        ORG_TEMPLATE,
+        organizations=view.rows,
+        org_view=view,
+        privilege_state=privilege_state(),
+    )  # The page prints settled values.
 
 
 @select_bp.post(ORG_PAGE_PATH)

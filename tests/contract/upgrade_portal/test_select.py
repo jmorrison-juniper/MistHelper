@@ -21,6 +21,7 @@ Why:
 
 from __future__ import annotations
 
+import re  # Issue #1989 collapses the wrapped text of a template.
 from collections.abc import Iterator
 from typing import Any
 
@@ -29,6 +30,7 @@ from flask import Flask
 from flask.testing import FlaskClient
 from werkzeug.test import TestResponse
 
+from src.upgrade_portal.app.routes import select  # Issue #1989 patches the organization reader of this module.
 from src.upgrade_portal.runtime import identity
 
 # ---------------------------------------------------------------------------
@@ -1041,3 +1043,80 @@ def test_the_inventory_refuses_a_session_with_no_chosen_organization(
     response = select_client.get(f"/api/sites/{fake_site_id}/inventory")
     assert response.status_code == 404
     assert read_error_code(response) == SITE_NOT_FOUND_CODE
+
+
+# ---------------------------------------------------------------------------
+# Issue #1989: an empty picker has three causes, and each one needs its own words
+# ---------------------------------------------------------------------------
+
+
+def test_an_unread_privilege_list_never_reads_as_an_empty_one(
+    select_client: FlaskClient,
+    registered_owner: identity.SessionOwner,
+) -> None:
+    """A plain session names no privilege list, so the scope stays unread.
+
+    Why:
+        The picker read an unknown list as an empty one, and the page then told
+        an operator with a valid token that the sign-in reaches no
+        organization. That operator asked an administrator for access, and the
+        administrator could change nothing. Issue #1989 holds that report.
+
+    Args:
+        select_client: The test client for the wired application.
+        registered_owner: The registered operator, whose session states no scope.
+    """
+    sign_in_client(select_client, registered_owner)  # The picker needs a signed-in operator.
+    words = collapsed_text(select_client.get("/select/org").get_data(as_text=True))
+    assert "could not read the organizations of this sign-in" in words  # The page names the real cause.
+    assert "Ask an administrator for access" not in words  # It sends nobody to the wrong person.
+
+
+def test_a_read_list_with_no_organization_names_the_administrator(
+    select_client: FlaskClient,
+    scoped_owner: identity.SessionOwner,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A cloud that answered with no organization is a real answer, not a fault.
+
+    Args:
+        select_client: The test client for the wired application.
+        scoped_owner: The registered operator with a stated scope.
+        monkeypatch: The fixture that empties the stated scope.
+    """
+    sign_in_client(select_client, scoped_owner)  # The picker needs a signed-in operator.
+    monkeypatch.setattr(select, "permitted_orgs", list)  # The cloud answered, and it named no organization.
+    words = collapsed_text(select_client.get("/select/org").get_data(as_text=True))
+    assert "Ask an administrator for access" in words  # An administrator fixes this one.
+    assert "could not read the organizations" not in words  # The read worked, so no read fault shows.
+
+
+def test_the_privilege_state_names_a_read_list(
+    select_client: FlaskClient,
+    scoped_owner: identity.SessionOwner,
+) -> None:
+    """A session that states a scope reports a read list.
+
+    Args:
+        select_client: The test client for the wired application.
+        scoped_owner: The registered operator with a stated scope.
+    """
+    sign_in_client(select_client, scoped_owner)  # The picker needs a signed-in operator.
+    words = collapsed_text(select_client.get("/select/org").get_data(as_text=True))
+    assert "could not read the organizations" not in words  # A stated scope is a read list.
+
+
+def collapsed_text(page: str) -> str:
+    """Return the page with every run of whitespace turned into one space.
+
+    Why:
+        The template wraps a sentence across several lines, so a test that
+        searched the raw page would miss a sentence that holds a line break.
+
+    Args:
+        page: The rendered page.
+
+    Returns:
+        The same text with one space between every word.
+    """
+    return re.sub(r"\s+", " ", page)  # One space between words, so a wrapped sentence reads as one line.

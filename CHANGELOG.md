@@ -7,6 +7,20 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Tell an operator why the organization picker is empty
+
+- **Fixed**: The organization picker told an operator with a valid token that
+  the sign-in reaches no organization. The reader answers `None` for a scope
+  that it could not read, and the picker turned that answer into an empty list.
+  An empty list and an unread list then looked the same. Issue #1989.
+- **Added**: The page names the cause that fits. A filter that matches nothing
+  reads one sentence. A cloud that answered with no organization reads a second
+  one. A cloud that named no privilege list reads a third one.
+
+Warning: the earlier sentence sent an operator to an administrator who could
+change nothing. The operator held the access the whole time, and the portal
+could not read the list that names it.
+
 ### Hide a control that the device types of the run do not read
 
 - **Fixed**: The radio strategy word stayed visible and stayed checked for a run
