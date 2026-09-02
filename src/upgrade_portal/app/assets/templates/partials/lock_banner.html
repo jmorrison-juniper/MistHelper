@@ -159,6 +159,19 @@
       and did not finish.
     </p>
 
+    {#
+      Issue #2200: a takeover moves the write of a live upgrade to this
+      operator. The count comes from the run record, and zero hides the
+      sentence, because a page with no live run names no firmware in flight.
+    #}
+    {% if (lock_upgrade_devices | default(0, true)) > 0 %}
+      <p class="confirm-box-text" data-testid="lock-confirm-upgrade-count">
+        Warning: a run is writing firmware to
+        {{ lock_upgrade_devices }} device(s) of this site now. A takeover moves
+        that run to you, and it never stops the firmware already in flight.
+      </p>
+    {% endif %}
+
     <input type="text"
            class="confirm-box-input"
            id="lock-confirm-input"

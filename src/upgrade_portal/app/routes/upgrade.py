@@ -143,6 +143,22 @@ TIER_EXTRA = 3  # Tier 2, the port state, the radio state, and the alarms.
 KNOWN_TIERS = (TIER_STANDARD, TIER_EXTRA)  # Any other value falls back to the standard tier.
 
 TARGETS_FIELD = "targets"  # The body field that carries one row for each device.
+
+# Issue #2200: the states in which a run writes firmware to a device now. The
+# takeover warning names the device count of such a run, because a takeover
+# moves that write to a second operator. A run outside this set writes to no
+# device, so a count from one would name firmware that never moves.
+LIVE_UPGRADE_STATES = frozenset(
+    {
+        "upgrade_submitting",
+        "upgrade_running",
+        "settling_gateways",
+        "settling_switches",
+        "settling_aps",
+        "settling_clients",
+        "stopping",
+    }
+)
 WARNINGS_FIELD = "warnings"  # The answer field that carries one sentence for each warning.
 PRE_CAPTURE_FIELD = "pre_capture_id"  # The run record field that names the saved pre-check.
 
@@ -1628,7 +1644,33 @@ def run_lock_banner(record: dict[str, Any]) -> dict[str, Any]:
     """
     org_id = str(record.get("org_id", ""))  # The run record carries its own scope, as the status route does.
     site_id = str(record.get("site_id", ""))  # FR-014 binds one run to one site.
-    return lock_banner_context(org_id, site_id)
+    context = lock_banner_context(org_id, site_id)
+    # Issue #2200: a takeover moves the write of a live upgrade to a second
+    # operator. That operator must read how many devices are under upgrade
+    # before the portal asks for the confirmation.
+    context["lock_upgrade_devices"] = live_upgrade_device_count(record)
+    return context
+
+
+def live_upgrade_device_count(record: Mapping[str, Any]) -> int:
+    """Return how many devices a live run of one site upgrades now.
+
+    Why:
+        The takeover warning names this count. A run that ended writes to no
+        device, so a count from such a run would tell the second operator that
+        firmware moves when none does.
+
+    Args:
+        record: The run record the page shows. May be empty.
+
+    Returns:
+        The count of targets while the run writes firmware, and zero otherwise.
+    """
+    state = str(record.get("state") or "")  # An empty record names no state.
+    if state not in LIVE_UPGRADE_STATES:  # A run that ended or never started writes to no device.
+        return 0
+    targets: Any = record.get(TARGETS_FIELD) or []  # A live run names every device it acts on.
+    return len(targets) if isinstance(targets, (list, tuple)) else 0
 
 
 @upgrade_bp.get(RUN_PAGE_PATH)
@@ -1732,7 +1774,13 @@ def confirm_page(run_id: str) -> str:
         call_count=plan_call_count(record),  # Issue #2194: the count of cloud calls that this run sends.
         pre_capture_id=record.get(PRE_CAPTURE_FIELD),  # Names the saved pre-check, or None.
         pre_capture_verified=bool(record.get(PRE_CAPTURE_FIELD)),  # FR-035 unlocks the control on this value.
-        **site_labels(record),  # Issue #2100 names the site in words and keeps the identifier.
+        **{
+            **site_labels(record),  # Issue #2100 names the site in words and keeps the identifier.
+            # Issue #2200: a second operator reads this page. The banner names
+            # the holder, and the start gate reads `lock_write_allowed`. Without
+            # this context the holder would lose the control as well.
+            **run_lock_banner(record),
+        },  # One merged dict, because the banner repeats `site_id` and a second splat of it would fault.
     )
 
 

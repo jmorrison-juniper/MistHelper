@@ -7,6 +7,21 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Let a second operator read a run without the site lock
+
+- **Fixed**: A control that writes to a site now renders shut when another
+  operator holds that site, and it names the holder and the reason. The control
+  stayed live before, so an operator pressed it and learned of the hold only
+  after the refusal. Issue #2200.
+- **Added**: The confirmation page reads the site lock. A second operator reads
+  the whole plan, and the start control stays shut for that operator.
+- **Added**: The takeover box names the count of devices under upgrade. A
+  takeover moves a live firmware write to the second operator, and that operator
+  must read the size of what they take.
+- **Note**: A free site and an unreadable lock store both leave every control
+  live. The server is the real guard, and a control that shut on an unreadable
+  store would stop every operator whenever the lock store blinked.
+
 ### List every upgrade run on the history page
 
 - **Added**: The history page holds a runs section beside the captures section.
