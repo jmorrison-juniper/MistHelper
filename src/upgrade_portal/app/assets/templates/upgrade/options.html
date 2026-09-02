@@ -172,7 +172,12 @@
     {% set selection = typed_selections.get(device_type, {}) %}
     {% set candidates = selection.get('candidates', []) %}
     {% set selected = selection.get('selected_version', '') %}
-    <div class="mb-3">
+    {#
+      Issue #2198 hides the applier of a device type that the run does not hold.
+      An applier that named an absent type invited a version choice that reaches
+      no device.
+    #}
+    <div class="mb-3" data-requires-device-type="{{ device_type }}">
       <label class="form-label" for="upgrade-version-select-{{ device_type }}">
         Apply a version to compatible {{ label }}
       </label>
@@ -247,7 +252,7 @@
       </label>
     </div>
 
-    <div class="bubble-option">
+    <div class="bubble-option" data-requires-device-type="ap" data-requires-strategy-option="rrm">
       <input type="radio"
              id="upgrade-strategy-rrm"
              name="upgrade-strategy"

@@ -7,6 +7,20 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Hide a control that the device types of the run do not read
+
+- **Fixed**: The radio strategy word stayed visible and stayed checked for a run
+  that held no access point. The cloud reads that word for an access point
+  alone, so the portal sent no strategy at all. The cloud then wrote every
+  device at the same moment, which is not the order that the operator picked.
+  Issue #2198.
+- **Added**: The page moves the strategy choice when it hides the word that
+  holds it. The move goes to the first word that the page still shows, and a
+  message names the move. A silent move would run an order that nobody read.
+- **Fixed**: Each control that applies a version to one device type stayed
+  visible for a type that the run did not hold. Each control now names its own
+  device type.
+
 ### Keep the upgrade schedule and show every warning of the plan
 
 - **Fixed**: The portal discarded the upgrade schedule. A run asked for a
