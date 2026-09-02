@@ -2,23 +2,23 @@
 
 Why:
     A capture fans out several cloud call groups at one time, and the cloud
-    enforces a call budget, so the portal must bound the work in flight. The
-    portal also runs under Gunicorn with the ``gthread`` worker class, so it
+    enforces a call budget. The portal must therefore bound the work in flight.
+    The portal also runs under Gunicorn with the ``gthread`` worker class, so it
     must let the work in flight finish when the worker process stops. One
     module owns both rules, so no caller builds a second pool.
 
     The module holds two shapes, because a capture holds two shapes of work.
     ``CapturePool`` starts a batch of call groups from a request thread and
     reaches the shared ``ConnectionPoolExecutor``. ``BoundedFanOut`` runs a
-    handful of named blocking calls that already sit inside one work item, such
-    as the four tier 3 cloud calls of one call group. Both shapes bound the
-    work in flight to ``CAPTURE_WORKER_TARGET``, so neither one raises the
+    handful of named blocking calls that already sit inside one work item. The
+    four tier 3 cloud calls of one call group are such a set. Both shapes bound
+    the work in flight to ``CAPTURE_WORKER_TARGET``, so neither one raises the
     share of the hourly cloud call budget that a capture holds.
 
     ``documentation/python-parallelism-matrix.md`` decides the tool. Every call
     of this module waits on a network, so the bottleneck is input and output
-    and not the processor. The matrix answers that case with a thread pool, and
-    it warns that a process pool would pay a pickle cost for a payload that a
+    and not the processor. The matrix answers that case with a thread pool. It
+    warns that a process pool would pay a pickle cost for a payload that a
     thread shares for free.
 """
 
@@ -328,7 +328,7 @@ class BoundedFanOut:
         """Report how many calls of one fan-out run at one time.
 
         Why:
-            A pool wider than the work wastes a thread, and a pool wider than
+            A pool wider than the work wastes a thread. A pool wider than
             ``CAPTURE_WORKER_TARGET`` takes a larger share of the hourly cloud
             call budget than the plan allows.
 
@@ -385,7 +385,7 @@ class BoundedFanOut:
 
         Why:
             The matrix at ``documentation/python-parallelism-matrix.md`` puts
-            the cost of a thread at about 50 microseconds and asks for work far
+            the cost of a thread at about 50 microseconds. It asks for work far
             above that before a thread pays. One call never pays, and a fan-out
             of one also hides a fault behind a worker thread, which makes a
             test harder to read.

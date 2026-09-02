@@ -287,7 +287,7 @@ def read_proxy_hops() -> int:
 
         A bad value falls back to zero, unlike the other readers in this module,
         which fall back to a working default. Zero is the safe end of this
-        setting, not the convenient one: it makes the portal ignore every
+        setting, not the convenient one. It makes the portal ignore every
         forwarded header and read the socket address instead. A guess above zero
         would trust a header that no proxy wrote, and a forged address would
         then pass the network allow list.
@@ -320,8 +320,8 @@ def read_port(variable: str, default: int, lowest: int = LOWEST_ALLOWED_PORT) ->
         listen below 1024, so the listen port keeps that floor. A process needs
         no privilege to call out to a low port, so an outbound port such as the
         Redis port passes the floor 1. A shared floor of 1024 would refuse a
-        real Redis on a low port and would then connect to the default port
-        instead, which is a different host service.
+        real Redis on a low port. The portal would then connect to the default
+        port instead, which is a different host service.
 
     Args:
         variable: The name of the environment variable.
@@ -462,8 +462,8 @@ def read_themes() -> tuple[str, ...]:
         A theme name reaches a file path in layout.html. That template refuses a
         name this list does not hold, so this list is the real guard. A name
         with a path separator or a dot would let a crafted value point the
-        stylesheet link outside the theme folder, so this step drops such a
-        name. The step also drops a repeated name, because a repeated name
+        stylesheet link outside the theme folder. This step therefore drops such
+        a name. The step also drops a repeated name, because a repeated name
         would show the same choice twice in the theme picker.
 
     Returns:
@@ -491,8 +491,8 @@ def read_allowed_networks() -> tuple[Network, ...]:
 
         A variable that holds entries means something else. The operator asked
         for a guard. If no entry names a network, the portal must not fall back
-        to an open door, because one typo would then remove the guard and leave
-        no sign of the loss. The portal refuses to start instead.
+        to an open door. One typo would then remove the guard and leave no sign
+        of the loss. The portal refuses to start instead.
 
     Returns:
         One entry for each valid network. An empty tuple means the operator

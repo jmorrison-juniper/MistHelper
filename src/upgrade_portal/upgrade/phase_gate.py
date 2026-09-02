@@ -23,9 +23,9 @@ Why:
 
     The deadline for one phase is 30 minutes. FR-047 makes a limit mandatory
     and names no number, so this module chooses one and states the reason here.
-    A Junos device writes the image and then reboots, and the vendor publishes
+    A Junos device writes the image and then reboots. The vendor publishes
     no settle time for a switch or a gateway
-    (``research/settle-gate-apis.md`` section 11), so the value cannot come
+    (``research/settle-gate-apis.md`` section 11). The value cannot come
     from vendor guidance.
 
     Thirty minutes covers a slow chassis and still holds the call budget
@@ -99,9 +99,9 @@ class PhaseProgress:
         progress seat of `PhaseGateDeps`.
 
         Caution: in production nothing publishes this record to the operator.
-        `app/wiring.py` puts the site lock heartbeat in the progress seat,
-        because that seat is the only call inside the 20-second poll loop, and
-        `wiring.build_heartbeat` calls `driver.lock_heartbeat` with two
+        The `app/wiring.py` module puts the site lock heartbeat in the progress
+        seat. That seat is the only call inside the 20-second poll loop. The
+        `wiring.build_heartbeat` helper calls `driver.lock_heartbeat` with two
         arguments. The optional `progress` parameter of that function is
         therefore `None`, so the heartbeat renews the lock and forwards this
         record nowhere.
@@ -112,8 +112,8 @@ class PhaseProgress:
         phase and then jumps.
 
         The live channel stays unbuilt on purpose. One store write for each round
-        is 30 to 90 extra writes for each phase, and a phase may hold half an
-        hour. `audit-2026-08-20.md` section 2.4 declined it, and issue #1995
+        is 30 to 90 extra writes for each phase. A phase may hold half an hour.
+        The `audit-2026-08-20.md` note section 2.4 declined it. Issue #1995
         records the decision. The page states when the count moves instead, so a
         still count reads as a wait and not as a stall.
 
@@ -174,7 +174,7 @@ class DeviceGate(Protocol):
 
     Why:
         ``gate.SettleGate`` fills this shape. Naming the shape here keeps the
-        loop separate from the rules, so a test proves the loop with a stub and
+        loop separate from the rules. A test then proves the loop with a stub and
         proves the rules with the real gate. It also gives the loop one clock,
         which is the same clock that measures the device waits.
     """
@@ -347,8 +347,8 @@ class _PhaseWatch:
     Why:
         The loop needs the run, the phase, the targets, the limit, and the
         progress of every device together. One record keeps each private method
-        at two parameters and keeps the loop free of a long argument list that a
-        reader must match by position.
+        at two parameters. It also keeps the loop free of a long argument list
+        that a reader must match by position.
 
     Attributes:
         run_id: The run key that the progress report names.
@@ -370,8 +370,8 @@ class _PhaseWatch:
 
         Why:
             The family comes from the targets and never from a second phase to
-            family map, because the targets already carry it and a second map
-            would drift from the first.
+            family map. The targets already carry it. A second map would drift
+            from the first.
 
         Returns:
             The family in lower case. Empty when the phase holds no target.
@@ -434,8 +434,8 @@ def calls_per_phase(deadline_seconds: int = PHASE_DEADLINE_SECONDS) -> int:
 
     Why:
         The budget of this feature must stay checkable rather than stated. A
-        test compares this answer against ``gate.MAX_CALLS_PER_HOUR``, so a
-        change of the deadline or of the round that breaks the budget fails the
+        test compares this answer against ``gate.MAX_CALLS_PER_HOUR``. A change
+        of the deadline or of the round that breaks the budget then fails the
         build instead of failing in production.
 
     Args:
@@ -456,7 +456,7 @@ def phase_family(targets: Sequence[gate.GateTarget]) -> str:
     Why:
         One event call names one family, and one cascade phase holds one
         family. A phase that mixed two families would read the events of the
-        first family only, and the devices of the second family would never see
+        first family only. The devices of the second family would never see
         a reconnect. The cloud reports no error for that case, so the mix must
         raise here.
 
@@ -642,13 +642,13 @@ class PhaseSettleGate:
         Why:
             The deadline test follows the sleep and never precedes the round.
             The loop therefore polls at 0, 20, and every 20 seconds up to one
-            interval before the limit, which is the exact round count that
+            interval before the limit. That count is the exact round count that
             ``calls_per_phase`` reports. A test that read the clock first would
             add one round and pass the documented call budget.
 
             The loop keeps the cause of the last round alone. An earlier round
             that failed and a later round that answered describe a cloud that
-            recovered, and the page must show the state of the last look.
+            recovered. The page must show the state of the last look.
 
         Args:
             watch: The moving state of the wait.
@@ -712,12 +712,12 @@ class PhaseSettleGate:
 
         Why:
             A read that failed must not stop the run. The event window reaches
-            300 seconds back and the round repeats after 20 seconds, so the next
-            round reads the same event again and the signal is not lost.
+            300 seconds back and the round repeats after 20 seconds. The next
+            round reads the same event again, so the signal is not lost.
 
             The answer carries the cause as well as the addresses. An empty set
-            alone reads exactly like a round in which no device came back, so
-            the operator would see a wait with no stated reason.
+            alone reads exactly like a round in which no device came back. The
+            operator would then see a wait with no stated reason.
 
         Args:
             family: The device family to read.
@@ -745,8 +745,8 @@ class PhaseSettleGate:
             The cause travels back with the readings. The reason entries name a
             machine fault and reach the log alone, so this reader turns them
             into one sentence that an operator can read. An answer that holds no
-            reading at all reports a failed read, because a partial read that
-            returned nothing helps the operator no more than a fault does.
+            reading at all reports a failed read. A partial read that returned
+            nothing helps the operator no more than a fault does.
 
         Returns:
             One reading for each device, and the cause of a failed or partial
@@ -774,13 +774,13 @@ class PhaseSettleGate:
 
         Why:
             FR-047 asks the portal to mark each device that never returned. The
-            gate knows those addresses and the driver owns the per-device marks,
-            so the addresses travel in the outcome rather than in a log line
-            that no later reader can act on.
+            gate knows those addresses and the driver owns the per-device marks.
+            The addresses therefore travel in the outcome rather than in a log
+            line that no later reader can act on.
 
             The note travels the same way and for the same reason. A phase that
-            waited on a cloud that would not answer must say so on the page, and
-            the log of the run thread is not a page.
+            waited on a cloud that would not answer must say so on the page. The
+            log of the run thread is not a page.
 
         Args:
             watch: The moving state of the wait.

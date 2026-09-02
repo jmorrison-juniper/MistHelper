@@ -2,9 +2,10 @@
 
 Why:
     The portal drives a firmware upgrade, so a forged request could start work
-    on a live site. This module holds the five controls that stop that: the
-    proxy trust boundary, the content security policy, the standard response
-    headers, the cross-site request forgery token, and the network allow list.
+    on a live site. This module holds the five controls that stop that. They
+    are the proxy trust boundary, the content security policy, the standard
+    response headers, the cross-site request forgery token, and the network
+    allow list.
 
     The controls live in one module, so a reader finds every control in one
     place and an audit needs one file.
@@ -86,9 +87,9 @@ class PortalSecurity:
 
         Why:
             A forwarded header is client-supplied text that any caller can send.
-            `ProxyFix` counts the entries from the right, so it reads the entry
-            that the outermost trusted proxy wrote and no prepended entry can
-            move that position. It then writes the result into the request
+            `ProxyFix` counts the entries from the right. It therefore reads the
+            entry that the outermost trusted proxy wrote, and no prepended entry
+            can move that position. It then writes the result into the request
             environment, where `request.remote_addr` and `request.is_secure`
             read it. Nothing else in the portal touches a forwarded header.
 
@@ -145,9 +146,10 @@ class PortalSecurity:
 
             An empty list here always means that the operator asked for no
             guard. `config.read_allowed_networks` raises `SettingsError` when
-            the operator asks for a guard and no entry names a network, so a
-            list of typed entries can never reach this method as an empty tuple.
-            That invariant is what makes an empty list safe to read as "open".
+            the operator asks for a guard and no entry names a network. A
+            list of typed entries can therefore never reach this method as an
+            empty tuple. That invariant makes an empty list safe to read as
+            "open".
 
         Args:
             app: The application to protect.
@@ -209,8 +211,8 @@ def read_client_address() -> str:
 
     Why:
         This function never reads a forwarded header. A caller can send any
-        header it likes, so a header the portal parses by hand would let a
-        caller name its own address and walk straight through the allow list.
+        header it likes. A header that the portal parsed by hand would let a
+        caller name its own address and pass the allow list.
 
         `request.remote_addr` is correct in both deployments. With no trusted
         proxy it holds the socket address of the caller. Behind a trusted proxy

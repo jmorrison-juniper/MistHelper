@@ -6,10 +6,10 @@ Why:
     second worker. The file sentinel that the older code uses is worse. The
     writer at ``web_portal/services/operation.py:345`` and the reader at
     ``src/config/config_utils.py:159`` both name ``stop_loop.txt`` with no
-    directory, so the path follows the process working directory, which no
-    second worker and no container mount can trust. The stop request therefore
-    lives inside the run record, which every worker reads from the shared
-    store. This module writes no file of its own.
+    directory. The path therefore follows the process working directory, which
+    no second worker and no container mount can trust. The stop request
+    therefore lives inside the run record, which every worker reads from the
+    shared store. This module writes no file of its own.
 """
 
 from __future__ import annotations  # Enable postponed evaluation for forward-ref typing
@@ -207,7 +207,7 @@ class RunRecordStore(Protocol):
 
     Why:
         The stop store must not depend on one storage class. A narrow shape
-        keeps the module testable with a plain double, and it lets the run
+        keeps the module testable with a plain double. It also lets the run
         record module own the ArangoDB write and the CSV fallback under
         ``data/``.
     """

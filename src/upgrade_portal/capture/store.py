@@ -1,15 +1,15 @@
 """The store that keeps an upgrade capture and an upgrade run.
 
 Why:
-    An operator reads a capture months after the upgrade, so a record must
-    survive and the portal must prove that the record arrived. The exporter
-    reports success for a write that reached no database, because it skips the
-    database outside a container (``src/export/data_exporter.py:141``) and
-    because the router returns a success envelope after a file fallback
-    (``src/db/router.py:372``). This module therefore reads every key back and
-    compares the schema version and the digest before it calls a write
-    verified. The result also names the store that truly took the data, so an
-    operator can tell a database write from a file backup.
+    An operator reads a capture months after the upgrade. So a record must
+    survive, and the portal must prove that the record arrived. The exporter
+    reports success for a write that reached no database. It skips the database
+    outside a container (``src/export/data_exporter.py:141``). The router
+    returns a success envelope after a file fallback (``src/db/router.py:372``).
+    This module therefore reads every key back. It compares the schema version
+    and the digest before it calls a write verified. The result also names the
+    store that truly took the data. So an operator can tell a database write
+    from a file backup.
 
     The store keeps every record forever. No index and no code path here
     expires a record, because the operator needs the capture long after the
@@ -137,7 +137,7 @@ class IndexPlan:
     """One persistent index that this feature owns.
 
     Why:
-        The plan states the index table of the data model in one place, so a
+        The plan states the index table of the data model in one place. So a
         reader compares the code against the table without a search. The plan
         holds a persistent index only. It holds no index that expires a
         document, because the operator keeps every capture forever.
@@ -361,13 +361,13 @@ class CaptureStateMachine:
 
     Why:
         A comparison rests on the word ``verified``. A caller that wrote that
-        word by hand would defeat the read-back that FR-031 asks for, so every
-        move passes this table and an illegal move raises instead of landing
+        word by hand would defeat the read-back that FR-031 asks for. So every
+        move passes this table. An illegal move raises instead of landing
         silently in the document.
 
         The table stamps no time. The capture field table names ``started_at``
-        and ``finished_at`` and names no update time, so a stamp here would add
-        a field that no reader expects and would change the digest.
+        and ``finished_at`` and names no update time. So a stamp here would add
+        a field that no reader expects. It would change the digest.
     """
 
     # WHY: The arrows of data-model.md section 3.8. Every state that is not
@@ -501,9 +501,9 @@ def is_comparable(record: Mapping[str, Any]) -> bool:
 
     Why:
         Section 3.8 of the data model allows a comparison of a ``verified``
-        capture alone, because ``verified`` is the one word that proves the
-        portal read the key back and matched the digest. The rule lives at the
-        store boundary, so no caller has to remember it.
+        capture alone. The word ``verified`` proves the portal read the key back
+        and matched the digest. The rule lives at the store boundary, so no
+        caller has to remember it.
 
     Args:
         record: The capture to test.
@@ -717,8 +717,8 @@ def canonical_json(document: Mapping[str, Any]) -> str:
     Why:
         A digest and a size must not change when the field order changes or
         when the driver adds a field of its own. The function drops every
-        field whose name starts with an underscore, because the writer and the
-        server add those fields after the caller builds the document.
+        field whose name starts with an underscore. The writer and the server
+        add those fields after the caller builds the document.
 
     Args:
         document: The document to render.
@@ -750,10 +750,10 @@ def _has_own_fields(document: Mapping[str, Any]) -> bool:
     """Report whether a document holds one field that the caller wrote.
 
     Why:
-        The canonical text of an empty body is the two-character string ``{}``,
-        so a plain byte count reports two bytes for a record that holds
-        nothing. A stored record that comes back with driver fields alone is
-        the exact shape of a lost write, and the size rule must call it empty.
+        The canonical text of an empty body is the two-character string ``{}``.
+        So a plain byte count reports two bytes for a record that holds nothing.
+        A stored record that comes back with driver fields alone is the exact
+        shape of a lost write. The size rule must call it empty.
 
     Args:
         document: The document to test.
@@ -871,7 +871,7 @@ def _backup_row(payload: Mapping[str, Any]) -> dict[str, Any]:
     Why:
         A capture holds nested sections, and a cell of a backup file holds
         text only. The row keeps every plain field as its own column for a
-        quick read, and it holds the whole document as canonical JSON, so an
+        quick read. It holds the whole document as canonical JSON. So an
         operator rebuilds the record from the file alone.
 
     Args:
@@ -938,9 +938,9 @@ def _stored_digest(document: Mapping[str, Any]) -> str:
 
     Why:
         A capture holds a digest map that the assembly wrote, and that value
-        is the stored digest the check compares. A run holds no digest map,
-        and the function then returns an empty string, so the check falls back
-        to the digest of the whole body.
+        is the stored digest the check compares. A run holds no digest map. The
+        function then returns an empty string. So the check falls back to the
+        digest of the whole body.
 
     Args:
         document: The document to read.
@@ -1057,8 +1057,8 @@ def _mismatch_reason(expected: Mapping[str, Any], stored: Mapping[str, Any]) -> 
     Why:
         The check reads the schema version first, because a reader refuses a
         version it does not understand. The check then compares the digest the
-        document carries, and then the digest of the whole body, so a document
-        with no digest map still gets a full comparison.
+        document carries. The check then compares the digest of the whole body.
+        So a document with no digest map still gets a full comparison.
 
     Args:
         expected: The document the portal wrote.
@@ -1087,7 +1087,7 @@ def verify_write(collection: str, key: str, expected: Mapping[str, Any], databas
 
         The last check is the size rule of the data model. A document that
         matches the digest and still measures zero bytes holds no field of its
-        own, and that shape is a lost write with a matching empty digest.
+        own. That shape is a lost write with a matching empty digest.
 
     Args:
         collection: The collection that holds the key.
@@ -1239,7 +1239,7 @@ def _verified_document(payload: Mapping[str, Any]) -> dict[str, Any]:
     """Return the capture as it must read after a matching read-back.
 
     Why:
-        The word ``verified`` is one byte longer than the word ``writing``, so
+        The word ``verified`` is one byte longer than the word ``writing``. So
         the size that the writing copy carries is stale as soon as the state
         moves. The function therefore measures the size again, and the patch
         writes both fields together. A document that carried a size for
@@ -1284,11 +1284,11 @@ def _mark_verified(result: StoreResult, payload: dict[str, Any], database: Any) 
     """Move one stored capture to the verified state and confirm the move.
 
     Why:
-        ``verified`` is the one word that lets a capture join a comparison, so
-        the portal writes it only after the read-back matched and then reads
-        the key back a second time. A capture that keeps the writing state is
-        stored and whole, and it stays out of every comparison until an
-        operator repeats the capture.
+        The word ``verified`` is the one word that lets a capture join a
+        comparison. So the portal writes it only after the read-back matched.
+        The portal then reads the key back a second time. A capture that keeps
+        the writing state is stored and whole, and it stays out of every
+        comparison until an operator repeats the capture.
 
     Args:
         result: The outcome of the first read-back.
@@ -1438,9 +1438,9 @@ def _edge_result(edge: Mapping[str, Any], verified: bool, reason: str) -> StoreR
 
     Why:
         No backup file holds an edge. The registry of the data model names two
-        operations only, and the capture already carries its run and its role,
-        so the portal rebuilds a lost edge from the capture. The result
-        therefore reports no backup file and names no store after a failure.
+        operations only. The capture already carries its run and its role. So
+        the portal rebuilds a lost edge from the capture. The result therefore
+        reports no backup file and names no store after a failure.
 
     Args:
         edge: The edge the portal wrote.
@@ -1528,15 +1528,15 @@ def _link_capture_to_run(capture: Mapping[str, Any], database: Any) -> None:
         runs inside the store, where every stored capture passes.
 
         The link is a best effort, which is the stated design of this section.
-        ``_insert_edge`` records that a lost edge hides no capture, because the
-        capture names its run, and ``_edge_result`` records that the portal
-        rebuilds a lost edge from the capture. A failed link therefore writes
-        one log record, returns nothing, and raises nothing.
+        The helper ``_insert_edge`` records that a lost edge hides no capture,
+        because the capture names its run. The helper ``_edge_result`` records
+        that the portal rebuilds a lost edge from the capture. A failed link
+        therefore writes one log record, returns nothing, and raises nothing.
 
         A capture that names no run leaves at the debug level. Such a capture
-        has no link to build, so the case is not a fault. ``write_edge`` logs
-        an error for the same shape, because a caller that asks for a link by
-        name states a wrong expectation.
+        has no link to build, so the case is not a fault. The helper
+        ``write_edge`` logs an error for the same shape. A caller that asks for
+        a link by name states a wrong expectation.
 
     Args:
         capture: The capture that the database holds and proved.
@@ -1830,7 +1830,7 @@ class CaptureListPage:
     Why:
         The history contract answers with the rows and a total, so the page
         below the list can show how many captures the site holds. The report
-        also says whether the database answered, so a caller never shows an
+        also says whether the database answered. So a caller never shows an
         empty history as a fact when the database was out of reach.
 
     Attributes:
@@ -1879,7 +1879,7 @@ class RunListPage:
     Why:
         The run history page shows how many runs the site holds, so the row
         count alone is not enough. The report also says whether the database
-        answered, so a caller never shows an empty history as a fact when the
+        answered. So a caller never shows an empty history as a fact when the
         database was out of reach.
 
     Attributes:
@@ -1922,8 +1922,8 @@ def _filter_binds(query: CaptureQuery) -> dict[str, Any]:
     """Return the bind values for the narrowing fields the caller filled.
 
     Why:
-        An unused bind parameter makes the server refuse the whole query, so
-        the count query and the list query each receive their own binds and the
+        An unused bind parameter makes the server refuse the whole query. So
+        the count query and the list query each receive their own binds. The
         empty fields travel with neither.
 
     Args:
@@ -2032,7 +2032,7 @@ def latest_standalone_precheck(site_id: str, database: Any = None) -> dict[str, 
         The run creation adopts the newest pre-check that named no run, so an
         operator never repeats a reading the site already holds. The reader
         narrows by the site, the pre role, an empty run, and the verified
-        state, then reads the newest by start time (Delta H3, FR-103).
+        state. It then reads the newest by start time (Delta H3, FR-103).
 
     Args:
         site_id: The site whose pre-check the run adopts.
@@ -2062,10 +2062,10 @@ def list_runs(query: RunQuery, database: Any = None) -> RunListPage:
 
     Why:
         FR-085 asks for a run history beside the capture history. The page
-        carries the small row of ``RUN_LIST_FIELDS`` and never the whole run,
-        because a run of a large site holds one target entry for every device.
-        The total comes from its own count query, because a page cannot report
-        what lies beyond it.
+        carries the small row of ``RUN_LIST_FIELDS`` and never the whole run. A
+        run of a large site holds one target entry for every device. The total
+        comes from its own count query, because a page cannot report what lies
+        beyond it.
 
     Args:
         query: The narrowing values and the page bounds.
@@ -2096,8 +2096,9 @@ def load_capture(capture_id: str, database: Any = None) -> CaptureLoad:
         maps each reason to its status.
 
         The schema gate runs before the state gate. A record from a later
-        release may hold a state word this release does not know, so the reader
-        must refuse the record on its version and never on its state.
+        release may hold a state word this release does not know. So the reader
+        must refuse the record on its version. The reader must never refuse the
+        record on its state.
 
     Args:
         capture_id: The business key of the capture.
@@ -2127,7 +2128,7 @@ def load_capture_for_comparison(capture_id: str, database: Any = None) -> Captur
 
     Why:
         Section 3.8 allows a comparison of a ``verified`` capture alone. The
-        rule belongs at the store boundary, not in each caller, so this
+        rule belongs at the store boundary, not in each caller. So this
         function returns no document at all for a capture that is not
         verified. A caller therefore cannot compare a half-written capture even
         by mistake.

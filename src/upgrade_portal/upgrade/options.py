@@ -387,8 +387,8 @@ def read_upgrade_inventory(session: Any, org_id: str, site_id: str, page_limit: 
     Why:
         Decision D11 states that an upgrade targets the logical device. The call
         therefore omits the virtual chassis parameter. ``getOrgInventory`` builds
-        its query with ``if vc:``, so an omitted value sends nothing and the
-        cloud returns one row for each stack instead of one row for each member.
+        its query with ``if vc:``. An omitted value sends nothing, so the cloud
+        returns one row for each stack instead of one row for each member.
         A read with ``vc=True`` would offer the operator four members of one
         stack and send four upgrades to one logical device.
 
@@ -599,11 +599,11 @@ def _guard_start_time(moment: int, now: int, field: str = "start_time") -> int:
     """Refuse a chosen moment that sits outside the window a run can use.
 
     Why:
-        The cloud starts the upgrade at once when the moment is already past, so
-        a stale value writes firmware immediately while the operator believes
-        they scheduled it for later. A moment far ahead never runs at all, and
-        the operator waits for work that can never start. Both readings look
-        valid to every earlier check, so the window is the only guard.
+        The cloud starts the upgrade at once when the moment is already past. A
+        stale value therefore writes firmware immediately, while the operator
+        believes they scheduled it for later. A moment far ahead never runs at
+        all, and the operator waits for work that can never start. Both readings
+        look valid to every earlier check, so the window is the only guard.
 
         The separate reboot window obeys the same rule, so it passes its own
         field name. A refusal that named the start time for a bad reboot window
@@ -636,9 +636,9 @@ def _flat_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
     Why:
         ``build_options_record`` stores the option record through ``asdict``,
         which writes the three advanced groups as nested mappings. The browser
-        posts the same fields flat. One reading path must serve both shapes, or
-        a saved run would replay with every advanced choice dropped and the
-        cloud would run a plan that nobody picked.
+        posts the same fields flat. One reading path must serve both shapes. A
+        saved run would otherwise replay with every advanced choice dropped, and
+        the cloud would run a plan that nobody picked.
 
     Args:
         payload: The request body, or the stored option record.
@@ -770,10 +770,10 @@ def _read_optional_boolean(payload: Mapping[str, Any], field: str) -> bool | Non
     """Read one optional boolean that stays absent until the operator sets it.
 
     Why:
-        Every radio resource management flag has a cloud default, and the
-        contract asks the portal to omit an optional field unless the operator
-        picks it. A ``False`` that the portal invented would replace a cloud
-        default that the operator never saw.
+        Every radio resource management flag has a cloud default. The contract
+        asks the portal to omit an optional field unless the operator picks it.
+        A ``False`` that the portal invented would replace a cloud default that
+        the operator never saw.
 
     Args:
         payload: The flat request body.
@@ -902,8 +902,9 @@ def parse_duration_seconds(text: str, field: str) -> int:
         The count of seconds after the start of the job.
 
     Raises:
-        BadOptionError: If the text names no unit, names an unknown unit, holds
-            no number, or names a span longer than the window of one year.
+        BadOptionError: If the text names no unit or names an unknown unit. It
+            also raises if the text holds no number. It also raises if the text
+            names a span longer than one year.
     """
     word = text.strip().lower().replace(" ", "")  # An operator may write "5 m".
     if len(word) < 2:  # One character can hold a unit or a number, and never both.
@@ -1029,8 +1030,8 @@ def _guard_strategy_settings(options: UpgradeOptions) -> None:
     Why:
         The cloud reads a phase list for the canary strategy alone, and it reads
         every radio field for the radio strategy alone. A body that carried one
-        outside its own strategy would drop the setting without a word, and the
-        operator would read a plan that the cloud never runs.
+        outside its own strategy would drop the setting without a word. The
+        operator would then read a plan that the cloud never runs.
 
     Args:
         options: The finished option record.
@@ -1097,9 +1098,9 @@ def build_option_record(payload: Mapping[str, Any]) -> dict[str, Any]:
     Why:
         Two callers store an option record. ``build_options_record`` stores one
         after it reads the site inventory, and the route stores one when no
-        inventory answers. Both must write the same shape, or a run that met a
-        failed inventory read would lose every advanced choice and the schedule
-        that the operator picked.
+        inventory answers. Both must write the same shape. A run that met a
+        failed inventory read would otherwise lose every advanced choice and the
+        schedule that the operator picked.
 
     Args:
         payload: The request body of the options call.
@@ -1216,7 +1217,7 @@ def advanced_option_values(stored: Mapping[str, Any]) -> dict[str, str]:
         ``build_options_record`` stores the three advanced groups as nested
         mappings, and the options page draws one flat control for each field. A
         template that walked the groups on its own would repeat the storage
-        shape in markup, and a later change of that shape would leave the page
+        shape in markup. A later change of that shape would then leave the page
         blank with no error at all.
 
         A saved run must reopen with every choice still shown. Issue #2156 asks
@@ -1307,12 +1308,12 @@ def _last_seen_of(device: Mapping[str, Any]) -> int | None:
 
     Why:
         The settle gate needs an absolute anchor. The uptime of a device is
-        nullable, so a device whose uptime never arrives can never show a
-        fall, and it waits to the phase deadline. The cloud raises this moment
+        nullable. A device whose uptime never arrives can therefore never show
+        a fall, and it waits to the phase deadline. The cloud raises this moment
         each time it hears from the device, so a later moment proves that the
-        device returned. The value stays null when the record holds no
-        reading, because a stored zero sits at the start of the epoch and
-        every later record would look newer.
+        device returned. The value stays null when the record holds no reading.
+        A stored zero sits at the start of the epoch, so every later record
+        would look newer.
 
     Args:
         device: The device record. The caller merges the statistics into the
@@ -1404,8 +1405,8 @@ def _resolve_choice(
 
     Why:
         The browser posts a MAC address and a version. A MAC address that the
-        site does not hold is a fault of the caller, and an upgrade of an
-        unknown device would reach the wrong site.
+        site does not hold is a fault of the caller. An upgrade of an unknown
+        device would reach the wrong site.
 
     Args:
         index: The devices of the site, keyed by the normalized MAC address.
@@ -1585,8 +1586,8 @@ def build_options_record(session: Any, org_id: str, site_id: str, body: Mapping[
 
     Why:
         The browser sends only a MAC address and a target version for each
-        device, but ``to_device_targets`` reads ``device_type`` and the run
-        driver reads the family, the scope, and the first uptime. This function
+        device. ``to_device_targets`` reads ``device_type``, and the run driver
+        reads the family, the scope, and the first uptime. This function
         reads the site inventory once and fills every field, so the record that
         reaches the driver names a real device.
 

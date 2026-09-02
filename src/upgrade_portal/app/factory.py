@@ -1,20 +1,20 @@
 """The application factory for the upgrade capture portal.
 
 Why:
-    Two callers start this portal and neither passes an argument.
-    `wsgi_capture.py` builds the Gunicorn target and the menu 239 launcher in
-    `MistHelper.py` builds the same object. `create_app` therefore takes no
-    argument and reads every setting from the process environment.
+    Two callers start this portal and neither passes an argument. The
+    `wsgi_capture.py` module builds the Gunicorn target. The menu 239 launcher
+    in `MistHelper.py` builds the same object. So `create_app` takes no
+    argument. It reads every setting from the process environment.
 
     The factory imports each route module late, inside `create_app`, and treats
     an `ImportError` as survivable. The portal is built in stages, so a route
     module can arrive after the shell. A missing module writes one warning and
     the portal starts with the routes that exist.
 
-    Two probe routes answer from the first day. `GET /healthz` reports that the
-    process is alive and reads no store. `GET /readyz` reports that the two
-    stores answer. The container health check needs the first route and the
-    orchestrator readiness probe needs the second one.
+    Two probe routes answer from the first day. The `GET /healthz` route reports
+    that the process is alive and reads no store. The `GET /readyz` route reports
+    that the two stores answer. The container health check needs the first route.
+    The orchestrator readiness probe needs the second one.
 """
 
 import logging  # The portal logs with the standard library only.
@@ -282,8 +282,8 @@ def copy_allow_header(error: Exception, response: Response) -> None:
         HTTP requires a 405 answer to name the methods that the path accepts.
         Werkzeug builds that header for its own HTML page, and the JSON envelope
         is a fresh response that inherits none of it. Without this copy the
-        portal would answer a valid envelope inside an invalid HTTP message, and
-        a client could not learn which method to send instead.
+        portal would answer a valid envelope inside an invalid HTTP message. A
+        client could not then learn which method to send instead.
 
     Args:
         error: The fault that Flask caught.
@@ -348,9 +348,9 @@ def verify_document_write(database: Any) -> bool:
         fails. See `specs/1823-upgrade-capture-portal/quickstart.md` section 12
         and issue #1824. The probe therefore writes a value and reads it back.
 
-        The probe uses one scratch collection and one fixed key, so the
-        readiness traffic never grows the stored data and never mixes with the
-        capture records or the run records.
+        The probe uses one scratch collection and one fixed key. The readiness
+        traffic never grows the stored data. It never mixes with the capture
+        records or the run records.
 
     Args:
         database: The open document store handle from `connect_database`.
@@ -374,8 +374,8 @@ def verify_lock_write(client: Any) -> bool:
     Why:
         A ping proves that the socket answers. The portal writes the site lock
         into this store, so the probe writes a key as well. A read-only replica
-        answers a ping and refuses every write, and the site lock would then
-        fail for every operator while the probe reported the store ready.
+        answers a ping and refuses every write. The site lock would then fail for
+        every operator while the probe reported the store ready.
 
     Args:
         client: The open lock store client from `connect_lock_store`.
@@ -394,8 +394,8 @@ def probe_document_store() -> str:
     Why:
         This function catches every fault, because a probe that raises turns a
         readiness check into a 500 answer. The connection helper owns the socket
-        and sets a ten-second request bound, so this function opens no socket of
-        its own and no probe holds a worker thread longer than that bound.
+        and sets a ten-second request bound. This function opens no socket of its
+        own. No probe holds a worker thread longer than that bound.
 
     Returns:
         The word `ok`, or the word `unreachable` for any failure.
@@ -448,8 +448,8 @@ def probe_readiness() -> tuple[dict[str, str], int]:
         so the operator knows which store to repair.
 
         This is the uncached form. It writes to both stores on every call, so
-        no route may call it directly. `read_readiness` is the entry point that
-        the endpoint uses, and it bounds how often this function runs.
+        no route may call it directly. The `read_readiness` function is the entry
+        point that the endpoint uses. It bounds how often this function runs.
 
     Returns:
         The readiness body and the HTTP status code.
@@ -479,10 +479,10 @@ def reset_readiness_cache() -> None:
     """Drop the cached readiness answer.
 
     Why:
-        The cache lives for the life of the process, so a test that installs a
+        The cache lives for the life of the process. A test that installs a
         stand-in store would otherwise read the answer that an earlier test
-        obtained. `register_readiness` calls this for each new application, and
-        a test calls it to force a fresh probe.
+        obtained. The `register_readiness` function calls this for each new
+        application. A test calls it to force a fresh probe.
     """
     with _readiness_lock:  # A caller may reset while another thread reads.
         _readiness_cache.clear()  # The next call probes both stores again.
@@ -494,18 +494,18 @@ def read_readiness() -> tuple[dict[str, str], int]:
     Why:
         `GET /readyz` carries no session guard, because an orchestrator probe
         cannot sign in. Without a bound, every request that reaches the port
-        drives one document store write and one lock store write, so a caller
-        can load both stores at the rate it can open sockets.
+        drives one document store write and one lock store write. A caller can
+        then load both stores at the rate it can open sockets.
 
         The bound is a short cache, not an address list and not the removal of
-        the write probe. The write probe must stay: a read-only replica answers
-        a ping and refuses every write, and the site lock would then fail for
+        the write probe. The write probe must stay. A read-only replica answers
+        a ping and refuses every write. The site lock would then fail for
         every operator while the probe reported the store ready.
 
         The window is shorter than the interval an orchestrator uses, so a
         genuine probe always finds the entry expired and always does real work.
-        The container ships no health check of its own, and the two store
-        containers in `compose.yml` probe every 10 seconds, so 5 seconds sits
+        The container ships no health check of its own. The two store
+        containers in `compose.yml` probe every 10 seconds. So 5 seconds sits
         below the shortest interval this repository states. A flood collapses
         to one probe pair for each window.
 
@@ -538,9 +538,9 @@ def register_readiness(app: Flask) -> None:
         balancer without a restart.
 
         The body carries no host name, no password, and no connection string.
-        `store._safe_host` exists because a connection string holds a password,
-        and the safest body is the one that names no host at all. The two fixed
-        words `ok` and `unreachable` name the store, never the address.
+        The `store._safe_host` helper exists because a connection string holds a
+        password. The safest body is the one that names no host at all. The two
+        fixed words `ok` and `unreachable` name the store, never the address.
 
         The readiness cache lives for the life of the process, so a new
         application must not inherit the answer of an earlier one. A new
@@ -704,7 +704,7 @@ def apply_cookie_config(app: Flask, settings: PortalSettings) -> None:
 
     Why:
         A session cookie carries the identity that the site lock grants a site
-        to, so a cookie that leaves the browser in clear text hands a site to
+        to. A cookie that leaves the browser in clear text hands a site to
         whoever reads the wire.
 
         The `Secure` flag follows the trusted proxy count and nothing else.
@@ -712,8 +712,8 @@ def apply_cookie_config(app: Flask, settings: PortalSettings) -> None:
         scheme, so one setting drives both and the two can never disagree. A
         portal behind a terminating proxy answers on HTTPS and marks the
         cookie. A direct listener on plain HTTP inside the lab network leaves
-        the flag off, because a marked cookie would never reach the browser
-        and every operator would lose the session at the first page.
+        the flag off. A marked cookie would never reach the browser. Every
+        operator would then lose the session at the first page.
 
     Args:
         app: The application to configure.
@@ -745,11 +745,12 @@ def allowed_themes() -> tuple[str, ...]:
     """Return the theme names that this portal offers.
 
     Why:
-        The operator names the themes with `CAPTURE_THEMES`, and `read_themes`
-        drops any name that a file path must not carry. `apply_web_config` then
-        writes the checked names to the application. A second hard coded list
-        here would ignore the setting, so a theme the operator added would show
-        in the picker and then refuse to load.
+        The operator names the themes with `CAPTURE_THEMES`. The `read_themes`
+        function drops any name that a file path must not carry. The
+        `apply_web_config` function then writes the checked names to the
+        application. A second hard coded list here would ignore the setting. A
+        theme the operator added would show in the picker and then refuse to
+        load.
 
     Returns:
         The configured names, or the shipped names outside an application.
@@ -766,10 +767,10 @@ def default_theme() -> str:
 
     Why:
         An operator names the themes with `CAPTURE_THEMES` and may leave the
-        brand theme out. `THEME_DEFAULT` would then name a stylesheet that this
-        portal refuses to serve, and every page would fall back inside the
-        template instead. This read stays inside the configured list, so the
-        Python answer and the template answer always agree.
+        brand theme out. The `THEME_DEFAULT` name would then point to a
+        stylesheet that this portal refuses to serve. Every page would fall back
+        inside the template instead. This read stays inside the configured list,
+        so the Python answer and the template answer always agree.
 
     Returns:
         The brand theme when the portal offers it, or the first offered name.
@@ -786,9 +787,10 @@ def theme_scheme(name: str) -> str:
     Why:
         Bootstrap draws its own controls, its form fields, and its vendored
         control graphics from the `data-bs-theme` attribute. A theme file
-        changes the portal colors alone, so a Bootstrap selection list would
-        stay white on a near black page. `layout.html` writes this answer onto
-        the html element, which switches those controls with the theme.
+        changes the portal colors alone. A Bootstrap selection list would then
+        stay white on a near black page. The `layout.html` template writes this
+        answer onto the html element. That write switches those controls with
+        the theme.
 
     Args:
         name: The theme name that the request resolved to.

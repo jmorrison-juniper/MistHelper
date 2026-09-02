@@ -197,8 +197,8 @@ def status_is_known(status: Mapping[str, object] | None) -> bool:
         organization-scope read of a session smart router answers device
         statistics, not an upgrade job. The seam marks that answer with
         `status_known` set to false. A test for `None` alone would call that
-        answer a good read, and the operator would then see the word stopped
-        for a device that is still writing firmware.
+        answer a good read. The operator would then see the word stopped for a
+        device that is still writing firmware.
 
     Args:
         status: The status mapping that the seam returned, or None.
@@ -442,12 +442,12 @@ def stop_run(session: Any, targets: Sequence[StopTarget], confirmation: str) -> 
         the module answers with the three lists and one plain message.
 
         The cancel calls run at one time. Each plan costs two cloud calls, and
-        a run holds up to one plan for each family, so a run in order waits for
-        six network round trips before the last plan reaches the cloud. Every
-        second of that wait is a second in which one more device can start to
-        write firmware, and FR-038d forbids an interrupt of a write. The
-        fan-out therefore shortens the window in which a stop can still save a
-        device. The call count never changes.
+        a run holds up to one plan for each family. A run in order therefore
+        waits for six network round trips before the last plan reaches the
+        cloud. Every second of that wait is a second in which one more device
+        can start to write firmware. FR-038d forbids an interrupt of a write.
+        The fan-out therefore shortens the window in which a stop can
+        still save a device. The call count never changes.
 
     Args:
         session: The Mist session.

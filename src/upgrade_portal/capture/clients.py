@@ -2,9 +2,9 @@
 
 Why:
     A comparison of two captures answers one question for an operator. Did
-    every client return after the upgrade? The answer needs one stable key,
-    so this module normalizes every media access control address to lower case
-    with no separator, and the comparison matches on that value alone
+    every client return after the upgrade? The answer needs one stable key.
+    This module therefore normalizes every media access control address to lower
+    case with no separator. The comparison matches on that value alone
     (``specs/1823-upgrade-capture-portal/data-model.md:358``).
 
     The cloud returns three different row shapes. A wired row holds arrays and
@@ -155,7 +155,7 @@ class ClientRecord:
         fields, so this record groups the 13 fields by the question each field
         answers. ``ClientIdentity`` answers who the client is.
         ``ClientAttachment`` answers what serves it. ``WirelessSignal`` answers
-        how the radio performed. Every group holds 5 fields or fewer, and each
+        how the radio performed. Every group holds 5 fields or fewer. Each
         group also matches one comparison outcome, so the comparison reads one
         group instead of a field list.
 
@@ -410,8 +410,8 @@ def read_guest_clients(session: Any, site_id: str, source: RowReader | None = No
 
     Why:
         A guest row is an authorization record. It carries a serving access
-        point and a wireless network name, so the capture holds a guest as a
-        client and keeps the guest list apart from the wireless list.
+        point and a wireless network name. The capture therefore holds a guest
+        as a client, and it keeps the guest list apart from the wireless list.
 
     Args:
         session: The mistapi session.
@@ -471,7 +471,7 @@ def _wired_record(row: Row) -> ClientRecord | None:
         ``documentation/api/sites/GET_sites_site_id_wired_clients_search.md``
         and the organization variant name ``auth_state`` and ``auth_method``
         and no user name. The read still asks for the key. A cloud that starts
-        to publish an 802.1X identity then reaches the record on its own, and a
+        to publish an 802.1X identity then reaches the record on its own. A
         cloud that publishes none leaves the field empty, which
         ``data-model.md:154`` allows.
 

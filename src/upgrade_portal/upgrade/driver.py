@@ -4,8 +4,8 @@ Why:
     One long-lived thread owns one run. No other thread writes the run
     record. Two threads that wrote the same record under multi-user load
     would leave a record that no operator can explain. The driver reads the
-    record back before each write and keeps the `stop_request` field, which
-    the route thread owns, so the two threads never fight over one field.
+    record back before each write. It keeps the `stop_request` field, which
+    the route thread owns. So the two threads never fight over one field.
 
     The cascade order is fixed: gateways, then switches, then access points,
     then wireless clients. Everything sits downstream of the gateways. The
@@ -15,13 +15,13 @@ Why:
 
     The settle gate, the event reader, and the option builder live in sibling
     modules that other lanes write at the same time. This module names the
-    shape it needs as a protocol and takes the object as a dependency, so it
-    imports cleanly today and a test injects a double.
+    shape it needs as a protocol. It takes the object as a dependency. So it
+    imports cleanly today, and a test injects a double.
 
     The site lock lives 300 seconds. The browser alone renewed it before this
-    module took a heartbeat, so an operator who closed the page during a
-    40-minute cascade lost the site after five minutes, and a second operator
-    could take a site that was still writing firmware to a switch. The run
+    module took a heartbeat. So an operator who closed the page during a
+    40-minute cascade lost the site after five minutes. A second operator
+    could then take a site that was still writing firmware to a switch. The run
     thread now renews the lock as well, at every wait the driver performs and
     at every poll round of the settle gate. The heartbeat starts no thread,
     because a second thread would be a second failure mode.
@@ -245,8 +245,8 @@ class Clock(Protocol):
     """The one time reading the driver needs.
 
     Why:
-        A test must never sleep. The driver takes the clock as a dependency,
-        so a test injects a clock that returns fixed text and the test reads
+        A test must never sleep. The driver takes the clock as a dependency.
+        So a test injects a clock that returns fixed text. The test then reads
         the stored times without a wait.
     """
 
@@ -376,9 +376,8 @@ class LockRefresher(Protocol):
         `src/upgrade_portal/runtime/lock.py` owns the Redis script. This
         module names the shape it calls, so a test injects a stand-in that
         counts the beats and reaches no store. The shape repeats the real
-        signature of `refresh_site_lock`, because a stand-in that is more
-        permissive than the real call would hide the very defect the tests
-        exist to catch.
+        signature of `refresh_site_lock`. A stand-in that is more permissive
+        than the real call would hide the very defect the tests exist to catch.
     """
 
     def __call__(self, key: str, record: LockRecord, client: Any = None) -> int:
@@ -405,8 +404,8 @@ class LockReleaser(Protocol):
         `src/upgrade_portal/runtime/lock.py` owns the Redis script. This module
         names the shape it calls, so a test injects a stand-in that records the
         release and reaches no store. The shape repeats the real signature of
-        `release_site_lock`, because a stand-in that is more permissive than
-        the real call would hide the very defect the tests exist to catch.
+        `release_site_lock`. A stand-in that is more permissive than the real
+        call would hide the very defect the tests exist to catch.
     """
 
     def __call__(self, key: str, record: LockRecord, client: Any = None) -> ReleaseOutcome:
@@ -451,9 +450,9 @@ class LockHeartbeatPlan:
 
     Why:
         Seven separate parameters would break the parameter limit. This group
-        travels as one argument, and every member below the lock record
-        carries the default the production path wants, so a caller names the
-        key and the record alone.
+        travels as one argument. Every member below the lock record carries the
+        default the production path wants. So a caller names the key and the
+        record alone.
 
     Attributes:
         key: The Redis key of the site lock, from `build_key`.
@@ -480,8 +479,8 @@ class LockHeartbeat:
 
     Why:
         The site lock lives 300 seconds. Only the browser renewed it before
-        this class existed, so an operator who closed the page lost the site
-        after five minutes, and a second operator could take a site that was
+        this class existed. So an operator who closed the page lost the site
+        after five minutes. A second operator could then take a site that was
         still writing firmware to a switch.
 
         The class holds no thread. Every beat runs on the run thread, at a
@@ -494,16 +493,16 @@ class LockHeartbeat:
 
         The application passes this object as the progress reporter of the
         settle gate, so a beat also rides the 20-second poll loop. Without
-        that seat the lock still beats at every wait the driver owns, and a
-        phase longer than the life of the lock then loses it.
+        that seat the lock still beats at every wait the driver owns. A phase
+        longer than the life of the lock then loses it.
     """
 
     def __init__(self, plan: LockHeartbeatPlan) -> None:
         """Hold the plan and set the first beat one interval from now.
 
         Why:
-            The lock was fresh when the operator took the site, so the first
-            beat waits one whole interval and the run start spends no round
+            The lock was fresh when the operator took the site. So the first
+            beat waits one whole interval. The run start then spends no round
             trip on the lock store.
 
         Args:
@@ -529,8 +528,8 @@ class LockHeartbeat:
 
         Why:
             The heartbeat holds no run record and no store. The driver hands
-            it one call, so a beat inside a settle gate reaches the record at
-            once and the operator does not wait half an hour for the phase to
+            it one call. So a beat inside a settle gate reaches the record at
+            once. The operator then does not wait half an hour for the phase to
             end. The driver thread still performs every write.
 
         Args:
@@ -702,9 +701,9 @@ def lock_heartbeat(record: Mapping[str, Any], lock: LockRecord, progress: Progre
         The driver thread holds no request context and cannot read the signed
         session. The run record already carries the organization and the site,
         so the key needs no new channel. The lock record travels as a
-        dependency instead, because the run record reaches the store, the
-        status body of the progress page, and a log line, and the lock token
-        must reach none of the three.
+        dependency instead. The run record reaches the store, the status body
+        of the progress page, and a log line. The lock token must reach none
+        of the three.
 
     Args:
         record: The run record.
@@ -792,7 +791,7 @@ def _tracker_text(path: Path) -> str | None:
 
     Why:
         The write lands through a rename. Windows refuses to open the target
-        of a rename for a very short moment, so a reader that arrives in that
+        of a rename for a very short moment. A reader that arrives in that
         moment meets a permission error. One retry after a short pause clears
         that window. Without the retry, ``_read_tracker`` reports an empty
         tracker and the caller reads a running upgrade as no upgrade at all.
@@ -821,13 +820,13 @@ def _read_tracker(path: Path) -> list[dict[str, Any]]:
         an empty list and writes one warning.
 
         The read holds the same lock as the write. Windows refuses to rename a
-        file that another handle holds open, and the write lands through a
-        rename, so a reader inside this process would make that rename fail.
+        file that another handle holds open. The write lands through a rename.
+        So a reader inside this process would make that rename fail.
         The lock keeps the two apart. A reader in another process still meets
         the rename, and the retry inside ``_tracker_text`` covers that case.
 
         The reader never tests for the file before it opens it. A rename makes
-        the target absent for a very short moment, and a test before the open
+        the target absent for a very short moment. A test before the open
         would read that moment as a fresh clone with no tracker at all. The
         open therefore runs first, and the test for a fresh clone runs only
         after every attempt failed.
@@ -891,13 +890,14 @@ def write_tracker(record: Mapping[str, Any], now: str, root: Path | None = None)
         the whole write, which is the only order that keeps both rows.
 
         The write also lands through a neighbor file and one rename. A rename
-        inside one directory is atomic, so a reader never meets a half-written
-        file, and a process that dies mid-write leaves the last whole file.
+        inside one directory is atomic. So a reader never meets a half-written
+        file. A process that dies mid-write leaves the last whole file.
 
         The tracker is a convenience for restart recovery, not the record of
         the run. The upgrade already reached the cloud by the time the driver
-        calls this function, so a full disk or a permission fault here must
-        report a failure and return, never raise out of a best-effort step.
+        calls this function. So a full disk or a permission fault here must
+        report a failure and return. It must never raise out of a best-effort
+        step.
 
     Args:
         record: The run record.
@@ -1017,7 +1017,7 @@ def not_returned_count(entry: Mapping[str, Any]) -> int:
     Why:
         FR-047 asks the portal to mark a device that passed the time limit as
         not returned. The phase entry already carries the two counts that the
-        status contract transports, so this answer needs no new field and the
+        status contract transports. So this answer needs no new field. The
         phase entry keeps the one shape the page reads.
 
     Args:
@@ -1036,11 +1036,11 @@ def phase_partly_settled(entry: Mapping[str, Any]) -> bool:
     Why:
         FR-047 splits a wait that ended into three results. Every device came
         back, no device came back, or some came back and some did not. This
-        answer names the third result, which must never read like the second:
-        one access point of two hundred that stayed out is not an empty site.
-        The counts alone cannot say it, because a phase that still waits also
-        holds a settled count below its total, so the state must first report
-        a wait that ended.
+        answer names the third result. It must never read like the second.
+        One access point of two hundred that stayed out is not an empty site.
+        The counts alone cannot say it. A phase that still waits also holds a
+        settled count below its total. So the state must first report a wait
+        that ended.
 
     Args:
         entry: One phase entry of the run record.
@@ -1084,14 +1084,14 @@ def client_gate_open(phases: Sequence[Mapping[str, Any]]) -> bool:
     Why:
         Only the wireless clients sit downstream of the access points, so an
         access point holds this one gate shut. FR-047 asks the portal to mark
-        the device that passed the time limit and to continue with the others,
-        and the edge case at spec.md line 275 lets the operator take the second
+        the device that passed the time limit and to continue with the others.
+        The edge case at spec.md line 275 lets the operator take the second
         capture without the missing device. One access point of two hundred
         must therefore never throw away the post-check of the whole site. The
         gate opens when at least one access point came back, because the
         clients of that access point are present and countable. The gate stays
-        shut when none came back, because a client count of zero would then
-        report the silence of the access points and not the clients.
+        shut when none came back. A client count of zero would then report the
+        silence of the access points and not the clients.
 
     Args:
         phases: The phase entries of the run record.
@@ -1336,13 +1336,13 @@ class RunDriver:
         Why:
             contracts/site-lock.md line 105 releases the lock at `complete`,
             `stopped`, or `failed`. A lock left to expire holds the site for
-            the rest of its 3600-second life, and the next operator waits an
+            the rest of its 3600-second life. The next operator then waits an
             hour for a site that nobody upgrades.
 
             Every other state keeps the lock. A closed browser leaves the run
             alive, and the contract at line 98 keeps the site held through it.
             This call sits in the `finally` of the run, which only a final
-            state reaches, and the guard below proves the state before the
+            state reaches. The guard below proves the state before the
             release runs.
 
             The heartbeat holds the key and the token, so a run that built no
@@ -1428,7 +1428,7 @@ class RunDriver:
 
             The loop always reaches the finish step, even when one phase could
             not run. A phase that left the loop early would take the post-check
-            capture away, and that capture is the one record the operator needs
+            capture away. That capture is the one record the operator needs
             most when the site came back wrong.
 
         Args:
@@ -1450,9 +1450,9 @@ class RunDriver:
 
         Why:
             A shut client gate must never throw the run away. The gate is right
-            to refuse the count, because a client count of zero would report
-            the silence of the access points and not the clients. The phase
-            therefore reads failed and the cascade continues, so the operator
+            to refuse the count. A client count of zero would report the
+            silence of the access points and not the clients. The phase
+            therefore reads failed and the cascade continues. The operator
             still gets the switch versions, the switch state, the access point
             state, and the wired clients of the site.
 
@@ -1484,8 +1484,8 @@ class RunDriver:
         Why:
             The entry carries the note of the gate as well as the counts. A
             phase that waited on a cloud that would not answer shows the
-            operator how many devices returned and never why the rest did not,
-            so the page would name a failure with no cause.
+            operator how many devices returned. It never shows why the rest did
+            not. The page would then name a failure with no cause.
 
         Args:
             record: The run record.
@@ -1512,7 +1512,7 @@ class RunDriver:
         Why:
             FR-047 asks the portal to mark the device that passed the time
             limit and to continue with the other devices. The log line names
-            both counts, so a later reader tells a phase that brought nothing
+            both counts. A later reader then tells a phase that brought nothing
             back from a phase that lost one device of two hundred.
 
         Args:
@@ -1537,7 +1537,7 @@ class RunDriver:
             The capture comes before the final state, in the same order that a
             stopped run follows. A run that lost one phase still holds the
             switch versions, the switch state, the access point state, and the
-            wired clients, and that record is the evidence of the failure. The
+            wired clients. That record is the evidence of the failure. The
             run then reports failed, so a run with a lost phase never reads
             complete.
 
@@ -1691,11 +1691,11 @@ class RunDriver:
             memory disagreeing with the run state in the database. The run
             then never appears right in the history page, and it cannot be
             resumed. The method reads the write result and moves the run to
-            the failed state when the store never confirmed it, the same
-            rule `write_capture` already applies to a capture. One retry
-            write reports the failed state to the store; a second failure
-            only logs, because a state machine already in its final state
-            refuses a repeat transition and this method must never recurse.
+            the failed state when the store never confirmed it. The rule
+            `write_capture` already applies to a capture. One retry
+            write reports the failed state to the store. A second failure
+            only logs. A state machine already in its final state
+            refuses a repeat transition, and this method must never recurse.
 
         Args:
             record: The run record.

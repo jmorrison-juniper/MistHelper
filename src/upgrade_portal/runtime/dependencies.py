@@ -23,10 +23,10 @@ What the probe tests:
     deeper answer knows where it lives.
 
 Why auto-start sits behind a switch:
-    Starting a container is a change to the host, and a firmware tool should not
+    Starting a container is a change to the host. A firmware tool should not
     change a host by surprise. `CAPTURE_AUTOSTART` holds the choice. The default
-    is on for a workstation, because that is the case this feature repairs, and
-    the action is limited to starting a container that already exists.
+    is on for a workstation, because that is the case this feature repairs. The
+    action also reaches no further than a container that already exists.
 """
 
 from __future__ import annotations  # Postponed annotations keep every hint a plain string.
@@ -178,8 +178,9 @@ def build_registry(arango: ArangoSettings, redis: RedisSettings) -> tuple[Depend
     """Name every service the portal needs, with the address the settings give.
 
     Why:
-        The registry reads the same settings the portal itself uses, so the
-        probe can never test a different address from the one the portal calls.
+        The registry reads the same settings that the portal itself uses. The
+        probe can therefore never test a different address from the one the
+        portal calls.
 
     Args:
         arango: The document store settings.
@@ -314,7 +315,7 @@ def run_preflight(arango: ArangoSettings, redis: RedisSettings, *, allow_start: 
 
     Why:
         One entry point keeps the page, the launcher, and the tests on the same
-        path, so the operator and a test never read a different answer.
+        path. The operator and a test therefore never read a different answer.
 
     Args:
         arango: The document store settings.
@@ -339,8 +340,8 @@ def reading_rows(report: PreflightReport) -> list[dict[str, str]]:
     """Flatten the report into the rows the template renders.
 
     Why:
-        A template reads a plain mapping far more simply than a nested record,
-        and the flat form also keeps the markup free of any settings object.
+        A template reads a plain mapping far more simply than a nested record.
+        The flat form also keeps the markup free of any settings object.
 
     Args:
         report: The report that `run_preflight` returned.

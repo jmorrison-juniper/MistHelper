@@ -4,8 +4,8 @@ Why:
     Section 6 of ``contracts/http-api.md`` gives the operator three ways to
     read one comparison. A machine reads ``GET /api/comparisons``. A person
     reads ``GET /compare``. A record keeper downloads
-    ``GET /api/comparisons/export``. All three must report the same numbers,
-    so each route builds the comparison with the same three calls into the
+    ``GET /api/comparisons/export``. All three must report the same numbers.
+    Each route builds the comparison with the same three calls into the
     compare package and counts nothing on its own. The same section holds the
     history, because a comparison and a history read the same stored captures.
 
@@ -13,6 +13,7 @@ Route names:
     ``review.compare_captures`` answers ``GET /api/comparisons``.
     ``review.download_comparison`` answers ``GET /api/comparisons/export``.
     ``review.compare_page`` answers ``GET /compare``.
+
     ``review.capture_history`` answers ``GET /api/sites/<site_id>/history``.
     ``review.run_history`` answers ``GET /api/sites/<site_id>/runs/history``.
     ``review.history_page`` answers ``GET /history``.
@@ -21,12 +22,12 @@ A free read:
     FR-032, FR-081, and FR-082 let any person read the history. No history
     route asks for a typed word, and no history route reads the site lock. A
     read that waited for a lock would hide the record from the operator who
-    most needs it, which is the operator watching somebody else's upgrade.
+    most needs it. That is the operator watching somebody else's upgrade.
 
 One filter bar, two tables:
     Rule 6 of ``contracts/ui-testids.md`` allows one value of a test
-    identifier for each page, and ``added`` belongs to the device outcomes and
-    to the client outcomes. Two filter bars would print
+    identifier for each page. The word ``added`` belongs to the device
+    outcomes and to the client outcomes. Two filter bars would print
     ``compare-filter-added`` twice, so the page carries one bar that holds the
     union of the two outcome sets. The route hands the chosen outcome to the
     table that owns it and hands ``all`` to the other table. The rows match
@@ -262,7 +263,7 @@ def load_optional_module(suffix: str) -> ModuleType | None:
     Why:
         The capture store imports the database driver at module level. A
         top-level import here would stop the whole portal on a host that holds
-        no driver, so the import waits until a request needs the store.
+        no driver. The import waits until a request needs the store.
 
     Args:
         suffix: The module path below the package root.
@@ -322,7 +323,7 @@ def store_capture_rows(site_id: str, limit: int = DEFAULT_HISTORY_LIMIT, offset:
     """Read one page of capture rows from the capture store.
 
     Why:
-        The store takes one query record rather than loose values, so the
+        The store takes one query record rather than loose values. The
         fallback builds that record here and keeps the store shape out of the
         page code. The two window values carry a default, so the picker still
         calls this reader with the site alone.
@@ -389,7 +390,7 @@ def capture_lister() -> Callable[..., Any]:
 
     Why:
         The picker always renders, even with no rows, so this seam falls back
-        to the store rather than to None and the page needs no extra branch.
+        to the store rather than to None. The page then needs no extra branch.
 
     Returns:
         The reader.
@@ -403,7 +404,7 @@ def run_lister() -> Callable[..., Any]:
 
     Why:
         The run history renders with no rows in the same way as the capture
-        history, so this seam falls back to the store rather than to None.
+        history. This seam falls back to the store rather than to None.
 
     Returns:
         The reader.
@@ -555,7 +556,7 @@ def read_pair(before_id: str, after_id: str) -> CapturePair:
 
     Why:
         The verification test runs before the site test, because the store
-        hands out no document at all for an unverified capture and the route
+        hands out no document at all for an unverified capture. The route
         therefore cannot read that capture's site.
 
     Args:
@@ -717,8 +718,9 @@ def table_filter(chosen: str, allowed: tuple[str, ...]) -> str:
 
     Why:
         ``missing`` is a client outcome and never a device outcome. Handing it
-        to the device table would make the table fall back to ``all`` and log a
-        warning about a value that the page offered on purpose.
+        to the device table would make the table fall back to ``all``. The
+        table would then log a warning about a value that the page offered on
+        purpose.
 
     Args:
         chosen: The filter in force.
@@ -927,8 +929,8 @@ def render_comparison(parts: ComparisonParts) -> str:
     """Render the comparison of two captures.
 
     Why:
-        The filter arrives in the address bar, so the route normalizes it once
-        and hands the same value to the bar and to both tables.
+        The filter arrives in the address bar, so the route normalizes it once.
+        The route hands the same value to the bar and to both tables.
 
     Args:
         parts: The whole comparison result.
@@ -944,7 +946,7 @@ def build_attachment(result: compare_download.ExportResult) -> tuple[Response, i
     """Return one download as a file attachment.
 
     Why:
-        The browser must save the file rather than show it, so the answer
+        The browser must save the file rather than show it. The answer
         carries the disposition header and the file name that the export chose.
 
     Args:
@@ -971,8 +973,8 @@ class PageWindow:
     Why:
         Retention is unlimited under FR-032, so one site can hold thousands of
         capture rows. The window carries the two neighbor addresses ready to
-        print, because a template that builds an address of its own drifts
-        away from the browser test that clicks it.
+        print. A template that builds an address of its own drifts away from
+        the browser test that clicks it.
 
     Attributes:
         limit: The largest number of rows on this page.
@@ -1037,8 +1039,8 @@ def page_href(site_id: str, limit: int, offset: int) -> str:
     """Return the address of one history page.
 
     Why:
-        The site travels in the address bar beside the two window values, so
-        the next page and the earlier page stay on the same site. The builder
+        The site travels in the address bar beside the two window values. The
+        next page and the earlier page stay on the same site. The builder
         escapes each value rather than joining raw text.
 
     Args:
@@ -1116,8 +1118,8 @@ def read_store_page(
 
     Why:
         ``CaptureListPage`` and ``RunListPage`` carry their rows under
-        different names and their count under the same name, so one reader
-        serves both histories and neither route counts anything itself.
+        different names and their count under the same name. One reader serves
+        both histories, and neither route counts anything itself.
 
     Args:
         lister: The list seam.
@@ -1290,9 +1292,9 @@ def moment_texts(rows: Iterable[Mapping[str, Any]]) -> dict[str, str]:
         ``compare/render.py`` owns the columns of the table, and its row record
         is frozen. The page therefore reads the short moment from a map beside
         the view model, keyed by the capture identifier that each row already
-        carries. A row with no identifier reaches no entry, because one empty
-        key would serve two rows and the page would then show the moment of the
-        wrong capture.
+        carries. A row with no identifier reaches no entry. One empty key would
+        serve two rows, and the page would then show the moment of the wrong
+        capture.
 
     Args:
         rows: The history rows of this page.
@@ -1361,9 +1363,9 @@ def build_history(rows: list[dict[str, Any]], window: PageWindow) -> Any:
 
     Why:
         ``compare.render.build_history_view`` owns the columns and the stored
-        size of FR-032b. The name is read at call time, so a portal whose
-        render module has not grown the builder yet still answers the page
-        with the plain rows instead of a server error.
+        size of FR-032b. The name is read at call time. A portal whose render
+        module has not grown the builder yet still answers the page with the
+        plain rows instead of a server error.
 
     Args:
         rows: The rows of this page.
@@ -1534,7 +1536,7 @@ def download_comparison() -> tuple[Response, int]:
     """Answer the comparison of two captures as a file attachment.
 
     Why:
-        The download module owns the format rule and the column list, so the
+        The download module owns the format rule and the column list. The
         route reads the two captures, asks for the file, and passes the refusal
         straight on.
 

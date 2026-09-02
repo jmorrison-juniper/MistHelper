@@ -9,38 +9,37 @@ Why:
     below.
 
 Route names:
-    The templates and the browser script render against these endpoint names, so
-    the names are a contract and no rename is safe: `upgrade.create_run`,
+    The templates and the browser script render against these endpoint names.
+    The names are a contract, so no rename is safe: `upgrade.create_run`,
     `upgrade.save_options`, `upgrade.start_run`, `upgrade.run_status`,
     `upgrade.run_page`, `upgrade.options_page`, `upgrade.confirm_page`, and
     `upgrade.stop_run`.
 
 Two paths, one new run:
-    `contracts/http-api.md` section 5 names `POST /api/sites/<site_id>/runs` and
-    carries the site in the path. `tasks.md` T151 names `POST /api/runs` and
-    carries no site at all. The contract wins, because the browser code and the
-    contract tests both read the contract, and because the site lock check of
-    T182 and the `RunSpec` record both need a site identifier. The task path
-    still binds to the same handler, which reads the site out of the signed
-    session instead. `select.list_sites` already settles this exact class of
-    conflict the same way, so the two documents agree and neither path repeats a
-    line of logic.
+    Section 5 of `contracts/http-api.md` names `POST /api/sites/<site_id>/runs`.
+    That path carries the site. Task T151 of `tasks.md` names `POST /api/runs`.
+    That path carries no site at all. The contract wins for two reasons. The
+    browser code and the contract tests both read the contract. The site lock
+    check of T182 and the `RunSpec` record both need a site identifier. The task
+    path still binds to the same handler. That handler reads the site out of the
+    signed session instead. The helper `select.list_sites` already settles this
+    same class of conflict the same way. The two documents agree, so neither path
+    repeats a line of logic.
 
 Seams:
     Three parts of this feature arrive beside this module: the run record store,
     the run driver, and the cancel work of a stop. Each one travels through a
-    seam, which is an injected object in the application configuration. Nothing
-    here imports either module while this module loads, so the portal starts
-    today and picks up each module on the day its wiring lands. A contract test
-    injects a stand-in and reaches no cloud, no ArangoDB server, and no Redis
-    server.
+    seam. A seam is an injected object in the application configuration. Nothing
+    here imports either module while this module loads. The portal starts today
+    and picks up each module on the day its wiring lands. A contract test injects
+    a stand-in and reaches no cloud, no ArangoDB server, and no Redis server.
 
 Where a run record lives:
-    In the injected store when the configuration holds one, and in one guarded
-    dictionary in this process when it does not. `capture/store.py` publishes
-    `write_run` and publishes no run reader, so it does not satisfy the two
-    method shape that `runtime/signals.RunRecordStore` asks for. The memory store
-    keeps every route working until that reader lands.
+    The record lives in the injected store when the configuration holds one. It
+    lives in one guarded dictionary in this process when it does not. The module
+    `capture/store.py` publishes `write_run` and publishes no run reader. So it
+    does not satisfy the two method shape that `runtime/signals.RunRecordStore`
+    asks for. The memory store keeps every route working until that reader lands.
 """
 
 from __future__ import annotations  # Postponed annotations keep every hint a plain string.
@@ -200,11 +199,12 @@ class MemoryRunStore:
     """Holds every run record of this process in one guarded dictionary.
 
     Why:
-        `runtime/signals.RunRecordStore` asks for a reader and a writer.
-        `capture/store.py` publishes `write_run` and publishes no reader, so it
-        does not satisfy that shape today. This store keeps the start route, the
-        poll route, and the stop route working until the reader lands, and the
-        `RUN_STORE` seam replaces it with no change to any handler below.
+        The store `runtime/signals.RunRecordStore` asks for a reader and a
+        writer. The module `capture/store.py` publishes `write_run` and
+        publishes no reader. So it does not satisfy that shape today. This store
+        keeps the start route, the poll route, and the stop route working until
+        the reader lands. The `RUN_STORE` seam then replaces it with no change to
+        any handler below.
     """
 
     def read_run(self, run_id: str) -> dict[str, Any] | None:
@@ -243,10 +243,10 @@ class MemoryRunStore:
         Why:
             FR-037 asks the portal to find a run that already acts on the site.
             The two method shape of `runtime/signals.RunRecordStore` answers one
-            run at a time, so it cannot answer that question. This third method
-            is optional, and `site_run_records` reads it through the same seam,
-            so the store that lands later publishes the same name and no handler
-            changes.
+            run at a time. So it cannot answer that question. This third method
+            is optional. The helper `site_run_records` reads it through the same
+            seam. So the store that lands later publishes the same name. No
+            handler changes.
 
         Args:
             site_id: The site that the new run wants to act on.
@@ -331,7 +331,7 @@ def precheck_adopter() -> Any | None:
     Why:
         Delta H3 asks the run create call to adopt the newest verified
         standalone pre-check of the site. The adoption reads the newest key and
-        writes one edge, so it sits behind a seam and a contract test injects a
+        writes one edge. So it sits behind a seam. A contract test injects a
         stand-in that reaches no database.
 
     Returns:
@@ -491,11 +491,11 @@ class SiteLockRead(NamedTuple):
     """Holds what the portal learned about one site lock.
 
     Why:
-        A holder address alone answers two states. A free site and a site the
-        portal could not read both answer None, so a write path that reads only
-        an address treats a dead lock store as a free site. Issue #1827 reports
-        that exact failure. These two fields carry the third state, so every
-        write path can refuse what it cannot read.
+        A holder address alone answers two states. A free site answers None. A
+        site the portal could not read also answers None. So a write path that
+        reads only an address treats a dead lock store as a free site. Issue
+        #1827 reports that exact failure. These two fields carry the third state.
+        So every write path can refuse what it cannot read.
     """
 
     state: str  # One of `free`, `locked`, or `unknown`, as `select.site_lock_state` names them.
@@ -534,10 +534,11 @@ def site_locked_refusal(holder: str) -> tuple[Response, int]:
     """Answer a site that another operator holds, and name that operator.
 
     Why:
-        T182 asks the refusal to name the holder, so the second operator knows
-        whom to ask. `json_error` carries no `details` key, so the answer takes
-        the envelope builder instead. `contracts/http-api.md:132` fixes
-        `details.actor_email` for the same refusal on the lock path.
+        T182 asks the refusal to name the holder. So the second operator knows
+        whom to ask. The helper `json_error` carries no `details` key. So the
+        answer takes the envelope builder instead. The citation
+        `contracts/http-api.md:132` fixes `details.actor_email` for the same
+        refusal on the lock path.
 
     Args:
         holder: The address of the operator that holds the lock.
@@ -650,10 +651,10 @@ def live_run_at_site(site_id: str) -> str | None:
     Why:
         FR-037 asks the portal to warn before it sends a second upgrade to the
         same site. The site lock answers a different question. The operator that
-        started the first run still holds that lock, so that same operator
-        passes every lock check and starts a second upgrade over the first.
-        `run_is_live` reads `RunStateMachine.TERMINAL`, so no state name is
-        written twice and a finished run leaves the site free.
+        started the first run still holds that lock. So that same operator passes
+        every lock check and starts a second upgrade over the first. The helper
+        `run_is_live` reads `RunStateMachine.TERMINAL`. So no state name is
+        written twice. A finished run leaves the site free.
 
     Args:
         site_id: The site that the new run wants to act on.
@@ -671,10 +672,11 @@ def already_running_refusal(run_id: str) -> tuple[Response, int]:
     """Answer a site that already runs an upgrade, and name that run.
 
     Why:
-        `site_locked` names a second operator, which is a different fact and the
-        exact confusion that FR-037 repairs, so this refusal carries its own
-        code. `json_error` holds no `details` key, so the answer takes the
-        envelope builder, as `site_locked_refusal` already does.
+        The helper `site_locked` names a second operator. That is a different
+        fact. It is the exact confusion that FR-037 repairs. So this refusal
+        carries its own code. The helper `json_error` holds no `details` key. So
+        the answer takes the envelope builder, as `site_locked_refusal` already
+        does.
 
     Args:
         run_id: The key of the run that has not reached a final state.
@@ -692,7 +694,7 @@ def site_refusal(org_id: str, site_id: str) -> tuple[Response, int] | None:
     Why:
         A create call passes two separate checks. A held site belongs to a
         second operator. A live run belongs to the current operator as often as
-        not, so the lock check alone lets that operator open a second run from a
+        not. So the lock check alone lets that operator open a second run from a
         second tab. One function holds both checks and keeps the handler inside
         the Five-Item Rule.
 
@@ -852,7 +854,7 @@ def create_run(site_id: str | None = None) -> tuple[Response, int]:
 
     Why:
         FR-014 binds one run to one site. The site lock stops a second operator
-        from opening a competing run, and FR-037 stops the current operator from
+        from opening a competing run. FR-037 stops the current operator from
         sending a second upgrade over a run that still runs.
 
     Args:
@@ -890,11 +892,11 @@ def built_options(record: dict[str, Any], body: dict[str, Any]) -> dict[str, Any
 
     Why:
         The browser sends only a MAC address and a target version for each
-        device, but the run driver reads the device type, the gateway family,
-        and the scope. `upgrade/options.py` fills those fields from the site
-        inventory, so this function reaches that module first. The body itself
-        remains the answer when no cloud session or no inventory answers, which
-        keeps a test and an offline view working.
+        device. The run driver also reads the device type, the gateway family,
+        and the scope. The module `upgrade/options.py` fills those fields from
+        the site inventory. So this function reaches that module first. The body
+        itself remains the answer when no cloud session or no inventory answers.
+        That keeps a test and an offline view working.
 
     Args:
         record: The stored run record.
@@ -936,13 +938,13 @@ def plain_options(body: dict[str, Any]) -> dict[str, Any]:
         reads `targets` on its own, so this function reads every option field
         beside it.
 
-        `upgrade/options.py` owns every mapping rule and every refusal, so this
-        function reaches that module first. Issue #2156 needs it: the advanced
-        controls live in that module alone, and a body that skipped it would
-        store three fields and drop every advanced choice with no word to the
-        operator. The three basic fields stand only while that module does not
-        import, which is the same rule that every other seam of this route
-        follows.
+        The module `upgrade/options.py` owns every mapping rule and every
+        refusal. So this function reaches that module first. Issue #2156 needs
+        it. The advanced controls live in that module alone. A body that skipped
+        the module would store three fields. It would drop every advanced choice
+        with no word to the operator. The three basic fields stand only while
+        that module does not import. That is the same rule that every other seam
+        of this route follows.
 
     Args:
         body: The request body of the options call.
@@ -1061,8 +1063,8 @@ def version_index(answer: Any) -> dict[str, list[str]]:
         Two sources answer this read. The configuration holds a ready map, and
         the options module holds a reader that builds one. Both arrive here, so
         the body of this route and the picker of the page hold the same shape. A
-        value of any other shape reads as no version, because a picker with no
-        option is safer than a picker that shows a version the cloud never named.
+        value of any other shape reads as no version. A picker with no option is
+        safer than a picker that shows a version the cloud never named.
 
     Args:
         answer: The value that the seam gave, of any type.
@@ -1094,9 +1096,9 @@ def read_versions(record: dict[str, Any]) -> dict[str, list[str]]:
     """Return the version list of each model that one run may install.
 
     Why:
-        The injected value wins over the late import, so a contract test reaches
-        no cloud. `upgrade/options.py` may not be loadable in every stage of the
-        build, so the import happens inside this call and never at load time.
+        The injected value wins over the late import. So a contract test reaches
+        no cloud. The module `upgrade/options.py` may not load in every stage of
+        the build. So the import happens inside this call and never at load time.
 
     Args:
         record: The run record that names the site and the target devices.
@@ -1140,7 +1142,7 @@ def plan_warnings(record: dict[str, Any]) -> list[str]:
 
     Why:
         The confirmation page is the last page before firmware moves. It showed
-        the warnings of the option save and none of the warnings of the plan, so
+        the warnings of the option save and none of the warnings of the plan. So
         an operator confirmed a run without reading what the cloud would do
         differently from the page. Issue #2194 holds that report.
 
@@ -1232,11 +1234,12 @@ def advanced_values(record: dict[str, Any]) -> dict[str, str]:
     """Return the text that each advanced upgrade control shows.
 
     Why:
-        Issue #2156 draws nine advanced controls, and a saved run must reopen
-        with every choice still shown. `upgrade/options.py` owns the storage
-        shape of those choices, so it owns the flattening. This seam keeps the
-        route working through a build stage in which that module does not
-        import, the same rule that every other seam of this route follows.
+        Issue #2156 draws nine advanced controls. A saved run must reopen with
+        every choice still shown. The module `upgrade/options.py` owns the
+        storage shape of those choices. So it owns the flattening. This seam
+        keeps the route working through a build stage in which that module does
+        not import. That is the same rule that every other seam of this route
+        follows.
 
     Args:
         record: The stored run record.
@@ -1259,10 +1262,10 @@ def option_defaults() -> dict[str, str]:
 
     Why:
         Issue #2186 asks the page to name the default of every optional control.
-        `upgrade/options.py` owns the cloud schema defaults and reads the
-        environment, so it owns the mapping. This seam keeps the route working
-        through a build stage in which that module does not import, the same
-        rule that every other seam of this route follows.
+        The module `upgrade/options.py` owns the cloud schema defaults and reads
+        the environment. So it owns the mapping. This seam keeps the route
+        working through a build stage in which that module does not import. That
+        is the same rule that every other seam of this route follows.
 
     Returns:
         The default text of each control, or an empty mapping when the module is
@@ -1305,13 +1308,13 @@ def options_view(record: dict[str, Any]) -> dict[str, Any]:
     """Build the device rows and the version map that the options page draws.
 
     Why:
-        The page drew only the rows that the run record already held, and a new
-        run holds none. The page therefore showed no device, the browser found
-        no version control to read, and the saved target list stayed empty. This
-        function reads the site inventory once, so the operator sees a device on
-        the first view and sees the same version list on every later view. A
-        ready map, a missing module, and a signed-out session each keep the
-        earlier answer, so no test and no offline view reaches the cloud.
+        The page drew only the rows that the run record already held. A new run
+        holds none. The page therefore showed no device. The browser found no
+        version control to read. The saved target list stayed empty. This
+        function reads the site inventory once. So the operator sees a device on
+        the first view. The operator sees the same version list on every later
+        view. A ready map, a missing module, and a signed-out session each keep
+        the earlier answer. So no test and no offline view reaches the cloud.
 
     Args:
         record: The stored run record.
@@ -1357,10 +1360,10 @@ def composed_options(record: dict[str, Any], body: dict[str, Any]) -> dict[str, 
 
     Why:
         The browser sends only a MAC address and a target version for each
-        device, but `to_device_targets` reads the device type and the run driver
-        reads the gateway family, the scope, and the first uptime. Only a site
-        read fills those fields. A thin row would reach the driver, raise a key
-        fault inside the plan builder, and send no device to the cloud.
+        device. The helper `to_device_targets` reads the device type. The run
+        driver reads the gateway family, the scope, and the first uptime. Only a
+        site read fills those fields. A thin row would reach the driver, raise a
+        key fault inside the plan builder, and send no device to the cloud.
 
     Args:
         record: The stored run record.
@@ -1422,11 +1425,11 @@ def start_refusal(record: dict[str, Any]) -> tuple[Response, int] | None:
 
     Why:
         FR-033 to FR-035 guard the start with three separate rules. One function
-        holds all three in their documented order, so the handler below stays
-        inside the size limit and a reader finds every refusal in one place. A
-        fourth rule guards the plan itself, because a start that sends nothing
-        would still report a complete run and the operator would read that run
-        as an upgrade of the whole site.
+        holds all three in their documented order. So the handler below stays
+        inside the size limit. A reader finds every refusal in one place. A
+        fourth rule guards the plan itself. A start that sends nothing would
+        still report a complete run. The operator would then read that run as an
+        upgrade of the whole site.
 
     Args:
         record: The run record the operator asks to start.
@@ -1523,9 +1526,9 @@ def run_status(run_id: str) -> tuple[Response, int]:
 
     Why:
         FR-039 asks the page to refresh every 30 seconds with no operator
-        action, so this route answers from the run record alone and reads no
-        cloud. `RunStatusView` owns the whole body shape, so no field of the
-        contract is built twice.
+        action. So this route answers from the run record alone and reads no
+        cloud. The view `RunStatusView` owns the whole body shape. So no field of
+        the contract is built twice.
 
     Args:
         run_id: The run key.
@@ -1669,10 +1672,10 @@ def options_page(run_id: str) -> str:
 
     Why:
         The page includes the site lock banner, because a saved option writes to
-        the site. FR-072 gives one site to one operator, so the operator must
+        the site. FR-072 gives one site to one operator. So the operator must
         read who holds the site before the save call. The rows come from
-        `options_view`, because a new run holds no row of its own and the
-        operator must still see every device of the site.
+        `options_view`. A new run holds no row of its own. The operator must
+        still see every device of the site.
 
     Args:
         run_id: The run key.
@@ -1742,11 +1745,11 @@ def stop_refusal(failure: StopRequestError) -> tuple[Response, int]:
     """Map one stop request failure onto the documented answer.
 
     Why:
-        `runtime/signals.py` already carries the machine code on each error
-        class, so this function maps the class to a status and repeats no code.
-        The 409 of a run that cannot stop reads `run_not_stoppable`, which is a
-        different word from the 409 `site_locked` of a held site, so the browser
-        tells the two apart.
+        The module `runtime/signals.py` already carries the machine code on each
+        error class. So this function maps the class to a status and repeats no
+        code. The 409 of a run that cannot stop reads `run_not_stoppable`. That
+        is a different word from the 409 `site_locked` of a held site. So the
+        browser tells the two apart.
 
     Args:
         failure: The error that the stop store raised.
@@ -1770,8 +1773,8 @@ def stop_lock_refusal(record: dict[str, Any]) -> tuple[Response, int] | None:
         FR-038i binds the stop control to the operator that holds the site lock.
         Without this check any signed-in operator cancels the upgrade of any
         other operator. The run record names its own organization and its own
-        site, so this check reads no value out of the session and no value out
-        of the request body.
+        site. So this check reads no value out of the session. It reads no value
+        out of the request body.
 
     Args:
         record: The run record that the stop acts on.
@@ -1791,9 +1794,9 @@ def cancel_outcome(run_id: str) -> StopOutcome:
     """Run the cancel work of one stop and return what it achieved.
 
     Why:
-        FR-038f forbids a claim of a cancel that never happened. While the cancel
-        work is not wired, the three lists therefore stay empty and the message
-        states only what the portal did do, which is to stop starting devices.
+        FR-038f forbids a claim of a cancel that never happened. The cancel work
+        is not wired yet. So the three lists stay empty. The message states only
+        what the portal did do, which is to stop starting devices.
 
     Args:
         run_id: The run key.
@@ -1834,10 +1837,10 @@ def outcome_is_recorded(record: Mapping[str, Any]) -> bool:
     """Report whether the run record already names the outcome of its stop.
 
     Why:
-        Two layers can write this one value. `stop.stop_run_and_record` writes
-        it whenever a cancel call reaches the cloud, and the stop route writes
-        it on every other path. This reader lets the route see the earlier
-        write and skip a second write of the same value.
+        Two layers can write this one value. The layer
+        `stop.stop_run_and_record` writes it whenever a cancel call reaches the
+        cloud. The stop route writes it on every other path. This reader lets the
+        route see the earlier write and skip a second write of the same value.
 
     Args:
         record: The run record, read after the cancel work finished.
@@ -1853,12 +1856,13 @@ def record_stop_outcome(store: Any, run_id: str, outcome: StopOutcome) -> dict[s
     """Write the outcome of one stop unless the cancel layer already wrote it.
 
     Why:
-        FR-038h asks the record to hold the whole stop. `stop.stop_run_and_record`
-        owns that write, but it runs only when the run holds an accepted upgrade
-        call and a cloud session. An operator who stops a run before the first
-        accepted call reaches neither, so this route keeps its own write for that
-        path. The route reads the record here in any case, because the state move
-        below needs the record that the cancel layer may have changed.
+        FR-038h asks the record to hold the whole stop. The layer
+        `stop.stop_run_and_record` owns that write. It runs only when the run
+        holds an accepted upgrade call and a cloud session. An operator who stops
+        a run before the first accepted call reaches neither. So this route keeps
+        its own write for that path. The route reads the record here in any case.
+        The state move below needs the record that the cancel layer may have
+        changed.
 
     Args:
         store: The run record store of this request.

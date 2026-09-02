@@ -10,7 +10,7 @@ Why:
 
 Route names:
     `contracts/http-api.md` fixes every path below. The template layer and the
-    browser script use the paths and not the endpoint names, so a rename of a
+    browser script use the paths and not the endpoint names. A rename of a
     function stays safe, and a change of a path does not.
 
 Where a credential lives:
@@ -23,7 +23,7 @@ Where a credential lives:
     that state back.
 
 Why a pending store exists:
-    A second factor arrives on a later request, and the cloud needs the same
+    A second factor arrives on a later request. The cloud needs the same
     session object that made the first attempt. The signed browser session
     cannot carry a live object, and it must never carry the password. The store
     below therefore holds the object in memory, keyed by the browser
@@ -250,8 +250,8 @@ def resolve_host(raw_host: str) -> str:
 
     Why:
         The host decides where the password travels. Free text here would let a
-        crafted post send the password to a server that the attacker owns, so
-        the value must match an entry of the catalog and nothing else.
+        crafted post send the password to a server that the attacker owns. The
+        value must match an entry of the catalog and nothing else.
 
     Args:
         raw_host: The host that the request named.
@@ -293,8 +293,8 @@ def default_cloud_login(actor_email: str, password: str, host: str) -> Any:
         This is the only expression of the portal that holds a password. The
         existing interactive flow makes the same call, so the portal reuses that
         behavior instead of writing a second login path. The two token fields
-        reset first, because a cached token would let the library skip the pair
-        and report a success that the operator never earned.
+        reset first, because a cached token would let the library skip the pair.
+        The library would then report a success that the operator never earned.
 
     Args:
         actor_email: The normalized work address.
@@ -499,7 +499,7 @@ def remember_pending(browser_id: str, record: PendingSignIn) -> None:
     Why:
         The retry needs the same cloud session object, and the signed browser
         session cannot carry a live object. The cap drops the oldest wait
-        instead of the whole store, so a flood cannot cancel the sign-in of an
+        instead of the whole store. A flood cannot cancel the sign-in of an
         operator who is still typing a code.
 
     Args:
@@ -517,7 +517,7 @@ def read_pending(browser_id: str) -> PendingSignIn | None:
     """Return the pending sign-in of one browser.
 
     Why:
-        The read purges first, so an expired wait reads as absent and the
+        The read purges first. An expired wait then reads as absent, and the
         operator receives the refusal instead of a retry against a dead
         session.
 
@@ -662,8 +662,8 @@ def with_browser_id(answer: Response | tuple[Response, int], browser_id: str) ->
     Why:
         A first visit carries no cookie, and the pending store and the session
         registry both key on the value. The cookie must therefore travel on the
-        same answer that starts the wait or ends the sign-in, or the next
-        request keys on a different value and finds nothing.
+        same answer that starts the wait or ends the sign-in. The next request
+        otherwise keys on a different value and finds nothing.
 
     Args:
         answer: The redirect, or the body and status pair.
@@ -774,7 +774,7 @@ def error_page(name: str, context: dict[str, Any], message: str, status: int) ->
         A browser form post cannot read a JSON body, so a refusal envelope
         would show the operator raw text instead of the form. This helper shows
         the form again with the reason, and it keeps the status that
-        `contracts/http-api.md` fixes, so a script caller and a browser caller
+        `contracts/http-api.md` fixes. A script caller and a browser caller
         still agree about the outcome.
 
     Args:
@@ -798,7 +798,7 @@ def credential_refusal(message: str = BAD_CREDENTIALS_MESSAGE) -> tuple[Response
         part of the value that the operator typed. One refusal for a bad
         address and for a bad password also tells an attacker nothing about
         which half was wrong. The message still varies, exactly as
-        `two_factor_refusal` varies its own message, because a pair that never
+        `two_factor_refusal` varies its own message. A pair that never
         reached the cloud needs a different cure from a pair that the cloud
         refused.
 
@@ -835,7 +835,7 @@ def two_factor_refusal(message: str) -> tuple[Response, int]:
     Why:
         `contracts/http-api.md` fixes one code for this step, so an expired
         wait and a wrong code share it. The message differs, because the
-        operator needs a different next action for each case, and
+        operator needs a different next action for each case. The contract
         `contracts/README.md` states that a test reads the code and not the
         message.
 
@@ -858,8 +858,9 @@ def password_present() -> bool:
         the field as required only while no token variable holds text. A
         provider post can therefore still arrive empty. An empty password would
         spend one cloud attempt against the sign-in rate limit for an answer
-        that is already known, so the portal must refuse it here. The truth test
-        keeps the value inside this one expression, so no name ever binds it.
+        that is already known. The portal must therefore refuse it here. The
+        truth test keeps the value inside this one expression, so no name ever
+        binds it.
 
     Returns:
         True when the field holds text, or False when the field is empty.
@@ -1096,8 +1097,8 @@ def check_two_factor(browser_id: str, pending: PendingSignIn) -> Response | tupl
     """Judge one second factor code and finish or refuse the sign-in.
 
     Why:
-        A wrong code keeps the pending record, because an operator mistypes a
-        six digit code often and a dropped record would force the whole pair
+        A wrong code keeps the pending record. An operator mistypes a
+        six digit code often, and a dropped record would force the whole pair
         again. The wait still expires, and the cloud still counts its own
         attempts, so the retry window stays short.
 
@@ -1221,13 +1222,13 @@ def submit_signout() -> Response | tuple[Response, int]:
     Why:
         `identity.sign_out` already drops the cloud session from the registry
         and clears the whole browser session, so this route adds no registry
-        logic. It also drops any half-finished sign-in, because a wait that
+        logic. It also drops any half-finished sign-in. A wait that
         outlived a sign-out would let the next person at a shared workstation
         complete the login of the person before them.
 
         The route carries no session guard. A sign-out on a session that is
-        already gone must still report success, or a stale tab would show a
-        refusal instead of the sign-in form.
+        already gone must still report success. A stale tab would otherwise
+        show a refusal instead of the sign-in form.
 
     Returns:
         The redirect to the sign-in form, or that path as a JSON body.
