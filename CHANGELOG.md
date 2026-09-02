@@ -7,6 +7,24 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Keep the upgrade schedule and show every warning of the plan
+
+- **Fixed**: The portal discarded the upgrade schedule. A run asked for a
+  download in two hours and a reboot in three hours. The request carried
+  neither field, so the cloud wrote the firmware at once. A duration now
+  resolves against the clock of the reader whatever the caller passed. Issue
+  #2196.
+- **Fixed**: The confirmation page showed the warnings of the option save and
+  none of the warnings of the plan. A real run hid three sentences, and one of
+  them named the reboot of six access points. Issue #2194.
+- **Added**: The confirmation page names the count of cloud calls. The portal
+  splits a run by device type, by gateway family, and by version, so one
+  selection can send several calls.
+
+Warning: the schedule defect can drop a production site with no warning. An
+operator plans a window at midnight, reads that window on the confirmation page,
+and the firmware writes the moment they confirm.
+
 ### Start the container stack with a provider that works on Windows
 
 - **Added**: A helper script at `scripts/compose.ps1`. It finds a compose

@@ -191,6 +191,24 @@
 
     <dt class="col-sm-4">Pre-check capture</dt>
     <dd class="col-sm-8 cell-mono">{{ capture_key | default('None saved', true) }}</dd>
+
+    {#
+      Issue #2194 names the count of cloud calls. The portal splits a run
+      by device type, by gateway family, and by version, so one selection
+      can send several calls. An operator who reads one plan and gets
+      three calls cannot match the result to this page.
+    #}
+    {% set cloud_calls = call_count | default(0) %}
+    {% if cloud_calls %}
+      <dt class="col-sm-4">Cloud calls</dt>
+      <dd class="col-sm-8" data-testid="upgrade-summary-call-count">
+        {{ cloud_calls }}
+        {% if cloud_calls > 1 %}
+          (the portal sends one call for each device type, each gateway
+          family, and each version)
+        {% endif %}
+      </dd>
+    {% endif %}
   </dl>
 </div>
 

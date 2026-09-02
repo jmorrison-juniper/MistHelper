@@ -119,6 +119,10 @@ VIEW_ATTRIBUTES = ("build_options_view",)  # The builder of the device rows of t
 RECORD_ATTRIBUTES = ("build_options_record",)  # The builder of the stored target list.
 ADVANCED_ATTRIBUTES = ("advanced_option_values",)  # The reader of the advanced control text of one run.
 DEFAULT_ATTRIBUTES = ("option_defaults",)  # The reader of the value that each empty control keeps.
+# The wiring module owns the plan seam, so the confirmation page builds no plan
+# of its own. Issue #2194 needs the plan before the operator confirms.
+WIRING_MODULE = "app.wiring"
+PLAN_ATTRIBUTES = ("build_plans",)  # The builder of every cloud call of one run.
 OPTION_RECORD_ATTRIBUTES = ("build_option_record",)  # The mapper of one request body onto a stored record.
 SELECTED_TYPES_ATTRIBUTES = ("selected_device_types",)  # The validator of selected upgrade types.
 VIEW_VERSIONS_FIELD = "versions_by_model"  # The render keyword that `options.html` reads.
@@ -1131,6 +1135,99 @@ def module_attribute(names: tuple[str, ...]) -> Any:
     return find_attribute(load_optional_module(VERSIONS_MODULE), names)  # A missing module answers None.
 
 
+def plan_warnings(record: dict[str, Any]) -> list[str]:
+    """Return the warning sentences that the plan of this run builds.
+
+    Why:
+        The confirmation page is the last page before firmware moves. It showed
+        the warnings of the option save and none of the warnings of the plan, so
+        an operator confirmed a run without reading what the cloud would do
+        differently from the page. Issue #2194 holds that report.
+
+        The worst of the hidden sentences names the reboot of each access point.
+        An operator reads the reboot control, plans a window around one switch
+        and one gateway, and every access point reboots outside that window.
+
+        `wiring.build_plans` already builds the plan from a stored record, so
+        this seam calls it and no second planning path exists. The plan is pure,
+        so this call reaches no cloud endpoint and writes nothing.
+
+    Args:
+        record: The stored run record.
+
+    Returns:
+        One sentence for each warning of the plan. An empty list when the plan
+        cannot be built, because the confirmation page must still render.
+    """
+    builder = find_attribute(load_optional_module(WIRING_MODULE), PLAN_ATTRIBUTES)
+    if not callable(builder):  # A missing module must draw the page, never a fault.
+        logger.warning("upgrade: no plan builder answered, so the confirm page shows the saved warnings alone")
+        return []
+    try:
+        plans: Any = builder(record)
+    except Exception as fault:  # A stored row may hold a value that no rule maps.
+        logger.warning("upgrade: the plan of the confirm page failed with %s", type(fault).__name__)
+        return []  # The page still renders, and the start call applies every rule again.
+    found: list[str] = []
+    for plan in plans:  # Every plan of one run carries the same warning tuple.
+        for sentence in getattr(plan, "warnings", ()):
+            if sentence not in found:  # One risk reads once, whatever the count of calls.
+                found.append(str(sentence))
+    logger.debug("upgrade: the plan of this run holds %s warning(s)", len(found))
+    return found
+
+
+def plan_call_count(record: dict[str, Any]) -> int:
+    """Return the count of cloud calls that this run will send.
+
+    Why:
+        Issue #2194 asks the confirmation page to name the count. The portal
+        splits a run by device type, by gateway family, and by version, so one
+        selection can send several calls. An operator who reads one plan and
+        gets three calls cannot match the result to the page.
+
+    Args:
+        record: The stored run record.
+
+    Returns:
+        The count of plans, or zero when the plan cannot be built.
+    """
+    builder = find_attribute(load_optional_module(WIRING_MODULE), PLAN_ATTRIBUTES)
+    if not callable(builder):
+        return 0  # The page then names no count, which is honest.
+    try:
+        return len(tuple(builder(record)))
+    except Exception as fault:  # The same rule as the warning reader above.
+        logger.warning("upgrade: the call count of the confirm page failed with %s", type(fault).__name__)
+        return 0
+
+
+def confirm_warnings(record: dict[str, Any]) -> list[str]:
+    """Return every sentence that the operator must read before the firmware moves.
+
+    Why:
+        Two readers build a warning. The option save writes the sentences of the
+        device list, such as a device that already runs the chosen version. The
+        plan writes the sentences of the cloud call, such as the reboot of an
+        access point that the reboot control never reaches.
+
+        The confirmation page showed the first set alone, so issue #2194 asks
+        for both. The saved list comes first, because the operator already read
+        it on the options page.
+
+    Args:
+        record: The stored run record.
+
+    Returns:
+        One sentence for each warning, with no repeat.
+    """
+    found: list[str] = [str(one) for one in record.get(WARNINGS_FIELD, [])]
+    for sentence in plan_warnings(record):
+        if sentence not in found:  # One risk reads once, whatever reader named it.
+            found.append(sentence)
+    return found
+
+
 def advanced_values(record: dict[str, Any]) -> dict[str, str]:
     """Return the text that each advanced upgrade control shows.
 
@@ -1628,7 +1725,8 @@ def confirm_page(run_id: str) -> str:
         targets=record.get(TARGETS_FIELD, []),  # The operator reads the whole list one last time.
         options=record.get("options", {}),  # The three controls show the saved choice.
         advanced=advanced_values(record),  # Issue #2156 names every advanced control before the firmware moves.
-        warnings=record.get(WARNINGS_FIELD, []),  # Issue #2003: the last page repeats the saved warning list.
+        warnings=confirm_warnings(record),  # Issue #2194: the saved list and every warning of the plan.
+        call_count=plan_call_count(record),  # Issue #2194: the count of cloud calls that this run sends.
         pre_capture_id=record.get(PRE_CAPTURE_FIELD),  # Names the saved pre-check, or None.
         pre_capture_verified=bool(record.get(PRE_CAPTURE_FIELD)),  # FR-035 unlocks the control on this value.
         **site_labels(record),  # Issue #2100 names the site in words and keeps the identifier.
