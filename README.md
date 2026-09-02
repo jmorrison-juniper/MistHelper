@@ -50,6 +50,28 @@ same gate closes that issue when it passes again.
 
 See `deploy/.env.example` for environment variable documentation. For full container and SSH setup, see the [Container Setup](https://github.com/jmorrison-juniper/MistHelper/wiki/Container-Setup) and [SSH Remote Access](https://github.com/jmorrison-juniper/MistHelper/wiki/SSH-Remote-Access) wiki pages.
 
+### Start the container stack
+
+Use the helper script. It picks a compose provider that works on every platform.
+
+```powershell
+.\scripts\compose.ps1 up -d     # Start the stack
+.\scripts\compose.ps1 down      # Stop the stack
+```
+
+Warning: do not run `podman compose` on Windows, because that command can stop
+the whole portal. It starts the stack without its application service, so the
+portal never answers. The command delegates to an external provider, which sends
+the bind mount as a Windows path with a drive letter. The volume parser then
+refuses the application service, and the two database services start without it.
+Issue #2184 holds that report.
+
+The script needs the native provider. Install it one time with this command:
+
+```powershell
+.venv\Scripts\python.exe -m pip install podman-compose
+```
+
 ### Corporate proxy and TLS certificates
 
 The container image verifies every TLS certificate. It never disables the check.

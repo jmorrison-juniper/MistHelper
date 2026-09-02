@@ -7,6 +7,24 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Start the container stack with a provider that works on Windows
+
+- **Added**: A helper script at `scripts/compose.ps1`. It finds a compose
+  provider that works on every platform, and it passes every argument through.
+  Issue #2184.
+- **Added**: The README names the supported command for the stack. It also names
+  the one install command that the helper script needs.
+- **Fixed**: The command `podman compose` starts the stack without its
+  application service on Windows. That command delegates to an external
+  provider, which sends the bind mount as a Windows path with a drive letter.
+  The volume parser reads the colon of the drive letter as a separator, so it
+  refuses the application service. The two database services start without it.
+
+Warning: a stack without its application service can stop every operation of the
+portal. Such a stack answers no request on port 8055 and none on port 8056. Each
+database service of the stack still reports a healthy state, so the fault reads
+as a working stack.
+
 ### Show the effective default in every upgrade option control
 
 - **Added**: Each optional control names the value that applies when the
