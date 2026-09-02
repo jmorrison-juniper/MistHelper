@@ -139,6 +139,17 @@
                 Target: {{ device.version_target }}
               </span>
             {% endif %}
+            {#
+              Issue #2211: the cloud names a type that the portal does not model.
+              The row says so, because a blank target reads as an error.
+            #}
+            {% if device.type_supported is defined and not device.type_supported %}
+              <span class="portal-note"
+                    data-testid="inventory-unsupported-type-{{ mac }}">
+                The portal offers no upgrade for the type
+                {{ device.type | default('unknown', true) }}.
+              </span>
+            {% endif %}
           </td>
           {#
             The status reads as a word. The table adds no color, so the status

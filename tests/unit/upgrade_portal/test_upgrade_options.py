@@ -260,6 +260,9 @@ class TestVersionOptions:
                 "target_source": "model_fallback",
                 "firmware_mismatch": True,
                 "versions": ["24.2R1.17", "23.4R2-S4.11"],
+                # Issue #2211 marks the row that the portal cannot upgrade. A
+                # switch is a modeled type, so the row reads true.
+                "type_supported": True,
                 # Issue #2157 shows the router controls only for a router row,
                 # so every row names its gateway family. A switch has none.
                 "gateway_family": "",
@@ -280,6 +283,21 @@ class TestVersionOptions:
         """A missing model must not raise, because the operator still sees the row."""
         rows = module.build_version_options([AP_ROW], {})
         assert rows[0]["versions"] == []
+
+    def test_an_unmodeled_device_type_never_ends_the_page(self) -> None:
+        """Issue #2211: one router row made the whole site inventory answer 500."""
+        router_row = {"mac": "5c5b350e0002", "name": "ssr-01", "type": "router", "model": "SSR130", "version": "6.2.5"}
+        rows = module.build_version_options([router_row], {})
+        assert rows[0]["device_type"] == "router"
+        assert rows[0]["type_supported"] is False
+
+    def test_an_unmodeled_device_type_reads_no_version_override(self) -> None:
+        """The portal names no environment variable for a type it does not model."""
+        assert module._configured_override("router", {"CAPTURE_DEFAULT_AP_VERSION": "0.14.29076"}) == ""
+
+    def test_a_modeled_device_type_still_reads_its_override(self) -> None:
+        """The guard must not remove the override that a modeled type carries."""
+        assert module._configured_override("ap", {"CAPTURE_DEFAULT_AP_VERSION": "0.14.29076"}) == "0.14.29076"
 
 
 class TestBuildOptions:

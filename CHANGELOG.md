@@ -7,6 +7,14 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Keep the inventory page alive for an unmodeled device type
+
+- **Fixed**: A device that reports a type the portal does not model no longer
+  ends the site inventory page. One `router` device made the page answer the
+  status 500, so the operator reached no device of the site. Issue #2211.
+- **Added**: The inventory table states that the portal offers no upgrade for an
+  unmodeled type. A blank target with no cause reads as an error.
+
 ### Order any table by any column
 
 - **Added**: Every table of the portal now sorts by any column, both ways. The

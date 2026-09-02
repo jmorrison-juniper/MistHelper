@@ -248,8 +248,27 @@ def _configured_override(
     device_type: str,
     configured: Mapping[str, str | None],
 ) -> str:
-    """Return the configured type override in its comparison form."""
-    value = configured.get(TYPE_OVERRIDE_VARIABLES[device_type])
+    """Return the configured type override in its comparison form.
+
+    Warning: an unmodeled type must never raise. Issue #2211 records a site
+    where one device reported the type ``router``. The lookup raised, and the
+    whole inventory page answered 500, so the operator reached no device of the
+    site.
+
+    Args:
+        device_type: The type that the cloud reported for one device.
+        configured: The environment that may name an override for that type.
+
+    Returns:
+        The override in its comparison form. An unmodeled type answers an empty
+        text, so the model fallback decides the target instead.
+    """
+    variable = TYPE_OVERRIDE_VARIABLES.get(device_type)  # The cloud may name a type the portal does not model
+    if variable is None:
+        # The portal offers no upgrade for an unmodeled type, so the fallback is safe.
+        logger.info("Upgrade portal reads no version override for the unmodeled device type %s", device_type)
+        return ""
+    value = configured.get(variable)  # An absent variable means the model fallback decides
     return _normalized_version(value) if value else ""
 
 
@@ -491,6 +510,10 @@ def build_version_options(
                 "target_source": target_source,
                 "firmware_mismatch": bool(version_before) and bool(safe_target) and version_before != safe_target,
                 "versions": versions,
+                # Issue #2211: the cloud may name a type that the portal does not
+                # model. The row states it, so the table can tell the operator why
+                # that device carries no target.
+                "type_supported": device_type in SUPPORTED_DEVICE_TYPES,
                 # Issue #2157 shows the router controls only when the selection
                 # holds a router. The page cannot read the model rules, so the
                 # row carries the family that `classify_gateway` decided.
