@@ -1928,13 +1928,24 @@ def lock_banner_context(org_id: str, site_id: str) -> dict[str, Any]:
     return build_lock_banner(site_id, state, holder, wait, "")  # This browser holds no token on this path.
 
 
-def build_lock_banner(site_id: str, state: str, holder: str, cooldown: int, token: str) -> dict[str, Any]:
-    """Shape the six banner values into the names that the partial reads.
+def build_lock_banner(
+    site_id: str,
+    state: str,
+    holder: str,
+    cooldown: int,
+    token: str,
+    upgrade_devices: int = 0,
+) -> dict[str, Any]:
+    """Shape the banner values into the names that the partial reads.
 
     Why:
-        `partials/lock_banner.html` fixes six variable names in its own header.
+        `partials/lock_banner.html` fixes each variable name in its own header.
         One builder holds those names, so `lock_banner_context` states each rule
         once and no route spells a name a second way.
+
+        Issue #2200 adds the device count. A takeover moves the write of a live
+        upgrade to a second operator, and that operator must read how many
+        devices are under upgrade before the portal asks for the confirmation.
 
     Args:
         site_id: The site the banner covers.
@@ -1942,6 +1953,8 @@ def build_lock_banner(site_id: str, state: str, holder: str, cooldown: int, toke
         holder: The work email address of the holder. Empty when none is known.
         cooldown: The seconds left before a takeover becomes possible.
         token: The lock token this browser holds. Empty when it holds none.
+        upgrade_devices: The count of devices that a live run of this site
+            upgrades now. Zero means no run of this site writes firmware.
 
     Returns:
         The template context of the banner.
@@ -1953,6 +1966,18 @@ def build_lock_banner(site_id: str, state: str, holder: str, cooldown: int, toke
         "lock_cooldown": cooldown,  # Zero hides the cooldown line of the banner.
         "lock_token": token,  # An empty value stops the heartbeat before it starts.
         "lock_confirm_word": takeover_word(holder),  # The first guess, which a refusal may replace.
+        # Issue #2200: the takeover warning names this count. Zero hides the sentence.
+        "lock_upgrade_devices": upgrade_devices,
+        # Issue #2200: a control that writes to the site is off when another
+        # operator holds it. The page renders that state, so the control is
+        # never live for a moment before the script runs.
+        #
+        # A free site and an unreadable state both leave the control on. The
+        # server is the real guard, and it refuses with 409 site_locked when
+        # another operator holds the site. A control that shut on a free site
+        # would stop honest work, and a control that shut on an unreadable lock
+        # store would stop every operator whenever Redis blinked.
+        "lock_write_allowed": state != LOCK_STATE_LOCKED,
     }
 
 

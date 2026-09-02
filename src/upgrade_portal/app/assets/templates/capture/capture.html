@@ -142,12 +142,36 @@
     it is a button and not a form. A form would move the browser to a new page
     and would lose the 202 body. portal.js adds the token header.
   #}
+  {#
+    Issue #2200: the site lock guards this write. The control renders disabled
+    for an operator who does not hold the site, and it names the reason. The
+    server refuses such a call with 409 site_locked either way, and a live
+    control that answers a refusal wastes the time of the operator.
+
+    The page decides this, not the script. A control that is live until the
+    script runs invites a press in that moment.
+  #}
+  {% set write_allowed = lock_write_allowed | default(false, true) %}
   <button type="button"
           class="portal-button portal-button-primary"
           data-testid="capture-start-button"
+          data-needs-lock
           data-site-id="{{ site_id | default('', true) }}"
           data-run-id="{{ run_id | default('', true) }}"
-          data-role="{{ role | default('pre', true) }}">Start the capture</button>
+          data-role="{{ role | default('pre', true) }}"
+          {% if not write_allowed %}disabled aria-describedby="capture-start-locked"{% endif %}
+          >Start the capture</button>
+
+  {% if not write_allowed %}
+    <p class="portal-note" id="capture-start-locked" data-testid="capture-start-locked-note" data-lock-reason-note>
+      {% if lock_holder | default('', true) %}
+        {{ lock_holder | default('', true) }} holds this site, so this control is off. Take the site
+        to start a capture.
+      {% else %}
+        Another operator holds this site, so this control is off.
+      {% endif %}
+    </p>
+  {% endif %}
 
   {#
     FR-040 requires a manual refresh control. The poll runs every 30 seconds,
@@ -514,3 +538,6 @@
      role="alert"
      hidden></div>
 {% endblock %}
+
+
+

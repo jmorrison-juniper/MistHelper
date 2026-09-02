@@ -2821,6 +2821,33 @@
     }
 
     /**
+     * Turns every write control on or off to match the site lock.
+     *
+     * Why: Issue #2200 lets any signed-in operator read a run and a capture.
+     * The lock gates the write alone. A control that writes to the site
+     * therefore answers the lock, and the page renders that state already. This
+     * keeps the controls in step when the operator takes or releases the site
+     * with no page load.
+     *
+     * The reason sits in a note that the markup already holds, so this function
+     * writes no sentence of its own and the page owns every word.
+     *
+     * @param {boolean} allowed True when this browser holds the site.
+     * @returns {void}
+     */
+    function paintWriteControls(allowed) {
+        var controls = document.querySelectorAll("[data-needs-lock]");
+        var index = 0;
+        for (index = 0; index < controls.length; index += 1) {
+            controls[index].disabled = !allowed;
+        }
+        var notes = document.querySelectorAll("[data-lock-reason-note]");
+        for (index = 0; index < notes.length; index += 1) {
+            notes[index].hidden = allowed;
+        }
+    }
+
+    /**
      * Paints the banner for a lock this browser now holds.
      *
      * Why: The take button and the release button never both apply. The token
@@ -2836,6 +2863,7 @@
         region.setAttribute("data-lock-token", (grant && grant.lock_token) || "");
         setText(region.querySelector("[data-lock-message]"), "You hold this site.");
         showLockError(region, "");
+        paintWriteControls(true);  // The holder writes, so every write control answers again.
 
         var takeButton = byTestId(LOCK_TAKE_TESTID, region);
         if (takeButton) {
@@ -2866,6 +2894,7 @@
         region.setAttribute("data-lock-state", "free");
         region.setAttribute("data-lock-token", "");
         setText(region.querySelector("[data-lock-message]"), message);
+        paintWriteControls(false);  // A released lock shuts every control that writes to the site.
 
         var takeButton = byTestId(LOCK_TAKE_TESTID, region);
         if (takeButton) {

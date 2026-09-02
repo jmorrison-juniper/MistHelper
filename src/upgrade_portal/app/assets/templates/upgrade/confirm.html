@@ -107,13 +107,19 @@
 {% set device_noun = 'device' if device_count == 1 else 'devices' %}
 
 {#
-  The gate opens on two facts. FR-035 asks for a verified pre-check. The plan
+  The gate opens on three facts. FR-035 asks for a verified pre-check. The plan
   must also name at least one device, because a start that sends nothing still
   reports a complete run and an operator would read that run as an upgrade of
   the whole site. `POST /api/runs/<run_id>/start` refuses the same two states,
   so the page and the server agree.
+
+  Issue #2200 adds the third fact. The operator must hold the site lock. A
+  second operator reads this page and every value on it, and the start control
+  stays shut for that operator. The start route refuses the same request with
+  409 site_locked, so the page and the server agree here as well.
 #}
-{% set start_ready = pre_check_ready and device_count > 0 %}
+{% set holds_site_lock = lock_write_allowed | default(false, true) %}
+{% set start_ready = pre_check_ready and device_count > 0 and holds_site_lock %}
 {% set chosen_strategy = option_values.strategy | default('big_bang', true) %}
 {% set force_chosen = option_values.force | default(false) %}
 {% set stable_version_chosen = option_values.stable_version | default(false) %}
@@ -355,6 +361,17 @@
     {% elif device_count == 0 %}
       The saved plan names no device. Return to the options, choose a version,
       and save the plan again.
+    {% elif not holds_site_lock %}
+      {#
+        Issue #2200: a second operator reads this page and may not start the
+        run. The reason names the holder, so the reader knows whom to ask.
+      #}
+      {% if lock_holder | default('', true) %}
+        {{ lock_holder | default('', true) }} holds this site, so this control is off. You may read
+        the whole plan. Take the site to start the upgrade.
+      {% else %}
+        Another operator holds this site, so this control is off. You may read the whole plan.
+      {% endif %}
     {% endif %}
   </p>
 
@@ -376,3 +393,5 @@
   </div>
 </div>
 {% endblock %}
+
+
