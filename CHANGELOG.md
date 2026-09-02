@@ -7,6 +7,22 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Check every line citation with a gate
+
+- **Added**: `python -m tools.check_citations` reads every citation of the form
+  `path:line`, resolves the path, and reads the line number. It reports a
+  citation whose file does not exist, and a citation whose line sits past the
+  end of that file. Issue #1998.
+- **Added**: A CI job runs the check against `src` and `tests`. Those two
+  folders hold the text that a maintainer reads while changing code.
+- **Fixed**: Two comments of the browser fixtures cited a `gunicorn_server`
+  fixture that no longer exists. Two documents cited the same deleted fixture.
+- **Fixed**: The two upgrade-run tables of the HTTP contract omitted three
+  answer codes that the routes can return.
+- **Fixed**: Three documents named the success criterion SC-002 for a 90-second
+  capture, and one named SC-005 for a 3-second render. Both labels were wrong.
+  The four numbers are performance goals of the plan.
+
 ### Cover the absent-store paths of the portal wiring
 
 - **Fixed**: `app/wiring.py` sat at 88 percent of statements, under the 90

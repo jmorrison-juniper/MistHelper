@@ -34,9 +34,11 @@ and a trace.
 | `testIdAttribute` | `data-testid` | Makes `getByTestId` match this contract |
 | `baseURL` | `http://127.0.0.1:8056` | The default portal port |
 
-The existing `gunicorn_server` fixture at `tests/e2e/conftest.py:56-99` has no
-consumer today. The new tests give it one, or the new tests add their own fixture
-for port 8056.
+The portal tests start their own server in
+`tests/e2e/upgrade_portal/conftest.py`, and it binds to port 8056. Issue #1998:
+this paragraph once named a `gunicorn_server` fixture of `tests/e2e/conftest.py`.
+That fixture is gone. Its own file records that no test ever used it, and that
+Gunicorn cannot import `fcntl` on Windows.
 
 ---
 

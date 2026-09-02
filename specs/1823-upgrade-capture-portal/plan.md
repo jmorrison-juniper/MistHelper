@@ -62,9 +62,14 @@ browser side uses server-rendered templates and a small amount of plain
 JavaScript. No build step exists and none is added.
 
 **Performance Goals**: A Tier 2 capture of a 250-device site completes in 90
-seconds or less (SC-002). A settle gate evaluates every device of one type in one
-polling round of 20 seconds. A comparison page renders in 3 seconds or less
-(SC-005). One upgrade run consumes at most 7.2 percent of the hourly API quota.
+seconds or less. A settle gate evaluates every device of one type in one
+polling round of 20 seconds. A comparison page renders in 3 seconds or less.
+One upgrade run consumes at most 7.2 percent of the hourly API quota.
+
+Issue #1998: these four numbers are goals of this plan, and no success criterion
+of `spec.md` states one. SC-002 is a 30-second read of the finished comparison,
+which is a different measurement from the 3-second render. SC-005 is the
+two-operator criterion. Both labels appeared here in error.
 
 **Constraints**: The rate limit is 5000 API calls each hour for each token, for
 each process. Every asset must load from the application itself, because the
