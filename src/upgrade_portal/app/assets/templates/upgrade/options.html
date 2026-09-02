@@ -92,6 +92,18 @@
 {% set advanced_values = advanced | default({}, true) %}
 
 {#
+  Issue #2186 names the value that an empty control keeps. The route sends one
+  flat mapping, because the cloud schema and the environment both live on the
+  server. A default written into this template by hand would drift from the
+  schema.
+
+  Warning: a default below is placeholder text alone. It must never become the
+  value attribute of a control. A browser that sent one would start a run with a
+  value that the operator never chose.
+#}
+{% set option_default = defaults | default({}, true) %}
+
+{#
   The apply-to-every-device control needs one list that holds every version of
   every model. A model that does not offer the chosen version keeps its own
   value, so this list never forces a version onto a device that cannot take it.
@@ -374,6 +386,7 @@
              max="100"
              step="1"
              value="{{ advanced_values.get('max_failure_percentage') | default('', true) }}"
+             placeholder="{{ option_default.get('max_failure_percentage') | default('', true) }}"
              aria-describedby="upgrade-max-failure-percentage-note">
       <p class="portal-card-note" id="upgrade-max-failure-percentage-note">
         Leave the field empty to keep the cloud default of 5 percent. The cloud
@@ -391,8 +404,8 @@
              data-testid="upgrade-canary-phases"
              inputmode="numeric"
              autocomplete="off"
-             placeholder="1,10,50,100"
              value="{{ advanced_values.get('canary_phases') | default('', true) }}"
+             placeholder="{{ option_default.get('canary_phases') | default('', true) }}"
              aria-describedby="upgrade-canary-phases-note">
       <p class="portal-card-note" id="upgrade-canary-phases-note">
         Write one whole number for each phase, separated by commas. Leave the
@@ -413,8 +426,8 @@
              data-testid="upgrade-max-failures"
              inputmode="numeric"
              autocomplete="off"
-             placeholder="1,2,5,10"
              value="{{ advanced_values.get('max_failures') | default('', true) }}"
+             placeholder="{{ option_default.get('max_failures') | default('', true) }}"
              aria-describedby="upgrade-max-failures-note">
       <p class="portal-card-note" id="upgrade-max-failures-note">
         Write one count for each phase above. The portal refuses a list that
@@ -597,6 +610,7 @@
              min="0"
              step="1"
              value="{{ advanced_values.get('p2p_cluster_size') | default('', true) }}"
+             placeholder="{{ option_default.get('p2p_cluster_size') | default('', true) }}"
              aria-describedby="upgrade-p2p-cluster-size-note">
       <p class="portal-card-note" id="upgrade-p2p-cluster-size-note">
         Leave the field empty to keep the cloud default of 10. The cloud reads
@@ -618,6 +632,7 @@
              min="0"
              step="1"
              value="{{ advanced_values.get('p2p_parallelism') | default('', true) }}"
+             placeholder="{{ option_default.get('p2p_parallelism') | default('', true) }}"
              aria-describedby="upgrade-p2p-parallelism-note">
       <p class="portal-card-note" id="upgrade-p2p-parallelism-note">
         Leave the field empty to keep the cloud default. The cloud reads this
@@ -640,6 +655,7 @@
              max="100"
              step="1"
              value="{{ advanced_values.get('rrm_first_batch_percentage') | default('', true) }}"
+             placeholder="{{ option_default.get('rrm_first_batch_percentage') | default('', true) }}"
              aria-describedby="upgrade-rrm-first-batch-percentage-note">
       <p class="portal-card-note" id="upgrade-rrm-first-batch-percentage-note">
         Leave the field empty to keep the cloud default.
@@ -661,6 +677,7 @@
              max="100"
              step="1"
              value="{{ advanced_values.get('rrm_max_batch_percentage') | default('', true) }}"
+             placeholder="{{ option_default.get('rrm_max_batch_percentage') | default('', true) }}"
              aria-describedby="upgrade-rrm-max-batch-percentage-note">
       <p class="portal-card-note" id="upgrade-rrm-max-batch-percentage-note">
         Leave the field empty to keep the cloud default.

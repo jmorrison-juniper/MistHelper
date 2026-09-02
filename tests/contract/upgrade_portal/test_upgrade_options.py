@@ -1490,3 +1490,73 @@ def test_one_strategy_radio_carries_the_checked_attribute(
     page = upgrade_client.get(OPTIONS_PAGE_TEMPLATE.format(run_id=run_id)).get_data(as_text=True)
     strategy_block = page.split('data-testid="upgrade-strategy-group"')[1].split("</fieldset>")[0]
     assert strategy_block.count("checked") == 1, strategy_block  # Exactly one radio of the group is checked.
+
+
+# ---------------------------------------------------------------------------
+# Issue #2186: the default of each empty control
+# ---------------------------------------------------------------------------
+
+
+def test_the_page_names_the_cloud_default_of_each_numeric_control(
+    upgrade_app: Flask,
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """An operator cannot tell what an empty control does without the default.
+
+    Why:
+        Every optional control means "keep the current default", and the page
+        never stated that default. Issue #2186 asks each control to name it.
+
+    Args:
+        upgrade_app: The application with the seams injected.
+        upgrade_client: The signed-in client.
+        run_store: The stand-in run record store.
+    """
+    upgrade_app.config[OPTIONS_VIEW_KEY] = StandInOptionsView()
+    run_id = seed_run(run_store, "pre_capture_done")
+    page = upgrade_client.get(OPTIONS_PAGE_TEMPLATE.format(run_id=run_id)).get_data(as_text=True)
+    assert 'placeholder="1,10,50,100"' in page  # The phase list of the cloud schema.
+    assert 'placeholder="5"' in page  # The failure percentage of the cloud schema.
+    assert 'placeholder="10"' in page  # The download group of the cloud schema.
+
+
+def test_the_page_holds_no_invented_default(
+    upgrade_app: Flask,
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """A placeholder that names no real default reads as one and misleads.
+
+    Why:
+        The failure count of each phase carried the text "1,2,5,10". The cloud
+        names no such default, so an operator read an invented example as the
+        value that the run would use.
+
+    Args:
+        upgrade_app: The application with the seams injected.
+        upgrade_client: The signed-in client.
+        run_store: The stand-in run record store.
+    """
+    upgrade_app.config[OPTIONS_VIEW_KEY] = StandInOptionsView()
+    run_id = seed_run(run_store, "pre_capture_done")
+    page = upgrade_client.get(OPTIONS_PAGE_TEMPLATE.format(run_id=run_id)).get_data(as_text=True)
+    assert "1,2,5,10" not in page  # The invented example is gone.
+
+
+def test_a_default_never_reaches_the_stored_option_record(
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """A ghost that the browser sent would start a run that nobody chose.
+
+    Args:
+        upgrade_client: The signed-in client.
+        run_store: The stand-in run record store.
+    """
+    run_id = seed_run(run_store, "pre_capture_done")
+    assert save_options(upgrade_client, run_id, {"targets": []}).status_code == OK_STATUS
+    saved = run_store.runs[run_id]["options"]
+    assert saved["canary"]["canary_phases"] is None  # The ghost of the phase list stayed on the page.
+    assert saved["canary"]["max_failure_percentage"] is None  # The same for the failure percentage.
+    assert saved["peer_to_peer"]["p2p_cluster_size"] is None  # The same for the download group.

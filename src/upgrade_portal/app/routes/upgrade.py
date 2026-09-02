@@ -118,6 +118,7 @@ VERSIONS_ATTRIBUTES = ("read_model_versions",)  # The reader name that the modul
 VIEW_ATTRIBUTES = ("build_options_view",)  # The builder of the device rows of the options page.
 RECORD_ATTRIBUTES = ("build_options_record",)  # The builder of the stored target list.
 ADVANCED_ATTRIBUTES = ("advanced_option_values",)  # The reader of the advanced control text of one run.
+DEFAULT_ATTRIBUTES = ("option_defaults",)  # The reader of the value that each empty control keeps.
 OPTION_RECORD_ATTRIBUTES = ("build_option_record",)  # The mapper of one request body onto a stored record.
 SELECTED_TYPES_ATTRIBUTES = ("selected_device_types",)  # The validator of selected upgrade types.
 VIEW_VERSIONS_FIELD = "versions_by_model"  # The render keyword that `options.html` reads.
@@ -1156,6 +1157,27 @@ def advanced_values(record: dict[str, Any]) -> dict[str, str]:
     return shown
 
 
+def option_defaults() -> dict[str, str]:
+    """Return the value that each empty upgrade control keeps.
+
+    Why:
+        Issue #2186 asks the page to name the default of every optional control.
+        `upgrade/options.py` owns the cloud schema defaults and reads the
+        environment, so it owns the mapping. This seam keeps the route working
+        through a build stage in which that module does not import, the same
+        rule that every other seam of this route follows.
+
+    Returns:
+        The default text of each control, or an empty mapping when the module is
+        absent. Every control then shows no ghost at all.
+    """
+    reader = module_attribute(DEFAULT_ATTRIBUTES)  # The module owns every default.
+    if not callable(reader):  # A missing module must draw a plain control, never a fault page.
+        return {}
+    values: Any = reader()
+    return dict(values)
+
+
 def _add_schedule_preview(shown: dict[str, str], options: Mapping[str, Any]) -> None:
     """Add the moment that each schedule duration names, if the run started now.
 
@@ -1576,6 +1598,7 @@ def options_page(run_id: str) -> str:
         type_selections=view.get("type_selections", {}),  # The safe common targets of each device type.
         options=record.get("options", {}),  # The three controls show the saved choice.
         advanced=advanced_values(record),  # Issue #2156 reopens every advanced control with its saved value.
+        defaults=option_defaults(),  # Issue #2186 names the value that an empty control keeps.
         warnings=[],  # The save call answers the warnings, so the first read of the page shows none.
         **context,  # The site labels and the lock banner values.
     )

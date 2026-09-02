@@ -1129,6 +1129,55 @@ def format_duration(seconds: int) -> str:
     return f"{seconds}s"  # Seconds always divide, so this is the last resort.
 
 
+def option_defaults() -> dict[str, str]:
+    """Return the value that applies to each control that the operator leaves empty.
+
+    Why:
+        Every optional control means "keep the current default", and the page
+        never stated that default. An operator who left the failure percentage
+        empty could not learn that the cloud uses 5. Issue #2186 asks the page
+        to name the value that applies.
+
+        The defaults come from two places. Most come from the cloud request
+        schema at
+        ``documentation/api/utilities/POST_sites_site_id_devices_upgrade.md``.
+        The three version defaults come from the environment of the container,
+        which ``TYPE_OVERRIDE_VARIABLES`` already names.
+
+    Warning: a value from this mapping must never reach the request body. The
+    page shows it as placeholder text alone. A browser that sent one would start
+    a run with a value that the operator never chose.
+
+    Returns:
+        The default text of each control, keyed by its cloud field name. A
+        control with no default carries an empty text.
+    """
+    defaults = {
+        # The cloud request schema names each of these.
+        "canary_phases": "1,10,50,100",
+        "max_failure_percentage": "5",
+        "p2p_cluster_size": "10",
+        "max_failures": "",  # The schema names no default. The percentage applies instead.
+        "p2p_parallelism": "",
+        "rrm_first_batch_percentage": "",
+        "rrm_max_batch_percentage": "",
+        "rrm_node_order": "",
+        "rrm_mesh_upgrade": "",
+        "rrm_slow_ramp": "",
+        # Issue #2187 writes both schedule controls as a duration.
+        "start_time": "at once",
+        "reboot_at": "as soon as the write ends",
+        # Only a session smart router reads a channel, and it keeps its own train.
+        "channel": "the train that the router follows now",
+    }
+    for device_type, variable in TYPE_OVERRIDE_VARIABLES.items():
+        # The operator sets these in the environment of the container, so the
+        # page reads the live value and never a copy written by hand.
+        defaults[f"version_{device_type}"] = os.environ.get(variable, "").strip()
+    logger.debug("Upgrade portal names %s option default(s) for the page", len(defaults))
+    return defaults
+
+
 def advanced_option_values(stored: Mapping[str, Any]) -> dict[str, str]:
     """Flatten the stored advanced options into the text of each control.
 
@@ -1562,6 +1611,7 @@ __all__ = [
     "build_options",
     "build_options_record",
     "build_options_view",
+    "option_defaults",
     "build_target_entry",
     "build_targets",
     "safe_model_target",
