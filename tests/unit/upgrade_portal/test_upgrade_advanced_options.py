@@ -331,7 +331,7 @@ def test_a_reboot_window_already_past_is_refused_under_its_own_name() -> None:
     """
     with pytest.raises(BadOptionError) as failure:
         options_from({"reboot": "yes", "reboot_at": str(fixed_now() - TWO_HOURS_SECONDS)})
-    assert "reboot_at" in str(failure.value)  # The message names the control that holds the fault.
+    assert failure.value.field == "reboot_at"  # The refusal names the control that holds the fault.
 
 
 def test_a_session_smart_router_still_disables_its_reboot_with_the_documented_value() -> None:

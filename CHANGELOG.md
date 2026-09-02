@@ -7,6 +7,16 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Name the control in a refused option, and state its rule
+
+- **Fixed**: A refused option named the internal cloud field, which appears on
+  no control. The message now names the control label that the page paints, and
+  it states the rule that the value broke. Issue #2195.
+- **Fixed**: The message still repeats no value that the operator typed, and the
+  error code stays `bad_option`, so every existing client keeps working.
+- **Added**: A test reads each label against the options page. A label that
+  drifts from the page would send the operator to a control that does not exist.
+
 ### Cap each table of the capture page
 
 - **Added**: Each table of the capture page paints at most 500 rows. A capture
