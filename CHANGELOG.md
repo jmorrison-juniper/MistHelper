@@ -16,6 +16,20 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
   routes of the application. Fourteen tests covered the runs section and none
   caught this, because each one read the shaped row and none read the markup.
 
+### Reschedule or cancel a run that has not begun
+
+- **Added**: An operator with the site lock moves the start of a run that never
+  reached the cloud. The duration counts from the moment of the reschedule, so
+  `8h` means eight hours from now. Issue #2201.
+- **Added**: An operator with the site lock ends such a run. The cancel writes
+  the record alone and reaches no cloud endpoint.
+- **Added**: The run state `cancelled`. It is not the state `stopped`. A stop
+  cancels firmware that the cloud already holds, and a cancel ends a plan that
+  no device ever saw. A reader months later must tell the two apart, because
+  one of them touched hardware.
+- **Note**: Neither control reaches a run at or past the submission. Such a run
+  answers `run_already_started`, and the stop control applies to it instead.
+
 ### Let a second operator read a run without the site lock
 
 - **Fixed**: A control that writes to a site now renders shut when another
@@ -6431,3 +6445,4 @@ Closes #368
 - Locations: Single AP pre-check, multi-AP pre-check, site PCAP polling, org PCAP polling
 - Function names now match mistapi SDK and Mist API operationId values
 - operationId: listSitePacketCaptures and listOrgPacketCaptures per OpenAPI spec
+

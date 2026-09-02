@@ -469,6 +469,48 @@ The key sits last in the body, so it never hides a key that this contract fixes.
 
 The browser polls this endpoint every 30 seconds.
 
+### `POST /api/runs/<run_id>/reschedule` — move the start of a run that has not begun
+
+| Item | Value |
+| --- | --- |
+| Body | `{ "start_time": "8h" }`, a number and a unit |
+| 200 | `{ "run_id": "<id>", "start_time": <epoch>, "starts_in_seconds": <count> }` |
+| 400 | `bad_option` when the duration names no unit or no number |
+| 401 | `not_authenticated` when no browser session exists |
+| 404 | `run_not_found` |
+| 409 | `site_locked` when a different operator holds the site lock |
+| 409 | `run_already_started` when the run reached the cloud |
+| 500 | `run_write_failed` when the store refused the write |
+| 503 | `lock_store_unreachable` when the portal cannot read the site lock |
+
+The duration counts from the moment of this call and never from the original
+start. An operator who writes `8h` means eight hours from now.
+
+The call writes the run record alone and reaches no cloud endpoint, because the
+run has not started. Every other option of the run stays as it stands.
+
+### `POST /api/runs/<run_id>/cancel` — end a run that has not begun
+
+| Item | Value |
+| --- | --- |
+| Body | Empty |
+| 200 | `{ "run_id": "<id>", "state": "cancelled" }` |
+| 401 | `not_authenticated` when no browser session exists |
+| 404 | `run_not_found` |
+| 409 | `site_locked` when a different operator holds the site lock |
+| 409 | `run_already_started` when the run reached the cloud |
+| 500 | `run_write_failed` when the store refused the write |
+| 503 | `lock_store_unreachable` when the portal cannot read the site lock |
+
+Warning: a cancel ends a run that never reached the cloud. It writes no firmware
+and it changes no device. A run that already sent firmware answers
+`run_already_started`, and the stop control applies to that run instead.
+
+The state `cancelled` is not the state `stopped`. A stop cancels firmware that
+the cloud already holds, and a cancel ends a plan that no device ever saw. A
+reader months later must tell the two apart, because one of them touched
+hardware.
+
 ### `POST /api/runs/<run_id>/stop` — stop the run
 
 | Item | Value |
