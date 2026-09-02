@@ -171,7 +171,8 @@
 </div>
 
 <div class="portal-table-scroll">
-  <table class="portal-table" data-testid="compare-device-table">
+  <table class="portal-table" data-testid="compare-device-table"
+                 data-sortable>
     <caption class="visually-hidden">
       Every device difference between the two captures. The table shows
       {{ device_rows | length }} of {{ device_total }} rows.
@@ -229,7 +230,8 @@
 </div>
 
 <div class="portal-table-scroll">
-  <table class="portal-table" data-testid="compare-client-table">
+  <table class="portal-table" data-testid="compare-client-table"
+                 data-sortable>
     <caption class="visually-hidden">
       Every client difference between the two captures. A moved client is on
       the network, so a move is never a loss. The table shows

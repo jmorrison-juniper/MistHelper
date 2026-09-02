@@ -820,7 +820,8 @@
 </div>
 
 <div class="portal-table-scroll">
-  <table class="portal-table" data-testid="upgrade-target-table">
+  <table class="portal-table" data-testid="upgrade-target-table"
+                 data-sortable>
     <caption class="visually-hidden">
       Every device the upgrade writes to, with the version before the upgrade
       and the target version.
@@ -833,7 +834,7 @@
         <th scope="col">Type</th>
         <th scope="col">Model</th>
         <th scope="col">Version now</th>
-        <th scope="col">Target version</th>
+        <th scope="col" data-no-sort>Target version</th>
       </tr>
     </thead>
 

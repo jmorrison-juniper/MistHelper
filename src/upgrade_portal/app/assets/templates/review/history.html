@@ -126,8 +126,20 @@
   </p>
 </div>
 
+{#
+  Issue #2027 orders the rows in the browser, so a press orders the rows of this
+  page and never the rows of a later page. The note states that limit, because
+  an operator who sorted a paged table and read the first row as the smallest
+  value of the whole list would read a false answer.
+#}
+<p class="portal-card-note" data-testid="history-sort-scope">
+  A sort orders the rows of this page. Use the filter to reach a row that sits
+  on a later page.
+</p>
+
 <div class="portal-table-scroll">
-  <table class="portal-table history-table" id="history-table" data-testid="history-table">
+  <table class="portal-table history-table" id="history-table" data-testid="history-table"
+                 data-sortable>
     <caption class="visually-hidden">
       The stored captures of the site. Each row holds the moment, the role, the
       state, the device count, the device types, the client count, and the
@@ -144,7 +156,7 @@
         <th scope="col">Device types</th>
         <th scope="col">Clients</th>
         <th scope="col">Stored size</th>
-        <th scope="col">Action</th>
+        <th scope="col" data-no-sort>Action</th>
       </tr>
     </thead>
 

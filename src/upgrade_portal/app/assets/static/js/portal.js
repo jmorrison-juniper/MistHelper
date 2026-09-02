@@ -110,8 +110,15 @@
      * other without an end. */
     var strategyRescueRunning = false;
 
-    var UPGRADE_WARNING_TESTID = "upgrade-warning-list";    var UPGRADE_SAVE_TESTID = "upgrade-options-save-button";
-    var UPGRADE_CONFIRM_TESTID = "upgrade-confirm-input";
+    /* Issue #2027. The three values of aria-sort that a column can hold, and
+     * the shape that names each one. The shape carries the state for a sighted
+     * reader, so no reader depends on color to read the order. */
+    var SORT_NONE = "none";
+    var SORT_ASCENDING = "ascending";
+    var SORT_DESCENDING = "descending";
+    var SORT_ARROWS = { none: "\u2195", ascending: "\u25B2", descending: "\u25BC" };
+
+    var UPGRADE_WARNING_TESTID = "upgrade-warning-list";    var UPGRADE_SAVE_TESTID = "upgrade-options-save-button";    var UPGRADE_CONFIRM_TESTID = "upgrade-confirm-input";
     var UPGRADE_START_TESTID = "upgrade-start-button";
     var UPGRADE_STATE_TESTID = "upgrade-state";
     var UPGRADE_REFRESH_TESTID = "upgrade-refresh-button";
@@ -1148,6 +1155,203 @@
         if (empty) {
             empty.hidden = shown !== 0 || rows.length === 0;
         }
+    }
+
+    /**
+     * Makes every column of every marked table sortable.
+     *
+     * Why: Issue #2027. No table ordered its rows, so every table rendered in
+     * the order the cloud returned. That order follows no field on the page,
+     * and the cloud promises nothing about it. An operator who reads a list of
+     * 200 devices could not group the ones that run an old version, the ones
+     * that are offline, or the ones that a naming convention already groups.
+     * A missed device is the fault that this whole feature exists to catch.
+     *
+     * The sort runs in the browser, so it costs no cloud call and no route
+     * change. A table that pages its rows therefore orders the rows of the
+     * page on screen. Each such table carries a note that states that limit.
+     *
+     * @returns {void}
+     */
+    function initTableSorting() {
+        var tables = document.querySelectorAll("[data-sortable]");
+        Array.prototype.forEach.call(tables, function (table) {
+            var headers = table.querySelectorAll("thead th");
+            Array.prototype.forEach.call(headers, function (header, column) {
+                prepareSortHeader(table, header, column);
+            });
+        });
+    }
+
+    /**
+     * Turns one header cell into a sort control.
+     *
+     * Why: The cell answers a pointer and a keyboard alike, so it carries a
+     * button role and a tab stop. The attribute aria-sort names the state for a
+     * screen reader, and the arrow names it for a sighted reader. Neither one
+     * depends on color, which issue #2027 asks for directly.
+     *
+     * A header that carries data-no-sort keeps its plain form. An action column
+     * holds a button and never a value, so an order of those cells means
+     * nothing.
+     *
+     * @param {HTMLElement} table The table that holds the header.
+     * @param {HTMLElement} header The header cell.
+     * @param {number} column The zero-based index of the column.
+     * @returns {void}
+     */
+    function prepareSortHeader(table, header, column) {
+        if (header.hasAttribute("data-no-sort")) {
+            return;  /* An action column carries no value to order. */
+        }
+        header.setAttribute("role", "button");  /* The cell acts as a control, so it names itself as one. */
+        header.setAttribute("tabindex", "0");  /* A keyboard reaches the control without a pointer. */
+        header.setAttribute("aria-sort", SORT_NONE);  /* Every column starts unordered. */
+        header.classList.add("portal-sort-header");  /* The style sheet shows the pointer shape. */
+        if (!header.querySelector("[data-sort-arrow]")) {
+            var arrow = document.createElement("span");
+            arrow.setAttribute("data-sort-arrow", "");
+            arrow.className = "portal-sort-arrow";
+            arrow.setAttribute("aria-hidden", "true");  /* aria-sort names the state, so this stays decoration. */
+            header.appendChild(arrow);
+        }
+        header.addEventListener("click", function () {
+            sortTableByColumn(table, column);
+        });
+        header.addEventListener("keydown", function (event) {
+            /* The button role promises both keys, so the control answers both. */
+            if (event.key === "Enter" || event.key === " " || event.key === "Spacebar") {
+                event.preventDefault();  /* The space key scrolls the page by default. */
+                sortTableByColumn(table, column);
+            }
+        });
+    }
+
+    /**
+     * Orders the rows of one table by one column.
+     *
+     * Why: A second press on the same column reverses the order, which is the
+     * behavior that every table of this kind carries. A press on another column
+     * starts that column at the ascending order.
+     *
+     * The sort keeps a row that a filter hid, because the filter owns the
+     * hidden state and this function owns the order alone. A row with no cell
+     * in the column sinks to the end, so a short row never displaces a value.
+     *
+     * @param {HTMLElement} table The table to order.
+     * @param {number} column The zero-based index of the column.
+     * @returns {void}
+     */
+    function sortTableByColumn(table, column) {
+        var body = table.querySelector("tbody");
+        if (!body) {
+            return;  /* A table with no body holds no row to order. */
+        }
+        var headers = table.querySelectorAll("thead th");
+        var header = headers[column];
+        if (!header || header.hasAttribute("data-no-sort")) {
+            return;  /* The caller named a column that carries no value. */
+        }
+        var next = header.getAttribute("aria-sort") === SORT_ASCENDING ? SORT_DESCENDING : SORT_ASCENDING;
+        var rows = Array.prototype.slice.call(body.querySelectorAll("tr"));
+        var ordered = rows.filter(function (row) {
+            return !row.hasAttribute("data-filter-empty") && row.querySelectorAll("td, th").length > column;
+        });
+        var kept = rows.filter(function (row) {
+            return ordered.indexOf(row) === -1;  /* An empty-state row keeps its place at the end. */
+        });
+        ordered.sort(function (first, second) {
+            var order = compareCells(cellText(first, column), cellText(second, column));
+            return next === SORT_ASCENDING ? order : -order;
+        });
+        ordered.concat(kept).forEach(function (row) {
+            body.appendChild(row);  /* An append of an existing node moves it, so this reorders in place. */
+        });
+        paintSortState(headers, header, next);
+    }
+
+    /**
+     * Reads the sortable text of one cell.
+     *
+     * Why: A cell may hold a badge beside its value, so the reader takes the
+     * text of the whole cell. A cell may also carry data-sort-value, which lets
+     * a template state an order that the visible text does not carry, such as
+     * an epoch second behind a readable date.
+     *
+     * @param {HTMLElement} row The row that holds the cell.
+     * @param {number} column The zero-based index of the column.
+     * @returns {string} The text to compare.
+     */
+    function cellText(row, column) {
+        var cells = row.querySelectorAll("td, th");
+        var cell = cells[column];
+        if (!cell) {
+            return "";  /* A short row sorts as an empty value. */
+        }
+        var stated = cell.getAttribute("data-sort-value");
+        if (stated !== null) {
+            return stated.trim();  /* The template stated the order of this cell. */
+        }
+        return (cell.textContent || "").trim();
+    }
+
+    /**
+     * Compares two cell values, and reads a number as a number.
+     *
+     * Why: A text compare puts 10 before 9, and a count column then reads as
+     * nonsense. The reader tries a number first. It falls back to a text
+     * compare that reads an embedded number, so switch-2 sits before switch-10.
+     *
+     * An empty value always sinks, whichever way the column runs. A blank cell
+     * is the absence of a value, so it belongs at the end and never between two
+     * real ones.
+     *
+     * @param {string} first The value of the first row.
+     * @param {string} second The value of the second row.
+     * @returns {number} A negative number, zero, or a positive number.
+     */
+    function compareCells(first, second) {
+        if (!first && !second) {
+            return 0;  /* Two absent values hold the same place. */
+        }
+        if (!first) {
+            return 1;  /* An absent value sinks below a present one. */
+        }
+        if (!second) {
+            return -1;
+        }
+        var firstNumber = Number(first);
+        var secondNumber = Number(second);
+        if (!isNaN(firstNumber) && !isNaN(secondNumber)) {
+            return firstNumber - secondNumber;  /* A count column orders by value, so 9 sits before 10. */
+        }
+        return first.localeCompare(second, undefined, { numeric: true, sensitivity: "base" });
+    }
+
+    /**
+     * Writes the sort state onto the header cells.
+     *
+     * Why: One column at a time holds the order, so every other column returns
+     * to the unordered state. A reader who sees two ordered columns cannot tell
+     * which one the table follows.
+     *
+     * @param {NodeList} headers Every header cell of the table.
+     * @param {HTMLElement} active The header that holds the order.
+     * @param {string} direction The new direction of the active header.
+     * @returns {void}
+     */
+    function paintSortState(headers, active, direction) {
+        Array.prototype.forEach.call(headers, function (header) {
+            if (header.hasAttribute("data-no-sort")) {
+                return;  /* An action column carries no state to paint. */
+            }
+            var own = header === active ? direction : SORT_NONE;
+            header.setAttribute("aria-sort", own);
+            var arrow = header.querySelector("[data-sort-arrow]");
+            if (arrow) {
+                arrow.textContent = SORT_ARROWS[own];  /* A shape, so the state reads with no color. */
+            }
+        });
     }
 
     /**
@@ -2955,6 +3159,7 @@
      */
     function initPortal() {
         initTableFilters();
+        initTableSorting();  /* Issue #2027 lets an operator order any table by any column. */
         initCapturePage();
         /* The gates run before the pages that hold them. A page then starts
          * with a button state that matches the field. */
