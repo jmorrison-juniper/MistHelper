@@ -976,3 +976,117 @@ def test_a_version_read_with_no_session_is_refused(run_store: RecordingRunStore,
         answer = read_versions(client, run_id)
     assert answer.status_code == NOT_AUTHENTICATED_STATUS  # The guard refuses before the handler runs.
     assert read_error_code(answer) == "not_authenticated"  # One code for every unsigned request.
+
+
+# ---------------------------------------------------------------------------
+# Issue #2194: the confirmation page names every warning of the plan
+# ---------------------------------------------------------------------------
+
+
+def seed_mixed_run(run_store: RecordingRunStore) -> str:
+    """Seed a run that triggers three warnings of the plan.
+
+    Why:
+        The selection holds two versions, a radio strategy that reaches an
+        access point alone, and six access points that reboot on their own.
+
+    Args:
+        run_store: The stand-in run record store.
+
+    Returns:
+        The run identifier.
+    """
+    targets = [
+        {
+            "mac": "209339051780",
+            "name": "sw",
+            "device_type": "switch",
+            "model": "EX4100-F-12P",
+            "version_before": "25.4R1",
+            "version_target": "25.4R2",
+            "gateway_family": None,
+            "scope": "site",
+        }
+    ]
+    targets += [
+        {
+            "mac": f"7cb68d9269{index:02d}",
+            "name": f"ap{index}",
+            "device_type": "ap",
+            "model": "AP37",
+            "version_before": "0.15.1",
+            "version_target": "0.15.2",
+            "gateway_family": None,
+            "scope": "site",
+        }
+        for index in range(6)
+    ]
+    options = {"strategy": "rrm", "reboot": True, "schedule": {"start_time_after": 7200}}
+    return seed_run(run_store, "pre_capture_done", targets=targets, options=options)
+
+
+def test_the_confirm_page_names_the_reboot_of_each_access_point(
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """An operator plans a window from the reboot control, and an access point ignores it.
+
+    Why:
+        Issue #2003 reported that the no-reboot choice never reaches an access
+        point and the page never says so. Issue #2194 found that the sentence
+        exists and never reached this page.
+
+    Args:
+        upgrade_client: The signed-in client.
+        run_store: The stand-in run record store.
+    """
+    run_id = seed_mixed_run(run_store)
+    page = upgrade_client.get(f"/runs/{run_id}/confirm").get_data(as_text=True)
+    assert "reboots each of the 6 access point" in page  # The count names the devices to plan for.
+
+
+def test_the_confirm_page_names_the_strategy_that_the_run_drops(
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """The radio strategy reaches an access point alone.
+
+    Args:
+        upgrade_client: The signed-in client.
+        run_store: The stand-in run record store.
+    """
+    run_id = seed_mixed_run(run_store)
+    page = upgrade_client.get(f"/runs/{run_id}/confirm").get_data(as_text=True)
+    assert "radio strategy reaches an access point only" in page
+
+
+def test_the_confirm_page_names_the_count_of_cloud_calls(
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """One selection can send several calls, and the page named one plan.
+
+    Args:
+        upgrade_client: The signed-in client.
+        run_store: The stand-in run record store.
+    """
+    run_id = seed_mixed_run(run_store)
+    page = upgrade_client.get(f"/runs/{run_id}/confirm").get_data(as_text=True)
+    assert 'data-testid="upgrade-summary-call-count"' in page  # The row renders.
+    assert "one call for each device type" in page  # The note names the reason for the split.
+
+
+def test_the_confirm_page_keeps_the_saved_warning_list(
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """The plan warnings join the saved list, and they replace none of it.
+
+    Args:
+        upgrade_client: The signed-in client.
+        run_store: The stand-in run record store.
+    """
+    saved = "One device already runs the version that you chose. The portal still sends the upgrade."
+    run_id = seed_run(run_store, "pre_capture_done", warnings=[saved])
+    page = upgrade_client.get(f"/runs/{run_id}/confirm").get_data(as_text=True)
+    assert saved in page  # The sentence of the option save still shows.

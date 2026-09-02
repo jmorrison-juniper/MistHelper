@@ -29,6 +29,7 @@ from typing import Any  # A request body is free-form.
 
 import pytest  # The test framework of the project.
 
+import src.upgrade_portal.upgrade.options as module_options  # Owns the clock seam.
 from src.firmware.upgrade_service import (
     ENDPOINT_ORG_SSRS,
     SCOPE_ORG,
@@ -418,3 +419,58 @@ def test_an_empty_schedule_holds_no_duration_and_no_moment() -> None:
     """An empty control means the run begins at once."""
     options = options_from({})
     assert (options.start_time, options.schedule.start_time_after) == (None, None)
+
+
+# ---------------------------------------------------------------------------
+# Issue #2196: the schedule must survive the replay of the run driver
+# ---------------------------------------------------------------------------
+
+
+def test_a_stored_duration_reaches_a_moment_with_no_clock() -> None:
+    """The run driver replays with no clock, and a duration still needs one.
+
+    Why:
+        The driver passes no clock, because an absolute epoch must skip the
+        window guard when a run waits past its own start time. A duration counts
+        from the start of the job instead, so it must resolve whatever the
+        caller passed. Without this rule the moment left the request body, and
+        the cloud wrote the firmware at once. Issue #2196 holds that report.
+    """
+    stored = build_option_record({"start_time": "2h"})
+    replayed = build_options(stored, now=None)
+    assert replayed.start_time is not None  # The moment must reach the body.
+
+
+def test_the_replayed_moment_counts_from_the_replay(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A duration counts from the start of the job, not from the save."""
+    monkeypatch.setattr(module_options, "_now_epoch", lambda: 1_900_000_000)
+    stored = build_option_record({"reboot_at": "3h"})
+    replayed = build_options(stored, now=None)
+    assert replayed.reboot_at == 1_900_000_000 + 10800
+
+
+def test_the_request_body_carries_the_stored_schedule() -> None:
+    """The whole point of the schedule is that the cloud reads it."""
+    stored = build_option_record({"start_time": "2h", "reboot_at": "3h", "reboot": "yes"})
+    options = build_options(stored, now=None)
+    body = build_body(switches_pair(), options, GatewayFamily.JUNOS)
+    assert "start_time" in body  # The download window reaches the cloud.
+    assert "reboot_at" in body  # The reboot window reaches the cloud.
+
+
+def test_a_stored_epoch_still_skips_the_window_guard() -> None:
+    """A run that waits past its own start time must still upgrade."""
+    past = fixed_now() - 999_999  # A moment well outside the window that the guard allows.
+    assert build_options({"start_time": past}, now=None).start_time == past
+
+
+def switches_pair() -> tuple[DeviceTarget, ...]:
+    """Return two switches, so no body takes the per-device path.
+
+    Returns:
+        Two switch targets of one model and one version.
+    """
+    return (
+        target(MAC_SWITCH, "switch", "EX4100-48P"),
+        target(MAC_FIRST_ROUTER, "switch", "EX4100-48P"),
+    )

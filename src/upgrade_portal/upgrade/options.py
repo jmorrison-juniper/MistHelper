@@ -949,7 +949,9 @@ def _read_written_schedule(value: Any, field: str, now: Callable[[], int] | None
         moment = int(word)
         return None, moment if now is None else _guard_start_time(moment, now(), field)
     seconds = parse_duration_seconds(word, field)
-    return seconds, (now() + seconds if now is not None else None)
+    # A duration needs a clock whatever the caller passed. See issue #2196 and
+    # the note in `_read_schedule` above.
+    return seconds, _now_epoch() + seconds if now is None else now() + seconds
 
 
 def _read_schedule(
@@ -985,7 +987,13 @@ def _read_schedule(
     stored = payload.get(f"{field}_after")  # The duration in seconds that issue #2187 stores.
     if stored is not None and str(stored).strip() and not isinstance(stored, bool):
         seconds = _read_stored_duration(stored, field)
-        return seconds, (now() + seconds if now is not None else None)
+        # Warning: a duration always needs a clock. The run driver passes no
+        # clock, because an absolute epoch must skip the window guard when a run
+        # waits past its own start time. A duration counts from the start of the
+        # job instead, so it resolves here whatever the caller passed. Without
+        # this rule the moment left the body, and the cloud wrote the firmware at
+        # once. Issue #2196 holds that report.
+        return seconds, _now_epoch() + seconds if now is None else now() + seconds
     value = payload.get(field)  # A browser body and an older record both use the plain name.
     if value is None or not str(value).strip():
         return None, None
