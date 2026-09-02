@@ -26,7 +26,7 @@ from collections.abc import Iterator
 from typing import Any
 
 import pytest
-from flask import Flask
+from flask import Flask, render_template
 from flask.testing import FlaskClient
 from werkzeug.test import TestResponse
 
@@ -921,6 +921,31 @@ def test_an_empty_text_filter_keeps_every_site(signed_in_client: FlaskClient, fa
 # ---------------------------------------------------------------------------
 # The site inventory
 # ---------------------------------------------------------------------------
+
+
+def test_an_unmodeled_device_type_still_renders_the_inventory_page(portal_app: Flask) -> None:
+    """Issue #2211: one `router` row made the whole site inventory answer 500.
+
+    Why:
+        The cloud names the device type, and the cloud may add a type at any
+        moment. The portal knows three types. Before this test, a fourth type
+        raised `KeyError` inside the target builder, and the operator then
+        reached no device of the site at all.
+
+    Args:
+        portal_app: The real application from the shared fixture.
+    """
+    router_row = {
+        "mac": "5c5b350e0002",
+        "name": "ssr-01",
+        "type": "router",
+        "model": "SSR130",
+        "version": "6.2.5",
+    }  # The shape that the live site returned on 2026-09-02.
+    with portal_app.test_request_context("/select/site/site-1"):  # The base template reads the request path.
+        page = render_template("select/inventory.html", devices=[{**router_row, "type_supported": False}])
+    assert "inventory-unsupported-type-5c5b350e0002" in page  # The row names why it carries no target.
+    assert "The portal offers no upgrade for the type" in collapsed_text(page)  # The operator reads the cause.
 
 
 def test_the_inventory_answers_the_documented_shape(signed_in_client: FlaskClient, fake_site_id: str) -> None:
