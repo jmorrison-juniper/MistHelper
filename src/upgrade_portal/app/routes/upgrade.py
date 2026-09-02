@@ -96,6 +96,8 @@ OPTIONS_API_PATH = "/api/runs/<run_id>/options"  # The saved target list and the
 VERSIONS_PATH = "/api/runs/<run_id>/versions"  # `contracts/http-api.md` section 5 names this path.
 START_PATH = "/api/runs/<run_id>/start"  # The one begin action of a run.
 STATUS_PATH = "/api/runs/<run_id>/status"  # The poll target of the browser.
+RESCHEDULE_PATH = "/api/runs/<run_id>/reschedule"  # Issue #2201 moves the start of a run that has not begun.
+CANCEL_PATH = "/api/runs/<run_id>/cancel"  # Issue #2201 ends a run that never reached the cloud.
 STOP_PATH = "/api/runs/<run_id>/stop"  # The one stop action of a run.
 RUN_PAGE_PATH = "/runs/<run_id>"  # The live run view with the phase list and the device table.
 OPTIONS_PAGE_PATH = "/runs/<run_id>/options"  # The page that picks a version for each device.
@@ -118,6 +120,7 @@ VIEW_ATTRIBUTES = ("build_options_view",)  # The builder of the device rows of t
 RECORD_ATTRIBUTES = ("build_options_record",)  # The builder of the stored target list.
 ADVANCED_ATTRIBUTES = ("advanced_option_values",)  # The reader of the advanced control text of one run.
 DEFAULT_ATTRIBUTES = ("option_defaults",)  # The reader of the value that each empty control keeps.
+DURATION_ATTRIBUTES = ("parse_duration_seconds",)  # Issue #2201 reads the duration of a reschedule.
 # The wiring module owns the plan seam, so the confirmation page builds no plan
 # of its own. Issue #2194 needs the plan before the operator confirms.
 WIRING_MODULE = "app.wiring"
@@ -1703,6 +1706,9 @@ def run_page(run_id: str) -> str:
         run_id=run_id,  # The page builds every control identifier from this value.
         status=RunStatusView().build(record),  # The same body that the poll answers.
         poll_interval_seconds=poll_seconds,  # The script reads this through `data-poll-seconds`.
+        # Issue #2201 shows the reschedule and the cancel for a run that has not
+        # reached the cloud. A run past that point offers the stop control alone.
+        run_not_started=run_not_started(record),
         **context,  # The site labels, the stop partial values, and the lock banner values.
     )
 
@@ -1925,6 +1931,142 @@ def record_stop_outcome(store: Any, run_id: str, outcome: StopOutcome) -> dict[s
         return written  # One write saved, and the record already answers FR-038h.
     StopRequestStore(store).record_outcome(run_id, outcome)  # FR-038h records the whole stop.
     return load_run(run_id) or {}  # Read again, because this write changed the record.
+
+
+# Issue #2201: the two codes that the reschedule and the cancel answer.
+RUN_ALREADY_STARTED_CODE = "run_already_started"  # The run reached the cloud, so the stop control applies instead.
+RUN_ALREADY_STARTED_MESSAGE = (
+    "This run already sent firmware to the cloud. Use the stop control, which cancels the work that has not begun."
+)
+
+
+def run_not_started(record: Mapping[str, Any]) -> bool:
+    """Report whether one run may still change its schedule or end with no call.
+
+    Why:
+        A run before the submission holds a plan and nothing else. No device saw
+        it, so a change of the start moment writes the record alone, and an end
+        needs no cloud call at all.
+
+        A run at or past the submission needs the stop control. That control
+        cancels the work that the cloud already holds, and it states which
+        devices are past the point of a cancel.
+
+    Args:
+        record: The run record.
+
+    Returns:
+        True while the run has sent nothing to the cloud.
+    """
+    try:  # A damaged record names a state outside the model.
+        state = RunStateMachine.read_state(record)
+    except Exception:  # An unknown state reads as a run that nobody may reschedule.
+        logger.warning("upgrade: the run %s names a state outside the model", record.get("run_id", ""))
+        return False
+    return state in RunStateMachine.PRE_CHECK_OPEN
+
+
+def guard_not_started(record: dict[str, Any]) -> tuple[Response, int] | None:
+    """Refuse a reschedule or a cancel that reaches a run which already started.
+
+    Args:
+        record: The run record.
+
+    Returns:
+        The refusal, or None when the run has sent nothing.
+    """
+    if run_not_started(record):  # The run holds a plan alone.
+        return None
+    return json_error(CONFLICT_STATUS, RUN_ALREADY_STARTED_CODE, RUN_ALREADY_STARTED_MESSAGE)
+
+
+@upgrade_bp.post(RESCHEDULE_PATH)
+@identity.require_session
+def reschedule_run(run_id: str) -> tuple[Response, int]:
+    """Move the start moment of one run that has not begun.
+
+    Why:
+        Issue #2201 records the gap. An operator who took over a site could
+        start a run and stop a run, and could not move a run that had not begun.
+        A scheduled run therefore held its moment whatever the new operator
+        needed.
+
+        The new duration counts from this moment and never from the original
+        start. An operator who writes `8h` means eight hours from now, and a
+        duration measured from a stale moment would fire at an hour that nobody
+        chose.
+
+    Args:
+        run_id: The run key.
+
+    Returns:
+        The saved duration and the moment it names, or a refusal.
+    """
+    record = load_run(run_id)  # Read first, because the record names the site the lock guards.
+    if record is None:  # A run that left the store, or a key that never existed.
+        return run_not_found()
+    refusal = stop_lock_refusal(record)  # FR-038i binds every write of a run to the operator that holds the site.
+    if refusal is not None:  # Another operator holds the site, so this call writes nothing.
+        return refusal
+    started = guard_not_started(record)  # A run past the submission needs the stop control.
+    if started is not None:
+        return started
+    body: Any = request.get_json(silent=True) or {}  # A body that is not JSON reads as an empty body.
+    reader = module_attribute(DURATION_ATTRIBUTES)  # The options module owns every rule of the duration form.
+    if not callable(reader):  # A missing module must refuse the write, never guess a moment.
+        return json_error(SERVER_ERROR_STATUS, RUN_WRITE_FAILED_CODE, RUN_WRITE_FAILED_MESSAGE)
+    try:  # The reader names the control and states the rule on a refusal.
+        seconds = int(reader(str(body.get("start_time", "")), "start_time"))
+    except Exception as failure:  # `BadOptionError` carries the code, and the seam may raise another class.
+        code = str(getattr(failure, "code", BAD_OPTION_CODE))
+        return json_error(BAD_REQUEST_STATUS, code, str(failure))
+    moment = int(time.time()) + seconds  # The duration counts from this moment, which is what the operator meant.
+    logger.info("upgrade: reschedule the run %s to start in %s second(s)", run_id, seconds)  # BEFORE the write.
+    options = dict(record.get("options") or {})  # A copy, so a failed write leaves the record as it stands.
+    options["start_time"] = moment
+    record["options"] = options
+    record["rescheduled_by"] = identity.email_digest(actor_address())  # The record names no address.
+    if not save_run(record):  # The operator must learn that the portal kept nothing.
+        return write_failed()
+    logger.info("upgrade: the run %s now starts at %s", run_id, moment)  # AFTER the write.
+    return jsonify({"run_id": run_id, "start_time": moment, "starts_in_seconds": seconds}), OK_STATUS
+
+
+@upgrade_bp.post(CANCEL_PATH)
+@identity.require_session
+def cancel_run(run_id: str) -> tuple[Response, int]:
+    """End one run that never reached the cloud.
+
+    Why:
+        Issue #2201 records the gap. A run that will never start held its place
+        for ever, and the operator had no control that ended it.
+
+        This route sends no cloud call, because the run sent none. A run that
+        already submitted firmware needs the stop control instead, which cancels
+        the work that the cloud holds.
+
+    Args:
+        run_id: The run key.
+
+    Returns:
+        The new state of the run, or a refusal.
+    """
+    record = load_run(run_id)  # Read first, because the record names the site the lock guards.
+    if record is None:  # A run that left the store, or a key that never existed.
+        return run_not_found()
+    refusal = stop_lock_refusal(record)  # FR-038i binds every write of a run to the operator that holds the site.
+    if refusal is not None:  # Another operator holds the site, so this call writes nothing.
+        return refusal
+    started = guard_not_started(record)  # A run past the submission needs the stop control.
+    if started is not None:
+        return started
+    logger.info("upgrade: cancel the run %s, which sent no firmware", run_id)  # BEFORE the change.
+    RunStateMachine().advance(record, RunState.CANCELLED)  # The model refuses the move from any later state.
+    record["cancelled_by"] = identity.email_digest(actor_address())  # The record names the operator, never the address.
+    if not save_run(record):  # The operator must learn that the portal kept nothing.
+        return write_failed()
+    logger.info("upgrade: the run %s holds the state %s", run_id, record["state"])  # AFTER the change.
+    return jsonify({"run_id": run_id, "state": record["state"]}), OK_STATUS
 
 
 @upgrade_bp.post(STOP_PATH)

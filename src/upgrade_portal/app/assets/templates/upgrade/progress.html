@@ -347,6 +347,84 @@
 {% include 'upgrade/stop.html' %}
 
 {#
+  Issue #2201: a run that has not begun offers two controls that a running run
+  does not. The reschedule moves the start moment, and the cancel ends the run
+  with no cloud call at all.
+
+  Both controls need the site lock, which `lock_write_allowed` reports. Both
+  also reach a run before the submission alone, which `run_not_started`
+  reports. A run past that point needs the stop control above, which cancels
+  the work that the cloud already holds.
+#}
+{% set may_change_schedule = run_not_started | default(false, true) %}
+{% set may_write_site = lock_write_allowed | default(false, true) %}
+{% if may_change_schedule %}
+  <section class="portal-card" data-testid="run-schedule-controls">
+    <h2 class="portal-card-title">This run has not begun</h2>
+
+    <p class="portal-card-note">
+      The run holds a plan and nothing else. No device has seen it, so the
+      portal may move the start moment or end the run with no cloud call.
+    </p>
+
+    <div class="mb-3">
+      <label class="form-label" for="run-reschedule-input">
+        Start the run after this much time
+      </label>
+      <input type="text"
+             class="form-control"
+             id="run-reschedule-input"
+             data-testid="run-reschedule-input"
+             placeholder="8h"
+             autocomplete="off"
+             {% if not may_write_site %}disabled{% endif %}>
+      <p class="portal-card-note" id="run-reschedule-note">
+        Write a number and a unit. Use s for seconds, m for minutes, h for
+        hours, and d for days. The time counts from the moment you press the
+        control.
+      </p>
+    </div>
+
+    <div class="confirm-box-actions">
+      <button type="button"
+              class="portal-button"
+              data-testid="run-reschedule-button"
+              data-needs-lock
+              data-run-id="{{ run_id | default('', true) }}"
+              {% if not may_write_site %}disabled aria-describedby="run-schedule-locked"{% endif %}
+              >Reschedule the run</button>
+
+      {#
+        Warning: a cancel ends the run. The word guards it, which is the rule
+        that every other action of this portal follows.
+      #}
+      <button type="button"
+              class="portal-button portal-button-danger"
+              data-testid="run-cancel-button"
+              data-needs-lock
+              data-run-id="{{ run_id | default('', true) }}"
+              {% if not may_write_site %}disabled aria-describedby="run-schedule-locked"{% endif %}
+              >Cancel the run</button>
+    </div>
+
+    {% if not may_write_site %}
+      <p class="portal-note" id="run-schedule-locked"
+         data-lock-reason-note
+         data-testid="run-schedule-locked-note">
+        {% if lock_holder | default('', true) %}
+          {{ lock_holder | default('', true) }} holds this site, so both
+          controls are off. You may read the whole run. Take the site to change
+          it.
+        {% else %}
+          Another operator holds this site, so both controls are off. You may
+          read the whole run.
+        {% endif %}
+      </p>
+    {% endif %}
+  </section>
+{% endif %}
+
+{#
   FR-072 gives one site to one operator. The banner sits below the run state,
   because this page answers one question first: what is the run doing now. The
   site lock is a second question, and it never gates the content above.

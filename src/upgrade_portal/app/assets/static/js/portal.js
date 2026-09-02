@@ -135,6 +135,11 @@
     var STOP_WRITING_TESTID = "stop-outcome-writing";
     var STOP_NO_CANCEL_TESTID = "stop-outcome-no-cancel";
 
+    /* Issue #2201: the two controls of a run that has not begun. */
+    var RESCHEDULE_INPUT_TESTID = "run-reschedule-input";
+    var RESCHEDULE_BUTTON_TESTID = "run-reschedule-button";
+    var CANCEL_BUTTON_TESTID = "run-cancel-button";
+
     /* The lock identifiers. contracts/ui-testids.md lines 77-82 fix every value
      * below. */
     var LOCK_BANNER_TESTID = "lock-banner";
@@ -2732,6 +2737,96 @@
     }
 
     /**
+     * Sends the reschedule of one run that has not begun.
+     *
+     * Why: Issue #2201 lets an operator move the start of a run that never
+     * reached the cloud. The duration counts from this moment, and the server
+     * owns every rule of the form, so this function reads no unit itself.
+     *
+     * @param {Element} button The control the operator pressed.
+     * @param {Element} input The control that holds the duration.
+     * @returns {Promise} The answer, or null after a refusal.
+     */
+    function requestRunReschedule(button, input) {
+        var runId = button.getAttribute("data-run-id") || "";
+        var text = input ? String(input.value || "").trim() : "";
+        button.disabled = true;
+        return fetchJson("/api/runs/" + encodeURIComponent(runId) + "/reschedule", {
+            method: "POST",
+            body: {start_time: text}
+        })
+            .then(function (answer) {
+                showFlash("The portal moved the start of this run.", "success");
+                return answer;
+            })
+            .catch(function (error) {
+                /* The log carries the stable code and the status only. It
+                 * carries no session value and no email address. */
+                console.error("The reschedule failed.", error && error.code, error && error.status);
+                showRequestError(error);
+                button.disabled = false;
+                return null;
+            });
+    }
+
+    /**
+     * Sends the cancel of one run that has not begun.
+     *
+     * Why: A cancel ends a plan that no device ever saw, so it reaches no cloud
+     * endpoint. A run that already sent firmware answers `run_already_started`,
+     * and the stop control applies to that run instead.
+     *
+     * @param {Element} button The control the operator pressed.
+     * @returns {Promise} The answer, or null after a refusal.
+     */
+    function requestRunCancel(button) {
+        var runId = button.getAttribute("data-run-id") || "";
+        button.disabled = true;
+        return fetchJson("/api/runs/" + encodeURIComponent(runId) + "/cancel", {
+            method: "POST",
+            body: {}
+        })
+            .then(function (answer) {
+                showFlash("The portal ended this run. It sent no firmware.", "warning");
+                return answer;
+            })
+            .catch(function (error) {
+                console.error("The cancel failed.", error && error.code, error && error.status);
+                showRequestError(error);
+                button.disabled = false;
+                return null;
+            });
+    }
+
+    /**
+     * Binds the reschedule control and the cancel control of the run page.
+     *
+     * Why: Both controls appear for a run that has not begun. A page that holds
+     * neither leaves early, so a running run costs nothing here.
+     *
+     * @returns {void}
+     */
+    function initRunScheduleControls() {
+        var region = document.querySelector("[data-testid='run-schedule-controls']");
+        if (!region) {
+            return;
+        }
+        var input = byTestId(RESCHEDULE_INPUT_TESTID, region);
+        var rescheduleButton = byTestId(RESCHEDULE_BUTTON_TESTID, region);
+        if (rescheduleButton) {
+            rescheduleButton.addEventListener("click", function () {
+                requestRunReschedule(rescheduleButton, input);
+            });
+        }
+        var cancelButton = byTestId(CANCEL_BUTTON_TESTID, region);
+        if (cancelButton) {
+            cancelButton.addEventListener("click", function () {
+                requestRunCancel(cancelButton);
+            });
+        }
+    }
+
+    /**
      * Arms the stop control of the run page.
      *
      * Why: FR-038a asks for a stop control while the run is live. The first
@@ -3198,6 +3293,7 @@
         initUpgradeConfirmPage();
         initRunPage();
         initStopControl();
+        initRunScheduleControls();  // Issue #2201: the reschedule and the cancel of a run that has not begun.
         initLockBanner();
     }
 
@@ -3258,3 +3354,4 @@
     window.upgradePortal.startLockBeat = startLockBeat;
     window.upgradePortal.stopLockBeat = stopLockBeat;
 })();
+

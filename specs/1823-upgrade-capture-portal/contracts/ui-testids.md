@@ -210,6 +210,20 @@ the word and never the class.
 | `stop-outcome-no-cancel` | The list of devices with no cancel path |
 | `stop-outcome-message` | The plain sentence for the operator |
 
+### Reschedule and cancel
+
+Issue #2201 adds these controls. They appear for a run that has not reached the
+cloud, and that run alone. A run past the submission offers the stop control
+above, which cancels the work that the cloud already holds.
+
+| Identifier | Control |
+| --- | --- |
+| `run-schedule-controls` | The region that holds both controls |
+| `run-reschedule-input` | The field for the new duration, such as `8h` |
+| `run-reschedule-button` | Move the start of the run |
+| `run-cancel-button` | End the run with no cloud call |
+| `run-schedule-locked-note` | The reason both controls are off |
+
 ### Comparison
 
 | Identifier | Control |

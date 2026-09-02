@@ -82,11 +82,12 @@ DATA_MODEL_CHAIN: Final[tuple[str, ...]] = (
 # WHY: The data model says any live state may reach either of these two.
 STOP_ROUTES: Final[tuple[str, str]] = ("stopping", "failed")
 
-# WHY: The three states that sit off the linear chain.
-OFF_CHAIN_STATES: Final[tuple[str, ...]] = ("stopping", "stopped", "failed")
+# WHY: The states that sit off the linear chain. Issue #2201 added `cancelled`,
+# which ends a run that never reached the cloud.
+OFF_CHAIN_STATES: Final[tuple[str, ...]] = ("stopping", "stopped", "failed", "cancelled")
 
 # WHY: A finished run moves nowhere. The stop route reads this refusal.
-TERMINAL_NAMES: Final[tuple[str, ...]] = ("complete", "stopped", "failed")
+TERMINAL_NAMES: Final[tuple[str, ...]] = ("complete", "stopped", "failed", "cancelled")
 
 # WHY: The four states before firmware submission. A run in one of these has
 # touched no device, so a fresh pre-check still describes the site before the
@@ -115,6 +116,8 @@ PRE_CHECK_CLOSED_NAMES: Final[tuple[str, ...]] = (
     "stopping",
     "stopped",
     "failed",
+    # Issue #2201: a cancelled run ended, so it takes no new pre-check either.
+    "cancelled",
 )
 
 # WHY: The two moves out of stopping.
@@ -124,8 +127,9 @@ STOPPING_MOVES: Final[tuple[tuple[str, str], ...]] = (
 )
 
 # WHY: Twelve forward moves, twenty-four stop or fail moves, two moves out of
-# stopping. The model must offer these and no others.
-EXPECTED_MOVE_TOTAL: Final[int] = 38
+# stopping, and four cancel moves. Issue #2201 added the four, one for each
+# state before the submission. The model must offer these and no others.
+EXPECTED_MOVE_TOTAL: Final[int] = 42
 
 # WHY: A move that the model forbids. Each pair skips a step, reverses a step,
 # repeats a state, or leaves the stop route.
@@ -206,9 +210,26 @@ def _escape_moves() -> list[tuple[str, str]]:
     return [(start, target) for start in live_states for target in STOP_ROUTES]
 
 
-# WHY: Every move the data model allows. The count must read thirty-eight.
+def _cancel_moves() -> list[tuple[str, str]]:
+    """Return every move from a state before the submission to cancelled.
+
+    Why:
+        Issue #2201 lets an operator end a run that never reached the cloud. The
+        move is legal from a state before the submission alone, because a run
+        that already sent firmware needs the stop, which cancels the work that
+        the cloud holds.
+
+    Returns:
+        One pair for each state before the submission.
+    """
+    submission = DATA_MODEL_CHAIN.index("upgrade_submitting")  # The first state that reached the cloud.
+    return [(start, "cancelled") for start in DATA_MODEL_CHAIN[:submission]]
+
+
+# WHY: Every move the data model allows. The count reads thirty-eight moves of
+# the earlier model, and four more that issue #2201 added for the cancel.
 LEGAL_MOVES: Final[tuple[tuple[str, str], ...]] = tuple(
-    _forward_moves() + _escape_moves() + list(STOPPING_MOVES),
+    _forward_moves() + _escape_moves() + _cancel_moves() + list(STOPPING_MOVES),
 )
 
 # WHY: A readable test name for each of the thirty-eight moves.
@@ -626,7 +647,7 @@ def test_new_key_returns_a_fresh_value_every_call() -> None:
 
 
 def test_the_state_list_matches_the_data_model() -> None:
-    """The model holds the sixteen states of the data model, and no other.
+    """The model holds every state of the data model, and no other.
 
     Why:
         A closed set of names keeps a stored record readable years after the
@@ -634,7 +655,7 @@ def test_the_state_list_matches_the_data_model() -> None:
     """
     names = {state.value for state in RunState}
     assert names == set(DATA_MODEL_CHAIN) | set(OFF_CHAIN_STATES)
-    assert len(RunState) == 16
+    assert len(RunState) == len(DATA_MODEL_CHAIN) + len(OFF_CHAIN_STATES)
 
 
 def test_the_module_chain_matches_the_data_model() -> None:
@@ -693,8 +714,8 @@ def test_every_legal_move_is_allowed(start: str, target: str) -> None:
     assert record["state"] == target
 
 
-def test_the_model_allows_exactly_thirty_eight_moves() -> None:
-    """The whole model offers thirty-eight moves, and no more.
+def test_the_model_allows_exactly_the_listed_moves() -> None:
+    """The whole model offers the listed moves, and no more.
 
     Why:
         The parametrized move test catches a dropped edge. This test catches
