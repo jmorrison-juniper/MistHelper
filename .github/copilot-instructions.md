@@ -524,7 +524,10 @@ the resolution.
 
 ### Copilot Token Efficiency
 
-See [copilot-token-efficiency.instructions.md](instructions/copilot-token-efficiency.instructions.md) (applied globally via `applyTo: "**"`).
+See `copilot-token-efficiency.instructions.md` in the VS Code user profile at
+`%APPDATA%\Code\User\prompts\`. That file governs the model choice, the MCP
+servers, and the chat session. A cloud agent makes none of those choices, so
+the file stays out of this repository and costs no tokens here.
 
 ### Windows Branch Switching & Post-Merge Fix Timing
 

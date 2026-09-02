@@ -294,8 +294,8 @@ only when the user states that STE is suspended for the session.
 
 ## Copilot Token Efficiency
 
-See `copilot-token-efficiency.instructions.md` for the full guide
-(applies globally via `applyTo: "**"`).
+See `copilot-token-efficiency.instructions.md` in the VS Code user profile.
+That file governs the local editor only, so no repository holds a copy.
 
 ---
 
