@@ -1560,3 +1560,55 @@ def test_a_default_never_reaches_the_stored_option_record(
     assert saved["canary"]["canary_phases"] is None  # The ghost of the phase list stayed on the page.
     assert saved["canary"]["max_failure_percentage"] is None  # The same for the failure percentage.
     assert saved["peer_to_peer"]["p2p_cluster_size"] is None  # The same for the download group.
+
+
+# ---------------------------------------------------------------------------
+# Issue #2198: a control of an absent device type
+# ---------------------------------------------------------------------------
+
+
+def test_each_version_applier_names_its_own_device_type(
+    upgrade_app: Flask,
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """An applier of an absent type invites a version that reaches no device.
+
+    Why:
+        A run of switches alone still drew the applier of the access points.
+        Issue #2198 holds that report.
+
+    Args:
+        upgrade_app: The application with the seams injected.
+        upgrade_client: The signed-in client.
+        run_store: The stand-in run record store.
+    """
+    upgrade_app.config[OPTIONS_VIEW_KEY] = StandInOptionsView()
+    run_id = seed_run(run_store, "pre_capture_done")
+    page = upgrade_client.get(OPTIONS_PAGE_TEMPLATE.format(run_id=run_id)).get_data(as_text=True)
+    for device_type in ("ap", "switch", "gateway"):
+        marker = f'<div class="mb-3" data-requires-device-type="{device_type}">'
+        assert marker in page, device_type  # Each applier carries the rule of its own type.
+
+
+def test_the_radio_strategy_word_names_the_access_point_rule(
+    upgrade_app: Flask,
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """The cloud reads the radio word for an access point alone.
+
+    Why:
+        A run without an access point kept that word checked, and the portal
+        then sent no strategy at all. The cloud wrote every device at the same
+        moment, which is not the order that the operator picked.
+
+    Args:
+        upgrade_app: The application with the seams injected.
+        upgrade_client: The signed-in client.
+        run_store: The stand-in run record store.
+    """
+    upgrade_app.config[OPTIONS_VIEW_KEY] = StandInOptionsView()
+    run_id = seed_run(run_store, "pre_capture_done")
+    page = upgrade_client.get(OPTIONS_PAGE_TEMPLATE.format(run_id=run_id)).get_data(as_text=True)
+    assert 'data-requires-device-type="ap" data-requires-strategy-option="rrm"' in page

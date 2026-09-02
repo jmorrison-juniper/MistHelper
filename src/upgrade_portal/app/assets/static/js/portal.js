@@ -105,8 +105,12 @@
         "rrm_slow_ramp",
         "channel"
     ];
-    var UPGRADE_WARNING_TESTID = "upgrade-warning-list";
-    var UPGRADE_SAVE_TESTID = "upgrade-options-save-button";
+    /* Issue #2198. The rescue changes the strategy and then repaints, and the
+     * repaint reads the strategy. This flag stops the two from calling each
+     * other without an end. */
+    var strategyRescueRunning = false;
+
+    var UPGRADE_WARNING_TESTID = "upgrade-warning-list";    var UPGRADE_SAVE_TESTID = "upgrade-options-save-button";
     var UPGRADE_CONFIRM_TESTID = "upgrade-confirm-input";
     var UPGRADE_START_TESTID = "upgrade-start-button";
     var UPGRADE_STATE_TESTID = "upgrade-state";
@@ -1545,6 +1549,57 @@
             var filledOk = matchesFilledControl(control.getAttribute("data-requires-filled"));
             control.hidden = !(typeOk && strategyOk && familyOk && valueOk && filledOk);
         });
+        rescueHiddenStrategy();  /* Issue #2198 moves a choice that the page just hid. */
+    }
+
+    /**
+     * Moves the strategy choice when the page hides the word that holds it.
+     *
+     * Why: Issue #2198. The radio word reaches an access point alone. A run
+     * that dropped its access points kept that word checked, and the portal
+     * then sent no strategy at all. The cloud wrote every device at the same
+     * moment, which is not the order that the operator picked.
+     *
+     * The move goes to the first word that the page still shows, which is the
+     * default word of the group. The page names the move in the flash area,
+     * because a silent move runs an order that nobody read.
+     *
+     * The guard below stops a loop. The move changes the strategy, and the
+     * repaint reads the strategy, so the two could call each other without an
+     * end. A strategy word hides by device type alone, so one repaint settles
+     * the page and the guard costs nothing.
+     *
+     * @returns {void}
+     */
+    function rescueHiddenStrategy() {
+        if (strategyRescueRunning) {
+            return;  /* One repaint already carries the move, so this call adds nothing. */
+        }
+        var group = byTestId(UPGRADE_STRATEGY_GROUP_TESTID);
+        if (!group) {
+            return;  /* A page without the group needs no rescue. */
+        }
+        var checked = group.querySelector('input[type="radio"]:checked');
+        if (!checked || !isHiddenControl(checked)) {
+            return;  /* The chosen word still shows, so the choice stands. */
+        }
+        var options = group.querySelectorAll('input[type="radio"]');
+        for (var index = 0; index < options.length; index += 1) {
+            if (!isHiddenControl(options[index])) {
+                options[index].checked = true;  /* The first visible word takes the choice. */
+                showFlash(
+                    "The chosen strategy reaches no device of this run, so the page moved the choice.",
+                    "warning"
+                );
+                strategyRescueRunning = true;  /* Hold the guard across the repaint below. */
+                try {
+                    filterAdvancedUpgradeControls();  /* The new word may reveal or hide a setting. */
+                } finally {
+                    strategyRescueRunning = false;  /* Release the guard, even after a fault. */
+                }
+                return;
+            }
+        }
     }
 
     /**
