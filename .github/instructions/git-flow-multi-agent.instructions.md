@@ -238,6 +238,29 @@ the cheap leg on every event.
 A nightly schedule costs 30 runs each month. A weekly schedule costs 4. Choose
 the weekly schedule unless the job guards a daily risk.
 
+### Never skip a required check with a path filter
+
+A text-only change starts every gate. That looks wasteful, and `paths-ignore`
+looks like the repair. It is not.
+
+Warning: never add `paths-ignore` to a workflow that reports a required check.
+The workflow never starts, so the check never reports. Branch protection then
+waits for a status that no run will ever send, and the pull request blocks
+forever.
+
+Issue #1952 records the matching failure in the other direction. A branch
+filter on the `pull_request` trigger let a stacked pull request merge with zero
+checks. A reviewer read the empty check list as clean, when it was unmeasured.
+
+Use this pattern instead when the saving is worth the complexity.
+
+1. Add one filter job that always runs and outputs a boolean.
+2. Guard each expensive job with an `if:` condition that reads the boolean.
+3. Add one aggregator job that always runs and reports the combined result.
+4. Make the aggregator the only required check.
+
+The aggregator always reports, so branch protection always clears.
+
 ### Watch for a hidden failure
 
 A job that declares `needs:` does not run when the job above it fails. The
