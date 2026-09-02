@@ -42,6 +42,21 @@ on:
         type: boolean
         default: true
 
+# WHY this group: a second push to the same pull request must cancel the first
+# run. Without a group, both runs continue, and the 15 gates of the older run
+# spend minutes on a tree that no reviewer will read. One month of that waste
+# used the whole free allowance of the account.
+#
+# WHY a literal name: github.workflow reports the name of the caller when
+# another workflow starts this one through workflow_call. A literal keeps this
+# group distinct from the group of any caller.
+concurrency:
+  group: quality-gates-${{ github.event.pull_request.number || github.ref }}
+  # WHY this condition: a push to main must not cancel an earlier main run.
+  # That run reports the state of a merged tree, and the Auto-merge workflow
+  # reads it.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
   issues: write

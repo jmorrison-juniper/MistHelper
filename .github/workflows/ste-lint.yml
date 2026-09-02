@@ -12,6 +12,13 @@ on:
       - ".github/workflows/ste-lint.yml"
   workflow_dispatch:
 
+# WHY this group: a second push to the same pull request must cancel the first
+# grading run. This workflow reports no required check, so a cancelled run
+# blocks no merge.
+concurrency:
+  group: ste-lint-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
