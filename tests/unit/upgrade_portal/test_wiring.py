@@ -406,6 +406,144 @@ def _boom() -> Any:
     raise RuntimeError("The store did not answer.")  # The wiring must hold this fault.
 
 
+def _no_store_module(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make every store lookup of the wiring module answer None.
+
+    Why:
+        The portal imports the store module late, so a deployment that ships
+        without it still starts. Every reader of that seam holds its own
+        absent-store path, and issue #1996 records that none of those paths ran
+        under a test. An untested path is where a defect survives.
+
+    Args:
+        monkeypatch: The patcher of this test.
+    """
+    monkeypatch.setattr(wiring, "load_module", lambda name: None)  # The deployment ships no store module.
+
+
+def test_a_read_with_no_store_module_answers_the_mirror(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A poll must answer a run that this process holds, even with no store module.
+
+    Why:
+        The poll route reads the run many times. A None answer there would tell
+        the operator that the run vanished while the driver still writes to it.
+
+    Args:
+        monkeypatch: The patcher of this test.
+    """
+    _no_store_module(monkeypatch)
+    wiring.mirror_run({"run_id": RUN_ID, "state": "upgrading"})  # This process holds the run.
+    assert wiring.DocumentRunStore().read_run(RUN_ID) == {"run_id": RUN_ID, "state": "upgrading"}
+
+
+def test_a_write_with_no_store_module_answers_false(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A write that nothing holds must answer False, never True.
+
+    Why:
+        A True answer would tell the operator that the portal kept the record.
+        No record would exist, and the change history would hold a gap that
+        nobody can explain later.
+
+    Args:
+        monkeypatch: The patcher of this test.
+    """
+    _no_store_module(monkeypatch)
+    assert wiring.DocumentRunStore().write_run({"run_id": RUN_ID}) is False
+
+
+def test_a_site_scan_with_no_store_module_still_guards_the_site(monkeypatch: pytest.MonkeyPatch) -> None:
+    """FR-037 must still find a run that this process started.
+
+    Why:
+        The scan stops a second run on one site. With no store module the mirror
+        is the only record, so the scan must read it.
+
+    Args:
+        monkeypatch: The patcher of this test.
+    """
+    _no_store_module(monkeypatch)
+    wiring.mirror_run({"run_id": RUN_ID, "site_id": SITE_ID, "state": "upgrading"})  # One live run of this process.
+    assert [row["run_id"] for row in wiring.DocumentRunStore().runs_for_site(SITE_ID)] == [RUN_ID]
+
+
+def test_an_adoption_with_no_store_module_names_no_pre_check(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A run must still start when no store holds a pre-check to adopt.
+
+    Why:
+        The adoption is a convenience. A fault here would refuse the whole run,
+        and the operator would then take the pre-check by hand for nothing.
+
+    Args:
+        monkeypatch: The patcher of this test.
+    """
+    _no_store_module(monkeypatch)
+    assert wiring.StandalonePrecheckAdopter().newest_precheck(SITE_ID) == ""
+
+
+def test_an_adoption_holds_a_store_fault(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A store that raises must not refuse the run.
+
+    Why:
+        The read reaches a network. An unreachable store must cost the operator
+        the adoption alone, and never the run.
+
+    Args:
+        monkeypatch: The patcher of this test.
+    """
+    from src.upgrade_portal.capture import store  # Late, to match the import rule of the wiring module.
+
+    monkeypatch.setattr(store, "latest_standalone_precheck", lambda *args, **kwargs: _boom())
+    assert wiring.StandalonePrecheckAdopter().newest_precheck(SITE_ID) == ""
+
+
+def test_an_edge_write_with_no_store_module_raises_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A missing edge must never end the create call.
+
+    Why:
+        The run record names its pre-check in a field of its own. The edge is a
+        second path to the same fact, so its loss hides no capture.
+
+    Args:
+        monkeypatch: The patcher of this test.
+    """
+    _no_store_module(monkeypatch)
+    assert wiring.StandalonePrecheckAdopter().write_capture_edge(RUN_ID, "cap-1", "pre") is None
+
+
+def test_an_edge_write_holds_a_store_fault(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A store that raises during the edge write must not end the create call.
+
+    Why:
+        The operator asked for a run. A lost edge costs the history view one
+        link, and a raised fault would cost the operator the whole run.
+
+    Args:
+        monkeypatch: The patcher of this test.
+    """
+    from src.upgrade_portal.capture import store  # Late, to match the import rule of the wiring module.
+
+    monkeypatch.setattr(store, "write_edge", lambda *args, **kwargs: _boom())
+    assert wiring.StandalonePrecheckAdopter().write_capture_edge(RUN_ID, "cap-1", "pre") is None
+
+
+def test_a_read_that_raises_answers_the_mirror(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A store fault during a poll must answer the run, never a fault.
+
+    Why:
+        The poll route calls this read many times for each run. A raised fault
+        would turn an unreachable store into a 500 answer on the operator
+        screen, and the operator would read that as a lost upgrade.
+
+    Args:
+        monkeypatch: The patcher of this test.
+    """
+    from src.upgrade_portal.capture import store  # Late, to match the import rule of the wiring module.
+
+    monkeypatch.setattr(store, "connect_database", lambda *args, **kwargs: _boom())  # The store is unreachable.
+    wiring.mirror_run({"run_id": RUN_ID, "state": "upgrading"})  # This process still holds the run.
+    assert wiring.DocumentRunStore().read_run(RUN_ID) == {"run_id": RUN_ID, "state": "upgrading"}
+
+
 def test_the_site_scan_answers_an_empty_list_when_the_store_is_silent(monkeypatch: pytest.MonkeyPatch) -> None:
     """A failed site scan must refuse no run.
 

@@ -7,6 +7,15 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Cover the absent-store paths of the portal wiring
+
+- **Fixed**: `app/wiring.py` sat at 88 percent of statements, under the 90
+  percent floor. It now reads 92 percent. Issue #1996.
+- **Added**: Nine tests drive the paths that run when the store module is absent
+  or when the store raises. A poll now proves that it answers the run from the
+  mirror instead of a fault, and an adoption proves that it costs the operator
+  the adoption alone and never the whole run.
+
 ### Bring every portal sentence under the length limit
 
 - **Fixed**: 473 sentences of the portal package passed the 25-word limit of
