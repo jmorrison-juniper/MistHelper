@@ -18,7 +18,8 @@ Usage:
 from __future__ import annotations
 
 import ast
-import subprocess
+import shutil
+import subprocess  # nosec B404 - The module queries git, and each call below uses shell=False.
 import sys
 
 
@@ -53,6 +54,25 @@ def code_shape(source: str) -> str:
     return ast.dump(strip_docstrings(ast.parse(source)))  # The tree holds no comment at all.
 
 
+def git_path() -> str:
+    """Return the absolute path of the git program.
+
+    Why:
+        A bare name reads the search path, and an earlier entry could supply
+        another program of the same name.
+
+    Returns:
+        The absolute path of git.
+
+    Raises:
+        RuntimeError: If the search path holds no git program.
+    """
+    found = shutil.which("git")  # An absolute path stops an earlier entry supplying another program.
+    if found is None:  # No git means the check cannot read the base revision.
+        raise RuntimeError("This check needs git, and the search path holds none.")
+    return found
+
+
 def base_source(revision: str, path: str) -> str | None:
     """Return the text of one file at one revision.
 
@@ -63,8 +83,8 @@ def base_source(revision: str, path: str) -> str | None:
     Returns:
         The file text, or None when the revision holds no such file.
     """
-    result = subprocess.run(
-        ["git", "show", f"{revision}:{path}"],
+    result = subprocess.run(  # nosec B603 - shutil.which resolved the path and the rest are literals.
+        [git_path(), "show", f"{revision}:{path}"],
         capture_output=True,
         text=True,
         check=False,
@@ -81,8 +101,8 @@ def changed_files(revision: str) -> list[str]:
     Returns:
         The repository path of each changed Python file.
     """
-    result = subprocess.run(
-        ["git", "diff", "--name-only", revision],
+    result = subprocess.run(  # nosec B603 - shutil.which resolved the path and the rest are literals.
+        [git_path(), "diff", "--name-only", revision],
         capture_output=True,
         text=True,
         check=True,
