@@ -7,6 +7,15 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Cap each table of the capture page
+
+- **Added**: Each table of the capture page paints at most 500 rows. A capture
+  of a large site holds thousands of client rows, and a page that painted every
+  one would render slowly and sort slowly. Issue #2075.
+- **Added**: A capped table states what it removed, and it names the download
+  control that answers every record. A silent cut would let an operator read a
+  cut table as the whole site.
+
 ### Check every line citation with a gate
 
 - **Added**: `python -m tools.check_citations` reads every citation of the form
