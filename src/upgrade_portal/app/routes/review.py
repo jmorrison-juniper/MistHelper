@@ -247,6 +247,10 @@ QUERY_ATTRIBUTES = ("CaptureQuery",)
 # carries `runs` and `total` under the same two names as `CaptureListPage`, so
 # one page reader serves both histories.
 RUN_LISTER_ATTRIBUTES = ("list_runs",)
+
+# Issue #2221: the reader of the site lock trail, which the audit log paints.
+AUDIT_MODULE = "compare.lock_audit"
+AUDIT_READER_ATTRIBUTES = ("read_audit_rows",)
 RUN_QUERY_ATTRIBUTES = ("RunQuery",)
 
 # The history view of the compare package. The name is read at call time rather
@@ -1739,6 +1743,33 @@ def run_history(site_id: str) -> tuple[Response, int]:
     return jsonify({RUNS_FIELD: rows, TOTAL_FIELD: total}), OK_STATUS
 
 
+def audit_history_rows() -> list[dict[str, Any]]:
+    """Return the audit log rows that the history page paints.
+
+    Why:
+        Issue #2221 asks the history page for a record of every site lock
+        action. The reader lives in its own module, and this seam keeps the
+        page working through a build stage in which that module does not
+        import. That is the rule that every other seam of this route follows.
+
+        Every moment reads as UTC, which is the rule that the runs section
+        already follows.
+
+    Returns:
+        One row for each action, newest first. An empty list when the reader is
+        absent or the trail holds nothing.
+    """
+    module = load_optional_module(AUDIT_MODULE)  # The reader may not be built yet.
+    reader = find_attribute(module, AUDIT_READER_ATTRIBUTES)
+    if reader is None:  # A missing reader draws an empty section, never a fault page.
+        logger.info("review: the portal offers no lock audit reader, so the audit log is empty")
+        return []
+    rows: Any = reader()
+    shaped = [dict(row, moment_text=short_moment(row.get("occurred_at"))) for row in rows]
+    logger.debug("review: the audit log holds %s row(s)", len(shaped))
+    return shaped
+
+
 @review_bp.get(HISTORY_PAGE_PATH)
 @identity.require_session
 def history_page() -> str:
@@ -1769,4 +1800,6 @@ def history_page() -> str:
         moment_texts=moment_texts(shaped),
         # Issue #2199 adds the runs section beside the captures section.
         run_rows=run_history_rows(site_id, limit, offset),
+        # Issue #2221 adds the audit log of every site lock action.
+        audit_rows=audit_history_rows(),
     )

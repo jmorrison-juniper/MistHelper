@@ -7,6 +7,24 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Record every site lock action, and show the audit log
+
+- **Added**: The portal records a take and a release beside the takeover that it
+  already recorded. A page built on takeovers alone would tell the reader that
+  one lock action ever happened. Issue #2221.
+- **Added**: The history page holds an audit log section. Each row names the
+  moment in UTC, the site, the action, and the operator.
+- **Added**: The reader infers an expiry. No request runs at the moment a hold
+  ends, and the lock store drops the key, so no writer can record one. A take
+  that follows an unreleased hold means that hold ended with no release, and the
+  row states that the portal read the fact rather than recorded it.
+- **Note**: The trail holds the address of each operator, because an audit names
+  people. No row of the page holds that address. The page shows the one-way
+  digest that the portal already writes into every log record.
+- **Note**: A take and a release never fail closed. A takeover still refuses
+  itself when the trail cannot hold it, because a takeover moves a site between
+  operators and an unaccountable move is worse than a refused one.
+
 ### Retry a failed run in one press
 
 - **Added**: A failed run offers a retry to the holder of the site lock. The new
