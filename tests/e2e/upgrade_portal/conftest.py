@@ -77,12 +77,14 @@ REPO_ROOT = Path(__file__).parents[3]
 CONFIG_PATH = Path(__file__).with_name("playwright.config.py")
 CONFIG_MODULE_NAME = "upgrade_portal_playwright_config"
 
-# WHY: 20 tries of 0.5 seconds gives the same 10-second budget as the fixture
-# at tests/e2e/conftest.py:86.
+# WHY: 20 tries of 0.5 seconds gives a 10-second budget for the server to open
+# its port. Issue #1998: this comment once cited a fixture of
+# tests/e2e/conftest.py that no longer exists. That file starts no server now,
+# so it names no budget to match.
 READY_TRIES = 20
 READY_PAUSE_SECONDS = 0.5
 PROBE_TIMEOUT_SECONDS = 0.5  # One connection attempt against a port that may hold no listener.
-STOP_TIMEOUT_SECONDS = 5  # The same 5-second budget as tests/e2e/conftest.py:99.
+STOP_TIMEOUT_SECONDS = 5  # The server gets 5 seconds to stop before this fixture ends it.
 
 # WHY: The server runs for the whole session and logs one record for each
 # request. A pipe holds 64 KB on Windows, and nothing drains it while the tests

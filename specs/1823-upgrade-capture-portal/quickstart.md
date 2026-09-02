@@ -69,7 +69,9 @@ Expected result: `podman ps` shows the container with both ports published, and
 
 **Pass conditions**
 
-1. A 250-device site finishes in 90 seconds or less (SC-002).
+1. A 250-device site finishes in 90 seconds or less. This is a performance goal
+   of `plan.md`, and not the success criterion SC-002. SC-002 is a 30-second
+   read of the finished comparison. Issue #1998 records the correction.
 2. The verified badge is present. The badge means the portal read the stored key
    back and matched the digest.
 3. The stored size shows a value above zero.

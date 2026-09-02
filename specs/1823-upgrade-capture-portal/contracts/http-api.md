@@ -422,6 +422,7 @@ one begin action for each run, so the second call sends nothing.
 | Item | Value |
 | --- | --- |
 | 200 | See the body below |
+| 401 | `not_authenticated` when no browser session exists |
 | 404 | `run_not_found` |
 
 ```json
@@ -475,9 +476,11 @@ The browser polls this endpoint every 30 seconds.
 | Body | `{ "confirm": "STOP" }` |
 | 200 | See the body below |
 | 400 | `confirmation_required` when `confirm` is not exactly `STOP` |
+| 401 | `not_authenticated` when no browser session exists |
 | 404 | `run_not_found` |
 | 409 | `site_locked` with `details.actor_email` when a different operator holds the site lock |
 | 409 | `run_not_stoppable` when the run already finished |
+| 500 | The machine code of the stop store, when that store refuses the write itself |
 | 503 | `lock_store_unreachable` when the portal cannot read the site lock |
 
 ```json

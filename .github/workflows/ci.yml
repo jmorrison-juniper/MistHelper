@@ -505,6 +505,23 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
       - run: python scripts/lint_diagram_refs.py
 
+  citation_lint:
+    name: "Citation reference lint"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      # Issue #1998: a citation of the form `path:line` went stale in silence.
+      # The check reads `src` and `tests` alone, because those two folders hold
+      # the text that a maintainer reads while changing code. A dated record
+      # under `specs/` keeps its citation on purpose.
+      - run: python -m tools.check_citations src tests
+
   menu_reference_drift:
     name: "Menu reference drift"
     runs-on: ubuntu-latest
