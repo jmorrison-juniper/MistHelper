@@ -277,7 +277,7 @@ def guard_page_count(section: str, collected: int, response: Any) -> list[dict[s
         ``mistapi.get_all`` returns an empty list for an answer shape that it
         does not know, and it raises nothing. A capture would then store zero
         devices and look complete. This guard reads the status, the answer
-        shape, and the reported total, so a refusal and a short read each
+        shape, and the reported total. A refusal and a short read each
         become a partial reason that names its own cause.
 
     Args:
@@ -525,8 +525,8 @@ def _state_of(chassis: Mapping[str, Any], module: Mapping[str, Any]) -> dict[str
     Why:
         A chassis member holds its own firmware version and its own uptime
         inside ``module_stat``. An index that copied the chassis version to
-        every member would hide a member that missed the upgrade, and that
-        fault is the reason this feature exists.
+        every member would hide a member that missed the upgrade. That fault is
+        the reason this feature exists.
 
     Args:
         chassis: The statistics record of the whole device.

@@ -17,11 +17,11 @@ What this module refuses to do:
     does nothing else. A missing container therefore stays missing, and the
     operator reads the compose command in the report instead. Creating a
     container would invent a configuration that no file in this repository
-    describes, and the portal would then drive a firmware upgrade against a
+    describes. The portal would then drive a firmware upgrade against a
     store that nobody reviewed.
 
-    It never runs inside a container. A container cannot start its sibling, and
-    a portal that reached the host runtime socket would hold far more power over
+    It never runs inside a container. A container cannot start its sibling. A
+    portal that reached the host runtime socket would hold far more power over
     the host than a firmware tool needs.
 
 Why the name is checked against a pattern:

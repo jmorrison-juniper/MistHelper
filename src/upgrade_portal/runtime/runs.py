@@ -3,8 +3,8 @@
 Why:
     One upgrade run ties one site, one operator, one pre-check capture, one
     firmware upgrade, and one post-check capture together. An operator reads
-    that record months after the work, so the record must hold every field
-    from the first release and must never reach an impossible state.
+    that record months after the work. The record must therefore hold every
+    field from the first release, and it must never reach an impossible state.
 
     This module owns the shape of the record, the legal moves between the
     states, and the status body the browser polls. It owns no storage. Every
@@ -263,7 +263,7 @@ class RunRecordBuilder:
         Why:
             Python holds bool as a subclass of int, so `True == 1` reads as
             true. A stored `True` would pass an equality check against the
-            schema version 1, and the store would then hold a record that no
+            schema version 1. The store would then hold a record that no
             later reader can trust. A float carries the same risk, because
             `2.0 == 2` also reads as true. This check names the exact type and
             closes both holes.
@@ -358,8 +358,8 @@ class RunStateMachine:
         than write a state that no reader can explain.
 
         FR-058 needs no extra move. A site with no device of one family runs
-        that phase with the phase state ``skipped``, so the run still passes
-        through each settling state in the fixed order.
+        that phase with the phase state ``skipped``. The run therefore still
+        passes through each settling state in the fixed order.
     """
 
     # WHY: The one linear path of the data model. Each member may move only to
@@ -484,7 +484,7 @@ class RunStateMachine:
 
         Why:
             The brief asks the portal to lock the first capture once the second
-            one exists, so that no later capture corrupts the reading the
+            one exists. No later capture then corrupts the reading that the
             comparison depends on. This method locks it earlier, at firmware
             submission, because that is the first moment a capture stops
             describing the site before the upgrade. Until then an operator who
@@ -669,10 +669,10 @@ class RunStatusView:
 
         Why:
             FR-058 lets the portal pass over a family that the site does not
-            hold. The run state still names that family, so the state sentence
-            alone tells the operator that the portal waits for a gateway at a
-            site that holds no gateway. This step reads the phase state first
-            and reports the real reason.
+            hold. The run state still names that family. The state sentence
+            alone therefore tells the operator that the portal waits for a
+            gateway at a site that holds no gateway. This step reads the phase
+            state first and reports the real reason.
 
         Args:
             record: The stored run record.

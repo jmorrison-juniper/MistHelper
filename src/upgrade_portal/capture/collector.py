@@ -3,10 +3,10 @@
 Why:
     ``app/routes/capture.py`` answers 202 and hands the reading to a worker
     thread. That thread calls this module. Every part of the work already
-    exists: ``devices``, ``clients``, and ``extras`` read the cloud,
-    ``assembly`` builds the document, and ``store`` writes it and reads it
-    back. This module owns the order of that work, the concurrency, and the
-    progress that the browser polls.
+    exists. The ``devices``, ``clients``, and ``extras`` modules read the cloud.
+    The ``assembly`` module builds the document. The ``store`` module writes it
+    and reads it back. This module owns the order of that work, the concurrency,
+    and the progress that the browser polls.
 
 Concurrency:
     The reads run in two waves through ``CapturePool``. Wave one holds the
@@ -248,9 +248,9 @@ class ProgressLedger:
         """Set the final outcome of every call group that one wave reported.
 
         Why:
-            A group that the pool loses never reaches its own worker, so its
-            row would stay pending for ever. ``run_call_groups`` reports every
-            group, with a reason for each loss, so this pass settles them all.
+            A group that the pool loses never reaches its own worker. Its row
+            would stay pending for ever. The ``run_call_groups`` helper reports
+            every group, with a reason for each loss. This pass settles them all.
 
         Args:
             results: The group results of one wave.
@@ -511,7 +511,7 @@ def resolve_session(job: Mapping[str, Any], kit: CaptureResources) -> Any:
         inside a worker thread. The start route therefore reads the session on
         the request thread and carries it in the job. This function takes the
         session from the resources, then from the job, then from the module
-        provider, and names the gap when all three are empty.
+        provider. It names the gap when all three are empty.
 
     Args:
         job: The capture job.
@@ -722,8 +722,8 @@ def device_rows(inventory: Any) -> list[dict[str, Any]]:
 
     Why:
         Validation rule 7 asks the index and the device list to hold the same
-        members. ``build_device_index`` drops a record with no address, so
-        this filter drops the same records and the rule then holds.
+        members. The ``build_device_index`` helper drops a record with no
+        address. This filter drops the same records. The rule then holds.
 
     Args:
         inventory: The inventory read, or None.
@@ -741,9 +741,9 @@ def device_reasons(inventory: Any, statistics: Any) -> list[dict[str, Any]]:
 
     Why:
         The statistics call answers with access points alone when the caller
-        omits the type, and the cloud reports no error.
-        ``guard_statistics_coverage`` names a lost device type, so a capture
-        that lost every switch reports the loss instead of looking complete.
+        omits the type. The cloud reports no error. The
+        ``guard_statistics_coverage`` helper names a lost device type. A capture
+        that lost every switch then reports the loss instead of looking complete.
 
     Args:
         inventory: The inventory read, or None.
@@ -766,9 +766,9 @@ def already_read_rows(rows: Any, session: Any, site_id: str) -> list[dict[str, A
 
     Why:
         The two wireless call groups run at the same time and each returns raw
-        rows. ``clients.read_wireless_clients`` owns the join of those two
-        reads, so a bound copy of this function hands it the rows it holds and
-        the reader then makes no further call.
+        rows. The ``clients.read_wireless_clients`` reader owns the join of those
+        two reads. A bound copy of this function hands it the rows it holds. The
+        reader then makes no further call.
 
     Args:
         rows: The rows that a call group already read.
@@ -787,8 +787,8 @@ def wireless_records(results: Mapping[str, Any]) -> list[Any]:
 
     Why:
         Neither wireless call holds every field. The statistics call holds the
-        signal strength and the search call holds the randomized-address flag,
-        so the two groups read at the same time and this step joins them.
+        signal strength. The search call holds the randomized-address flag. The
+        two groups read at the same time and this step joins them.
 
     Args:
         results: The group results of one capture.
@@ -906,7 +906,7 @@ def row_reasons(reason: Mapping[str, Any]) -> list[dict[str, Any]]:
     Why:
         The capture page paints a row red when a partial reason carries that
         row name. A reason that carried a call group name or a sub-read name
-        would paint nothing, and a reloaded page would show a green row over a
+        would paint nothing. A reloaded page would then show a green row over a
         section that the capture never read. The first name moves to the
         ``source`` field, so the document still names the exact read that
         failed. Validation rule 5 asks for three fields at the least, so the
@@ -928,8 +928,8 @@ def collect_reasons(results: Mapping[str, Any]) -> list[dict[str, Any]]:
 
     Why:
         A failed section never stops the capture. Each reason names its own
-        row, so the stored document paints the same rows that the live poll
-        painted, and a reader still sees every section that arrived.
+        row. The stored document paints the same rows that the live poll
+        painted. A reader still sees every section that arrived.
 
     Args:
         results: The group results of one capture.
@@ -986,7 +986,7 @@ def site_identity(job: Mapping[str, Any]) -> assembly.SiteIdentity:
 
     Why:
         The start route reads the organization name and the site name on the
-        request thread and carries both in the job, because a worker thread
+        request thread. It carries both in the job, because a worker thread
         holds no request. A job that a caller builds by hand may hold neither
         name. Each read therefore falls back to an empty value. A reader of the
         stored capture then shows an identifier in place of a name.
@@ -1128,10 +1128,11 @@ def store_capture(capture_id: str, document: Mapping[str, Any], kit: CaptureReso
     """Write one capture, read the key back, and report the outcome.
 
     Why:
-        A write result alone proves nothing, so the portal reads the key back
-        and only then reports the capture verified.
-        ``contracts/http-api.md`` answers 409 ``capture_not_verified`` for a
-        capture that fails this step, so the flag must never rest on the write.
+        A write result alone proves nothing. The portal reads the key back
+        and only then reports the capture verified. The
+        ``contracts/http-api.md`` contract answers 409 ``capture_not_verified``
+        for a capture that fails this step. The flag must never rest on the
+        write.
 
     Args:
         capture_id: The identifier that the progress record carries.

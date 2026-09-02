@@ -9,8 +9,8 @@ Why:
     Waitress fills that role.
 
     This module holds the choice in one place. A launcher and the browser test
-    fixture both read it, so both start the same server on the same platform and
-    neither one repeats the platform test.
+    fixture both read it. Both therefore start the same server on the same
+    platform, and neither one repeats the platform test.
 """
 
 from __future__ import annotations
@@ -55,7 +55,7 @@ def resolve_host(requested: str | None, *, in_container: bool) -> str:
         email, but that email holds the site lock and names the operator. It is
         not a password, so the portal refuses nobody. A bind to every address
         therefore offers the upgrade controls to every computer that can reach
-        the host, and a workstation on a customer network reaches many. Loopback
+        the host. A workstation on a customer network reaches many. Loopback
         is the safe default for a workstation.
 
         A container is the opposite case. It reaches its portal through a

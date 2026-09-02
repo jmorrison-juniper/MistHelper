@@ -18,7 +18,7 @@ Why:
     this module passes the value.
 
     Third, the cursor is ``search_after``. Both vendored event search documents
-    advise ``limit`` and ``page`` under their pagination heading, and no ``page``
+    advise ``limit`` and ``page`` under their pagination heading. No ``page``
     parameter exists in either parameter table or in the installed SDK. This
     module narrows the window with ``start`` and ``end`` and raises ``limit``, so
     one poll usually fits one page.
@@ -193,7 +193,7 @@ def filter_event_keys(rows: Iterable[Mapping[str, Any]]) -> EventKeys:
     Why:
         T137 forbids a hard-coded key list, because only the access point keys
         are vendor confirmed. The suffix test survives a vendor rename of the
-        family prefix, and the poll already splits the families with the
+        family prefix. The poll already splits the families with the
         ``device_type`` parameter, so this function needs no prefix map.
 
     Args:
@@ -245,8 +245,8 @@ class EventCatalogue:
     Why:
         The catalogue changes only with a cloud release, so one read serves the
         whole process life. A module level cache would be process state that no
-        test can clear, so the cache lives on an instance that the application
-        owns and a test builds fresh.
+        test can clear. The cache therefore lives on an instance that the
+        application owns and a test builds fresh.
     """
 
     def __init__(self) -> None:
@@ -488,9 +488,8 @@ def drain_device_events(
         repeated event costs nothing.
 
         A cloud that always returns a cursor meets the page ceiling instead. That
-        case keeps its warning and no split, because ten full pages of one family
-        inside one window is a load that no narrowing can bring under the poll
-        budget.
+        case keeps its warning and no split. Ten full pages of one family inside
+        one window is a load that no narrowing can bring under the poll budget.
 
     Args:
         session: The cloud session. The caller owns it.

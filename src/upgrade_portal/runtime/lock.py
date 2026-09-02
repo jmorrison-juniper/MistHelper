@@ -2,8 +2,8 @@
 
 Why:
     The older portal keeps its duplicate guard in process memory. The guard
-    dies with a restart and never crosses a Gunicorn worker, so two operators
-    can start an upgrade on one site at the same time. This module holds the
+    dies with a restart and never crosses a Gunicorn worker. Two operators can
+    then start an upgrade on one site at the same time. This module holds the
     guard in Redis, where every worker reads the same value.
     ``contracts/site-lock.md`` fixes the key, the value, and every command.
 
@@ -21,7 +21,7 @@ Failure policy:
     A read fails open. ``read_site_locks`` and ``read_lock`` never raise. An
     unreachable store answers with no holder, and the page still renders. An
     operator may view a site, a capture, a comparison, or a history page with
-    no lock and with no typed word, so a dead lock store must not hide a page.
+    no lock and with no typed word. A dead lock store must not hide a page.
     The contract states this at ``contracts/site-lock.md`` line 138.
 
     Both halves need a bounded wait. A client with no limits waits on the
@@ -38,7 +38,7 @@ Personal data:
     shows the holder to the next operator.
 
     Every value class below replaces the generated ``__repr__``. The generated
-    form prints each field, so one ``%s`` on a record, one ``logging.exception``
+    form prints each field. One ``%s`` on a record, one ``logging.exception``
     call, or one traceback that shows a local value would publish the token and
     the address together. Naming each log line by hand keeps the rule only
     while every later author remembers it. Replacing the text form keeps the
@@ -267,9 +267,9 @@ class TakeoverAuditError(SiteLockError):
     Why:
         contracts/site-lock.md line 120 asks for an audit record of every
         takeover. A takeover with no record removes the one trail that names
-        who took a site from whom, so the portal refuses the takeover instead
-        of moving the site with no account of it. This repeats the write policy
-        of the module header: a write fails closed.
+        who took a site from whom. The portal therefore refuses the takeover
+        instead of moving the site with no account of it. This repeats the write
+        policy of the module header: a write fails closed.
     """
 
     code: ClassVar[str] = "takeover_audit_failed"  # The portal took no site, so no code of the contract fits
@@ -289,8 +289,8 @@ class LockLostError(SiteLockError):
     """The caller no longer holds the lock it named.
 
     Why:
-        contracts/site-lock.md lines 90 and 103 answer 409 with this code when a
-        refresh or a release compares a token that the store no longer holds.
+        contracts/site-lock.md lines 90 and 103 answer 409 with this code. A
+        refresh or a release may compare a token that the store no longer holds.
 
     Attributes:
         outcome: How one release lost the lock, or None when a refresh raised.
@@ -387,8 +387,9 @@ def _utc_now_text() -> str:
     """Return the present moment as ISO 8601 text in UTC.
 
     Why:
-        Every stored time of this feature uses one clock and one format, so a
-        record written by one worker compares with a record written by another.
+        Every stored time of this feature uses one clock and one format. A
+        record written by one worker then compares with a record written by
+        another.
 
     Returns:
         The timestamp text.
@@ -474,7 +475,7 @@ def _checkout_root() -> Path:
     Why:
         The path comes from the location of this module, so every process
         reaches the same directory. This repeats the rule that
-        `upgrade/driver.py` states at `data_root`, and this module states it a
+        `upgrade/driver.py` states at `data_root`. This module states it a
         second time because `runtime` sits below `upgrade` and must not import
         it.
 
@@ -488,13 +489,13 @@ def _audit_path() -> Path:
     """Return the file that holds the takeover trail.
 
     Why:
-        The function reads the two constants at call time, so a test points the
-        trail at its own directory without a reload of this module. A relative
-        directory is anchored against the checkout, because a bare name follows
-        the process working directory. A portal started from a service manager,
-        a container, or another directory would otherwise leave the trail
-        somewhere no reader looks, and two starts from two directories would
-        split one site history across two files.
+        The function reads the two constants at call time. A test then points
+        the trail at its own directory without a reload of this module. A
+        relative directory is anchored against the checkout, because a bare
+        name follows the process working directory. A portal started from a
+        service manager, a container, or another directory would otherwise
+        leave the trail somewhere no reader looks. Two starts from two
+        directories would then split one site history across two files.
 
     Returns:
         The absolute path of the append-only audit file.
@@ -557,7 +558,7 @@ def _clean_run(value: str | None) -> str:
 
     Why:
         FR-112 forbids the word None in a stored lock. A caller that wraps a
-        missing run with str writes that word, so this rule maps the word and a
+        missing run with str writes that word. This rule maps the word and a
         real None to the empty run the contract allows.
 
     Args:
@@ -693,8 +694,8 @@ class LockRecord:
 
         Why:
             A damaged time counts as quiet. The other answer would hold a site
-            until the key expires, and a takeover still needs the typed word,
-            so counting a damaged time as quiet opens no door on its own.
+            until the key expires. A takeover still needs the typed word, so
+            counting a damaged time as quiet opens no door on its own.
 
         Args:
             now: The moment to measure from. The method reads the clock when
@@ -858,10 +859,10 @@ def connect_lock_store(settings: RedisSettings | None = None) -> Any:
 
     Why:
         A failed open costs a full connection wait. Repeating that wait for
-        each request would hide every page behind a dead store, so the module
-        remembers the failure for `RETRY_AFTER_SECONDS` and answers None at
-        once inside that window. The portal locks again as soon as Redis comes
-        back, because the window is short.
+        each request would hide every page behind a dead store. The module
+        therefore remembers the failure for `RETRY_AFTER_SECONDS` and answers
+        None at once inside that window. The portal locks again as soon as Redis
+        comes back, because the window is short.
 
     Args:
         settings: Settings to use. The function reads the environment when the
@@ -1007,8 +1008,8 @@ def _replace_holder(request: LockRequest, held: LockRecord, handle: Any, state: 
 
     Why:
         Two operators can type the word at the same moment. The script writes
-        only while the quiet record the caller read is still the stored one, so
-        the second operator loses instead of overwriting the first.
+        only while the quiet record the caller read is still the stored one.
+        The second operator then loses instead of overwriting the first.
 
     Args:
         request: The operator, the site, and the run.
@@ -1069,8 +1070,8 @@ def _grant_to_new_owner(request: LockRequest, held: LockRecord, handle: Any) -> 
         contracts/site-lock.md lines 58 and 59 refuse an active holder outright
         and ask for the word `CONFIRM` once the holder passed the cooldown. The
         audit record goes to the sink before the lock moves, because line 120
-        asks for a record of every takeover, and a record written after the
-        move is absent for any takeover the sink refuses.
+        asks for a record of every takeover. A record written after the move is
+        absent for any takeover the sink refuses.
 
     Args:
         request: The operator, the site, and the run.
@@ -1196,9 +1197,9 @@ def release_site_lock(key: str, record: LockRecord, client: Any = None) -> Relea
     Why:
         contracts/site-lock.md line 105 releases the lock when a run reaches
         `complete`, `stopped`, or `failed`. A closed browser releases nothing,
-        because the run continues. The compare and the delete run as one step,
-        so a release cannot drop the lock of an operator who took the site
-        after this caller stopped holding it.
+        because the run continues. The compare and the delete run as one step.
+        A release cannot drop the lock of an operator who took the site after
+        this caller stopped holding it.
 
     Args:
         key: The lock key, from `build_key`.
@@ -1277,7 +1278,7 @@ def read_site_locks(org_id: str, site_ids: list[str], client: Any = None) -> dic
         The row shape carries no third value for an unknown state. An
         unreachable store therefore answers with an empty index, and every site
         shows no holder. The contract asks the page to mark the state unknown
-        at line 118, so the page must label the state from the store health and
+        at line 118. The page must label the state from the store health and
         not from this index.
 
     Args:

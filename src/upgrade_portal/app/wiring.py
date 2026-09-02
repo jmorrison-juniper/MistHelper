@@ -179,8 +179,8 @@ class DocumentRunStore:
         holds the two calls together, which is the shape both callers declare.
 
         Every call catches every fault. A store that does not answer must leave
-        the run readable as far as the memory of the driver reaches, and must
-        never turn a poll into a 500 answer.
+        the run readable as far as the memory of the driver reaches. The store
+        must never turn a poll into a 500 answer.
     """
 
     def read_run(self, run_id: str) -> dict[str, Any] | None:
@@ -189,8 +189,8 @@ class DocumentRunStore:
         Why:
             The database answers first, so a mirrored copy can never hide a
             newer stored row. A database that is absent or silent then falls
-            back to the mirror, because a run that reads as absent stops the
-            whole upgrade journey while every write reports that it landed.
+            back to the mirror. A run that reads as absent stops the whole
+            upgrade journey while every write reports that it landed.
 
         Args:
             run_id: The run key, which is also the document key.
@@ -242,8 +242,8 @@ class DocumentRunStore:
         """Return one small row for each run that the store holds for one site.
 
         Why:
-            FR-037 asks the portal to find a run that already acts on the site,
-            and the two call shape answers one run at a time. This third call is
+            FR-037 asks the portal to find a run that already acts on the site.
+            The two call shape answers one run at a time. This third call is
             optional, and `routes/upgrade.site_run_records` reads it by name, so
             a store that publishes none still works.
 
@@ -321,12 +321,13 @@ class CaptureBridge:
 
     Why:
         `driver.CaptureStarter` blocks. The driver counts on the capture to hold
-        the thread until the read of the site ends, and it beats the site lock on
-        each side of that call. The capture route spawns a worker thread instead,
-        so this class calls the runner straight and never spawns a second thread.
+        the thread until the read of the site ends. The capture beats the site
+        lock on each side of that call. The capture route spawns a worker thread
+        instead, so this class calls the runner straight and never spawns a
+        second thread.
 
         The runner and the four job fields that only a request can supply are
-        bound before the driver thread starts, because the worker thread holds no
+        bound before the driver thread starts. The worker thread holds no
         request and no application.
 
         Warning: the held context holds a cloud session, and a log of the
@@ -526,8 +527,8 @@ def read_lock_record(site_id: str) -> Any:
     """Return the site lock record that the signed session of the operator holds.
 
     Why:
-        The session holds one lock text for each site, and `select.held_record`
-        cannot serve here because it demands a lock token in the request body
+        The session holds one lock text for each site. The `select.held_record`
+        accessor cannot serve here. It demands a lock token in the request body,
         while the start body carries the confirmation word alone. This function
         reads the same session field, so the portal keeps one source of the lock
         and never invents a second one.
@@ -553,8 +554,8 @@ def read_safely(read: Callable[[], Any], subject: str) -> Any:
     """Perform one read of the request and answer None when it did not work.
 
     Why:
-        `routes/upgrade.launch_run` calls the launcher with no guard of its own,
-        so a fault here would turn the confirmation into a 500 answer while the
+        `routes/upgrade.launch_run` calls the launcher with no guard of its own.
+        A fault here would turn the confirmation into a 500 answer while the
         run record already sits in the store. Every read of the request therefore
         answers None instead of raising, and the caller names the gap.
 
@@ -614,7 +615,7 @@ def request_bindings(record: Mapping[str, Any]) -> dict[str, Any]:
     """Read every value that only the request thread can supply.
 
     Why:
-        The driver thread holds no request and no application, so the signed
+        The driver thread holds no request and no application. The signed
         session, the injected capture runner, the run store seam, and the
         operator record all answer nothing there. The launcher reads all of them
         now, inside the request that the operator confirmed.
@@ -644,7 +645,7 @@ def capture_context(record: Mapping[str, Any], bindings: Mapping[str, Any]) -> d
 
     Why:
         The collector reads eleven fields. Seven of them hold for every capture
-        of one run, so the wiring builds them once and the bridge adds the four
+        of one run. The wiring builds them once, and the bridge adds the four
         that name one capture inside the run.
 
     Args:
@@ -671,10 +672,10 @@ def build_heartbeat(driver: ModuleType, record: Mapping[str, Any], lock_record: 
     Why:
         The settle gate blocks for up to 1800 seconds inside one call, and the
         site lock lives 300 seconds. Only the 20-second poll loop inside that
-        gate can renew the lock during the wait, so the same object must sit in
+        gate can renew the lock during the wait. The same object must sit in
         `driver.RunDriverDeps.heartbeat` and in `phase_gate.PhaseGateDeps.progress`.
 
-        One object in both seats keeps one count of the seconds, so the beat
+        One object in both seats keeps one count of the seconds. The beat then
         stays rate limited at its 60-second interval however many callers ask.
 
     Args:
@@ -743,7 +744,7 @@ def build_driver_deps(driver: ModuleType, record: Mapping[str, Any], bindings: M
     """Build every collaborator of the driver of one run.
 
     Why:
-        The driver takes one record, because a constructor with a store, a gate,
+        The driver takes one record. A constructor with a store, a gate,
         a capture, a submitter, a clock, a heartbeat, and a mode would pass the
         parameter limit. The clock stays at the default, which reads the wall
         clock.
@@ -776,7 +777,7 @@ def free_site_lock(record: Mapping[str, Any]) -> None:
     Why:
         `upgrade/driver.py` frees the lock in the `finally` of a run that
         reached its thread. A run that never reached that thread passes
-        through none of it, so without this call the site stays held for the
+        through none of it. Without this call the site stays held for the
         whole 3600-second lease while nothing upgrades it.
 
     Args:
@@ -800,8 +801,8 @@ def write_failed_state(runs: ModuleType, record: dict[str, Any], reason: str) ->
 
     Why:
         The state and the store must agree. A record that reads `failed` in
-        this process alone still blocks every later run of the same site,
-        because the start route reads the store and not this memory.
+        this process alone still blocks every later run of the same site. The
+        start route reads the store and not this memory.
 
     Args:
         runs: The `runtime.runs` module, already imported.
@@ -825,9 +826,9 @@ def abandon_run(record: dict[str, Any], reason: str) -> None:
         `routes/upgrade.launch_run` writes the run record before it calls this
         launcher, and the operator already holds the site lock. A launcher that
         returns without both of these calls leaves the record at
-        `upgrade_submitting` for good. `contracts/http-api.md` line 255 then
-        answers `upgrade_already_running` to every later start of that site, so
-        the site accepts no upgrade again.
+        `upgrade_submitting` for good. The file `contracts/http-api.md` line 255
+        then answers `upgrade_already_running` to every later start of that site.
+        The site then accepts no upgrade again.
 
         The failed state is honest here. `upgrade/driver.py` sends the firmware
         from its own thread, which this path never reaches, so no device
@@ -852,7 +853,7 @@ def start_upgrade_run(record: dict[str, Any]) -> None:
     Why:
         `routes/upgrade.launch_run` reads this callable out of the `RUN_LAUNCHER`
         seam. The route calls it inside the request, so this function may read
-        the signed session and the injected seams, and the thread it starts needs
+        the signed session and the injected seams. The thread it starts needs
         neither.
 
     Args:
@@ -878,8 +879,8 @@ def plan_family(plan: Any) -> Any:
 
     Why:
         `UpgradePlan` holds no family field, and the status read needs one. The
-        endpoint of the plan already names the family, because the upgrade seam
-        sends every session smart router to the organization call and every other
+        endpoint of the plan already names the family. The upgrade seam sends
+        every session smart router to the organization call, and every other
         device to the site call.
 
     Args:
@@ -902,7 +903,7 @@ def target_for_row(stop: ModuleType, plans: Mapping[frozenset[str], Any], row: M
     Why:
         FR-038f forbids a claim of a cancel that never happened. A row that names
         no cloud identifier, and a row that matches no plan, therefore build no
-        target at all, and the stop then claims nothing for that row.
+        target at all. The stop then claims nothing for that row.
 
     Args:
         stop: The already imported stop module.
@@ -925,11 +926,11 @@ def stop_targets(stop: ModuleType, record: Mapping[str, Any]) -> list[Any]:
 
     Why:
         The cancel call needs the plan and the cloud identifier together, and the
-        run record holds the identifier alone. `build_plans` is pure, so a second
-        call names the same groups again, and `plan_upgrade` puts each device in
-        one group only. The address list of a stored row therefore names one plan
-        and no other. A run that started before this repair already holds that
-        address list, so no stored record needs a new field.
+        run record holds the identifier alone. The `build_plans` call is pure, so
+        a second call names the same groups again, and `plan_upgrade` puts each
+        device in one group only. The address list of a stored row therefore
+        names one plan and no other. A run that started before this repair
+        already holds that address list, so no stored record needs a new field.
 
     Args:
         stop: The already imported stop module.
@@ -981,18 +982,18 @@ def install_seams(app: Flask) -> None:
     Why:
         Each value lands with `setdefault`, so a caller that already chose a
         stand-in keeps it. The contract tests inject their own store, their own
-        launcher, and their own stop runner after `create_app` returns, so the
+        launcher, and their own stop runner after `create_app` returns. The
         injected object always wins over the object this function writes.
 
         The `STOP_RUNNER` seam stayed empty while no run record held a cloud
-        identifier. `CloudUpgradeSubmitter.submit` now writes one row for each
-        accepted call, so the seam holds `cancel_run`. FR-038f still holds,
-        because a run with no accepted call builds no cancel target and
+        identifier. The `CloudUpgradeSubmitter.submit` call now writes one row
+        for each accepted call, so the seam holds `cancel_run`. FR-038f still
+        holds, because a run with no accepted call builds no cancel target and
         `cancel_run` then answers None.
 
-        One seam stays empty on purpose. `UPGRADE_OPTIONS_BUILDER` must stay
-        empty, because the route resolves that builder from `upgrade/options.py`
-        on its own, exactly as the version seam does. A test that names its own
+        One seam stays empty on purpose. The `UPGRADE_OPTIONS_BUILDER` seam must
+        stay empty. The route resolves that builder from `upgrade/options.py` on
+        its own, exactly as the version seam does. A test that names its own
         builder still wins, because the route reads the seam first.
 
     Args:
@@ -1021,21 +1022,21 @@ def prepare_storage() -> None:
         capture, so no upgrade could ever start against a fresh database.
 
         The call cannot stop the portal. A database that is out of reach must
-        still leave a portal that reads, because the site pages and the history
-        need no store. `bootstrap_storage` already answers a report rather than
+        still leave a portal that reads. The site pages and the history need no
+        store. The `bootstrap_storage` call already answers a report rather than
         raising for that case, and this function guards the rest.
 
         The bootstrap runs once for each process and not once for each
         application. Every step of it repeats without harm, so a second run adds
         nothing. A second run does cost a database probe, and that probe is not
-        free: `DatabaseConfig.from_env` resolves the database host and the lock
-        store host to decide the standalone mode, and `connect_database` repeats
-        that work whenever the store was out of reach before.
+        free. The `DatabaseConfig.from_env` call resolves the database host and
+        the lock store host to decide the standalone mode. The `connect_database`
+        call repeats that work whenever the store was out of reach before.
 
         Warning: a contract test builds one application for each test. Without
         this guard a run of the contract suite paid one host probe for each of
         those applications. On a runner where the host name does not resolve
-        quickly, each probe took about 20 seconds, and the whole job reached its
+        quickly, each probe took about 20 seconds. The whole job then reached its
         15 minute limit and reported as a test failure. Issue #2036 holds that
         record.
     """

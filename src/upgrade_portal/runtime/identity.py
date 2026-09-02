@@ -14,8 +14,8 @@ Credential modes:
     This phase supports the environment token mode only (FR-006). The process
     already holds a cloud session that an environment token created, so the
     operator supplies a work email address alone and no password. The managed
-    service provider login of FR-007, which asks for an address and a password
-    and may ask for a second factor, arrives with User Story 5. `CredentialMode`
+    service provider login of FR-007 asks for an address and a password. It may
+    ask for a second factor. That login arrives with User Story 5. `CredentialMode`
     and `sign_in` already carry the second mode, so that story adds a route and
     rewrites nothing here.
 
@@ -220,8 +220,8 @@ def credential_reference(variable_name: str) -> str:
     Why:
         FR-009 asks the portal to refer to a stored credential by its variable
         name only. Every part of the portal that must mention a credential calls
-        this function, so one shape reaches every log record, every answer body,
-        and every page. The function reads no credential value.
+        this function. One shape then reaches every log record, every answer
+        body, and every page. The function reads no credential value.
 
     Args:
         variable_name: The name of the field or the environment variable that
@@ -371,7 +371,7 @@ class SessionOwner:  # Frozen, so a stored owner cannot change while the site lo
         """Refuse a pair when either half fails its check.
 
         Why:
-            The site lock grants a site to this pair, so an unchecked pair
+            The site lock grants a site to this pair. An unchecked pair
             would let a blank address or a forged cookie value hold a lock.
             The check lives here and not in the builder alone, because every
             construction path reaches this method. A builder-only check leaves
@@ -726,7 +726,7 @@ def current_session() -> OperatorSession | None:
 
     Why:
         The guard and the site lock need one answer to the same question. The
-        check also binds the signed browser session to the browser cookie, so a
+        check also binds the signed browser session to the browser cookie. A
         copied session fails on a computer that holds a different browser
         identifier.
 
@@ -768,8 +768,8 @@ def sign_out() -> bool:
         The function clears the whole browser session and not the owner key
         alone. The session also carries the chosen organization, the chosen
         site, and any lock token. Dropping one key would leave that state
-        behind for the next person at a shared workstation, who would then
-        sign in and inherit the site selection of the person before them.
+        behind for the next person at a shared workstation. That person would
+        then sign in and inherit the site selection of the person before them.
 
         The browser identifier lives in its own first-party cookie and not in
         the session, so a sign-out leaves the browser identity in place. That
@@ -809,7 +809,7 @@ def _refusal_for_request() -> tuple[Response, int] | None:
 
     Why:
         The guard below stays short when the decision lives in a function of
-        its own, and a test can then call the decision without a decorator.
+        its own. A test can then call the decision without a decorator.
 
     Returns:
         The `not_authenticated` envelope, or None when a session exists.
@@ -944,8 +944,8 @@ def org_is_permitted(org_id: str) -> bool:
     Why:
         A session whose cloud session lists no privilege passes the check. That
         is deliberate. An environment token session and a stand-in session in a
-        test both name no privilege, and a closed answer there would refuse
-        every request and hide the real refusal that this function exists for.
+        test both name no privilege. A closed answer there would refuse every
+        request. It would hide the real refusal that this function exists for.
 
     Args:
         org_id: The organization the request names.

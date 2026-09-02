@@ -7,6 +7,23 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Bring every portal sentence under the length limit
+
+- **Fixed**: 473 sentences of the portal package passed the 25-word limit of
+  the writing guide. Every one now reads under the limit. The text sits in the
+  `Why:` block of a docstring or in an inline comment, and a junior engineer
+  reads it. Issue #1993.
+- **Fixed**: The sentence splitter of the STE linter joined every entry of a
+  Google-style `Args:` block into one long sentence. An entry name starts in
+  lower case, and the splitter needed a capital letter. The join produced 119
+  reports that no writer could repair without damaging a correct docstring.
+- **Fixed**: The sentence splitter also joined a sentence that starts with an
+  inline code span, such as one that starts with a function name in double
+  backticks. A technical sentence often starts that way.
+- **Added**: `python -m tools.show_long_sentences <path>` prints each long
+  sentence with its text, its word count, and its mode. The linter reports a
+  line number alone, and a long docstring holds many candidates near that line.
+
 ### Keep the inventory page alive for an unmodeled device type
 
 - **Fixed**: A device that reports a type the portal does not model no longer

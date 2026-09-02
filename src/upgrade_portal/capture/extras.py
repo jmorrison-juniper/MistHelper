@@ -8,11 +8,11 @@ Why:
 
     Two sections cost no extra cloud call, and this module is built around that
     fact. The radio state already rides inside the ``radio_stat`` field of the
-    tier 2 device statistics, so this module takes those statistics as an input
-    and never calls the cloud for a radio. The power over Ethernet state rides
-    inside the same port record as the switch port state, so one port read
-    feeds both sections. A caller that already read the ports supplies them,
-    and this module then makes no port call at all.
+    tier 2 device statistics. This module therefore takes those statistics as an
+    input, and it never calls the cloud for a radio. The power over Ethernet
+    state rides inside the same port record as the switch port state, so one
+    port read feeds both sections. A caller that already read the ports supplies
+    them, and this module then makes no port call at all.
 
     The module returns plain sections keyed by the section name. It never
     builds the capture document and it never builds the ``partial_reasons``
@@ -260,10 +260,10 @@ def _paged(session: Any, response: Any, scope: SiteScope) -> _PagedResponse:
     Why:
         A large site holds more ports than one page. ``mistapi.get_all``
         answers with an empty list, no error, and no log when the payload shape
-        surprises it, which would drop a whole section without a word. The
-        first page is therefore the floor, so a surprise loses no row. A silent
-        floor would show a short section that reads as whole, so the floor
-        writes a log record that names the site and both counts.
+        surprises it. Such an answer would drop a whole section without a word.
+        The first page is therefore the floor, so a surprise loses no row. A
+        silent floor would show a short section that reads as whole. The floor
+        therefore writes a log record that names the site and both counts.
 
     Args:
         session: The mistapi session that made the call.
@@ -544,9 +544,9 @@ def _answered(name: str, answers: Mapping[str, Any]) -> ExtraSection:
 
     Why:
         ``_read_section`` holds the error boundary and always answers with a
-        section, so an absent answer can only mean that the fan-out itself
-        lost the call. That loss must still leave a named section, because
-        ``collect_extras`` promises every name to its caller.
+        section. An absent answer can therefore only mean that the fan-out
+        itself lost the call. That loss must still leave a named section,
+        because ``collect_extras`` promises every name to its caller.
 
     Args:
         name: The section name.
@@ -616,7 +616,7 @@ def collect_extras(
         removes another. The caller assembles the capture document.
 
         The cloud reads run at one time. Every read reaches a different
-        endpoint, so no read waits for another, and
+        endpoint, so no read waits for another.
         ``documentation/python-parallelism-matrix.md`` answers a set of
         independent network waits with a bounded thread pool. Run in order,
         four page walks cost the sum of four waits. Run at one time, they cost

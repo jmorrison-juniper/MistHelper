@@ -7,7 +7,7 @@ Why:
     spreadsheet and must also feed another program.
 
     One row holds one device or one client. A flat row lets a reader sort and
-    filter the file without unpacking a nested structure, and it lets the two
+    filter the file without unpacking a nested structure. It also lets the two
     formats report the same rows.
 
     Each chassis member writes its own row. A stack that loses a member keeps
@@ -17,15 +17,15 @@ Why:
 Why this module copies two controls of `compare/download.py`:
     `compare/clients.py` already imports `capture/clients.py`. An import of
     `compare/download.py` from this package would make the two packages read
-    each other, and a later import inside `capture/clients.py` would then close
+    each other. A later import inside `capture/clients.py` would then close
     the loop. The formula guard and the credential filter are therefore copied
     from `src/upgrade_portal/compare/download.py`, which stays the source of
     both rules. `tests/unit/upgrade_portal/test_capture_export.py` compares the
     two copies, so neither copy can change alone.
 
-    The file never holds a credential. The row columns are fixed and the
-    builder drops any field whose name reads as a secret, so a future capture
-    field cannot leak into a downloaded file.
+    The file never holds a credential. The row columns are fixed, and the
+    builder drops any field whose name reads as a secret. A future capture
+    field therefore cannot leak into a downloaded file.
 """
 
 from __future__ import annotations  # Every annotation stays text, so a name may appear before its class.
@@ -262,8 +262,8 @@ def _one_line(value: str) -> str:
 
     Why:
         A cloud value can hold a line break. A line break inside a cell splits
-        one row into two rows for a reader that does not honor the quoting, so
-        the writer removes it before the cell reaches the file.
+        one row into two rows for a reader that does not honor the quoting. The
+        writer therefore removes it before the cell reaches the file.
 
     Args:
         value: The raw value.

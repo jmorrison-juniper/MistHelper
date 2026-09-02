@@ -7,8 +7,8 @@ Why:
     did the whole run take?
 
     The client return rate counts a ``moved`` client as returned. A client
-    that roamed to another access point is on the network, so counting the
-    roam as a loss would raise a false alarm on every busy site.
+    that roamed to another access point is on the network. Counting the roam as
+    a loss would raise a false alarm on every busy site.
 
     A digest match skips a section, and the comparison then reads no row
     there. The device counts still report the truth. The device comparison

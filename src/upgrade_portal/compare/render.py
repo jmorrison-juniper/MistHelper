@@ -2,7 +2,7 @@
 
 Why:
     A template must never hold a rule. The route lane builds the comparison,
-    passes it here, and hands the result to the template, so the page shows
+    passes it here, and hands the result to the template. The page then shows
     what this module decided and nothing else.
 
     The view carries four sections. The header names the two captures and any
@@ -193,8 +193,8 @@ def history_open_test_id(capture_id: str) -> str:
 
     Why:
         contracts/ui-testids.md line 164 fixes ``history-open-{capture_id}``.
-        The row and the open control carry the same key, so a test that found
-        a row can reach the control of that row without a second lookup.
+        The row and the open control carry the same key. A test that found
+        a row can then reach the control of that row without a second lookup.
 
     Args:
         capture_id: The stable identifier of one stored capture.
@@ -674,10 +674,10 @@ def _whole_number(value: object) -> int:
     """Return one stored value as a whole number that is never negative.
 
     Why:
-        A count and a size reach this module from a stored document, so the
+        A count and a size reach this module from a stored document. The
         value may be absent, a text, or a floating point number. A reader that
         answers zero for every other shape keeps the type tests out of the row
-        builder, and a negative size can never reach the page.
+        builder. A negative size can never reach the page.
 
     Args:
         value: One stored value of any shape.
@@ -750,8 +750,8 @@ def _counts_map(row: Mapping[str, Any]) -> Mapping[str, Any]:
     Why:
         The store projection of contracts/http-api.md line 361 holds no device
         count and no client count. A caller that passes a whole capture
-        document instead carries those numbers under the ``counts`` key, so the
-        page shows a real number for both shapes.
+        document instead carries those numbers under the ``counts`` key. The
+        page then shows a real number for both shapes.
 
     Args:
         row: One history record, or one whole capture document.
@@ -846,7 +846,7 @@ class HistoryView:
 
     Why:
         The template must do no arithmetic. The two boolean values and the two
-        links answer every question the paging controls ask, so the page shows
+        links answer every question the paging controls ask. The page shows
         a control or hides it and never compares a number.
 
     Attributes:
@@ -952,7 +952,7 @@ def _step_url(source: object, name: str, offset: int, page_size: int, path: str)
 
     Why:
         The template must hold no arithmetic, so the link arrives complete. The
-        route lane may already hold the link in its window record, and that
+        route lane may already hold the link in its window record. That
         value wins, because the route owns the real path of the page.
 
     Args:
@@ -982,9 +982,9 @@ def build_history_view(
 
     Why:
         The route lane reads the store and hands the result here. This builder
-        settles the paging, so the template shows a control or hides it and
-        never compares a number. ``has_next`` is true when the rows of this
-        page and the rows of the earlier pages do not reach the total.
+        settles the paging. The template shows a control or hides it and
+        never compares a number. The ``has_next`` flag is true when the rows of
+        this page and the rows of the earlier pages do not reach the total.
 
     Args:
         page: A store page record, or the capture records alone.

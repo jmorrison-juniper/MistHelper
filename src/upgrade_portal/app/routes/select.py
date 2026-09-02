@@ -9,8 +9,8 @@ Why:
 
 Route names:
     Another module renders the templates and the browser script against these
-    endpoint names, so the names are a contract and no rename is safe:
-    `select.org_page`, `select.choose_org`, `select.sites_page`,
+    endpoint names. The names are a contract, and no rename is safe. These
+    endpoints are `select.org_page`, `select.choose_org`, `select.sites_page`,
     `select.list_sites`, and `select.site_inventory`.
 
 Two paths, one site list:
@@ -326,8 +326,8 @@ def collect_pages(cloud_session: Any, response: Any, name: str) -> list[dict[str
         pagination helper of the software development kit returns an empty list
         when the answer holds an unexpected shape. This function therefore keeps
         the first page whenever the helper returns less than the first page did.
-        A silent fall back would show a short site list that reads as whole, so
-        the fall back writes a log record that names the read and both counts.
+        A silent fall back would show a short site list that reads as whole.
+        The fall back writes a log record that names the read and both counts.
 
     Args:
         cloud_session: The Mist session that made the call.
@@ -364,7 +364,7 @@ def as_records(payload: Any) -> list[dict[str, Any]]:
         The device module answers with a third shape. `capture/devices.py:67`
         returns a `DeviceRead`, which carries the rows under `records` beside
         the reasons of the read. A reader that knew the first two shapes alone
-        answered an empty list, so the inventory page showed no device for a
+        answered an empty list. The inventory page then showed no device for a
         site that holds eight. The stand-in of the contract tests answers a
         plain list, which is why no test caught it.
 
@@ -388,7 +388,7 @@ def org_refusal(chosen: str) -> tuple[Response, int] | None:
     """Return the refusal envelope when one organization fails a check.
 
     Why:
-        The picker post and the site list run the same two checks: the request
+        The picker post and the site list run the same two checks. The request
         must name an organization, and the cloud session must reach it. One
         helper holds both checks, so the two routes cannot drift apart and the
         contract keeps one code for each refusal.
@@ -436,12 +436,12 @@ def privilege_state() -> str:
 
     Why:
         `identity.session_privileges` answers None for an unknown list and a
-        list for a known one. `permitted_orgs` flattens None to an empty list,
-        so the picker could not tell an account with no organization from a
-        cloud read that failed.
+        list for a known one. The `permitted_orgs` helper flattens None to an
+        empty list. So the picker could not tell an account with no
+        organization from a cloud read that failed.
 
         The page then told an operator with a valid token that the sign-in
-        reaches no organization, and it sent that operator to an administrator
+        reaches no organization. It sent that operator to an administrator
         who could change nothing. Issue #1989 holds that report.
 
     Returns:
@@ -615,7 +615,7 @@ def lock_reader() -> Callable[..., Any] | None:
     """Return the callable that reads the site lock holders.
 
     Why:
-        The lock module arrives after this one, so the seam keeps the site
+        The lock module arrives after this one. The seam keeps the site
         picker working today and finds the real reader on the day it lands.
 
     Returns:
@@ -661,10 +661,11 @@ def site_lock_state(site_id: str, locks: dict[str, str | None]) -> str:
 
     Why:
         A free site and a site that the portal could not read both answer None
-        from the holder index, so the holder alone cannot tell them apart. An
-        operator who reads free on an unreadable site may walk into a site that
-        another operator holds. `contracts/site-lock.md:138` asks the page to
-        mark that state unknown, so this function names three states, not two.
+        from the holder index. The holder alone cannot tell them apart. An
+        operator who reads free on an unreadable site may enter a site that
+        another operator holds. The citation `contracts/site-lock.md:138` asks
+        the page to mark that state unknown. This function therefore names
+        three states, not two.
 
     Args:
         site_id: The site to name.
@@ -737,9 +738,9 @@ def build_site_row(site: dict[str, Any], counts: dict[str, int], locks: dict[str
         locks: The address of the operator that holds each site lock.
 
     Returns:
-        The five fields of one row. `contracts/http-api.md:77` names the first
-        four. `lock_state` adds the third lock state that
-        `contracts/site-lock.md:138` asks a read-only page to show.
+        The five fields of one row. The citation `contracts/http-api.md:77`
+        names the first four. The `lock_state` field adds the third lock state
+        that `contracts/site-lock.md:138` asks a read-only page to show.
     """
     site_id = str(site.get("id", ""))  # The row key, used by the count index and the lock index.
     return {
@@ -831,8 +832,8 @@ def statistics_reader() -> Callable[..., Any] | None:
     Why:
         The inventory answer of the cloud carries no address. A probe of
         `getOrgInventory` on 2026-08-24 returned 22 field names and no address
-        among them, so the address column of the page was empty for every device
-        of every real site. Issue #1994 holds that record.
+        among them. The address column of the page was then empty for every
+        device of every real site. Issue #1994 holds that record.
 
         The device statistics answer does carry an address, and the capture lane
         already reads that call. This seam lets the read page reach the same
@@ -840,10 +841,10 @@ def statistics_reader() -> Callable[..., Any] | None:
 
         A portal that reads its devices from an injected stand-in reaches no
         cloud for the address either. Without that rule a contract test that
-        injects one reader would make a real cloud call for the other, which is
-        the defect class of issue #1991: a stand-in that answers a simpler shape
-        than the cloud hides what the cloud really does. A test that wants the
-        address joins injects this seam as well.
+        injects one reader would make a real cloud call for the other. This is
+        the defect class of issue #1991. A stand-in that answers a simpler
+        shape than the cloud hides what the cloud really does. A test that
+        wants the address joins injects this seam as well.
 
     Returns:
         The injected reader, the reader of the device module, or None when
@@ -868,7 +869,7 @@ def address_index(cloud_session: Any, site_id: str) -> dict[str, str]:
         it that way already.
 
         A failed statistics read leaves the column empty and never fails the
-        page. The address is a convenience on a read page, and an operator who
+        page. The address is a convenience on a read page. An operator who
         cannot open the inventory at all is worse off than one who reads seven
         columns instead of eight.
 
@@ -1005,8 +1006,8 @@ def with_status_word(device: dict[str, Any]) -> dict[str, Any]:
         The inventory endpoint names the state `connected` and carries a true or
         false value. The table reads `status` and prints `unknown` for a missing
         field, so every connected device of a real site read as unknown. The
-        state matters most on this page, because an operator reads it before an
-        upgrade and an unknown state hides a device that is already offline.
+        state matters most on this page. An operator reads it before an upgrade,
+        and an unknown state hides a device that is already offline.
 
         A record that already names a status keeps it. The device statistics
         call spells the field that way, so a later reader of that call needs no
@@ -1035,8 +1036,8 @@ def call_device_reader(reader: Callable[..., Any], cloud_session: Any, org_id: s
         The reader of the device module takes the cloud session first. A
         stand-in that a contract test injects takes the two identifiers alone.
         One caller serves both. It reads the signature rather than catching a
-        `TypeError`, because the real reader may raise that same class from
-        inside itself and a retry would then send the wrong parameters.
+        `TypeError`. The real reader may raise that same class from
+        inside itself, and a retry would then send the wrong parameters.
 
     Args:
         reader: The device reader, injected or real.
@@ -1123,9 +1124,9 @@ def capture_page_url(site_id: str) -> str:
     Why:
         The inventory page is the last read-only step, and the capture page is
         the first write step. Without this address the inventory page holds no
-        forward control, so an operator who picks a site reaches a dead end and
-        cannot start the work. `contracts/ui-testids.md:74` names the link that
-        this address fills.
+        forward control. An operator who picks a site then reaches a dead end
+        and cannot start the work. `contracts/ui-testids.md:74` names the link
+        that this address fills.
 
         The address carries the site as a query argument, because the capture
         page names no site of its own until a capture exists.
@@ -1283,8 +1284,8 @@ def read_whole_number(field: str, fallback: int) -> int:
 
     Why:
         A paging link is a path, so an operator may edit it by hand. A value
-        that is not a number, or a value below zero, must read as the fallback
-        instead of reaching the slice and showing a page from the wrong end.
+        that is not a number, or a value below zero, must read as the fallback.
+        The fallback keeps the slice from showing a page from the wrong end.
 
     Args:
         field: The query argument to read.
@@ -1325,9 +1326,9 @@ def build_org_view(rows: list[dict[str, str]], offset: int, needle: str) -> OrgP
 
     Why:
         FR-011 asks for a picker of every organization that a provider login may
-        reach, and `contracts/http-api.md:53` asks that picker to page and to
-        filter inside the portal. The filter runs first and the slice runs
-        second, so a match on a later page still reaches the operator.
+        reach. The citation `contracts/http-api.md:53` asks that picker to page
+        and to filter inside the portal. The filter runs first and the slice
+        runs second, so a match on a later page still reaches the operator.
 
     Args:
         rows: Every organization that the cloud session may reach.
@@ -1376,15 +1377,15 @@ def org_page() -> str:
 
     Why:
         FR-011 starts the journey here. A managed service provider account
-        reaches many organizations, so the page lists every organization that
-        the cloud session may act on. `contracts/http-api.md:53` asks that list
-        to page and to filter inside the portal, so a long list arrives one page
-        at a time and each filter costs no cloud read.
+        reaches many organizations. So the page lists every organization that
+        the cloud session may act on. The citation `contracts/http-api.md:53`
+        asks that list to page and to filter inside the portal. A long list
+        then arrives one page at a time, and each filter costs no cloud read.
 
         The filter runs here and not in the browser alone. The browser script
-        hides a row of the page on screen, so a browser filter with no portal
-        filter would search one page and would hide every match that sits on a
-        later page.
+        hides a row of the page on screen. A browser filter with no portal
+        filter would search one page. It would then hide every match that sits
+        on a later page.
 
     Returns:
         The rendered picker page.
@@ -1408,16 +1409,17 @@ def choose_org() -> Response | tuple[Response, int]:
     """Store the organization that the operator picked.
 
     Why:
-        Every later read holds the organization in the signed session, so the
+        Every later read holds the organization in the signed session. So the
         scope check runs at the one point where the pick enters the session.
 
-        One post serves two clients, so `wants_browser_page` holds the rule: a
-        request earns a page only when its `Accept` header prefers `text/html`
-        and no `X-Requested-With: XMLHttpRequest` header marks a script. A page
-        request reads a 303 redirect to the path that `contracts/http-api.md`
-        names next, and every other post reads the `{"next": ...}` body of that
-        same contract. A refusal keeps the JSON envelope for both clients,
-        because the contract fixes one error shape for every caller.
+        One post serves two clients. The `wants_browser_page` helper holds the
+        rule. A request earns a page only when its `Accept` header prefers
+        `text/html` and no `X-Requested-With: XMLHttpRequest` header marks a
+        script. A page request reads a 303 redirect to the path that
+        `contracts/http-api.md` names next. Every other post reads the
+        `{"next": ...}` body of that same contract. A refusal keeps the JSON
+        envelope for both clients, because the contract fixes one error shape
+        for every caller.
 
     Returns:
         The redirect, the next path as JSON, or the refusal envelope.
@@ -1600,7 +1602,7 @@ def lock_client() -> Any:
     """Return the store client that every lock call of this module uses.
 
     Why:
-        A contract test injects a stand-in store here, so the test drives the
+        A contract test injects a stand-in store here. So the test drives the
         real acquire rule, the real compare-and-extend, and the real
         compare-and-delete with no Redis server. An unset key answers None, and
         `runtime.lock` then opens the shared client of the worker.
@@ -1779,7 +1781,7 @@ def held_record(site_id: str) -> lock.LockRecord | None:
     Why:
         `contracts/http-api.md` section 3 asks the caller to send the token
         with a beat and with a release. The check here refuses a token that
-        does not match the session copy, so a caller cannot beat a lock that
+        does not match the session copy. So a caller cannot beat a lock that
         another tab of the same browser holds.
 
     Args:
@@ -1983,8 +1985,8 @@ def take_site_lock(site_id: str) -> tuple[Response, int]:
     Why:
         FR-076 grants the site to exactly one session owner even when two
         requests arrive together, and FR-077 blocks every write of a different
-        owner. One endpoint serves all three ways in, because
-        `contracts/http-api.md` section 3 names one path and the typed word in
+        owner. One endpoint serves all three ways in. The citation
+        `contracts/http-api.md` section 3 names one path. The typed word in
         the body decides which way the lock module takes.
 
     Args:

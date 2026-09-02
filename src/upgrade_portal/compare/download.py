@@ -16,9 +16,9 @@ Why:
     site, the organization, the two moments, and every statistic. A record
     keeper then reads the whole result from the file alone.
 
-    The file never holds a credential. The row columns are fixed and the
-    builder drops any field whose name reads as a secret, so a future capture
-    field cannot leak into a downloaded file.
+    The file never holds a credential. The row columns are fixed, and the
+    builder drops any field whose name reads as a secret. A future capture
+    field therefore cannot leak into a downloaded file.
 
     An unknown format returns the error code ``bad_format`` rather than a
     guess, and an unknown scope returns ``bad_scope``. A guess would hand the
@@ -311,8 +311,8 @@ def _device_rows_of(delta: device_compare.DeviceDelta) -> list[ExportRow]:
     """Return every export row of one device difference.
 
     Why:
-        A changed device writes one row for each differing field, so a reader
-        can sort the file by field and see every version change together. An
+        A changed device writes one row for each differing field. A reader can
+        then sort the file by field and see every version change together. An
         added device and a removed device write one row with no field.
 
         A device whose every change is a credential field still changed. It
@@ -380,8 +380,8 @@ def build_rows(
 
     Why:
         The download reports differences. A device that did not change and a
-        client that stayed on the same access point are not differences, so
-        they write no row and keep the file short.
+        client that stayed on the same access point are not differences. They
+        write no row, and the file stays short.
 
     Args:
         devices: The device half of the comparison.
@@ -560,8 +560,8 @@ def build_summary(context: ExportContext, skipped: tuple[str, ...] = ()) -> dict
     """Return the header block details of one comparison.
 
     Why:
-        The operator attaches the file to a change record, and that record
-        must name the site and the two captures without the portal beside it.
+        The operator attaches the file to a change record. That record must name
+        the site and the two captures without the portal beside it.
         Both captures name the same site, so either one answers.
 
     Args:
@@ -800,8 +800,8 @@ def render_full_json(export: FullExport) -> str:
 
     Why:
         Another program reads this file. Three named parts let that program
-        read the statistics without counting the rows itself, and the rows
-        keep the same seven column names as the comma-separated file.
+        read the statistics without counting the rows itself. The rows keep the
+        same seven column names as the comma-separated file.
 
     Args:
         export: The parts of the full download.

@@ -1,16 +1,17 @@
 """Assemble one upgrade capture document from the section reads.
 
 Why:
-    The readers in this package each answer one question. ``devices`` answers
-    what the site holds, ``clients`` answers who uses it, and ``extras`` answers
-    the tier 3 detail. No reader owns the stored document, because a reader that
-    also owned the document would need every other reader. This module owns the
-    document instead. It owns the key, the digests, the counts, the validation
-    rules of ``data-model.md`` section 3.7, and the partial path.
+    The readers in this package each answer one question. The ``devices`` reader
+    answers what the site holds. The ``clients`` reader answers who uses it. The
+    ``extras`` reader answers the tier 3 detail. No reader owns the stored
+    document, because a reader that also owned the document would need every
+    other reader. This module owns the document instead. It owns the key, the
+    digests, the counts, the validation rules of ``data-model.md`` section 3.7,
+    and the partial path.
 
     This module also owns the fan-out. A capture runs six call groups at one
     time through ``runtime/pools.py``. The pages inside one group stay
-    sequential, because the cloud paginates with a cursor and a parallel page
+    sequential, because the cloud paginates with a cursor. A parallel page
     fetch inside one group would corrupt the sequence. The parallelism is
     between groups only.
 """
@@ -361,8 +362,8 @@ class CaptureTimer:
 
     Why:
         A wall clock can step backward, so a duration read from two wall stamps
-        can go negative. This timer stamps the wall clock for the record and
-        measures the duration with a monotonic clock, so the duration is always
+        can go negative. This timer stamps the wall clock for the record. It
+        measures the duration with a monotonic clock. The duration is always
         the true elapsed time.
     """
 
@@ -703,8 +704,8 @@ def guarded_call(section: str, work: Callable[[], Any]) -> tuple[Any, list[dict[
 
     Why:
         A failed section must never abort the whole capture. A capture that
-        lost the alarm list still answers the question that the operator asked,
-        so the read returns an empty value and names the loss instead.
+        lost the alarm list still answers the question that the operator asked.
+        The read returns an empty value and names the loss instead.
 
     Args:
         section: The section name for the reason entry.
@@ -725,13 +726,13 @@ def report_section(name: str) -> str:
     """Name the report row that one read belongs to.
 
     Why:
-        A partial reason names the read that failed, and a read name is not a
-        report row. ``extras.collect_extras`` answers with six tier 3 read
-        names, and the report shows two rows for them. This function maps a read
-        name to its row, so a failed ``tunnels`` read marks the ``extras`` row
-        and a failed ``alarms`` read marks the ``alarms`` row. Without the map,
-        the progress display would report every tier 3 failure against one row
-        and an operator could not see which read lost the data.
+        A partial reason names the read that failed. A read name is not a
+        report row. The ``extras.collect_extras`` reader answers with six tier 3
+        read names. The report shows two rows for them. This function maps a
+        read name to its row. A failed ``tunnels`` read marks the ``extras`` row.
+        A failed ``alarms`` read marks the ``alarms`` row. Without the map,
+        the progress display would report every tier 3 failure against one row.
+        An operator could not then see which read lost the data.
 
     Args:
         name: A read name, from a partial reason or from a section map.
@@ -973,11 +974,12 @@ def measure_size_bytes(document: Mapping[str, Any]) -> int:
     Why:
         ``data-model.md:62`` asks for the measured size, and validation rule 6
         asks for a size above zero. The store owns the definition of the size,
-        and this function repeats it: the byte count of the canonical JSON text
-        of the document body, in UTF-8. The body drops every field whose name
-        starts with an underscore, because the writer and the server add those
-        fields after the caller builds the document. The two modules therefore
-        report the same number, and a read-back never disagrees with the write.
+        and this function repeats it. The repeat is the byte count of the
+        canonical JSON text of the document body, in UTF-8. The body drops every
+        field whose name starts with an underscore. The writer and the server
+        add those fields after the caller builds the document. The two modules
+        therefore report the same number, and a read-back never disagrees with
+        the write.
 
         The measurement stays here rather than calling the store, because the
         store imports the database driver and the exporter. An assembly step
@@ -1002,11 +1004,12 @@ def stamp_size(document: Mapping[str, Any]) -> dict[str, Any]:
         its own width.
 
         The loop stops the moment the number repeats. A whole capture is a
-        document of several megabytes, and every round serializes all of it, so
-        a round that cannot change the answer is pure waste. The number settles
-        after two rounds for almost every capture, and it settles after three
-        rounds when the width of the number grows. ``capture/store.py`` already
-        stops early, so this loop now matches it and both report one number.
+        document of several megabytes, and every round serializes all of it. A
+        round that cannot change the answer is pure waste. The number settles
+        after two rounds for almost every capture. It settles after three
+        rounds when the width of the number grows. The ``capture/store.py``
+        module already stops early. This loop now matches it and both report
+        one number.
 
     Args:
         document: The capture document.

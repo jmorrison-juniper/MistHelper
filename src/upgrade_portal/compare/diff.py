@@ -4,7 +4,7 @@ Why:
     An operator reads a comparison to answer one question. Did the upgrade
     change anything that the operator did not ask for? A device row therefore
     reports the exact fields that differ, with the value before and the value
-    after, and not a single true or false flag.
+    after. It never reports a single true or false flag.
 
     The module excludes ``uptime`` from the change test. A reboot resets the
     uptime of every upgraded device, so an uptime test marks the whole site
@@ -76,8 +76,8 @@ class FieldChange:
 
     Why:
         The operator needs the two values, not the word ``changed``. A record
-        that carries both values lets the table, the export, and the log all
-        report the same pair without a second read of the captures.
+        that carries both values serves the table, the export, and the log. All
+        three then report the same pair without a second read of the captures.
 
     Attributes:
         field: The name of the compared field.
@@ -161,8 +161,8 @@ class DeviceComparison:
 
     Why:
         The skipped section list travels with the deltas. A caller that reads
-        an empty delta list must be able to tell an equal site from a site
-        that the digest short circuit never compared.
+        an empty delta list must tell an equal site apart from a site that the
+        digest short circuit never compared.
 
         The proved count travels beside them. A digest match proves every
         device of the section unchanged, so the count states how many devices
@@ -319,9 +319,10 @@ def _field_changes(before: Mapping[str, Any], after: Mapping[str, Any]) -> tuple
     """Return each compared field that differs between two device rows.
 
     Why:
-        The field list is fixed and excludes ``uptime``. Walking the fixed
-        list, rather than the keys of the rows, keeps a new capture field out
-        of the change test until somebody adds it on purpose.
+        The field list is fixed and excludes ``uptime``. This function walks the
+        fixed list and never the keys of the rows. A new capture field
+        therefore stays out of the change test until somebody adds it on
+        purpose.
 
     Args:
         before: The device row of the pre-check capture.

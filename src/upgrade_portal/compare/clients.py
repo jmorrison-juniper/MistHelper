@@ -221,7 +221,7 @@ def _embedded_address(key: str) -> str:
 
     Why:
         A writer sometimes joins the address and the timestamp with nothing
-        between them, and a composite key sometimes holds an address that the
+        between them. A composite key sometimes holds an address that the
         colons already split. Removing every separator and reading the first
         run of 12 hexadecimal characters covers both forms.
 

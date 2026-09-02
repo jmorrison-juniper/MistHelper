@@ -1,23 +1,26 @@
 """The capture routes: the start, the progress poll, the read, and the page.
 
 Why:
-    A capture reads a whole site. A large site takes minutes, and a request that
-    waits that long dies at the proxy. `contracts/http-api.md` therefore splits
-    the work in two. `POST /api/sites/<site_id>/captures` answers 202 at once and
-    hands the reading to a worker thread. The browser then polls
+    A capture reads a whole site. A large site takes minutes. A request that
+    waits that long dies at the proxy. The contract `contracts/http-api.md`
+    therefore splits the work in two. The route
+    `POST /api/sites/<site_id>/captures` answers 202 at once. It hands the
+    reading to a worker thread. The browser then polls
     `GET /api/captures/<id>/status` every 30 seconds. The portal sends no
     server-sent event, because the existing event bus caps at ten subscribers.
 
 Route names:
-    Another module renders the page and the browser script against these names,
-    so the names are a contract and no rename is safe: `capture.start_capture`,
-    `capture.capture_status`, `capture.read_capture`, and `capture.capture_page`.
+    Another module renders the page and the browser script against these names.
+    The names are a contract, so no rename is safe. The names are
+    `capture.start_capture`, `capture.capture_status`, `capture.read_capture`,
+    and `capture.capture_page`.
 
 Seams:
     Three parts of this feature arrive beside this module. The collection work,
-    the stored capture reader, and the site lock all travel through a seam: an
-    injected callable in the application configuration first, then a late import
-    of the real module. Nothing here imports either module while this module
+    the stored capture reader, and the site lock all travel through a seam. The
+    seam is an injected callable in the application configuration first. A late
+    import of the real module follows. Nothing here imports either module while
+    this module
     loads, so the portal starts today and picks up each module on the day it
     lands. A contract test injects a stand-in and reaches no network.
 
@@ -286,8 +289,8 @@ def record_status(capture_id: str, **changes: Any) -> None:
     Why:
         The worker reports its progress from another thread. One guarded writer
         keeps the poll and the worker from reading a half-written record. This
-        writer also sees every state change, so it is the one place that learns
-        when a capture is verified and may open the start of its run.
+        writer also sees every state change. It is the one place that learns
+        when a capture is verified. The writer may then open the start of its run.
 
     Args:
         capture_id: The identifier of the capture.
@@ -481,8 +484,8 @@ def default_runner(job: dict[str, Any]) -> None:
 
     Why:
         The collection module arrives beside this one. Until it lands, a start
-        must still answer 202 and must still leave a record the operator can
-        read, so this function marks the capture failed and names the cause.
+        must still answer 202. The start must still leave a record the operator
+        can read. This function marks the capture failed and names the cause.
 
     Args:
         job: The capture job that the start route built.
@@ -631,8 +634,8 @@ def build_job(site: dict[str, Any], org_id: str, tier: int, body: dict[str, Any]
     Why:
         Issue 2096 names the defect. A start with no run invented a run and
         wrote a dangling edge. A run-less start now names no run and carries a
-        fresh nonce key, so it stands alone as a site pre-check and writes no
-        run and no edge (D1, FR-096).
+        fresh nonce key. It stands alone as a site pre-check. It writes no run
+        and no edge (D1, FR-096).
 
     Args:
         site: The site record of the site the capture reads.
@@ -682,9 +685,9 @@ def actor_address() -> str:
     """Return the address of the signed-in operator.
 
     Why:
-        The lock check must know who asks, so it can tell the holder apart from
-        every other operator. `runtime/identity.current_owner` owns the session
-        read, so no copy of that rule lives here.
+        The lock check must know who asks. It can then tell the holder apart
+        from every other operator. The `runtime/identity.current_owner` helper
+        owns the session read. No copy of that rule lives here.
 
     Returns:
         The address, or an empty string when no session owner exists.
@@ -700,17 +703,18 @@ def held_by_other(org_id: str, site_id: str) -> str | None:
         The documented journey asks one operator to take the site lock and then
         take the pre-check capture. A presence-only test refuses that operator
         their own capture, so the primary journey cannot finish. The holder
-        therefore passes every check here, and a second operator still reads
-        409 `site_locked`. `upgrade.held_by_other` keeps a different rule for the
-        unknown state, because only the upgrade route writes firmware.
+        therefore passes every check here. A second operator still reads
+        409 `site_locked`. The `upgrade.held_by_other` helper keeps a different
+        rule for the unknown state. Only the upgrade route writes firmware.
 
     The unreachable store:
         `read_site_locks` answers an empty index when the lock store is
         unreachable, so an unknown state reads as free and the capture starts.
-        That choice is correct for a capture and stays.
+        That choice is correct for a capture and stays. The citation
         `contracts/site-lock.md:138` asks a read to continue when the store is
-        unreachable, and `contracts/site-lock.md:167` states that an unreachable
-        store still lets a capture start. An unknown state names no holder, so
+        unreachable. The citation `contracts/site-lock.md:167` states that an
+        unreachable store still lets a capture start. An unknown state names no
+        holder, so
         this function has no address to refuse. The upgrade start makes the
         opposite choice and answers 503 `lock_store_unreachable`, because only
         that path writes firmware to a device. Issue #1827 records that repair.
@@ -733,10 +737,12 @@ def pre_check_locked(body: dict[str, Any]) -> bool:
     """Answer whether one request repeats a pre-check that its run has locked.
 
     Why:
-        `build_capture_id` names the capture from the run alone, so a repeat pre-check carries the identifier of
-        the first one and would replace that stored document in place. Before firmware submission the operator
-        asked for that replacement. After it the reading describes upgraded devices, and the comparison would
-        measure the upgraded site against itself. The route refuses there, so no worker ever opens the write.
+        `build_capture_id` names the capture from the run alone. A repeat
+        pre-check carries the identifier of the first one. It would replace
+        that stored document in place. Before firmware submission the operator
+        asked for that replacement. After it, the reading describes upgraded
+        devices. The comparison would then measure the upgraded site against
+        itself. The route refuses there, so no worker ever opens the write.
 
     Args:
         body: The request body, which may name the run and the role.
@@ -758,9 +764,10 @@ def renew_own_lock(org_id: str, site_id: str) -> bool:
     """Extend a site lock that this browser already holds.
 
     Why:
-        A beat needs no typed word and keeps the same token, so the holder starts
-        a second capture on the same site with no extra step. An acquire would
-        ask a quiet holder for the word `continue` and would stop that journey.
+        A beat needs no typed word and keeps the same token. The holder then
+        starts a second capture on the same site with no extra step. An acquire
+        would ask a quiet holder for the word `continue` and would stop that
+        journey.
 
     Args:
         org_id: The organization that holds the site.
@@ -849,7 +856,7 @@ def capture_conflict(org_id: str, site_id: str, body: dict[str, Any]) -> tuple[R
         pre-check it holds. One reader holds both, so the route keeps one line for the pair that shares an answer.
 
         The grant runs last, after both refusals pass. A capture that the portal
-        refuses must leave the site exactly as it found it, and the grant still
+        refuses must leave the site exactly as it found it. The grant still
         happens before the route reads the cloud.
 
     Args:
@@ -1060,7 +1067,7 @@ def refusal_for(load: Any) -> tuple[Response, int]:
     Why:
         `capture/store.py` names each refusal with the error code of this route,
         so the code passes straight on. A reason this module does not know is a
-        fault of the portal, and a 404 there would send the operator to start the
+        fault of the portal. A 404 there would send the operator to start the
         whole capture again for nothing.
 
     Args:
@@ -1172,9 +1179,9 @@ def read_capture(capture_id: str) -> tuple[Response, int]:
 
     Why:
         FR-029 to FR-032b bind the comparison and the download to this one read.
-        A capture that the portal never read back answers 409, because a
-        comparison of a document that may never have reached the store would
-        report a change that never happened.
+        A capture that the portal never read back answers 409. A comparison of a
+        document that may never have reached the store would report a change that
+        never happened.
 
     Args:
         capture_id: The capture the path named.
@@ -1217,7 +1224,7 @@ def download_capture(capture_id: str) -> tuple[Response, int]:
         FR-027 requires a file download of a completed capture, and Acceptance
         Scenario 3 requires that the file holds every captured row. The refusals
         match `read_capture`, because the same store read feeds both routes. A
-        capture the portal never read back answers 409, so no operator files a
+        capture the portal never read back answers 409. No operator then files a
         change record against a reading that may never have reached the store.
 
     Args:
@@ -1246,8 +1253,8 @@ def capture_page(capture_id: str) -> str:
     Why:
         One page covers the whole life of one capture. It starts the capture, it
         shows the progress, and it shows the result. The page renders even for a
-        capture the portal does not know, because the operator reaches this page
-        from a link that the start route answered a moment earlier.
+        capture the portal does not know. The operator reaches this page from a
+        link that the start route answered a moment earlier.
 
     Args:
         capture_id: The capture the path named.
@@ -1284,8 +1291,9 @@ def page_context(capture_id: str) -> dict[str, Any]:
         the first poll never disagree.
 
         The page also includes the site lock banner. FR-072 gives one site to
-        one operator, so the operator must read the lock state before the start
-        control. `select.lock_banner_context` owns every rule of that banner.
+        one operator. The operator must read the lock state before the start
+        control. The `select.lock_banner_context` helper owns every rule of that
+        banner.
 
     Args:
         capture_id: The capture the path named.

@@ -191,7 +191,7 @@ def client_table(capture: Mapping[str, Any], group: str, columns: tuple[str, ...
 
     Why:
         Acceptance Scenario 2 requires every wired client and every wireless
-        client with the address, the host name, the address, the VLAN, and the
+        client. Each row names the address, the host name, the VLAN, and the
         parent device. One builder covers both groups, because the two tables
         differ by their column list alone.
 

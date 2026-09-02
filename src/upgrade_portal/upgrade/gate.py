@@ -37,12 +37,12 @@ Why:
     The gate compares the ``last_seen`` value of each record against the
     highest ``last_seen`` that it already read for the same device. A record
     that does not raise that mark repeats a snapshot that the gate read
-    before, so it holds no new evidence and the gate drops it.
+    before. It holds no new evidence, and the gate drops it.
 
     Both values of that comparison come from the cloud, and both come from the
     same field of the same device. FR-045 at ``spec.md:523`` forbids a
-    comparison between a cloud timestamp and the local clock, because the two
-    machines keep separate clocks and a difference between them would make the
+    comparison between a cloud timestamp and the local clock. The two
+    machines keep separate clocks, and a difference between them would make the
     result wrong. A record with no ``last_seen`` is never stale, because an
     absent value is no evidence. That rule follows ``uptime_decreased``.
 """
@@ -138,14 +138,14 @@ class GateTarget:
 
         ``uptime_before`` holds a null, because the pre-check may read a
         device whose statistics record carried no uptime. A zero in its place
-        would make every later reading look larger, the gate would never see
+        would make every later reading look larger. The gate would never see
         a decrease, and the device would wait to the phase deadline.
 
         ``last_seen_before`` is the absolute anchor. The cloud raises that
-        moment each time it hears from the device, so a device whose uptime
+        moment each time it hears from the device. A device whose uptime
         never arrives can still prove that it returned. The field carries a
         default, because a caller that holds no anchor must still build a
-        target, and a null anchor proves nothing on its own.
+        target. A null anchor proves nothing on its own.
 
     Attributes:
         mac: The device address in lower case with no separator.
@@ -268,7 +268,7 @@ def polls_per_hour(interval_seconds: int) -> int:
     Why:
         The budget of this feature must stay checkable rather than stated.
         A test calls this function and compares the answer against
-        ``MAX_CALLS_PER_HOUR`` and against the quota, so a change of the
+        ``MAX_CALLS_PER_HOUR`` and against the quota. A change of the
         interval that breaks the budget fails the build.
 
     Args:
@@ -311,8 +311,8 @@ def uptime_decreased(uptime_before: int | None, uptime_now: int | None) -> bool:
     Why:
         The test is "current is less than previous". It is never "current is
         near zero". A device that reboots quickly already reports a small
-        positive uptime by the time the poll reads it, so a near-zero test
-        misses the reboot and the gate waits for ever.
+        positive uptime by the time the poll reads it. A near-zero test
+        misses the reboot, and the gate waits for ever.
 
         A null is not zero. A null current reading means the device reported
         nothing, and a null earlier value means the pre-check read nothing.
@@ -434,7 +434,7 @@ def target_version_outcome(entry: Mapping[str, Any]) -> str:
 
     Why:
         The run record keeps the requested version and the reported version on
-        the same target row, so the check needs no second lookup and no extra
+        the same target row. The check needs no second lookup and no extra
         cloud call. The reader takes a plain mapping, because the run record
         holds plain mappings for the document store.
 
@@ -524,7 +524,7 @@ def last_seen_advanced(last_seen_before: int | None, last_seen_now: int | None) 
     """Report whether the cloud heard from one device after the pre-check.
 
     Why:
-        This is the absolute anchor. The uptime of a device is nullable, so a
+        This is the absolute anchor. The uptime of a device is nullable. A
         device whose uptime never arrives can never satisfy the fall test, and
         it waits to the phase deadline. The cloud raises ``last_seen`` each
         time it hears from the device, so a later moment proves the return.
@@ -548,7 +548,7 @@ def reading_from_record(record: Mapping[str, Any]) -> GateReading | None:
     """Build one gate reading from one statistics record.
 
     Why:
-        The gate joins its readings to the run targets on the address, so the
+        The gate joins its readings to the run targets on the address. The
         address must follow the one rule that the capture package holds. A
         record with no usable address matches every other malformed record,
         so this builder drops it.
@@ -658,8 +658,8 @@ def _reboot_is_proven(target: GateTarget, reading: GateReading) -> bool:
         is next, and it runs whenever the fall test lacked a reading on either
         side. The version change alone is the weakest, and it runs last, so a
         device with no earlier uptime still gets the cloud moment first. T141
-        forbids a settle on a version change that no other signal supports, and
-        this order keeps that path as the final resort of a device that the
+        forbids a settle on a version change that no other signal supports. This
+        order keeps that path as the final resort of a device that the
         pre-check never measured.
 
         A real pair of uptime readings that did not fall is evidence against a
@@ -689,7 +689,7 @@ def _note_reboot(target: GateTarget, progress: GateProgress, reading: GateReadin
 
     Why:
         The second signal needs both halves in one reading. An uptime that
-        fell alone can follow a counter reset, and a version that changed
+        fell alone can follow a counter reset. A version that changed
         alone can follow a record that the cloud updated before the reboot.
         The version half runs here, and ``_reboot_is_proven`` holds the three
         paths that can prove the second half.
@@ -745,7 +745,7 @@ def advance(target: GateTarget, progress: GateProgress, signals: GateSignals, no
 
         A stale statistics record never reaches the reboot rule. The screen
         runs first and drops a record that repeats a snapshot the gate read
-        before, so a copy that the cloud cached before the reboot can neither
+        before. A copy that the cloud cached before the reboot can neither
         settle a device nor delay one.
 
     Args:
@@ -919,9 +919,9 @@ class SettleGate:
     Why:
         The gate rules are pure, yet a caller still needs a clock. Holding
         the clock behind a callable lets a test drive time forward with a
-        counter and prove the 60-second wait and the 120-second wait without
+        counter. It proves the 60-second wait and the 120-second wait without
         sleeping. The default reads the wall clock in epoch seconds, which
-        matches the timestamps of the cloud records and lets the driver write
+        matches the timestamps of the cloud records. It lets the driver write
         an ISO stamp from the same value.
     """
 
