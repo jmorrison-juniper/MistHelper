@@ -1,8 +1,12 @@
 name: CodeQL Analysis
 
 on:
+  # No branch filter here. A pull request against any base runs the scan. A
+  # filter that named main alone let a stacked pull request merge without a
+  # scan, because the required check never started and never reported. Issue
+  # #1952 records that gap for the Quality Gates workflow, and the same trap
+  # applied here.
   pull_request:
-    branches: [main]
   push:
     branches: [main]
   schedule:
