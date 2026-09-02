@@ -112,8 +112,86 @@
 {% block heading %}<h1>{{ page_title | default('Capture history', true) }}</h1>{% endblock %}
 
 {% block content %}
+{#
+  Issue #2199 splits this page into sections. The runs section comes first,
+  because an operator who opens the history most often wants to reach a run that
+  is scheduled, running, or failed. A capture is the evidence of a run, so it
+  reads second.
+#}
 <div class="portal-card">
-  <h2 class="portal-card-title">Stored captures</h2>
+  <h2 class="portal-card-title">Runs</h2>
+
+  <p class="portal-card-note">
+    Every upgrade run, newest first. Each row links to the capture from before
+    the upgrade and to the capture from after it. Every moment reads as UTC.
+  </p>
+</div>
+
+<div class="portal-table-scroll">
+  <table class="portal-table" data-testid="history-run-table" data-sortable>
+    <caption class="visually-hidden">
+      Every upgrade run. Each row holds the site, the state, the device count,
+      the start moment, the end moment, and a link to each capture.
+    </caption>
+
+    <thead>
+      <tr>
+        <th scope="col">Run</th>
+        <th scope="col">Site</th>
+        <th scope="col">State</th>
+        <th scope="col">Devices</th>
+        <th scope="col">Started</th>
+        <th scope="col">Ended</th>
+        <th scope="col" data-no-sort>Captures</th>
+      </tr>
+    </thead>
+
+    <tbody>
+      {% for run in run_rows | default([], true) %}
+        <tr data-testid="history-run-row-{{ run.run_id }}">
+          <th scope="row" class="cell-mono">
+            <a href="/runs/{{ run.run_id }}/progress">{{ run.run_id }}</a>
+          </th>
+          <td>{{ run.site_name }}</td>
+          {#
+            The badge class carries the stored word, so this page picks no color
+            and holds no list of states. A word that no rule matches shows the
+            neutral border of .portal-badge.
+          #}
+          <td>
+            <span class="portal-badge badge-{{ run.state }}"
+                  data-testid="history-run-state-{{ run.run_id }}">{{ run.state }}</span>
+          </td>
+          <td>{{ run.device_count }}</td>
+          <td title="{{ run.started_raw }}">{{ run.started_text }}</td>
+          <td>{{ run.ended_text }}</td>
+          <td>
+            {% if run.pre_capture_id %}
+              <a href="/captures/{{ run.pre_capture_id }}"
+                 data-testid="history-run-pre-{{ run.run_id }}">Before</a>
+            {% endif %}
+            {% if run.post_capture_id %}
+              <a href="/captures/{{ run.post_capture_id }}"
+                 data-testid="history-run-post-{{ run.run_id }}">After</a>
+            {% endif %}
+            {% if not run.pre_capture_id and not run.post_capture_id %}
+              <span class="portal-note">No capture yet</span>
+            {% endif %}
+          </td>
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="7" class="portal-table-empty" data-testid="history-run-empty">
+            The portal holds no upgrade run yet.
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="portal-card">
+  <h2 class="portal-card-title">Captures</h2>
 
   <p class="portal-card-note">
     {% if site_label %}

@@ -1285,6 +1285,75 @@ def short_moment(value: Any) -> str:
     return moment.astimezone(UTC).strftime(MOMENT_TEXT_FORMAT)  # One zone for every row.
 
 
+# The state that the page shows for a run whose record names none. Issue #2199
+# asks the page to name an unknown state and never to hide the row, because a
+# run stored before the state field existed still happened.
+UNKNOWN_RUN_STATE = "unknown"
+
+# The run states that mean the run ended. A run in one of these names an end
+# moment. Any other state leaves that column empty, because the run still runs.
+FINISHED_RUN_STATES = frozenset({"succeeded", "failed", "stopped", "complete", "completed"})
+
+
+def run_history_row(record: Mapping[str, Any]) -> dict[str, Any]:
+    """Shape one stored run record into the row that the history page paints.
+
+    Why:
+        Issue #2199 asks the history page to list every run beside the captures.
+        An operator who wants to find a run, or to reach the comparison of a run
+        that ended, had no page to read.
+
+        Every moment reads as a human date in UTC. The store writes the offset
+        of the machine that started the run, so a page that showed the stored
+        text would name a different hour for two runs of one afternoon.
+
+    Args:
+        record: The stored run record.
+
+    Returns:
+        The row, with the state, the counts, both moments, and both capture
+        keys.
+    """
+    state = str(record.get("state") or "").strip() or UNKNOWN_RUN_STATE  # An old record names no state.
+    targets: Any = record.get("targets") or []  # A run that reached no options holds no target.
+    ended = str(record.get("updated_at") or "") if state in FINISHED_RUN_STATES else ""  # A live run has no end.
+    return {
+        "run_id": str(record.get("run_id") or ""),
+        "site_name": str(record.get("site_name") or record.get("site_id") or ""),
+        "site_id": str(record.get("site_id") or ""),
+        "state": state,
+        "device_count": len(targets) if isinstance(targets, (list, tuple)) else 0,
+        "started_text": short_moment(record.get("created_at")),  # The human UTC moment.
+        "started_raw": str(record.get("created_at") or ""),  # The stored text, for the title attribute.
+        "ended_text": short_moment(ended),  # Empty while the run still runs.
+        "pre_capture_id": str(record.get("pre_capture_id") or ""),
+        "post_capture_id": str(record.get("post_capture_id") or ""),
+    }
+
+
+def run_history_rows(site_id: str, limit: int, offset: int) -> list[dict[str, Any]]:
+    """Return one page of run rows for the history page.
+
+    Why:
+        The page reads the same store page as the run history endpoint, so the
+        two views never disagree. A store that offers no run list answers an
+        empty page, and the section then states that it holds no run.
+
+    Args:
+        site_id: The site to narrow to. An empty value reads every site.
+        limit: The largest number of rows to read.
+        offset: The number of rows to step over first.
+
+    Returns:
+        One shaped row for each run of the page.
+    """
+    logger.info("review: the portal reads the run rows of the history page")  # Before the read.
+    rows, total = read_store_page(run_lister(), RUNS_FIELD, site_id, limit, offset)
+    shaped = [run_history_row(row) for row in rows]  # One shape for the template.
+    logger.debug("review: the history page holds %s run row(s) of %s", len(shaped), total)
+    return shaped
+
+
 def moment_texts(rows: Iterable[Mapping[str, Any]]) -> dict[str, str]:
     """Return the short moment of each history row, under the row key.
 
@@ -1654,4 +1723,6 @@ def history_page() -> str:
         site_name=read_site_name(shaped),
         history_view=page_view,
         moment_texts=moment_texts(shaped),
+        # Issue #2199 adds the runs section beside the captures section.
+        run_rows=run_history_rows(site_id, limit, offset),
     )
