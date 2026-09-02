@@ -46,6 +46,27 @@ SKIP_FOLDERS = frozenset({".git", ".venv", "node_modules", "__pycache__", "htmlc
 # checker reads the repository alone, so it passes over such a citation.
 EXTERNAL_ROOTS = frozenset({"mistapi", "flask", "redis", "arango", "werkzeug", "gunicorn", "waitress"})
 
+# A part of a path that names the virtual environment. Such a citation resolves
+# on a workstation that installed the packages, and it resolves nowhere else.
+# The continuous integration runner holds no such folder, so a checker that
+# read the disk alone would pass on a workstation and fail in the runner.
+EXTERNAL_PARTS = ("/site-packages/", ".venv/", "/node_modules/")
+
+
+def is_external(target: str) -> bool:
+    """Report whether one citation names a file outside this repository.
+
+    Args:
+        target: The path that the citation names.
+
+    Returns:
+        True when the path names an installed package.
+    """
+    normalized = target.replace("\\", "/")  # One separator, whatever the writer typed.
+    if normalized.split("/")[0] in EXTERNAL_ROOTS:  # A citation written as a module path.
+        return True
+    return any(part in normalized for part in EXTERNAL_PARTS)  # A citation written as an install path.
+
 
 class Finding:
     """One citation that does not resolve."""
@@ -173,10 +194,10 @@ def check_file(path: str, counts: dict[str, int], index: dict[str, list[str]]) -
             found += 1
             target = match.group("path")  # The path that the citation names.
             cited = int(match.group("line"))  # The line that the citation names.
+            if is_external(target):  # A path of an installed package, not of this repository.
+                continue
             candidates = resolve(path, target, index)  # Every path that the citation may name.
             if not candidates:  # A citation to a file that does not exist.
-                if target.split("/")[0] in EXTERNAL_ROOTS:  # A path of an installed package, not of this repository.
-                    continue
                 findings.append(Finding(path, number, target, cited, "the file does not exist"))
                 continue
             for candidate in candidates:  # Measure each candidate one time.
