@@ -150,7 +150,13 @@
       {% for run in run_rows | default([], true) %}
         <tr data-testid="history-run-row-{{ run.run_id }}">
           <th scope="row" class="cell-mono">
-            <a href="/runs/{{ run.run_id }}/progress">{{ run.run_id }}</a>
+            {#
+              Issue #2225: this link named `/runs/<id>/progress`, which is no
+              route of this portal. The template of the live run view is
+              `upgrade/progress.html`, and the route that renders it is
+              `/runs/<id>`. Every row reached a fault page.
+            #}
+            <a href="/runs/{{ run.run_id }}">{{ run.run_id }}</a>
           </th>
           <td>{{ run.site_name }}</td>
           {#
@@ -359,3 +365,5 @@
   </div>
 </div>
 {% endblock %}
+
+

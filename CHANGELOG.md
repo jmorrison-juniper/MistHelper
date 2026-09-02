@@ -7,6 +7,15 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Repair every run link of the history page
+
+- **Fixed**: Each run row of the history page linked `/runs/<run_id>/progress`,
+  and no such route exists. Every press reached a fault page. The live run view
+  is `/runs/<run_id>`. Issue #2225.
+- **Added**: A test resolves every internal link of the history page against the
+  routes of the application. Fourteen tests covered the runs section and none
+  caught this, because each one read the shaped row and none read the markup.
+
 ### Let a second operator read a run without the site lock
 
 - **Fixed**: A control that writes to a site now renders shut when another
