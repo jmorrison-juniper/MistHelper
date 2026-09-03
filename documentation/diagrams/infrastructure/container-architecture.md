@@ -48,8 +48,8 @@ flowchart TB
     end
 
     subgraph polyglot["Polyglot Backends (Optional)"]
-        arango["ArangoDB<br/>:8529"]
-        redis["Redis Stack<br/>:6379"]
+        arango["ArangoDB<br/>:9529"]
+        redis["Redis Stack<br/>:9379"]
     end
 
     subgraph ports["External Ports"]
@@ -101,8 +101,8 @@ flowchart LR
         end
 
         subgraph polyglot["Polyglot Backends (Optional)"]
-            arango["ArangoDB<br/>:8529"]
-            redis["Redis Stack<br/>:6379"]
+            arango["ArangoDB<br/>:9529"]
+            redis["Redis Stack<br/>:9379"]
         end
     end
 
@@ -130,8 +130,8 @@ container entrypoint behavior remains unchanged.
 |-----------|------|---------|
 | Session Directory | `/app/sessions/session_{id}/` | Per-connection isolation |
 | Data Volume | `/app/data/` | Shared CSV/SQLite output |
-| ArangoDB | `arangodb:8529` | Document storage (optional polyglot backend) |
-| Redis Stack | `redis-stack:6379` | Time-series + JSON cache (optional polyglot backend) |
+| ArangoDB | `misthelper-arangodb:9529` | Document storage (optional polyglot backend) |
+| Redis Stack | `misthelper-redis:9379` | Time-series + JSON cache (optional polyglot backend) |
 | SSH Config | `/etc/ssh/sshd_config` | ForceCommand, port 2200 |
 | Web Server | `0.0.0.0:8055` | Gunicorn with workers |
 | Credentials | `/app/.env` | Read-only mounted secrets |

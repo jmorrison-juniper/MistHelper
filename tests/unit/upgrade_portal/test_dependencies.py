@@ -49,9 +49,9 @@ class TestSplitArangoAddress:
         """A full URL carries both values."""
         assert split_arango_address("http://misthelper-arangodb:9529") == ("misthelper-arangodb", 9529)
 
-    def test_falls_back_to_the_arango_port(self) -> None:
-        """A URL with no port means the vendor port, which the registry then probes."""
-        assert split_arango_address("http://store.example.com") == ("store.example.com", 8529)
+    def test_falls_back_to_the_project_port(self) -> None:
+        """A URL with no port means the project port, and never the vendor port 8529."""
+        assert split_arango_address("http://store.example.com") == ("store.example.com", 9529)
 
     def test_reads_a_bare_host_name(self) -> None:
         """A value with no scheme must still split, because an operator may set one."""
