@@ -48,6 +48,38 @@ gh pr list --json files
 Two branches that both change that file produce a conflict that costs more than
 the wait.
 
+## Branch cleanup
+
+Warning: never delete a branch that reached no pull request. The delete destroys
+the only copy of the work, and git prints no warning.
+
+A pull request makes a branch head permanent, because GitHub keeps the head under
+`refs/pull/<n>/head`. That reference survives a branch deletion forever. A branch
+with no pull request has one copy on `origin` and one copy in each local
+checkout. A delete removes both.
+
+Never trust `git branch --merged` for this decision. The repository squash-merges
+every pull request, so a feature branch never reports as merged, and `--merged`
+returns nothing for work that already landed.
+
+Follow these three steps before any cleanup.
+
+1. Run the report and read the branches it names.
+
+   ```powershell
+   python scripts/report_stranded_branches.py
+   ```
+
+2. Open a pull request for every branch the report names. Open the pull request
+   even when you plan to close it without a merge, because the head then stays
+   readable.
+3. Delete a branch only after step 2.
+
+The `Stranded Branch Report` workflow runs the same report every Monday. It keeps
+one open issue with the current list, and it closes that issue when every branch
+has a pull request. Issue #1980 asked for the check. Issue #2251 recorded the
+loss of five branches, and one head was unrecoverable.
+
 ## License
 
 CC-BY-NC-SA-4.0, the Creative Commons Attribution-NonCommercial-ShareAlike 4.0

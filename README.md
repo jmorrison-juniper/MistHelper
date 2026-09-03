@@ -212,9 +212,10 @@ machine.
 | [Architecture](documentation/architecture.md) | The package layout, the diagrams, and the decomposition record |
 | [Diagram suite](documentation/diagrams/README.md) | All 20 Mermaid diagram types |
 | [Security and safety](documentation/security.md) | The credential rules and the destructive operation rules |
-| [Quality gates](documentation/quality-gates.md) | The 13 checks that every pull request runs |
+| [Quality gates](documentation/quality-gates.md) | The 14 checks that every pull request runs |
 | [Development setup](documentation/development-setup.md) | Run the code from a source checkout |
 | [Contributing](documentation/contributing.md) | The branch workflow, the labels, and the review rules |
+| [Stranded branch review](documentation/stranded-branch-review.md) | Why a cleanup never deletes a branch that has no pull request |
 | [Writing guide](documentation/ASD-STE100_writing-guide.md) | The Simplified Technical English rules for every document |
 | [NOC runbooks](documentation/noc-runbooks) | Task guides for the operations center |
 | [API notes](documentation/api) | The Mist API specification and the endpoint notes |

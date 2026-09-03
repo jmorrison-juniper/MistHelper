@@ -1,0 +1,94 @@
+name: Stranded Branch Report
+
+# Report a branch that holds commits above `main` and has no open pull request.
+#
+# A branch with no pull request has one copy. A cleanup deletes that copy, and
+# git prints no warning. The repository squash-merges, so `git branch --merged`
+# never reports a feature branch as merged, and a cleanup that trusts `--merged`
+# is unsafe.
+#
+# Only `refs/pull/<n>/head` survives a branch deletion. This job names every
+# branch that lacks that protection, and it keeps one open issue with the list.
+#
+# Issue #1980 asked for the check. Issue #2251 recorded the loss that followed.
+
+on:
+  schedule:
+    # Run every Monday at 07:00 UTC, before the working week starts.
+    - cron: "0 7 * * 1"
+  workflow_dispatch:
+    inputs:
+      min_age_days:
+        description: "The quiet period in days. A younger branch is active work."
+        required: false
+        default: "7"
+
+# WHY this group: a manual run and a scheduled run must not write the same issue
+# at the same time, because the second write would duplicate the report.
+concurrency:
+  group: stranded-branch-report
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+jobs:
+  report:
+    name: Report a branch with no pull request
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Build the report
+        id: report
+        env:
+          # The script reads the API through `gh`, so it needs the run token.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MIN_AGE_DAYS: ${{ github.event.inputs.min_age_days || '7' }}
+        run: |
+          python scripts/report_stranded_branches.py \
+            --repository "${GITHUB_REPOSITORY}" \
+            --min-age-days "${MIN_AGE_DAYS}" > report.md
+          # Report whether the run found a branch, so the next step can branch on it.
+          if grep -q '^| \`' report.md; then
+            echo "found=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "found=false" >> "${GITHUB_OUTPUT}"
+          fi
+          cat report.md >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Open or update the tracking issue
+        if: steps.report.outputs.found == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TITLE: "chore(git): a branch holds work with no pull request"
+        run: |
+          # Reuse one open issue, so a weekly run never opens a second copy.
+          number=$(gh issue list --state open --search "$TITLE in:title" \
+            --json number,title --jq "map(select(.title == \"$TITLE\")) | .[0].number // empty")
+          if [ -n "${number}" ]; then
+            gh issue comment "${number}" --body-file report.md
+          else
+            gh issue create --title "${TITLE}" --body-file report.md --label chore --label ci
+          fi
+
+      - name: Close the tracking issue when every branch is protected
+        if: steps.report.outputs.found == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TITLE: "chore(git): a branch holds work with no pull request"
+        run: |
+          # Close the issue only when the report is clean, so the state stays true.
+          number=$(gh issue list --state open --search "$TITLE in:title" \
+            --json number,title --jq "map(select(.title == \"$TITLE\")) | .[0].number // empty")
+          if [ -n "${number}" ]; then
+            gh issue close "${number}" --comment "Every branch with work above the base branch now has an open pull request."
+          fi
