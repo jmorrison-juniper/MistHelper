@@ -454,7 +454,15 @@
 }
 
 /* The input keeps its size and its position, so a screen reader and the focus
- * order still find it. Opacity alone removes the paint. */
+ * order still find it. Opacity alone removes the paint.
+ *
+ * Why the stack order is explicit:
+ *   The input is positioned and the label is not, so the input paints above the
+ *   label by default. A browser driver presses the center of the input, and that
+ *   press must reach the input itself. A later rule that positions the label
+ *   would silently move the press to the label. The z-index states the order, so
+ *   the press target never changes by accident. See issue #2226.
+ */
 .bubble-option-input {
     position: absolute;
     inset: 0;
@@ -463,6 +471,7 @@
     margin: 0;
     opacity: 0;
     cursor: pointer;
+    z-index: 1;
 }
 
 .bubble-option-label {

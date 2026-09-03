@@ -52,6 +52,9 @@ Gunicorn cannot import `fcntl` on Windows.
 | `signin-password` | Password field |
 | `signin-submit` | Sign-in button |
 | `signin-error` | Error message region |
+| `signin-mode-provider` | Credential radio for the address and the password |
+| `signin-mode-token` | Credential radio for the token that the server holds |
+| `signin-mode-browser-token` | Credential radio for a token of this browser session |
 | `twofactor-code` | Second factor field |
 | `twofactor-submit` | Second factor button |
 | `org-search` | Organization filter field |

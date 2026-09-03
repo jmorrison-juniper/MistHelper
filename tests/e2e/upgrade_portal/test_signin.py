@@ -50,6 +50,30 @@ SIGNIN_EMAIL_ID = "signin-email"
 SIGNIN_PASSWORD_ID = "signin-password"
 SIGNIN_SUBMIT_ID = "signin-submit"
 SIGNIN_ERROR_ID = "signin-error"
+SIGNIN_MODE_PROVIDER_ID = "signin-mode-provider"
+SIGNIN_MODE_TOKEN_ID = "signin-mode-token"
+SIGNIN_MODE_BROWSER_TOKEN_ID = "signin-mode-browser-token"
+
+# The credential modes, in the order the page paints them. A portal hides a mode
+# when it holds no such credential, so a test reads the count before it presses.
+CREDENTIAL_MODE_IDS = (
+    SIGNIN_MODE_PROVIDER_ID,
+    SIGNIN_MODE_TOKEN_ID,
+    SIGNIN_MODE_BROWSER_TOKEN_ID,
+)
+
+# Reads the box of one element across two animation frames. A driver calls a
+# target stable when the two boxes match, so this reader answers the same
+# question that a driver asks before it presses. See issue #2226.
+STABLE_BOX_READER = """
+node => new Promise(resolve => {
+    const first = node.getBoundingClientRect();
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+        const second = node.getBoundingClientRect();
+        resolve({ dx: second.x - first.x, dy: second.y - first.y });
+    }));
+})
+"""
 TWO_FACTOR_CODE_ID = "twofactor-code"
 TWO_FACTOR_SUBMIT_ID = "twofactor-submit"
 ORG_SEARCH_ID = "org-search"
@@ -451,6 +475,80 @@ class TestSignInForm:
         """
         button = signin_page.get_by_test_id(SIGNOUT_BUTTON_ID)
         assert button.count() == 0, "The sign-in page offers a sign-out control."
+
+
+class TestSignInControlsAnswerAPlainPress:
+    """Every sign-in control answers a plain browser press.
+
+    Why:
+        Issue #2226 records two faults. A driver reported that a press of the
+        credential radio changed nothing, and a press of the submit button never
+        found a stable target. Both faults forced a browser test to reach around
+        the control, so each test proved less than the press of an operator.
+
+        No test drove these two controls before. The rest of the browser suite
+        signs in with a cookie that `conftest.py` builds, so the sign-in form
+        itself carried no guard at all. These tests are that guard.
+
+        Warning: a control that never holds still is also hard to press for an
+        operator with a motor impairment. WCAG 2.2 asks for a target that stays
+        in one place, so a moving control fails a person and not a test alone.
+    """
+
+    def test_each_credential_radio_answers_a_plain_check(self, signin_page: Any) -> None:
+        """A plain check changes the state of every credential radio.
+
+        Why:
+            The visible bubble is the label, and the input carries no paint. A
+            press must still reach the input. No `force` argument and no
+            property write appears here, because either one would hide the
+            fault that this test exists to catch.
+
+        Args:
+            signin_page: The page that shows the sign-in form.
+        """
+        pressed = 0  # Counts the radios this page offers, so an empty page cannot pass.
+        for testid in CREDENTIAL_MODE_IDS:  # The page hides a mode when its credential is absent.
+            radio = signin_page.get_by_test_id(testid)
+            if radio.count() == 0:  # This portal offers no such credential mode, so skip it.
+                continue
+            radio.check()  # WHY: A plain check. Issue #2226 reports that this call changed nothing.
+            assert radio.is_checked(), f"The radio {testid} took a plain press and did not change."
+            pressed += 1
+        assert pressed > 0, "The page offered no credential radio, so this test proved nothing."
+
+    def test_the_submit_button_answers_a_plain_click(self, signin_page: Any) -> None:
+        """A plain click reaches the submit button inside the default wait.
+
+        Why:
+            Issue #2226 reports that the button never became stable, so a driver
+            waited 25 seconds and gave up. This test passes no timeout, so the
+            default wait applies and a return of the moving fault fails it.
+
+        Args:
+            signin_page: The page that shows the sign-in form.
+        """
+        button = signin_page.get_by_test_id(SIGNIN_SUBMIT_ID)
+        button.click()  # WHY: Both credential fields are empty, so the browser holds the submit.
+        signin_page.wait_for_load_state("domcontentloaded")  # WHY: Returns at once when no page opened.
+        assert button.count() == 1, "The press left no submit button, so the form did not hold."
+
+    def test_the_submit_button_holds_a_stable_box(self, signin_page: Any) -> None:
+        """The box of the submit button does not move across two frames.
+
+        Why:
+            A driver calls a target stable when its box matches across two
+            animation frames. The fault of issue #2226 means something on the
+            page moves for ever. This test reads the two boxes and names the
+            movement, so a later failure points at the cause and not at a
+            timeout alone.
+
+        Args:
+            signin_page: The page that shows the sign-in form.
+        """
+        boxes = signin_page.get_by_test_id(SIGNIN_SUBMIT_ID).evaluate(STABLE_BOX_READER)
+        assert boxes["dx"] == 0, f"The submit button moved {boxes['dx']} across the page in one frame."
+        assert boxes["dy"] == 0, f"The submit button moved {boxes['dy']} down the page in one frame."
 
 
 class TestSecondFactorForm:
