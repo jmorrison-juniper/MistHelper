@@ -115,7 +115,7 @@ offers the browser token mode.
 | `CAPTURE_THEMES` | `default,magenta` | The stylesheet names that the portal offers. |
 | `CAPTURE_ALLOWED_IPS` | none | A comma list of networks that may reach the portal. |
 | `CAPTURE_PROXY_HOPS` | `0` | The count of trusted reverse proxies in front of the portal. |
-| `ARANGO_HOST` | `http://arangodb:8529` | The URL of the primary store. |
+| `ARANGO_HOST` | `http://misthelper-arangodb:9529` | The URL of the primary store. |
 | `ARANGO_DATABASE` | `misthelper` | The database name inside that store. |
 | `ARANGO_USERNAME` | `root` | The account name for the store. |
 | `ARANGO_ROOT_PASSWORD` | none | The store password. |
