@@ -588,7 +588,7 @@ Each of these cost real time. Read them before you debug.
 | --- | --- | --- |
 | `PATHEXT` holds `.CPL` alone | `git` and `python` report "not recognized" | Set `$env:PATHEXT = ".COM;.EXE;.BAT;.CMD;.VBS;.JS;.WS;.MSC;.PS1"` first |
 | `APPDATA` is empty | `gh` looks signed out. Podman loses its connection list | Set `$env:APPDATA = "C:\Users\jmorrison\AppData\Roaming"`. Never cycle the podman machine for this |
-| A stale copy of `src/` sits in `.venv/Lib/site-packages/src/` | A script reports a missing module for a file that exists | Run from the repository root. Check `module.__file__`. If it points inside `.venv`, this is the cause |
+| A stale copy of `src/` sits in `.venv/Lib/site-packages/src/` | A script reports a missing module for a file that exists | A `pip install .` of this project puts it there, because the wheel packs the repository root. Run `python -m pip uninstall -y misthelper`. `tests/conftest.py` now stops a session that would read the copy. Issue #2010 |
 | `src/dataclasses/` shadows the standard library | Strange import faults | Never put `src` on `sys.path`. Import as `src.<package>` |
 | Bandit `exclude_dirs` uses forward slashes | 42 local findings that CI never reports | Judge a local run by the paths, not the exit code. All 42 sit in `tools/test_quality_analyzer/fixtures/` |
 | The lint tools live in the virtual environment | `python -m ruff` fails | Call `.\.venv\Scripts\python.exe` by path |
