@@ -13,7 +13,7 @@ devices, and your clients, and it writes what it finds to a file or to a
 database. It also runs a small set of change operations, such as a firmware
 upgrade.
 
-The tool holds **239 operations**, numbered 1 to 240 with one gap at 152. Menu 0
+The tool holds **240 operations**, numbered 1 to 241 with one gap at 152. Menu 0
 is Exit. Read [the menu reference](documentation/menu_reference.md) for the full
 list, which is generated from the code.
 
@@ -27,6 +27,7 @@ list, which is generated from the code.
 | Devices | SSH command runs, packet captures, and configuration reads |
 | Upgrades | A firmware upgrade with a capture of the site state before it and after it |
 | Portals | A web portal on port 8055, and an upgrade capture portal on port 8056 |
+| Monitoring | A metrics gateway on port 8057 that serves Prometheus and SNMP |
 
 Two rules shape the whole tool. An operation that changes the cloud asks for a
 typed confirmation from a person. An automated test pass never runs one.
@@ -142,6 +143,50 @@ Read [the SSH guide](documentation/SSH_GUIDE.md) for the setup.
 In the upgrade capture portal, a capture is one record of site state and not a
 packet capture. Read [the portal
 guide](documentation/upgrade_capture_portal.md).
+
+### Watch the network from a monitoring system
+
+Menu 241 starts a metrics gateway on port 8057. The gateway reads your
+organization on a timer and holds the last reading, so a monitoring system polls
+the gateway and never polls Mist Cloud. Your Mist token stays in `.env`.
+
+```powershell
+podman exec misthelper-app python MistHelper.py --metrics-gateway
+```
+
+The gateway serves the same reading two ways.
+
+| Path | Address | Reads |
+|------|---------|-------|
+| Prometheus | <http://127.0.0.1:8057/metrics> | Prometheus, Grafana, Zabbix, LibreNMS, Icinga |
+| SNMP | Net-SNMP `pass_persist` | Any SNMP poller |
+
+Prometheus is the path to choose. It needs no MIB and no registered enterprise
+number, and it binds an unprivileged port.
+
+For the SNMP path, add one line to `snmpd.conf`. Choose a base OID under an
+enterprise number that you own. `snmpd` keeps port 161 and the community string,
+so MistHelper holds neither.
+
+```text
+pass_persist .1.3.6.1.4.1.8072.9999.9999 /usr/bin/python3 /app/MistHelper.py --metrics-snmp
+```
+
+| Setting | Default | Meaning |
+|---------|---------|---------|
+| `METRICS_ORG_ID` | unset | The organization to report. The menu asks when this is unset |
+| `METRICS_PORT` | `8057` | The listen port |
+| `METRICS_HOST` | `127.0.0.1` | The bind address. A container takes every address |
+| `METRICS_REFRESH_SECONDS` | `900` | The age at which a reading becomes stale. The floor is 60 |
+| `METRICS_SITE_IDS` | unset | A comma list of sites. Unset reports every site |
+| `METRICS_SNMP_BASE_OID` | `.1.3.6.1.4.1.8072.9999.9999` | The base OID that `snmpd.conf` names |
+
+Warning: The gateway asks for no password. Keep the default loopback bind unless
+a reverse proxy holds the access control.
+
+Read `mist_scrape_success` and `mist_scrape_age_seconds` in your alarm rules. A
+failed read of Mist Cloud keeps the last good reading, so those two values are
+how you tell a stale reading from a real outage.
 
 ### Find your output
 
