@@ -1,8 +1,13 @@
 # Handoff: upgrade capture portal (issue #1823)
 
-**Last updated**: 2026-08-25.
-**Branch**: `feat/1823-upgrade-capture-portal`.
-**Pull request**: [#1825](https://github.com/jmorrison-juniper/MistHelper/pull/1825).
+**Last updated**: 2026-09-03.
+**Branch**: `feat/1823-upgrade-capture-portal`. A squash merge replaced it on
+2026-08-26 as `f6097428`, and the branch is deleted.
+**Pull request**: [#1825](https://github.com/jmorrison-juniper/MistHelper/pull/1825), merged.
+
+Caution: no branch hash in this file resolves in a fresh clone.
+[The commit citations page](commit-citations.md) names the subject of each one.
+Issue #1997 records the cause.
 
 Read this file first if you take over this feature. It states what is complete,
 what waits, and what a person must decide. The other files in this folder state
