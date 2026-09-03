@@ -213,6 +213,75 @@ def _load_playwright_config() -> dict[str, str]:
 PLAYWRIGHT_CONFIG = _load_playwright_config()
 
 
+# WHY: Issue #2241. Every test module under this folder calls
+# `pytest.importorskip("playwright.sync_api")`. A missing package therefore
+# turned all 11 modules into a skip, and pytest reports a skip as a pass. The
+# "E2E smoke tests" gate then reported green while it opened no page, so the
+# whole browser suite covered nothing and no signal said so.
+#
+# Neither requirements file named the package, so a fresh worktree always hit
+# this state. `requirements-dev.txt` now pins it, and this guard makes the
+# regression impossible to hide: in strict mode a missing package fails
+# collection instead of skipping it.
+STRICT_VARIABLE = "UPGRADE_PORTAL_E2E_STRICT"  # The gate. CI sets it, and a workstation may leave it unset.
+STRICT_ENABLED = "1"  # The one value that turns a skip into a failure. Any other value keeps the skip.
+
+MISSING_PLAYWRIGHT_MESSAGE = (
+    "The Playwright package is not installed, and "
+    f"{STRICT_VARIABLE}={STRICT_ENABLED} forbids a skip. "
+    "Every browser test would report a skip, and pytest reports a skip as a pass, "
+    "so the gate would pass while it opened no page. Install the pinned packages, "
+    "then download the browser:\n"
+    "    pip install -r requirements-dev.txt\n"
+    "    python -m playwright install chromium\n"
+    "`python scripts/bootstrap_worktree.py` runs both commands for you. Issue #2241."
+)
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Refuse a run that would skip every browser test in strict mode.
+
+    Why:
+        A skip reads as a pass. In strict mode a missing browser package must
+        stop the run, so no gate can report success over an empty suite.
+
+    Args:
+        config: The pytest configuration for this run. The guard reads no value
+            from it, and the parameter exists because pytest supplies it.
+
+    Raises:
+        pytest.UsageError: If strict mode is on and Playwright is absent.
+    """
+    del config  # WHY: The hook signature requires the parameter, and the guard reads no setting.
+    if os.environ.get(STRICT_VARIABLE) != STRICT_ENABLED:  # WHY: A workstation may still skip.
+        logging.debug("The browser strict guard is off, so a missing package stays a skip")
+        return  # WHY: Leave the existing skip behaviour for a workstation with no browser.
+    logging.info("The browser strict guard is on, so a missing package fails the run")
+    if not _playwright_is_installed():  # WHY: Ask without importing the package.
+        raise pytest.UsageError(MISSING_PLAYWRIGHT_MESSAGE)  # WHY: Stop the run before it reports a pass.
+    logging.debug("The Playwright package is present, so the browser suite can open a page")
+
+
+def _playwright_is_installed() -> bool:
+    """Report whether `playwright.sync_api` can be imported.
+
+    Why:
+        `importlib.util.find_spec` answers None for a missing submodule, but it
+        raises `ModuleNotFoundError` when the parent package is absent. That is
+        the exact state this guard exists to catch, so the raise must become a
+        plain answer. Without this guard the run ends in an internal error and
+        never prints the repair.
+
+    Returns:
+        True when the package is present.
+    """
+    try:  # WHY: A missing parent package raises rather than answering None.
+        return importlib.util.find_spec("playwright.sync_api") is not None
+    except ModuleNotFoundError:  # WHY: No `playwright` package exists at all.
+        logging.debug("The playwright package is absent, so no browser test can open a page")
+        return False  # WHY: Report the absence as an answer, not as an internal error.
+
+
 def _probe_port(port: int) -> bool:
     """Report whether a server answers on one port right now.
 

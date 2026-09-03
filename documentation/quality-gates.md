@@ -20,6 +20,21 @@ through a `workflow_call` input. The table lists the default.
 | Diagram references | `scripts/lint_diagram_refs.py` | Every diagram reference resolves |
 | Browser tests | Playwright | Every end-to-end test passes |
 
+Warning: the browser gate can report a false pass. Each browser test module
+calls `pytest.importorskip`, so a missing Playwright package turns the whole
+suite into a skip, and pytest reports a skip as a pass. Issue #2241 recorded 11
+test files that covered nothing while this gate stayed green.
+
+Two changes close that hole, and both must stay.
+
+- The workflow downloads the browser with `playwright install --with-deps
+  chromium`, because the package ships no browser.
+- The workflow sets `UPGRADE_PORTAL_E2E_STRICT=1`, which turns a missing package
+  into a collection failure instead of a skip.
+
+Warning: do not remove either step. The gate then passes over an empty suite,
+and no signal reports the loss.
+
 CodeQL runs in a separate workflow, `.github/workflows/codeql.yml`. A code pull
 request must wait for CodeQL before it takes the `auto-merge` label.
 
