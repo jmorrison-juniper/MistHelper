@@ -103,6 +103,44 @@ git pull origin main
 
 Run [the quality gates](quality-gates.md) before every commit.
 
+## Run the browser tests
+
+The tests under `tests/e2e/` drive a real browser. The bootstrap installs the
+two packages and downloads Chromium, so a fresh worktree needs no extra step.
+
+```powershell
+python -m pytest tests/e2e/upgrade_portal
+```
+
+Warning: a missing browser package does not fail the run. Each browser test
+module calls `pytest.importorskip`, so the whole suite reports a skip, and
+pytest reports a skip as a pass. Issue #2241 recorded 11 test files that covered
+nothing while the gate stayed green.
+
+Set one variable to turn that skip into a failure. The `E2E smoke tests` gate
+sets it on every run.
+
+```powershell
+$env:UPGRADE_PORTAL_E2E_STRICT = "1"
+python -m pytest tests/e2e/upgrade_portal
+```
+
+If the browser download failed, repair it with one command.
+
+```powershell
+python -m playwright install chromium
+```
+
+The tests start their own portal, because only that portal holds the sign-in
+seam. If another process already listens on port 8056, every test reports an
+error that names the port. A running portal container is the common cause. Stop
+the container, or point the tests at a free port.
+
+```powershell
+$env:CAPTURE_PORT = "8066"
+python -m pytest tests/e2e/upgrade_portal
+```
+
 ## Never install this project into its own environment
 
 Warning: do not run `pip install .` or `uv pip install .` in this repository. The

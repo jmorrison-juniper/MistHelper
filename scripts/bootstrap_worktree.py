@@ -40,6 +40,16 @@ LOGGER = logging.getLogger("bootstrap_worktree")
 # skips a file that the worktree does not hold.
 REQUIREMENT_FILES: tuple[str, ...] = ("requirements.txt", "requirements-dev.txt")
 
+# The browser that the tests under `tests/e2e/` drive. Chromium is the only
+# browser those tests name, so the bootstrap downloads that one and no other.
+# Issue #2241: the `playwright` package ships no browser, so a pip install alone
+# leaves every browser test unable to start one.
+PLAYWRIGHT_BROWSER = "chromium"
+
+# The command that repairs a failed download. The report prints this line, so an
+# engineer never has to search for the package name or the browser name.
+PLAYWRIGHT_INSTALL_HINT = f"python -m playwright install {PLAYWRIGHT_BROWSER}"
+
 # The public index that the script uses when the configured index does not
 # answer. See issue #2000.
 PUBLIC_INDEX_URL = "https://pypi.org/simple"
@@ -185,6 +195,32 @@ class WorktreeBootstrapper:
         LOGGER.info("The install took %.1f seconds.", time.monotonic() - started)  # Report the total wall time.
         return installed  # Give the caller the list of the installed files.
 
+    def install_browser_driver(self) -> bool:
+        """Download the browser that the tests under `tests/e2e/` drive.
+
+        Why:
+            Issue #2241. The `playwright` package ships no browser. Without the
+            download every browser test fails to start one. A pip install alone
+            therefore leaves the worktree unable to run the browser gate.
+
+        Returns:
+            True when the browser is ready. False when the download failed, so
+            the caller can print the command instead of stopping the bootstrap.
+        """
+        LOGGER.info("Downloading the %s browser for the browser tests", PLAYWRIGHT_BROWSER)
+        command = [str(self.interpreter), "-m", "playwright", "install", PLAYWRIGHT_BROWSER]
+        started = time.monotonic()  # Time the download, because it is the slowest step after pip.
+        result = subprocess.run(  # nosec B603 - the argument list holds no shell input.
+            command, check=False, env=self._install_environment()
+        )
+        LOGGER.info("The browser download took %.1f seconds.", time.monotonic() - started)
+        if result.returncode != 0:  # A failed download must not stop a bootstrap that otherwise worked.
+            LOGGER.warning("The browser download failed with code %d.", result.returncode)
+            LOGGER.warning("Run this command before the browser tests: %s", PLAYWRIGHT_INSTALL_HINT)
+            return False  # Report the failure, so the final report names the missing step.
+        LOGGER.debug("The %s browser is ready", PLAYWRIGHT_BROWSER)
+        return True  # The browser tests can now open a page.
+
     def _install_environment(self) -> dict[str, str]:
         """Build the environment that the pip subprocess reads."""
         environment = dict(os.environ)  # Copy the caller environment, because pip needs the rest of it.
@@ -221,7 +257,7 @@ def build_parser() -> argparse.ArgumentParser:
     return parser  # Give the caller the ready parser.
 
 
-def report_result(bootstrapper: WorktreeBootstrapper, installed: list[str]) -> None:
+def report_result(bootstrapper: WorktreeBootstrapper, installed: list[str], browser_ready: bool = True) -> None:
     """Print the interpreter path and the activation command for this platform."""
     activate = ".venv\\Scripts\\Activate.ps1" if sys.platform == "win32" else "source .venv/bin/activate"
     LOGGER.info("The environment is ready.")
@@ -229,6 +265,12 @@ def report_result(bootstrapper: WorktreeBootstrapper, installed: list[str]) -> N
     LOGGER.info("Interpreter: %s", bootstrapper.interpreter)
     LOGGER.info("To activate the environment, run: %s", activate)
     LOGGER.info("To run the tests, run: python -m pytest -q")
+    if browser_ready:  # The browser tests can open a page, so name the command that runs them.
+        LOGGER.info("To run the browser tests, run: python -m pytest tests/e2e/upgrade_portal")
+        return  # No repair line is needed, because every step succeeded.
+    LOGGER.warning("Caution: the browser download failed, so every browser test will report a skip.")
+    LOGGER.warning("A skip reads as a pass. Run this command before you trust a browser result:")
+    LOGGER.warning("  %s", PLAYWRIGHT_INSTALL_HINT)
 
 
 class GitHubAccountChecker:
@@ -304,7 +346,8 @@ def main(argv: list[str] | None = None) -> int:
     except (OSError, RuntimeError) as error:  # A file error or a failed install stops the script.
         LOGGER.error("The bootstrap failed: %s", error)
         return 1  # Report the failure to the shell.
-    report_result(bootstrapper, installed)  # Tell the user which interpreter to activate.
+    browser_ready = bootstrapper.install_browser_driver()  # Download the browser the e2e tests drive.
+    report_result(bootstrapper, installed, browser_ready)  # Tell the user which interpreter to activate.
     GitHubAccountChecker().warn_on_mismatch()  # Warn before the user pushes with the wrong account.
     LOGGER.debug("The bootstrap completed for %s", root)
     return 0  # Report the success to the shell.

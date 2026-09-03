@@ -568,7 +568,17 @@ jobs:
         run: |
           pip install -r requirements.txt
           pip install -r requirements-dev.txt  # pinned pytest and timeout plugin (issue #1779)
+      - name: Download the browser
+        # Issue #2241: the playwright package ships no browser. Without this step
+        # every browser test reports a skip, and pytest reports a skip as a pass,
+        # so this gate would report green while it opened no page.
+        run: python -m playwright install --with-deps chromium
       - name: Run E2E smoke tests
+        # UPGRADE_PORTAL_E2E_STRICT turns a missing browser package into a
+        # collection failure. Without it the two steps above could silently stop
+        # working and this gate would keep reporting green over an empty suite.
+        env:
+          UPGRADE_PORTAL_E2E_STRICT: "1"
         run: pytest tests/e2e/ -v --timeout=60
 
   # ──────────────────────────────────────────────────────────────
