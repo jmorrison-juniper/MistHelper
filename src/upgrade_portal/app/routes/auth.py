@@ -47,6 +47,7 @@ from jinja2 import TemplateNotFound  # Marks a template that a later module stil
 from ...runtime import identity  # The registry, the digest, and the sign-out. No copy of them lives here.
 from ..config import load_settings  # The dependency panel probes the addresses the portal itself uses.
 from ..factory import json_error  # The one error envelope that the contract allows.
+from ..seam_shapes import check_stand_in  # Issue #1991: compare each stand-in against the real callee.
 
 logger = logging.getLogger(__name__)  # One logger for each module keeps the source visible in the log.
 
@@ -218,7 +219,11 @@ def injected_seam(config_key: str) -> Callable[..., Any] | None:
         The injected callable, or None when the configuration holds none.
     """
     candidate: Any = current_app.config.get(config_key)  # An unset key reads as None.
-    return candidate if callable(candidate) else None  # A value that is not callable counts as unset.
+    if not callable(candidate):  # A value that is not callable counts as unset.
+        return None  # The caller then falls back to the real callee.
+    check_stand_in(config_key, candidate)  # Issue #1991: a wrong shape must fail here, not at a customer site.
+    stand_in: Callable[..., Any] = candidate  # The named type satisfies the strict return check.
+    return stand_in  # The stand-in answers the same call the real callee answers.
 
 
 def cloud_catalog() -> tuple[tuple[str, str], ...]:
