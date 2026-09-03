@@ -15,23 +15,24 @@ from __future__ import annotations
 
 import os
 import re
-import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
 
+from tests.unit.container.bash_support import BASH_PATH, BASH_SKIP_REASON
+
 # Find the repository root, because pytest moves the working directory.
 REPO_ROOT = Path(__file__).resolve().parents[3]
 # Point at the script under test.
 SESSION_SCRIPT = REPO_ROOT / "container" / "scripts" / "misthelper-session.sh"
-# Locate bash, because the test runs a shell script.
-BASH_PATH = shutil.which("bash")
 # Stop a runaway loop, because a lost limit must fail the test and not hang it.
 HARNESS_TIMEOUT_SECONDS = 60
 
-# Skip the module when bash is absent, because the script needs bash.
-pytestmark = pytest.mark.skipif(BASH_PATH is None, reason="bash is required to run the session script")
+# Skip the module when no bash can open the script. A bash that refuses a
+# Windows path reaches this guard too, because the presence of bash proves
+# nothing on Windows. Read tests/unit/container/bash_support.py for the reason.
+pytestmark = pytest.mark.skipif(BASH_SKIP_REASON is not None, reason=BASH_SKIP_REASON or "")
 
 # The token that every loop test carries. Issue #2181 makes the script refuse a
 # session with no token, so a loop test must supply one. No test reaches the
