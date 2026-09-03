@@ -103,6 +103,35 @@ git pull origin main
 
 Run [the quality gates](quality-gates.md) before every commit.
 
+## Never install this project into its own environment
+
+Warning: do not run `pip install .` or `uv pip install .` in this repository. The
+wheel packs the repository root, so the install copies `src/` into
+`site-packages`. That copy then shadows the real package for every script that
+runs from another folder, and the tests read code that nobody ships.
+
+Both copies import cleanly, so no gate reports the difference. A green test run
+proves nothing while the copy exists. Issue #2010 records a session that lost an
+hour to it.
+
+Install the requirements instead. `scripts/bootstrap_worktree.py` does that
+already.
+
+If you suspect the copy, ask Python where it reads the package from.
+
+```powershell
+python -c "import src; print(src.__file__)"
+```
+
+A path inside `.venv` names the stale copy. Remove it with one command.
+
+```powershell
+python -m pip uninstall -y misthelper
+```
+
+`tests/conftest.py` also checks this before pytest collects a single module. The
+session stops with a message that names the path and the command above.
+
 ## Where the code lives
 
 New code goes in `src/`, and not in `MistHelper.py`. The entrypoint holds the
