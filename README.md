@@ -72,6 +72,26 @@ The script needs the native provider. Install it one time with this command:
 .venv\Scripts\python.exe -m pip install podman-compose
 ```
 
+### Recreate the application container alone
+
+After a new image, recreate the application container and leave the two stores
+running. Remove the container first, then name the service.
+
+```powershell
+podman pull ghcr.io/jmorrison-juniper/misthelper:latest
+podman rm -f misthelper-app
+.\scripts\compose.ps1 up -d --no-deps misthelper
+```
+
+Caution: pass `--no-deps` and name the service. Without both, compose tries to
+create `misthelper-arangodb` and `misthelper-redis` again, and it stops with
+`the container name is already in use`. Those two stores hold every capture and
+every upgrade run, so this pair of commands is the one that leaves them
+untouched. Issue #2228 holds that report.
+
+The plain start command above is still the right command for a cold start, when
+no container of the stack runs yet.
+
 ### Corporate proxy and TLS certificates
 
 The container image verifies every TLS certificate. It never disables the check.
