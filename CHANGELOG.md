@@ -7,6 +7,15 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Read every moment as UTC, and sort the last table
+
+- **Fixed**: The capture picker of the comparison page showed the stored text,
+  which holds 32 characters and the offset of the machine that wrote it. It now
+  reads the same short UTC form as the history page. Issue #2227.
+- **Fixed**: The site table was the one table of the portal that never sorted.
+  An organization with many sites showed one long unordered list, and the
+  operator could not order it by the device count or by the lock state.
+
 ### Record every site lock action, and show the audit log
 
 - **Added**: The portal records a take and a release beside the takeover that it

@@ -821,7 +821,13 @@ def read_capture_rows(site_id: str) -> list[dict[str, Any]]:
         One plain dictionary for each usable row.
     """
     page: Any = capture_lister()(site_id)
-    return plain_rows(getattr(page, CAPTURES_FIELD, page))
+    rows = plain_rows(getattr(page, CAPTURES_FIELD, page))
+    # Issue #2227: the picker showed the stored text, which holds 32 characters
+    # and the offset of the machine that wrote it. The operator picks two
+    # captures here, and the moment is the one value that tells the two apart.
+    # The history page already reads the short UTC form, so the picker reads it
+    # too and no page of the portal shows a raw stamp of the store.
+    return [dict(row, moment_text=short_moment(row.get(STARTED_AT_FIELD))) for row in rows]
 
 
 def render_picker(before_id: str, after_id: str, notice: str = "") -> str:

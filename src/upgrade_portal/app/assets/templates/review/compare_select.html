@@ -80,7 +80,7 @@
           <option value="{{ capture_key }}"
                   {% if capture_key and capture_key == chosen_before %}selected{% endif %}>
             {{ capture.role | default('capture', true) }} -
-            {{ capture.started_at | default('no start time', true) }} -
+            {{ capture.moment_text | default(capture.started_at, true) | default('no start time', true) }} -
             {{ capture_key }}
           </option>
         {% endfor %}
@@ -99,7 +99,7 @@
           <option value="{{ capture_key }}"
                   {% if capture_key and capture_key == chosen_after %}selected{% endif %}>
             {{ capture.role | default('capture', true) }} -
-            {{ capture.started_at | default('no start time', true) }} -
+            {{ capture.moment_text | default(capture.started_at, true) | default('no start time', true) }} -
             {{ capture_key }}
           </option>
         {% endfor %}
