@@ -5049,14 +5049,20 @@ def _run_metrics_snmp(_args: argparse.Namespace) -> None:
     Warning:
         This mode writes the protocol replies to standard output. Nothing else may
         print there, because one stray line makes snmpd drop the whole subtree.
+        snmpd also merges standard error into the same pipe, so a log record on
+        either stream breaks the handshake. protect_protocol_streams() must run
+        before anything else, because building the cache writes a log record.
 
     Args:
         _args: The parsed command-line namespace. This mode reads no flag.
     """
-    from src.metrics_gateway.service import GatewaySettings, build_cache
-    from src.metrics_gateway.snmp import SnmpPassPersistResponder
+    from src.metrics_gateway.snmp import SnmpPassPersistResponder, protect_protocol_streams
 
-    logging.info("METRICS_SNMP: Starting the pass_persist responder")  # Log to the file, never to stdout
+    protect_protocol_streams()  # First call of this mode. A later call cannot recall a sent record.
+
+    from src.metrics_gateway.service import GatewaySettings, build_cache
+
+    logging.info("METRICS_SNMP: Starting the pass_persist responder")  # Log to the file, never to a stream
     settings = GatewaySettings.from_environment(EnvironmentUtils.is_running_in_container())
     if not settings.org_id:  # snmpd cannot answer a prompt, so the setting is the only source here
         logging.error("METRICS_SNMP: METRICS_ORG_ID is not set - abort")  # Log the refusal

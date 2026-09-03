@@ -32,6 +32,7 @@ Warning:
 from __future__ import annotations
 
 import logging
+import sys
 from collections.abc import Iterator
 from typing import IO, TYPE_CHECKING
 
@@ -64,6 +65,57 @@ TABLE_ENTRY_NODE = 1  # Every SNMP table holds its columns under one entry node,
 SCALAR_INSTANCE = 0  # Every SNMP scalar answers at instance 0.
 
 OidKey = tuple[int, ...]  # An OID as numbers, so that a sort gives true lexicographic order.
+
+
+def protect_protocol_streams() -> None:
+    """Stop every log record from reaching the two protocol streams.
+
+    Why:
+        `snmpd` reads the replies from the pipe it gave this process as standard
+        output. It also merges standard error into that same pipe. The net-snmp
+        source is explicit about it, in `get_exec_pipes`:
+
+            netsnmp_close_fds(STDOUT_FILENO);
+            dup2(STDOUT_FILENO, STDERR_FILENO);
+
+        One log record on either stream therefore lands in the middle of the
+        protocol. `snmpd` reads that text where it expected `PONG`, decides the
+        helper is broken, closes the pipe, and answers `No Such Instance` for the
+        whole subtree. A real `snmpd` reported exactly that:
+
+            open_persist_pipe: Got DEBUG:...Build the metric catalog
+            instead of PONG!
+
+        MistHelper configures logging for every mode, so this responder cannot
+        assume a quiet stream. It takes the two streams away from logging
+        instead. A file handler keeps working, so the audit trail survives.
+
+    Warning:
+        Call this before you build the cache and before you build the responder.
+        A catalog logs while it builds, so a later call cannot undo a record that
+        already reached the pipe.
+
+    Warning:
+        This changes the logging configuration of the whole process. It is
+        correct here, because a `pass_persist` process exists only to answer
+        `snmpd` and owns both streams for its whole life.
+    """
+    protocol_streams = (sys.stdout, sys.stderr)  # The two channels `snmpd` reads.
+    # WHY: this must be a NullHandler and not None. With `lastResort` set to None
+    # and no handler found, CPython writes `No handlers could be found for logger`
+    # straight to stderr, which corrupts the protocol just as a log record does. A
+    # real `snmpd` reported that text in place of `PONG` after the first attempt at
+    # this guard used None. A NullHandler discards the record and writes nothing.
+    logging.lastResort = logging.NullHandler()
+    every_logger: list[logging.Logger] = [logging.getLogger()]  # The root logger holds most handlers.
+    for name in list(logging.root.manager.loggerDict):  # A named logger can hold its own handler.
+        item = logging.root.manager.loggerDict.get(name)
+        if isinstance(item, logging.Logger):  # A placeholder is not a logger and holds no handler.
+            every_logger.append(item)
+    for owner in every_logger:  # Detach each handler that writes where the protocol lives.
+        for handler in list(owner.handlers):
+            if isinstance(handler, logging.StreamHandler) and getattr(handler, "stream", None) in protocol_streams:
+                owner.removeHandler(handler)
 
 
 def parse_oid(text: str) -> OidKey:
@@ -307,13 +359,26 @@ class SnmpPassPersistResponder:
             is the second. `set` is three lines. This reader keeps that shape in
             one place, so the handler sees a command and an argument only.
 
+        Warning:
+            This loop must call `readline`. A `for line in stream` loop reads
+            ahead into an internal buffer, and on a live pipe it blocks until
+            that buffer fills. `snmpd` sends one request and then waits for the
+            answer, so the read-ahead never fills and neither side moves.
+            `snmpd` then treats the helper as dead and stops it, and the whole
+            subtree answers `No Such Instance`. A real `snmpd` proved this. No
+            test against an in-memory stream can reproduce it, because such a
+            stream holds every byte already.
+
         Args:
             stream: The stream that `snmpd` writes to.
 
         Yields:
             The command word and its argument.
         """
-        for raw in stream:  # `snmpd` holds the pipe open, so this loop ends when `snmpd` closes it.
+        while True:  # `snmpd` holds the pipe open, so this loop ends when `snmpd` closes it.
+            raw = stream.readline()
+            if not raw:  # An empty read means end of file, which is the one clean way out.
+                return
             command = raw.strip()
             if not command:  # A blank line carries no request.
                 continue
@@ -337,7 +402,8 @@ class SnmpPassPersistResponder:
             stdin: The stream that `snmpd` writes the requests to.
             stdout: The stream that carries the replies back.
         """
-        logger.info("Answer Net-SNMP pass_persist requests under the base OID %s", self._base_oid)  # Log the start.
+        protect_protocol_streams()  # A backstop. The entry point must already have called this.
+        logger.info("Answer Net-SNMP pass_persist requests under the base OID %s", self._base_oid)  # File log only.
         served = 0  # Count the requests, so the log can report the work at the end.
         for command, argument in self._requests(stdin):  # One iteration answers one request.
             for line in self.handle(command, argument):  # A reply is one line or three lines.
