@@ -71,6 +71,7 @@ from ...runtime.signals import (  # The stop request rides inside the run record
     StopRequestStore,
 )
 from ..factory import build_error_envelope, json_error  # The one error envelope that the contract allows.
+from ..seam_shapes import check_stand_in  # Issue #1991: compare each stand-in against the real callee.
 from .select import (  # The sibling module owns these rules, so no copy of them lives here.
     LOCK_STATE_FREE,
     LOCK_STATE_LOCKED,
@@ -301,7 +302,10 @@ def injected_object(config_key: str) -> Any | None:
     Returns:
         The injected object, or None when the configuration holds none.
     """
-    return current_app.config.get(config_key)  # An unset key reads as None, which every caller expects.
+    candidate = current_app.config.get(config_key)  # An unset key reads as None, which every caller expects.
+    if callable(candidate):  # A seam that holds one callable carries a recorded shape.
+        check_stand_in(config_key, candidate)  # Issue #1991: a wrong shape must fail here, not at a customer site.
+    return candidate  # An object seam keeps its own method-name guard below.
 
 
 def run_store() -> Any:

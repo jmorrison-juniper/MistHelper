@@ -12,10 +12,19 @@ errors with one message that names the bootstrap command. See issue #1866.
 
 import importlib.util
 import logging
+import os
 import sys
 from pathlib import Path
 
 import pytest
+
+# Issue #1991 records the fault this line prevents. A stand-in that answers a
+# simpler shape than the real callee agreed with its own reader and disagreed
+# with the cloud, and the whole suite stayed green. With this variable set, every
+# portal seam compares the injected stand-in against the real callee and raises
+# on a difference. A live portal never sets the variable, so a live portal warns
+# instead of breaking. See `src/upgrade_portal/app/seam_shapes.py`.
+os.environ.setdefault("UPGRADE_PORTAL_SEAM_STRICT", "1")
 
 # Runtime packages that almost every test module imports through `src`. Keep the
 # list short, because the guard runs before every test session. `paramiko` sits

@@ -64,6 +64,7 @@ from ...compare import render as compare_render
 from ...compare import statistics as compare_statistics
 from ...runtime import identity
 from ..factory import json_error
+from ..seam_shapes import check_stand_in  # Issue #1991: compare each stand-in against the real callee.
 
 logger = logging.getLogger(__name__)
 
@@ -320,7 +321,11 @@ def injected_seam(config_key: str) -> Callable[..., Any] | None:
         The injected callable, or None when the config holds no callable.
     """
     candidate: Any = current_app.config.get(config_key)
-    return candidate if callable(candidate) else None
+    if not callable(candidate):  # A value that is not callable counts as unset.
+        return None  # The caller then falls back to the real callee.
+    check_stand_in(config_key, candidate)  # Issue #1991: a wrong shape must fail here, not at a customer site.
+    stand_in: Callable[..., Any] = candidate  # The named type satisfies the strict return check.
+    return stand_in  # The stand-in answers the same call the real callee answers.
 
 
 def store_capture_rows(site_id: str, limit: int = DEFAULT_HISTORY_LIMIT, offset: int = DEFAULT_HISTORY_OFFSET) -> Any:
