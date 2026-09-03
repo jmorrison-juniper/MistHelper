@@ -26,6 +26,27 @@ request must wait for CodeQL before it takes the `auto-merge` label.
 A gate that fails on `main` opens an issue with the `quality-gate` label. The
 same gate closes that issue when it passes again.
 
+## Branch protection on main
+
+Branch protection names 14 required checks. They are the 13 gates above plus
+CodeQL.
+
+Branch protection also sets `strict` to true, which GitHub calls "Require
+branches to be up to date before merging". Rebase your branch onto `main` before
+you merge. GitHub then re-runs the gates against the new tip.
+
+Warning: do not turn that flag off. A gate run measures the branch against the
+base that existed when the run started, and it never re-runs when `main` moves.
+Without the flag, a green pull request that sits far behind can break `main`, and
+the next author pays for a defect that another branch introduced. Issue #1978
+records the case, and issue #1754 records the choice of the 14 checks.
+
+Read the current setting with one command.
+
+```powershell
+gh api repos/jmorrison-juniper/MistHelper/branches/main/protection/required_status_checks
+```
+
 ## Run a gate on your own machine
 
 Each command below runs one gate. Run the gate that covers the file you changed.
