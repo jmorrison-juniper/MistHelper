@@ -7,6 +7,37 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Serve Mist Cloud health to a monitoring system
+
+- **Added**: Menu 241 and the `--metrics-gateway` flag start a metrics gateway on
+  port 8057. The gateway reads the organization on a timer and holds the last
+  reading. A monitoring system polls the gateway and never polls Mist Cloud, so a
+  poller cannot spend the Mist rate limit budget. Issue #2243.
+- **Added**: A Prometheus endpoint at `/metrics`. This is the path to choose. It
+  needs no MIB and no registered enterprise number, and it binds an unprivileged
+  port. Prometheus, Grafana, Zabbix, LibreNMS, and Icinga all read the format.
+- **Added**: An SNMP path through the Net-SNMP `pass_persist` protocol, started by
+  the `--metrics-snmp` flag from one line in `snmpd.conf`. `snmpd` keeps port 161
+  and the community string, so MistHelper binds no privileged port and holds no
+  community string. The operator names the base OID, so no unregistered
+  enterprise number is baked into this repository.
+- **Added**: The readings `mist_scrape_success`, `mist_scrape_age_seconds`, and
+  `mist_scrape_duration_seconds` describe the gateway itself. A failed read of
+  Mist Cloud keeps the last good reading, so those values are how an operator
+  tells a stale reading from a real outage.
+- **Note**: The design carries the object set of `tmunzer/mist_snmp_gateway`,
+  which is MIT licensed and which its author calls a proof of concept. The store,
+  the transport, and the OID layout are new. That project copies each reading into
+  MongoDB, which it never queries and never reads after the next refresh, so the
+  database earns nothing and costs a second service. This gateway holds the
+  reading in memory instead.
+- **Note**: One refresh costs three calls, whatever the size of the organization.
+  The upstream project calls two endpoints for each site and waits between two
+  sites, so a 200 site organization costs it 400 calls and 20 seconds of delay.
+- **Note**: SNMP carries a whole number only. A ratio therefore takes a documented
+  scale factor on the SNMP path, and the help text of each scaled reading names
+  the unit. The Prometheus path reports the true value.
+
 ### Read every moment as UTC, and sort the last table
 
 - **Fixed**: The capture picker of the comparison page showed the stored text,
