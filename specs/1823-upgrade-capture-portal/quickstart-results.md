@@ -39,6 +39,56 @@ Morrison House organization. The site holds nine devices.
 Scenario C writes firmware to real hardware and reboots it. Scenario D stops
 that upgrade. Both need a person who decides to run them.
 
+---
+
+## 0a. The staged run of 2026-09-02, built and not started
+
+A later session built scenario C up to the confirm page and stopped there. Every
+step below writes nothing to a device. The run waits for a person.
+
+**Run**: `run-8a8db18835b347b28ea14f1392122e76`
+**Site**: Morrison House Site, `cf36153a-97bb-4974-8f8f-e9cc25d64d83`
+**Pre-check capture**: `cap-6f9c530513b641509894793bfee26050-01`, verified at 100
+percent, 18,441 bytes.
+
+| Step of scenario C | Result | Evidence |
+| --- | --- | --- |
+| 1, open the site | PASS | The inventory page listed 9 devices: 1 gateway, 1 switch, 6 access points, and 1 router that the portal does not upgrade. |
+| 2, take the lock | PASS | The banner reads `You hold this site. The portal renews the hold every 60 seconds.` |
+| 3, take a pre-check capture | PASS | The capture above reached the verified badge. |
+| 4, choose target versions | PASS | The options page offered a version list for each device type and for each device. The save moved the run to the confirm page. |
+| 5, try to start without typing | NOT RUN | The begin button carries the disabled attribute until the word arrives, so the browser gate holds. The server gate needs a post with no word, and that post is the one call that could start the write. A person makes that call. |
+| 6 to 9 | NOT RUN | Each one writes firmware. |
+
+### What the confirm page states for this run
+
+Read this table before you press the button. The run holds the defaults of the
+options page, and nobody chose them for this site.
+
+| Item | Value |
+| --- | --- |
+| Devices to upgrade | 8 |
+| Strategy | All devices at the same time |
+| Reboot after the write | Yes, for each switch and each gateway |
+| Cloud calls | 3 |
+| Write onto a device that already runs the version | No |
+| Access point takes the firmware from a neighbour | No |
+
+The page raised two plan warnings. One device already runs the version that the
+form chose, and the selection holds more than one version.
+
+Warning: the defaults upgrade all 8 devices at the same time and reboot the
+switch and the gateway. The site loses its network for several minutes. Change
+the strategy and the target of each device on the options page before you press
+the button, or cancel the run.
+
+### How to continue this run
+
+Open `/runs/run-8a8db18835b347b28ea14f1392122e76/confirm` and read the plan. To
+change a target, open the options page of the same run. To end the run with no
+write, use the cancel control of the run page. The run has not started, so the
+cancel control accepts it.
+
 Warning: no agent may start scenario C alone. The write reaches production
 hardware, and a reboot removes the network of the site for several minutes.
 
