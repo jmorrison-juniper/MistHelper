@@ -20,6 +20,9 @@ Why:
     transport, and the OID layout are new. See issue #2243 for the assessment.
 """
 
+import importlib
+from typing import TYPE_CHECKING, Any
+
 from src.metrics_gateway.cache import MetricsCache
 from src.metrics_gateway.catalog import MetricCatalog, MetricDefinition, MetricKind, MetricScope
 from src.metrics_gateway.collector import MistMetricsCollector, MistStatsReader
@@ -27,7 +30,38 @@ from src.metrics_gateway.prometheus import PrometheusRenderer
 from src.metrics_gateway.samples import MetricSample, MetricSnapshot
 from src.metrics_gateway.service import GatewaySettings, build_cache, start_refresh_thread
 from src.metrics_gateway.snmp import OidTree, SnmpPassPersistResponder
-from src.metrics_gateway.web import create_app
+
+_LAZY_EXPORTS = {"create_app": "src.metrics_gateway.web"}  # A name that costs a web framework to import.
+
+if TYPE_CHECKING:  # WHY: this names the lazy export for a reader and for a checker. It never runs.
+    from src.metrics_gateway.web import create_app
+
+
+def __getattr__(name: str) -> Any:
+    """Import a Flask-backed name only when a caller asks for it.
+
+    Why:
+        `snmpd` starts the SNMP responder as a child process on a monitoring
+        host, and that host may hold a small Python install with no Flask. An
+        eager import of `web` here would raise ImportError and the whole SNMP
+        subtree would answer nothing. A real `snmpd` proved that fault, because
+        every unit test ran on a workstation where Flask is present.
+
+    Args:
+        name: The attribute a caller asked for.
+
+    Returns:
+        The named object.
+
+    Raises:
+        AttributeError: If the package holds no such name.
+    """
+    module_name = _LAZY_EXPORTS.get(name)  # Only a name in the table may load another module.
+    if module_name is None:  # Every other name is a plain mistake, so report it the usual way.
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    module = importlib.import_module(module_name)  # The first request pays the import, and no other does.
+    return getattr(module, name)
+
 
 __all__ = [
     "GatewaySettings",
