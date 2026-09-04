@@ -104,8 +104,8 @@ services:
       # SNMP service port and community. Set SNMP_COMMUNITY in .env for production.
       - SNMP_PORT=1161
       - SNMP_COMMUNITY=${SNMP_COMMUNITY:-misthelper}
-      - SNMP_BASE_OID=${SNMP_BASE_OID:-.1.3.6.1.4.1.11.2147483646}
-      - METRICS_SNMP_BASE_OID=${METRICS_SNMP_BASE_OID:-.1.3.6.1.4.1.11.2147483646}
+      - SNMP_BASE_OID=${SNMP_BASE_OID:-.1.3.6.1.4.1.8072.9999.9999}
+      - METRICS_SNMP_BASE_OID=${METRICS_SNMP_BASE_OID:-.1.3.6.1.4.1.8072.9999.9999}
       # The resolver addresses the container tries when it cannot resolve
       # api.mist.com with the resolver that Podman gave it.
       #
