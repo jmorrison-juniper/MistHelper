@@ -31,6 +31,30 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 - **Note**: This work does not close issue #1992. A person must decide the live
   run.
 
+### Generate the SNMP MIB from the Mist OpenAPI file
+
+- **Added**: Menu 243 and the `--mib-generate` flag write
+  `documentation/mibs/MISTHELPER-MIB.mib` from three inputs: the Mist OpenAPI
+  file, the metric catalog, and a new OID ledger at
+  `data/mib_generator/oid_assignments.json`. A person no longer edits the MIB by
+  hand.
+- **Added**: `--mib-dry-run` prints the module and writes nothing. `--mib-report`
+  lists the Mist fields that the catalog does not yet serve. `--mib-check` exits
+  with status 1 when the stored MIB disagrees with its inputs.
+- **Added**: The OID ledger holds the number and the name of every object, live
+  or removed. The ledger wins over every rule in the code, so no stored history
+  can point at the wrong object. The ledger is seeded with all 35 objects of the
+  earlier hand-written module, and none of them moved.
+- **Added**: `tests/contract/test_generated_mib_matches_agent.py` proves the
+  module names the same OID that the running agent answers, and that no table
+  gained an extra level.
+
+### Find sites without an SSID broadcast
+
+- **Added**: Menu 242 prompts for an SSID and checks each site's effective WLAN list.
+  It reports sites without an enabled exact SSID match. The report writes a complete
+  CSV file under `data/` and writes SQLite data in a container.
+
 ### Serve Mist Cloud health to a monitoring system
 
 - **Added**: Menu 241 and the `--metrics-gateway` flag start a metrics gateway on
@@ -61,6 +85,90 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 - **Note**: SNMP carries a whole number only. A ratio therefore takes a documented
   scale factor on the SNMP path, and the help text of each scaled reading names
   the unit. The Prometheus path reports the true value.
+
+### Read the Mist metrics by name in Observium
+
+- **Added**: `documentation/mibs/MISTHELPER-MIB.mib` names every object the SNMP
+  responder serves. A monitoring system loads it and shows `mistOrgSites` in
+  place of `.1.3.6.1.4.1.11.2147483646.1.2.0`. The module defines the
+  organization scalars, the site table, the device table, and the service level
+  expectation table. Each object names its Mist API source and its unit.
+- **Added**: `tests/unit/metrics_gateway/test_mib_matches_catalog.py` holds the
+  MIB to the OID layout of the metric catalog. The test reads the MIB text, so it
+  needs no `snmptranslate` binary. It compares the module root against
+  `DEFAULT_BASE_OID`, and it compares every column against the catalog.
+- **Added**: The container image now installs the `snmp` package, so an operator
+  can run `snmpget` and `snmpwalk` inside the container. The earlier image held
+  the daemon and no client at all.
+- **Fixed**: An SNMP read timed out and `snmpd` dropped the whole subtree. The
+  responder called the cache method that refreshes a stale reading, so the first
+  read waited for a complete pass over Mist Cloud. The responder now starts a
+  background refresh thread and answers from the last reading, so no read waits
+  for Mist Cloud. A first read after a container start returns `No Such Instance`
+  until the background pass finishes.
+- **Fixed**: `MetricsCache.cached_snapshot` took the same lock that the refresh
+  thread holds for the length of a Mist pass, so the read still waited. It now
+  reads the snapshot reference without a lock. `MetricSnapshot` is frozen, so a
+  reader holds a whole reading that no later refresh can change.
+- **Fixed**: The container printed about 520 MIB parse errors on every start,
+  such as `Cannot find module (SNMPv2-SMI)` and `Undefined identifier:
+  enterprises`. Debian ships no IETF MIB file, because the license does not
+  permit redistribution, and Net-SNMP tried to load every module anyway. The
+  start script now sets an empty `MIBS` value for the daemon and writes
+  `mibs :` into `snmp.conf` for the command line tools. The agent needs no MIB
+  file, because a MIB belongs to the monitoring system. The start log fell from
+  585 lines to 61.
+- **Fixed**: `snmpd.conf` named a fixed base OID while the responder read
+  `METRICS_SNMP_BASE_OID`. Two different values made every read return
+  `No Such Instance`. The start script now reads `SNMP_BASE_OID`, and it falls
+  back to `METRICS_SNMP_BASE_OID`.
+- **Note**: The default base OID moved to `.1.3.6.1.4.1.11.2147483646`. The
+  parent number 11 belongs to Hewlett Packard Enterprise. Caution: the child
+  number is not a registered assignment. Request a branch before you use the MIB
+  outside your own network.
+- **Note**: Podman ignores the compose `dns` key when the network runs its own
+  DNS server. The container then resolves no name outside the network, and every
+  Mist API call fails.
+
+### Start the stack with one command and no repair step
+
+- **Added**: `src/bootstrap/dns_preflight.py` repairs container name resolution
+  before any service starts. It tests the Mist host, and it adds the first
+  resolver that answers. The container therefore needs no operator command, and
+  the repair survives `compose down`.
+- **Added**: The setting `DNS_FALLBACK_SERVERS` names the resolvers the
+  preflight may try. The default holds two public resolvers. An operator whose
+  network blocks a public resolver names an internal resolver instead, and an
+  operator who wants no repair sets an empty value.
+- **Added**: The container log carries one `[DNS]` line on every start. It
+  reports that no repair was needed, or it names the resolver it added, or it
+  warns and names every address it tried. Before this line, a name resolution
+  fault reached the operator as a Mist API connection error, which names the
+  wrong cause.
+- **Fixed**: The repair reported a success as a failure. A repair that walked
+  past a blocked resolver filled both the added list and the rejected list, and
+  the message read the rejected list first. A real container printed
+  `no resolver answered. Tried: 1.1.1.1` after it had already added `8.8.8.8`
+  and repaired the fault.
+- **Fixed**: The repair confirmed itself with a second name lookup, which always
+  failed. glibc reads `/etc/resolv.conf` one time for each process and caches
+  the result, so the running process never sees the new resolver. The report now
+  reads the proof from the resolver probe and from the file write, and every
+  process that starts after the repair resolves the name.
+- **Note**: The preflight appends and removes nothing, so the Podman DNS proxy
+  stays first and every container name still resolves. It runs only after the
+  container already failed to resolve the Mist host, so it cannot take a working
+  lookup away from an internal resolver.
+- **Added**: `compose.yml` carries the Observium monitoring system as the
+  service `misthelper-observium`, behind the profile `monitoring`. Start it with
+  `.\scripts\compose.ps1 --profile monitoring up -d`. The service mounts the
+  MistHelper MIB, so no operator copies a file, and it joins the project
+  network, so the container name `misthelper-app` resolves. Before this change,
+  an operator built the monitoring system with four `podman` commands and one
+  `podman cp`.
+- **Note**: The Observium service carries a profile, so `compose up` does not
+  start it. The monitoring system is optional, and it carries its own database
+  and its own web server.
 
 ### Read every moment as UTC, and sort the last table
 
@@ -6542,4 +6650,3 @@ Closes #368
 - Locations: Single AP pre-check, multi-AP pre-check, site PCAP polling, org PCAP polling
 - Function names now match mistapi SDK and Mist API operationId values
 - operationId: listSitePacketCaptures and listOrgPacketCaptures per OpenAPI spec
-
