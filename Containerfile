@@ -22,9 +22,9 @@ LABEL org.opencontainers.image.documentation="https://github.com/jmorrison-junip
 LABEL org.opencontainers.image.source="https://github.com/jmorrison-juniper/MistHelper"
 LABEL maintainer="MistHelper Development Team"
 
-# Install minimal system dependencies including SSH server
+# Install minimal system dependencies including SSH server and SNMP daemon
 RUN apt-get update && \
-    apt-get install -y ca-certificates openssh-server sudo && \
+    apt-get install -y ca-certificates openssh-server sudo snmpd snmp-mibs-downloader && \
     rm -rf /var/lib/apt/lists/*
 
 # Create non-root user and configure SSH access
@@ -60,6 +60,11 @@ RUN chmod +x /usr/local/bin/misthelper-session /home/misthelper/welcome.sh && \
 
 # Set working directory
 WORKDIR /app
+
+# Configure SNMP to use downloaded MIBs and disable loading errors in logs
+RUN mkdir -p /etc/snmp && \
+    echo "mibs :" > /etc/snmp/snmp.conf && \
+    echo "mibdirs /usr/share/snmp/mibs:/usr/share/snmp/mibs/iana:/usr/share/snmp/mibs/ietf" >> /etc/snmp/snmp.conf
 
 # Create data directory with proper permissions
 RUN mkdir -p /app/data && chown -R misthelper:misthelper /app/data
