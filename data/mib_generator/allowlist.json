@@ -2,6 +2,21 @@
   "version": 1,
   "entries": [
     {
+      "operation_id": "getOrgStats",
+      "scope": "org",
+      "notes": "Original endpoint serving org-level source fields (num_sites, num_devices, num_inventory, etc.)"
+    },
+    {
+      "operation_id": "listOrgSiteStats",
+      "scope": "site",
+      "notes": "Original endpoint serving site-level source fields"
+    },
+    {
+      "operation_id": "listOrgDevicesStats",
+      "scope": "device",
+      "notes": "Original endpoint serving device-level source fields"
+    },
+    {
       "operation_id": "countOrgAssetsByDistanceField",
       "scope": "org",
       "notes": "Auto-generated from OpenAPI GET path /api/v1/orgs/{org_id}/stats/assets/count"

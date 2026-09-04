@@ -57,7 +57,7 @@ IMPORTS
         FROM SNMPv2-TC;
 
 mistHelperMIB MODULE-IDENTITY
-    LAST-UPDATED "202609042039Z"
+    LAST-UPDATED "202609042050Z"
     ORGANIZATION "MistHelper project"
     CONTACT-INFO
         "MistHelper project maintainers
@@ -67,7 +67,7 @@ mistHelperMIB MODULE-IDENTITY
          MistHelper metrics gateway collects from the Mist REST API.
          The gateway reads Mist Cloud on a timer and answers every
          request from memory, so a poll never waits for Mist Cloud."
-    REVISION "202609042039Z"
+    REVISION "202609042050Z"
     DESCRIPTION
         "The generator writes this module. Run it again after Mist ships
          a new OpenAPI file:  python MistHelper.py --mib-generate
@@ -573,8 +573,8 @@ mistSiteClients OBJECT-TYPE
     MAX-ACCESS read-only
     STATUS current
     DESCRIPTION
-        "The count of wireless clients that the site serves. The
-         gateway names this reading mist_site_clients."
+        "Number of Wi-Fi clients (unconnected + connected) The gateway
+         names this reading mist_site_clients."
     ::= { mistSiteEntry 10 }
 
 
@@ -1150,8 +1150,8 @@ mistDeviceUptimeSeconds OBJECT-TYPE
     MAX-ACCESS read-only
     STATUS current
     DESCRIPTION
-        "The seconds since the device last restarted. The gateway names
-         this reading mist_device_uptime_seconds."
+        "How long, in seconds, has the device been up (or rebooted) The
+         gateway names this reading mist_device_uptime_seconds."
     ::= { mistDeviceEntry 3 }
 
 
@@ -1161,8 +1161,7 @@ mistDeviceLastSeenTimestamp OBJECT-TYPE
     MAX-ACCESS read-only
     STATUS current
     DESCRIPTION
-        "The moment Mist Cloud last heard from the device, in seconds
-         since the epoch. The gateway names this reading
+        "Last seen timestamp The gateway names this reading
          mist_device_last_seen_timestamp_seconds."
     ::= { mistDeviceEntry 4 }
 
@@ -1173,8 +1172,8 @@ mistDeviceClients OBJECT-TYPE
     MAX-ACCESS read-only
     STATUS current
     DESCRIPTION
-        "The count of wireless clients that the device serves. The
-         gateway names this reading mist_device_clients."
+        "How many wireless clients are currently connected The gateway
+         names this reading mist_device_clients."
     ::= { mistDeviceEntry 5 }
 
 
@@ -1219,7 +1218,7 @@ mistDevicePowerBudgetWatts OBJECT-TYPE
     MAX-ACCESS read-only
     STATUS current
     DESCRIPTION
-        "The power budget the device reports, in watts. The gateway
+        "In mW, surplus if positive or deficit if negative The gateway
          names this reading mist_device_power_budget_watts."
     ::= { mistDeviceEntry 9 }
 
@@ -1241,8 +1240,8 @@ mistDeviceReceivedBytes OBJECT-TYPE
     MAX-ACCESS read-only
     STATUS current
     DESCRIPTION
-        "The bytes the device has received. The gateway names this
-         reading mist_device_received_bytes_total."
+        "Amount of traffic received since connection The gateway names
+         this reading mist_device_received_bytes_total."
     ::= { mistDeviceEntry 11 }
 
 
@@ -1251,8 +1250,8 @@ mistDeviceTransmittedBytes OBJECT-TYPE
     MAX-ACCESS read-only
     STATUS current
     DESCRIPTION
-        "The bytes the device has sent. The gateway names this reading
-         mist_device_transmitted_bytes_total."
+        "Amount of traffic sent since connection The gateway names this
+         reading mist_device_transmitted_bytes_total."
     ::= { mistDeviceEntry 12 }
 
 

@@ -81,7 +81,8 @@ class MibGeneratorRunner:
         found: dict[MetricScope, dict[str, FieldRecord]] = {scope: {} for scope in MetricScope}
         for entry in self._allowlist.entries():  # One pass over the selection fills every scope it names.
             schema = self._document.response_schema(entry.operation_id)
-            found[entry.scope] = {item.path: item for item in flattener.flatten(entry.scope, schema)}
+            # Merge fields from all endpoints of the same scope, not overwrite.
+            found[entry.scope].update({item.path: item for item in flattener.flatten(entry.scope, schema)})
         found[MetricScope.SLE] = self._sle_fields(found[SLE_PARENT[0]])
         logger.info("%s Read %d Mist fields in total", LOG_PREFIX, sum(len(item) for item in found.values()))
         return found
