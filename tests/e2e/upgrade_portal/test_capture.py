@@ -76,6 +76,16 @@ CAPTURE_START_UPGRADE_ERROR_ID = "capture-start-upgrade-error"
 SITE_OPEN_PREFIX = "site-open-"
 SITE_CAPTURE_LINK_ID = "site-capture-link"
 
+# Issue #2259: the walk must hold the site before it writes to it. FR-072 gives
+# one site to one operator. One press takes a free site, and a site that any
+# lock already holds needs the word of FR-079 as well.
+LOCK_TAKE_BUTTON_ID = "lock-take-button"
+LOCK_CONFIRM_INPUT_ID = "lock-confirm-input"
+LOCK_CONFIRM_SUBMIT_ID = "lock-confirm-submit"
+TAKEOVER_WORD = "CONFIRM"  # FR-079 fixes this word and this letter case. The page may name another.
+CONFIRM_WORD_ATTRIBUTE = "data-confirm-word"  # The page names the word the gate reads.
+LOCK_SETTLE_MS = 4000  # The take call is one round trip on loopback, so it settles quickly.
+
 # The options page and the confirm page of the run the upgrade button creates.
 # `contracts/http-api.md` section 5 fixes both page paths and the create path.
 VERSION_SELECT_ALL_ID = "upgrade-version-select-all"
@@ -553,6 +563,79 @@ def _walk_to_capture_view(page: Any) -> None:
         page.get_by_test_id(f"{SITE_OPEN_PREFIX}{site_id}").click()  # The site row opens the inventory page.
     with page.expect_response(lambda answer: answer.request.is_navigation_request()):
         page.get_by_test_id(SITE_CAPTURE_LINK_ID).click()  # The inventory page opens the capture view.
+    _take_the_site(page)  # FR-072 gives one site to one operator, so the walk must take it before any write.
+
+
+def _take_the_site(page: Any) -> None:
+    """Take the site lock, so the operator may write to the site.
+
+    Why:
+        Issue #2259. FR-072 gives one site to one operator, and `capture.html`
+        draws the start control disabled until this browser holds the site. The
+        walk pressed the start control without the lock, so the press waited for
+        a control that could never become enabled and reported a timeout.
+
+        The take has two shapes, and the walk must follow both. One press takes
+        a free site, which `partials/lock_banner.html` states in its own header.
+        A site that any lock already holds answers a refusal, and the script
+        then opens the confirmation box. FR-079 fixes the word for that box.
+
+        A run of this suite leaves a lock behind, and the lease outlives the
+        run. The second shape is therefore the normal one on a workstation that
+        runs the suite twice, and the first shape is the normal one in CI.
+
+    Args:
+        page: The Playwright page object, on a page that draws the lock banner.
+    """
+    take = page.get_by_test_id(LOCK_TAKE_BUTTON_ID)
+    if take.count() < 1 or not take.is_visible():  # The banner hides the control while this browser holds the site.
+        return  # This browser already holds the site, so no press is needed.
+    take.click()  # A plain press. One press takes a free site.
+    if _write_is_allowed(page):  # The site was free, so the one press was enough.
+        return
+    _confirm_the_takeover(page)  # A lock already held the site, so the word must follow the press.
+
+
+def _write_is_allowed(page: Any) -> bool:
+    """Report whether the page now offers an enabled start control.
+
+    Args:
+        page: The Playwright page object, on the capture view.
+
+    Returns:
+        True when this browser may write to the site.
+    """
+    start = page.get_by_test_id(CAPTURE_START_ID)
+    try:  # A control that never enables is the refusal path, and not a fault.
+        sync_api.expect(start).to_be_enabled(timeout=LOCK_SETTLE_MS)
+    except AssertionError:  # The take met a refusal, so the confirmation box holds the next step.
+        return False
+    return True
+
+
+def _confirm_the_takeover(page: Any) -> None:
+    """Type the word and press the submit control of the takeover box.
+
+    Why:
+        FR-079 guards a takeover with one word, because a takeover moves the
+        write of a live site to another browser. The box opens only after the
+        first press meets the refusal, so this helper runs only on that path.
+
+    Args:
+        page: The Playwright page object, on the capture view.
+    """
+    field = page.get_by_test_id(LOCK_CONFIRM_INPUT_ID)
+    sync_api.expect(field).to_be_visible(timeout=LOCK_SETTLE_MS)  # The refusal opened the box.
+    # WHY: `portal.js` writes the needed word into this attribute from the refusal
+    # body, so the page names the word. A copy in this module would drift from it.
+    word = str(field.get_attribute(CONFIRM_WORD_ATTRIBUTE) or TAKEOVER_WORD)
+    field.fill(word)  # The gate reads each key press and enables the submit for the exact word.
+    submit = page.get_by_test_id(LOCK_CONFIRM_SUBMIT_ID)
+    sync_api.expect(submit).to_be_enabled(timeout=LOCK_SETTLE_MS)  # The gate opened for the typed word.
+    submit.click()  # A plain press sends the typed word.
+    # WHY: the script writes the lock, then enables every control that needs it.
+    # The walk must wait for that state, or the next press meets a disabled control.
+    sync_api.expect(page.get_by_test_id(CAPTURE_START_ID)).to_be_enabled(timeout=START_TIMEOUT_MS)
 
 
 def _start_and_reveal_upgrade(page: Any) -> None:
@@ -581,13 +664,19 @@ def _start_and_reveal_upgrade(page: Any) -> None:
     sync_api.expect(page.get_by_test_id(CAPTURE_START_UPGRADE_ID)).to_be_visible(timeout=START_TIMEOUT_MS)
 
 
-# WHY: Issue #2259. Neither test below takes the site lock, so `capture.html`
-# draws the start control disabled and the press times out. Both tests reported
-# a skip until the E2E job gained a lock store, so neither one ever ran and
-# neither one ever passed. The marker states that truth. It is not the repair,
-# and issue #2259 holds the repair.
+# WHY: Issue #2259. The lock repair above clears the first blocker, and a second
+# one follows it. The create call of the run answers nothing at all on a
+# workstation. `POST /api/sites/<site_id>/runs` logs "create the run" and never
+# logs the line after the store write, so the request never returns and the
+# browser waits forever. The portal keeps serving every other request, so the
+# fault reaches that one call.
+#
+# The marker is not strict, so a run that passes reports a pass and never an
+# error. If the two tests pass in CI, the fault is a workstation state and the
+# marker comes off. If they fail there as well, the hang is real and issue #2259
+# carries the measurement.
 @pytest.mark.xfail(
-    reason="Issue #2259: the journey never takes the site lock, so the start control stays disabled.",
+    reason="Issue #2259: the run create answers nothing after a capture, so the walk waits forever.",
     strict=False,
 )
 class TestUpgradeJourney:
