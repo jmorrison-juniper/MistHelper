@@ -1,0 +1,141 @@
+{
+  "openapi": "3.1.0",
+  "info": { "title": "A small fixture of the Mist API", "version": "1.0.0" },
+  "paths": {
+    "/api/v1/orgs/{org_id}/stats": {
+      "get": {
+        "operationId": "getOrgStats",
+        "tags": ["Orgs Stats"],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/stats_org" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/orgs/{org_id}/stats/devices": {
+      "get": {
+        "operationId": "listOrgDevicesStats",
+        "tags": ["Orgs Stats - Devices"],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/stats_device" }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "searchOrgDevices",
+        "responses": { "200": { "content": { "application/json": { "schema": {} } } } }
+      }
+    },
+    "/api/v1/orgs/{org_id}/loop": {
+      "get": {
+        "operationId": "getOrgLoop",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/loop" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/orgs/{org_id}/nothing": {
+      "get": {
+        "operationId": "getOrgNothing",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/empty" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "stats_org": {
+        "allOf": [
+          { "$ref": "#/components/schemas/org_counts" },
+          {
+            "type": "object",
+            "properties": {
+              "name": { "type": ["string", "null"], "description": "The organization name." },
+              "allow_mist": { "type": "boolean" },
+              "sle": { "type": "array", "items": { "$ref": "#/components/schemas/org_sle" } },
+              "tags": { "type": "array", "items": { "type": "string" } },
+              "raw": { "type": "object" }
+            }
+          }
+        ]
+      },
+      "org_counts": {
+        "type": "object",
+        "properties": {
+          "num_sites": { "type": "integer", "description": "The count of sites." },
+          "num_devices": { "type": "integer" }
+        }
+      },
+      "org_sle": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string" },
+          "user_minutes": { "$ref": "#/components/schemas/org_sle_user_minutes" }
+        }
+      },
+      "org_sle_user_minutes": {
+        "type": "object",
+        "properties": {
+          "total": { "type": "number" },
+          "ok": { "type": "number" }
+        }
+      },
+      "stats_device": {
+        "oneOf": [
+          { "$ref": "#/components/schemas/stats_ap" },
+          { "$ref": "#/components/schemas/stats_switch" }
+        ],
+        "discriminator": { "propertyName": "type" }
+      },
+      "stats_ap": {
+        "type": "object",
+        "properties": {
+          "uptime": { "type": "integer", "description": "The seconds since the restart." },
+          "rx_bytes": { "type": "integer", "format": "int64" }
+        }
+      },
+      "stats_switch": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "uptime": { "type": "integer", "description": "A second definition." },
+              "tx_bytes": { "type": "integer", "format": "int64" }
+            }
+          }
+        ]
+      },
+      "loop": {
+        "type": "object",
+        "properties": { "next": { "$ref": "#/components/schemas/loop" } }
+      },
+      "empty": { "type": "object" }
+    }
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/jmorrison-juniper/MistHelper/schemas/mib-generator-oid-assignments.json",
+  "title": "MIB generator OID assignments",
+  "description": "The number and the name of every field the MIB has ever held. This file holds the stability promise: a live OID never moves, and a retired number is never reused.",
+  "type": "object",
+  "required": ["version", "base_oid", "entries"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "description": "The format version. The loader stops when it reads a version it does not know.",
+      "type": "integer",
+      "const": 1
+    },
+    "base_oid": {
+      "description": "The MIB root. It must equal DEFAULT_BASE_OID in src/metrics_gateway/snmp.py. The run stops when the two differ.",
+      "type": "string",
+      "pattern": "^\\.1\\.3\\.6\\.1\\.4\\.1(\\.[0-9]+)+$"
+    },
+    "entries": {
+      "description": "One entry for each field, live or obsolete. Sorted by subtree and then by column, so a run writes stable bytes.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/entry" }
+    }
+  },
+  "$defs": {
+    "entry": {
+      "type": "object",
+      "required": ["key", "subtree", "column", "descriptor", "state", "notes"],
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "description": "The stable identity, in the form <scope>/<source path>. It is never the descriptor, because a rename of a name must not move an OID.",
+          "type": "string",
+          "pattern": "^(org|site|device|sle)/.*$"
+        },
+        "subtree": {
+          "description": "The number below the base OID. It must be a value of SUBTREE_BY_SCOPE, and it must match the scope in the key.",
+          "type": "integer",
+          "enum": [1, 2, 3, 4]
+        },
+        "column": {
+          "description": "The column below the subtree. 1 to 89 is a data column. 90 to 98 is reserved for the gateway health readings the catalog owns. 99 is the row identity column and never appears here.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 98
+        },
+        "descriptor": {
+          "description": "The SMIv2 name. It starts with a lowercase letter, it holds letters and digits only, and it stays at or below 64 characters. It is stored, so it never changes after the first run.",
+          "type": "string",
+          "pattern": "^[a-z][A-Za-z0-9]*$",
+          "maxLength": 64
+        },
+        "state": {
+          "description": "live when the field is in the current MIB. obsolete when Mist removed the field. An obsolete entry keeps its number reserved and its object carries STATUS obsolete.",
+          "type": "string",
+          "enum": ["live", "obsolete"]
+        },
+        "notes": {
+          "description": "Free text for a person. Record here why a field went obsolete, and in which Mist release.",
+          "type": "string"
+        }
+      }
+    }
+  }
+}
