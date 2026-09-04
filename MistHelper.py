@@ -5088,6 +5088,7 @@ def _run_metrics_snmp(_args: argparse.Namespace) -> None:
     protect_protocol_streams()  # First call of this mode. A later call cannot recall a sent record.
 
     from src.metrics_gateway.service import GatewaySettings, build_cache, start_refresh_thread
+    from src.utils.environment_utils import EnvironmentUtils  # Import EnvironmentUtils for container detection
 
     logging.info("METRICS_SNMP: Starting the pass_persist responder")  # Log to the file, never to a stream
     settings = GatewaySettings.from_environment(EnvironmentUtils.is_running_in_container())
@@ -5096,7 +5097,7 @@ def _run_metrics_snmp(_args: argparse.Namespace) -> None:
         sys.exit(1)
     cache = build_cache(apisession, settings)  # The cache holds the reading that the responder serves.
     start_refresh_thread(cache, threading.Event())  # Mist Cloud access runs away from the SNMP protocol.
-    responder = SnmpPassPersistResponder(cache, settings.base_oid, refresh_on_request=False)
+    responder = SnmpPassPersistResponder(cache, settings.base_oid)
     responder.run(sys.stdin, sys.stdout)  # Blocks until snmpd closes the pipe
     sys.exit(0)
 
