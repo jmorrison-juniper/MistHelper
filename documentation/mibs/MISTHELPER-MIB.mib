@@ -41,8 +41,7 @@ MISTHELPER-MIB DEFINITIONS ::= BEGIN
 --   row. Do not treat a row number as a stable identifier.
 --
 -- Enterprise number
---   The parent number 11 belongs to Hewlett Packard Enterprise. The
---   child 2147483646 is a high number chosen for this deployment.
+--   The OID tail 8072 9999 9999 is a high number chosen for this deployment.
 --   Caution: this child is not a registered assignment. Request a
 --   branch from Hewlett Packard Enterprise before you distribute this
 --   module outside your own network.
@@ -58,7 +57,7 @@ IMPORTS
         FROM SNMPv2-TC;
 
 mistHelperMIB MODULE-IDENTITY
-    LAST-UPDATED "202609041820Z"
+    LAST-UPDATED "202609041947Z"
     ORGANIZATION "MistHelper project"
     CONTACT-INFO
         "MistHelper project maintainers
@@ -68,7 +67,7 @@ mistHelperMIB MODULE-IDENTITY
          MistHelper metrics gateway collects from the Mist REST API.
          The gateway reads Mist Cloud on a timer and answers every
          request from memory, so a poll never waits for Mist Cloud."
-    REVISION "202609041820Z"
+    REVISION "202609041947Z"
     DESCRIPTION
         "The generator writes this module. Run it again after Mist ships
          a new OpenAPI file:  python MistHelper.py --mib-generate
@@ -77,7 +76,7 @@ mistHelperMIB MODULE-IDENTITY
          deep, so no table object was reachable by name. The generator
          places a table cell at <base>.<subtree>.1.<column>.<row>, which
          is the address the agent answers."
-    ::= { enterprises 11 2147483646 }
+    ::= { enterprises 8072 9999 9999 }
 
 -- ---------------------------------------------------------------------
 -- Subtree 1: the organization scalars.

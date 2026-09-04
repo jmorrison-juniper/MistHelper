@@ -247,9 +247,15 @@ class MibWriter:
         Returns:
             The header text.
         """
-        root = DEFAULT_BASE_OID.strip(".").split(".")  # The MODULE-IDENTITY names the two numbers below enterprises.
+        root = DEFAULT_BASE_OID.strip(".").split(".")  # Split the OID into segments.
+        # Skip the enterprises prefix (1.3.6.1.4.1) to get the rest of the OID.
+        sub_oid_numbers = root[6:]  # enterprises is exactly 6 components.
+        sub_oid_str = " ".join(sub_oid_numbers)  # Format as space-separated numbers for ASN.1.
         return _HEADER_TEMPLATE.format(
-            module=MODULE_NAME, root=MODULE_ROOT, updated=updated, parent=root[-2], child=root[-1]
+            module=MODULE_NAME,
+            root=MODULE_ROOT,
+            updated=updated,
+            oid_tail=sub_oid_str,
         )
 
     def _org_section(self, objects: list[MibObject]) -> str:
@@ -443,8 +449,7 @@ _HEADER_TEMPLATE = """{module} DEFINITIONS ::= BEGIN
 --   row. Do not treat a row number as a stable identifier.
 --
 -- Enterprise number
---   The parent number {parent} belongs to Hewlett Packard Enterprise. The
---   child {child} is a high number chosen for this deployment.
+--   The OID tail {oid_tail} is a high number chosen for this deployment.
 --   Caution: this child is not a registered assignment. Request a
 --   branch from Hewlett Packard Enterprise before you distribute this
 --   module outside your own network.
@@ -479,7 +484,7 @@ IMPORTS
          deep, so no table object was reachable by name. The generator
          places a table cell at <base>.<subtree>.1.<column>.<row>, which
          is the address the agent answers."
-    ::= {{ enterprises {parent} {child} }}
+    ::= {{ enterprises {oid_tail} }}
 """
 
 _ORG_NODE_TEMPLATE = """-- Subtree {subtree}: the organization scalars.
