@@ -22,9 +22,9 @@ LABEL org.opencontainers.image.documentation="https://github.com/jmorrison-junip
 LABEL org.opencontainers.image.source="https://github.com/jmorrison-juniper/MistHelper"
 LABEL maintainer="MistHelper Development Team"
 
-# Install minimal system dependencies including SSH server
+# Install minimal system dependencies including SSH server and SNMP support
 RUN apt-get update && \
-    apt-get install -y ca-certificates openssh-server sudo && \
+    apt-get install -y ca-certificates openssh-server sudo snmpd snmp-mibs-downloader && \
     rm -rf /var/lib/apt/lists/*
 
 # Create non-root user and configure SSH access
@@ -50,6 +50,11 @@ RUN mkdir -p /var/run/sshd && \
 RUN echo "misthelper:misthelper123!" | chpasswd && \
     usermod -aG sudo misthelper && \
     echo "misthelper ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+
+# Configure SNMPd for metrics gateway pass_persist handler
+RUN mkdir -p /var/lib/snmp && \
+    mkdir -p /var/run/snmp && \
+    chown -R snmp:snmp /var/lib/snmp /var/run/snmp
 
 # Copy container scripts from maintainable source files
 COPY container/scripts/misthelper-session.sh /usr/local/bin/misthelper-session
@@ -133,8 +138,8 @@ ENV AUTO_UPGRADE_DEPENDENCIES=false
 # Volume for data persistence
 VOLUME ["/app/data"]
 
-# Expose SSH port 2200 and Dash web viewer port 8050
-EXPOSE 2200 8050
+# Expose SSH port 2200, Dash web viewer port 8055, and SNMP port 1161 (UDP)
+EXPOSE 2200 8055 1161/udp
 
 # Health probe for the web portal readiness endpoint (issue #1863).
 # The image installs no curl, so the probe uses the Python interpreter that
