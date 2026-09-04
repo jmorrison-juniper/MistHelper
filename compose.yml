@@ -275,7 +275,7 @@ services:
       - misthelper-observium-rrd:/opt/observium/rrd
       # The MistHelper MIB, read-only. Observium loads every file of this folder,
       # so the mount installs the MIB and no operator copies a file.
-      - ./documentation/mibs/MISTHELPER-MIB.mib:/opt/observium/mibs/MISTHELPER-MIB:ro
+      - ./documentation/mibs/MISTHELPER-MIB.mib:/opt/observium/mibs/MISTHELPER-MIB.mib:ro
     networks:
       - misthelper-network
     restart: unless-stopped
