@@ -646,7 +646,7 @@ jobs:
     # The job budget stays above the sum of the step budgets on purpose. A step
     # timeout names the step that ran long. A job timeout reports "cancelled"
     # with no cause, which is what made the first report hard to read.
-    timeout-minutes: 30
+    timeout-minutes: 35
     defaults:
       run:
         working-directory: ops-portal
@@ -700,24 +700,34 @@ jobs:
         # answered "Service Unavailable" for five minutes on one run. One retry
         # after a short pause clears a brief outage. A longer outage then fails
         # this step alone, and the three steps above have already reported.
-        timeout-minutes: 6
+        #
+        # Second measurement, 2026-09-04: the first shape of this step called
+        # `npm audit` twice for each attempt, once for the status and once for
+        # the reason, and neither call carried a network bound. Four unbounded
+        # calls passed the step budget, so the step reported a timeout instead
+        # of the cause. This shape calls the audit one time for each attempt and
+        # bounds the call, so a dead endpoint fails fast and says so.
+        timeout-minutes: 8
         run: |
           # The default shell is `bash -e`, so every status test below uses `if`.
           attempt=1
           while [ "${attempt}" -le 2 ]; do
-            if npm audit --audit-level=high; then
+            # One call answers both questions. The JSON body carries an `error`
+            # key for an outage, and it carries the advisory counts for a real
+            # finding. `--audit-level` still decides the exit status.
+            if body="$(npm audit --audit-level=high --json --fetch-timeout=60000 2>&1)"; then
+              echo "The npm advisory service answered and reported no finding above the threshold."
               exit 0
             fi
-            # An advisory and an outage both exit non-zero, so read the reason
-            # before any retry. The JSON body of an outage carries an `error`
-            # key, and the body of a real finding does not.
-            if ! npm audit --audit-level=high --json 2>&1 | grep -q '"error"'; then
+            if ! printf '%s' "${body}" | grep -q '"error"'; then
               echo "::error::npm audit reported an advisory at the high level or above."
+              printf '%s\n' "${body}" | head -c 4000
               exit 1
             fi
             echo "The audit endpoint did not answer on attempt ${attempt}."
             if [ "${attempt}" -eq 2 ]; then
               echo "::error::The npm audit endpoint stayed unreachable. This is not an advisory."
+              printf '%s\n' "${body}" | head -c 1000
               exit 1
             fi
             sleep 30
