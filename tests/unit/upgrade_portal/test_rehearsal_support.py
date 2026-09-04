@@ -8,6 +8,9 @@ Why:
 
 from __future__ import annotations
 
+import logging
+from pathlib import Path
+
 import pytest
 
 from src.upgrade_portal.upgrade import events
@@ -200,3 +203,28 @@ def test_the_pause_hook_runs_once_for_one_poll_round(cloud: StandInCloud) -> Non
     cloud.set_pause(lambda: seen.append(1))  # The hook that the run status test installs.
     cloud.list_org_devices_stats(None, "org", type="all", site_id=None, fields=None, limit=1000)
     assert seen == [1]  # The hook ran for the one call.
+
+
+# ---------------------------------------------------------------------------
+# SC-001, the one condition that this suite does not prove
+# ---------------------------------------------------------------------------
+
+
+def test_the_route_level_condition_keeps_its_own_proof() -> None:
+    """SC-001 names one condition that another suite proves, so that name must hold.
+
+    Why:
+        Condition C1 of scenario C is the refusal to start with no verified
+        pre-check. It belongs to the start route, and the rehearsal starts below
+        that route on purpose. SC-001 therefore points at a contract test
+        instead of claiming the proof here. A rename or a deletion of that test
+        would make SC-001 false with no other signal, so this test holds the
+        name.
+    """
+    logging.info("Checking that the contract test named by SC-001 still exists")  # Report before the read.
+    path = Path(__file__).resolve().parents[2] / "contract" / "upgrade_portal" / "test_capture_attach.py"
+    text = path.read_text(encoding="utf-8")  # The module that owns the route-level proof.
+    logging.debug("Read %d characters of the contract module", len(text))  # Record the size after the read.
+
+    assert path.is_file(), "SC-001 names a contract module that must exist"
+    assert "def test_a_start_before_the_pre_check_still_refuses(" in text, "SC-001 names this test"

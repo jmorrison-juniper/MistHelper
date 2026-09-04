@@ -25,7 +25,7 @@ import pytest
 
 from src.firmware import upgrade_service
 from src.upgrade_portal.runtime.runs import PHASE_ORDER, RunRecordBuilder, RunState
-from src.upgrade_portal.upgrade import driver, events, gate, phase_gate
+from src.upgrade_portal.upgrade import driver, events, gate, options, phase_gate
 from tests.support.rehearsal.clock import RehearsalClock
 from tests.support.rehearsal.cloud import StandInCloud
 from tests.support.rehearsal.errors import RehearsalNetworkError
@@ -203,6 +203,12 @@ def build_targets(fleet: FleetScript, site_id: str = SITE_ID) -> list[dict[str, 
         drops an entry with no usable address. The builder writes all five and
         adds the two fields that the stop path reads.
 
+        The scope comes from the shipped ``options.resolve_family_scope``, which
+        is the function that writes the same field at ``options.py:1474`` in a
+        live run. A literal word here would prove nothing, because the test
+        would then read its own constant back. FR-027 asks that the run record
+        carry the scope, so the shipped classifier must decide it.
+
     Args:
         fleet: The scripts of the run.
         site_id: The site that holds every device.
@@ -210,18 +216,27 @@ def build_targets(fleet: FleetScript, site_id: str = SITE_ID) -> list[dict[str, 
     Returns:
         The target entries of the run record.
     """
-    return [
-        {
-            "mac": script.mac,  # The address that the gate joins against a statistics record.
-            "device_type": script.device_type,  # The family that sorts the device into one phase.
-            "version_before": script.version_before,  # One half of the reboot proof.
-            "uptime_before": script.uptime_before,  # The other half, which must fall at the reboot.
-            "last_seen_before": None,  # The pre-check read no cloud moment, so the anchor path stays shut.
-            "name": script.mac,  # The plan needs a name, and the address is the honest one here.
-            "site_id": site_id,  # The site of the device, which the plan route reads.
-        }
-        for script in fleet.scripts
-    ]
+    logging.info("Building %d run record targets for the rehearsal", len(fleet.scripts))  # Entry audit.
+    entries: list[dict[str, Any]] = []  # One target for each scripted device.
+    for script in fleet.scripts:  # A single pass keeps the cost linear in the device count.
+        row = {"type": script.device_type, "model": script.model}  # The two keys the classifier reads.
+        family, scope = options.resolve_family_scope(script.device_type, row)  # The shipped decision.
+        entries.append(
+            {
+                "mac": script.mac,  # The address that the gate joins against a statistics record.
+                "device_type": script.device_type,  # The family that sorts the device into one phase.
+                "version_before": script.version_before,  # One half of the reboot proof.
+                "uptime_before": script.uptime_before,  # The other half, which must fall at the reboot.
+                "last_seen_before": None,  # The pre-check read no cloud moment, so the anchor path stays shut.
+                "name": script.mac,  # The plan needs a name, and the address is the honest one here.
+                "site_id": site_id,  # The site of the device, which the plan route reads.
+                "model": script.model,  # The value that the shipped classifier read.
+                "gateway_family": family,  # The family word, or None for a device that is not a gateway.
+                "scope": scope,  # The cloud scope that the shipped classifier chose for this device.
+            }
+        )
+    logging.debug("Built %d targets, and the scope of each one came from the shipped classifier", len(entries))
+    return entries
 
 
 def build_record(fleet: FleetScript, run_id: str | None = None) -> dict[str, Any]:

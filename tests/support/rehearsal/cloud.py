@@ -46,6 +46,11 @@ CANCEL_NAMES: tuple[str, ...] = ("cancelSiteDeviceUpgrade", "cancelOrgDeviceUpgr
 STATUS_NAMES: tuple[str, ...] = ("getSiteDeviceUpgrade", "getOrgDeviceUpgrade", "getSiteSsrUpgrade")
 STATISTICS_NAME: str = "listOrgDevicesStats"
 
+# The status that a fault answer carries. The shipped page guard drops any page
+# whose status is not 200, and rule 1 of section 4 of ``data-model.md`` asks for
+# a fault answer, because a partial round must slow a run and never stop it.
+FAULT_STATUS: int = 503
+
 # WHY: The upgrade identifier of the rehearsal. One value serves the whole run,
 # because the stand-in holds one upgrade job.
 UPGRADE_ID: str = "rehearsal-upgrade-0001"
@@ -131,6 +136,7 @@ class StandInCloud:
         self.writing: set[str] = set()  # The devices that already write firmware and must not be cancelled.
         self.cancelled: list[str] = []  # Each identifier that a cancel call named, in call order.
         self.total_bonus: int = 0  # A test raises this to make the page guard report a short read.
+        self.fault_rounds: int = 0  # A test raises this to make that many statistics reads answer a fault.
         self.frozen_last_seen: float | None = None  # A test sets this to hold every record at one cloud moment.
 
     def set_pause(self, hook: Callable[[], None] | None) -> None:
@@ -219,6 +225,10 @@ class StandInCloud:
         self._record(STATISTICS_NAME, (session, org_id), keywords)  # The shape test reads this record.
         if self._pause is not None:  # Q8 of the research holds one round here.
             self._pause()  # The hook runs inside the round, so a reader meets a busy run.
+        if self.fault_rounds > 0:  # A test asked this read to fail, which proves the partial round.
+            self.fault_rounds -= 1  # Each fault answer spends one of the asked rounds.
+            logger.debug("The stand-in answered a fault for one statistics read")  # The result of the action.
+            return StandInResponse(None, status_code=FAULT_STATUS)  # The shipped guard drops a non-200 page.
         now = self.clock.now()  # One reading dates every record of this answer.
         stamp = self.frozen_last_seen if self.frozen_last_seen is not None else now  # A stale cloud repeats one stamp.
         elapsed = now - self.fleet.started_at  # The offset that each script reads.

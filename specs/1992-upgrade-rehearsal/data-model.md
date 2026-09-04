@@ -53,6 +53,8 @@ order, and no stop rule.
 | `uptime_before` | `int` | The uptime in seconds before the reboot. |
 | `reconnect_at` | `float` | The offset of the reconnect event. |
 | `version_at` | `float` | The offset of the version change. |
+| `uptime_reset_at` | `float \| None` | The offset of the uptime fall, or `None` to use `version_at`. |
+| `model` | `str` | The hardware model that the shipped classifier reads. |
 
 **Rules**:
 
@@ -60,8 +62,8 @@ order, and no stop rule.
    event, so a version change before it would prove nothing.
 2. `version_at` stays far below the phase deadline of 1800 seconds. A device
    that passes the deadline cannot settle.
-3. A script with a `version_after` equal to `version_before` never settles. One
-   edge case test uses that script.
+3. A script can publish the target version before the uptime falls. The gate
+   waits until the uptime proof arrives before it settles the device.
 
 ## 3. FleetScript
 
@@ -97,8 +99,10 @@ order, and no stop rule.
 | - | - | - |
 | `fleet` | `FleetScript` | The scripts of the run. |
 | `clock` | `RehearsalClock` | The one time source. |
-| `_calls` | `dict[str, int]` | The count of each call name. |
+| `_calls` | `list[CallRecord]` | Each call that reached the stand-in, in order. |
+| `_counts` | `dict[str, int]` | The count of each call name. |
 | `_pause` | `Callable[[], None] \| None` | The hook of the run status test. |
+| `fault_rounds` | `int` | The count of statistics reads that must answer a fault. |
 
 **Methods**: One method answers each of the five attachment points. The contract
 `contracts/rehearsal-cloud.md` records each signature.
@@ -147,7 +151,7 @@ The harness reads these records and writes none of their rules.
 
 | Record | Module | What the suite reads |
 | - | - | - |
-| The run record | The store double | `current_state`, `phases`, and `targets` |
+| The run record | The store double | `state`, `phases`, and `targets` |
 | `PhaseOutcome` | `driver.py:281` | `name`, `state`, `settled`, and `total` |
 | `GateProgress` | `gate.py` | `reconnected`, `reboot_at`, and `settled_at` |
 | `StopOutcome` | `signals.py` | The three lists and the message |

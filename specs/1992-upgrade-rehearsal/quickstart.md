@@ -115,13 +115,19 @@ Run each gate before you open a pull request.
 
 ## 9. Grade every Markdown file of this feature
 
-FR-032 and SC-008 ask for a score of 80 or above.
+FR-032 and SC-008 ask for a score of 80 or above. Grade all 11 Markdown files
+of this feature.
 
 ```powershell
+.venv\Scripts\python.exe -m tools.ste_linter --min-score 80 specs/1992-upgrade-rehearsal/spec.md
 .venv\Scripts\python.exe -m tools.ste_linter --min-score 80 specs/1992-upgrade-rehearsal/plan.md
 .venv\Scripts\python.exe -m tools.ste_linter --min-score 80 specs/1992-upgrade-rehearsal/research.md
 .venv\Scripts\python.exe -m tools.ste_linter --min-score 80 specs/1992-upgrade-rehearsal/data-model.md
 .venv\Scripts\python.exe -m tools.ste_linter --min-score 80 specs/1992-upgrade-rehearsal/quickstart.md
+.venv\Scripts\python.exe -m tools.ste_linter --min-score 80 specs/1992-upgrade-rehearsal/tasks.md
+.venv\Scripts\python.exe -m tools.ste_linter --min-score 80 specs/1992-upgrade-rehearsal/live-checklist.md
+.venv\Scripts\python.exe -m tools.ste_linter --min-score 80 specs/1992-upgrade-rehearsal/analysis.md
+.venv\Scripts\python.exe -m tools.ste_linter --min-score 80 specs/1992-upgrade-rehearsal/checklists/requirements.md
 .venv\Scripts\python.exe -m tools.ste_linter --min-score 80 specs/1992-upgrade-rehearsal/contracts/rehearsal-cloud.md
 .venv\Scripts\python.exe -m tools.ste_linter --min-score 80 specs/1992-upgrade-rehearsal/contracts/rehearsal-clock.md
 ```

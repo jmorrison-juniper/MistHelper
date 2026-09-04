@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-04
 
-**Status**: Draft
+**Status**: Implemented
 
 **Input**: Prove the upgrade settle gate and the stop control of the upgrade
 capture portal without a write of firmware to production hardware. GitHub issue
@@ -168,8 +168,8 @@ hardware. Remove any item that the rehearsal already proves.
   belongs in the cancelled list, and the `already_writing` list is empty.
 - The stop arrives after every device finished the write. No device belongs in
   the cancelled list.
-- The cloud answers an unknown status for one device. The outcome must report
-  that device as unknown and must not claim a cancel.
+- The portal cannot read the state of one device. The outcome must place that
+  device in `already_writing` and must not claim a cancel.
 
 ## Requirements *(mandatory)*
 
@@ -186,7 +186,8 @@ hardware. Remove any item that the rehearsal already proves.
 - **FR-003**: The harness MUST reach the shipped stop path in
   `src/upgrade_portal/upgrade/stop.py`.
 - **FR-004**: The harness MUST NOT hold a copy of any settle rule, any phase
-  order, or any stop rule. Every such rule stays in the shipped code.
+  order, or any stop rule. Every such rule stays in the shipped code. This rule
+  holds by review, and no automated check proves it.
 - **FR-005**: The harness MUST NOT write firmware. No test may call the real
   upgrade endpoint of the cloud.
 
@@ -276,8 +277,9 @@ hardware. Remove any item that the rehearsal already proves.
   deadline, the device waits, and the sleep of the poll loop.
 - **The run record**: The shipped record of one upgrade run. The suite reads it
   for the phase order, the current phase, and the device scope.
-- **The stop outcome**: The shipped result of one stop. It holds the cancelled
-  list, the `already_writing` list, the unknown list, and the message.
+- **The stop outcome**: The shipped result of one stop. It holds `cancelled`,
+  `already_writing`, `no_cancel_available`, and `message`. A device with an
+  unreadable state lands in `already_writing`.
 - **The live checklist**: The short document for the human run of scenario C and
   scenario D.
 
@@ -285,8 +287,15 @@ hardware. Remove any item that the rehearsal already proves.
 
 ### Measurable Outcomes
 
-- **SC-001**: The rehearsal suite proves 9 of the 9 portal pass conditions of
-  scenario C and scenario D that the answers of the cloud drive.
+- **SC-001**: The rehearsal suite proves 8 of the 9 portal pass conditions of
+  scenario C and scenario D. The ninth is condition C1 of scenario C, "the
+  portal refuses to start the upgrade when no verified pre-check exists". That
+  condition belongs to the start route, and the rehearsal starts below that
+  route on purpose, so the rehearsal cannot prove it and must not claim to. The
+  contract test
+  `tests/contract/upgrade_portal/test_capture_attach.py::test_a_start_before_the_pre_check_still_refuses`
+  proves C1 at the level that owns it. All 9 conditions therefore hold, and this
+  criterion states which suite proves each part.
 - **SC-002**: The whole rehearsal suite finishes in under 60 seconds on a
   continuous integration worker.
 - **SC-003**: No rehearsal test waits more than 1 real second for a settle

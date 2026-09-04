@@ -17,7 +17,7 @@ The harness holds no settle rule, no phase order, and no stop rule. Every such
 rule stays in the shipped code. The harness only supplies the answers of the
 cloud and the readings of the clock.
 
-The harness adds one package under `tests/support/rehearsal/` and three test
+The harness adds one package under `tests/support/rehearsal/` and four test
 modules under `tests/unit/upgrade_portal/`. It changes no file under `src/`.
 
 ## Technical Context
@@ -51,7 +51,7 @@ total, plus one session smart router for the stop test.
 
 | Principle | How this plan meets it |
 | - | - |
-| I. Five-Item Rule | The new package holds 5 modules. Every planned function keeps 5 parameters, 5 blocks, and 25 lines. Each record groups its fields, as `RunDriverDeps` does. |
+| I. Five-Item Rule | The new package holds 7 modules. Every planned function keeps 5 parameters, 5 blocks, and 25 lines. Each record groups its fields, as `RunDriverDeps` does. |
 | II. Class-Based Architecture | Each module holds one named class. `RehearsalClock`, `StandInCloud`, `DeviceScript`, `RehearsalHarness`, and `DefectDrill` own the behavior. |
 | III. Safety-First | The harness reads no operator input. The stand-in resolver refuses every firmware write endpoint and raises. |
 | IV. Full Deployment Pipeline | The implementation phase runs the pipeline. This plan writes prose only. |
@@ -85,10 +85,12 @@ tests/support/rehearsal/
 ├── clock.py             # RehearsalClock: one time source for the whole run
 ├── script.py            # DeviceScript and FleetScript: the device lifecycle
 ├── cloud.py             # StandInCloud: the answers and the call counters
+├── errors.py            # Rehearsal errors for network and firmware refusal
 ├── harness.py           # RehearsalHarness: the run record and the wiring
 └── defects.py           # DefectDrill: the three defect classes
 
 tests/unit/upgrade_portal/
+├── test_rehearsal_support.py   # Support module checks
 ├── test_rehearsal_cascade.py   # User Story 1
 ├── test_rehearsal_stop.py      # User Story 2
 └── test_rehearsal_defects.py   # User Story 3
@@ -230,7 +232,7 @@ counter, the lock, and the logger. It publishes `now`, `sleep`, `now_text`, and
 ### The script module
 
 `tests/support/rehearsal/script.py` holds `DeviceScript` and `FleetScript`.
-`DeviceScript` is a frozen record of 7 fields. `FleetScript` holds a tuple of
+`DeviceScript` is a frozen record of 9 fields. `FleetScript` holds a tuple of
 scripts, and it answers `script_for` and `scripts_of_type`. Two module builders
 create the fleet of the cascade test and the fleet of the stop test.
 
@@ -265,9 +267,8 @@ A fixture replaces `socket.socket` with a function that raises
 `RehearsalNetworkError`. The fixture counts each attempt. Every rehearsal test
 asserts that the count stayed at zero.
 
-The harness passes a `StandInSession` object to the shipped readers. The object
-carries no host and no token, so a call that escaped the stand-in would fail at
-once. The five attachment points cover every cloud call that the run makes.
+The harness passes `None` as the cloud session to the shipped readers. The five
+attachment points cover every cloud call that the run makes.
 
 The proof holds in two directions. A blocked socket changes no result, because
 no code opens one. A stand-in that missed a call would raise at the socket
@@ -280,9 +281,10 @@ upgrade endpoint. The stand-in resolver raises `RehearsalFirmwareError` for
 `upgradeSiteDevices`, for `upgradeDevice`, and for `upgradeOrgSsrs`.
 
 The stand-in also counts each name that it answers. Each test asserts that the
-count of the three write names is zero. The `UpgradeSubmitter` seat of
-`RunDriverDeps` holds a double. The double writes the upgrade identifiers into
-the run record, and it calls no cloud endpoint.
+count of the three write names is zero. The harness passes `None` for the
+`RunDriverDeps.submit` seat, so the run driver skips submission. The scope of
+each device reaches the run record through the shipped
+`options.resolve_family_scope` call inside `harness.build_targets`.
 
 ## Design decision 6: how the defect drill runs, for SC-006
 

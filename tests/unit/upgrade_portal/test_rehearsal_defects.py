@@ -26,7 +26,8 @@ from tests.support.rehearsal import (
     RehearsalHarness,
     cascade_fleet,
 )
-from tests.unit.upgrade_portal.test_rehearsal_stop import UPGRADE_ID, site_plan
+from tests.support.rehearsal.cloud import UPGRADE_ID  # The identifier at its true home
+from tests.unit.upgrade_portal.test_rehearsal_stop import site_plan
 
 # WHY: The cloud publishes the target version at this offset, and the device
 # only reboots much later. The honest gate must wait for the second moment.

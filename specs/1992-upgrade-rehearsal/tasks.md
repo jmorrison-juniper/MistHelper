@@ -172,7 +172,7 @@ device that writes firmware, and reports a clear message.
       test asserts the cancel through the organization scope call, and it
       asserts `scope: "org"` in the run record. This test meets FR-027.
 - [X] T031 [P] [US2] Add the stop edge case tests to the same file. The cases
-      are the early stop, the late stop, and the unknown status of one device.
+      are the early stop, the late stop, and the unreadable state of one device.
 - [X] T032 [US2] Add the guard test to the same file, in the shape of T024. The
       test measures SC-004 and SC-005 for the stop run.
 
@@ -261,9 +261,10 @@ hardware.
       and repair every finding.
 - [X] T050 [P] Run `.venv\Scripts\python.exe -m interrogate -f 90 tests/support/rehearsal`
       and reach 90 percent or above.
-- [X] T051 Run `.venv\Scripts\python.exe -m tools.ste_linter --min-score 80 specs/1992-upgrade-rehearsal`
-      and reach 80 or above for every Markdown file of the feature. This task
-      meets FR-032 and measures SC-008.
+- [X] T051 Run the STE linter command from section 9 of
+      `specs/1992-upgrade-rehearsal/quickstart.md` for each Markdown file of the
+      feature. Reach 80 or above for every file. This task meets FR-032 and
+      measures SC-008.
 - [X] T052 Add the inline comment on every executable line of the new modules,
       as principle VI of the constitution asks. Confirm the `info` line and the
       `debug` line of each action, as principle VII asks.

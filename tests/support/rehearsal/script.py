@@ -48,6 +48,13 @@ class DeviceScript:
         uptime_reset_at: The offset of the uptime fall, or None to follow
             ``version_at``. A later value scripts the cloud that publishes the
             target version before the device reboots.
+        model: The hardware model of the device. The shipped
+            ``upgrade_service.classify_gateway`` reads this value to tell a
+            session smart router from a Junos gateway, and
+            ``options.resolve_family_scope`` turns that family into the cloud
+            scope of the device. A model that holds ``SSR`` or ``128T`` reads as
+            a session smart router. The default holds neither, so a plain
+            gateway stays at the site scope.
     """
 
     mac: str
@@ -58,6 +65,7 @@ class DeviceScript:
     reconnect_at: float = 40.0
     version_at: float = 40.0
     uptime_reset_at: float | None = None
+    model: str = "SRX345"
 
     @property
     def reboot_moment(self) -> float:
@@ -190,7 +198,7 @@ def stop_fleet(started_at: float) -> FleetScript:
         The cascade fleet and one session smart router.
     """
     logger.info("Build the stop fleet at reading %s", started_at)  # The action, before it happens.
-    router = DeviceScript("dd0000000001", TYPE_GATEWAY)  # The router rides the gateway phase of the cascade.
+    router = DeviceScript("dd0000000001", TYPE_GATEWAY, model="SSR120")  # The model that marks a session smart router.
     base = cascade_fleet(started_at)  # The stop fleet holds every device of the cascade fleet.
     fleet = FleetScript(scripts=(*base.scripts, router), started_at=float(started_at))  # Seven devices in all.
     logger.debug("Built the stop fleet of %s devices", len(fleet.scripts))  # The result of the action.

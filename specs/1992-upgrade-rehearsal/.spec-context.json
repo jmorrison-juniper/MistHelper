@@ -2,8 +2,8 @@
   "workflow": "speckit",
   "specName": "The upgrade rehearsal harness",
   "branch": "feat/1992-upgrade-rehearsal",
-  "currentStep": "tasks",
-  "status": "ready-to-implement",
+  "currentStep": "implement",
+  "status": "implemented",
   "history": [
     {
       "step": "specify",
@@ -25,6 +25,13 @@
       "kind": "complete",
       "by": "extension",
       "at": "2026-09-04T16:41:41.954Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-09-04T18:52:05.407Z"
     }
   ]
 }

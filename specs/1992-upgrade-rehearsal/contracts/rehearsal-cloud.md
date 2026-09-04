@@ -144,6 +144,7 @@ cancel endpoint. It raises `RehearsalFirmwareError` for each write endpoint.
 | `getSiteDeviceUpgrade` | Answers the upgrade status of the site scope. |
 | `getOrgDeviceUpgrade` | Answers the upgrade status of the organization scope. |
 | `getSiteSsrUpgrade` | Answers the status of a session smart router. |
+| `listOrgDevicesStats` | Answers organization statistics for a session smart router. |
 | `cancelSiteDeviceUpgrade` | Records the cancel and answers the outcome. |
 | `cancelOrgDeviceUpgrade` | Records the cancel and answers the outcome. |
 | `cancelOrgSsrUpgrade` | Records the cancel of the organization scope. |
@@ -163,8 +164,9 @@ reader `_normalize_status` reads each one.
 | `status_known` | `bool` | True when the answer is an upgrade job. |
 
 **Rule**: The organization scope read of a session smart router answers device
-statistics and no upgrade job. The stand-in therefore sets `status_known` to
-false for that read. `stop.status_is_known` at `stop.py:192` reads that field.
+statistics and no upgrade job. The stand-in returns an empty list for that read.
+The shipped normalizer then derives `status_known` from the answer shape.
+`stop.status_is_known` at `stop.py:192` reads that field.
 
 ## 6. The response object
 

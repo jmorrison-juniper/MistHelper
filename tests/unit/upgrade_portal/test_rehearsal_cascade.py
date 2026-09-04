@@ -277,6 +277,29 @@ def test_a_short_page_marks_the_round_partial(monkeypatch: pytest.MonkeyPatch, t
     assert harness.record()["state"] == RunState.COMPLETE.value  # A short page slows a run and never stops it.
 
 
+def test_a_failed_statistics_read_marks_the_round_partial(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """A statistics read that answers a fault must slow the run and never stop it.
+
+    Why:
+        Rule 1 of section 4 of ``data-model.md`` asks for a fault answer, and the
+        edge case list of the specification names the failed round. The shipped
+        page guard drops a page whose status is not 200, so the round holds no
+        reading and the next round must carry on.
+
+    Args:
+        monkeypatch: The pytest patch helper.
+        tmp_path: The temporary directory of this test.
+    """
+    harness = RehearsalHarness()  # A run whose first statistics read fails.
+    harness.attach(monkeypatch, tmp_path / "data")  # The five attachment points and the page size.
+    harness.cloud.fault_rounds = 1  # The next statistics read answers a fault and holds no record.
+    harness.start()  # The shipped entry point of the run.
+    harness.join()  # The run still ends, because one failed round is no fault of the run.
+
+    assert harness.record()["state"] == RunState.COMPLETE.value  # A failed round slows a run and never stops it.
+    assert harness.cloud.fault_rounds == 0  # The run really met the fault answer and spent it.
+
+
 def test_a_device_that_never_reconnects_fails_its_phase(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """The phase deadline of the shipped gate ends a phase that cannot settle.
 

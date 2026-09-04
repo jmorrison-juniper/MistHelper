@@ -18,7 +18,7 @@ import pytest
 from src.firmware.upgrade_service import DeviceTarget, GatewayFamily, PlanRoute, UpgradePlan
 from src.upgrade_portal.runtime.runs import RunState
 from src.upgrade_portal.runtime.signals import StopOutcome, StopRequestStore
-from src.upgrade_portal.upgrade import stop
+from src.upgrade_portal.upgrade import options, stop
 from tests.support.rehearsal import (
     ORG_ID,
     SITE_ID,
@@ -218,12 +218,40 @@ def test_the_message_states_that_the_writing_device_finishes(stopped: StoppedRun
 def test_the_router_cancel_travels_the_organization_scope_call(stopped: StoppedRun) -> None:
     """FR-027 asks the router of the organization scope to reach its own call.
 
+    Why:
+        This test once read ``router_plan().route.scope``, which is a constant
+        of this module. That assertion passed whatever the shipped code did, so
+        it proved nothing. FR-027 names the run record, so the test now reads
+        the record, and the shipped ``options.resolve_family_scope`` is the
+        function that put the value there.
+
     Args:
         stopped: The stopped run.
     """
-    assert router_plan().route.scope == "org"  # The scope of the plan that the run submitted.
+    targets = stopped.harness.record()["targets"]  # The record that the shipped driver carried through the run.
+    router = next(entry for entry in targets if entry["mac"] == ROUTER_MAC)  # The one session smart router.
+    others = [entry for entry in targets if entry["mac"] != ROUTER_MAC]  # Every other device of the fleet.
+    assert router["scope"] == "org"  # The record shows the organization scope for the router, as FR-027 asks.
+    assert all(entry["scope"] == "site" for entry in others)  # No other device took the organization scope.
     assert stopped.harness.cloud.calls_of("cancelOrgSsrUpgrade") == 1  # The one cancel call of that scope.
     assert stopped.harness.cloud.calls_of("cancelSiteDeviceUpgrade") == 1  # The site plan kept its own call.
+
+
+def test_the_shipped_classifier_decides_the_router_scope() -> None:
+    """The scope of the record comes from the shipped code and not from this test.
+
+    Why:
+        The test above reads a field of the run record. That field is only
+        honest while the shipped classifier writes it. This test names the
+        shipped function and proves that the model of the router, and nothing
+        else, produces the organization scope.
+    """
+    router_row = {"type": "gateway", "model": "SSR120"}  # The row that the target builder hands the classifier.
+    junos_row = {"type": "gateway", "model": "SRX345"}  # A gateway of the other family.
+
+    assert options.resolve_family_scope("gateway", router_row)[1] == "org"  # The shipped rule, not a constant here.
+    assert options.resolve_family_scope("gateway", junos_row)[1] == "site"  # A Junos gateway stays at the site.
+    assert options.resolve_family_scope("switch", junos_row)[1] == "site"  # A switch is never a gateway family.
 
 
 def test_the_router_status_read_reports_an_unknown_state(stopped: StoppedRun) -> None:
