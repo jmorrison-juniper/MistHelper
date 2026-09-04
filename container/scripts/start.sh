@@ -233,10 +233,11 @@ if ! [[ "$SNMP_COMMUNITY" =~ ^[A-Za-z0-9_.-]+$ ]]; then
     log_container_event "[SNMP] ERROR: SNMP_COMMUNITY contains unsupported characters."
     exit 1
 fi
+mkdir -p /etc/snmp  # Create the SNMP config directory if it does not exist
 printf '%s\n' \
     "agentAddress udp:${SNMP_PORT}" \
     "rocommunity ${SNMP_COMMUNITY} 0.0.0.0/0" \
-    "pass_persist ${SNMP_BASE_OID} /usr/local/bin/python3.13 /app/MistHelper.py --metrics-snmp" \
+    "pass_persist ${SNMP_BASE_OID} /usr/local/bin/python3 /app/MistHelper.py --metrics-snmp" \
     > "$SNMP_CONFIG"
 
 # Stop Net-SNMP from loading a MIB file at startup.
