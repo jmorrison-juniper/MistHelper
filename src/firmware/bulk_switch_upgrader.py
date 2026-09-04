@@ -435,7 +435,22 @@ class BulkSwitchFirmwareUpgrader:  # pylint: disable=too-few-public-methods,too-
         return list(switches_response.data)  # WHY: return list of switch dicts.
 
     def _populate_inventory_state(self, switches: list[dict[str, Any]]) -> None:
-        """Populate switch_models and current_firmware_versions from inventory."""
+        """Populate switch_models and current_firmware_versions from inventory.
+
+        Why:
+            Issue #2253. The rows come from ``getOrgInventory``, which reports
+            the running version. ``RunningFirmwareVersionResolver`` holds that
+            rule, and its ``RUNNING_VERSION_ENDPOINTS`` names this endpoint.
+
+            Warning: never read a version from ``listSiteDevices``. That endpoint
+            reports the configured version, which can name a release the device
+            left long ago. The ``_get_site_switches`` call below reads that
+            endpoint for device identifiers alone, and no verdict reads a version
+            from those rows. Issue #2006 records what the wrong endpoint costs.
+
+        Args:
+            switches: The switch rows of the org inventory.
+        """
         for switch in switches:  # WHY: single pass over inventory.
             version = switch.get("version")  # WHY: extract version once for narrowing.
             if version:  # WHY: skip entries lacking a version field.
@@ -878,7 +893,25 @@ class BulkSwitchFirmwareUpgrader:  # pylint: disable=too-few-public-methods,too-
         self._execute_site_upgrade(site_id, site_name, site_switches)  # WHY: perform upgrade.
 
     def _get_site_switches(self, site_id: str, site_name: str) -> list[dict[str, Any]] | None:
-        """Get switches for a specific site."""
+        """Get switches for a specific site.
+
+        Why:
+            Issue #2253. This call reads ``listSiteDevices``, which reports the
+            configured version and not the running one. The caller reads the
+            device identifiers of these rows and nothing else.
+
+            Warning: never read the ``version`` field of a row this method
+            returns. ``_populate_inventory_state`` reads the running version from
+            ``getOrgInventory`` instead. Issue #2006 records what the wrong
+            endpoint costs on production hardware.
+
+        Args:
+            site_id: The site to read.
+            site_name: The site name, used in the operator messages.
+
+        Returns:
+            The switch rows, or None when the call failed.
+        """
         import mistapi  # pylint: disable=import-outside-toplevel
 
         # WHY: query devices scoped to switch type only.
