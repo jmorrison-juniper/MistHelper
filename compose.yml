@@ -82,6 +82,8 @@ services:
       - "8055:8055"
       # Upgrade capture portal for pre-check and post-check work
       - "8056:8056"
+      # SNMP service on an unprivileged container port
+      - "1161:1161/udp"
     volumes:
       # Mount local data directory to persist SQLite database and logs
       # The container writes to /app/data, this maps it to ./data on host
@@ -97,6 +99,33 @@ services:
       - WEB_PORT=8055
       # Upgrade capture portal port (must match exposed port)
       - CAPTURE_PORT=8056
+      # Metrics gateway HTTP port
+      - METRICS_PORT=8057
+      # SNMP service port and community. Set SNMP_COMMUNITY in .env for production.
+      - SNMP_PORT=1161
+      - SNMP_COMMUNITY=${SNMP_COMMUNITY:-misthelper}
+      - SNMP_BASE_OID=${SNMP_BASE_OID:-.1.3.6.1.4.1.11.2147483646}
+      - METRICS_SNMP_BASE_OID=${METRICS_SNMP_BASE_OID:-.1.3.6.1.4.1.11.2147483646}
+      # The resolver addresses the container tries when it cannot resolve
+      # api.mist.com with the resolver that Podman gave it.
+      #
+      # Why: Podman gives the container one nameserver, its own DNS proxy on the
+      # bridge gateway. That proxy answers a container name such as
+      # `misthelper-arangodb`, and it forwards every other name to an upstream
+      # resolver. When the network holds no upstream resolver, the proxy
+      # forwards nothing, and every Mist API call fails with
+      # "Temporary failure in name resolution".
+      #
+      # The start script tests each address below and adds the first one that
+      # answers. It runs only after the container already failed to resolve the
+      # name, and it appends, so the Podman proxy stays first and every
+      # container name still resolves.
+      #
+      # Set this in .env to your own resolvers when your network blocks a public
+      # resolver. Set it to an empty value to turn the repair off.
+      - DNS_FALLBACK_SERVERS=${DNS_FALLBACK_SERVERS:-1.1.1.1,8.8.8.8}
+      # Reuse the existing lowercase organization setting from .env.
+      - METRICS_ORG_ID=${org_id}
       # Database connection. The service names below resolve on the project
       # network, and the ports match the non-default ports each service binds.
       - ARANGO_HOST=http://misthelper-arangodb:9529
@@ -208,6 +237,49 @@ services:
       retries: 5
       start_period: 10s
 
+  # ---------------------------------------------------------------------------
+  # Observium, an SNMP monitoring system. It reads the metrics gateway.
+  #
+  # This service carries a profile, so `compose up` does not start it. Start it
+  # only when you want the monitoring system:
+  #
+  #     .\scripts\compose.ps1 --profile monitoring up -d
+  #
+  # Why a profile: the monitoring system is optional. It carries its own
+  # database and its own web server, and an operator who reads the Prometheus
+  # endpoint instead needs none of it.
+  #
+  # The image is community maintained. It is not an Observium release.
+  # ---------------------------------------------------------------------------
+  misthelper-observium:
+    image: docker.io/uberchuckie/observium:latest
+    container_name: misthelper-observium
+    profiles:
+      - monitoring
+    # The host name must be `observium`, because the bundled Apache
+    # configuration and the bundled database both name it.
+    hostname: observium
+    ports:
+      # The Observium web interface. Sign in with observium / observium, then
+      # change that password.
+      - "8668:8668"
+      # Syslog. The container side keeps 514, and the host side moves, because a
+      # rootless container cannot bind a port below 1024.
+      - "1514:514/udp"
+    volumes:
+      # The image declares these four paths. `/config` holds the database and
+      # the Observium configuration file, so it is the one that must persist.
+      - misthelper-observium-config:/config
+      - misthelper-observium-certificates:/opt/observium/certificates
+      - misthelper-observium-logs:/opt/observium/logs
+      - misthelper-observium-rrd:/opt/observium/rrd
+      # The MistHelper MIB, read-only. Observium loads every file of this folder,
+      # so the mount installs the MIB and no operator copies a file.
+      - ./documentation/mibs/MISTHELPER-MIB.mib:/opt/observium/mibs/MISTHELPER-MIB:ro
+    networks:
+      - misthelper-network
+    restart: unless-stopped
+
 networks:
   misthelper-network:
     name: misthelper-network
@@ -228,4 +300,16 @@ volumes:
     driver: local
   misthelper-redis-data:
     name: misthelper-redis-data
+    driver: local
+  misthelper-observium-config:
+    name: misthelper-observium-config
+    driver: local
+  misthelper-observium-certificates:
+    name: misthelper-observium-certificates
+    driver: local
+  misthelper-observium-logs:
+    name: misthelper-observium-logs
+    driver: local
+  misthelper-observium-rrd:
+    name: misthelper-observium-rrd
     driver: local
