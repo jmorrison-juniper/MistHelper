@@ -51,10 +51,25 @@ name: ${COMPOSE_PROJECT_NAME:-misthelper}
 
 services:
   misthelper:
-    # The published image is the one that CI builds and tests. Name it here, so
-    # a compose run uses it instead of a stale local build. Without this key,
-    # compose builds from the section below and keeps that local image forever,
-    # which silently pins the stack to an old commit.
+    # The published image is the one that CI builds and tests, so name it here.
+    #
+    # Warning: naming the image does not stop a rebuild. `podman-compose up -d`
+    # with no service argument builds from the section below, overwrites this
+    # tag with the local build, and prints no line that names the build. If the
+    # checkout is behind `main`, that command downgrades the running container
+    # and clears the labels that name the commit. Issue #2272 holds the
+    # measurement: one run replaced the image of commit `6eb253f7` with a build
+    # of commit `6095392c`, 18 commits behind, and the running code lost a
+    # firmware repair.
+    #
+    # Pull first, then name the service. That pair never builds:
+    #   podman pull ghcr.io/jmorrison-juniper/misthelper:latest
+    #   podman rm -f misthelper-app
+    #   .\scripts\compose.ps1 up -d --no-deps misthelper
+    #
+    # Read the commit that a running container holds with this command. An empty
+    # answer names a local build, because only the CI build writes the label.
+    #   podman inspect misthelper-app --format '{{index .Config.Labels "org.opencontainers.image.revision"}}'
     image: ghcr.io/jmorrison-juniper/misthelper:latest
     build:
       context: .

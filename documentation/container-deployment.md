@@ -51,6 +51,37 @@ The script needs the native provider. Install it one time with this command:
 .venv\Scripts\python.exe -m pip install podman-compose
 ```
 
+## Update the stack to the newest code
+
+Warning: a plain `up` rebuilds. `podman-compose up -d` with no service argument
+builds the application image from your working tree and overwrites the published
+tag with that build. It prints no line that names the build. If your checkout is
+behind `main`, the command downgrades the running container and clears the labels
+that name the commit. Issue #2272 holds the measurement.
+
+Update the checkout first, then pull, then name the service.
+
+```powershell
+git pull                                        # The build source, if one runs
+podman pull ghcr.io/jmorrison-juniper/misthelper:latest
+podman rm -f misthelper-app
+.\scripts\compose.ps1 up -d --no-deps misthelper
+```
+
+Continuous integration builds and publishes an image for every commit that
+changes `src/`, `web_portal/`, `MistHelper.py`, `requirements.txt`, or the
+`Containerfile`. A pull therefore gives you the tested image, and no local build
+is needed. Read `.github/workflows/container-build.yml` for the full path list.
+
+## Read the commit that a container runs
+
+```powershell
+podman inspect misthelper-app --format '{{index .Config.Labels "org.opencontainers.image.revision"}}'
+```
+
+Compare that value against `git rev-parse origin/main`. An empty answer names a
+local build, because only the continuous integration build writes the label.
+
 ## Recreate the application container alone
 
 After a new image, recreate the application container and leave the two stores
