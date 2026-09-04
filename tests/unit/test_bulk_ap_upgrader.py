@@ -271,9 +271,12 @@ class TestStep3FirmwareStats:
         """Process APs and extract version info."""
         upgrader = _make_upgrader()
         upgrader.all_aps = [SAMPLE_AP, SAMPLE_AP_2]
+        # Issue #2253: the lookup now maps a join key to the running version
+        # string. `RunningFirmwareVersionResolver.index_stats_rows` builds it,
+        # so the whole stats row no longer travels past the index step.
         stats = {
-            "ap-001": {"version": "0.14.123"},
-            "ap-002": {"version": "0.14.120"},
+            "ap-001": "0.14.123",
+            "ap-002": "0.14.120",
         }
         upgrader._process_aps_with_stats(stats)
         assert upgrader.ap_versions["ap-001"] == "0.14.123"
@@ -284,7 +287,7 @@ class TestStep3FirmwareStats:
     def test_get_ap_version_from_stats(self):
         """Get AP version from stats lookup."""
         upgrader = _make_upgrader()
-        stats = {"ap-001": {"version": "0.14.123"}}
+        stats = {"ap-001": "0.14.123"}  # Issue #2253: a key maps to the version string.
         ap = {"id": "ap-001", "mac": "aa:bb:cc:dd:ee:01"}
         result = upgrader._get_ap_version(ap, stats)
         assert result == "0.14.123"
