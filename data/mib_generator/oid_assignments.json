@@ -1,0 +1,814 @@
+{
+  "version": 1,
+  "base_oid": ".1.3.6.1.4.1.8072.9999.9999",
+  "entries": [
+    {
+      "key": "org/#mist_org_info",
+      "subtree": 1,
+      "column": 1,
+      "descriptor": "mistOrgInfo",
+      "state": "live",
+      "notes": "Seeded from the hand-written MIB so the OID and the name never move."
+    },
+    {
+      "key": "org/num_sites",
+      "subtree": 1,
+      "column": 2,
+      "descriptor": "mistOrgSites",
+      "state": "live",
+      "notes": "Seeded from the hand-written MIB so the OID and the name never move."
+    },
+    {
+      "key": "org/num_devices",
+      "subtree": 1,
+      "column": 3,
+      "descriptor": "mistOrgDevices",
+      "state": "live",
+      "notes": "Seeded from the hand-written MIB so the OID and the name never move."
+    },
+    {
+      "key": "org/num_inventory",
+      "subtree": 1,
+      "column": 4,
+      "descriptor": "mistOrgInventory",
+      "state": "live",
+      "notes": "Seeded from the hand-written MIB so the OID and the name never move."
+    },
+    {
+      "key": "org/num_devices_connected",
+      "subtree": 1,
+      "column": 5,
+      "descriptor": "mistOrgDevicesConnected",
+      "state": "live",
+      "notes": "Seeded from the hand-written MIB so the OID and the name never move."
+    },
+    {
+      "key": "org/num_devices_disconnected",
+      "subtree": 1,
+      "column": 6,
+      "descriptor": "mistOrgDevicesDisconnected",
+      "state": "live",
+      "notes": "Seeded from the hand-written MIB so the OID and the name never move."
+    },
+    {
+      "key": "org/#mist_count_org_assets_by_distance_field",
+      "subtree": 1,
+      "column": 14,
+      "descriptor": "mistOrgMistCountOrgAssetsByDistanceField",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "org/#mist_count_org_bgp_stats",
+      "subtree": 1,
+      "column": 15,
+      "descriptor": "mistOrgMistCountOrgBgpStats",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "org/#mist_count_org_ospf_stats",
+      "subtree": 1,
+      "column": 16,
+      "descriptor": "mistOrgMistCountOrgOspfStats",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "org/#mist_count_org_peer_path_stats",
+      "subtree": 1,
+      "column": 17,
+      "descriptor": "mistOrgMistCountOrgPeerPathStats",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "org/#mist_count_org_sw_or_gw_ports",
+      "subtree": 1,
+      "column": 18,
+      "descriptor": "mistOrgMistCountOrgSwOrGwPorts",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "org/#mist_count_org_tunnels_stats",
+      "subtree": 1,
+      "column": 19,
+      "descriptor": "mistOrgMistCountOrgTunnelsStats",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "org/#mist_get_org_mx_edge_stats",
+      "subtree": 1,
+      "column": 20,
+      "descriptor": "mistOrgMistGetOrgMxEdgeStats",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "org/#mist_get_org_other_device_stats",
+      "subtree": 1,
+      "column": 21,
+      "descriptor": "mistOrgMistGetOrgOtherDeviceStats",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "org/#mist_list_org_assets_stats",
+      "subtree": 1,
+      "column": 23,
+      "descriptor": "mistOrgMistListOrgAssetsStats",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "org/#mist_list_org_bgp_stats",
+      "subtree": 1,
+      "column": 24,
+      "descriptor": "mistOrgMistListOrgBgpStats",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "org/#mist_list_org_devices_stats",
+      "subtree": 1,
+      "column": 25,
+      "descriptor": "mistOrgMistListOrgDevicesStats",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "org/#mist_list_org_mx_edges_stats",
+      "subtree": 1,
+      "column": 26,
+      "descriptor": "mistOrgMistListOrgMxEdgesStats",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "org/#mist_list_org_ospf_stats",
+      "subtree": 1,
+      "column": 27,
+      "descriptor": "mistOrgMistListOrgOspfStats",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "org/#mist_list_org_peer_path_stats",
+      "subtree": 1,
+      "column": 28,
+      "descriptor": "mistOrgMistListOrgPeerPathStats",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "org/#mist_list_org_site_stats",
+      "subtree": 1,
+      "column": 29,
+      "descriptor": "mistOrgMistListOrgSiteStats",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "org/#mist_list_org_sw_or_gw_ports",
+      "subtree": 1,
+      "column": 30,
+      "descriptor": "mistOrgMistListOrgSwOrGwPorts",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "org/#mist_list_org_tunnels_stats",
+      "subtree": 1,
+      "column": 31,
+      "descriptor": "mistOrgMistListOrgTunnelsStats",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "org/#mist_search_org_assets",
+      "subtree": 1,
+      "column": 32,
+      "descriptor": "mistOrgMistSearchOrgAssets",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "org/#mist_search_org_bgp_stats",
+      "subtree": 1,
+      "column": 33,
+      "descriptor": "mistOrgMistSearchOrgBgpStats",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "org/#mist_scrape_success",
+      "subtree": 1,
+      "column": 90,
+      "descriptor": "mistScrapeSuccess",
+      "state": "live",
+      "notes": "Seeded from the hand-written MIB so the OID and the name never move."
+    },
+    {
+      "key": "org/#mist_scrape_age_seconds",
+      "subtree": 1,
+      "column": 91,
+      "descriptor": "mistScrapeAgeSeconds",
+      "state": "live",
+      "notes": "Seeded from the hand-written MIB so the OID and the name never move."
+    },
+    {
+      "key": "org/#mist_scrape_duration_seconds",
+      "subtree": 1,
+      "column": 92,
+      "descriptor": "mistScrapeDurationMilliseconds",
+      "state": "live",
+      "notes": "Seeded from the hand-written MIB so the OID and the name never move."
+    },
+    {
+      "key": "site/#mist_site_info",
+      "subtree": 2,
+      "column": 1,
+      "descriptor": "mistSiteInfo",
+      "state": "live",
+      "notes": "Seeded from the hand-written MIB so the OID and the name never move."
+    },
+    {
+      "key": "site/num_ap",
+      "subtree": 2,
+      "column": 2,
+      "descriptor": "mistSiteAps",
+      "state": "live",
+      "notes": "Seeded from the hand-written MIB so the OID and the name never move."
+    },
+    {
+      "key": "site/num_ap_connected",
+      "subtree": 2,
+      "column": 3,
+      "descriptor": "mistSiteApsConnected",
+      "state": "live",
+      "notes": "Seeded from the hand-written MIB so the OID and the name never move."
+    },
+    {
+      "key": "site/num_switch",
+      "subtree": 2,
+      "column": 4,
+      "descriptor": "mistSiteSwitches",
+      "state": "live",
+      "notes": "Seeded from the hand-written MIB so the OID and the name never move."
+    },
+    {
+      "key": "site/num_switch_connected",
+      "subtree": 2,
+      "column": 5,
+      "descriptor": "mistSiteSwitchesConnected",
+      "state": "live",
+      "notes": "Seeded from the hand-written MIB so the OID and the name never move."
+    },
+    {
+      "key": "site/num_gateway",
+      "subtree": 2,
+      "column": 6,
+      "descriptor": "mistSiteGateways",
+      "state": "live",
+      "notes": "Seeded from the hand-written MIB so the OID and the name never move."
+    },
+    {
+      "key": "site/num_gateway_connected",
+      "subtree": 2,
+      "column": 7,
+      "descriptor": "mistSiteGatewaysConnected",
+      "state": "live",
+      "notes": "Seeded from the hand-written MIB so the OID and the name never move."
+    },
+    {
+      "key": "site/num_devices",
+      "subtree": 2,
+      "column": 8,
+      "descriptor": "mistSiteDevices",
+      "state": "live",
+      "notes": "Seeded from the hand-written MIB so the OID and the name never move."
+    },
+    {
+      "key": "site/num_devices_connected",
+      "subtree": 2,
+      "column": 9,
+      "descriptor": "mistSiteDevicesConnected",
+      "state": "live",
+      "notes": "Seeded from the hand-written MIB so the OID and the name never move."
+    },
+    {
+      "key": "site/num_clients",
+      "subtree": 2,
+      "column": 10,
+      "descriptor": "mistSiteClients",
+      "state": "live",
+      "notes": "Seeded from the hand-written MIB so the OID and the name never move."
+    },
+    {
+      "key": "site/#mist_count_site_apps",
+      "subtree": 2,
+      "column": 14,
+      "descriptor": "mistSiteMistCountSiteApps",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "site/#mist_count_site_assets",
+      "subtree": 2,
+      "column": 15,
+      "descriptor": "mistSiteMistCountSiteAssets",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "site/#mist_count_site_bgp_stats",
+      "subtree": 2,
+      "column": 16,
+      "descriptor": "mistSiteMistCountSiteBgpStats",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "site/#mist_count_site_calls",
+      "subtree": 2,
+      "column": 17,
+      "descriptor": "mistSiteMistCountSiteCalls",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "site/#mist_count_site_discovered_switches",
+      "subtree": 2,
+      "column": 18,
+      "descriptor": "mistSiteMistCountSiteDiscoveredSwitches",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "site/#mist_count_site_ospf_stats",
+      "subtree": 2,
+      "column": 19,
+      "descriptor": "mistSiteMistCountSiteOspfStats",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "site/#mist_count_site_sw_or_gw_ports",
+      "subtree": 2,
+      "column": 20,
+      "descriptor": "mistSiteMistCountSiteSwOrGwPorts",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "site/#mist_get_site_all_clients_stats_by_device",
+      "subtree": 2,
+      "column": 21,
+      "descriptor": "mistSiteMistGetSiteAllClientsStatsByDevice",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "site/#mist_get_site_asset_stats",
+      "subtree": 2,
+      "column": 22,
+      "descriptor": "mistSiteMistGetSiteAssetStats",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "site/#mist_get_site_assets_of_interest",
+      "subtree": 2,
+      "column": 23,
+      "descriptor": "mistSiteMistGetSiteAssetsOfInterest",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "site/#mist_get_site_calls_summary",
+      "subtree": 2,
+      "column": 24,
+      "descriptor": "mistSiteMistGetSiteCallsSummary",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "site/#mist_get_site_device_stats",
+      "subtree": 2,
+      "column": 25,
+      "descriptor": "mistSiteMistGetSiteDeviceStats",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "site/#mist_get_site_discovered_asset_by_map",
+      "subtree": 2,
+      "column": 26,
+      "descriptor": "mistSiteMistGetSiteDiscoveredAssetByMap",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "site/#mist_get_site_gateway_metrics",
+      "subtree": 2,
+      "column": 27,
+      "descriptor": "mistSiteMistGetSiteGatewayMetrics",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "site/#mist_get_site_insight_metrics_for_gateway",
+      "subtree": 2,
+      "column": 28,
+      "descriptor": "mistSiteMistGetSiteInsightMetricsForGateway",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "site/#mist_get_site_mx_edge_stats",
+      "subtree": 2,
+      "column": 29,
+      "descriptor": "mistSiteMistGetSiteMxEdgeStats",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "site/#mist_get_site_rssi_zone_stats",
+      "subtree": 2,
+      "column": 30,
+      "descriptor": "mistSiteMistGetSiteRssiZoneStats",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "site/#mist_get_site_sdk_stats",
+      "subtree": 2,
+      "column": 31,
+      "descriptor": "mistSiteMistGetSiteSdkStats",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "site/#mist_get_site_sdk_stats_by_map",
+      "subtree": 2,
+      "column": 32,
+      "descriptor": "mistSiteMistGetSiteSdkStatsByMap",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "site/#mist_get_site_stats",
+      "subtree": 2,
+      "column": 33,
+      "descriptor": "mistSiteMistGetSiteStats",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "site/#mist_get_site_switches_metrics",
+      "subtree": 2,
+      "column": 34,
+      "descriptor": "mistSiteMistGetSiteSwitchesMetrics",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "site/#mist_get_site_wireless_client_stats",
+      "subtree": 2,
+      "column": 35,
+      "descriptor": "mistSiteMistGetSiteWirelessClientStats",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "site/#mist_get_site_wireless_clients_stats_by_map",
+      "subtree": 2,
+      "column": 36,
+      "descriptor": "mistSiteMistGetSiteWirelessClientsStatsByMap",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "site/#mist_get_site_wx_rules_usage",
+      "subtree": 2,
+      "column": 37,
+      "descriptor": "mistSiteMistGetSiteWxRulesUsage",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "site/#mist_get_site_zone_stats",
+      "subtree": 2,
+      "column": 38,
+      "descriptor": "mistSiteMistGetSiteZoneStats",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "site/#mist_list_insight_metrics",
+      "subtree": 2,
+      "column": 39,
+      "descriptor": "mistSiteMistListInsightMetrics",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "site/#mist_list_site_assets_stats",
+      "subtree": 2,
+      "column": 40,
+      "descriptor": "mistSiteMistListSiteAssetsStats",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "site/#mist_list_site_beacons_stats",
+      "subtree": 2,
+      "column": 41,
+      "descriptor": "mistSiteMistListSiteBeaconsStats",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "site/#mist_list_site_devices_stats",
+      "subtree": 2,
+      "column": 42,
+      "descriptor": "mistSiteMistListSiteDevicesStats",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "site/#mist_list_site_discovered_assets",
+      "subtree": 2,
+      "column": 43,
+      "descriptor": "mistSiteMistListSiteDiscoveredAssets",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "site/#mist_list_site_discovered_switches_metrics",
+      "subtree": 2,
+      "column": 44,
+      "descriptor": "mistSiteMistListSiteDiscoveredSwitchesMetrics",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "site/#mist_list_site_mx_edges_stats",
+      "subtree": 2,
+      "column": 45,
+      "descriptor": "mistSiteMistListSiteMxEdgesStats",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "site/#mist_list_site_rssi_zones_stats",
+      "subtree": 2,
+      "column": 46,
+      "descriptor": "mistSiteMistListSiteRssiZonesStats",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "site/#mist_list_site_sles_metrics",
+      "subtree": 2,
+      "column": 47,
+      "descriptor": "mistSiteMistListSiteSlesMetrics",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "site/#mist_list_site_spectrum_analysis",
+      "subtree": 2,
+      "column": 48,
+      "descriptor": "mistSiteMistListSiteSpectrumAnalysis",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "site/#mist_list_site_troubleshoot_calls",
+      "subtree": 2,
+      "column": 49,
+      "descriptor": "mistSiteMistListSiteTroubleshootCalls",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "site/#mist_list_site_unconnected_client_stats",
+      "subtree": 2,
+      "column": 50,
+      "descriptor": "mistSiteMistListSiteUnconnectedClientStats",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "site/#mist_list_site_wireless_clients_stats",
+      "subtree": 2,
+      "column": 51,
+      "descriptor": "mistSiteMistListSiteWirelessClientsStats",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "site/#mist_list_site_zones_stats",
+      "subtree": 2,
+      "column": 52,
+      "descriptor": "mistSiteMistListSiteZonesStats",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "site/#mist_search_site_assets",
+      "subtree": 2,
+      "column": 53,
+      "descriptor": "mistSiteMistSearchSiteAssets",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "site/#mist_search_site_bgp_stats",
+      "subtree": 2,
+      "column": 54,
+      "descriptor": "mistSiteMistSearchSiteBgpStats",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "site/#mist_search_site_calls",
+      "subtree": 2,
+      "column": 55,
+      "descriptor": "mistSiteMistSearchSiteCalls",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "site/#mist_search_site_discovered_switches",
+      "subtree": 2,
+      "column": 56,
+      "descriptor": "mistSiteMistSearchSiteDiscoveredSwitches",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "site/#mist_search_site_discovered_switches_metrics",
+      "subtree": 2,
+      "column": 57,
+      "descriptor": "mistSiteMistSearchSiteDiscoveredSwitchesMetrics",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "site/#mist_search_site_ospf_stats",
+      "subtree": 2,
+      "column": 58,
+      "descriptor": "mistSiteMistSearchSiteOspfStats",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "site/#mist_search_site_sw_or_gw_ports",
+      "subtree": 2,
+      "column": 59,
+      "descriptor": "mistSiteMistSearchSiteSwOrGwPorts",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "site/#mist_troubleshoot_site_call",
+      "subtree": 2,
+      "column": 60,
+      "descriptor": "mistSiteMistTroubleshootSiteCall",
+      "state": "live",
+      "notes": ""
+    },
+    {
+      "key": "device/#mist_device_info",
+      "subtree": 3,
+      "column": 1,
+      "descriptor": "mistDeviceInfo",
+      "state": "live",
+      "notes": "Seeded from the hand-written MIB so the OID and the name never move."
+    },
+    {
+      "key": "device/#mist_device_up",
+      "subtree": 3,
+      "column": 2,
+      "descriptor": "mistDeviceUp",
+      "state": "live",
+      "notes": "Seeded from the hand-written MIB so the OID and the name never move."
+    },
+    {
+      "key": "device/uptime",
+      "subtree": 3,
+      "column": 3,
+      "descriptor": "mistDeviceUptimeSeconds",
+      "state": "live",
+      "notes": "Seeded from the hand-written MIB so the OID and the name never move."
+    },
+    {
+      "key": "device/last_seen",
+      "subtree": 3,
+      "column": 4,
+      "descriptor": "mistDeviceLastSeenTimestamp",
+      "state": "live",
+      "notes": "Seeded from the hand-written MIB so the OID and the name never move."
+    },
+    {
+      "key": "device/num_clients",
+      "subtree": 3,
+      "column": 5,
+      "descriptor": "mistDeviceClients",
+      "state": "live",
+      "notes": "Seeded from the hand-written MIB so the OID and the name never move."
+    },
+    {
+      "key": "device/#mist_device_cpu_utilization_ratio",
+      "subtree": 3,
+      "column": 6,
+      "descriptor": "mistDeviceCpuUtilization",
+      "state": "live",
+      "notes": "Seeded from the hand-written MIB so the OID and the name never move."
+    },
+    {
+      "key": "device/#mist_device_memory_used_bytes",
+      "subtree": 3,
+      "column": 7,
+      "descriptor": "mistDeviceMemoryUsedBytes",
+      "state": "live",
+      "notes": "Seeded from the hand-written MIB so the OID and the name never move."
+    },
+    {
+      "key": "device/#mist_device_memory_total_bytes",
+      "subtree": 3,
+      "column": 8,
+      "descriptor": "mistDeviceMemoryTotalBytes",
+      "state": "live",
+      "notes": "Seeded from the hand-written MIB so the OID and the name never move."
+    },
+    {
+      "key": "device/power_budget",
+      "subtree": 3,
+      "column": 9,
+      "descriptor": "mistDevicePowerBudgetWatts",
+      "state": "live",
+      "notes": "Seeded from the hand-written MIB so the OID and the name never move."
+    },
+    {
+      "key": "device/#mist_device_cpu_temperature_celsius",
+      "subtree": 3,
+      "column": 10,
+      "descriptor": "mistDeviceCpuTemperatureCelsius",
+      "state": "live",
+      "notes": "Seeded from the hand-written MIB so the OID and the name never move."
+    },
+    {
+      "key": "device/rx_bytes",
+      "subtree": 3,
+      "column": 11,
+      "descriptor": "mistDeviceReceivedBytes",
+      "state": "live",
+      "notes": "Seeded from the hand-written MIB so the OID and the name never move."
+    },
+    {
+      "key": "device/tx_bytes",
+      "subtree": 3,
+      "column": 12,
+      "descriptor": "mistDeviceTransmittedBytes",
+      "state": "live",
+      "notes": "Seeded from the hand-written MIB so the OID and the name never move."
+    },
+    {
+      "key": "device/cert_expiry",
+      "subtree": 3,
+      "column": 13,
+      "descriptor": "mistDeviceCertificateExpiryTimestamp",
+      "state": "live",
+      "notes": "Seeded from the hand-written MIB so the OID and the name never move."
+    },
+    {
+      "key": "sle/user_minutes.total",
+      "subtree": 4,
+      "column": 1,
+      "descriptor": "mistSleUserMinutesTotal",
+      "state": "live",
+      "notes": "Seeded from the hand-written MIB so the OID and the name never move."
+    },
+    {
+      "key": "sle/user_minutes.ok",
+      "subtree": 4,
+      "column": 2,
+      "descriptor": "mistSleUserMinutesOk",
+      "state": "live",
+      "notes": "Seeded from the hand-written MIB so the OID and the name never move."
+    },
+    {
+      "key": "sle/#mist_org_sle_ratio",
+      "subtree": 4,
+      "column": 3,
+      "descriptor": "mistSleRatio",
+      "state": "live",
+      "notes": "Seeded from the hand-written MIB so the OID and the name never move."
+    }
+  ]
+}

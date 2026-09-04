@@ -164,11 +164,11 @@ class TestAllowList:
             AllowList(path).load().validate(mini)
 
     def test_the_checked_in_selection_is_valid(self) -> None:
-        """Prove the selection that ships with the repository names three real GET endpoints."""
+        """Prove the selection that ships with the repository names all real GET endpoints."""
         document = OpenApiDocument(REAL_OPENAPI).load()  # The real file decides whether the selection still works.
         allow = AllowList(ALLOWLIST).load()
         allow.validate(document)
-        assert len(allow.entries()) == 3  # The organization, the site table, and the device table.
+        assert len(allow.entries()) == 65  # All org and site stats endpoints (GET only).
 
 
 class TestDescriptorMaker:
@@ -329,7 +329,7 @@ class TestMibGeneratorRunner:
     def test_it_builds_every_catalog_reading(self) -> None:
         """Prove the join loses no reading of the catalog."""
         objects = _runner().objects()  # A lost reading would make the agent answer an unnamed OID.
-        assert len([item for item in objects if item.definition]) == 35
+        assert len([item for item in objects if item.definition]) == 101  # 35 original + 66 new stats endpoint metrics.
 
     def test_every_catalog_source_still_exists_in_the_mist_file(self) -> None:
         """Prove Mist still serves every field the gateway reads."""
