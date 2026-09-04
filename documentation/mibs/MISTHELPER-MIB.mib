@@ -57,7 +57,7 @@ IMPORTS
         FROM SNMPv2-TC;
 
 mistHelperMIB MODULE-IDENTITY
-    LAST-UPDATED "202609041951Z"
+    LAST-UPDATED "202609042039Z"
     ORGANIZATION "MistHelper project"
     CONTACT-INFO
         "MistHelper project maintainers
@@ -67,7 +67,7 @@ mistHelperMIB MODULE-IDENTITY
          MistHelper metrics gateway collects from the Mist REST API.
          The gateway reads Mist Cloud on a timer and answers every
          request from memory, so a poll never waits for Mist Cloud."
-    REVISION "202609041951Z"
+    REVISION "202609042039Z"
     DESCRIPTION
         "The generator writes this module. Run it again after Mist ships
          a new OpenAPI file:  python MistHelper.py --mib-generate
@@ -155,6 +155,197 @@ mistOrgDevicesDisconnected OBJECT-TYPE
     ::= { mistOrg 6 }
 
 
+mistOrgMistCountOrgAssetsByDistanceField OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the countOrgAssetsByDistanceField endpoint.
+         The gateway names this reading
+         mist_count_org_assets_by_distance_field."
+    ::= { mistOrg 14 }
+
+
+mistOrgMistCountOrgBgpStats OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the countOrgBgpStats endpoint. The gateway
+         names this reading mist_count_org_bgp_stats."
+    ::= { mistOrg 15 }
+
+
+mistOrgMistCountOrgOspfStats OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the countOrgOspfStats endpoint. The gateway
+         names this reading mist_count_org_ospf_stats."
+    ::= { mistOrg 16 }
+
+
+mistOrgMistCountOrgPeerPathStats OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the countOrgPeerPathStats endpoint. The
+         gateway names this reading mist_count_org_peer_path_stats."
+    ::= { mistOrg 17 }
+
+
+mistOrgMistCountOrgSwOrGwPorts OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the countOrgSwOrGwPorts endpoint. The gateway
+         names this reading mist_count_org_sw_or_gw_ports."
+    ::= { mistOrg 18 }
+
+
+mistOrgMistCountOrgTunnelsStats OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the countOrgTunnelsStats endpoint. The gateway
+         names this reading mist_count_org_tunnels_stats."
+    ::= { mistOrg 19 }
+
+
+mistOrgMistGetOrgMxEdgeStats OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the getOrgMxEdgeStats endpoint. The gateway
+         names this reading mist_get_org_mx_edge_stats."
+    ::= { mistOrg 20 }
+
+
+mistOrgMistGetOrgOtherDeviceStats OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the getOrgOtherDeviceStats endpoint. The
+         gateway names this reading mist_get_org_other_device_stats."
+    ::= { mistOrg 21 }
+
+
+mistOrgMistListOrgAssetsStats OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the listOrgAssetsStats endpoint. The gateway
+         names this reading mist_list_org_assets_stats."
+    ::= { mistOrg 23 }
+
+
+mistOrgMistListOrgBgpStats OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the listOrgBgpStats endpoint. The gateway
+         names this reading mist_list_org_bgp_stats."
+    ::= { mistOrg 24 }
+
+
+mistOrgMistListOrgDevicesStats OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the listOrgDevicesStats endpoint. The gateway
+         names this reading mist_list_org_devices_stats."
+    ::= { mistOrg 25 }
+
+
+mistOrgMistListOrgMxEdgesStats OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the listOrgMxEdgesStats endpoint. The gateway
+         names this reading mist_list_org_mx_edges_stats."
+    ::= { mistOrg 26 }
+
+
+mistOrgMistListOrgOspfStats OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the listOrgOspfStats endpoint. The gateway
+         names this reading mist_list_org_ospf_stats."
+    ::= { mistOrg 27 }
+
+
+mistOrgMistListOrgPeerPathStats OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the listOrgPeerPathStats endpoint. The gateway
+         names this reading mist_list_org_peer_path_stats."
+    ::= { mistOrg 28 }
+
+
+mistOrgMistListOrgSiteStats OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the listOrgSiteStats endpoint. The gateway
+         names this reading mist_list_org_site_stats."
+    ::= { mistOrg 29 }
+
+
+mistOrgMistListOrgSwOrGwPorts OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the listOrgSwOrGwPorts endpoint. The gateway
+         names this reading mist_list_org_sw_or_gw_ports."
+    ::= { mistOrg 30 }
+
+
+mistOrgMistListOrgTunnelsStats OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the listOrgTunnelsStats endpoint. The gateway
+         names this reading mist_list_org_tunnels_stats."
+    ::= { mistOrg 31 }
+
+
+mistOrgMistSearchOrgAssets OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the searchOrgAssets endpoint. The gateway
+         names this reading mist_search_org_assets."
+    ::= { mistOrg 32 }
+
+
+mistOrgMistSearchOrgBgpStats OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the searchOrgBgpStats endpoint. The gateway
+         names this reading mist_search_org_bgp_stats."
+    ::= { mistOrg 33 }
+
+
 mistScrapeSuccess OBJECT-TYPE
     SYNTAX Gauge32
     MAX-ACCESS read-only
@@ -222,6 +413,53 @@ MistSiteEntry ::= SEQUENCE {
     mistSiteDevices Gauge32,
     mistSiteDevicesConnected Gauge32,
     mistSiteClients Gauge32,
+    mistSiteMistCountSiteApps Gauge32,
+    mistSiteMistCountSiteAssets Gauge32,
+    mistSiteMistCountSiteBgpStats Gauge32,
+    mistSiteMistCountSiteCalls Gauge32,
+    mistSiteMistCountSiteDiscoveredSwitches Gauge32,
+    mistSiteMistCountSiteOspfStats Gauge32,
+    mistSiteMistCountSiteSwOrGwPorts Gauge32,
+    mistSiteMistGetSiteAllClientsStatsByDevice Gauge32,
+    mistSiteMistGetSiteAssetStats Gauge32,
+    mistSiteMistGetSiteAssetsOfInterest Gauge32,
+    mistSiteMistGetSiteCallsSummary Gauge32,
+    mistSiteMistGetSiteDeviceStats Gauge32,
+    mistSiteMistGetSiteDiscoveredAssetByMap Gauge32,
+    mistSiteMistGetSiteGatewayMetrics Gauge32,
+    mistSiteMistGetSiteInsightMetricsForGateway Gauge32,
+    mistSiteMistGetSiteMxEdgeStats Gauge32,
+    mistSiteMistGetSiteRssiZoneStats Gauge32,
+    mistSiteMistGetSiteSdkStats Gauge32,
+    mistSiteMistGetSiteSdkStatsByMap Gauge32,
+    mistSiteMistGetSiteStats Gauge32,
+    mistSiteMistGetSiteSwitchesMetrics Gauge32,
+    mistSiteMistGetSiteWirelessClientStats Gauge32,
+    mistSiteMistGetSiteWirelessClientsStatsByMap Gauge32,
+    mistSiteMistGetSiteWxRulesUsage Gauge32,
+    mistSiteMistGetSiteZoneStats Gauge32,
+    mistSiteMistListInsightMetrics Gauge32,
+    mistSiteMistListSiteAssetsStats Gauge32,
+    mistSiteMistListSiteBeaconsStats Gauge32,
+    mistSiteMistListSiteDevicesStats Gauge32,
+    mistSiteMistListSiteDiscoveredAssets Gauge32,
+    mistSiteMistListSiteDiscoveredSwitchesMetrics Gauge32,
+    mistSiteMistListSiteMxEdgesStats Gauge32,
+    mistSiteMistListSiteRssiZonesStats Gauge32,
+    mistSiteMistListSiteSlesMetrics Gauge32,
+    mistSiteMistListSiteSpectrumAnalysis Gauge32,
+    mistSiteMistListSiteTroubleshootCalls Gauge32,
+    mistSiteMistListSiteUnconnectedClientStats Gauge32,
+    mistSiteMistListSiteWirelessClientsStats Gauge32,
+    mistSiteMistListSiteZonesStats Gauge32,
+    mistSiteMistSearchSiteAssets Gauge32,
+    mistSiteMistSearchSiteBgpStats Gauge32,
+    mistSiteMistSearchSiteCalls Gauge32,
+    mistSiteMistSearchSiteDiscoveredSwitches Gauge32,
+    mistSiteMistSearchSiteDiscoveredSwitchesMetrics Gauge32,
+    mistSiteMistSearchSiteOspfStats Gauge32,
+    mistSiteMistSearchSiteSwOrGwPorts Gauge32,
+    mistSiteMistTroubleshootSiteCall Gauge32,
     mistSiteIdentity DisplayString,
     mistSiteIndex Integer32
 }
@@ -340,6 +578,487 @@ mistSiteClients OBJECT-TYPE
     ::= { mistSiteEntry 10 }
 
 
+mistSiteMistCountSiteApps OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the countSiteApps endpoint. The gateway names
+         this reading mist_count_site_apps."
+    ::= { mistSiteEntry 14 }
+
+
+mistSiteMistCountSiteAssets OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the countSiteAssets endpoint. The gateway
+         names this reading mist_count_site_assets."
+    ::= { mistSiteEntry 15 }
+
+
+mistSiteMistCountSiteBgpStats OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the countSiteBgpStats endpoint. The gateway
+         names this reading mist_count_site_bgp_stats."
+    ::= { mistSiteEntry 16 }
+
+
+mistSiteMistCountSiteCalls OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the countSiteCalls endpoint. The gateway names
+         this reading mist_count_site_calls."
+    ::= { mistSiteEntry 17 }
+
+
+mistSiteMistCountSiteDiscoveredSwitches OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the countSiteDiscoveredSwitches endpoint. The
+         gateway names this reading
+         mist_count_site_discovered_switches."
+    ::= { mistSiteEntry 18 }
+
+
+mistSiteMistCountSiteOspfStats OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the countSiteOspfStats endpoint. The gateway
+         names this reading mist_count_site_ospf_stats."
+    ::= { mistSiteEntry 19 }
+
+
+mistSiteMistCountSiteSwOrGwPorts OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the countSiteSwOrGwPorts endpoint. The gateway
+         names this reading mist_count_site_sw_or_gw_ports."
+    ::= { mistSiteEntry 20 }
+
+
+mistSiteMistGetSiteAllClientsStatsByDevice OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the getSiteAllClientsStatsByDevice endpoint.
+         The gateway names this reading
+         mist_get_site_all_clients_stats_by_device."
+    ::= { mistSiteEntry 21 }
+
+
+mistSiteMistGetSiteAssetStats OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the getSiteAssetStats endpoint. The gateway
+         names this reading mist_get_site_asset_stats."
+    ::= { mistSiteEntry 22 }
+
+
+mistSiteMistGetSiteAssetsOfInterest OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the getSiteAssetsOfInterest endpoint. The
+         gateway names this reading mist_get_site_assets_of_interest."
+    ::= { mistSiteEntry 23 }
+
+
+mistSiteMistGetSiteCallsSummary OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the getSiteCallsSummary endpoint. The gateway
+         names this reading mist_get_site_calls_summary."
+    ::= { mistSiteEntry 24 }
+
+
+mistSiteMistGetSiteDeviceStats OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the getSiteDeviceStats endpoint. The gateway
+         names this reading mist_get_site_device_stats."
+    ::= { mistSiteEntry 25 }
+
+
+mistSiteMistGetSiteDiscoveredAssetByMap OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the getSiteDiscoveredAssetByMap endpoint. The
+         gateway names this reading
+         mist_get_site_discovered_asset_by_map."
+    ::= { mistSiteEntry 26 }
+
+
+mistSiteMistGetSiteGatewayMetrics OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the getSiteGatewayMetrics endpoint. The
+         gateway names this reading mist_get_site_gateway_metrics."
+    ::= { mistSiteEntry 27 }
+
+
+mistSiteMistGetSiteInsightMetricsForGateway OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the getSiteInsightMetricsForGateway endpoint.
+         The gateway names this reading
+         mist_get_site_insight_metrics_for_gateway."
+    ::= { mistSiteEntry 28 }
+
+
+mistSiteMistGetSiteMxEdgeStats OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the getSiteMxEdgeStats endpoint. The gateway
+         names this reading mist_get_site_mx_edge_stats."
+    ::= { mistSiteEntry 29 }
+
+
+mistSiteMistGetSiteRssiZoneStats OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the getSiteRssiZoneStats endpoint. The gateway
+         names this reading mist_get_site_rssi_zone_stats."
+    ::= { mistSiteEntry 30 }
+
+
+mistSiteMistGetSiteSdkStats OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the getSiteSdkStats endpoint. The gateway
+         names this reading mist_get_site_sdk_stats."
+    ::= { mistSiteEntry 31 }
+
+
+mistSiteMistGetSiteSdkStatsByMap OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the getSiteSdkStatsByMap endpoint. The gateway
+         names this reading mist_get_site_sdk_stats_by_map."
+    ::= { mistSiteEntry 32 }
+
+
+mistSiteMistGetSiteStats OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the getSiteStats endpoint. The gateway names
+         this reading mist_get_site_stats."
+    ::= { mistSiteEntry 33 }
+
+
+mistSiteMistGetSiteSwitchesMetrics OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the getSiteSwitchesMetrics endpoint. The
+         gateway names this reading mist_get_site_switches_metrics."
+    ::= { mistSiteEntry 34 }
+
+
+mistSiteMistGetSiteWirelessClientStats OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the getSiteWirelessClientStats endpoint. The
+         gateway names this reading
+         mist_get_site_wireless_client_stats."
+    ::= { mistSiteEntry 35 }
+
+
+mistSiteMistGetSiteWirelessClientsStatsByMap OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the getSiteWirelessClientsStatsByMap endpoint.
+         The gateway names this reading
+         mist_get_site_wireless_clients_stats_by_map."
+    ::= { mistSiteEntry 36 }
+
+
+mistSiteMistGetSiteWxRulesUsage OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the getSiteWxRulesUsage endpoint. The gateway
+         names this reading mist_get_site_wx_rules_usage."
+    ::= { mistSiteEntry 37 }
+
+
+mistSiteMistGetSiteZoneStats OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the getSiteZoneStats endpoint. The gateway
+         names this reading mist_get_site_zone_stats."
+    ::= { mistSiteEntry 38 }
+
+
+mistSiteMistListInsightMetrics OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the listInsightMetrics endpoint. The gateway
+         names this reading mist_list_insight_metrics."
+    ::= { mistSiteEntry 39 }
+
+
+mistSiteMistListSiteAssetsStats OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the listSiteAssetsStats endpoint. The gateway
+         names this reading mist_list_site_assets_stats."
+    ::= { mistSiteEntry 40 }
+
+
+mistSiteMistListSiteBeaconsStats OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the listSiteBeaconsStats endpoint. The gateway
+         names this reading mist_list_site_beacons_stats."
+    ::= { mistSiteEntry 41 }
+
+
+mistSiteMistListSiteDevicesStats OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the listSiteDevicesStats endpoint. The gateway
+         names this reading mist_list_site_devices_stats."
+    ::= { mistSiteEntry 42 }
+
+
+mistSiteMistListSiteDiscoveredAssets OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the listSiteDiscoveredAssets endpoint. The
+         gateway names this reading mist_list_site_discovered_assets."
+    ::= { mistSiteEntry 43 }
+
+
+mistSiteMistListSiteDiscoveredSwitchesMetrics OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the listSiteDiscoveredSwitchesMetrics
+         endpoint. The gateway names this reading
+         mist_list_site_discovered_switches_metrics."
+    ::= { mistSiteEntry 44 }
+
+
+mistSiteMistListSiteMxEdgesStats OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the listSiteMxEdgesStats endpoint. The gateway
+         names this reading mist_list_site_mx_edges_stats."
+    ::= { mistSiteEntry 45 }
+
+
+mistSiteMistListSiteRssiZonesStats OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the listSiteRssiZonesStats endpoint. The
+         gateway names this reading mist_list_site_rssi_zones_stats."
+    ::= { mistSiteEntry 46 }
+
+
+mistSiteMistListSiteSlesMetrics OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the listSiteSlesMetrics endpoint. The gateway
+         names this reading mist_list_site_sles_metrics."
+    ::= { mistSiteEntry 47 }
+
+
+mistSiteMistListSiteSpectrumAnalysis OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the listSiteSpectrumAnalysis endpoint. The
+         gateway names this reading mist_list_site_spectrum_analysis."
+    ::= { mistSiteEntry 48 }
+
+
+mistSiteMistListSiteTroubleshootCalls OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the listSiteTroubleshootCalls endpoint. The
+         gateway names this reading mist_list_site_troubleshoot_calls."
+    ::= { mistSiteEntry 49 }
+
+
+mistSiteMistListSiteUnconnectedClientStats OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the listSiteUnconnectedClientStats endpoint.
+         The gateway names this reading
+         mist_list_site_unconnected_client_stats."
+    ::= { mistSiteEntry 50 }
+
+
+mistSiteMistListSiteWirelessClientsStats OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the listSiteWirelessClientsStats endpoint. The
+         gateway names this reading
+         mist_list_site_wireless_clients_stats."
+    ::= { mistSiteEntry 51 }
+
+
+mistSiteMistListSiteZonesStats OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the listSiteZonesStats endpoint. The gateway
+         names this reading mist_list_site_zones_stats."
+    ::= { mistSiteEntry 52 }
+
+
+mistSiteMistSearchSiteAssets OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the searchSiteAssets endpoint. The gateway
+         names this reading mist_search_site_assets."
+    ::= { mistSiteEntry 53 }
+
+
+mistSiteMistSearchSiteBgpStats OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the searchSiteBgpStats endpoint. The gateway
+         names this reading mist_search_site_bgp_stats."
+    ::= { mistSiteEntry 54 }
+
+
+mistSiteMistSearchSiteCalls OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the searchSiteCalls endpoint. The gateway
+         names this reading mist_search_site_calls."
+    ::= { mistSiteEntry 55 }
+
+
+mistSiteMistSearchSiteDiscoveredSwitches OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the searchSiteDiscoveredSwitches endpoint. The
+         gateway names this reading
+         mist_search_site_discovered_switches."
+    ::= { mistSiteEntry 56 }
+
+
+mistSiteMistSearchSiteDiscoveredSwitchesMetrics OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the searchSiteDiscoveredSwitchesMetrics
+         endpoint. The gateway names this reading
+         mist_search_site_discovered_switches_metrics."
+    ::= { mistSiteEntry 57 }
+
+
+mistSiteMistSearchSiteOspfStats OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the searchSiteOspfStats endpoint. The gateway
+         names this reading mist_search_site_ospf_stats."
+    ::= { mistSiteEntry 58 }
+
+
+mistSiteMistSearchSiteSwOrGwPorts OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the searchSiteSwOrGwPorts endpoint. The
+         gateway names this reading mist_search_site_sw_or_gw_ports."
+    ::= { mistSiteEntry 59 }
+
+
+mistSiteMistTroubleshootSiteCall OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Statistics from the troubleshootSiteCall endpoint. The gateway
+         names this reading mist_troubleshoot_site_call."
+    ::= { mistSiteEntry 60 }
+
+
 mistSiteIdentity OBJECT-TYPE
     SYNTAX DisplayString (SIZE (0..255))
     MAX-ACCESS read-only
@@ -431,8 +1150,8 @@ mistDeviceUptimeSeconds OBJECT-TYPE
     MAX-ACCESS read-only
     STATUS current
     DESCRIPTION
-        "How long, in seconds, has the device been up (or rebooted) The
-         gateway names this reading mist_device_uptime_seconds."
+        "The seconds since the device last restarted. The gateway names
+         this reading mist_device_uptime_seconds."
     ::= { mistDeviceEntry 3 }
 
 
@@ -442,7 +1161,8 @@ mistDeviceLastSeenTimestamp OBJECT-TYPE
     MAX-ACCESS read-only
     STATUS current
     DESCRIPTION
-        "Last seen timestamp The gateway names this reading
+        "The moment Mist Cloud last heard from the device, in seconds
+         since the epoch. The gateway names this reading
          mist_device_last_seen_timestamp_seconds."
     ::= { mistDeviceEntry 4 }
 
@@ -453,8 +1173,8 @@ mistDeviceClients OBJECT-TYPE
     MAX-ACCESS read-only
     STATUS current
     DESCRIPTION
-        "How many wireless clients are currently connected The gateway
-         names this reading mist_device_clients."
+        "The count of wireless clients that the device serves. The
+         gateway names this reading mist_device_clients."
     ::= { mistDeviceEntry 5 }
 
 
@@ -499,7 +1219,7 @@ mistDevicePowerBudgetWatts OBJECT-TYPE
     MAX-ACCESS read-only
     STATUS current
     DESCRIPTION
-        "In mW, surplus if positive or deficit if negative The gateway
+        "The power budget the device reports, in watts. The gateway
          names this reading mist_device_power_budget_watts."
     ::= { mistDeviceEntry 9 }
 
@@ -521,8 +1241,8 @@ mistDeviceReceivedBytes OBJECT-TYPE
     MAX-ACCESS read-only
     STATUS current
     DESCRIPTION
-        "Amount of traffic received since connection The gateway names
-         this reading mist_device_received_bytes_total."
+        "The bytes the device has received. The gateway names this
+         reading mist_device_received_bytes_total."
     ::= { mistDeviceEntry 11 }
 
 
@@ -531,8 +1251,8 @@ mistDeviceTransmittedBytes OBJECT-TYPE
     MAX-ACCESS read-only
     STATUS current
     DESCRIPTION
-        "Amount of traffic sent since connection The gateway names this
-         reading mist_device_transmitted_bytes_total."
+        "The bytes the device has sent. The gateway names this reading
+         mist_device_transmitted_bytes_total."
     ::= { mistDeviceEntry 12 }
 
 
@@ -684,6 +1404,25 @@ mistOrgGroup OBJECT-GROUP
         mistOrgInventory,
         mistOrgDevicesConnected,
         mistOrgDevicesDisconnected,
+        mistOrgMistCountOrgAssetsByDistanceField,
+        mistOrgMistCountOrgBgpStats,
+        mistOrgMistCountOrgOspfStats,
+        mistOrgMistCountOrgPeerPathStats,
+        mistOrgMistCountOrgSwOrGwPorts,
+        mistOrgMistCountOrgTunnelsStats,
+        mistOrgMistGetOrgMxEdgeStats,
+        mistOrgMistGetOrgOtherDeviceStats,
+        mistOrgMistListOrgAssetsStats,
+        mistOrgMistListOrgBgpStats,
+        mistOrgMistListOrgDevicesStats,
+        mistOrgMistListOrgMxEdgesStats,
+        mistOrgMistListOrgOspfStats,
+        mistOrgMistListOrgPeerPathStats,
+        mistOrgMistListOrgSiteStats,
+        mistOrgMistListOrgSwOrGwPorts,
+        mistOrgMistListOrgTunnelsStats,
+        mistOrgMistSearchOrgAssets,
+        mistOrgMistSearchOrgBgpStats,
         mistScrapeSuccess,
         mistScrapeAgeSeconds,
         mistScrapeDurationMilliseconds
@@ -705,6 +1444,53 @@ mistSiteGroup OBJECT-GROUP
         mistSiteDevices,
         mistSiteDevicesConnected,
         mistSiteClients,
+        mistSiteMistCountSiteApps,
+        mistSiteMistCountSiteAssets,
+        mistSiteMistCountSiteBgpStats,
+        mistSiteMistCountSiteCalls,
+        mistSiteMistCountSiteDiscoveredSwitches,
+        mistSiteMistCountSiteOspfStats,
+        mistSiteMistCountSiteSwOrGwPorts,
+        mistSiteMistGetSiteAllClientsStatsByDevice,
+        mistSiteMistGetSiteAssetStats,
+        mistSiteMistGetSiteAssetsOfInterest,
+        mistSiteMistGetSiteCallsSummary,
+        mistSiteMistGetSiteDeviceStats,
+        mistSiteMistGetSiteDiscoveredAssetByMap,
+        mistSiteMistGetSiteGatewayMetrics,
+        mistSiteMistGetSiteInsightMetricsForGateway,
+        mistSiteMistGetSiteMxEdgeStats,
+        mistSiteMistGetSiteRssiZoneStats,
+        mistSiteMistGetSiteSdkStats,
+        mistSiteMistGetSiteSdkStatsByMap,
+        mistSiteMistGetSiteStats,
+        mistSiteMistGetSiteSwitchesMetrics,
+        mistSiteMistGetSiteWirelessClientStats,
+        mistSiteMistGetSiteWirelessClientsStatsByMap,
+        mistSiteMistGetSiteWxRulesUsage,
+        mistSiteMistGetSiteZoneStats,
+        mistSiteMistListInsightMetrics,
+        mistSiteMistListSiteAssetsStats,
+        mistSiteMistListSiteBeaconsStats,
+        mistSiteMistListSiteDevicesStats,
+        mistSiteMistListSiteDiscoveredAssets,
+        mistSiteMistListSiteDiscoveredSwitchesMetrics,
+        mistSiteMistListSiteMxEdgesStats,
+        mistSiteMistListSiteRssiZonesStats,
+        mistSiteMistListSiteSlesMetrics,
+        mistSiteMistListSiteSpectrumAnalysis,
+        mistSiteMistListSiteTroubleshootCalls,
+        mistSiteMistListSiteUnconnectedClientStats,
+        mistSiteMistListSiteWirelessClientsStats,
+        mistSiteMistListSiteZonesStats,
+        mistSiteMistSearchSiteAssets,
+        mistSiteMistSearchSiteBgpStats,
+        mistSiteMistSearchSiteCalls,
+        mistSiteMistSearchSiteDiscoveredSwitches,
+        mistSiteMistSearchSiteDiscoveredSwitchesMetrics,
+        mistSiteMistSearchSiteOspfStats,
+        mistSiteMistSearchSiteSwOrGwPorts,
+        mistSiteMistTroubleshootSiteCall,
         mistSiteIdentity
     }
     STATUS current
