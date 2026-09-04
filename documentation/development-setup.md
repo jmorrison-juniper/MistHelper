@@ -144,13 +144,18 @@ python -m pytest tests/e2e/upgrade_portal
 ## Never install this project into its own environment
 
 Warning: do not run `pip install .` or `uv pip install .` in this repository. The
-wheel packs the repository root, so the install copies `src/` into
-`site-packages`. That copy then shadows the real package for every script that
-runs from another folder, and the tests read code that nobody ships.
+install copies `src/` into `site-packages`. That copy then shadows the real
+package for every script that runs from another folder, and the tests read code
+that nobody ships.
 
 Both copies import cleanly, so no gate reports the difference. A green test run
 proves nothing while the copy exists. Issue #2010 records a session that lost an
 hour to it.
+
+Issue #2246 narrowed the wheel, so an install no longer copies `tests/`,
+`scripts/`, `specs/`, or `documentation/`. The wheel still ships `src`, because
+every module of this project imports `src.<area>`. A local install therefore
+still shadows the checkout, and this rule still holds.
 
 Install the requirements instead. `scripts/bootstrap_worktree.py` does that
 already.
