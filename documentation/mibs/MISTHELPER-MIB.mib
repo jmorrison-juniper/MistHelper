@@ -1,0 +1,765 @@
+MISTHELPER-MIB DEFINITIONS ::= BEGIN
+
+-- =====================================================================
+-- This file is generated. Do not edit it by hand.
+--
+-- The generator is src/mib_generator. Run it again after Mist ships a
+-- new OpenAPI file. The MODULE-IDENTITY description below names the
+-- exact command.
+--
+-- Warning: never write two hyphens together inside a comment of this
+-- file. ASN.1 opens a comment at two hyphens and it closes the comment
+-- at the next two hyphens. A command line flag inside a comment
+-- therefore ends the comment, and the parser then reads the rest of the
+-- line as code. That defect made a whole generated module unreadable,
+-- and every object of it answered "Unknown Object Identifier". A quoted
+-- string carries two hyphens safely, so put a flag in a DESCRIPTION.
+--
+-- The generator reads three inputs:
+--   documentation/mist-api-openapi31json.json  the Mist field types.
+--   src/metrics_gateway/catalog.py             the readings the agent
+--                                              answers.
+--   data/mib_generator/oid_assignments.json    the number of each
+--                                              field, so no OID moves.
+--
+-- OID layout
+--   A scalar answers at <base>.<subtree>.<column>.0
+--   A table cell answers at <base>.<subtree>.1.<column>.<row>
+--
+--   Subtree 1 holds the organization scalars.
+--   Subtree 2 holds the site table.
+--   Subtree 3 holds the device table.
+--   Subtree 4 holds the service level expectation table.
+--
+--   Column 99 of each table repeats the row identity, because SNMP
+--   carries no label. A poller that reads row 4 uses column 99 to
+--   learn which site, device, or expectation row 4 describes.
+--
+-- Row numbers
+--   A row number is a position, not a permanent key. The agent sorts
+--   the rows on each read of Mist Cloud. Read column 99 to identify a
+--   row. Do not treat a row number as a stable identifier.
+--
+-- Enterprise number
+--   The parent number 11 belongs to Hewlett Packard Enterprise. The
+--   child 2147483646 is a high number chosen for this deployment.
+--   Caution: this child is not a registered assignment. Request a
+--   branch from Hewlett Packard Enterprise before you distribute this
+--   module outside your own network.
+-- =====================================================================
+
+IMPORTS
+    MODULE-IDENTITY, OBJECT-TYPE, OBJECT-IDENTITY,
+    enterprises, Gauge32, Counter64, Integer32
+        FROM SNMPv2-SMI
+    MODULE-COMPLIANCE, OBJECT-GROUP
+        FROM SNMPv2-CONF
+    DisplayString
+        FROM SNMPv2-TC;
+
+mistHelperMIB MODULE-IDENTITY
+    LAST-UPDATED "202609041820Z"
+    ORGANIZATION "MistHelper project"
+    CONTACT-INFO
+        "MistHelper project maintainers
+         https://github.com/jmorrison-juniper/MistHelper"
+    DESCRIPTION
+        "The read-only SNMP view of Mist Cloud health that the
+         MistHelper metrics gateway collects from the Mist REST API.
+         The gateway reads Mist Cloud on a timer and answers every
+         request from memory, so a poll never waits for Mist Cloud."
+    REVISION "202609041820Z"
+    DESCRIPTION
+        "The generator writes this module. Run it again after Mist ships
+         a new OpenAPI file:  python MistHelper.py --mib-generate
+
+         An earlier hand-written module put each table one level too
+         deep, so no table object was reachable by name. The generator
+         places a table cell at <base>.<subtree>.1.<column>.<row>, which
+         is the address the agent answers."
+    ::= { enterprises 11 2147483646 }
+
+-- ---------------------------------------------------------------------
+-- Subtree 1: the organization scalars.
+-- Each object answers at <base>.1.<column>.0
+-- ---------------------------------------------------------------------
+
+mistOrg OBJECT-IDENTITY
+    STATUS current
+    DESCRIPTION
+        "The scalars that describe the whole Mist organization."
+    ::= { mistHelperMIB 1 }
+
+
+mistOrgInfo OBJECT-TYPE
+    SYNTAX DisplayString (SIZE (0..255))
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "A constant 1. The labels carry the organization identifier and
+         name. The gateway names this reading mist_org_info."
+    ::= { mistOrg 1 }
+
+
+mistOrgSites OBJECT-TYPE
+    SYNTAX Gauge32
+    UNITS "sites"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "The count of sites in the organization. The gateway names this
+         reading mist_org_sites."
+    ::= { mistOrg 2 }
+
+
+mistOrgDevices OBJECT-TYPE
+    SYNTAX Gauge32
+    UNITS "devices"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "The count of devices the organization has assigned to a site.
+         The gateway names this reading mist_org_devices."
+    ::= { mistOrg 3 }
+
+
+mistOrgInventory OBJECT-TYPE
+    SYNTAX Gauge32
+    UNITS "devices"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "The count of devices in the organization inventory, assigned
+         or not. The gateway names this reading mist_org_inventory."
+    ::= { mistOrg 4 }
+
+
+mistOrgDevicesConnected OBJECT-TYPE
+    SYNTAX Gauge32
+    UNITS "devices"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "The count of devices that are connected to Mist Cloud. The
+         gateway names this reading mist_org_devices_connected."
+    ::= { mistOrg 5 }
+
+
+mistOrgDevicesDisconnected OBJECT-TYPE
+    SYNTAX Gauge32
+    UNITS "devices"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "The count of devices that are not connected to Mist Cloud. The
+         gateway names this reading mist_org_devices_disconnected."
+    ::= { mistOrg 6 }
+
+
+mistScrapeSuccess OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "1 when the last read of Mist Cloud finished, and 0 when it
+         failed. The gateway names this reading mist_scrape_success."
+    ::= { mistOrg 90 }
+
+
+mistScrapeAgeSeconds OBJECT-TYPE
+    SYNTAX Gauge32
+    UNITS "seconds"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "The seconds since the gateway last read Mist Cloud. The
+         gateway names this reading mist_scrape_age_seconds."
+    ::= { mistOrg 91 }
+
+
+mistScrapeDurationMilliseconds OBJECT-TYPE
+    SYNTAX Gauge32
+    UNITS "milliseconds"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "The seconds the last read of Mist Cloud took. SNMP reports
+         milliseconds. SNMP reports milliseconds. The gateway names
+         this reading mist_scrape_duration_seconds."
+    ::= { mistOrg 92 }
+
+-- ---------------------------------------------------------------------
+-- Subtree 2: the Site table.
+-- Each cell answers at <base>.2.1.<column>.<row>
+-- ---------------------------------------------------------------------
+
+mistSiteTable OBJECT-TYPE
+    SYNTAX SEQUENCE OF MistSiteEntry
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION
+        "One row for each Site record that the gateway reads."
+    ::= { mistHelperMIB 2 }
+
+mistSiteEntry OBJECT-TYPE
+    SYNTAX MistSiteEntry
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION
+        "The readings of one row. Read mistSiteIdentity to learn
+         which record the row describes."
+    INDEX { mistSiteIndex }
+    ::= { mistSiteTable 1 }
+
+
+MistSiteEntry ::= SEQUENCE {
+    mistSiteInfo DisplayString,
+    mistSiteAps Gauge32,
+    mistSiteApsConnected Gauge32,
+    mistSiteSwitches Gauge32,
+    mistSiteSwitchesConnected Gauge32,
+    mistSiteGateways Gauge32,
+    mistSiteGatewaysConnected Gauge32,
+    mistSiteDevices Gauge32,
+    mistSiteDevicesConnected Gauge32,
+    mistSiteClients Gauge32,
+    mistSiteIdentity DisplayString,
+    mistSiteIndex Integer32
+}
+
+
+mistSiteInfo OBJECT-TYPE
+    SYNTAX DisplayString (SIZE (0..255))
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "A constant 1. The labels carry the site identifier, name, and
+         country code. The gateway names this reading mist_site_info."
+    ::= { mistSiteEntry 1 }
+
+
+mistSiteAps OBJECT-TYPE
+    SYNTAX Gauge32
+    UNITS "access"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "The count of access points the site holds. The gateway names
+         this reading mist_site_aps."
+    ::= { mistSiteEntry 2 }
+
+
+mistSiteApsConnected OBJECT-TYPE
+    SYNTAX Gauge32
+    UNITS "access"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "The count of access points at the site that are connected to
+         Mist Cloud. The gateway names this reading
+         mist_site_aps_connected."
+    ::= { mistSiteEntry 3 }
+
+
+mistSiteSwitches OBJECT-TYPE
+    SYNTAX Gauge32
+    UNITS "switches"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "The count of switches the site holds. The gateway names this
+         reading mist_site_switches."
+    ::= { mistSiteEntry 4 }
+
+
+mistSiteSwitchesConnected OBJECT-TYPE
+    SYNTAX Gauge32
+    UNITS "switches"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "The count of switches at the site that are connected to Mist
+         Cloud. The gateway names this reading
+         mist_site_switches_connected."
+    ::= { mistSiteEntry 5 }
+
+
+mistSiteGateways OBJECT-TYPE
+    SYNTAX Gauge32
+    UNITS "gateways"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "The count of gateways the site holds. The gateway names this
+         reading mist_site_gateways."
+    ::= { mistSiteEntry 6 }
+
+
+mistSiteGatewaysConnected OBJECT-TYPE
+    SYNTAX Gauge32
+    UNITS "gateways"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "The count of gateways at the site that are connected to Mist
+         Cloud. The gateway names this reading
+         mist_site_gateways_connected."
+    ::= { mistSiteEntry 7 }
+
+
+mistSiteDevices OBJECT-TYPE
+    SYNTAX Gauge32
+    UNITS "devices"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "The count of devices the site holds, of every type. The
+         gateway names this reading mist_site_devices."
+    ::= { mistSiteEntry 8 }
+
+
+mistSiteDevicesConnected OBJECT-TYPE
+    SYNTAX Gauge32
+    UNITS "devices"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "The count of devices at the site that are connected to Mist
+         Cloud. The gateway names this reading
+         mist_site_devices_connected."
+    ::= { mistSiteEntry 9 }
+
+
+mistSiteClients OBJECT-TYPE
+    SYNTAX Gauge32
+    UNITS "wireless"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "The count of wireless clients that the site serves. The
+         gateway names this reading mist_site_clients."
+    ::= { mistSiteEntry 10 }
+
+
+mistSiteIdentity OBJECT-TYPE
+    SYNTAX DisplayString (SIZE (0..255))
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "The identity of the record in this row. SNMP carries no label,
+         so read this object to learn which record the row number
+         describes."
+    ::= { mistSiteEntry 99 }
+
+mistSiteIndex OBJECT-TYPE
+    SYNTAX Integer32 (1..2147483647)
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION
+        "The position of the row. The agent counts from 1. The agent
+         does not answer a request for this object, because the row
+         number is already the last part of every cell OID."
+    ::= { mistSiteEntry 100 }
+
+-- ---------------------------------------------------------------------
+-- Subtree 3: the Device table.
+-- Each cell answers at <base>.3.1.<column>.<row>
+-- ---------------------------------------------------------------------
+
+mistDeviceTable OBJECT-TYPE
+    SYNTAX SEQUENCE OF MistDeviceEntry
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION
+        "One row for each Device record that the gateway reads."
+    ::= { mistHelperMIB 3 }
+
+mistDeviceEntry OBJECT-TYPE
+    SYNTAX MistDeviceEntry
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION
+        "The readings of one row. Read mistDeviceIdentity to learn
+         which record the row describes."
+    INDEX { mistDeviceIndex }
+    ::= { mistDeviceTable 1 }
+
+
+MistDeviceEntry ::= SEQUENCE {
+    mistDeviceInfo DisplayString,
+    mistDeviceUp Gauge32,
+    mistDeviceUptimeSeconds Gauge32,
+    mistDeviceLastSeenTimestamp Gauge32,
+    mistDeviceClients Gauge32,
+    mistDeviceCpuUtilization Gauge32,
+    mistDeviceMemoryUsedBytes Gauge32,
+    mistDeviceMemoryTotalBytes Gauge32,
+    mistDevicePowerBudgetWatts Gauge32,
+    mistDeviceCpuTemperatureCelsius Gauge32,
+    mistDeviceReceivedBytes Counter64,
+    mistDeviceTransmittedBytes Counter64,
+    mistDeviceCertificateExpiryTimestamp Gauge32,
+    mistDeviceIdentity DisplayString,
+    mistDeviceIndex Integer32
+}
+
+
+mistDeviceInfo OBJECT-TYPE
+    SYNTAX DisplayString (SIZE (0..255))
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "A constant 1. The labels carry the device name, model, serial
+         number, and running firmware version. The gateway names this
+         reading mist_device_info."
+    ::= { mistDeviceEntry 1 }
+
+
+mistDeviceUp OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "1 when Mist Cloud reports the device as connected, and 0 for
+         every other state. The gateway names this reading
+         mist_device_up."
+    ::= { mistDeviceEntry 2 }
+
+
+mistDeviceUptimeSeconds OBJECT-TYPE
+    SYNTAX Gauge32
+    UNITS "seconds"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "How long, in seconds, has the device been up (or rebooted) The
+         gateway names this reading mist_device_uptime_seconds."
+    ::= { mistDeviceEntry 3 }
+
+
+mistDeviceLastSeenTimestamp OBJECT-TYPE
+    SYNTAX Gauge32
+    UNITS "seconds"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Last seen timestamp The gateway names this reading
+         mist_device_last_seen_timestamp_seconds."
+    ::= { mistDeviceEntry 4 }
+
+
+mistDeviceClients OBJECT-TYPE
+    SYNTAX Gauge32
+    UNITS "wireless"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "How many wireless clients are currently connected The gateway
+         names this reading mist_device_clients."
+    ::= { mistDeviceEntry 5 }
+
+
+mistDeviceCpuUtilization OBJECT-TYPE
+    SYNTAX Gauge32
+    UNITS "ten-thousandths"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "The share of the processor that the device is using, from 0 to
+         1. SNMP reports ten-thousandths. SNMP reports ten-thousandths.
+         The gateway names this reading
+         mist_device_cpu_utilization_ratio."
+    ::= { mistDeviceEntry 6 }
+
+
+mistDeviceMemoryUsedBytes OBJECT-TYPE
+    SYNTAX Gauge32
+    UNITS "bytes"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "The memory the device is using, in bytes. The gateway names
+         this reading mist_device_memory_used_bytes."
+    ::= { mistDeviceEntry 7 }
+
+
+mistDeviceMemoryTotalBytes OBJECT-TYPE
+    SYNTAX Gauge32
+    UNITS "bytes"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "The memory the device holds, in bytes. The gateway names this
+         reading mist_device_memory_total_bytes."
+    ::= { mistDeviceEntry 8 }
+
+
+mistDevicePowerBudgetWatts OBJECT-TYPE
+    SYNTAX Gauge32
+    UNITS "watts"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "In mW, surplus if positive or deficit if negative The gateway
+         names this reading mist_device_power_budget_watts."
+    ::= { mistDeviceEntry 9 }
+
+
+mistDeviceCpuTemperatureCelsius OBJECT-TYPE
+    SYNTAX Gauge32
+    UNITS "degrees Celsius"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "The processor temperature the device reports, in degrees
+         Celsius. The gateway names this reading
+         mist_device_cpu_temperature_celsius."
+    ::= { mistDeviceEntry 10 }
+
+
+mistDeviceReceivedBytes OBJECT-TYPE
+    SYNTAX Counter64
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Amount of traffic received since connection The gateway names
+         this reading mist_device_received_bytes_total."
+    ::= { mistDeviceEntry 11 }
+
+
+mistDeviceTransmittedBytes OBJECT-TYPE
+    SYNTAX Counter64
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Amount of traffic sent since connection The gateway names this
+         reading mist_device_transmitted_bytes_total."
+    ::= { mistDeviceEntry 12 }
+
+
+mistDeviceCertificateExpiryTimestamp OBJECT-TYPE
+    SYNTAX Gauge32
+    UNITS "seconds"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "The moment the device certificate expires, in seconds since
+         the epoch. The gateway names this reading
+         mist_device_certificate_expiry_timestamp_seconds."
+    ::= { mistDeviceEntry 13 }
+
+
+mistDeviceIdentity OBJECT-TYPE
+    SYNTAX DisplayString (SIZE (0..255))
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "The identity of the record in this row. SNMP carries no label,
+         so read this object to learn which record the row number
+         describes."
+    ::= { mistDeviceEntry 99 }
+
+mistDeviceIndex OBJECT-TYPE
+    SYNTAX Integer32 (1..2147483647)
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION
+        "The position of the row. The agent counts from 1. The agent
+         does not answer a request for this object, because the row
+         number is already the last part of every cell OID."
+    ::= { mistDeviceEntry 100 }
+
+-- ---------------------------------------------------------------------
+-- Subtree 4: the Sle table.
+-- Each cell answers at <base>.4.1.<column>.<row>
+-- ---------------------------------------------------------------------
+
+mistSleTable OBJECT-TYPE
+    SYNTAX SEQUENCE OF MistSleEntry
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION
+        "One row for each Sle record that the gateway reads."
+    ::= { mistHelperMIB 4 }
+
+mistSleEntry OBJECT-TYPE
+    SYNTAX MistSleEntry
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION
+        "The readings of one row. Read mistSleIdentity to learn
+         which record the row describes."
+    INDEX { mistSleIndex }
+    ::= { mistSleTable 1 }
+
+
+MistSleEntry ::= SEQUENCE {
+    mistSleUserMinutesTotal Gauge32,
+    mistSleUserMinutesOk Gauge32,
+    mistSleRatio Gauge32,
+    mistSleIdentity DisplayString,
+    mistSleIndex Integer32
+}
+
+
+mistSleUserMinutesTotal OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "The total user minutes that the service level expectation
+         measured. The gateway names this reading
+         mist_org_sle_user_minutes_total."
+    ::= { mistSleEntry 1 }
+
+
+mistSleUserMinutesOk OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "The user minutes that met the service level expectation. The
+         gateway names this reading mist_org_sle_user_minutes_ok."
+    ::= { mistSleEntry 2 }
+
+
+mistSleRatio OBJECT-TYPE
+    SYNTAX Gauge32
+    UNITS "ten-thousandths"
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "The share of user minutes that met the service level
+         expectation, from 0 to 1. SNMP reports ten-thousandths. SNMP
+         reports ten-thousandths. The gateway names this reading
+         mist_org_sle_ratio."
+    ::= { mistSleEntry 3 }
+
+
+mistSleIdentity OBJECT-TYPE
+    SYNTAX DisplayString (SIZE (0..255))
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "The identity of the record in this row. SNMP carries no label,
+         so read this object to learn which record the row number
+         describes."
+    ::= { mistSleEntry 99 }
+
+mistSleIndex OBJECT-TYPE
+    SYNTAX Integer32 (1..2147483647)
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION
+        "The position of the row. The agent counts from 1. The agent
+         does not answer a request for this object, because the row
+         number is already the last part of every cell OID."
+    ::= { mistSleEntry 100 }
+
+-- ---------------------------------------------------------------------
+-- Conformance
+-- ---------------------------------------------------------------------
+
+mistHelperConformance OBJECT-IDENTITY
+    STATUS current
+    DESCRIPTION
+        "The groups and the compliance statement of this module."
+    ::= { mistHelperMIB 100 }
+
+mistHelperGroups OBJECT-IDENTITY
+    STATUS current
+    DESCRIPTION "The object groups of this module."
+    ::= { mistHelperConformance 1 }
+
+mistHelperCompliances OBJECT-IDENTITY
+    STATUS current
+    DESCRIPTION "The compliance statements of this module."
+    ::= { mistHelperConformance 2 }
+
+
+mistOrgGroup OBJECT-GROUP
+    OBJECTS {
+        mistOrgInfo,
+        mistOrgSites,
+        mistOrgDevices,
+        mistOrgInventory,
+        mistOrgDevicesConnected,
+        mistOrgDevicesDisconnected,
+        mistScrapeSuccess,
+        mistScrapeAgeSeconds,
+        mistScrapeDurationMilliseconds
+    }
+    STATUS current
+    DESCRIPTION "The objects of the Org scope."
+    ::= { mistHelperGroups 1 }
+
+
+mistSiteGroup OBJECT-GROUP
+    OBJECTS {
+        mistSiteInfo,
+        mistSiteAps,
+        mistSiteApsConnected,
+        mistSiteSwitches,
+        mistSiteSwitchesConnected,
+        mistSiteGateways,
+        mistSiteGatewaysConnected,
+        mistSiteDevices,
+        mistSiteDevicesConnected,
+        mistSiteClients,
+        mistSiteIdentity
+    }
+    STATUS current
+    DESCRIPTION "The objects of the Site scope."
+    ::= { mistHelperGroups 2 }
+
+
+mistDeviceGroup OBJECT-GROUP
+    OBJECTS {
+        mistDeviceInfo,
+        mistDeviceUp,
+        mistDeviceUptimeSeconds,
+        mistDeviceLastSeenTimestamp,
+        mistDeviceClients,
+        mistDeviceCpuUtilization,
+        mistDeviceMemoryUsedBytes,
+        mistDeviceMemoryTotalBytes,
+        mistDevicePowerBudgetWatts,
+        mistDeviceCpuTemperatureCelsius,
+        mistDeviceReceivedBytes,
+        mistDeviceTransmittedBytes,
+        mistDeviceCertificateExpiryTimestamp,
+        mistDeviceIdentity
+    }
+    STATUS current
+    DESCRIPTION "The objects of the Device scope."
+    ::= { mistHelperGroups 3 }
+
+
+mistSleGroup OBJECT-GROUP
+    OBJECTS {
+        mistSleUserMinutesTotal,
+        mistSleUserMinutesOk,
+        mistSleRatio,
+        mistSleIdentity
+    }
+    STATUS current
+    DESCRIPTION "The objects of the Sle scope."
+    ::= { mistHelperGroups 4 }
+
+
+mistHelperCompliance MODULE-COMPLIANCE
+    STATUS current
+    DESCRIPTION
+        "The gateway serves every object of this module as read-only.
+         The gateway refuses every write request, because it never
+         changes Mist Cloud."
+    MODULE
+        MANDATORY-GROUPS {
+            mistOrgGroup,
+            mistSiteGroup,
+            mistDeviceGroup,
+            mistSleGroup
+        }
+    ::= { mistHelperCompliances 1 }
+
+END
