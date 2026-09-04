@@ -168,7 +168,7 @@ class TestAllowList:
         document = OpenApiDocument(REAL_OPENAPI).load()  # The real file decides whether the selection still works.
         allow = AllowList(ALLOWLIST).load()
         allow.validate(document)
-        assert len(allow.entries()) == 65  # All org and site stats endpoints (GET only).
+        assert len(allow.entries()) == 68  # 3 original endpoints (getOrgStats, listOrgSiteStats, listOrgDevicesStats) + 65 new stats endpoints (GET only).
 
 
 class TestDescriptorMaker:

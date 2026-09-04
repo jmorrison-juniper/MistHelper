@@ -909,7 +909,8 @@ class MetricCatalog:
         """
         logger.debug("Build the metric catalog")  # Log before the index build, because a name clash stops it.
         self._by_scope: dict[MetricScope, tuple[MetricDefinition, ...]] = {
-            MetricScope.ORG: _ORG_DEFINITIONS + _NEW_ORG_DEFINITIONS + _GATEWAY_DEFINITIONS,  # The gateway health joins the org scalars.
+            # The gateway health joins the org scalars.
+            MetricScope.ORG: _ORG_DEFINITIONS + _NEW_ORG_DEFINITIONS + _GATEWAY_DEFINITIONS,
             MetricScope.SITE: _SITE_DEFINITIONS + _NEW_SITE_DEFINITIONS,
             MetricScope.DEVICE: _DEVICE_DEFINITIONS,
             MetricScope.SLE: _SLE_DEFINITIONS,
