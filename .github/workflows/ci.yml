@@ -582,10 +582,11 @@ jobs:
         ports:
           - 8529:8529
         options: >-
-          --health-cmd "arangosh --server.authentication false --javascript.execute-string 'db._version()'"
+          --health-cmd "arangosh --server.endpoint tcp://127.0.0.1:8529 --server.username root --server.password $ARANGO_ROOT_PASSWORD --javascript.execute-string 'db._version()'"
           --health-interval 10s
-          --health-timeout 5s
-          --health-retries 20
+          --health-timeout 10s
+          --health-retries 30
+          --health-start-period 20s
     steps:
       - uses: actions/checkout@v7
         with:
