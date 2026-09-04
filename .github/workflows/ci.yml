@@ -555,7 +555,38 @@ jobs:
       - mypy
     if: ${{ always() }}
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
+    # Issue #2242: the browser suite could cover no write journey, because the
+    # portal refuses a write it cannot guard with the site lock. With no lock
+    # store the run creation answered 503, and 50 browser tests skipped. The run
+    # record needs the document store for the same reason.
+    #
+    # These two services give the job both stores, so the write journey runs.
+    # Neither one holds production data, and both die with the job.
+    services:
+      redis:
+        image: redis:8-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+      arangodb:
+        image: arangodb/arangodb:3.12
+        env:
+          # A throwaway value for a throwaway service. The store dies with the
+          # job, it holds no production data, and it answers on loopback alone.
+          ARANGO_ROOT_PASSWORD: e2e-throwaway-password
+        ports:
+          - 8529:8529
+        options: >-
+          --health-cmd "arangosh --server.endpoint tcp://127.0.0.1:8529 --server.username root --server.password $ARANGO_ROOT_PASSWORD --javascript.execute-string 'db._version()'"
+          --health-interval 10s
+          --health-timeout 10s
+          --health-retries 30
+          --health-start-period 20s
     steps:
       - uses: actions/checkout@v7
         with:
@@ -577,9 +608,16 @@ jobs:
         # UPGRADE_PORTAL_E2E_STRICT turns a missing browser package into a
         # collection failure. Without it the two steps above could silently stop
         # working and this gate would keep reporting green over an empty suite.
+        #
+        # The two store addresses point at the service containers above. Issue
+        # #2242 measured that a run without them skips every write journey.
         env:
           UPGRADE_PORTAL_E2E_STRICT: "1"
-        run: pytest tests/e2e/ -v --timeout=60
+          REDIS_HOST: "127.0.0.1"
+          REDIS_PORT: "6379"
+          ARANGO_HOST: "http://127.0.0.1:8529"
+          ARANGO_ROOT_PASSWORD: e2e-throwaway-password
+        run: pytest tests/e2e/ -v --timeout=180
 
   # ──────────────────────────────────────────────────────────────
   # OPS PORTAL (TypeScript + React)

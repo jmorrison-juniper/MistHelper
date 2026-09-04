@@ -37,6 +37,7 @@ import os
 import socket
 import subprocess
 import tempfile
+import threading
 import time
 from collections.abc import Iterator
 from dataclasses import asdict, dataclass
@@ -1018,6 +1019,73 @@ def _skip_storage_bootstrap() -> None:
     """
 
 
+FAILED_RUN_ID = "e2e-failed-run-0001"  # The seeded run that the retry test opens. One fixed key, so no test guesses.
+
+
+def _failed_run_record() -> dict[str, Any]:
+    """Build one run record that already failed.
+
+    Why:
+        Issue #2202 shows the retry control for a failed run and for no other
+        state. No journey through the pages reaches that state, because a real
+        failure needs a real upgrade fault at a real site. The retry rebuilds a
+        run from the settings of the failed one, so the record carries the same
+        fields that a finished run carries.
+
+    Returns:
+        The run record, in the state `failed`.
+    """
+    return {
+        "run_id": FAILED_RUN_ID,  # The one key that the retry test opens.
+        "site_id": STAND_IN_SITE_ID,  # The same site every other test drives, so one lock covers both.
+        "org_id": STAND_IN_ORG_ID,  # The lock key needs both halves, so the record must carry the org.
+        "state": "failed",  # The one state that offers the retry control.
+        "message": "A stand-in failure, so the retry control appears for the browser test.",
+        "targets": [],  # The retry copies this list. An empty list keeps the record small and valid.
+        "options": {},  # The retry copies every option. An empty table still exercises the copy.
+    }
+
+
+def _seed_failed_run(built: Any, upgrade: Any) -> None:
+    """Write one failed run into the store of the stand-in portal.
+
+    Why:
+        The retry control needs a failed run, and the portal offers no route
+        that puts a run into that state. The server process therefore writes one
+        record itself, exactly as it registers the two operators above.
+
+        The write runs on its own thread. A cold store builds its collections on
+        the first write, and that build takes longer than the port wait of the
+        fixture. A write on this thread would therefore stop the server from
+        binding at all, and every browser test would report a start failure.
+
+    Args:
+        built: The Flask application. The write needs its context to read the
+            store seam out of the configuration.
+        upgrade: The upgrade route module, which owns the store seam.
+    """
+    logger.info("Seeding the failed run %s for the retry control test", FAILED_RUN_ID)
+    writer = threading.Thread(target=_write_failed_run, args=(built, upgrade), daemon=True)
+    writer.start()  # The server binds now, and the record lands a moment later.
+    logger.debug("The failed run seed runs on its own thread")
+
+
+def _write_failed_run(built: Any, upgrade: Any) -> None:
+    """Write the seeded record, and report a refusal instead of raising.
+
+    Args:
+        built: The Flask application that owns the store seam.
+        upgrade: The upgrade route module, which owns the store seam.
+    """
+    try:  # A store that refuses the write must not end the thread with a trace.
+        with built.app_context():  # `run_store` reads `current_app.config`, so a context is required.
+            written = upgrade.save_run(_failed_run_record())
+    except Exception as failure:  # An unreachable store is a normal state on a bare workstation.
+        logger.warning("The failed run seed did not write. The retry test will skip. Cause: %s", failure)
+        return  # The retry test reads the absent run and reports a skip that names the cause.
+    logger.info("The failed run seed reported %s", written)  # The retry test skips when this reads False.
+
+
 def build_stand_in_app() -> Any:
     """Build the portal with two signed-in operators and no cloud reach.
 
@@ -1063,6 +1131,7 @@ def build_stand_in_app() -> Any:
     built.config[upgrade.STOP_RUNNER_KEY] = stand_in_stop_runner  # A stop then cancels nothing at the cloud.
     _register_operator(STAND_IN_EMAIL, STAND_IN_BROWSER_ID)  # The operator that every test drives.
     _register_operator(SECOND_EMAIL, SECOND_BROWSER_ID)  # The operator that meets the lock refusal.
+    _seed_failed_run(built, upgrade)  # Issue #2242 needs a failed run, and no page journey reaches that state.
     return built  # Waitress and Gunicorn both load this object by name.
 
 
