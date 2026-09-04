@@ -114,6 +114,38 @@ def test_the_audit_retries_an_unreachable_endpoint(ops_portal_job: dict[str, Any
     assert "sleep" in body, "the retry must pause before the second attempt"
 
 
+def test_the_audit_bounds_its_network_call(ops_portal_job: dict[str, Any]) -> None:
+    """The audit MUST bound the network call, or a dead endpoint eats the budget.
+
+    Why:
+        Issue #2257, second measurement. An unbounded call ran until the step
+        budget ended, so the step reported a timeout and never named the cause.
+    """
+    logging.info("Checking the network bound of the audit step")  # Report the plan.
+    audit = next(step for step in _named_steps(ops_portal_job) if step["name"] == _AUDIT_STEP)
+    body = str(audit["run"])
+
+    assert "--fetch-timeout" in body, "the audit call must carry a network bound"
+
+
+def test_the_audit_reads_one_answer_for_each_attempt(ops_portal_job: dict[str, Any]) -> None:
+    """One attempt MUST cost one call, because a dead endpoint costs the budget twice.
+
+    Why:
+        The first shape called the audit twice for each attempt, once for the
+        status and once for the reason. A dead endpoint then cost four calls.
+        One JSON body answers both questions.
+    """
+    logging.info("Checking the call count of the audit step")  # Report the plan.
+    audit = next(step for step in _named_steps(ops_portal_job) if step["name"] == _AUDIT_STEP)
+    body = str(audit["run"])
+
+    # WHY: one assignment holds the body, and every later test reads that variable.
+    # The error message names the command as well, so the count reads the call form.
+    assert body.count("npm audit --audit-level") == 1, "each attempt must call the audit one time"
+    assert 'body="$(' in body, "the attempt must keep the answer for the reason test"
+
+
 def test_the_audit_still_fails_on_a_real_advisory(ops_portal_job: dict[str, Any]) -> None:
     """A real advisory MUST still fail the step, because the audit is a gate.
 
