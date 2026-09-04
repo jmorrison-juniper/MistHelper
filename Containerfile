@@ -24,7 +24,7 @@ LABEL maintainer="MistHelper Development Team"
 
 # Install minimal system dependencies including SSH server and SNMP daemon
 RUN apt-get update && \
-    apt-get install -y ca-certificates openssh-server sudo snmpd snmp-mibs-downloader && \
+    apt-get install -y ca-certificates openssh-server sudo snmpd && \
     rm -rf /var/lib/apt/lists/*
 
 # Create non-root user and configure SSH access
