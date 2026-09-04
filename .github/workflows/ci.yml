@@ -636,7 +636,17 @@ jobs:
     # needs.ops_portal.result. The whole job costs well under a minute with the
     # npm cache warm, so an unconditional run buys a clear signal cheaply.
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # Issue #2257: the job held one 10 minute budget for four steps, and no step
+    # had a budget of its own. The audit step reaches a remote service that this
+    # repository does not own, and that service consumed the whole budget twice:
+    # once behind a cold npm cache, and once when it answered "Service
+    # Unavailable" for five minutes. Both runs reported a failure that graded no
+    # code, because the three later steps never ran.
+    #
+    # The job budget stays above the sum of the step budgets on purpose. A step
+    # timeout names the step that ran long. A job timeout reports "cancelled"
+    # with no cause, which is what made the first report hard to read.
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: ops-portal
@@ -660,22 +670,59 @@ jobs:
         # published releases, so no upgrade clears the conflict yet. A strict
         # resolve fails with ERESOLVE. Issue #1852 records the measurement.
         # Delete this flag when both plugins publish an eslint 10 peer range.
+        #
+        # The install reaches the registry, so it carries its own budget. A cold
+        # cache took 5 minutes once, and this bound leaves room for that.
+        timeout-minutes: 8
         run: npm ci --legacy-peer-deps
-      - name: Audit the npm dependency tree
-        # This is the blocking security check and the reason issue #1847 exists.
-        # It fails on a HIGH or a CRITICAL advisory. Dependabot reports a MODERATE
-        # or a LOW finding as a pull request, so those do not block a merge here.
-        run: npm audit --audit-level=high
       # The three steps below block a merge. Issue #1852 fixed the three
       # configuration defects that kept them advisory. tsconfig.json no longer
       # sets the deprecated baseUrl, eslint reads a flat eslint.config.js, and
       # the project ships a vitest suite for the confirmation dialog.
+      #
+      # Issue #2257 moved these three above the audit. Each one reads the code
+      # and needs no network, so a registry outage must never hide their result.
       - name: Type check
+        timeout-minutes: 5
         run: npm run typecheck
       - name: Lint
+        timeout-minutes: 5
         run: npm run lint
       - name: Unit tests
+        timeout-minutes: 5
         run: npm run test
+      - name: Audit the npm dependency tree
+        # This is the blocking security check and the reason issue #1847 exists.
+        # It fails on a HIGH or a CRITICAL advisory. Dependabot reports a MODERATE
+        # or a LOW finding as a pull request, so those do not block a merge here.
+        #
+        # Issue #2257: the audit reaches a remote service, and that service
+        # answered "Service Unavailable" for five minutes on one run. One retry
+        # after a short pause clears a brief outage. A longer outage then fails
+        # this step alone, and the three steps above have already reported.
+        timeout-minutes: 6
+        run: |
+          # The default shell is `bash -e`, so every status test below uses `if`.
+          attempt=1
+          while [ "${attempt}" -le 2 ]; do
+            if npm audit --audit-level=high; then
+              exit 0
+            fi
+            # An advisory and an outage both exit non-zero, so read the reason
+            # before any retry. The JSON body of an outage carries an `error`
+            # key, and the body of a real finding does not.
+            if ! npm audit --audit-level=high --json 2>&1 | grep -q '"error"'; then
+              echo "::error::npm audit reported an advisory at the high level or above."
+              exit 1
+            fi
+            echo "The audit endpoint did not answer on attempt ${attempt}."
+            if [ "${attempt}" -eq 2 ]; then
+              echo "::error::The npm audit endpoint stayed unreachable. This is not an advisory."
+              exit 1
+            fi
+            sleep 30
+            attempt=$((attempt + 1))
+          done
 
   # ──────────────────────────────────────────────────────────────
   # OPS PLATFORM (FastAPI + Celery sub-project)
