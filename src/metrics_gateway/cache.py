@@ -127,6 +127,30 @@ class MetricsCache:
                 self._refresh_locked()
             return self._with_health(self._snapshot)
 
+    def cached_snapshot(self) -> MetricSnapshot:
+        """Return the current reading without a Mist Cloud call and without a wait.
+
+        Why:
+            `snmpd` gives the pass_persist responder a few seconds to answer. It
+            closes the pipe when the answer is late, and the whole subtree then
+            reports nothing. A Mist pass over a large organization takes longer
+            than that budget, so an SNMP request must never wait for one.
+
+            This method therefore takes no lock. It reads the one reference that
+            `_refresh_locked` replaces, and `MetricSnapshot` is frozen, so the
+            caller holds a whole reading that no later refresh can change. A
+            reader can see the reading from just before a refresh, which is
+            correct: that is the last reading the gateway confirmed.
+
+        Warning:
+            Do not add a lock here. A real `snmpd` dropped the whole subtree
+            when this method waited for the refresh thread.
+
+        Returns:
+            The last reading, with the three gateway health readings appended.
+        """
+        return self._with_health(self._snapshot)  # One atomic attribute read, so no wait can happen.
+
     def refresh_now(self) -> MetricSnapshot:
         """Read Mist Cloud at once, whatever the age of the cache.
 

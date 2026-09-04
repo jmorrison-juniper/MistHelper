@@ -274,9 +274,13 @@ class TestGatewaySettings:
         monkeypatch.setenv("MIST_ORG_ID", "org-shared")
         assert GatewaySettings.from_environment().org_id == "org-shared"
 
-    def test_the_default_base_oid_needs_no_registration(self) -> None:
-        """The upstream README warns that its own unregistered number can collide."""
-        assert DEFAULT_BASE_OID.startswith(".1.3.6.1.4.1.8072")
+    def test_the_default_base_oid_sits_under_an_enterprise_branch(self) -> None:
+        """The base OID must sit under the HPE enterprise number 11.
+
+        The MIB at documentation/mibs/MISTHELPER-MIB.mib names the same root.
+        A change here without a change there breaks every name translation.
+        """
+        assert DEFAULT_BASE_OID == ".1.3.6.1.4.1.11.2147483646"
 
     def test_the_default_port_avoids_the_other_portals(self) -> None:
         """Port 8055 serves the data browser and port 8056 serves the upgrade portal."""

@@ -44,7 +44,7 @@ if TYPE_CHECKING:  # An import for a type only. It must not run, because it woul
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_BASE_OID = ".1.3.6.1.4.1.8072.9999.9999"  # The Net-SNMP experimental base. No operator has to register it.
+DEFAULT_BASE_OID = ".1.3.6.1.4.1.11.2147483646"  # HPE enterprise branch with a high operator-owned child.
 
 PING_REQUEST = "PING"  # `snmpd` sends this to test that the responder is alive.
 PING_REPLY = "PONG"  # The only answer that keeps `snmpd` talking to this responder.
@@ -285,15 +285,22 @@ class OidTree:
 class SnmpPassPersistResponder:
     """Speaks the Net-SNMP `pass_persist` protocol on standard input and output."""
 
-    def __init__(self, cache: MetricsCache, base_oid: str = DEFAULT_BASE_OID) -> None:
+    def __init__(
+        self,
+        cache: MetricsCache,
+        base_oid: str = DEFAULT_BASE_OID,
+        refresh_on_request: bool = True,
+    ) -> None:
         """Store the cache and the base OID.
 
         Args:
             cache: The source of the reading. It refreshes itself when stale.
             base_oid: The base the operator named in `snmpd.conf`.
+            refresh_on_request: True for direct use, or False for a live SNMP pipe.
         """
         self._cache = cache  # A poll reads memory, so no request reaches Mist Cloud.
         self._base_oid = base_oid  # The operator owns this number, so no unregistered OID is baked in.
+        self._refresh_on_request = refresh_on_request  # The live protocol must never wait on Mist Cloud.
 
     def tree(self) -> OidTree:
         """Build the OID tree of the reading the cache holds now.
@@ -306,7 +313,8 @@ class SnmpPassPersistResponder:
         Returns:
             The tree for this request.
         """
-        return OidTree(self._cache.snapshot(), self._base_oid)
+        snapshot = self._cache.snapshot() if self._refresh_on_request else self._cache.cached_snapshot()
+        return OidTree(snapshot, self._base_oid)
 
     def handle(self, command: str, argument: str) -> list[str]:
         """Answer one request.

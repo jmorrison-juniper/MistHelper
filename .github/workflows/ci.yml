@@ -143,6 +143,9 @@ jobs:
       - run: pip install -r requirements-dev.txt  # pinned (issue #1779)
       - name: Ruff lint
         run: ruff check .
+      # WHY: a stale MIB names an OID that the agent does not answer, and a poller then reads nothing.
+      - name: MIB is current
+        run: python MistHelper.py --mib-check
 
   black:
     name: "Black (format check)"

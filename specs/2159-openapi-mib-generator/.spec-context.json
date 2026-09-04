@@ -3,7 +3,7 @@
   "specName": "OpenAPI MIB Generator",
   "branch": "2159-openapi-mib-generator",
   "currentStep": "implement",
-  "status": "implemented",
+  "status": "completed",
   "history": [
     {
       "step": "specify",

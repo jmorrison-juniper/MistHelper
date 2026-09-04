@@ -457,12 +457,14 @@ python_functions = ["test_*"]
 addopts = "-v --tb=short"
 markers = [
     "integration: tests that call the real Mist API (require .env credentials)",
+    "slow: tests that read the whole 16 MB Mist OpenAPI file and measure the run time",
 ]
 
 [tool.coverage.run]
-# src/upgrade_portal is named on its own, so a run that measures only the new
-# package still reports it. The "." entry already covers the repository.
-source = [".", "src/upgrade_portal"]
+# src/upgrade_portal and src/mib_generator are named on their own, so a run that
+# measures only one new package still reports it. The "." entry already covers
+# the repository.
+source = [".", "src/upgrade_portal", "src/mib_generator"]
 omit = [
     "tests/*",
     "venv/*",

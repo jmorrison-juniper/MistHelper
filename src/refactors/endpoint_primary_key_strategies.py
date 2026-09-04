@@ -829,6 +829,13 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "unique_constraints": [],
         "description": "E911 BSSID compliance report - one row per BSSID with location context",
     },
+    "ssidBroadcastGapReport": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["site_id", "site_name", "ssid"],
+        "unique_constraints": [],
+        "description": "Sites without an enabled effective WLAN for the selected SSID",
+    },
     # Default fallback strategy for unclassified endpoints
     # Uses auto-increment with unique constraint on API id field if present
     # Device Utility Commands - Diagnostic/Show command results (menus 123-157)

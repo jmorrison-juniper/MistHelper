@@ -22,9 +22,12 @@ LABEL org.opencontainers.image.documentation="https://github.com/jmorrison-junip
 LABEL org.opencontainers.image.source="https://github.com/jmorrison-juniper/MistHelper"
 LABEL maintainer="MistHelper Development Team"
 
-# Install minimal system dependencies including SSH server
+# Install the SSH server and Net-SNMP daemon used by the metrics gateway.
+# The `snmp` package supplies snmpget and snmpwalk. An operator needs them to
+# test the responder from inside the container, and the earlier image had no
+# SNMP client at all.
 RUN apt-get update && \
-    apt-get install -y ca-certificates openssh-server sudo && \
+    apt-get install -y ca-certificates openssh-server snmp snmpd sudo && \
     rm -rf /var/lib/apt/lists/*
 
 # Create non-root user and configure SSH access
@@ -141,8 +144,8 @@ ENV CAPTURE_PORT=8056
 # Volume for data persistence
 VOLUME ["/app/data"]
 
-# Expose SSH port 2200, web portal port 8055, and capture portal port 8056
-EXPOSE 2200 8055 8056
+# Expose SSH, web, capture, metrics, and SNMP ports.
+EXPOSE 2200 8055 8056 8057 1161/udp
 
 # Health probe for the web portal readiness endpoint (issue #1863).
 # The image installs no curl, so the probe uses the Python interpreter that
