@@ -168,14 +168,14 @@ seconds, and the driven clock spends no real time on them.
 
 ## 13. A note on the type gate
 
-The pyproject.toml file holds 	ests in the mypy exclude list, so a plain
-mypy tests/support/rehearsal reads no file at all. Run the gate with a small
+The `pyproject.toml` file holds `\tests` in the mypy exclude list, so a plain
+`mypy tests/support/rehearsal` reads no file at all. Run the gate with a small
 config file that turns strict mode on and excludes nothing.
 
 ```powershell
 .venv\Scripts\python.exe -m mypy --config-file .mypy_rehearsal.ini tests/support/rehearsal
 ```
 
-The file holds five lines: [mypy], strict = True,
-xplicit_package_bases = True, ignore_missing_imports = True, and
-warn_unused_ignores = False.
+The file holds five lines: `[mypy]`, `strict = True`,
+`explicit_package_bases = True`, `ignore_missing_imports = True`, and
+`warn_unused_ignores = False`.

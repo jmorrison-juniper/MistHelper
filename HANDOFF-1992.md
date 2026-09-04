@@ -6,6 +6,65 @@ model. This file holds the state and the reasoning that was still in flight.
 Delete this file before the pull request merges. It is a note between agents and
 it is not a document of the repository.
 
+## Update of 2026-09-04, second pause
+
+`speckit.analyze` has now run, and it changes the picture. **The feature is not
+ready for a pull request.** The full report sits at
+`specs/1992-upgrade-rehearsal/analysis.md`.
+
+The harness itself is sound. The analysis confirms it drives the shipped path,
+the clock seats are real, the drills assert genuine divergence, the scope guard
+holds, and the budgets are met. Nothing needs a redesign.
+
+Two findings must close before the pull request opens.
+
+**F1, high. The success criterion overstates the cover.** SC-001 claims the
+suite proves 9 of the 9 portal pass conditions of scenarios C and D. It proves
+8, and one of those in part. Condition C1 of scenario C, "the portal refuses to
+start the upgrade when no verified pre-check exists", has no functional
+requirement, no test, and no reachable path in the harness. The harness hands
+the driver a record that already carries `pre_capture_id`, and it starts the
+thread below the route that would refuse. Correct SC-001 to the true number,
+name C1 as unproved, and say why. The live checklist holds 5 items or fewer, so
+C1 can move there.
+
+**F2, high. One assertion is circular.**
+`test_the_router_cancel_travels_the_organization_scope_call` asserts
+`router_plan().route.scope == "org"`. That reads the fixture of the test, not
+the run record, while FR-027 says "the run record shows `scope: "org"`". The
+record never carries a scope, because the rehearsal skips the submission. Either
+give `RunDriverDeps.submit` the double that `plan.md` design decision 5 already
+specifies, so the record carries the submission row, or amend FR-027 and the
+quickstart to say plainly that the rehearsal proves the org-scope call while the
+record field stays a live-run check. The first is better and the second is
+honest. What cannot stay is an assertion that reads its own fixture.
+
+I take F2 personally. I reviewed the three defect drills by hand and found them
+sound, and they are. I did not review the stop tests with the same care, and the
+circular assertion sat there. The lesson for the next agent: a test that passes
+is not the same as a test that proves, and the two look identical in a green
+run.
+
+**F3 to F7 are document corrections** that should ride the same commit. F3 is
+the direct cause of F2: `plan.md` describes a `StandInSession` and an
+`UpgradeSubmitter` that were never built. F4 notes one untested edge case, a
+statistics read that fails for a round, and it may want a small extra test. F5,
+F6, and F7 are factual drift between the documents and the shipped code.
+
+**F8 to F12 are tidying**, including `.spec-context.json` which still reads
+`currentStep: tasks` while the feature is delivered, and `spec.md` which still
+reads `Status: Draft`.
+
+F13, corrupted escape text in `quickstart.md` section 13, is already fixed.
+
+### The order I would work them
+
+1. F2, because it is a real hole in the proof. Prefer the submitter double.
+2. F1, because the number in a success criterion must be true.
+3. F3 to F7 in one commit with F1 and F2.
+4. F8 to F12 as tidying.
+5. Then open the pull request, and only then.
+
 ## Where the work sits
 
 | Item | Value |
@@ -22,11 +81,12 @@ that were deleted with unpushed work on them.
 
 ## What the next agent should do first
 
-1. Open the pull request. The body needs the measurements, which sit in section
-   "Evidence already gathered" below.
-2. Wait for the full check set. Read the caution about the changelog below
-   first, because a rebase may be needed.
-3. Do **not** merge until the two open questions below are answered.
+1. Read `specs/1992-upgrade-rehearsal/analysis.md`. It holds 13 findings.
+2. Close F2, then F1, then the document corrections F3 to F7, in one commit.
+3. Tidy F8 to F12.
+4. Only then open the pull request. The body needs the measurements, which sit
+   in section "Evidence already gathered" below, corrected for F1.
+5. Do **not** merge until the two open questions below are answered.
 
 ## The state of the speckit workflow
 
@@ -37,7 +97,7 @@ that were deleted with unpushed work on them.
 | `speckit.plan` | Done. `plan.md`, `research.md`, `data-model.md`, two contract files |
 | `speckit.tasks` | Done. `tasks.md`, 53 tasks in 7 phases |
 | `speckit.implement` | Reports all 53 tasks done |
-| `speckit.analyze` | **Not run.** This is the natural next step |
+| `speckit.analyze` | **Done.** Report at `specs/1992-upgrade-rehearsal/analysis.md`. Verdict: not ready for a pull request. Two findings of high severity, F1 and F2 |
 
 ## What I verified myself, and what I did not
 
