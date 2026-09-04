@@ -57,7 +57,7 @@ IMPORTS
         FROM SNMPv2-TC;
 
 mistHelperMIB MODULE-IDENTITY
-    LAST-UPDATED "202609041947Z"
+    LAST-UPDATED "202609041951Z"
     ORGANIZATION "MistHelper project"
     CONTACT-INFO
         "MistHelper project maintainers
@@ -67,7 +67,7 @@ mistHelperMIB MODULE-IDENTITY
          MistHelper metrics gateway collects from the Mist REST API.
          The gateway reads Mist Cloud on a timer and answers every
          request from memory, so a poll never waits for Mist Cloud."
-    REVISION "202609041947Z"
+    REVISION "202609041951Z"
     DESCRIPTION
         "The generator writes this module. Run it again after Mist ships
          a new OpenAPI file:  python MistHelper.py --mib-generate
