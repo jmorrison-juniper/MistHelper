@@ -13,7 +13,7 @@ devices, and your clients, and it writes what it finds to a file or to a
 database. It also runs a small set of change operations, such as a firmware
 upgrade.
 
-The tool holds **240 operations**, numbered 1 to 241 with one gap at 152. Menu 0
+The tool holds **241 operations**, numbered 1 to 242 with one gap at 152. Menu 0
 is Exit. Read [the menu reference](documentation/menu_reference.md) for the full
 list, which is generated from the code.
 
@@ -164,12 +164,13 @@ The gateway serves the same reading two ways.
 Prometheus is the path to choose. It needs no MIB and no registered enterprise
 number, and it binds an unprivileged port.
 
-For the SNMP path, add one line to `snmpd.conf`. Choose a base OID under an
-enterprise number that you own. `snmpd` keeps port 161 and the community string,
-so MistHelper holds neither.
+The container starts Net-SNMP on UDP port 1161. Choose a community string and
+set `SNMP_COMMUNITY` in `.env`. Choose a base OID under an enterprise number
+that you own.
 
-```text
-pass_persist .1.3.6.1.4.1.8072.9999.9999 /usr/bin/python3 /app/MistHelper.py --metrics-snmp
+```powershell
+.\scripts\compose.ps1 up -d
+snmpwalk -v2c -c <community> -On 127.0.0.1:1161 .1.3.6.1.4.1.11.2147483646
 ```
 
 | Setting | Default | Meaning |
@@ -179,7 +180,14 @@ pass_persist .1.3.6.1.4.1.8072.9999.9999 /usr/bin/python3 /app/MistHelper.py --m
 | `METRICS_HOST` | `127.0.0.1` | The bind address. A container takes every address |
 | `METRICS_REFRESH_SECONDS` | `900` | The age at which a reading becomes stale. The floor is 60 |
 | `METRICS_SITE_IDS` | unset | A comma list of sites. Unset reports every site |
-| `METRICS_SNMP_BASE_OID` | `.1.3.6.1.4.1.8072.9999.9999` | The base OID that `snmpd.conf` names |
+| `METRICS_SNMP_BASE_OID` | `.1.3.6.1.4.1.11.2147483646` | The base OID that the responder serves |
+| `SNMP_BASE_OID` | `.1.3.6.1.4.1.11.2147483646` | The base OID that `snmpd.conf` names |
+| `SNMP_PORT` | `1161` | The UDP listen port |
+| `SNMP_COMMUNITY` | `misthelper` | The read-only SNMP community |
+
+Warning: `SNMP_BASE_OID` and `METRICS_SNMP_BASE_OID` must hold the same value.
+`snmpd` routes a request by the first value, and the responder answers by the
+second. Two different values make every read return `No Such Instance`.
 
 Warning: The gateway asks for no password. Keep the default loopback bind unless
 a reverse proxy holds the access control.
@@ -187,6 +195,71 @@ a reverse proxy holds the access control.
 Read `mist_scrape_success` and `mist_scrape_age_seconds` in your alarm rules. A
 failed read of Mist Cloud keeps the last good reading, so those two values are
 how you tell a stale reading from a real outage.
+
+#### Read the metrics by name
+
+The file `documentation/mibs/MISTHELPER-MIB.mib` gives every number a name. Load
+it into your monitoring system to see `mistOrgSites` in place of
+`.1.3.6.1.4.1.11.2147483646.1.2.0`.
+
+The MIB describes four groups.
+
+| Group | OID below the base | Source endpoint |
+|-------|--------------------|-----------------|
+| Organization scalars | `.1.<column>.0` | `getOrgStats` |
+| Site table | `.2.1.<column>.<row>` | `listOrgSiteStats` |
+| Device table | `.3.1.<column>.<row>` | `listOrgDevicesStats` |
+| Expectation table | `.4.1.<column>.<row>` | The `sle` array of `getOrgStats` |
+
+Column 99 of each table repeats the row identity. Read it to learn which site,
+device, or expectation a row describes.
+
+Warning: a row number is a position, not a permanent key. The gateway sorts the
+rows on every read of Mist Cloud. An alarm that names a row number can move to
+another device. Match on column 99 instead.
+
+Caution: the branch `.1.3.6.1.4.1.11.2147483646` sits below the Hewlett Packard
+Enterprise number 11, but the child number is not a registered assignment.
+Request a branch before you use this MIB outside your own network.
+
+#### Add the gateway to Observium
+
+Observium is an SNMP monitoring system. The compose file carries it behind a
+profile, so it starts only when you ask for it.
+
+```powershell
+.\scripts\compose.ps1 --profile monitoring up -d
+```
+
+The command starts Observium on <http://127.0.0.1:8668>. Sign in with the user
+`observium` and the password `observium`, then change that password. The compose
+file mounts the MIB into the container, so no operator copies a file.
+
+Add the gateway as a device in the Observium web interface.
+
+| Field | Value |
+|-------|-------|
+| Hostname | `misthelper-app` |
+| Port | `1161` |
+| Transport | `udp` |
+| SNMP version | `v2c` |
+| Community | The value of `SNMP_COMMUNITY` |
+
+Turn on **Skip ICMP**, because the container answers no ping.
+
+Confirm the reading first, if the device does not add:
+
+```powershell
+podman exec misthelper-observium snmpget -v2c -c misthelper -t 20 misthelper-app:1161 .1.3.6.1.4.1.11.2147483646.1.2.0
+```
+
+The first read returns `No Such Instance`. `snmpd` starts the responder when it
+routes that first request, and the responder then reads Mist Cloud in the
+background. It answers at once and never makes a poller wait. Read again about
+one minute after the first read.
+
+If every read times out, the container cannot reach Mist Cloud. Read the
+container log for the line that starts with `[DNS]`.
 
 ### Find your output
 

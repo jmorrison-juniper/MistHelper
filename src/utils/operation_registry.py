@@ -316,6 +316,14 @@ class OperationRegistry:
                 "stops it. The menu needs an org choice and a browser or a monitoring system."
             ),
         },
+        "242": {
+            "category": "interactive_safe",
+            "skip_reason": "Requires an SSID input and reads effective WLANs for every site",
+        },
+        # WHY: menu 243 only reads three checked-in files and writes one MIB. It never calls Mist Cloud.
+        "243": {
+            "category": "safe",
+        },
         # WHY: menu 239 starts a local web server and drives a firmware upgrade, so it writes
         # device state. The fail-closed guardrail needs this row or the build breaks.
         #
