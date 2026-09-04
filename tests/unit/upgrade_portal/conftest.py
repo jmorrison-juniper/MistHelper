@@ -22,6 +22,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from src.upgrade_portal.runtime import lock  # WHY: The fixture drops the cached lock store handle.
+from tests.support.rehearsal.errors import RehearsalNetworkError  # WHY: The named error of the rehearsal guard.
 
 logger = logging.getLogger(__name__)
 
@@ -175,6 +176,57 @@ def _block_network(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     finally:  # WHY: A handle opened here must not reach the next test either.
         lock.reset_connection()  # WHY: Leave the module as clean as this fixture found it.
         logger.debug("Release the lock store handle after one unit test")  # WHY: Records the cleanup.
+
+
+class NetworkAttemptCounter:
+    """Count every socket call that a rehearsal test tried to make.
+
+    Why:
+        SC-004 asks the rehearsal to prove that it reached no network. A block
+        that only raises cannot prove the count, because a caller can swallow
+        the error. This counter answers the number, so a test can assert zero.
+    """
+
+    def __init__(self) -> None:
+        """Build one counter at zero."""
+        self.attempts: int = 0  # Every refused call adds one, and a test asserts this number.
+
+    def refuse(self, *args: Any, **kwargs: Any) -> None:
+        """Count one attempt and refuse it.
+
+        Args:
+            *args: The arguments the caller passed. The guard ignores them.
+            **kwargs: The keyword arguments the caller passed.
+
+        Raises:
+            RehearsalNetworkError: Always, because a rehearsal stays offline.
+        """
+        self.attempts += 1  # The count comes before the raise, so a swallowed error still shows.
+        logger.warning("A rehearsal test tried to open a network connection")  # The refused action.
+        raise RehearsalNetworkError("A rehearsal test must not open a network connection.")
+
+
+@pytest.fixture
+def network_guard(monkeypatch: pytest.MonkeyPatch) -> NetworkAttemptCounter:
+    """Replace the socket calls with a counting guard for one rehearsal test.
+
+    Why:
+        The autouse block above already refuses a socket call, and it raises a
+        plain ``RuntimeError``. A rehearsal test needs the count and the named
+        error class, so this fixture replaces the block for that one test.
+
+    Args:
+        monkeypatch: The pytest patch helper.
+
+    Returns:
+        The counter, which answers zero for a healthy rehearsal.
+    """
+    counter = NetworkAttemptCounter()  # One counter for the life of one test.
+    logger.info("Install the counting network guard of one rehearsal test")  # The action.
+    monkeypatch.setattr(socket.socket, "connect", counter.refuse)  # A direct socket call.
+    monkeypatch.setattr(socket, "create_connection", counter.refuse)  # The path of requests and urllib3.
+    logger.debug("The counting network guard holds %s attempts", counter.attempts)  # The result.
+    return counter  # The guard test asserts that this count stayed at zero.
 
 
 @pytest.fixture

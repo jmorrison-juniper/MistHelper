@@ -20,6 +20,8 @@ Auto-generated from all feature plans. Last updated: 2026-07-14
 - Python 3.13+ + `mistapi` 0.63.3, Flask 3.x, `flask-wtf`, `redis`, `python-arango` through `DatabaseRouter` (1823-upgrade-capture-portal)
 - ArangoDB primary (collections `upgrade_captures`, `upgrade_runs`, edge `capture_for_run`, all `natural_pk`); Redis for the site lock only; CSV under `data/` as fallback (1823-upgrade-capture-portal)
 - New package `src/upgrade_portal/` on port 8056 (`CAPTURE_PORT`). Menu 239 and the `--capture-portal` flag both start it (1823-upgrade-capture-portal)
+- Python 3.13. + pytest, `mistapi` 0.63.3, and the shipped package (1992-upgrade-rehearsal)
+- None. The harness holds the run record in memory. (1992-upgrade-rehearsal)
 
 - Python 3.13 (matches project constitution binding minimum). (1019-test-quality-analyzer)
 
@@ -39,9 +41,9 @@ cd src; pytest; ruff check .
 Python 3.13 (matches project constitution binding minimum).: Follow standard conventions
 
 ## Recent Changes
+- 1992-upgrade-rehearsal: Added Python 3.13. + pytest, `mistapi` 0.63.3, and the shipped package
 - 1823-upgrade-capture-portal: New package `src/upgrade_portal/` (outside `web_portal/`, which ruff and mypy exclude) on port 8056; new upgrade seam `src/firmware/upgrade_service.py`; menu 239; 30-second JSON poll instead of server-sent events; Redis site lock.
 - 671-mist-get-site-beacon: Added Python 3.13+ + `mistapi>=0.63.1`, `python-dotenv`, `PyYAML`, `structlog`, existing MistHelper utility modules (`InputUtils`, `DataExporter`)
-- 1029-ap-profile-migration: Added menus 207 (migrate APs between device profiles) and 208 (revert); writes JSON backup and JSONL audit under `data/`.
 
 <!-- MANUAL ADDITIONS START -->
 
