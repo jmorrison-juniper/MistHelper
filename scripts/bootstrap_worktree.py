@@ -78,6 +78,8 @@ TOKEN_VARIABLES: tuple[str, ...] = ("GH_TOKEN", "GITHUB_TOKEN")
 # The seconds that the script waits for the gh command to name the account. A
 # short wait keeps the check cheap on a slow network.
 GH_PROBE_TIMEOUT_SECONDS = 15.0
+# The repository-local setting that pins Git credentials to the write account.
+GIT_USERNAME_CONFIG = "credential.https://github.com.username"
 
 
 class PipIndexProbe:
@@ -286,6 +288,31 @@ class GitHubAccountChecker:
         """Store the account that this repository accepts."""
         self.expected = expected  # Keep the one account that can write.
 
+    def configure_git_username(self, root: Path) -> bool:
+        """Pin the repository credential username to the expected account."""
+        executable = shutil.which("git")  # Find Git without assuming its install path.
+        if executable is None:  # A worktree without Git cannot store the local setting.
+            LOGGER.warning("Warning: Git is absent, so the credential username is not configured.")
+            return False  # Report the incomplete setup, because pushes can still use another account.
+        command = [executable, "-C", str(root), "config", "--local", GIT_USERNAME_CONFIG, self.expected]
+        LOGGER.info("Configuring Git credentials for %s.", self.expected)
+        try:  # A locked or read-only repository must name the failed repair.
+            result = subprocess.run(
+                command, capture_output=True, text=True, timeout=GH_PROBE_TIMEOUT_SECONDS, check=False
+            )
+        except (
+            OSError,
+            subprocess.SubprocessError,
+        ) as error:  # Surface the setup failure without stopping dependency setup.
+            LOGGER.warning("Warning: Git credential configuration failed: %s", error)
+            return False  # The caller still runs the account probe, which can explain the remaining risk.
+        if result.returncode != 0:  # Git reports repository or permission failures through its status.
+            detail = result.stderr.strip() or "Git returned no error detail."
+            LOGGER.warning("Warning: Git credential configuration failed: %s", detail)
+            return False  # The caller still runs the account probe, which can explain the remaining risk.
+        LOGGER.debug("Git credentials now use %s.", self.expected)
+        return True  # The local repository setting is ready for the next push.
+
     def read_active_account(self) -> str | None:
         """Return the login that the gh command reports, or None when unknown."""
         executable = shutil.which("gh")  # Find gh without a hardcoded path.
@@ -348,7 +375,9 @@ def main(argv: list[str] | None = None) -> int:
         return 1  # Report the failure to the shell.
     browser_ready = bootstrapper.install_browser_driver()  # Download the browser the e2e tests drive.
     report_result(bootstrapper, installed, browser_ready)  # Tell the user which interpreter to activate.
-    GitHubAccountChecker().warn_on_mismatch()  # Warn before the user pushes with the wrong account.
+    account_checker = GitHubAccountChecker()  # Build the checker that owns repository credential setup.
+    account_checker.configure_git_username(root)  # Pin the local Git username before the account probe.
+    account_checker.warn_on_mismatch()  # Warn before the user pushes with the wrong account.
     LOGGER.debug("The bootstrap completed for %s", root)
     return 0  # Report the success to the shell.
 
