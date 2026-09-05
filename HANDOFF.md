@@ -13,10 +13,12 @@
 
 * Confirm each exact device SKU, optic part number, and software release before
   procurement. Vendor support tables are authoritative.
-* Add the catalog files to the integration branch and push the commit.
+* The catalog commit is pushed to the remote `integration` branch.
 
 ## Branch state
 
-* Active branch: `main`
+* Active checkout branch: `main`
+* Remote integration branch: `integration`, commit `8072bdc`
+* Direct push to protected `main` was rejected because required checks are pending.
 * No worktree was created.
 * Existing unrelated untracked files were not changed.
