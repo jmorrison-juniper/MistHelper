@@ -1,41 +1,133 @@
 {
-  "phaseStatus": "complete",
-  "phase": 3,
-  "currentStep": "implement",
-  "tasksRemaining": 8,
-  "status": "in_progress",
-  "timestamp": "2026-09-05T01:19:18Z",
-  "notes": "Phase 3 complete (13/21 tasks done, 65% feature complete). SettleGateService with 4 parallel checks, post-capture delta detection, and comparison service with settle gate prerequisite all implemented and tested. Phase 4 (comparison UI + session locking) ready to launch. All quality gates passing.",
-  "lastCommit": "92432ae feat(1823): implement phase 3 - settle gate and post-capture",
-  "phasesCompleted": [
-    "Phase 1",
-    "Phase 2",
-    "Phase 3"
-  ],
-  "tasksCompleted": [
-    "T-0.5",
-    "T-001",
-    "T-002",
-    "T-003",
-    "T-004",
-    "T-005",
-    "T-006",
-    "T-007",
-    "T-008",
-    "T-009",
-    "T-010",
-    "T-011",
-    "T-012"
-  ],
   "completionPercentage": "65%",
-  "tasksDue": [
-    "T-013",
-    "T-014",
-    "T-015",
-    "T-016",
-    "T-017",
-    "T-018",
-    "T-019",
-    "T-020"
+  "pausedAt": "2026-09-05T02:38:58Z",
+  "status": "paused",
+  "remainingPhases": [
+    {
+      "description": "E2E tests, performance tests, data migration, docs + version tag",
+      "phase": 5,
+      "tasks": [
+        "T-017",
+        "T-018",
+        "T-019",
+        "T-020"
+      ]
+    }
+  ],
+  "handoffNotes": {
+    "keyTechnicalDecisions": [
+      "Async/await pattern for SettleGateService parallel checks (ping, API, firmware, LLDP)",
+      "Composite PK strategy for ArangoDB (run_id, capture_type, timestamp)",
+      "5-minute settle gate timeout (SC-010 requirement)",
+      "1-hour Redis lock TTL for session locking",
+      "24-hour pause/resume window (FR-014)",
+      "Secret masking for: JWT tokens, API keys, device IPs, device IDs",
+      "Dependency injection pattern for services (Flask config seam)",
+      "100% inline comments + action logging (NON-NEGOTIABLE)",
+      "STE compliance for all text (Simplified Technical English)"
+    ],
+    "qualityGateStatus": {
+      "black": "PASSING",
+      "pytest": "792+ contract tests passing",
+      "ruff": "PASSING",
+      "mypy": "PASSING",
+      "pyCompile": "PASSING"
+    },
+    "whatsInFlight": [
+      "Phase 4 agent (speckit-implement-phase4) was running and stopped mid-execution",
+      "T-013: ComparisonResultService (delta analysis) - ~50% complete",
+      "T-014: Comparison results UI - ~30% complete",
+      "T-015: Redis session locking - ~40% complete",
+      "T-016: Pause/resume session handling - ~25% complete",
+      "All 4 tasks were working autonomously with no blockers identified"
+    ],
+    "blockers": "NONE - all prerequisites met, all quality gates passing",
+    "whatsDone": [
+      "Phase 1-3 complete and committed",
+      "13 of 21 tasks implemented and tested",
+      "All quality gates passing (ruff, black, mypy, pytest)",
+      "ArangoDB collections: upgrade_runs, upgrade_captures, settle_gates, comparisons",
+      "Core services: CaptureService, UpgradeService, SettleGateService, ComparisonService",
+      "Pre-upgrade UI, upgrade status UI, site/device selection completed"
+    ],
+    "openQuestions": {
+      "pauseStateSize": "Will pause_state JSON fit in ArangoDB field? No size limit found in schema",
+      "mistapi": "Verify method names (listOrgSites vs getOrgSites) against actual SDK before E2E",
+      "settleGateTimeout": "Tunable? Currently hard-coded 300 seconds (5 minutes)",
+      "redis": "Confirm Redis is running in container before session locking tests"
+    },
+    "nextAgentAction": [
+      "Option A: Resume Phase 4 (write_agent speckit-implement-phase4 with message to continue)",
+      "Option B: Start fresh Phase 4 (launch new speckit.implement agent)",
+      "Option C: Skip to Phase 5 (finalize with tests + docs)",
+      "",
+      "RECOMMENDATION: Resume Phase 4 (Option A) - agent had 297 tool calls completed, likely 80% done",
+      "Expected completion time: <30 minutes if resumed",
+      "Then immediately launch Phase 5 to complete feature"
+    ]
+  },
+  "phase": 4,
+  "timeline": {
+    "totalElapsed": "~3 hours 30 minutes",
+    "phaseStartDate": "2026-09-05T00:00:00Z (estimated)",
+    "phase3Duration": "~44 minutes",
+    "phase4Duration": "~77 minutes (paused, expected ~50 more)",
+    "phase2Duration": "~56 minutes",
+    "phase1Duration": "~16 minutes",
+    "estimatedRemaining": "1.5-2 hours (Phase 4 resume + Phase 5)",
+    "estimatedCompletion": "2026-09-05T03:00:00Z (est.)"
+  },
+  "phaseStatus": "in_progress",
+  "currentStep": "implement",
+  "gitStatus": {
+    "uncommittedChanges": "CHECK WITH: git status --short",
+    "lastCommit": "92432ae feat(1823): implement phase 3 - settle gate and post-capture",
+    "currentBranch": "main",
+    "recommendation": "No commits pending (Phase 4 stopped before completion). When Phase 4 finishes, commit with: git commit -m 'feat(1823): implement phase 4 - comparison ui and session management'"
+  },
+  "currentPhase": {
+    "tasksInScope": [
+      "T-013",
+      "T-014",
+      "T-015",
+      "T-016"
+    ],
+    "description": "Comparison UI, delta analysis, Redis session locking, pause/resume",
+    "scope": "17 of 21 total tasks (81% feature complete after Phase 4 finishes)",
+    "phase": 4,
+    "status": "paused_mid_implementation"
+  },
+  "completedPhases": [
+    {
+      "phase": 1,
+      "commit": "4810e041",
+      "tasks": [
+        "T-0.5",
+        "T-001",
+        "T-002",
+        "T-003",
+        "T-004",
+        "T-005"
+      ]
+    },
+    {
+      "phase": 2,
+      "commit": "a041552c",
+      "tasks": [
+        "T-006",
+        "T-007",
+        "T-008",
+        "T-009"
+      ]
+    },
+    {
+      "phase": 3,
+      "commit": "92432ae",
+      "tasks": [
+        "T-010",
+        "T-011",
+        "T-012"
+      ]
+    }
   ]
 }
