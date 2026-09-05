@@ -273,6 +273,10 @@ services:
       # The MistHelper MIB, read-only. Observium loads every file of this folder,
       # so the mount installs the MIB and no operator copies a file.
       - ./documentation/mibs/MISTHELPER-MIB.mib:/opt/observium/mibs/MISTHELPER-MIB.mib:ro
+      # Fixes the Net-SNMP MIB search path on every start, so `snmpwalk -m
+      # MISTHELPER-MIB` and `snmptranslate` can resolve SNMPv2-SMI/SNMPv2-TC
+      # from the IETF set Observium already bundles. See the script for why.
+      - ./container/observium/10-fix-mib-search-path.sh:/etc/my_init.d/10-fix-mib-search-path.sh:ro
     networks:
       - misthelper-network
     restart: unless-stopped
