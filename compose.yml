@@ -270,9 +270,17 @@ services:
       - misthelper-observium-certificates:/opt/observium/certificates
       - misthelper-observium-logs:/opt/observium/logs
       - misthelper-observium-rrd:/opt/observium/rrd
-      # The MistHelper MIB, read-only. Observium loads every file of this folder,
-      # so the mount installs the MIB and no operator copies a file.
-      - ./documentation/mibs/MISTHELPER-MIB.mib:/opt/observium/mibs/MISTHELPER-MIB.mib:ro
+      # The MistHelper MIB. Observium loads every file of this folder, so the
+      # mount installs the MIB and no operator copies a file.
+      #
+      # Warning: this mount is read-write, not `:ro`. firstrun.sh runs
+      # `chown nobody:users -R /opt/observium` on every container start to
+      # match Observium's own file ownership scheme. A read-only bind mount
+      # here makes that one file fail with "Read-only file system" on every
+      # boot (harmless to content, since chown changes ownership only, but it
+      # is noisy and worth avoiding). The container never rewrites the file's
+      # content, so the checked-in copy stays the source of truth in practice.
+      - ./documentation/mibs/MISTHELPER-MIB.mib:/opt/observium/mibs/MISTHELPER-MIB.mib
       # Fixes the Net-SNMP MIB search path on every start, so `snmpwalk -m
       # MISTHELPER-MIB` and `snmptranslate` can resolve SNMPv2-SMI/SNMPv2-TC
       # from the IETF set Observium already bundles. See the script for why.
