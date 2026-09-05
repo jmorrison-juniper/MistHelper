@@ -24,8 +24,9 @@ LABEL maintainer="MistHelper Development Team"
 
 # Install minimal system dependencies including SSH server and SNMP support
 RUN apt-get update && \
-    apt-get install -y ca-certificates openssh-server sudo snmpd snmp-mibs-downloader && \
-    rm -rf /var/lib/apt/lists/*
+    apt-get install -y ca-certificates openssh-server sudo snmpd && \
+    rm -rf /var/lib/apt/lists/* && \
+    ls -la /usr/sbin/snmp* 
 
 # Create non-root user and configure SSH access
 RUN groupadd -r misthelper && useradd -r -g misthelper -m -s /bin/bash misthelper
@@ -53,8 +54,7 @@ RUN echo "misthelper:misthelper123!" | chpasswd && \
 
 # Configure SNMPd for metrics gateway pass_persist handler
 RUN mkdir -p /var/lib/snmp && \
-    mkdir -p /var/run/snmp && \
-    chown -R snmp:snmp /var/lib/snmp /var/run/snmp
+    mkdir -p /var/run/snmp
 
 # Copy container scripts from maintainable source files
 COPY container/scripts/misthelper-session.sh /usr/local/bin/misthelper-session
@@ -102,8 +102,10 @@ COPY pyproject.toml ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application files
-COPY MistHelper.py __init__.py ./
+COPY MistHelper.py __init__.py wsgi.py wsgi_capture.py ./
 COPY scripts/ ./scripts/
+COPY web_portal/ ./web_portal/
+COPY src/ ./src/
 
 # Set ownership and switch to non-root user for application files
 RUN chown -R misthelper:misthelper /app

@@ -71,9 +71,6 @@ services:
     # answer names a local build, because only the CI build writes the label.
     #   podman inspect misthelper-app --format '{{index .Config.Labels "org.opencontainers.image.revision"}}'
     image: ghcr.io/jmorrison-juniper/misthelper:latest
-    build:
-      context: .
-      dockerfile: Containerfile  # Use Containerfile for Podman, Dockerfile for Docker
     container_name: misthelper-app
     ports:
       # SSH access for interactive sessions
