@@ -141,20 +141,7 @@ class SettleGateService:
         )  # WHY: pre-operation event
 
         try:
-            # WHY: validate inputs
-            if not run_id or not isinstance(run_id, str):  # WHY: run_id validation
-                logger.error("settle_invalid_run_id", run_id=run_id)  # WHY: validation error
-                return {}  # WHY: fail fast
-
-            if not device_ids or not isinstance(device_ids, list):  # WHY: device list validation
-                # WHY: device list is empty or invalid type
-                device_count = len(device_ids) if device_ids else 0  # WHY: get count or 0
-                logger.error("settle_no_devices", device_count=device_count)  # WHY: no devices
-                return {}  # WHY: fail fast
-
-            # WHY: check dependencies available
-            if not self.mist_client or not self.db_router:  # WHY: dependency check
-                logger.error("settle_dependencies_unavailable")  # WHY: missing dependencies
+            if not self._validate_settle_request(run_id, device_ids):
                 return {}  # WHY: fail fast
 
             # WHY: generate unique settle gate run ID
@@ -169,19 +156,10 @@ class SettleGateService:
                 device_count=len(device_ids),  # WHY: scope metric
             )  # WHY: check phase start
 
-            # WHY: create list of check tasks for each device
-            check_tasks = []  # WHY: task list for parallel execution
-            for device_id in device_ids:  # WHY: iterate each device
-                # WHY: schedule parallel checks for this device
-                task = self._run_device_checks(  # WHY: check function call
-                    device_id=device_id,  # WHY: device identifier
-                    run_id=run_id,  # WHY: run context
-                    site_id=site_id,  # WHY: API context
-                    org_id=org_id,  # WHY: API context
-                    settle_run_id=settle_run_id,  # WHY: settle run identifier
-                )  # WHY: check task
-                # WHY: append task to list
-                check_tasks.append(task)  # WHY: collect task
+            # WHY: create check tasks for parallel execution
+            check_tasks = self._create_check_tasks(
+                device_ids, run_id, site_id, org_id, settle_run_id
+            )  # WHY: schedule device checks
 
             # WHY: execute all checks concurrently with timeout
             try:
@@ -199,103 +177,16 @@ class SettleGateService:
                     device_count=len(device_ids),  # WHY: affected count
                 )  # WHY: timeout logged
 
-                # WHY: create timeout result for all devices
-                timeout_results = {}  # WHY: result dict
-                for device_id in device_ids:  # WHY: iterate devices
-                    # WHY: create timeout failure result
-                    timeout_results[device_id] = SettleResult(  # WHY: failure result
-                        passed=False,  # WHY: validation failed
-                        device_id=device_id,  # WHY: device identifier
-                        failed_checks=["timeout"],  # WHY: timeout error
-                        details={"error": f"Settle gate timeout after {timeout} seconds"},  # WHY: error detail
-                        timestamp=timestamp,  # WHY: result timestamp
-                    )  # WHY: timeout result object
-                # WHY: return timeout results
-                return timeout_results  # WHY: early exit on timeout
+                return self._create_timeout_results(device_ids, timeout, timestamp)  # WHY: return timeout results
 
             # WHY: convert results to dict keyed by device_id
-            device_results = {}  # WHY: results dict
-            for i, result in enumerate(results):  # WHY: iterate results
-                # WHY: handle exceptions in parallel results
-                if isinstance(result, Exception):  # WHY: check for exception
-                    # WHY: log exception
-                    logger.error(
-                        "settle_check_exception",  # WHY: error event
-                        device_id=device_ids[i],  # WHY: device identifier
-                        exception_type=type(result).__name__,  # WHY: exception class
-                        error_message=str(result),  # WHY: exception message
-                    )  # WHY: exception logged
-                    # WHY: create exception result
-                    device_results[device_ids[i]] = SettleResult(  # WHY: failure result
-                        passed=False,  # WHY: validation failed
-                        device_id=device_ids[i],  # WHY: device identifier
-                        failed_checks=["exception"],  # WHY: exception error
-                        details={"error": str(result)},  # WHY: error detail
-                        timestamp=timestamp,  # WHY: result timestamp
-                    )  # WHY: exception result object
-                else:  # WHY: result is not exception
-                    # WHY: store successful result (cast to SettleResult)
-                    device_results[device_ids[i]] = result  # type: ignore[assignment]  # WHY: mypy knows result is SettleResult
+            device_results = self._build_device_results(
+                device_ids, results, timestamp
+            )  # WHY: normalize parallel results
 
-            # WHY: persist results to ArangoDB
-            logger.info(
-                "settle_persisting_results",  # WHY: operation name
-                settle_run_id=settle_run_id,  # WHY: settle run context
-                device_count=len(device_results),  # WHY: result count
-            )  # WHY: persist phase start
-
-            # WHY: build settle gate document for storage
-            settle_doc = {  # WHY: ArangoDB document structure
-                "_key": f"{run_id}_{settle_run_id}_{int(time.time() * 1000)}",  # WHY: composite key
-                "settle_run_id": settle_run_id,  # WHY: settle run identifier
-                "run_id": run_id,  # WHY: link to upgrade run
-                "org_id": org_id,  # WHY: organization context
-                "site_id": site_id,  # WHY: site context
-                "timestamp": timestamp,  # WHY: settlement moment
-                "device_results": {  # WHY: results dict
-                    device_id: {  # WHY: per-device result
-                        "passed": result.passed,  # WHY: pass/fail status
-                        "failed_checks": result.failed_checks,  # WHY: failed checks list
-                        "details": result.details,  # WHY: check details
-                    }  # WHY: device result
-                    for device_id, result in device_results.items()  # WHY: iterate results
-                },  # WHY: results dict complete
-                "device_count": len(device_results),  # WHY: result count
-                "passed_count": sum(1 for r in device_results.values() if r.passed),  # WHY: passed count
-                "failed_count": sum(1 for r in device_results.values() if not r.passed),  # WHY: failed count
-                "user_id": user_id,  # WHY: audit context
-            }  # WHY: document complete
-
-            # WHY: persist to ArangoDB
-            write_result = self.db_router.write(  # WHY: database write operation
-                collection="settle_gates",  # WHY: collection name
-                document=settle_doc,  # WHY: document to write
-            )  # WHY: write operation result
-
-            # WHY: verify persistence succeeded
-            if not write_result:  # WHY: check write result
-                logger.error("settle_persist_failed", settle_run_id=settle_run_id)  # WHY: persistence error
-
-            # WHY: audit log settle gate completion
-            if self.audit_logger:  # WHY: audit logging conditional
-                # WHY: build audit detail
-                audit_details = {  # WHY: audit details dict
-                    "settle_run_id": settle_run_id,  # WHY: identifier
-                    "device_count": len(device_results),  # WHY: scope metric
-                    "passed_count": settle_doc["passed_count"],  # WHY: success count
-                    "failed_count": settle_doc["failed_count"],  # WHY: failure count
-                    "run_id": run_id,  # WHY: run link
-                }  # WHY: audit details complete
-                # WHY: determine overall status
-                # WHY: success if no failures, partial if any failures
-                overall_status = "success" if settle_doc["failed_count"] == 0 else "partial"  # WHY: status
-                # WHY: log audit entry
-                self.audit_logger.log_operation(  # WHY: audit trail
-                    operation="settle_gate_complete",  # WHY: operation type
-                    user_id=user_id,  # WHY: user context
-                    details=audit_details,  # WHY: operation details
-                    result=overall_status,  # WHY: result status
-                )  # WHY: audit entry
+            settle_doc = self._persist_settle_results(
+                run_id, org_id, site_id, settle_run_id, timestamp, user_id, device_results
+            )  # WHY: persist results and audit completion
 
             # WHY: log success
             logger.info(
@@ -327,6 +218,120 @@ class SettleGateService:
                 )  # WHY: audit entry
 
             return {}  # WHY: return empty on exception
+
+    def _validate_settle_request(self, run_id: str, device_ids: list[str]) -> bool:
+        """Validate settle gate identifiers, devices, and dependencies."""
+        if not run_id or not isinstance(run_id, str):
+            logger.error("settle_invalid_run_id", run_id=run_id)
+            return False
+        if not device_ids or not isinstance(device_ids, list):
+            logger.error("settle_no_devices", device_count=len(device_ids) if device_ids else 0)
+            return False
+        if not self.mist_client or not self.db_router:
+            logger.error("settle_dependencies_unavailable")
+            return False
+        return True
+
+    def _persist_settle_results(
+        self,
+        run_id: str,
+        org_id: str,
+        site_id: str,
+        settle_run_id: str,
+        timestamp: str,
+        user_id: str,
+        device_results: dict[str, SettleResult],
+    ) -> dict[str, Any]:
+        """Persist settle results and write the completion audit record."""
+        logger.info("settle_persisting_results", settle_run_id=settle_run_id)
+        settle_doc = {
+            "_key": f"{run_id}_{settle_run_id}_{int(time.time() * 1000)}",
+            "settle_run_id": settle_run_id,
+            "run_id": run_id,
+            "org_id": org_id,
+            "site_id": site_id,
+            "timestamp": timestamp,
+            "device_results": {
+                device_id: {
+                    "passed": result.passed,
+                    "failed_checks": result.failed_checks,
+                    "details": result.details,
+                }
+                for device_id, result in device_results.items()
+            },
+            "device_count": len(device_results),
+            "passed_count": sum(result.passed for result in device_results.values()),
+            "failed_count": sum(not result.passed for result in device_results.values()),
+            "user_id": user_id,
+        }
+        write_result = self.db_router.write(collection="settle_gates", document=settle_doc)
+        if not write_result:
+            logger.error("settle_persist_failed", settle_run_id=settle_run_id)
+        if self.audit_logger:
+            self.audit_logger.log_operation(
+                operation="settle_gate_complete",
+                user_id=user_id,
+                details={"settle_run_id": settle_run_id, "device_count": len(device_results)},
+                result="success" if settle_doc["failed_count"] == 0 else "partial",
+            )
+        return settle_doc
+
+    def _create_check_tasks(
+        self,
+        device_ids: list[str],
+        run_id: str,
+        site_id: str,
+        org_id: str,
+        settle_run_id: str,
+    ) -> list[Any]:
+        """Create one validation task for each device."""
+        return [
+            self._run_device_checks(
+                device_id=device_id,
+                run_id=run_id,
+                site_id=site_id,
+                org_id=org_id,
+                settle_run_id=settle_run_id,
+            )
+            for device_id in device_ids
+        ]
+
+    def _create_timeout_results(self, device_ids: list[str], timeout: int, timestamp: str) -> dict[str, SettleResult]:
+        """Build failure results when the settle gate reaches its timeout."""
+        return {
+            device_id: SettleResult(
+                passed=False,
+                device_id=device_id,
+                failed_checks=["timeout"],
+                details={"error": f"Settle gate timeout after {timeout} seconds"},
+                timestamp=timestamp,
+            )
+            for device_id in device_ids
+        }
+
+    def _build_device_results(
+        self, device_ids: list[str], results: list[Any], timestamp: str
+    ) -> dict[str, SettleResult]:
+        """Map parallel check results to device identifiers."""
+        device_results: dict[str, SettleResult] = {}
+        for device_id, result in zip(device_ids, results, strict=False):
+            if isinstance(result, Exception):
+                logger.error(
+                    "settle_check_exception",
+                    device_id=device_id,
+                    exception_type=type(result).__name__,
+                    error_message=str(result),
+                )
+                device_results[device_id] = SettleResult(
+                    passed=False,
+                    device_id=device_id,
+                    failed_checks=["exception"],
+                    details={"error": str(result)},
+                    timestamp=timestamp,
+                )
+            else:
+                device_results[device_id] = result
+        return device_results
 
     async def _run_device_checks(
         self,

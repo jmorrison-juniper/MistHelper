@@ -6,8 +6,8 @@ All sensitive data is automatically masked before storage.
 
 import time  # WHY: millisecond precision timestamp for audit entries
 import uuid  # WHY: unique log IDs for traceability
-from datetime import datetime, timezone  # WHY: ISO 8601 timestamps
-from typing import Any, Dict, List, Optional  # WHY: type hints for complex structures
+from datetime import UTC, datetime  # WHY: ISO 8601 timestamps
+from typing import Any  # WHY: type hints for complex structures
 
 import structlog  # WHY: structured logging
 
@@ -44,10 +44,10 @@ class AuditLogger:
         self,
         operation: str,
         user_id: str,
-        details: Dict[str, Any] = None,
+        details: dict[str, Any] = None,
         result: str = "success",
         error_message: str = None,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Log an audit operation.
 
         Args:
@@ -68,35 +68,39 @@ class AuditLogger:
             # WHY: build audit entry with metadata
             log_id = str(uuid.uuid4())  # WHY: unique log identifier
             timestamp_ms = int(time.time() * 1000)  # WHY: millisecond precision
-            iso_timestamp = datetime.now(timezone.utc).isoformat()  # WHY: ISO 8601 format
+            iso_timestamp = datetime.now(UTC).isoformat()  # WHY: ISO 8601 format
             # WHY: prepare entry document
             entry = {
-                '_key': log_id,  # WHY: primary key for ArangoDB
-                'log_id': log_id,  # WHY: duplicate for query convenience
-                'timestamp': iso_timestamp,  # WHY: ISO 8601 timestamp
-                'timestamp_ms': timestamp_ms,  # WHY: milliseconds since epoch
-                'operation': operation,  # WHY: operation name for filtering
-                'user_id': user_id,  # WHY: user identifier
-                'result': result,  # WHY: success/failure/pending
-                'error_message': error_message,  # WHY: error context if failed
-                'details': details or {},  # WHY: additional operation data
+                "_key": log_id,  # WHY: primary key for ArangoDB
+                "log_id": log_id,  # WHY: duplicate for query convenience
+                "timestamp": iso_timestamp,  # WHY: ISO 8601 timestamp
+                "timestamp_ms": timestamp_ms,  # WHY: milliseconds since epoch
+                "operation": operation,  # WHY: operation name for filtering
+                "user_id": user_id,  # WHY: user identifier
+                "result": result,  # WHY: success/failure/pending
+                "error_message": error_message,  # WHY: error context if failed
+                "details": details or {},  # WHY: additional operation data
             }  # WHY: audit entry structure
             # WHY: apply secret masking if enabled
             if self.enable_masking and self.masker:  # WHY: conditional masking
-                entry['details'] = self.masker.mask_dict(entry['details'])  # WHY: redact sensitive fields
+                entry["details"] = self.masker.mask_dict(entry["details"])  # WHY: redact sensitive fields
             # WHY: write to database
             if self.db_router:  # WHY: optional database routing
                 write_result = self.db_router.write(  # WHY: database write
                     data=[entry],  # WHY: single entry
-                    collection='audit_logs',  # WHY: target collection
-                    endpoint='audit_log',  # WHY: endpoint label
-                    strategy={'type': 'natural_pk', 'primary_key': ['log_id']},  # WHY: PK strategy
+                    collection="audit_logs",  # WHY: target collection
+                    endpoint="audit_log",  # WHY: endpoint label
+                    strategy={"type": "natural_pk", "primary_key": ["log_id"]},  # WHY: PK strategy
                 )  # WHY: execute write
                 # WHY: log write result
                 if write_result.success:  # WHY: check success
-                    logger.debug("audit_operation_logged", log_id=log_id, operation=operation, result=result)  # WHY: post-operation log
+                    logger.debug(
+                        "audit_operation_logged", log_id=log_id, operation=operation, result=result
+                    )  # WHY: post-operation log
                 else:
-                    logger.error("audit_write_failed", log_id=log_id, error=write_result.backend)  # WHY: write failure log
+                    logger.error(
+                        "audit_write_failed", log_id=log_id, error=write_result.backend
+                    )  # WHY: write failure log
             # WHY: return log ID for traceability
             return log_id  # WHY: success return
         except Exception as e:
@@ -109,8 +113,8 @@ class AuditLogger:
         user_id: str,
         run_id: str,
         site_id: str,
-        device_ids: List[str],
-    ) -> Optional[str]:
+        device_ids: list[str],
+    ) -> str | None:
         """Log capture start operation.
 
         Args:
@@ -126,15 +130,15 @@ class AuditLogger:
         """
         # WHY: log capture start with operation details
         return self.log_operation(  # WHY: delegate to main logging
-            operation='capture_start',  # WHY: operation type
+            operation="capture_start",  # WHY: operation type
             user_id=user_id,  # WHY: user context
             details={  # WHY: operation-specific details
-                'run_id': run_id,  # WHY: upgrade run reference
-                'site_id': site_id,  # WHY: site context
-                'device_count': len(device_ids),  # WHY: device count
-                'device_ids': device_ids,  # WHY: specific devices
+                "run_id": run_id,  # WHY: upgrade run reference
+                "site_id": site_id,  # WHY: site context
+                "device_count": len(device_ids),  # WHY: device count
+                "device_ids": device_ids,  # WHY: specific devices
             },  # WHY: details dictionary
-            result='pending',  # WHY: capture in progress
+            result="pending",  # WHY: capture in progress
         )  # WHY: log operation
 
     def log_capture_complete(
@@ -144,7 +148,7 @@ class AuditLogger:
         site_id: str,
         device_count: int,
         duration_ms: int,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Log capture completion.
 
         Args:
@@ -161,15 +165,15 @@ class AuditLogger:
         """
         # WHY: log capture complete with results
         return self.log_operation(  # WHY: delegate to main logging
-            operation='capture_complete',  # WHY: operation type
+            operation="capture_complete",  # WHY: operation type
             user_id=user_id,  # WHY: user context
             details={  # WHY: operation-specific details
-                'run_id': run_id,  # WHY: upgrade run reference
-                'site_id': site_id,  # WHY: site context
-                'device_count': device_count,  # WHY: devices captured
-                'duration_ms': duration_ms,  # WHY: time taken
+                "run_id": run_id,  # WHY: upgrade run reference
+                "site_id": site_id,  # WHY: site context
+                "device_count": device_count,  # WHY: devices captured
+                "duration_ms": duration_ms,  # WHY: time taken
             },  # WHY: details dictionary
-            result='success',  # WHY: completion status
+            result="success",  # WHY: completion status
         )  # WHY: log operation
 
     def log_validation_error(
@@ -177,8 +181,8 @@ class AuditLogger:
         user_id: str,
         operation: str,
         error_message: str,
-        input_data: Dict[str, Any] = None,
-    ) -> Optional[str]:
+        input_data: dict[str, Any] = None,
+    ) -> str | None:
         """Log validation failure.
 
         Args:
@@ -197,10 +201,10 @@ class AuditLogger:
             operation=operation,  # WHY: operation type
             user_id=user_id,  # WHY: user context
             details={  # WHY: operation-specific details
-                'input_data': input_data or {},  # WHY: invalid input
-                'validation_error': error_message,  # WHY: error detail
+                "input_data": input_data or {},  # WHY: invalid input
+                "validation_error": error_message,  # WHY: error detail
             },  # WHY: details dictionary
-            result='failure',  # WHY: failure status
+            result="failure",  # WHY: failure status
             error_message=error_message,  # WHY: error message
         )  # WHY: log operation
 
@@ -212,7 +216,7 @@ class AuditLogger:
         end_time: str = None,
         limit: int = 100,
         offset: int = 0,
-    ) -> Optional[List[Dict[str, Any]]]:
+    ) -> list[dict[str, Any]] | None:
         """Query audit logs from ArangoDB.
 
         Args:
@@ -236,21 +240,21 @@ class AuditLogger:
             params = {}  # WHY: query parameters
             # WHY: operation filter
             if operation:  # WHY: if operation specified
-                filters.append('doc.operation == @operation')  # WHY: AQL condition
-                params['operation'] = operation  # WHY: parameter binding
+                filters.append("doc.operation == @operation")  # WHY: AQL condition
+                params["operation"] = operation  # WHY: parameter binding
             # WHY: user filter
             if user_id:  # WHY: if user specified
-                filters.append('doc.user_id == @user_id')  # WHY: AQL condition
-                params['user_id'] = user_id  # WHY: parameter binding
+                filters.append("doc.user_id == @user_id")  # WHY: AQL condition
+                params["user_id"] = user_id  # WHY: parameter binding
             # WHY: time range filters
             if start_time:  # WHY: if start time specified
-                filters.append('doc.timestamp >= @start_time')  # WHY: AQL condition
-                params['start_time'] = start_time  # WHY: parameter binding
+                filters.append("doc.timestamp >= @start_time")  # WHY: AQL condition
+                params["start_time"] = start_time  # WHY: parameter binding
             if end_time:  # WHY: if end time specified
-                filters.append('doc.timestamp <= @end_time')  # WHY: AQL condition
-                params['end_time'] = end_time  # WHY: parameter binding
+                filters.append("doc.timestamp <= @end_time")  # WHY: AQL condition
+                params["end_time"] = end_time  # WHY: parameter binding
             # WHY: build WHERE clause
-            where_clause = ' AND '.join(filters) if filters else '1 == 1'  # WHY: combine conditions
+            where_clause = " AND ".join(filters) if filters else "1 == 1"  # WHY: combine conditions
             # WHY: build AQL query
             aql_query = f"""  # WHY: formatted AQL query string
                 FOR doc IN audit_logs
@@ -260,8 +264,8 @@ class AuditLogger:
                 RETURN doc
             """  # WHY: AQL return statement
             # WHY: add pagination parameters
-            params['offset'] = offset  # WHY: offset parameter
-            params['limit'] = limit  # WHY: limit parameter
+            params["offset"] = offset  # WHY: offset parameter
+            params["limit"] = limit  # WHY: limit parameter
             # WHY: execute query via database router
             if not self.db_router:  # WHY: check router available
                 logger.error("audit_query_failed_no_router")  # WHY: log missing router
@@ -278,4 +282,3 @@ class AuditLogger:
 
 
 # WHY: convenience import for logging
-import logging  # WHY: built-in logging module

@@ -4,8 +4,7 @@ Queries Mist API and caches results for 5 minutes per FR-003.
 """
 
 import json  # WHY: JSON serialization for cache
-import time  # WHY: cache TTL calculations
-from typing import Dict, List, Optional, Any  # WHY: type hints
+from typing import Any  # WHY: type hints
 
 import structlog  # WHY: structured logging
 
@@ -34,7 +33,7 @@ class MistAPIClient:
         # WHY: log initialization
         logger.info("mist_api_client_initialized", cache_enabled=redis_cache is not None)  # WHY: startup event
 
-    def list_sites(self, org_id: str) -> Optional[List[Dict[str, Any]]]:
+    def list_sites(self, org_id: str) -> list[dict[str, Any]] | None:
         """List all sites for an organization.
 
         Args:
@@ -70,16 +69,16 @@ class MistAPIClient:
                 return None  # WHY: fail
             # WHY: normalize response
             sites_list = []  # WHY: normalized output
-            for site in (sites or []):  # WHY: iterate sites
+            for site in sites or []:  # WHY: iterate sites
                 # WHY: extract relevant fields
                 site_dict = {  # WHY: normalized site dict
-                    'id': site.get('id', ''),  # WHY: site ID
-                    'name': site.get('name', ''),  # WHY: site name
-                    'country_code': site.get('country_code', ''),  # WHY: country
+                    "id": site.get("id", ""),  # WHY: site ID
+                    "name": site.get("name", ""),  # WHY: site name
+                    "country_code": site.get("country_code", ""),  # WHY: country
                 }  # WHY: site data
                 sites_list.append(site_dict)  # WHY: add to list
             # WHY: sort by name
-            sites_list.sort(key=lambda x: x['name'])  # WHY: alphabetical sort
+            sites_list.sort(key=lambda x: x["name"])  # WHY: alphabetical sort
             # WHY: cache result
             if self.redis:  # WHY: if cache enabled
                 self._set_cache(cache_key, sites_list, self.SITES_CACHE_TTL)  # WHY: cache result
@@ -92,7 +91,7 @@ class MistAPIClient:
             logger.error("mist_list_sites_exception", org_id=org_id, error=str(e))  # WHY: exception log
             return None  # WHY: fail
 
-    def list_site_devices(self, site_id: str, device_type: str = 'all') -> Optional[List[Dict[str, Any]]]:
+    def list_site_devices(self, site_id: str, device_type: str = "all") -> list[dict[str, Any]] | None:
         """List devices for a site.
 
         Args:
@@ -129,16 +128,16 @@ class MistAPIClient:
                 return None  # WHY: fail
             # WHY: normalize response
             devices_list = []  # WHY: normalized output
-            for device in (devices or []):  # WHY: iterate devices
+            for device in devices or []:  # WHY: iterate devices
                 # WHY: extract relevant fields
                 device_dict = {  # WHY: normalized device dict
-                    'id': device.get('id', ''),  # WHY: device ID
-                    'name': device.get('name', ''),  # WHY: device name
-                    'model': device.get('model', ''),  # WHY: device model
-                    'serial': device.get('serial', ''),  # WHY: device serial
-                    'firmware_version': device.get('fw_version', ''),  # WHY: running firmware (not configured)
-                    'mac': device.get('mac', ''),  # WHY: MAC address
-                    'status': device.get('status', 'unknown'),  # WHY: connection status
+                    "id": device.get("id", ""),  # WHY: device ID
+                    "name": device.get("name", ""),  # WHY: device name
+                    "model": device.get("model", ""),  # WHY: device model
+                    "serial": device.get("serial", ""),  # WHY: device serial
+                    "firmware_version": device.get("fw_version", ""),  # WHY: running firmware (not configured)
+                    "mac": device.get("mac", ""),  # WHY: MAC address
+                    "status": device.get("status", "unknown"),  # WHY: connection status
                 }  # WHY: device data
                 devices_list.append(device_dict)  # WHY: add to list
             # WHY: cache result
@@ -153,7 +152,7 @@ class MistAPIClient:
             logger.error("mist_list_devices_exception", site_id=site_id, error=str(e))  # WHY: exception log
             return None  # WHY: fail
 
-    def _get_cache(self, key: str) -> Optional[List]:
+    def _get_cache(self, key: str) -> list | None:
         """Get value from Redis cache.
 
         Args:
@@ -179,7 +178,7 @@ class MistAPIClient:
             logger.warning("cache_get_failed", key=key, error=str(e))  # WHY: cache error
             return None  # WHY: fail
 
-    def _set_cache(self, key: str, value: List, ttl: int) -> bool:
+    def _set_cache(self, key: str, value: list, ttl: int) -> bool:
         """Set value in Redis cache.
 
         Args:

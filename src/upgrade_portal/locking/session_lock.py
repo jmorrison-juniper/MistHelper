@@ -4,7 +4,6 @@ Implement per-user per-site upgrade session locking to prevent concurrent upgrad
 on same site. Use Redis key format: upgrade_lock:{user_id}:{site_id}.
 """
 
-import logging  # WHY: structured logging for action tracking
 from dataclasses import dataclass  # WHY: immutable result data structure
 from datetime import datetime  # WHY: lock timestamp calculation
 
@@ -36,6 +35,7 @@ class SessionLockManager:
     """
 
     def __init__(self, redis_client: redis.Redis | None = None) -> None:
+        """Initialize the session lock manager with an optional Redis client."""
         # WHY: store Redis client reference
         self.redis_client = redis_client  # WHY: Redis client for key operations
         # WHY: default lock TTL in seconds (1 hour)

@@ -5,7 +5,7 @@ are stored in queryable logs (SC-010 compliance).
 """
 
 import re  # WHY: pattern matching for token detection
-from typing import Any, Dict  # WHY: type hints for dynamic data structures
+from typing import Any  # WHY: type hints for dynamic data structures
 
 import structlog  # WHY: structured logging
 
@@ -17,14 +17,24 @@ class SecretMasker:
 
     # WHY: patterns for common secret formats
     PATTERNS = {
-        'jwt_token': re.compile(r'eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.?[A-Za-z0-9_-]*'),  # WHY: JWT format (OIDC/OAuth2)
-        'api_key': re.compile(r'api[_-]?key["\']?\s*[:=]\s*["\']?([a-zA-Z0-9_-]+)["\']?', re.IGNORECASE),  # WHY: API key declarations
-        'password': re.compile(r'(password|pwd)["\']?\s*[:=]\s*["\']?([^"\']*)["\']?', re.IGNORECASE),  # WHY: password field values
-        'auth_token': re.compile(r'(auth|bearer|token)["\']?\s*[:=]\s*["\']?([a-zA-Z0-9_-]+)["\']?', re.IGNORECASE),  # WHY: generic auth tokens
-        'mist_token': re.compile(r'x-api-token["\']?\s*[:=]\s*["\']?([a-zA-Z0-9_-]+)["\']?', re.IGNORECASE),  # WHY: Mist API token header
+        "jwt_token": re.compile(
+            r"eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.?[A-Za-z0-9_-]*"
+        ),  # WHY: JWT format (OIDC/OAuth2)
+        "api_key": re.compile(
+            r'api[_-]?key["\']?\s*[:=]\s*["\']?([a-zA-Z0-9_-]+)["\']?', re.IGNORECASE
+        ),  # WHY: API key declarations
+        "password": re.compile(
+            r'(password|pwd)["\']?\s*[:=]\s*["\']?([^"\']*)["\']?', re.IGNORECASE
+        ),  # WHY: password field values
+        "auth_token": re.compile(
+            r'(auth|bearer|token)["\']?\s*[:=]\s*["\']?([a-zA-Z0-9_-]+)["\']?', re.IGNORECASE
+        ),  # WHY: generic auth tokens
+        "mist_token": re.compile(
+            r'x-api-token["\']?\s*[:=]\s*["\']?([a-zA-Z0-9_-]+)["\']?', re.IGNORECASE
+        ),  # WHY: Mist API token header
     }  # WHY: centralized regex patterns for detection
 
-    def __init__(self, mask_char: str = '*', mask_length: int = 8):
+    def __init__(self, mask_char: str = "*", mask_length: int = 8):
         """Initialize masker with mask character and length.
 
         Args:
@@ -57,7 +67,7 @@ class SecretMasker:
         suffix = value[-3:]  # WHY: last 3 chars for debugging context
         return f"{prefix}{self.mask_placeholder}{suffix}"  # WHY: redacted format with context
 
-    def mask_dict(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    def mask_dict(self, data: dict[str, Any]) -> dict[str, Any]:
         """Recursively mask sensitive values in a dictionary.
 
         Args:
@@ -75,7 +85,7 @@ class SecretMasker:
         masked = {}  # WHY: new dict for masked output
         for key, value in data.items():  # WHY: process each field
             # WHY: detect and mask sensitive keys
-            if self._is_sensitive_key(key):  # WHY: check key name
+            if self._is_sensitive_key(key) and not isinstance(value, (dict, list)):  # WHY: mask scalar secrets only
                 masked[key] = self.mask_string(str(value)) if value else None  # WHY: redact sensitive field
             # WHY: recursively process nested dicts
             elif isinstance(value, dict):  # WHY: handle nested objects
@@ -107,9 +117,21 @@ class SecretMasker:
         """
         # WHY: case-insensitive check against known sensitive key names
         sensitive_keys = {  # WHY: set for O(1) lookup
-            'token', 'api_key', 'apikey', 'password', 'pwd', 'secret',  # WHY: common auth keys
-            'x-api-token', 'authorization', 'bearer', 'auth',  # WHY: HTTP auth headers
-            'mist_token', 'jwt', 'oauth', 'access_token', 'refresh_token',  # WHY: token types
+            "token",
+            "api_key",
+            "apikey",
+            "password",
+            "pwd",
+            "secret",  # WHY: common auth keys
+            "x-api-token",
+            "authorization",
+            "bearer",
+            "auth",  # WHY: HTTP auth headers
+            "mist_token",
+            "jwt",
+            "oauth",
+            "access_token",
+            "refresh_token",  # WHY: token types
         }  # WHY: whitelist of known sensitive key names
         return key.lower() in sensitive_keys  # WHY: case-insensitive match
 
@@ -145,5 +167,5 @@ class SecretMasker:
         result = value  # WHY: start with original
         for pattern in self.PATTERNS.values():  # WHY: iterate patterns
             # WHY: replace each match with mask
-            result = pattern.sub(lambda m: self.mask_placeholder, result)  # WHY: regex substitution
+            result = pattern.sub(lambda _match: self.mask_placeholder, result)  # WHY: regex substitution
         return result  # WHY: return masked string

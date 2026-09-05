@@ -108,7 +108,7 @@ class PortalSecurity:
         if trusted_hops <= 0:  # The operator named no proxy, so no header is trustworthy.
             logger.info("The portal trusts no forwarded header. The socket address is the client address.")
             return  # Install no middleware, so a direct listener pays no cost for each request.
-        app.wsgi_app = ProxyFix(  # type: ignore[method-assign]  # WHY: The documented way to wrap a WSGI app.
+        app.wsgi_app = ProxyFix(  # WHY: The documented way to wrap a WSGI app.
             app.wsgi_app,
             x_for=trusted_hops,  # Sets `REMOTE_ADDR`, which the allow list then tests.
             x_proto=trusted_hops,  # Sets the scheme, which decides the `Secure` cookie flag.
