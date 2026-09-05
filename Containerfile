@@ -22,9 +22,10 @@ LABEL org.opencontainers.image.documentation="https://github.com/jmorrison-junip
 LABEL org.opencontainers.image.source="https://github.com/jmorrison-juniper/MistHelper"
 LABEL maintainer="MistHelper Development Team"
 
-# Install minimal system dependencies including SSH server and SNMP daemon
+# Install minimal system dependencies including SSH server and SNMP daemon.
+# The snmp package provides snmpget, snmpwalk, and other CLI tools for testing.
 RUN apt-get update && \
-    apt-get install -y ca-certificates openssh-server sudo snmpd && \
+    apt-get install -y ca-certificates openssh-server sudo snmpd snmp && \
     rm -rf /var/lib/apt/lists/*
 
 # Create non-root user and configure SSH access

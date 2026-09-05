@@ -5049,6 +5049,7 @@ def _launch_metrics_gateway(dev_debug: bool = False) -> None:
     """
     from src.metrics_gateway.service import GatewaySettings, build_cache, start_refresh_thread
     from src.metrics_gateway.web import create_app
+    import mistapi  # Import mistapi to create API session
 
     in_container = EnvironmentUtils.is_running_in_container()  # A container binds every address
     settings = GatewaySettings.from_environment(in_container)  # One frozen record holds every setting
@@ -5058,7 +5059,9 @@ def _launch_metrics_gateway(dev_debug: bool = False) -> None:
         logging.error("METRICS_GATEWAY: No organization selected - abort the launch")  # Log the refusal
         return
     settings = settings.with_org_id(resolved)  # Carry the chosen org into the frozen record
-    cache = build_cache(apisession, settings)  # The cache holds the reading that both output paths serve
+    # Create an API session from environment variables (required for build_cache to fetch metrics)
+    apisession_local = mistapi.ApiSession()  # Create a fresh API session with environment credentials
+    cache = build_cache(apisession_local, settings)  # The cache holds the reading that both output paths serve
     start_refresh_thread(cache, threading.Event())  # A daemon thread keeps the reading fresh ahead of a poll
     logging.info("METRICS_GATEWAY: Building the application for %s:%s", settings.host, settings.port)
     echo(">> Mist metrics gateway starting at http://127.0.0.1:%s/metrics", settings.port)  # Clickable URL
@@ -5089,13 +5092,16 @@ def _run_metrics_snmp(_args: argparse.Namespace) -> None:
 
     from src.metrics_gateway.service import GatewaySettings, build_cache, start_refresh_thread
     from src.utils.environment_utils import EnvironmentUtils  # Import EnvironmentUtils for container detection
+    import mistapi  # Import mistapi to create API session
 
     logging.info("METRICS_SNMP: Starting the pass_persist responder")  # Log to the file, never to a stream
     settings = GatewaySettings.from_environment(EnvironmentUtils.is_running_in_container())
     if not settings.org_id:  # snmpd cannot answer a prompt, so the setting is the only source here
         logging.error("METRICS_SNMP: METRICS_ORG_ID is not set - abort")  # Log the refusal
         sys.exit(1)
-    cache = build_cache(apisession, settings)  # The cache holds the reading that the responder serves.
+    # Create an API session from environment variables (required for build_cache to fetch metrics)
+    apisession_local = mistapi.ApiSession()  # Create a fresh API session with environment credentials
+    cache = build_cache(apisession_local, settings)  # The cache holds the reading that the responder serves.
     start_refresh_thread(cache, threading.Event())  # Mist Cloud access runs away from the SNMP protocol.
     responder = SnmpPassPersistResponder(cache, settings.base_oid)
     responder.run(sys.stdin, sys.stdout)  # Blocks until snmpd closes the pipe
